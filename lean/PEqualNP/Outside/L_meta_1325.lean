@@ -306,8 +306,10 @@ private lemma card_assigned {n k c : ℕ} (C : Circuit) (T : Finset (Fin n)) (o 
 
 end PEqualNP.Outside.L_meta_1325_aux.Light
 
-open PEqualNP.Outside.L_meta_1325_aux.Light in
-theorem PEqualNP.Outside.L_meta_1325_aux.Light :
+namespace PEqualNP.Outside.L_meta_1325_aux
+
+open Light in
+theorem Light :
     ∀ (n m k : ℕ) (S : Fin m → Finset (Fin n)) (C : PEqualNP.CircuitLowerBounds.Circuit)
       (o : Fin m → ℕ) (c : Fin m → ℕ),
       (∀ i j : Fin m, i ≠ j → (S i ∩ S j).card ≤ 1) →
@@ -341,6 +343,8 @@ theorem PEqualNP.Outside.L_meta_1325_aux.Light :
       obtain ⟨i, _, hi⟩ := Finset.mem_biUnion.mp hw
       exact (Finset.mem_filter.mp hi).1
     _ = C.size := by simp
+
+end PEqualNP.Outside.L_meta_1325_aux
 
 namespace PEqualNP.Outside.L_meta_1325_aux.Restrict
 
@@ -619,8 +623,12 @@ theorem main_aux : ∀ (n : ℕ) (gates : List PEqualNP.CircuitLowerBounds.Gate)
 
 end PEqualNP.Outside.L_meta_1325_aux.Restrict
 
-theorem PEqualNP.Outside.L_meta_1325_aux.Restrict : ∀ (n : ℕ) (gates : List PEqualNP.CircuitLowerBounds.Gate) (T Z : Finset (Fin n)), (∀ g ∈ gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length ≤ 2) → ∃ (gates' : List PEqualNP.CircuitLowerBounds.Gate) (r : ℕ → ℕ), (∀ g ∈ gates', (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length = 2) ∧ gates'.length ≤ gates.length ∧ ∀ o : ℕ, (∃ x y : Fin n → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, o⟩ (List.ofFn (fun i => if i ∈ T then true else if i ∈ Z then false else x i)) ≠ PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, o⟩ (List.ofFn (fun i => if i ∈ T then true else if i ∈ Z then false else y i))) → ∀ x : Fin n → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates', r o⟩ (List.ofFn x) = PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, o⟩ (List.ofFn (fun i => if i ∈ T then true else if i ∈ Z then false else x i)) :=
+namespace PEqualNP.Outside.L_meta_1325_aux
+
+theorem Restrict : ∀ (n : ℕ) (gates : List PEqualNP.CircuitLowerBounds.Gate) (T Z : Finset (Fin n)), (∀ g ∈ gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length ≤ 2) → ∃ (gates' : List PEqualNP.CircuitLowerBounds.Gate) (r : ℕ → ℕ), (∀ g ∈ gates', (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length = 2) ∧ gates'.length ≤ gates.length ∧ ∀ o : ℕ, (∃ x y : Fin n → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, o⟩ (List.ofFn (fun i => if i ∈ T then true else if i ∈ Z then false else x i)) ≠ PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, o⟩ (List.ofFn (fun i => if i ∈ T then true else if i ∈ Z then false else y i))) → ∀ x : Fin n → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates', r o⟩ (List.ofFn x) = PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, o⟩ (List.ofFn (fun i => if i ∈ T then true else if i ∈ Z then false else x i)) :=
   PEqualNP.Outside.L_meta_1325_aux.Restrict.main_aux
+
+end PEqualNP.Outside.L_meta_1325_aux
 
 namespace PEqualNP.Outside.L_meta_1325_aux.Windows
 
