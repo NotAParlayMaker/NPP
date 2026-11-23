@@ -1192,7 +1192,7 @@ namespace Pilot5bMeta1020TripleCounting
 
 open MarkerNearStar
 
-theorem semantic_marker_root_choice
+theorem semantic_marker_rt_choice
     {Point Line Gate : Type*}
     [Fintype Point] [Fintype Line] [DecidableEq Point] [DecidableEq Line]
     (I : Point → Line → Prop) [DecidableRel I]
@@ -1492,7 +1492,7 @@ theorem residual_count {N K : ℕ}
       ((S r).filter (fun p => ¬ I p j.val.2)).card ≤ 4 ∧ points j ⊆ S r := by
     have hj : bare (roots j.val.1.1 j.val.1.2) = {j.val.2} :=
       (Finset.mem_filter.mp j.property).2
-    apply semantic_marker_root_choice I hI S row bare labelG alive query horigin
+    apply semantic_marker_rt_choice I hI S row bare labelG alive query horigin
       F hmono hrow hbare (roots j.val.1.1 (otherA j.val.1.2))
       (roots j.val.1.1 (otherB j.val.1.2)) j.val.2
       (rotated_marker_sound I roots F hmono hsound bare hbare j.val.1.1 j.val.1.2 j.val.2 hj)
@@ -5815,7 +5815,7 @@ lemma aggregate_prefix (n : ℕ) (gs : List Instruction) (rs : List ℕ) :
   obtain ⟨hs, heq, _, _⟩ := aggregate_extension n gs rs
   exact ⟨hs, heq.symm⟩
 
-lemma appendOrs_root_valid (n : ℕ) (gs : List Instruction) (r : ℕ) (rs : List ℕ)
+lemma appendOrs_rt_valid (n : ℕ) (gs : List Instruction) (r : ℕ) (rs : List ℕ)
     (hr : r < n + gs.length) :
     (appendOrs n gs r rs).2 < n + (appendOrs n gs r rs).1.length := by
   induction rs generalizing gs r with
@@ -5824,7 +5824,7 @@ lemma appendOrs_root_valid (n : ℕ) (gs : List Instruction) (r : ℕ) (rs : Lis
     apply ih
     simp
 
-lemma aggregate_root_valid (n : ℕ) (gs : List Instruction) (rs : List ℕ)
+lemma aggregate_rt_valid (n : ℕ) (gs : List Instruction) (rs : List ℕ)
     (hz : gs.head? = some (Sum.inl []))
     (hrs : ∀ r ∈ rs, r < n + gs.length) :
     (aggregate n gs rs).2 < n + (aggregate n gs rs).1.length := by
@@ -5835,7 +5835,7 @@ lemma aggregate_root_valid (n : ℕ) (gs : List Instruction) (rs : List ℕ)
       | nil => simp at hz
       | cons g gs => simp
     simpa only [aggregate] using (show n < n + gs.length by omega)
-  | cons r rs => exact appendOrs_root_valid n gs r rs (hrs r (by simp))
+  | cons r rs => exact appendOrs_rt_valid n gs r rs (hrs r (by simp))
 
 lemma aggregate_old_read (n : ℕ) (gs : List Instruction) (rs : List ℕ)
     (labels : ℕ → Bool) (y : List Bool) (hy : y.length = n)
@@ -6064,7 +6064,7 @@ lemma step_valid (n : ℕ) (seeds edges : List (ℕ × ℕ)) (weight : ℕ → O
     valid n (step n seeds edges weight v s) := by
   let a := aggregate n (net s) (incoming seeds edges (message s) v)
   have ha : a.2 < n + a.1.length :=
-    aggregate_root_valid n (net s) _ hs.1 (incoming_valid n seeds edges v s hs hseeds)
+    aggregate_rt_valid n (net s) _ hs.1 (incoming_valid n seeds edges v s hs hseeds)
   have hh : a.1.head? = some (Sum.inl []) := aggregate_head n (net s) _ hs.1
   have hl : (net s).length ≤ a.1.length := by
     dsimp [a]
@@ -6122,7 +6122,7 @@ lemma step_context_true (n : ℕ) (seeds edges : List (ℕ × ℕ)) (weight : �
   let rs := incoming seeds edges (message s) v
   have hrs := incoming_valid n seeds edges v s hs hseeds
   have ht := aggregate_true n (net s) rs hs.1 hrs labels y hy
-  have hr := aggregate_root_valid n (net s) rs hs.1 hrs
+  have hr := aggregate_rt_valid n (net s) rs hs.1 hrs
   rw [step_context_eq]
   cases hw : weight v with
   | none => simpa only [step, net, hw, rs] using ht
@@ -6146,7 +6146,7 @@ lemma step_message_true (n : ℕ) (seeds edges : List (ℕ × ℕ)) (weight : �
           (context (step n seeds edges weight v s) v) false = true := by
   let a := aggregate n (net s) (incoming seeds edges (message s) v)
   have ha : a.2 < n + a.1.length :=
-    aggregate_root_valid n (net s) _ hs.1 (incoming_valid n seeds edges v s hs hseeds)
+    aggregate_rt_valid n (net s) _ hs.1 (incoming_valid n seeds edges v s hs hseeds)
   cases hw : weight v with
   | none => simp [step, net, context, message, hw, weightValue]
   | some z =>
