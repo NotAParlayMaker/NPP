@@ -1249,11 +1249,13 @@ private theorem level_bound {n t : ℕ} (G : SimpleGraph (Fin n)) (C : Circuit)
     intro j
     simp only [A, Finset.mem_filter, Finset.mem_range]
     constructor
-    · rintro ⟨_, h⟩
-      exact h
-    · intro h
-      obtain ⟨g, hg, _⟩ := h
-      exact ⟨(List.getElem?_eq_some_iff.mp hg).1, h⟩
+    · rintro ⟨_, hex⟩
+      exact hex
+    · intro hex
+      have hj : j < C.size := by
+        obtain ⟨g, hg, _⟩ := hex
+        exact (List.getElem?_eq_some_iff.mp hg).1
+      exact ⟨hj, hex⟩
   have h5A : ∀ j ∈ A, ∀ i ∈ A, ¬ Relation.TransGen (Rd C n) j i := by
     intro j hj i hi
     exact h5 j i ((hA j).mp hj) ((hA i).mp hi)
