@@ -1,1170 +1,803 @@
-import Mathlib
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+import Mathlib.Data.Finset.Card
+import Mathlib.Data.List.GetD
+import Mathlib.Order.Interval.Finset.Nat
 import PEqualNP.Defs
 
-namespace PEqualNP.Outside.L_meta_667_aux
+namespace PEqualNP.Outside.L_meta_667
 
-open PEqualNP.CircuitLowerBounds
+open Finset PEqualNP.CircuitLowerBounds
 
-def wiresFrom (gs : List Gate) (w : List Bool) : List Bool :=
-  gs.foldl (fun acc g => acc ++ [g.op.eval (g.inputs.map fun i => acc.getD i false)]) w
-
-lemma wires_eq (C : Circuit) (x : List Bool) : C.wires x = wiresFrom C.gates x := rfl
-
-lemma wiresFrom_append (gs₁ gs₂ : List Gate) (w : List Bool) :
-    wiresFrom (gs₁ ++ gs₂) w = wiresFrom gs₂ (wiresFrom gs₁ w) := by
-  simp [wiresFrom, List.foldl_append]
-
-lemma wiresFrom_ext (gs : List Gate) : ∀ w : List Bool,
-    ∃ t : List Bool, wiresFrom gs w = w ++ t ∧ t.length = gs.length := by
-  induction gs with
-  | nil => intro w; exact ⟨[], by simp [wiresFrom], rfl⟩
-  | cons g gs ih =>
-    intro w
-    let v := g.op.eval (g.inputs.map fun i => w.getD i false)
-    obtain ⟨t, ht, hl⟩ := ih (w ++ [v])
-    refine ⟨v :: t, ?_, by simp [hl]⟩
-    have hstep : wiresFrom (g :: gs) w = wiresFrom gs (w ++ [v]) := rfl
-    rw [hstep, ht]
-    simp
-
-lemma length_wiresFrom (gs : List Gate) (w : List Bool) :
-    (wiresFrom gs w).length = w.length + gs.length := by
-  obtain ⟨t, ht, hl⟩ := wiresFrom_ext gs w
-  rw [ht, List.length_append, hl]
-
-lemma getD_wiresFrom_lt (gs : List Gate) (w : List Bool) (i : ℕ) (h : i < w.length) :
-    (wiresFrom gs w).getD i false = w.getD i false := by
-  obtain ⟨t, ht, _⟩ := wiresFrom_ext gs w
-  rw [ht, List.getD_append _ _ _ _ h]
-
-lemma getD_wiresFrom_take (gs : List Gate) (w : List Bool) (k i : ℕ) (hk : k ≤ gs.length) :
-    (wiresFrom (gs.take k) w).getD i false =
-      if i < w.length + k then (wiresFrom gs w).getD i false else false := by
-  have hlen : (wiresFrom (gs.take k) w).length = w.length + k := by
-    rw [length_wiresFrom, List.length_take, min_eq_left hk]
-  split_ifs with hi
-  · have hsplit : gs = gs.take k ++ gs.drop k := (List.take_append_drop k gs).symm
-    conv_rhs => rw [hsplit, wiresFrom_append]
-    exact (getD_wiresFrom_lt (gs.drop k) (wiresFrom (gs.take k) w) i (by omega)).symm
-  · rw [List.getD_eq_default]
-    omega
-
-lemma getD_snoc_eq (l : List Bool) (b : Bool) : (l ++ [b]).getD l.length false = b := by
-  simp
-
-lemma getD_wiresFrom_gate (gs : List Gate) (w : List Bool) (k : ℕ) (hk : k < gs.length) :
-    (wiresFrom gs w).getD (w.length + k) false =
-      (gs[k]).op.eval ((gs[k]).inputs.map fun i =>
-        if i < w.length + k then (wiresFrom gs w).getD i false else false) := by
-  have hsplit : gs = gs.take k ++ gs[k] :: gs.drop (k + 1) := by
-    have h1 := (List.take_append_drop k gs).symm
-    rw [List.drop_eq_getElem_cons hk] at h1
-    exact h1
-  have hlen : (wiresFrom (gs.take k) w).length = w.length + k := by
-    rw [length_wiresFrom, List.length_take, min_eq_left (Nat.le_of_lt hk)]
-  have heq : wiresFrom gs w =
-      wiresFrom (gs.drop (k + 1))
-        (wiresFrom (gs.take k) w ++
-          [(gs[k]).op.eval ((gs[k]).inputs.map fun i => (wiresFrom (gs.take k) w).getD i false)]) := by
-    conv_lhs => rw [hsplit, wiresFrom_append]
-    rfl
-  rw [heq, getD_wiresFrom_lt]
-  · conv_lhs => rw [← hlen, getD_snoc_eq]
-    congr 1
-    apply List.map_congr_left
-    intro i _
-    rw [getD_wiresFrom_take gs w k i (Nat.le_of_lt hk), heq]
-  · rw [List.length_append, hlen]; simp
-
-lemma gateOp_eval_mono (op : GateOp) (hop : op = GateOp.and ∨ op = GateOp.or)
-    (l₁ l₂ : List Bool) (hlen : l₁.length = l₂.length)
-    (hle : ∀ i, l₁.getD i false = true → l₂.getD i false = true) :
-    op.eval l₁ = true → op.eval l₂ = true := by
-  rcases hop with rfl | rfl
-  · simp only [GateOp.eval, List.all_eq_true, id_eq]
-    intro h b hb
-    obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hb
-    have h1 : l₁.getD i false = true := by
-      have hi1 : i < l₁.length := by omega
-      rw [List.getD_eq_getElem _ _ hi1]
-      exact h _ (List.getElem_mem hi1)
-    have h2 := hle i h1
-    rwa [List.getD_eq_getElem _ _ hi] at h2
-  · simp only [GateOp.eval, List.any_eq_true, id_eq]
-    rintro ⟨b, hb, rfl⟩
-    obtain ⟨i, hi, hbi⟩ := List.getElem_of_mem hb
-    have h1 : l₁.getD i false = true := by
-      rw [List.getD_eq_getElem _ _ hi]; exact hbi
-    have h2 := hle i h1
-    have hi2 : i < l₂.length := by omega
-    rw [List.getD_eq_getElem _ _ hi2] at h2
-    exact ⟨l₂[i], List.getElem_mem hi2, h2⟩
-
-lemma wiresFrom_mono (gs : List Gate)
-    (hmono : ∀ g ∈ gs, g.op = GateOp.and ∨ g.op = GateOp.or) :
-    ∀ (w₁ w₂ : List Bool), w₁.length = w₂.length →
-      (∀ i, w₁.getD i false = true → w₂.getD i false = true) →
-      ∀ i, (wiresFrom gs w₁).getD i false = true → (wiresFrom gs w₂).getD i false = true := by
-  induction gs with
-  | nil =>
-    intro w₁ w₂ _ hle i hi
-    exact hle i hi
-  | cons g gs ih =>
-    intro w₁ w₂ hlen hle i hi
-    have hstep1 : wiresFrom (g :: gs) w₁ =
-        wiresFrom gs (w₁ ++ [g.op.eval (g.inputs.map fun j => w₁.getD j false)]) := rfl
-    have hstep2 : wiresFrom (g :: gs) w₂ =
-        wiresFrom gs (w₂ ++ [g.op.eval (g.inputs.map fun j => w₂.getD j false)]) := rfl
-    rw [hstep1] at hi
-    rw [hstep2]
-    apply ih (fun g' hg' => hmono g' (List.mem_cons_of_mem g hg')) _ _ (by simp [hlen]) _ i hi
-    intro j hj
-    by_cases hlt : j < w₁.length
-    · rw [List.getD_append _ _ _ _ hlt] at hj
-      rw [List.getD_append _ _ _ _ (by omega)]
-      exact hle j hj
-    · by_cases heq : j = w₁.length
-      · subst heq
-        rw [getD_snoc_eq] at hj
-        rw [hlen, getD_snoc_eq]
-        exact gateOp_eval_mono g.op (hmono g List.mem_cons_self)
-          (g.inputs.map fun k => w₁.getD k false) (g.inputs.map fun k => w₂.getD k false)
-          (by simp) (by
-            intro t ht
-            by_cases ht_lt : t < g.inputs.length
-            · rw [List.getD_eq_getElem _ _ (by simpa using ht_lt)] at ht
-              rw [List.getD_eq_getElem _ _ (by simpa using ht_lt)]
-              simp only [List.getElem_map] at ht ⊢
-              exact hle _ ht
-            · rw [List.getD_eq_default _ _ (by simpa using Nat.le_of_not_lt ht_lt)] at ht
-              exact Bool.noConfusion ht) hj
-      · rw [List.getD_eq_default _ _ (by simp; omega)] at hj
-        exact Bool.noConfusion hj
-
--- PG(2, 3) finite geometry
 def line (w : Fin 13) : Finset (Fin 13) :=
   ({0, 1, 3, 9} : Finset (Fin 13)).image (fun u => u + w)
 
-lemma card_line (w : Fin 13) : (line w).card = 4 := by
-  revert w; decide
+lemma line_card (w : Fin 13) : (line w).card = 4 := by
+  revert w
+  decide
 
-lemma card_inter_line (w₁ w₂ : Fin 13) (h : w₁ ≠ w₂) : (line w₁ ∩ line w₂).card = 1 := by
-  revert w₁ w₂ h; decide
+lemma line_inter (w1 w2 : Fin 13) (h : w1 ≠ w2) : (line w1 ∩ line w2).card ≤ 1 := by
+  revert w1 w2 h
+  decide
 
-lemma line_eq_of_subset_two {S : Finset (Fin 13)} {w₁ w₂ : Fin 13}
-    (h1 : S ⊆ line w₁) (h2 : S ⊆ line w₂) (hc : 2 ≤ S.card) : w₁ = w₂ := by
-  by_contra hne
-  have hsub : S ⊆ line w₁ ∩ line w₂ := Finset.subset_inter h1 h2
-  have hle := Finset.card_le_card hsub
-  rw [card_inter_line w₁ w₂ hne] at hle
+def credit (s : Finset (Fin 13)) (w : Fin 13) : ℕ :=
+  if s ⊆ line w ∧ 2 ≤ s.card then 2
+  else if line w ⊆ s ∧ s.card ≤ 6 then 2
+  else if line w ⊆ s ∧ s.card = 7 then 1
+  else 0
+
+lemma line_union_card {w1 w2 : Fin 13} (h : w1 ≠ w2) :
+    7 ≤ (line w1 ∪ line w2).card := by
+  have h1 := card_union_add_card_inter (line w1) (line w2)
+  have h2 := line_card w1
+  have h3 := line_card w2
+  have h4 := line_inter w1 w2 h
   omega
 
-lemma line_eq_of_superset_le6 {S : Finset (Fin 13)} {w₁ w₂ : Fin 13}
-    (h1 : line w₁ ⊆ S) (h2 : line w₂ ⊆ S) (hc : S.card ≤ 6) : w₁ = w₂ := by
-  by_contra hne
-  have hun : line w₁ ∪ line w₂ ⊆ S := Finset.union_subset h1 h2
-  have hle := Finset.card_le_card hun
-  have hci := Finset.card_union_add_card_inter (line w₁) (line w₂)
-  rw [card_line w₁, card_line w₂, card_inter_line w₁ w₂ hne] at hci
-  omega
+lemma capacity (s : Finset (Fin 13)) : ∑ w : Fin 13, credit s w ≤ 2 := by
+  by_cases hsub : ∃ w0 : Fin 13, s ⊆ line w0 ∧ 2 ≤ s.card
+  · obtain ⟨w0, hs0, hcard⟩ := hsub
+    have hzero : ∀ w : Fin 13, w ≠ w0 → credit s w = 0 := by
+      intro w hne
+      have hns : ¬ (s ⊆ line w ∧ 2 ≤ s.card) := by
+        rintro ⟨hsw, _⟩
+        have hle : s.card ≤ (line w ∩ line w0).card :=
+          card_le_card (subset_inter hsw hs0)
+        have hi := line_inter w w0 hne
+        omega
+      have hnl : ¬ (line w ⊆ s) := by
+        intro hws
+        have hle : (line w).card ≤ (line w ∩ line w0).card :=
+          card_le_card (subset_inter Subset.rfl (hws.trans hs0))
+        have hc := line_card w
+        have hi := line_inter w w0 hne
+        omega
+      simp [credit, hns, hnl]
+    rw [Finset.sum_eq_single w0 (fun w _ hne => hzero w hne) (by simp)]
+    simp [credit, hs0, hcard]
+  · have hns : ∀ w : Fin 13, ¬ (s ⊆ line w ∧ 2 ≤ s.card) := fun w hw => hsub ⟨w, hw⟩
+    by_cases hc6 : s.card ≤ 6
+    · by_cases hex : ∃ w0 : Fin 13, line w0 ⊆ s
+      · obtain ⟨w0, hw0⟩ := hex
+        have hzero : ∀ w : Fin 13, w ≠ w0 → credit s w = 0 := by
+          intro w hne
+          have hnl : ¬ (line w ⊆ s) := by
+            intro hws
+            have hle : (line w ∪ line w0).card ≤ s.card :=
+              card_le_card (union_subset hws hw0)
+            have hu := line_union_card hne
+            omega
+          simp [credit, hns w, hnl]
+        rw [Finset.sum_eq_single w0 (fun w _ hne => hzero w hne) (by simp)]
+        simp [credit, hns w0, hw0, hc6]
+      · have hzero : ∀ w : Fin 13, credit s w = 0 := by
+          intro w
+          have hnl : ¬ (line w ⊆ s) := fun h => hex ⟨w, h⟩
+          simp [credit, hns w, hnl]
+        simp [hzero]
+    · by_cases hc7 : s.card = 7
+      · let T : Finset (Fin 13) := Finset.univ.filter (fun w => line w ⊆ s)
+        have hsum : ∑ w : Fin 13, credit s w = T.card := by
+          have h1 : ∀ w : Fin 13, credit s w = if line w ⊆ s then 1 else 0 := by
+            intro w
+            have hnsub : ¬ s ⊆ line w := fun h => hns w ⟨h, by omega⟩
+            simp [credit, hnsub, hc7]
+          simp [h1, T]
+        rw [hsum]
+        by_contra hgt
+        have h3 : 2 < T.card := by omega
+        rw [Finset.two_lt_card] at h3
+        obtain ⟨w1, hw1, w2, hw2, w3, hw3, h12, h13, h23⟩ := h3
+        have hs1 : line w1 ⊆ s := (mem_filter.mp hw1).2
+        have hs2 : line w2 ⊆ s := (mem_filter.mp hw2).2
+        have hs3 : line w3 ⊆ s := (mem_filter.mp hw3).2
+        have heq : line w1 ∪ line w2 = s := by
+          apply eq_of_subset_of_card_le (union_subset hs1 hs2)
+          have hu := line_union_card h12
+          omega
+        have hsub3 : line w3 ⊆ (line w3 ∩ line w1) ∪ (line w3 ∩ line w2) := by
+          intro p hp
+          have hpm : p ∈ line w1 ∪ line w2 := heq ▸ hs3 hp
+          rcases mem_union.mp hpm with h1 | h2
+          · exact mem_union_left _ (mem_inter.mpr ⟨hp, h1⟩)
+          · exact mem_union_right _ (mem_inter.mpr ⟨hp, h2⟩)
+        have hle := (card_le_card hsub3).trans (card_union_le _ _)
+        have hc3 := line_card w3
+        have hi1 := line_inter w3 w1 h13.symm
+        have hi2 := line_inter w3 w2 h23.symm
+        omega
+      · have hzero : ∀ w : Fin 13, credit s w = 0 := by
+          intro w
+          simp [credit, hns w, hc6, hc7]
+        simp [hzero]
 
-lemma lines_in_card7_le2 (S : Finset (Fin 13)) (hc : S.card = 7) :
-    (Finset.univ.filter (fun w : Fin 13 => line w ⊆ S)).card ≤ 2 := by
-  set T := Finset.univ.filter (fun w : Fin 13 => line w ⊆ S)
-  by_contra hgt
-  have h3 : 2 < T.card := by omega
-  obtain ⟨w₁, hw₁, w₂, hw₂, h12⟩ := Finset.one_lt_card.mp (by omega : 1 < T.card)
-  have hrem : (T.erase w₁ |>.erase w₂).Nonempty := by
-    rw [Finset.nonempty_iff_ne_empty]
-    intro hemp
-    have hcard : (T.erase w₁ |>.erase w₂).card = 0 := by rw [hemp]; rfl
-    have h1 : (T.erase w₁).card = T.card - 1 := Finset.card_erase_of_mem hw₁
-    have hw2' : w₂ ∈ T.erase w₁ := Finset.mem_erase.mpr ⟨h12.symm, hw₂⟩
-    have h2 : (T.erase w₁ |>.erase w₂).card = (T.erase w₁).card - 1 := Finset.card_erase_of_mem hw2'
-    omega
-  obtain ⟨w₃, hw₃⟩ := hrem
-  have hw3_2 : w₃ ≠ w₂ := (Finset.mem_erase.mp hw₃).1
-  have hw3_1 : w₃ ≠ w₁ := (Finset.mem_erase.mp (Finset.mem_erase.mp hw₃).2).1
-  have hw3_T : w₃ ∈ T := (Finset.mem_erase.mp (Finset.mem_erase.mp hw₃).2).2
-  have hL1 : line w₁ ⊆ S := (Finset.mem_filter.mp hw₁).2
-  have hL2 : line w₂ ⊆ S := (Finset.mem_filter.mp hw₂).2
-  have hL3 : line w₃ ⊆ S := (Finset.mem_filter.mp hw3_T).2
-  have hun : (line w₁ ∪ line w₂) ∪ line w₃ ⊆ S :=
-    Finset.union_subset (Finset.union_subset hL1 hL2) hL3
-  have h12u : (line w₁ ∪ line w₂).card = 7 := by
-    have hci := Finset.card_union_add_card_inter (line w₁) (line w₂)
-    rw [card_line w₁, card_line w₂, card_inter_line w₁ w₂ h12] at hci
-    omega
-  have hinter : ((line w₁ ∪ line w₂) ∩ line w₃).card ≤ 2 := by
-    rw [Finset.union_inter_distrib_right]
-    have hu := Finset.card_union_le (line w₁ ∩ line w₃) (line w₂ ∩ line w₃)
-    rw [card_inter_line w₁ w₃ hw3_1.symm, card_inter_line w₂ w₃ hw3_2.symm] at hu
-    omega
-  have htot := Finset.card_union_add_card_inter (line w₁ ∪ line w₂) (line w₃)
-  rw [h12u, card_line w₃] at htot
-  have hle := Finset.card_le_card hun
-  omega
+def step (w : List Bool) (g : Gate) : List Bool :=
+  w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
 
--- Light inputs and monotonicity helpers
-def e1 (v : Fin 13) : Fin 13 → Bool := fun k => decide (k = v)
-def e2 (a b : Fin 13) : Fin 13 → Bool := fun k => decide (k = a ∨ k = b)
+def read (v : ℕ → Bool) (j i : ℕ) : Bool :=
+  if i < j then v i else false
 
-def WeightLe2 (x : Fin 13 → Bool) : Prop :=
-  ∀ i j k : Fin 13, x i = true → x j = true → x k = true → i = j ∨ j = k ∨ i = k
+def evalG (g : Gate) (v : ℕ → Bool) : Bool :=
+  g.op.eval (g.inputs.map v)
 
-lemma e1_weightLe2 (v : Fin 13) : WeightLe2 (e1 v) := by
-  intro i j k hi hj hk
-  simp only [e1, decide_eq_true_eq] at hi hj hk
-  left; exact hi.trans hj.symm
+def defaultGate : Gate := ⟨GateOp.or, []⟩
 
-lemma e2_weightLe2 (a b : Fin 13) : WeightLe2 (e2 a b) := by
-  intro i j k hi hj hk
-  simp only [e2, decide_eq_true_eq] at hi hj hk
-  rcases hi with rfl | rfl <;> rcases hj with rfl | rfl <;> rcases hk with rfl | rfl <;> tauto
+lemma fold_spec (gs : List Gate) (w : List Bool) :
+    (gs.foldl step w).length = w.length + gs.length ∧
+    (∀ i < w.length, (gs.foldl step w).getD i false = w.getD i false) ∧
+    ∀ j < gs.length, (gs.foldl step w).getD (w.length + j) false =
+      evalG (gs.getD j defaultGate)
+        (read (fun a => (gs.foldl step w).getD a false) (w.length + j)) := by
+  induction gs generalizing w with
+  | nil => simp
+  | cons g gs ih =>
+    obtain ⟨h1, h2, h3⟩ := ih (step w g)
+    have hl : (step w g).length = w.length + 1 := by simp [step]
+    simp only [List.foldl_cons]
+    refine ⟨by rw [h1, hl]; simp; omega, ?_, ?_⟩
+    · intro i hi
+      rw [h2 i (by omega)]
+      exact List.getD_append _ _ _ _ hi
+    · intro j hj
+      cases j with
+      | zero =>
+        rw [Nat.add_zero, h2 _ (by omega)]
+        have hv : (step w g).getD w.length false = evalG g (fun a => w.getD a false) := by
+          simp [step, evalG]
+        rw [hv, List.getD_cons_zero]
+        unfold evalG
+        congr 1
+        apply List.map_congr_left
+        intro a _
+        unfold read
+        split_ifs with ha
+        · change w.getD a false = (gs.foldl step (step w g)).getD a false
+          rw [h2 a (by omega)]
+          exact (List.getD_append _ _ _ _ ha).symm
+        · exact List.getD_eq_default _ _ (by omega)
+      | succ j =>
+        have h := h3 j (by simp at hj; omega)
+        rw [hl] at h
+        rw [List.getD_cons_succ, show w.length + (j + 1) = w.length + 1 + j by omega]
+        exact h
 
-def MonoFun (f : (Fin 13 → Bool) → Bool) : Prop :=
-  ∀ x y : Fin 13 → Bool, (∀ k, x k = true → y k = true) → f x = true → f y = true
+def value (gs : List Gate) (x : Fin 13 → Bool) (w : ℕ) : Bool :=
+  (gs.foldl step (List.ofFn x)).getD w false
 
-def Safe (w : Fin 13) (f : (Fin 13 → Bool) → Bool) : Prop :=
-  ∀ x : Fin 13 → Bool, WeightLe2 x → f x = true → ∃ v ∈ line w, x v = true
+def gateAt (gs : List Gate) (w : ℕ) : Gate :=
+  gs.getD (w - 13) defaultGate
 
-lemma prime_weight2 (w : Fin 13) (f₁ f₂ : (Fin 13 → Bool) → Bool)
-    (hm₁ : MonoFun f₁) (hm₂ : MonoFun f₂)
-    (hs : Safe w (fun x => f₁ x && f₂ x)) :
-    (∀ v : Fin 13, f₁ (e1 v) = true → v ∈ line w) ∨
-    (∀ v : Fin 13, f₂ (e1 v) = true → v ∈ line w) := by
-  by_contra h
-  push_neg at h
-  obtain ⟨⟨a, ha1, haL⟩, ⟨b, hb2, hbL⟩⟩ := h
-  have h1 : f₁ (e2 a b) = true := hm₁ (e1 a) (e2 a b) (by
-    intro k hk; simp only [e1, e2, decide_eq_true_eq] at hk ⊢; exact Or.inl hk) ha1
-  have h2 : f₂ (e2 a b) = true := hm₂ (e1 b) (e2 a b) (by
-    intro k hk; simp only [e1, e2, decide_eq_true_eq] at hk ⊢; exact Or.inr hk) hb2
-  obtain ⟨v, hvL, hvx⟩ := hs (e2 a b) (e2_weightLe2 a b) (by simp [h1, h2])
-  simp only [e2, decide_eq_true_eq] at hvx
-  rcases hvx with rfl | rfl
-  · exact haL hvL
-  · exact hbL hvL
+def Legal (gs : List Gate) : Prop :=
+  ∀ g ∈ gs, (g.op = GateOp.and ∨ g.op = GateOp.or) ∧ g.inputs.length ≤ 2
 
--- Wire evaluation and weight-1 support V
-def wval (gates : List Gate) (i : ℕ) (x : Fin 13 → Bool) : Bool :=
-  (wiresFrom gates (List.ofFn x)).getD i false
+lemma value_eq_eval (gs : List Gate) (o : ℕ) (x : Fin 13 → Bool) :
+    value gs x o = Circuit.eval ⟨gs, o⟩ (List.ofFn x) := rfl
 
-def wvalAt (gates : List Gate) (k i : ℕ) (x : Fin 13 → Bool) : Bool :=
-  if i < 13 + k then wval gates i x else false
+lemma value_input (gs : List Gate) (x : Fin 13 → Bool) (w : ℕ) (hw : w < 13) :
+    value gs x w = x ⟨w, hw⟩ := by
+  unfold value
+  rw [(fold_spec gs (List.ofFn x)).2.1 w (by rw [List.length_ofFn]; exact hw)]
+  rw [List.getD_eq_getElem?_getD, List.getElem?_ofFn]
+  simp [hw]
 
-def V (gates : List Gate) (i : ℕ) : Finset (Fin 13) :=
-  Finset.univ.filter (fun v => wval gates i (e1 v) = true)
+lemma value_missing (gs : List Gate) (x : Fin 13 → Bool) (w : ℕ) (hw : 13 + gs.length ≤ w) :
+    value gs x w = false := by
+  unfold value
+  apply List.getD_eq_default
+  rw [(fold_spec gs (List.ofFn x)).1, List.length_ofFn]
+  exact hw
 
-def VAt (gates : List Gate) (k i : ℕ) : Finset (Fin 13) :=
-  if i < 13 + k then V gates i else ∅
-
-lemma mem_V (gates : List Gate) (i : ℕ) (v : Fin 13) :
-    v ∈ V gates i ↔ wval gates i (e1 v) = true := by
-  simp [V]
-
-lemma mem_VAt (gates : List Gate) (k i : ℕ) (v : Fin 13) :
-    v ∈ VAt gates k i ↔ wvalAt gates k i (e1 v) = true := by
-  unfold VAt wvalAt
-  split_ifs with h
-  · exact mem_V gates i v
-  · simp
-
-lemma wval_mono (gates : List Gate)
-    (hmono : ∀ g ∈ gates, g.op = GateOp.and ∨ g.op = GateOp.or) (i : ℕ) :
-    MonoFun (wval gates i) := by
-  intro x y hle hx
-  apply wiresFrom_mono gates hmono (List.ofFn x) (List.ofFn y) (by simp) _ i hx
-  intro j hj
-  by_cases hjlt : j < 13
-  · rw [List.getD_eq_getElem _ _ (by simpa using hjlt)] at hj ⊢
-    simp only [List.getElem_ofFn] at hj ⊢
-    exact hle ⟨j, hjlt⟩ hj
-  · rw [List.getD_eq_default _ _ (by simp; omega)] at hj
-    exact Bool.noConfusion hj
-
-lemma wvalAt_mono (gates : List Gate)
-    (hmono : ∀ g ∈ gates, g.op = GateOp.and ∨ g.op = GateOp.or) (k i : ℕ) :
-    MonoFun (wvalAt gates k i) := by
-  intro x y hle hx
-  unfold wvalAt at hx ⊢
-  split_ifs at hx ⊢ with h
-  exact wval_mono gates hmono i x y hle hx
-
-lemma wval_input (gates : List Gate) (i : ℕ) (hi : i < 13) (x : Fin 13 → Bool) :
-    wval gates i x = x ⟨i, hi⟩ := by
-  unfold wval
-  have hlen : (List.ofFn x).length = 13 := List.length_ofFn
-  rw [getD_wiresFrom_lt gates (List.ofFn x) i (by omega)]
-  rw [List.getD_eq_getElem _ _ (by omega)]
-  exact List.getElem_ofFn (f := x) (i := i) (by omega)
-
-lemma V_input (gates : List Gate) (i : ℕ) (hi : i < 13) :
-    V gates i = {⟨i, hi⟩} := by
-  ext v
-  rw [mem_V, wval_input gates i hi, Finset.mem_singleton]
-  simp [e1, Fin.ext_iff, eq_comm]
-
-lemma card_V_input (gates : List Gate) (i : ℕ) (hi : i < 13) :
-    (V gates i).card = 1 := by
-  rw [V_input gates i hi, Finset.card_singleton]
-
-lemma V_ge_len (gates : List Gate) (i : ℕ) (hi : 13 + gates.length ≤ i) :
-    V gates i = ∅ := by
-  ext v
-  rw [mem_V]
-  simp only [Finset.notMem_empty, iff_false]
-  unfold wval
-  rw [List.getD_eq_default]
-  · simp
-  · rw [length_wiresFrom, List.length_ofFn]; omega
-
-lemma gate_idx_of_VAt_ge2 (gates : List Gate) (k i : ℕ) (hc : 2 ≤ (VAt gates k i).card) :
-    ∃ g' < k, i = 13 + g' := by
-  unfold VAt at hc
-  split_ifs at hc with hlt
-  · have hge13 : 13 ≤ i := by
-      by_contra h13
-      have hcard := card_V_input gates i (by omega)
-      omega
-    exact ⟨i - 13, by omega, by omega⟩
-  · simp at hc
-
-lemma gate_idx_of_V_ge2 (gates : List Gate) (i : ℕ) (hc : 2 ≤ (V gates i).card) :
-    ∃ g < gates.length, i = 13 + g := by
-  have hlt : i < 13 + gates.length := by
-    by_contra hge
-    have he := V_ge_len gates i (by omega)
-    rw [he] at hc; simp at hc
-  have hge13 : 13 ≤ i := by
-    by_contra h13
-    have hcard := card_V_input gates i (by omega)
-    omega
-  exact ⟨i - 13, by omega, by omega⟩
-
-lemma wval_gate_eq (gates : List Gate) (k : ℕ) (hk : k < gates.length) (x : Fin 13 → Bool) :
-    wval gates (13 + k) x =
-      (gates[k]).op.eval ((gates[k]).inputs.map fun i => wvalAt gates k i x) := by
-  have h := getD_wiresFrom_gate gates (List.ofFn x) k hk
-  rw [List.length_ofFn] at h
+lemma value_gate (gs : List Gate) (x : Fin 13 → Bool) {w : ℕ}
+    (h1 : 13 ≤ w) (h2 : w < 13 + gs.length) :
+    value gs x w = evalG (gateAt gs w) (read (value gs x) w) := by
+  have h := (fold_spec gs (List.ofFn x)).2.2 (w - 13) (by omega)
+  rw [List.length_ofFn, show 13 + (w - 13) = w by omega] at h
   exact h
 
-lemma V_gate_nil_and (gates : List Gate) (k : ℕ) (hk : k < gates.length)
-    (hop : (gates[k]).op = GateOp.and) (hin : (gates[k]).inputs = []) :
-    V gates (13 + k) = Finset.univ := by
-  ext v
-  rw [mem_V, wval_gate_eq gates k hk, hop, hin]
-  simp [GateOp.eval]
+lemma gateAt_legal (gs : List Gate) (hL : Legal gs) {w : ℕ}
+    (h1 : 13 ≤ w) (h2 : w < 13 + gs.length) :
+    ((gateAt gs w).op = GateOp.and ∨ (gateAt gs w).op = GateOp.or) ∧
+      (gateAt gs w).inputs.length ≤ 2 := by
+  apply hL
+  unfold gateAt
+  rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by omega)]
+  exact List.getElem_mem _
 
-lemma V_gate_nil_or (gates : List Gate) (k : ℕ) (hk : k < gates.length)
-    (hop : (gates[k]).op = GateOp.or) (hin : (gates[k]).inputs = []) :
-    V gates (13 + k) = ∅ := by
-  ext v
-  rw [mem_V, wval_gate_eq gates k hk, hop, hin]
-  simp [GateOp.eval]
+lemma all_mono (l : List ℕ) (u v : ℕ → Bool) (h : ∀ a ∈ l, u a ≤ v a) :
+    (l.map u).all id ≤ (l.map v).all id := by
+  induction l with
+  | nil => simp
+  | cons a l ih =>
+    simp only [List.map_cons, List.all_cons, id_eq]
+    have ha := h a (by simp)
+    have hl := ih (fun b hb => h b (by simp [hb]))
+    cases h1 : u a <;> cases h2 : v a <;> cases h3 : (l.map u).all id <;>
+      cases h4 : (l.map v).all id <;> simp_all
 
-lemma wval_gate_one (gates : List Gate) (k : ℕ) (hk : k < gates.length) (a : ℕ)
-    (hop : (gates[k]).op = GateOp.and ∨ (gates[k]).op = GateOp.or)
-    (hin : (gates[k]).inputs = [a]) (x : Fin 13 → Bool) :
-    wval gates (13 + k) x = wvalAt gates k a x := by
-  rw [wval_gate_eq gates k hk, hin]
-  rcases hop with h | h <;> simp [h, GateOp.eval]
+lemma any_mono (l : List ℕ) (u v : ℕ → Bool) (h : ∀ a ∈ l, u a ≤ v a) :
+    (l.map u).any id ≤ (l.map v).any id := by
+  induction l with
+  | nil => simp
+  | cons a l ih =>
+    simp only [List.map_cons, List.any_cons, id_eq]
+    have ha := h a (by simp)
+    have hl := ih (fun b hb => h b (by simp [hb]))
+    cases h1 : u a <;> cases h2 : v a <;> cases h3 : (l.map u).any id <;>
+      cases h4 : (l.map v).any id <;> simp_all
 
-lemma wval_gate_two_and (gates : List Gate) (k : ℕ) (hk : k < gates.length) (a b : ℕ)
-    (hop : (gates[k]).op = GateOp.and) (hin : (gates[k]).inputs = [a, b]) (x : Fin 13 → Bool) :
-    wval gates (13 + k) x = (wvalAt gates k a x && wvalAt gates k b x) := by
-  rw [wval_gate_eq gates k hk, hop, hin]
-  simp [GateOp.eval]
+lemma value_mono (gs : List Gate) (hL : Legal gs) {x y : Fin 13 → Bool}
+    (hxy : ∀ p : Fin 13, x p ≤ y p) (w : ℕ) : value gs x w ≤ value gs y w := by
+  induction w using Nat.strong_induction_on with
+  | _ w ih =>
+    by_cases hin : w < 13
+    · rw [value_input gs x w hin, value_input gs y w hin]
+      exact hxy ⟨w, hin⟩
+    by_cases hout : 13 + gs.length ≤ w
+    · rw [value_missing gs x w hout, value_missing gs y w hout]
+    have h1 : 13 ≤ w := by omega
+    have h2 : w < 13 + gs.length := by omega
+    rw [value_gate gs x h1 h2, value_gate gs y h1 h2]
+    obtain ⟨hop, _⟩ := gateAt_legal gs hL h1 h2
+    have hread : ∀ a ∈ (gateAt gs w).inputs, read (value gs x) w a ≤ read (value gs y) w a := by
+      intro a _
+      unfold read
+      split_ifs with ha
+      · exact ih a ha
+      · exact le_rfl
+    unfold evalG
+    rcases hop with hop | hop <;> rw [hop]
+    · exact all_mono _ _ _ hread
+    · exact any_mono _ _ _ hread
 
-lemma wval_gate_two_or (gates : List Gate) (k : ℕ) (hk : k < gates.length) (a b : ℕ)
-    (hop : (gates[k]).op = GateOp.or) (hin : (gates[k]).inputs = [a, b]) (x : Fin 13 → Bool) :
-    wval gates (13 + k) x = (wvalAt gates k a x || wvalAt gates k b x) := by
-  rw [wval_gate_eq gates k hk, hop, hin]
-  simp [GateOp.eval]
+lemma gate_cases (gs : List Gate) (hL : Legal gs) {w : ℕ}
+    (h1 : 13 ≤ w) (h2 : w < 13 + gs.length) :
+    (∀ x, value gs x w = false) ∨
+    (∀ x, value gs x w = true) ∨
+    (∃ a < w, ∀ x, value gs x w = value gs x a) ∨
+    (∃ a < w, ∃ b < w, ∀ x, value gs x w = (value gs x a || value gs x b)) ∨
+    (∃ a < w, ∃ b < w, ∀ x, value gs x w = (value gs x a && value gs x b)) := by
+  obtain ⟨hop, hlen⟩ := gateAt_legal gs hL h1 h2
+  have hv : ∀ x, value gs x w = (gateAt gs w).op.eval ((gateAt gs w).inputs.map (read (value gs x) w)) :=
+    fun x => value_gate gs x h1 h2
+  cases hin : (gateAt gs w).inputs with
+  | nil =>
+    rcases hop with hop | hop
+    · right; left; intro x; simp [hv x, hop, hin, GateOp.eval]
+    · left; intro x; simp [hv x, hop, hin, GateOp.eval]
+  | cons a l =>
+    cases l with
+    | nil =>
+      by_cases ha : a < w
+      · right; right; left; refine ⟨a, ha, fun x => ?_⟩
+        rcases hop with hop | hop <;> simp [hv x, hop, hin, GateOp.eval, read, ha]
+      · left; intro x
+        rcases hop with hop | hop <;> simp [hv x, hop, hin, GateOp.eval, read, ha]
+    | cons b l =>
+      cases l with
+      | cons c l =>
+        rw [hin] at hlen
+        simp at hlen
+      | nil =>
+        rcases hop with hop | hop
+        · by_cases ha : a < w
+          · by_cases hb : b < w
+            · right; right; right; right; refine ⟨a, ha, b, hb, fun x => ?_⟩
+              simp [hv x, hop, hin, GateOp.eval, read, ha, hb]
+            · left; intro x
+              simp [hv x, hop, hin, GateOp.eval, read, ha, hb]
+          · left; intro x
+            simp [hv x, hop, hin, GateOp.eval, read, ha]
+        · by_cases ha : a < w
+          · by_cases hb : b < w
+            · right; right; right; left; refine ⟨a, ha, b, hb, fun x => ?_⟩
+              simp [hv x, hop, hin, GateOp.eval, read, ha, hb]
+            · right; right; left; refine ⟨a, ha, fun x => ?_⟩
+              simp [hv x, hop, hin, GateOp.eval, read, ha, hb]
+          · by_cases hb : b < w
+            · right; right; left; refine ⟨b, hb, fun x => ?_⟩
+              simp [hv x, hop, hin, GateOp.eval, read, ha, hb]
+            · left; intro x
+              simp [hv x, hop, hin, GateOp.eval, read, ha, hb]
 
-lemma V_gate_one (gates : List Gate) (k : ℕ) (hk : k < gates.length) (a : ℕ)
-    (hop : (gates[k]).op = GateOp.and ∨ (gates[k]).op = GateOp.or)
-    (hin : (gates[k]).inputs = [a]) :
-    V gates (13 + k) = VAt gates k a := by
-  ext v; rw [mem_V, mem_VAt, wval_gate_one gates k hk a hop hin]
+def single (p : Fin 13) : Fin 13 → Bool := fun q => decide (q = p)
 
-lemma V_gate_two_and (gates : List Gate) (k : ℕ) (hk : k < gates.length) (a b : ℕ)
-    (hop : (gates[k]).op = GateOp.and) (hin : (gates[k]).inputs = [a, b]) :
-    V gates (13 + k) = VAt gates k a ∩ VAt gates k b := by
-  ext v; rw [mem_V, Finset.mem_inter, mem_VAt, mem_VAt, wval_gate_two_and gates k hk a b hop hin]
-  simp [Bool.and_eq_true]
+def pair (p q : Fin 13) : Fin 13 → Bool := fun r => decide (r = p ∨ r = q)
 
-lemma V_gate_two_or (gates : List Gate) (k : ℕ) (hk : k < gates.length) (a b : ℕ)
-    (hop : (gates[k]).op = GateOp.or) (hin : (gates[k]).inputs = [a, b]) :
-    V gates (13 + k) = VAt gates k a ∪ VAt gates k b := by
-  ext v; rw [mem_V, Finset.mem_union, mem_VAt, mem_VAt, wval_gate_two_or gates k hk a b hop hin]
-  simp [Bool.or_eq_true]
+def support (gs : List Gate) (w : ℕ) : Finset (Fin 13) :=
+  Finset.univ.filter (fun p => value gs (single p) w = true)
 
--- Owned gate sets and triple-superset predicate
-def GwUp (gates : List Gate) (w : Fin 13) (g : ℕ) : Finset ℕ :=
-  (Finset.range (g + 1)).filter (fun j => V gates (13 + j) ⊆ line w ∧ 2 ≤ (V gates (13 + j)).card)
+lemma mem_support (gs : List Gate) (w : ℕ) (p : Fin 13) :
+    p ∈ support gs w ↔ value gs (single p) w = true := by
+  simp [support]
 
-def Gw (gates : List Gate) (w : Fin 13) : Finset ℕ :=
-  (Finset.range gates.length).filter (fun j => V gates (13 + j) ⊆ line w ∧ 2 ≤ (V gates (13 + j)).card)
+lemma valid_of_card (gs : List Gate) (w : ℕ) (hw : 2 ≤ (support gs w).card) :
+    13 ≤ w ∧ w < 13 + gs.length := by
+  constructor
+  · by_contra hlt
+    have hlt' : w < 13 := by omega
+    have he : support gs w = {⟨w, hlt'⟩} := by
+      ext p
+      rw [mem_support, value_input gs (single p) w hlt', mem_singleton]
+      simp [single, eq_comm]
+    simp [he] at hw
+  · by_contra hge
+    have hge' : 13 + gs.length ≤ w := by omega
+    have he : support gs w = ∅ := by
+      ext p
+      rw [mem_support, value_missing gs (single p) w hge']
+      simp
+    simp [he] at hw
 
-def HasTriple (gates : List Gate) (w : Fin 13) : Prop :=
-  ∃ ga gb gc : ℕ,
-    ga < gates.length ∧ gb < gates.length ∧ gc < gates.length ∧
-    line w ⊂ V gates (13 + ga) ∧ line w ⊂ V gates (13 + gb) ∧ line w ⊂ V gates (13 + gc) ∧
-    Disjoint (V gates (13 + ga) \ line w) (V gates (13 + gb) \ line w) ∧
-    Disjoint (V gates (13 + ga) \ line w) (V gates (13 + gc) \ line w) ∧
-    Disjoint (V gates (13 + gb) \ line w) (V gates (13 + gc) \ line w)
+lemma pair_true_left (gs : List Gate) (hL : Legal gs) (w : ℕ) {p q : Fin 13}
+    (hp : p ∈ support gs w) : value gs (pair p q) w = true := by
+  have hm : ∀ r : Fin 13, single p r ≤ pair p q r := by
+    intro r
+    by_cases h : r = p <;> simp [single, pair, h]
+  have hle := value_mono gs hL hm w
+  rw [(mem_support gs w p).mp hp] at hle
+  cases hv : value gs (pair p q) w
+  · rw [hv] at hle; exact False.elim ((by decide : ¬ (true ≤ false)) hle)
+  · rfl
 
-lemma GwUp_subset_Gw (gates : List Gate) (w : Fin 13) (g : ℕ) (hg : g < gates.length) :
-    GwUp gates w g ⊆ Gw gates w := by
-  intro j hj
-  simp only [GwUp, Gw, Finset.mem_filter, Finset.mem_range] at hj ⊢
-  exact ⟨by omega, hj.2⟩
+lemma pair_true_right (gs : List Gate) (hL : Legal gs) (w : ℕ) {p q : Fin 13}
+    (hq : q ∈ support gs w) : value gs (pair p q) w = true := by
+  have hm : ∀ r : Fin 13, single q r ≤ pair p q r := by
+    intro r
+    by_cases h : r = q <;> simp [single, pair, h]
+  have hle := value_mono gs hL hm w
+  rw [(mem_support gs w q).mp hq] at hle
+  cases hv : value gs (pair p q) w
+  · rw [hv] at hle; exact False.elim ((by decide : ¬ (true ≤ false)) hle)
+  · rfl
 
-lemma card_ge3_of_three {S : Finset ℕ} {a b c : ℕ}
-    (ha : a ∈ S) (hb : b ∈ S) (hc : c ∈ S) (hab : a ≠ b) (hac : a ≠ c) (hbc : b ≠ c) :
-    3 ≤ S.card := by
-  have hsub : ({a, b, c} : Finset ℕ) ⊆ S := by
-    intro x hx
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hx
-    rcases hx with rfl | rfl | rfl <;> assumption
-  have hcard : ({a, b, c} : Finset ℕ).card = 3 := by
-    rw [Finset.card_insert_of_notMem (by simp [hab, hac])]
-    rw [Finset.card_insert_of_notMem (by simp [hbc])]
-    simp
-  linarith [Finset.card_le_card hsub]
+def privSet (gs : List Gate) (S : Finset (Fin 13)) : Finset ℕ :=
+  (Finset.Ico 13 (13 + gs.length)).filter (fun i => support gs i ⊆ S ∧ 2 ≤ (support gs i).card)
 
-lemma card_ge2_of_two {S : Finset ℕ} {a b : ℕ} (ha : a ∈ S) (hb : b ∈ S) (hab : a ≠ b) :
-    2 ≤ S.card := by
-  have hsub : ({a, b} : Finset ℕ) ⊆ S := by
-    intro x hx
-    simp only [Finset.mem_insert, Finset.mem_singleton] at hx
-    rcases hx with rfl | rfl <;> assumption
-  have hcard : ({a, b} : Finset ℕ).card = 2 := by
-    rw [Finset.card_insert_of_notMem (by simp [hab])]; simp
-  linarith [Finset.card_le_card hsub]
+lemma mem_privSet (gs : List Gate) (S : Finset (Fin 13)) (i : ℕ) :
+    i ∈ privSet gs S ↔ support gs i ⊆ S ∧ 2 ≤ (support gs i).card := by
+  unfold privSet
+  rw [mem_filter, mem_Ico]
+  constructor
+  · exact fun h => h.2
+  · intro h
+    exact ⟨valid_of_card gs i h.2, h⟩
 
-lemma card_ge3_of_sub (gates : List Gate) (w : Fin 13) (g' g : ℕ)
-    (hlt : g' < g) (hg : g ∈ GwUp gates w g) (h2 : 2 ≤ (GwUp gates w g').card) :
-    3 ≤ (GwUp gates w g).card := by
-  have hnot : g ∉ GwUp gates w g' := by
-    simp only [GwUp, Finset.mem_filter, Finset.mem_range]
+lemma no_priv_below (gs : List Gate) (hL : Legal gs) (S : Finset (Fin 13)) (hScard : S.card = 4)
+    (u : ℕ) (hsub : support gs u ⊆ S) (hcard : 3 ≤ (support gs u).card)
+    (hpair : ∀ q1 q2 : Fin 13, q1 ∉ S → q2 ∉ S → value gs (pair q1 q2) u = false)
+    (hno : ∀ c < u, c ∉ privSet gs S) : False := by
+  obtain ⟨h1, h2⟩ := valid_of_card gs u (by omega)
+  rcases gate_cases gs hL h1 h2 with hf | ht | ⟨a, ha, hua⟩ | ⟨a, ha, b, hb, huab⟩ | ⟨a, ha, b, hb, huab⟩
+  · have he : support gs u = ∅ := by
+      ext p; simp [mem_support, hf]
+    rw [he] at hcard; simp at hcard
+  · have he : support gs u = Finset.univ := by
+      ext p; simp [mem_support, ht]
+    have hle := card_le_card (he ▸ hsub)
+    simp [hScard] at hle
+  · have hsup : support gs a = support gs u := by
+      ext p; simp [mem_support, hua]
+    exact hno a ha ((mem_privSet gs S a).mpr ⟨hsup ▸ hsub, by rw [hsup]; omega⟩)
+  · have hsup : support gs u = support gs a ∪ support gs b := by
+      ext p; simp [mem_support, huab]
+    have hsa : support gs a ⊆ S := (hsup ▸ subset_union_left).trans hsub
+    have hsb : support gs b ⊆ S := (hsup ▸ subset_union_right).trans hsub
+    have hca : (support gs a).card ≤ 1 := by
+      by_contra h
+      exact hno a ha ((mem_privSet gs S a).mpr ⟨hsa, by omega⟩)
+    have hcb : (support gs b).card ≤ 1 := by
+      by_contra h
+      exact hno b hb ((mem_privSet gs S b).mpr ⟨hsb, by omega⟩)
+    have hle := card_union_le (support gs a) (support gs b)
+    rw [← hsup] at hle
     omega
-  have hsub : insert g (GwUp gates w g') ⊆ GwUp gates w g := by
-    intro j hj
-    simp only [Finset.mem_insert] at hj
-    rcases hj with rfl | hj
-    · exact hg
-    · simp only [GwUp, Finset.mem_filter, Finset.mem_range] at hj ⊢
-      exact ⟨by omega, hj.2⟩
-  have hcard := Finset.card_le_card hsub
-  rw [Finset.card_insert_of_notMem hnot] at hcard
+  · have hsup : support gs u = support gs a ∩ support gs b := by
+      ext p; simp [mem_support, huab]
+    have hca : 3 ≤ (support gs a).card :=
+      hcard.trans (card_le_card (hsup ▸ inter_subset_left))
+    have hcb : 3 ≤ (support gs b).card :=
+      hcard.trans (card_le_card (hsup ▸ inter_subset_right))
+    have hnsa : ¬ support gs a ⊆ S := fun h => hno a ha ((mem_privSet gs S a).mpr ⟨h, by omega⟩)
+    have hnsb : ¬ support gs b ⊆ S := fun h => hno b hb ((mem_privSet gs S b).mpr ⟨h, by omega⟩)
+    obtain ⟨q1, hq1a, hq1S⟩ := Finset.not_subset.mp hnsa
+    obtain ⟨q2, hq2b, hq2S⟩ := Finset.not_subset.mp hnsb
+    have hv1 := pair_true_left gs hL a (q := q2) hq1a
+    have hv2 := pair_true_right gs hL b (p := q1) hq2b
+    have hvu := huab (pair q1 q2)
+    rw [hv1, hv2, hpair q1 q2 hq1S hq2S] at hvu
+    simp at hvu
+
+lemma extra_credit (w : Fin 13) (s1 s2 s3 : Finset (Fin 13))
+    (h1 : line w ⊆ s1) (h2 : line w ⊆ s2) (h3 : line w ⊆ s3)
+    (hc1 : 5 ≤ s1.card) (hc2 : 5 ≤ s2.card) (hc3 : 5 ≤ s3.card)
+    (hsum : s1.card + s2.card + s3.card ≤ 21) :
+    2 ≤ credit s1 w + credit s2 w + credit s3 w := by
+  have hns : ∀ s : Finset (Fin 13), 5 ≤ s.card → ¬ s ⊆ line w := by
+    intro s hs hsub
+    have hle := card_le_card hsub
+    rw [line_card] at hle
+    omega
+  by_cases k1 : s1.card ≤ 6
+  · have : credit s1 w = 2 := by simp [credit, hns s1 hc1, h1, k1]
+    omega
+  by_cases k2 : s2.card ≤ 6
+  · have : credit s2 w = 2 := by simp [credit, hns s2 hc2, h2, k2]
+    omega
+  by_cases k3 : s3.card ≤ 6
+  · have : credit s3 w = 2 := by simp [credit, hns s3 hc3, h3, k3]
+    omega
+  have e1 : s1.card = 7 := by omega
+  have e2 : s2.card = 7 := by omega
+  have e3 : s3.card = 7 := by omega
+  have c1 : credit s1 w = 1 := by simp [credit, hns s1 hc1, h1, e1]
+  have c2 : credit s2 w = 1 := by simp [credit, hns s2 hc2, h2, e2]
+  have c3 : credit s3 w = 1 := by simp [credit, hns s3 hc3, h3, e3]
   omega
 
--- Helper: any gate g' with V(13+g') ⊆ line w, card = 3, and Safe w has an earlier gate in GwUp
-lemma exists_child_of_card3 (gates : List Gate)
-    (hvalid : ∀ g ∈ gates, (g.op = GateOp.and ∨ g.op = GateOp.or) ∧ g.inputs.length ≤ 2)
-    (w : Fin 13) (g' : ℕ) (hg' : g' < gates.length)
-    (hsub : V gates (13 + g') ⊆ line w) (hcard : (V gates (13 + g')).card = 3)
-    (hsafe : Safe w (wval gates (13 + g'))) :
-    ∃ g'' < g', V gates (13 + g'') ⊆ line w ∧ 2 ≤ (V gates (13 + g'')).card := by
-  have hmono : ∀ g ∈ gates, g.op = GateOp.and ∨ g.op = GateOp.or := fun g hg => (hvalid g hg).1
-  obtain ⟨hop, hlen⟩ := hvalid (gates[g']) (List.getElem_mem hg')
-  match hin : (gates[g']).inputs with
-  | [] =>
-    rcases hop with h | h
-    · have hV := V_gate_nil_and gates g' hg' h hin
-      rw [hV] at hcard; simp at hcard
-    · have hV := V_gate_nil_or gates g' hg' h hin
-      rw [hV] at hcard; simp at hcard
-  | [a] =>
-    have hV := V_gate_one gates g' hg' a hop hin
-    have ha3 : (VAt gates g' a).card = 3 := by rw [← hV]; exact hcard
-    obtain ⟨g'', hg''lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g' a (by omega)
-    have hVeq : VAt gates g' (13 + g'') = V gates (13 + g'') := if_pos (by omega)
-    rw [hVeq] at hV ha3
-    exact ⟨g'', hg''lt, by rw [← hV]; exact hsub, by omega⟩
-  | [a, b] =>
-    rcases hop with h | h
-    · have hw : ∀ x, wval gates (13 + g') x = (wvalAt gates g' a x && wvalAt gates g' b x) :=
-        wval_gate_two_and gates g' hg' a b h hin
-      have hsafe' : Safe w (fun x => wvalAt gates g' a x && wvalAt gates g' b x) := by
-        intro x hx hv; exact hsafe x hx (by rw [hw]; exact hv)
-      have hV := V_gate_two_and gates g' hg' a b h hin
-      have hpr := prime_weight2 w (wvalAt gates g' a) (wvalAt gates g' b)
-        (wvalAt_mono gates hmono g' a) (wvalAt_mono gates hmono g' b) hsafe'
-      rcases hpr with haL | hbL
-      · have hasub : VAt gates g' a ⊆ line w := by
-          intro v hv; exact haL v ((mem_VAt gates g' a v).mp hv)
-        have hge : 3 ≤ (VAt gates g' a).card := by
-          have := Finset.card_le_card (Finset.inter_subset_left (s₁ := VAt gates g' a) (s₂ := VAt gates g' b))
-          rw [← hV, hcard] at this; exact this
-        obtain ⟨g'', hg''lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g' a (by omega)
-        have hVeq : VAt gates g' (13 + g'') = V gates (13 + g'') := if_pos (by omega)
-        rw [hVeq] at hasub hge
-        exact ⟨g'', hg''lt, hasub, by omega⟩
-      · have hbsub : VAt gates g' b ⊆ line w := by
-          intro v hv; exact hbL v ((mem_VAt gates g' b v).mp hv)
-        have hge : 3 ≤ (VAt gates g' b).card := by
-          have := Finset.card_le_card (Finset.inter_subset_right (s₁ := VAt gates g' a) (s₂ := VAt gates g' b))
-          rw [← hV, hcard] at this; exact this
-        obtain ⟨g'', hg''lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g' b (by omega)
-        have hVeq : VAt gates g' (13 + g'') = V gates (13 + g'') := if_pos (by omega)
-        rw [hVeq] at hbsub hge
-        exact ⟨g'', hg''lt, hbsub, by omega⟩
-    · have hV := V_gate_two_or gates g' hg' a b h hin
-      have hsum : 3 ≤ (VAt gates g' a).card + (VAt gates g' b).card := by
-        have := Finset.card_union_le (VAt gates g' a) (VAt gates g' b)
-        rw [← hV, hcard] at this; exact this
-      by_cases ha2 : 2 ≤ (VAt gates g' a).card
-      · obtain ⟨g'', hg''lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g' a ha2
-        have hVeq : VAt gates g' (13 + g'') = V gates (13 + g'') := if_pos (by omega)
-        have hasub : V gates (13 + g'') ⊆ line w := by
-          rw [← hVeq]; exact Finset.subset_union_left.trans (by rw [← hV]; exact hsub)
-        exact ⟨g'', hg''lt, hasub, by rw [← hVeq]; exact ha2⟩
-      · have hb2 : 2 ≤ (VAt gates g' b).card := by omega
-        obtain ⟨g'', hg''lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g' b hb2
-        have hVeq : VAt gates g' (13 + g'') = V gates (13 + g'') := if_pos (by omega)
-        have hbsub : V gates (13 + g'') ⊆ line w := by
-          rw [← hVeq]; exact Finset.subset_union_right.trans (by rw [← hV]; exact hsub)
-        exact ⟨g'', hg''lt, hbsub, by rw [← hVeq]; exact hb2⟩
-  | _ :: _ :: _ :: _ =>
-    rw [hin] at hlen; simp at hlen
-
--- Helper: symmetric core of the AND case when VAt g i = line w and line w ⊆ VAt g j
-lemma and_case_core (gates : List Gate)
-    (hvalid : ∀ g ∈ gates, (g.op = GateOp.and ∨ g.op = GateOp.or) ∧ g.inputs.length ≤ 2)
-    (w : Fin 13) (g : ℕ) (hg : g < gates.length)
-    (hVg : V gates (13 + g) = line w)
-    (hsafe : Safe w (wval gates (13 + g)))
-    (ih : ∀ m < g, V gates (13 + m) = line w → Safe w (wval gates (13 + m)) →
-      3 ≤ (GwUp gates w m).card ∨ (2 ≤ (GwUp gates w m).card ∧ HasTriple gates w))
-    (i j : ℕ) (hwg : ∀ x, wval gates (13 + g) x = (wvalAt gates g i x && wvalAt gates g j x))
-    (hVi : VAt gates g i = line w) (hVj_sub : line w ⊆ VAt gates g j) :
-    3 ≤ (GwUp gates w g).card ∨ (2 ≤ (GwUp gates w g).card ∧ HasTriple gates w) := by
-  have hmono : ∀ g ∈ gates, g.op = GateOp.and ∨ g.op = GateOp.or := fun g hg => (hvalid g hg).1
-  have hgw : g ∈ GwUp gates w g := by
-    simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-    exact ⟨Nat.lt_succ_self g, by rw [hVg], by rw [hVg, card_line]; omega⟩
-  have hi2 : 2 ≤ (VAt gates g i).card := by rw [hVi, card_line]; omega
-  obtain ⟨g', hg'lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g i hi2
-  have hVi_eq : VAt gates g (13 + g') = V gates (13 + g') := if_pos (by omega)
-  rw [hVi_eq] at hVi
-  have hg'w : g' ∈ GwUp gates w g := by
-    simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-    exact ⟨by omega, by rw [hVi], by rw [hVi, card_line]; omega⟩
-  -- Case 1: VAt g j = line w
-  by_cases hVj_eq : VAt gates g j = line w
-  · by_cases hji : j = 13 + g'
-    · subst hji
-      have hsafe' : Safe w (wval gates (13 + g')) := by
-        intro x hx hv
-        have h1 : wvalAt gates g (13 + g') x = true := by
-          unfold wvalAt; rw [if_pos (by omega)]; exact hv
-        exact hsafe x hx (by rw [hwg]; simp [h1])
-      have hih := ih g' hg'lt hVi hsafe'
-      have h2' : 2 ≤ (GwUp gates w g').card := by
-        rcases hih with h3 | ⟨h2, _⟩ <;> omega
-      exact Or.inl (card_ge3_of_sub gates w g' g hg'lt hgw h2')
-    · have hj2 : 2 ≤ (VAt gates g j).card := by rw [hVj_eq, card_line]; omega
-      obtain ⟨g'', hg''lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g j hj2
-      have hVj_eq2 : VAt gates g (13 + g'') = V gates (13 + g'') := if_pos (by omega)
-      rw [hVj_eq2] at hVj_eq
-      have hg''w : g'' ∈ GwUp gates w g := by
-        simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-        exact ⟨by omega, by rw [hVj_eq], by rw [hVj_eq, card_line]; omega⟩
-      exact Or.inl (card_ge3_of_three hg'w hg''w hgw (by omega) (by omega) (by omega))
-  -- Case 2: line w ⊂ VAt g j
-  · have hVj_ssub : line w ⊂ VAt gates g j := Finset.ssubset_iff_subset_ne.mpr ⟨hVj_sub, fun he => hVj_eq he.symm⟩
-    have hj5 : 5 ≤ (VAt gates g j).card := by
-      have := Finset.card_lt_card hVj_ssub
-      rw [card_line] at this; omega
-    obtain ⟨gj, hgjlt, rfl⟩ := gate_idx_of_VAt_ge2 gates g j (by omega)
-    have hVj_eq2 : VAt gates g (13 + gj) = V gates (13 + gj) := if_pos (by omega)
-    rw [hVj_eq2] at hVj_ssub
-    -- Now inspect gate g' (which has V gates (13 + g') = line w)
-    have hg'_len : g' < gates.length := by omega
-    obtain ⟨hop', hlen'⟩ := hvalid (gates[g']) (List.getElem_mem hg'_len)
-    match hin' : (gates[g']).inputs with
-    | [] =>
-      rcases hop' with h | h
-      · have hV := V_gate_nil_and gates g' hg'_len h hin'
-        rw [hV] at hVi
-        have := congrArg Finset.card hVi
-        rw [card_line] at this; simp at this
-      · have hV := V_gate_nil_or gates g' hg'_len h hin'
-        rw [hV] at hVi
-        have := congrArg Finset.card hVi
-        rw [card_line] at this; simp at this
-    | [a] =>
-      have hV := V_gate_one gates g' hg'_len a hop' hin'
-      rw [hVi] at hV
-      obtain ⟨g'', hg''lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g' a (by rw [← hV, card_line]; omega)
-      have hVeq : VAt gates g' (13 + g'') = V gates (13 + g'') := if_pos (by omega)
-      rw [hVeq] at hV
-      have hg''w : g'' ∈ GwUp gates w g := by
-        simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-        exact ⟨by omega, by rw [← hV], by rw [← hV, card_line]; omega⟩
-      exact Or.inl (card_ge3_of_three hg''w hg'w hgw (by omega) (by omega) (by omega))
-    | [a, b] =>
-      rcases hop' with h | h
-      · have hV := V_gate_two_and gates g' hg'_len a b h hin'
-        rw [hVi] at hV
-        have ha_sub : line w ⊆ VAt gates g' a := by
-          rw [hV]; exact Finset.inter_subset_left
-        have hb_sub : line w ⊆ VAt gates g' b := by
-          rw [hV]; exact Finset.inter_subset_right
-        by_cases ha_eq : VAt gates g' a = line w
-        · obtain ⟨g'', hg''lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g' a (by rw [ha_eq, card_line]; omega)
-          have hVeq : VAt gates g' (13 + g'') = V gates (13 + g'') := if_pos (by omega)
-          rw [hVeq] at ha_eq
-          have hg''w : g'' ∈ GwUp gates w g := by
-            simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-            exact ⟨by omega, by rw [ha_eq], by rw [ha_eq, card_line]; omega⟩
-          exact Or.inl (card_ge3_of_three hg''w hg'w hgw (by omega) (by omega) (by omega))
-        · by_cases hb_eq : VAt gates g' b = line w
-          · obtain ⟨g'', hg''lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g' b (by rw [hb_eq, card_line]; omega)
-            have hVeq : VAt gates g' (13 + g'') = V gates (13 + g'') := if_pos (by omega)
-            rw [hVeq] at hb_eq
-            have hg''w : g'' ∈ GwUp gates w g := by
-              simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-              exact ⟨by omega, by rw [hb_eq], by rw [hb_eq, card_line]; omega⟩
-            exact Or.inl (card_ge3_of_three hg''w hg'w hgw (by omega) (by omega) (by omega))
-          · -- Strict supersets: ga, gb, gj!
-            have ha_ssub : line w ⊂ VAt gates g' a := Finset.ssubset_iff_subset_ne.mpr ⟨ha_sub, fun he => ha_eq he.symm⟩
-            have hb_ssub : line w ⊂ VAt gates g' b := Finset.ssubset_iff_subset_ne.mpr ⟨hb_sub, fun he => hb_eq he.symm⟩
-            have ha5 : 5 ≤ (VAt gates g' a).card := by
-              have := Finset.card_lt_card ha_ssub; rw [card_line] at this; omega
-            have hb5 : 5 ≤ (VAt gates g' b).card := by
-              have := Finset.card_lt_card hb_ssub; rw [card_line] at this; omega
-            obtain ⟨ga, hgalt, rfl⟩ := gate_idx_of_VAt_ge2 gates g' a (by omega)
-            obtain ⟨gb, hgblt, rfl⟩ := gate_idx_of_VAt_ge2 gates g' b (by omega)
-            have hVa_eq : VAt gates g' (13 + ga) = V gates (13 + ga) := if_pos (by omega)
-            have hVb_eq : VAt gates g' (13 + gb) = V gates (13 + gb) := if_pos (by omega)
-            rw [hVa_eq] at ha_ssub
-            rw [hVb_eq] at hb_ssub
-            rw [hVa_eq, hVb_eq] at hV
-            have hdisj_ab : Disjoint (V gates (13 + ga) \ line w) (V gates (13 + gb) \ line w) := by
-              rw [Finset.disjoint_left]
-              intro p hpa hpb
-              rw [Finset.mem_sdiff] at hpa hpb
-              have hp_in : p ∈ V gates (13 + ga) ∩ V gates (13 + gb) := Finset.mem_inter.mpr ⟨hpa.1, hpb.1⟩
-              rw [← hV] at hp_in
-              exact hpa.2 hp_in
-            have hwg' : ∀ x, wval gates (13 + g') x = (wval gates (13 + ga) x && wval gates (13 + gb) x) := by
-              intro x
-              rw [wval_gate_two_and gates g' hg'_len (13 + ga) (13 + gb) h hin']
-              unfold wvalAt
-              rw [if_pos (by omega), if_pos (by omega)]
-            have hdisj_aj : Disjoint (V gates (13 + ga) \ line w) (V gates (13 + gj) \ line w) := by
-              rw [Finset.disjoint_left]
-              intro p hpa hpj
-              rw [Finset.mem_sdiff] at hpa hpj
-              obtain ⟨q, hqb, hqL⟩ := Finset.exists_of_ssubset hb_ssub
-              have h1 : wval gates (13 + ga) (e2 p q) = true :=
-                wval_mono gates hmono (13 + ga) (e1 p) (e2 p q)
-                  (by intro k hk; simp only [e1, e2, decide_eq_true_eq] at hk ⊢; exact Or.inl hk)
-                  ((mem_V gates (13 + ga) p).mp hpa.1)
-              have h2 : wval gates (13 + gb) (e2 p q) = true :=
-                wval_mono gates hmono (13 + gb) (e1 q) (e2 p q)
-                  (by intro k hk; simp only [e1, e2, decide_eq_true_eq] at hk ⊢; exact Or.inr hk)
-                  ((mem_V gates (13 + gb) q).mp hqb)
-              have h3 : wval gates (13 + gj) (e2 p q) = true :=
-                wval_mono gates hmono (13 + gj) (e1 p) (e2 p q)
-                  (by intro k hk; simp only [e1, e2, decide_eq_true_eq] at hk ⊢; exact Or.inl hk)
-                  ((mem_V gates (13 + gj) p).mp hpj.1)
-              have hval : wval gates (13 + g) (e2 p q) = true := by
-                rw [hwg]
-                unfold wvalAt
-                rw [if_pos (by omega), if_pos (by omega), hwg']
-                simp [h1, h2, h3]
-              obtain ⟨v, hvL, hvx⟩ := hsafe (e2 p q) (e2_weightLe2 p q) hval
-              simp only [e2, decide_eq_true_eq] at hvx
-              rcases hvx with rfl | rfl
-              · exact hpa.2 hvL
-              · exact hqL hvL
-            have hdisj_bj : Disjoint (V gates (13 + gb) \ line w) (V gates (13 + gj) \ line w) := by
-              rw [Finset.disjoint_left]
-              intro p hpb hpj
-              rw [Finset.mem_sdiff] at hpb hpj
-              obtain ⟨q, hqa, hqL⟩ := Finset.exists_of_ssubset ha_ssub
-              have h1 : wval gates (13 + ga) (e2 q p) = true :=
-                wval_mono gates hmono (13 + ga) (e1 q) (e2 q p)
-                  (by intro k hk; simp only [e1, e2, decide_eq_true_eq] at hk ⊢; exact Or.inl hk)
-                  ((mem_V gates (13 + ga) q).mp hqa)
-              have h2 : wval gates (13 + gb) (e2 q p) = true :=
-                wval_mono gates hmono (13 + gb) (e1 p) (e2 q p)
-                  (by intro k hk; simp only [e1, e2, decide_eq_true_eq] at hk ⊢; exact Or.inr hk)
-                  ((mem_V gates (13 + gb) p).mp hpb.1)
-              have h3 : wval gates (13 + gj) (e2 q p) = true :=
-                wval_mono gates hmono (13 + gj) (e1 p) (e2 q p)
-                  (by intro k hk; simp only [e1, e2, decide_eq_true_eq] at hk ⊢; exact Or.inr hk)
-                  ((mem_V gates (13 + gj) p).mp hpj.1)
-              have hval : wval gates (13 + g) (e2 q p) = true := by
-                rw [hwg]
-                unfold wvalAt
-                rw [if_pos (by omega), if_pos (by omega), hwg']
-                simp [h1, h2, h3]
-              obtain ⟨v, hvL, hvx⟩ := hsafe (e2 q p) (e2_weightLe2 q p) hval
-              simp only [e2, decide_eq_true_eq] at hvx
-              rcases hvx with rfl | rfl
-              · exact hqL hvL
-              · exact hpb.2 hvL
-            exact Or.inr ⟨card_ge2_of_two hg'w hgw (by omega),
-              ⟨ga, gb, gj, by omega, by omega, by omega,
-                ha_ssub, hb_ssub, hVj_ssub, hdisj_ab, hdisj_aj, hdisj_bj⟩⟩
-      · have hV := V_gate_two_or gates g' hg'_len a b h hin'
-        rw [hVi] at hV
-        have hsum : 4 ≤ (VAt gates g' a).card + (VAt gates g' b).card := by
-          have := Finset.card_union_le (VAt gates g' a) (VAt gates g' b)
-          rw [← hV, card_line] at this; exact this
-        by_cases ha2 : 2 ≤ (VAt gates g' a).card
-        · obtain ⟨g'', hg''lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g' a ha2
-          have hVeq : VAt gates g' (13 + g'') = V gates (13 + g'') := if_pos (by omega)
-          have hasub : V gates (13 + g'') ⊆ line w := by
-            rw [← hVeq, hV]; exact Finset.subset_union_left
-          have hg''w : g'' ∈ GwUp gates w g := by
-            simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-            exact ⟨by omega, hasub, by rw [← hVeq]; exact ha2⟩
-          exact Or.inl (card_ge3_of_three hg''w hg'w hgw (by omega) (by omega) (by omega))
-        · have hb2 : 2 ≤ (VAt gates g' b).card := by omega
-          obtain ⟨g'', hg''lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g' b hb2
-          have hVeq : VAt gates g' (13 + g'') = V gates (13 + g'') := if_pos (by omega)
-          have hbsub : V gates (13 + g'') ⊆ line w := by
-            rw [← hVeq, hV]; exact Finset.subset_union_right
-          have hg''w : g'' ∈ GwUp gates w g := by
-            simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-            exact ⟨by omega, hbsub, by rw [← hVeq]; exact hb2⟩
-          exact Or.inl (card_ge3_of_three hg''w hg'w hgw (by omega) (by omega) (by omega))
-    | _ :: _ :: _ :: _ =>
-      rw [hin'] at hlen'; simp at hlen'
-
--- Main per-line structural lemma by strong induction on gate index g
-lemma line_structure (gates : List Gate)
-    (hvalid : ∀ g ∈ gates, (g.op = GateOp.and ∨ g.op = GateOp.or) ∧ g.inputs.length ≤ 2)
-    (w : Fin 13) :
-    ∀ g : ℕ, g < gates.length → V gates (13 + g) = line w → Safe w (wval gates (13 + g)) →
-      3 ≤ (GwUp gates w g).card ∨ (2 ≤ (GwUp gates w g).card ∧ HasTriple gates w) := by
-  intro g
-  induction g using Nat.strongRecOn with
-  | ind g ih =>
-    intro hg hVg hsafe
-    have hmono : ∀ g ∈ gates, g.op = GateOp.and ∨ g.op = GateOp.or := fun g hg => (hvalid g hg).1
-    have hgw : g ∈ GwUp gates w g := by
-      simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-      exact ⟨Nat.lt_succ_self g, by rw [hVg], by rw [hVg, card_line]; omega⟩
-    obtain ⟨hop, hlen⟩ := hvalid (gates[g]) (List.getElem_mem hg)
-    match hin : (gates[g]).inputs with
-    | [] =>
-      rcases hop with h | h
-      · have hV := V_gate_nil_and gates g hg h hin
-        rw [hV] at hVg
-        have := congrArg Finset.card hVg; rw [card_line] at this; simp at this
-      · have hV := V_gate_nil_or gates g hg h hin
-        rw [hV] at hVg
-        have := congrArg Finset.card hVg; rw [card_line] at this; simp at this
-    | [a] =>
-      have hV := V_gate_one gates g hg a hop hin
-      rw [hVg] at hV
-      obtain ⟨g', hg'lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g a (by rw [← hV, card_line]; omega)
-      have hVeq : VAt gates g (13 + g') = V gates (13 + g') := if_pos (by omega)
-      rw [hVeq] at hV
-      have hsafe' : Safe w (wval gates (13 + g')) := by
-        intro x hx hv
-        apply hsafe x hx
-        rw [wval_gate_one gates g hg (13 + g') hop hin]
-        unfold wvalAt; rw [if_pos (by omega)]; exact hv
-      have hih := ih g' hg'lt (by omega) hV.symm hsafe'
-      have h2' : 2 ≤ (GwUp gates w g').card := by rcases hih with h3 | ⟨h2, _⟩ <;> omega
-      exact Or.inl (card_ge3_of_sub gates w g' g hg'lt hgw h2')
-    | [i, j] =>
-      rcases hop with h | h
-      · -- AND gate
-        have hwg := wval_gate_two_and gates g hg i j h hin
-        have hsafe' : Safe w (fun x => wvalAt gates g i x && wvalAt gates g j x) := by
-          intro x hx hv; exact hsafe x hx (by rw [hwg]; exact hv)
-        have hV := V_gate_two_and gates g hg i j h hin
-        rw [hVg] at hV
-        have hpr := prime_weight2 w (wvalAt gates g i) (wvalAt gates g j)
-          (wvalAt_mono gates hmono g i) (wvalAt_mono gates hmono g j) hsafe'
-        have ih' : ∀ m < g, V gates (13 + m) = line w → Safe w (wval gates (13 + m)) →
-            3 ≤ (GwUp gates w m).card ∨ (2 ≤ (GwUp gates w m).card ∧ HasTriple gates w) :=
-          fun m hm => ih m hm (by omega)
-        rcases hpr with hiL | hjL
-        · have hisub : VAt gates g i ⊆ line w := fun v hv => hiL v ((mem_VAt gates g i v).mp hv)
-          have hVi : VAt gates g i = line w :=
-            Finset.Subset.antisymm hisub (by rw [hV]; exact Finset.inter_subset_left)
-          have hVj_sub : line w ⊆ VAt gates g j := by rw [hV]; exact Finset.inter_subset_right
-          exact and_case_core gates hvalid w g hg hVg hsafe ih' i j hwg hVi hVj_sub
-        · have hjsub : VAt gates g j ⊆ line w := fun v hv => hjL v ((mem_VAt gates g j v).mp hv)
-          have hVj : VAt gates g j = line w :=
-            Finset.Subset.antisymm hjsub (by rw [hV]; exact Finset.inter_subset_right)
-          have hVi_sub : line w ⊆ VAt gates g i := by rw [hV]; exact Finset.inter_subset_left
-          have hwg_comm : ∀ x, wval gates (13 + g) x = (wvalAt gates g j x && wvalAt gates g i x) := by
-            intro x; rw [hwg, Bool.and_comm]
-          exact and_case_core gates hvalid w g hg hVg hsafe ih' j i hwg_comm hVj hVi_sub
-      · -- OR gate
-        have hwg := wval_gate_two_or gates g hg i j h hin
-        have hV := V_gate_two_or gates g hg i j h hin
-        rw [hVg] at hV
-        have hi_sub : VAt gates g i ⊆ line w := by rw [hV]; exact Finset.subset_union_left
-        have hj_sub : VAt gates g j ⊆ line w := by rw [hV]; exact Finset.subset_union_right
-        have hsafe_i : Safe w (wvalAt gates g i) := by
-          intro x hx hv; exact hsafe x hx (by rw [hwg]; simp [hv])
-        have hsafe_j : Safe w (wvalAt gates g j) := by
-          intro x hx hv; exact hsafe x hx (by rw [hwg]; simp [hv])
-        have hci_le : (VAt gates g i).card ≤ 4 := by
-          have := Finset.card_le_card hi_sub; rw [card_line] at this; exact this
-        have hcj_le : (VAt gates g j).card ≤ 4 := by
-          have := Finset.card_le_card hj_sub; rw [card_line] at this; exact this
-        have hsum : 4 ≤ (VAt gates g i).card + (VAt gates g j).card := by
-          have := Finset.card_union_le (VAt gates g i) (VAt gates g j)
-          rw [← hV, card_line] at this; exact this
-        by_cases hi4 : (VAt gates g i).card = 4
-        · have hVi : VAt gates g i = line w :=
-            Finset.eq_of_subset_of_card_le hi_sub (by rw [card_line, hi4])
-          obtain ⟨g', hg'lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g i (by omega)
-          have hVeq : VAt gates g (13 + g') = V gates (13 + g') := if_pos (by omega)
-          rw [hVeq] at hVi
-          have hsafe' : Safe w (wval gates (13 + g')) := by
-            intro x hx hv; exact hsafe_i x hx (by unfold wvalAt; rw [if_pos (by omega)]; exact hv)
-          have hih := ih g' hg'lt (by omega) hVi hsafe'
-          have h2' : 2 ≤ (GwUp gates w g').card := by rcases hih with h3 | ⟨h2, _⟩ <;> omega
-          exact Or.inl (card_ge3_of_sub gates w g' g hg'lt hgw h2')
-        · by_cases hj4 : (VAt gates g j).card = 4
-          · have hVj : VAt gates g j = line w :=
-              Finset.eq_of_subset_of_card_le hj_sub (by rw [card_line, hj4])
-            obtain ⟨g', hg'lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g j (by omega)
-            have hVeq : VAt gates g (13 + g') = V gates (13 + g') := if_pos (by omega)
-            rw [hVeq] at hVj
-            have hsafe' : Safe w (wval gates (13 + g')) := by
-              intro x hx hv; exact hsafe_j x hx (by unfold wvalAt; rw [if_pos (by omega)]; exact hv)
-            have hih := ih g' hg'lt (by omega) hVj hsafe'
-            have h2' : 2 ≤ (GwUp gates w g').card := by rcases hih with h3 | ⟨h2, _⟩ <;> omega
-            exact Or.inl (card_ge3_of_sub gates w g' g hg'lt hgw h2')
-          · by_cases hi3 : (VAt gates g i).card = 3
-            · obtain ⟨g', hg'lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g i (by omega)
-              have hVeq : VAt gates g (13 + g') = V gates (13 + g') := if_pos (by omega)
-              rw [hVeq] at hi_sub hi3
-              have hsafe' : Safe w (wval gates (13 + g')) := by
-                intro x hx hv; exact hsafe_i x hx (by unfold wvalAt; rw [if_pos (by omega)]; exact hv)
-              obtain ⟨g'', hg''lt, hsub'', hc''⟩ :=
-                exists_child_of_card3 gates hvalid w g' (by omega) hi_sub hi3 hsafe'
-              have hg'w : g' ∈ GwUp gates w g := by
-                simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-                exact ⟨by omega, hi_sub, by omega⟩
-              have hg''w : g'' ∈ GwUp gates w g := by
-                simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-                exact ⟨by omega, hsub'', hc''⟩
-              exact Or.inl (card_ge3_of_three hg''w hg'w hgw (by omega) (by omega) (by omega))
-            · by_cases hj3 : (VAt gates g j).card = 3
-              · obtain ⟨g', hg'lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g j (by omega)
-                have hVeq : VAt gates g (13 + g') = V gates (13 + g') := if_pos (by omega)
-                rw [hVeq] at hj_sub hj3
-                have hsafe' : Safe w (wval gates (13 + g')) := by
-                  intro x hx hv; exact hsafe_j x hx (by unfold wvalAt; rw [if_pos (by omega)]; exact hv)
-                obtain ⟨g'', hg''lt, hsub'', hc''⟩ :=
-                  exists_child_of_card3 gates hvalid w g' (by omega) hj_sub hj3 hsafe'
-                have hg'w : g' ∈ GwUp gates w g := by
-                  simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-                  exact ⟨by omega, hj_sub, by omega⟩
-                have hg''w : g'' ∈ GwUp gates w g := by
-                  simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-                  exact ⟨by omega, hsub'', hc''⟩
-                exact Or.inl (card_ge3_of_three hg''w hg'w hgw (by omega) (by omega) (by omega))
-              · -- Both have card = 2!
-                have hi2 : (VAt gates g i).card = 2 := by omega
-                have hj2 : (VAt gates g j).card = 2 := by omega
-                have hij_ne : i ≠ j := by
-                  intro he; subst he
-                  rw [Finset.union_idempotent] at hV
-                  have := congrArg Finset.card hV
-                  rw [card_line, hi2] at this; omega
-                obtain ⟨g₁, hg₁lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g i (by omega)
-                obtain ⟨g₂, hg₂lt, rfl⟩ := gate_idx_of_VAt_ge2 gates g j (by omega)
-                have hV1 : VAt gates g (13 + g₁) = V gates (13 + g₁) := if_pos (by omega)
-                have hV2 : VAt gates g (13 + g₂) = V gates (13 + g₂) := if_pos (by omega)
-                rw [hV1] at hi_sub hi2
-                rw [hV2] at hj_sub hj2
-                have hg1w : g₁ ∈ GwUp gates w g := by
-                  simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-                  exact ⟨by omega, hi_sub, by omega⟩
-                have hg2w : g₂ ∈ GwUp gates w g := by
-                  simp only [GwUp, Finset.mem_filter, Finset.mem_range]
-                  exact ⟨by omega, hj_sub, by omega⟩
-                exact Or.inl (card_ge3_of_three hg1w hg2w hgw (by omega) (by omega) (by omega))
-    | _ :: _ :: _ :: _ =>
-      rw [hin] at hlen; simp at hlen
-
--- From HasTriple, either some gate has card in {5, 6}, or all three have card = 7 and are distinct!
-def B56 (gates : List Gate) : Finset ℕ :=
-  (Finset.range gates.length).filter (fun j => 5 ≤ (V gates (13 + j)).card ∧ (V gates (13 + j)).card ≤ 6)
-
-def B7 (gates : List Gate) : Finset ℕ :=
-  (Finset.range gates.length).filter (fun j => (V gates (13 + j)).card = 7)
-
-lemma card_sdiff_eq {α : Type*} [DecidableEq α] {s t : Finset α} (h : s ⊆ t) :
-    (t \ s).card = t.card - s.card := by
-  rw [Finset.card_sdiff, Finset.inter_eq_left.mpr h]
-
-lemma triple_split (gates : List Gate) (w : Fin 13) (ht : HasTriple gates w) :
-    (∃ j ∈ B56 gates, line w ⊆ V gates (13 + j)) ∨
-    3 ≤ ((B7 gates).filter (fun j => line w ⊆ V gates (13 + j))).card := by
-  obtain ⟨ga, gb, gc, ha_lt, hb_lt, hc_lt, ha_ss, hb_ss, hc_ss, hab, hac, hbc⟩ := ht
-  set Da := V gates (13 + ga) \ line w
-  set Db := V gates (13 + gb) \ line w
-  set Dc := V gates (13 + gc) \ line w
-  have ha_sub : line w ⊆ V gates (13 + ga) := ha_ss.subset
-  have hb_sub : line w ⊆ V gates (13 + gb) := hb_ss.subset
-  have hc_sub : line w ⊆ V gates (13 + gc) := hc_ss.subset
-  have hra_pos : 1 ≤ Da.card := by
-    obtain ⟨p, hp, hpn⟩ := Finset.exists_of_ssubset ha_ss
-    exact Finset.card_pos.mpr ⟨p, Finset.mem_sdiff.mpr ⟨hp, hpn⟩⟩
-  have hrb_pos : 1 ≤ Db.card := by
-    obtain ⟨p, hp, hpn⟩ := Finset.exists_of_ssubset hb_ss
-    exact Finset.card_pos.mpr ⟨p, Finset.mem_sdiff.mpr ⟨hp, hpn⟩⟩
-  have hrc_pos : 1 ≤ Dc.card := by
-    obtain ⟨p, hp, hpn⟩ := Finset.exists_of_ssubset hc_ss
-    exact Finset.card_pos.mpr ⟨p, Finset.mem_sdiff.mpr ⟨hp, hpn⟩⟩
-  have hca : (V gates (13 + ga)).card = 4 + Da.card := by
-    have hle := Finset.card_le_card ha_sub
-    have hsd : Da.card = (V gates (13 + ga)).card - (line w).card := card_sdiff_eq ha_sub
-    rw [card_line] at hsd hle; omega
-  have hcb : (V gates (13 + gb)).card = 4 + Db.card := by
-    have hle := Finset.card_le_card hb_sub
-    have hsd : Db.card = (V gates (13 + gb)).card - (line w).card := card_sdiff_eq hb_sub
-    rw [card_line] at hsd hle; omega
-  have hcc : (V gates (13 + gc)).card = 4 + Dc.card := by
-    have hle := Finset.card_le_card hc_sub
-    have hsd : Dc.card = (V gates (13 + gc)).card - (line w).card := card_sdiff_eq hc_sub
-    rw [card_line] at hsd hle; omega
-  have hsum : Da.card + Db.card + Dc.card ≤ 9 := by
-    have hsub : (Da ∪ Db) ∪ Dc ⊆ Finset.univ \ line w := by
-      intro x hx
-      simp only [Finset.mem_union] at hx
-      rcases hx with (hx | hx) | hx
-      · exact Finset.mem_sdiff.mpr ⟨Finset.mem_univ _, (Finset.mem_sdiff.mp hx).2⟩
-      · exact Finset.mem_sdiff.mpr ⟨Finset.mem_univ _, (Finset.mem_sdiff.mp hx).2⟩
-      · exact Finset.mem_sdiff.mpr ⟨Finset.mem_univ _, (Finset.mem_sdiff.mp hx).2⟩
-    have hd_ab_c : Disjoint (Da ∪ Db) Dc := Finset.disjoint_union_left.mpr ⟨hac, hbc⟩
-    have hc_u : ((Da ∪ Db) ∪ Dc).card = Da.card + Db.card + Dc.card := by
-      rw [Finset.card_union_of_disjoint hd_ab_c, Finset.card_union_of_disjoint hab]
-    have hc_comp : (Finset.univ \ line w).card = 9 := by
-      rw [card_sdiff_eq (Finset.subset_univ _), Finset.card_univ, Fintype.card_fin, card_line]
-    have := Finset.card_le_card hsub
+lemma and_chain_demand (gs : List Gate) (hL : Legal gs) (w : Fin 13)
+    (o a b : ℕ)
+    (ho : support gs o = line w)
+    (haP : a ∈ privSet gs (line w)) (ha_lt : a < o)
+    (hbnot : b ∉ privSet gs (line w))
+    (ho_eq : ∀ x, value gs x o = (value gs x a && value gs x b))
+    (hpair : ∀ q1 q2 : Fin 13, q1 ∉ line w → q2 ∉ line w → value gs (pair q1 q2) o = false)
+    (hno : ∀ c < a, c ∉ privSet gs (line w)) :
+    6 ≤ ∑ i ∈ Finset.Ico 13 (13 + gs.length), credit (support gs i) w := by
+  let S := line w
+  have hScard : S.card = 4 := line_card w
+  have hsup_o : support gs o = support gs a ∩ support gs b := by
+    ext p; simp [mem_support, ho_eq]
+  have hSa : S ⊆ support gs a := by
+    dsimp only [S]; rw [← ho, hsup_o]; exact inter_subset_left
+  have hSb : S ⊆ support gs b := by
+    dsimp only [S]; rw [← ho, hsup_o]; exact inter_subset_right
+  have ha_sub : support gs a ⊆ S := ((mem_privSet gs S a).mp haP).1
+  have ha_eq : support gs a = S := Subset.antisymm ha_sub hSa
+  have hnbS : ¬ support gs b ⊆ S := by
+    intro h
+    have hcb : 2 ≤ (support gs b).card := by
+      have := card_le_card hSb; omega
+    exact hbnot ((mem_privSet gs S b).mpr ⟨h, hcb⟩)
+  obtain ⟨h1a, h2a⟩ := valid_of_card gs a (by rw [ha_eq, hScard]; omega)
+  rcases gate_cases gs hL h1a h2a with hf | ht | ⟨c, hc, hac⟩ | ⟨c, hc, d, hd, hacd⟩ | ⟨c, hc, d, hd, hacd⟩
+  · have he : support gs a = ∅ := by ext p; simp [mem_support, hf]
+    rw [ha_eq] at he; rw [he] at hScard; simp at hScard
+  · have he : support gs a = Finset.univ := by ext p; simp [mem_support, ht]
+    rw [ha_eq] at he; rw [he] at hScard; simp at hScard
+  · have hsup : support gs c = S := by
+      rw [← ha_eq]; ext p; simp [mem_support, hac]
+    exact (hno c hc ((mem_privSet gs S c).mpr ⟨hsup ▸ Subset.rfl, by rw [hsup, hScard]; omega⟩)).elim
+  · have hsup : S = support gs c ∪ support gs d := by
+      rw [← ha_eq]; ext p; simp [mem_support, hacd]
+    have hsc : support gs c ⊆ S := hsup ▸ subset_union_left
+    have hsd : support gs d ⊆ S := hsup ▸ subset_union_right
+    have hcc : (support gs c).card ≤ 1 := by
+      by_contra h; exact hno c hc ((mem_privSet gs S c).mpr ⟨hsc, by omega⟩)
+    have hcd : (support gs d).card ≤ 1 := by
+      by_contra h; exact hno d hd ((mem_privSet gs S d).mpr ⟨hsd, by omega⟩)
+    have hle := card_union_le (support gs c) (support gs d)
+    rw [← hsup, hScard] at hle
     omega
-  by_cases ha2 : Da.card ≤ 2
-  · left
-    exact ⟨ga, Finset.mem_filter.mpr ⟨Finset.mem_range.mpr ha_lt, by omega, by omega⟩, ha_sub⟩
-  · by_cases hb2 : Db.card ≤ 2
-    · left
-      exact ⟨gb, Finset.mem_filter.mpr ⟨Finset.mem_range.mpr hb_lt, by omega, by omega⟩, hb_sub⟩
-    · by_cases hc2 : Dc.card ≤ 2
-      · left
-        exact ⟨gc, Finset.mem_filter.mpr ⟨Finset.mem_range.mpr hc_lt, by omega, by omega⟩, hc_sub⟩
-      · right
-        have ha7 : (V gates (13 + ga)).card = 7 := by omega
-        have hb7 : (V gates (13 + gb)).card = 7 := by omega
-        have hc7 : (V gates (13 + gc)).card = 7 := by omega
-        have hne_ab : ga ≠ gb := by
-          intro he
-          obtain ⟨p, hp⟩ := Finset.card_pos.mp hra_pos
-          exact Finset.disjoint_left.mp hab hp (by simpa [Da, Db, he] using hp)
-        have hne_ac : ga ≠ gc := by
-          intro he
-          obtain ⟨p, hp⟩ := Finset.card_pos.mp hra_pos
-          exact Finset.disjoint_left.mp hac hp (by simpa [Da, Dc, he] using hp)
-        have hne_bc : gb ≠ gc := by
-          intro he
-          obtain ⟨p, hp⟩ := Finset.card_pos.mp hrb_pos
-          exact Finset.disjoint_left.mp hbc hp (by simpa [Db, Dc, he] using hp)
-        have hma : ga ∈ (B7 gates).filter (fun j => line w ⊆ V gates (13 + j)) :=
-          Finset.mem_filter.mpr ⟨Finset.mem_filter.mpr ⟨Finset.mem_range.mpr ha_lt, ha7⟩, ha_sub⟩
-        have hmb : gb ∈ (B7 gates).filter (fun j => line w ⊆ V gates (13 + j)) :=
-          Finset.mem_filter.mpr ⟨Finset.mem_filter.mpr ⟨Finset.mem_range.mpr hb_lt, hb7⟩, hb_sub⟩
-        have hmc : gc ∈ (B7 gates).filter (fun j => line w ⊆ V gates (13 + j)) :=
-          Finset.mem_filter.mpr ⟨Finset.mem_filter.mpr ⟨Finset.mem_range.mpr hc_lt, hc7⟩, hc_sub⟩
-        exact card_ge3_of_three hma hmb hmc hne_ab hne_ac hne_bc
+  · have hsup_a : S = support gs c ∩ support gs d := by
+      rw [← ha_eq]; ext p; simp [mem_support, hacd]
+    have hSc : S ⊆ support gs c := hsup_a ▸ inter_subset_left
+    have hSd : S ⊆ support gs d := hsup_a ▸ inter_subset_right
+    have hncS : ¬ support gs c ⊆ S := by
+      intro h
+      have hcc : 2 ≤ (support gs c).card := by have := card_le_card hSc; omega
+      exact hno c hc ((mem_privSet gs S c).mpr ⟨h, hcc⟩)
+    have hndS : ¬ support gs d ⊆ S := by
+      intro h
+      have hcd : 2 ≤ (support gs d).card := by have := card_le_card hSd; omega
+      exact hno d hd ((mem_privSet gs S d).mpr ⟨h, hcd⟩)
+    let Ab := support gs b \ S
+    let Ac := support gs c \ S
+    let Ad := support gs d \ S
+    have hAb_ne : Ab.Nonempty := by
+      obtain ⟨q, hqb, hqS⟩ := Finset.not_subset.mp hnbS
+      exact ⟨q, mem_sdiff.mpr ⟨hqb, hqS⟩⟩
+    have hAc_ne : Ac.Nonempty := by
+      obtain ⟨q, hqc, hqS⟩ := Finset.not_subset.mp hncS
+      exact ⟨q, mem_sdiff.mpr ⟨hqc, hqS⟩⟩
+    have hAd_ne : Ad.Nonempty := by
+      obtain ⟨q, hqd, hqS⟩ := Finset.not_subset.mp hndS
+      exact ⟨q, mem_sdiff.mpr ⟨hqd, hqS⟩⟩
+    have hdisj_bc : Disjoint Ab Ac := by
+      rw [Finset.disjoint_left]
+      intro q hqb hqc
+      obtain ⟨r, hr⟩ := hAd_ne
+      obtain ⟨hqb', hqS⟩ := mem_sdiff.mp hqb
+      obtain ⟨hqc', _⟩ := mem_sdiff.mp hqc
+      obtain ⟨hrd', hrS⟩ := mem_sdiff.mp hr
+      have hb1 := pair_true_left gs hL b (q := r) hqb'
+      have hc1 := pair_true_left gs hL c (q := r) hqc'
+      have hd1 := pair_true_right gs hL d (p := q) hrd'
+      have hvo := ho_eq (pair q r)
+      rw [hacd (pair q r), hb1, hc1, hd1, hpair q r hqS hrS] at hvo
+      simp at hvo
+    have hdisj_bd : Disjoint Ab Ad := by
+      rw [Finset.disjoint_left]
+      intro q hqb hqd
+      obtain ⟨r, hr⟩ := hAc_ne
+      obtain ⟨hqb', hqS⟩ := mem_sdiff.mp hqb
+      obtain ⟨hqd', _⟩ := mem_sdiff.mp hqd
+      obtain ⟨hrc', hrS⟩ := mem_sdiff.mp hr
+      have hb1 := pair_true_left gs hL b (q := r) hqb'
+      have hd1 := pair_true_left gs hL d (q := r) hqd'
+      have hc1 := pair_true_right gs hL c (p := q) hrc'
+      have hvo := ho_eq (pair q r)
+      rw [hacd (pair q r), hb1, hc1, hd1, hpair q r hqS hrS] at hvo
+      simp at hvo
+    have hdisj_cd : Disjoint Ac Ad := by
+      rw [Finset.disjoint_left]
+      intro q hqc hqd
+      obtain ⟨r, hr⟩ := hAb_ne
+      obtain ⟨hqc', hqS⟩ := mem_sdiff.mp hqc
+      obtain ⟨hqd', _⟩ := mem_sdiff.mp hqd
+      obtain ⟨hrb', hrS⟩ := mem_sdiff.mp hr
+      have hc1 := pair_true_left gs hL c (q := r) hqc'
+      have hd1 := pair_true_left gs hL d (q := r) hqd'
+      have hb1 := pair_true_right gs hL b (p := q) hrb'
+      have hvo := ho_eq (pair q r)
+      rw [hacd (pair q r), hb1, hc1, hd1, hpair q r hqS hrS] at hvo
+      simp at hvo
+    have hcard_b : (support gs b).card = 4 + Ab.card := by
+      have h1 := card_sdiff_add_card_eq_card hSb
+      change Ab.card + S.card = (support gs b).card at h1
+      omega
+    have hcard_c : (support gs c).card = 4 + Ac.card := by
+      have h1 := card_sdiff_add_card_eq_card hSc
+      change Ac.card + S.card = (support gs c).card at h1
+      omega
+    have hcard_d : (support gs d).card = 4 + Ad.card := by
+      have h1 := card_sdiff_add_card_eq_card hSd
+      change Ad.card + S.card = (support gs d).card at h1
+      omega
+    have hAb_pos : 1 ≤ Ab.card := card_pos.mpr hAb_ne
+    have hAc_pos : 1 ≤ Ac.card := card_pos.mpr hAc_ne
+    have hAd_pos : 1 ≤ Ad.card := card_pos.mpr hAd_ne
+    have hsum_A : Ab.card + Ac.card + Ad.card ≤ 9 := by
+      have hsubU : Ab ∪ Ac ∪ Ad ⊆ Finset.univ \ S := by
+        intro p hp
+        rcases mem_union.mp hp with hp1 | hpd
+        · rcases mem_union.mp hp1 with hpb | hpc
+          · exact mem_sdiff.mpr ⟨mem_univ p, (mem_sdiff.mp hpb).2⟩
+          · exact mem_sdiff.mpr ⟨mem_univ p, (mem_sdiff.mp hpc).2⟩
+        · exact mem_sdiff.mpr ⟨mem_univ p, (mem_sdiff.mp hpd).2⟩
+      have hUcard : (Ab ∪ Ac ∪ Ad).card = Ab.card + Ac.card + Ad.card := by
+        rw [card_union_of_disjoint (Finset.disjoint_union_left.mpr ⟨hdisj_bd, hdisj_cd⟩),
+          card_union_of_disjoint hdisj_bc]
+      have hle := card_le_card hsubU
+      have hcomp := card_sdiff_add_card_eq_card (subset_univ S)
+      rw [card_univ, Fintype.card_fin, hScard] at hcomp
+      omega
+    have hextra := extra_credit w (support gs b) (support gs c) (support gs d)
+      hSb hSc hSd (by omega) (by omega) (by omega) (by omega)
+    have hne_oa : o ≠ a := by omega
+    have hne_ob : o ≠ b := fun h => hnbS (h ▸ ho ▸ Subset.rfl)
+    have hne_oc : o ≠ c := fun h => hncS (h ▸ ho ▸ Subset.rfl)
+    have hne_od : o ≠ d := fun h => hndS (h ▸ ho ▸ Subset.rfl)
+    have hne_ab : a ≠ b := fun h => hnbS (h ▸ ha_eq ▸ Subset.rfl)
+    have hne_ac : a ≠ c := fun h => hncS (h ▸ ha_eq ▸ Subset.rfl)
+    have hne_ad : a ≠ d := fun h => hndS (h ▸ ha_eq ▸ Subset.rfl)
+    have hne_bc : b ≠ c := by
+      intro h
+      obtain ⟨q, hq⟩ := hAb_ne
+      exact Finset.disjoint_left.mp hdisj_bc hq (by simpa [Ab, Ac, h] using hq)
+    have hne_bd : b ≠ d := by
+      intro h
+      obtain ⟨q, hq⟩ := hAb_ne
+      exact Finset.disjoint_left.mp hdisj_bd hq (by simpa [Ab, Ad, h] using hq)
+    have hne_cd : c ≠ d := by
+      intro h
+      obtain ⟨q, hq⟩ := hAc_ne
+      exact Finset.disjoint_left.mp hdisj_cd hq (by simpa [Ac, Ad, h] using hq)
+    let F : Finset ℕ := {o, a, b, c, d}
+    have hFsub : F ⊆ Finset.Ico 13 (13 + gs.length) := by
+      intro i hi
+      simp only [F, mem_insert, mem_singleton] at hi
+      rw [mem_Ico]
+      rcases hi with h | h | h | h | h <;> rw [h]
+      · exact valid_of_card gs o (by rw [ho, line_card]; omega)
+      · exact valid_of_card gs a (by rw [ha_eq, hScard]; omega)
+      · exact valid_of_card gs b (by omega)
+      · exact valid_of_card gs c (by omega)
+      · exact valid_of_card gs d (by omega)
+    have hFsum : ∑ i ∈ F, credit (support gs i) w =
+        credit (support gs o) w + credit (support gs a) w +
+        credit (support gs b) w + credit (support gs c) w + credit (support gs d) w := by
+      simp only [F, sum_insert, sum_singleton, mem_insert, mem_singleton,
+        hne_oa, hne_ob, hne_oc, hne_od, hne_ab, hne_ac, hne_ad, hne_bc, hne_bd, hne_cd,
+        or_self, not_false_eq_true]
+      omega
+    have hco : credit (support gs o) w = 2 := by
+      simp [credit, ho, line_card]
+    have hca : credit (support gs a) w = 2 := by
+      have ha_eq' : support gs a = line w := ha_eq
+      simp [credit, ha_eq', line_card]
+    have hle := Finset.sum_le_sum_of_subset_of_nonneg (f := fun i => credit (support gs i) w)
+      hFsub (fun _ _ _ => Nat.zero_le _)
+    rw [hFsum, hco, hca] at hle
+    omega
 
-theorem main_lb (gates : List Gate) (out : Fin 13 → ℕ)
-    (hvalid : ∀ g ∈ gates, (g.op = GateOp.and ∨ g.op = GateOp.or) ∧ g.inputs.length ≤ 2)
-    (hcomp : ∀ (w : Fin 13) (x : Fin 13 → Bool), WeightLe2 x →
-      Circuit.eval ⟨gates, out w⟩ (List.ofFn x) = decide (∃ v ∈ line w, x v = true)) :
+lemma line_demand (gs : List Gate) (hL : Legal gs) (o : ℕ) (w : Fin 13)
+    (hSingle : ∀ p : Fin 13, value gs (single p) o = true ↔ p ∈ line w)
+    (hPair : ∀ q1 q2 : Fin 13, q1 ∉ line w → q2 ∉ line w → value gs (pair q1 q2) o = false) :
+    6 ≤ ∑ i ∈ Finset.Ico 13 (13 + gs.length), credit (support gs i) w := by
+  let S := line w
+  have hScard : S.card = 4 := line_card w
+  have ho_sup : support gs o = S := by
+    ext p; rw [mem_support, hSingle p]
+  have hoP : o ∈ privSet gs S :=
+    (mem_privSet gs S o).mpr ⟨ho_sup ▸ Subset.rfl, by rw [ho_sup, hScard]; omega⟩
+  by_cases h3 : 3 ≤ (privSet gs S).card
+  · have hsub : privSet gs S ⊆ Finset.Ico 13 (13 + gs.length) := filter_subset _ _
+    have hle := Finset.sum_le_sum_of_subset_of_nonneg (f := fun i => credit (support gs i) w)
+      hsub (fun _ _ _ => Nat.zero_le _)
+    have hval : ∀ i ∈ privSet gs S, credit (support gs i) w = 2 := by
+      intro i hi
+      obtain ⟨h1, h2⟩ := (mem_privSet gs S i).mp hi
+      have h1' : support gs i ⊆ line w := h1
+      simp [credit, h1', h2]
+    rw [Finset.sum_congr rfl hval, Finset.sum_const, smul_eq_mul] at hle
+    omega
+  · have hP2 : (privSet gs S).card ≤ 2 := by omega
+    have hpair_no : ∀ a ∈ privSet gs S, a < o → ∀ c < o, c ≠ a → c ∉ privSet gs S := by
+      intro a haP ha_lt c hc_lt hca hcP
+      have hsub3 : ({o, a, c} : Finset ℕ) ⊆ privSet gs S := by
+        intro i hi
+        simp only [mem_insert, mem_singleton] at hi
+        rcases hi with rfl | rfl | rfl <;> assumption
+      have hcard3 : ({o, a, c} : Finset ℕ).card = 3 := by
+        rw [card_insert_of_notMem, card_insert_of_notMem, card_singleton]
+        · simp [hca.symm]
+        · simp [show o ≠ a by omega, show o ≠ c by omega]
+      have hle := card_le_card hsub3
+      omega
+    obtain ⟨h1o, h2o⟩ := valid_of_card gs o (by rw [ho_sup, hScard]; omega)
+    rcases gate_cases gs hL h1o h2o with hf | ht | ⟨a, ha, hoa⟩ | ⟨a, ha, b, hb, hoab⟩ | ⟨a, ha, b, hb, hoab⟩
+    · have he : support gs o = ∅ := by ext p; simp [mem_support, hf]
+      rw [ho_sup] at he; rw [he] at hScard; simp at hScard
+    · have he : support gs o = Finset.univ := by ext p; simp [mem_support, ht]
+      rw [ho_sup] at he; rw [he] at hScard; simp at hScard
+    · have ha_sup : support gs a = S := by
+        rw [← ho_sup]; ext p; simp [mem_support, hoa]
+      have haP : a ∈ privSet gs S :=
+        (mem_privSet gs S a).mpr ⟨ha_sup ▸ Subset.rfl, by rw [ha_sup, hScard]; omega⟩
+      exact (no_priv_below gs hL S hScard a (ha_sup ▸ Subset.rfl) (by rw [ha_sup, hScard]; omega)
+        (fun q1 q2 h1 h2 => by rw [← hoa]; exact hPair q1 q2 h1 h2)
+        (fun c hc => hpair_no a haP ha c (by omega) (by omega))).elim
+    · have hsup : S = support gs a ∪ support gs b := by
+        rw [← ho_sup]; ext p; simp [mem_support, hoab]
+      have hsa : support gs a ⊆ S := hsup ▸ subset_union_left
+      have hsb : support gs b ⊆ S := hsup ▸ subset_union_right
+      have hge2 : 2 ≤ (support gs a).card ∨ 2 ≤ (support gs b).card := by
+        have hle := card_union_le (support gs a) (support gs b)
+        rw [← hsup, hScard] at hle
+        omega
+      rcases hge2 with hca | hcb
+      · have haP : a ∈ privSet gs S := (mem_privSet gs S a).mpr ⟨hsa, hca⟩
+        have h3a : 3 ≤ (support gs a).card := by
+          by_cases hab : b = a
+          · rw [hab, union_idempotent] at hsup; rw [← hsup, hScard]; omega
+          · have hbnot : b ∉ privSet gs S := hpair_no a haP ha b hb hab
+            have hcb1 : (support gs b).card ≤ 1 := by
+              by_contra h; exact hbnot ((mem_privSet gs S b).mpr ⟨hsb, by omega⟩)
+            have hle := card_union_le (support gs a) (support gs b)
+            rw [← hsup, hScard] at hle
+            omega
+        have hpair_a : ∀ q1 q2 : Fin 13, q1 ∉ S → q2 ∉ S → value gs (pair q1 q2) a = false := by
+          intro q1 q2 h1 h2
+          have hv := hoab (pair q1 q2)
+          rw [hPair q1 q2 h1 h2] at hv
+          cases ha_v : value gs (pair q1 q2) a
+          · rfl
+          · rw [ha_v] at hv; simp at hv
+        exact (no_priv_below gs hL S hScard a hsa h3a hpair_a
+          (fun c hc => hpair_no a haP ha c (by omega) (by omega))).elim
+      · have hbP : b ∈ privSet gs S := (mem_privSet gs S b).mpr ⟨hsb, hcb⟩
+        have h3b : 3 ≤ (support gs b).card := by
+          by_cases hab : a = b
+          · rw [hab, union_idempotent] at hsup; rw [← hsup, hScard]; omega
+          · have hanot : a ∉ privSet gs S := hpair_no b hbP hb a ha hab
+            have hca1 : (support gs a).card ≤ 1 := by
+              by_contra h; exact hanot ((mem_privSet gs S a).mpr ⟨hsa, by omega⟩)
+            have hle := card_union_le (support gs a) (support gs b)
+            rw [← hsup, hScard] at hle
+            omega
+        have hpair_b : ∀ q1 q2 : Fin 13, q1 ∉ S → q2 ∉ S → value gs (pair q1 q2) b = false := by
+          intro q1 q2 h1 h2
+          have hv := hoab (pair q1 q2)
+          rw [hPair q1 q2 h1 h2] at hv
+          cases hb_v : value gs (pair q1 q2) b
+          · rfl
+          · rw [hb_v] at hv; simp at hv
+        exact (no_priv_below gs hL S hScard b hsb h3b hpair_b
+          (fun c hc => hpair_no b hbP hb c (by omega) (by omega))).elim
+    · have hsup : S = support gs a ∩ support gs b := by
+        rw [← ho_sup]; ext p; simp [mem_support, hoab]
+      have hSa : S ⊆ support gs a := hsup ▸ inter_subset_left
+      have hSb : S ⊆ support gs b := hsup ▸ inter_subset_right
+      by_cases haP : a ∈ privSet gs S
+      · by_cases hbP : b ∈ privSet gs S
+        · by_cases hab : a = b
+          · have ha_sup : support gs a = S :=
+              Subset.antisymm ((mem_privSet gs S a).mp haP).1 hSa
+            have hpair_a : ∀ q1 q2 : Fin 13, q1 ∉ S → q2 ∉ S → value gs (pair q1 q2) a = false := by
+              intro q1 q2 h1 h2
+              have hv := hoab (pair q1 q2)
+              rw [← hab, Bool.and_self, hPair q1 q2 h1 h2] at hv
+              exact hv.symm
+            exact (no_priv_below gs hL S hScard a (ha_sup ▸ Subset.rfl) (by rw [ha_sup, hScard]; omega)
+              hpair_a (fun c hc => hpair_no a haP ha c (by omega) (by omega))).elim
+          · exact (hpair_no a haP ha b hb (Ne.symm hab) hbP).elim
+        · exact and_chain_demand gs hL w o a b ho_sup haP ha hbP hoab hPair
+            (fun c hc => hpair_no a haP ha c (by omega) (by omega))
+      · by_cases hbP : b ∈ privSet gs S
+        · exact and_chain_demand gs hL w o b a ho_sup hbP hb haP
+            (fun x => by rw [hoab x, Bool.and_comm]) hPair
+            (fun c hc => hpair_no b hbP hb c (by omega) (by omega))
+        · have hnsa : ¬ support gs a ⊆ S := by
+            intro h
+            have hca : 2 ≤ (support gs a).card := by have := card_le_card hSa; omega
+            exact haP ((mem_privSet gs S a).mpr ⟨h, hca⟩)
+          have hnsb : ¬ support gs b ⊆ S := by
+            intro h
+            have hcb : 2 ≤ (support gs b).card := by have := card_le_card hSb; omega
+            exact hbP ((mem_privSet gs S b).mpr ⟨h, hcb⟩)
+          obtain ⟨q1, hq1a, hq1S⟩ := Finset.not_subset.mp hnsa
+          obtain ⟨q2, hq2b, hq2S⟩ := Finset.not_subset.mp hnsb
+          have hv1 := pair_true_left gs hL a (q := q2) hq1a
+          have hv2 := pair_true_right gs hL b (p := q1) hq2b
+          have hvo := hoab (pair q1 q2)
+          rw [hv1, hv2, hPair q1 q2 hq1S hq2S] at hvo
+          simp at hvo
+
+lemma main_proof (gates : List Gate) (out : Fin 13 → ℕ)
+    (hL : Legal gates)
+    (ho : ∀ (w : Fin 13) (x : Fin 13 → Bool),
+      (∀ i j k : Fin 13, x i = true → x j = true → x k = true → i = j ∨ j = k ∨ i = k) →
+      Circuit.eval ⟨gates, out w⟩ (List.ofFn x) =
+        decide (∃ v ∈ line w, x v = true)) :
     39 ≤ gates.length := by
-  -- Step 1: Every line w satisfies either 3 ≤ (Gw w).card or (2 ≤ (Gw w).card ∧ HasTriple w)
-  have hline : ∀ w : Fin 13,
-      3 ≤ (Gw gates w).card ∨ (2 ≤ (Gw gates w).card ∧ HasTriple gates w) := by
+  have hdem : ∀ w : Fin 13, 6 ≤ ∑ i ∈ Finset.Ico 13 (13 + gates.length), credit (support gates i) w := by
     intro w
-    have hVout : V gates (out w) = line w := by
-      ext v
-      rw [mem_V]
-      have hc := hcomp w (e1 v) (e1_weightLe2 v)
-      change wval gates (out w) (e1 v) = decide (∃ u ∈ line w, e1 v u = true) at hc
-      rw [hc, decide_eq_true_eq]
-      constructor
-      · rintro ⟨u, huL, hu⟩
-        simp only [e1, decide_eq_true_eq] at hu
-        rwa [← hu]
-      · intro hvL
-        exact ⟨v, hvL, by simp [e1]⟩
-    have hsafe_out : Safe w (wval gates (out w)) := by
-      intro x hx hv
-      have hc := hcomp w x hx
-      change wval gates (out w) x = decide (∃ u ∈ line w, x u = true) at hc
-      rw [hc, decide_eq_true_eq] at hv
-      exact hv
-    obtain ⟨g, hglt, hgo⟩ := gate_idx_of_V_ge2 gates (out w) (by rw [hVout, card_line]; omega)
-    rw [hgo] at hVout hsafe_out
-    have hsub := Finset.card_le_card (GwUp_subset_Gw gates w g hglt)
-    rcases line_structure gates hvalid w g hglt hVout hsafe_out with h3 | ⟨h2, ht⟩
-    · exact Or.inl (by omega)
-    · exact Or.inr ⟨by omega, ht⟩
-  -- Step 2: Gw w (across all w), B56, B7 are pairwise disjoint subsets of range gates.length
-  have hGw_disj : Set.PairwiseDisjoint (Finset.univ : Finset (Fin 13)) (Gw gates) := by
-    intro w₁ _ w₂ _ hne
-    change Disjoint (Gw gates w₁) (Gw gates w₂)
-    rw [Finset.disjoint_left]
-    intro j hj₁ hj₂
-    simp only [Gw, Finset.mem_filter] at hj₁ hj₂
-    exact hne (line_eq_of_subset_two hj₁.2.1 hj₂.2.1 hj₁.2.2)
-  set U := Finset.univ.biUnion (Gw gates)
-  have hU_card : U.card = ∑ w : Fin 13, (Gw gates w).card :=
-    Finset.card_biUnion (fun w₁ _ w₂ _ hne => hGw_disj (Finset.mem_univ w₁) (Finset.mem_univ w₂) hne)
-  have hU_disj_56 : Disjoint U (B56 gates) := by
-    rw [Finset.disjoint_left]
-    intro j hjU hj56
-    obtain ⟨w, _, hjw⟩ := Finset.mem_biUnion.mp hjU
-    simp only [Gw, B56, Finset.mem_filter] at hjw hj56
-    have hle := Finset.card_le_card hjw.2.1
-    rw [card_line] at hle
-    omega
-  have hU_disj_7 : Disjoint U (B7 gates) := by
-    rw [Finset.disjoint_left]
-    intro j hjU hj7
-    obtain ⟨w, _, hjw⟩ := Finset.mem_biUnion.mp hjU
-    simp only [Gw, B7, Finset.mem_filter] at hjw hj7
-    have hle := Finset.card_le_card hjw.2.1
-    rw [card_line] at hle
-    omega
-  have h56_disj_7 : Disjoint (B56 gates) (B7 gates) := by
-    rw [Finset.disjoint_left]
-    intro j hj56 hj7
-    simp only [B56, B7, Finset.mem_filter] at hj56 hj7
-    omega
-  have htot_sub : (U ∪ B56 gates) ∪ B7 gates ⊆ Finset.range gates.length := by
-    intro j hj
-    simp only [Finset.mem_union] at hj
-    rcases hj with (hjU | hj56) | hj7
-    · obtain ⟨w, _, hjw⟩ := Finset.mem_biUnion.mp hjU
-      exact (Finset.mem_filter.mp hjw).1
-    · exact (Finset.mem_filter.mp hj56).1
-    · exact (Finset.mem_filter.mp hj7).1
-  have htot_le : (∑ w : Fin 13, (Gw gates w).card) + (B56 gates).card + (B7 gates).card ≤ gates.length := by
-    have hc := Finset.card_le_card htot_sub
-    rw [Finset.card_range] at hc
-    rw [Finset.card_union_of_disjoint (Finset.disjoint_union_left.mpr ⟨hU_disj_7, h56_disj_7⟩),
-        Finset.card_union_of_disjoint hU_disj_56, hU_card] at hc
-    exact hc
-  -- Step 3: Partition Fin 13 into W3, W56, W7
-  set W3 := Finset.univ.filter (fun w : Fin 13 => 3 ≤ (Gw gates w).card)
-  set Wrem := Finset.univ \ W3
-  set W56 := Wrem.filter (fun w : Fin 13 => ∃ j ∈ B56 gates, line w ⊆ V gates (13 + j))
-  set W7 := Wrem \ W56
-  have hW56_sub : W56 ⊆ Wrem := Finset.filter_subset _ Wrem
-  have h1_part : W56.card + W7.card = Wrem.card := by
-    have hsd : W7.card = Wrem.card - W56.card := card_sdiff_eq hW56_sub
-    have hle : W56.card ≤ Wrem.card := Finset.card_le_card hW56_sub
-    omega
-  have hpart : W3.card + W56.card + W7.card = 13 := by
-    have hsd : Wrem.card = (Finset.univ : Finset (Fin 13)).card - W3.card := card_sdiff_eq (Finset.subset_univ W3)
-    have hle : W3.card ≤ (Finset.univ : Finset (Fin 13)).card := Finset.card_le_card (Finset.subset_univ W3)
-    rw [Finset.card_univ, Fintype.card_fin] at hsd hle
-    omega
-  -- Sum of |Gw w| >= 26 + W3.card = 3 * W3.card + 2 * W56.card + 2 * W7.card
-  have hGw_sum : 3 * W3.card + 2 * W56.card + 2 * W7.card ≤ ∑ w : Fin 13, (Gw gates w).card := by
-    have hge : ∀ w : Fin 13, (if w ∈ W3 then 3 else 2) ≤ (Gw gates w).card := by
-      intro w
-      split_ifs with hw
-      · exact (Finset.mem_filter.mp hw).2
-      · rcases hline w with h3 | ⟨h2, _⟩
-        · omega
-        · exact h2
-    have hsum_le := Finset.sum_le_sum (fun w (_ : w ∈ Finset.univ) => hge w)
-    have hlhs : ∑ w : Fin 13, (if w ∈ W3 then (3 : ℕ) else 2) = 3 * W3.card + 2 * Wrem.card := by
-      rw [Finset.sum_ite, Finset.sum_const, Finset.sum_const, smul_eq_mul, smul_eq_mul]
-      have hf1 : (Finset.univ.filter (fun w : Fin 13 => w ∈ W3)) = W3 := by
-        ext x; simp
-      have hf2 : (Finset.univ.filter (fun w : Fin 13 => w ∉ W3)) = Wrem := by
-        ext x; simp [Wrem]
-      rw [hf1, hf2]; ring
-    omega
-  -- Step 4: W56.card <= (B56 gates).card via injection
-  have hW56_le : W56.card ≤ (B56 gates).card := by
-    have hex : ∀ w ∈ W56, ∃ j ∈ B56 gates, line w ⊆ V gates (13 + j) :=
-      fun w hw => (Finset.mem_filter.mp hw).2
-    choose f hf_mem hf_sub using hex
-    have hinj : Set.InjOn (fun w => if hw : w ∈ W56 then f w hw else 0) W56 := by
-      intro w₁ hw₁ w₂ hw₂ heq
-      have hw₁' : w₁ ∈ W56 := Finset.mem_coe.mp hw₁
-      have hw₂' : w₂ ∈ W56 := Finset.mem_coe.mp hw₂
-      have hf_eq : f w₁ hw₁' = f w₂ hw₂' := by simpa [hw₁', hw₂'] using heq
-      have h1 := hf_sub w₁ hw₁'
-      have h2 := hf_sub w₂ hw₂'
-      rw [← hf_eq] at h2
-      have hc6 : (V gates (13 + f w₁ hw₁')).card ≤ 6 := (Finset.mem_filter.mp (hf_mem w₁ hw₁')).2.2
-      exact line_eq_of_superset_le6 h1 h2 hc6
-    have hmap : ∀ w ∈ W56, (if hw : w ∈ W56 then f w hw else 0) ∈ B56 gates := by
-      intro w hw; simp [hw, hf_mem w hw]
-    exact Finset.card_le_card_of_injOn _ hmap hinj
-  -- Step 5: 3 * W7.card <= 2 * (B7 gates).card via bipartite double counting
-  have hW7_le : 3 * W7.card ≤ 2 * (B7 gates).card := by
-    set E := (W7 ×ˢ B7 gates).filter (fun p => line p.1 ⊆ V gates (13 + p.2))
-    have hleft : 3 * W7.card ≤ E.card := by
-      have heq : E.card = ∑ w ∈ W7, ((B7 gates).filter (fun j => line w ⊆ V gates (13 + j))).card := by
-        rw [Finset.card_eq_sum_ones, Finset.sum_filter, Finset.sum_product]
-        apply Finset.sum_congr rfl
-        intro w _
-        rw [Finset.card_filter]
-      rw [heq]
-      have hge3 : ∀ w ∈ W7, 3 ≤ ((B7 gates).filter (fun j => line w ⊆ V gates (13 + j))).card := by
-        intro w hw
-        have hwrem : w ∈ Wrem := (Finset.mem_sdiff.mp hw).1
-        have hnot3 : ¬ (3 ≤ (Gw gates w).card) := by
-          intro h3
-          exact (Finset.mem_sdiff.mp hwrem).2 (Finset.mem_filter.mpr ⟨Finset.mem_univ w, h3⟩)
-        have hnot56 : ¬ (∃ j ∈ B56 gates, line w ⊆ V gates (13 + j)) := by
-          intro h56
-          exact (Finset.mem_sdiff.mp hw).2 (Finset.mem_filter.mpr ⟨hwrem, h56⟩)
-        rcases hline w with h3 | ⟨_, ht⟩
-        · exact absurd h3 hnot3
-        · rcases triple_split gates w ht with h56 | h3b
-          · exact absurd h56 hnot56
-          · exact h3b
-      calc 3 * W7.card = ∑ _w ∈ W7, 3 := by rw [Finset.sum_const, smul_eq_mul, mul_comm]
-        _ ≤ ∑ w ∈ W7, ((B7 gates).filter (fun j => line w ⊆ V gates (13 + j))).card :=
-          Finset.sum_le_sum hge3
-    have hright : E.card ≤ 2 * (B7 gates).card := by
-      have heq : E.card = ∑ j ∈ B7 gates, (W7.filter (fun w => line w ⊆ V gates (13 + j))).card := by
-        rw [Finset.card_eq_sum_ones, Finset.sum_filter, Finset.sum_product_right]
-        apply Finset.sum_congr rfl
-        intro j _
-        rw [Finset.card_filter]
-      rw [heq]
-      have hle2 : ∀ j ∈ B7 gates, (W7.filter (fun w => line w ⊆ V gates (13 + j))).card ≤ 2 := by
-        intro j hj
-        have hc7 : (V gates (13 + j)).card = 7 := (Finset.mem_filter.mp hj).2
-        have hsub : W7.filter (fun w => line w ⊆ V gates (13 + j)) ⊆
-            Finset.univ.filter (fun w : Fin 13 => line w ⊆ V gates (13 + j)) := by
-          intro w hw
-          exact Finset.mem_filter.mpr ⟨Finset.mem_univ w, (Finset.mem_filter.mp hw).2⟩
-        exact (Finset.card_le_card hsub).trans (lines_in_card7_le2 _ hc7)
-      calc ∑ j ∈ B7 gates, (W7.filter (fun w => line w ⊆ V gates (13 + j))).card
-          ≤ ∑ _j ∈ B7 gates, 2 := Finset.sum_le_sum hle2
-        _ = 2 * (B7 gates).card := by rw [Finset.sum_const, smul_eq_mul, mul_comm]
-    omega
+    apply line_demand gates hL (out w) w
+    · intro p
+      have h := ho w (single p) (by
+        intro i j k hi hj _
+        simp [single] at hi hj
+        exact Or.inl (hi.trans hj.symm))
+      rw [← value_eq_eval] at h
+      rw [h]
+      simp [single]
+    · intro q1 q2 hq1 hq2
+      have h := ho w (pair q1 q2) (by
+        intro i j k hi hj hk
+        simp [pair] at hi hj hk
+        rcases hi with rfl | rfl <;> rcases hj with rfl | rfl <;> rcases hk with rfl | rfl <;>
+          simp)
+      rw [← value_eq_eval] at h
+      rw [h]
+      simp only [pair, decide_eq_false_iff_not, not_exists, not_and, decide_eq_true_eq]
+      intro v hv hq
+      rcases hq with rfl | rfl
+      · exact hq1 hv
+      · exact hq2 hv
+  have hlow : 78 ≤ ∑ w : Fin 13, ∑ i ∈ Finset.Ico 13 (13 + gates.length), credit (support gates i) w := by
+    have h1 := Finset.sum_le_sum (s := (Finset.univ : Finset (Fin 13))) (fun w _ => hdem w)
+    simpa using h1
+  have hup : ∑ i ∈ Finset.Ico 13 (13 + gates.length), ∑ w : Fin 13, credit (support gates i) w ≤
+      2 * gates.length := by
+    have h1 := Finset.sum_le_sum (s := Finset.Ico 13 (13 + gates.length))
+      (fun i _ => capacity (support gates i))
+    simpa [Nat.mul_comm] using h1
+  rw [Finset.sum_comm] at hlow
   omega
 
-end PEqualNP.Outside.L_meta_667_aux
+end PEqualNP.Outside.L_meta_667
 
-theorem PEqualNP.Outside.L_meta_667 : ∀ (gates : List PEqualNP.CircuitLowerBounds.Gate) (out : Fin 13 → ℕ), (∀ g ∈ gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length ≤ 2) → (∀ (w : Fin 13) (x : Fin 13 → Bool), (∀ i j k : Fin 13, x i = true → x j = true → x k = true → i = j ∨ j = k ∨ i = k) → PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, out w⟩ (List.ofFn x) = decide (∃ v ∈ (({0, 1, 3, 9} : Finset (Fin 13)).image (fun u => u + w)), x v = true)) → 39 ≤ gates.length :=
-  fun gates out hvalid hcomp => PEqualNP.Outside.L_meta_667_aux.main_lb gates out hvalid hcomp
+open PEqualNP.Outside.L_meta_667
+
+theorem PEqualNP.Outside.L_meta_667 : ∀ (gates : List PEqualNP.CircuitLowerBounds.Gate) (out : Fin 13 → ℕ), (∀ g ∈ gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length ≤ 2) → (∀ (w : Fin 13) (x : Fin 13 → Bool), (∀ i j k : Fin 13, x i = true → x j = true → x k = true → i = j ∨ j = k ∨ i = k) → PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, out w⟩ (List.ofFn x) = decide (∃ v ∈ (({0, 1, 3, 9} : Finset (Fin 13)).image (fun u => u + w)), x v = true)) → 39 ≤ gates.length := by
+  intro gates out hL ho
+  exact main_proof gates out hL ho
