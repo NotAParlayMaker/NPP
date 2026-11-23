@@ -3,7 +3,7 @@ import PEqualNP.Defs
 
 open PEqualNP.MetaComplexity.SingleLevel
 
-namespace PEqualNP.Outside
+namespace PEqualNP.Outside.L_meta_365
 
 /-- Neighbours of `w` in the undirected simple graph given by edge list `E`. -/
 private def neigh {n : ℕ} (E : Edges n) (w : Fin n) : Finset (Fin n) :=
@@ -256,8 +256,11 @@ private lemma pendant_zero {n : ℕ} {E : Edges n} (hWF : WF E)
     rw [star_eq_singleton_right hWF he hdeg] at hs
     simpa using hs
 
-theorem L_meta_365 :
-    ∀ (n : ℕ) (E : Edges n), WF E →
+end PEqualNP.Outside.L_meta_365
+
+theorem PEqualNP.Outside.L_meta_365 :
+    ∀ (n : ℕ) (E : PEqualNP.MetaComplexity.SingleLevel.Edges n),
+      PEqualNP.MetaComplexity.SingleLevel.WF E →
       ∀ τ : Fin n × Fin n → Finset (Fin n) → Fin n,
         (∀ e ∈ E, ∀ I : Finset (Fin n),
           (∀ f ∈ E, ¬ (f.1 ∈ I ∧ f.2 ∈ I)) →
@@ -278,8 +281,6 @@ theorem L_meta_365 :
   intro n E hWF τ hτ c hsum
   constructor
   · intro w hN
-    exact star_sum_zero hτ hsum hN
+    exact PEqualNP.Outside.L_meta_365.star_sum_zero hτ hsum hN
   · intro e he hpend
-    exact pendant_zero hWF hτ hsum he hpend
-
-end PEqualNP.Outside
+    exact PEqualNP.Outside.L_meta_365.pendant_zero hWF hτ hsum he hpend
