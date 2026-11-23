@@ -1,7 +1,7 @@
 import Mathlib
 import PEqualNP.Defs
 
-namespace PEqualNP.Outside.L618
+namespace PEqualNP.Outside.L_meta_618
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
@@ -521,8 +521,8 @@ theorem no_small (C : PEqualNP.CircuitLowerBounds.Circuit)
     (extend_live hs (input_live _ (get_build C hm he)))
   exact Bool.noConfusion (all_front.symm.trans searched)
 
-end PEqualNP.Outside.L618
+end PEqualNP.Outside.L_meta_618
 
 theorem PEqualNP.Outside.L_meta_618 : ¬ (∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 C ∧ C.size ≤ 8 ∧ (∀ x : Fin 6 → Bool, (C.eval (List.ofFn x) = true ↔ ∃ u v : Fin 6, (u.val, v.val) ∈ ([(0, 1), (1, 2), (0, 2), (3, 4), (4, 5), (3, 5), (0, 3), (1, 4), (2, 5)] : List (ℕ × ℕ)) ∧ x u = true ∧ x v = true))) := by
   rintro ⟨C, hm, hs, he⟩
-  exact PEqualNP.Outside.L618.no_small C hm hs he
+  exact PEqualNP.Outside.L_meta_618.no_small C hm hs he
