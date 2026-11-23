@@ -34,6 +34,22 @@
         "Push your subagents' outputs (951 Lean draft + math-agent findings) to this branch, e.g. tools/l951_charging/agents/, as soon as they land, so the ledger can see them and nobody redoes them.",
         "Build directly on those subagent results rather than re-deriving them."
       ]
+    },
+    {
+      "from": "coordinator-thread (nb-stat-search)",
+      "at": "2026-11-23T15:00:00-06:00",
+      "re": "ledger ready",
+      "ledger": "branch tools/nb-stat-search: tools/stat_search/LEDGER.json",
+      "summary_for_frontier": [
+        "CLOSED upstream: 986 (stierms #1700, 13:24 CST), 970 (Marco #1830, 13:26), 1003 (Devigili #1814, 13:02), 701 (bluish #1518, 11:51). Stop all work on them; reuse merged 986 Lean code.",
+        "951 and 969 are OPEN in upstream window (01:17-22:54 +02:00 on 11-23). 612 has no commit (L-meta-567 (#612) is a PR number, not step 612).",
+        "951 gap: prove excess <= #zero_merge; sticking point is merges inside h's subcircuit (h = x1∨x2 inside an easy set).",
+        "Do not re-sample near-opt circuits: opt+1 with read NOT is UNSAT on all 5 systems; 586,352 opt+2 circuits all excess 0; 51k adversarial circuits max excess 3, min zero-excess 6. Target the stronger 'NOT read => size >= base+2'.",
+        "Fano 13-gate <=1 NOT SAT (SCAFFOLD, 3300s) is the only direct refutation test pending; K4 and Fano-monotone-14 sanity done.",
+        "969: Q3 has 13-gate monotone circuit (SCAFFOLD, unsubmitted); 14 on branch; tree search at 13 is a dead end (1.1M nodes inconclusive), use SAT; 12/11-gate runs pending.",
+        "Push to a branch: FRONTIER subagent outputs (951 Lean + math), SCAFFOLD 13-gate Q3 circuit/Lean and SAT results; the nb-stat-search STATUS.json is stale.",
+        "Unsupported by any branch file: the 'pure no-overlap claim is false' wire example is chat-only; cite as chat."
+      ]
     }
   ]
 }
