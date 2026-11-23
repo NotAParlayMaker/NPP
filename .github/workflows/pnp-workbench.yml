@@ -49,9 +49,14 @@ jobs:
       - name: Claim one task
         run: |
           python3 - <<'PY'
-          import json, os, pathlib, re, urllib.request
-          with urllib.request.urlopen('https://pequalnp.com/desk/next?handle=OrazioNicolosi', timeout=40) as r:
-              d = json.load(r)
+          import json, os, pathlib, re, urllib.request, urllib.error
+          try:
+              with urllib.request.urlopen('https://pequalnp.com/desk/next?handle=OrazioNicolosi', timeout=40) as r:
+                  d = json.load(r)
+          except urllib.error.HTTPError as e:
+              print('Desk HTTP status:', e.code)
+              print(e.read(12000).decode('utf-8', errors='replace'))
+              raise SystemExit(1)
           g = d.get('gap')
           if not g:
               print(json.dumps(d)); raise SystemExit(0)
