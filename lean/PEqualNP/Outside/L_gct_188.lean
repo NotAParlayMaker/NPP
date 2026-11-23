@@ -2,10 +2,10 @@ import Mathlib
 import PEqualNP.Defs
 
 /-! The witness is the hook: matrices supported on row `0` and column `0`, with the five entries
-`t (0, 1..5)` free and `t (0, 0)` minus their sum, and the column entries `t (1, 0)`, `t (2, 0)`
-free and `t (3, 0)` minus their sum. The total sum of entries is zero, every 2 x 2
-subpermanent sum is (row sum off the corner) * (column sum below the corner) = 0, and no larger
-subpermanent fits in a hook. The sum over injections is expanded by brute force. -/
+  `t (0, 1..5)` free and `t (0, 0)` minus their sum, and the column entries `t (1, 0)`, `t (2, 0)`
+  free and `t (3, 0)` minus their sum. The total sum of entries is zero, every 2 x 2
+  subpermanent sum is (row sum off the corner) * (column sum below the corner) = 0, and no larger
+  subpermanent fits in a hook. The sum over injections is expanded by brute force. -/
 
 namespace PEqualNP.Outside.L_gct_188_aux
 
