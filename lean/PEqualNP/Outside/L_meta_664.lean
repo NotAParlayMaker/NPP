@@ -43,8 +43,7 @@ theorem ker_two {q c : F} (hq : q ≠ 0) (hc : c ≠ 0) :
   have hset : ((poly q c).ker : Set F) = {0, c / q} := by
     ext x
     change q * x ^ 2 + c * x = 0 ↔ x = 0 ∨ x = c / q
-    rw [show q * x ^ 2 + c * x = x * (q * x + c) by ring, mul_eq_zero,
-      add_eq_zero_iff_eq_neg, CharTwo.neg_eq, eq_div_iff hq, mul_comm q x]
+    rw [show q * x ^ 2 + c * x = x * (q * x + c) by ring, mul_eq_zero, add_eq_zero_iff_eq_neg, CharTwo.neg_eq, eq_div_iff hq, mul_comm q x]
   change (((poly q c).ker : Set F)).ncard = 2
   rw [hset, Set.ncard_pair (Ne.symm (div_ne_zero hc hq))]
 
