@@ -83,51 +83,49 @@ private theorem wiresFrom_norm (gs : List Gate) : ∀ w : List Bool,
     rw [s1, s2, normGate_eval, ih]
 
 /-- The status of an old wire: a constant, or the wire `j` of the new circuit. -/
-private inductive Stat : Type
-  | const (c : Bool)
-  | wire (j : ℕ)
+private abbrev Stat := Sum Bool ℕ
 
 private def Stat.val (w : List Bool) : Stat → Bool
-  | Stat.const c => c
-  | Stat.wire j => w.getD j false
+  | Sum.inl c => c
+  | Sum.inr j => w.getD j false
 
 private def Stat.Valid (m : ℕ) : Stat → Prop
-  | Stat.const _ => True
-  | Stat.wire j => j < m
+  | Sum.inl _ => True
+  | Sum.inr j => j < m
 
 private def simpNot (m : ℕ) : List Stat → Option Gate × Stat
-  | [] => (none, Stat.const true)
-  | Stat.const c :: _ => (none, Stat.const (!c))
-  | Stat.wire j :: _ => (some ⟨GateOp.not, [j]⟩, Stat.wire m)
+  | [] => (none, Sum.inl true)
+  | Sum.inl c :: _ => (none, Sum.inl (!c))
+  | Sum.inr j :: _ => (some ⟨GateOp.not, [j]⟩, Sum.inr m)
 
 private def simpAnd (m : ℕ) : List Stat → Option Gate × Stat
-  | [] => (none, Stat.const true)
-  | [Stat.const c] => (none, Stat.const c)
-  | [Stat.wire j] => (none, Stat.wire j)
-  | [Stat.const c, Stat.const d] => (none, Stat.const (c && d))
-  | [Stat.const c, Stat.wire j] => (none, bif c then Stat.wire j else Stat.const false)
-  | [Stat.wire j, Stat.const c] => (none, bif c then Stat.wire j else Stat.const false)
-  | [Stat.wire j, Stat.wire k] => (some ⟨GateOp.and, [j, k]⟩, Stat.wire m)
-  | _ => (none, Stat.const false)
+  | [] => (none, Sum.inl true)
+  | [Sum.inl c] => (none, Sum.inl c)
+  | [Sum.inr j] => (none, Sum.inr j)
+  | [Sum.inl c, Sum.inl d] => (none, Sum.inl (c && d))
+  | [Sum.inl c, Sum.inr j] => (none, bif c then Sum.inr j else Sum.inl false)
+  | [Sum.inr j, Sum.inl c] => (none, bif c then Sum.inr j else Sum.inl false)
+  | [Sum.inr j, Sum.inr k] => (some ⟨GateOp.and, [j, k]⟩, Sum.inr m)
+  | _ => (none, Sum.inl false)
 
 private def simpOr (m : ℕ) : List Stat → Option Gate × Stat
-  | [] => (none, Stat.const false)
-  | [Stat.const c] => (none, Stat.const c)
-  | [Stat.wire j] => (none, Stat.wire j)
-  | [Stat.const c, Stat.const d] => (none, Stat.const (c || d))
-  | [Stat.const c, Stat.wire j] => (none, bif c then Stat.const true else Stat.wire j)
-  | [Stat.wire j, Stat.const c] => (none, bif c then Stat.const true else Stat.wire j)
-  | [Stat.wire j, Stat.wire k] => (some ⟨GateOp.or, [j, k]⟩, Stat.wire m)
-  | _ => (none, Stat.const false)
+  | [] => (none, Sum.inl false)
+  | [Sum.inl c] => (none, Sum.inl c)
+  | [Sum.inr j] => (none, Sum.inr j)
+  | [Sum.inl c, Sum.inl d] => (none, Sum.inl (c || d))
+  | [Sum.inl c, Sum.inr j] => (none, bif c then Sum.inl true else Sum.inr j)
+  | [Sum.inr j, Sum.inl c] => (none, bif c then Sum.inl true else Sum.inr j)
+  | [Sum.inr j, Sum.inr k] => (some ⟨GateOp.or, [j, k]⟩, Sum.inr m)
+  | _ => (none, Sum.inl false)
 
 /-- What a gate becomes, given the statuses of the wires it reads; `m` is the number of the
-next new wire. The result is the gate to emit, if any, and the status of the gate's wire. -/
+    next new wire. The result is the gate to emit, if any, and the status of the gate's wire. -/
 private def simplify (op : GateOp) (m : ℕ) (ins : List Stat) : Option Gate × Stat :=
   match op with
   | GateOp.and => simpAnd m ins
   | GateOp.or => simpOr m ins
   | GateOp.not => simpNot m ins
-  | _ => (none, Stat.const false)
+  | _ => (none, Sum.inl false)
 
 private theorem simplify_ok (op : GateOp) (m : ℕ) (ins : List Stat) :
     ∀ g ∈ (simplify op m ins).1, Ok g := by
@@ -144,7 +142,7 @@ private theorem simplify_ok (op : GateOp) (m : ℕ) (ins : List Stat) :
 
 private theorem simplify_count (op : GateOp) (m : ℕ) (ins : List Stat)
     (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not) (hlen : ins.length ≤ 2)
-    (hnot : op = GateOp.not → ins.length ≤ 1) (hc : ∃ c, Stat.const c ∈ ins) :
+    (hnot : op = GateOp.not → ins.length ≤ 1) (hc : ∃ c, Sum.inl c ∈ ins) :
     (simplify op m ins).1 = none := by
   obtain ⟨c, hc⟩ := hc
   rcases hop with rfl | rfl | rfl
@@ -181,9 +179,9 @@ private theorem simplify_sound (op : GateOp) (hop : op = GateOp.and ∨ op = Gat
 /-- One step of the pass: `acc.1` holds the statuses of the old wires, `acc.2` the new gates. -/
 private def elimStep (n : ℕ) (acc : List Stat × List Gate) (g : Gate) : List Stat × List Gate :=
   (acc.1 ++ [(simplify g.op (n + acc.2.length)
-      (g.inputs.map fun i => acc.1.getD i (Stat.const false))).2],
+      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).2],
     acc.2 ++ (simplify g.op (n + acc.2.length)
-      (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1.toList)
+      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList)
 
 private def elim (n : ℕ) (gs : List Gate) (acc : List Stat × List Gate) : List Stat × List Gate :=
   gs.foldl (elimStep n) acc
@@ -227,15 +225,15 @@ private theorem elim_len (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × Lis
     have h2 : (elimStep n acc g).2.length ≤ acc.2.length + 1 := by
       simp only [elimStep, List.length_append]
       have := toList_length_le (simplify g.op (n + acc.2.length)
-        (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1
+        (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1
       omega
     have h3 : elim n (g :: gs) acc = elim n gs (elimStep n acc g) := rfl
     rw [h3, List.length_cons]; omega
 
 /-- If the status of old wire `k` is a constant and some gate reads wire `k`, one gate is
-saved. -/
+    saved. -/
 private theorem elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
-    (∀ g ∈ gs, NOk g) → k < acc.1.length → (∃ c, acc.1.getD k (Stat.const false) = Stat.const c) →
+    (∀ g ∈ gs, NOk g) → k < acc.1.length → (∃ c, acc.1.getD k (Sum.inl false) = Sum.inl c) →
     (∃ g ∈ gs, k ∈ g.inputs) → (elim n gs acc).2.length + 1 ≤ acc.2.length + gs.length := by
   induction gs with
   | nil => intro acc _ _ _ h; obtain ⟨g, hg, _⟩ := h; simp at hg
@@ -247,7 +245,7 @@ private theorem elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat �
     · obtain ⟨c, hc⟩ := hc
       have hnok := hok g List.mem_cons_self
       have hnone : (simplify g.op (n + acc.2.length)
-          (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1 = none := by
+          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1 = none := by
         apply simplify_count
         · exact hnok.1.1
         · simpa using hnok.1.2
@@ -255,7 +253,7 @@ private theorem elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat �
         · exact ⟨c, List.mem_map.2 ⟨k, hkg, hc⟩⟩
       have h2 : (elimStep n acc g).2.length = acc.2.length := by
         show (acc.2 ++ (simplify g.op (n + acc.2.length)
-          (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1.toList).length = _
+          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList).length = _
         rw [hnone]; simp
       have := elim_len n gs (elimStep n acc g)
       omega
@@ -275,25 +273,25 @@ private theorem elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat �
       have h2 : (elimStep n acc g).2.length ≤ acc.2.length + 1 := by
         simp only [elimStep, List.length_append]
         have := toList_length_le (simplify g.op (n + acc.2.length)
-          (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1
+          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1
         omega
       omega
 
 private theorem Stat.valid_mono {m m' : ℕ} (h : m ≤ m') : ∀ s : Stat, s.Valid m → s.Valid m'
-  | Stat.const _, _ => trivial
-  | Stat.wire _, hj => lt_of_lt_of_le hj h
+  | Sum.inl _, _ => trivial
+  | Sum.inr _, hj => lt_of_lt_of_le hj h
 
 private theorem Stat.val_append (w t : List Bool) : ∀ s : Stat, s.Valid w.length →
     s.val (w ++ t) = s.val w
-  | Stat.const _, _ => rfl
-  | Stat.wire _, hj => List.getD_append _ _ _ _ hj
+  | Sum.inl _, _ => rfl
+  | Sum.inr _, hj => List.getD_append _ _ _ _ hj
 
 /-- The invariant of the pass, for one input `y` of the new circuit: `w` are the old wires,
-and every old wire has a valid status whose value on the new wires is the old value. -/
+    and every old wire has a valid status whose value on the new wires is the old value. -/
 private def Inv (n : ℕ) (y : List Bool) (w : List Bool) (acc : List Stat × List Gate) : Prop :=
   acc.1.length = w.length ∧ ∀ i : ℕ,
-    (acc.1.getD i (Stat.const false)).Valid (n + acc.2.length) ∧
-    (acc.1.getD i (Stat.const false)).val (wiresFrom acc.2 y) = w.getD i false
+    (acc.1.getD i (Sum.inl false)).Valid (n + acc.2.length) ∧
+    (acc.1.getD i (Sum.inl false)).val (wiresFrom acc.2 y) = w.getD i false
 
 private theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) :
     ∀ (w : List Bool) (acc : List Stat × List Gate), (∀ g ∈ gs, Ok g) → Inv n y w acc →
@@ -307,7 +305,7 @@ private theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : Lis
     obtain ⟨hl, hi⟩ := h
     set w' := wiresFrom acc.2 y with hw'
     have lw' : w'.length = n + acc.2.length := by rw [hw', length_wiresFrom, hy]
-    set ins := g.inputs.map fun i => acc.1.getD i (Stat.const false) with hins
+    set ins := g.inputs.map fun i => acc.1.getD i (Sum.inl false) with hins
     have hgok := hok g List.mem_cons_self
     have hs := simplify_sound g.op hgok.1 w' ins (by simpa [hins] using hgok.2)
       (by
@@ -326,8 +324,8 @@ private theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : Lis
     obtain ⟨t, ht, htl⟩ := wiresFrom_prefix r.1.toList w'
     refine ⟨by simp [elimStep, hl], ?_⟩
     intro i
-    show ((acc.1 ++ [r.2]).getD i (Stat.const false)).Valid (n + (acc.2 ++ r.1.toList).length) ∧
-      ((acc.1 ++ [r.2]).getD i (Stat.const false)).val (wiresFrom (acc.2 ++ r.1.toList) y) = _
+    show ((acc.1 ++ [r.2]).getD i (Sum.inl false)).Valid (n + (acc.2 ++ r.1.toList).length) ∧
+      ((acc.1 ++ [r.2]).getD i (Sum.inl false)).val (wiresFrom (acc.2 ++ r.1.toList) y) = _
     rw [hnew, List.length_append, ← Nat.add_assoc]
     by_cases hil : i = acc.1.length
     · subst hil
@@ -339,15 +337,15 @@ private theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : Lis
       exact (hi i).2
 
 /-- The statuses at the start: the first `n` old wires are the new input wires, and the last
-input is the constant `b`. -/
+    input is the constant `b`. -/
 private def initStats (n : ℕ) (b : Bool) : List Stat :=
-  List.ofFn (fun i : Fin n => Stat.wire i) ++ [Stat.const b]
+  List.ofFn (fun i : Fin n => (Sum.inr (i : ℕ) : Stat)) ++ [Sum.inl b]
 
 private theorem inv_init (n : ℕ) (b : Bool) (y : Fin n → Bool) :
     Inv n (List.ofFn y) (List.ofFn y ++ [b]) (initStats n b, []) := by
   refine ⟨by simp [initStats], ?_⟩
   intro i
-  have l1 : (List.ofFn (fun i : Fin n => Stat.wire i)).length = n := by simp
+  have l1 : (List.ofFn (fun i : Fin n => (Sum.inr (i : ℕ) : Stat))).length = n := by simp
   have l2 : (List.ofFn y).length = n := by simp
   by_cases hin : i = n
   · subst hin
@@ -395,23 +393,23 @@ private theorem elim_stat_length (n : ℕ) (gs : List Gate) (acc : List Stat × 
 
 private theorem elim_read_const (n k : ℕ) (acc : List Stat × List Gate) (g : Gate)
     (hg : NOk g) (hread : k ∈ g.inputs) (b : Bool)
-    (hfix : acc.1.getD k (Stat.const false) = Stat.const b) :
+    (hfix : acc.1.getD k (Sum.inl false) = Sum.inl b) :
     (elimStep n acc g).2.length = acc.2.length := by
   have hnone : (simplify g.op (n + acc.2.length)
-      (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1 = none :=
+      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1 = none :=
     simplify_count _ _ _ hg.1.1 (by simpa using hg.1.2)
       (fun h => by simpa using hg.2 h) ⟨b, List.mem_map.mpr ⟨k, hread, hfix⟩⟩
   change (acc.2 ++ (simplify g.op (n + acc.2.length)
-    (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1.toList).length = _
+    (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList).length = _
   rw [hnone]
   simp
 
 private theorem bad_reader_constant (n m : ℕ) (stats : List Stat) (g : Gate)
-    (hg : NOk g) (hread : n ∈ g.inputs) (hfix : stats.getD n (Stat.const false) = Stat.const false)
+    (hg : NOk g) (hread : n ∈ g.inputs) (hfix : stats.getD n (Sum.inl false) = Sum.inl false)
     (hbad : ¬(g.op = GateOp.or ∧ g.inputs.length = 2 ∧
       ∃ w ∈ g.inputs, w ≠ n ∧ w < stats.length)) :
-    ∃ b, (simplify g.op m (g.inputs.map fun i => stats.getD i (Stat.const false))).2 =
-      Stat.const b := by
+    ∃ b, (simplify g.op m (g.inputs.map fun i => stats.getD i (Sum.inl false))).2 =
+      Sum.inl b := by
   obtain ⟨op, ins⟩ := g
   have hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not := hg.1.1
   have hlen : ins.length ≤ 2 := hg.1.2
@@ -426,10 +424,10 @@ private theorem bad_reader_constant (n m : ℕ) (stats : List Stat) (g : Gate)
       rcases hmem with ha | hb
       · subst a
         refine ⟨false, ?_⟩
-        cases hb : stats[b]?.getD (Stat.const false) <;> simp [simplify, simpAnd, hfix, hb]
+        cases hb : stats[b]?.getD (Sum.inl false) <;> simp [simplify, simpAnd, hfix, hb]
       · subst b
         refine ⟨false, ?_⟩
-        cases ha : stats[a]?.getD (Stat.const false) <;> simp [simplify, simpAnd, hfix, ha]
+        cases ha : stats[a]?.getD (Sum.inl false) <;> simp [simplify, simpAnd, hfix, ha]
     · simp at hlen
   · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨d, rest⟩⟩⟩
     · simp at hread
@@ -437,7 +435,7 @@ private theorem bad_reader_constant (n m : ℕ) (stats : List Stat) (g : Gate)
       subst a
       exact ⟨false, by simp [simplify, simpOr, hfix]⟩
     · have hout (w : ℕ) (hw : w ∈ [a, b]) :
-          stats[w]?.getD (Stat.const false) = Stat.const false := by
+          stats[w]?.getD (Sum.inl false) = Sum.inl false := by
         by_cases hn : w = n
         · simpa only [hn] using hfix
         · have hnlt : ¬w < stats.length := fun hlt => hbad ⟨rfl, rfl, w, hw, hn, hlt⟩
@@ -524,26 +522,26 @@ theorem PEqualNP.Outside.L_meta_169 : ∀ (n : ℕ) (C : PEqualNP.CircuitLowerBo
     rw [hgn] at hlen hw
     exact hshape ⟨hop', hlen, by simpa only [hgn] using hread, w, hw, hne, by simpa [hm, m] using hlt⟩
   have hstart : n < start.1.length := by simp [start, initStats]
-  have hfix : start.1.getD n (Stat.const false) = Stat.const false := by
+  have hfix : start.1.getD n (Sum.inl false) = Sum.inl false := by
     simp [start, initStats]
-  have hbefore : before.1.getD n (Stat.const false) = Stat.const false := by
+  have hbefore : before.1.getD n (Sum.inl false) = Sum.inl false := by
     exact (elim_getD n n _ pre start hstart).trans hfix
   -- A reader with the wrong shape becomes a constant after fixing the last input.
   obtain ⟨b, hconst⟩ := bad_reader_constant n (n + before.2.length) before.1 g hg hread hbefore hbad
   have hSaved : after.2.length = before.2.length := elim_read_const n n before g hg hread false hbefore
   have hAfterLen : after.1.length = m + 1 := by simp [after, elimStep, hm]
-  have hAfterN : after.1.getD n (Stat.const false) = Stat.const false := by
-    change (before.1 ++ [_]).getD n (Stat.const false) = Stat.const false
+  have hAfterN : after.1.getD n (Sum.inl false) = Sum.inl false := by
+    change (before.1 ++ [_]).getD n (Sum.inl false) = Sum.inl false
     rw [getD_snoc_ne _ _ _ _ (by rw [hm]; dsimp [m]; omega), hbefore]
-  have hAfterM : after.1.getD m (Stat.const false) = Stat.const b := by
-    change (before.1 ++ [_]).getD m (Stat.const false) = Stat.const b
+  have hAfterM : after.1.getD m (Sum.inl false) = Sum.inl b := by
+    change (before.1 ++ [_]).getD m (Sum.inl false) = Sum.inl b
     rw [getD_snoc_len _ _ _ _ hm, hconst]
   have hFinal : elim n gs start = final := by
     rw [hsplit]
     simp only [elim, List.foldl_append]
     rfl
   have heval (y : Fin n → Bool) :
-      (final.1.getD C.output (Stat.const false)).val (wiresFrom final.2 (List.ofFn y)) =
+      (final.1.getD C.output (Sum.inl false)).val (wiresFrom final.2 (List.ofFn y)) =
         circuitFun (n + 1) C (Fin.snoc y false) := by
     have hv := (inv_elim n (List.ofFn y) (by simp) gs _ start
       (fun k hk => (hok k hk).1) (inv_init n false y)).2 C.output
@@ -552,10 +550,10 @@ theorem PEqualNP.Outside.L_meta_169 : ∀ (n : ℕ) (C : PEqualNP.CircuitLowerBo
     change _ = (wiresFrom C.gates (List.ofFn y ++ [false])).getD C.output false
     rw [← wiresFrom_norm C.gates]
     exact hv.2
-  obtain ⟨out, hout⟩ : ∃ out, final.1.getD C.output (Stat.const false) = Stat.wire out := by
-    cases h : final.1.getD C.output (Stat.const false) with
-    | wire out => exact ⟨out, rfl⟩
-    | const c =>
+  obtain ⟨out, hout⟩ : ∃ out, final.1.getD C.output (Sum.inl false) = Sum.inr out := by
+    cases h : final.1.getD C.output (Sum.inl false) with
+    | inr out => exact ⟨out, rfl⟩
+    | inl c =>
       obtain ⟨y, y', hne⟩ := hnonconst
       exfalso
       apply hne
