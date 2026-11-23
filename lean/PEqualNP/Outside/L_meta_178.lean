@@ -2,9 +2,9 @@ import Mathlib
 import PEqualNP.Defs
 
 /-! An embedding of `H` into `Gh` carries cycles to cycles of the same length, and three
-distinct neighbours of a vertex to three distinct neighbours of its image. A vertex with
-nonzero label has exactly the neighbours `a` and `b`, so a vertex of degree three maps to a
-vertex of label zero. -/
+  distinct neighbours of a vertex to three distinct neighbours of its image. A vertex with
+  nonzero label has exactly the neighbours `a` and `b`, so a vertex of degree three maps to a
+  vertex of label zero. -/
 
 theorem PEqualNP.Outside.L_meta_178 : ∀ (k N : ℕ) (Gh : SimpleGraph (Fin N)) (pos : Fin N → ℕ), (∀ u v : Fin N, Gh.Adj u v → pos u ≠ 0 ∨ pos v ≠ 0) → (∀ v : Fin N, pos v ≠ 0 → pos v ≤ 2 * k ∧ ∃ a b : Fin N, (∀ w : Fin N, Gh.Adj v w ↔ w = a ∨ w = b) ∧ pos a + 1 = pos v ∧ pos b = (pos v + 1) % (2 * k + 1)) → (∀ (L : ℕ) (c : ℕ → Fin N), 3 ≤ L → (∀ i j : ℕ, i < L → j < L → c i = c j → i = j) → (∀ i : ℕ, i < L → Gh.Adj (c i) (c ((i + 1) % L))) → 6 * k + 3 ≤ L) → ∀ (m : ℕ) (H : SimpleGraph (Fin m)) (e : RelEmbedding H.Adj Gh.Adj), (∀ (L : ℕ) (c : ℕ → Fin m), 3 ≤ L → (∀ i j : ℕ, i < L → j < L → c i = c j → i = j) → (∀ i : ℕ, i < L → H.Adj (c i) (c ((i + 1) % L))) → 6 * k + 3 ≤ L) ∧ ∀ u x y z : Fin m, H.Adj u x → H.Adj u y → H.Adj u z → x ≠ y → x ≠ z → y ≠ z → pos (e u) = 0
  := by
