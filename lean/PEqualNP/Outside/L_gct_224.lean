@@ -8,18 +8,28 @@ import Mathlib.Tactic.NormNum
 
 namespace PEqualNP.Outside.L_gct_224
 
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
 noncomputable def P2 (a b c d : ℂ) : ℂ :=
   432*a^2 + 288*a*c + 288*a*d - 144*a*b + 144*c^2 + 144*c*d + 144*d^2 + 144*b^2
 
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
 noncomputable def P3 (a b c d : ℂ) : ℂ :=
   -144*a^3 - 288*a^2*c - 288*a^2*d - 72*a^2*b - 144*a*c^2 - 288*a*c*d - 144*a*d^2 - 72*c^2*d - 72*c*d^2 + 72*a*b^2
 
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
 noncomputable def P4 (a b c d : ℂ) : ℂ :=
   210*a^4 + 408*a^3*c + 312*a^3*d - 108*a^3*b - 216*a^2*b*c + 156*a^2*b*d + 288*a^2*c^2 + 396*a^2*c*d + 222*a^2*d^2 + 96*a*c^3 + 216*a*c^2*d + 204*a*c*d^2 + 60*a^2*b^2 - 48*a*b^3 - 72*a*b*c^2 + 120*a*b*c*d + 84*a*b*d^2 + 96*a*b^2*c - 120*a*b^2*d + 24*b^2*c^2 - 24*b^2*c*d - 48*b^2*d^2 + 72*a*d^3 + 48*c^3*d + 60*c^2*d^2 + 36*c*d^3 + 18*d^4 + 24*b*c*d^2 + 48*b*c^2*d + 24*c^4 + 24*b^4
 
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
 noncomputable def P5 (a b c d : ℂ) : ℂ :=
   -168*a^5 - 312*a^4*c - 384*a^4*d + 36*a^4*b + 72*a^3*b*c + 72*a^3*b*d - 360*a^3*c^2 - 552*a^3*c*d - 300*a^3*d^2 - 192*a^2*c^3 - 468*a^2*c^2*d - 312*a^2*c*d^2 + 60*a^3*b^2 - 48*a^2*b^3 + 72*a^2*b*c^2 - 24*a^2*b*d^2 + 96*a^2*b^2*c - 12*a^2*b^2*d + 24*a*b^2*c^2 + 24*a*b^2*c*d - 12*a*b^2*d^2 - 108*a^2*d^3 - 192*a*c^3*d - 204*a*c^2*d^2 - 72*a*c*d^3 - 24*a*d^4 - 144*a*b*c*d^2 - 72*a*b*d^3 - 72*a*b*c^2*d - 48*a*c^4 - 48*b*c^2*d^2 - 72*b*c*d^3 + 24*a*b^4 - 24*b*d^4 + 24*b^2*c^2*d + 24*b^2*c*d^2 - 48*c^3*d^2 - 36*c^2*d^3 - 12*c*d^4 - 24*c^4*d
 
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
 noncomputable def P6 (a b c d : ℂ) : ℂ :=
   200*a^6 - 264*a^5*b - 600*a^4*b*c - 72*a^4*b*d + 480*a^5*c + 546*a^4*c^2 + 600*a^4*c*d + 368*a^3*c^3 + 552*a^3*c^2*d + 516*a^3*c*d^2 + 270*a^4*b^2 - 200*a^3*b^3 + 492*a^3*b^2*c + 24*a^3*b^2*d + 348*a^2*b^2*c^2 + 72*a^2*b^2*c*d + 54*a^2*b^2*d^2 + 336*a^5*d + 348*a^4*d^2 + 168*a^3*d^3 + 312*a^2*c^3*d + 390*a^2*c^2*d^2 + 228*a^2*c*d^3 + 36*a^2*d^4 - 540*a^3*b*c^2 - 96*a^3*b*c*d + 12*a^3*b*d^2 - 24*a^2*b^3*d + 132*a^2*b*c*d^2 + 60*a^2*b*d^3 - 240*a^2*b*c^3 + 24*a^2*b*c^2*d - 48*a*b*c^4 + 96*a*b*c^3*d + 192*a*b*c^2*d^2 + 144*a*b*c*d^3 - 288*a^2*b^3*c + 84*a^2*b^4 + 48*a*b^4*c - 24*a*b^4*d + 168*a^2*c^4 + 24*a*b*d^4 + 48*a*b^2*c^2*d + 96*a*b^2*c*d^2 + 48*a*b^2*d^3 + 168*a*c^3*d^2 + 120*a*c^2*d^3 + 48*a*c*d^4 - 24*a*b^3*d^2 - 192*a*b^3*c^2 - 96*a*b^3*c*d - 64*b^3*c^3 - 96*b^3*c^2*d - 48*b^3*c*d^2 + 48*b*c^4*d + 96*b*c^3*d^2 + 84*b*c^2*d^3 + 24*b*c*d^4 + 96*a*b^2*c^3 - 48*b^4*c*d - 24*b^4*d^2 + 60*b^2*c^2*d^2 + 60*b^2*c*d^3 + 18*b^2*d^4 + 48*a*c^5 + 120*a*c^4*d + 8*c^6 + 24*c^5*d + 36*c^4*d^2 + 24*c^3*d^3 + 6*c^2*d^4 - 24*a*b^5 + 8*b^6
 
@@ -100,6 +110,8 @@ variable {R : Type*} [CommRing R] {n : ℕ}
 
 -- The permutation of `Fin (n + 1)` that sends `Fin.last n` to `i` and `Fin.castSucc j` to
 -- `i.succAbove (τ j)`.
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
 noncomputable def insertLast (i : Fin (n + 1)) (τ : Equiv.Perm (Fin n)) : Equiv.Perm (Fin (n + 1)) :=
   finSuccEquivLast.trans ((Equiv.optionCongr τ).trans (finSuccEquiv' i).symm)
 
@@ -154,6 +166,8 @@ theorem permanent_succ_last (M : Matrix (Fin (n + 1)) (Fin (n + 1)) R) :
   simp
 
 
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
 private noncomputable def cm (m : ℕ) (rows : List (Fin 6)) (x : Fin 6 → ℂ) : Matrix (Fin m) (Fin m) ℂ :=
   Matrix.of fun i j => x (Fin.ofNat 6 j.val - rows.getD i.val 0)
 set_option maxRecDepth 100000 in
@@ -1273,21 +1287,33 @@ private theorem circulant_permanent (x : Fin 6 → ℂ) :
     fin_cases i <;> fin_cases j <;> rfl
   rw [h, val63]
 
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
 private noncomputable def Q1 (a b c d e f : ℂ) : ℂ :=
   720*a + 720*b + 720*c + 720*d + 720*e + 720*f
 
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
 private noncomputable def Q2 (a b c d e f : ℂ) : ℂ :=
   360*a^2 + 576*a*b + 576*a*c + 576*a*d + 576*a*e + 576*a*f + 360*b^2 + 576*b*c + 576*b*d + 576*b*e + 576*b*f + 360*c^2 + 576*c*d + 576*c*e + 576*c*f + 360*d^2 + 576*d*e + 576*d*f + 360*e^2 + 576*e*f + 360*f^2
 
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
 private noncomputable def Q3 (a b c d e f : ℂ) : ℂ :=
   120*a^3 + 216*a^2*b + 216*a^2*c + 216*a^2*d + 216*a^2*e + 216*a^2*f + 216*a*b^2 + 360*a*b*c + 360*a*b*d + 360*a*b*e + 360*a*b*f + 216*a*c^2 + 360*a*c*d + 360*a*c*e + 360*a*c*f + 216*a*d^2 + 360*a*d*e + 360*a*d*f + 216*a*e^2 + 360*a*e*f + 216*a*f^2 + 120*b^3 + 216*b^2*c + 216*b^2*d + 216*b^2*e + 216*b^2*f + 216*b*c^2 + 360*b*c*d + 360*b*c*e + 360*b*c*f + 216*b*d^2 + 360*b*d*e + 360*b*d*f + 216*b*e^2 + 360*b*e*f + 216*b*f^2 + 120*c^3 + 216*c^2*d + 216*c^2*e + 216*c^2*f + 216*c*d^2 + 360*c*d*e + 360*c*d*f + 216*c*e^2 + 360*c*e*f + 216*c*f^2 + 120*d^3 + 216*d^2*e + 216*d^2*f + 216*d*e^2 + 360*d*e*f + 216*d*f^2 + 120*e^3 + 216*e^2*f + 216*e*f^2 + 120*f^3
 
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
 private noncomputable def Q4 (a b c d e f : ℂ) : ℂ :=
   30*a^4 + 48*a^3*b + 48*a^3*c + 48*a^3*d + 48*a^3*e + 48*a^3*f + 54*a^2*b^2 + 96*a^2*b*c + 96*a^2*b*d + 96*a^2*b*e + 108*a^2*b*f + 54*a^2*c^2 + 96*a^2*c*d + 108*a^2*c*e + 96*a^2*c*f + 60*a^2*d^2 + 96*a^2*d*e + 96*a^2*d*f + 54*a^2*e^2 + 96*a^2*e*f + 54*a^2*f^2 + 48*a*b^3 + 108*a*b^2*c + 96*a*b^2*d + 96*a*b^2*e + 96*a*b^2*f + 96*a*b*c^2 + 168*a*b*c*d + 144*a*b*c*e + 168*a*b*c*f + 96*a*b*d^2 + 192*a*b*d*e + 144*a*b*d*f + 96*a*b*e^2 + 168*a*b*e*f + 96*a*b*f^2 + 48*a*c^3 + 96*a*c^2*d + 108*a*c^2*e + 96*a*c^2*f + 96*a*c*d^2 + 144*a*c*d*e + 192*a*c*d*f + 108*a*c*e^2 + 144*a*c*e*f + 96*a*c*f^2 + 48*a*d^3 + 96*a*d^2*e + 96*a*d^2*f + 96*a*d*e^2 + 168*a*d*e*f + 96*a*d*f^2 + 48*a*e^3 + 96*a*e^2*f + 108*a*e*f^2 + 48*a*f^3 + 30*b^4 + 48*b^3*c + 48*b^3*d + 48*b^3*e + 48*b^3*f + 54*b^2*c^2 + 96*b^2*c*d + 96*b^2*c*e + 96*b^2*c*f + 54*b^2*d^2 + 96*b^2*d*e + 108*b^2*d*f + 60*b^2*e^2 + 96*b^2*e*f + 54*b^2*f^2 + 48*b*c^3 + 108*b*c^2*d + 96*b*c^2*e + 96*b*c^2*f + 96*b*c*d^2 + 168*b*c*d*e + 144*b*c*d*f + 96*b*c*e^2 + 192*b*c*e*f + 96*b*c*f^2 + 48*b*d^3 + 96*b*d^2*e + 108*b*d^2*f + 96*b*d*e^2 + 144*b*d*e*f + 108*b*d*f^2 + 48*b*e^3 + 96*b*e^2*f + 96*b*e*f^2 + 48*b*f^3 + 30*c^4 + 48*c^3*d + 48*c^3*e + 48*c^3*f + 54*c^2*d^2 + 96*c^2*d*e + 96*c^2*d*f + 54*c^2*e^2 + 96*c^2*e*f + 60*c^2*f^2 + 48*c*d^3 + 108*c*d^2*e + 96*c*d^2*f + 96*c*d*e^2 + 168*c*d*e*f + 96*c*d*f^2 + 48*c*e^3 + 96*c*e^2*f + 96*c*e*f^2 + 48*c*f^3 + 30*d^4 + 48*d^3*e + 48*d^3*f + 54*d^2*e^2 + 96*d^2*e*f + 54*d^2*f^2 + 48*d*e^3 + 108*d*e^2*f + 96*d*e*f^2 + 48*d*f^3 + 30*e^4 + 48*e^3*f + 54*e^2*f^2 + 48*e*f^3 + 30*f^4
 
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
 private noncomputable def Q5 (a b c d e f : ℂ) : ℂ :=
   6*a^5 + 6*a^4*b + 6*a^4*c + 6*a^4*d + 6*a^4*e + 6*a^4*f + 6*a^3*b^2 + 12*a^3*b*c + 12*a^3*b*d + 12*a^3*b*e + 24*a^3*b*f + 6*a^3*c^2 + 12*a^3*c*d + 24*a^3*c*e + 12*a^3*c*f + 12*a^3*d^2 + 12*a^3*d*e + 12*a^3*d*f + 6*a^3*e^2 + 12*a^3*e*f + 6*a^3*f^2 + 6*a^2*b^3 + 18*a^2*b^2*c + 18*a^2*b^2*d + 18*a^2*b^2*e + 18*a^2*b^2*f + 18*a^2*b*c^2 + 36*a^2*b*c*d + 24*a^2*b*c*e + 24*a^2*b*c*f + 12*a^2*b*d^2 + 36*a^2*b*d*e + 24*a^2*b*d*f + 18*a^2*b*e^2 + 24*a^2*b*e*f + 18*a^2*b*f^2 + 6*a^2*c^3 + 18*a^2*c^2*d + 18*a^2*c^2*e + 18*a^2*c^2*f + 12*a^2*c*d^2 + 24*a^2*c*d*e + 36*a^2*c*d*f + 18*a^2*c*e^2 + 24*a^2*c*e*f + 18*a^2*c*f^2 + 12*a^2*d^3 + 12*a^2*d^2*e + 12*a^2*d^2*f + 18*a^2*d*e^2 + 36*a^2*d*e*f + 18*a^2*d*f^2 + 6*a^2*e^3 + 18*a^2*e^2*f + 18*a^2*e*f^2 + 6*a^2*f^3 + 6*a*b^4 + 24*a*b^3*c + 12*a*b^3*d + 12*a*b^3*e + 12*a*b^3*f + 18*a*b^2*c^2 + 24*a*b^2*c*d + 24*a*b^2*c*e + 24*a*b^2*c*f + 18*a*b^2*d^2 + 36*a*b^2*d*e + 24*a*b^2*d*f + 12*a*b^2*e^2 + 36*a*b^2*e*f + 18*a*b^2*f^2 + 12*a*b*c^3 + 24*a*b*c^2*d + 24*a*b*c^2*e + 36*a*b*c^2*f + 36*a*b*c*d^2 + 48*a*b*c*d*e + 48*a*b*c*d*f + 24*a*b*c*e^2 + 48*a*b*c*e*f + 36*a*b*c*f^2 + 12*a*b*d^3 + 36*a*b*d^2*e + 24*a*b*d^2*f + 36*a*b*d*e^2 + 48*a*b*d*e*f + 24*a*b*d*f^2 + 12*a*b*e^3 + 36*a*b*e^2*f + 24*a*b*e*f^2 + 12*a*b*f^3 + 6*a*c^4 + 12*a*c^3*d + 24*a*c^3*e + 12*a*c^3*f + 18*a*c^2*d^2 + 24*a*c^2*d*e + 36*a*c^2*d*f + 18*a*c^2*e^2 + 24*a*c^2*e*f + 12*a*c^2*f^2 + 12*a*c*d^3 + 24*a*c*d^2*e + 36*a*c*d^2*f + 24*a*c*d*e^2 + 48*a*c*d*e*f + 36*a*c*d*f^2 + 24*a*c*e^3 + 24*a*c*e^2*f + 24*a*c*e*f^2 + 12*a*c*f^3 + 6*a*d^4 + 12*a*d^3*e + 12*a*d^3*f + 18*a*d^2*e^2 + 36*a*d^2*e*f + 18*a*d^2*f^2 + 12*a*d*e^3 + 24*a*d*e^2*f + 24*a*d*e*f^2 + 12*a*d*f^3 + 6*a*e^4 + 12*a*e^3*f + 18*a*e^2*f^2 + 24*a*e*f^3 + 6*a*f^4 + 6*b^5 + 6*b^4*c + 6*b^4*d + 6*b^4*e + 6*b^4*f + 6*b^3*c^2 + 12*b^3*c*d + 12*b^3*c*e + 12*b^3*c*f + 6*b^3*d^2 + 12*b^3*d*e + 24*b^3*d*f + 12*b^3*e^2 + 12*b^3*e*f + 6*b^3*f^2 + 6*b^2*c^3 + 18*b^2*c^2*d + 18*b^2*c^2*e + 18*b^2*c^2*f + 18*b^2*c*d^2 + 36*b^2*c*d*e + 24*b^2*c*d*f + 12*b^2*c*e^2 + 36*b^2*c*e*f + 18*b^2*c*f^2 + 6*b^2*d^3 + 18*b^2*d^2*e + 18*b^2*d^2*f + 12*b^2*d*e^2 + 24*b^2*d*e*f + 18*b^2*d*f^2 + 12*b^2*e^3 + 12*b^2*e^2*f + 18*b^2*e*f^2 + 6*b^2*f^3 + 6*b*c^4 + 24*b*c^3*d + 12*b*c^3*e + 12*b*c^3*f + 18*b*c^2*d^2 + 24*b*c^2*d*e + 24*b*c^2*d*f + 18*b*c^2*e^2 + 36*b*c^2*e*f + 12*b*c^2*f^2 + 12*b*c*d^3 + 24*b*c*d^2*e + 24*b*c*d^2*f + 36*b*c*d*e^2 + 48*b*c*d*e*f + 24*b*c*d*f^2 + 12*b*c*e^3 + 36*b*c*e^2*f + 36*b*c*e*f^2 + 12*b*c*f^3 + 6*b*d^4 + 12*b*d^3*e + 24*b*d^3*f + 18*b*d^2*e^2 + 24*b*d^2*e*f + 18*b*d^2*f^2 + 12*b*d*e^3 + 24*b*d*e^2*f + 24*b*d*e*f^2 + 24*b*d*f^3 + 6*b*e^4 + 12*b*e^3*f + 18*b*e^2*f^2 + 12*b*e*f^3 + 6*b*f^4 + 6*c^5 + 6*c^4*d + 6*c^4*e + 6*c^4*f + 6*c^3*d^2 + 12*c^3*d*e + 12*c^3*d*f + 6*c^3*e^2 + 12*c^3*e*f + 12*c^3*f^2 + 6*c^2*d^3 + 18*c^2*d^2*e + 18*c^2*d^2*f + 18*c^2*d*e^2 + 36*c^2*d*e*f + 12*c^2*d*f^2 + 6*c^2*e^3 + 18*c^2*e^2*f + 12*c^2*e*f^2 + 12*c^2*f^3 + 6*c*d^4 + 24*c*d^3*e + 12*c*d^3*f + 18*c*d^2*e^2 + 24*c*d^2*e*f + 18*c*d^2*f^2 + 12*c*d*e^3 + 24*c*d*e^2*f + 36*c*d*e*f^2 + 12*c*d*f^3 + 6*c*e^4 + 12*c*e^3*f + 18*c*e^2*f^2 + 12*c*e*f^3 + 6*c*f^4 + 6*d^5 + 6*d^4*e + 6*d^4*f + 6*d^3*e^2 + 12*d^3*e*f + 6*d^3*f^2 + 6*d^2*e^3 + 18*d^2*e^2*f + 18*d^2*e*f^2 + 6*d^2*f^3 + 6*d*e^4 + 24*d*e^3*f + 18*d*e^2*f^2 + 12*d*e*f^3 + 6*d*f^4 + 6*e^5 + 6*e^4*f + 6*e^3*f^2 + 6*e^2*f^3 + 6*e*f^4 + 6*f^5
 
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
 private noncomputable def Q6 (a b c d e f : ℂ) : ℂ :=
   a^6 + 6*a^4*b*f + 6*a^4*c*e + 3*a^4*d^2 + 6*a^3*b^2*e + 12*a^3*b*c*d + 2*a^3*c^3 + 6*a^3*c*f^2 + 12*a^3*d*e*f + 2*a^3*e^3 + 6*a^2*b^3*d + 9*a^2*b^2*c^2 + 9*a^2*b^2*f^2 + 24*a^2*b*c*e*f + 12*a^2*b*d^2*f + 18*a^2*b*d*e^2 + 18*a^2*c^2*d*f + 9*a^2*c^2*e^2 + 12*a^2*c*d^2*e + 3*a^2*d^4 + 6*a^2*d*f^3 + 9*a^2*e^2*f^2 + 6*a*b^4*c + 12*a*b^3*e*f + 24*a*b^2*c*d*f + 12*a*b^2*c*e^2 + 18*a*b^2*d^2*e + 12*a*b*c^3*f + 24*a*b*c^2*d*e + 12*a*b*c*d^3 + 12*a*b*c*f^3 + 24*a*b*d*e*f^2 + 12*a*b*e^3*f + 6*a*c^4*e + 6*a*c^3*d^2 + 12*a*c^2*e*f^2 + 18*a*c*d^2*f^2 + 24*a*c*d*e^2*f + 6*a*c*e^4 + 12*a*d^3*e*f + 6*a*d^2*e^3 + 6*a*e*f^4 + b^6 + 6*b^4*d*f + 3*b^4*e^2 + 6*b^3*c^2*f + 12*b^3*c*d*e + 2*b^3*d^3 + 2*b^3*f^3 + 6*b^2*c^3*e + 9*b^2*c^2*d^2 + 18*b^2*c*e*f^2 + 9*b^2*d^2*f^2 + 12*b^2*d*e^2*f + 3*b^2*e^4 + 6*b*c^4*d + 12*b*c^2*d*f^2 + 18*b*c^2*e^2*f + 24*b*c*d^2*e*f + 12*b*c*d*e^3 + 6*b*d^4*f + 6*b*d^3*e^2 + 6*b*d*f^4 + 6*b*e^2*f^3 + c^6 + 3*c^4*f^2 + 12*c^3*d*e*f + 2*c^3*e^3 + 6*c^2*d^3*f + 9*c^2*d^2*e^2 + 3*c^2*f^4 + 6*c*d^4*e + 12*c*d*e*f^3 + 6*c*e^3*f^2 + d^6 + 2*d^3*f^3 + 9*d^2*e^2*f^2 + 6*d*e^4*f + e^6 + f^6
 
@@ -1386,6 +1412,8 @@ theorem sliceZero (h : Fin 6 → ℂ) (hs : h 4 = h 0 - h 1)
   fin_cases i <;> simp_all
 
 
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
 noncomputable def sliceForm (h : Fin 6 → ℂ) : ℂ := h 4 - h 0 + h 1
 
 set_option maxRecDepth 100000 in
