@@ -1,7 +1,7 @@
 import Mathlib
 import PEqualNP.Defs
 
-namespace PEqualNP.Outside.L273
+namespace PEqualNP.Outside.L_meta_273
 
 open PEqualNP.CircuitLowerBounds
 
@@ -335,20 +335,18 @@ theorem inv (C : Circuit) (n : ℕ)
       intro t' ht'
       exact ⟨by have := (hD t' ht').1; omega, (hD t' ht').2⟩
 
-end PEqualNP.Outside.L273
-
-theorem PEqualNP.Outside.L273.main : ∀ (n m k : ℕ) (S : Fin m → Finset (Fin n)) (C : PEqualNP.CircuitLowerBounds.Circuit) (o : Fin m → ℕ) (c : Fin m → ℕ), (∀ i j : Fin m, i ≠ j → (S i ∩ S j).card ≤ 1) → (∀ i : Fin m, 2 ≤ (S i).card) → (∀ g ∈ C.gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length = 2) → (∀ (i : Fin m) (p : Fin n), (C.wires (List.ofFn (fun q : Fin n => decide (q = p)))).getD (o i) false = true ↔ p ∈ S i) → (∀ (i : Fin m) (x : Fin n → Bool), (Finset.univ.filter (fun q : Fin n => x q = true)).card ≤ k → (∀ q ∈ S i, x q = false) → (C.wires (List.ofFn x)).getD (o i) false = false) → (∀ i : Fin m, c i ≤ k) → (∀ i : Fin m, c i + 1 ≤ (S i).card) → ∑ i : Fin m, c i ≤ C.size := by
+theorem main : ∀ (n m k : ℕ) (S : Fin m → Finset (Fin n)) (C : PEqualNP.CircuitLowerBounds.Circuit) (o : Fin m → ℕ) (c : Fin m → ℕ), (∀ i j : Fin m, i ≠ j → (S i ∩ S j).card ≤ 1) → (∀ i : Fin m, 2 ≤ (S i).card) → (∀ g ∈ C.gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length = 2) → (∀ (i : Fin m) (p : Fin n), (C.wires (List.ofFn (fun q : Fin n => decide (q = p)))).getD (o i) false = true ↔ p ∈ S i) → (∀ (i : Fin m) (x : Fin n → Bool), (Finset.univ.filter (fun q : Fin n => x q = true)).card ≤ k → (∀ q ∈ S i, x q = false) → (C.wires (List.ofFn x)).getD (o i) false = false) → (∀ i : Fin m, c i ≤ k) → (∀ i : Fin m, c i + 1 ≤ (S i).card) → ∑ i : Fin m, c i ≤ C.size := by
   intro n m k S C o c hS h2 hg hL hK hck hcS
   classical
   have key : ∀ i : Fin m, c i ≤ ((Finset.range C.gates.length).filter (fun t =>
-      PEqualNP.Outside.L273.Ls C n (n + t) ⊆ S i ∧
-        2 ≤ (PEqualNP.Outside.L273.Ls C n (n + t)).card)).card := by
+      PEqualNP.Outside.L_meta_273.Ls C n (n + t) ⊆ S i ∧
+        2 ≤ (PEqualNP.Outside.L_meta_273.Ls C n (n + t)).card)).card := by
     intro i
     obtain ⟨D, A, B, hD, hA, hc, hp⟩ :=
-      PEqualNP.Outside.L273.inv C n hg (S i) (o i + 1) {o i} (by simp)
+      PEqualNP.Outside.L_meta_273.inv C n hg (S i) (o i + 1) {o i} (by simp)
     have hDP : D ⊆ (Finset.range C.gates.length).filter (fun t =>
-        PEqualNP.Outside.L273.Ls C n (n + t) ⊆ S i ∧
-          2 ≤ (PEqualNP.Outside.L273.Ls C n (n + t)).card) := by
+        PEqualNP.Outside.L_meta_273.Ls C n (n + t) ⊆ S i ∧
+          2 ≤ (PEqualNP.Outside.L_meta_273.Ls C n (n + t)).card) := by
       intro t ht
       rw [Finset.mem_filter, Finset.mem_range]
       exact ⟨(hD t ht).2.1, (hD t ht).2.2⟩
@@ -356,15 +354,15 @@ theorem PEqualNP.Outside.L273.main : ∀ (n m k : ℕ) (S : Fin m → Finset (Fi
       rw [Finset.card_singleton] at hc
       by_cases hAk : A.card ≤ k
       · have hfilt : Finset.univ.filter (fun q : Fin n =>
-            PEqualNP.Outside.L273.ind n A q = true) = A := by
+            PEqualNP.Outside.L_meta_273.ind n A q = true) = A := by
           ext q
-          simp [PEqualNP.Outside.L273.ind]
-        have hfalse : PEqualNP.Outside.L273.Wv C n (PEqualNP.Outside.L273.ind n A) (o i) = false := by
-          apply hK i (PEqualNP.Outside.L273.ind n A)
+          simp [PEqualNP.Outside.L_meta_273.ind]
+        have hfalse : PEqualNP.Outside.L_meta_273.Wv C n (PEqualNP.Outside.L_meta_273.ind n A) (o i) = false := by
+          apply hK i (PEqualNP.Outside.L_meta_273.ind n A)
           · rw [hfilt]
             exact hAk
           · intro q hq
-            simp only [PEqualNP.Outside.L273.ind, decide_eq_false_iff_not]
+            simp only [PEqualNP.Outside.L_meta_273.ind, decide_eq_false_iff_not]
             exact fun h => hA q h hq
         have hSB : S i ⊆ B := by
           intro p hpS
@@ -380,16 +378,16 @@ theorem PEqualNP.Outside.L273.main : ∀ (n m k : ℕ) (S : Fin m → Finset (Fi
     exact le_trans hDc (Finset.card_le_card hDP)
   have hdisj : ∀ i ∈ (Finset.univ : Finset (Fin m)), ∀ j ∈ (Finset.univ : Finset (Fin m)), i ≠ j →
       Disjoint ((Finset.range C.gates.length).filter (fun t =>
-        PEqualNP.Outside.L273.Ls C n (n + t) ⊆ S i ∧
-          2 ≤ (PEqualNP.Outside.L273.Ls C n (n + t)).card))
+        PEqualNP.Outside.L_meta_273.Ls C n (n + t) ⊆ S i ∧
+          2 ≤ (PEqualNP.Outside.L_meta_273.Ls C n (n + t)).card))
         ((Finset.range C.gates.length).filter (fun t =>
-        PEqualNP.Outside.L273.Ls C n (n + t) ⊆ S j ∧
-          2 ≤ (PEqualNP.Outside.L273.Ls C n (n + t)).card)) := by
+        PEqualNP.Outside.L_meta_273.Ls C n (n + t) ⊆ S j ∧
+          2 ≤ (PEqualNP.Outside.L_meta_273.Ls C n (n + t)).card)) := by
     intro i _ j _ hij
     rw [Finset.disjoint_left]
     intro t hti htj
     rw [Finset.mem_filter] at hti htj
-    have hsub : PEqualNP.Outside.L273.Ls C n (n + t) ⊆ S i ∩ S j :=
+    have hsub : PEqualNP.Outside.L_meta_273.Ls C n (n + t) ⊆ S i ∩ S j :=
       Finset.subset_inter hti.2.1 htj.2.1
     have h5 := Finset.card_le_card hsub
     have h6 := hS i j hij
@@ -397,12 +395,12 @@ theorem PEqualNP.Outside.L273.main : ∀ (n m k : ℕ) (S : Fin m → Finset (Fi
     omega
   calc ∑ i : Fin m, c i
       ≤ ∑ i : Fin m, ((Finset.range C.gates.length).filter (fun t =>
-          PEqualNP.Outside.L273.Ls C n (n + t) ⊆ S i ∧
-            2 ≤ (PEqualNP.Outside.L273.Ls C n (n + t)).card)).card :=
+          PEqualNP.Outside.L_meta_273.Ls C n (n + t) ⊆ S i ∧
+            2 ≤ (PEqualNP.Outside.L_meta_273.Ls C n (n + t)).card)).card :=
         Finset.sum_le_sum (fun i _ => key i)
     _ = ((Finset.univ : Finset (Fin m)).biUnion (fun i => (Finset.range C.gates.length).filter (fun t =>
-          PEqualNP.Outside.L273.Ls C n (n + t) ⊆ S i ∧
-            2 ≤ (PEqualNP.Outside.L273.Ls C n (n + t)).card))).card :=
+          PEqualNP.Outside.L_meta_273.Ls C n (n + t) ⊆ S i ∧
+            2 ≤ (PEqualNP.Outside.L_meta_273.Ls C n (n + t)).card))).card :=
         (Finset.card_biUnion hdisj).symm
     _ ≤ (Finset.range C.gates.length).card := by
         apply Finset.card_le_card
@@ -414,9 +412,11 @@ theorem PEqualNP.Outside.L273.main : ∀ (n m k : ℕ) (S : Fin m → Finset (Fi
         rw [Finset.card_range]
         rfl
 
+end PEqualNP.Outside.L_meta_273
+
 theorem PEqualNP.Outside.L_meta_273 : ¬ ∃ (C : PEqualNP.CircuitLowerBounds.Circuit) (o : Fin 3 → ℕ), C.size ≤ 5 ∧ (∀ g ∈ C.gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length = 2) ∧ ∀ i : Fin 3, (∀ p : Fin 6, (C.wires (List.ofFn (fun q : Fin 6 => decide (q = p)))).getD (o i) false = true ↔ p ∈ (![{0, 1, 2}, {2, 3, 4}, {4, 5, 0}] : Fin 3 → Finset (Fin 6)) i) ∧ ∀ x : Fin 6 → Bool, (Finset.univ.filter (fun q : Fin 6 => x q = true)).card ≤ 2 → (∀ q ∈ (![{0, 1, 2}, {2, 3, 4}, {4, 5, 0}] : Fin 3 → Finset (Fin 6)) i, x q = false) → (C.wires (List.ofFn x)).getD (o i) false = false := by
   rintro ⟨C, o, hsz, hg, h⟩
-  have key := PEqualNP.Outside.L273.main 6 3 2
+  have key := PEqualNP.Outside.L_meta_273.main 6 3 2
     (![{0, 1, 2}, {2, 3, 4}, {4, 5, 0}] : Fin 3 → Finset (Fin 6)) C o (fun _ => 2)
     (by decide) (by decide) hg (fun i p => (h i).1 p) (fun i x hx hq => (h i).2 x hx hq)
     (by intro i; exact le_refl 2) (by decide)
