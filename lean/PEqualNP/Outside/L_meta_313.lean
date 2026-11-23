@@ -4,22 +4,24 @@ import Mathlib.Combinatorics.SimpleGraph.Finite
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
-private def wiresFrom (gs : List Gate) (w : List Bool) : List Bool :=
+namespace PEqualNP.Outside.L_meta_313
+
+def wiresFrom (gs : List Gate) (w : List Bool) : List Bool :=
   gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w
 
-private lemma wiresFrom_nil (w : List Bool) : wiresFrom [] w = w := rfl
+lemma wiresFrom_nil (w : List Bool) : wiresFrom [] w = w := rfl
 
-private lemma wiresFrom_cons (g : Gate) (gs : List Gate) (w : List Bool) :
+lemma wiresFrom_cons (g : Gate) (gs : List Gate) (w : List Bool) :
     wiresFrom (g :: gs) w =
       wiresFrom gs (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) := rfl
 
-private lemma wiresFrom_append (gs₁ gs₂ : List Gate) (w : List Bool) :
+lemma wiresFrom_append (gs₁ gs₂ : List Gate) (w : List Bool) :
     wiresFrom (gs₁ ++ gs₂) w = wiresFrom gs₂ (wiresFrom gs₁ w) := by
   induction gs₁ generalizing w with
   | nil => rfl
   | cons g gs ih => simp only [List.cons_append, wiresFrom_cons, ih]
 
-private lemma wiresFrom_length (gs : List Gate) (w : List Bool) :
+lemma wiresFrom_length (gs : List Gate) (w : List Bool) :
     (wiresFrom gs w).length = w.length + gs.length := by
   induction gs generalizing w with
   | nil => simp [wiresFrom]
@@ -28,22 +30,22 @@ private lemma wiresFrom_length (gs : List Gate) (w : List Bool) :
     simp
     omega
 
-private lemma getD_snoc_lt {α : Type*} (l : List α) (x d : α) (i : ℕ) (hi : i < l.length) :
+lemma getD_snoc_lt {α : Type*} (l : List α) (x d : α) (i : ℕ) (hi : i < l.length) :
     (l ++ [x]).getD i d = l.getD i d := by
   simp [List.getD, List.getElem?_append_left hi]
 
-private lemma getD_snoc_eq {α : Type*} (l : List α) (x d : α) (i : ℕ) (hi : i = l.length) :
+lemma getD_snoc_eq {α : Type*} (l : List α) (x d : α) (i : ℕ) (hi : i = l.length) :
     (l ++ [x]).getD i d = x := by
   subst hi
   simp [List.getD]
 
-private lemma getD_snoc_ne {α : Type*} (l : List α) (x d : α) (i : ℕ) (hi : i ≠ l.length) :
+lemma getD_snoc_ne {α : Type*} (l : List α) (x d : α) (i : ℕ) (hi : i ≠ l.length) :
     (l ++ [x]).getD i d = l.getD i d := by
   by_cases hlt : i < l.length
   · exact getD_snoc_lt l x d i hlt
   · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by omega)]
 
-private lemma wiresFrom_getD_lt (gs : List Gate) (w : List Bool) (i : ℕ) (hi : i < w.length) :
+lemma wiresFrom_getD_lt (gs : List Gate) (w : List Bool) (i : ℕ) (hi : i < w.length) :
     (wiresFrom gs w).getD i false = w.getD i false := by
   induction gs generalizing w with
   | nil => rfl
@@ -51,24 +53,24 @@ private lemma wiresFrom_getD_lt (gs : List Gate) (w : List Bool) (i : ℕ) (hi :
     rw [wiresFrom_cons, ih _ (by simp; omega)]
     exact getD_snoc_lt _ _ _ _ hi
 
-private def OkGate (g : Gate) : Prop :=
+def OkGate (g : Gate) : Prop :=
   g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) ∧ g.inputs.length ≤ 2
 
-private def NOkGate (g : Gate) : Prop :=
+def NOkGate (g : Gate) : Prop :=
   OkGate g ∧ (g.op = GateOp.not → g.inputs.length ≤ 1)
 
-private def normGate (g : Gate) : Gate :=
+def normGate (g : Gate) : Gate :=
   match g.op with
   | GateOp.not => ⟨GateOp.not, g.inputs.take 1⟩
   | _ => g
 
-private lemma normGate_eval (g : Gate) (F : ℕ → Bool) :
+lemma normGate_eval (g : Gate) (F : ℕ → Bool) :
     (normGate g).op.eval ((normGate g).inputs.map F) = g.op.eval (g.inputs.map F) := by
   obtain ⟨op, inputs⟩ := g
   cases op <;> simp only [normGate]
   cases inputs <;> simp [GateOp.eval]
 
-private lemma normGate_nok (g : Gate) (h : OkGate g) : NOkGate (normGate g) := by
+lemma normGate_nok (g : Gate) (h : OkGate g) : NOkGate (normGate g) := by
   obtain ⟨op, inputs⟩ := g
   obtain ⟨hop, hlen⟩ := h
   rcases hop with h | h | h
@@ -84,27 +86,27 @@ private lemma normGate_nok (g : Gate) (h : OkGate g) : NOkGate (normGate g) := b
     · simp [normGate]
     · simp [normGate]
 
-private lemma wiresFrom_norm (gs : List Gate) (w : List Bool) :
+lemma wiresFrom_norm (gs : List Gate) (w : List Bool) :
     wiresFrom (gs.map normGate) w = wiresFrom gs w := by
   induction gs generalizing w with
   | nil => rfl
   | cons g gs ih =>
     rw [List.map_cons, wiresFrom_cons, wiresFrom_cons, normGate_eval, ih]
 
-private def statVal (w : List Bool) : Bool ⊕ ℕ → Bool
+def statVal (w : List Bool) : Bool ⊕ ℕ → Bool
   | Sum.inl c => c
   | Sum.inr j => w.getD j false
 
-private def statValid (m : ℕ) : Bool ⊕ ℕ → Prop
+def statValid (m : ℕ) : Bool ⊕ ℕ → Prop
   | Sum.inl _ => True
   | Sum.inr j => j < m
 
-private def simpNot (m : ℕ) : List (Bool ⊕ ℕ) → Option Gate × (Bool ⊕ ℕ)
+def simpNot (m : ℕ) : List (Bool ⊕ ℕ) → Option Gate × (Bool ⊕ ℕ)
   | [] => (none, Sum.inl true)
   | Sum.inl c :: _ => (none, Sum.inl (!c))
   | Sum.inr j :: _ => (some ⟨GateOp.not, [j]⟩, Sum.inr m)
 
-private def simpAnd (m : ℕ) : List (Bool ⊕ ℕ) → Option Gate × (Bool ⊕ ℕ)
+def simpAnd (m : ℕ) : List (Bool ⊕ ℕ) → Option Gate × (Bool ⊕ ℕ)
   | [] => (none, Sum.inl true)
   | [Sum.inl c] => (none, Sum.inl c)
   | [Sum.inr j] => (none, Sum.inr j)
@@ -114,7 +116,7 @@ private def simpAnd (m : ℕ) : List (Bool ⊕ ℕ) → Option Gate × (Bool ⊕
   | [Sum.inr j, Sum.inr k] => (some ⟨GateOp.and, [j, k]⟩, Sum.inr m)
   | _ => (none, Sum.inl false)
 
-private def simpOr (m : ℕ) : List (Bool ⊕ ℕ) → Option Gate × (Bool ⊕ ℕ)
+def simpOr (m : ℕ) : List (Bool ⊕ ℕ) → Option Gate × (Bool ⊕ ℕ)
   | [] => (none, Sum.inl false)
   | [Sum.inl c] => (none, Sum.inl c)
   | [Sum.inr j] => (none, Sum.inr j)
@@ -124,7 +126,7 @@ private def simpOr (m : ℕ) : List (Bool ⊕ ℕ) → Option Gate × (Bool ⊕ 
   | [Sum.inr j, Sum.inr k] => (some ⟨GateOp.or, [j, k]⟩, Sum.inr m)
   | _ => (none, Sum.inl false)
 
-private def simplifyGate (op : GateOp) (m : ℕ) (ins : List (Bool ⊕ ℕ)) :
+def simplifyGate (op : GateOp) (m : ℕ) (ins : List (Bool ⊕ ℕ)) :
     Option Gate × (Bool ⊕ ℕ) :=
   match op with
   | GateOp.and => simpAnd m ins
@@ -132,7 +134,7 @@ private def simplifyGate (op : GateOp) (m : ℕ) (ins : List (Bool ⊕ ℕ)) :
   | GateOp.not => simpNot m ins
   | _ => (none, Sum.inl false)
 
-private lemma simplifyGate_ok (op : GateOp) (m : ℕ) (ins : List (Bool ⊕ ℕ)) :
+lemma simplifyGate_ok (op : GateOp) (m : ℕ) (ins : List (Bool ⊕ ℕ)) :
     ∀ g ∈ (simplifyGate op m ins).1, OkGate g := by
   intro g hg
   cases op <;> simp only [simplifyGate] at hg
@@ -148,7 +150,7 @@ private lemma simplifyGate_ok (op : GateOp) (m : ℕ) (ins : List (Bool ⊕ ℕ)
   · simp at hg
   · simp at hg
 
-private lemma simplifyGate_none_of_const (op : GateOp) (m : ℕ) (ins : List (Bool ⊕ ℕ))
+lemma simplifyGate_none_of_const (op : GateOp) (m : ℕ) (ins : List (Bool ⊕ ℕ))
     (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not) (hlen : ins.length ≤ 2)
     (hnot : op = GateOp.not → ins.length ≤ 1) (hc : ∃ c, Sum.inl c ∈ ins) :
     (simplifyGate op m ins).1 = none := by
@@ -161,7 +163,7 @@ private lemma simplifyGate_none_of_const (op : GateOp) (m : ℕ) (ins : List (Bo
   · have := hnot rfl
     rcases ins with _ | ⟨a, _ | ⟨b, l⟩⟩ <;> (try cases a) <;> simp_all [simplifyGate, simpNot]
 
-private lemma simplifyGate_and_false (m : ℕ) (ins : List (Bool ⊕ ℕ))
+lemma simplifyGate_and_false (m : ℕ) (ins : List (Bool ⊕ ℕ))
     (hlen : ins.length ≤ 2) (hf : Sum.inl false ∈ ins) :
     simplifyGate GateOp.and m ins = (none, Sum.inl false) := by
   rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨d, l⟩⟩⟩
@@ -178,7 +180,7 @@ private lemma simplifyGate_and_false (m : ℕ) (ins : List (Bool ⊕ ℕ))
       | inr j => simp at hf
   · simp at hlen
 
-private lemma simplifyGate_or_true (m : ℕ) (ins : List (Bool ⊕ ℕ))
+lemma simplifyGate_or_true (m : ℕ) (ins : List (Bool ⊕ ℕ))
     (hlen : ins.length ≤ 2) (ht : Sum.inl true ∈ ins) :
     simplifyGate GateOp.or m ins = (none, Sum.inl true) := by
   rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨d, l⟩⟩⟩
@@ -195,10 +197,10 @@ private lemma simplifyGate_or_true (m : ℕ) (ins : List (Bool ⊕ ℕ))
       | inr j => simp at ht
   · simp at hlen
 
-private lemma simplifyGate_not_const (m : ℕ) (c : Bool) :
+lemma simplifyGate_not_const (m : ℕ) (c : Bool) :
     simplifyGate GateOp.not m [Sum.inl c] = (none, Sum.inl (!c)) := rfl
 
-private lemma simplifyGate_sound (op : GateOp)
+lemma simplifyGate_sound (op : GateOp)
     (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not)
     (w : List Bool) (ins : List (Bool ⊕ ℕ)) (hlen : ins.length ≤ 2)
     (hv : ∀ s ∈ ins, statValid w.length s) :
@@ -237,31 +239,31 @@ private lemma simplifyGate_sound (op : GateOp)
     · simp [simplifyGate, simpNot, statValid, statVal, GateOp.eval]
     · cases a <;> simp_all [simplifyGate, simpNot, statValid, statVal, GateOp.eval, wiresFrom]
 
-private def elimStep (m : ℕ) (acc : List (Bool ⊕ ℕ) × List Gate) (g : Gate) :
+def elimStep (m : ℕ) (acc : List (Bool ⊕ ℕ) × List Gate) (g : Gate) :
     List (Bool ⊕ ℕ) × List Gate :=
   let r := simplifyGate g.op (m + acc.2.length)
     (g.inputs.map fun i => acc.1.getD i (Sum.inl false))
   (acc.1 ++ [r.2], acc.2 ++ r.1.toList)
 
-private def elimPass (m : ℕ) (gs : List Gate) (acc : List (Bool ⊕ ℕ) × List Gate) :
+def elimPass (m : ℕ) (gs : List Gate) (acc : List (Bool ⊕ ℕ) × List Gate) :
     List (Bool ⊕ ℕ) × List Gate :=
   gs.foldl (elimStep m) acc
 
-private lemma elimPass_nil (m : ℕ) (acc : List (Bool ⊕ ℕ) × List Gate) :
+lemma elimPass_nil (m : ℕ) (acc : List (Bool ⊕ ℕ) × List Gate) :
     elimPass m [] acc = acc := rfl
 
-private lemma elimPass_cons (m : ℕ) (g : Gate) (gs : List Gate)
+lemma elimPass_cons (m : ℕ) (g : Gate) (gs : List Gate)
     (acc : List (Bool ⊕ ℕ) × List Gate) :
     elimPass m (g :: gs) acc = elimPass m gs (elimStep m acc g) := rfl
 
-private lemma elimPass_append (m : ℕ) (gs₁ gs₂ : List Gate)
+lemma elimPass_append (m : ℕ) (gs₁ gs₂ : List Gate)
     (acc : List (Bool ⊕ ℕ) × List Gate) :
     elimPass m (gs₁ ++ gs₂) acc = elimPass m gs₂ (elimPass m gs₁ acc) := by
   induction gs₁ generalizing acc with
   | nil => rfl
   | cons g gs ih => simp only [List.cons_append, elimPass_cons, ih]
 
-private lemma elimPass_fst_len (m : ℕ) (gs : List Gate) (acc : List (Bool ⊕ ℕ) × List Gate) :
+lemma elimPass_fst_len (m : ℕ) (gs : List Gate) (acc : List (Bool ⊕ ℕ) × List Gate) :
     (elimPass m gs acc).1.length = acc.1.length + gs.length := by
   induction gs generalizing acc with
   | nil => simp [elimPass]
@@ -270,7 +272,7 @@ private lemma elimPass_fst_len (m : ℕ) (gs : List Gate) (acc : List (Bool ⊕ 
     simp [elimStep]
     omega
 
-private lemma elimPass_getD_lt (m k : ℕ) (d : Bool ⊕ ℕ) (gs : List Gate)
+lemma elimPass_getD_lt (m k : ℕ) (d : Bool ⊕ ℕ) (gs : List Gate)
     (acc : List (Bool ⊕ ℕ) × List Gate) (hk : k < acc.1.length) :
     (elimPass m gs acc).1.getD k d = acc.1.getD k d := by
   induction gs generalizing acc with
@@ -279,10 +281,10 @@ private lemma elimPass_getD_lt (m k : ℕ) (d : Bool ⊕ ℕ) (gs : List Gate)
     rw [elimPass_cons, ih _ (by simp [elimStep]; omega)]
     exact getD_snoc_lt _ _ _ _ hk
 
-private lemma toList_opt_len_le {α : Type*} (o : Option α) : o.toList.length ≤ 1 := by
+lemma toList_opt_len_le {α : Type*} (o : Option α) : o.toList.length ≤ 1 := by
   cases o <;> simp
 
-private lemma elimPass_ok (m : ℕ) (gs : List Gate) (acc : List (Bool ⊕ ℕ) × List Gate)
+lemma elimPass_ok (m : ℕ) (gs : List Gate) (acc : List (Bool ⊕ ℕ) × List Gate)
     (h : ∀ g ∈ acc.2, OkGate g) : ∀ g ∈ (elimPass m gs acc).2, OkGate g := by
   induction gs generalizing acc with
   | nil => exact h
@@ -294,7 +296,7 @@ private lemma elimPass_ok (m : ℕ) (gs : List Gate) (acc : List (Bool ⊕ ℕ) 
     · exact h g' h1
     · exact simplifyGate_ok _ _ _ g' (by simpa using h1)
 
-private lemma elimPass_len (m : ℕ) (gs : List Gate) (acc : List (Bool ⊕ ℕ) × List Gate) :
+lemma elimPass_len (m : ℕ) (gs : List Gate) (acc : List (Bool ⊕ ℕ) × List Gate) :
     (elimPass m gs acc).2.length ≤ acc.2.length + gs.length := by
   induction gs generalizing acc with
   | nil => simp [elimPass]
@@ -308,7 +310,7 @@ private lemma elimPass_len (m : ℕ) (gs : List Gate) (acc : List (Bool ⊕ ℕ)
       omega
     omega
 
-private lemma elimPass_len_lt (m k : ℕ) (gs : List Gate) (acc : List (Bool ⊕ ℕ) × List Gate)
+lemma elimPass_len_lt (m k : ℕ) (gs : List Gate) (acc : List (Bool ⊕ ℕ) × List Gate)
     (hok : ∀ g ∈ gs, NOkGate g) (hk : k < acc.1.length)
     (hc : ∃ c, acc.1.getD k (Sum.inl false) = Sum.inl c)
     (hex : ∃ g ∈ gs, k ∈ g.inputs) :
@@ -349,7 +351,7 @@ private lemma elimPass_len_lt (m k : ℕ) (gs : List Gate) (acc : List (Bool ⊕
         omega
       omega
 
-private lemma elimPass_len_two (m k : ℕ) (gs : List Gate) (acc : List (Bool ⊕ ℕ) × List Gate)
+lemma elimPass_len_two (m k : ℕ) (gs : List Gate) (acc : List (Bool ⊕ ℕ) × List Gate)
     (hok : ∀ g ∈ gs, NOkGate g) (hk : k < acc.1.length)
     (hc : ∃ c, acc.1.getD k (Sum.inl false) = Sum.inl c)
     (htwo : 2 ≤ (gs.filter (fun g => decide (k ∈ g.inputs))).length) :
@@ -400,7 +402,7 @@ private lemma elimPass_len_two (m k : ℕ) (gs : List Gate) (acc : List (Bool �
         omega
       omega
 
-private def ElimInv (m : ℕ) (w_in w_old : List Bool)
+def ElimInv (m : ℕ) (w_in w_old : List Bool)
     (acc : List (Bool ⊕ ℕ) × List Gate) : Prop :=
   w_in.length = m ∧
   acc.1.length = w_old.length ∧
@@ -408,7 +410,7 @@ private def ElimInv (m : ℕ) (w_in w_old : List Bool)
     statValid (m + acc.2.length) (acc.1.getD i (Sum.inl false)) ∧
     statVal (wiresFrom acc.2 w_in) (acc.1.getD i (Sum.inl false)) = w_old.getD i false
 
-private lemma elimInv_step (m : ℕ) (w_in w_old : List Bool)
+lemma elimInv_step (m : ℕ) (w_in w_old : List Bool)
     (acc : List (Bool ⊕ ℕ) × List Gate) (g : Gate) (hok : OkGate g)
     (hinv : ElimInv m w_in w_old acc) :
     ElimInv m w_in (w_old ++ [g.op.eval (g.inputs.map fun i => w_old.getD i false)])
@@ -460,7 +462,7 @@ private lemma elimInv_step (m : ℕ) (w_in w_old : List Bool)
         rw [wiresFrom_append, ← hw_new, wiresFrom_getD_lt _ _ _ (by omega)]
         exact hval
 
-private lemma elimInv_pass (m : ℕ) (w_in : List Bool) (gs : List Gate)
+lemma elimInv_pass (m : ℕ) (w_in : List Bool) (gs : List Gate)
     (w_old : List Bool) (acc : List (Bool ⊕ ℕ) × List Gate)
     (hok : ∀ g ∈ gs, OkGate g) (hinv : ElimInv m w_in w_old acc) :
     ElimInv m w_in (wiresFrom gs w_old) (elimPass m gs acc) := by
@@ -471,7 +473,7 @@ private lemma elimInv_pass (m : ℕ) (w_in : List Bool) (gs : List Gate)
     exact ih _ _ (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg'))
       (elimInv_step m w_in w_old acc g (hok g List.mem_cons_self) hinv)
 
-private lemma wiresFrom_agree (gs : List Gate) (B : Set ℕ) (w₁ w₂ : List Bool)
+lemma wiresFrom_agree (gs : List Gate) (B : Set ℕ) (w₁ w₂ : List Bool)
     (hlen : w₁.length = w₂.length) (hB : ∀ b ∈ B, b < w₁.length)
     (hagree : ∀ i ∉ B, w₁.getD i false = w₂.getD i false)
     (hread : ∀ g ∈ gs, ∀ i ∈ g.inputs, i ∉ B) :
@@ -501,11 +503,11 @@ private lemma wiresFrom_agree (gs : List Gate) (B : Set ℕ) (w₁ w₂ : List B
     · intro g' hg'
       exact hread g' (List.mem_cons_of_mem _ hg')
 
-private lemma ofFn_getD_lt {α : Type*} {m : ℕ} (f : Fin m → α) (d : α) (i : ℕ) (hi : i < m) :
+lemma ofFn_getD_lt {α : Type*} {m : ℕ} (f : Fin m → α) (d : α) (i : ℕ) (hi : i < m) :
     (List.ofFn f).getD i d = f ⟨i, hi⟩ := by
   rw [List.getD_eq_getElem _ _ (by simp; exact hi), List.getElem_ofFn]
 
-private lemma hardwire_prefix_nonconst {n k s : ℕ}
+lemma hardwire_prefix_nonconst {n k s : ℕ}
     {F : (Fin (n + k) → Bool) → Bool} {g : (Fin k → Bool) → Bool}
     (hC : HasCircuitSize (n + k) F s)
     (hFg : ∀ x : Fin (n + k) → Bool, F x = g (fun j : Fin k => x (Fin.natAdd n j)))
@@ -587,10 +589,10 @@ private lemma hardwire_prefix_nonconst {n k s : ℕ}
       rw [hst] at this
       exact this
 
-private def initVar (m : ℕ) (v : Fin m) (b : Bool) : List (Bool ⊕ ℕ) :=
+def initVar (m : ℕ) (v : Fin m) (b : Bool) : List (Bool ⊕ ℕ) :=
   List.ofFn fun i : Fin m => if i = v then Sum.inl b else Sum.inr (i : ℕ)
 
-private lemma elimInv_initVar (m : ℕ) (v : Fin m) (b : Bool) (x : Fin m → Bool) :
+lemma elimInv_initVar (m : ℕ) (v : Fin m) (b : Bool) (x : Fin m → Bool) :
     ElimInv m (List.ofFn x) (List.ofFn (Function.update x v b)) (initVar m v b, []) := by
   refine ⟨by simp, by simp [initVar], ?_⟩
   intro i
@@ -610,7 +612,7 @@ private lemma elimInv_initVar (m : ℕ) (v : Fin m) (b : Bool) (x : Fin m → Bo
         List.getD_eq_default _ _ (by simp; omega)]
     exact ⟨trivial, rfl⟩
 
-private lemma elim_one_var {m s : ℕ} {F : (Fin m → Bool) → Bool} (v : Fin m) (b : Bool)
+lemma elim_one_var {m s : ℕ} {F : (Fin m → Bool) → Bool} (v : Fin m) (b : Bool)
     (hC : HasCircuitSize m F s)
     (hdep : ∃ x : Fin m → Bool, F (Function.update x v false) ≠ F (Function.update x v true))
     (hnc : ∃ x x' : Fin m → Bool, F (Function.update x v b) ≠ F (Function.update x' v b)) :
@@ -701,7 +703,7 @@ private lemma elim_one_var {m s : ℕ} {F : (Fin m → Bool) → Bool} (v : Fin 
       rw [hst] at this
       exact this
 
-private lemma list_split_unique_filter {α : Type*} (p : α → Bool) (l : List α)
+lemma list_split_unique_filter {α : Type*} (p : α → Bool) (l : List α)
     (h : (l.filter p).length = 1) :
     ∃ l₁ a l₂, l = l₁ ++ [a] ++ l₂ ∧ p a = true ∧
       (∀ x ∈ l₁, p x = false) ∧ (∀ x ∈ l₂, p x = false) := by
@@ -731,7 +733,7 @@ private lemma list_split_unique_filter {α : Type*} (p : α → Bool) (l : List 
       · exact hpx
       · exact hl₁ y hy'
 
-private lemma elim_two_var {m s : ℕ} {F : (Fin m → Bool) → Bool} (v : Fin m)
+lemma elim_two_var {m s : ℕ} {F : (Fin m → Bool) → Bool} (v : Fin m)
     (hC : HasCircuitSize m F s)
     (hdep : ∃ x : Fin m → Bool, F (Function.update x v false) ≠ F (Function.update x v true))
     (hnc0 : ∃ x x' : Fin m → Bool,
@@ -986,7 +988,7 @@ private lemma elim_two_var {m s : ℕ} {F : (Fin m → Bool) → Bool} (v : Fin 
         | false => rw [hbc] at hres; exact Or.inl hres
         | true => rw [hbc] at hres; exact Or.inr hres
 
-private lemma acyclic_leaf_cases {n : ℕ} (G : SimpleGraph (Fin n)) (hAcyc : G.IsAcyclic)
+lemma acyclic_leaf_cases {n : ℕ} (G : SimpleGraph (Fin n)) (hAcyc : G.IsAcyclic)
     (hEdge : ∃ u v : Fin n, G.Adj u v) :
     ∃ ℓ p : Fin n, G.Adj ℓ p ∧ (∀ w, G.Adj ℓ w → w = p) ∧
       ((∃ ℓ' : Fin n, ℓ' ≠ ℓ ∧ G.Adj ℓ' p ∧ ∀ w, G.Adj ℓ' w → w = p) ∨
@@ -1098,14 +1100,14 @@ private lemma acyclic_leaf_cases {n : ℕ} (G : SimpleGraph (Fin n)) (hAcyc : G.
         by_contra hnot
         exact hother ⟨w, fun h => hnot (Or.inl h), fun h => hnot (Or.inr h), hpw⟩
 
-private def IsVC {n : ℕ} (G : SimpleGraph (Fin n)) (S : Finset (Fin n)) : Prop :=
+def IsVC {n : ℕ} (G : SimpleGraph (Fin n)) (S : Finset (Fin n)) : Prop :=
   ∀ u v : Fin n, G.Adj u v → u ∈ S ∨ v ∈ S
 
-private def HasMinVC {n : ℕ} (G : SimpleGraph (Fin n)) (t : ℕ) : Prop :=
+def HasMinVC {n : ℕ} (G : SimpleGraph (Fin n)) (t : ℕ) : Prop :=
   (∃ S : Finset (Fin n), IsVC G S ∧ S.card = t) ∧
   (∀ S : Finset (Fin n), IsVC G S → t ≤ S.card)
 
-private lemma hasMinVC_exists {n : ℕ} (G : SimpleGraph (Fin n)) : ∃ t : ℕ, HasMinVC G t := by
+lemma hasMinVC_exists {n : ℕ} (G : SimpleGraph (Fin n)) : ∃ t : ℕ, HasMinVC G t := by
   classical
   have hex : ∃ k : ℕ, ∃ S : Finset (Fin n), IsVC G S ∧ S.card = k :=
     ⟨(Finset.univ : Finset (Fin n)).card, Finset.univ, fun u _ _ => Or.inl (Finset.mem_univ u), rfl⟩
@@ -1113,22 +1115,22 @@ private lemma hasMinVC_exists {n : ℕ} (G : SimpleGraph (Fin n)) : ∃ t : ℕ,
   intro S hS
   exact Nat.find_min' hex ⟨S, hS, rfl⟩
 
-private lemma hasMinVC_empty {n t : ℕ} (G : SimpleGraph (Fin n))
+lemma hasMinVC_empty {n t : ℕ} (G : SimpleGraph (Fin n))
     (hempty : ∀ u v : Fin n, ¬ G.Adj u v) (hvc : HasMinVC G t) : t = 0 := by
   have hle : t ≤ (∅ : Finset (Fin n)).card := hvc.2 ∅ (fun u v h => absurd h (hempty u v))
   simpa using hle
 
-private def deleteVertexEdges {n : ℕ} (G : SimpleGraph (Fin n)) (p : Fin n) :
+def deleteVertexEdges {n : ℕ} (G : SimpleGraph (Fin n)) (p : Fin n) :
     SimpleGraph (Fin n) where
   Adj u v := G.Adj u v ∧ u ≠ p ∧ v ≠ p
   symm := ⟨fun _ _ h => ⟨h.1.symm, h.2.2, h.2.1⟩⟩
   loopless := ⟨fun v h => G.loopless.irrefl v h.1⟩
 
-private lemma deleteVertexEdges_le {n : ℕ} (G : SimpleGraph (Fin n)) (p : Fin n) :
+lemma deleteVertexEdges_le {n : ℕ} (G : SimpleGraph (Fin n)) (p : Fin n) :
     deleteVertexEdges G p ≤ G :=
   fun _ _ h => h.1
 
-private lemma hasMinVC_deleteEdge {n t t₁ : ℕ} (G : SimpleGraph (Fin n)) (ℓ p : Fin n)
+lemma hasMinVC_deleteEdge {n t t₁ : ℕ} (G : SimpleGraph (Fin n)) (ℓ p : Fin n)
     (hvc : HasMinVC G t) (hvc₁ : HasMinVC (G.deleteEdges {s(ℓ, p)}) t₁) :
     t₁ ≤ t ∧ t ≤ t₁ + 1 := by
   obtain ⟨⟨S, hS, hSc⟩, hmin⟩ := hvc
@@ -1152,7 +1154,7 @@ private lemma hasMinVC_deleteEdge {n t t₁ : ℕ} (G : SimpleGraph (Fin n)) (�
     have hcard : (insert p S₁).card ≤ S₁.card + 1 := Finset.card_insert_le p S₁
     omega
 
-private lemma hasMinVC_deleteLeafEdge_eq {n t t₁ : ℕ} (G : SimpleGraph (Fin n)) (ℓ ℓ' p : Fin n)
+lemma hasMinVC_deleteLeafEdge_eq {n t t₁ : ℕ} (G : SimpleGraph (Fin n)) (ℓ ℓ' p : Fin n)
     (hℓ'ne : ℓ' ≠ ℓ) (hℓ'p : G.Adj ℓ' p) (hℓ'leaf : ∀ w, G.Adj ℓ' w → w = p)
     (hvc : HasMinVC G t) (hvc₁ : HasMinVC (G.deleteEdges {s(ℓ, p)}) t₁) :
     t₁ = t := by
@@ -1209,7 +1211,7 @@ private lemma hasMinVC_deleteLeafEdge_eq {n t t₁ : ℕ} (G : SimpleGraph (Fin 
       omega
   omega
 
-private lemma hasMinVC_deleteVertex {n t t' : ℕ} (G : SimpleGraph (Fin n)) (ℓ p : Fin n)
+lemma hasMinVC_deleteVertex {n t t' : ℕ} (G : SimpleGraph (Fin n)) (ℓ p : Fin n)
     (hlp : G.Adj ℓ p) (hleaf : ∀ w, G.Adj ℓ w → w = p)
     (hvc : HasMinVC G t) (hvc' : HasMinVC (deleteVertexEdges G p) t') :
     t' + 1 = t := by
@@ -1258,7 +1260,7 @@ private lemma hasMinVC_deleteVertex {n t t' : ℕ} (G : SimpleGraph (Fin n)) (�
       omega
   omega
 
-private lemma edgeFinset_card_deleteEdge {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
+lemma edgeFinset_card_deleteEdge {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
     (ℓ p : Fin n) (hlp : G.Adj ℓ p) [DecidableRel (G.deleteEdges {s(ℓ, p)}).Adj] :
     (G.deleteEdges {s(ℓ, p)}).edgeFinset.card + 1 = G.edgeFinset.card := by
   have heq : (G.deleteEdges {s(ℓ, p)}).edgeFinset = G.edgeFinset.erase s(ℓ, p) := by
@@ -1273,7 +1275,7 @@ private lemma edgeFinset_card_deleteEdge {n : ℕ} (G : SimpleGraph (Fin n)) [De
   rw [Finset.card_erase_of_mem hmem]
   omega
 
-private lemma edgeFinset_card_deleteVertex_deg1 {n : ℕ} (G : SimpleGraph (Fin n))
+lemma edgeFinset_card_deleteVertex_deg1 {n : ℕ} (G : SimpleGraph (Fin n))
     [DecidableRel G.Adj] (ℓ p : Fin n) (hlp : G.Adj ℓ p)
     (hpdeg : ∀ w, G.Adj p w → w = ℓ) [DecidableRel (deleteVertexEdges G p).Adj] :
     (deleteVertexEdges G p).edgeFinset.card + 1 = G.edgeFinset.card := by
@@ -1305,7 +1307,7 @@ private lemma edgeFinset_card_deleteVertex_deg1 {n : ℕ} (G : SimpleGraph (Fin 
   rw [Finset.card_erase_of_mem hmem]
   omega
 
-private lemma edgeFinset_card_deleteVertex_deg2 {n : ℕ} (G : SimpleGraph (Fin n))
+lemma edgeFinset_card_deleteVertex_deg2 {n : ℕ} (G : SimpleGraph (Fin n))
     [DecidableRel G.Adj] (ℓ p q : Fin n) (hlp : G.Adj ℓ p) (hpq : G.Adj p q)
     (hqne : q ≠ ℓ) (hpdeg : ∀ w, G.Adj p w → w = ℓ ∨ w = q)
     [DecidableRel (deleteVertexEdges G p).Adj] :
@@ -1354,13 +1356,13 @@ private lemma edgeFinset_card_deleteVertex_deg2 {n : ℕ} (G : SimpleGraph (Fin 
   rw [Finset.card_erase_of_mem hmem1] at hpos2
   omega
 
-private def forestFun {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
+def forestFun {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
     (A : Finset (Fin n)) (g : (Fin k → Bool) → Bool) (x : Fin (n + k) → Bool) : Bool :=
   decide ((∃ a ∈ A, x (Fin.castAdd k a) = true) ∨
     ∃ u v : Fin n, G.Adj u v ∧ x (Fin.castAdd k u) = true ∧ x (Fin.castAdd k v) = true) &&
   g (fun j : Fin k => x (Fin.natAdd n j))
 
-private lemma exists_false_true_of_nonconst {k : ℕ} {g : (Fin k → Bool) → Bool}
+lemma exists_false_true_of_nonconst {k : ℕ} {g : (Fin k → Bool) → Bool}
     (hg_nc : ∃ y y' : Fin k → Bool, g y ≠ g y') :
     (∃ y₀, g y₀ = false) ∧ (∃ y₁, g y₁ = true) := by
   obtain ⟨y, y', hne⟩ := hg_nc
@@ -1370,7 +1372,7 @@ private lemma exists_false_true_of_nonconst {k : ℕ} {g : (Fin k → Bool) → 
   · exact ⟨⟨y', hy'⟩, ⟨y, hy⟩⟩
   · exact absurd (hy.trans hy'.symm) hne
 
-private lemma forestFun_nonconst {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
+lemma forestFun_nonconst {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
     (A : Finset (Fin n)) (g : (Fin k → Bool) → Bool)
     (hg_nc : ∃ y y' : Fin k → Bool, g y ≠ g y')
     (hAct : A.Nonempty ∨ ∃ u v : Fin n, G.Adj u v) :
@@ -1404,7 +1406,7 @@ private lemma forestFun_nonconst {n k : ℕ} (G : SimpleGraph (Fin n)) [Decidabl
     rw [h0, h1]
     decide
 
-private lemma forestFun_update_A_true {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
+lemma forestFun_update_A_true {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
     (A : Finset (Fin n)) (g : (Fin k → Bool) → Bool)
     (a : Fin n) (ha : a ∈ A) :
     (fun x => forestFun G A g (Function.update x (Fin.castAdd k a) true)) =
@@ -1423,7 +1425,7 @@ private lemma forestFun_update_A_true {n k : ℕ} (G : SimpleGraph (Fin n)) [Dec
     omega
   simp [ht, hg]
 
-private lemma forestFun_update_A {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
+lemma forestFun_update_A {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
     (A : Finset (Fin n)) (g : (Fin k → Bool) → Bool)
     (a : Fin n) (ha_iso : ∀ v : Fin n, ¬ G.Adj a v) :
     (fun x => forestFun G A g (Function.update x (Fin.castAdd k a) false)) =
@@ -1470,7 +1472,7 @@ private lemma forestFun_update_A {n k : ℕ} (G : SimpleGraph (Fin n)) [Decidabl
       exact ⟨u, v, huv, by rw [Function.update_of_ne hne1]; exact hux,
         by rw [Function.update_of_ne hne2]; exact hvx⟩
 
-private lemma forestFun_update_leaf_false {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
+lemma forestFun_update_leaf_false {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
     (g : (Fin k → Bool) → Bool) (ℓ p : Fin n) (hleaf : ∀ w, G.Adj ℓ w → w = p)
     [DecidableRel (G.deleteEdges {s(ℓ, p)}).Adj] :
     (fun x => forestFun G ∅ g (Function.update x (Fin.castAdd k ℓ) false)) =
@@ -1521,7 +1523,7 @@ private lemma forestFun_update_leaf_false {n k : ℕ} (G : SimpleGraph (Fin n)) 
     exact ⟨u, v, huv, by rw [Function.update_of_ne hne1]; exact hux,
       by rw [Function.update_of_ne hne2]; exact hvx⟩
 
-private lemma forestFun_update_leaf_true {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
+lemma forestFun_update_leaf_true {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
     (g : (Fin k → Bool) → Bool) (ℓ p : Fin n) (hlp : G.Adj ℓ p)
     (hleaf : ∀ w, G.Adj ℓ w → w = p) [DecidableRel (deleteVertexEdges G p).Adj] :
     (fun x => forestFun G ∅ g (Function.update x (Fin.castAdd k ℓ) true)) =
@@ -1570,7 +1572,7 @@ private lemma forestFun_update_leaf_true {n k : ℕ} (G : SimpleGraph (Fin n)) [
       exact ⟨u, v, huv, by rw [Function.update_of_ne hne1]; exact hux,
         by rw [Function.update_of_ne hne2]; exact hvx⟩
 
-private lemma forestFun_dep_A {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
+lemma forestFun_dep_A {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
     (A : Finset (Fin n)) (g : (Fin k → Bool) → Bool)
     (hg_nc : ∃ y y' : Fin k → Bool, g y ≠ g y') (a : Fin n) (ha : a ∈ A) :
     ∃ x : Fin (n + k) → Bool,
@@ -1609,7 +1611,7 @@ private lemma forestFun_dep_A {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRe
   rw [h0, h1]
   decide
 
-private lemma forestFun_dep_edge {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
+lemma forestFun_dep_edge {n k : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
     (g : (Fin k → Bool) → Bool) (hg_nc : ∃ y y' : Fin k → Bool, g y ≠ g y')
     (ℓ p : Fin n) (hlp : G.Adj ℓ p) :
     ∃ x : Fin (n + k) → Bool,
@@ -1654,7 +1656,7 @@ private lemma forestFun_dep_edge {n k : ℕ} (G : SimpleGraph (Fin n)) [Decidabl
   rw [h0, h1]
   decide
 
-private lemma lower_bound_aux {k c : ℕ} {g : (Fin k → Bool) → Bool}
+lemma lower_bound_aux {k c : ℕ} {g : (Fin k → Bool) → Bool}
     (hg_nc : ∃ y y' : Fin k → Bool, g y ≠ g y')
     (hg_sz : ∀ r : ℕ, HasCircuitSize k g r ↔ c ≤ r) :
     ∀ (s : ℕ) {n t : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (A : Finset (Fin n)),
@@ -1859,13 +1861,13 @@ private lemma lower_bound_aux {k c : ℕ} {g : (Fin k → Bool) → Bool}
             omega
       · exact False.elim (hAct.elim hAne hEdge)
 
-private def shiftGate (n : ℕ) (g : Gate) : Gate :=
+def shiftGate (n : ℕ) (g : Gate) : Gate :=
   ⟨g.op, g.inputs.map (· + n)⟩
 
-private lemma shiftGate_ok (n : ℕ) (g : Gate) (h : OkGate g) : OkGate (shiftGate n g) :=
+lemma shiftGate_ok (n : ℕ) (g : Gate) (h : OkGate g) : OkGate (shiftGate n g) :=
   ⟨h.1, by simp [shiftGate]; exact h.2⟩
 
-private lemma wiresFrom_shift (n : ℕ) (gs : List Gate) (pref w : List Bool)
+lemma wiresFrom_shift (n : ℕ) (gs : List Gate) (pref w : List Bool)
     (hpref : pref.length = n) :
     wiresFrom (gs.map (shiftGate n)) (pref ++ w) = pref ++ wiresFrom gs w := by
   induction gs generalizing w with
@@ -1888,7 +1890,7 @@ private lemma wiresFrom_shift (n : ℕ) (gs : List Gate) (pref w : List Bool)
     rw [hmap, List.append_assoc, ih]
     rfl
 
-private lemma list_any_congr_mem {α : Type*} {l : List α} {p q : α → Bool}
+lemma list_any_congr_mem {α : Type*} {l : List α} {p q : α → Bool}
     (h : ∀ x ∈ l, p x = q x) : l.any p = l.any q := by
   apply Bool.eq_iff_iff.2
   simp only [List.any_eq_true]
@@ -1896,11 +1898,11 @@ private lemma list_any_congr_mem {α : Type*} {l : List α} {p q : α → Bool}
   · rintro ⟨x, hx, hpx⟩; exact ⟨x, hx, by rw [← h x hx]; exact hpx⟩
   · rintro ⟨x, hx, hqx⟩; exact ⟨x, hx, by rw [h x hx]; exact hqx⟩
 
-private def pushOrList (m : ℕ) (gs : List Gate) (acc : ℕ) : List ℕ → List Gate × ℕ
+def pushOrList (m : ℕ) (gs : List Gate) (acc : ℕ) : List ℕ → List Gate × ℕ
   | [] => (gs, acc)
   | w :: ws => pushOrList m (gs ++ [⟨GateOp.or, [acc, w]⟩]) (m + gs.length) ws
 
-private lemma pushOrList_props (m : ℕ) (ws : List ℕ) :
+lemma pushOrList_props (m : ℕ) (ws : List ℕ) :
     ∀ (gs : List Gate) (acc : ℕ),
       (∀ g ∈ gs, OkGate g) →
       acc < m + gs.length →
@@ -1960,7 +1962,7 @@ private lemma pushOrList_props (m : ℕ) (ws : List ℕ) :
       rw [hany]
       simp [Bool.or_assoc]
 
-private def pushStarStep (m : ℕ) (gs : List Gate) (acc : ℕ) (u : ℕ) (vs : List ℕ) :
+def pushStarStep (m : ℕ) (gs : List Gate) (acc : ℕ) (u : ℕ) (vs : List ℕ) :
     List Gate × ℕ :=
   match vs with
   | [] => (gs, acc)
@@ -1971,7 +1973,7 @@ private def pushStarStep (m : ℕ) (gs : List Gate) (acc : ℕ) (u : ℕ) (vs : 
     let gs2 := gs1 ++ [⟨GateOp.or, [acc, w_and]⟩]
     (gs2, m + gs1.length)
 
-private lemma pushStarStep_props (m : ℕ) (gs : List Gate) (acc u : ℕ) (vs : List ℕ)
+lemma pushStarStep_props (m : ℕ) (gs : List Gate) (acc u : ℕ) (vs : List ℕ)
     (hok : ∀ g ∈ gs, OkGate g) (hacc : acc < m + gs.length) (hu : u < m + gs.length)
     (hvs : ∀ v ∈ vs, v < m + gs.length) :
     (∀ g ∈ (pushStarStep m gs acc u vs).1, OkGate g) ∧
@@ -2040,13 +2042,13 @@ private lemma pushStarStep_props (m : ℕ) (gs : List Gate) (acc u : ℕ) (vs : 
             hval_and, hpres1 u hu, hval1]
         simp
 
-private def pushStars (m : ℕ) (gs : List Gate) (acc : ℕ) : List (ℕ × List ℕ) → List Gate × ℕ
+def pushStars (m : ℕ) (gs : List Gate) (acc : ℕ) : List (ℕ × List ℕ) → List Gate × ℕ
   | [] => (gs, acc)
   | (u, vs) :: rest =>
     let r := pushStarStep m gs acc u vs
     pushStars m r.1 r.2 rest
 
-private lemma pushStars_props (m : ℕ) (stars : List (ℕ × List ℕ)) :
+lemma pushStars_props (m : ℕ) (stars : List (ℕ × List ℕ)) :
     ∀ (gs : List Gate) (acc : ℕ),
       (∀ g ∈ gs, OkGate g) →
       acc < m + gs.length →
@@ -2106,14 +2108,14 @@ private lemma pushStars_props (m : ℕ) (stars : List (ℕ × List ℕ)) :
       rw [hany]
       simp [Bool.or_assoc]
 
-private def pushStarValue (m : ℕ) (gs : List Gate) (u : ℕ) (vs : List ℕ) : List Gate × ℕ :=
+def pushStarValue (m : ℕ) (gs : List Gate) (u : ℕ) (vs : List ℕ) : List Gate × ℕ :=
   match vs with
   | [] => (gs, m + gs.length)
   | v₀ :: vs' =>
     let r1 := pushOrList m gs v₀ vs'
     (r1.1 ++ [⟨GateOp.and, [u, r1.2]⟩], m + r1.1.length)
 
-private lemma pushStarValue_props (m : ℕ) (gs : List Gate) (u : ℕ) (vs : List ℕ)
+lemma pushStarValue_props (m : ℕ) (gs : List Gate) (u : ℕ) (vs : List ℕ)
     (hok : ∀ g ∈ gs, OkGate g) (hu : u < m + gs.length)
     (hvs : ∀ v ∈ vs, v < m + gs.length) (hne : vs ≠ []) :
     (∀ g ∈ (pushStarValue m gs u vs).1, OkGate g) ∧
@@ -2168,7 +2170,7 @@ private lemma pushStarValue_props (m : ℕ) (gs : List Gate) (u : ℕ) (vs : Lis
         rw [hval_and, hpres1 u hu, hval1]
         rfl
 
-private lemma upper_bound_aux {n k c t s : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
+lemma upper_bound_aux {n k c t s : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
     (A : Finset (Fin n)) (g : (Fin k → Bool) → Bool)
     (hg_nc : ∃ y y' : Fin k → Bool, g y ≠ g y')
     (hg_sz : ∀ r : ℕ, HasCircuitSize k g r ↔ c ≤ r)
@@ -2531,8 +2533,10 @@ private lemma upper_bound_aux {n k c t s : ℕ} (G : SimpleGraph (Fin n)) [Decid
     simp only [forestFun, hAempty, Finset.notMem_empty, false_and, exists_false, false_or]
     rw [hand, hForest', hg_pres]
 
+end PEqualNP.Outside.L_meta_313
+
 theorem PEqualNP.Outside.L_meta_313 :
     ∀ (n k c t s : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (A : Finset (Fin n)) (g : (Fin k → Bool) → Bool), G.IsAcyclic → (∀ a ∈ A, ∀ v : Fin n, ¬ G.Adj a v) → (A.Nonempty ∨ ∃ u v : Fin n, G.Adj u v) → (∃ y y' : Fin k → Bool, g y ≠ g y') → (∀ r : ℕ, PEqualNP.MetaComplexity.HasCircuitSize k g r ↔ c ≤ r) → (∃ S : Finset (Fin n), PEqualNP.MetaComplexity.CoverPromise.IsVertexCover G S ∧ S.card = t) → (∀ S : Finset (Fin n), PEqualNP.MetaComplexity.CoverPromise.IsVertexCover G S → t ≤ S.card) → (PEqualNP.MetaComplexity.HasCircuitSize (n + k) (fun x : Fin (n + k) → Bool => decide ((∃ a ∈ A, x (Fin.castAdd k a) = true) ∨ ∃ u v : Fin n, G.Adj u v ∧ x (Fin.castAdd k u) = true ∧ x (Fin.castAdd k v) = true) && g (fun j : Fin k => x (Fin.natAdd n j))) s ↔ A.card + G.edgeFinset.card + t + c ≤ s) := by
   intro n k c t s G _ A g hAcyc hA_iso hAct hg_nc hg_sz hvc_ex hvc_min
-  exact ⟨lower_bound_aux hg_nc hg_sz s G A hAcyc hA_iso hAct ⟨hvc_ex, hvc_min⟩,
-    upper_bound_aux G A g hg_nc hg_sz hAct hvc_ex⟩
+  exact ⟨PEqualNP.Outside.L_meta_313.lower_bound_aux hg_nc hg_sz s G A hAcyc hA_iso hAct ⟨hvc_ex, hvc_min⟩,
+    PEqualNP.Outside.L_meta_313.upper_bound_aux G A g hg_nc hg_sz hAct hvc_ex⟩
