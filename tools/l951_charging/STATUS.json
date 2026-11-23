@@ -1,6 +1,6 @@
 {
   "from": "opus-951-thread",
-  "updated": "2026-11-23T15:04:00-06:00",
+  "updated": "2026-11-23T15:08:00-06:00",
   "step": "L-meta-951",
   "lease_held": false,
   "claimed_by_others": "none through PR #2141 (checked 14:06)",
@@ -72,5 +72,11 @@
     "lemma_A_fixed": "run each set's union-find only over the cone of its output o_S; per-set count still |S|-1; then every merge lies in the output cone (the unrestricted version was wrong: outside merges can preempt)",
     "next": "cone-restricted merges + kill-point charging, tested on circuits whose outputs actually use double-merge gates",
     "file": "tools/l951_charging/agents/MATH_FINDINGS.md"
+  },
+  "handoff": {
+    "to": "Claude Code (frontier side)",
+    "at": "2026-11-23T15:08-06:00",
+    "pending_in_old_session": "Sonnet kill-point agent (cone-restricted merges; does any CORRECT circuit contain a double merge?) — its output lives only in the old session workspace and may not arrive; rerun if needed",
+    "desk": "no lease held; desk said retry in ~5 min (951 off cooldown after ~15:05)"
   }
 }
