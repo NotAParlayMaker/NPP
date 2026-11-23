@@ -8,7 +8,10 @@
 # library, the definitions or the statement, cannot reach the network, and never sees the
 # GitHub credential of this run (.github/scripts/lake-locked.sh). The same holds for an
 # outside-written module already on the base branch that the gap lists as an import: it is
-# compiled only in that locked step, never before it (outside-guard.mjs closure).
+# compiled only in that locked step, never before it (outside-guard.mjs closure): the base
+# build runs with the folder of outside files moved out of the tree. CONSEQUENCE: a fleet module
+# that imports an outside proof can never be a listed import (the guard refuses it). A file that
+# builds on outside proofs imports the outside modules themselves, and the gap lists them.
 name: authoritative
 
 on:
@@ -159,8 +162,23 @@ jobs:
           # write under the library (it failed there on two modules: permission denied).
           set -- checklemma +Mathlib +PEqualNP.Defs
           while IFS= read -r m; do if [ -n "$m" ]; then set -- "$@" "+$m"; fi; done < "$W/in/base-imports.txt"
+          # CONTAINMENT: during this build the folder of outside-written files is not in the tree
+          # (moved aside, one rename on the same disk; the guard step has already read it). Should
+          # anything built here import an outside module after all, Lean finds no such module and
+          # the build fails, so this step fails: it can never compile one. The folder is put back
+          # when this step ends, however it ends, before the steps that need it (the lock step
+          # puts the proof file into it, and hashes the listed outside sources).
+          aside="$W/aside"; mkdir "$aside"
+          restore() { if [ -e "$aside/Outside" ]; then mv "$aside/Outside" PEqualNP/Outside; fi; }
+          trap restore EXIT
+          moved=no; if [ -e PEqualNP/Outside ]; then mv PEqualNP/Outside "$aside/Outside"; moved=yes; fi
+          [ ! -e PEqualNP/Outside ] || { echo "FAULT: the folder of outside files could not be moved aside"; exit 1; }
           ../tools/bin/lake build "$@"
-          # A tripwire, not the guard: nothing under PEqualNP/Outside may have been built here.
+          restore; trap - EXIT
+          if [ "$moved" = yes ]; then
+            [ -d PEqualNP/Outside ] && [ ! -e "$aside/Outside" ] || { echo "FAULT: the folder of outside files was not put back"; exit 1; }
+          fi
+          # A tripwire as well: nothing under PEqualNP/Outside may have been built here.
           if [ -n "$(find .lake/build/lib/lean/PEqualNP/Outside .lake/build/ir/PEqualNP/Outside -type f 2>/dev/null | head -n 1)" ]; then
             echo "FAULT: the base step built an outside-written module; stopping before anything else runs"; exit 1
           fi
@@ -381,6 +399,22 @@ jobs:
           echo "head commit: $(cat "$W/in/pr.head")   file: $file   content hash: $(cat "$W/in/pr.blob")"
           echo "base commit: $GITHUB_SHA   statement sha256: $(sha256sum "$W/in/statement.txt" | cut -d' ' -f1)"
           echo "Merge only while the pull request's head is still the head commit above."
+          if [ -s "$W/in/outside-imports.txt" ]; then
+            # Printed by this step from paths the guard wrote; no text of a pull request.
+            echo "----- listed outside modules -----"
+            echo "Their sources were hashed before the locked step and compared after it (with the files above)."
+            echo "The compiled files the verifier loaded for them were built in the locked step, from those"
+            echo "sources, by the locked account; the verifier sent every constant of them to the kernel again."
+            echo "sha256 of each compiled file after the checker ran:"
+            while IFS= read -r m; do
+              # The locked account wrote this file: read only a plain file, never a link or a
+              # pipe, and with a time limit.
+              o="$W/base/lean/.lake/build/lib/lean/$(printf '%s' "$m" | tr . /).olean"
+              h="(no plain compiled file)"
+              if [ -f "$o" ] && [ ! -L "$o" ]; then h=$(timeout 60 sha256sum "$o" | cut -d' ' -f1); fi
+              echo "  $m ${h:-(could not be read)}"
+            done < "$W/in/outside-imports.txt"
+          fi
           # ACCEPTED needs all of: exit 0, an ACCEPTED last line, one MANIFEST line, untouched files.
           verdict=FAULT
           case "$CODE" in

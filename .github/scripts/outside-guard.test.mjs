@@ -107,3 +107,20 @@ test('header: comments, module, modifiers, quoted names', () => {
 test('header: an import line below the header is refused, never passed over', () => {
   assert.throws(() => headerImports('import Mathlib\ndef x := 1\nimport PEqualNP.Outside.L_x_2\n', 'm'), /below its header/);
 });
+
+// Reached base modules are under the PEqualNP root only, and outside modules are capped.
+import { MAX_OUTSIDE } from './outside-guard.mjs';
+closureRefused('a listed fixture module', ['CheckerSuite.Pass'], { 'CheckerSuite.Pass': 'import Mathlib\n' }, 'not under the PEqualNP root');
+closureRefused('a base module that imports a fixture module', ['PEqualNP.Gct.A'], { 'PEqualNP.Gct.A': 'import CheckerSuite.Pass\n', 'CheckerSuite.Pass': 'import Mathlib\n' }, 'not under the PEqualNP root');
+closureRefused('an outside module that imports a fixture module', ['PEqualNP.Outside.L_x_2'], { 'PEqualNP.Outside.L_x_2': proof(['CheckerSuite.Pass']), 'CheckerSuite.Pass': 'import Mathlib\n' }, 'not under the PEqualNP root');
+const many = (n) => Object.fromEntries(Array.from({ length: n }, (_, k) => [`PEqualNP.Outside.L_x_${k + 10}`, proof(['Mathlib'], `PEqualNP.Outside.L_x_${k + 10}`)]));
+test(`closure: ${MAX_OUTSIDE} outside modules pass`, () => {
+  assert.equal(MAX_OUTSIDE, 16);
+  assert.equal(closure(Object.keys(many(MAX_OUTSIDE)), many(MAX_OUTSIDE)).outside.length, MAX_OUTSIDE);
+});
+closureRefused(`${MAX_OUTSIDE + 1} outside modules listed`, Object.keys(many(MAX_OUTSIDE + 1)), many(MAX_OUTSIDE + 1), `more than ${MAX_OUTSIDE} outside modules`);
+test(`closure refused: ${MAX_OUTSIDE + 1} outside modules, one listed and the rest reached through it`, () => {
+  const files = many(MAX_OUTSIDE);
+  files['PEqualNP.Outside.L_x_1000'] = proof(Object.keys(many(MAX_OUTSIDE)), 'PEqualNP.Outside.L_x_1000');
+  assert.throws(() => closure(['PEqualNP.Outside.L_x_1000'], files), /more than 16 outside modules/);
+});

@@ -153,9 +153,16 @@ export function checkPlain(text) {
 // outside module whose text fails the rules a proof file must pass (checkImports, checkPlain:
 // a second net, the sandbox is the first); a base module that imports an outside module (it
 // could be built neither before the locked step, which would compile outside code, nor inside
-// it, where nothing of the base may be written).
+// it, where nothing of the base may be written); a project module that is not under the
+// PEqualNP root (the checker's fixtures are never a gap's import); more than MAX_OUTSIDE
+// outside modules (each one is compiled on every run that lists it).
+// CONSEQUENCE: a fleet module that imports an outside proof can never be a listed import. A
+// file that builds on outside proofs imports the outside modules themselves, and the gap lists
+// them; fleet helpers built on outside proofs stay off the lists.
 export const OUTSIDE_MODULE_RE = /^PEqualNP\.Outside\.L_[a-z0-9_]+$/;
+export const MAX_OUTSIDE = 16;
 const PROJECT_RE = /^(PEqualNP|CheckerSuite)(\.[A-Za-z][A-Za-z0-9_]*)*$/;
+const BASE_ROOT_RE = /^PEqualNP(\.[A-Za-z][A-Za-z0-9_]*)*$/;
 const isOutside = (m) => m === 'PEqualNP.Outside' || m.startsWith('PEqualNP.Outside.');
 
 // The import lines of a base module, read the way Lean reads a header: comments, `module`,
@@ -203,12 +210,14 @@ export function importClosure(listed, read, judged) {
   const outside = new Set(), base = new Set();
   const visit = (m, from) => {
     if (outside.has(m) || base.has(m)) return;
+    if (!BASE_ROOT_RE.test(m)) refuse(`${from ? `${from} imports` : 'the gap lists'} ${m}, which is not under the PEqualNP root`);
     if (m === judged) refuse(`${from ? `${from} imports` : 'the gap lists'} ${m}, the file being judged`);
     const bytes = read(m);
     if (bytes === null) refuse(`${from ? `${from} imports` : 'the gap lists'} ${m}, which is not a plain file of the base tree`);
     if (isOutside(m)) {
       if (!OUTSIDE_MODULE_RE.test(m)) refuse(`${m} is not the name of an outside proof file`);
       outside.add(m);
+      if (outside.size > MAX_OUTSIDE) refuse(`more than ${MAX_OUTSIDE} outside modules are listed or reached (${[...outside].slice(0, 3).join(', ')}, ...); list fewer`);
       // The same rules a proof file passes before it is built, on the text as it is on the base.
       let imports;
       try { imports = checkImports(bytes, (x) => PROJECT_RE.test(x)); } catch (e) { if (e instanceof Refused) refuse(`the listed outside module ${m}: ${e.message}`); throw e; }
