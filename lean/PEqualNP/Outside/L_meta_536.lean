@@ -1,5 +1,7 @@
 import Mathlib
 import PEqualNP.Defs
+namespace PEqualNP.Outside.L_meta_536
+open PEqualNP.MetaComplexity.NestedCover PEqualNP.MetaComplexity
 namespace As
 abbrev Fn (n:ℕ):=(Fin n→Bool)→Bool
 def nT {n} (u:Fn n):Fn n:=fun x=> !(u x)
@@ -7721,6 +7723,8 @@ lemma nB {n}:iB n:=by
  intro u v m e;obtain⟨o,_,s⟩:=deleteIncidenceSet_adj.mp m;obtain⟨r,_,vl⟩:=deleteIncidenceSet_adj.mp e;exact((c u o).resolve_left s).trans ((c v r).resolve_left vl).symm
 lemma nS {n}:jI n:=by intro G dec A l p q C i h j a f iso leaf g e min d c b;exact Ah.tO iso leaf g e (kB f iso leaf min d) d c b
 end Aq
+end PEqualNP.Outside.L_meta_536
+open PEqualNP.Outside.L_meta_536 in
 theorem PEqualNP.Outside.L_meta_536 : ∀ (n : ℕ) (K : SimpleGraph (Fin n)) [DecidableRel K.Adj] (A : Finset (Fin n)), K.IsAcyclic → (∀ a ∈ A, ∀ v : Fin n, ¬ K.Adj a v) → (A.Nonempty ∨ ∃ u v : Fin n, K.Adj u v) → (∀ C : PEqualNP.CircuitLowerBounds.Circuit, (PEqualNP.MetaComplexity.IsMinimalCircuit n C ∧ PEqualNP.MetaComplexity.circuitFun n C = PEqualNP.MetaComplexity.NestedCover.graphFun K A) ↔ PEqualNP.MetaComplexity.NestedCover.IsNestedCoverCircuit n K A C) := by
  intro n K _ A c iso b C;exact Aq.dW Aq.oV Aq.nB
   Aq.nS K A c iso b C
