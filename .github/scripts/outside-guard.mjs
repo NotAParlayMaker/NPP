@@ -7,9 +7,10 @@
 //   node outside-guard.mjs gap <gaps.json> <gap id> <file path> <out dir>
 //   node outside-guard.mjs gap-of-file <gaps.json> <file path> <out dir>
 //   node outside-guard.mjs imports <lean file> <imports.json>
+//   node outside-guard.mjs closure <base dir> <imports.json> <judged file path> <out dir>
 //
 // Exit 0: the guard holds. Exit 1: REFUSED, with one line saying why. Exit 3: bad usage.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { lstatSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const FILE_RE = /^lean\/PEqualNP\/Outside\/L_[a-z0-9_]+\.lean$/;
@@ -78,7 +79,7 @@ export function checkImports(bytes, allowed) {
   try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { return refuse('the file is not UTF-8 text'); }
   if (text.includes('\0')) refuse('the file holds a NUL byte');
   const lines = text.split('\n').map((l) => l.replace(/\r$/, ''));
-  const ok = new Set(allowed);
+  const ok = typeof allowed === 'function' ? { has: allowed } : new Set(allowed);
   const seen = [];
   let i = 0;
   for (; i < lines.length; i += 1) {
@@ -141,6 +142,90 @@ export function checkPlain(text) {
   if (theorems === 0) refuse('the file holds no theorem');
 }
 
+// WHAT THE BASE STEP MAY BUILD. A gap may list modules that outsiders wrote (anything under
+// PEqualNP.Outside, merged on the base branch). A Lean file runs code while it compiles, so such
+// a module is never built by the base step: it is built in the locked step, by the checker's own
+// build of the judged file, as the account that compiles the judged file. This walks the imports
+// of every listed module, as plain text, and splits them:
+//   outside: every outside-written module reached (through outside modules only);
+//   base:    every other project module reached; the base step builds these.
+// Refused: a listed module that is the judged file or is not a plain file of the base tree; an
+// outside module whose text fails the rules a proof file must pass (checkImports, checkPlain:
+// a second net, the sandbox is the first); a base module that imports an outside module (it
+// could be built neither before the locked step, which would compile outside code, nor inside
+// it, where nothing of the base may be written).
+export const OUTSIDE_MODULE_RE = /^PEqualNP\.Outside\.L_[a-z0-9_]+$/;
+const PROJECT_RE = /^(PEqualNP|CheckerSuite)(\.[A-Za-z][A-Za-z0-9_]*)*$/;
+const isOutside = (m) => m === 'PEqualNP.Outside' || m.startsWith('PEqualNP.Outside.');
+
+// The import lines of a base module, read the way Lean reads a header: comments, `module`,
+// `prelude` and the modifiers `public`, `meta`, `private`, `all` are passed over. Base files are
+// the project's own and are not hostile; the reader still fails closed: an `import` at the start
+// of a line below the header it found is refused, never passed over.
+export function headerImports(text, name) {
+  const toks = [];
+  let i = 0, line = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === '\n') { line += 1; i += 1; } else if (/\s/.test(c)) { i += 1; }
+    else if (text.startsWith('--', i)) { while (i < text.length && text[i] !== '\n') i += 1; }
+    else if (text.startsWith('/-', i)) {
+      let depth = 0;
+      do {
+        if (text.startsWith('/-', i)) { depth += 1; i += 2; } else if (text.startsWith('-/', i)) { depth -= 1; i += 2; }
+        else { if (text[i] === '\n') line += 1; i += 1; }
+      } while (depth > 0 && i < text.length);
+    } else {
+      let j = i; while (j < text.length && !/\s/.test(text[j]) && !text.startsWith('--', j) && !text.startsWith('/-', j)) j += 1;
+      toks.push({ t: text.slice(i, j), line }); i = j;
+    }
+  }
+  const out = [];
+  let k = 0, end = 0;
+  for (; k < toks.length; k += 1) {
+    const t = toks[k].t;
+    if (['module', 'prelude', 'public', 'meta', 'private'].includes(t)) continue;
+    if (t !== 'import') break;
+    k += 1;
+    if (toks[k]?.t === 'all') k += 1;
+    const id = (toks[k]?.t ?? '').replace(/[«»]/g, '');
+    if (!/^[A-Za-z_][A-Za-z0-9_']*(\.[A-Za-z_][A-Za-z0-9_']*)*$/.test(id)) refuse(`cannot read the imports of ${name}`);
+    out.push(id); end = toks[k].line;
+  }
+  const lines = text.split('\n');
+  for (let n = end + 1; n < lines.length; n += 1) {
+    if (/^\s*((public|meta|private)\s+)*import\s/.test(lines[n])) refuse(`cannot read the imports of ${name}: an import line below its header (line ${n + 1})`);
+  }
+  return out;
+}
+
+export function importClosure(listed, read, judged) {
+  const outside = new Set(), base = new Set();
+  const visit = (m, from) => {
+    if (outside.has(m) || base.has(m)) return;
+    if (m === judged) refuse(`${from ? `${from} imports` : 'the gap lists'} ${m}, the file being judged`);
+    const bytes = read(m);
+    if (bytes === null) refuse(`${from ? `${from} imports` : 'the gap lists'} ${m}, which is not a plain file of the base tree`);
+    if (isOutside(m)) {
+      if (!OUTSIDE_MODULE_RE.test(m)) refuse(`${m} is not the name of an outside proof file`);
+      outside.add(m);
+      // The same rules a proof file passes before it is built, on the text as it is on the base.
+      let imports;
+      try { imports = checkImports(bytes, (x) => PROJECT_RE.test(x)); } catch (e) { if (e instanceof Refused) refuse(`the listed outside module ${m}: ${e.message}`); throw e; }
+      for (const x of imports) if (PROJECT_RE.test(x)) visit(x, m);
+    } else {
+      base.add(m);
+      for (const x of headerImports(new TextDecoder().decode(bytes), m)) {
+        if (!PROJECT_RE.test(x)) continue;
+        if (isOutside(x)) refuse(`the base module ${m} imports the outside-written ${x}; it can be built neither before the locked step nor in it`);
+        visit(x, m);
+      }
+    }
+  };
+  for (const m of listed) visit(m, null);
+  return { outside: [...outside].sort(), base: [...base].sort() };
+}
+
 const put = (dir, name, value) => writeFileSync(join(dir, name), value);
 const main = () => {
   const [cmd, ...a] = process.argv.slice(2);
@@ -159,8 +244,25 @@ const main = () => {
   } else if (cmd === 'imports' && a.length === 2) {
     const seen = checkImports(readFileSync(a[0]), json(a[1]));
     process.stdout.write(`imports allowed: ${seen.join(' ') || '(none)'}\n`);
+  } else if (cmd === 'closure' && a.length === 4) {
+    const [baseDir, importsPath, judgedFile, out] = a;
+    if (!FILE_RE.test(judgedFile)) refuse('the judged file is not lean/PEqualNP/Outside/L_<gap>.lean');
+    const listed = json(importsPath);
+    if (!Array.isArray(listed) || !listed.every((m) => typeof m === 'string' && MODULE_RE.test(m))) refuse('the listed imports are malformed');
+    // A module's file in the base tree: a plain file (not a link), at most 512 KiB, else null.
+    const read = (m) => {
+      const p = join(baseDir, 'lean', ...m.split('.')) + '.lean';
+      let st; try { st = lstatSync(p); } catch { return null; }
+      if (!st.isFile() || st.size > MAX_BYTES) return null;
+      return readFileSync(p);
+    };
+    const r = importClosure(listed, read, moduleOf(judgedFile));
+    put(out, 'base-imports.txt', r.base.map((m) => `${m}\n`).join(''));
+    put(out, 'outside-imports.txt', r.outside.map((m) => `${m}\n`).join(''));
+    put(out, 'outside-sources.txt', r.outside.map((m) => `base/lean/${m.split('.').join('/')}.lean\n`).join(''));
+    process.stdout.write(`built before the locked step: ${r.base.join(' ') || '(none)'}\noutside-written, built only in the locked step: ${r.outside.join(' ') || '(none)'}\n`);
   } else {
-    process.stderr.write('usage: outside-guard.mjs pr|gap|gap-of-file|imports ... (see the header)\n');
+    process.stderr.write('usage: outside-guard.mjs pr|gap|gap-of-file|imports|closure ... (see the header)\n');
     process.exit(3);
   }
 };
