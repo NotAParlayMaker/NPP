@@ -1312,7 +1312,7 @@ private theorem level_bound {n t : ℕ} (G : SimpleGraph (Fin n)) (C : Circuit)
       exact edge_e2 G s t (hle _ hk)
     have hcard1 : S.card = 1 ∨ T.card = 1 := by
       by_contra hboth
-      push_neg at hboth
+      push Not at hboth
       have hs2 : 2 ≤ S.card := by omega
       have ht2 : 2 ≤ T.card := by omega
       obtain ⟨aS, haS⟩ := Finset.card_pos.mp hSp
