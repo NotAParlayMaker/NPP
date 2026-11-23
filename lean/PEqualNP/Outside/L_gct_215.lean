@@ -1,5 +1,6 @@
 import Mathlib
 import PEqualNP.Defs
+namespace PEqualNP.Outside.L_gct_215
 noncomputable section
 namespace Aa
 open Finset
@@ -7550,6 +7551,9 @@ end Ac.Af
 lemma Ac.aGj:Ac.MidCase:=
  Ac.Af.uR Ac.Af.rG
   Ac.Af.pZ Ac.Af.sV
+end
+end PEqualNP.Outside.L_gct_215
+open PEqualNP.Outside.L_gct_215 in
 theorem PEqualNP.Outside.L_gct_215 : ∀ L : Submodule ℂ (Fin 4 × Fin 5 → ℂ), (∀ t ∈ L, (∑ i : Fin 4, ∑ j, t (i, j)) = 0 ∧ (∑ j, ∑ l, if j = l then 0 else ∑ a : Fin 4, ∑ b : Fin 4, if a < b then t (a, j) * t (b, l) else 0) = 0 ∧ (∑ j, ∑ l, ∑ m, if j = l ∨ j = m ∨ l = m then 0 else ∑ a : Fin 4, ∑ b : Fin 4, ∑ c : Fin 4, if a < b ∧ b < c then t (a, j) * t (b, l) * t (c, m) else 0) = 0 ∧ (∑ j, ∑ l, ∑ m, ∑ n, if j = l ∨ j = m ∨ j = n ∨ l = m ∨ l = n ∨ m = n then 0 else t (0, j) * t (1, l) * t (2, m) * t (3, n)) = 0) → Module.finrank ℂ L ≤ 7 :=
  Ac.aAm Ac.aEn Ac.aGj Ac.aCb Ac.vV
   Ac.aFy Ac.aGe
