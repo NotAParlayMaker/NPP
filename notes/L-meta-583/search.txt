@@ -1,0 +1,55 @@
+Independent finite check for L-meta-583
+
+Run bash reproduce.sh in this directory. It uses Python 3.10+ and a C++20
+compiler. The last output row is "8 1488 0". No possible prefix of eight
+gates survives. The graph function depends on ten inputs, so a fan-in-two
+circuit computing it must contain at least nine gates.
+
+The Python program computes lower bounds for 19,896 nonconstant restrictions
+of the graph function. Each function is represented by its minimal true
+inputs, stored as bit sets. A function depending on n inputs needs at least
+n-1 binary gates by connectivity. In a minimum circuit we may discard dead
+gates, copy gates and constants (including missing reads).
+
+To improve the lower bound, consider every possible first gate with distinct
+operands a,b. Fixing a eliminates that gate. Giving a its controlling value
+also eliminates a successor of the gate, which must exist when n > 2.
+If fixing b at the controlling value leaves the function dependent on a, at
+least one additional gate reads a directly. Fixing a eliminates this gate
+too. This additional reader is different from the successor just counted:
+a gate reading a and the first gate's result would be absorbed by a or the
+first gate. Take the best restriction bound for this first gate, then the
+minimum over all choices of first gate. Only smaller supports occur in the
+recursion. The generator uses all nonconstant restrictions fixing one through
+eight variables.
+
+The C++ program enumerates successive gates. Commuting operands are sorted.
+A topological ordering that always chooses the least available gate by
+(right operand, left operand, operation) exists. Therefore two successive
+gates whose order is inverted on that key can be skipped if the second gate
+was already eligible before the first.
+
+The target has twelve minimal true inputs P and twelve maximal false inputs N.
+An earlier wire can replace a gate if the replacement is at least as large on
+P and at most as large on N. Monotonicity of the suffix keeps the correct
+answers on these two families, which determine the function everywhere.
+Gates replaceable by an earlier wire or a constant are omitted.
+
+For each candidate prefix, every wire without a consumer in that prefix must
+be read later. Also, if just one available wire is true on p and false on n,
+for some p in P and n in N, that wire must be read later. Otherwise
+monotonicity of the suffix prevents it from distinguishing those inputs.
+A suffix reading M distinct required wires takes at least M-1 gates.
+
+For each restriction, simplify every prefix gate with a constant input or
+equal operands. Record the number of removed prefix gates and the required
+suffix-source wires that are now constant. Each of these constant wires saves
+at least one gate in the suffix in aggregate. To see this, mark all those
+wires as pending, and scan the suffix in order. Whenever a gate reads one
+or more pending wires, remove the marks on its pending inputs. That gate is
+eliminated by constant propagation. If it read two distinct pending inputs,
+the result is another constant, so mark this gate pending. The number of
+pending wires drops by at most one per eliminated gate. Every marked wire
+will be consumed, since the original circuit was live and the restricted
+output is nonconstant. The restricted lower bound plus these suffix savings
+plus the prefix savings must be at most 14 for the prefix to survive.
