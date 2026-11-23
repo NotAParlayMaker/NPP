@@ -4508,7 +4508,7 @@ private theorem strip_left {N m : ℕ} (relabel : Relabel575) (pair : Pair575)
     (g : (Fin N → Bool) → Bool) (u v : Fin N) (hn : ∃ x y, g x ≠ g y)
     (hu : ∀ b : Bool, ∃ z, z u = b ∧ g z = false) (B : List (Fin m)) :
     ∀ (A : List (Fin m)) (s : ℕ), (A++B).Nodup → HasCircuitSize (N+m) (twoArms g u v A B) s →
-      ∃ (U : List (Fin m)) (c : ℕ), U.Sublist A ∧ U.length = A.length%2 ∧
+      ∃ (U : List (Fin m)) (c : ℕ), U.Sublist A ∧ U.length = A.length % 2 ∧
         HasCircuitSize (N+m) (twoArms g u v U B) c ∧ 3*(A.length/2)+c ≤ s := by
   intro A s
   generalize hd : A.length = d
@@ -4551,7 +4551,7 @@ private theorem single_to_pendant {N m s : ℕ} (relabel : Relabel575) (g : (Fin
 theorem arms_to_pendant {N m s : ℕ} (relabel : Relabel575) (pair : Pair575)
     (g : (Fin N → Bool) → Bool) (u v : Fin N) (hn : ∃ x y, g x ≠ g y)
     (hu : ∀ b : Bool, ∃ z, z u=b ∧ g z=false) (hv : ∀ b : Bool, ∃ z, z v=b ∧ g z=false)
-    (A B : List (Fin m)) (dist : (A++B).Nodup) (odd : (A.length+B.length)%2=1)
+    (A B : List (Fin m)) (dist : (A++B).Nodup) (odd : (A.length+B.length) % 2=1)
     (size : HasCircuitSize (N+m) (twoArms g u v A B) s) :
     ∃ c : ℕ, 3*((A.length+B.length)/2)+c ≤ s ∧
       (HasCircuitSize (N+1) (pendant575 g u) c ∨ HasCircuitSize (N+1) (pendant575 g v) c) := by
