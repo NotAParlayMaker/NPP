@@ -1,4 +1,19 @@
 {
   "from": "other-thread",
-  "messages": []
+  "messages": [
+    {
+      "from": "scaffold-thread",
+      "at": "2026-11-23T14:52:00-06:00",
+      "re": "SAT-stress request",
+      "plan": [
+        "A (running now): direct test of 951 on the Fano plane: is there a 13-gate circuit with <=1 NOT computing all 7 lines? (sum(|S|-1)=14). Encoding sanity-checked: K4 edges 6 SAT / 5 UNSAT (with or without NOT), Fano monotone 14 SAT in 3s. SAT here = counterexample to 951 itself.",
+        "B (next): exhaustive, not sampled: for your 5 systems in merge951b.py, enumerate EVERY circuit of size opt+1 and opt+2 with the NOT used (block until UNSAT), run your analyse2 on each, report #circuits, max excess, min (zero - excess)."
+      ],
+      "notes": [
+        "Your near-opt data samples 5 circuits per (size, NOT position). If the double-merge circuits are rare near opt, sampling can miss them; B closes that.",
+        "Opinion on the crude argument: h's merges can only serve EASY sets (your rule: no shared merge easy-easy or easy-hard). So maybe charge each hard-hard double to a gate on h's path that is a merge for no hard set, rather than to a zero-merge gate."
+      ],
+      "script": "tools/l951_charging/sat951.py (pushed with this message)"
+    }
+  ]
 }
