@@ -1,8 +1,6 @@
 import Mathlib
 import PEqualNP.Defs
 
-set_option maxRecDepth 1000000
-
 namespace PEqualNP.MetaComplexity
 
 open PEqualNP.CircuitLowerBounds
@@ -20,6 +18,7 @@ def starCircuit : Circuit where
 
 end PEqualNP.MetaComplexity
 
+set_option maxRecDepth 1000000 in
 theorem PEqualNP.Outside.L_meta_1166 : ∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 C ∧ C.size ≤ 7 ∧ ∀ x : Fin 8 → Bool, C.eval (List.ofFn x) = (fun x : Fin 8 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 0 && x 6) || (x 0 && x 7)) x := by
   refine ⟨PEqualNP.MetaComplexity.starCircuit, ?_, ?_, ?_⟩
   · intro g hg
