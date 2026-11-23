@@ -58,7 +58,7 @@ theorem PEqualNP.Outside.L_meta_736 : ∀ (n n' : ℕ) (O : Finset (Fin n)) (e :
         have ej : e j = ⟨i,hi⟩ := Classical.choose_spec h
         have fj : f i = j.val := by simp [f, hi, h, j]
         have jlt : j.val < y.length := by simp [ly]
-        rw [fj, List.getD_append _ _ _ _ (by simp [ly]; omega),
+        rw [fj, List.getD_append _ _ _ _ (by simp only [List.length_append, List.length_singleton]; omega),
             List.getD_append _ _ _ _ jlt]
         simpa [ej] using (keep j).symm
       · have ho : (⟨i,hi⟩ : Fin n) ∈ O := by
