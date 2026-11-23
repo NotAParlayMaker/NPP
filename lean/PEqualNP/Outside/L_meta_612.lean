@@ -1244,22 +1244,16 @@ private theorem level_bound {n t : ℕ} (G : SimpleGraph (Fin n)) (C : Circuit)
   classical
   obtain ⟨u0, v0, huv0⟩ := hedge
   let A : Finset ℕ := (Finset.range C.size).filter (fun j =>
-    match C.gates[j]? with
-    | some g => g.op == GateOp.and
-    | none => false)
+    ∃ g : Gate, C.gates[j]? = some g ∧ g.op = GateOp.and)
   have hA : ∀ j : ℕ, j ∈ A ↔ ∃ g : Gate, C.gates[j]? = some g ∧ g.op = GateOp.and := by
     intro j
     simp only [A, Finset.mem_filter, Finset.mem_range]
     constructor
-    · rintro ⟨hj, hop⟩
-      cases hg : C.gates[j]? with
-      | none => simp [hg] at hop
-      | some g =>
-        have : g.op = GateOp.and := by simpa [hg] using hop
-        exact ⟨g, hg, this⟩
-    · rintro ⟨g, hg, hop⟩
-      have hj : j < C.size := (List.getElem?_eq_some_iff.mp hg).1
-      simp [hj, hg, hop]
+    · rintro ⟨_, h⟩
+      exact h
+    · intro h
+      obtain ⟨g, hg, _⟩ := h
+      exact ⟨(List.getElem?_eq_some_iff.mp hg).1, h⟩
   have h5A : ∀ j ∈ A, ∀ i ∈ A, ¬ Relation.TransGen (Rd C n) j i := by
     intro j hj i hi
     exact h5 j i ((hA j).mp hj) ((hA i).mp hi)
@@ -1365,7 +1359,8 @@ private theorem level_bound {n t : ℕ} (G : SimpleGraph (Fin n)) (C : Circuit)
     simpa [cen, hj] using And.intro h.2 h.1
   have hvc : CoverPromise.IsVertexCover G (A.image cen) := by
     intro a b hab
-    have ho : C.output = n + (C.size - 1) := hout.2
+    have hsub : n + C.size - 1 = n + (C.size - 1) := by omega
+    have ho : C.output = n + (C.size - 1) := hsub ▸ hout.2
     have ho' : C.size - 1 < C.size := by omega
     have hx : val C n (e2 a b) (n + (C.size - 1)) = true := by
       rw [← ho]
