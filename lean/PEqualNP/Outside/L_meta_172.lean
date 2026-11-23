@@ -7723,19 +7723,17 @@ lemma nB {n}:iB n:=by
  intro u v m e;obtain⟨o,_,s⟩:=deleteIncidenceSet_adj.mp m;obtain⟨r,_,vl⟩:=deleteIncidenceSet_adj.mp e;exact((c u o).resolve_left s).trans ((c v r).resolve_left vl).symm
 lemma nS {n}:jI n:=by intro G dec A l p q C i h j a f iso leaf g e min d c b;exact Ah.tO iso leaf g e (kB f iso leaf min d) d c b
 end Aq
-end PEqualNP.Outside.L_meta_172_aux
-open PEqualNP.Outside.L_meta_172_aux in
-theorem PEqualNP.Outside.L_meta_172_aux.nestedIff : ∀ (n : ℕ) (K : SimpleGraph (Fin n)) [DecidableRel K.Adj] (A : Finset (Fin n)), K.IsAcyclic → (∀ a ∈ A, ∀ v : Fin n, ¬ K.Adj a v) → (A.Nonempty ∨ ∃ u v : Fin n, K.Adj u v) → (∀ C : PEqualNP.CircuitLowerBounds.Circuit, (PEqualNP.MetaComplexity.IsMinimalCircuit n C ∧ PEqualNP.MetaComplexity.circuitFun n C = PEqualNP.MetaComplexity.NestedCover.graphFun K A) ↔ PEqualNP.MetaComplexity.NestedCover.IsNestedCoverCircuit n K A C) := by
+theorem nestedIff : ∀ (n : ℕ) (K : SimpleGraph (Fin n)) [DecidableRel K.Adj] (A : Finset (Fin n)), K.IsAcyclic → (∀ a ∈ A, ∀ v : Fin n, ¬ K.Adj a v) → (A.Nonempty ∨ ∃ u v : Fin n, K.Adj u v) → (∀ C : PEqualNP.CircuitLowerBounds.Circuit, (PEqualNP.MetaComplexity.IsMinimalCircuit n C ∧ PEqualNP.MetaComplexity.circuitFun n C = PEqualNP.MetaComplexity.NestedCover.graphFun K A) ↔ PEqualNP.MetaComplexity.NestedCover.IsNestedCoverCircuit n K A C) := by
  intro n K _ A c iso b C;exact Aq.dW Aq.oV Aq.nB
   Aq.nS K A c iso b C
 
-section
+-- final part, still inside the helper namespace
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.MetaComplexity.NestedCover
 open PEqualNP.Outside.L_meta_172_aux.PEqualNP.MetaComplexity.NestedCover
 open PEqualNP.Outside.L_meta_172_aux.PEqualNP.MetaComplexity.NestedCover.A7
 open PEqualNP.Outside.L_meta_172_aux.PEqualNP.MetaComplexity.NestedCover.An
 
-namespace PEqualNP.Outside.L_meta_172_aux.P172
+namespace P172
 
 def X {N : ℕ} (x : Fin N → Bool) (i : ℕ) : Bool := if h : i < N then x ⟨i, h⟩ else false
 
@@ -8222,10 +8220,10 @@ lemma gateForm (h : Valid (2 * m) (SimpleGraph.pathGraph (2 * m)) ∅ C d) {j : 
 
 end
 
-end PEqualNP.Outside.L_meta_172_aux.P172
+end P172
 
 
-end
+end PEqualNP.Outside.L_meta_172_aux
 theorem PEqualNP.Outside.L_meta_172 : ∀ (m : ℕ) (C : PEqualNP.CircuitLowerBounds.Circuit), 1 ≤ m → PEqualNP.MetaComplexity.IsMinimalCircuit (2 * m) C → PEqualNP.MetaComplexity.circuitFun (2 * m) C = (fun x : Fin (2 * m) → Bool => decide (∃ i j : Fin (2 * m), i.val + 1 = j.val ∧ x i = true ∧ x j = true)) → (∀ g ∈ C.gates, g.op ≠ PEqualNP.CircuitLowerBounds.GateOp.not) ∧ ∀ t : ℕ, t < C.size → ((∃ S : Finset ℕ, S.Nonempty ∧ (∀ i ∈ S, i + 1 < 2 * m) ∧ ∀ x : Fin (2 * m) → Bool, (C.wires (List.ofFn x)).getD (2 * m + t) false = decide (∃ i j : Fin (2 * m), i.val ∈ S ∧ i.val + 1 = j.val ∧ x i = true ∧ x j = true)) ∨ (∃ c : Fin (2 * m), 1 ≤ c.val ∧ c.val + 1 < 2 * m ∧ ∀ x : Fin (2 * m) → Bool, (C.wires (List.ofFn x)).getD (2 * m + t) false = decide (∃ k : Fin (2 * m), (k.val + 1 = c.val ∨ k.val = c.val + 1) ∧ x k = true)) ∨ (∃ i j k : Fin (2 * m), i.val % 2 = 0 ∧ i.val + 1 = j.val ∧ (k.val = j.val + 1 ∨ k.val + 1 = i.val) ∧ ∀ x : Fin (2 * m) → Bool, (C.wires (List.ofFn x)).getD (2 * m + t) false = ((x i && x j) || x k))) := by
   intro m C hm hmin hfun
   classical
