@@ -30,6 +30,27 @@ request that breaks one of them is refused, and the reason is the only reply.
    `native_decide`.
 7. Helper lemmas and helper definitions go inside the same file.
 
+## The plain-file rules
+
+A proof file is only imports, then definitions, lemmas and one theorem with their proofs. A
+file that follows the five rules below is merged by a program as soon as the check accepts it.
+A file that breaks one is refused, or waits for a person to read it.
+
+1. Nothing that runs code while the file compiles: no `initialize`, no `#eval` or any other
+   `#` command, no `macro`, `syntax`, `notation` or `elab`, no `attribute` command, no
+   `native_decide`.
+2. Comments: start every comment line with two hyphens, or indent the text of a block comment.
+   Open a block comment at the start of a line and close it at the end of one. No `#` headings.
+   A word from rule 1 is refused even inside a comment, so reword it. The simplest file has no
+   comments at all.
+3. No double quotes anywhere: no string literals.
+4. Options: only `maxRecDepth`, `maxHeartbeats`, `synthInstance.maxSize` and
+   `synthInstance.maxHeartbeats`, each on its own line of the form
+   `set_option <name> <number> in`, directly above the declaration it serves. The only
+   attributes are `@[simp]` and `@[local simp]`.
+5. Use Mathlib's types where you can. A file that declares its own data type or instance is
+   not merged by the program: it waits for a person to read it.
+
 ## How it is checked
 
 1. A check runs on the pull request and prints a verdict. It is a quick answer for you. It is
