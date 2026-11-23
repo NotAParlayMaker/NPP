@@ -2674,8 +2674,8 @@ private theorem cutBlockAll (i : Nat) (hi : i < 23) : cutGroup i = true := by
 theorem classification (t : Nat) (ht : t < 512) (s : Nat) (hs : s < 256) :
     ∃ T : Array Nat, ∃ w : Nat, topologyOK t T = true ∧ cutOK s w T allHosts = true := by
   have g := topBlockAll (t/16) (by omega)
-  have step := List.all_eq_true.mp g (t%16) (List.mem_range.mpr (Nat.mod_lt _ (by decide)))
-  have decomp : 16 * (t/16) + t%16 = t := by omega
+  have step := List.all_eq_true.mp g (t % 16) (List.mem_range.mpr (Nat.mod_lt _ (by decide)))
+  have decomp : 16 * (t/16) + t % 16 = t := by omega
   simp only [decomp, Bool.and_eq_true, decide_eq_true_eq] at step
   have cut := cutBlockAll _ step.1
   exact ⟨_, _, step.2, List.all_eq_true.mp cut s (List.mem_range.mpr hs)⟩
