@@ -169,7 +169,14 @@ jobs:
           # when this step ends, however it ends, before the steps that need it (the lock step
           # puts the proof file into it, and hashes the listed outside sources).
           aside="$W/aside"; mkdir "$aside"
-          restore() { if [ -e "$aside/Outside" ]; then mv "$aside/Outside" PEqualNP/Outside; fi; }
+          # Put back onto an empty place only: were a folder of that name there (something made it
+          # during the build), mv would nest the saved folder inside it and the check would pass.
+          restore() {
+            if [ -e "$aside/Outside" ]; then
+              if [ -e PEqualNP/Outside ] || [ -L PEqualNP/Outside ]; then echo "FAULT: a folder of outside files appeared during the base build; the saved one was not put back"; exit 1; fi
+              mv "$aside/Outside" PEqualNP/Outside
+            fi
+          }
           trap restore EXIT
           moved=no; if [ -e PEqualNP/Outside ]; then mv PEqualNP/Outside "$aside/Outside"; moved=yes; fi
           [ ! -e PEqualNP/Outside ] || { echo "FAULT: the folder of outside files could not be moved aside"; exit 1; }
@@ -403,8 +410,8 @@ jobs:
             # Printed by this step from paths the guard wrote; no text of a pull request.
             echo "----- listed outside modules -----"
             echo "Their sources were hashed before the locked step and compared after it (with the files above)."
-            echo "The compiled files the verifier loaded for them were built in the locked step, from those"
-            echo "sources, by the locked account; the verifier sent every constant of them to the kernel again."
+            echo "The compiled files the verifier loaded for them were written in the locked step, by the"
+            echo "locked account; the verifier sent every constant of them to the kernel again."
             echo "sha256 of each compiled file after the checker ran:"
             while IFS= read -r m; do
               # The locked account wrote this file: read only a plain file, never a link or a
