@@ -11,4 +11,9 @@ theorem PEqualNP.Outside.L_meta_475 : ∀ φ : PEqualNP.Search.CNF, ∃ u v : PE
   unfold PEqualNP.MetaComplexity.CoverPromise.satAdj
   refine ⟨rfl, by decide, ?_⟩
   unfold PEqualNP.MetaComplexity.CoverPromise.vars
-  simp [PEqualNP.MetaComplexity.CoverPromise.cvcFormula, y, PEqualNP.MetaComplexity.CoverPromise.fresh]
+  rw [Finset.mem_toFinset]
+  unfold PEqualNP.MetaComplexity.CoverPromise.cvcFormula
+  rw [List.flatMap_append]
+  apply List.mem_append.mpr
+  right
+  simp
