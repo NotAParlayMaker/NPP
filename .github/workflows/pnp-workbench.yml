@@ -50,6 +50,9 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os, pathlib, re, urllib.request, urllib.error
+          opener = urllib.request.build_opener()
+          opener.addheaders = [('User-Agent', 'OrazioNicolosi-PNP-workbench/1.0 (+https://github.com/OrazioNicolosi/pequalnp-proofs)')]
+          urllib.request.install_opener(opener)
           try:
               with urllib.request.urlopen('https://pequalnp.com/desk/next?handle=OrazioNicolosi', timeout=40) as r:
                   d = json.load(r)
@@ -74,6 +77,9 @@ jobs:
         run: |
           python3 -u - <<'PY'
           import json, os, pathlib, time, urllib.parse, urllib.request, urllib.error
+          opener = urllib.request.build_opener()
+          opener.addheaders = [('User-Agent', 'OrazioNicolosi-PNP-workbench/1.0 (+https://github.com/OrazioNicolosi/pequalnp-proofs)')]
+          urllib.request.install_opener(opener)
           p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pnp-lease.json'
           if not p.exists(): raise SystemExit(0)
           d = json.loads(p.read_text())
@@ -103,6 +109,9 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os, pathlib, urllib.parse, urllib.request, urllib.error
+          opener = urllib.request.build_opener()
+          opener.addheaders = [('User-Agent', 'OrazioNicolosi-PNP-workbench/1.0 (+https://github.com/OrazioNicolosi/pequalnp-proofs)')]
+          urllib.request.install_opener(opener)
           p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pnp-lease.json'
           if not p.exists(): raise SystemExit(0)
           d = json.loads(p.read_text())
