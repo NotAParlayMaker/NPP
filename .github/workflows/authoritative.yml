@@ -309,6 +309,18 @@ jobs:
           same=yes; cmp -s "$RUNNER_TEMP/before.sha256" "$RUNNER_TEMP/after.sha256" || same=no
           last=$(tail -n 1 "$RUNNER_TEMP/checker.out")
           manifests=$(grep -c '^MANIFEST {' "$RUNNER_TEMP/checker.out" || true)
+          # The one line the hub records an outside proof from: which gap, pull request and file
+          # this run judged, and the sha256 of that file and of the statement as hashed BEFORE the
+          # outside step ran (before.sha256). The statement hash is of in/statement.txt, the
+          # posted text byte for byte with no newline added, which is the form the hub hashes.
+          # Every value was validated or computed by this run, and jq builds the JSON. It is
+          # printed unquoted and before the quoted block, so no quoted line can pass for it.
+          fsha=$(awk -v p="base/$file" '$2 == p { print $1 }' "$RUNNER_TEMP/before.sha256")
+          ssha=$(awk '$2 == "in/statement.txt" { print $1 }' "$RUNNER_TEMP/before.sha256")
+          if printf '%s %s' "$fsha" "$ssha" | grep -Eqx '[0-9a-f]{64} [0-9a-f]{64}'; then
+            echo "OUTSIDE $(jq -cn --arg lemma "$GAP" --argjson pr "$PR" --arg file "$file" --arg f "$fsha" --arg s "$ssha" \
+              '{lemma: $lemma, pr: $pr, file: $file, file_sha256: $f, statement_sha256: $s}')"
+          fi
           # The output can quote the proof file. It is printed with workflow commands switched
           # off, so a line in it cannot pass for an instruction to the runner.
           echo "::stop-commands::$stop"
