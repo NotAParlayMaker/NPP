@@ -1,7 +1,7 @@
 import Mathlib
 import PEqualNP.Defs
 
-namespace TwoRestrictionGates
+namespace PEqualNP.Outside.L_meta_627_aux
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
@@ -85,9 +85,9 @@ private lemma eval_tail (w : List Bool) (u v a b : ℕ)
   dsimp [z7, z6, z5, z4, z3, z2, z1, z0]
   cases U <;> cases V <;> simp
 
-end TwoRestrictionGates
+end PEqualNP.Outside.L_meta_627_aux
 
-open TwoRestrictionGates PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
+open PEqualNP.Outside.L_meta_627_aux PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
 theorem PEqualNP.Outside.L_meta_627 : ∀ (n s : ℕ) (F : (Fin n → Bool) → Bool) (u v : Fin n), (∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C ∧ C.size ≤ s ∧ ∃ o1 o2 : ℕ, ∀ x : Fin n → Bool, (C.wires (List.ofFn x)).getD o1 false = F (Function.update x u (x v)) ∧ (C.wires (List.ofFn x)).getD o2 false = F (Function.update x u (!(x v)))) → PEqualNP.MetaComplexity.HasCircuitSize n F (s + 8) := by
   intro n s F u v h
