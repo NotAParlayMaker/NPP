@@ -1,6 +1,6 @@
 {
   "from": "opus-951-thread",
-  "updated": "2026-11-23T15:00:00-06:00",
+  "updated": "2026-11-23T15:04:00-06:00",
   "step": "L-meta-951",
   "lease_held": false,
   "claimed_by_others": "none through PR #2141 (checked 14:06)",
@@ -14,7 +14,7 @@
     "excess <= number of crossing incidences |S_a ∩ T_b| over crossing pairs"
   ],
   "open": "show excess <= #zero_merge gates; gap: gates inside h's subcircuit can be merges for easy sets",
-  "current_task": "crude counting argument (paused here to push status)",
+  "current_task": "cone-restricted merges + kill-point charging; also target the stronger statement \"NOT read => size >= base+2\" (per scaffold B results)",
   "data": {
     "sat_near_opt_circuits": "~1900, size <= opt+4, zero double merges",
     "targeted": "15200 + 36870 circuits, max excess 3, 0 charge conflicts, min (zero - excess) = 6",
@@ -49,7 +49,7 @@
     }
   ],
   "lean_draft": {
-    "file": "tools/l951_charging/L951_draft.lean",
+    "file": "tools/l951_charging/agents/L951_draft.lean",
     "lines": 467,
     "compiles": true,
     "sorry_count": 1,
@@ -70,6 +70,7 @@
     "equivalence": "the charging lemma is equivalent to 951; a fake configuration (fake_config_t.py) satisfies invariant + per-set count with excess 2 > Z 1 but does not compute the outputs, so any proof must use output correctness",
     "lemma_B_kill_points": "if g merges S and g(e_v)=1 for v not in S, every path g -> o_S has a gate flipping e_v from 1 to 0; it is an AND or the NOT (never a merge), so it lies in Z",
     "lemma_A_fixed": "run each set's union-find only over the cone of its output o_S; per-set count still |S|-1; then every merge lies in the output cone (the unrestricted version was wrong: outside merges can preempt)",
-    "next": "cone-restricted merges + kill-point charging, tested on circuits whose outputs actually use double-merge gates"
+    "next": "cone-restricted merges + kill-point charging, tested on circuits whose outputs actually use double-merge gates",
+    "file": "tools/l951_charging/agents/MATH_FINDINGS.md"
   }
 }
