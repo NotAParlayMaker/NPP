@@ -1,281 +1,191 @@
+import Mathlib
 import PEqualNP.Defs
-import Mathlib.Data.Finset.Card
 
-namespace PEqualNP.Outside.L_meta_729_aux
+namespace PEqualNP.Outside.L_meta_729
 
-def Walk {n : ℕ} (D : Fin n → Fin n → Prop) (S : Finset (Fin n)) (m : ℕ) (u v : Fin n) : Prop :=
-  ∃ p : ℕ → Fin n, p 0 = u ∧ p m = v ∧
-    (∀ i, i ≤ m → p i ∈ S) ∧ (∀ i, i < m → D (p i) (p (i + 1)))
+open Classical
 
-def Reach {n : ℕ} (D : Fin n → Fin n → Prop) (S : Finset (Fin n)) (u v : Fin n) : Prop :=
-  ∃ m, Walk D S m u v
+-- A walk of a given length along a relation.
+def Wk {α : Type} (R : α → α → Prop) : ℕ → α → α → Prop
+  | 0, u, v => u = v
+  | m + 1, u, v => ∃ w, R u w ∧ Wk R m w v
 
-def EvenReach {n : ℕ} (D : Fin n → Fin n → Prop) (S : Finset (Fin n)) (u v : Fin n) : Prop :=
-  ∃ k, Walk D S (2 * k) u v
+theorem wk_trans {α : Type} (R : α → α → Prop) : ∀ (a b : ℕ) (u v w : α),
+    Wk R a u v → Wk R b v w → Wk R (a + b) u w := by
+  intro a
+  induction a with
+  | zero =>
+    intro b u v w h1 h2
+    have e : u = v := h1
+    subst e
+    simpa using h2
+  | succ a ih =>
+    intro b u v w h1 h2
+    obtain ⟨x, hx, hw⟩ := h1
+    rw [show a + 1 + b = (a + b) + 1 by omega]
+    exact ⟨x, hx, ih b x v w hw h2⟩
 
-lemma walk_refl {n : ℕ} {D : Fin n → Fin n → Prop} {S : Finset (Fin n)} {u : Fin n}
-    (hu : u ∈ S) : Walk D S 0 u u := by
-  refine ⟨fun _ => u, rfl, rfl, ?_, ?_⟩
-  · intro i _
-    exact hu
-  · intro i hi
-    omega
+theorem wk_snoc {α : Type} (R : α → α → Prop) {m : ℕ} {u v w : α} (h : Wk R m u v)
+    (hr : R v w) : Wk R (m + 1) u w :=
+  wk_trans R m 1 u v w h ⟨w, hr, rfl⟩
 
-lemma walk_single {n : ℕ} {D : Fin n → Fin n → Prop} {S : Finset (Fin n)} {u v : Fin n}
-    (hu : u ∈ S) (hv : v ∈ S) (huv : D u v) : Walk D S 1 u v := by
-  refine ⟨fun i => if i = 0 then u else v, by simp, by simp, ?_, ?_⟩
-  · intro i _
-    by_cases h : i = 0
-    · simp [h, hu]
-    · simp [h, hv]
-  · intro i hi
-    have hi0 : i = 0 := by omega
-    subst hi0
-    simpa using huv
+theorem wk_of_rtg {α : Type} (R : α → α → Prop) {u v : α}
+    (h : Relation.ReflTransGen R u v) : ∃ m, Wk R m u v := by
+  induction h with
+  | refl => exact ⟨0, rfl⟩
+  | tail _ hbc ih =>
+    obtain ⟨m, hm⟩ := ih
+    exact ⟨m + 1, wk_snoc R hm hbc⟩
 
-lemma walk_append {n : ℕ} {D : Fin n → Fin n → Prop} {S : Finset (Fin n)}
-    {m1 m2 : ℕ} {u v w : Fin n}
-    (h1 : Walk D S m1 u v) (h2 : Walk D S m2 v w) : Walk D S (m1 + m2) u w := by
-  rcases h1 with ⟨p, hp0, hpm, hpS, hpD⟩
-  rcases h2 with ⟨q, hq0, hqm, hqS, hqD⟩
-  refine ⟨fun i => if i ≤ m1 then p i else q (i - m1), ?_, ?_, ?_, ?_⟩
-  · simp [hp0]
-  · by_cases h : m1 + m2 ≤ m1
-    · have hm2 : m2 = 0 := by omega
-      subst hm2
-      simp [hpm, hq0.symm.trans hqm]
-    · simp [h, hqm]
-  · intro i hi
-    by_cases h : i ≤ m1
-    · simp [h, hpS i h]
-    · simp [h]
-      exact hqS (i - m1) (by omega)
-  · intro i hi
-    by_cases hlt : i < m1
-    · have hle1 : i ≤ m1 := by omega
-      have hle2 : i + 1 ≤ m1 := by omega
-      simp [hle1, hle2, hpD i hlt]
-    · by_cases heq : i = m1
-      · have hle1 : i ≤ m1 := by omega
-        have hnot : ¬ (i + 1 ≤ m1) := by omega
-        have hm2 : 0 < m2 := by omega
-        have hsub : i + 1 - m1 = 1 := by omega
-        simp [hle1, hnot, hsub, heq, hpm, ← hq0]
-        exact hqD 0 hm2
-      · have hnot1 : ¬ (i ≤ m1) := by omega
-        have hnot2 : ¬ (i + 1 ≤ m1) := by omega
-        have hsub : i + 1 - m1 = (i - m1) + 1 := by omega
-        have hlt2 : i - m1 < m2 := by omega
-        simp [hnot1, hnot2, hsub]
-        exact hqD (i - m1) hlt2
+-- A walk as a sequence of vertices.
+theorem wk_fun {α : Type} (R : α → α → Prop) : ∀ (m : ℕ) (u v : α), Wk R m u v →
+    ∃ c : ℕ → α, c 0 = u ∧ c m = v ∧ ∀ i, i < m → R (c i) (c (i + 1)) := by
+  intro m
+  induction m with
+  | zero =>
+    intro u v h
+    exact ⟨fun _ => u, rfl, h, fun i hi => absurd hi (Nat.not_lt_zero _)⟩
+  | succ m ih =>
+    intro u v h
+    obtain ⟨w, hw, hwk⟩ := h
+    obtain ⟨c, c0, cm, cs⟩ := ih w v hwk
+    refine ⟨fun i => if i = 0 then u else c (i - 1), by simp, by simp [cm], ?_⟩
+    intro i hi
+    by_cases h0 : i = 0
+    · subst h0
+      simp [c0]
+      exact hw
+    · have := cs (i - 1) (by omega)
+      rw [show i - 1 + 1 = i by omega] at this
+      simp [h0]
+      exact this
 
-lemma reach_refl {n : ℕ} {D : Fin n → Fin n → Prop} {S : Finset (Fin n)} {u : Fin n}
-    (hu : u ∈ S) : Reach D S u u :=
-  ⟨0, walk_refl hu⟩
-
-lemma reach_trans {n : ℕ} {D : Fin n → Fin n → Prop} {S : Finset (Fin n)} {u v w : Fin n}
-    (h1 : Reach D S u v) (h2 : Reach D S v w) : Reach D S u w := by
-  rcases h1 with ⟨m1, hm1⟩
-  rcases h2 with ⟨m2, hm2⟩
-  exact ⟨m1 + m2, walk_append hm1 hm2⟩
-
-lemma reach_step {n : ℕ} {D : Fin n → Fin n → Prop} {S : Finset (Fin n)} {u v w : Fin n}
-    (h1 : Reach D S u v) (hv : v ∈ S) (hw : w ∈ S) (hvw : D v w) : Reach D S u w :=
-  reach_trans h1 ⟨1, walk_single hv hw hvw⟩
-
-lemma finset_exists_min {α : Type*} [DecidableEq α] (S : Finset α) (f : α → ℕ)
-    (hne : S.Nonempty) : ∃ r ∈ S, ∀ u ∈ S, f r ≤ f u := by
-  induction S using Finset.induction_on with
-  | empty => exact absurd hne Finset.not_nonempty_empty
-  | insert a s ha ih =>
-    by_cases hs : s.Nonempty
-    · rcases ih hs with ⟨r, hr, hmin⟩
-      by_cases hfa : f a ≤ f r
-      · refine ⟨a, Finset.mem_insert_self a s, ?_⟩
-        intro u hu
-        rcases Finset.mem_insert.mp hu with rfl | hus
-        · exact le_refl _
-        · exact le_trans hfa (hmin u hus)
-      · refine ⟨r, Finset.mem_insert_of_mem hr, ?_⟩
-        intro u hu
-        rcases Finset.mem_insert.mp hu with rfl | hus
-        · omega
-        · exact hmin u hus
-    · rw [Finset.not_nonempty_iff_eq_empty] at hs
-      subst hs
-      refine ⟨a, Finset.mem_singleton_self a, ?_⟩
-      intro u hu
-      rw [Finset.mem_singleton.mp hu]
-
-lemma no_odd_closed_in_S {n : ℕ} {D : Fin n → Fin n → Prop}
-    (hodd : ¬ ∃ (k : ℕ) (c : ℕ → Fin n), c (2 * k + 1) = c 0 ∧
-      ∀ i, i < 2 * k + 1 → D (c i) (c (i + 1)))
-    {S : Finset (Fin n)} {m : ℕ} {u : Fin n}
-    (hw : Walk D S m u u) : m % 2 = 0 := by
-  by_contra hne
-  have hmod : m % 2 = 1 := by omega
-  have hm : m = 2 * (m / 2) + 1 := by omega
-  rcases hw with ⟨p, hp0, hpm, _, hpD⟩
-  apply hodd
-  refine ⟨m / 2, p, ?_, ?_⟩
-  · rw [← hm, hpm, hp0]
-  · intro i hi
-    exact hpD i (by omega)
-
-lemma exists_kernel_finset {n : ℕ} (D : Fin n → Fin n → Prop)
+-- Richardson's theorem on every vertex set, by induction on the set.
+theorem kernel {n : ℕ} (D : Fin n → Fin n → Prop)
     (hodd : ¬ ∃ (k : ℕ) (c : ℕ → Fin n), c (2 * k + 1) = c 0 ∧
       ∀ i, i < 2 * k + 1 → D (c i) (c (i + 1))) :
-    ∀ k : ℕ, ∀ S : Finset (Fin n), S.card ≤ k →
-      ∃ K : Finset (Fin n), K ⊆ S ∧
-        (∀ u ∈ K, ∀ v ∈ K, ¬ D u v) ∧
-        (∀ v ∈ S, v ∉ K → ∃ a ∈ K, D v a) := by
-  classical
-  intro k
-  induction k with
-  | zero =>
-    intro S hcard
-    have hS : S = ∅ := Finset.card_eq_zero.mp (Nat.eq_zero_of_le_zero hcard)
-    subst hS
-    refine ⟨∅, Finset.Subset.refl _, ?_, ?_⟩
-    · intro u hu; exact absurd hu (Finset.notMem_empty u)
-    · intro v hv; exact absurd hv (Finset.notMem_empty v)
-  | succ k ih =>
-    intro S hcard
-    by_cases hne : S.Nonempty
-    · let R : Fin n → Finset (Fin n) := fun u => S.filter (fun v => Reach D S u v)
-      rcases finset_exists_min S (fun u => (R u).card) hne with ⟨r, hrS, hrmin⟩
-      let C : Finset (Fin n) := R r
-      have hrC : r ∈ C := Finset.mem_filter.mpr ⟨hrS, reach_refl hrS⟩
-      have hCS : C ⊆ S := Finset.filter_subset _ _
-      have hCout : ∀ u ∈ C, ∀ v ∈ S, D u v → v ∈ C := by
-        intro u huC v hvS huv
-        have huS : u ∈ S := (Finset.mem_filter.mp huC).1
-        have hru : Reach D S r u := (Finset.mem_filter.mp huC).2
-        exact Finset.mem_filter.mpr ⟨hvS, reach_step hru huS hvS huv⟩
-      have hCstrong : ∀ u ∈ C, Reach D S u r := by
-        intro u huC
-        have huS : u ∈ S := (Finset.mem_filter.mp huC).1
-        have hru : Reach D S r u := (Finset.mem_filter.mp huC).2
-        have hsub : R u ⊆ C := by
-          intro w hw
-          have hwS : w ∈ S := (Finset.mem_filter.mp hw).1
-          have huw : Reach D S u w := (Finset.mem_filter.mp hw).2
-          exact Finset.mem_filter.mpr ⟨hwS, reach_trans hru huw⟩
-        have hle : C.card ≤ (R u).card := hrmin u huS
-        have heq : R u = C := Finset.eq_of_subset_of_card_le hsub hle
-        have hrRu : r ∈ R u := heq ▸ hrC
-        exact (Finset.mem_filter.mp hrRu).2
-      let A : Finset (Fin n) := C.filter (fun u => EvenReach D S r u)
-      have hAC : A ⊆ C := Finset.filter_subset _ _
-      have hAS : A ⊆ S := Finset.Subset.trans hAC hCS
-      have hrA : r ∈ A := Finset.mem_filter.mpr ⟨hrC, ⟨0, walk_refl hrS⟩⟩
-      have hAindep : ∀ u ∈ A, ∀ v ∈ A, ¬ D u v := by
-        intro u huA v hvA huv
-        have huC : u ∈ C := (Finset.mem_filter.mp huA).1
-        have hvC : v ∈ C := (Finset.mem_filter.mp hvA).1
-        have huS : u ∈ S := hCS huC
-        have hvS : v ∈ S := hCS hvC
-        rcases (Finset.mem_filter.mp huA).2 with ⟨a, ha⟩
-        rcases (Finset.mem_filter.mp hvA).2 with ⟨b, hb⟩
-        rcases hCstrong v hvC with ⟨m, hm⟩
-        have hclosed1 : Walk D S (2 * b + m) r r := walk_append hb hm
-        have hm_even : (2 * b + m) % 2 = 0 := no_odd_closed_in_S hodd hclosed1
-        have hru1 : Walk D S (2 * a + 1) r v := walk_append ha (walk_single huS hvS huv)
-        have hclosed2 : Walk D S (2 * a + 1 + m) r r := walk_append hru1 hm
-        have hmod2 : (2 * a + 1 + m) % 2 = 0 := no_odd_closed_in_S hodd hclosed2
-        omega
-      have hAabsorbC : ∀ v ∈ C, v ∉ A → ∃ a ∈ A, D v a := by
-        intro v hvC hvnotA
-        have hvS : v ∈ S := hCS hvC
-        have hvr_ne : v ≠ r := by
-          intro h
-          subst h
-          exact hvnotA hrA
-        rcases hCstrong v hvC with ⟨m, p, hp0, hpm, hpS, hpD⟩
-        have hmpos : 0 < m := by
-          by_contra hm0
-          have hmzero : m = 0 := by omega
-          subst hmzero
-          exact hvr_ne (hp0.symm.trans hpm)
-        let u : Fin n := p 1
-        have huS : u ∈ S := hpS 1 (by omega)
-        have hvu : D v u := by
-          have h0 := hpD 0 hmpos
-          simpa [hp0, u] using h0
-        have huC : u ∈ C := hCout v hvC u huS hvu
-        rcases (Finset.mem_filter.mp hvC).2 with ⟨d, hd⟩
-        have hd_odd : d % 2 = 1 := by
-          by_contra hnotodd
-          have hdeven : d = 2 * (d / 2) := by omega
-          apply hvnotA
-          refine Finset.mem_filter.mpr ⟨hvC, ⟨d / 2, ?_⟩⟩
-          rwa [← hdeven]
-        have hru : Walk D S (d + 1) r u := walk_append hd (walk_single hvS huS hvu)
-        have huA : u ∈ A := by
-          refine Finset.mem_filter.mpr ⟨huC, ⟨(d + 1) / 2, ?_⟩⟩
-          have hd1 : 2 * ((d + 1) / 2) = d + 1 := by omega
-          rwa [hd1]
-        exact ⟨u, huA, hvu⟩
-      let S' : Finset (Fin n) := S.filter (fun v => v ∉ A ∧ ¬ ∃ a ∈ A, D v a)
-      have hS'S : S' ⊆ S := Finset.filter_subset _ _
-      have hrnotS' : r ∉ S' := by
-        intro hr'
-        exact (Finset.mem_filter.mp hr').2.1 hrA
-      have hS'card : S'.card ≤ k := by
-        have hlt : S'.card < S.card :=
-          Finset.card_lt_card (Finset.ssubset_iff_subset_ne.mpr ⟨hS'S, fun h => hrnotS' (h ▸ hrS)⟩)
-        omega
-      rcases ih S' hS'card with ⟨K', hK'S', hK'indep, hK'abs⟩
-      refine ⟨A ∪ K', Finset.union_subset hAS (Finset.Subset.trans hK'S' hS'S), ?_, ?_⟩
-      · intro u hu v hv huv
-        rcases Finset.mem_union.mp hu with huA | huK'
-        · rcases Finset.mem_union.mp hv with hvA | hvK'
-          · exact hAindep u huA v hvA huv
-          · have hvS' : v ∈ S' := hK'S' hvK'
-            have hvS : v ∈ S := hS'S hvS'
-            have hvC : v ∈ C := hCout u (hAC huA) v hvS huv
-            have hvnotA : v ∉ A := (Finset.mem_filter.mp hvS').2.1
-            have hvnoA : ¬ ∃ a ∈ A, D v a := (Finset.mem_filter.mp hvS').2.2
-            exact hvnoA (hAabsorbC v hvC hvnotA)
-        · rcases Finset.mem_union.mp hv with hvA | hvK'
-          · have huS' : u ∈ S' := hK'S' huK'
-            exact (Finset.mem_filter.mp huS').2.2 ⟨v, hvA, huv⟩
-          · exact hK'indep u huK' v hvK' huv
-      · intro v hvS hvnotK
-        have hvnotA : v ∉ A := fun h => hvnotK (Finset.mem_union_left K' h)
-        have hvnotK' : v ∉ K' := fun h => hvnotK (Finset.mem_union_right A h)
-        by_cases habs : ∃ a ∈ A, D v a
-        · rcases habs with ⟨a, haA, hva⟩
-          exact ⟨a, Finset.mem_union_left K' haA, hva⟩
-        · have hvS' : v ∈ S' := Finset.mem_filter.mpr ⟨hvS, hvnotA, habs⟩
-          rcases hK'abs v hvS' hvnotK' with ⟨a, haK', hva⟩
-          exact ⟨a, Finset.mem_union_right A haK', hva⟩
-    · rw [Finset.not_nonempty_iff_eq_empty] at hne
-      subst hne
-      refine ⟨∅, Finset.Subset.refl _, ?_, ?_⟩
-      · intro u hu; exact absurd hu (Finset.notMem_empty u)
-      · intro v hv; exact absurd hv (Finset.notMem_empty v)
+    ∀ V : Finset (Fin n), ∃ K : Finset (Fin n), K ⊆ V ∧ (∀ u ∈ K, ∀ v ∈ K, ¬ D u v) ∧
+      ∀ v ∈ V, v ∉ K → ∃ k ∈ K, D v k := by
+  intro V
+  induction V using Finset.strongInduction with
+  | H V ih =>
+    by_cases hV : V.Nonempty
+    swap
+    · refine ⟨∅, by simp, by simp, ?_⟩
+      intro v hv
+      exact absurd ⟨v, hv⟩ hV
+    obtain ⟨R, hR⟩ : ∃ R : Fin n → Fin n → Prop, ∀ u w, R u w ↔ (D u w ∧ w ∈ V) :=
+      ⟨_, fun _ _ => Iff.rfl⟩
+    have hodd' : ∀ (k : ℕ) (u : Fin n), ¬ Wk R (2 * k + 1) u u := by
+      intro k u h
+      obtain ⟨c, c0, cm, cs⟩ := wk_fun R _ u u h
+      exact hodd ⟨k, c, by rw [cm, c0], fun i hi => ((hR _ _).mp (cs i hi)).1⟩
+    obtain ⟨r, hrV, hmin⟩ := Finset.exists_min_image V
+      (fun v => (V.filter (fun w => Relation.ReflTransGen R v w)).card) hV
+    obtain ⟨C, hC⟩ : ∃ C : Finset (Fin n), ∀ w, w ∈ C ↔ (w ∈ V ∧ Relation.ReflTransGen R r w) :=
+      ⟨V.filter _, fun w => Finset.mem_filter⟩
+    have hrC : r ∈ C := (hC r).mpr ⟨hrV, Relation.ReflTransGen.refl⟩
+    have c3 : ∀ v ∈ C, Relation.ReflTransGen R v r := by
+      intro v hv
+      obtain ⟨hvV, hrv⟩ := (hC v).mp hv
+      have hsub : V.filter (fun w => Relation.ReflTransGen R v w)
+          ⊆ V.filter (fun w => Relation.ReflTransGen R r w) := by
+        intro w hw
+        rw [Finset.mem_filter] at hw ⊢
+        exact ⟨hw.1, hrv.trans hw.2⟩
+      have heq := Finset.eq_of_subset_of_card_le hsub (hmin v hvV)
+      have hmem : r ∈ V.filter (fun w => Relation.ReflTransGen R r w) :=
+        Finset.mem_filter.mpr ⟨hrV, Relation.ReflTransGen.refl⟩
+      rw [← heq] at hmem
+      exact (Finset.mem_filter.mp hmem).2
+    have c2 : ∀ u ∈ C, ∀ w, D u w → w ∈ V → w ∈ C := by
+      intro u hu w hd hw
+      exact (hC w).mpr ⟨hw, ((hC u).mp hu).2.tail ((hR u w).mpr ⟨hd, hw⟩)⟩
+    obtain ⟨P0, hP0⟩ : ∃ P0 : Finset (Fin n),
+        ∀ w, w ∈ P0 ↔ (w ∈ C ∧ ∃ j, Wk R (2 * j) r w) :=
+      ⟨C.filter _, fun w => Finset.mem_filter⟩
+    have hrP0 : r ∈ P0 := (hP0 r).mpr ⟨hrC, 0, rfl⟩
+    have indepP0 : ∀ u ∈ P0, ∀ v ∈ P0, ¬ D u v := by
+      intro u hu v hv hd
+      obtain ⟨huC, j, hj⟩ := (hP0 u).mp hu
+      obtain ⟨hvC, j', hj'⟩ := (hP0 v).mp hv
+      have hvV := ((hC v).mp hvC).1
+      obtain ⟨b, hb⟩ := wk_of_rtg R (c3 v hvC)
+      have h1 : Wk R (2 * j + 1) r v := wk_snoc R hj ((hR u v).mpr ⟨hd, hvV⟩)
+      rcases Nat.even_or_odd' b with ⟨c, rfl | rfl⟩
+      · have := wk_trans R _ _ r v r h1 hb
+        exact hodd' (j + c) r (by
+          rw [show 2 * (j + c) + 1 = 2 * j + 1 + 2 * c by ring]
+          exact this)
+      · have := wk_trans R _ _ r v r hj' hb
+        exact hodd' (j' + c) r (by
+          rw [show 2 * (j' + c) + 1 = 2 * j' + (2 * c + 1) by ring]
+          exact this)
+    have absC : ∀ v ∈ C, v ∉ P0 → ∃ k ∈ P0, D v k := by
+      intro v hvC hvP
+      obtain ⟨hvV, hrv⟩ := (hC v).mp hvC
+      obtain ⟨m, hm⟩ := wk_of_rtg R hrv
+      obtain ⟨b, hb⟩ := wk_of_rtg R (c3 v hvC)
+      rcases Nat.even_or_odd' m with ⟨j, rfl | rfl⟩
+      · exact absurd ((hP0 v).mpr ⟨hvC, j, hm⟩) hvP
+      · cases b with
+        | zero =>
+          have e : v = r := hb
+          rw [e] at hvP
+          exact absurd hrP0 hvP
+        | succ b' =>
+          obtain ⟨w, hw, _⟩ := hb
+          obtain ⟨hdw, hwV⟩ := (hR v w).mp hw
+          refine ⟨w, (hP0 w).mpr ⟨c2 v hvC w hdw hwV, j + 1, ?_⟩, hdw⟩
+          have := wk_snoc R hm hw
+          rw [show 2 * (j + 1) = 2 * j + 1 + 1 by ring]
+          exact this
+    obtain ⟨V', hV'⟩ : ∃ V' : Finset (Fin n),
+        ∀ w, w ∈ V' ↔ (w ∈ V ∧ ¬ (w ∈ C ∨ ∃ k ∈ P0, D w k)) :=
+      ⟨V.filter _, fun w => Finset.mem_filter⟩
+    have hss : V' ⊂ V := by
+      refine ⟨fun w hw => ((hV' w).mp hw).1, fun h => ?_⟩
+      exact ((hV' r).mp (h hrV)).2 (Or.inl hrC)
+    obtain ⟨K', hK'sub, hK'ind, hK'abs⟩ := ih V' hss
+    refine ⟨P0 ∪ K', ?_, ?_, ?_⟩
+    · intro w hw
+      rcases Finset.mem_union.mp hw with h | h
+      · exact ((hC w).mp ((hP0 w).mp h).1).1
+      · exact ((hV' w).mp (hK'sub h)).1
+    · intro u hu v hv hd
+      rcases Finset.mem_union.mp hu with hu | hu <;> rcases Finset.mem_union.mp hv with hv | hv
+      · exact indepP0 u hu v hv hd
+      · have hvV' := (hV' v).mp (hK'sub hv)
+        exact hvV'.2 (Or.inl (c2 u ((hP0 u).mp hu).1 v hd hvV'.1))
+      · have huV' := (hV' u).mp (hK'sub hu)
+        exact huV'.2 (Or.inr ⟨v, hv, hd⟩)
+      · exact hK'ind u hu v hv hd
+    · intro v hvV hvK
+      rw [Finset.mem_union, not_or] at hvK
+      by_cases h1 : v ∈ C
+      · obtain ⟨k, hk, hd⟩ := absC v h1 hvK.1
+        exact ⟨k, Finset.mem_union_left _ hk, hd⟩
+      · by_cases h2 : ∃ k ∈ P0, D v k
+        · obtain ⟨k, hk, hd⟩ := h2
+          exact ⟨k, Finset.mem_union_left _ hk, hd⟩
+        · have hvV' : v ∈ V' := (hV' v).mpr ⟨hvV, by
+            rintro (h | h)
+            · exact h1 h
+            · exact h2 h⟩
+          obtain ⟨k, hk, hd⟩ := hK'abs v hvV' hvK.2
+          exact ⟨k, Finset.mem_union_right _ hk, hd⟩
 
-theorem main :
-    ∀ (n : ℕ) (D : Fin n → Fin n → Prop),
-      (∀ v, ¬ D v v) → (∀ u v, D u v → ¬ D v u) →
-      (¬ ∃ (k : ℕ) (c : ℕ → Fin n), c (2 * k + 1) = c 0 ∧ ∀ i, i < 2 * k + 1 → D (c i) (c (i + 1))) →
-      ∃ K : Set (Fin n), (∀ u ∈ K, ∀ v ∈ K, ¬ D u v) ∧ ∀ v, v ∉ K → ∃ k ∈ K, D v k := by
+end PEqualNP.Outside.L_meta_729
+
+theorem PEqualNP.Outside.L_meta_729 : ∀ (n : ℕ) (D : Fin n → Fin n → Prop),
+  (∀ v, ¬ D v v) → (∀ u v, D u v → ¬ D v u) →
+  (¬ ∃ (k : ℕ) (c : ℕ → Fin n), c (2 * k + 1) = c 0 ∧ ∀ i, i < 2 * k + 1 → D (c i) (c (i + 1))) →
+  ∃ K : Set (Fin n), (∀ u ∈ K, ∀ v ∈ K, ¬ D u v) ∧ ∀ v, v ∉ K → ∃ k ∈ K, D v k := by
   intro n D _ _ hodd
-  rcases exists_kernel_finset D hodd (Finset.univ : Finset (Fin n)).card Finset.univ (le_refl _) with
-    ⟨K, _, hind, habs⟩
+  obtain ⟨K, _, hind, habs⟩ := PEqualNP.Outside.L_meta_729.kernel D hodd Finset.univ
   refine ⟨(K : Set (Fin n)), ?_, ?_⟩
   · intro u hu v hv
-    exact hind u hu v hv
+    exact hind u (Finset.mem_coe.mp hu) v (Finset.mem_coe.mp hv)
   · intro v hv
-    rcases habs v (Finset.mem_univ v) hv with ⟨a, ha, hva⟩
-    exact ⟨a, ha, hva⟩
-
-end PEqualNP.Outside.L_meta_729_aux
-
-theorem PEqualNP.Outside.L_meta_729 :
-    ∀ (n : ℕ) (D : Fin n → Fin n → Prop),
-      (∀ v, ¬ D v v) → (∀ u v, D u v → ¬ D v u) →
-      (¬ ∃ (k : ℕ) (c : ℕ → Fin n), c (2 * k + 1) = c 0 ∧ ∀ i, i < 2 * k + 1 → D (c i) (c (i + 1))) →
-      ∃ K : Set (Fin n), (∀ u ∈ K, ∀ v ∈ K, ¬ D u v) ∧ ∀ v, v ∉ K → ∃ k ∈ K, D v k :=
-  PEqualNP.Outside.L_meta_729_aux.main
+    obtain ⟨k, hk, hd⟩ := habs v (Finset.mem_univ v) (fun h => hv (Finset.mem_coe.mpr h))
+    exact ⟨k, Finset.mem_coe.mpr hk, hd⟩
