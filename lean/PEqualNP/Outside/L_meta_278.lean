@@ -1,7 +1,7 @@
 import Mathlib
 import PEqualNP.Defs
 
-namespace PEqualNP.Outside.L278
+namespace PEqualNP.Outside.L_meta_278
 
 open PEqualNP.CircuitLowerBounds
 
@@ -335,16 +335,16 @@ theorem inv (C : Circuit) (n : ℕ)
       intro t' ht'
       exact ⟨by have := (hD t' ht').1; omega, (hD t' ht').2⟩
 
-end PEqualNP.Outside.L278
+end PEqualNP.Outside.L_meta_278
 
 theorem PEqualNP.Outside.L_meta_278 : ∀ (n k c o : ℕ) (S : Finset (Fin n)) (C : PEqualNP.CircuitLowerBounds.Circuit), (∀ g ∈ C.gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length = 2) → (∀ p : Fin n, (C.wires (List.ofFn (fun q : Fin n => decide (q = p)))).getD o false = true ↔ p ∈ S) → (∀ x : Fin n → Bool, (Finset.univ.filter (fun q : Fin n => x q = true)).card ≤ k → (∀ q ∈ S, x q = false) → (C.wires (List.ofFn x)).getD o false = false) → c ≤ k → c + 1 ≤ S.card → c ≤ ((Finset.range C.size).filter (fun j => (Finset.univ.filter (fun p : Fin n => (C.wires (List.ofFn (fun q : Fin n => decide (q = p)))).getD (n + j) false = true)) ⊆ S ∧ 2 ≤ (Finset.univ.filter (fun p : Fin n => (C.wires (List.ofFn (fun q : Fin n => decide (q = p)))).getD (n + j) false = true)).card)).card := by
   intro n k c o S C hg hL hK hck hcS
   classical
   obtain ⟨D, A, B, hD, hA, hc, hp⟩ :=
-    PEqualNP.Outside.L278.inv C n hg S (o + 1) {o} (by simp)
+    PEqualNP.Outside.L_meta_278.inv C n hg S (o + 1) {o} (by simp)
   have hDP : D ⊆ (Finset.range C.gates.length).filter (fun t =>
-      PEqualNP.Outside.L278.Ls C n (n + t) ⊆ S ∧
-        2 ≤ (PEqualNP.Outside.L278.Ls C n (n + t)).card) := by
+      PEqualNP.Outside.L_meta_278.Ls C n (n + t) ⊆ S ∧
+        2 ≤ (PEqualNP.Outside.L_meta_278.Ls C n (n + t)).card) := by
     intro t ht
     rw [Finset.mem_filter, Finset.mem_range]
     exact ⟨(hD t ht).2.1, (hD t ht).2.2⟩
@@ -352,15 +352,15 @@ theorem PEqualNP.Outside.L_meta_278 : ∀ (n k c o : ℕ) (S : Finset (Fin n)) (
     rw [Finset.card_singleton] at hc
     by_cases hAk : A.card ≤ k
     · have hfilt : Finset.univ.filter (fun q : Fin n =>
-          PEqualNP.Outside.L278.ind n A q = true) = A := by
+          PEqualNP.Outside.L_meta_278.ind n A q = true) = A := by
         ext q
-        simp [PEqualNP.Outside.L278.ind]
-      have hfalse : PEqualNP.Outside.L278.Wv C n (PEqualNP.Outside.L278.ind n A) o = false := by
-        apply hK (PEqualNP.Outside.L278.ind n A)
+        simp [PEqualNP.Outside.L_meta_278.ind]
+      have hfalse : PEqualNP.Outside.L_meta_278.Wv C n (PEqualNP.Outside.L_meta_278.ind n A) o = false := by
+        apply hK (PEqualNP.Outside.L_meta_278.ind n A)
         · rw [hfilt]
           exact hAk
         · intro q hq
-          simp only [PEqualNP.Outside.L278.ind, decide_eq_false_iff_not]
+          simp only [PEqualNP.Outside.L_meta_278.ind, decide_eq_false_iff_not]
           exact fun h => hA q h hq
       have hSB : S ⊆ B := by
         intro p hpS
