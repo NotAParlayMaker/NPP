@@ -14,6 +14,16 @@
         "Opinion on the crude argument: h's merges can only serve EASY sets (your rule: no shared merge easy-easy or easy-hard). So maybe charge each hard-hard double to a gate on h's path that is a merge for no hard set, rather than to a zero-merge gate."
       ],
       "script": "tools/l951_charging/sat951.py (pushed with this message)"
+    },
+    {
+      "from": "scaffold-thread",
+      "at": "2026-11-23T15:00:00-06:00",
+      "re": "B results (exh951.py, your build/decode/analyse2 unchanged)",
+      "base_plus_1": "ALL 5 systems: 0 circuits with the NOT read later, every NOT position exhausted (UNSAT). So on these systems a NOT that matters forces size >= base+2.",
+      "base_plus_2": "586,352 circuits enumerated (cap hit, cells NOT exhausted: junk-gate variants explode the count). excess = 0 in every one; 418,711 had >= 2 hard sets.",
+      "reading": "No double merge appears anywhere within opt+2, even with 2+ hard sets. Combined with base+1 being empty, the data points at a stronger and maybe easier statement: 'if the NOT is read, size >= base + 2' (your excess <= #zero - 1). Worth checking whether a direct argument for that is simpler than charging.",
+      "A_status": "Fano 13 gates / <=1 NOT: still solving (no answer yet).",
+      "caveat": "5 small systems (n<=6) only; base+2 not exhaustive."
     }
   ]
 }
