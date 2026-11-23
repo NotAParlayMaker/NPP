@@ -40,3 +40,74 @@ jobs:
           lake env lean --version
       - name: Report readiness
         run: echo 'Pinned Lean and Mathlib are ready; project definitions built successfully.' >> "$GITHUB_STEP_SUMMARY"
+
+  desk:
+    needs: bootstrap
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Claim one task
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, re, urllib.request
+          with urllib.request.urlopen('https://pequalnp.com/desk/next?handle=OrazioNicolosi', timeout=40) as r:
+              d = json.load(r)
+          g = d.get('gap')
+          if not g:
+              print(json.dumps(d)); raise SystemExit(0)
+          assert re.fullmatch(r'L-[a-z0-9]+(?:-[a-z0-9]+)*', g['id'])
+          p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pnp-lease.json'
+          p.write_text(json.dumps(d)); p.chmod(0o600)
+          print('::add-mask::' + d['lease']['id'])
+          print(json.dumps(g, ensure_ascii=False, indent=2))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write('Task: ' + g['id'] + '\n\n' + json.dumps(g, ensure_ascii=False, indent=2))
+          PY
+      - name: Keep the task active until submission
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -u - <<'PY'
+          import json, os, pathlib, time, urllib.parse, urllib.request, urllib.error
+          p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pnp-lease.json'
+          if not p.exists(): raise SystemExit(0)
+          d = json.loads(p.read_text())
+          lease = d['lease']['id']; gid = d['gap']['id']
+          for minute in range(50):
+              if minute % 5 == 0:
+                  url = 'https://pequalnp.com/desk/beat?' + urllib.parse.urlencode({'lease': lease})
+                  try:
+                      with urllib.request.urlopen(urllib.request.Request(url, method='POST'), timeout=30) as r:
+                          json.load(r)
+                      print('Lease renewed for', gid, flush=True)
+                  except urllib.error.HTTPError as e:
+                      if e.code == 410:
+                          p.unlink(); print('Task withdrawn or settled.'); raise SystemExit(0)
+                      raise
+              query = urllib.parse.urlencode({'head': 'OrazioNicolosi:' + gid, 'state': 'open'})
+              req = urllib.request.Request('https://api.github.com/repos/brilliant-hq/pequalnp-proofs/pulls?' + query,
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json'})
+              with urllib.request.urlopen(req, timeout=30) as r: prs = json.load(r)
+              if prs:
+                  d['release_reason'] = 'submitted'; p.write_text(json.dumps(d))
+                  print('Submission detected:', prs[0]['html_url']); break
+              time.sleep(60)
+          PY
+      - name: Release the task
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, urllib.parse, urllib.request, urllib.error
+          p = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pnp-lease.json'
+          if not p.exists(): raise SystemExit(0)
+          d = json.loads(p.read_text())
+          reason = d.get('release_reason', 'out_of_time')
+          url = 'https://pequalnp.com/desk/release?' + urllib.parse.urlencode({'lease': d['lease']['id'], 'reason': reason})
+          try:
+              with urllib.request.urlopen(urllib.request.Request(url, method='POST'), timeout=30) as r:
+                  r.read()
+              print('Task released:', reason)
+          except urllib.error.HTTPError as e:
+              if e.code != 410: raise
+              print('Task was already closed.')
+          PY
