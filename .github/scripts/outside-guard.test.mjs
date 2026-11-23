@@ -184,3 +184,7 @@ ownRefused('variable at the top level', `variable {n : ℕ}\n${t9}`, 'line 4: a 
 ownRefused('no theorem with the full name', `namespace ${M}\ntheorem x : True := trivial\nend ${M}\n`, 'the theorem must stand at the top level');
 ownRefused('a theorem of another step', `theorem PEqualNP.Outside.L_meta_99 : True := trivial\n`, 'line 4: a declaration');
 ownRefused('a file name ending in _aux', `theorem PEqualNP.Outside.L_meta_9_aux : True := trivial\n`, 'may not end in _aux', 'PEqualNP.Outside.L_meta_9_aux');
+
+// The add_ rule's sentence names the way round for an honest proof line.
+refused('a proof line that begins with a lemma named add_...', `theorem PEqualNP.Outside.L_x_1 : True := by\n  exact\n    add_or_out\n`, 'may not BEGIN with a name that starts with add_');
+refused('an add_ command still refused', `add_decl_doc Nat.succ\n${thm}`, '"add_decl_doc" is not allowed');

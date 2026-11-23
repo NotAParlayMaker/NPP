@@ -136,7 +136,10 @@ export function checkPlain(text) {
   text.split('\n').forEach((raw, k) => {
     const line = raw.replace(/\r$/, '');
     const m = FORBIDDEN.exec(line.replace(LIMIT, '').replace(/@\[(local )?simp\]/gu, ''));
-    if (m) refuse(`line ${k + 1}: "${m[0].trim()}" is not allowed in a proof file, in code or in a comment (no code that runs at build time, no new syntax, no string literals, no attributes but simp, no options but the four limits)`);
+    // A line that BEGINS with a name starting add_ reads like one of the library's add_ commands.
+    // An honest proof line can begin with such a lemma name: the sentence says the way round.
+    const hint = m && /^add_/.test(m[0].trim()) ? '; a line may not BEGIN with a name that starts with add_ (the library\'s commands do): if this is a lemma of yours used in a proof, put it after other text on the line or rename it' : '';
+    if (m) refuse(`line ${k + 1}: "${m[0].trim()}" is not allowed in a proof file, in code or in a comment (no code that runs at build time, no new syntax, no string literals, no attributes but simp, no options but the four limits)${hint}`);
     if (/^\s*(@\[(local )?simp\] )?((private|protected) )?theorem /u.test(line)) theorems += 1;
   });
   if (theorems === 0) refuse('the file holds no theorem');
