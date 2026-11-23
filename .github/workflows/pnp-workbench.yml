@@ -1,0 +1,42 @@
+name: PNP workbench
+on:
+  push:
+    branches: [pnp-workbench]
+    paths: [.github/workflows/pnp-workbench.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pnp-workbench
+  cancel-in-progress: false
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.elan
+            lean/.lake
+          key: pnp-linux-lean4360-${{ hashFiles('lean/lake-manifest.json') }}
+      - name: Install the pinned Lean toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -x "$HOME/.elan/bin/elan" ]; then
+            curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          fi
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+          "$HOME/.elan/bin/elan" toolchain install "$(cat lean/lean-toolchain)"
+      - name: Fetch Mathlib and check the project definitions
+        working-directory: lean
+        run: |
+          lake exe cache get
+          lake build PEqualNP.Defs
+          lake env lean --version
+      - name: Report readiness
+        run: echo 'Pinned Lean and Mathlib are ready; project definitions built successfully.' >> "$GITHUB_STEP_SUMMARY"
