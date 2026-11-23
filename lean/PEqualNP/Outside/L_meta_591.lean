@@ -1,109 +1,91 @@
 import Mathlib
 import PEqualNP.Defs
 
-namespace PEqualNP.Outside.Identification591
+namespace PEqualNP.Outside.L_meta_591_aux
 
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
+open PEqualNP.CircuitLowerBounds
 
-theorem getD_snoc_eq {α : Type} (L : List α) (S d : α) : (L ++ [S]).getD L.length d = S := by
-  simp
+def sw (u v : ℕ) (i : ℕ) : ℕ := if i = u then v else i
 
-def wmap (n m : ℕ) (π : Fin n → Fin m) (w : ℕ) : ℕ :=
-  if h : w < n then (π ⟨w, h⟩ : ℕ) else w - n + m
+def reGate (u v : ℕ) (g : Gate) : Gate := ⟨g.op, g.inputs.map (sw u v)⟩
 
-def relGate (n m : ℕ) (π : Fin n → Fin m) (g : Gate) : Gate :=
-  ⟨g.op, g.inputs.map (wmap n m π)⟩
+theorem step (u v : ℕ) (b : Bool) (w w' : List Bool) (hlen : w.length = w'.length)
+    (hu : u < w.length) (hv : v < w.length)
+    (h : ∀ i, w.getD i false = w'.getD (sw u v i) false) :
+    ∀ i, (w ++ [b]).getD i false = (w' ++ [b]).getD (sw u v i) false := by
+  intro i
+  have hi := h i
+  simp only [List.getD_eq_getElem?_getD] at hi ⊢
+  by_cases hiu : i = u
+  · have hs : sw u v i = v := by simp [sw, hiu]
+    rw [hs] at hi ⊢
+    rw [List.getElem?_append_left (by omega), List.getElem?_append_left (by omega)]
+    exact hi
+  · have hs : sw u v i = i := by simp [sw, hiu]
+    rw [hs] at hi ⊢
+    rcases lt_trichotomy i w.length with hlt | heq | hgt
+    · rw [List.getElem?_append_left hlt, List.getElem?_append_left (by omega)]
+      exact hi
+    · subst heq
+      rw [List.getElem?_append_right (le_refl _), List.getElem?_append_right (by omega)]
+      simp [hlen]
+    · rw [List.getElem?_eq_none (by simp; omega), List.getElem?_eq_none (by simp; omega)]
 
-def relabel (n m : ℕ) (π : Fin n → Fin m) (C : Circuit) : Circuit :=
-  ⟨C.gates.map (relGate n m π), wmap n m π C.output⟩
-
-def step (w : List Bool) (g : Gate) : List Bool :=
-  w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
-
-def Rel (n m : ℕ) (π : Fin n → Fin m) (W W' : List Bool) : Prop :=
-  n ≤ W.length ∧ W'.length + n = W.length + m ∧
-    ∀ w : ℕ, W'.getD (wmap n m π w) false = W.getD w false
-
-theorem rel_step (n m : ℕ) (π : Fin n → Fin m) (W W' : List Bool) (g : Gate)
-    (h : Rel n m π W W') : Rel n m π (step W g) (step W' (relGate n m π g)) := by
-  obtain ⟨h1, h2, h3⟩ := h
-  have hv : (relGate n m π g).op.eval
-      ((relGate n m π g).inputs.map fun i => W'.getD i false)
-      = g.op.eval (g.inputs.map fun i => W.getD i false) := by
-    simp only [relGate, List.map_map]
-    congr 1
-    apply List.map_congr_left
-    intro a _
-    exact h3 a
-  refine ⟨by simp [step]; omega, by simp [step]; omega, ?_⟩
-  intro w
-  simp only [step, hv]
-  rcases Nat.lt_trichotomy w W.length with hw | hw | hw
-  · have hlt : wmap n m π w < W'.length := by
-      unfold wmap
-      split
-      · have := (π ⟨w, by assumption⟩).2; omega
-      · omega
-    rw [List.getD_append _ _ _ _ hlt, List.getD_append _ _ _ _ hw]
-    exact h3 w
-  · have he : wmap n m π w = W'.length := by
-      unfold wmap
-      split
-      · omega
-      · omega
-    rw [he, hw, getD_snoc_eq, getD_snoc_eq]
-  · have hge : W'.length + 1 ≤ wmap n m π w := by
-      unfold wmap
-      split
-      · omega
-      · omega
-    rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega)]
-
-theorem rel_fold (n m : ℕ) (π : Fin n → Fin m) (gs : List Gate) :
-    ∀ W W' : List Bool, Rel n m π W W' →
-      Rel n m π (gs.foldl step W) ((gs.map (relGate n m π)).foldl step W') := by
+theorem fold (u v : ℕ) (gs : List Gate) :
+    ∀ (w w' : List Bool), w.length = w'.length → u < w.length → v < w.length →
+      (∀ i, w.getD i false = w'.getD (sw u v i) false) →
+      ∀ i, (gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
+          w).getD i false =
+        ((gs.map (reGate u v)).foldl
+          (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w').getD
+          (sw u v i) false := by
   induction gs with
-  | nil => intro W W' h; exact h
+  | nil => intro w w' _ _ _ h; simpa using h
   | cons g gs ih =>
-    intro W W' h
-    exact ih _ _ (rel_step n m π W W' g h)
+    intro w w' hlen hu hv h
+    simp only [List.map_cons, List.foldl_cons]
+    have hb : (reGate u v g).op.eval ((reGate u v g).inputs.map fun i => w'.getD i false) =
+        g.op.eval (g.inputs.map fun i => w.getD i false) := by
+      simp only [reGate, List.map_map]
+      congr 1
+      apply List.map_congr_left
+      intro i _
+      exact (h i).symm
+    rw [hb]
+    apply ih
+    · simp [hlen]
+    · simp; omega
+    · simp; omega
+    · exact step u v _ w w' hlen hu hv h
 
-theorem rel_init (n m : ℕ) (π : Fin n → Fin m) (x : Fin m → Bool) :
-    Rel n m π (List.ofFn (x ∘ π)) (List.ofFn x) := by
-  refine ⟨by simp, by simp; omega, ?_⟩
-  intro w
-  unfold wmap
-  split
-  · rename_i hw
-    rw [List.getD_eq_getElem _ _ (by simp), List.getD_eq_getElem _ _ (by simpa using hw)]
-    simp
-  · rename_i hw
-    rw [List.getD_eq_default _ _ (by simp), List.getD_eq_default _ _ (by simp; omega)]
-
-theorem relabel_size {n m : ℕ} (π : Fin n → Fin m) (h : (Fin n → Bool) → Bool) (s : ℕ)
-    (hc : HasCircuitSize n h s) : HasCircuitSize m (fun x => h (x ∘ π)) s := by
-  obtain ⟨C, ok, hsz, hev⟩ := hc
-  refine ⟨relabel n m π C, ?_, ?_, ?_⟩
-  · intro g hg
-    obtain ⟨g0, hg0, rfl⟩ := List.mem_map.1 hg
-    exact ⟨(ok g0 hg0).1, by simpa [relGate] using (ok g0 hg0).2⟩
-  · simpa [relabel, Circuit.size] using hsz
-  · intro x
-    show _ = h (x ∘ π)
-    rw [← hev (x ∘ π)]
-    have := (rel_fold n m π C.gates _ _ (rel_init n m π x)).2.2 C.output
-    exact this
-
-
-end PEqualNP.Outside.Identification591
+end PEqualNP.Outside.L_meta_591_aux
 
 theorem PEqualNP.Outside.L_meta_591 : ∀ (n s : ℕ) (F : (Fin n → Bool) → Bool) (u v : Fin n), PEqualNP.MetaComplexity.HasCircuitSize n F s → PEqualNP.MetaComplexity.HasCircuitSize n (fun x : Fin n → Bool => F (Function.update x u (x v))) s := by
-  intro n s F u v hc
-  let π : Fin n → Fin n := fun k => if k = u then v else k
-  have equiv (x : Fin n → Bool) : x ∘ π = Function.update x u (x v) := by
-    funext k
-    by_cases h : k = u
-    · subst k
-      simp [π]
-    · simp [π, h, Function.update_of_ne]
-  simpa only [equiv] using PEqualNP.Outside.Identification591.relabel_size π F s hc
+  intro n s F u v h
+  obtain ⟨C, hfan, hsize, heval⟩ := h
+  refine ⟨⟨C.gates.map (PEqualNP.Outside.L_meta_591_aux.reGate u v),
+    PEqualNP.Outside.L_meta_591_aux.sw u v C.output⟩, ?_, ?_, ?_⟩
+  · intro g hg
+    simp only [List.mem_map] at hg
+    obtain ⟨g0, hg0, rfl⟩ := hg
+    have := hfan g0 hg0
+    simpa [PEqualNP.Outside.L_meta_591_aux.reGate] using this
+  · simpa [PEqualNP.CircuitLowerBounds.Circuit.size] using hsize
+  · intro x
+    show _ = F (Function.update x u (x v))
+    rw [← heval (Function.update x u (x v))]
+    simp only [PEqualNP.CircuitLowerBounds.Circuit.eval, PEqualNP.CircuitLowerBounds.Circuit.wires]
+    symm
+    apply PEqualNP.Outside.L_meta_591_aux.fold
+    · simp
+    · simp
+    · simp
+    · intro i
+      simp only [List.getD_eq_getElem?_getD, PEqualNP.Outside.L_meta_591_aux.sw]
+      by_cases hiu : i = (u : ℕ)
+      · subst hiu
+        simp
+      · simp only [hiu, ite_false]
+        by_cases hin : i < n
+        · simp [hin, Function.update, Fin.ext_iff, hiu]
+        · simp [hin]
