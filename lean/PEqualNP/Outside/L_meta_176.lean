@@ -121,8 +121,8 @@ theorem mapG_id_map (l : List Gate) : l.map (mapG id) = l := by
   | cons g l ih => rw [List.map_cons, ih]; cases g; simp [mapG]
 
 /-- Removing one gate whose value is a copy of an earlier wire (on every input whose last bit
-is `false`), or that no later gate reads and is not the output, and setting the last input to
-`false`. -/
+  is `false`), or that no later gate reads and is not the output, and setting the last input to
+  `false`. -/
 theorem drop (m : ℕ) (l1 l2 : List Gate) (G : Gate) (out q : ℕ) (E : Set ℕ)
     (hq : q < m + 1 + l1.length)
     (hEsub : ∀ i ∈ E, i = m + 1 + l1.length)
@@ -291,7 +291,7 @@ theorem fwd_eval (n : ℕ) (C : Circuit) (y : List Bool) (hy : y.length = n) (a 
 
 
 /-- Contraction can be undone at the cost of one gate: a circuit of size `s + 1` for the
-contracted function gives a circuit of size `s` for `g`. -/
+  contracted function gives a circuit of size `s` for `g`. -/
 theorem conv (n s : ℕ) (g : (Fin (n + 1) → Bool) → Bool)
     (hdep : ∃ y : Fin n → Bool, g (Fin.snoc y false) ≠ g (Fin.snoc y true))
     (C : Circuit) (hfan : PEqualNP.MetaComplexity.FanInTwo C) (hsize : C.size ≤ s + 1)
