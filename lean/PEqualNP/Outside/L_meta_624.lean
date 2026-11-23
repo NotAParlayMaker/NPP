@@ -199,11 +199,9 @@ private lemma circuit_correct (x : Fin 14 → Bool) :
 
 end PEqualNP.Outside.L_meta_624
 
-namespace PEqualNP.Outside
+open PEqualNP.Outside.L_meta_624
 
-open L_meta_624
-
-theorem L_meta_624 : ¬ (∀ (n : ℕ) (G : SimpleGraph (Fin n))
+theorem PEqualNP.Outside.L_meta_624 : ¬ (∀ (n : ℕ) (G : SimpleGraph (Fin n))
     (C : PEqualNP.CircuitLowerBounds.Circuit) (A B : Finset ℕ),
     (∀ a b c e : Fin n, G.Adj a b → G.Adj b c → G.Adj c e → G.Adj e a →
       a = c ∨ b = e) →
@@ -224,5 +222,3 @@ theorem L_meta_624 : ¬ (∀ (n : ℕ) (G : SimpleGraph (Fin n))
     circuit_correct cover_and cover_or
   rw [fano_edges] at hbound
   exact (by decide : ¬ (21 ≤ andSet.card + orSet.card)) hbound
-
-end PEqualNP.Outside
