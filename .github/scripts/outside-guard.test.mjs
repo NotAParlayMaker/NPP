@@ -45,10 +45,10 @@ refused('_root_', by('exact _root_.id trivial'), '_root_');
 refused('include_str', by('exact include_str x'), 'include_str');
 refused('polyrith', by('polyrith'), 'polyrith');
 refused('a string literal', `private def s : String := "x"\n${thm}`, '"');
-refused('a character-literal trick', `${thm}  -- '"'\n`, '"');
+refused('a character-literal trick', `${thm}  -- '"'\n`, 'a comment');
 refused('a quoted identifier', `private def «a» : Nat := 1\n${thm}`, '«');
-refused('code hidden behind a comment trick', `-- a note /- here\n  initialize pure ()\n-- done -/\n${thm}`, 'initialize');
-refused('a command after a comment on one line', `/- note -/ initialize pure ()\n${thm}`, 'initialize');
+refused('code hidden behind a comment trick', `-- a note /- here\n  initialize pure ()\n-- done -/\n${thm}`, 'a comment');
+refused('a command after a comment on one line', `/- note -/ initialize pure ()\n${thm}`, 'a comment');
 refused('a syntax quotation', by('exact \x60(tactic| trivial)'), '(tactic|');
 refused('#check', `#check Nat\n${thm}`, '#check');
 refused('#print axioms, indented', `${thm}  #print axioms Nat.add_comm\n`, '#print');
@@ -61,15 +61,15 @@ refused('proof_wanted', `proof_wanted foo : True\n${thm}`, 'proof_wanted');
 refused('an attribute that takes a target name', `@[to_additive Foo.bar] theorem t : True := trivial\n${thm}`, '@[');
 
 passes('one theorem', thm);
-passes('helpers, definitions, namespaces, a docstring', `namespace PEqualNP.Outside.L_x_1\nopen Finset\nvariable {n : ℕ}\n/-- A doc comment. -/\nprivate def f (x : ℕ) : ℕ := x\nprivate lemma l : f 1 = 1 := rfl\nend PEqualNP.Outside.L_x_1\n\n${thm}`);
-passes('a block comment with indented prose', `/-\n  The idea of the proof,\n  in two lines.\n-/\n${thm}`);
+passes('helpers, definitions, namespaces', `namespace PEqualNP.Outside.L_x_1\nopen Finset\nvariable {n : ℕ}\nprivate def f (x : ℕ) : ℕ := x\nprivate lemma l : f 1 = 1 := rfl\nend PEqualNP.Outside.L_x_1\n\n${thm}`);
+refused('a block comment with indented prose', `/-\n  The idea of the proof,\n  in two lines.\n-/\n${thm}`, 'a comment');
 passes('the simp attributes', `namespace PEqualNP.Outside.L_x_1\n@[simp] private theorem a : True := trivial\n@[local simp] private theorem b : True := trivial\nend PEqualNP.Outside.L_x_1\n${thm}`);
 passes('the four limit options', `set_option maxHeartbeats 400000 in\nset_option maxRecDepth 2000 in\n${thm}`);
 passes('an indented limit option inside a proof', by('set_option maxRecDepth 2000 in\n  trivial'));
-passes('comment prose at column 0 and a heading (form is not judged)', `/-!\n# A heading\n\nProse that starts in column 0,\nover two lines.\n-/\n${thm}`);
+refused('a module doc comment with prose at column 0', `/-!\n# A heading\n\nProse that starts in column 0,\nover two lines.\n-/\n${thm}`, 'a comment');
 passes('a small enumerated type and an instance', `namespace PEqualNP.Outside.L_x_1\nprivate inductive Stack | input | output\n  deriving DecidableEq\n\nprivate instance : Inhabited Stack := ⟨.input⟩\nend PEqualNP.Outside.L_x_1\n${thm}`);
 passes('open scoped, and a cardinality written with a hash', `open scoped BigOperators\ntheorem PEqualNP.Outside.L_x_1 (s : Finset ℕ) : #s = #s := rfl\n`);
-passes('a pair in backticks inside a doc comment', '/-- The coordinates \x60(a, b, c, d)\x60 of the block. -/\n' + thm);
+refused('a doc comment', '/-- The coordinates \x60(a, b, c, d)\x60 of the block. -/\n' + thm, 'a comment');
 passes('lemma names that contain add_', by('simp only [Nat.add_comm, add_zero]'));
 
 // The closure rule: which listed modules the base step may build, and which are outside-written
@@ -188,3 +188,26 @@ ownRefused('a file name ending in _aux', `theorem PEqualNP.Outside.L_meta_9_aux 
 // The add_ rule's sentence names the way round for an honest proof line.
 refused('a proof line that begins with a lemma named add_...', `theorem PEqualNP.Outside.L_x_1 : True := by\n  exact\n    add_or_out\n`, 'may not BEGIN with a name that starts with add_');
 refused('an add_ command still refused', `add_decl_doc Nat.succ\n${thm}`, '"add_decl_doc" is not allowed');
+
+// No comments and no carriage returns (a founder's law on what outsiders type): each form is
+// refused before any build, with one fixed sentence that holds no text of the file.
+import { checkNoProse, NO_PROSE } from './outside-guard.mjs';
+refused('a line comment after code', `${by('trivial -- done')}`, 'a comment');
+refused('a line comment on its own line', `-- a note\n${thm}`, 'a comment');
+refused('a comment closer alone', `-/\n${thm}`, 'a comment');
+refused('a nested block comment', `/- a /- b -/ c -/\n${thm}`, 'a comment');
+refused('a doc comment on a helper inside the namespace', `namespace PEqualNP.Outside.L_x_1\n/-- words -/\ndef f : ℕ := 1\nend PEqualNP.Outside.L_x_1\n${thm}`, 'a comment');
+refused('Windows line endings', `${thm}`.replace(/\n/g, '\r\n'), 'a carriage return');
+refused('one carriage return inside a line', `theorem PEqualNP.Outside.L_x_1 : True :=\r trivial\n`, 'control characters');
+test('the no-prose refusal names a line and the fixed sentence, and no text of the file', () => {
+  assert.throws(() => checkNoProse('def secret_words_here := 1 -- please read me\n'), (e) => e.message === `REFUSED: line 1: a comment; ${NO_PROSE}` || e.message === `line 1: a comment; ${NO_PROSE}`);
+});
+passes('subtraction of a negative with a space is not a comment', by('have h : (1 : ℤ) - -1 = 2 := by norm_num\n  trivial'));
+// The no-comments rule is for the judged file. A module already merged that a judged file lists
+// may still carry comments (it is held to every other rule), or no closing file over the older
+// modules could be judged.
+test('closure: a listed outside module that carries a comment still passes', () => {
+  const withComment = `import Mathlib\n\n/-- An older file with a doc comment. -/\ntheorem PEqualNP.Outside.L_x_2 : True := trivial -- note\n`;
+  assert.deepEqual(closure(['PEqualNP.Outside.L_x_2'], { 'PEqualNP.Outside.L_x_2': withComment }).outside, ['PEqualNP.Outside.L_x_2']);
+});
+closureRefused('a listed outside module with a comment AND code that runs is still refused', ['PEqualNP.Outside.L_x_2'], { 'PEqualNP.Outside.L_x_2': `import Mathlib\n-- note\ninitialize pure ()\n${thm}` }, 'initialize');

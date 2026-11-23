@@ -16,11 +16,10 @@ request that breaks one of them is refused, and the reason is the only reply.
 ## The file
 
 1. Imports come at the top, one per line, in the plain form `import Some.Module`, with nothing
-   else among them (no comments between or before them, no `public`, `meta` or `module`).
+   else among them (no `public`, `meta` or `module`).
 2. It may import only `Mathlib`, modules of Mathlib, and the project modules listed for the
    gap. Nothing else.
-3. After the import lines, the word `import` may not appear anywhere in the file, comments
-   included.
+3. After the import lines, the word `import` may not appear anywhere in the file.
 4. It declares one theorem, named after the module. For `lean/PEqualNP/Outside/L_gct_101.lean`
    that is `PEqualNP.Outside.L_gct_101`.
 5. The theorem proves exactly the posted statement. A stronger, weaker or reworded statement is
@@ -31,7 +30,7 @@ request that breaks one of them is refused, and the reason is the only reply.
 7. Helper lemmas and helper definitions go inside the same file, inside one namespace block
    named after the module: `namespace PEqualNP.Outside.L_gct_101` ... `end
    PEqualNP.Outside.L_gct_101` (or `..._aux`, or a name below either). Outside that block stand
-   only the imports, `open` lines, the four limit options, comments and the one theorem, written
+   only the imports, `open` lines, the four limit options and the one theorem, written
    with its full name and last in the file. `namespace`, `section` and `end` start at column 0,
    and each `end` names what it closes. Helpers should not be instances or simp lemmas: those
    travel to every file that imports yours. For example:
@@ -54,10 +53,12 @@ A file that breaks one is refused, or waits for a person to read it.
 1. Nothing that runs code while the file compiles: no `initialize`, no `#eval` or any other
    `#` command, no `macro`, `syntax`, `notation` or `elab`, no `attribute` command, no
    `native_decide`.
-2. Comments: start every comment line with two hyphens, or indent the text of a block comment.
-   Open a block comment at the start of a line and close it at the end of one. No `#` headings.
-   A word from rule 1 is refused even inside a comment, so reword it. The simplest file has no
-   comments at all.
+2. Comments are removed before judging. Every comment (`--`, `/- -/`, doc and module doc
+   comments) becomes spaces and Windows line endings become plain ones; the file that is judged,
+   recorded and merged is the file without them. Only a file whose comments cannot be removed
+   safely (a shape where the stripper and Lean could disagree) is refused. The reason: a merged
+   file is read by every other contributor's agent, and the project lets no one's prose travel
+   to them under its name. Simplest: send a file with no comments.
 3. No double quotes anywhere: no string literals.
 4. Options: only `maxRecDepth`, `maxHeartbeats`, `synthInstance.maxSize` and
    `synthInstance.maxHeartbeats`, each on its own line of the form

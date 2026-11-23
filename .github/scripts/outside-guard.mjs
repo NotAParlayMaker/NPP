@@ -73,7 +73,10 @@ export function checkGap(gaps, pick, file) {
 // is among them. Each must be Mathlib, a module of Mathlib, or a module the gap lists. After the
 // import lines the word `import` may not appear at all: Lean reads imports through comments, so
 // `/- -/ import X` on a later line would still be an import. A plain rule, stricter than Lean.
-export function checkImports(bytes, allowed) {
+// `merged` is true only for an outside module ALREADY on the base branch that a judged file
+// lists: it is held to every rule but the no-comments rule, which is for new files (many merged
+// files carry comments from before the rule; stripping them is a separate decision).
+export function checkImports(bytes, allowed, merged = false) {
   if (bytes.length > MAX_BYTES) refuse(`the file is larger than ${MAX_BYTES} bytes`);
   let text;
   try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { return refuse('the file is not UTF-8 text'); }
@@ -94,7 +97,7 @@ export function checkImports(bytes, allowed) {
   for (; i < lines.length; i += 1) {
     if (/(^|[^A-Za-z0-9_])import([^A-Za-z0-9_]|$)/.test(lines[i])) refuse(`line ${i + 1}: the word "import" after the import lines (imports are plain lines at the top, one module each)`);
   }
-  checkPlain(text);
+  checkPlain(text, merged);
   return seen;
 }
 
@@ -129,9 +132,28 @@ const LIMIT = /set_option (maxRecDepth|maxHeartbeats|synthInstance\.maxSize|synt
 const INVISIBLE = /[​-‏‪-‮⁠-⁩﻿]/u;
 const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f]/u;
 
-export function checkPlain(text) {
+// NO COMMENTS, NO CARRIAGE RETURNS (a founder's law, 2026-11-23: nothing an outsider typed is
+// trusted). A merged proof file is read by our seats and by every other contributor's agent that
+// clones the repository, so a comment in an accepted proof is a channel from one outsider to
+// hundreds of other people's agents under the project's name. The only safe amount of outsider
+// prose on the tree is none: a proof file is declarations and proofs, and explains nothing.
+// Refused by the raw text, with no scan to mislead: Lean has no token `--`, `/-` or `-/` that is
+// not a comment marker, so any occurrence of the two characters side by side is one. A carriage
+// return is refused too: it hides text from a reader's screen and makes a line look different
+// from what is compiled. The sentence is fixed and names no text of the file.
+export const NO_PROSE = 'a proof file is declarations and proofs only: send it again with no comments (no `--`, no `/-`, no doc comments) and with plain line endings (no carriage returns)';
+export function checkNoProse(text) {
+  const lines = text.split('\n');
+  for (let k = 0; k < lines.length; k += 1) {
+    if (lines[k].includes('\r')) refuse(`line ${k + 1}: a carriage return; ${NO_PROSE}`);
+    if (lines[k].includes('--') || lines[k].includes('/-') || lines[k].includes('-/')) refuse(`line ${k + 1}: a comment; ${NO_PROSE}`);
+  }
+}
+
+export function checkPlain(text, merged = false) {
   if (CONTROL.test(text.replace(/\r?\n/g, ''))) refuse('the file holds control characters');
   if (INVISIBLE.test(text)) refuse('the file holds invisible or direction-changing characters');
+  if (!merged) checkNoProse(text);
   let theorems = 0;
   text.split('\n').forEach((raw, k) => {
     const line = raw.replace(/\r$/, '');
@@ -309,7 +331,7 @@ export function importClosure(listed, read, judged) {
       if (outside.size > MAX_OUTSIDE) refuse(`more than ${MAX_OUTSIDE} outside modules are listed or reached (${[...outside].slice(0, 3).join(', ')}, ...); list fewer`);
       // The same rules a proof file passes before it is built, on the text as it is on the base.
       let imports;
-      try { imports = checkImports(bytes, (x) => PROJECT_RE.test(x)); } catch (e) { if (e instanceof Refused) refuse(`the listed outside module ${m}: ${e.message}`); throw e; }
+      try { imports = checkImports(bytes, (x) => PROJECT_RE.test(x), true); } catch (e) { if (e instanceof Refused) refuse(`the listed outside module ${m}: ${e.message}`); throw e; }
       for (const x of imports) if (PROJECT_RE.test(x)) visit(x, m);
     } else {
       base.add(m);

@@ -114,6 +114,18 @@ jobs:
           [ "$(wc -c < "$W/in/proof.lean")" -le 524288 ] || { echo "REFUSED: the file is larger than 512 KiB"; exit 1; }
           # The bytes must be the ones the pull request names.
           [ "$(git hash-object "$W/in/proof.lean")" = "$blob" ] || { echo "REFUSED: the downloaded bytes are not the file of the pull request"; exit 1; }
+          # THE RUNNER STRIPS (the operator's ruling, 2026-11-23). A merged proof is read by every
+          # other contributor's agent, so no outsider's prose may reach the tree: every comment
+          # becomes spaces byte for byte (no token moves, the line count is unchanged) and carriage
+          # returns become newlines, by .github/scripts/outside-strip.py, the SAME script the intake
+          # runs before it commits; both must agree byte for byte. From here on, every rule, the
+          # checker and the recorded hash see only the stripped bytes. A file whose comments cannot
+          # be removed safely is refused, with a line number and a fixed reason, never its text.
+          python3 -I "$W/base/.github/scripts/outside-strip.py" "$W/in/proof.lean" "$W/in/proof.stripped" > "$W/in/stripped.sha" \
+            || { echo "REFUSED: the comments of the file could not be removed safely; send it again with no comments and plain line endings"; exit 1; }
+          grep -Eqx '[0-9a-f]{64}' "$W/in/stripped.sha" || { echo "REFUSED: the stripper gave no hash"; exit 1; }
+          mv "$W/in/proof.stripped" "$W/in/proof.lean"
+          [ "$(sha256sum "$W/in/proof.lean" | cut -d' ' -f1)" = "$(cat "$W/in/stripped.sha")" ] || { echo "REFUSED: the stripped bytes are not the ones hashed"; exit 1; }
 
       - name: The posted statement for the gap, and the import rule
         run: |
@@ -373,6 +385,9 @@ jobs:
           # printed unquoted and before the quoted block, so no quoted line can pass for it.
           fsha=$(awk -v p="base/$file" '$2 == p { print $1 }' "$RUNNER_TEMP/before.sha256")
           ssha=$(awk '$2 == "in/statement.txt" { print $1 }' "$RUNNER_TEMP/before.sha256")
+          # The judged bytes are the stripped ones: their hash, once, on its own line, for the intake
+          # (it re-strips the pull request's file itself and lands only on an exact match).
+          if [ "$fsha" = "$(cat "$W/in/stripped.sha" 2>/dev/null)" ]; then echo "JUDGED-STRIPPED sha256:$fsha"; else fsha=""; fi
           if printf '%s %s' "$fsha" "$ssha" | grep -Eqx '[0-9a-f]{64} [0-9a-f]{64}'; then
             echo "OUTSIDE $(jq -cn --arg lemma "$GAP" --argjson pr "$PR" --arg file "$file" --arg f "$fsha" --arg s "$ssha" \
               '{lemma: $lemma, pr: $pr, file: $file, file_sha256: $f, statement_sha256: $s}')"
