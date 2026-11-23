@@ -4,7 +4,7 @@ import Mathlib.Data.Finset.Fold
 import Mathlib.Tactic
 import PEqualNP.Defs
 
-namespace PEqualNP.Outside.Wheel619
+namespace PEqualNP.Outside.L_meta_619
 abbrev W := BitVec 128
 def op (b : Bool) (a c : W) := if b then a ||| c else a &&& c
 def sep (w : W) : BitVec 64 := (w >>> 64).truncate 64 &&& ~~~(w.truncate 64)
@@ -40,9 +40,7 @@ theorem Live.cover {t S k} (h : Live t S k) : covers S t := by
       · exact ⟨a, by simp, ha⟩
       · exact ⟨b, by simp, hb⟩
     · exact ⟨w,by simp [hw,e],hit⟩
-end PEqualNP.Outside.Wheel619
 
-namespace PEqualNP.Outside.Wheel619
 def mask (S : Finset W) := S.fold (fun a b : BitVec 64 => a ||| b) 0 sep
 theorem mask_iff (S : Finset W) (i : Fin 64) :
     (mask S).getLsbD i = true ↔ ∃ w ∈ S, (sep w).getLsbD i = true := by
@@ -73,9 +71,7 @@ def tick (t : W) (n : Nat) (S : Finset W) (go : Finset W → Bool) : Bool :=
 
 def search (t : W) (fuel : Nat) : Finset W → Bool :=
   Nat.rec (fun S => decide (t ∈ S)) (fun f go S => tick t (f+1) S go) fuel
-end PEqualNP.Outside.Wheel619
 
-namespace PEqualNP.Outside.Wheel619
 theorem restore {A : Finset W} (a b : W) (o : Bool) (h : op o a b ∈ A) :
     next (insert a (insert b (A.erase (op o a b)))) a b o
       (decide (a ∈ A)) (decide (b ∈ A)) = A := by
@@ -112,13 +108,11 @@ theorem search_yes {S t k} (h : Live t S k) (fuel : Nat) (le : k ≤ fuel) :
         refine ⟨a, by simp, b, by simp, o, decide (a ∈ A), decide (b ∈ A), by simp [Ne.symm da, Ne.symm db], ?_⟩
         rw [restore a b o u]
         exact ih f (by omega)
-end PEqualNP.Outside.Wheel619
 
-namespace PEqualNP.Outside.Wheel619
-@[simp] theorem and_ones (x : W) : x &&& (340282366920938463463374607431768211455#128) = x := BitVec.and_allOnes
-@[simp] theorem ones_and (x : W) : (340282366920938463463374607431768211455#128) &&& x = x := BitVec.allOnes_and
-@[simp] theorem or_ones (x : W) : x ||| (340282366920938463463374607431768211455#128) = -1 := BitVec.or_allOnes
-@[simp] theorem ones_or (x : W) : (340282366920938463463374607431768211455#128) ||| x = -1 := BitVec.allOnes_or
+@[local simp] theorem and_ones (x : W) : x &&& (340282366920938463463374607431768211455#128) = x := BitVec.and_allOnes
+@[local simp] theorem ones_and (x : W) : (340282366920938463463374607431768211455#128) &&& x = x := BitVec.allOnes_and
+@[local simp] theorem or_ones (x : W) : x ||| (340282366920938463463374607431768211455#128) = -1 := BitVec.or_allOnes
+@[local simp] theorem ones_or (x : W) : (340282366920938463463374607431768211455#128) ||| x = -1 := BitVec.allOnes_or
 theorem ones_bit (i : Fin 128) : (340282366920938463463374607431768211455#128).getLsbD i = true := by
   change (BitVec.allOnes 128).getLsbD i = true
   rw [BitVec.getLsbD_allOnes]; exact decide_eq_true i.isLt
@@ -247,14 +241,10 @@ theorem extract (t : W) (nz : t ≠ 0) (no : t ≠ -1)
         exact ⟨_,sub',k+1,by simpa using le,Live.step o (by intro e; exact vp (by rwa [ea, ← e])) (by intro e; exact vp (by rwa [ea, ← e])) (ea ▸ mem) live⟩
       · exact ⟨A,fun z hz => (Finset.mem_insert.mp (sub hz)).resolve_left (by aesop),k,
           by simp; omega,live⟩
-end PEqualNP.Outside.Wheel619
 
-namespace PEqualNP.Outside.Wheel619
 def stock : List W := [0xfff00003f00c30c30c30c30c3, 0x3f000000fff030c30c30c30c30c, 0xfc000003ffc00451451451451451, 0x3f000000fff0000186186186186186, 0xfc000003ffc00000618618618618618, 0xfffffffc00000000820820820820820]
 def target : W := 0xfffffffffffffff0000000000000000
-end PEqualNP.Outside.Wheel619
 
-namespace PEqualNP.Outside.Wheel619
 def lmask (s : List W) : BitVec 64 := s.foldr (fun w m => sep w ||| m) 0
 theorem lmask_eq (s : List W) : lmask s = mask s.toFinset := by
   induction s with
@@ -292,9 +282,7 @@ theorem next_swap (s : Finset W) (a b : W) (o ka kb : Bool) :
   ext z
   cases o <;> cases ka <;> cases kb <;> simp [next,op,BitVec.and_comm,BitVec.or_comm] <;> tauto
 
-end PEqualNP.Outside.Wheel619
 
-namespace PEqualNP.Outside.Wheel619
 theorem fast_yes (fuel : Nat) (t : W) (s : List W) (nd : s.Nodup)
     (hit : search t fuel s.toFinset = true) : fast t fuel s = true := by
   induction fuel generalizing s with
@@ -344,9 +332,7 @@ theorem fast_yes (fuel : Nat) (t : W) (s : List W) (nd : s.Nodup)
         exact False.elim (fresh (by rwa [this]))
       · apply use_pair b a kb ka hb ha lt (comm ▸ fresh)
         rwa [next_swap]
-end PEqualNP.Outside.Wheel619
 
-namespace PEqualNP.Outside.Wheel619
 theorem essential (w : W) (hw : w ∈ stock) :
     ∃ i : Fin 64, (sep target).getLsbD i = true ∧ ∀ z ∈ stock, (sep z).getLsbD i = true → z = w := by
   simp only [stock,List.mem_cons,List.not_mem_nil,or_false] at hw
@@ -381,9 +367,7 @@ theorem full {A k} (h : Live target A k) (sub : A ⊆ stock.toFinset) : A = stoc
   obtain ⟨i,ht,only⟩ := essential w (List.mem_toFinset.mp hw)
   obtain ⟨v,hv,z⟩ := h.cover i ht
   exact only v (List.mem_toFinset.mp (sub hv)) z ▸ hv
-end PEqualNP.Outside.Wheel619
 
-namespace PEqualNP.Outside.Wheel619
 def possible (t : W) (fuel : Nat) (s : List W) :=
   decide (s.length ≤ fuel+1) && (sep t &&& lmask s == sep t)
 
@@ -436,9 +420,7 @@ theorem certify (t : W) (n : Nat) (s : List W) (rejects : List (List W))
     have m : r ∉ rejects := fun mem => by have := children r mem; simp_all
     simp [allow,fast_possible t n r h,m]) hit
   simp_all
-end PEqualNP.Outside.Wheel619
 
-namespace PEqualNP.Outside.Wheel619
 def s0_0 : List W := [0xfff00003f00c30c30c30c30c3, 0x3f000000fff030c30c30c30c30c, 0xfc000003ffc00451451451451451, 0x3f000000fff0000186186186186186, 0xfc000003ffc00000618618618618618, 0xfffffffc00000000820820820820820]
 def s1_0 : List W := [0x41041041041041, 0xfff00003f00c30c30c30c30c3, 0x3f000000fff030c30c30c30c30c, 0xfc000003ffc00451451451451451, 0x3f000000fff0000186186186186186, 0xfc000003ffc00000618618618618618, 0xfffffffc00000000820820820820820]
 def s1_1 : List W := [0x82082082082082, 0xfff00003f00c30c30c30c30c3, 0x3f000000fff030c30c30c30c30c, 0xfc000003ffc00451451451451451, 0x3f000000fff0000186186186186186, 0xfc000003ffc00000618618618618618, 0xfffffffc00000000820820820820820]
@@ -2789,19 +2771,17 @@ theorem reject0_0 : fast target 8 s0_0 = false := by
     · exact reject1_29
   · decide +kernel
 theorem eight : fast target 8 stock = false := reject0_0
-end PEqualNP.Outside.Wheel619
 
-namespace PEqualNP.Outside.Wheel619
 def input (i : Fin 128) (j : Fin 6) := (stock.getD j 0).getLsbD i
 theorem agree (i : Fin 128) : target.getLsbD i = true ↔ ∃ u v : Fin 6, (u.val, v.val) ∈ ([(0, 1), (1, 2), (2, 3), (3, 4), (4, 0), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5)] : List (ℕ × ℕ)) ∧ input i u = true ∧ input i v = true := by
   decide +revert
 theorem input_eq (i : Fin 128) : List.ofFn (input i) = bits i stock := by
   rfl
-end PEqualNP.Outside.Wheel619
-namespace PEqualNP.Outside
-open PEqualNP.Outside.Wheel619
+end PEqualNP.Outside.L_meta_619
+
+open PEqualNP.Outside.L_meta_619
 set_option maxHeartbeats 2000000 in
-theorem L_meta_619 : ¬ (∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 C ∧ C.size ≤ 8 ∧ (∀ x : Fin 6 → Bool, (C.eval (List.ofFn x) = true ↔ ∃ u v : Fin 6, (u.val, v.val) ∈ ([(0, 1), (1, 2), (2, 3), (3, 4), (4, 0), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5)] : List (ℕ × ℕ)) ∧ x u = true ∧ x v = true))) := by
+theorem PEqualNP.Outside.L_meta_619 : ¬ (∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 C ∧ C.size ≤ 8 ∧ (∀ x : Fin 6 → Bool, (C.eval (List.ofFn x) = true ↔ ∃ u v : Fin 6, (u.val, v.val) ∈ ([(0, 1), (1, 2), (2, 3), (3, 4), (4, 0), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5)] : List (ℕ × ℕ)) ∧ x u = true ∧ x v = true))) := by
   rintro ⟨C, mono, size, spec⟩
   have good := good_of mono
   have out : (run C.gates stock).getD C.output 0 = target := by
@@ -2820,4 +2800,3 @@ theorem L_meta_619 : ¬ (∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.M
   rw [hs] at lv
   have yes := fast_yes 8 target stock (by decide) (search_yes lv 8 (le.trans size))
   exact Bool.noConfusion (eight.symm.trans yes)
-end PEqualNP.Outside
