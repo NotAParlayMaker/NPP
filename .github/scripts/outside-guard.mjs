@@ -93,7 +93,64 @@ export function checkImports(bytes, allowed) {
   for (; i < lines.length; i += 1) {
     if (/(^|[^A-Za-z0-9_])import([^A-Za-z0-9_]|$)/.test(lines[i])) refuse(`line ${i + 1}: the word "import" after the import lines (imports are plain lines at the top, one module each)`);
   }
+  checkPlain(text);
   return seen;
+}
+
+// THE PLAIN-FILE RULE: a first filter, NOT what makes an outside file safe to build. A Lean file
+// runs code while it compiles; what contains that is the sandbox this job runs in (no secrets,
+// no network, a time limit, a machine thrown away after) and the checker's own verdict rules.
+// This rule refuses, early and by name, file shapes that have no place in a proof.
+//   1. The RAW text is searched, comments included, and nothing is stripped: a comment or
+//      string stripper can be led astray (a character literal, a line comment holding a block
+//      opener), so no stripper is used. A forbidden word in a comment is refused too: reword it.
+//   2. No double quote anywhere (no string or character-quote literal), no quoted identifier.
+//   3. Every line that starts in column 0 is an allowed command, the start or end of a comment,
+//      or blank. So the prose of a block comment is indented, or each line starts with `--`.
+//   4. A block-comment marker stands only at the very start or the very end of a line.
+//   5. No word of FORBIDDEN anywhere. KNOWN LIMIT: Lean needs no newline between commands, so an
+//      indented or same-line command is judged by this list alone, and the list cannot be
+//      complete. What it misses meets the sandbox.
+// The only attributes are `@[simp]` and `@[local simp]`; the only options are four limits.
+const ALLOWED = new RegExp(String.raw`^(import |namespace |end( |$)|section( |$)|open |variable |universe |omit |include |/-|-/|--`
+  + String.raw`|(@\[(local )?simp\] )?((private|protected) )?(noncomputable )?(theorem|lemma|def|abbrev) |noncomputable section`
+  + String.raw`|set_option (maxRecDepth|maxHeartbeats|synthInstance\.maxSize|synthInstance\.maxHeartbeats) [0-9]+ in$)`, 'u');
+const B = String.raw`(?<![A-Za-z0-9_])`, A = String.raw`(?![A-Za-z0-9_])`;
+const FORBIDDEN = new RegExp([
+  String.raw`"|[«»]|simproc|builtin_|native|bv_decide|ofReduce|reduceNat|reduceBool`,
+  '|' + B + String.raw`(Lean|System|IO|Elab|Meta|Lake|FS|Process|EIO)` + A,
+  String.raw`|_root_|RealWorld|BaseIO|include_str|notation|[A-Za-z0-9_]%|polyrith|initialize|run_cmd|run_tac|run_elab|run_meta|by_elab`,
+  '|' + B + String.raw`elab|` + B + String.raw`macro|` + B + 'syntax' + A + '|' + B + 'attribute' + A,
+  '|' + B + 'instance' + A + '|' + B + 'axiom' + A + '|' + B + 'opaque' + A + String.raw`|unsafe|` + B + 'partial' + A + String.raw`|sorry|` + B + 'admit' + A,
+  String.raw`|#|implemented_by|extern|` + B + 'deriving' + A + '|' + B + 'structure' + A + '|' + B + 'inductive' + A + '|' + B + 'class' + A,
+  '|' + B + 'mutual' + A + '|' + B + 'export' + A + '|' + B + 'scoped' + A + '|' + B + 'local' + A,
+  String.raw`|` + '`' + String.raw`\(|\$\(|%\[|@\[|register_|declare_|lcProof|lcUnreachable|` + B + 'infix|' + B + 'prefix' + A + '|' + B + 'postfix' + A,
+  String.raw`|set_option|binder_predicate|unif_hint|^\s*add_\w+|` + B + 'alias' + A + '|' + B + 'example' + A + String.raw`|unseal|compile_inductive|irreducible_def`,
+].join(''), 'u');
+// The four limit options, wherever they stand, are taken out before the forbidden list is asked;
+// every other set_option, at column 0 or indented, is refused by it.
+const LIMIT = /set_option (maxRecDepth|maxHeartbeats|synthInstance\.maxSize|synthInstance\.maxHeartbeats) [0-9]+ in(?![A-Za-z0-9_])/gu;
+const INVISIBLE = /[​-‏‪-‮⁠-⁩﻿]/u;
+const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f]/u;
+
+export function checkPlain(text) {
+  if (CONTROL.test(text.replace(/\r?\n/g, ''))) refuse('the file holds control characters');
+  if (INVISIBLE.test(text)) refuse('the file holds invisible or direction-changing characters');
+  let theorems = 0;
+  text.split('\n').forEach((raw, k) => {
+    const line = raw.replace(/\r$/, ''), st = line.trim(), n = k + 1;
+    if (line !== '' && line[0] !== ' ' && line[0] !== '\t' && !ALLOWED.test(line)) {
+      refuse(`line ${n}: a line that starts in column 0 must be a declaration, an import, or a comment marker (indent the prose of a comment): ${line.slice(0, 50)}`);
+    }
+    if (st.slice(2).includes('/-') || st.slice(0, -2).includes('-/') || (st.includes('--') && (st.includes('/-') || st.includes('-/')) && !st.startsWith('/-'))) {
+      refuse(`line ${n}: a comment marker inside the line (a block comment opens at the start of a line and closes at the end of one)`);
+    }
+    const scanned = line.replace(LIMIT, '').replace(/@\[(local )?simp\]/gu, '');
+    const m = FORBIDDEN.exec(scanned);
+    if (m) refuse(`line ${n}: "${m[0].trim()}" is not allowed in a proof file, in code or in a comment (no code that runs at build time, no new syntax, no string literals, no attributes but simp)`);
+    if (/^(@\[(local )?simp\] )?((private|protected) )?theorem /u.test(line)) theorems += 1;
+  });
+  if (theorems === 0) refuse('the file holds no theorem');
 }
 
 const put = (dir, name, value) => writeFileSync(join(dir, name), value);
