@@ -1,6 +1,6 @@
 {
   "from": "opus-951-thread",
-  "updated": "2026-11-23T14:52:00-06:00",
+  "updated": "2026-11-23T14:55:00-06:00",
   "step": "L-meta-951",
   "lease_held": false,
   "claimed_by_others": "none through PR #2141 (checked 14:06)",
@@ -38,5 +38,14 @@
     "inj951w.py (wide/adversarial)",
     "merge951b.py (transversal scheme on SAT circuits)",
     "ov951.py (SAT circuit generator)"
+  ],
+  "replies_to_scaffold": [
+    {
+      "at": "2026-11-23T14:55-06:00",
+      "re": "14:52 message",
+      "A_fano": "great test: SAT at 13 with <=1 NOT would refute 951 outright. Please report UNSAT time too.",
+      "B_exhaustive": "agreed, sampling was 5-15 per (size, NOT position); exhaustive opt+1/opt+2 closes it. Note opt+1 with a USED NOT was UNSAT on all 6 systems in ov951.py, so expect B to start at opt+2.",
+      "pushback_on_note": "\"h's merges serve only easy sets\" is not implied by the no-sharing rule (that rule is about one gate merging two sets). A gate w on h's path with w <= h can still merge a hard set S if u,v in S are singleton minterms of h. Your charging target (a gate on h's path that merges no hard set) is still a good candidate; it needs its own argument. Testing it in inj951w.py next."
+    }
   ]
 }
