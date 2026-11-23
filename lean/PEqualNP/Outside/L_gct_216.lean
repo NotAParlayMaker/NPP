@@ -8,7 +8,6 @@ theorem sum_perm_succ {n : ℕ} (g : Equiv.Perm (Fin (n + 1)) → ℂ) :
       g (Equiv.Perm.decomposeFin.symm (a, τ)) := by
   rw [← Equiv.Perm.decomposeFin.symm.sum_comp, Fintype.sum_prod_type]
 
-/-- The permanent of a `4 x 4` matrix as a sum over permutations, written out. -/
 theorem sum_perm_four (z : Fin 4 × Fin 4 → ℂ) :
     ∑ σ : Equiv.Perm (Fin 4), ∏ i, z (σ i, i) =
       z (0, 0) * z (1, 1) * z (2, 2) * z (3, 3) +
@@ -44,7 +43,6 @@ theorem sum_perm_four (z : Fin 4 × Fin 4 → ℂ) :
   simp (config := { decide := true }) [Equiv.swap_apply_def]
   ring
 
-/-- The same for `MvPolynomial.eval` of `permPoly`. -/
 theorem eval_perm_four (z : Fin 4 × Fin 4 → ℂ) :
     MvPolynomial.eval z (PEqualNP.Gct.permPoly ℂ 4) =
       z (0, 0) * z (1, 1) * z (2, 2) * z (3, 3) +
@@ -75,8 +73,6 @@ theorem eval_perm_four (z : Fin 4 × Fin 4 → ℂ) :
   rw [← sum_perm_four]
   simp [PEqualNP.Gct.permPoly, Matrix.permanent, Matrix.mvPolynomialX_apply]
 
-/-- Bridge: the four explicit sums of the gap statement vanish, so the permanent of `J + t` is 24.
-(Pointwise identity `perm (J + t) = 24 + 6 s1 + 2 s2 + s3 + s4`.) -/
 theorem level_of_sums (t : Fin 4 × Fin 4 → ℂ)
     (h : (∑ i : Fin 4, ∑ j, t (i, j)) = 0 ∧ (∑ j, ∑ l, if j = l then 0 else ∑ a : Fin 4, ∑ b : Fin 4, if a < b then t (a, j) * t (b, l) else 0) = 0 ∧ (∑ j, ∑ l, ∑ m, if j = l ∨ j = m ∨ l = m then 0 else ∑ a : Fin 4, ∑ b : Fin 4, ∑ c : Fin 4, if a < b ∧ b < c then t (a, j) * t (b, l) * t (c, m) else 0) = 0 ∧ (∑ j, ∑ l, ∑ m, ∑ n, if j = l ∨ j = m ∨ j = n ∨ l = m ∨ l = n ∨ m = n then 0 else t (0, j) * t (1, l) * t (2, m) * t (3, n)) = 0) :
     MvPolynomial.eval (fun p => 1 + t p) (PEqualNP.Gct.permPoly ℂ 4) = 24 := by
@@ -285,7 +281,6 @@ end PQ200
 namespace PQ200
 namespace ColBlockAux
 
-/-- Transposition of a `3 × 3` coordinate array. -/
 def tr : M ≃ₗ[ℂ] M := LinearEquiv.funCongrLeft ℂ ℂ (Equiv.prodComm IX IX)
 
 theorem tr_apply (x : M) (a b : IX) : tr x (a, b) = x (b, a) := rfl
@@ -536,13 +531,11 @@ private theorem specEigenIn (K : Submodule ℂ SpecU) (N : SpecU →ₗ[ℂ] Spe
 
 end PQ200
 
-
 namespace PQ200
 
 noncomputable def specS (z v : Fin 3 → ℂ) : Fin 3 → ℂ :=
   ![z 2 * v 1 + z 1 * v 2, z 2 * v 0 + z 0 * v 2, z 1 * v 0 + z 0 * v 1]
 
-/-- The characteristic equation and the diagonal cofactor identity at one coordinate. -/
 private theorem spec_coord (a b c u v w m : ℂ)
     (hq : a ^ 2 + b ^ 2 + c ^ 2 = 0)
     (hu : m*u = c*v + b*w) (hv : m*v = c*u + a*w) (hw : m*w = b*u + a*v) :
@@ -681,9 +674,8 @@ end PQ200
 namespace PQ200
 namespace PureRed
 
-/-- Original row profile of a Walsh row. -/
 def vv (z : V) (q : Fin 4) : ℂ := ∑ j : IX, z j * H q j
-/-- The matrix whose Walsh row `i` is `z`, other rows zero. -/
+
 def srow (i : IX) (z : V) : M := fun p => if p.1 = i then z p.2 else 0
 def r0 (i : IX) : IX := if i = 0 then 1 else 0
 def r1 (i : IX) : IX := if i = 2 then 1 else 2
@@ -710,7 +702,6 @@ theorem vv3 (z : V) : vv z 3 = -z 0 - z 1 + z 2 := by
 theorem Hprod (i : IX) : H 0 i * H 1 i * H 2 i * H 3 i = 1 := by
   fin_cases i <;> simp [H]
 
-/-- Three-by-three permanent written out. -/
 theorem P_eq (x : M) : P x =
     x (0,0) * x (1,1) * x (2,2) + x (0,0) * x (2,1) * x (1,2) +
     x (1,0) * x (0,1) * x (2,2) + x (1,0) * x (2,1) * x (0,2) +
@@ -735,8 +726,6 @@ theorem F_line (i : IX) (z : V) (t : M) (c : ℂ) :
   unfold F Matrix.permanent
   simp only [Matrix.of_apply, toT_line]
 
-/-- First-order term of the permanent along a line through a rank-one matrix, by a five-point
-finite difference (the permanent is a quartic along the line). -/
 theorem fd (a v : Fin 4 → ℂ) (B : Fin 4 × Fin 4 → ℂ) (g : ℂ → ℂ)
     (hg : ∀ c, g c = ∑ σ : Equiv.Perm (Fin 4), ∏ k,
       (fun p : Fin 4 × Fin 4 => a p.1 * v p.2 + c * B p) (σ k, k)) :
@@ -755,7 +744,6 @@ theorem fd (a v : Fin 4 → ℂ) (B : Fin 4 × Fin 4 → ℂ) (g : ℂ → ℂ)
   simp only [e]
   constructor <;> ring
 
-/-- Cofactor sums of the sign column `H · i` against `toT t` pick out Walsh row `i`. -/
 theorem cofH (i : IX) (t : M) (q : Fin 4) :
     H 1 i * H 2 i * H 3 i * toT t (0,q) + H 0 i * H 2 i * H 3 i * toT t (1,q) +
       H 0 i * H 1 i * H 3 i * toT t (2,q) + H 0 i * H 1 i * H 2 i * toT t (3,q) =
@@ -846,8 +834,6 @@ theorem alg (z r : V) (hz : z ≠ 0) (h2 : ∑ j, z j ^ 2 = 0)
       linear_combination (hE1 - (-4*r 0*z 0^2 + 4*r 0*z 0*z 1 - 4*r 0*z 0*z 2 + 4*r 1*z 0*z 1 - 4*r 1*z 1^2 - 4*r 1*z 1*z 2 + 4*r 2*z 0*z 2 + 4*r 2*z 1*z 2 + 4*r 2*z 2^2) * h3) / 8)
     exact ⟨α, all3 (by linear_combination -p0) (by linear_combination -p1) p2⟩
 
-/-- The local statement at a pure Walsh row: all entries of `z` are nonzero and every `t` on a
-line through it inside the quadric and the quartic has Walsh row `i` proportional to `z`. -/
 theorem rowLocal (i : IX) (z : V) (hz : z ≠ 0) (h2 : ∑ j, z j ^ 2 = 0)
     (hF : F (srow i z) = 0) :
     (∀ j, z j ≠ 0) ∧ ∀ t : M, (∑ j, z j * t (i,j)) = 0 →
@@ -889,7 +875,6 @@ theorem polar (z : V) (u u' : U) :
 
 end PureRed
 
--- Kept: use the first-order quartic at a pure Walsh row and restrict to two rows.
 theorem pureReduction (L : Submodule ℂ M) (hd : 4 ≤ Module.finrank ℂ L)
     (hQ : ∀ x ∈ L, ∀ y ∈ L, dot x y = 0)
     (hP : ∀ x ∈ L, P x = 0) (hF : ∀ x ∈ L, F x = 0) (hr : pureR L) :
@@ -1053,8 +1038,6 @@ open Finset
 
 private abbrev Perm := Equiv.Perm (Fin 4)
 
--- Enumerate permutations before inserting the entries of the matrix. This
--- lets the same expansion handle one, two, three, or four selected columns.
 private theorem sum_perm_succ {n : ℕ} (g : Equiv.Perm (Fin (n + 1)) → ℂ) :
     ∑ σ, g σ = ∑ a : Fin (n + 1), ∑ τ : Equiv.Perm (Fin n),
       g (Equiv.Perm.decomposeFin.symm (a, τ)) := by
@@ -1099,8 +1082,6 @@ private def e3 (a b c d : ℂ) := a*b*c + a*b*d + a*c*d + b*c*d
 private def coeff (f : ℂ → ℂ → ℂ → ℂ → ℂ) (t : T) : ℂ :=
   tuples (fun a b c d => f (t (a,0)) (t (b,1)) (t (c,2)) (t (d,3)))
 
--- Equating the coefficients grouped by permutation with those grouped by
--- their subsets of columns is just a rearrangement of the same terms.
 set_option maxHeartbeats 2000000 in
 private theorem coefIds (t : T) :
     coeff e1 t = lin t ∧ coeff e2 t = quad t ∧ coeff e3 t = cub t := by
@@ -1144,8 +1125,6 @@ private def triple (u v w : V) : ℂ :=
   u 0 * v 1 * w 2 + u 0 * v 2 * w 1 + u 1 * v 0 * w 2 +
   u 1 * v 2 * w 0 + u 2 * v 0 * w 1 + u 2 * v 1 * w 0
 
--- The first three permutation sums of Walsh columns: zero for a single
--- column, the bilinear dot product for a pair, and the permanent for a triple.
 private theorem mix_one (u : V) : c1 (mix u) = 0 := by
   rw [c1, permTuples]
   simp [mix, H, Fin.sum_univ_three]
@@ -1225,8 +1204,6 @@ end PQ200
 
 namespace PQ200
 
-/-- In three Walsh coordinates the one-dimensional inverse on sum-zero
-four-vectors is given by half the sum of coordinate zero and coordinate `a+1`. -/
 private theorem inverse1 (z : Fin 4 → ℂ) (hz : ∑ k, z k = 0) (i : Fin 4) :
     (∑ a : IX, H i a * ((z 0 + z a.succ) / 2)) = z i := by
   rw [Fin.sum_univ_four] at hz
@@ -1318,7 +1295,6 @@ theorem bound (L : Submodule ℂ T)
   · exact colFalse hrow W hw hQ hP hF c
 
 end PQ200
-
 
 theorem PEqualNP.Outside.L_gct_216 : ∀ L : Submodule ℂ (Fin 4 × Fin 4 → ℂ), (∀ t ∈ L, (∀ i : Fin 4, ∑ j, t (i, j) = 0) ∧ (∀ j : Fin 4, ∑ i, t (i, j) = 0) ∧ (∑ j, ∑ l, if j = l then 0 else ∑ a : Fin 4, ∑ b : Fin 4, if a < b then t (a, j) * t (b, l) else 0) = 0 ∧ (∑ j, ∑ l, ∑ m, if j = l ∨ j = m ∨ l = m then 0 else ∑ a : Fin 4, ∑ b : Fin 4, ∑ c : Fin 4, if a < b ∧ b < c then t (a, j) * t (b, l) * t (c, m) else 0) = 0 ∧ (∑ j, ∑ l, ∑ m, ∑ n, if j = l ∨ j = m ∨ j = n ∨ l = m ∨ l = n ∨ m = n then 0 else t (0, j) * t (1, l) * t (2, m) * t (3, n)) = 0) → Module.finrank ℂ L ≤ 3 := by
   intro L hm
