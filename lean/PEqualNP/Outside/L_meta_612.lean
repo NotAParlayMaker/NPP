@@ -1187,3 +1187,202 @@ private theorem main_thm (n : ℕ) (G : SimpleGraph (Fin n)) (C : Circuit) (cen 
     have hSpos : 0 < S.card := Finset.card_pos.mpr ⟨o, hoS⟩
     omega
 
+
+private theorem read_trans {n : ℕ} {C : Circuit} {k g i : ℕ}
+    (hk : Rd C n k g) (hg : Relation.ReflTransGen (Rd C n) g i) :
+    Relation.TransGen (Rd C n) k i := by
+  induction hg with
+  | refl => exact Relation.TransGen.single hk
+  | tail _ hbc ih => exact Relation.TransGen.tail ih hbc
+
+private theorem propagates {n : ℕ} (C : Circuit) (A : Finset ℕ)
+    (hMono : Monotone2 C)
+    (hA : ∀ j : ℕ, j ∈ A ↔ ∃ g : Gate, C.gates[j]? = some g ∧ g.op = GateOp.and)
+    (h5 : ∀ j ∈ A, ∀ i ∈ A, ¬ Relation.TransGen (Rd C n) j i)
+    (hused : ∀ j : ℕ, j < C.size → n + j ≠ C.output →
+      ∃ k : ℕ, j < k ∧ k < C.size ∧ ∃ g : Gate, C.gates[k]? = some g ∧ n + j ∈ g.inputs)
+    (x : Fin n → Bool) :
+    ∀ g : ℕ, g < C.size → (∃ i ∈ A, Relation.ReflTransGen (Rd C n) g i) →
+      val C n x (n + g) = true → val C n x C.output = true := by
+  intro g
+  induction hfuel : C.size - g using Nat.strong_induction_on generalizing g with
+  | ind fuel ih =>
+    intro hg hcone hx
+    by_cases hdone : n + g = C.output
+    · simpa [hdone] using hx
+    · obtain ⟨k, hlt, hk, gR, hgR, hmem⟩ := hused g hg hdone
+      obtain ⟨i, hiA, hi⟩ := hcone
+      have hTG := read_trans (C := C) (k := k) (g := g) (i := i) ⟨hlt, gR, hgR, hmem⟩ hi
+      have hkA : k ∉ A := fun hkA => h5 k hkA i hiA hTG
+      have hop : gR.op = GateOp.or := gate_or C A hMono hA k gR hgR hkA
+      have hxk : val C n x (n + k) = true :=
+        (val_or C n x k gR hgR hop).mpr ⟨n + g, hmem, by omega, hx⟩
+      have hcone' : ∃ i ∈ A, Relation.ReflTransGen (Rd C n) k i :=
+        ⟨i, hiA, Relation.ReflTransGen.head ⟨hlt, gR, hgR, hmem⟩ hi⟩
+      exact ih (C.size - k) (by omega) k rfl hk hcone' hxk
+
+
+private theorem level_bound {n t : ℕ} (G : SimpleGraph (Fin n)) (C : Circuit)
+    (hC4 : ∀ a b c d : Fin n, a ≠ b → a ≠ c → a ≠ d → b ≠ c → b ≠ d → c ≠ d →
+      G.Adj a b → G.Adj b c → G.Adj c d → ¬ G.Adj d a)
+    (hMono : Monotone2 C)
+    (hfun : ∀ x : Fin n → Bool, C.eval (List.ofFn x) = true ↔
+      ∃ u v : Fin n, G.Adj u v ∧ x u = true ∧ x v = true)
+    (hEx : ∃ S : Finset (Fin n), CoverPromise.IsVertexCover G S ∧ S.card = t)
+    (hMin : ∀ S : Finset (Fin n), CoverPromise.IsVertexCover G S → t ≤ S.card)
+    (hedge : ∃ u v : Fin n, G.Adj u v)
+    (h5 : ∀ j i : ℕ, (∃ g : Gate, C.gates[j]? = some g ∧ g.op = GateOp.and) →
+      (∃ g : Gate, C.gates[i]? = some g ∧ g.op = GateOp.and) →
+      ¬ Relation.TransGen (Rd C n) j i)
+    (hshape : ∀ j : ℕ, j < C.size → ∃ p q : ℕ, ∃ g : Gate,
+      C.gates[j]? = some g ∧ g.inputs = [p, q] ∧ p < n + j ∧ q < n + j ∧ p ≠ q)
+    (hused : ∀ j : ℕ, j < C.size → n + j ≠ C.output →
+      ∃ k : ℕ, j < k ∧ k < C.size ∧ ∃ g : Gate, C.gates[k]? = some g ∧ n + j ∈ g.inputs)
+    (hlive : ∀ j : ℕ, j < C.size → ∃ x : Fin n → Bool, val C n x (n + j) = true)
+    (hout : C.size ≠ 0 ∧ C.output = n + C.size - 1) :
+    G.edgeSet.ncard + t ≤ C.size + 1 := by
+  classical
+  obtain ⟨u0, v0, huv0⟩ := hedge
+  let A : Finset ℕ := (Finset.range C.size).filter (fun j =>
+    match C.gates[j]? with
+    | some g => g.op == GateOp.and
+    | none => false)
+  have hA : ∀ j : ℕ, j ∈ A ↔ ∃ g : Gate, C.gates[j]? = some g ∧ g.op = GateOp.and := by
+    intro j
+    simp only [A, Finset.mem_filter, Finset.mem_range]
+    constructor
+    · rintro ⟨hj, hop⟩
+      cases hg : C.gates[j]? with
+      | none => simp [hg] at hop
+      | some g =>
+        have : g.op = GateOp.and := by simpa [hg] using hop
+        exact ⟨g, hg, this⟩
+    · rintro ⟨g, hg, hop⟩
+      have hj : j < C.size := (List.getElem?_eq_some_iff.mp hg).1
+      simp [hj, hg, hop]
+  have h5A : ∀ j ∈ A, ∀ i ∈ A, ¬ Relation.TransGen (Rd C n) j i := by
+    intro j hj i hi
+    exact h5 j i ((hA j).mp hj) ((hA i).mp hi)
+  have hfval : ∀ x : Fin n → Bool, val C n x C.output = true ↔
+      ∃ u v : Fin n, G.Adj u v ∧ x u = true ∧ x v = true := by
+    intro x
+    simpa [val, Circuit.eval] using hfun x
+  have hcenter : ∀ j ∈ A, ∃ c : Fin n, ∀ x : Fin n → Bool, val C n x (n + j) = true →
+      x c = true ∧ ∃ u v : Fin n, G.Adj u v ∧ x u = true ∧ x v = true := by
+    intro j hjA
+    obtain ⟨g, hg, hop⟩ := (hA j).mp hjA
+    have hj : j < C.size := (List.getElem?_eq_some_iff.mp hg).1
+    obtain ⟨p, q, g', hg', hpq, hp, hq, hpqne⟩ := hshape j hj
+    have hgg : g = g' := by rw [hg] at hg'; exact Option.some.inj hg'
+    subst hgg
+    have hlinp := and_reads_lin C n A hMono hA h5A j g hg hjA p (by simp [hpq]) hp
+    have hlinq := and_reads_lin C n A hMono hA h5A j g hg hjA q (by simp [hpq]) hq
+    have hle : ∀ x, val C n x (n + j) = true →
+        ∃ u v, G.Adj u v ∧ x u = true ∧ x v = true := by
+      intro x hx
+      have houtv := propagates C A hMono hA h5A hused x j hj
+        ⟨j, hjA, Relation.ReflTransGen.refl⟩ hx
+      exact (hfval x).mp houtv
+    obtain ⟨x0, hx0⟩ := hlive j hj
+    have hall0 := (val_and C n x0 j g hg hop).mp hx0
+    obtain ⟨_, hvp⟩ := hall0 p (by simp [hpq])
+    obtain ⟨_, hvq⟩ := hall0 q (by simp [hpq])
+    obtain ⟨s0, _, hs0v⟩ := (hlinp x0).mp hvp
+    obtain ⟨t0, _, ht0v⟩ := (hlinq x0).mp hvq
+    let S : Finset (Fin n) := Finset.univ.filter (fun i => val C n (e1 i) p = true)
+    let T : Finset (Fin n) := Finset.univ.filter (fun i => val C n (e1 i) q = true)
+    have hs0S : s0 ∈ S := by simp [S, hs0v]
+    have ht0T : t0 ∈ T := by simp [T, ht0v]
+    have hSp : 0 < S.card := Finset.card_pos.mpr ⟨s0, hs0S⟩
+    have hTp : 0 < T.card := Finset.card_pos.mpr ⟨t0, ht0T⟩
+    have hdisj : ∀ s ∈ S, s ∉ T := by
+      intro s hs hT
+      have hk : val C n (e1 s) (n + j) = true := by
+        refine (val_and C n (e1 s) j g hg hop).mpr ?_
+        intro w hw
+        have hw' : w = p ∨ w = q := by simpa [hpq] using hw
+        rcases hw' with rfl | rfl
+        · exact ⟨hp, by simpa [S] using hs⟩
+        · exact ⟨hq, by simpa [T] using hT⟩
+      exact no_edge_e1 G s (hle _ hk)
+    have hcross : ∀ s ∈ S, ∀ t ∈ T, G.Adj s t := by
+      intro s hs t ht
+      have hne : s ≠ t := fun hst => hdisj s hs (hst ▸ ht)
+      have hk : val C n (e2 s t) (n + j) = true := by
+        refine (val_and C n (e2 s t) j g hg hop).mpr ?_
+        intro w hw
+        have hw' : w = p ∨ w = q := by simpa [hpq] using hw
+        rcases hw' with rfl | rfl
+        · exact ⟨hp, (hlinp (e2 s t)).mpr ⟨s, by simp [e2], by simpa [S] using hs⟩⟩
+        · exact ⟨hq, (hlinq (e2 s t)).mpr ⟨t, by simp [e2], by simpa [T] using ht⟩⟩
+      exact edge_e2 G s t (hle _ hk)
+    have hcard1 : S.card = 1 ∨ T.card = 1 := by
+      by_contra hboth
+      push_neg at hboth
+      have hs2 : 2 ≤ S.card := by omega
+      have ht2 : 2 ≤ T.card := by omega
+      obtain ⟨aS, haS⟩ := Finset.card_pos.mp hSp
+      have hSe : 0 < (S.erase aS).card := by rw [Finset.card_erase_of_mem haS]; omega
+      obtain ⟨bS, hbS⟩ := Finset.card_pos.mp hSe
+      obtain ⟨hbSne, hbSU⟩ := Finset.mem_erase.mp hbS
+      obtain ⟨aT, haT⟩ := Finset.card_pos.mp hTp
+      have hTe : 0 < (T.erase aT).card := by rw [Finset.card_erase_of_mem haT]; omega
+      obtain ⟨bT, hbT⟩ := Finset.card_pos.mp hTe
+      obtain ⟨hbTne, hbTU⟩ := Finset.mem_erase.mp hbT
+      have hab : aS ≠ aT := fun h => hdisj aS haS (h ▸ haT)
+      have hac : aS ≠ bS := hbSne.symm
+      have had : aS ≠ bT := fun h => hdisj aS haS (h ▸ hbTU)
+      have hbc : aT ≠ bS := fun h => hdisj bS hbSU (h.symm ▸ haT)
+      have hbd : aT ≠ bT := hbTne.symm
+      have hcd : bS ≠ bT := fun h => hdisj bS hbSU (h ▸ hbTU)
+      exact hC4 aS aT bS bT hab hac had hbc hbd hcd
+        (hcross aS haS aT haT) (hcross bS hbSU aT haT).symm
+        (hcross bS hbSU bT hbTU) (hcross aS haS bT hbTU).symm
+    rcases hcard1 with hS1 | hT1
+    · obtain ⟨c, hc⟩ := Finset.card_eq_one.mp hS1
+      refine ⟨c, ?_⟩
+      intro x hx
+      have hall := (val_and C n x j g hg hop).mp hx
+      obtain ⟨_, hvp'⟩ := hall p (by simp [hpq])
+      obtain ⟨s, hsx, hsv⟩ := (hlinp x).mp hvp'
+      have hs : s ∈ S := by simp [S, hsv]
+      have hsc : s = c := by simpa [hc] using hs
+      exact ⟨hsc ▸ hsx, hle x hx⟩
+    · obtain ⟨c, hc⟩ := Finset.card_eq_one.mp hT1
+      refine ⟨c, ?_⟩
+      intro x hx
+      have hall := (val_and C n x j g hg hop).mp hx
+      obtain ⟨_, hvq'⟩ := hall q (by simp [hpq])
+      obtain ⟨t, htx, htv⟩ := (hlinq x).mp hvq'
+      have ht : t ∈ T := by simp [T, htv]
+      have htc : t = c := by simpa [hc] using ht
+      exact ⟨htc ▸ htx, hle x hx⟩
+  let cen : ℕ → Fin n := fun j => if hj : j ∈ A then Classical.choose (hcenter j hj) else u0
+  have hcen : ∀ j ∈ A, ∀ x : Fin n → Bool, val C n x (n + j) = true →
+      (∃ u v : Fin n, G.Adj u v ∧ x u = true ∧ x v = true) ∧ x (cen j) = true := by
+    intro j hj x hx
+    have h := Classical.choose_spec (hcenter j hj) x hx
+    simpa [cen, hj] using And.intro h.2 h.1
+  have hvc : CoverPromise.IsVertexCover G (A.image cen) := by
+    intro a b hab
+    have ho : C.output = n + (C.size - 1) := hout.2
+    have ho' : C.size - 1 < C.size := by omega
+    have hx : val C n (e2 a b) (n + (C.size - 1)) = true := by
+      rw [← ho]
+      exact (hfval (e2 a b)).mpr ⟨a, b, hab, by simp [e2], by simp [e2]⟩
+    have hVo : ∀ i : Fin n, val C n (e1 i) (n + (C.size - 1)) ≠ true := by
+      intro i hi
+      have htrue : val C n (e1 i) C.output = true := by rw [ho]; exact hi
+      exact no_edge_e1 G i ((hfval _).mp htrue)
+    obtain ⟨j, hjA, _, hjx⟩ := upper C n A hMono hA (C.size - 1) (e2 a b) (C.size - 1)
+      Relation.ReflTransGen.refl hVo hx
+    have hc := (hcen j hjA _ hjx).2
+    have hc' : cen j = a ∨ cen j = b := by simpa [e2] using hc
+    rcases hc' with rfl | rfl
+    · exact Or.inl (Finset.mem_image.mpr ⟨j, hjA, rfl⟩)
+    · exact Or.inr (Finset.mem_image.mpr ⟨j, hjA, rfl⟩)
+  have htle : t ≤ (A.image cen).card := hMin _ hvc
+  have hmain := main_thm n G C cen A hC4 hMono hfval hA
+    (fun j hj x hx => hcen j hj x hx) h5A
+  omega
+
