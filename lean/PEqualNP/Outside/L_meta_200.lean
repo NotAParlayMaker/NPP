@@ -2,7 +2,7 @@ import Mathlib
 import PEqualNP.Defs
 
 /-! `C` outputs the NOT of wire `w`, so `!x p || C x` is the NOT of `x p && wire w`. Keep the
-gates `gs`, then add an AND of input `p` and wire `w`, and a NOT of that AND. -/
+  gates `gs`, then add an AND of input `p` and wire `w`, and a NOT of that AND. -/
 
 namespace PEqualNP.Outside.L_meta_200_aux
 
