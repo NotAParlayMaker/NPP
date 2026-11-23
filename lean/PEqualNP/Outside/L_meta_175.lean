@@ -1,7 +1,38 @@
 import Mathlib
 import PEqualNP.Defs
 
+/-- What an old wire is in the new circuit: a constant (left), or a wire (right). The value of
+  such a representation on the new wires. -/
+def Sum.rv (W : List Bool) : Bool ⊕ ℕ → Bool
+  | Sum.inl b => b
+  | Sum.inr i => W.getD i false
+
+def Sum.rok (k : ℕ) : Bool ⊕ ℕ → Prop
+  | Sum.inl _ => True
+  | Sum.inr i => i < k
+
+def Sum.risW : Bool ⊕ ℕ → Bool
+  | Sum.inl _ => false
+  | Sum.inr _ => true
+
+def Sum.ridx : Bool ⊕ ℕ → ℕ
+  | Sum.inl _ => 0
+  | Sum.inr i => i
+
+theorem Sum.rok_mono {k k' : ℕ} (h : k ≤ k') (r : Bool ⊕ ℕ) (hr : r.rok k) : r.rok k' := by
+  cases r with
+  | inl b => trivial
+  | inr i => exact Nat.lt_of_lt_of_le hr h
+
+theorem Sum.rv_append (W t : List Bool) (r : Bool ⊕ ℕ) (hr : r.rok W.length) :
+    r.rv (W ++ t) = r.rv W := by
+  cases r with
+  | inl b => rfl
+  | inr i => exact List.getD_append _ _ _ _ hr
+
 namespace PEqualNP.Outside.L_meta_175_aux
+
+abbrev Rep : Type := Bool ⊕ ℕ
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
@@ -29,7 +60,7 @@ theorem trunc_length (op : GateOp) (l : List ℕ) : (trunc op l).length ≤ l.le
 theorem trunc_not_length (l : List ℕ) : (trunc GateOp.not l).length ≤ 1 := by
   simp [trunc]
 
-/-! ### From a circuit for `g` to a circuit for the contraction -/
+/-! From a circuit for `g` to a circuit for the contraction -/
 
 /-- The new name of a wire: two wires are inserted at position `n`. -/
 def rel (n i : ℕ) : ℕ := if i < n then i else i + 2
@@ -76,55 +107,23 @@ theorem up_spec (xs : List Bool) (z1 z2 z : Bool) (gs : List Gate) :
       congr 1
       simp [stp]
 
-/-! ### From a circuit for the contraction to a circuit for `g` -/
-
-/-- What an old wire is in the new circuit: a constant, or a wire. -/
-inductive Rep where
-  | c (b : Bool)
-  | w (i : ℕ)
-
-def Rep.val (W : List Bool) : Rep → Bool
-  | Rep.c b => b
-  | Rep.w i => W.getD i false
-
-def Rep.ok (k : ℕ) : Rep → Prop
-  | Rep.c _ => True
-  | Rep.w i => i < k
-
-def Rep.isW : Rep → Bool
-  | Rep.c _ => false
-  | Rep.w _ => true
-
-def Rep.idx : Rep → ℕ
-  | Rep.c _ => 0
-  | Rep.w i => i
-
-theorem Rep.ok_mono {k k' : ℕ} (h : k ≤ k') (r : Rep) (hr : r.ok k) : r.ok k' := by
-  cases r with
-  | c b => trivial
-  | w i => exact Nat.lt_of_lt_of_le hr h
-
-theorem Rep.val_append (W t : List Bool) (r : Rep) (hr : r.ok W.length) :
-    r.val (W ++ t) = r.val W := by
-  cases r with
-  | c b => rfl
-  | w i => exact List.getD_append _ _ _ _ hr
+/-! From a circuit for the contraction to a circuit for `g` -/
 
 /-- The value of a gate whose inputs are known as `rs`, without a new gate when a constant
-is among them. -/
+  is among them. -/
 def stepC (op : GateOp) (rs : List Rep) : Rep :=
   match op, rs with
-  | GateOp.not, [Rep.c b] => Rep.c (!b)
-  | GateOp.and, [Rep.c b] => Rep.c b
-  | GateOp.and, [Rep.c b, r] => if b then r else Rep.c false
-  | GateOp.and, [r, Rep.c b] => if b then r else Rep.c false
-  | GateOp.or, [Rep.c b] => Rep.c b
-  | GateOp.or, [Rep.c b, r] => if b then Rep.c true else r
-  | GateOp.or, [r, Rep.c b] => if b then Rep.c true else r
-  | _, _ => Rep.c false
+  | GateOp.not, [Sum.inl b] => Sum.inl (!b)
+  | GateOp.and, [Sum.inl b] => Sum.inl b
+  | GateOp.and, [Sum.inl b, r] => if b then r else Sum.inl false
+  | GateOp.and, [r, Sum.inl b] => if b then r else Sum.inl false
+  | GateOp.or, [Sum.inl b] => Sum.inl b
+  | GateOp.or, [Sum.inl b, r] => if b then Sum.inl true else r
+  | GateOp.or, [r, Sum.inl b] => if b then Sum.inl true else r
+  | _, _ => Sum.inl false
 
 def stepR (op : GateOp) (rs : List Rep) (k : ℕ) : Rep × Option Gate :=
-  if rs.all Rep.isW then (Rep.w k, some ⟨op, rs.map Rep.idx⟩) else (stepC op rs, none)
+  if rs.all Sum.risW then (Sum.inr k, some ⟨op, rs.map Sum.ridx⟩) else (stepC op rs, none)
 
 def Wnext (W : List Bool) : Option Gate → List Bool
   | none => W
@@ -146,37 +145,37 @@ theorem Wnext_append (W : List Bool) (o : Option Gate) : ∃ t, Wnext W o = W ++
 theorem stepC_spec (op : GateOp) (rs : List Rep) (W : List Bool)
     (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not)
     (hlen : rs.length ≤ 2) (hnot : op = GateOp.not → rs.length ≤ 1)
-    (hok : ∀ r ∈ rs, r.ok W.length) (hc : rs.all Rep.isW = false) :
-    (stepC op rs).ok W.length ∧ (stepC op rs).val W = op.eval (rs.map (Rep.val W)) := by
+    (hok : ∀ r ∈ rs, r.rok W.length) (hc : rs.all Sum.risW = false) :
+    (stepC op rs).rok W.length ∧ (stepC op rs).rv W = op.eval (rs.map (Sum.rv W)) := by
   rcases rs with _ | ⟨r1, _ | ⟨r2, _ | ⟨r3, rs⟩⟩⟩
   · simp at hc
   · rcases hop with rfl | rfl | rfl <;> cases r1 <;>
-      simp_all [stepC, Rep.isW, Rep.ok, Rep.val, GateOp.eval]
+      simp_all [stepC, Sum.risW, Sum.rok, Sum.rv, GateOp.eval]
   · rcases hop with rfl | rfl | rfl
     · cases r1 with
-      | c b1 =>
+      | inl b1 =>
         cases r2 with
-        | c b2 => cases b1 <;> cases b2 <;> simp [stepC, Rep.ok, Rep.val, GateOp.eval]
-        | w i2 =>
-          have h2 : (Rep.w i2).ok W.length := hok _ (by simp)
-          cases b1 <;> simp_all [stepC, Rep.ok, Rep.val, GateOp.eval]
-      | w i1 =>
-        have h1 : (Rep.w i1).ok W.length := hok _ (by simp)
+        | inl b2 => cases b1 <;> cases b2 <;> simp [stepC, Sum.rok, Sum.rv, GateOp.eval]
+        | inr i2 =>
+          have h2 : (Sum.inr i2).rok W.length := hok _ (by simp)
+          cases b1 <;> simp_all [stepC, Sum.rok, Sum.rv, GateOp.eval]
+      | inr i1 =>
+        have h1 : (Sum.inr i1).rok W.length := hok _ (by simp)
         cases r2 with
-        | c b2 => cases b2 <;> simp_all [stepC, Rep.ok, Rep.val, GateOp.eval]
-        | w i2 => simp [Rep.isW] at hc
+        | inl b2 => cases b2 <;> simp_all [stepC, Sum.rok, Sum.rv, GateOp.eval]
+        | inr i2 => simp [Sum.risW] at hc
     · cases r1 with
-      | c b1 =>
+      | inl b1 =>
         cases r2 with
-        | c b2 => cases b1 <;> cases b2 <;> simp [stepC, Rep.ok, Rep.val, GateOp.eval]
-        | w i2 =>
-          have h2 : (Rep.w i2).ok W.length := hok _ (by simp)
-          cases b1 <;> simp_all [stepC, Rep.ok, Rep.val, GateOp.eval]
-      | w i1 =>
-        have h1 : (Rep.w i1).ok W.length := hok _ (by simp)
+        | inl b2 => cases b1 <;> cases b2 <;> simp [stepC, Sum.rok, Sum.rv, GateOp.eval]
+        | inr i2 =>
+          have h2 : (Sum.inr i2).rok W.length := hok _ (by simp)
+          cases b1 <;> simp_all [stepC, Sum.rok, Sum.rv, GateOp.eval]
+      | inr i1 =>
+        have h1 : (Sum.inr i1).rok W.length := hok _ (by simp)
         cases r2 with
-        | c b2 => cases b2 <;> simp_all [stepC, Rep.ok, Rep.val, GateOp.eval]
-        | w i2 => simp [Rep.isW] at hc
+        | inl b2 => cases b2 <;> simp_all [stepC, Sum.rok, Sum.rv, GateOp.eval]
+        | inr i2 => simp [Sum.risW] at hc
     · have := hnot rfl
       simp at this
   · simp at hlen
@@ -184,41 +183,41 @@ theorem stepC_spec (op : GateOp) (rs : List Rep) (W : List Bool)
 theorem stepR_spec (op : GateOp) (rs : List Rep) (W : List Bool)
     (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not)
     (hlen : rs.length ≤ 2) (hnot : op = GateOp.not → rs.length ≤ 1)
-    (hok : ∀ r ∈ rs, r.ok W.length) :
-    (stepR op rs W.length).1.ok (Wnext W (stepR op rs W.length).2).length ∧
-      (stepR op rs W.length).1.val (Wnext W (stepR op rs W.length).2)
-        = op.eval (rs.map (Rep.val W)) := by
-  by_cases hc : rs.all Rep.isW = true
-  · have hmap : (rs.map Rep.idx).map (fun i => W.getD i false) = rs.map (Rep.val W) := by
+    (hok : ∀ r ∈ rs, r.rok W.length) :
+    (stepR op rs W.length).1.rok (Wnext W (stepR op rs W.length).2).length ∧
+      (stepR op rs W.length).1.rv (Wnext W (stepR op rs W.length).2)
+        = op.eval (rs.map (Sum.rv W)) := by
+  by_cases hc : rs.all Sum.risW = true
+  · have hmap : (rs.map Sum.ridx).map (fun i => W.getD i false) = rs.map (Sum.rv W) := by
       rw [List.map_map]
       apply List.map_congr_left
       intro r hr
       have := List.all_eq_true.mp hc r hr
       cases r with
-      | c b => simp [Rep.isW] at this
-      | w i => rfl
+      | inl b => simp [Sum.risW] at this
+      | inr i => rfl
     simp only [stepR, hc, if_true, Wnext, stp, hmap]
     constructor
-    · simp [Rep.ok]
-    · simp [Rep.val, List.getD_eq_getElem?_getD]
-  · have hc' : rs.all Rep.isW = false := by simpa using hc
+    · simp [Sum.rok]
+    · simp [Sum.rv, List.getD_eq_getElem?_getD]
+  · have hc' : rs.all Sum.risW = false := Bool.eq_false_iff.mpr hc
     simp only [stepR, hc', Wnext]
     exact stepC_spec op rs W hop hlen hnot hok hc'
 
 theorem stepR_snd_some (op : GateOp) (rs : List Rep) (k : ℕ) (g : Gate)
-    (h : (stepR op rs k).2 = some g) : g = ⟨op, rs.map Rep.idx⟩ := by
+    (h : (stepR op rs k).2 = some g) : g = ⟨op, rs.map Sum.ridx⟩ := by
   unfold stepR at h
   split at h
   · simpa using h.symm
   · simp at h
 
 theorem stepR_snd_none (op : GateOp) (rs : List Rep) (k : ℕ)
-    (h : rs.all Rep.isW = false) : (stepR op rs k).2 = none := by
+    (h : rs.all Sum.risW = false) : (stepR op rs k).2 = none := by
   simp [stepR, h]
 
 /-- The representations of the wires a gate reads. -/
 def reads (reps : List Rep) (g : Gate) : List Rep :=
-  (trunc g.op g.inputs).map fun i => reps.getD i (Rep.c false)
+  (trunc g.op g.inputs).map fun i => reps.getD i (Sum.inl false)
 
 def simG : List Gate → List Rep → ℕ → List Gate
   | [], _, _ => []
@@ -241,11 +240,11 @@ def Good (g : Gate) : Prop :=
 theorem sim_spec (gs : List Gate) :
     ∀ (reps : List Rep) (Wo Wn : List Bool), (∀ g ∈ gs, Good g) →
       reps.length = Wo.length →
-      (∀ i, (reps.getD i (Rep.c false)).ok Wn.length ∧
-        (reps.getD i (Rep.c false)).val Wn = Wo.getD i false) →
-      ∀ i, ((simR gs reps Wn.length).getD i (Rep.c false)).ok
+      (∀ i, (reps.getD i (Sum.inl false)).rok Wn.length ∧
+        (reps.getD i (Sum.inl false)).rv Wn = Wo.getD i false) →
+      ∀ i, ((simR gs reps Wn.length).getD i (Sum.inl false)).rok
             ((simG gs reps Wn.length).foldl stp Wn).length ∧
-          ((simR gs reps Wn.length).getD i (Rep.c false)).val
+          ((simR gs reps Wn.length).getD i (Sum.inl false)).rv
             ((simG gs reps Wn.length).foldl stp Wn) = (gs.foldl stp Wo).getD i false := by
   induction gs with
   | nil =>
@@ -264,13 +263,13 @@ theorem sim_spec (gs : List Gate) :
       intro e
       simp only [reads, List.length_map, e]
       exact trunc_not_length _
-    have hrok : ∀ r ∈ reads reps g, r.ok Wn.length := by
+    have hrok : ∀ r ∈ reads reps g, r.rok Wn.length := by
       intro r hr
       simp only [reads, List.mem_map] at hr
       obtain ⟨i, _, rfl⟩ := hr
       exact (h i).1
     have hsp := stepR_spec g.op (reads reps g) Wn hop hrl hrn hrok
-    have hval : g.op.eval ((reads reps g).map (Rep.val Wn))
+    have hval : g.op.eval ((reads reps g).map (Sum.rv Wn))
         = g.op.eval (g.inputs.map fun i => Wo.getD i false) := by
       rw [← eval_trunc g.op g.inputs (fun i => Wo.getD i false)]
       simp only [reads, List.map_map]
@@ -283,9 +282,9 @@ theorem sim_spec (gs : List Gate) :
         = (stp Wo g).length := by
       simp [stp, hlen]
     have hinv : ∀ i,
-        ((reps ++ [(stepR g.op (reads reps g) Wn.length).1]).getD i (Rep.c false)).ok
+        ((reps ++ [(stepR g.op (reads reps g) Wn.length).1]).getD i (Sum.inl false)).rok
             (Wnext Wn (stepR g.op (reads reps g) Wn.length).2).length ∧
-          ((reps ++ [(stepR g.op (reads reps g) Wn.length).1]).getD i (Rep.c false)).val
+          ((reps ++ [(stepR g.op (reads reps g) Wn.length).1]).getD i (Sum.inl false)).rv
             (Wnext Wn (stepR g.op (reads reps g) Wn.length).2) = (stp Wo g).getD i false := by
       intro i
       rcases lt_trichotomy i reps.length with hi | hi | hi
@@ -294,13 +293,13 @@ theorem sim_spec (gs : List Gate) :
         simp only [stp]
         rw [List.getD_append _ _ _ _ hi']
         constructor
-        · apply Rep.ok_mono _ _ (h i).1
+        · apply Sum.rok_mono _ _ (h i).1
           rw [ht]; simp
-        · rw [ht, Rep.val_append _ _ _ (h i).1]
+        · rw [ht, Sum.rv_append _ _ _ (h i).1]
           exact (h i).2
       · subst hi
         have e1 : (reps ++ [(stepR g.op (reads reps g) Wn.length).1]).getD reps.length
-            (Rep.c false) = (stepR g.op (reads reps g) Wn.length).1 := by
+            (Sum.inl false) = (stepR g.op (reads reps g) Wn.length).1 := by
           simp [List.getD_eq_getElem?_getD]
         have e2 : (stp Wo g).getD reps.length false
             = g.op.eval (g.inputs.map fun i => Wo.getD i false) := by
@@ -308,7 +307,7 @@ theorem sim_spec (gs : List Gate) :
         rw [e1, e2, ← hval]
         exact hsp
       · have e1 : (reps ++ [(stepR g.op (reads reps g) Wn.length).1]).getD i
-            (Rep.c false) = Rep.c false := by
+            (Sum.inl false) = Sum.inl false := by
           rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none (by simp; omega)]
           rfl
         have e2 : (stp Wo g).getD i false = false := by
@@ -366,7 +365,7 @@ theorem getElem?_append_of_some {α : Type} (l t : List α) (i : ℕ) (x : α)
   exact h
 
 theorem simG_len_lt (L : ℕ) (b : Bool) (gs : List Gate) :
-    ∀ (reps : List Rep) (k : ℕ), reps[L]? = some (Rep.c b) →
+    ∀ (reps : List Rep) (k : ℕ), reps[L]? = some (Sum.inl b) →
       (∃ g ∈ gs, L ∈ trunc g.op g.inputs) → (simG gs reps k).length < gs.length := by
   induction gs with
   | nil => intro reps k _ h; simp at h
@@ -378,9 +377,9 @@ theorem simG_len_lt (L : ℕ) (b : Bool) (gs : List Gate) :
     have h1 : (stepR g.op (reads reps g) k).2.toList.length ≤ 1 := by
       cases (stepR g.op (reads reps g) k).2 <;> simp
     by_cases hg : L ∈ trunc g.op g.inputs
-    · have hall : (reads reps g).all Rep.isW = false := by
+    · have hall : (reads reps g).all Sum.risW = false := by
         rw [List.all_eq_false]
-        refine ⟨Rep.c b, ?_, by simp [Rep.isW]⟩
+        refine ⟨Sum.inl b, ?_, by simp [Sum.risW]⟩
         simp only [reads, List.mem_map]
         refine ⟨L, hg, ?_⟩
         simp [List.getD_eq_getElem?_getD, hL]
@@ -443,27 +442,27 @@ theorem indep (L : ℕ) (gs : List Gate) :
       exact hno g' (by simp [hg'])
 
 /-- The first representations: every input is itself, the last one is the constant `true`. -/
-def reps0 (m : ℕ) : List Rep := (List.range m).map Rep.w ++ [Rep.c true]
+def reps0 (m : ℕ) : List Rep := (List.range m).map Sum.inr ++ [Sum.inl true]
 
-theorem reps0_last (m : ℕ) : (reps0 m)[m]? = some (Rep.c true) := by
+theorem reps0_last (m : ℕ) : (reps0 m)[m]? = some (Sum.inl true) := by
   simp [reps0]
 
 theorem reps0_inv (m : ℕ) (inp : List Bool) (hm : inp.length = m) :
-    ∀ i, ((reps0 m).getD i (Rep.c false)).ok inp.length ∧
-      ((reps0 m).getD i (Rep.c false)).val inp = (inp ++ [true]).getD i false := by
+    ∀ i, ((reps0 m).getD i (Sum.inl false)).rok inp.length ∧
+      ((reps0 m).getD i (Sum.inl false)).rv inp = (inp ++ [true]).getD i false := by
   intro i
   rcases lt_trichotomy i m with hi | hi | hi
-  · have e : (reps0 m).getD i (Rep.c false) = Rep.w i := by
+  · have e : (reps0 m).getD i (Sum.inl false) = Sum.inr i := by
       simp [reps0, List.getD_eq_getElem?_getD, List.getElem?_append, hi]
     rw [e, List.getD_append _ _ _ _ (hm ▸ hi)]
     exact ⟨hm ▸ hi, rfl⟩
   · subst hi
-    have e : (reps0 i).getD i (Rep.c false) = Rep.c true := by
+    have e : (reps0 i).getD i (Sum.inl false) = Sum.inl true := by
       simp [List.getD_eq_getElem?_getD, reps0_last]
     rw [e]
     refine ⟨trivial, ?_⟩
-    simp [Rep.val, List.getD_eq_getElem?_getD, hm]
-  · have e : (reps0 m).getD i (Rep.c false) = Rep.c false := by
+    simp [Sum.rv, List.getD_eq_getElem?_getD, hm]
+  · have e : (reps0 m).getD i (Sum.inl false) = Sum.inl false := by
       rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none (by simp [reps0]; omega)]
       rfl
     rw [e]
@@ -494,7 +493,7 @@ theorem PEqualNP.Outside.L_meta_175 : ∀ (n s : ℕ) (g : (Fin (n + 1) → Bool
       simpa [Circuit.eval, wires_eq] using this
     have hgood : ∀ g' ∈ C.gates, Good g' := hF
     have hsim : ∀ (x : Fin (n + 1) → Bool) (i : ℕ),
-        ((simR C.gates (reps0 (n + 1)) (n + 1)).getD i (Rep.c false)).val
+        ((simR C.gates (reps0 (n + 1)) (n + 1)).getD i (Sum.inl false)).rv
             ((simG C.gates (reps0 (n + 1)) (n + 1)).foldl stp (List.ofFn x))
           = (C.gates.foldl stp (List.ofFn x ++ [true])).getD i false := by
       intro x i
@@ -508,8 +507,8 @@ theorem PEqualNP.Outside.L_meta_175 : ∀ (n s : ℕ) (g : (Fin (n + 1) → Bool
       congr 1
       simp only [Bool.and_true]
       exact Fin.snoc_init_self x
-    cases hro : (simR C.gates (reps0 (n + 1)) (n + 1)).getD C.output (Rep.c false) with
-    | c b =>
+    cases hro : (simR C.gates (reps0 (n + 1)) (n + 1)).getD C.output (Sum.inl false) with
+    | inl b =>
       exfalso
       have hconst : ∀ x : Fin (n + 1) → Bool, g x = b := by
         intro x
@@ -517,11 +516,11 @@ theorem PEqualNP.Outside.L_meta_175 : ∀ (n s : ℕ) (g : (Fin (n + 1) → Bool
         rw [hro, hCb, hgx] at h
         exact h.symm
       exact hy ((hconst _).trans (hconst _).symm)
-    | w j =>
+    | inr j =>
       refine ⟨⟨simG C.gates (reps0 (n + 1)) (n + 1), j⟩, simG_good _ _ _ hgood, ?_, ?_⟩
       · have hne : C.output ≠ n + 1 := by
           intro e
-          have hk := simR_keep (n + 1) (Rep.c true) C.gates (reps0 (n + 1)) (n + 1)
+          have hk := simR_keep (n + 1) (Sum.inl true) C.gates (reps0 (n + 1)) (n + 1)
             (reps0_last (n + 1))
           rw [e, List.getD_eq_getElem?_getD, hk] at hro
           simp at hro
@@ -552,7 +551,7 @@ theorem PEqualNP.Outside.L_meta_175 : ∀ (n s : ℕ) (g : (Fin (n + 1) → Bool
       · intro x
         have h := hsim x C.output
         rw [hro, hCb, hgx] at h
-        simpa [Circuit.eval, wires_eq, Rep.val] using h
+        simpa [Circuit.eval, wires_eq, Sum.rv] using h
   · rintro ⟨D, hF, hsz, hD⟩
     refine ⟨⟨⟨GateOp.and, [n, n + 1]⟩ :: D.gates.map (relG n), rel n D.output⟩, ?_, ?_, ?_⟩
     · intro g' hg'
