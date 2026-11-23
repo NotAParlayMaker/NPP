@@ -46,6 +46,8 @@ import PEqualNP.Defs.Peelable
 import PEqualNP.Defs.NestedCoverCircuit
 import PEqualNP.Defs.LiteralPartition
 import PEqualNP.Defs.MinimumComplex
+import PEqualNP.Defs.PendantBit
+import PEqualNP.Defs.BorrowedCoverCircuit
 
 /-!
 # The definitions root
