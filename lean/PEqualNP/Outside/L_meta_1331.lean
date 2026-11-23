@@ -1,74 +1,61 @@
 import Mathlib
 import PEqualNP.Defs
 
+namespace PEqualNP.Outside.L_meta_1331_aux
+
 open PEqualNP.CircuitLowerBounds
 
-namespace PEqualNP.Outside.L_meta_1331
-
-def W (gs : List Gate) (x : List Bool) : List Bool := Circuit.wires ⟨gs, 0⟩ x
-
-theorem W_snoc (gs : List Gate) (g : Gate) (x : List Bool) :
-    W (gs ++ [g]) x = W gs x ++ [g.op.eval (g.inputs.map fun i => (W gs x).getD i false)] := by
-  simp [W, Circuit.wires, List.foldl_append]
-
-theorem W_length (gs : List Gate) (x : List Bool) : (W gs x).length = x.length + gs.length := by
-  induction gs using List.reverseRecOn with
-  | nil => simp [W, Circuit.wires]
-  | append_singleton gs g ih =>
-    rw [W_snoc, List.length_append, ih]
-    simp
+theorem getD_eq_of_drop (n : ℕ) (a b : List Bool) (h : a.drop n = b.drop n) (i : ℕ) (hi : n ≤ i) :
+    a.getD i false = b.getD i false := by
+  have ha : a.getD i false = (a.drop n).getD (i - n) false := by
+    simp only [List.getD_eq_getElem?_getD, List.getElem?_drop]
+    congr 2
     omega
+  have hb : b.getD i false = (b.drop n).getD (i - n) false := by
+    simp only [List.getD_eq_getElem?_getD, List.getElem?_drop]
+    congr 2
+    omega
+  rw [ha, hb, h]
 
-theorem key (n : ℕ) (gs : List Gate) (hg : ∀ g ∈ gs, ∀ u ∈ g.inputs, n ≤ u)
-    (x y : List Bool) (hx : x.length = n) (hy : y.length = n) :
-    ∀ i, n ≤ i → (W gs x).getD i false = (W gs y).getD i false := by
-  induction gs using List.reverseRecOn with
-  | nil =>
-    intro i hi
-    have e1 : W [] x = x := by simp [W, Circuit.wires]
-    have e2 : W [] y = y := by simp [W, Circuit.wires]
-    rw [e1, e2, List.getD_eq_default _ _ (by omega), List.getD_eq_default _ _ (by omega)]
-  | append_singleton gs g ih =>
-    have ih' := ih (fun g' hg' => hg g' (List.mem_append_left _ hg'))
-    intro i hi
-    rw [W_snoc, W_snoc]
-    have hlx := W_length gs x
-    have hly := W_length gs y
-    by_cases h1 : i < n + gs.length
-    · rw [List.getD_append _ _ _ _ (by omega), List.getD_append _ _ _ _ (by omega)]
-      exact ih' i hi
-    · rw [List.getD_append_right _ _ _ _ (by omega), List.getD_append_right _ _ _ _ (by omega)]
-      have hv : (g.inputs.map fun i => (W gs x).getD i false) =
-          (g.inputs.map fun i => (W gs y).getD i false) := by
+theorem fold_drop (n : ℕ) (gs : List Gate) (hg : ∀ g ∈ gs, ∀ u ∈ g.inputs, n ≤ u) :
+    ∀ a b : List Bool, n ≤ a.length → n ≤ b.length → a.drop n = b.drop n →
+      (gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) a).drop n =
+      (gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) b).drop n := by
+  induction gs with
+  | nil => intro a b _ _ h; simpa using h
+  | cons g gs ih =>
+    intro a b ha hb h
+    simp only [List.foldl_cons]
+    apply ih (fun g' hg' => hg g' (List.mem_cons_of_mem _ hg'))
+    · simp; omega
+    · simp; omega
+    · have hm : (g.inputs.map fun i => a.getD i false) = (g.inputs.map fun i => b.getD i false) := by
         apply List.map_congr_left
         intro u hu
-        exact ih' u (hg g (List.mem_append_right _ (List.mem_singleton_self g)) u hu)
-      rw [hv, hlx, hly, hx, hy]
+        exact getD_eq_of_drop n a b h u (hg g List.mem_cons_self u hu)
+      rw [List.drop_append_of_le_length ha, List.drop_append_of_le_length hb, h, hm]
 
-end PEqualNP.Outside.L_meta_1331
+end PEqualNP.Outside.L_meta_1331_aux
 
+open PEqualNP.Outside.L_meta_1331_aux in
 theorem PEqualNP.Outside.L_meta_1331 : ∀ (n : ℕ) (gates : List PEqualNP.CircuitLowerBounds.Gate) (G : Finset (Fin gates.length)), (∀ j : Fin gates.length, j ∉ G → ∀ u ∈ (gates.get j).inputs, n ≤ u) → ∀ k ∈ G, (∀ i ∈ G, k ≤ i) → ∀ w ∈ (gates.get k).inputs, n ≤ w → ∀ x y : Fin n → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates.take k.val, w⟩ (List.ofFn x) = PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates.take k.val, w⟩ (List.ofFn y) := by
-  intro n gates G hG k hk hmin w hw hnw x y
-  have hgs : ∀ g ∈ gates.take k.val, ∀ u ∈ g.inputs, n ≤ u := by
+  intro n gates G hG k hk hmin w _ hw x y
+  have hpre : ∀ g ∈ gates.take k.val, ∀ u ∈ g.inputs, n ≤ u := by
     intro g hg u hu
-    obtain ⟨i, hi, hgi⟩ := List.mem_iff_getElem.mp hg
-    have hik : i < k.val := by
-      have := List.length_take_le' k.val gates
-      simp only [List.length_take] at hi
+    obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hg
+    have hjk : j < k.val := by simp at hj; omega
+    have hjl : j < gates.length := by simp at hj; omega
+    have hnot : (⟨j, hjl⟩ : Fin gates.length) ∉ G := by
+      intro hin
+      have := hmin _ hin
+      rw [Fin.le_def] at this
+      simp at this
       omega
-    have hil : i < gates.length := by
-      simp only [List.length_take] at hi
-      omega
-    let j : Fin gates.length := ⟨i, hil⟩
-    have hj : j ∉ G := by
-      intro hjG
-      have := hmin j hjG
-      have : k.val ≤ i := this
-      omega
-    have hgj : gates.get j = g := by
-      rw [← hgi, List.getElem_take]
-      rfl
-    exact hG j hj u (hgj ▸ hu)
-  change (PEqualNP.Outside.L_meta_1331.W (gates.take k.val) (List.ofFn x)).getD w false =
-    (PEqualNP.Outside.L_meta_1331.W (gates.take k.val) (List.ofFn y)).getD w false
-  exact PEqualNP.Outside.L_meta_1331.key n _ hgs _ _ (by simp) (by simp) w hnw
+    have := hG _ hnot u
+    simp only [List.get_eq_getElem] at this
+    rw [List.getElem_take] at hu
+    exact this hu
+  unfold PEqualNP.CircuitLowerBounds.Circuit.eval PEqualNP.CircuitLowerBounds.Circuit.wires
+  apply getD_eq_of_drop n _ _ _ w hw
+  refine fold_drop n _ hpre _ _ (by simp) (by simp) ?_
+  rw [List.drop_eq_nil_of_le (by simp), List.drop_eq_nil_of_le (by simp)]
