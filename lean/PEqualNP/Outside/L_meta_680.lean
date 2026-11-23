@@ -1,62 +1,43 @@
 import Mathlib
 import PEqualNP.Defs
 
-namespace PEqualNP.Outside.L_meta_680
-
--- The common elements of two translates are the pairs of D with the difference of the shifts.
-theorem inter_eq {n : ℕ} (D : Finset (ZMod n)) (s t : ZMod n) :
-    D.image (fun a : ZMod n => a + s) ∩ D.image (fun a : ZMod n => a + t)
-      = ((D ×ˢ D).filter (fun q : ZMod n × ZMod n => q.1 - q.2 = t - s)).image
-          (fun q => q.1 + s) := by
-  ext x
-  simp only [Finset.mem_inter, Finset.mem_image, Finset.mem_filter, Finset.mem_product]
-  constructor
-  · rintro ⟨⟨a, ha, hax⟩, ⟨b, hb, hbx⟩⟩
-    refine ⟨(a, b), ⟨⟨ha, hb⟩, ?_⟩, hax⟩
-    show a - b = t - s
-    linear_combination hax - hbx
-  · rintro ⟨⟨a, b⟩, ⟨⟨ha, hb⟩, hd⟩, hx⟩
-    simp only at ha hb hd hx
-    refine ⟨⟨a, ha, hx⟩, ⟨b, hb, ?_⟩⟩
-    linear_combination hx - hd
-
-theorem inj_on {n : ℕ} (D : Finset (ZMod n)) (s t : ZMod n) :
-    Set.InjOn (fun q : ZMod n × ZMod n => q.1 + s)
-      (((D ×ˢ D).filter (fun q : ZMod n × ZMod n => q.1 - q.2 = t - s) :
-        Finset (ZMod n × ZMod n)) : Set (ZMod n × ZMod n)) := by
-  rintro ⟨a, b⟩ hq ⟨a', b'⟩ hq' h
-  rw [Finset.mem_coe, Finset.mem_filter] at hq hq'
-  have h1 : a = a' := add_right_cancel h
-  have hd : a - b = t - s := hq.2
-  have hd' : a' - b' = t - s := hq'.2
-  have h2 : b = b' := by linear_combination h1 - hd + hd'
-  rw [h1, h2]
-
-theorem count_eq {n : ℕ} [NeZero n] (D : Finset (ZMod n)) (x : ZMod n) :
-    Finset.univ.filter (fun w : ZMod n => x ∈ D.image (fun a : ZMod n => a + w))
-      = D.image (fun a : ZMod n => x - a) := by
-  ext w
-  simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image]
-  constructor
-  · rintro ⟨a, ha, rfl⟩
-    exact ⟨a, ha, by ring⟩
-  · rintro ⟨a, ha, rfl⟩
-    exact ⟨a, ha, by ring⟩
-
-end PEqualNP.Outside.L_meta_680
-
 theorem PEqualNP.Outside.L_meta_680 : ∀ (n : ℕ) [NeZero n] (D : Finset (ZMod n)),
     (∀ d : ZMod n, d ≠ 0 → ((D ×ˢ D).filter (fun q : ZMod n × ZMod n => q.1 - q.2 = d)).card = 1) →
     (∀ s t : ZMod n, s ≠ t →
         (D.image (fun a : ZMod n => a + s) ∩ D.image (fun a : ZMod n => a + t)).card = 1) ∧
     (∀ x : ZMod n,
         (Finset.univ.filter (fun w : ZMod n => x ∈ D.image (fun a : ZMod n => a + w))).card = D.card) := by
-  intro n _ D hD
-  constructor
+  intro n _ D h
+  refine ⟨?_, ?_⟩
   · intro s t hst
-    rw [PEqualNP.Outside.L_meta_680.inter_eq,
-      Finset.card_image_of_injOn (PEqualNP.Outside.L_meta_680.inj_on D s t)]
-    exact hD (t - s) (sub_ne_zero.mpr (Ne.symm hst))
+    rw [← h (t - s) (sub_ne_zero.mpr (Ne.symm hst))]
+    apply Finset.card_bij (fun x _ => (x - s, x - t))
+    · intro x hx
+      simp only [Finset.mem_inter, Finset.mem_image] at hx
+      obtain ⟨⟨a, ha, rfl⟩, ⟨b, hb, hab⟩⟩ := hx
+      simp only [Finset.mem_filter, Finset.mem_product]
+      have e : a + s - t = b := by linear_combination (-1 : ZMod n) * hab
+      refine ⟨⟨by simpa using ha, ?_⟩, by ring⟩
+      rw [e]; exact hb
+    · intro x _ y _ hxy
+      simpa using congrArg Prod.fst hxy
+    · intro q hq
+      simp only [Finset.mem_filter, Finset.mem_product] at hq
+      obtain ⟨⟨h1, h2⟩, h3⟩ := hq
+      refine ⟨q.1 + s, ?_, ?_⟩
+      · simp only [Finset.mem_inter, Finset.mem_image]
+        exact ⟨⟨q.1, h1, rfl⟩, ⟨q.2, h2, by linear_combination (-1 : ZMod n) * h3⟩⟩
+      · refine Prod.ext (by simp) ?_
+        show q.1 + s - t = q.2
+        linear_combination h3
   · intro x
-    rw [PEqualNP.Outside.L_meta_680.count_eq]
-    exact Finset.card_image_of_injective _ (fun a b h => by simpa using h)
+    have e : Finset.univ.filter (fun w : ZMod n => x ∈ D.image (fun a : ZMod n => a + w))
+        = D.image (fun a : ZMod n => x - a) := by
+      ext w
+      simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image]
+      constructor
+      · rintro ⟨a, ha, rfl⟩
+        exact ⟨a, ha, by ring⟩
+      · rintro ⟨a, ha, rfl⟩
+        exact ⟨a, ha, by ring⟩
+    rw [e, Finset.card_image_of_injective _ (fun a b hab => by simpa using hab)]
