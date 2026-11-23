@@ -193,10 +193,29 @@ jobs:
 
       - name: Run the BASE checker on the file (the only step that runs outside code)
         id: run
+        # A backstop only: the checker's own limit below (20 minutes) ends it first, with a
+        # recorded exit code, so the verdict step reports a FAULT and prints what it was doing.
+        timeout-minutes: 25
         run: |
           # The checker's exit code is read below, so a nonzero one must not end this step.
           set +e -u
           file=$(cat "$W/in/pr.file")
+          # What the machine was doing, every 30 s, kept for the verdict step: the busiest
+          # processes, memory and swap, swap and disk traffic, memory pressure, which builds have
+          # finished. Written by this account into a directory closed to every other one. The
+          # process list can show arguments of the locked build, so the verdict step prints it
+          # only quoted.
+          mkdir -m 700 "$RUNNER_TEMP/sampler"
+          t0=$(date +%s)
+          ( while sleep 30; do
+              echo "--- t=$(( $(date +%s) - t0 ))s"
+              ps -eo user:10,etime,pcpu,rss,args --sort=-pcpu | head -5 | cut -c1-200
+              free -m | sed -n 2,3p
+              vmstat 1 2 | tail -1 | awk '{print "swap in/out " $7 "/" $8 " KB/s, disk in/out " $9 "/" $10 " blocks/s, iowait " $16 "%"}'
+              head -n 1 /proc/pressure/memory 2>/dev/null
+              cat "$RUNNER_TEMP"/builds/*/cmd 2>/dev/null
+            done ) > "$RUNNER_TEMP/sampler/log" 2>&1 &
+          sampler=$!
           node_bin=$(dirname "$(readlink -f "$(command -v node)")")
           cd "$W/base"
           # Full build output, kept by lake-locked.sh. Created and owned by this account, closed
@@ -218,11 +237,15 @@ jobs:
           env -i HOME="$HOME" LANG=C.UTF-8 PATH="$TC_BIN:$node_bin:/usr/bin:/bin" \
               PEQUALNP_REAL_LAKE="$W/base/.github/scripts/lake-locked.sh" PEQUALNP_HOME="$W/queue" \
               PNP_TC_BIN="$TC_BIN" PNP_GITCONFIG="$W/in/gitconfig" PNP_BUILD_LOGS="$RUNNER_TEMP/builds" \
-            timeout -k 30 5400 node "$W/base/tools/check-lean.mjs" "$W/base/$file" "$W/in/statement.txt" check \
+            timeout -k 30 1200 node "$W/base/tools/check-lean.mjs" "$W/base/$file" "$W/in/statement.txt" check \
             > "$RUNNER_TEMP/checker.out" 2> "$RUNNER_TEMP/checker.err"
           code=$?
-          # Nothing the compile started may outlive it.
+          kill "$sampler" 2>/dev/null
+          # 124 or 137: the 20 minute limit ended the checker. A FAULT, never a verdict on the proof.
+          case "$code" in 124|137) echo "the checker was stopped after 20 minutes" >> "$RUNNER_TEMP/checker.err" ;; esac
+          # Nothing the compile started may outlive it, and neither may the verifier.
           sudo pkill -KILL -u outsider || true
+          pkill -KILL -f "$W/base/lean/.lake/build/bin/checklemma" || true
           echo "code=$code" >> "$GITHUB_OUTPUT"
 
       - name: Print the checker's last line, MANIFEST, and the verdict
@@ -251,6 +274,8 @@ jobs:
               cat "$b/cmd" 2>/dev/null | quoted; tail -n 15 "$b/out" | quoted; tail -n 15 "$b/err" | quoted
             done
             tail -n 15 "$RUNNER_TEMP/checker.err" 2>/dev/null | quoted
+            echo "----- the machine, last samples -----"
+            tail -n 40 "$RUNNER_TEMP/sampler/log" 2>/dev/null | quoted
             echo "::$stop::"
             echo "VERDICT: FAULT (the checker's step was stopped before it finished: $RAN. This says nothing about the proof.)" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 3
@@ -294,6 +319,10 @@ jobs:
               | grep -a -m 8 -A 15 -E '^lake |^error|^✖|: error' | quoted
           done
           tail -n 40 "$RUNNER_TEMP/checker.out" | grep -av '^MANIFEST {' | quoted
+          if [ "$CODE" != 0 ] && [ "$CODE" != 1 ]; then
+            echo "----- the machine, last samples -----"
+            tail -n 40 "$RUNNER_TEMP/sampler/log" 2>/dev/null | quoted
+          fi
           echo "----- MANIFEST -----"
           grep -a '^MANIFEST {' "$RUNNER_TEMP/checker.out" | cut -c1-200000 | sed 's/^/  | /' || true
           echo "----- last line -----"
