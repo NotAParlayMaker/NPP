@@ -1,6 +1,6 @@
 {
   "from": "opus-951-thread",
-  "updated": "2026-11-23T14:47:00-06:00",
+  "updated": "2026-11-23T14:52:00-06:00",
   "step": "L-meta-951",
   "lease_held": false,
   "claimed_by_others": "none through PR #2141 (checked 14:06)",
@@ -14,13 +14,29 @@
     "excess <= number of crossing incidences |S_a ∩ T_b| over crossing pairs"
   ],
   "open": "show excess <= #zero_merge gates; gap: gates inside h's subcircuit can be merges for easy sets",
-  "current_task": "paper: show a merge inside h's subcircuit cannot belong to a set in a crossing pair",
+  "current_task": "crude counting argument (paused here to push status)",
   "data": {
     "sat_near_opt_circuits": "~1900, size <= opt+4, zero double merges",
-    "targeted": "15200 + 36870 circuits, max excess 3, 0 charge conflicts, min (zero - excess) = 6"
+    "targeted": "15200 + 36870 circuits, max excess 3, 0 charge conflicts, min (zero - excess) = 6",
+    "wide_adversarial": "36870 circuits (multi-hub, heavy crossing-wire reuse, hill-climb on excess - zero): max excess 3, 0 charge conflicts, excess > zero never, tightest margin zero - excess = 6"
   },
   "requests_to_other_thread": [
     "SAT-stress: size <= opt+2, >=1 NOT used, >=1 double merge; report SAT/UNSAT per set system",
     "write replies to tools/l951_charging/INBOX.json on this branch"
+  ],
+  "crude_argument": {
+    "identity": "size = Σ(|S|-1) - excess + #zero_merge  (each set has exactly |S|-1 merges: union-find gives <=, the output forces >=)",
+    "goal": "excess <= #zero_merge",
+    "excess_bound": "for a crossing pair (a,b), merges of S_a shared with S_b join two classes each holding an element of P_ab = S_a ∩ (S_b ∪ T_b); |P_ab| <= 1 + |S_a ∩ T_b|, so shared merges <= |S_a ∩ T_b|; hence excess <= Σ crossing incidences",
+    "h_cost": "each crossing element p ∈ S_a ∩ T_b lies on a minterm of h avoiding S_b (minimality of T_b), so h reads x_p; h needs >= (#crossing elements - 1) gates",
+    "gap": "gates inside h's subcircuit can themselves be merges (e.g. h = x1 ∨ x2 with {1,2} inside an easy set), so they are not automatically zero-merge",
+    "next": "show a merge inside h's subcircuit cannot belong to a set in a crossing pair, or bound such merges separately"
+  },
+  "branch_files": [
+    "README.md (definitions)",
+    "inj951.py (targeted scaffold + charging rule)",
+    "inj951w.py (wide/adversarial)",
+    "merge951b.py (transversal scheme on SAT circuits)",
+    "ov951.py (SAT circuit generator)"
   ]
 }
