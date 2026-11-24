@@ -38,7 +38,8 @@ theorem PEqualNP.Outside.R_meta_2990_571
       simpa only [Set.mem_insert_iff, Set.mem_singleton_iff] using (mono g hg).1
     · intro j hj wire hwire
       obtain ⟨a, b, hin, hab, hlast⟩ := ordered j C.gates[j] (List.getElem?_eq_getElem hj)
-      rw [PEqualNP.MetaComplexity.NestedCover.gateAt, List.getD_eq_getElem _ _ hj, hin] at hwire
+      change wire ∈ (C.gates.getD j ⟨.or, []⟩).inputs at hwire
+      rw [List.getD_eq_getElem _ _ hj, hin] at hwire
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hwire
       rcases hwire with rfl | rfl
       · exact hab.trans hlast
