@@ -145,7 +145,11 @@ theorem PEqualNP.Outside.R_meta_2828_7
               (List.getD [1, 0, 5, 8, 6, 2, 4, 7, 3] g.left g.left)
               (List.getD [1, 0, 5, 8, 6, 2, 4, 7, 3] g.right g.right))
           (List.getD [1, 0, 5, 8, 6, 2, 4, 7, 3] C.output C.output)) ?_ ?_ ?_
-      · simpa [PEqualNP.MetaComplexity.BinaryCircuit.size] using hsize
+      · have hszB : ∀ D : PEqualNP.MetaComplexity.BinaryCircuit, D.size = D.gates.length :=
+          fun _ => rfl
+        rw [hszB] at hsize
+        rw [hszB]
+        simpa using hsize
       · intro g' hg'
         simp only [List.mem_map] at hg'
         obtain ⟨g0, hg0, rfl⟩ := hg'
@@ -161,8 +165,12 @@ theorem PEqualNP.Outside.R_meta_2828_7
           (List.ofFn (fun i => y (![1, 0, 5, 8, 6, 2, 4, 7, 3] i)) ++
             [y (![1, 0, 5, 8, 6, 2, 4, 7, 3] 0) || y (![1, 0, 5, 8, 6, 2, 4, 7, 3] 1), false])
           (List.ofFn y ++ [y 0 || y 1, false]) (by simp) (by simp) ?_ C.output
-        · simp only [PEqualNP.MetaComplexity.BinaryCircuit.eval,
-            PEqualNP.MetaComplexity.BinaryCircuit.wires] at hf ⊢
+        · have hevB : ∀ (D : PEqualNP.MetaComplexity.BinaryCircuit) (l : List Bool), D.eval l =
+              (D.gates.foldl (fun w g => w ++ [g.op (w.getD g.left false) (w.getD g.right false)])
+                l).getD D.output false := fun _ _ => rfl
+          rw [hevB] at hf
+          rw [hevB]
+          dsimp only at hf ⊢
           rw [e, hf]
           exact hF0 (y 0) (y 1) (y 2) (y 3) (y 4) (y 5) (y 6) (y 7) (y 8)
         · intro j
