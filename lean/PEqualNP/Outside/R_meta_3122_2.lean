@@ -34,7 +34,7 @@ theorem PEqualNP.Outside.R_meta_3122_2
     let readWire (j : ℕ) := if hj : j < 11 then (f ⟨j,hj⟩).val else j
     let changeGate (g : Gate) : Gate := ⟨g.op, g.inputs.map readWire⟩
     let D : Circuit := ⟨C.gates.map changeGate, readWire C.output⟩
-    refine ⟨D, ?_, by simp [D, Circuit.size], ?_⟩
+    refine ⟨D, ?_, List.length_map changeGate, ?_⟩
     · intro g hg
       change g ∈ C.gates.map changeGate at hg
       obtain ⟨old, hold, rfl⟩ := List.mem_map.mp hg
@@ -109,8 +109,9 @@ theorem PEqualNP.Outside.R_meta_3122_2
         | nil =>
           refine ⟨clamp a,clamp b,?_⟩
           intro x
-          simp only [List.map_cons, List.map_nil, GateOp.eval, List.any_cons, List.any_nil,
-            id_eq, Bool.or_false, getClamp]
+          change ((u x).getD a false || ((u x).getD b false || false)) =
+            (raw x (clamp a) || raw x (clamp b))
+          rw [getClamp, getClamp, Bool.or_false]
         | cons c cs => simp at hlen
   obtain ⟨a,b,hn⟩ := normalize
   have computed (x : Fin 9 → Bool) : C.eval (List.ofFn (slot a b x)) = edge x := by
