@@ -75,6 +75,8 @@ import PEqualNP.Defs.ReadK
 import PEqualNP.Defs.GenericRejection
 import PEqualNP.Defs.CrossAnd
 import PEqualNP.Defs.ReadKJoin
+import PEqualNP.Defs.SharedBlockCost
+import PEqualNP.Defs.ReadTwo
 
 /-!
 # The definitions root
