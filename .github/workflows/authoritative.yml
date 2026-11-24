@@ -41,7 +41,11 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-24.04
+    # The runner's label is a repository VARIABLE an admin sets (CHECK_RUNNER), so the check can move to a
+    # larger GitHub-hosted runner by a settings change. Unset, it is the standard runner as before. A pull
+    # request cannot set a variable, and this workflow is only ever started from the base repository.
+    # Only a label on the list below is taken: a mistyped or self-hosted label falls back to the standard runner.
+    runs-on: ${{ contains(fromJSON('["pnp-4core"]'), vars.CHECK_RUNNER) && vars.CHECK_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 150
     env:
       # Inputs are free text typed by whoever starts the run. They reach the scripts only as
