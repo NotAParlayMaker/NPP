@@ -7,6 +7,8 @@
 # environment, no way to gain privileges, and write access to nothing but the output
 # directories of its own module. Every other lake command (the verifier's run) is the plain
 # pinned lake, run by the workflow's own account, which that compile cannot touch.
+# The system's own tools only, whatever a build left on the runner's PATH (red team, second wall).
+PATH=/usr/bin:/bin; export PATH
 set -eu
 : "${PNP_TC_BIN:?the toolchain bin directory}" "${PNP_GITCONFIG:?the git config file}"
 : "${PNP_RW_DIRS:?the output directories of the build, colon-separated}"
@@ -24,11 +26,11 @@ case "${1:-}" in
     # when the build ends the kernel ends everything it started; its own IPC objects; its own mounts,
     # where everything is read-only but the places it must write (locked-ns.sh, which says why).
     : > "$log/ns"
-    sudo -n unshare --net --ipc --mount --pid --fork -- /bin/sh "$here/locked-ns.sh" \
+    sudo -n /usr/bin/unshare --net --ipc --mount --pid --fork -- /bin/sh "$here/locked-ns.sh" \
         "$log/ns" "$PNP_TC_BIN" "${PNP_LEAN_THREADS:-${LEAN_NUM_THREADS:-3}}" "$PNP_GITCONFIG" "$PNP_RW_DIRS" "$PNP_TC_BIN/lake" "$@" \
       > "$log/out" 2> "$log/err" || code=$?
     # Nothing a build started may outlive it: the compiled result is read only once it is still.
-    sudo -n pkill -KILL -u outsider || true
+    sudo -n /usr/bin/pkill -KILL -u outsider || true
     # A namespace that did not say it was ready: the build never ran as it should. That is OUR fault,
     # never the proof's: the marker file tells the workflow, which reports a FAULT, never a verdict.
     if ! grep -qx 'namespace ready' "$log/ns" 2>/dev/null; then
@@ -41,7 +43,7 @@ case "${1:-}" in
     # The same namespace with a command that does nothing, run by the workflow BEFORE any outside file
     # is placed: a runner on which the namespace cannot be made ready stops there, with no file judged.
     log=$(mktemp -d "${PNP_BUILD_LOGS:-${TMPDIR:-/tmp}}/probe.XXXXXX"); : > "$log/ns"; code=0
-    sudo -n unshare --net --ipc --mount --pid --fork -- /bin/sh "$here/locked-ns.sh" \
+    sudo -n /usr/bin/unshare --net --ipc --mount --pid --fork -- /bin/sh "$here/locked-ns.sh" \
         "$log/ns" "$PNP_TC_BIN" 1 "$PNP_GITCONFIG" "$PNP_RW_DIRS" /bin/true 2> "$log/err" || code=$?
     if grep -qx 'namespace ready' "$log/ns" 2>/dev/null && [ "$code" = 0 ]; then echo "the namespace of the locked build: ready; $(grep -m 1 '^mounts: ' "$log/ns")"; exit 0; fi
     why=`tr -cd 'A-Za-z0-9_./:, \n-' < "$log/err" | head -n 5 | tr '\n' ' '`

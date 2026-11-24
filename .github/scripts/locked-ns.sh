@@ -17,6 +17,9 @@
 # The ready file (the caller's, in a directory only the caller's account can enter) gets one line,
 # "namespace ready", only after the check below passed; the caller treats anything else as our fault.
 # It is opened FIRST, before any mount turns read-only, and closed before the build account starts.
+# The system's own tools only (red team, second wall): sudo hands this root process its secure path,
+# which lists /usr/local/bin ahead of /usr/bin.
+PATH=/usr/bin:/bin; export PATH
 set -eu
 exec 4>>"$1"
 tc=$2; threads=$3; gitcfg=$4; rwdirs=$5; shift 5

@@ -279,6 +279,15 @@ jobs:
           PNP_TC_BIN="$TC_BIN" PNP_GITCONFIG="$W/in/gitconfig" PNP_BUILD_LOGS="$RUNNER_TEMP/builds" \
             PNP_RW_DIRS="$W/base/lean/.lake/build/lib/lean/PEqualNP/Outside:$W/base/lean/.lake/build/ir/PEqualNP/Outside" \
             sh "$W/base/.github/scripts/lake-locked.sh" probe || { echo "FAULT: the namespace of the locked build could not be made ready on this runner"; exit 1; }
+          # THE CHECKER'S NODE, a copy taken BEFORE any outside code runs, into a directory only this
+          # account can enter, with its hash: the node on the runner's PATH (/usr/local/bin/node) is
+          # writable by the build account by its file mode (tool table, 2026-11-24). A second wall
+          # behind the read-only namespace: the run step checks the hash before it starts the checker.
+          src=$(readlink -f "$(command -v node)")
+          mkdir -m 700 "$RUNNER_TEMP/node"
+          install -m 0700 "$src" "$RUNNER_TEMP/node/node"
+          sha256sum "$RUNNER_TEMP/node/node" | cut -d' ' -f1 > "$RUNNER_TEMP/node.sha256"
+          echo "the checker's node: a copy of $src, sha256 $(cat "$RUNNER_TEMP/node.sha256")"
           # What the verdict will be about, hashed before the hostile step runs. With it, the
           # source of every listed outside module (in/outside-sources.txt: paths the guard wrote,
           # each matching base/lean/PEqualNP/Outside/L_<gap>.lean, so word splitting is safe).
@@ -312,7 +321,15 @@ jobs:
               cat "$RUNNER_TEMP"/builds/*/cmd 2>/dev/null
             done ) > "$RUNNER_TEMP/sampler/log" 2>&1 &
           sampler=$!
-          node_bin=$(dirname "$(readlink -f "$(command -v node)")")
+          # SECOND WALL (2026-11-24): from here on, every tool is the system's own. A writable directory
+          # ahead of /usr/bin on the runner's PATH (/usr/local/bin, /opt/pipx_bin) cannot shadow one, and
+          # the checker runs on the node copied before any outside code, checked against its hash now.
+          export PATH=/usr/bin:/bin
+          node_bin="$RUNNER_TEMP/node"
+          if [ "$(sha256sum "$node_bin/node" | cut -d' ' -f1)" != "$(cat "$RUNNER_TEMP/node.sha256")" ]; then
+            echo "the checker's node copy does not match its hash; no check run" >> "$RUNNER_TEMP/checker.err"
+            echo "code=3" >> "$GITHUB_OUTPUT"; exit 0
+          fi
           cd "$W/base"
           # Full build output, kept by lake-locked.sh. Created and owned by this account, closed
           # to every other one: the locked account can neither list, read nor create files in it.
@@ -397,7 +414,7 @@ jobs:
               fi
               if [ "$dog" = on ] && [ "$still" -ge 32 ]; then
                 echo "no progress: the check made no progress for 8 minutes (CPU time $((cpu / 1000000)) s; last: $(stage_now)); ending the whole checker scope" | tee -a "$RUNNER_TEMP/checker.err" "$MARK"
-                sudo systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true
+                sudo /usr/bin/systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true
                 break
               fi
               total=$(awk '/^MemTotal:/{print $2}' /proc/meminfo); avail=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)
@@ -409,7 +426,7 @@ jobs:
               if [ "$avail" -lt $((total / 20)) ]; then low=$((low + 1)); else low=0; fi
               if [ "$low" -ge 2 ] || [ "${full:-0}" -gt 40 ]; then
                 echo "memory watch: the MACHINE is running short (available $((avail / 1024)) MB, pressure full $full%): ending the checker before the runner is lost" | tee -a "$RUNNER_TEMP/checker.err" "$MARK"
-                sudo systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true
+                sudo /usr/bin/systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true
                 break
               fi
             done ) &
@@ -424,7 +441,7 @@ jobs:
           ( sleep "$limit" </dev/null >/dev/null 2>&1 || exit 0
             [ -e "$DONE" ] && exit 0
             echo "time limit reached: ${limit} s; ending the whole checker scope now" | tee -a "$RUNNER_TEMP/checker.err" "$MARK"
-            sudo systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true ) &
+            sudo /usr/bin/systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true ) &
           limiter=$!
           # ONE JOB PER MACHINE: no other check can hold the build queue or the build lock here, so a
           # slot or a lock left by an earlier step can only block this check until its limit
@@ -450,13 +467,13 @@ jobs:
           # (refused, code 5), measured on two cores, and must not depend on which pool ran it.
           if [ "$(cat "$W/in/gap.kind")" = reduce ]; then ncpu=2; nthr=3; fi
           echo "the checker runs on ${ncpu} cores of this runner, ${nthr} Lean threads"
-          sudo systemd-run --quiet --scope --collect --unit="$unit" -p MemoryMax="${cap}K" \
+          sudo /usr/bin/systemd-run --quiet --scope --collect --unit="$unit" -p MemoryMax="${cap}K" \
               --uid="$(id -u)" --gid="$(id -g)" \
-          taskset -c "0-$((ncpu - 1))" env -i HOME="$HOME" LANG=C.UTF-8 PATH="$TC_BIN:$node_bin:/usr/bin:/bin" \
+          /usr/bin/taskset -c "0-$((ncpu - 1))" /usr/bin/env -i HOME="$HOME" LANG=C.UTF-8 PATH="$TC_BIN:$node_bin:/usr/bin:/bin" \
               PEQUALNP_REAL_LAKE="$W/base/.github/scripts/lake-locked.sh" PEQUALNP_HOME="$W/queue" \
               PNP_TC_BIN="$TC_BIN" PNP_GITCONFIG="$W/in/gitconfig" PNP_BUILD_LOGS="$RUNNER_TEMP/builds" PNP_RW_DIRS="$PNP_RW_DIRS" \
               PNP_LEAN_THREADS="$nthr" \
-            timeout -k 30 "$((limit + 60))" node "$W/base/tools/check-lean.mjs" "$W/base/$file" "$W/in/statement.txt" "$(cat "$W/in/gap.kind")" \
+            timeout -k 30 "$((limit + 60))" "$node_bin/node" "$W/base/tools/check-lean.mjs" "$W/base/$file" "$W/in/statement.txt" "$(cat "$W/in/gap.kind")" \
             > "$RUNNER_TEMP/checker.out" 2> "$RUNNER_TEMP/checker.err"
           code=$?
           touch "$DONE"
@@ -498,7 +515,7 @@ jobs:
             case "$code" in 124|137) echo "the checker was stopped after $limit seconds" >> "$RUNNER_TEMP/checker.err" ;; esac
           fi
           # Nothing the compile started may outlive it, and neither may the verifier.
-          sudo pkill -KILL -u outsider || true
+          sudo /usr/bin/pkill -KILL -u outsider || true
           pkill -KILL -f "$W/base/lean/.lake/build/bin/checklemma" || true
           # A namespace that was not made ready (lake-locked.sh leaves nsfail): the build never ran as
           # it must. Our fault, never the proof's: a FAULT, whatever the checker said.
@@ -530,6 +547,8 @@ jobs:
           CODE: ${{ steps.run.outputs.code }}
           RAN: ${{ steps.run.outcome }}
         run: |
+          # SECOND WALL: the system's own tools only, whatever the build left on the runner's PATH.
+          export PATH=/usr/bin:/bin
           set -u
           # Everything below that a pull request can influence (the checker's output, the build
           # output, a guard's reason) is printed ONLY through quoted, between stop-commands and
