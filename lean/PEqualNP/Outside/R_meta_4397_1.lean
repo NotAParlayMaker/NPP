@@ -4,7 +4,7 @@ import PEqualNP.Defs
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
 -- Split the five residual vertices. Each hypothesis is the 29-row monotone
--- size-13 bound for one fixed vertex in the OR prefix.
+-- size-13 bound for one fixed vertex on the extra OR wire.
 theorem PEqualNP.Outside.R_meta_4397_1
     (h1 :
       ∀ (C : Circuit), Monotone2 C → C.size ≤ 13 →
