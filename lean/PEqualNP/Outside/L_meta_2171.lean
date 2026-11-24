@@ -31,7 +31,8 @@ inductive Live : Nat->Nat->Finset Sig->Prop
       (ha : proper a) (hb : proper b) (hab : a ≠ b)
       (hfresh : bin d a b ∉ insert a (insert b U)) (tail : Live k t (insert (bin d a b) U)) :
       Live (k+1) t (insert a (insert b U))
-namespace PEqualNP.Outside.L_meta_2171.Theta
+end PEqualNP.Outside.L_meta_2171.Base1007
+namespace PEqualNP.Outside.L_meta_2171.Base1007.Theta
 def kept {α : Type} (b : Bool) (x : α) (xs : List α) : List α :=
   if b then x :: xs else xs
 inductive Run {α : Type} (inv : α->α) (meet join : α->α->α) (y : α) : ℕ->List α->Prop
@@ -666,7 +667,8 @@ lemma noSub {s : Nat} {ws : List Nat} (hs : s ≤ 10) (hsub : ws.Sublist xs517)
   · subst ws; exact noRunFull _ hs h
   · rw [← vb,← vc] at h
     exact yn _ (List.mem_sublists.2 hsub) eq (vl h)
-end PEqualNP.Outside.L_meta_2171.Theta
+end PEqualNP.Outside.L_meta_2171.Base1007.Theta
+namespace PEqualNP.Outside.L_meta_2171.Base1007
 abbrev q0:=Nat × Nat
 def rx : Nat:=0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 def rm (x : Nat) : Nat:=x^^^rx
