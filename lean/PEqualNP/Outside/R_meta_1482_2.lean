@@ -327,3 +327,5 @@ theorem PEqualNP.Outside.R_meta_1482_2 (h63 : ∀ C : PEqualNP.CircuitLowerBound
       ⟨![0, 2, 1, 8, 4, 5, 11, 7, 3, 12, 10, 6, 9], ![12, 1, 5, 8, 4, 2, 11, 7, 3, 9, 10, 6, 0],
         by decide, by decide, by decide, by decide, by decide⟩
     exact fin _ σ2 τ2 12 hc2 bs2 bt2 h02 hd2 hs1 hs2 hS1 hF1 hI1 hVW1
+
+-- Re-check request: the run on 4313cb0 ended with FAULT (runner lost); this file is unchanged apart from this line.
