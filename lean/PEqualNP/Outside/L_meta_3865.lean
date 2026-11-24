@@ -3,7 +3,6 @@ import PEqualNP.Defs
 
 -- The circuit certificate comes from the merged L-meta-2012. Its 161 wire signatures
 -- are regenerated from Boolean gates and packed in the original order.
-namespace PEqualNP.Outside.L_meta_3865
 namespace PEqualNP.Outside.L_meta_3865.Base1007
 abbrev B:=BitVec 252
 abbrev Sig:=B × B
@@ -33,7 +32,8 @@ inductive Live : Nat->Nat->Finset Sig->Prop
       (ha : proper a) (hb : proper b) (hab : a ≠ b)
       (hfresh : bin d a b ∉ insert a (insert b U)) (tail : Live k t (insert (bin d a b) U)) :
       Live (k+1) t (insert a (insert b U))
-namespace PEqualNP.Outside.L_meta_3865.Theta
+end PEqualNP.Outside.L_meta_3865.Base1007
+namespace PEqualNP.Outside.L_meta_3865.Base1007.Theta
 def kept {α : Type} (b : Bool) (x : α) (xs : List α) : List α :=
   if b then x :: xs else xs
 inductive Run {α : Type} (inv : α->α) (meet join : α->α->α) (y : α) : ℕ->List α->Prop
@@ -668,7 +668,8 @@ lemma noSub {s : Nat} {ws : List Nat} (hs : s ≤ 10) (hsub : ws.Sublist xs517)
   · subst ws; exact noRunFull _ hs h
   · rw [← vb,← vc] at h
     exact yn _ (List.mem_sublists.2 hsub) eq (vl h)
-end PEqualNP.Outside.L_meta_3865.Theta
+end PEqualNP.Outside.L_meta_3865.Base1007.Theta
+namespace PEqualNP.Outside.L_meta_3865.Base1007
 abbrev q0:=Nat × Nat
 def rx : Nat:=0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 def rm (x : Nat) : Nat:=x^^^rx
@@ -7961,7 +7962,6 @@ lemma selector (l : List ℕ) (len : l.length = 2) (range : ∀ k ∈ l, k < 10)
       simp [Bool.or_comm]
 
 end PEqualNP.Outside.L_meta_3865.Argument
-end PEqualNP.Outside.L_meta_3865
 
 open PEqualNP.Outside.L_meta_3865.Argument PEqualNP.Outside.L_meta_3865.GateRestriction PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity in
 theorem PEqualNP.Outside.L_meta_3865 : ∀ (x1 : List ℕ),   x1 = [(9 : ℕ), (1 : ℕ)] ∨ x1 = [(9 : ℕ), (2 : ℕ)] ∨ x1 = [(9 : ℕ), (3 : ℕ)] ∨ x1 = [(9 : ℕ), (4 : ℕ)] ∨ x1 = [(9 : ℕ), (6 : ℕ)] →     ∀ (x3 : PEqualNP.CircuitLowerBounds.Circuit),       PEqualNP.MetaComplexity.FanInTwo x3 →         x3.size ≤ (13 : ℕ) →           ∃ (x6 : Fin (9 : ℕ) → Bool),             have x7 : List Bool := List.ofFn x6 ++ [!x6 (0 : Fin (9 : ℕ))];             x3.eval (x7 ++ [PEqualNP.CircuitLowerBounds.GateOp.or.eval (List.map (fun (x8 : ℕ) => x7.getD x8 Bool.false) x1)]) ≠ (x6 (0 : Fin (9 : ℕ)) && x6 (1 : Fin (9 : ℕ)) || x6 (1 : Fin (9 : ℕ)) && x6 (2 : Fin (9 : ℕ)) || x6 (2 : Fin (9 : ℕ)) && x6 (3 : Fin (9 : ℕ)) || x6 (3 : Fin (9 : ℕ)) && x6 (4 : Fin (9 : ℕ)) || x6 (4 : Fin (9 : ℕ)) && x6 (0 : Fin (9 : ℕ)) || x6 (0 : Fin (9 : ℕ)) && x6 (5 : Fin (9 : ℕ)) || x6 (1 : Fin (9 : ℕ)) && x6 (6 : Fin (9 : ℕ)) || x6 (2 : Fin (9 : ℕ)) && x6 (7 : Fin (9 : ℕ)) || x6 (3 : Fin (9 : ℕ)) && x6 (8 : Fin (9 : ℕ)) || x6 (5 : Fin (9 : ℕ)) && x6 (7 : Fin (9 : ℕ)) || x6 (6 : Fin (9 : ℕ)) && x6 (8 : Fin (9 : ℕ)) || x6 (8 : Fin (9 : ℕ)) && x6 (5 : Fin (9 : ℕ))) := by
