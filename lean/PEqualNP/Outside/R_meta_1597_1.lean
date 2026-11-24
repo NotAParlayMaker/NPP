@@ -40,13 +40,19 @@ theorem PEqualNP.Outside.R_meta_1597_1
   have hk5 : 5 ≤ K.card := by
     by_contra hn
     have hlt : K.card < 5 := by omega
-    interval_cases hkc : K.card <;> simp [hkc] at hp <;> omega
+    have lookup : ∀ k : Fin 5, 3 ≤ ([16,12,8,5,3,2,1] : List ℕ).getD k.val 0 := by decide
+    have := lookup ⟨K.card, hlt⟩
+    change 3 ≤ ([16,12,8,5,3,2,1] : List ℕ).getD K.card 0 at this
+    omega
   have hu2 : (PEqualNP.TopForm.Ustar G D).card = 2 := by
     by_contra hne
     have hk6 : 6 ≤ K.card := by
       by_contra hn
       have hlt : K.card < 6 := by omega
-      interval_cases hkc : K.card <;> simp [hkc] at hp <;> omega
+      have lookup : ∀ k : Fin 6, 2 ≤ ([16,12,8,5,3,2,1] : List ℕ).getD k.val 0 := by decide
+      have := lookup ⟨K.card, hlt⟩
+      change 2 ≤ ([16,12,8,5,3,2,1] : List ℕ).getD K.card 0 at this
+      omega
     omega
   have hc0 : (PEqualNP.TopForm.centreless G D).card = 0 := by omega
   have hr1 : (PEqualNP.TopForm.orN G D \ PEqualNP.TopForm.lam G D).card ≤ 1 := by omega
