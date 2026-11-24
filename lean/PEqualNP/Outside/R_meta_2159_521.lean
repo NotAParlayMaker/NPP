@@ -35,7 +35,10 @@ theorem PEqualNP.Outside.R_meta_2159_521
     let liftG (r : ℕ → ℕ) (g : Gate) : Gate := ⟨g.op, g.inputs.map r⟩
     let step (w : List Bool) (g : Gate) := w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
     let D : Circuit := ⟨pivot :: (pre.map (liftG up) ++ post.map (liftG move)), move C.output⟩
-    have sizeD : D.size = C.size := by simp [D, Circuit.size, hsplit]; omega
+    have sizeD : D.size = C.size := by
+      change (pivot :: (pre.map (liftG up) ++ post.map (liftG move))).length = C.gates.length
+      simp [hsplit]
+      omega
     have fanD : FanInTwo D := by
       intro g hg
       change g ∈ pivot :: (pre.map (liftG up) ++ post.map (liftG move)) at hg
@@ -132,9 +135,10 @@ theorem PEqualNP.Outside.R_meta_2159_521
         simp only [xs, List.getElem_ofFn]
       obtain ⟨ys, ly, P, Q⟩ := runPrefix xs lx bit pre []
       simp only [List.length_nil, Nat.zero_add, List.append_nil] at ly P
+      have andValues (v w : Bool) : GateOp.and.eval [v,w] = (v && w) := by
+        cases v <;> cases w <;> rfl
       have H (ys : List Bool) : step (xs ++ ys) pivot = xs ++ (ys ++ [bit]) := by
-        simp only [step, pivot, List.map_cons, List.map_nil, GateOp.eval, List.all_cons,
-          List.all_nil, id_eq, Bool.and_true, atBase xs lx ys, raw, bit, List.append_assoc]
+        simp only [step, pivot, List.map_cons, List.map_nil, andValues, atBase xs lx ys, raw, bit, List.append_assoc]
       obtain ⟨zs, A, B⟩ := runSuffix xs lx bit ys ly post []
       refine ⟨ys, zs, ly, ?_, ?_⟩
       · change C.gates.foldl step xs = _
@@ -228,7 +232,9 @@ theorem PEqualNP.Outside.R_meta_2159_521
     have calcE : circuitFun 9 E = f := by
       funext x
       exact (ewire x D.output).trans ((congrFun correctD (fun j => x (σ j))).trans (graphSym k x))
-    have eSize : E.size = D.size := by simp [E,Circuit.size]
+    have eSize : E.size = D.size := by
+      change (D.gates.map (liftG pin)).length = D.gates.length
+      exact List.length_map _
     have h := andFirst (min (σ a) (σ b)) (max (σ a) (σ b)) rep E efan firstE calcE
     simpa only [eSize,sizeD] using h
   · exact remaining C mono first (by
