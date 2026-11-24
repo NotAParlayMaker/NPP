@@ -3,7 +3,10 @@ import PEqualNP.Defs
 
 namespace PEqualNP.Outside.L_meta_670_aux.Helpers
 open PEqualNP.CircuitLowerBounds
+open PEqualNP.MetaComplexity
 
+/-- The table of one gate, from the tables of the wires it reads. Meant for AND, OR and NOT
+gates reading at most two wires. -/
 def gt (M : ℕ) : GateOp → List ℕ → ℕ
   | GateOp.and, [] => M
   | GateOp.and, [a] => a
@@ -15,12 +18,15 @@ def gt (M : ℕ) : GateOp → List ℕ → ℕ
   | GateOp.not, a :: _ => M ^^^ a
   | _, _ => 0
 
+/-- One step of `tabs`. -/
 def tstep (M : ℕ) (T : List ℕ) (g : Gate) : List ℕ :=
   T ++ [gt M g.op (g.inputs.map fun i => T.getD i 0)]
 
+/-- The tables of all wires: the tables `T0` of the inputs, then one table per gate. -/
 def tabs (M : ℕ) (T0 : List ℕ) (gs : List Gate) : List ℕ :=
   gs.foldl (tstep M) T0
 
+/-- The gate is AND, OR or NOT and reads at most two wires. -/
 def GOk (g : Gate) : Prop :=
   (g.op = GateOp.and ∨ g.op = GateOp.or ∨ g.op = GateOp.not) ∧ g.inputs.length ≤ 2
 
@@ -39,6 +45,7 @@ theorem getD_map_testBit (T : List ℕ) (p i : ℕ) :
     (T.map fun t => t.testBit p).getD i false = (T.getD i 0).testBit p := by
   rw [show false = (0 : ℕ).testBit p by simp, List.getD_map]
 
+/-- The abstraction lemma: wire values at the point `p` are bits of the wire tables. -/
 theorem wires_tabs (M p : ℕ) (hM : M.testBit p = true) :
     ∀ (gs : List Gate) (T0 : List ℕ), (∀ g ∈ gs, GOk g) →
       gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
@@ -64,17 +71,38 @@ theorem wires_tabs (M p : ℕ) (hM : M.testBit p = true) :
     rw [e]
     exact ih _ (fun g' hg' => hok g' (by simp [hg']))
 
+/-- Every table one gate can add to the wire tables `S` (a missing wire reads `0`). -/
 def cands (M : ℕ) (S : List ℕ) : List ℕ :=
   M :: 0 :: ((0 :: S).map (fun a => M ^^^ a) ++ (0 :: S) ++
     ((0 :: S).flatMap fun a => (0 :: S).map fun b => a &&& b) ++
     ((0 :: S).flatMap fun a => (0 :: S).map fun b => a ||| b))
 
+/-- A list without repetitions, with the same members. -/
 def nub : List ℕ → List ℕ
-  | l => l.nodup
+  | [] => []
+  | a :: l => if (nub l).contains a then nub l else a :: nub l
 
+theorem mem_nub (x : ℕ) : ∀ l : List ℕ, x ∈ nub l ↔ x ∈ l := by
+  intro l
+  induction l with
+  | nil => simp [nub]
+  | cons a l ih =>
+    simp only [nub]
+    split
+    · rename_i h
+      simp only [List.contains_iff_mem] at h
+      rw [ih, List.mem_cons]
+      constructor
+      · exact Or.inr
+      · rintro (rfl | h') <;> [exact (ih.1 h); exact h']
+    · simp [ih]
+
+/-- The new tables one gate can add to `S`, without repetitions. -/
 def next (M : ℕ) (S : List ℕ) : List ℕ :=
-  (cands M S |>.nub |>.filter fun t => t ∉ S)
+  nub ((cands M S).filter fun t => !(S.contains t))
 
+/-- Some wire table of `S`, or the missing-wire table `0`, is good, using at most `k` more
+gates. -/
 def reach (M : ℕ) (good : ℕ → Bool) : ℕ → List ℕ → Bool
   | 0, S => (0 :: S).any good
   | k + 1, S => (0 :: S).any good || (next M S).any fun t => reach M good k (S ++ [t])
@@ -87,6 +115,7 @@ theorem cands_mono (M : ℕ) (S S' : List ℕ) (h : ∀ x, x ∈ S → x ∈ S')
     · simp [hx]
     · exact List.mem_cons_of_mem _ (h x hx)
   simp only [cands, List.mem_cons, List.mem_append, List.mem_map, List.mem_flatMap] at ht
+  simp only [cands, List.mem_cons, List.mem_append, List.mem_map, List.mem_flatMap]
   rcases ht with ht | ht | ((⟨a, ha, e⟩ | ht) | ⟨a, ha, b, hb, e⟩) | ⟨a, ha, b, hb, e⟩
   · exact Or.inl ht
   · exact Or.inr (Or.inl ht)
@@ -109,8 +138,9 @@ theorem any_congr_mem (l l' : List ℕ) (f f' : ℕ → Bool) (hl : ∀ x, x ∈
   rw [Bool.eq_iff_iff, List.any_eq_true, List.any_eq_true]
   constructor
   · rintro ⟨x, hx, e⟩; exact ⟨x, (hl x).1 hx, by rw [← hf]; exact e⟩
-  · rintro ⟨x, hx, e⟩; exact ⟨x, (hl x).2 hx, by rw [← hf]; exact e⟩
+  · rintro ⟨x, hx, e⟩; exact ⟨x, (hl x).2 hx, by rw [hf]; exact e⟩
 
+/-- The search depends on the wire tables only through which tables are present. -/
 theorem reach_congr (M : ℕ) (good : ℕ → Bool) : ∀ (k : ℕ) (S S' : List ℕ),
     (∀ x, x ∈ S ↔ x ∈ S') → reach M good k S = reach M good k S' := by
   intro k
@@ -125,88 +155,111 @@ theorem reach_congr (M : ℕ) (good : ℕ → Bool) : ∀ (k : ℕ) (S S' : List
     congr 1
     · exact any_congr_mem _ _ _ _ (by intro x; simp [h]) (fun _ => rfl)
     · apply any_congr_mem
-      · intro t
+      · intro x
         rw [mem_next, mem_next]
         exact ⟨fun ⟨a, b⟩ => ⟨cands_mono M S S' (fun y => (h y).1) x a, by rwa [← h]⟩,
-          fun ⟨a, b⟩ => ⟨cands_mono M S' S (fun y => (h y).2) x a, by rwa [← h]⟩⟩
+          fun ⟨a, b⟩ => ⟨cands_mono M S' S (fun y => (h y).2) x a, by rwa [h]⟩⟩
       · intro t
         exact ih _ _ (by intro x; simp [h])
-        exact any_congr_mem _ _ _ _ (by intro x; simp [h]) (fun _ => rfl)
 
-theorem reach_mono (M : ℕ) (good : ℕ → Bool) (k : ℕ) (S S' : List ℕ)
-    (h : ∀ x, x ∈ S → x ∈ S') (ht : reach M good k S = true) :
-    reach M good k S' = true := by
+theorem reach_of_zero (M : ℕ) (good : ℕ → Bool) (S : List ℕ) (h : reach M good 0 S = true) :
+    ∀ k, reach M good k S = true := by
+  intro k
+  cases k with
+  | zero => exact h
+  | succ k => simp only [reach] at h ⊢; simp [h]
+
+theorem reach_succ (M : ℕ) (good : ℕ → Bool) (k : ℕ) (S : List ℕ) :
+    reach M good (k + 1) S
+      = ((0 :: S).any good || (next M S).any fun t => reach M good k (S ++ [t])) := rfl
+
+theorem reach_mono (M : ℕ) (good : ℕ → Bool) : ∀ (k : ℕ) (S : List ℕ),
+    reach M good k S = true → reach M good (k + 1) S = true := by
+  intro k
   induction k with
-  | zero =>
-    rw [reach] at ht ⊢
-    obtain ⟨a, ha, hgood⟩ := List.any_eq_true.1 ht
-    by_cases ha0 : a = 0
-    · subst a; simp [ha0] at ha; simp [List.mem_nil] at ha
-    · simp [List.mem_cons] at ha
-      exact List.any_eq_true.2 ⟨a, (h a ha.2 ▸ ha), hgood⟩
+  | zero => intro S h; exact reach_of_zero M good S h 1
   | succ k ih =>
-    rw [reach] at ht ⊢
-    obtain hgood | hnext := List.any_eq_true.1 ht
-    · exact Or.inl ⟨a, ha, hgood⟩
-    · obtain ⟨t, ht, hnext⟩ := List.any_eq_true.1 hnext
-      have := reach_mono M good k (S ++ [t]) (fun x hx => List.mem_append.2 hx) hnext
-      exact Or.inr ⟨t, (mem_next M S' t).2 ⟨?_, by rwa [← mem_next]⟩, ?_⟩
-      · exact cands_mono M S S' h t ht.1
-      · exact this
+    intro S h
+    rw [reach_succ M good k S] at h
+    rw [reach_succ M good (k + 1) S]
+    simp only [Bool.or_eq_true, List.any_eq_true] at h ⊢
+    rcases h with h | ⟨t, ht, e⟩
+    · exact Or.inl h
+    · exact Or.inr ⟨t, ht, ih _ e⟩
 
-theorem reach_sound (M : ℕ) (good : ℕ → Bool) (gs : List Gate) (k : ℕ) (T0 : List ℕ)
-    (o : ℕ) (hk : k < T0.length + gs.length) (hok : ∀ g ∈ gs, GOk g)
-    (hgood : good ((tabs M T0 gs).getD o 0) = true) :
-    reach M good k T0 = true := by
+theorem getD_mem_zero (S : List ℕ) (o : ℕ) : S.getD o 0 ∈ (0 :: S) := by
+  rw [List.getD_eq_getElem?_getD]
+  cases hs : S[o]? with
+  | none => simp
+  | some v => exact List.mem_cons_of_mem _ (List.mem_of_getElem? hs)
+
+theorem mem_cands_not (M : ℕ) (S : List ℕ) (a : ℕ) (ha : a ∈ (0 :: S)) :
+    M ^^^ a ∈ cands M S :=
+  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_append_left _
+    (List.mem_append_left _ (List.mem_append_left _ (List.mem_map_of_mem ha)))))
+
+theorem mem_cands_copy (M : ℕ) (S : List ℕ) (a : ℕ) (ha : a ∈ (0 :: S)) : a ∈ cands M S :=
+  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_append_left _
+    (List.mem_append_left _ (List.mem_append_right _ ha))))
+
+theorem mem_cands_and (M : ℕ) (S : List ℕ) (a b : ℕ) (ha : a ∈ (0 :: S)) (hb : b ∈ (0 :: S)) :
+    a &&& b ∈ cands M S :=
+  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_append_left _
+    (List.mem_append_right _ (List.mem_flatMap.2 ⟨a, ha, List.mem_map_of_mem hb⟩))))
+
+theorem mem_cands_or (M : ℕ) (S : List ℕ) (a b : ℕ) (ha : a ∈ (0 :: S)) (hb : b ∈ (0 :: S)) :
+    a ||| b ∈ cands M S :=
+  List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_append_right _
+    (List.mem_flatMap.2 ⟨a, ha, List.mem_map_of_mem hb⟩)))
+
+theorem gt_mem (M : ℕ) (S : List ℕ) (g : Gate) (hg : GOk g) :
+    gt M g.op (g.inputs.map fun i => S.getD i 0) ∈ cands M S := by
+  obtain ⟨hop, hl⟩ := hg
+  have hm : ∀ i, S.getD i 0 ∈ (0 :: S) := getD_mem_zero S
+  generalize g.inputs = ins at hl ⊢
+  match ins, hl with
+  | [], _ =>
+    rcases hop with h | h | h <;> rw [h] <;> simp [gt, cands]
+  | [i], _ =>
+    rcases hop with h | h | h <;> rw [h] <;> simp only [gt, List.map_cons, List.map_nil]
+    · exact mem_cands_copy M S _ (hm i)
+    · exact mem_cands_copy M S _ (hm i)
+    · exact mem_cands_not M S _ (hm i)
+  | [i, j], _ =>
+    rcases hop with h | h | h <;> rw [h] <;> simp only [gt, List.map_cons, List.map_nil]
+    · exact mem_cands_and M S _ _ (hm i) (hm j)
+    · exact mem_cands_or M S _ _ (hm i) (hm j)
+    · exact mem_cands_not M S _ (hm i)
+
+/-- Soundness of the search: a circuit with at most `k` gates whose output table is good. -/
+theorem reach_sound (M : ℕ) (good : ℕ → Bool) : ∀ (gs : List Gate) (k : ℕ) (S : List ℕ)
+    (o : ℕ), gs.length ≤ k → (∀ g ∈ gs, GOk g) → good ((tabs M S gs).getD o 0) = true →
+    reach M good k S = true := by
+  intro gs
   induction gs with
   | nil =>
-    intro T0 o hk _ hgood
-    rw [tabs] at hgood
-    have : o < T0.length := by omega
-    simp only [List.foldl_nil] at hgood
-    have : o < T0.length := by omega
-    exact List.any_eq_true.2 ⟨o, (List.mem_range.1 this), hgood⟩
+    intro k S o _ _ hgood
+    apply reach_of_zero
+    simp only [reach, List.any_eq_true]
+    exact ⟨_, getD_mem_zero S o, hgood⟩
   | cons g gs ih =>
-    intro T0 o hk hok hgood
-    have hok' := ih _ _ _ (fun g' hg' => hok g' (by simp [List.mem_append, List.mem_cons_of_mem] at hg'; simpa using hg'))
+    intro k S o hk hok hgood
+    obtain ⟨k', rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by simp at hk; omega⟩
     have hg := hok g (by simp)
-    have hlen := hg.2
-    simp only [tabs, tstep, List.foldl_cons] at hgood
-    have hnext : o ≤ T0.length + gs.length := by omega
-    have hnext' : o < T0.length + gs.length + 1 := by omega
-    by_cases ho : o < T0.length
-    · have hgood' : good (T0.getD o 0) = true := by
-        have hM : M.testBit o = true := by simp
-        have := hgood
-        simp only [List.getD_append] at this
-        exact this
-      exact List.any_eq_true.2 ⟨o, (List.mem_range.1 ho), hgood'⟩
-    · have ho' : T0.length ≤ o := by omega
-      have hlen' : o < T0.length + gs.length + 1 := by omega
-      obtain ⟨o', rfl⟩ : ∃ o', o = T0.length + o' := ⟨o - T0.length, by omega⟩
-      have ho' : o' < gs.length + 1 := by omega
-      by_cases ho' : o' < gs.length
-      · have ih' := ih (T0 ++ [gt M g.op (g.inputs.map fun i => T0.getD i 0)]) o' _ hok'
-          have hg' : good ((tabs M (T0 ++ [gt M g.op (g.inputs.map fun i => T0.getD i 0)]) gs).getD o' 0) = true := by
-            simp only [tabs, tstep, List.foldl_cons]
-            exact hgood
-          have := ih' (by omega) hok' hg'
-          simp only [reach] at this
-          obtain hgood | hnext := List.any_eq_true.1 this
-          · exact Or.inl ⟨o, (List.mem_range.1 (by omega)), hgood⟩
-          · obtain ⟨t, ht, hnext⟩ := List.any_eq_true.1 hnext
-            have ht' := ht
-            have hnext' : reach M good (gs.length - 1) ((T0 ++ [gt M g.op (g.inputs.map fun i => T0.getD i 0)]) ++ [t]) = true := by
-              simpa [reach] using hnext
-            exact Or.inr ⟨t, (mem_next M (T0 ++ [gt M g.op (g.inputs.map fun i => T0.getD i 0)]) t).2 ⟨?_, by rwa [← mem_next]⟩, ?_⟩
-            · exact cands_mono M (T0 ++ [gt M g.op (g.inputs.map fun i => T0.getD i 0)]) (T0 ++ [gt M g.op (g.inputs.map fun i => T0.getD i 0)]) (by simp) t (by simp)
-            · exact hnext'
-      · have ho' : gs.length ≤ o' := by omega
-        have hgood' : good (gt M g.op (g.inputs.map fun i => (T0 ++ [gt M g.op (g.inputs.map fun i => T0.getD i 0))).getD i 0)) = true := by
-          simp only [show o = T0.length + gs.length from by omega]
-          exact hgood
-        exact Or.inl ⟨o, (List.mem_range.1 (by omega)), hgood'⟩
+    set t := gt M g.op (g.inputs.map fun i => S.getD i 0) with ht
+    have h1 : reach M good k' (S ++ [t]) = true :=
+      ih k' (S ++ [t]) o (by simpa using hk) (fun g' hg' => hok g' (by simp [hg'])) hgood
+    by_cases hin : t ∈ S
+    · have e : reach M good k' (S ++ [t]) = reach M good k' S :=
+        reach_congr M good k' _ _ (by intro x; simp only [List.mem_append, List.mem_singleton]
+                                      constructor
+                                      · rintro (h | rfl) <;> assumption
+                                      · exact Or.inl)
+      exact reach_mono M good k' S (e ▸ h1)
+    · simp only [reach, Bool.or_eq_true, List.any_eq_true]
+      exact Or.inr ⟨t, (mem_next M S t).2 ⟨gt_mem M S g hg, hin⟩, h1⟩
 
+/-- A table equal to `tgt` on the points below `B`, with `tgt < 2 ^ B`. -/
 theorem mod_eq_of_testBit (B t tgt : ℕ) (htgt : tgt < 2 ^ B)
     (h : ∀ p, p < B → t.testBit p = tgt.testBit p) : t % 2 ^ B = tgt := by
   apply Nat.eq_of_testBit_eq
@@ -219,6 +272,9 @@ theorem mod_eq_of_testBit (B t tgt : ℕ) (htgt : tgt < 2 ^ B)
     apply Nat.testBit_eq_false_of_lt
     exact lt_of_lt_of_le htgt (Nat.pow_le_pow_right (by norm_num) (by omega))
 
+/-- The lower bound from a failed search. The wire tables `T0` of the inputs must give, at
+each point `p < B`, the input `pt p`; `f` must take the value `tgt.testBit p` there, and every
+input on which `f` is checked must be some `pt p`. -/
 theorem lower_of_search (n B : ℕ) (f : (Fin n → Bool) → Bool) (T0 : List ℕ) (tgt k : ℕ)
     (htgt : tgt < 2 ^ B)
     (hpt : ∀ p, p < B → ∃ x : Fin n → Bool, List.ofFn x = T0.map (fun t => t.testBit p) ∧
@@ -246,13 +302,12 @@ theorem lower_of_search (n B : ℕ) (f : (Fin n → Bool) → Bool) (T0 : List �
   have := reach_sound (2 ^ B - 1) (fun t => t % 2 ^ B == tgt) C.gates k T0 C.output hsize hok hgood
   rw [hsearch] at this
   exact absurd this (by decide)
-
 end PEqualNP.Outside.L_meta_670_aux.Helpers
 
 namespace PEqualNP.Outside.L_meta_670
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.Outside.L_meta_670_aux.Helpers.TableSearch
+open PEqualNP.Outside.L_meta_670_aux.Helpers
 
 def f : (Fin 9 → Bool) → Bool :=
   fun x => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) ||
@@ -298,5 +353,5 @@ theorem PEqualNP.Outside.L_meta_670 :
         (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)) := by
     funext x
     simp [PEqualNP.Outside.L_meta_670.f]
-  rw [this]
+  rw [← this]
   exact PEqualNP.Outside.L_meta_670.petersen_minus_vertex_no_15
