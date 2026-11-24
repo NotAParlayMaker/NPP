@@ -444,6 +444,15 @@ jobs:
             echo "time limit reached: ${limit} s; ending the whole checker scope now" | tee -a "$RUNNER_TEMP/checker.err" "$MARK"
             sudo /usr/bin/systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true ) &
           limiter=$!
+          # THE PEAK, read every second (rehearsal 3, part three: the scope is collected the moment the check ends,
+          # and the 15 s watch sample under-read short checks). memory.peak only grows, so its last read is the true
+          # peak to within one second. Fixed text of ours; nothing of the file reaches it.
+          ( while [ ! -e "$RUNNER_TEMP/sampler/done" ]; do
+              v=$(cat "$cg/memory.peak" 2>/dev/null)
+              case "$v" in ''|*[!0-9]*) ;; *) echo "$v" > "$RUNNER_TEMP/sampler/peak1.tmp" && mv -f "$RUNNER_TEMP/sampler/peak1.tmp" "$RUNNER_TEMP/sampler/peak1" ;; esac
+              sleep 1
+            done ) &
+          peakw=$!
           # ONE JOB PER MACHINE: no other check can hold the build queue or the build lock here, so a
           # slot or a lock left by an earlier step can only block this check until its limit
           # (2026-11-24: eleven runs hung 45 minutes in this step). Clear them, and say what was found.
@@ -480,10 +489,12 @@ jobs:
           touch "$DONE"
           # For the rehearsal (red team C2, M1): the scope's peak memory beside its cap, and the watch's largest gap.
           # Each value read into a variable and tested for digits first (red team N1: a file read while it is rewritten).
-          pk=$(cat "$cg/memory.peak" 2>/dev/null); printf '%s' "$pk" | grep -Eqx '[0-9]+' || pk=$(cat "$RUNNER_TEMP/sampler/peak" 2>/dev/null)
+          src="read at the end"; pk=$(cat "$cg/memory.peak" 2>/dev/null)
+          printf '%s' "$pk" | grep -Eqx '[0-9]+' || { src="1 s sample"; pk=$(cat "$RUNNER_TEMP/sampler/peak1" 2>/dev/null); }
+          printf '%s' "$pk" | grep -Eqx '[0-9]+' || { src="15 s sample"; pk=$(cat "$RUNNER_TEMP/sampler/peak" 2>/dev/null); }
           printf '%s' "$pk" | grep -Eqx '[0-9]+' || pk=0
           mg=$(cat "$RUNNER_TEMP/sampler/maxgap" 2>/dev/null); printf '%s' "$mg" | grep -Eqx '[0-9]+' || mg=unknown
-          echo "checker peak memory $((pk / 1048576)) MB of $((cap / 1024)) MB (last sample if the scope is gone); memory watch largest gap between samples ${mg} s"
+          echo "checker peak memory $((pk / 1048576)) MB of $((cap / 1024)) MB (${src}); memory watch largest gap between samples ${mg} s"
           # A check ENDED ON ITS OWN only if the checker wrote its own final line: an ACCEPTED or REJECTED
           # last line on stdout, or a CHECKER FAULT line on stderr. Only then is a marker of ours ignored;
           # with no such line the run is a FAULT, whatever exit code the wrapper returned (red team).
@@ -491,7 +502,7 @@ jobs:
             case "$(tail -n 1 "$RUNNER_TEMP/checker.out" 2>/dev/null)" in ACCEPTED*|REJECTED*) return 0 ;; esac
             grep -aq '^CHECKER FAULT: ' "$RUNNER_TEMP/checker.err" 2>/dev/null
           }
-          kill "$limiter" "$watch" "$sampler" 2>/dev/null; pkill -P "$limiter" 2>/dev/null; pkill -P "$watch" 2>/dev/null
+          kill "$limiter" "$watch" "$sampler" "$peakw" 2>/dev/null; pkill -P "$limiter" 2>/dev/null; pkill -P "$watch" 2>/dev/null
           # Ended by the memory watch: a FAULT of the machine, never a verdict on the proof.
           if grep -q '^memory watch: the MACHINE is running short' "$MARK" 2>/dev/null && ! ended_own; then
             code=137
