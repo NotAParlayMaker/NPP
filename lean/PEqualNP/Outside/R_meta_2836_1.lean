@@ -48,7 +48,10 @@ theorem PEqualNP.Outside.R_meta_2836_1
       obtain ⟨old,oldMem,rfl⟩ := List.mem_map.mp hg
       have ok := legal old oldMem
       exact ⟨ok.1, by simpa [mapGate] using ok.2⟩
-    have smallD : D.size ≤ 13 := by simpa [D, Circuit.size] using small
+    have smallD : D.size ≤ 13 := by
+      change (C.gates.map mapGate).length ≤ 13
+      rw [List.length_map]
+      exact small
     let step := fun (w : List Bool) (g : Gate) =>
       w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
     have mapSmall (i n : ℕ) (enough : 9 ≤ n) : mapWire i < n ↔ i < n := by
