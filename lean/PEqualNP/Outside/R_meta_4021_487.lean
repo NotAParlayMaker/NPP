@@ -28,9 +28,9 @@ theorem PEqualNP.Outside.R_meta_4021_487
         Relation.ReflTransGen (active C a) (26 + j) C.output
       ∀ (C : Circuit), C.size ≤ 64 → PEqualNP.TopForm.IsAO2 26 C →
         (∀ g ∈ C.gates, g.inputs.Nodup) →
-        circuitFun 26 C = fpl 13 (fun p l : Fin 13 => p - l ∈ ({0, 1, 3, 9} : Finset (Fin 13))) →
+        circuitFun 26 C = fpl 13 (fun p l => p ∈ PEqualNP.HeptadCover.singerLines3 l) →
         0 < PEqualNP.TopForm.andPairs 26 C →
-        (∃ j < C.gates.length, (gateAt C j).op = .and ∧
+        (∃ j, (gateAt C j).op = .and ∧
           ∃ y : Fin 26 → Bool, wval C y (26 + j) = true ∧ circuitFun 26 C y = false) →
         (∃ j, collision C 0 j) → (∃ j, collision C 13 j) →
         Relation.ReflTransGen (active C 0) 13 C.output ∨
@@ -70,13 +70,17 @@ have x1 : PEqualNP.CircuitLowerBounds.Circuit → Fin (26 : ℕ) → ℕ → ℕ
   · exact Or.inl hp
   rcases hright with hp | ⟨k, _, hko, hkv, hkr⟩
   · exact Or.inr hp
-  have hf : circuitFun 26 C = fpl 13 (fun p l : Fin 13 => p - l ∈ ({0, 1, 3, 9} : Finset (Fin 13))) := by
+  have hsinger : ∀ p l : Fin 13,
+      p - l ∈ ({0, 1, 3, 9} : Finset (Fin 13)) ↔ p ∈ PEqualNP.HeptadCover.singerLines3 l := by
+    decide
+  have hf : circuitFun 26 C = fpl 13 (fun p l => p ∈ PEqualNP.HeptadCover.singerLines3 l) := by
     funext y
     apply Bool.eq_iff_iff.mpr
     change C.eval (List.ofFn y) = true ↔ decide (∃ p l : Fin 13,
-      p - l ∈ ({0, 1, 3, 9} : Finset (Fin 13)) ∧ y (Fin.castAdd 13 p) = true ∧
+      p ∈ PEqualNP.HeptadCover.singerLines3 l ∧ y (Fin.castAdd 13 p) = true ∧
       y (Fin.natAdd 13 l) = true) = true
-    simpa only [decide_eq_true_eq] using heval y
-  exact collision_case C hsize hshape hnodup hf hnested hdirty
+    simpa only [decide_eq_true_eq, ← hsinger] using heval y
+  obtain ⟨m, _, hmo, y, hyv, hyo⟩ := hdirty
+  exact collision_case C hsize hshape hnodup hf hnested ⟨m, hmo, y, hyv, hyo⟩
     ⟨j, hjo, by simpa only [flipLeft] using hjv, hjr⟩
     ⟨k, hko, by simpa only [flipRight] using hkv, hkr⟩
