@@ -11,7 +11,7 @@ set_option maxRecDepth 8192 in
 set_option maxHeartbeats 2200000 in
 theorem PEqualNP.Outside.R_meta_2280_1
     (sampling : let pairs : List ℕ := [7,8,10,23,25,29,40,44,45,55,59,60,74,75,77,89,90,92,104,105,107]
-    let test (x : Fin 14 → Bool) := pairs.any (fun e => x (Fin.ofNat 14 (e/16)) && x (Fin.ofNat 14 (e%16)))
+    let test (x : Fin 14 → Bool) := pairs.any (fun e => x (Fin.ofNat 14 (e / 16)) && x (Fin.ofNat 14 (e % 16)))
     let rows : List ℕ := [129,257,1025,130,514,8194,260,4100,8196,136,2056,4104,1040,2064,8208,544,1056,4128,320,576,2112,127,244,314,432,541,660,792,1102,1220,1290,1548,2087,2212,2338,2565,3078,3716,4179,4304,4370,4625,5008,5186,6147,7426,8297,8416,8488,8713,9288,9992,10273,10656,12353,13504,14849,16256]
     ∀ i : Fin 58, let x := fun j : Fin 14 => (rows.getD i.val 0).testBit j.val
       ((test x=true ∧ ∀ j, x j=true → test (Function.update x j false)≠true) ∨
