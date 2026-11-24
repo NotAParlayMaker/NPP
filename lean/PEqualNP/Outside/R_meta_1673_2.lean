@@ -21,6 +21,9 @@ theorem PEqualNP.Outside.R_meta_1673_2
   intro C hC first correct
   let step := fun (w : List Bool) (g : Gate) =>
     w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
+  have evalAnd (l : List Bool) : GateOp.and.eval l = l.all id := rfl
+  have evalOr (l : List Bool) : GateOp.or.eval l = l.any id := rfl
+  have evalNot (l : List Bool) : GateOp.not.eval l = !(l.headD false) := rfl
   let H : (Fin 8 → Bool) → Bool := (fun y : Fin 8 → Bool => ([(0,1),(0,5),(1,2),(1,6),(2,3),(2,7),(4,6),(4,7),(5,7)] : List (Fin 8 × Fin 8)).any (fun e => y e.1 && y e.2))
   let F : (Fin 9 → Bool) → Bool := (fun x : Fin 9 → Bool => ([(0,1),(1,2),(2,3),(3,4),(4,0),(0,5),(1,6),(2,7),(3,8),(5,7),(6,8),(8,5)] : List (Fin 9 × Fin 9)).any (fun e => x e.1 && x e.2))
   have same : circuitFun 9 C = F := correct.trans (by decide +kernel)
@@ -185,40 +188,39 @@ theorem PEqualNP.Outside.R_meta_1673_2
         obtain ⟨op, ins⟩ := g
         have hg (y) : (W y).getD (9 + k) false = op.eval (ins.map fun i => val i y) := hgate y
         simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hop
-        match ins, hlen with
-        | [], _ => exact absurd (fun y => hg y) (notConst (op.eval []))
-        | [a], _ =>
-          rcases hop with rfl | rfl | rfl
-          · exact absurd (fun y => by rw [hg y]; simp [GateOp.eval]) (notVal a)
-          · exact absurd (fun y => by rw [hg y]; simp [GateOp.eval]) (notVal a)
+        rcases ins with _ | ⟨a, _ | ⟨c, _ | ⟨d, rest⟩⟩⟩
+        · exact absurd (fun y => hg y) (notConst (op.eval []))
+        · rcases hop with rfl | rfl | rfl
+          · exact absurd (fun y => by rw [hg y]; simp [evalAnd, evalOr, evalNot]) (notVal a)
+          · exact absurd (fun y => by rw [hg y]; simp [evalAnd, evalOr, evalNot]) (notVal a)
           · rcases valCases a with ⟨b, hb⟩ | ⟨_, a', _, ha'⟩
-            · exact absurd (fun y => by rw [hg y]; simp [GateOp.eval, hb]) (notConst (!b))
-            · exact ⟨⟨.not, [a']⟩, by simp, fun y => by rw [hg y]; simp [GateOp.eval, ha']⟩
-        | [a, c], _ =>
-          rcases hop with rfl | rfl | rfl
+            · exact absurd (fun y => by rw [hg y]; simp [evalAnd, evalOr, evalNot, hb]) (notConst (!b))
+            · exact ⟨⟨.not, [a']⟩, by simp, fun y => by rw [hg y]; simp [evalAnd, evalOr, evalNot, ha']⟩
+        · rcases hop with rfl | rfl | rfl
           · rcases valCases a with ⟨b, hb⟩ | ⟨_, a', _, ha'⟩
             · cases b
-              · exact absurd (fun y => by rw [hg y]; simp [GateOp.eval, hb]) (notConst false)
-              · exact absurd (fun y => by rw [hg y]; simp [GateOp.eval, hb]) (notVal c)
+              · exact absurd (fun y => by rw [hg y]; simp [evalAnd, evalOr, evalNot, hb]) (notConst false)
+              · exact absurd (fun y => by rw [hg y]; simp [evalAnd, evalOr, evalNot, hb]) (notVal c)
             rcases valCases c with ⟨b, hb⟩ | ⟨_, c', _, hc'⟩
             · cases b
-              · exact absurd (fun y => by rw [hg y]; simp [GateOp.eval, hb]) (notConst false)
-              · exact absurd (fun y => by rw [hg y]; simp [GateOp.eval, hb]) (notVal a)
+              · exact absurd (fun y => by rw [hg y]; simp [evalAnd, evalOr, evalNot, hb]) (notConst false)
+              · exact absurd (fun y => by rw [hg y]; simp [evalAnd, evalOr, evalNot, hb]) (notVal a)
             exact ⟨⟨.and, [a', c']⟩, by simp, fun y => by
-              rw [hg y]; simp [GateOp.eval, ha', hc']⟩
+              rw [hg y]; simp [evalAnd, evalOr, evalNot, ha', hc']⟩
           · rcases valCases a with ⟨b, hb⟩ | ⟨_, a', _, ha'⟩
             · cases b
-              · exact absurd (fun y => by rw [hg y]; simp [GateOp.eval, hb]) (notVal c)
-              · exact absurd (fun y => by rw [hg y]; simp [GateOp.eval, hb]) (notConst true)
+              · exact absurd (fun y => by rw [hg y]; simp [evalAnd, evalOr, evalNot, hb]) (notVal c)
+              · exact absurd (fun y => by rw [hg y]; simp [evalAnd, evalOr, evalNot, hb]) (notConst true)
             rcases valCases c with ⟨b, hb⟩ | ⟨_, c', _, hc'⟩
             · cases b
-              · exact absurd (fun y => by rw [hg y]; simp [GateOp.eval, hb]) (notVal a)
-              · exact absurd (fun y => by rw [hg y]; simp [GateOp.eval, hb]) (notConst true)
+              · exact absurd (fun y => by rw [hg y]; simp [evalAnd, evalOr, evalNot, hb]) (notVal a)
+              · exact absurd (fun y => by rw [hg y]; simp [evalAnd, evalOr, evalNot, hb]) (notConst true)
             exact ⟨⟨.or, [a', c']⟩, by simp, fun y => by
-              rw [hg y]; simp [GateOp.eval, ha', hc']⟩
+              rw [hg y]; simp [evalAnd, evalOr, evalNot, ha', hc']⟩
           · rcases valCases a with ⟨b, hb⟩ | ⟨_, a', _, ha'⟩
-            · exact absurd (fun y => by rw [hg y]; simp [GateOp.eval, hb]) (notConst (!b))
-            · exact ⟨⟨.not, [a']⟩, by simp, fun y => by rw [hg y]; simp [GateOp.eval, ha']⟩
+            · exact absurd (fun y => by rw [hg y]; simp [evalAnd, evalOr, evalNot, hb]) (notConst (!b))
+            · exact ⟨⟨.not, [a']⟩, by simp, fun y => by rw [hg y]; simp [evalAnd, evalOr, evalNot, ha']⟩
+        · simp at hlen
       obtain ⟨g, hgfan, hgval⟩ := build
       refine ⟨gs ++ [g], ?_, ?_, fun i hi => ?_⟩
       · intro g' hg'
