@@ -5419,10 +5419,14 @@ theorem rootB : Impossible graph 14 lowInputs.toFinset :=
     (i:=1) (ws:=lowInputs) (by decide +kernel)
 end PEqualNP.Outside.L_meta_4984.P
 
-theorem PEqualNP.Outside.L_meta_4984.P : ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C → (∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = !(y 0)) → PEqualNP.MetaComplexity.circuitFun 9 C = (fun x : Fin 9 → Bool => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)) → 16 ≤ C.size :=
+namespace PEqualNP.Outside.L_meta_4984
+
+theorem P : ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C → (∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = !(y 0)) → PEqualNP.MetaComplexity.circuitFun 9 C = (fun x : Fin 9 → Bool => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)) → 16 ≤ C.size :=
   PEqualNP.Outside.L_meta_4984.P.completedRoots
     (PEqualNP.Outside.L_meta_4984.P.dead_start (PEqualNP.Outside.L_meta_4984.P.before_sound PEqualNP.Outside.L_meta_4984.P.known383 PEqualNP.Outside.L_meta_4984.P.valid383) PEqualNP.Outside.L_meta_4984.P.geomdead PEqualNP.Outside.L_meta_4984.P.tablesdead)
     PEqualNP.Outside.L_meta_4984.P.rootA PEqualNP.Outside.L_meta_4984.P.rootB
+
+end PEqualNP.Outside.L_meta_4984
 
 namespace PEqualNP.Outside.L_meta_4984
 
