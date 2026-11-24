@@ -119,6 +119,19 @@ test('a path that main gained after the pull request branched is left out, and t
   assert.equal(why(res, good.pr), 'landed');
 });
 
+test('a push refused twice: the line of each entry is printed before the refusal, nothing lands, the job faults', () => {
+  const w = world(); const e = pr(w, add()); const bad = { ...pr(w, add()), blob: 'f'.repeat(40) };
+  const before = g(w.root, ['--git-dir', w.remote, 'rev-parse', 'main']);
+  writeFileSync(join(w.remote, 'hooks', 'pre-receive'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  const lines = []; const dir = mkdtempSync(join(w.root, 'store-'));
+  const parentsOf = (sha) => g(w.root, ['--git-dir', w.remote, 'rev-list', '--parents', '-n', '1', sha]).split(' ').slice(1);
+  assert.throws(() => run({ dir, remote: w.remote, listJson: JSON.stringify([e, bad]), parentsOf, log: (s) => lines.push(s) }), /refused twice/);
+  const text = lines.join('\n');
+  assert.match(text, new RegExp(`in the chain #${e.pr}\nleft out #${bad.pr}: the added file is not the listed content\nthe push was refused`));
+  assert.doesNotMatch(text, /landed #/);
+  assert.equal(g(w.root, ['--git-dir', w.remote, 'rev-parse', 'main']), before);
+});
+
 test('nothing landable: nothing is pushed, main unchanged', () => {
   const w = world(); const before = g(w.root, ['--git-dir', w.remote, 'rev-parse', 'main']);
   const e = { ...pr(w, add()), blob: 'f'.repeat(40) };
@@ -133,7 +146,8 @@ test('main moved after the fetch: the chain is rebuilt once on the new main, nev
   writeFileSync(hook, `#!/bin/sh\nf="${w.root}/once"\nif [ ! -e "$f" ]; then : > "$f"; unset $(env | sed -n 's/^\\(GIT_[A-Z_]*\\)=.*/\\1/p'); cd "${w.work}" && echo moved >> README && git commit -qam moved && git push -q "${w.remote}" main; exit 1; fi\nexit 0\n`, { mode: 0o755 });
   const { res, text } = land(w, [e]);
   assert.equal(why(res, e.pr), 'landed');
-  assert.match(text, /rebuilt once/);
+  assert.match(text, /the push was refused\nrebuilding once/);
+  assert.match(text, new RegExp(`in the chain #${e.pr}[\\s\\S]*pushed: these heads are on main\\nlanded #${e.pr}`));
 });
 
 test('a signature block or an extra header is left out; names from the variable are ours too', () => {
