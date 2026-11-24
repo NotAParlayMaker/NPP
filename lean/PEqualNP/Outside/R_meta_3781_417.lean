@@ -1,5 +1,4 @@
-import Mathlib.Data.Set.Card
-import Mathlib.Data.Nat.Find
+import Mathlib
 import PEqualNP.Defs
 
 set_option maxHeartbeats 2500000 in
