@@ -1,7 +1,7 @@
 import Mathlib
 import PEqualNP.Defs
 
-namespace PEqualNP.Outside
+namespace PEqualNP.Outside.L_meta_3322_aux
 open CircuitLowerBounds
 
 private def remapWire (σ : Equiv.Perm (Fin 14)) (k : ℕ) : ℕ :=
@@ -271,8 +271,12 @@ private theorem split_initial (f : (Fin 14 → Bool) → Bool) (C : Circuit)
       show (List.ofFn x).getD b false = x bi from readInput bi] at he
     exact he
 
+end PEqualNP.Outside.L_meta_3322_aux
+
+open PEqualNP PEqualNP.CircuitLowerBounds PEqualNP.Outside.L_meta_3322_aux
+
 -- Fixing the first two gates up to input symmetries leaves at most 24 gates.
-theorem L_meta_3322 (f : (Fin 14 → Bool) → Bool) (C : Circuit)
+theorem PEqualNP.Outside.L_meta_3322 (f : (Fin 14 → Bool) → Bool) (C : Circuit)
     (hModel : TopForm.IsAO2 14 C) (hDistinct : ∀ g ∈ C.gates, g.inputs.Nodup)
     (hmin : 2 ≤ C.size) (hmax : C.size ≤ 26)
     (hfun : ∀ x : Fin 14 → Bool, C.eval (List.ofFn x) = f x) :
@@ -298,5 +302,3 @@ theorem L_meta_3322 (f : (Fin 14 → Bool) → Bool) (C : Circuit)
   have hle := Nat.find_min' hex (show Q T.code from ⟨T, hT, rfl⟩)
   rw [← hcode, hcodeT, remapSecond_val, remapSecond_val] at hle
   exact hle
-
-end PEqualNP.Outside
