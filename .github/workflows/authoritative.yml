@@ -30,7 +30,7 @@ on:
         required: false
         type: string
       pool:
-        description: Leave empty. The intake sends "standard" to put this one run on the standard runner while the larger runner is the default, so both pools work at once.
+        description: Leave empty. The intake sends "standard" or one label of the fixed list in runs-on to choose the hosted runner for this one run.
         required: false
         type: string
 
@@ -49,7 +49,9 @@ jobs:
     # larger GitHub-hosted runner by a settings change. Unset, it is the standard runner as before. A pull
     # request cannot set a variable, and this workflow is only ever started from the base repository.
     # Only a label on the list below is taken: a mistyped or self-hosted label falls back to the standard runner.
-    runs-on: ${{ inputs.pool != 'standard' && contains(fromJSON('["pnp-4core"]'), vars.CHECK_RUNNER) && vars.CHECK_RUNNER || 'ubuntu-24.04' }}
+    # The pool input, sent only by the project's own dispatch, may name ONE label of the fixed list (or "standard");
+    # anything else falls to the repository variable if it is on the list, and otherwise to the standard runner.
+    runs-on: ${{ contains(fromJSON('["pnp-4core","pnp-8core","pnp-2core"]'), inputs.pool) && inputs.pool || (inputs.pool != 'standard' && contains(fromJSON('["pnp-4core","pnp-8core","pnp-2core"]'), vars.CHECK_RUNNER) && vars.CHECK_RUNNER || 'ubuntu-24.04') }}
     timeout-minutes: 150
     env:
       # Inputs are free text typed by whoever starts the run. They reach the scripts only as
