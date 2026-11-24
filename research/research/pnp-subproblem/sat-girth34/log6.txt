@@ -135,3 +135,4 @@ Ez`_ k=8 SAT 0.8s
 Eju? k=5 UNSAT 0.3s
 Eju? k=6 UNSAT 0.8s
 Eju? k=7 UNSAT 5.1s
+Eju? k=8 UNSAT 56.2s
