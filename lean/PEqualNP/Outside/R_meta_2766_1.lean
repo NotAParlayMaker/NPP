@@ -3,7 +3,7 @@ import PEqualNP.Defs
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
-namespace PEqualNP.Outside
+namespace PEqualNP.Outside.R_meta_2766_1
 
 abbrev E2766 : (Fin 9 → Bool) → Bool := fun x =>
   x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 ||
@@ -59,144 +59,145 @@ lemma gate1_form2766 (C : Circuit) (h : Hyps2766 C) :
       exact ⟨.or, a, b, Or.inr rfl, ha, hb, hrank, by
         rw [List.getElem?_eq_getElem h1lt, hAB]⟩
 
+end PEqualNP.Outside.R_meta_2766_1
 
-theorem R_meta_2766_1 :
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, []⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 0]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 1]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 2]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 3]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 4]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 5]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 6]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 1]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 2]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 3]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 4]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 5]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 6]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 2]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 3]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 4]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 5]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 6]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 3]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 4]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 5]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 6]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [4, 4]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [4, 5]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [4, 6]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [4, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [4, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [4, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [4, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [5, 5]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [5, 6]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [5, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [5, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [5, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [5, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [6, 6]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [6, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [6, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [6, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [6, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [7, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [7, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [7, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [7, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [8, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [8, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [8, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [9, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [24, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.and, [24, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 0]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 1]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 2]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 3]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 4]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 5]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 6]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 1]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 2]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 3]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 4]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 5]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 6]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 2]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 3]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 4]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 5]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 6]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 3]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 4]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 5]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 6]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [4, 4]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [4, 5]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [4, 6]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [4, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [4, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [4, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [4, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [5, 5]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [5, 6]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [5, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [5, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [5, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [5, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [6, 6]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [6, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [6, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [6, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [6, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [7, 7]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [7, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [7, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [7, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [8, 8]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [8, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [8, 24]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [9, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [24, 9]⟩ → Goal2766 C) →
-    (∀ C : Circuit, Hyps2766 C → C.gates[1]? = some ⟨.or, [24, 24]⟩ → Goal2766 C) →
-    ∀ C : Circuit, Hyps2766 C → Goal2766 C := by
+theorem PEqualNP.Outside.R_meta_2766_1 :
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, []⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 0]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 1]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 2]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 3]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 4]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 5]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 6]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [0, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 1]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 2]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 3]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 4]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 5]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 6]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [1, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 2]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 3]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 4]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 5]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 6]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [2, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 3]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 4]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 5]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 6]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [3, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [4, 4]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [4, 5]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [4, 6]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [4, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [4, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [4, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [4, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [5, 5]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [5, 6]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [5, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [5, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [5, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [5, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [6, 6]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [6, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [6, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [6, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [6, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [7, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [7, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [7, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [7, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [8, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [8, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [8, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [9, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [24, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.and, [24, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 0]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 1]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 2]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 3]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 4]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 5]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 6]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [0, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 1]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 2]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 3]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 4]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 5]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 6]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [1, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 2]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 3]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 4]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 5]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 6]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [2, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 3]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 4]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 5]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 6]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [3, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [4, 4]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [4, 5]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [4, 6]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [4, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [4, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [4, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [4, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [5, 5]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [5, 6]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [5, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [5, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [5, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [5, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [6, 6]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [6, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [6, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [6, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [6, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [7, 7]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [7, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [7, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [7, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [8, 8]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [8, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [8, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [9, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [24, 9]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    (∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → C.gates[1]? = some ⟨.or, [24, 24]⟩ → PEqualNP.Outside.R_meta_2766_1.Goal2766 C) →
+    ∀ C : Circuit, PEqualNP.Outside.R_meta_2766_1.Hyps2766 C → PEqualNP.Outside.R_meta_2766_1.Goal2766 C := by
   intro h_nil h_and_0_0 h_and_0_1 h_and_0_2 h_and_0_3 h_and_0_4 h_and_0_5 h_and_0_6 h_and_0_7 h_and_0_8 h_and_0_9 h_and_0_24 h_and_1_1 h_and_1_2 h_and_1_3 h_and_1_4 h_and_1_5 h_and_1_6 h_and_1_7 h_and_1_8 h_and_1_9 h_and_1_24 h_and_2_2 h_and_2_3 h_and_2_4 h_and_2_5 h_and_2_6 h_and_2_7 h_and_2_8 h_and_2_9 h_and_2_24 h_and_3_3 h_and_3_4 h_and_3_5 h_and_3_6 h_and_3_7 h_and_3_8 h_and_3_9 h_and_3_24 h_and_4_4 h_and_4_5 h_and_4_6 h_and_4_7 h_and_4_8 h_and_4_9 h_and_4_24 h_and_5_5 h_and_5_6 h_and_5_7 h_and_5_8 h_and_5_9 h_and_5_24 h_and_6_6 h_and_6_7 h_and_6_8 h_and_6_9 h_and_6_24 h_and_7_7 h_and_7_8 h_and_7_9 h_and_7_24 h_and_8_8 h_and_8_9 h_and_8_24 h_and_9_9 h_and_24_9 h_and_24_24 h_or_0_0 h_or_0_1 h_or_0_2 h_or_0_3 h_or_0_4 h_or_0_5 h_or_0_6 h_or_0_7 h_or_0_8 h_or_0_9 h_or_0_24 h_or_1_1 h_or_1_2 h_or_1_3 h_or_1_4 h_or_1_5 h_or_1_6 h_or_1_7 h_or_1_8 h_or_1_9 h_or_1_24 h_or_2_2 h_or_2_3 h_or_2_4 h_or_2_5 h_or_2_6 h_or_2_7 h_or_2_8 h_or_2_9 h_or_2_24 h_or_3_3 h_or_3_4 h_or_3_5 h_or_3_6 h_or_3_7 h_or_3_8 h_or_3_9 h_or_3_24 h_or_4_4 h_or_4_5 h_or_4_6 h_or_4_7 h_or_4_8 h_or_4_9 h_or_4_24 h_or_5_5 h_or_5_6 h_or_5_7 h_or_5_8 h_or_5_9 h_or_5_24 h_or_6_6 h_or_6_7 h_or_6_8 h_or_6_9 h_or_6_24 h_or_7_7 h_or_7_8 h_or_7_9 h_or_7_24 h_or_8_8 h_or_8_9 h_or_8_24 h_or_9_9 h_or_24_9 h_or_24_24 C hC
-  rcases gate1_form2766 C hC with h | ⟨op, a, b, hop, ha, hb, hrank, hgate⟩
+  rcases PEqualNP.Outside.R_meta_2766_1.gate1_form2766 C hC with h | ⟨op, a, b, hop, ha, hb, hrank, hgate⟩
   · exact h_nil C hC h
   · rcases hop with rfl | rfl
     · -- second gate is AND[a,b]
@@ -471,5 +472,3 @@ theorem R_meta_2766_1 :
         · exact absurd hrank (by decide)
         · exact h_or_24_9 C hC hgate
         · exact h_or_24_24 C hC hgate
-
-end PEqualNP.Outside
