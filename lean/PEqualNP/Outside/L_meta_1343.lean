@@ -1861,6 +1861,8 @@ end Proof
 open PEqualNP.Outside.L_meta_1343_graph
 open PEqualNP.Outside.L_meta_1343_proof
 
+end PEqualNP.Outside.L_meta_1343
+
 theorem PEqualNP.Outside.L_meta_1343 :
     ∀ C : PEqualNP.CircuitLowerBounds.Circuit,
       PEqualNP.MetaComplexity.Monotone2 C →
@@ -1881,4 +1883,3 @@ theorem PEqualNP.Outside.L_meta_1343 :
     · intro h; exact (hfun x).mpr ((eval_iff x).mpr h)
   exact size_ge_22 C hmono hfun'
 
-end PEqualNP.Outside.L_meta_1343
