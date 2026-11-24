@@ -3,7 +3,6 @@ import PEqualNP.Defs
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
--- The prefix and suffix surrounding the only effective reader cannot read wire six.
 theorem PEqualNP.Outside.R_meta_2504_1
     (case_and :
       let read : PEqualNP.CircuitLowerBounds.Gate → Bool := fun g =>
