@@ -6,7 +6,10 @@
 // here by mistake and would have built outside Lean as the workflow's account.)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 const root = new URL('../../', import.meta.url);
 const wrapper = readFileSync(new URL('tools/check-lean.mjs', root), 'utf8');
 const workflow = readFileSync(new URL('.github/workflows/authoritative.yml', root), 'utf8');
@@ -56,4 +59,17 @@ test('second wall: both namespace scripts pin PATH first, and every sudo after t
   assert.doesNotMatch(locked, /sudo -n (?!\/)/, 'lake-locked.sh hands sudo a bare name');
   const run = workflow.slice(workflow.indexOf('- name: Run the BASE checker'), workflow.indexOf("- name: Print the checker's last line"));
   assert.doesNotMatch(run, /sudo (?!\/usr\/bin\/)/, 'the run step hands sudo a bare name');
+});
+test('the launch line RUNS: locked-ns.sh gets the ready file first, then the toolchain, and writes through descriptor 4', () => {
+  // The fixed program of lake-locked.sh's build launch, with the namespace tool replaced by plain env:
+  // what reaches the script, in what order, and the inherited descriptor (a dropped shift once broke it).
+  const prog = locked.match(/sudo -n \/bin\/sh -c '([^']*)' pnp-ready/)[1].replace(/\/usr\/bin\/unshare --net --ipc --mount --pid --fork --/, '/usr/bin/env');
+  const d = mkdtempSync(join(tmpdir(), 'pnp-launch-'));
+  try {
+    const ready = join(d, 'ready'), stub = join(d, 'ns.sh'); writeFileSync(ready, '');
+    writeFileSync(stub, 'printf "%s|" "$@"; echo "namespace ready" >&4\n');
+    const out = execFileSync('/bin/sh', ['-c', prog, 'pnp-ready', ready, stub, ready, 'TC', '3', 'CFG', 'RW', 'lake', 'build', 'X'], { encoding: 'utf8' });
+    assert.equal(out, `${ready}|TC|3|CFG|RW|lake|build|X|`, 'the script got its arguments in the wrong order');
+    assert.equal(readFileSync(ready, 'utf8'), 'namespace ready\n', 'the ready line did not arrive through descriptor 4');
+  } finally { rmSync(d, { recursive: true, force: true }); }
 });

@@ -44,6 +44,7 @@ mount -n --move /tmp/.pnp-proc /proc
 #    keeps it; the build needs none of them). Whatever is left, the judge below reads the final table:
 #    a mount still writable, or allowing set-user-id or device files, stops the build. So a failure here
 #    can only ever stop a build, never open one.
+n0=$(wc -l < /proc/self/mountinfo)
 awk '{print $5}' /proc/self/mountinfo | while IFS= read -r m; do
   m=$(printf '%b' "$m")
   case "$m" in
@@ -52,6 +53,7 @@ awk '{print $5}' /proc/self/mountinfo | while IFS= read -r m; do
   esac
   mount -n -o "$o" "$m" 2>/dev/null || umount -n -l "$m" 2>/dev/null || true
 done
+detached=$(( n0 - $(wc -l < /proc/self/mountinfo) ))
 # 2. the places the build may write, each recorded by its MOUNT ID the moment it is made, so the judge
 #    allows exactly these mounts and not whatever sits at their paths. Mode 1777 makes the tmpfs places
 #    world-writable INSIDE this namespace only, where the build account is the one account that runs.
@@ -96,7 +98,7 @@ if [ -n "$bad" ]; then
   exit 98
 fi
 # One line for the log: how many mounts are read-only, and which are writable (our own places only).
-awk '{print $5, $6}' /proc/self/mountinfo | awk '{ split($2, f, ","); if (f[1] == "ro") r++; else w = w " " $1 } END { print "mounts: " r " read-only; writable:" w }' \
+awk '{print $5, $6}' /proc/self/mountinfo | awk -v d="$detached" '{ split($2, f, ","); if (f[1] == "ro") r++; else w = w " " $1 } END { print "mounts: " r " read-only; detached: " d "; writable:" w }' \
   | tr -cd 'A-Za-z0-9_./:;, \n-' >&4
 echo "namespace ready" >&4
 exec 4>&-
