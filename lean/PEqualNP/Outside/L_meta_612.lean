@@ -1667,7 +1667,6 @@ theorem main_bound (n t : ℕ) (G : SimpleGraph (Fin n))
         ∃ k : ℕ, j < k ∧ k < s ∧ ∃ g : Gate, C.gates[k]? = some g ∧ n + j ∈ g.inputs := by
       intro j hjs hne
       by_contra hnone
-      push Not at hnone
       have hjlen : j < C.gates.length := by omega
       obtain ⟨C', hm', hsz', heq'⟩ :=
         elim_smaller_circuit G C hmono hfun hedge j hjlen (fun _ => Sum.inl false) true
@@ -1683,7 +1682,8 @@ theorem main_bound (n t : ℕ) (G : SimpleGraph (Fin n))
               obtain ⟨p, q, hpq, hp, hq, _⟩ := hgate_shape j' hj'lt
               have : n + j = p ∨ n + j = q := by simpa [hpq] using hmem
               rcases this with h | h <;> omega
-            exact hnone j' ⟨hltj, by omega, ⟨C.gates[j']'hj'lt, List.getElem?_eq_getElem hj'lt, hmem⟩⟩⟩)
+            apply hnone
+            exact ⟨j', hltj, by omega, C.gates[j']'hj'lt, List.getElem?_eq_getElem hj'lt, hmem⟩⟩)
       exact hnot_smaller C' hm' (by rw [← hCsize]; exact hsz') heq'
     have hout_last : C.output = n + s - 1 := by
       by_contra hne
