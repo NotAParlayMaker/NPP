@@ -32,7 +32,88 @@ private lemma ind_number_petersen_minus_one :
       (x7 0 && x7 1 || x7 1 && x7 2 || x7 2 && x7 3 || x7 3 && x7 4 || x7 4 && x7 0 ||
         x7 0 && x7 5 || x7 1 && x7 6 || x7 2 && x7 7 || x7 3 && x7 8 ||
         x7 5 && x7 7 || x7 6 && x7 8 || x7 8 && x7 5) = Bool.true := by
-  decide
+  intro S hS
+  by_contra h
+  have h58 : (S ∩ {5, 6, 7, 8}).card ≥ 2 := by
+    by_cases h5 : (5 : Fin 9) ∈ S
+    · by_cases h8 : (8 : Fin 9) ∈ S
+      · have : ({5, 8} : Finset (Fin 9)) ⊆ S ∩ {5, 6, 7, 8} := by intro x hx; simp at hx; rcases hx with rfl | rfl <;> simp [*]
+        exact le_trans (by decide : ({5, 8} : Finset (Fin 9)).card ≥ 2) (Finset.card_le_card this)
+      · have h6 : (6 : Fin 9) ∈ S := by by_contra h6; apply h; simp [h8, h6]
+        have : ({5, 6} : Finset (Fin 9)) ⊆ S ∩ {5, 6, 7, 8} := by intro x hx; simp at hx; rcases hx with rfl | rfl <;> simp [*]
+        exact le_trans (by decide : ({5, 6} : Finset (Fin 9)).card ≥ 2) (Finset.card_le_card this)
+    · have h7 : (7 : Fin 9) ∈ S := by by_contra h7; apply h; simp [h5, h7]
+      have h8 : (8 : Fin 9) ∈ S := by by_contra h8; apply h; simp [h5, h8]
+      have : ({7, 8} : Finset (Fin 9)) ⊆ S ∩ {5, 6, 7, 8} := by intro x hx; simp at hx; rcases hx with rfl | rfl <;> simp [*]
+      exact le_trans (by decide : ({7, 8} : Finset (Fin 9)).card ≥ 2) (Finset.card_le_card this)
+  have h04 : (S ∩ {0, 1, 2, 3, 4}).card ≥ 3 := by
+    by_contra hlt
+    by_cases h0 : (0 : Fin 9) ∈ S <;> by_cases h1 : (1 : Fin 9) ∈ S <;> by_cases h2 : (2 : Fin 9) ∈ S <;>
+      by_cases h3 : (3 : Fin 9) ∈ S <;> by_cases h4 : (4 : Fin 9) ∈ S
+    all_goals
+      try (apply h; simp [h0, h1, h2, h3, h4]; done)
+    all_goals
+      exfalso
+      apply hlt
+      -- 5choose3+ cases where >=3 are in S:
+      have : ∀ (s : Finset (Fin 9)), s ⊆ S ∩ {0, 1, 2, 3, 4} → s.card ≥ 3 → (S ∩ {0, 1, 2, 3, 4}).card ≥ 3 :=
+        fun s hs hsc => le_trans hsc (Finset.card_le_card hs)
+      first
+      | exact this {0, 1, 2} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
+      | exact this {0, 1, 3} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
+      | exact this {0, 1, 4} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
+      | exact this {0, 2, 3} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
+      | exact this {0, 2, 4} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
+      | exact this {0, 3, 4} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
+      | exact this {1, 2, 3} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
+      | exact this {1, 2, 4} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
+      | exact this {1, 3, 4} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
+      | exact this {2, 3, 4} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
+  have hdisj : Disjoint (S ∩ {0, 1, 2, 3, 4}) (S ∩ {5, 6, 7, 8}) := by
+    rw [Finset.disjoint_left]
+    intro x hx1 hx2
+    simp at hx1 hx2
+    omega
+  have hunion : (S ∩ {0, 1, 2, 3, 4}) ∪ (S ∩ {5, 6, 7, 8}) ⊆ S :=
+    Finset.union_subset Finset.inter_subset_left Finset.inter_subset_left
+  have hcard_union := Finset.card_le_card hunion
+  rw [Finset.card_union_of_disjoint hdisj] at hcard_union
+  omega
+
+private lemma getD_pair (y : Fin 9 → Bool) (b : Bool) (j : ℕ) :
+    (List.ofFn y ++ [b]).getD j Bool.false =
+      if h : j < 9 then y ⟨j, h⟩ else if j = 9 then b else Bool.false := by
+  simp only [List.getD_eq_getElem?_getD]
+  by_cases h9 : j < 9
+  · rw [dif_pos h9, List.getElem?_append_left (by simp [h9])]
+    simp [h9]
+  · rw [dif_neg h9]
+    by_cases heq9 : j = 9
+    · subst heq9
+      rw [if_pos rfl, List.getElem?_append_right (by simp)]
+      simp
+    · rw [if_neg heq9, List.getElem?_append_right (by simp; omega)]
+      simp [List.getElem?_eq_none (by omega : 1 ≤ j - 9)]
+
+private lemma getD_triple (y : Fin 9 → Bool) (b c : Bool) (j : ℕ) :
+    (List.ofFn y ++ [b] ++ [c]).getD j Bool.false =
+      if h : j < 9 then y ⟨j, h⟩ else if j = 9 then b else if j = 10 then c else Bool.false := by
+  simp only [List.getD_eq_getElem?_getD]
+  by_cases h9 : j < 9
+  · rw [dif_pos h9, List.getElem?_append_left (by simp [h9]), List.getElem?_append_left (by simp [h9])]
+    simp [h9]
+  · rw [dif_neg h9]
+    by_cases heq9 : j = 9
+    · subst heq9
+      rw [if_pos rfl, List.getElem?_append_left (by simp), List.getElem?_append_right (by simp)]
+      simp
+    · rw [if_neg heq9]
+      by_cases heq10 : j = 10
+      · subst heq10
+        rw [if_pos rfl, List.getElem?_append_right (by simp)]
+        simp
+      · rw [if_neg heq10, List.getElem?_append_right (by simp; omega)]
+        simp [List.getElem?_eq_none (by omega : 1 ≤ j - 10)]
 
 private lemma getD_agree (x1 : List ℕ) (S : Finset (Fin 9))
     (y0 y1 : Fin 9 → Bool) (hy : ∀ v ∈ S, y0 v = y1 v)
@@ -44,58 +125,49 @@ private lemma getD_agree (x1 : List ℕ) (S : Finset (Fin 9))
   have h8 : ∀ j : ℕ, (if hj : j < 9 then ({⟨j, hj⟩} : Finset (Fin 9)) else if j = 9 then {0} else ∅) ⊆ S →
       (List.ofFn y0 ++ [!y0 0]).getD j Bool.false = (List.ofFn y1 ++ [!y1 0]).getD j Bool.false := by
     intro j hj
+    rw [getD_pair, getD_pair]
     by_cases h9 : j < 9
-    · have hmem : ⟨j, h9⟩ ∈ S := hj (by simp [h9])
-      simp only [List.getD_eq_getElem?_getD, List.getElem?_append_left (by simp [h9]),
-        List.getElem?_ofFn, dite_eq_left, Option.getD_some]
-      exact hy ⟨j, h9⟩ hmem
-    · by_cases heq9 : j = 9
+    · simp only [dif_pos h9]
+      exact hy ⟨j, h9⟩ (hj (by simp [h9]))
+    · simp only [dif_neg h9]
+      by_cases heq9 : j = 9
       · subst heq9
-        have hmem : (0 : Fin 9) ∈ S := hj (by simp)
-        simp only [List.getD_eq_getElem?_getD, List.getElem?_append_right (by simp),
-          List.length_ofFn, Nat.sub_self, List.getElem?_cons_zero, Option.getD_some]
-        rw [hy 0 hmem]
-      · simp only [List.getD_eq_getElem?_getD, List.getElem?_append_right (by simp; omega),
-          List.length_ofFn]
-        simp [List.getElem?_cons_succ, List.getElem?_eq_none (by omega : 1 ≤ j - 9)]
+        simp only [ite_true]
+        rw [hy 0 (hj (by simp))]
+      · simp [heq9]
+  rw [getD_triple, getD_triple]
   by_cases hi9 : i < 9
-  · have hsub : (if hj : i < 9 then ({⟨i, hj⟩} : Finset (Fin 9)) else if i = 9 then {0} else ∅) ⊆ S := by
-      simpa [wireDeps, hi9] using hi
-    simp only [List.getD_eq_getElem?_getD, List.getElem?_append_left (by simp [hi9] : i < (List.ofFn y0 ++ [!y0 0]).length)]
-    have := h8 i hsub
-    simpa [List.getD_eq_getElem?_getD] using this
-  · by_cases heq9 : i = 9
+  · simp only [dif_pos hi9]
+    exact hy ⟨i, hi9⟩ (hi (by simp [wireDeps, hi9]))
+  · simp only [dif_neg hi9]
+    by_cases heq9 : i = 9
     · subst heq9
-      have hsub : (if hj : 9 < 9 then ({⟨9, hj⟩} : Finset (Fin 9)) else if (9 : ℕ) = 9 then {0} else ∅) ⊆ S := by
-        simpa [wireDeps] using hi
-      simp only [List.getD_eq_getElem?_getD, List.getElem?_append_left (by simp : 9 < (List.ofFn y0 ++ [!y0 0]).length)]
-      have := h8 9 hsub
-      simpa [List.getD_eq_getElem?_getD] using this
-    · by_cases heq10 : i = 10
+      simp only [ite_true]
+      rw [hy 0 (hi (by simp [wireDeps]))]
+    · simp only [if_neg heq9]
+      by_cases heq10 : i = 10
       · subst heq10
-        have hsub : x1.foldr (fun j acc => (if hj : j < 9 then {⟨j, hj⟩} else if j = 9 then {0} else ∅) ∪ acc) ∅ ⊆ S := by
-          simpa [wireDeps] using hi
-        simp only [List.getD_eq_getElem?_getD, List.getElem?_append_right (by simp : (List.ofFn y0 ++ [!y0 0]).length ≤ 10),
-          List.length_append, List.length_ofFn, List.length_singleton, Nat.sub_self, List.getElem?_cons_zero,
-          Option.getD_some]
+        simp only [ite_true]
         congr 1
         apply List.map_congr_left
         intro j hj
         apply h8 j
         intro x hx
-        apply hsub
-        clear hsub hi hi9 heq9 hy y0 y1
-        induction x1 with
-        | nil => simp at hj
-        | cons k ks ih =>
-          simp only [List.mem_cons] at hj
-          simp only [List.foldr_cons, Finset.mem_union]
-          rcases hj with rfl | hmem
-          · exact Or.inl hx
-          · exact Or.inr (ih hmem)
-      · have hge11 : 11 ≤ i := by omega
-        simp only [List.getD_eq_getElem?_getD]
-        rw [List.getElem?_eq_none (by simp; omega), List.getElem?_eq_none (by simp; omega)]
+        apply hi
+        simp only [wireDeps, dif_neg (by omega : ¬ (10 : ℕ) < 9), if_neg (by omega : (10 : ℕ) ≠ 9), ite_true]
+        have hfold : ∀ (L : List ℕ), j ∈ L →
+            x ∈ L.foldr (fun k acc => (if hk : k < 9 then ({⟨k, hk⟩} : Finset (Fin 9)) else if k = 9 then {0} else ∅) ∪ acc) ∅ := by
+          intro L hL
+          induction L with
+          | nil => simp at hL
+          | cons k ks ih =>
+            simp only [List.mem_cons] at hL
+            simp only [List.foldr_cons, Finset.mem_union]
+            rcases hL with rfl | hmem
+            · exact Or.inl hx
+            · exact Or.inr (ih hmem)
+        exact hfold x1 hj
+      · simp [heq10]
 
 end PEqualNP.Outside.L_meta_3124
 
