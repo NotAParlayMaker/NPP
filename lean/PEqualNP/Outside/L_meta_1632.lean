@@ -1,0 +1,60 @@
+import Mathlib
+import PEqualNP.Defs
+
+namespace PEqualNP.Outside.L_meta_1632
+
+lemma foldl_append_getD (gates : List PEqualNP.CircuitLowerBounds.Gate) (x : List Bool) (k : ℕ)
+    (hk : k < x.length) :
+    (gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) x).getD k false =
+      x.getD k false := by
+  induction gates generalizing x with
+  | nil => rfl
+  | cons g gs ih =>
+    rw [List.foldl_cons, ih (x ++ [g.op.eval (g.inputs.map fun i => x.getD i false)]) (by simp; omega)]
+    simp only [List.getD_eq_getElem?_getD, List.getElem?_append_left hk]
+
+end PEqualNP.Outside.L_meta_1632
+
+theorem PEqualNP.Outside.L_meta_1632 : ∀ (q N : ℕ) (L : Fin N → Finset (Fin N)) (i0 p0 p1 : Fin N),
+    3 ≤ q → N = q ^ 2 + q + 1 → (∀ i : Fin N, (L i).card = q + 1) → (∀ i j : Fin N, i ≠ j → (L i ∩ L j).card = 1) →
+    (∀ p p' : Fin N, p ≠ p' → ∃ i : Fin N, p ∈ L i ∧ p' ∈ L i) →
+    p0 ≠ p1 → p0 ∈ L i0 → p1 ∈ L i0 →
+    (∀ l l' : Fin N, (p0 ∈ L l ∧ p1 ∉ L l) → (p0 ∈ L l' ∧ p1 ∉ L l') → l ≠ l' → ∀ p ∈ L l, p ≠ p0 → p1 ∉ L l' ∧ p ∉ L l') ∧
+    (∀ m m' : Fin N, (p1 ∈ L m ∧ p0 ∉ L m) → (p1 ∈ L m' ∧ p0 ∉ L m') → m ≠ m' → ∀ p ∈ L m, p ≠ p1 → p0 ∉ L m' ∧ p ∉ L m') ∧
+    (∀ m : Fin N, (p1 ∈ L m ∧ p0 ∉ L m) → p0 ∉ L m) ∧ (∀ l : Fin N, (p0 ∈ L l ∧ p1 ∉ L l) → p1 ∉ L l) ∧
+    (∀ M m : Fin N, (p0 ∉ L M ∧ p1 ∉ L M) → (p1 ∈ L m ∧ p0 ∉ L m) → ∀ p ∈ L M, p ∉ L m → p0 ∉ L m ∧ p ∉ L m) ∧
+    (∀ l m : Fin N, (p0 ∈ L l ∧ p1 ∉ L l) → (p1 ∈ L m ∧ p0 ∉ L m) → ∃ c : Fin N, L l ∩ L m = {c}) ∧
+    (∀ (gates : List PEqualNP.CircuitLowerBounds.Gate), (∀ gt ∈ gates, (gt.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ gt.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ gt.inputs.length ≤ 2) →
+      (∀ i : Fin gates.length, 1 ≤ (gates.get i).inputs.length) → (∀ (i : Fin gates.length), ∀ w ∈ (gates.get i).inputs, w < N + (i : ℕ)) →
+      ∀ p t : Fin N, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, (p : ℕ)⟩ (List.ofFn (fun v : Fin N => decide (v ∉ L t))) = false ↔ p ∈ L t) := by
+  intro q N L i0 p0 p1 hq hN hcard hinter hjoin hp01 hp0 hp1
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro l l' hl hl' hne p hp hpp0
+    refine ⟨hl'.2, ?_⟩
+    intro hpl'
+    obtain ⟨c, hc⟩ := Finset.card_eq_one.mp (hinter l l' hne)
+    have h1 : p0 ∈ ({c} : Finset (Fin N)) := hc ▸ Finset.mem_inter.mpr ⟨hl.1, hl'.1⟩
+    have h2 : p ∈ ({c} : Finset (Fin N)) := hc ▸ Finset.mem_inter.mpr ⟨hp, hpl'⟩
+    simp only [Finset.mem_singleton] at h1 h2
+    exact hpp0 (h2.trans h1.symm)
+  · intro m m' hm hm' hne p hp hpp1
+    refine ⟨hm'.2, ?_⟩
+    intro hpm'
+    obtain ⟨c, hc⟩ := Finset.card_eq_one.mp (hinter m m' hne)
+    have h1 : p1 ∈ ({c} : Finset (Fin N)) := hc ▸ Finset.mem_inter.mpr ⟨hm.1, hm'.1⟩
+    have h2 : p ∈ ({c} : Finset (Fin N)) := hc ▸ Finset.mem_inter.mpr ⟨hp, hpm'⟩
+    simp only [Finset.mem_singleton] at h1 h2
+    exact hpp1 (h2.trans h1.symm)
+  · intro m hm
+    exact hm.2
+  · intro l hl
+    exact hl.2
+  · intro M m hM hm p hp hpm
+    exact ⟨hm.2, hpm⟩
+  · intro l m hl hm
+    have hne : l ≠ m := fun h => hm.2 (h ▸ hl.1)
+    exact Finset.card_eq_one.mp (hinter l m hne)
+  · intro gates hgates hlen hwires p t
+    simp only [PEqualNP.CircuitLowerBounds.Circuit.eval, PEqualNP.CircuitLowerBounds.Circuit.wires]
+    rw [PEqualNP.Outside.L_meta_1632.foldl_append_getD gates _ (p : ℕ) (by simp)]
+    simp [List.getD_eq_getElem?_getD]
