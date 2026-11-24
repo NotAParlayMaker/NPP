@@ -50,10 +50,11 @@ theorem PEqualNP.Outside.R_meta_2114_2
     let relGate (g : Gate) : Gate := ⟨g.op, g.inputs.map wmap⟩
     let D : Circuit := ⟨C.gates.map relGate, wmap C.output⟩
     have hsz : D.size = C.size := by
-      simp [D, Circuit.size]
+      change (C.gates.map relGate).length = C.gates.length
+      simp [List.length_map]
     let q : Fin C.size ≃ Fin D.size := finCongr hsz.symm
-    have hqval (i : Fin C.size) : (q i).val = i.val := by
-      simp [q, finCongr]
+    have hqval (i : Fin C.size) : (q i).val = i.val :=
+      finCongr_apply_coe hsz.symm i
     have hget (i : Fin C.size) : D.gates.get (q i) = relGate (C.gates.get i) := by
       have hiC : i.val < C.gates.length := (by
         change i.val < C.size; exact i.isLt)
@@ -187,19 +188,24 @@ theorem PEqualNP.Outside.R_meta_2114_2
       exact ⟨(hF g0 hg0).1, by simpa [relGate] using (hF g0 hg0).2⟩
     have hfun0 (x : Fin n → Bool) :
         circuitFun n D x = circuitFun n C (x ∘ s) := by
-      unfold circuitFun Circuit.eval Circuit.wires
-      obtain ⟨_, _, hbits⟩ := init_rel x
       obtain ⟨_, _, hall⟩ := fold_rel C.gates (List.ofFn (x ∘ s)) (List.ofFn x)
         (by simp) (by simp) (init_rel x).2.2
-      have : (C.gates.map relGate).foldl
+      have hDg : (C.gates.map relGate).foldl
           (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
           (List.ofFn x) =
-        (D.gates).foldl
+        D.gates.foldl
           (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
           (List.ofFn x) := by
         simp [D]
-      rw [← this]
-      exact (hall C.output)
+      change (D.gates.foldl
+          (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
+          (List.ofFn x)).getD D.output false =
+        (C.gates.foldl
+          (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
+          (List.ofFn (x ∘ s))).getD C.output false
+      have hDout : D.output = wmap C.output := rfl
+      rw [← hDg, hDout]
+      exact hall C.output
     refine ⟨D, q, hsz, ?min, hfun0, ?gates⟩
     · intro hCmin
       refine ⟨hFan C hCmin.1, ?_⟩
@@ -211,7 +217,11 @@ theorem PEqualNP.Outside.R_meta_2114_2
       -- Instead argue with a specialized copy below after the refine? We need a
       -- general relabel fact. Prove a local copy for s.symm by applying hfun0's
       -- pattern. Simpler: instantiate the same construction inline for s.symm.
-      have hszE : E.size = D'.size := by simp [E, Circuit.size]
+      have hszE : E.size = D'.size := by
+        change (D'.gates.map (fun g => (⟨g.op, g.inputs.map
+            (fun w => if h : w < n then (s.symm ⟨w, h⟩ : ℕ) else w)⟩ : Gate))).length =
+          D'.gates.length
+        simp [List.length_map]
       have hFE : FanInTwo E := by
         intro g hg
         obtain ⟨g0, hg0, rfl⟩ := List.mem_map.mp hg
@@ -314,35 +324,25 @@ theorem PEqualNP.Outside.R_meta_2114_2
           have h2 : (List.ofFn y).length ≤ wmap' w := by
             rw [wmap'_ge w hw]; simp; omega
           rw [List.getD_eq_default _ _ h2, List.getD_eq_default _ _ h1]
-      unfold circuitFun Circuit.eval Circuit.wires
       obtain ⟨_, _, hall⟩ := fold' D'.gates (List.ofFn (y ∘ s.symm)) (List.ofFn y)
         (by simp) (by simp) init'.2.2
       have hE : E.gates = D'.gates.map (fun (g : Gate) => (⟨g.op, g.inputs.map wmap'⟩ : Gate)) ∧
           E.output = wmap' D'.output := by
         simp [E, wmap']
-      rw [hE.1, hE.2]
-      have := hall D'.output
-      -- this : wires of mapped D' on y, getD (wmap' output) = wires of D' on (y ∘ s.symm), getD output
-      -- which is circuitFun D' (y ∘ s.symm)
-      change (List.getD
-          ((D'.gates.map (fun (g : Gate) => (⟨g.op, g.inputs.map wmap'⟩ : Gate))).foldl
-            (fun w (g : Gate) => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
-            (List.ofFn y))
-          (wmap' D'.output) false) =
-        circuitFun n C y
+      have hEeval : circuitFun n E y =
+          (E.gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
+            (List.ofFn y)).getD E.output false := rfl
       have hL :
           (List.foldl
             (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
             (List.ofFn (y ∘ s.symm)) D'.gates).getD D'.output false =
-          circuitFun n D' (y ∘ s.symm) := by
-        unfold circuitFun Circuit.eval Circuit.wires
-        rfl
+          circuitFun n D' (y ∘ s.symm) := rfl
       have hD' : circuitFun n D' (y ∘ s.symm) = circuitFun n D (y ∘ s.symm) := by
         rw [hfun']
       have hDs : circuitFun n D (y ∘ s.symm) = circuitFun n C (y ∘ s.symm ∘ s) := hfun0 _
       have hss : y ∘ s.symm ∘ s = y := by
         funext i; simp
-      rw [this, hL, hD', hDs, hss]
+      rw [hEeval, hE.1, hE.2, hall D'.output, hL, hD', hDs, hss]
     · intro i
       rw [hget]
       refine ⟨rfl, by simp [relGate], ?_, ?_, ?_⟩
@@ -360,16 +360,20 @@ theorem PEqualNP.Outside.R_meta_2114_2
       · intro v
         simp [relGate, List.mem_map]
         constructor
-        · intro ⟨w0, hw0, heq⟩
-          have : wmap w0 = (s v).val := heq
-          by_cases hw0n : w0 < n
-          · have : s ⟨w0, hw0n⟩ = s v := by
+        · intro hex
+          refine Exists.elim hex (fun w0 hw => ?_)
+          have hw0 := hw.1
+          have heq := hw.2
+          refine Or.elim (Classical.em (w0 < n)) ?lt ?ge
+          · intro hw0n
+            have : s ⟨w0, hw0n⟩ = s v := by
               apply Fin.ext
               simpa [wmap, hw0n] using heq
             have := s.injective this
             have : w0 = v.val := Fin.ext_iff.mp this
             simpa [this] using hw0
-          · have : wmap w0 = w0 := wmap_ge w0 hw0n
+          · intro hw0n
+            have : wmap w0 = w0 := wmap_ge w0 hw0n
             have : w0 = (s v).val := by simpa [this] using heq
             have : (s v).val < n := (s v).isLt
             omega
@@ -398,7 +402,7 @@ theorem PEqualNP.Outside.R_meta_2114_2
   have hCfun : circuitFun 9 C = f := hC.2.2.1
   let rot : Equiv.Perm (Fin 9) :=
     ⟨![1, 2, 3, 8, 6, 0, 7, 4, 5], ![5, 0, 1, 2, 7, 8, 4, 6, 3],
-      by intro i; fin_cases i <;> decide, by intro i; fin_cases i <;> decide⟩
+      by decide, by decide⟩
 
   have hrotF (x : Fin 9 -> Bool) : f (x ∘ rot) = f x := by
     change (x 1 && x 2 || x 2 && x 3 || x 3 && x 8 || x 8 && x 6 || x 6 && x 1 ||
@@ -407,7 +411,20 @@ theorem PEqualNP.Outside.R_meta_2114_2
     unfold f
     ac_rfl
   have hrotL (u : Fin 9) : rot u ∈ lows ↔ u ∈ lows := by
-    fin_cases u <;> decide
+    have : u.val = 0 ∨ u.val = 1 ∨ u.val = 2 ∨ u.val = 3 ∨ u.val = 4 ∨
+        u.val = 5 ∨ u.val = 6 ∨ u.val = 7 ∨ u.val = 8 := by
+      have := u.isLt
+      omega
+    rcases this with h | h | h | h | h | h | h | h | h
+    · have : u = (0 : Fin 9) := Fin.ext h; subst u; simp [rot, lows]
+    · have : u = (1 : Fin 9) := Fin.ext h; subst u; simp [rot, lows]
+    · have : u = (2 : Fin 9) := Fin.ext h; subst u; simp [rot, lows]
+    · have : u = (3 : Fin 9) := Fin.ext h; subst u; simp [rot, lows]
+    · have : u = (4 : Fin 9) := Fin.ext h; subst u; simp [rot, lows]
+    · have : u = (5 : Fin 9) := Fin.ext h; subst u; simp [rot, lows]
+    · have : u = (6 : Fin 9) := Fin.ext h; subst u; simp [rot, lows]
+    · have : u = (7 : Fin 9) := Fin.ext h; subst u; simp [rot, lows]
+    · have : u = (8 : Fin 9) := Fin.ext h; subst u; simp [rot, lows]
   have hchoose : ∃ s : Equiv.Perm (Fin 9), s v = 4 ∧
       (∀ u, s u ∈ lows ↔ u ∈ lows) ∧ (∀ x, f (x ∘ s) = f x) := by
     change v ∈ ([4, 6, 7] : List (Fin 9)) at hv
