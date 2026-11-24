@@ -225,16 +225,20 @@ theorem PEqualNP.Outside.R_meta_2348_247
           obtain hop | hop := hAO.1 C.gates[j] (List.getElem_mem hj)
           all_goals rw [← hgate j hj] at hop
           · rw [hop] at hpa hba
+            change pair w = ([pair (opnd C j 0), pair (opnd C j 1)].all id) at hpa
+            simp only [List.all_cons, List.all_nil, Bool.and_true, id_eq] at hpa
+            change base w = ([base (opnd C j 0), base (opnd C j 1)].all id) at hba
+            simp only [List.all_cons, List.all_nil, Bool.and_true, id_eq] at hba
             have hpa' : pair (opnd C j 0) = true ∧ pair (opnd C j 1) = true := by
               rw [hpa] at hp
-              simpa [GateOp.eval] using hp
+              simpa using hp
             have ha' := ha hpa'.1
             have hb' := hb hpa'.2
             have hd : d w = (base (opnd C j 0) && d (opnd C j 1) || d (opnd C j 0) && base (opnd C j 1)) := by
               rw [heq]; exact hder.1 hop
             by_cases h0 : base (opnd C j 0) = true
             · rcases hb' with h1 | h1
-              · left; simp [hba, GateOp.eval, h0, h1]
+              · left; simp [hba, h0, h1]
               · right; simp [hd, h0, h1]
             · rcases ha' with ha0 | ha1
               · exact False.elim (h0 ha0)
@@ -245,17 +249,21 @@ theorem PEqualNP.Outside.R_meta_2348_247
                   · right; simp [hd, ha1, h1]
                   · exact False.elim (hn ⟨j,hj,hop,h00,Bool.eq_false_iff.mpr h1,ha1,hb1⟩)
           · rw [hop] at hpa hba
+            change pair w = ([pair (opnd C j 0), pair (opnd C j 1)].any id) at hpa
+            simp only [List.any_cons, List.any_nil, Bool.or_false, id_eq] at hpa
+            change base w = ([base (opnd C j 0), base (opnd C j 1)].any id) at hba
+            simp only [List.any_cons, List.any_nil, Bool.or_false, id_eq] at hba
             have hp' : pair (opnd C j 0) = true ∨ pair (opnd C j 1) = true := by
               rw [hpa] at hp
-              simpa [GateOp.eval] using hp
+              simpa using hp
             have hd : d w = (d (opnd C j 0) || d (opnd C j 1)) := by
               rw [heq]; exact hder.2 hop
             rcases hp' with hp' | hp'
             · rcases ha hp' with h | h
-              · left; simp [hba, GateOp.eval, h]
+              · left; simp [hba, h]
               · right; simp [hd, h]
             · rcases hb hp' with h | h
-              · left; simp [hba, GateOp.eval, h]
+              · left; simp [hba, h]
               · right; simp [hd, h]
         · have hh : pair w = false := wireVal_ge C _ w (by omega)
           rw [hh] at hp
