@@ -42,7 +42,8 @@ theorem PEqualNP.Outside.R_meta_2841_1
     let step := fun (w : List Bool) (g : Gate) =>
       w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
     have firstValue : step (List.ofFn x) first = List.ofFn x ++ [x 0 || x 4] := by
-      simp [step, first, GateOp.eval, List.getD_eq_getElem?_getD]
+      change List.ofFn x ++ [([(List.ofFn x).getD 0 false, (List.ofFn x).getD 4 false].any id)] = _
+      simp [List.getD_eq_getElem?_getD, Bool.or_assoc]
     have read (i : Fin 9) : (List.ofFn x ++ [x 0 || x 4]).getD i.val false = x i := by
       have lt : i.val < (List.ofFn x).length := by simp
       rw [List.getD_eq_getElem?_getD, List.getElem?_append_left lt]
@@ -61,9 +62,9 @@ theorem PEqualNP.Outside.R_meta_2841_1
       have eq : (T.toList.map x).any id = decide (∃ a ∈ T, x a = true) := by
         apply Bool.eq_iff_iff.mpr
         simp [List.any_eq_true]
-      change (List.ofFn x ++ [x 0 || x 4]) ++ [GateOp.or.eval _] = _
+      change (List.ofFn x ++ [x 0 || x 4]) ++ [((T.toList.map Fin.val).map (fun i => (List.ofFn x ++ [x 0 || x 4]).getD i false)).any id] = _
       rw [mapEq]
-      simpa [GateOp.eval, List.append_assoc] using
+      simpa [List.append_assoc] using
         congrArg (fun b => List.ofFn x ++ [x 0 || x 4, b]) eq
     change (C.gates.foldl step (step (step (List.ofFn x) first) second)).getD C.output false =
       (C.gates.foldl step _).getD C.output false
@@ -73,6 +74,9 @@ theorem PEqualNP.Outside.R_meta_2841_1
     change (first :: second :: C.gates).length = C.gates.length + 2
     simp
   have nots : notCount D = notCount C := by
-    simp [notCount, D, first, second]
+    change (List.filter (fun g : Gate => @decide (g.op = GateOp.not) (lineDegreeGateOpDecEq _ _))
+      (first :: second :: C.gates)).length = _
+    change _ = (List.filter (fun g : Gate => @decide (g.op = GateOp.not) (lineDegreeGateOpDecEq _ _)) C.gates).length
+    simp [first, second]
   rw [size, nots] at post
   omega
