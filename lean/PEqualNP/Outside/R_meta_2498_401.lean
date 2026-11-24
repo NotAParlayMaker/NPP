@@ -59,12 +59,11 @@ theorem PEqualNP.Outside.R_meta_2498_401
     rcases C with ⟨gates, o⟩
     have hlen : gates.length ≤ 1 := by
       simpa [List.getElem?_eq_none_iff] using hsec
-    match gates, hlen with
-    | [], _ =>
-      have h := first (fun _ => true)
-      simp [Circuit.wires] at h
-    | [g0], _ =>
-      have key : ∀ x : Fin 9 → Bool,
+    rcases gates with _ | ⟨g0, _ | ⟨g1, rest⟩⟩
+    · have h := first (fun _ => true)
+      change (List.ofFn (fun _ : Fin 9 => true)).getD 9 false = (true || true) at h
+      exact absurd h (by decide)
+    · have key : ∀ x : Fin 9 → Bool,
           (List.ofFn x ++ [x 0 || x 1]).getD o false =
           ([(0,1),(1,2),(2,3),(3,4),(4,0),(0,5),(1,6),(2,7),(3,8),(5,7),(6,8),(8,5)] :
             List (Fin 9 × Fin 9)).any (fun e => x e.1 && x e.2) := by
@@ -94,6 +93,7 @@ theorem PEqualNP.Outside.R_meta_2498_401
       · have h := key (fun _ => true)
         rw [List.getD_eq_default _ _ (by simp; omega)] at h
         exact absurd h (by decide)
+    · simp at hlen
   · have hg : g ∈ C.gates := List.mem_of_getElem? hsec
     have hop := (hC g hg).1
     simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hop
