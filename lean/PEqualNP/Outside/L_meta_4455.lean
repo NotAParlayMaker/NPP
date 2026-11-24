@@ -484,9 +484,8 @@ theorem add_or (n : ℕ) (f : (Fin n → Bool) → Bool) (s : ℕ)
     rw [hi, ho]
     simp
 
-end PEqualNP.Outside.L_meta_4455
 
-theorem PEqualNP.Outside.L_meta_4455.del : ∀ (x1 : ℕ) (x2 : Fin x1) (x3 : (Fin x1 → Bool) → Bool) (x4 : ℕ), (∀ (x5 : Fin x1 → Bool), x3 (Function.update x5 x2 Bool.false) = x3 x5) → (∃ (x6 : Fin x1 → Bool) (x7 : Fin x1 → Bool), x3 x6 ≠ x3 x7) → PEqualNP.MetaComplexity.HasCircuitSize x1 (fun (x7 : Fin x1 → Bool) => x7 x2 || x3 x7) x4 → ∃ (x8 : ℕ), x8 + (1 : ℕ) ≤ x4 ∧ PEqualNP.MetaComplexity.HasCircuitSize x1 x3 x8 := by
+theorem del : ∀ (x1 : ℕ) (x2 : Fin x1) (x3 : (Fin x1 → Bool) → Bool) (x4 : ℕ), (∀ (x5 : Fin x1 → Bool), x3 (Function.update x5 x2 Bool.false) = x3 x5) → (∃ (x6 : Fin x1 → Bool) (x7 : Fin x1 → Bool), x3 x6 ≠ x3 x7) → PEqualNP.MetaComplexity.HasCircuitSize x1 (fun (x7 : Fin x1 → Bool) => x7 x2 || x3 x7) x4 → ∃ (x8 : ℕ), x8 + (1 : ℕ) ≤ x4 ∧ PEqualNP.MetaComplexity.HasCircuitSize x1 x3 x8 := by
   intro n i f s hind hnc h
   obtain ⟨C, h1, h2, h3⟩ := h
   have hf : ∀ y : Fin n → Bool, C.eval (List.ofFn (Function.update y i false)) = f y := by
@@ -512,7 +511,7 @@ theorem PEqualNP.Outside.L_meta_4455.del : ∀ (x1 : ℕ) (x2 : Fin x1) (x3 : (F
     rw [← hf x, ← hf y, hc, hc])
   exact ⟨D.size, by omega, D, d1, le_rfl, fun w => by rw [d3, hf]⟩
 
-theorem PEqualNP.Outside.L_meta_4455.many (n : ℕ) (E : (Fin n → Bool) → Prop)
+theorem many (n : ℕ) (E : (Fin n → Bool) → Prop)
     (h0 : ¬ E (fun _ => false)) (h1 : E (fun _ => true)) (S : Finset (Fin n)) :
     (∀ i ∈ S, ∀ x y : Fin n → Bool, (∀ j, j ≠ i → x j = y j) → (E x ↔ E y)) →
     ∀ (s : ℕ) (f : (Fin n → Bool) → Bool),
@@ -553,6 +552,8 @@ theorem PEqualNP.Outside.L_meta_4455.many (n : ℕ) (E : (Fin n → Bool) → Pr
     obtain ⟨t, ht, hst⟩ := PEqualNP.Outside.L_meta_4455.del n a f' s hno hne hs
     obtain ⟨u, hu, g, hg⟩ := ih (fun i hi => hind i (Finset.mem_insert_of_mem hi)) t f' hf' hst
     exact ⟨u, by rw [Finset.card_insert_of_notMem ha]; omega, g, hg⟩
+
+end PEqualNP.Outside.L_meta_4455
 
 theorem PEqualNP.Outside.L_meta_4455 : ∀ (x1 : ℕ) (x2 : SimpleGraph (Fin x1)) [x3 : DecidableRel x2.Adj] (x4 : Finset (Fin x1)), (∀ (x5 x6 : Fin x1), x2.Adj x5 x6 → x5 ∉ x4) → (∃ (x6 : Fin x1) (x7 : Fin x1), x2.Adj x6 x7) → ∀ (x7 : ℕ), PEqualNP.MetaComplexity.HasCircuitSize x1 (PEqualNP.MetaComplexity.NestedCover.graphFun x2 x4) x7 → ∃ (x9 : ℕ), x9 + x4.card ≤ x7 ∧ PEqualNP.MetaComplexity.HasCircuitSize x1 (PEqualNP.MetaComplexity.NestedCover.graphFun x2 ∅) x9 := by
   intro n G _ S hiso hedge s hs
