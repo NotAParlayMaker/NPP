@@ -224,6 +224,22 @@ const FORBIDDEN = new RegExp([
 ].join(''), 'u');
 // The four limit options, wherever they stand, are taken out before the list is asked; every
 // other set_option, at column 0 or indented, is refused by it.
+// The matched word is printed raw only when it is EXACTLY one of these literals of our own rules
+// (string equality); any other match goes through tok() (red team, 2026-11-24).
+const RAW_WORDS = new Set([
+  '"', '«', '»', '$(', '%[', '@[', '`(tactic|', '`(term|', '`(command|', '`(conv|', '`(doElem|',
+  '#eval', '#check', '#print', '#reduce', '#synth', '#exit', '#help', '#lint', '#guard', '#guard_msgs',
+  '#find', '#simp', '#norm_num', '#conv', '#where', '#time', '#check_failure', '#adaptation_note',
+  'simproc', 'builtin_', 'native', 'bv_decide', 'ofReduce', 'reduceNat', 'reduceBool',
+  'Lean', 'System', 'IO', 'Elab', 'Meta', 'Lake', 'FS', 'Process', 'EIO',
+  '_root_', 'RealWorld', 'BaseIO', 'include_str', 'notation', 'polyrith', 'initialize',
+  'run_cmd', 'run_tac', 'run_elab', 'run_meta', 'by_elab', 'elab', 'macro', 'syntax', 'attribute',
+  'axiom', 'opaque', 'unsafe', 'partial', 'sorry', 'admit', 'implemented_by', 'extern',
+  'register_', 'declare_', 'lcProof', 'lcUnreachable', 'infix', 'prefix', 'postfix',
+  'set_option', 'binder_predicate', 'unif_hint', 'unseal', 'compile_inductive', 'irreducible_def',
+  'proof_wanted', 'mk_iff_of_inductive_prop',
+]);
+const sayWord = (w) => (RAW_WORDS.has(w) ? w : tok(w));
 const LIMIT = /set_option (maxRecDepth|maxHeartbeats|synthInstance\.maxSize|synthInstance\.maxHeartbeats) [0-9]+ in(?![A-Za-z0-9_])/gu;
 const INVISIBLE = /[​-‏‪-‮⁠-⁩﻿]/u;
 const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f]/u;
@@ -246,7 +262,7 @@ function plainProblems(text, problems) {
     // A limit option set for the whole file (no `in`) is refused, as before; the sentence names the
     // one fix, so an honest prover passes in one push (red team, 2026-11-23: the rule stays narrow).
     if (m && /^\s*set_option (maxRecDepth|maxHeartbeats|synthInstance\.maxSize|synthInstance\.maxHeartbeats) [0-9]+\s*$/u.test(line)) hint = '; a limit option holds only for one declaration: write it as set_option <option> <value> in, directly before the declaration that needs it';
-    if (m) problems.push({ at: k + 1, why: `line ${k + 1}: "${tok(m[0].trim())}" is not allowed in a proof file, in code or in a comment (no code that runs at build time, no new syntax, no string literals, no attributes but simp, no options but the four limits)${hint}` });
+    if (m) problems.push({ at: k + 1, why: `line ${k + 1}: "${sayWord(m[0].trim())}" is not allowed in a proof file, in code or in a comment (no code that runs at build time, no new syntax, no string literals, no attributes but simp, no options but the four limits)${hint}` });
     if (/^\s*(@\[(local )?simp\] )?((private|protected) )?theorem /u.test(line)) theorems += 1;
   });
   if (theorems === 0) problems.push({ at: Infinity, why: 'the file holds no theorem' });
