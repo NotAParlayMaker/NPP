@@ -3,7 +3,7 @@ import PEqualNP.Defs
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
--- Remove the sole gate reading vertex four and keep the same prefix and suffix
+-- Remove the sole gate reading vertex four and retain the circuits before and after it
 -- for both cofactors. A NOT requires a later inversion. An AND requires its
 -- other operand wherever activating vertex four introduces the first edge.
 set_option maxHeartbeats 2000000 in
