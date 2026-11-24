@@ -1,8 +1,10 @@
 import PEqualNP.Defs
--- First-negated-input certificate adapted from dsgallups, PR 6907, commit b18267b08b735cbbf99bee66e0f71d168c62ba9c, Apache-2.0.
--- This proof compresses the assignment pairs to 131 rows and decodes a failing nine-bit assignment.
+-- Move verifier from the accepted L-meta-1665, file SHA-256 2fbab5299779587e3528ab36e9f447fe89ccdc3f57e345e763377652caae21c7.
+-- Signed forest, complete root argument and original certificate by dsgallups, PR #6907.
+-- The move witness stream below selects a restriction, a linked state, or a repeated value.
+-- Each selected reason is verified against the actual node before use.
 -- Search framework and the plain 15-gate tables adapted from PEqualNP/Outside/L_meta_1667.lean, Apache-2.0.
-namespace PEqualNP.Outside.L_meta_4373_aux
+namespace PEqualNP.Outside.L_meta_4373
 open PEqualNP.CircuitLowerBounds
 abbrev Sig := BitVec 512
 def zero : Sig := 0
@@ -1597,7 +1599,9 @@ theorem materialize_sound {raw T d L cs c} (slice : Slice raw T d L)
     exact build_valid slice cs he
 
 
-abbrev Bits := BitVec 131
+abbrev Bits := BitVec 768
+-- Repeats the same 64-bit sample pattern across the packed word.
+def repeatSamples : Bits := 0x100000000000000010000000000000001000000000000000100000000000000010000000000000001000000000000000100000000000000010000000000000001000000000000000100000000000000010000000000000001
 abbrev Signals := Bits × Bits
 abbrev Decor := Sig × Signals
 
@@ -1607,24 +1611,24 @@ theorem ofRows_bit {n : Nat} (r : Fin n → Row) (v : Sig) (i : Fin n) :
     (ofRows r v).getLsbD i.val = bit (r i) v := by
   simp only [ofRows,BitVec.getLsbD_cast,BitVec.getLsbD_ofBoolListLE,List.getD_eq_getElem?_getD,List.getElem?_ofFn]
   simp [i.isLt]
-def pairSig (r s : Fin 131 → Row) (a : Sig) : Signals := (ofRows r a,ofRows s a)
-def properPairs (T : Sig) (r s : Fin 131 → Row) :=
+def pairSig (r s : Fin 768 → Row) (a : Sig) : Signals := (ofRows r a,ofRows s a)
+def properPairs (T : Sig) (r s : Fin 768 → Row) :=
   ∀ i, bit (r i) T = true ∧ bit (s i) T = false
-theorem pair_sep {T r s} (h : properPairs T r s) : Sep T 131 r s (pairSig r s) := by
+theorem pair_sep {T r s} (h : properPairs T r s) : Sep T 768 r s (pairSig r s) := by
   exact ⟨h,fun a i => ⟨ofRows_bit _ _ _,ofRows_bit _ _ _⟩⟩
-def faithful (r s : Fin 131 → Row) (x : Decor) := x.2 = pairSig r s x.1
+def faithful (r s : Fin 768 → Row) (x : Decor) := x.2 = pairSig r s x.1
 def dneg (x : Decor) : Decor := (neg x.1,~~~x.2.1,~~~x.2.2)
 def dbin (d : Bool) (x y : Decor) : Decor :=
   if d then (bin d x.1 y.1,x.2.1 ||| y.2.1,x.2.2 ||| y.2.2)
   else (bin d x.1 y.1,x.2.1 &&& y.2.1,x.2.2 &&& y.2.2)
 
-theorem ofRows_neg (r : Fin 131 → Row) (a : Sig) : ofRows r (neg a) = ~~~ofRows r a := by
+theorem ofRows_neg (r : Fin 768 → Row) (a : Sig) : ofRows r (neg a) = ~~~ofRows r a := by
   apply BitVec.eq_of_getLsbD_eq
   intro j hj
   have h := ofRows_bit r (neg a) ⟨j,hj⟩
   rw [bit_neg,←ofRows_bit r a ⟨j,hj⟩] at h
   simpa only [BitVec.getLsbD_not,hj,decide_true,Bool.true_and] using h
-theorem ofRows_bin (r : Fin 131 → Row) (d : Bool) (a b : Sig) :
+theorem ofRows_bin (r : Fin 768 → Row) (d : Bool) (a b : Sig) :
     ofRows r (bin d a b) = if d then ofRows r a ||| ofRows r b else ofRows r a &&& ofRows r b := by
   apply BitVec.eq_of_getLsbD_eq
   intro j hj
@@ -1678,7 +1682,7 @@ theorem decode_faithful (n bits) (ws) (r s) (base : ∀ v ∈ ws, faithful r s v
       · exact faithful_neg (faithful_get base _)
       · exact faithful_bin _ (faithful_get base _) (faithful_get base _)
 
-def asRow (cols : Nat → Bits) (i : Fin 131) : Row :=
+def asRow (cols : Nat → Bits) (i : Fin 768) : Row :=
   (BitVec.ofBoolListLE (List.ofFn (fun j : Fin 9 => (cols j.val).getLsbD i.val))).toFin.cast
     (by simp [List.length_ofFn])
 theorem coordinate0 : ∀ r : Row, bit r (inputs.getD 0 zero) = r.val.testBit 0 := by decide +kernel
@@ -1703,7 +1707,7 @@ theorem input_coords : ∀ (j : Fin 9) (r : Row),
   · exact coordinate6 r
   · exact coordinate7 r
   · exact coordinate8 r
-theorem asRow_bit (cols : Nat → Bits) (i : Fin 131) (j : Fin 9) :
+theorem asRow_bit (cols : Nat → Bits) (i : Fin 768) (j : Fin 9) :
     bit (asRow cols i) (inputs.getD j.val zero) = (cols j.val).getLsbD i.val := by
   rw [input_coords]
   change (BitVec.ofBoolListLE (List.ofFn (fun h : Fin 9 => (cols h.val).getLsbD i.val))).getLsbD j.val = _
@@ -1734,13 +1738,13 @@ def liftGoal (m : Nat) (v : Nat → Bits) : Bits :=
   (x 0 &&& x 1) ||| (x 1 &&& x 2) ||| (x 2 &&& x 3) ||| (x 3 &&& x 4) |||
     (x 4 &&& x 0) ||| (x 0 &&& x 5) ||| (x 1 &&& x 6) ||| (x 2 &&& x 7) |||
     (x 3 &&& x 8) ||| (x 5 &&& x 7) ||| (x 6 &&& x 8) ||| (x 8 &&& x 5)
-theorem bit_vertex (m : Nat) (v : Nat → Bits) (i : Fin 131) (j : Fin 9) :
+theorem bit_vertex (m : Nat) (v : Nat → Bits) (i : Fin 768) (j : Fin 9) :
     bit (asRow v i) (vertex m j.val) =
     ((if m.testBit j.val then v j.val else 0) : Bits).getLsbD i.val := by
   by_cases hh : m.testBit j.val = true
   · simpa [vertex,hh] using asRow_bit v i j
   · simp [vertex,hh,bit_zero]
-theorem bit_liftGoal (m : Nat) (v : Nat → Bits) (i : Fin 131) :
+theorem bit_liftGoal (m : Nat) (v : Nat → Bits) (i : Fin 768) :
     bit (asRow v i) (graphGoal m) = (liftGoal m v).getLsbD i.val := by
   have pos (j : Nat) (hj : j<9) : (vertex m j).getLsbD (asRow v i).val = ((if m.testBit j then v j else 0) : Bits).getLsbD i.val := bit_vertex m v i ⟨j,hj⟩
   simp only [bit,graphGoal,liftGoal,BitVec.getLsbD_and,BitVec.getLsbD_or]
@@ -1924,7 +1928,7 @@ def evalMove (c : NodeContext) (op : Nat) (a b z : Decor) (ka kb : Bool) :=
   if len>cap then true else
     let d := len==cap
     let rs := restCov (getCov cov d) (column d a.2) (column d b.2) un ka kb
-    if (rs ||| column d z.2) != BitVec.allOnes 131 then true else
+    if (rs ||| column d z.2) != BitVec.allOnes 768 then true else
     if !properB z.1 || ws.any (fun v => v.1==z.1) then true else
       let rest := (opKeep un ka kb a b ws).map Prod.fst
       closeChild pools links (cap-1) rest (movedChoice op a b)
@@ -1972,12 +1976,12 @@ theorem evalMove_sound {raw T r s ws pools links cap a b op ka kb}
   have rz := rest_coverage ha hb (op==2) ka kb d ne
   have hf := moved_faithful (faith _ ha) (faith _ hb) op
   have deq : decide (child.length=cap) = (child.length==cap) := by by_cases he : child.length=cap <;> simp [he]
-  change covered (decide (child.length = cap)) (pairSig r s) child = BitVec.allOnes 131 at sep
+  change covered (decide (child.length = cap)) (pairSig r s) child = BitVec.allOnes 768 at sep
   rw [deq] at sep
   change column d (pairSig r s z.1) ||| covered d (pairSig r s) (rest.map Prod.fst) = _ at sep
   change z.2 = pairSig r s z.1 at hf
   rw [←hf,←g,rz,BitVec.or_comm] at sep
-  have be : ((restCov (getCov (preCov ws) d) (column d a.2) (column d b.2) (op==2) ka kb ||| column d z.2) != BitVec.allOnes 131) = false := by simp [sep]
+  have be : ((restCov (getCov (preCov ws) d) (column d a.2) (column d b.2) (op==2) ka kb ||| column d z.2) != BitVec.allOnes 768) = false := by simp [sep]
   change (if (_ != _) then true else if !properB z.1 || ws.any (fun v => v.1==z.1) then true else _) = true at test
   rw [be,pp,fr] at test
   have val := moved_full op a b
@@ -2246,10 +2250,10 @@ theorem wires_faithful (g : Forest) : ∀ a ∈ wiresOf g,
 
 def targetOf (g : Forest) := chartGoal g.mask
 def chartSamples (m : Nat) (v : Nat → Bits) := liftGoal m v
-theorem chart_bit (m : Nat) (v : Nat → Bits) (i : Fin 131) :
+theorem chart_bit (m : Nat) (v : Nat → Bits) (i : Fin 768) :
     bit (asRow v i) (chartGoal m) = (chartSamples m v).getLsbD i.val := bit_liftGoal m v i
 theorem chart_pairs {m : Nat} {p q : Nat → Bits}
-    (hp : chartSamples m p = BitVec.allOnes 131) (hq : chartSamples m q = 0) :
+    (hp : chartSamples m p = BitVec.allOnes 768) (hq : chartSamples m q = 0) :
     properPairs (chartGoal m) (asRow p) (asRow q) := by
   intro i
   simp only [chart_bit,hp,hq,BitVec.getLsbD_allOnes,i.isLt,decide_true,BitVec.getLsbD_zero]
@@ -2399,7 +2403,7 @@ theorem block_merge {g k start a b} (h : block g k start a=true)
 def checkedTables (g : Forest) (top : Nat) :=
   ∀ k ≤ top, block g k 0 (g.levels k).1 = true
 def graphValid (g : Forest) (prior : Nat → Nat) :=
-  (chartSamples g.mask (fun j => (g.samples j).1) == BitVec.allOnes 131) &&
+  (chartSamples g.mask (fun j => (g.samples j).1) == BitVec.allOnes 768) &&
   (chartSamples g.mask (fun j => (g.samples j).2) == 0) &&
   (IndexTree.values g.cols).all (fun c => colCheck g.mask c prior) &&
   g.autos.toList.all (fun p => autoOK (targetOf g) (p.map swapRows))
@@ -2471,33 +2475,33 @@ theorem extendKnown_ok {old L m remaps} (previous : Known old)
     exact remap_of (List.all_eq_true.mp ok _ hv) main
   · exact previous e h
 theorem baseKnown : Known [] := by simp [Known]
-def lanePlace (v : Nat) (upper : Nat) := 2^132*upper+v
+def lanePlace (v : Nat) (upper : Nat) := 2^769*upper+v
 def combineLanes {α : Type} (f : α → Bits) : List α → Nat
   | [] => 0
   | x::xs => lanePlace (f x).toNat (combineLanes f xs)
 def units : Nat → Nat
   | 0 => 0
   | n+1 => lanePlace 1 (units n)
-theorem laneSmall (x : Bits) : x.toNat < 2^132 :=
+theorem laneSmall (x : Bits) : x.toNat < 2^769 :=
   lt_trans x.isLt (by decide +kernel)
 theorem place_and (a b : Bits) (u v : Nat) :
     lanePlace a.toNat u &&& lanePlace b.toNat v = lanePlace (a &&& b).toNat (u &&& v) := by
   apply Nat.eq_of_testBit_eq
   intro i
   simp only [lanePlace,Nat.testBit_and,Nat.testBit_two_pow_mul_add _ (laneSmall _)]
-  by_cases h : i<132 <;> simp only [h,ite_true,ite_false,BitVec.toNat_and,Nat.testBit_and]
+  by_cases h : i<769 <;> simp only [h,ite_true,ite_false,BitVec.toNat_and,Nat.testBit_and]
 theorem place_or (a b : Bits) (u v : Nat) :
     lanePlace a.toNat u ||| lanePlace b.toNat v = lanePlace (a ||| b).toNat (u ||| v) := by
   apply Nat.eq_of_testBit_eq
   intro i
   simp only [lanePlace,Nat.testBit_or,Nat.testBit_two_pow_mul_add _ (laneSmall _)]
-  by_cases h : i<132 <;> simp only [h,ite_true,ite_false,BitVec.toNat_or,Nat.testBit_or]
+  by_cases h : i<769 <;> simp only [h,ite_true,ite_false,BitVec.toNat_or,Nat.testBit_or]
 theorem place_xor (a b : Bits) (u v : Nat) :
     lanePlace a.toNat u ^^^ lanePlace b.toNat v = lanePlace (a ^^^ b).toNat (u ^^^ v) := by
   apply Nat.eq_of_testBit_eq
   intro i
   simp only [lanePlace,Nat.testBit_xor,Nat.testBit_two_pow_mul_add _ (laneSmall _)]
-  by_cases h : i<132 <;> simp only [h,ite_true,ite_false,BitVec.toNat_xor,Nat.testBit_xor]
+  by_cases h : i<769 <;> simp only [h,ite_true,ite_false,BitVec.toNat_xor,Nat.testBit_xor]
 theorem lanes_and {α} (f g : α → Bits) (xs) :
     combineLanes f xs &&& combineLanes g xs = combineLanes (fun x => f x &&& g x) xs := by
   induction xs with
@@ -2519,51 +2523,51 @@ theorem broadcast {α} (a : Bits) (xs : List α) :
   | nil => simp [units,combineLanes]
   | cons v xs ih => simp only [List.length_cons,units,combineLanes,lanePlace,Nat.add_mul,Nat.mul_assoc,ih,Nat.one_mul]
 
-def fullMarks (r packed : Nat) := ((packed+r) >>> 131) &&& r
-theorem unit_bit (n i : Nat) (hi : i<n) : (units n).testBit (132*i) = true := by
+def fullMarks (r packed : Nat) := ((packed+r) >>> 768) &&& r
+theorem unit_bit (n i : Nat) (hi : i<n) : (units n).testBit (769*i) = true := by
   induction n generalizing i with
   | zero => omega
   | succ n ih =>
-    rw [units,lanePlace,Nat.testBit_two_pow_mul_add _ (by decide +kernel : 1 < 2^132)]
+    rw [units,lanePlace,Nat.testBit_two_pow_mul_add _ (by decide +kernel : 1 < 2^769)]
     cases i with
     | zero => simp
     | succ i =>
-      have di : 132*(i+1)-132=132*i := by omega
-      have ge : ¬132*(i+1)<132 := by omega
+      have di : 769*(i+1)-769=769*i := by omega
+      have ge : ¬769*(i+1)<769 := by omega
       simp only [ge,ite_false,di]
       exact ih _ (by omega)
 set_option maxRecDepth 8192 in
-theorem guardBit (a : Bits) : (a.toNat+1).testBit 131 = (a==BitVec.allOnes 131) := by
-  by_cases h : a=BitVec.allOnes 131
+theorem guardBit (a : Bits) : (a.toNat+1).testBit 768 = (a==BitVec.allOnes 768) := by
+  by_cases h : a=BitVec.allOnes 768
   · subst a
     decide +kernel
   · have lim := a.isLt
-    have ne : a.toNat ≠ 2^131-1 := by
+    have ne : a.toNat ≠ 2^768-1 := by
       intro eq
       apply h
       apply BitVec.eq_of_toNat_eq
       simpa only [BitVec.toNat_allOnes] using eq
-    have lt : a.toNat+1<2^131 := by omega
+    have lt : a.toNat+1<2^768 := by omega
     rw [Nat.testBit_eq_false_of_lt lt]
     exact (beq_eq_false_iff_ne.mpr h).symm
 
 set_option maxRecDepth 8192 in
 theorem mark_at {α} (f : α → Bits) (xs : List α) (i : Nat) (hi : i<xs.length) :
-    (fullMarks (units xs.length) (combineLanes f xs)).testBit (132*i) =
-      (f xs[i]==BitVec.allOnes 131) := by
+    (fullMarks (units xs.length) (combineLanes f xs)).testBit (769*i) =
+      (f xs[i]==BitVec.allOnes 768) := by
   simp only [fullMarks,Nat.testBit_and,Nat.testBit_shiftRight,unit_bit _ _ hi,Bool.and_true]
   induction xs generalizing i with
   | nil => simp at hi
   | cons a xs ih =>
     simp only [combineLanes,List.length_cons,units,lanePlace]
-    have sum (u v x : Nat) : 2^132*u+x+(2^132*v+1)=2^132*(u+v)+(x+1) := by omega
-    rw [sum,Nat.testBit_two_pow_mul_add _ (show (f a).toNat+1<2^132 from by have := (f a).isLt; omega)]
+    have sum (u v x : Nat) : 2^769*u+x+(2^769*v+1)=2^769*(u+v)+(x+1) := by omega
+    rw [sum,Nat.testBit_two_pow_mul_add _ (show (f a).toNat+1<2^769 from by have := (f a).isLt; omega)]
     have hi' : i < xs.length+1 := hi
     cases i with
     | zero => simpa using guardBit (f a)
     | succ i =>
-      have ge : ¬132*(i+1)+131<132 := by omega
-      have di : 132*(i+1)+131-132=132*i+131 := by omega
+      have ge : ¬769*(i+1)+768<769 := by omega
+      have di : 769*(i+1)+768-769=769*i+768 := by omega
       simp only [ge,ite_false,di,List.getElem_cons_succ]
       apply ih i (by omega)
 
@@ -2592,9 +2596,9 @@ theorem packed_column {α} (s : α → Signals) (xs : List α) (d : Bool) :
 def packedOp (full : Nat) (op : Nat) (a b : PackedSig) : PackedSig :=
   if op=2 then (full ^^^ a.1,full ^^^ a.2) else if op=1 then (a.1 ||| b.1,a.2 ||| b.2)
   else (a.1 &&& b.1,a.2 &&& b.2)
-theorem top_xor (a : Bits) : BitVec.allOnes 131 ^^^ a = ~~~a := BitVec.allOnes_xor
+theorem top_xor (a : Bits) : BitVec.allOnes 768 ^^^ a = ~~~a := BitVec.allOnes_xor
 theorem packed_op {α} (a b : α → Decor) (xs : List α) (op : Nat) :
-    packedOp (units xs.length*(BitVec.allOnes 131).toNat) op
+    packedOp (units xs.length*(BitVec.allOnes 768).toNat) op
       (packedSig (fun x => (a x).2) xs) (packedSig (fun x => (b x).2) xs) =
     packedSig (fun x => (movedDecor op (a x) (b x)).2) xs := by
   by_cases un : op=2
@@ -2629,9 +2633,9 @@ def combField (c : NodeContext) (d un ka kb : Bool) (op i j : Nat) :=
 def onMarks {α : Type} (f : α → Bool) (mask : Nat) : List α → Bool
   | [] => true
   | x::xs => if mask=0 then true else
-    ((mask &&& 1 == 0) || f x) && onMarks f (mask >>> 132) xs
+    ((mask &&& 1 == 0) || f x) && onMarks f (mask >>> 769) xs
 theorem marked_ok {α} (f : α → Bool) (mask : Nat) (xs : List α) (i : Nat) (hi : i<xs.length)
-    (bitOn : mask.testBit (132*i)=true) (ok : onMarks f mask xs=true) : f xs[i]=true := by
+    (bitOn : mask.testBit (769*i)=true) (ok : onMarks f mask xs=true) : f xs[i]=true := by
   induction xs generalizing mask i with
   | nil => simp at hi
   | cons x xs ih =>
@@ -2647,7 +2651,7 @@ theorem marked_ok {α} (f : α → Bool) (mask : Nat) (xs : List α) (i : Nat) (
         simp [bitOn] at at0
       exact ok.1.resolve_left nonzero
     | succ i =>
-      apply ih (mask:=mask >>> 132) (i:=i) (by simpa using hi) _ ok.2
+      apply ih (mask:=mask >>> 769) (i:=i) (by simpa using hi) _ ok.2
       simpa only [Nat.testBit_shiftRight,Nat.mul_succ,Nat.add_comm] using bitOn
 
 abbrev Batch := Nat × Nat × Nat × List PackedSig × PackedCov × PackedCov
@@ -2780,7 +2784,7 @@ def batchMove (b : Batch) (xs : List NodeContext) (i j op : Nat) (ka kb : Bool) 
     let d := len==k
     let a := laneWire b i
     let b' := laneWire b j
-    let z := packedOp (r*(BitVec.allOnes 131).toNat) op a b'
+    let z := packedOp (r*(BitVec.allOnes 768).toNat) op a b'
     let cov := if d then v else u
     let mask := fullMarks r (takePacked cov (packedColumn d a) (packedColumn d b') un ka kb ||| packedColumn d z)
     onMarks (fun c => fallbackAt c i j op ka kb) mask xs
@@ -2793,7 +2797,7 @@ theorem batchMove_at (k n) (xs : List NodeContext) {i j op : Nat} {ka kb}
   let len := 1+(n-(if ka then 0 else 1)-(if (op==2) || kb then 0 else 1))
   let d := len==k
   have eval : checkAt xs[q] i j op ka kb =
-      if len>k then true else if combField xs[q] d (op==2) ka kb op i j != BitVec.allOnes 131 then true
+      if len>k then true else if combField xs[q] d (op==2) ka kb op i j != BitVec.allOnes 768 then true
       else if !properB (movedDecor op (contextWire xs[q] i) (contextWire xs[q] j)).1 ||
         xs[q].2.2.1.any (fun v => v.1==(movedDecor op (contextWire xs[q] i) (contextWire xs[q] j)).1)
       then true else closeChild xs[q].2.2.2.2.1 xs[q].2.2.2.2.2 (k-1)
@@ -2809,7 +2813,7 @@ theorem batchMove_at (k n) (xs : List NodeContext) {i j op : Nat} {ka kb}
             else packedCov (fun c : NodeContext => c.2.2.2.1.1) xs
     change (if len>k then true else onMarks _ (fullMarks r
        (takePacked cov (packedColumn d a) (packedColumn d b) (op==2) ka kb |||
-        packedColumn d (packedOp (r*(BitVec.allOnes 131).toNat) op a b))) xs) = true at pass
+        packedColumn d (packedOp (r*(BitVec.allOnes 768).toNat) op a b))) xs) = true at pass
     rw [if_neg small] at pass
     have chosen : cov = packedCov (fun c => getCov c.2.2.2.1 d) xs := by
       dsimp only [cov]
@@ -2818,7 +2822,7 @@ theorem batchMove_at (k n) (xs : List NodeContext) {i j op : Nat} {ka kb}
     have cb : b = _ := laneWire_at k n xs hj
     dsimp only [r] at pass
     rw [ca,cb,packed_op,packed_column,packed_column,packed_column,chosen,takePacked_ok,lanes_or] at pass
-    by_cases hit : combField xs[q] d (op==2) ka kb op i j = BitVec.allOnes 131
+    by_cases hit : combField xs[q] d (op==2) ka kb op i j = BitVec.allOnes 768
     · apply fallback_sound
       apply marked_ok _ _ _ q hq _ pass
       rw [mark_at _ _ _ hq]
@@ -2997,9 +3001,183 @@ theorem listPieces_all {α f xs d} (h : @listPieces α f xs d) : xs.all f=true :
     have ap : ((xs.take (xs.length/2)) ++ (xs.drop (xs.length/2))).all f=true := by
       simp only [List.all_append,ih h.1,ih h.2,Bool.and_self]
     simpa only [List.take_append_drop] using ap
+-- A node certificate may name one applicable restriction or the previously verified child.
+-- The number is just a witness. The kernel checks the chosen reason on the actual move.
+def recommended (c : NodeContext) (i j op : Nat) (ka kb : Bool) (tag : Nat) : Bool :=
+  let a := contextWire c i
+  let b := contextWire c j
+  let z := movedDecor op a b
+  let rest := (opKeep (op==2) ka kb a b c.2.2.1).map Prod.fst
+  let action := movedChoice op a b
+  let ws := choiceVal action :: rest
+  if tag=0 then !properB z.1 || c.2.2.1.any (fun w => w.1 == z.1)
+  else if tag=1 then (c.2.2.2.2.2 (keySet ws)).any (sameWords ws)
+  else ((c.2.2.2.2.1[(tag-2)/2]?).any fun p =>
+    if tag % 2 = 0 then
+      decide (i<c.2.2.1.length ∧ j<c.2.2.1.length) &&
+        fastCost (summarizePool c.2.2.1 p) (c.1-1) a b op ka kb
+    else scalarPoolCut p (c.1-1) rest action)
+
+lemma selected_good {c i j op ka kb tag} (h : recommended c i j op ka kb tag=true) :
+    checkAt c i j op ka kb=true := by
+  let a := contextWire c i
+  let b := contextWire c j
+  let z := movedDecor op a b
+  let rest := (opKeep (op==2) ka kb a b c.2.2.1).map Prod.fst
+  let action := movedChoice op a b
+  let ws := choiceVal action :: rest
+  have done (cap : closeChild c.2.2.2.2.1 c.2.2.2.2.2 (c.1-1) rest action = true) :
+      checkAt c i j op ka kb = true := by
+    change evalMove c op a b z ka kb = true
+    unfold evalMove
+    dsimp only
+    repeat' split
+    all_goals first | rfl | exact cap
+  unfold recommended at h
+  dsimp only at h
+  split at h
+  · change evalMove c op a b z ka kb = true
+    change (!properB z.1 || c.2.2.1.any (fun w => w.1 == z.1)) = true at h
+    simp only [evalMove,h,ite_true]
+    repeat' split
+    all_goals rfl
+  split at h
+  · apply done
+    exact Bool.or_eq_true_iff.mpr (Or.inl h)
+  cases hp : c.2.2.2.2.1[(tag-2)/2]? with
+  | none => simp [hp] at h
+  | some p =>
+    have mem := List.mem_of_getElem? hp
+    simp only [hp,Option.any_some] at h
+    apply done
+    apply Bool.or_eq_true_iff.mpr
+    right
+    apply List.any_eq_true.mpr
+    refine ⟨p,mem,?_⟩
+    split at h
+    · obtain ⟨bounds,success⟩ := Bool.and_eq_true_iff.mp h
+      have good := of_decide_eq_true bounds
+      have present (t) (ht : t<c.2.2.1.length) : contextWire c t ∈ c.2.2.1 := by
+        simp [contextWire,List.getD_eq_getElem?_getD,ht]
+      exact fastCost_good (present i good.1) (present j good.2) success
+    · exact h
+
+
+-- The stream records one reason for each surviving state, in gate and state order.
+-- A successful check returns the unused part of the stream.
+def readTag (s : Nat) : Nat × Nat := (if s &&& 1 = 0 then (2, s >>> 1) else (if s &&& 2 = 0 then (if s &&& 4 = 0 then (if s &&& 8 = 0 then (if s &&& 16 = 0 then (10, s >>> 5) else (if s &&& 32 = 0 then (12, s >>> 6) else (if s &&& 64 = 0 then (if s &&& 128 = 0 then (11, s >>> 8) else (if s &&& 256 = 0 then (if s &&& 512 = 0 then (if s &&& 1024 = 0 then (if s &&& 2048 = 0 then (if s &&& 4096 = 0 then (23, s >>> 13) else (if s &&& 8192 = 0 then (if s &&& 16384 = 0 then (22, s >>> 15) else (if s &&& 32768 = 0 then (24, s >>> 16) else (26, s >>> 16))) else (if s &&& 16384 = 0 then (27, s >>> 15) else (25, s >>> 15)))) else (20, s >>> 12)) else (21, s >>> 11)) else (17, s >>> 10)) else (16, s >>> 9))) else (if s &&& 128 = 0 then (9, s >>> 8) else (if s &&& 256 = 0 then (if s &&& 512 = 0 then (if s &&& 1024 = 0 then (18, s >>> 11) else (19, s >>> 11)) else (15, s >>> 10)) else (13, s >>> 9)))))) else (if s &&& 16 = 0 then (8, s >>> 5) else (if s &&& 32 = 0 then (3, s >>> 6) else (if s &&& 64 = 0 then (5, s >>> 7) else (if s &&& 128 = 0 then (14, s >>> 8) else (7, s >>> 8)))))) else (4, s >>> 3)) else (if s &&& 4 = 0 then (0, s >>> 3) else (if s &&& 8 = 0 then (6, s >>> 4) else (1, s >>> 4)))))
+
+def consume {α : Type} (ok : Nat → α → Bool) (mask code : Nat) : List α → Option Nat
+  | [] => some code
+  | x::xs =>
+    if mask=0 then some code else if mask &&& 1 == 0 then consume ok (mask >>> 769) code xs
+    else let p := readTag code
+         if ok p.1 x then consume ok (mask >>> 769) p.2 xs else none
+
+theorem consume_sound {α} {ok : Nat → α → Bool} {f : α → Bool}
+    (valid : ∀ t c, ok t c=true → f c=true) (m v : Nat) (xs : List α) {r}
+    (h : consume ok m v xs=some r) : onMarks f m xs=true := by
+  induction xs generalizing m v with
+  | nil => rfl
+  | cons x xs ih =>
+    by_cases mz : m=0
+    · simp [onMarks,mz]
+    simp only [consume,mz,ite_false] at h
+    simp only [onMarks,mz,ite_false,Bool.and_eq_true,Bool.or_eq_true]
+    split at h
+    next ht => exact ⟨Or.inl ht,ih _ _ h⟩
+    next =>
+      split at h
+      next yes => exact ⟨Or.inr (valid _ x yes),ih _ _ h⟩
+      next => cases h
+
+def streamMove (b : Batch) (xs : List NodeContext) (i j op : Nat) (ka kb : Bool) (v : Nat) :=
+  let (k,n,r,_,u,cov2) := b
+  let un := op==2
+  let len := 1+(n-(if ka then 0 else 1)-(if un || kb then 0 else 1))
+  if len>k then some v else
+    let d := len==k
+    let a := laneWire b i
+    let b' := laneWire b j
+    let z := packedOp (r*(BitVec.allOnes 768).toNat) op a b'
+    let cov := if d then cov2 else u
+    let mask := fullMarks r (takePacked cov (packedColumn d a) (packedColumn d b') un ka kb ||| packedColumn d z)
+    consume (fun t c => recommended c i j op ka kb t) mask v xs
+
+lemma streamMove_ok (b xs i j op ka kb v r) :
+    streamMove b xs i j op ka kb v=some r → batchMove b xs i j op ka kb=true := by
+  unfold streamMove batchMove
+  dsimp only
+  by_cases hlen : b.1 < 1+(b.2.1-(if ka then 0 else 1)-(if (op==2 || kb) then 0 else 1))
+  · simp only [gt_iff_lt,hlen,ite_true,imp_true_iff]
+  · simp only [gt_iff_lt,hlen,ite_false]
+    exact consume_sound (fun t c h => Bool.or_eq_true_iff.mpr (Or.inr (selected_good h))) _ _ _
+
+lemma splitBind {α β} {x : Option α} {f : α → Option β} {r : β}
+    (h : x.bind f=some r) : ∃ u, x=some u ∧ f u=some r := by
+  cases x with
+  | none => cases h
+  | some u => exact ⟨u,rfl,h⟩
+
+def streamPair (b xs i j op) (v : Nat) := do
+  let w ← streamMove b xs i j op false false v
+  let w ← streamMove b xs i j op true false w
+  let w ← streamMove b xs i j op false true w
+  streamMove b xs i j op true true w
+lemma streamPair_ok (b xs i j op v r) (pass : streamPair b xs i j op v = some r) :
+    batchPair b xs i j op=true := by
+  obtain ⟨v1,h1,more⟩ := splitBind pass
+  obtain ⟨v2,h2,more⟩ := splitBind more
+  obtain ⟨v3,h3,h4⟩ := splitBind more
+  simp only [batchPair,Bool.and_eq_true]
+  exact ⟨⟨⟨streamMove_ok _ _ _ _ _ _ _ _ _ h1,streamMove_ok _ _ _ _ _ _ _ _ _ h2⟩,
+    streamMove_ok _ _ _ _ _ _ _ _ _ h3⟩,streamMove_ok _ _ _ _ _ _ _ _ _ h4⟩
+
+def streamJs (b : Batch) (xs : List NodeContext) (i : Nat) : List Nat → Nat → Option Nat
+  | [],v => some v
+  | j::js,v => do
+    let w ← streamPair b xs i j 0 v
+    let w ← streamPair b xs i j 1 w
+    streamJs b xs i js w
+lemma streamJs_ok (b xs i js v r) (pass : streamJs b xs i js v=some r) :
+    js.all (fun j => batchPair b xs i j 0 && batchPair b xs i j 1)=true := by
+  induction js generalizing v with
+  | nil => rfl
+  | cons j js ih =>
+    obtain ⟨v1,h1,more⟩ := splitBind pass
+    obtain ⟨v2,h2,more⟩ := splitBind more
+    simp only [List.all_cons,Bool.and_eq_true]
+    exact ⟨⟨streamPair_ok _ _ _ _ _ _ _ h1,streamPair_ok _ _ _ _ _ _ _ h2⟩,ih _ more⟩
+
+def streamRow (b xs i js) (v : Nat) := do
+  let w ← streamMove b xs i i 2 false false v
+  let w ← streamMove b xs i i 2 true true w
+  streamJs b xs i js w
+lemma streamRow_ok (b xs i js v r) (pass : streamRow b xs i js v=some r) : batchRow b xs i js=true := by
+  obtain ⟨v1,h1,more⟩ := splitBind pass
+  obtain ⟨v2,h2,more⟩ := splitBind more
+  simp only [batchRow,Bool.and_eq_true]
+  exact ⟨⟨streamMove_ok _ _ _ _ _ _ _ _ _ h1,streamMove_ok _ _ _ _ _ _ _ _ _ h2⟩,streamJs_ok _ _ _ _ _ _ more⟩
+
+def streamCut (words : Array Nat) (g : Forest) (k start n ar : Nat) :=
+  let xs := contexts g k start n
+  let b := makeBatch k ar xs
+  (List.range ar).all (fun i =>
+    (streamRow b xs i (List.range' (i+1) (ar-(i+1))) (words[i]?.getD 0)).isSome)
+lemma streamBlock {w g k start n ar} (h : header g k start n ar=true)
+    (run : streamCut w g k start n ar=true) : block g k start n=true := by
+  apply cutsBlock h
+  unfold rowCut
+  simp only [Nat.zero_add]
+  unfold streamCut at run
+  apply List.all_eq_true.mpr
+  intro i hi
+  obtain ⟨r,ok⟩ := Option.isSome_iff_exists.mp (List.all_eq_true.mp run i hi)
+  exact streamRow_ok _ _ _ _ _ r ok
+
 def g15d3 (i : Nat) : Nat := 0xf
 def g15l3 : Packing := (1,0,0,0,1,0,0,g15d3)
-def g15samples : Array (Bits × Bits) := #[(0x10,0x7fffffffffffffffffffffffffffffff7),(0x7fffffffffffffffffffffffffffffff9,0x8),(0x7ffffffffffffffffffffffffffffffef,0x7ffffffffffffffffffffffffffffffe5),(0x16,0x12),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0)]
+def g15samples : Array (Bits × Bits) := #[(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbaf3ea78de4d799d,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff450cc90c3c245919),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdf7ff8fe9f9b7ed5,0x20812421801324c4),(0xefbdbf97f9f6bf6a,0x102a401415600a0a),(0xf3a9d7437375f5ba,0xfc028ab620235b0),(0,0),(0,0),(0,0),(0,0),(0,0)]
 def g15columns : IndexTree ColumnInfo := []
 def g15autos : Array (List Nat) := #[[],[33,48]]
 def g15levels : Nat → Packing
@@ -3014,7 +3192,7 @@ def g31d5 (i : Nat) : Nat := 0x84001e90fd02fd01fa00
 def g31l5 : Packing := (3,1,3,0,4,4,0,g31d5)
 def g31d6 (i : Nat) : Nat := 0x11a20bf
 def g31l6 : Packing := (1,0,3,2,4,0,0,g31d6)
-def g31samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffc9e5,0x7ffffffffffffffffffffffffffffc525),(0x27a,0xa58),(0x7ffffffffffffffffffffffffffffc58f,0x186),(0x7fffffffffffffffffffffffffffff771,0x7ffffffffffffffffffffffffffffd471),(0x3a9e,0x2a8a),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0)]
+def g31samples : Array (Bits × Bits) := #[(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdafffab2d55fb9f999d9ceeefacb357b78f9ce2bb554a3bac97b2a9d65,0x250142092220460600407048c382809c2160e048740030a88143281c44),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffef5dfed46f26fea572a7ba9effd7341aff97ad1ab5bd2d547d6793334b,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff90aa211010d10141c4300836206168204010183680184d04682483210b),(0x73ef3f3c8ff8df3fe567b556c9567ffcd665219778a6bd6e36bfd946ac,0xc10d0c3000214920a0d648109801012344d60802686b04210115006a4),(0x7c7fd57b7ffa3476e74d6f3fc4bddbd44dc213c5eb8bdea95bf6ee7492,0x38022048645c06490200044a25241818912934541000824c322ae5002),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8fe76ff6451fda6ff84b6daf38f5bb6f6a5ee88a4d6be3f71c64aa3f,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8076989008882001270e063010011622500c04308a174300141c40a239),(0,0),(0,0),(0,0),(0,0)]
 def g31columns : IndexTree ColumnInfo := [(1,0,30,0,4),(2,0,29,0,4),(4,0,27,0,4),(8,0,23,0,4),(16,0,15,0,4)]
 def g31autos : Array (List Nat) := #[[],[50,65],[66,16],[67,50,33,16],[67,32],[67,66,49,32],[33,48],[67,50,65,48],[67,66,65,64],[49,64]]
 def g31levels : Nat → Packing
@@ -3026,7 +3204,7 @@ def g31index : Nat → Nat → Option (Nat × Nat)
   | 6 => lookupWord 5 25 2 10 2 4 (key31l6)
   | _ => fun _ => none
 def g31 : Forest := ⟨31,6,fun j => g31samples[j]?.getD (0,0),g31columns,g31autos,g31levels,g31index⟩
-def g47samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffff,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x0,0x0)]
+def g47samples : Array (Bits × Bits) := #[(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffddffff5cfaafae7dd35b9ce7bbffd6b6b7b7cfbb8d3b7ad85ddf257b56b575,0x2200a042011011800c00803812181c2009c1061c0107200c09440143143444),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeebefed537937fcb8ab173daa7df7f7691aff9776b2b7dcb92a3f3678b2b59,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff9149112428688034a38448020d64a21d120601022ea84882b022a624830919),(0x77db9fef67fc77f3ffe6e3dd55f86b6fffcab66472f7c57fb768dabfad4eae,0x820641080010508440806b120004c020121a4ec1002247c020840112806a4),(0x78ebe4ae9ffd0d576de696b3cff805db7d426c00d8ded437ed436ff6f66c92,0x71419416322f057a950700411b6b328381c4110e8d4580325370f22d66812),(0,0),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0bf9ebdb2287acd4afec26dbb6d98eabb3768bb508ca4b7f1fdd1c709a3f,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80f74f1424444852a26637058ca3a012d22680c12e48c8e17411561c608a3b),(0,0),(0,0),(0,0)]
 def g47columns : IndexTree ColumnInfo := [(8,0,39,0,4)]
 def g47autos : Array (List Nat) := #[[],[83,32]]
 def g47levels : Nat → Packing
@@ -3034,7 +3212,7 @@ def g47levels : Nat → Packing
 def g47index : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 def g47 : Forest := ⟨47,4,fun j => g47samples[j]?.getD (0,0),g47columns,g47autos,g47levels,g47index⟩
-def g55samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffff,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x0,0x0)]
+def g55samples : Array (Bits × Bits) := #[(0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffffdf7defdfafbfd3fcebcfdeffcebffefe76de77fed7f1773f95eb2ebeb,0x400028000010005000000400701010180030103060043200102204010904888),(0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdb7fbfbb9ad3afd94caf0b9db5bbdf7f7d39bfcdadcf77ec9eccd2fb9cf16b5,0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2484444214284026a4e002420468a8a43140a00408d944460a4082569431231),(0xeda5e7e7b2fc29de4ffc371dba2bf0775ff12db9b18bb528fedad96afcd3c5e,0x12589919410293410206d0396285445a082c5d2bf0022b20f0895d2048c2c4e),(0,0),(0xf1cd79264efe956afa7a64bb677ab40beba463600362eda36f3357b7d763926,0xe3a8651b1a36a0acc57538a080f6ea703078a0c13c28dc34c91f3868663126),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe05fe74eda341d5872cbf684d5e2ed19e7e3bba5e964550dd792aec724f479,0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff01fb53db1204342a549861b60b6727a22d48ac0b14da4445855161ae724b471),(0,0),(0,0),(0,0)]
 def g55columns : IndexTree ColumnInfo := [(16,0,39,0,4)]
 def g55autos : Array (List Nat) := #[[],[84]]
 def g55levels : Nat → Packing
@@ -3042,7 +3220,7 @@ def g55levels : Nat → Packing
 def g55index : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 def g55 : Forest := ⟨55,4,fun j => g55samples[j]?.getD (0,0),g55columns,g55autos,g55levels,g55index⟩
-def g63samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffff,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0)]
+def g63samples : Array (Bits × Bits) := #[(0xdabffdfdbdf61bfbfc7dcbe34f7f1b17917df75df7edd9eff77b6dbd3dcebed3cfbfaddba50fcabded46bc9b579eb7bd3d92776566ad4ad3debe36d74deb7f9faf189ad76da7dc1a6b4eaf21eb254de4ae1f7451bb34d9456fd18e934db17349,0x4400202400040800310000100084000ac0000102800a1100490002240004b2800a001b4000190000008108000574009200040400000594000190004218c0010840002890800550053044a00410008802d0060013000c004400188120c206208),(0xb6678efeffcbf5a9cad5bfd527a7a5bd74d1314b7915f5b2ffdec2fc5d978f8ab3b44b2b5add5b771711b15ce99bf2b3f5bce975ef94cd59a34e76ab937848a94ef6be6c9579db5905539ea703c87a7d4ae11fe2ae423fade4a3c3299b0724e7,0x499461811a200a55004cf88854029340027a680613c002ec00233c1096d01045025d0203d400243150030b7e4900b00499e023395882049d0206ec00041398010bbb1000b7310ad00cc0858112c8207810e917400e423d0034024309910504e5),(0xbfdd27bedf8fade4776ebf9d185bc5bd76aeffb29711f77d628e86e5fffdff6d1a52bff6da987348e3e147dcecdbcc68d1accc4e7d7d77b9734cfbbcefbc022d72eff5a31a72e32584dd5a72accb1256ede309af577ea6b3ab2be572a2769632,0x20983204990108b1910222a2810c12a8041040402e00006394000908008912a582448429aad10a21a0240190b504314209040621245140c82010e8812042049440841100c0c52080310832a5111106e902488a012c82618908a42202729212),(0x77ddb87389d95f9f7bbe7e8eb89e6e76fbf75ca7fd5bb3758b555b578affe964ae7e7fa493e06d03bebc4fb5cff51e46b2dd5bdbb1eab66f60f7d916b9c6944fd85b6f0fc30a2ae7d2afc9dc369ef80bb1b0b2dd52e9331e786f7a5d38e8c8b4,0x1482478012444200420888514440810c402202189081ecc814422aa4c048408050190921c0450c000a080254044021081134422900082c11250884167012813a48094aca870a3283708e41084282480000c012150640581c30655a55288040a4),(0xdca768aafb78ce8d2db2ec3fbdddfa4ec963339dbac7a8e05eccbf0bb99ddf5febcef6dc7762a4a79d9ad8f70324ba6e724754bded1eed86f695f276b70acbd73dc66e39a88d0cfed920a0ee10b5a4dd5893bba709bff6dc1ece388c561e1ed5,0x210938550593284a984457082a220ca002159526023c0223a02100100d271046aa46f2022bb0201ea5730921b3008e848a002106a7520082d20653c8040064810364a00030c5086c0c2084761035a077101508a009ba22e00b822088521e1c51),(0x77dad76bd4ced656e7ec247a694c9eb5b66dc4de71aac18acebb177a9bac7a62d6f3e3996dd9d62d6ecf7b18557229a30b5ebb1ef46b568a8f3400a7c2d3365caade63d0f2234a24623735bcfaee29c0664eddfc63b2a86915f817ca03dc41fa,0x88252894b2b3256598a758928465236453b27d28c68c4c28a24dcc0d24d500d4a845700845b04bd175706d345a20a0a24d641d897dd822a1d52444cad2629c8e732b305273362844202335b73c8d8150424e93e44a78286995ec17c803dc01f2),(0,0),(0,0),(0,0)]
 def g63columns : IndexTree ColumnInfo := [(32,0,31,0,7)]
 def g63autos : Array (List Nat) := #[[],[50,65]]
 def g63levels : Nat → Packing
@@ -3052,7 +3230,7 @@ def g63index : Nat → Nat → Option (Nat × Nat)
 def g63 : Forest := ⟨63,7,fun j => g63samples[j]?.getD (0,0),g63columns,g63autos,g63levels,g63index⟩
 def g111d6 (i : Nat) : Nat := 0x120ff
 def g111l6 : Packing := (1,0,2,0,1,0,0,g111d6)
-def g111samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffff17b,0x13a),(0x7ffffffffffffffffffffffffffffe2a5,0x7ffffffffffffffffffffffffffffe281),(0x1c9e,0x181c),(0xd72,0x762),(0x0,0x0),(0x1dcc,0x1ec4),(0xf60,0xd70),(0x0,0x0),(0x0,0x0)]
+def g111samples : Array (Bits × Bits) := #[(0xeafcc7b96fc59ffd26c5e2bb3d7bd378fb35ff5dcb26f92afa5f57eff59a73b7aaa379b2fc8d7a99e2ef9efcf4defd4efabc9c89733cebade5579ad5abbcd64d8557ad3d63bd1c6a75510ce3b9bf05e462ee0edf6dfb2914efc74c7d31727465,0x4d00310a2003881269402d0c00406ccc142a8012908082d00025ac006a88036948003229000032d4001bf20024ec2018680000aaf2500325400423a6f02003840040a8016ea8106822700071012c01d500600ad401ea0010f407087831504444),(0xf771ad34ff2bcf4fbd7f5f5de52efaeb7ebbabfffefbf2eab7c7cf56f8ecea565ddfabcf87cb61db9d6ef4aecff7cebd76fe679cfb9935e6adabc77cdcdb677ed3da5e4f56b4cbe39cfd7aed1f519a6b999796b48a51f4f7b8ad91a66cc6d9cb,0x1204940050200482000010001c10308054448009004424020800871400ac0690000402004e0508404004081210450414000904018220d090010808000a44280600460810104d92040818880c1010088d8400200a10a1400808810604821909),(0xf5be76df5e79b8b5d13f5f6e3ecd176fbeee538a7cfb9f7f6b7fad9b13bb7fed97560ecd71f29f3f1e3ef959a338e3a9e32bd5e7cfc7b51df73d7e9e165479b3baa9a0d59e62e11eead3ad5c624777de8699f96d3766d64d1f3fa2ca8f3d2e52,0x8e4d19200884440101e4a802e100a0c04000830eb000289800c49240c1c411082c325a6812b0485430294040c52402008322a4b0e00c0021216842103a050a9080848145264020288841a770220547500211500d95204c05521120880b352452),(0xde2ebbc73c1cf83c4cedbed77297d7f5b666582db23d5c5d7bf4a54b37a75f4992f88d683d388ea5bafb57791a5deb9b257390777cf70e9d329773c24416edd93fe3d2909bc3b81d7e62dd94d70a759eb42b6b51587d63da2e7eea6ce78912bc,0x10b22099c5638280b403142808691e02bd9d04d1097a9640ce2041351e20e64283892100494815238b12089820999d9858901b4e1903515e001721098578a5416f515492d981d895722018845902b08a5c4a2a2248dd03d08c66ca64e48812ac),(0,0),(0x4a99db5e74fdf3bbfb83b4b12e735e58f515867b75942dba656f9eeac55739b971685432ece5b39368c30fbbb9f895ca9efa5eceda2fea7be4766f052ba5def635ccf928215f7640050f6846acafb2ca6efbba0bffbfdb9043d87d111c3c3ebd,0x12d68401de50564414b80023f49c0203c0413d800068400bbb08034f0177ac0427f40400f6de0023bcc009fc1201950403ff4900082ea08a2fc908010c8a4053de0011e801464d050407f806ac13f8026d9b800bfa055d40038875010c2c3ab9),(0x107b7e8791b6519a9ebd6f37d374faa298392ebad8b5e4afe6bd267679568b3365bebaabdf6ef4e9035a918e8ca50ef74769b2b74aea726a09a6c5e9463715fb76745a9b1b6212a1b9add6dec52a9ba55b57e399ab660ca6d0f217384af881fe,0xadc48a6a24248ac9294916cc74a18dce4988890976a839d0a90054480a8f001149b409fd5690d8d50882129489ae3083c83b5253565cd02541ca4550f495b985581508b28aaa022919a1e755a00eaaa54243a315f06a0c87d4f216384a7880f6),(0,0),(0,0)]
 def g111columns : IndexTree ColumnInfo := [(4,8,99,0,4),(1,32,78,0,4),(64,0,47,0,5)]
 def g111autos : Array (List Nat) := #[[],[83,32]]
 def g111levels : Nat → Packing
@@ -3062,7 +3240,7 @@ def g111index : Nat → Nat → Option (Nat × Nat)
   | 6 => fun _ => none
   | _ => fun _ => none
 def g111 : Forest := ⟨111,6,fun j => g111samples[j]?.getD (0,0),g111columns,g111autos,g111levels,g111index⟩
-def g119samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffff,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x0,0x0)]
+def g119samples : Array (Bits × Bits) := #[(0xfab75f3dfbfa3756f92d9ff7baf5ff7dbfebb9b33bef7dcdf77fbffe7bbbf75546cedccfd6f7eb762bef3ffdd2ede7abbef7e4e4b775eb9be6ab6f4d5fde77f2b955ece57b3feb97c6d99b5cdd2fdd2ea315de5f3efbf8d44ddcaa7566eda9cd,0x20100000802449000a820000c1900042800052080010000098c000620802429000050a2000012e00000be20013404000082000047420011240000c8b8000110080002480036500158018000c4009400c9000c0062803a0400e00885042a10888),(0xaf7efcd6de9febfb57d6f5ddedde36f3db7fffeed79fdbfafcf255738c743cbbbff3e3b86b8f9fb9f5bdf54fbff79bd74f5afb3f7fba34f5bf5f9afae879ab5feefe93fa9ee6566f7bbee6bf67d426d75cfb2bace9344fabf72bd58e999b76b3,0x9300010000091004000400382060802420900110020801010208161810541520000000800198110400c004084880812115000049028020c0800220200009220a01801050108206a8408406120184808104430800802442850101410609083421),(0xd3aee9d1a16b8afb579b1b1a2ede96c634714fced4ed35afb8d86696aabedb2eada373270f48f3a9b93de8a90d87d8f6684756adef8eb40bf672fc78b9342c9c7aaa652b2aec9422dd38b32b2a5255bdcc3d35b2da5f372953f3c4ba3a70d996,0x2c07b23e74020fd2aa41748155856818d263d681015680dac92709c7448b08586eaf3a512642c64b613a9091954b38c222671d26711d023332d48951dd0691952839212f8b6888039910b9ac2a42653c283c65315b1b95185ae084b83270c996),(0,0),(0x759a506bc07865de6f37bc2fabe39a5e2705b6a3eec6bd3cca572e3ed72f0325f632aa43d8e0e833eaeab6f86ad5fa72dbaf9c83b9e70faa212acf122e177ae733d8fa39a0b0bb12b7915f7134c3b9a9ed98d75362b1d9c725676c3caf04637c,0x16e5f59c6d01a255c44806523c0cddb5529a2196d082e7c24415d298c0f10d071e6090549dc090f8ed501938009f3fb2169588d90b0b506d102e01343cb84ad135f45369a498be0a36011e712702bb816af81651c4b05c0701a6642cad046374),(0x6339c3e76f77dc41ec6c9766b8b0f93592cd6e58a17db2abb9eea5cd269eeae2dc2c1c9ec755bae6a2821f6b678c3538a75edaf56c57e97ff4e8b90d55c4e75ce36b37ac511be4c610c6f229b9ab77956345b3a117ef6f3608dd37697870ba61,0x84ef690f5888a6bc0049f9381c0ba0115db000874a075d2102333605e754184fe100105f739880fb92c019ec481f2d2102dbf2480954a0ad3f922114724920d57f80032e5018c6a22083e62199863ec06b43378157e41d3d00d937293850b261),(0xd5cc96ab2735f4eedbcfece9fd4d847149d75b8aa71ff3959066dc7566c66ecb75975abde9bb8d684d89311f3151135dd1ce4d97acd9737d0b4d97b62b1596cf57b51ab1b6b408593b67d5bb928b32dabad66fc43367241aeaae177095e247ea,0x481560b0cd924918c5323d4303992d88d1232e6a49f254a2454320824e8122936522ef3572424e688310332525616c12e023da92a435d213539c9243b254cc21b63548a8e4258841b361f1c95a017252ba1c47902bc1245a7a8e167094e243ca),(0,0),(0,0)]
 def g119columns : IndexTree ColumnInfo := [(4,0,115,0,5)]
 def g119autos : Array (List Nat) := #[[],[84],[98],[84,98],[101,66,16],[101,100,66,16],[101,84,82,16],[100,82,16]]
 def g119levels : Nat → Packing
@@ -3075,7 +3253,7 @@ def g189d6 (i : Nat) : Nat := 0x82000f487f40bfa03fa00
 def g189l6 : Packing := (3,1,3,0,4,4,0,g189d6)
 def g189d7 (i : Nat) : Nat := 0x1f5859bf
 def g189l7 : Packing := (1,0,3,2,4,0,0,g189d7)
-def g189samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffff3662b,0x7fffffffffffffffffffffffffff9e02b),(0x0,0x0),(0x7fffffffffffffffffffffffffffad83b,0x7fffffffffffffffffffffffffff2902b),(0x7fffffffffffffffffffffffffffced45,0x86d04),(0x513d2,0x412d0),(0x63da4,0x61d04),(0x0,0x0),(0x952dc,0x942d0),(0x0,0x0)]
+def g189samples : Array (Bits × Bits) := #[(0x76b7b935ad7f6fd4d735f26d2df10ff4361bcad97bdde979efcd6e58b7554d7ea7eff73e73de92e56562d7533a4ef3de34b1f6acf1d6e216666babd43dbaabce3ad8d545ed4e53771cb4e6d84ab365f9722155b0decf672135d0ab0e8aab3265,0x8404642124899480a2a81184400c4494a40542200633c0114901482008a100b4c40690c02a500485280025a8300be5004d078022244028e4a0122910034dd0088624c002500565400b4701a401901a06a801c60d40e430038408b0c08aa0264),(0,0),(0xb725f7b34edfbeffaf8e64c99fca263eeb8ebd6e6efba6759d07fff35f0d57cf0f1af1c8e8596f2d9f9a363b65aade972ff9af593499366f72b4e55d5e6f961954d5fce693a74e66d370dbbd59357a0ab5d8c2e2b4913d9ddc0ac963246654eb,0x2019084c910042485050a84580141012107000421c10cd02a29a004c0424911090cb1414ac1a4012048a60a1130c00921224ba8854044c203120d1318881010110848d88109408245548f0845c253042044cc0e02091152804424943044214c9),(0x6b3b37beb0d3b3db67cafb77eb9e1dd789aebdb18d1db77732f653e35977f97f4dd313687fb67a399a5d29e7c5c2df2ae361e9d1a8a6a7bdf9b41bf76bf3c59c972736ba642a6ec8e10ddd388a5d8a2fef454b2f6c5cd8cb4dafd1a5458caf32,0x84c42401462a8882042c15880121e0040f09501440a3008044047580824b00c92204cb801220a2e8d004050a8c13a8082552010080e322ce0002224042220e86c96110212062d680201609100358082de8010e0a0c4e080169249024018caa32),(0xeed4ecfef66eeb7efebdd9aee7077cf1671b7b7a97dfdfd372d0ed94ede3ade9c50737565e265d36d07689d4ac4faafe5abbfdc5676e89f79f8f9a623b38502f3db98ff0fa982b81b88d0790fae9d8d74f74351d5187af7a955e769667c1914c,0x112b0124099000041080680538580102a03620812918016ca82b084951200b0011391441e40a1406003a00a460640102802906c05910d52121d05c00b8012058249003c452192901d049060038a0e052051c011422a1a0780618649266411108),(0xd9cafe65094bbf5f7264b7bbce3ffbefdc6762cbb35969c8ac2ddbae62ff5a5f3ee2cea13be5ccd265ed5a725a1921f7f9e712e69e98fb2d45e97fd5f2e0abe4f3f7676b375491bf662220c7ec1235aaa52f7b260bfdf8f023b73c589c1c3f19,0x2215018860a440b0408528403b942810a5b0009c1c080302094a000184016510830b02e2ac10b810014a60046c8c012e120b028809b84c0105208c4e88802201101131880274018a550300819c02301e012cc3000b90a8a80382305084143519),(0,0),(0xe9cbc8feffb7f8e7b8d17ff4f26deb6af5fadcfef4fa8da189aed6c66eadfbba567e7aa58acda76b57bfee9d03799233ac5e277f4fab9af55d736c18d65d30adcab7ab9d1b9dcbcc02d24b67373e9182d29baedd99bcc115aa3d04dc337a48be,0x1420360100482d00252a00a2440945244a022b202187302c44004bb2035a00002400090800450025fa000d1a80010240a950404582409154ca522280124a1c0c672a40054909a2500214036203d800a092812c0514244211e81d048c33284826),(0,0)]
 def g189columns : IndexTree ColumnInfo := [(1,0,188,0,5),(12,0,177,0,4),(16,0,173,0,5),(17,0,172,0,4),(24,0,165,0,4),(33,0,156,0,4),(132,0,57,0,4),(160,0,29,0,4)]
 def g189autos : Array (List Nat) := #[[],[84,115],[117,67,32],[116,83,32],[82,48],[84,115,82,48],[117,116,115,114,64],[83,114,64],[116,50,80],[117,84,67,50,80],[84,115,66,112],[66,112]]
 def g189levels : Nat → Packing
@@ -3087,7 +3265,7 @@ def g189index : Nat → Nat → Option (Nat × Nat)
   | 7 => lookupWord 5 18 5 10 2 4 (key189l7)
   | _ => fun _ => none
 def g189 : Forest := ⟨189,7,fun j => g189samples[j]?.getD (0,0),g189columns,g189autos,g189levels,g189index⟩
-def g127samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffff,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0)]
+def g127samples : Array (Bits × Bits) := #[(0x27ec63be833e95d9cd8b1b0f8c7b949b955ab7ff06f2f46fb53d19a8b89e2cf938ea5b637a679113a99b1a558cf5d3757100e2a2d92956b1df648864a3a84cf9f5aafcc4980f547cd2d2abacb351593072ded0ca36876c216b176a15583d3069,0x215000b22a840210400a1040082a19401000220004808d00802008c02014082088420800402688520818425544410445400040805130408104600820a3600c001020e0440008143510802b10a111102142440000168440214816081150281060),(0xd1272c7d4d43f0bd72e56dab39ddfe7c6a407c139e413a8c95b2f6c7134bd9d2e6151acc0f6f6e61aecc859cb80ab9d38d1f9c08bbd08127631b9fb156aefb042a9049abe4f27cdb8815184a3fa2b5dede495570df2830da3c38c46cf1426d13,0x806000d540888802080408280406213088804000000320c048631024209804006241648090164a10080940a08001912a8109004a2408004431a0101080453200880088a80c0004a880100481a02008819080040c10830122428406420422c11),(0x3757a63bdee4ba3fd3e2275cd925bbac4327c3605b6a92ba668b6b375f5956a61c0ee4c8b6382a0c726a8d674c1d24e187c7697b46618e9a3259ec9e635cb1935494676727a9c6a3df6b34450ca72f271676b8367562d5a985429aaa9a64d626,0xe190134200c030558e6885084d0788a40161e860830e0412a109c61098d030850809a9902628890c322a09e446182064058721691005078a1841cc5c6248a09654242521162044855722240404692506023498262462c48981029a8a9a244222),(0x7c12f7ae7cb67a121957d4766ab145360dad0baa714fd5dd4ad95b9245e39e4cff88a61691dd24ee5570ea624367b54a6aea5375c626bc6f4082772e38770d5a1955fa1dcb198b20afa8d659c70c9ab5dbb42b955b55e374e0f839c3068a9694,0x100b203118264280010702e3020864421484020c18c0438c4090018044060d7096401604915660c20151c00201478d0220604290c2020821402022221025140809114a0c4919231288809339110498f1918002911b15216460582041008a9494),(0x5f0ed2cab79191489f9794fa9f865222c0c45f4f23977137ba6ec87e2fb718cbcb3281372d8190b9e5b2713c276012285f3b185c628f375c96ee95cada25845527c7ad5b31bc018c667be7de6cdf9480211b73e5e0fc0e1e03a683a80feb2399,0x4e04900c0410144f3ce0e018c1840020605099a3823d30032c4ce03413c1e08c412481b32c810028f486342022205010179b1c44008d375c030cd5d908008055e282051134c40088667900c444ea04000013f960e0680e1a03a083a80f412309),(0x64ed11ab034e6565aa5f6f0a73fb2abb553e90eaf5f2056f4f2ad1a6a7112f3107edc462d825611a42150349a39be3bcbdfa3bf68749fd950e410251758bd0aaed7e1f93ab81b400f6cd22629068e5bc2da9dbde283bbf115009f3b1a197a662,0x46299909050b25a18c71e62a5095c63ecb8f04a3c26b60b927cda532c109201915ade64b3091412042050108b390e3bab9cb9877060097580a090251508bf2aae7571e1ba185a2088a6c00621068c596ada8d9f5a83bbf101009f3a0a197a602),(0xed72aa63cb994444b8dcf183254b4e7cee24db3ad729ab4a1ba98c700af5e5480459e832e1cc5750368c89edf172492ed4565f186db3259850f427f3943aea1f7b1d745054d56ed5059c9e36e00b68fdae413f628aa9c64ad98b04d0b38dd9ac,0x4400b2628be723745844a119668f0ccc9303b92a933d014173710ec9a0c0658c41596832a4cc13563c0629c5d4a2402c44020f584d31651810e10cda143b2c95631f726414156f15141896b3a1182c75a6e53b222aa1c648d9830490938dd1ac),(0,0),(0,0)]
 def g127columns : IndexTree ColumnInfo := [(32,0,95,0,8)]
 def g127autos : Array (List Nat) := #[[],[101,66,16]]
 def g127levels : Nat → Packing
@@ -3109,7 +3287,7 @@ def g191d9 (i : Nat) : Nat := 0x180327c7c11a70600f8f1304b1c05f0c3c541303017c38f1
 def g191l9 : Packing := (12,1,6,7,2,9,0,g191d9)
 def g191d10 (i : Nat) : Nat := 0x1f3c11ff
 def g191l10 : Packing := (1,0,6,4,2,0,0,g191d10)
-def g191samples : Array (Bits × Bits) := #[(0x7fffffffffffffffd0c0c402004fef2db,0x7fffffffffffffff80804000200e6f9fd),(0x11b148275f1c286a0,0x11782c171f1000600),(0x7fffffffffffffffe531122c7040d21fd,0x7fffffffffffffffa40191604044901fd),(0x2c1e025583913b710,0x119c0a85a3812b202),(0x6c0e955b5db084440,0x6c22957a5c3080400),(0x648ab82dfe311c0a,0x245c8b22d9c110402),(0x0,0x0),(0x7fffffffffffffff92a03d9dae3060a05,0x12a2649d263060a00),(0x0,0x0)]
+def g191samples : Array (Bits × Bits) := #[(0x6acfda3c2cb83a92b793db4cbe83faea9cb2634793e21db352fb83fe8df2bc07a86d83614e9e1d6652f73c866931a299021d0d35cea03b8bca899a3ae9b0852968ae39aed598c502d3cc66c95e3918558ba9636cd1546c95b4522b12e41c6251,0x8027018c1220821109402382a0c04040242201142810004800310a01021028020024504420900008134444101889108100844480011218a0808a088000429588a002494484002118004005c4110108908c2000154441190520210a0142200),(0x7913ceb593e8bd03514889e55f4c93639759259376fb3230720c9a865196f27cc74c193b9b758265cc3f7b6a39d891145642471fe1a3e402ed12036d66f3fc532a7d00122732be1cd6f8a0d631223ddb153772d463789a2c383ce02e7842d163,0x88036081c60419a2c82401d04754b2b302101402821d5c654204040641a4c69d42c491108805a675482c4b1a3210132646402113b58224122512010966d1b044833550122312b410427aa086012a6ec1101538c042289a0c282ca02a5842d161),(0x557693cafd0fd9424efb95e75ddf8ed5bd78c8ecb52fa208a8d45cb3574ccaab77d93b1e650b4399e9518160864e914bee471a4d6078d8cd3710b8c5462d299957d5836e24a95a7b253cdb2e6196070b78eaa32a2b4a267149c447650cd138a6,0x10c082401088400012d0c4008000004018ca8080142020182010002082500860100b028600824082a011044180428040210612040030c884904098c2002801191040822880a108c8040449084010010648220108084220210140474504110882),(0x9c642d62a2f2f7ba22bc048df67d49f5212576be5994f8cdc5e270babb8959b792802cb3e87f90d4054ae918d4ab1ce241d9cf541d5d16b72277276810cef58c9e0f2a3137066d66292bcd81a96583d025d9fd03afbb585aa2b81e898b063d44,0x8024093988519a8e002822a41919198600217873085849c0c483198871885081c08060615e498874054ab3104029780240914c50140c132321226228088464808a9608100702c12708ba84812c642a102598ac01a5195852a098180889063544),(0xd23eefb5d75806b89dcda38864b64661c9f5e2babc176a70b2d3a56f26f32e727e31fe7789e6e58a36284c9dbcb30e74d59821a10b67441120e71511dbf31ab50b42210b3baf1a3e4c47734dcff8958cfd1109f7ce27c18a062741ac46d7cd91,0x7413208444084451d48501104604c068b3980408840422121160844600658c78341c18180024668a9220480b8c940760b50821038273441010c51501633a18440140258228a50a1044455344031a81ae1001013e42228188062541a446c1c891),(0x44ee3263ec00331534507b30f50239085a477dc26fc97fafdd3677e1adedabf5a6627a917685fed951e16b05c441608531a6eebab7bf0ffa2c9d6923c000425ae070ded9cbf43ff0702d561449016826463c1cddf881bbc98109fdb0912bda0a,0x5c9601812402000310c10a308504200a188ca4d220b13a418220c4ac1700cc49329049900289169c4a408a09044020043184b638a739649c2011540242004250a0701ac901871eb02048c310010048264632184cec01aac801096da0110b580a),(0,0),(0x3ab08ab4b6d74c50e56bc9651caf5894b179e03465572acbdca5615696769c27053d6dc580568c9318a62a712d4d06df8fcf0933a8a96615b24c8891d85dee28deccf746ecda09546a23c7138dbf2215a9d969340b49504d34d905859a5a4fc,0x8020482e4971b288ed202044508b9ca5050108094844412451461041282e3192c9648008d0242841110660a6538444294c484083188002614b0e00011891a8820d8e45006648e00548a230c32acf32918089829300b41504d204901848a4a474),(0,0)]
 def g191columns : IndexTree ColumnInfo := [(1,0,190,0,7),(2,0,189,0,8),(3,0,188,0,5),(4,0,187,0,7),(6,0,185,0,5),(8,0,183,0,8),(0,8,163,20,6),(10,0,181,0,5),(12,0,179,0,5),(4,8,163,16,5),(14,0,177,0,4),(16,0,175,0,8),(0,16,166,9,6),(1,16,166,8,5),(19,0,172,0,4),(24,0,167,0,7),(16,8,163,4,5),(8,16,166,1,5),(25,0,166,0,4),(9,16,166,0,4),(20,8,163,0,4),(32,0,159,0,8),(1,32,30,128,5),(35,0,156,0,4),(40,0,151,0,5),(48,0,143,0,5),(56,0,135,0,4),(128,0,63,0,8),(130,0,61,0,5),(4,128,27,32,5),(136,0,55,0,5),(160,0,31,0,7),(128,32,30,1,5),(32,128,27,4,5),(161,0,30,0,4),(129,32,30,0,4),(164,0,27,0,4),(36,128,27,0,4)]
 def g191autos : Array (List Nat) := #[[],[84,115],[117,67,32],[116,83,32]]
 def g191levels : Nat → Packing
@@ -3127,7 +3305,7 @@ def g191index : Nat → Nat → Option (Nat × Nat)
   | 10 => lookupWord 9 46 4 10 4 2 (key191l10)
   | _ => fun _ => none
 def g191 : Forest := ⟨191,10,fun j => g191samples[j]?.getD (0,0),g191columns,g191autos,g191levels,g191index⟩
-def g251samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffff,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x0,0x0)]
+def g251samples : Array (Bits × Bits) := #[(0x7c5b1073c997e37379da30f398119ee6fb6b9ec3f472bcb960b6e16b764eab308775a6f93b85666e9d3190b2b24d642ca5712b6de7ab3f7906c1699135342a691b3ae0a5aa4ef7bb316cf861cfcc30541d6a6cc4992b1a999615c8e8d911c1e1,0x2118206040004a02130d09680103a002090a061080141a8c00302460220208340600a251588102029c90b010225400202065234404234e080480294178042009180840240246b20a0024c060c50410001a48a084882a181106058840c1114140),(0xcce5a5f376b735aeaefe578ced15d32ecca61663a9af3bd1860bc21b19116b79223f9d41251db7915d2d676e62aaa4f819f9d341f91890478f7c179edecb18b88452ff03ce59b2503e9c1117dab8cd95ebc956b7a216470f30e3a2b3ec2d18bb,0x4842cb022293909020208080c0985104462050200a232050248f580a09002349282c0500277025a04229050a00aa2098018840837118b0c40a78400806c358a084123a0140090810bc8810142aa8e601010152222014470a10a222b02c2818b9),(0,0),(0x615f43b7c5899d56d0ed540d07e5651da134ed341e9bc1f74f237fc0ae8a342e74d0d54381c29b89aafb968c73300f2ad24e70d94c925aaf7c71d97b8e42ee34b1eb0d1c78f57307cdbb8ab0333b96f243ce283ea4988c525a6cf93575cb22d6,0x600508638c1a9f0381c44ce96aa5f40532886e32158a42c5402a7e6c4a89343c9410964685c08b09acb0120c353c06229a6c00c94c92de87444159522882ae0499430c1549527146cd2ac810537252985246622c84980c521a4cf835558922d2),(0x743743261165c64a5893c74b56706899b56f313d76fa70640bd59bea9f4cd6cd40c9796a92725dcea2baccf628444b5fc70e36349d152cf473b98c6d967cf8571ea4949a30a5a9a67c52f2db3fa12e66e966315b35ec80fa603e034c2e56ad7c,0x8e228200012500a04432a202145800c8c044118122412020998581138524c38140cb492802205484420a48e00002411d45001410a1402070b13084088559515204a0a28a24a10ca03050168720812c4621201151314480a8603203082a468c2c),(0xf3d9bb1a8ffcdc97c518eaf4c8cf14e122f0fafd99d5fdca7ef0f64eebb658a39d280ab679b66835384c18039df39cc970c09cab32e75b6d986af50aa1e14f67f56dcf6f41924d79e9e39f3990e7fa0a34138f4a5e417d209f607f101fc4fe09,0x9201861738918010c41062040c8818244620088911c0e1638783100880a45083c120082600262524204640020401ded90000982b30080131d06c4002816148a041658f0100904561e8880e0910f0e60220020e2216414120916065101cc4aa09),(0x8c34b489b6743f0cbbb4f14fa7d16d9fa49b993f9ba2b3789eb911d5e1cd7a6f64e2a177140a8013c504eb6dd8b5e7f7e94f5a351463882a81261e97691b96dcefd6ddbc37c1e3432aa0876640524995f6a595fd43d7d81429dbe94302afe942,0x269c30c1984c0e0408d2577d35632830a8c6a4165540daa693102041644d9ca647426045188a80110514e824d9155760ee46136c04410a2a918614976910825e2b85c52c35a0b36b4200852245520814f6b484dd43c398142959c9430287e142),(0x1bb2ab4aa0e85ba9e596de5ec3ce129b01134cce9757f2d674620576a8bd96bf3a893c9457f0a28da9ccac591d7731877093a6c205d64d4c2bcaa6363cd0b55e770f7a466dfb2a9c82572d4ce3aa90cf64d9c30549ce2fe50b809671629a567c,0xd9639e04222012901869c59f133e18908110146a61f169c201c69140019863c2e851098d7d900098988b54119762026501322c440c64c4e0e9086343c860556368a70222d632a1a145321c6e30c00cc44fdf181498e2ec50a809261621a5474),(0,0)]
 def g251columns : IndexTree ColumnInfo := [(8,0,243,0,7)]
 def g251autos : Array (List Nat) := #[[],[84,115],[99,65],[118,84,115,65],[118,81],[118,84,99,81]]
 def g251levels : Nat → Packing
@@ -3135,7 +3313,7 @@ def g251levels : Nat → Packing
 def g251index : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 def g251 : Forest := ⟨251,7,fun j => g251samples[j]?.getD (0,0),g251columns,g251autos,g251levels,g251index⟩
-def g255samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffff,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0)]
+def g255samples : Array (Bits × Bits) := #[(0x9b665c544a8481c32c829a3849d25a0c2e734bceaece0410b1910c9246b692285657c973ca335d593cb00f0546b90059eb43e97a932728851785431870f031165ac8b80393ba6e576270cc58c906b870841734e15dc89803598ab05c2460a6b1,0x104454110880808228020a2041d8002c08600a02808c02009111060244ac12008614a1024802115108904700443200508241c8821224200116051018407029164080a01212302c0942400010c90428108414142154888803090a9048202086a0),(0xf315668af28fdb1ca228365b7ccc05a0011317731e21482f697635c521d4e57b4580944cacd08190116899ef79421d834fcee4e488905930903982805fb1c61927af17aaf49049a676974192f0d0160363a1bd03830701b0dc1f8281c2dc6123,0x83112a82400c43108201140b24040542001210600e014836084820c40800442b4181104024900000902098cc210099010006246088901220003082011981800902040620cc814002101041843090160043212902810201b054050081825c2101),(0x380526282fa13ac851f4c9c505254980d6e8ec3804b3594a769d93b950ebc251b0d8e2a15610b8154799066089743516386914b45de9a6e1e91c2d64aa4bec2945782990b2d68e61aa4d3cd1b24a6ab680984b4c1298da14a63264e421a50a46,0x184000082381184051a442400021c800c760240c008201086414493150c8805030586481420228050588002082640402084818905528808149002d00020c144045280184104604602a043c40824a60b20098024012185a048212646400810a02),(0x96903da21572f2b1f1c959078994a771bc47364121282ac5966e24786e0f6b8886ae49c27124b27b7242ff2e0094e0b4b1b582696d3c94568c371a6b03b30075a8d6353ad9672c0089eb12ba6325f80dd24d451b8459a7c113618d0b812f118c,0x86100cb01034a2a12848198388d4226018030240202c8a411a0a044824066a838a240842212092185a40cf0a0080e094a530c6680a1400448645526011312024a0c7343889210800016b021a61259805924545098441a1c11120810b812e1184),(0xca830c6ee5a1c1ac77b2c4bb013b84b271c7189edce77b42164b82b2ec44ccc2202552493f52e619512b4f09e2177ba801c291327039cbf4fba1fd7ca29d36ceca40c4508827295a1b45be11b7c00687be220f65622167c80c13fe90c415919,0x1282044674a181cc515204830038803270c71014e5265b22464b9241a4004482002443590d10ca0850630203a411b2a000c201185038c3861ba0d078200d6480c204804048212d4a89449e11258006869a220d60222163c80c12ea00c414819),(0xadcb89db333a54791fc5b16de6a74b1fbdaa5224c4caa060c8434905e130b3e50875189fa3aee40ebf67487ce98db2673644923b555505294552488c144494c2312ef3656d2d51ee39b1b44e04f3d3ec4d148000ab72771f011403179f478e82,0xa991884a13221d3803c5e045a0014312e78660240442614040424905201081f109410899826ca6043646807ca808b20b342020284941850001124c8410049440302c118d6904416438b533460072d3ec490080008b50771c0014031517470802),(0xccf1d170b069949f14600d7679a83ea985e068495997ad010287ff4ea745b576050c4fa9e8e0fabd2497448bd27a5aa8acea4ac0268e4d44dc2df9de452a225ad1457b3d721818b9bf9e05034d50ecb938aed67098a522a72856072e55b8d214,0xce85130b040942f1560095449a91aad8dc0e80b5196a18140955b282345b194266c47298868eeb9221d4601c27a00e8acf04a8036004c04cc8c58ecc43a23d68161791d311c0cb9abcc24434d40e8b9388ed67018a522072852072e55a0d214),(0x442aa5b9d884c622461c21eaaaf556fac8da8923687abbfb99c9c28096422e0eb83cb34c1d8918aec8c55d99f53bc2670104934ee2f27258616b2c55a56fa8970e02486406e9b92b5242282d15890d903f02672424a3e96d3ce1d022fa0aa8e8,0x460a679588446000a40a01aa08c414e80818810338389a92898982c08602320ec02091061180118a88016c815113416481048146a2821250206d8051a4632a958802cc600689381b004a400915810c003602652424a380613ce19002e808a0e8),(0,0)]
 def g255columns : IndexTree ColumnInfo := [(64,0,191,0,11)]
 def g255autos : Array (List Nat) := #[[],[84,115],[117,67,32],[116,83,32]]
 def g255levels : Nat → Packing
@@ -3157,7 +3335,7 @@ def g383d11 (i : Nat) : Nat := 0x540b1d9a02e3804632e686a85e3b342382008507c4a8582
 def g383l11 : Packing := (6,1,6,6,3,8,0,g383d11)
 def g383d12 (i : Nat) : Nat := 0x11b280e4ff
 def g383l12 : Packing := (1,0,6,3,3,0,0,g383d12)
-def g383samples : Array (Bits × Bits) := #[(0xc60dd118c12693bdc,0x727d0084122921c8),(0x7fffffffffffffff95cc2a44f8492746f,0x7ffffffffffffffe00c80e8498c025227),(0xf503f97a55354c080,0xf503f15a451548080),(0x7fffffffffffffff4a9202a30ea296fc7,0x28002a10a2a97e7c),(0x7fffffffffffffffe8508744b7d550001,0x7fffffffffffffffe8500544b4d540001),(0x7fffffffffffffffb0014017ba48c1e31,0x7fffffffffffffffb0000013ba4801e31),(0x18560541a2a3aaac98,0x18520601a222a8ac98),(0x0,0x0),(0x2aed1c8d455748122,0x85d1d44451540102)]
+def g383samples : Array (Bits × Bits) := #[(0x22c0d3a3723e453b61b292904161c19166ba4156452239cb2ce776d1285888036922ca069735ba1c39466bb49cb80c880d6801ee650cd2ea8938a452f08d3169a1612a59384753bad95626662c63076161205bac29b905015369815a61884cb1,0x22a042a308281022412222104041018102a0455c0820218028210490004898014122a802062510400900403480940c80084001804506910881200012c0203148e041211030641239500420000c630440212052a0291101014268811220880c80),(0x3e4782180591e1e8ca415c93fb0e30440ddb7b080a80044a5e58703417b0ed0da2975b6df4e0151155ba1024096257dc7280e61c3739c9924483ab0a0d0a407f268250f5cf15b48886f76ba0ccf46838068d8de07060e07838bc1a040b61c283,0x9028018810161088ac0504223081040850928000290004c425070241b00400822080144b0c0241004a20000482053184202c40808184882448102000d0800b3040a404084018c8080110220c214483800898940502040781814120409604201),(0xc3b0d0243e2c92704a6d0bb89a642e3e324709614c855ba1b03c2574c53f0c84bca3b709607618aaaaca1686a79e094292d1a5b2e1a729d1ef4c761d2455891cd68664af136132ce19aaa19e6c55a2caed1460758145348a6cc923aa16a49516,0xc22070243c088a32102908b09820ae3610c20125cc051d809026055084360c62d8a3320940364922a8484682858e00c384d420b061233141a94434152055010c599024a50348105611a2a11e2441a2c2e41460350145348264c921aa12049512),(0x4138264952b1d12493a4452d72585b389605825093cff11edb60090262cf75191c382db2876b8a708e04945dba40fc5c0117030382d504a579e551698e39d387601c521a9a75d96750089c8958b895e01b82b803f01d0be08606741604bc230c,0x1080c0b03b031008084040c42504188060180103100c00a0a40008040890111041009902b010250040410442a404c140103030210c08ca050a00048c0a8c022200c1018d83149210000148108b815200b021800b00809600202141404b82204),(0x7a0c641d50044e150338db871c0d9c6d8b49b017941b1c71c485efc79a14e6ae159b09d8c200cd085276a758cd18f3623c4db7d00870524c281de7f5fe3e2adc1756b294808a0882ea6a1f2df107bc01d0df010f4d40469e2105ef94c107b239,0xd004201450464809021899a3188eb82288483003841b1c31c500f247991664ae92090048c000c90e723223084509b040f48cd45008304046281cf3843e140e8407928284000804822b6a8b24f004a801d0dd010f4440469e21056a80c1079039),(0xcc62da0a5fa8f5e2c996caf343c42faac6de9a345ff56a94813a6425060416282f4d23c281526277465dd835f65817a533b901ad51024edaaa84a94a69219208d911c25be8aad34a7f39eda22807bafd8e8540012ec5ecf42900c6dcd341c02,0x8452d0021128d5c8c9144a91d1c007ab845a00141d69e1982122246c02041428290423d28902225305595421e41c17a5023985a908040a15a0c4800269208200d9018058b1aa90485c38f99a2803baf58c8040010ec1ece00900c4d4d341002),(0xdaef1c77688221978d1e0c4ad4cf460c43747468370c9781a044ccfb808507cfc7550e6f05834be93d3c1e4e94918217a4e0da637baa95002472c84f89f63e421033ad28de7ab208228bfb0281a229d272553696158289b300da2c9976c32464,0x92e959624882001701040c005417432c02544069252c9701a0048cc280a00e56d4150e31071309c931151f4c9213080304e00a4233c09500a002c04d90b29c403071012c5a3a310c128ab91220a221c27244349605808983008a2c9966812464),(0,0),(0x941a1aee99450a81362f36506691ad42486aa7b56b55a36c2710c35afdccd2f0604110c2892f54d343a9228b60c516b3ea6e18394813263b179331842a516d8adc29c7c000c846f164b52014130d4016a078833106127956c94690a3b81ad1d8,0x4120210904c02803268a2402080b401402a07040a01006405204110294490a020401002d0205402c22800a1400c2280a20c04a14813021a0411310009012188c000460020c0069060300020050540108030832102126010c94480229002c198)]
 def g383columns : IndexTree ColumnInfo := [(1,0,382,0,9),(0,1,332,50,7),(2,0,381,0,9),(0,2,312,69,7),(3,0,380,0,6),(2,1,332,48,6),(1,2,312,68,6),(4,0,379,0,11),(5,0,378,0,7),(7,0,376,0,5),(5,2,312,64,5),(8,0,375,0,9),(0,8,99,276,7),(12,0,371,0,8),(13,0,354,0,4),(14,0,369,0,5),(16,0,367,0,11),(17,0,366,0,8),(18,0,365,0,7),(19,0,364,0,5),(18,1,332,32,5),(24,0,359,0,8),(25,0,358,0,5),(28,0,355,0,7),(20,8,99,256,5),(32,0,351,0,11),(33,0,350,0,8),(32,1,332,18,6),(35,0,348,0,5),(34,1,332,16,5),(44,0,339,0,5),(49,0,334,0,7),(48,1,332,2,5),(33,16,326,8,5),(56,0,327,0,5),(64,0,319,0,11),(65,0,318,0,7),(66,0,317,0,8),(67,0,316,0,5),(65,2,312,4,5),(70,0,313,0,7),(34,64,29,256,5),(256,0,127,0,9),(0,256,23,104,7),(264,0,119,0,6),(256,8,99,20,6),(8,256,23,96,6),(268,0,115,0,5),(260,8,99,16,5),(280,0,103,0,5),(272,8,99,4,5),(288,0,95,0,8),(289,0,94,0,5),(40,256,23,64,5),(304,0,79,0,5),(320,0,63,0,8),(322,0,61,0,5),(258,64,61,0,5),(352,0,31,0,7)]
 def g383autos : Array (List Nat) := #[[],[84,131,98],[101,66,16],[100,131,82,16],[82,129,48],[101,100,131,98,129,48],[100,49,128],[101,84,131,66,49,128]]
 def g383levels : Nat → Packing
@@ -3202,11 +3380,8 @@ set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s15_3_0 : block g15 3 0 1=true := by
-  apply cellsBlock (ar:=4) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s15_3_0 : block g15 3 0 1=true :=
+  @streamBlock #[0,0,0,0] g15 3 0 1 4 (by decide +kernel) (by decide +kernel)
 theorem bl15_3 : block g15 3 0 1 = true := s15_3_0
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
@@ -3253,28 +3428,19 @@ set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s31_5_0 : block g31 5 0 1=true := by
-  apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s31_5_0 : block g31 5 0 1=true :=
+  @streamBlock #[0,0,0,0,0] g31 5 0 1 5 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s31_5_1 : block g31 5 1 2=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s31_5_1 : block g31 5 1 2=true :=
+  @streamBlock #[0x1b,0xcb,0x3,0,0,0] g31 5 1 2 6 (by decide +kernel) (by decide +kernel)
 theorem bl31_5 : block g31 5 0 3 = true := (@block_merge g31 5 0 1 2 s31_5_0 s31_5_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s31_6_0 : block g31 6 0 1=true := by
-  apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s31_6_0 : block g31 6 0 1=true :=
+  @streamBlock #[0x1ef7bcf,0xfbf7edf,0xf7f77f,0x3d29f,0x1f] g31 6 0 1 5 (by decide +kernel) (by decide +kernel)
 theorem bl31_6 : block g31 6 0 1 = true := s31_6_0
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
@@ -3335,11 +3501,8 @@ set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s111_6_0 : block g111 6 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s111_6_0 : block g111 6 0 1=true :=
+  @streamBlock #[0x2d,0x7a,0,0,0,0] g111 6 0 1 6 (by decide +kernel) (by decide +kernel)
 theorem bl111_6 : block g111 6 0 1 = true := s111_6_0
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
@@ -3382,28 +3545,19 @@ set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s189_6_0 : block g189 6 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s189_6_0 : block g189 6 0 1=true :=
+  @streamBlock #[0,0,0,0,0,0] g189 6 0 1 6 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s189_6_1 : block g189 6 1 2=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s189_6_1 : block g189 6 1 2=true :=
+  @streamBlock #[0x1b,0x3,0x3,0x19,0,0,0] g189 6 1 2 7 (by decide +kernel) (by decide +kernel)
 theorem bl189_6 : block g189 6 0 3 = true := (@block_merge g189 6 0 1 2 s189_6_0 s189_6_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s189_7_0 : block g189 7 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s189_7_0 : block g189 7 0 1=true :=
+  @streamBlock #[0xf247bcf,0x1bf7d6df,0x3efd75f,0x7bcf,0x4529f,0x1f] g189 7 0 1 6 (by decide +kernel) (by decide +kernel)
 theorem bl189_7 : block g189 7 0 1 = true := s189_7_0
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
@@ -3455,79 +3609,52 @@ set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s191_6_0 : block g191 6 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s191_6_0 : block g191 6 0 1=true :=
+  @streamBlock #[0,0,0,0,0,0,0] g191 6 0 1 7 (by decide +kernel) (by decide +kernel)
 theorem bl191_6 : block g191 6 0 1 = true := s191_6_0
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s191_7_0 : block g191 7 0 13=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s191_7_0 : block g191 7 0 13=true :=
+  @streamBlock #[0,0,0,0,0,0,0xf] g191 7 0 13 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s191_7_1 : block g191 7 13 15=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s191_7_1 : block g191 7 13 15=true :=
+  @streamBlock #[0x396c,0xffdb6,0xd9,0x659,0x39,0x195,0x1ed99,0] g191 7 13 15 8 (by decide +kernel) (by decide +kernel)
 theorem bl191_7 : block g191 7 0 28 = true := (@block_merge g191 7 0 13 15 s191_7_0 s191_7_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s191_8_0 : block g191 8 0 7=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s191_8_0 : block g191 8 0 7=true :=
+  @streamBlock #[0xfffffff,0xfffffff,0x7f8ff,0xfffff,0x2dfffff,0x19659659,0x16872] g191 8 0 7 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s191_8_1 : block g191 8 7 61=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s191_8_1 : block g191 8 7 61=true :=
+  @block_merge g191 8 7 36 25 (@streamBlock #[0x3b956d9b6ce9b6db6db96db6db6db6dfffbde,0x3ff9b6dbdb6db6f5b6db6db6db696db96dbffd7fbc,0x3a4a66c1b96db6db96fce58,0x1dcb56dcbdb662c6cbb6dcb72db78,0x1cc558cbd9c8ce4dcb6dfd,0x7bc4f4e2f8d13f2e5fffcd,0x7f126be4d8ef1a7ca5c4e5fcbfc32cb265932cb2cb2cb2c99,0x326464cf99659] g191 8 7 36 8 (by decide +kernel) (by decide +kernel)) (@streamBlock #[0xb56abb759b63938b97136db6db3fb6db7eeff9685f78,0x5a56fe9559b61c9b6ff24b6dfcb6ebf965effffbd2dbe,0x2d76ab5adbadb1ba14ad98b6dd6add6a50ea,0xa66c6656db6d8db6dd6db6db6e852fcfc85,0xab4e876bd8cc52969cb6ea96d,0x5a76ba6d68d9b6dc9d92c1696db73f2e7,0xb5d6aed3319431b90df250d7f2c75c98d659659659,0x28a39] g191 8 43 25 8 (by decide +kernel) (by decide +kernel))
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s191_8_2 : block g191 8 68 32=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s191_8_2 : block g191 8 68 32=true :=
+  @streamBlock #[0x66db72dc5b6db6db6db6db6db6db6db6cff,0x3ccb6cb6d9bf36cfcfcf9cb2f6db6db7eff,0x15b6db6db6db6db6db6cda,0x3e7e6d6db6dd6db6cdb6db6dd65c9e,0x3735b64ae5595,0xdb96db6dd7,0x6db6ed99,0x1c9cbe4f90eab6e4e4e59ad5565cb3f2c9c5c8c5c59cd6d972cfcb2cccb2e59f,0] g191 8 68 32 9 (by decide +kernel) (by decide +kernel)
 theorem bl191_8 : block g191 8 0 100 = true := (@block_merge g191 8 0 68 32 (@block_merge g191 8 0 7 61 s191_8_0 s191_8_1) s191_8_2)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s191_9_0 : block g191 9 0 3=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s191_9_0 : block g191 9 0 3=true :=
+  @streamBlock #[0x15c35dffef5ffef57fe9fffe7ffbdfefff,0x5709ffffd5fffd5eff97ffcafffff,0x15c357ffdd7ffdd6ad5f5fff,0x15c356ffd5bff56adff,0x570daef5debbd7fff,0x15c36bbd7fff,0x570d771] g191 9 0 3 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s191_9_1 : block g191 9 3 9=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s191_9_1 : block g191 9 3 9=true :=
+  @streamBlock #[0x4d6db6dffffb6db654b6db6dbf8fc7e3f16db6db487fffdf7fc0842d4bfffc9bfe0421692ee9f2a7fc770b5ddebf7dffff2b854d7ffffb7df7ff168d5ebffdfe77fc014a7f83ffffff7b,0x2b7f3bffefffddb4ed33f769da67f1690fbfd1bf696d12f7f8687fed2da12e4fa497fb4b68ef5bfdbfff696d0ffaffb7ffed2da5a5b4fff7ffdf,0x1d76febff7fedfd61775db56ef1bc5de3f16fe378b690ffffbffa5ed77a1452ffff7f0fffa5ed77a9449774fbfa5ffdded77a77775fefffbbdaef5dddd3ef6bbdffffffff7ff,0x1b6fdf5db6fffebb6da4adb6edb693bb6dbbbd7f47fc3fee9ae94d7776f5fc3e1f774d74a6bba5277ae94bba5d35d29a77777b5d35ddd2ee9ffff,0x19ebf95a5dd3fff5a6ba5256969774a4eed24bba7d3e94ba5dd2909d9dd3e9f4a5d2ee94a277725dd2949dd2ee9ffff,0x1b4d7f26b7ffffff5ba9084adb6108420a2da410842108521084210a514a410842148521fffffff,0x4d7f7d487fffffea43521095210842105148421084214521fffffff,0x5afe3ffffff7b] g191 9 3 9 8 (by decide +kernel) (by decide +kernel)
 theorem bl191_9 : block g191 9 0 12 = true := (@block_merge g191 9 0 3 9 s191_9_0 s191_9_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s191_10_0 : block g191 10 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s191_10_0 : block g191 10 0 1=true :=
+  @streamBlock #[0x7bfbfdfbffeff,0x3def7bcf,0x3dfdfefdff,0x7dfb6df,0x1f7edf,0x777f,0x7f] g191 10 0 1 7 (by decide +kernel) (by decide +kernel)
 theorem bl191_10 : block g191 10 0 1 = true := s191_10_0
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
@@ -3583,93 +3710,60 @@ set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s383_8_0 : block g383 8 0 23=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s383_8_0 : block g383 8 0 23=true :=
+  @streamBlock #[0x5,0xa,0x5,0xa,0,0,0x32,0] g383 8 0 23 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s383_8_1 : block g383 8 23 2=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s383_8_1 : block g383 8 23 2=true :=
+  @streamBlock #[0,0x3,0,0,0,0,0x3,0,0] g383 8 23 2 9 (by decide +kernel) (by decide +kernel)
 theorem bl383_8 : block g383 8 0 25 = true := (@block_merge g383 8 0 23 2 s383_8_0 s383_8_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s383_9_0 : block g383 9 0 9=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s383_9_0 : block g383 9 0 9=true :=
+  @streamBlock #[0x2aaaaaa9e7f9e,0x2dfa8a86a6bdbff455,0xf5ddceeeeeef68a7,0x1294a290a7eadb49,0x68521084356d5f,0x23514a28adb7fd9,0x26a59659659fff659659659,0x15966f16593ffd9] g383 9 0 9 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s383_9_1 : block g383 9 9 75=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s383_9_1 : block g383 9 9 75=true :=
+  @block_merge g383 9 9 36 39 (@streamBlock #[0xdbf6db6db3,0x5f6cdcb91b,0x16ffff8cdb,0x2dff639,0x5fff0,0x2d6c72db,0x5ad9636db32,0x16b6db6e5b0e464cb2c996432,0] g383 9 9 36 9 (by decide +kernel) (by decide +kernel)) (@block_merge g383 9 45 36 3 (@streamBlock #[0x533515685fff6ca036c734720db6ccdb36db6dd6e87f28,0x1831b6c330b4b6b93bffedb6db36db36c72e39286db6edb680cb2a50aa,0xed05282d2b6effff632828006ca6a0b4a335cd05a,0x5aa2d75b33969dcfffeedb615c8db66302b6dbab4adb66b9a603d,0x16a8b41c55a1fffffe155c8e3928e415d682d05f9734,0x56e72b9ea969eda7fffb02b912ae4e5c7295368b4a3b2f4,0x66dd76c7524d5375bada4fdb6ccdb0dd702f973b66cdab70b6d6db4a1d97a,0x6cdad3aed3b76bb559d6ddae6edf99b3677e5429b0df2e4ccdba57716eb758db3,0x6401401f8] g383 9 45 36 9 (by decide +kernel) (by decide +kernel)) (@streamBlock #[0x36d8,0x50,0x1c7,0x36dd,0x2d,0x247,0x147,0x28,0] g383 9 81 3 9 (by decide +kernel) (by decide +kernel)))
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s383_9_2 : block g383 9 84 7=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s383_9_2 : block g383 9 84 7=true :=
+  @streamBlock #[0x1b6,0xdb,0xf,0x6cb,0x7fd,0xf,0xf,0x36db72,0x7cb973f36bb932cb2,0] g383 9 84 7 10 (by decide +kernel) (by decide +kernel)
 theorem bl383_9 : block g383 9 0 91 = true := (@block_merge g383 9 0 84 7 (@block_merge g383 9 0 9 75 s383_9_0 s383_9_1) s383_9_2)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s383_10_0 : block g383 10 0 5=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s383_10_0 : block g383 10 0 5=true :=
+  @streamBlock #[0x3c878043c3c3c120907070a140a01e1e,0x1f6b62f6bfed23f6bd6bd6be84d09a1e87b6adb57ed7fdaf,0xb6db6db6dfb6dfb56dab6da5b4b696d2db7edb7ed,0x28ef477a3bd1dc3b877a3bd1de8ef477,0xa25344a6894d12909484a6894d129,0x16bcec56ffad0a2b7fd6ffadff,0xffa145fefffff851fff659,0x3fd79d8ffd659] g383 10 0 5 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s383_10_1 : block g383 10 5 16=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s383_10_1 : block g383 10 5 16=true :=
+  @streamBlock #[0xae749a6da4ebdffb7e6fdb636f6db636317589b18b6dbac77da96338c1ae3bf63fe1c571c0e2b8e46d70e2b8e46a6d038915c73a6a6ffbfc529d5c7005007fbfdffffeff3,0x2b6d4f6da8287d6dbadb4b16dd001b7bbb86f96d5bf7621770df5b56bc84e11e6d2910bb8490a36d5042ee1a8fdb6ad4d74bd4d4a4b6ad5b56fffffd050,0xe9726b6dba6a6bf6db6fcdba9b5ea6b6dba6a6bf8b6db631adb774d4db5293a53537c974a6a6df3a53534245d2a9251774aa474a6a55ed74a6a474a6a6d2ba535355d29a9ae94d4dfff7d3ff,0x2ee2c5988a5fbb6934a7ed1addb75a582c5db490add0ba53eff528a53ee8f8514a7636d4a2979d8da1449793c9289179028a528912514851128a53efe8a7ffeda4d2d,0x442e45e117948515af42f55ffff5e685c14521456b82538517485105e529448bca4289179485122f20a245e41448bca428917948515af42f6d7,0xf211e47922f2774d44e3eec48b9e48bc9dd24471e5c8bcb6343b125e4f3b122f279d891793cec48bc9e76245e4ee9a89dc,0x1b10bb635ec42f3b1bfedfffbce8f1af2f5ec42f3b1bf1bc5b9e27c5f17b170bcec6d08f10a7637623c42f3b1bb1f0bcec6fffdffffff,0x177458b9bfffff6de5f62966716e8f1a977058a420b1963f1ac7858b8dbef3f7f2c42fe9f7b5e5f629a9a9ffffffb5965966b359,0x2869dfe7ffdc7fffde33] g383 10 5 16 9 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s383_10_2 : block g383 10 21 20=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s383_10_2 : block g383 10 21 20=true :=
+  @streamBlock #[0x7d8b2acf17595413f3ffffeadb962cc2b58b3628e7f16d7e35cdb6db6db6db6db6db6db6db6db6db6db6db6db6db6db6db6db6f34ad8bd2eea9a0dfe001e,0xd8edb66dcb174af8fc5b36d3fedb6db6d9b758b1d5e2ed98b6db778b36ecaadb6db51dfed9b6dcf1ac91b6db6e2c8e6ffcb6dbb488277b6bad5aa7a37f8,0x1c0b8053baaff8000ea77147c4000a553fc7701c3b8a2b8,0x1b6dd6eec6db36db6efc42db6db6db6e58b36936dd6db6da5b6db6db636db6fe2cbf2551b7ffeedb6cdb6db314b7062e91db6dfb8fcaaa6da0d2bd097b54,0x29d36d2da14e73fffed25c3db5687487b44d0f6d2aa9cff4d097b45aa0e9097b54,0x3834a777a29273fffc340bd775a1eb1380d2bbbbd5553bbfc3408ef6824c4e,0x74685e9d2ee57a9257fd1229136a420daaf46351a08d2d74bbad753bbfffd14bba44868454d39a8d,0x36ddf7adb7f1b6deadb6db6c256dde2ac6b6dd62f8a5b6d879a54bde2ee2ae2ea777ffcf10bbd0c7e37e20c5262717,0x3b6eafc5b3f92856dd278b66287b6ffffdbf7febf17278b6e862d9862e2cb16dd2b16cc51dedbf977b6e2d7dfefffd3a7bd31b6db,0xfa757dc7ef71b] g383 10 21 20 10 (by decide +kernel) (by decide +kernel)
 theorem bl383_10 : block g383 10 0 41 = true := (@block_merge g383 10 0 21 20 (@block_merge g383 10 0 5 16 s383_10_0 s383_10_1) s383_10_2)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s383_11_0 : block g383 11 0 1=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s383_11_0 : block g383 11 0 1=true :=
+  @streamBlock #[0x7ffd2977b7fcff,0,0x1fff4a5dedff,0x2db6db6d,0x77777777,0x1294a529,0x1fff,0x59] g383 11 0 1 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s383_11_1 : block g383 11 1 5=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s383_11_1 : block g383 11 1 5=true :=
+  @streamBlock #[0x1b6db6db6db6db6db6db6dbf79fe0224445c0082004922403797c61ca72bd03ccbe0d407ef3,0x1e6cffdb3f367789b717fff7ffedf45d1ae8bdae10408544d4894da7dfbfef6dfb5edb6dbff6ffffdf,0x538b5ebe9ca75b5edb5edb5edb5eda729cb5cb5cb5edb5edb5edb5ed,0x37e337fe7edf8dbbc462fefffbdfff46a35dea35c20817044d4897a91effffdfff,0x92426a4f4922524894d489a9135226a4492249135226a4,0x410104f08204102081040820410208104,0x112208ba35fe8911122745d1ae8ba35d1746ba2e8d7,0x7bc7fffbfde562ac5f1ffffffffff,0x3de7ef3] g383 11 1 5 9 (by decide +kernel) (by decide +kernel)
 theorem bl383_11 : block g383 11 0 6 = true := (@block_merge g383 11 0 1 5 s383_11_0 s383_11_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s383_12_0 : block g383 12 0 1=true := by
-  apply cellsBlock (ar:=8) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem s383_12_0 : block g383 12 0 1=true :=
+  @streamBlock #[0x3fd2977b7fcffff,0x3fd2977b7fcff,0,0xff4a5dedff,0xb6db6d,0x777777,0x4a529,0xff] g383 12 0 1 8 (by decide +kernel) (by decide +kernel)
 theorem bl383_12 : block g383 12 0 1 = true := s383_12_0
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
@@ -3718,7 +3812,7 @@ def deadd13 (i : Nat) : Nat := 0x22dfc5b6a90e86821a4efdb54c724410d1f7f16a63a18e0
 def deadl13 : Packing := (4,1,7,5,4,8,0,deadd13)
 def deadd14 (i : Nat) : Nat := 0x17e2b6526070604013ff
 def deadl14 : Packing := (1,0,7,2,4,0,0,deadd14)
-def deadsamples : Array (Bits × Bits) := #[(0x1c8d4051c0de200a4a1521a9a552,0xb404180ce00084a38408fe044),(0x7fffff112d21048047165d40186c406a3,0x7ffffe150821240006161940101401ea3),(0x7fffff8afe10211224b0e6a32141b6019,0x10a64100310202066a522c394010),(0x38080ec9485c608946ad24109ee,0x888e488c4c408142cd20085aa),(0x7fffffdf433cb47193ff526432d701a11,0x7fffffdf4330a47113bf520432d701a11),(0x7fffff0509d24528184c731546a50d729,0x7fffff0209920500184463147b2401709),(0x102a12c429c39cba53fcd22d0108,0x102a10c429c19c9a437cd22d0108),(0x19253f877478f08d004086a8e2,0x19241f867478b084004086a8e2),(0x7602e02a04aa311a8880d9872d4,0x340661a022a230188800d906054)]
+def deadsamples : Array (Bits × Bits) := #[(0xf854605d026923a5a16008862c9d18d42fd85e54d221898f1e440284a107a02910c3e03c06c40d2642ca74f54627022c11e389d9b43b30c961ca72386ce81500aa210d1ba1a121108a6c99348979d054ac200727ac054c0970110780155ad581,0x6844620d0040231585204884208800c4270824141201090814040082a10700282003e02402c4084602ca04a440240a1091218919100a2084314a220840a00480aa210819a02120100a4409048968c05484200702a805440920100380144a9480),(0x80b20c31f72bfc4e1481d27000d43c9c5bd438a9c5e0286040f054f111d001ce10920229bde170b8d339029e2bcac4cd494fb74d1052452141a61c5b9ca1e642f40c600258428f0e5c00df481e03202a204cd465e10fe01206e82c7b03150603,0x80100c30e6089040109182600012282018c41889c5e0204002b0604000c009861080028b1c2120a0d12000120908c00d005a724402504200402010501c01c208540860025840090e1400964816012008204cd0254102a00206a0247b01150201),(0x12ce100c308544478a85796a2341d206e4242e31335abb35943abb40be28c8e05c4c115123137950052a02a9ba0d31c096458c656cc338623e92230683d8962194d5145c2aa62229438824d8e06246d0cd124850733918c390189888a426380a,0x10ca0000108540870900790a0240900460282200221a991490081a0028289000cc41010021184410080a0a28a20020c0200184206c0128621092200a03d8103080d5145c02a2022143880090804206d04d100840322918c190088800a4221002),(0x8628ebbd17000228c83c0291b729e17b3643984a392a815889878936d04e41b82b8e28807cc302855ead3105d9868885c748c2b0724ae81086518e259124cd4278a18b4aa01db88524c3a3435a0814469349110c18f0c24c2a8052bd88818268,0xc2206a1d05000020401c0090e509051303449848110100480001811490070429238c000818c508010485900541c68805c240409012420000024186258024450270208b02a00da0842041a3414a08100690490104085040042a8052bc00818028),(0xbc8ccda8781e4d8151cd3cf93a4a0a01509a42078c1bc4a783ea4aec6c7bbbd02ef85be130b1750bcd872a062d01842a34826040203d5b99ac8899721d47b82106b4f88001d04ee6f42e103eb14e0a090b95e84905a08ef7a2230402e2b14bc5,0x148981a0109a5c8210c1a4690a42220050930202c418c4a7837a48680e50b9d00c601bc02020f518c9002a002c1124282402304220255b598c9019921c51b8010494708001d04e62d42a103a30060a090b94e84905a08af280230402e2304b45),(0xd3b19712becef4647857054f8773c68492608a46265cd6cd0106c449284294958830b40e8328a4102841c46a63b66493288c7290c714876750b08cb0eb0a532e014ce7e24f9c08720240400006971f885be46b00080a21145aa7f52cf42a8012,0x92218c003e8654007015040a0c73c50280c0084821449285810a8400004080918c301008002824100801c000230200c0688c40804110046300b00cb28307502a0004c5624f9c086200004000021315805bc46800000a00145205f42ce0200002),(0x3145d24845746a93b60987114c89950ee90ab5809889781e716b0d141d9e036fea797f20c896480c8b565809c5575a81eabcad03980701be24b7e8d7401960b32336416db2f0c4c050f169960250e8b311988b92828b0074bd455ad232c2112c,0x2307720c00346283a400011d4c09950fa108a4001a095004514a0014181e2261ab3d3060c0d6480a2ac41009e4571880ea848181d90321bc24d38a860208103323340169a2b084c040f169960050c8b211800b9082890074b8455a803282012c),(0x49615339cc24bb41a658244591d020101222d0f578b5376254a121290a30cd5c4e2ad1d6dabfa9e032f022500c91031b32331a7a9ace0ca4e96243014a4009cd0d2a3210b66014de852533c420acc80ff443ad9cc5d0f4808cd621151170ac54,0x4900539a4030aa408668006591882010120251355ca1242200a1212102144d6e020a42d6d2878b6832b420400cb9813312321a4a924e408ce04943054c0001c10d2a2200b040149c8425334420acc80fa003859cc5d0e4000cd201111150ac54),(0x2108654280dbc21c532263cad6a2ab60a053058994f658a43b3dd89384745a04932387065124c385d01899e2cc083e3c1e3327061d61ca921a4965c8583262f4485320b5c04953298d1f02098424a39520b6148b236021a80528c3236c545ab4,0xc0001428049001c03a04a4012802a200013019184320c200a34088304a0580410028702010083a440180cc2080827381411260a0400ca0098085048489022c408432094004053098d0e0008842422012032140b21202188052801030c545a90)]
 def deadcolumns : IndexTree ColumnInfo := [(1,0,510,0,12),(0,1,460,50,8),(2,0,509,0,12),(0,2,440,69,8),(3,0,508,0,9),(2,1,460,48,7),(4,0,507,0,12),(0,4,369,138,8),(5,0,506,0,8),(6,0,505,0,9),(4,2,440,65,7),(2,4,369,136,7),(7,0,504,0,7),(5,2,440,64,6),(8,0,503,0,12),(0,8,227,276,8),(9,0,486,0,8),(10,0,501,0,8),(12,0,499,0,9),(8,4,369,130,7),(4,8,227,272,7),(14,0,497,0,7),(10,4,369,128,6),(15,0,480,0,4),(16,0,495,0,13),(0,16,486,9,10),(17,0,494,0,11),(16,1,460,34,7),(19,0,492,0,8),(16,4,353,138,7),(21,0,490,0,7),(21,2,424,64,5),(24,0,487,0,11),(8,16,486,1,9),(25,0,486,0,8),(9,16,486,0,8),(27,0,484,0,5),(11,16,484,0,5),(24,4,353,130,6),(29,0,482,0,5),(26,4,353,128,5),(32,0,479,0,12),(0,32,94,385,8),(32,1,460,18,7),(1,32,94,384,7),(35,0,476,0,7),(34,1,460,16,6),(36,0,347,0,8),(39,0,344,0,4),(40,0,471,0,8),(49,0,462,0,8),(48,1,460,2,6),(50,1,460,0,5),(56,0,455,0,7),(64,0,447,0,13),(0,64,189,258,10),(66,0,445,0,11),(2,64,189,256,9),(67,0,444,0,8),(66,1,396,48,6),(70,0,441,0,8),(69,2,440,0,5),(74,0,437,0,7),(74,4,305,128,5),(80,0,431,0,11),(83,0,428,0,7),(96,0,415,0,9),(96,1,396,18,6),(98,1,396,16,5),(128,0,383,0,13),(128,1,332,50,7),(3,128,344,36,6),(132,0,379,0,11),(4,128,347,32,9),(133,0,378,0,7),(134,0,377,0,8),(132,2,312,65,6),(133,2,312,64,5),(136,0,375,0,9),(128,8,99,276,7),(140,0,371,0,8),(132,8,99,272,6),(138,4,369,0,5),(144,0,367,0,11),(152,4,353,2,5),(160,0,351,0,11),(160,1,332,18,6),(162,1,332,16,5),(164,0,347,0,8),(36,128,347,0,8),(172,0,339,0,5),(176,1,332,2,5),(180,0,331,0,5),(192,0,319,0,11),(198,0,313,0,7),(256,0,255,0,12),(258,0,189,0,8),(260,0,251,0,8),(264,0,247,0,9),(256,8,227,20,7),(8,256,151,96,7),(268,0,243,0,7),(260,8,227,16,6),(273,0,238,0,7),(280,0,231,0,8),(276,8,227,0,5),(288,0,223,0,9),(256,32,94,129,7),(32,256,151,72,7),(257,32,94,128,6),(296,0,215,0,7),(40,256,151,64,6),(304,0,207,0,6),(288,16,198,9,6),(273,32,78,128,5),(56,256,135,64,5),(320,0,191,0,11),(256,64,189,2,9),(322,0,189,0,8),(258,64,189,0,8),(324,0,187,0,7),(324,8,163,16,5),(321,32,30,128,5),(388,8,99,16,5),(168,256,23,64,5),(224,256,23,8,5)]
 def deadautos : Array (List Nat) := #[[],[118,130,81],[100,131,82,16],[118,133,100,131,50,33,16],[116,83,32],[118,116,83,130,49,32],[118,133,33,48],[82,129,48],[118,133,116,83,82,81,80],[116,50,129,80],[100,49,128],[118,100,83,130,81,128]]
 def deadlevels : Nat → Packing
@@ -4040,7 +4134,7 @@ theorem lower_forest9 {g : Forest} {old m hints r s i j} (previous : Known old)
 
 def n15d3 (i : Nat) : Nat := 0xa3df
 def n15l3 : Packing := (2,0,0,0,0,3,0,n15d3)
-def n15samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffff,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0)]
+def n15samples : Array (Bits × Bits) := #[(0xd697a7b9ef407673*repeatSamples,0x820800199b8db652*repeatSamples),(0xfdf6dfff9763f87f*repeatSamples,0x1112104404524829*repeatSamples),(0xebfffeeffcbf8f9c*repeatSamples,0x8248822282049514*repeatSamples),(0x93fbe35669bc0fe0*repeatSamples,0x6d8751492c1b6ae0*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples)]
 def n15columns : List ColumnInfo := []
 def n15autos : Array (List Nat) := #[[],[48,33]]
 def n15levels : Nat → Packing
@@ -4058,18 +4152,12 @@ theorem geomn15 : graphValid n15 (boundsBefore known383) = true := by
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn153_0 : block n15 3 0 1=true := by
-  apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn153_0 : block n15 3 0 1=true :=
+  @streamBlock #[0,0,0,0,0] n15 3 0 1 5 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn153_1 : block n15 3 1 1=true := by
-  apply cellsBlock (ar:=4) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn153_1 : block n15 3 1 1=true :=
+  @streamBlock #[0,0,0,0] n15 3 1 1 4 (by decide +kernel) (by decide +kernel)
 theorem alln153 : block n15 3 0 2=true := (@block_merge n15 3 0 1 1 sn153_0 sn153_1)
 theorem tablesn15 : checkedTables n15 3 := by
   intro k hk
@@ -4089,7 +4177,7 @@ set_option maxHeartbeats 0 in
 theorem validn15 : Known knownn15 := extendKnown_ok valid383 lown15 (by decide +kernel)
 def n23d3 (i : Nat) : Nat := 0xa3df
 def n23l3 : Packing := (2,0,0,0,0,3,0,n23d3)
-def n23samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffff,0x0),(0x7ffffffffffffffffffffffffffffffff,0x7ffffffffffffffffffffffffffffffff),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0)]
+def n23samples : Array (Bits × Bits) := #[(0xd69fa7b9efdc73f3*repeatSamples,0x8208001093849252*repeatSamples),(0xedfedeef96e3fc9f*repeatSamples,0x1010000d08492889*repeatSamples),(0xebf7feeffc238f1c*repeatSamples,0x834a92628616d714*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x93fbe35669bc0fe0*repeatSamples,0x6d8751492c1b6da0*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples)]
 def n23columns : List ColumnInfo := []
 def n23autos : Array (List Nat) := #[[],[16,66]]
 def n23levels : Nat → Packing
@@ -4107,18 +4195,12 @@ theorem geomn23 : graphValid n23 (boundsBefore knownn15) = true := by
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn233_0 : block n23 3 0 1=true := by
-  apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn233_0 : block n23 3 0 1=true :=
+  @streamBlock #[0,0,0,0,0] n23 3 0 1 5 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn233_1 : block n23 3 1 1=true := by
-  apply cellsBlock (ar:=4) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn233_1 : block n23 3 1 1=true :=
+  @streamBlock #[0,0,0,0] n23 3 1 1 4 (by decide +kernel) (by decide +kernel)
 theorem alln233 : block n23 3 0 2=true := (@block_merge n23 3 0 1 1 sn233_0 sn233_1)
 theorem tablesn23 : checkedTables n23 3 := by
   intro k hk
@@ -4141,7 +4223,7 @@ def n31l5 : Packing := (3,1,3,0,0,4,0,n31d5)
 def n31d6 (i : Nat) : Nat := 0x63441680fbf
 def n31l6 : Packing := (2,0,3,0,0,5,0,n31d6)
 def hashn31l6 (i : Nat) : Nat := 0xd5f40780000649c0
-def n31samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffd4f,0x7fffffffffffffffffffffffffffffc47),(0x3f0,0x390),(0x7fffffffffffffffffffffffffffffc3f,0x2e),(0x7ffffffffffffffffffffffffffffffc5,0x7ffffffffffffffffffffffffffffff41),(0x2ba,0xb8),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x0,0x0)]
+def n31samples : Array (Bits × Bits) := #[(0xa8d01f003e2ab86f*repeatSamples,0x30086318c628282d*repeatSamples),(0x75640007fe1be3f0*repeatSamples,0x4b18c631803c350*repeatSamples),(0xd79c00ffc199468f*repeatSamples,0x820e318c6318048b*repeatSamples),(0xcb3fe0f801e4457c*repeatSamples,0x7840c6318ce04074*repeatSamples),(0xfbafff0001649b93*repeatSamples,0x821718c631049382*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples)]
 def n31columns : List ColumnInfo := [(1,0,30,0,4),(2,0,541,0,4),(4,0,539,0,4),(8,0,535,0,4),(16,0,527,0,4)]
 def n31autos : Array (List Nat) := #[[],[65,50],[16,66],[64,65,66,67],[32,67],[48,65,50,67],[48,33],[32,49,66,67],[16,33,50,67],[64,49]]
 def n31levels : Nat → Packing
@@ -4161,26 +4243,17 @@ theorem geomn31 : graphValid n31 (boundsBefore knownn23) = true := by
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn315_0 : block n31 5 0 3=true := by
-  apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn315_0 : block n31 5 0 3=true :=
+  @streamBlock #[0,0,0,0,0] n31 5 0 3 5 (by decide +kernel) (by decide +kernel)
 theorem alln315 : block n31 5 0 3=true := sn315_0
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn316_0 : block n31 6 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn316_0 : block n31 6 0 1=true :=
+  @streamBlock #[0x1b,0x5,0x7,0x9,0x1,0x3] n31 6 0 1 6 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn316_1 : block n31 6 1 1=true := by
-  apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn316_1 : block n31 6 1 1=true :=
+  @streamBlock #[0xf,0xf,0xf,0xf,0xf] n31 6 1 1 5 (by decide +kernel) (by decide +kernel)
 theorem alln316 : block n31 6 0 2=true := (@block_merge n31 6 0 1 1 sn316_0 sn316_1)
 theorem tablesn31 : checkedTables n31 6 := by
   intro k hk
@@ -4206,7 +4279,7 @@ def n187l5 : Packing := (1,1,1,0,0,0,0,n187d5)
 def n187d6 (i : Nat) : Nat := 0x10c2e3f7f
 def n187l6 : Packing := (2,0,1,0,0,3,0,n187d6)
 def hashn187l6 (i : Nat) : Nat := 0x4
-def n187samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffbc3,0x2c2),(0x7fffffffffffffffffffffffffffffa1f,0x7fffffffffffffffffffffffffffff81d),(0x0,0x0),(0x7fffffffffffffffffffffffffffffc27,0x7fffffffffffffffffffffffffffff807),(0x57c,0x538),(0xb8,0x28),(0x0,0x0),(0x758,0x750),(0x0,0x0)]
+def n187samples : Array (Bits × Bits) := #[(0xffc08e2ff1ed699*repeatSamples,0x421008420a0c4219*repeatSamples),(0x7f318c6de69750*repeatSamples,0xbdef318c65e29540*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0xf0003e0f8eeb2d32*repeatSamples,0xd6b43e0b8e8b0530*repeatSamples),(0xff83c0af51f9692a*repeatSamples,0x294bc0a451702802*repeatSamples),(0x3fff0a2c200e7*repeatSamples,0x318ea5a0a0c200a6*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x3ff5f5c00324c*repeatSamples,0xce715a5f5c003248*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples)]
 def n187columns : List ColumnInfo := [(10,0,689,0,4),(130,0,569,0,4)]
 def n187autos : Array (List Nat) := #[[],[115,84]]
 def n187levels : Nat → Packing
@@ -4226,26 +4299,17 @@ theorem geomn187 : graphValid n187 (boundsBefore knownn31) = true := by
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1875_0 : block n187 5 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1875_0 : block n187 5 0 1=true :=
+  @streamBlock #[0,0,0,0,0,0] n187 5 0 1 6 (by decide +kernel) (by decide +kernel)
 theorem alln1875 : block n187 5 0 1=true := sn1875_0
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1876_0 : block n187 6 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1876_0 : block n187 6 0 1=true :=
+  @streamBlock #[0,0xf,0,0,0,0x5,0] n187 6 0 1 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1876_1 : block n187 6 1 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1876_1 : block n187 6 1 1=true :=
+  @streamBlock #[0,0,0,0,0,0x19] n187 6 1 1 6 (by decide +kernel) (by decide +kernel)
 theorem alln1876 : block n187 6 0 2=true := (@block_merge n187 6 0 1 1 sn1876_0 sn1876_1)
 theorem tablesn187 : checkedTables n187 6 := by
   intro k hk
@@ -4271,7 +4335,7 @@ def n189l6 : Packing := (4,1,2,0,0,4,0,n189d6)
 def n189d7 (i : Nat) : Nat := 0x20a71343f7f
 def n189l7 : Packing := (2,0,2,0,0,4,0,n189d7)
 def hashn189l7 (i : Nat) : Nat := 0x110b00018ce4002680
-def n189samples : Array (Bits × Bits) := #[(0x1b9b8,0x19930),(0x0,0x0),(0x7fffffffffffffffffffffffffffead31,0x22930),(0x1474a,0x1060a),(0x7fffffffffffffffffffffffffffe72e5,0x7fffffffffffffffffffffffffffe60c5),(0x14e0e,0x460a),(0x0,0x0),(0x7fffffffffffffffffffffffffffe90d7,0x7fffffffffffffffffffffffffffc90c5),(0x0,0x0)]
+def n189samples : Array (Bits × Bits) := #[(0x83e019ac5a30dd2d*repeatSamples,0xa52911244a109d28*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x1faa45f50afb20*repeatSamples,0x94a5aa40940ac920*repeatSamples),(0x7c1f347ee45123ca*repeatSamples,0x294a143e6010224a*repeatSamples),(0x7fe0e8b30c734cd1*repeatSamples,0x5294e88104634091*repeatSamples),(0x8000df4816a482de*repeatSamples,0x18c6ca48142402c6*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0xd731618f1433*repeatSamples,0x6318153161811411*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples)]
 def n189columns : List ColumnInfo := [(12,0,689,0,4),(17,0,172,0,4),(33,0,156,0,4),(132,0,569,0,4)]
 def n189autos : Array (List Nat) := #[[],[115,84],[32,67,117],[32,83,116],[48,82],[112,66,115,84],[80,50,67,84,117],[64,114,83],[80,50,116],[64,114,115,116,117],[48,82,115,84],[112,66]]
 def n189levels : Nat → Packing
@@ -4291,26 +4355,17 @@ theorem geomn189 : graphValid n189 (boundsBefore knownn187) = true := by
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1896_0 : block n189 6 0 4=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1896_0 : block n189 6 0 4=true :=
+  @streamBlock #[0,0,0,0,0,0] n189 6 0 4 6 (by decide +kernel) (by decide +kernel)
 theorem alln1896 : block n189 6 0 4=true := sn1896_0
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1897_0 : block n189 7 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1897_0 : block n189 7 0 1=true :=
+  @streamBlock #[0x1b,0x5,0x7,0x9,0,0x5,0x3] n189 7 0 1 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1897_1 : block n189 7 1 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1897_1 : block n189 7 1 1=true :=
+  @streamBlock #[0xf,0xf,0xf,0xf,0xf,0xf] n189 7 1 1 6 (by decide +kernel) (by decide +kernel)
 theorem alln1897 : block n189 7 0 2=true := (@block_merge n189 7 0 1 1 sn1897_0 sn1897_1)
 theorem tablesn189 : checkedTables n189 7 := by
   intro k hk
@@ -4334,7 +4389,7 @@ set_option maxHeartbeats 0 in
 theorem validn189 : Known knownn189 := extendKnown_ok validn187 lown189 (by decide +kernel)
 def n215d6 (i : Nat) : Nat := 0x41c3f7f
 def n215l6 : Packing := (2,0,1,0,0,3,0,n215d6)
-def n215samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffb2b,0x30a),(0x7fffffffffffffffffffffffffffff955,0x7fffffffffffffffffffffffffffff851),(0x6ce,0x28c),(0x0,0x0),(0xbc,0xb4),(0x0,0x0),(0x4b0,0x4a0),(0x7a2,0x522),(0x0,0x0)]
+def n215samples : Array (Bits × Bits) := #[(0xf07c3c83ba7f1c1b*repeatSamples,0x94a42c811847141a*repeatSamples),(0xffcc1f37383e5a5*repeatSamples,0x4210811262002125*repeatSamples),(0xf830e1d44eee3d2*repeatSamples,0x318e0a0900eec0c2*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0xf003f15ea8f8388a*repeatSamples,0x6b5bd15ea0b82880*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x3ffe111e09a24*repeatSamples,0xbdef7ee111e09a00*repeatSamples),(0x3febec604065c*repeatSamples,0xce71f4b6c600061c*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples)]
 def n215columns : List ColumnInfo := [(1,16,198,0,4)]
 def n215autos : Array (List Nat) := #[[],[32,116]]
 def n215levels : Nat → Packing
@@ -4352,18 +4407,12 @@ theorem geomn215 : graphValid n215 (boundsBefore knownn189) = true := by
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn2156_0 : block n215 6 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn2156_0 : block n215 6 0 1=true :=
+  @streamBlock #[0,0,0,0,0,0,0] n215 6 0 1 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn2156_1 : block n215 6 1 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn2156_1 : block n215 6 1 1=true :=
+  @streamBlock #[0,0,0,0,0,0] n215 6 1 1 6 (by decide +kernel) (by decide +kernel)
 theorem alln2156 : block n215 6 0 2=true := (@block_merge n215 6 0 1 1 sn2156_0 sn2156_1)
 theorem tablesn215 : checkedTables n215 6 := by
   intro k hk
@@ -4386,7 +4435,7 @@ set_option maxHeartbeats 0 in
 theorem validn215 : Known knownn215 := extendKnown_ok validn189 lown215 (by decide +kernel)
 def n349d6 (i : Nat) : Nat := 0x20a3f7f
 def n349l6 : Packing := (2,0,1,0,0,3,0,n349d6)
-def n349samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffba3,0x3a2),(0x0,0x0),(0x256,0x46),(0x6b4,0x630),(0x7fffffffffffffffffffffffffffffc4f,0x7fffffffffffffffffffffffffffff84d),(0x0,0x0),(0x7fffffffffffffffffffffffffffffb5d,0x7fffffffffffffffffffffffffffffa55),(0x0,0x0),(0x1e8,0x188)]
+def n349samples : Array (Bits × Bits) := #[(0xf802cd3e45b26ed*repeatSamples,0xb5ac2cc2245a26ec*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x7f0d5bb882fa58*repeatSamples,0xdef70d5bb8803a18*repeatSamples),(0xf07c320c3ff6f968*repeatSamples,0x210830000276c060*repeatSamples),(0xff83c25fc0f50f85*repeatSamples,0x4a53c21dc0810901*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x3fff008e940da*repeatSamples,0x739ebaf008e140d8*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x3fdaf77080036*repeatSamples,0x8c61450f75080006*repeatSamples)]
 def n349columns : List ColumnInfo := [(0,1,332,16,5)]
 def n349autos : Array (List Nat) := #[[],[96,132]]
 def n349levels : Nat → Packing
@@ -4404,18 +4453,12 @@ theorem geomn349 : graphValid n349 (boundsBefore knownn215) = true := by
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3496_0 : block n349 6 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3496_0 : block n349 6 0 1=true :=
+  @streamBlock #[0,0,0,0,0,0,0] n349 6 0 1 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3496_1 : block n349 6 1 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3496_1 : block n349 6 1 1=true :=
+  @streamBlock #[0,0,0,0,0,0] n349 6 1 1 6 (by decide +kernel) (by decide +kernel)
 theorem alln3496 : block n349 6 0 2=true := (@block_merge n349 6 0 1 1 sn3496_0 sn3496_1)
 theorem tablesn349 : checkedTables n349 6 := by
   intro k hk
@@ -4438,7 +4481,7 @@ set_option maxHeartbeats 0 in
 theorem validn349 : Known knownn349 := extendKnown_ok validn215 lown349 (by decide +kernel)
 def n455d6 (i : Nat) : Nat := 0x20a3f7f
 def n455l6 : Packing := (2,0,1,0,0,3,0,n455d6)
-def n455samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffff85,0x784),(0x7fffffffffffffffffffffffffffff867,0x7fffffffffffffffffffffffffffff823),(0x592,0x190),(0x0,0x0),(0x0,0x0),(0x0,0x0),(0x3e8,0x348),(0x570,0x460),(0x29e,0x96)]
+def n455samples : Array (Bits × Bits) := #[(0x7d8cf092de5b85*repeatSamples,0xf7bd8cb0905e5b84*repeatSamples),(0xfffe12c3569ff619*repeatSamples,0x842104342810019*repeatSamples),(0xf801d3ddd6684ae*repeatSamples,0x5294083c9c268406*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0x0*repeatSamples,0x0*repeatSamples),(0xf003e23e206d6d74*repeatSamples,0x318d4228006c6564*repeatSamples),(0x3fdc189f920a6*repeatSamples,0xad6bf5c101d920a0*repeatSamples),(0x3fdfe36000b4a*repeatSamples,0xce72bdd636000a0a*repeatSamples)]
 def n455columns : List ColumnInfo := [(0,256,647,64,5)]
 def n455autos : Array (List Nat) := #[[],[98,135]]
 def n455levels : Nat → Packing
@@ -4456,18 +4499,12 @@ theorem geomn455 : graphValid n455 (boundsBefore knownn349) = true := by
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn4556_0 : block n455 6 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn4556_0 : block n455 6 0 1=true :=
+  @streamBlock #[0,0,0,0,0,0,0] n455 6 0 1 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn4556_1 : block n455 6 1 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn4556_1 : block n455 6 1 1=true :=
+  @streamBlock #[0,0,0,0,0,0x19] n455 6 1 1 6 (by decide +kernel) (by decide +kernel)
 theorem alln4556 : block n455 6 0 2=true := (@block_merge n455 6 0 1 1 sn4556_0 sn4556_1)
 theorem tablesn455 : checkedTables n455 6 := by
   intro k hk
@@ -4502,7 +4539,7 @@ def hashn191l9 (i : Nat) : Nat := 0x930786134c48673454805509a9534615484274bc37f5
 def n191d10 (i : Nat) : Nat := 0x3a81985412a0feff
 def n191l10 : Packing := (2,0,4,0,0,5,0,n191d10)
 def hashn191l10 (i : Nat) : Nat := 0x3831c5fcafd3cc9c892d53825846d8ec66c3c82983789bc7e848c581b2927801d62850c19485c0a5494b000397c002804414001d2399c0398a0000c83d9b089d45c96812d0a042954d0f47480c003d40a3295d17400201f48cc4f16eda9c7b82f9924238b546acb846f0a7da7463c564704a860454c610d01e08b14307d181019000b80
-def n191samples : Array (Bits × Bits) := #[(0x7ffffffffffffffec0f3e6d224e80836b,0x7ffffffffffffff020c1e4d004880824b),(0x3c82e55a19de070882,0x3c02e1100832574d90),(0x7ffffffffffffff7390430293809892af,0x7ffffffffffffff41800402f380889263),(0x6f3842f4cc43375e10,0x2e3c42e40c6a370580),(0x8509a9935715856c54,0x9183a1125315406814),(0xc174b1342d3076b130,0x5152a1b26d20341130),(0x0,0x0),(0x7ffffffffffffff8865c84008336b280d,0x82254840001b43680c),(0x0,0x0)]
+def n191samples : Array (Bits × Bits) := #[(0x8ff9ff6bd7d1f858797267c57e9d5a96ed734c7eed7c67d95cfd2f92713411fdaba5b9fabfbdbe0070dde370e7f50cfbbaf75f6ffaa1b33f9bf33a2c570bc0229d710c33e85f5b2800f03a183ff10251bd37ba40348a08223182c3af17acdda1,0x8600080000800400400004690100c425000018f0900422020c840500410c10834000404c96428150860432002000020000a38082281590208e0000004205c00880045040000ac0038e2012002480932204a100644002002001c0c286008cdd81),(0x3463f9604287c0b15d967c7731db6eccc0acb7823f9bb3c599e01ec60c1eb3ecf0dd3abf891f47245753bd1a75cea7383c1de4adbfd2ec97fc73a7bac1305db76019b48e2573ce5d521147b8ea48c01048501e1f75a8b71ee12095c912cd405a,0x28a274482e3ea0843eb538964e900942d10ea205403908a56202325e18a20c1400ea240108005e021922006313f21d46881c3b1d95826a481078202508222503164a21997cd42544011448241930249ddb527e99318897cee42415490a402276),(0xa3ec3bb4327b56e6a6ffed2badc0d16b62ac6e8fd097ab878f4ec84eff4af695bf9af6bf6edf73ea5d5f17876bea61d35fe9bb90d45c9d72b77edfdfbdbeafffc487b5ba97b7cee7e9f34aaff69b40ae406c41b6c160749c9a539502c0611789,0x4119023640000d3200080348200010040030080202800400011100208008c06180000000804480980419009c0c04c220120200000019052280070282114412c0082014400200822310c880914600c902040c8122c460601010138200a1290589),(0x6b17eda16fc4b69de7abd53885fbfd60bb43ce050e6a19479b0b78821a7564a527f04d46e462a15b9a59dced78ca1d6d5662696dbdc060e7e23ddacf25ef944bb68b26e40aeac4839d3cc223d976820002e043a8891f8bc3547d4518629252c6,0x16e2700105d0108d804320234c4082c0060830b8e01102f246c24dda380012021500c84917115400a382bd00120a0104a091cc641700e0085a2050516819640654d2c3a4812c4950c805512a018e32248ae3620c190e888b40cc551842867a62),(0x98f7759984d0122dd2f793d1efaa8f9ecf2bd0dfdec6de59e151e4e8cd51f6960aebaf5a70c4ecf62ec2df62fa7dfb0450974f6ca2a742aa4ae64b6ad3d0d182a3063be77c562b08fd1fdb7d2b6c8240639fa00808f70350ec3c226c34738454,0x9050786b0006b20333c929432131902c0c386040128c905812822208410cd680a6f04b0482c008f485040b44534f8e005402211804000d001800706852202c10b090003749124a000d0005518410cc9711c819224f11350ac3020613c71001c),(0x772f4f466d57ad89604fef491017f78630d197e530fe75f26c3e37b12dba7952cff2fcf903bab715d739b879d2e6bf848000c4fb49f213eb1bed74efe06d8de19c7ae0298d4bfdbab64bfdfa0db3fd419404144102cdcd2110936c500d412b76,0x4014b1be5066c23290050116a0950a124051a6016190c1ac8229e0dc00a2c96c027b0ca361801204008288488ccd08540b041835116a010a40412182a0d002d428282720c9201820508720de02634c4c1804f58204eddd4810130c1121432274),(0x0,0x0),(0xd0eea67f7caee1da9a8252196d7370ef39c693e0a535462bb200f06f94973e9b4dff41b5849702f5e0a547ca6c05df270df3d6753b0f5138f36802971f39ba8ff02dd332981625382ac3974cae2ebfae60680e410a40c0056ba06852ce10e013,0x92204c40028130402da2f4a04b084188050e50cc88022a4214c600005e1430006000e31c0c222923c0403623732015808499c6420804f2d1031894700c082c2b9216088a208301c001001400a98c32a1e3e308553a0000856fe060424e14c802),(0x0,0x0)]
 def n191columns : List ColumnInfo := [(1,0,190,0,7),(1,16,166,8,5),(1,32,30,128,5),(2,0,701,0,8),(4,0,699,0,7),(4,8,675,16,5),(4,128,539,32,5),(14,0,689,0,4),(24,0,679,0,7),(152,0,551,0,4),(160,0,543,0,7)]
 def n191autos : Array (List Nat) := #[[],[115,84],[32,67,117],[32,83,116]]
 def n191levels : Nat → Packing
@@ -4528,120 +4565,72 @@ theorem geomn191 : graphValid n191 (boundsBefore knownn455) = true := by
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1916_0 : block n191 6 0 2=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1916_0 : block n191 6 0 2=true :=
+  @streamBlock #[0,0,0,0,0,0,0] n191 6 0 2 7 (by decide +kernel) (by decide +kernel)
 theorem alln1916 : block n191 6 0 2=true := sn1916_0
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1917_0 : block n191 7 0 26=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1917_0 : block n191 7 0 26=true :=
+  @streamBlock #[0,0,0,0,0,0x19659659659,0x19] n191 7 0 26 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1917_26 : block n191 7 26 21=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1917_26 : block n191 7 26 21=true :=
+  @streamBlock #[0xdb,0x1bf33edb2db,0x1b,0,0x1b,0x19,0x339659,0] n191 7 26 21 8 (by decide +kernel) (by decide +kernel)
 theorem alln1917 : block n191 7 0 47=true := (@block_merge n191 7 0 26 21 sn1917_0 sn1917_26)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1918_0 : block n191 8 0 10=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1918_0 : block n191 8 0 10=true :=
+  @streamBlock #[0xee8dfa973ddffffdffffd9,0x3851bf52103ffe0ff,0x3dfffe,0xef29a9a9b6fdfffff,0xf6dacb2cfd659659f,0x7acb3432cb2cb2f,0x7b6fb219f] n191 8 0 10 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1918_10 : block n191 8 10 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1918_10 : block n191 8 10 36=true :=
+  @streamBlock #[0xf72e5b6cc32cb2cdb6,0x1b6db6db6dbd,0x15b26ddadd0,0xcdad19,0x6ee,0x3bbb2e59659659,0x36d9972cde65971659659659659,0xacb2] n191 8 10 36 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1918_46 : block n191 8 46 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1918_46 : block n191 8 46 36=true :=
+  @streamBlock #[0xf1c7ff336d98721e,0x798f0ffadb72391ba6fe5b7e9a0fe,0x2be40726e465d6cb6db36ed5,0x8879c8e46db9f6e7ced6c,0x1df253153971ff0e21863e,0xe238de271f97c9cfc8e5cbf659,0xdd18ec462e2c7c99cfca9fcd72e7e5965967e59659,0xf932c8] n191 8 46 36 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1918_82 : block n191 8 82 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1918_82 : block n191 8 82 36=true :=
+  @streamBlock #[0x386db56db6cb6d8,0xf1ff2714d1b6db26c96d4,0x1e3dc41a36d985b75,0x7edcad6db7476cd5,0x619b72f975b96d8fb4a,0xa18f9adb6ae59659659,0x18e57e68f65965965965b9,0x3e5c8] n191 8 82 36 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1918_118 : block n191 8 118 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1918_118 : block n191 8 118 36=true :=
+  @streamBlock #[0x3cdb6db6db,0x6db6dcb6d96,0x1cb6cd86db,0x1b6db,0xdb6c,0xccdb6db2cb2cb2cb9,0x36db9397b9659659659659659659659,0] n191 8 118 36 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1918_154 : block n191 8 154 21=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1918_154 : block n191 8 154 21=true :=
+  @streamBlock #[0x7b,0xdb6cb,0x3dfb64,0x1b96dffb,0x372cb9,0x36db6db,0x6db2fd9659659659659659,0] n191 8 154 21 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1918_175 : block n191 8 175 36=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1918_175 : block n191 8 175 36=true :=
+  @streamBlock #[0x3db6db6,0x787fb35b6e5b7d6db6db6db7e0f,0xdb6dc5b659b66db6e590,0x36d9736b66db64db5,0x7b6cb2cb2dd,0x1ffedcd,0x1f3f265cb6fe6b2e5b67e5b37d6d,0x3973f232fe5c86dcb2e7e4db6fdecdfb5fb2e6b2f6d9a3972f4ddb2e5ccb9,0] n191 8 175 36 9 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1918_211 : block n191 8 211 12=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1918_211 : block n191 8 211 12=true :=
+  @streamBlock #[0,0xf6,0x36dba,0x1b6c9b,0x6,0x1ba,0x36d9f,0xcb72e5c996cb9735b27cd7ecb2,0] n191 8 211 12 9 (by decide +kernel) (by decide +kernel)
 theorem alln1918 : block n191 8 0 223=true := (@block_merge n191 8 0 211 12 (@block_merge n191 8 0 175 36 (@block_merge n191 8 0 154 21 (@block_merge n191 8 0 118 36 (@block_merge n191 8 0 82 36 (@block_merge n191 8 0 46 36 (@block_merge n191 8 0 10 36 sn1918_0 sn1918_10) sn1918_46) sn1918_82) sn1918_118) sn1918_154) sn1918_175) sn1918_211)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1919_0 : block n191 9 0 5=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1919_0 : block n191 9 0 5=true :=
+  @streamBlock #[0x38e712bffff5dd3f7fffedb5dfffeb6b8ff0affffeeeeaeee9f7ffff,0x1e39217fffeffadffffb6abfffd6a850a9ff5fffff,0x1c01fe147f851fe1428ff,0x1c29fffeb6badaeb6badaeffff,0x14752affffdb6bdb6bdffff,0x28ea7ab2cfb35967d9,0x191cc862] n191 9 0 5 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1919_5 : block n191 9 5 28=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1919_5 : block n191 9 5 28=true :=
+  @streamBlock #[0x1db661cf7dfefff6db6dfbffff6e19b6c1e7b771f971f9f9717cfcb6d86f9f9726db6e5bda0bdbf6d2e6dbf7b4e56db7adb6b6bdfffffff6d3adaf47bfdffff68a5b5c120fffffbe140a5a3dfffeffff7ad0ff28f6bdffffffef7b48ad3ba5e7b4c9fffffffffed75759967fffe,0x1368dbfbeff6db7fbb5effdbf6d368db6db498b898b8b8b6d98b8b8b4a426e2e2d98b6db69fff0bdf748fffff7a5dddddfe085dd3ea10a3eff5dddde89f7ffffa5b47a5fdffffe2da3ffcefff252139c0a52145fffffffdffffffffffffeffffef,0xb5b30db798fed6c7ffed6b66d8db61b6e47f26e7e378b7789b89cb6dc9b6dffef08ffff79ddc905ff5021448dfff3bb920241bfef1541ef05503d17978a7f9e7fffffbffcfff,0x606c3d8de6f37fff8c36db31ba3937cb393aace272db6eb161e9ff087f85b402822946f85b45b7fc2da05b453fcf3c3ffffcfff,0x5605ad5bffdffecf7ffffffd60dbbf2fe6bf93972e3f2e7e5aab97262f96dd1210dffffa5b6db6bd13e1a5b6da5b6fdfb7fffffffdefffffffffff,0xb685b4ebffdfff6bdffffff6d0d7e6fcbbf272e5c7e5cfcbbb92e5c98be5fcd77774d7ffffd77774db6d7aeeee9bf7edffffffffffffffffffffff,0x1da1b1c6cc59898b6e2e2cc4c5c6d79b75b7686db63c0dfbff6ffdfffbbb9219b6e78bac99655964cb2cbbbba4217a975932c9965932cb3efdffbf6cb3f59,0x75438efbfcff7ffd506232cf99] n191 9 5 28 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn1919_33 : block n191 9 33 14=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn1919_33 : block n191 9 33 14=true :=
+  @streamBlock #[0x78f3fdb6ffffffdffedb6db6f937c989172db663f262cc7e4c4c5c5cb6db6db6db6db6db6db6db6dfffbc7f96dff7fff9feffff07bdce,0xf7bcdb7fb6dfb4a535214b6d290b6dd62d13c7f9c2a7894a5e5294a5d29486a7ffd104bfffffe9,0xde6db7b7bf6db7f1f8fc5b6fe378b31f8bbc5b6c78f3fd479fe17968a5e14fbca7fdfe8bc8122f2bfe,0x1bf31f9ffb66dd6ed76b7aebb75b74044f0a2abd5a7aaea7ff5082d,0xac0b1be2c887db6cd6b5676aedb600f3c3d12ab9472bdae0,0x2bad17c4ac6f105e51f6dd75ebbd3bba5b51feff50a4bd77a7774bbd,0x6f79fefff6edebd77a7774b51ef2ff52bd74bd77a7774d,0x99e41e3edb6f937c88b96db31f931663f2317172db6793240a44d79bfdfe1ffeffffffe935b6db6db6db,0x7abdbfccfb9] n191 9 33 14 9 (by decide +kernel) (by decide +kernel)
 theorem alln1919 : block n191 9 0 47=true := (@block_merge n191 9 0 33 14 (@block_merge n191 9 0 5 28 sn1919_0 sn1919_5) sn1919_33)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn19110_0 : block n191 10 0 1=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn19110_0 : block n191 10 0 1=true :=
+  @streamBlock #[0xdb6dffdbff6ff9fe7fbfffba5b,0x7f4a7efdf7bd29f,0x7ffffbf7deff,0x3f9ef0f,0xfe7bcf,0x3fdb6df,0xff6df,0x1b] n191 10 0 1 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn19110_1 : block n191 10 1 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn19110_1 : block n191 10 1 1=true :=
+  @streamBlock #[0xf7fbf7def77f,0xfffbf7deff,0x3def0f,0xf7bcf,0xfb6df,0x3edf,0xff] n191 10 1 1 7 (by decide +kernel) (by decide +kernel)
 theorem alln19110 : block n191 10 0 2=true := (@block_merge n191 10 0 1 1 sn19110_0 sn19110_1)
 theorem tablesn191 : checkedTables n191 10 := by
   intro k hk
@@ -4680,7 +4669,7 @@ def hashn351l9 (i : Nat) : Nat := 0x3a819127a184c478015e2516310f02202bb20840d800
 def n351d10 (i : Nat) : Nat := 0x295194a8e20feff
 def n351l10 : Packing := (2,0,4,0,0,5,0,n351d10)
 def hashn351l10 (i : Nat) : Nat := 0x18b05359e534a764e6ab75043d46330a1c20c0009b22ee97420b1232c4ed0b82c2a24a80781f12000d3f10210c8a5572045381dd700060b42ad7800e3122d1180015b0524b0005494180000001a07c004116000900041900001005602104
-def n351samples : Array (Bits × Bits) := #[(0x7fffffffffffcb3751f0634d04dd43081,0x7fffffffffffca145030620c045d41081),(0x2162362c59d380a0fc946,0x62040415f3a1a02ed06),(0x7ffffffffffff9001ccc3680d859c1bc1,0x350038d92200485bc1040),(0x7ffffffffffffe100e2305381591296bf,0x7fffffffffffc21246240c3016a0006bf),(0x625c9c2a1a4c809b605c,0x142989ca8180e802b6040),(0x0,0x0),(0x7fffffffffffc3d8b392aa027a771500b,0x7fffffffffffc7983382aa00521310049),(0x0,0x0),(0xd88851c2dc6f4e88c20,0x1040885140cc294cc8900)]
+def n351samples : Array (Bits × Bits) := #[(0xacf97f5bd7d0f448597a4fc57cd95af66d674c7eed7447690ae3ae98c13810fc2be529fe29b5af8071d5e3f567e74c5a3e975fedaad5317ebb722e28530be66a91b40d3bf9d4cbe802d41adebf624002054679592100e0c0cb2639478d511e26,0x8604098810a6c600c00004690181c62580451cf1b104e3028cac459441ae108f420148ecd74283548684ba4420c8020009af90a2285700204c402104e215c03c800472218920d803cc0512cab4e1d42a597062dd8100c0008b24390309411c26),(0x3763f17853af88f36d967877719f6eadc0b8b3823f92b2ddd3fc9fcaac3ebbecf0dc3abb8b3e57a667cfbd9ef55fe7bab10dfcaffdff6e875cf2b7aaeb305fab2c5db5de35798e5f5295673c2ad9c005f8c9895ca270233624bf90f48078b598,0x288200402e1800840f90880004000040110000000029002160001202041004100080a01000204c0359600003401204820400210884800a9113380421042203000440001a14dd20c0031048200010094480021d000ab0263400980064a638a098),(0xa3ec33ac327a16e6a6ffc92bedc0d14be2ac6a8fd09e8a2f814e48527f4af7953f9a66bf6ed673686dcf17076b7b21d357e1b390d4590d63b77fdfcfbfbaadc38483b4fa87369ee7e9f34a6ba69f2004018186cdc74f09a6892fa511718c82a4,0x5319063640803d32a02a13e8200013848436188ea2800e4205d140b08008d061800048088d4480988499bcb80d2cd2201283ce6000191562400712d6315c10d502b05661e3229e2550ed901a8e8eb2b16b95a24de44f09820d27a51111835221),(0x6b17e5a96fc5f69de7abf138c7fbfd60bb47ca050e6b38ef970b78961a756ca5a7b0dd46e46ba159aac9dced785b1d6d5e62616dbdc1e0f6e23ddadf07ebb65ffe0b66e40a6b90c19d38c2a38974a8f8033006935dab502190d0281572364d5e,0x4c631811550428d0041000304418040024124304111c190c2280d4a2000020a170180e1521154042302010000020004210000041740000918204101c001622044408104000c4052880041a000414508102050901880602090400aa06834855e),(0x98f77d9184d0122dd2f797d1afaa8f9e4f2fd4dfdec6df51ed51e4e8cd51f6960aebaf5a60c4ecf61e52df66faecfb045097476ca2a6d2aa48e64b7ad1d0d382ab867ba77cd46b08fd3bdbbc2b6ea80206b6790002b0d0db7981e4061c8042e8,0x9214606a0002920333cb2947a121902408a820400280825010222209c10c460086e0410082c008b485040b05734f9e084502a118000f0d0038006020d2204c31b0b0082749321a402f0001409062ad5a6860d00627215db6081c40c14804281),(0x0,0x0),(0x772f4f466d17ad89604fef491217f78630d597e530fe75f2683e37b12dba7852cfb27cf913bab717d739b87dd2f6bf848008c4fb49f203ea19ed74efe06dade19cfaa0688dc1e9b8b44bfd7b5db59703f8090071101c4e592e02efa901c52355,0x4014b1be5066c23290050116a2950a124051a6016190c18c8629e0cc00a2c16c023b0ca361801204008288488ccd08540b041835116a010a4041218680d420f428282760c92218265087201e1265441a383960f0900848432c02ea8901c44345),(0x0,0x0),(0xd0eea67f7caee1da9a8252196d7370efb9c693e0a535462bb200f06f9497369b4dbf41b5949702f5e0a547ce6c15df270dfbd6753b0fc138f16802971f3d989ff82d9332989c253828c3974c7e28b7f8050008221c348e8802795f0883a308a3,0x92204c40028130402da2f4a049084188050e50cc88022a4210c600005e1438006000631c0c222921c0403627732015808491c6420804f2d0811894702c080c0b9296488b208105800320144169883ae5c7060e062476868c023d1500820318a0)]
 def n351columns : List ColumnInfo := [(2,0,861,0,7),(2,1,332,16,5),(4,0,859,0,8),(7,0,344,0,4),(9,16,326,0,4),(17,0,334,0,7),(70,0,793,0,4),(72,256,535,0,4),(258,64,541,0,4),(320,0,543,0,7),(324,0,539,0,4),(328,0,535,0,4)]
 def n351autos : Array (List Nat) := #[[],[64,49,134],[96,132],[128,49,100]]
 def n351levels : Nat → Packing
@@ -4706,148 +4695,88 @@ theorem geomn351 : graphValid n351 (boundsBefore knownn191) = true := by
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3516_0 : block n351 6 0 2=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3516_0 : block n351 6 0 2=true :=
+  @streamBlock #[0,0,0,0,0,0,0] n351 6 0 2 7 (by decide +kernel) (by decide +kernel)
 theorem alln3516 : block n351 6 0 2=true := sn3516_0
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3517_0 : block n351 7 0 36=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3517_0 : block n351 7 0 36=true :=
+  @streamBlock #[0,0,0,0,0,0xcfb2c8,0] n351 7 0 36 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3517_36 : block n351 7 36 13=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3517_36 : block n351 7 36 13=true :=
+  @streamBlock #[0,0,0,0,0,0x19659659,0] n351 7 36 13 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3517_49 : block n351 7 49 26=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3517_49 : block n351 7 49 26=true :=
+  @streamBlock #[0,0x7b,0x7b6cb2d96cb65b,0x1b6db,0,0,0x1b2,0] n351 7 49 26 8 (by decide +kernel) (by decide +kernel)
 theorem alln3517 : block n351 7 0 75=true := (@block_merge n351 7 0 49 26 (@block_merge n351 7 0 36 13 sn3517_0 sn3517_36) sn3517_49)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3518_0 : block n351 8 0 13=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3518_0 : block n351 8 0 13=true :=
+  @streamBlock #[0x7ffffffdfffff,0xfffffffffffff,0xfffffff7fffff,0xff0fff,0x659659659f32cbd9,0x65965964f659659659,0x2832cfb872] n351 8 0 13 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3518_13 : block n351 8 13 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3518_13 : block n351 8 13 36=true :=
+  @streamBlock #[0x1cb6db6db,0x1b6e5b6db,0x36db6d8,0x3ce46d8,0x3db3,0x19b0,0x1b01903219,0x5] n351 8 13 36 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3518_49 : block n351 8 49 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3518_49 : block n351 8 49 36=true :=
+  @streamBlock #[0x50b6836ed1b6d85,0x500cdb6dd29e,0xaa7bf7f8db7ec5bf2c1f2dfde5be,0x3fe8fffef985607165f,0x2da2db7e6bfc2d01cadb,0x3be4e871f918371039f9619,0x1d771671f97cfcb89b0d419cb672c9964,0x3d9320] n351 8 49 36 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3518_85 : block n351 8 85 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3518_85 : block n351 8 85 36=true :=
+  @streamBlock #[0x300db9a36d96db6c0,0xf61b6e7e5f2cadb6db95ef,0x1fff9b73f358adb6dd0,0x316d7f9419b6db,0x2bbbffe5cd036cce7,0x3f971b4d96c745f6,0x1abda65b6cdf22b72c99,0xf0] n351 8 85 36 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3518_121 : block n351 8 121 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3518_121 : block n351 8 121 36=true :=
+  @streamBlock #[0x1b6db6db6db6db,0x396db6d965b6db,0xdb6db,0x1b6,0x33,0xd9965964e59,0x3f379ec8cb2659659659659,0] n351 8 121 36 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3518_157 : block n351 8 157 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3518_157 : block n351 8 157 36=true :=
+  @streamBlock #[0x65b6db6db6db6db6db75,0xf6e5cdb5cab2cd,0x36db6db6db7,0x1b036db6,0x799bb9b3,0x3676ffffecb2e59659,0xdb2ce5cb2ffc32cb2cb2cb35965ef659,0] n351 8 157 36 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3518_193 : block n351 8 193 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3518_193 : block n351 8 193 36=true :=
+  @streamBlock #[0x1edb,0xcb6cdb6db2db6db0,0x6fcdb6db6c,0x2b6db6db,0x3cdb63,0x3db66db65932,0x1b965b90321cb265932cb9,0] n351 8 193 36 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3518_229 : block n351 8 229 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3518_229 : block n351 8 229 36=true :=
+  @streamBlock #[0x1fb671,0x3e5b7cb,0x3fdb6db6db6,0x3fdb6db6465b,0x3fdb665b393,0xf6ccfce6d659,0xdb6e4cb3edb6cc8cb2c2b2659,0] n351 8 229 36 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3518_265 : block n351 8 265 13=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3518_265 : block n351 8 265 13=true :=
+  @streamBlock #[0x7b,0x7b,0x6db,0x72,0xf3,0x6db9,0x6c8032,0] n351 8 265 13 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3518_278 : block n351 8 278 36=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3518_278 : block n351 8 278 36=true :=
+  @streamBlock #[0,0x7b6db6db6db6f,0x3db6fe7e5b6db73ecb767df,0x36db6db36dfb6db,0,0xcf9b96dcb758,0x6e5bf9659cb2dd65ffe,0xcb2cb6596e5cb3ecb2e596cb96e5cb2cb3eae5cb96e7e5b2cb3f2cb93932e5b8b8b36438d72cb2,0] n351 8 278 36 9 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3518_314 : block n351 8 314 4=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3518_314 : block n351 8 314 4=true :=
+  @streamBlock #[0,0,0x3,0x3,0,0,0xf,0xd96596e5cb9,0] n351 8 314 4 9 (by decide +kernel) (by decide +kernel)
 theorem alln3518 : block n351 8 0 318=true := (@block_merge n351 8 0 314 4 (@block_merge n351 8 0 278 36 (@block_merge n351 8 0 265 13 (@block_merge n351 8 0 229 36 (@block_merge n351 8 0 193 36 (@block_merge n351 8 0 157 36 (@block_merge n351 8 0 121 36 (@block_merge n351 8 0 85 36 (@block_merge n351 8 0 49 36 (@block_merge n351 8 0 13 36 sn3518_0 sn3518_13) sn3518_49) sn3518_85) sn3518_121) sn3518_157) sn3518_193) sn3518_229) sn3518_265) sn3518_278) sn3518_314)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3519_0 : block n351 9 0 7=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3519_0 : block n351 9 0 7=true :=
+  @streamBlock #[0xa3cf4792b473fdfe91fffe2db6ffffffdb6db7ffffffd3ffe73ffffffbbbbbfa53ffffe9fffffff,0x28f3d0ef5a38ee7ff1fffe2db6ffffffdb6db5ffffffddddce77777ff7ffffff,0x28f3d0168e7f8e1fffe2aaffffffdb6abfffcefffffff,0x1479e8aab472d5b45b68b6db6db6dffffff,0x1e70aa0705b45b68ffff,0x7bd68e32cbd9f,0x28f3d0e231] n351 9 0 7 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3519_7 : block n351 9 7 31=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3519_7 : block n351 9 7 31=true :=
+  @streamBlock #[0x1b76ffd3fffffffffffb6db6daffffb6db6db6c0fe7e7e7e7e5c5c5c5c5c5c5b6db6dbf9f9f9716db6daab6db1b6d8a36db6db7f55ff6ffffffa802bcfffff502857ffff9e7ffa8017fffffffffffffdebe07a4ffffff7ff802d17ffffffffffeffffbdb66ebfffff,0xedfffffffb6dffffffb7bfff7eeb6dbf6dc5c5c5c5c7e5db6efcfcfcb934fc5b8b8b8b716db72dd003a9fffe9be7fffd03feff87bfdfff43dfffeeaae77ffffffdb5fffffeffffff7fffdf,0x79b7fedb6fffdffffb7effff7fedd36db6ffdb6dfffbbffedffa5feffdb6dbbe00512eff777ffff77ffd4a8afffff557fbdff52094ffffffbffffffffffffffffffffffff,0x66dbfdfffbf7fbfff3fa0d9b6d9b3972df3f2dc9cb9639ad41b6dafd015cff0577fffda115ef28bf6bfdffef7fbffffffcf50,0x7e7fe7ffe7fffe53fff1b66cdc9b9a7f3f34dcfcbe7e4373f3f2db36a005057b545514f3fcfff3ffffc7fdf5fff,0x14dedfedffedfffeff77ffe9b36d9cb39adf3f359cfcbe7e4c4eb9f9f96cdbaf40572daf55cf3fcfff3ffffedfffff5fff,0x14d82d6e5c9f3f272dcb91cb97fb6db6ebedfbebf6daffdffef7fef7f9881f69964659326591966d7a169965ecb264cb2f65965bf6fdd0,0x5b59a7ffffff7ffff7fffdeedf669965cfb9f] n351 9 7 31 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn3519_38 : block n351 9 38 12=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn3519_38 : block n351 9 38 12=true :=
+  @streamBlock #[0xfffffffffff700028169b6db6db6db6db6db6de7fbfe9ffe,0x3ff7ffb6db6db6cc4c4c5c4c5c5b6db6db0007a3fefe97095effdfaffffff7,0x3fcdbfff3adbf6ee96dba5cc2db7160003ba5dddddcae9bfff7ffe9fe9,0x6dbff7fedfd6db6dbf8fc5fc4c5b7c5b6c00292907fc3fe1fbff7edff,0x2d000000002d0,0x56afebfffadd75bd76ba38b7580016bdb6daef6db6d,0x3a77ddfffaeb6ebbb5da38bad8002d7b6db5ded,0x28169293cbfa5fca001ffffffffe9ff6db6db6db,0xff7fffffe3] n351 9 38 12 9 (by decide +kernel) (by decide +kernel)
 theorem alln3519 : block n351 9 0 50=true := (@block_merge n351 9 0 38 12 (@block_merge n351 9 0 7 31 sn3519_0 sn3519_7) sn3519_38)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn35110_0 : block n351 10 0 1=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn35110_0 : block n351 10 0 1=true :=
+  @streamBlock #[0x36db6f1e03c78f1b,0xffbf4fff7ff,0x7fbf4f77f,0xffbf4ff,0,0xb6df,0x2df,0x1b] n351 10 0 1 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn35110_1 : block n351 10 1 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn35110_1 : block n351 10 1 1=true :=
+  @streamBlock #[0x7fdfbefff7ff,0x3fdfbef77f,0x7fdfbeff,0x7bcf,0xb6df,0x2df,0xf] n351 10 1 1 7 (by decide +kernel) (by decide +kernel)
 theorem alln35110 : block n351 10 0 2=true := (@block_merge n351 10 0 1 1 sn35110_0 sn35110_1)
 theorem tablesn351 : checkedTables n351 10 := by
   intro k hk
@@ -4886,7 +4815,7 @@ def hashn487l9 (i : Nat) : Nat := 0x18420003d29b04d85ba9854468047c54d16545e5200c
 def n487d10 (i : Nat) : Nat := 0x951ca80e20feff
 def n487l10 : Packing := (2,0,4,0,0,5,0,n487d10)
 def hashn487l10 (i : Nat) : Nat := 0x3544c9123e098fa8da23ca9f10aae004b3c48937b2264a9b81b1cc0800e12534c346150a10e1a00c0012bdd8cc500021ce73210013d1b3bb6848c2f4a10a6d2609a850300001113d9002584696000426439a8d0dde802c02e0db42900095
-def n487samples : Array (Bits × Bits) := #[(0x7c6a1fe870051c,0x544a0fa000051c),(0x7fffffffffffffffffe55bc98c1273283,0x7fffffffffffffffffd09a410510a22a3),(0x285928e3c364e58,0x2c0528e0c344c08),(0x0,0x0),(0x0,0x0),(0x7ffffffffffffffffff2801654b7de2a3,0x7fffffffffffffffffc0900c04a7de223),(0x92454e00913d54,0xd04b4c00911454),(0x1368750b40091fe,0x1268d11b08011d4),(0x7fffffffffffffffffc86f433a78a4d0d,0x6b433b5020908)]
+def n487samples : Array (Bits × Bits) := #[(0x2c3957d85750f76ccbfa5b15d1f150ee626949462374cc78c2f3eac983f99f7c6bec2afe69f1e3ea69e7a4f7cd674c5a7e045de988f5e37e73f32d0c029ff448b094573c3ac29bba4bf49ccb9d2d000002088fe13a72f910b686520ce02abb15,0x8a00b806208004204311846aa1044435800038c0d03c22ab0a848258451cd4e14010401fa4e291518c463200e415029404a3a886b93580a88700040626a6a0d8a0041103d493a4e306b632513580ba74eb5aa7679872e1103e801208600ab815),(0xbfb3c9ebd32f9af76ca674b7dd1f6cbd8f9af7b8f992b9dcdeb91bd24e76b348f0dcbbb9f97a4b2e3e9ffe9ed7d7a732e18eff2b1debde82d4f0b98a9ab05fb92f79bc51e76fcc5d5385e52c0959800a008f6036bb6a189942c3312219aac5aa,0x240405c01a0862002ca0188100018100114704340100c900a02815000000011a028120e05a00080612200023012014020108030800c01a4008180120c00141010200409821404000890088040851418b00840810210c18004011490001e0452a),(0x276c23af327a0fe6244fd17bf0ecdb43ab9a2bad5a9e8a2f012a0f135dc3f9d57f9267bf4dd667026cef7111636b2153d76bb0129449cd63ff7cf3efcfaebfd3a4f3e6f644329cf7e3f76e7ab656000003f0001fc44ba68d08efa43175d83aa5,0x539b823044901d96000a0368840410d40430188a8281064a41d18022800810018010c00aa4c4c4988519349c8a03c2301283c44044398522922612d131cc121024f01441420c8207104a70a0068c96245a3062ccce43a29f0866a02174182a84),(0x0,0x0),(0x0,0x0),(0x6b17f5aa6fc5e79df79be928c75bfd60f2658b270e6b38ef964f78873afc6ca1e7b0dc44c66bb15baba99ced78431ded4e6060ed7dd120e7a23fd6df27efa66fde2b646c4a6b86939f2846a7d8f280f5fa208fc04004d3e6f11648ef9214662a,0x44d200394536809f0040010104c08040021000310081001040010d0620a2020615008040121146002300014808c200002a041000060a010218606081404142004460e4c4090c40149800c1a00220050010004080420412c68147c807121406aa),(0x98f77d9384d0032dc2d797d1af2a8f9ecf2b95ffdec6df71ec51e4e9cdd1fe924aebaf5850c4ecf61e32df62f8f4fb044097466c62a652ba4ae7436ad1d0d382aba67b27fdd67b18ff0f5f382a6cff0a040f7020459140c5a60007826c0d2e51,0x4911823ee0268932021c0314b2961812c090820100a8000d0101a22480a2cc64087e0402208c0288081040dc8ed5e8700a443011802a011200c0228601e200d0292924409c10242410d6209012200e14385971e2c68140d7a6408483680f2211),(0x772f4f446d57bc89706fef491297f78630d1d6c530fe75d2693e37b02d3a71568fb27cfb23bab715d759b879d0eebf849000cdfbc9f203eb1bed7cefe06dade19cdaa0e80cc3fdaeb45b79ff4db38001f9d00029458066204ab88f99ab44915d,0x24758610406220a125b0966a110b02404ba6046110c9a4862a60d81c10c968022b0cb14920100740c28820552c19c485100a35114070d8410105028c1024c71a0a0322a0a119e04085001f494368d1a1c60d33318045204098079889439151),(0xd0eea67f7caee1da8a8252196d7370ef39c693e0a535462bb200f06f94973e9b4dbf41b5849702f5e0a547ca6c05df270df3d6757b0f4138f36802971f39988ff82dd332589e25382ac3174dee2ffffc0620900000f5054605a0234045b1d856,0x92204c40028130402da2f4a049084188050e50cc88022a4210c600005e1430006000631c0c22292380403623712015808499c6420804f2c1031994702c080c2b9296080b608311c001001445e88d70e9c7268e143870050008a0235005e0d844)]
 def n487columns : List ColumnInfo := [(1,0,486,0,8),(7,0,480,0,4),(32,0,967,0,7),(96,256,647,0,4),(130,4,865,0,4),(132,0,867,0,7),(161,0,326,0,4),(258,64,677,0,4),(289,0,198,0,4),(320,0,679,0,7),(324,0,675,0,4)]
 def n487autos : Array (List Nat) := #[[],[98,135],[81,114,134],[81,130,118]]
 def n487levels : Nat → Packing
@@ -4912,99 +4841,60 @@ theorem geomn487 : graphValid n487 (boundsBefore knownn351) = true := by
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn4876_0 : block n487 6 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn4876_0 : block n487 6 0 1=true :=
+  @streamBlock #[0,0,0,0,0,0,0] n487 6 0 1 7 (by decide +kernel) (by decide +kernel)
 theorem alln4876 : block n487 6 0 1=true := sn4876_0
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn4877_0 : block n487 7 0 24=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn4877_0 : block n487 7 0 24=true :=
+  @streamBlock #[0,0,0,0,0,0xcb2cb20,0x19f] n487 7 0 24 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn4877_24 : block n487 7 24 29=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn4877_24 : block n487 7 24 29=true :=
+  @streamBlock #[0x1fedb,0xdb,0x6596596,0x6db,0,0xdb,0x7b359,0] n487 7 24 29 8 (by decide +kernel) (by decide +kernel)
 theorem alln4877 : block n487 7 0 53=true := (@block_merge n487 7 0 24 29 sn4877_0 sn4877_24)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn4878_0 : block n487 8 0 7=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn4878_0 : block n487 8 0 7=true :=
+  @streamBlock #[0x3ffcff,0xfffffff,0xfbfe,0x5befff,0x32cfd67d9,0x19af659659,0x7afb272] n487 8 0 7 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn4878_7 : block n487 8 7 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn4878_7 : block n487 8 7 36=true :=
+  @streamBlock #[0xa0fe5b6fdb63db6cf,0x6d9b6dfd,0x3391fb608db67,0xf7bdc8716,0xf971ff97b97c9cb,0x1ee35e397cb64,0x671f97136938b396e5e32659064,0xf0] n487 8 7 36 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn4878_43 : block n487 8 43 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn4878_43 : block n487 8 43 36=true :=
+  @streamBlock #[0x1ddd7b6d8df9b6dbadb538,0x3fd8db036db6dedcbfff,0x2f802db7138b27fd,0x1fef6c7136db65987f,0x1dca71365b96397,0xb4fdb6c3ae7df8e59,0xc5c5bf929fd96db2cb67e59,0x19f] n487 8 43 36 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn4878_79 : block n487 8 79 33=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn4878_79 : block n487 8 79 33=true :=
+  @streamBlock #[0x2b6db6db6db6dbbffc,0x1f3e6e5b306fc,0x17dbf6fdb7,0x776,0x7fb63,0x7b6edbfb2c99,0xadb9f6cb76fb972dd32cb2c9964cb2cb3ef659659,0xff] n487 8 79 33 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn4878_112 : block n487 8 112 20=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn4878_112 : block n487 8 112 20=true :=
+  @streamBlock #[0x3dc99,0xf6cdb6db6dbf,0x1ecb6c3f,0x1b6cdb659,0x1cb72c,0x367b,0x37ffefd9,0xcb2cb65fd96dcb2cb972e6daffdcb2e7db3ffd9659,0] n487 8 112 20 9 (by decide +kernel) (by decide +kernel)
 theorem alln4878 : block n487 8 0 132=true := (@block_merge n487 8 0 112 20 (@block_merge n487 8 0 79 33 (@block_merge n487 8 0 43 36 (@block_merge n487 8 0 7 36 sn4878_0 sn4878_7) sn4878_43) sn4878_79) sn4878_112)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn4879_0 : block n487 9 0 3=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn4879_0 : block n487 9 0 3=true :=
+  @streamBlock #[0x3bdcaef7cff5529ffe9a7fbdfefff,0x79e777fbfd69e1feb5feff,0x3bdd6bbdb56adafa26dfff,0xafa53d0f14af,0x1e53bad5aff,0xa7afaef59f,0x1dee71] n487 9 0 3 7 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn4879_3 : block n487 9 3 13=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn4879_3 : block n487 9 3 13=true :=
+  @streamBlock #[0xadbbfffedb6ddf6db6db1ffb6db6fdb6dd3bf6376ffb6dfdffffff52fbefd05ffffb54ff7ffffd4f9f5fffffe055fffffff6ebff,0x1b6fdfefdbf6db36db93266dcb66de83e94387dff07fff87bfdfffef,0x1ffffb7ffffecfe7e5c7e5bf9714b8b8b0fffffe127fa5ffffefffffff,0xfafffffffffcebf972e4e6fc7e7e5f8777f57787edfffffffffff,0xe7bff7fbcc72d901396e0eb5fc73dfefbfef,0x3bffffffffe6efcb9727353f3f2fc53badfffffffffff,0x7638b8b71772e2fedb7df7ffbff7f84f65932ecb2ef4cb267d967dfba,0x14cfffffbddf659f] n487 9 3 13 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn4879_16 : block n487 9 16 7=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn4879_16 : block n487 9 16 7=true :=
+  @streamBlock #[0x7ffffff80057adb6db6db6dbdef7fd,0x1ffb6db6db085b6db6c052529f1fffff7fefd,0x377ccdd6dd73375803bd716d7bf6dfff,0x1fffb7e6ef1f898b6316008ffa6fffdff,0xaffffceb7a3b016bd74bd7f,0x3bbf4d3776e25803bd74d4df7,0x3bfe8f9baf47602d7ae97,0x18bdd8bca7c00ffffbfedb6db,0x1fffe3] n487 9 16 7 9 (by decide +kernel) (by decide +kernel)
 theorem alln4879 : block n487 9 0 23=true := (@block_merge n487 9 0 16 7 (@block_merge n487 9 0 3 13 sn4879_0 sn4879_3) sn4879_16)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn48710_0 : block n487 10 0 1=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn48710_0 : block n487 10 0 1=true :=
+  @streamBlock #[0x1b6db78f1e3c78f1b,0x3fdfefbfffdff,0x17edbf7edf,0x7fbfdf7ff,0x3bbfd7f,0x17edf,0x77f,0x1b] n487 10 0 1 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sn48710_1 : block n487 10 1 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sn48710_1 : block n487 10 1 1=true :=
+  @streamBlock #[0x7ffbefbffeff,0x3bc7bcf,0x3ffdf7dff,0xf6df5f,0x3bcf,0x1edf,0x7f] n487 10 1 1 7 (by decide +kernel) (by decide +kernel)
 theorem alln48710 : block n487 10 0 2=true := (@block_merge n487 10 0 1 1 sn48710_0 sn48710_1)
 theorem tablesn487 : checkedTables n487 10 := by
   intro k hk
@@ -5049,7 +4939,7 @@ def hashgzl13 (i : Nat) : Nat := (if i<1 then 0x1409807404a582ea000068090000000a
 def gzd14 (i : Nat) : Nat := 0x195918981d41504b23c4c2880a7bc0ffbff
 def gzl14 : Packing := (2,0,6,0,0,6,0,gzd14)
 def hashgzl14 (i : Nat) : Nat := 0x31aec2284c18823bb3688fe493ac1358f619b94e1d80b95112c6c6e4d5c0804c6a05908e14045000000e5cc95cb00043eac618618003e9a4fe2d17c83644229039e058b00061400091ca42354eb5ed1173800000d0051b1041c920f04055022a040ed40005c0641
-def gzsamples : Array (Bits × Bits) := #[(0x8445b200673679400480a449dc72860c,0x440b040651468400400a049dc528208),(0x68418ef8c031934c390e981e002897182,0x4801a43858209148b908a189022893012),(0x6290104f000caa43851726039dd30827e,0x2212184104042a0206150602cc4308289),(0x148c82001a0cc82c702a90a968acc5f45,0x88d22080b98c42cf00a100900a8c0d46),(0x161cd482706611027db540f2641337001,0x3612d482f02611030fb565f2621217081),(0x30224c026a03cb26d80112aa22853c40,0x2a0320c831a828306f0011022028534c7),(0x2a903d1c3002a2842f25054b4f05cfc8,0x328a03c183982e2042a25054b4904cfc8),(0x4398a40660c0c18d90e9ee78131cee930,0x51888406c851c58d90e8e8781314a4930),(0x5224113090451e30e55cb840947a003b,0x5204816040511c30055ae804b4720010)]
+def gzsamples : Array (Bits × Bits) := #[(0xd866789f0851bcc5baf4c1477d7489923a4adeb26a7ef4967a54650cf77abaff3eb9d050ee8018a8e4319682dbe0000004082000800262ffe003ffc862003ee94818bc8a030b8703a051a216600e83828748908c04041a909a804a341388b04b,0x660430f6304000408000a81120d9120bf8920361000700b241a03130406001c002100343000800608905012082815115155135105115300135115195135114004810940a000a8501a001a216400c83820748808c01041a909a8008241180104b),(0x3adf76c6e74816e063e0573fd5fc348951fa1964aece4e2ae1fc61509deebf58f348f92bbed7f786cdad06dd4b30040004084206083d3c800200000827fbffee10a5320d4346642408444550a9805e51d401c9011c155421211a491a3c084f96,0x16208004d0a2d0801c0020088000140040100048030d00c80400040020008140100a400ea04030400084086054a0ce08208c20c08e00a88c2860868ac08a08e10a522044340402408440420ad800849b02449120c09c420011b4112a81c0f84),(0xedba451a51fbba6688e30d12476047ceb8a4e787317a255fbfaffc9c65c268666497287914177ab85eb7f7b43880000048800006ffc0a0500040003799fbc110020142d164867971c31a819a90330187282a400333d041fd5ac503c462d15141,0x890d044a08110c06009001754438a9002401c081000010145100a1300988008e04d0812105904f220e6a2091230c10c50c50c52c50cb0550450c50410c14950000000c1240630514302819000330386080a20014290098518c4124142c35053),(0xd5a2d6eff5f9635837ff16cb7c8d574b07fde6e83339136489cdf4ae062d46a70dd01b60d2b00497ff55aa5fb7ac00004377c285000081003db400b79a000001620690728808581499f838263de0104424b93dacda28a49cac7030803d680ca0,0x460228010302240080002188a010000358a962446d4624ba100821002462499008306249800440000d01194648801a41a01203a51241000a61a41a41821a00a16200901288084804b05838663d40100924a4158498202418a1102990bd1804a0),(0xd32f3763bb9025db737b15fb145b5cd28f779fae97ac9bf3df1569c1047d07ec5f2a58409050acb85aea94f115d4040040006083800241501fb7ff402004411280cfe802f1f1109a09812401011e04c0c1936464c689c14304b892484821eb4c,0x8199c1008034c0bd605606445a02ad840604048290a08044261002459009922c2004003458713189728a46192406a4aa4224c84aa4aa4b748a02a42228a4eb5a80cf680071f1109a0980040180120450c013607246d9c147046c92494027eb14),(0x80253ee4afe6efc3af90877935aea25fc9a272fbcaa257fc4fee68f73615712b9dc93cdfeb6bd176612dbfb39020043ff0001d7a8002c23fe04800004404001504f005813e0092ed74cad6010000a808d04417b188036b0b8022a040ee461aa4,0xb04001820243880413124a0c060c2002412c0a0200924490054200990200152422d4182244688800d80a0c094802c06006806a86c2c816c06c06404c02807d000001813e0012e404da544104002809c0203501c019610f012001d1ae460ab0),(0xfacf30e55b4166c5cd19bc40ce4d1a6882fdd0dd0e455b7831a3a63c19e4c054fe056bb784a75d566033e16c1abffbc000000203803f9c402248000046000502f90880543c7a3400020466cb521c74324e8912c19220165833a8a46b062190b1,0xe409140020949084b21291aa015b06a1d8dc425a5d060a0242a105050d4240000ca01a000081643839f60a094094330330370173b70394672178370352330760680880503c2a34002200624b121c76304e8912c1d230125c36a0a8c906229031),(0x6f323bf06e67e0b6ce4c2810063526a5e882ea1fa9e463d94f2cbf7acb5fcfe313f3afda3b716fc84c9c9c7f3b6800000c881d7877c005002048000022040416f9f7ed22c08149001206120b1259014011870b7a29c60462f21de06c91b8862c,0xa64a288a190c2c118ae041808210210fbd1c82c500e2688a2240b5a002443fa2029000218d800300dd0015a2848338338f3811003031072831833833a33c3682f9f7ec22c08149003004022a9248005011c50a7a29460460e619e82c1138840c),(0x5bd38bf781036e0a56a4a6ed5cf35b2b62b82537f8bd6ecc9332d7895968db29210eb69f721a9fff6d676d9d262bffffb377c000080020800000008000000002fdf768283d7800cd452109a44ec3a82e0b10284820e7b1004803452741876541,0x114483ea446008424100480550a0a11405020101800801012d5298c04094a428500c002400221346820004009603c43c03405c00483c22801403c0b401c0380295f768280150000941210180c08380060150081a21c688000847542640816142)]
 def gzcolumns : List ColumnInfo := [(5,2,440,64,6),(7,0,504,0,7),(9,16,486,0,8),(11,16,484,0,5),(14,0,1009,0,7),(17,0,494,0,11),(19,0,492,0,8),(24,0,999,0,11),(26,4,865,128,5),(34,1,460,16,6),(35,0,476,0,7),(36,128,859,0,8),(39,128,344,0,4),(49,0,462,0,8),(56,256,647,64,5),(65,0,446,0,9),(66,0,957,0,11),(80,0,943,0,11),(129,0,382,0,9),(130,1,332,48,6),(132,0,891,0,11),(136,256,535,96,6),(144,0,879,0,11),(156,0,867,0,7),(160,0,863,0,11),(192,0,831,0,11),(198,0,825,0,7),(206,0,817,0,4),(257,0,254,0,8),(257,32,94,128,6),(258,64,701,0,8),(268,0,755,0,7),(270,64,689,0,4),(296,0,727,0,7),(320,0,703,0,11),(324,8,675,16,5),(344,0,679,0,7),(384,8,611,20,6),(480,0,543,0,7)]
 def gzautos : Array (List Nat) := #[[],[81,130,118],[16,82,131,100],[80,81,82,83,116,133,118],[32,83,116],[128,81,130,83,100,118],[48,33,133,118],[48,129,82],[16,33,50,131,100,133,118],[80,129,50,116],[128,49,100],[32,49,130,83,116,118]]
 def gzlevels : Nat → Packing
@@ -5079,633 +4969,366 @@ theorem geomgz : graphValid gz (boundsBefore knownn487) = true := by
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz8_0 : block gz 8 0 4=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz8_0 : block gz 8 0 4=true :=
+  @streamBlock #[0,0,0,0,0,0,0,0] gz 8 0 4 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz8_4 : block gz 8 4 1=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz8_4 : block gz 8 4 1=true :=
+  @streamBlock #[0,0,0,0,0,0,0,0,0] gz 8 4 1 9 (by decide +kernel) (by decide +kernel)
 theorem allgz8 : block gz 8 0 5=true := (@block_merge gz 8 0 4 1 sgz8_0 sgz8_4)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz9_0 : block gz 9 0 2=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz9_0 : block gz 9 0 2=true :=
+  @streamBlock #[0x7,0xff,0x16d,0xe9,0x659,0xff,0x1e,0] gz 9 0 2 8 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz9_2 : block gz 9 2 36=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz9_2 : block gz 9 2 36=true :=
+  @streamBlock #[0xfff,0,0x7,0x5,0x1ee559,0x73ef659659,0x32,0x19,0] gz 9 2 36 9 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz9_38 : block gz 9 38 2=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz9_38 : block gz 9 38 2=true :=
+  @streamBlock #[0,0,0,0,0,0,0,0,0] gz 9 38 2 9 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz9_40 : block gz 9 40 6=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz9_40 : block gz 9 40 6=true :=
+  @streamBlock #[0,0x3ff,0x7b,0x19,0x3,0x19,0x1cb9,0xd9,0x1b,0] gz 9 40 6 10 (by decide +kernel) (by decide +kernel)
 theorem allgz9 : block gz 9 0 46=true := (@block_merge gz 9 0 40 6 (@block_merge gz 9 0 38 2 (@block_merge gz 9 0 2 36 sgz9_0 sgz9_2) sgz9_38) sgz9_40)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_0 : block gz 10 0 19=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_0 : block gz 10 0 19=true :=
+  @streamBlock #[0xbfefbef3c1ee25341d2,0x7fff79de7ff77af,0xaafb7febdd7fded777,0x27ffeadf0b99bfffe9,0xf6df7b6b2cd7faecba6b2cdacb2cad,0x3147e2ffecb2cb37ed4fb2f777af,0x1c5fe5cfcb965965967fd967cecdb4e,0x19b6dff65ff59a19ff,0x1965965e3ddd965965c] gz 10 0 19 9 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_19 : block gz 10 19 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_19 : block gz 10 19 36=true :=
+  @streamBlock #[0x1b6db6db,0x1b6d9,0x1972cb659659659659,0x32d9659,0x19,0x6d9,0x72e5cb659659659,0x1b2659,0x39,0] gz 10 19 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_55 : block gz 10 55 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_55 : block gz 10 55 36=true :=
+  @streamBlock #[0x36db6db6db6db,0xdb6db6db,0x6db,0x3965b965965b,0x6596d9,0xcb32,0xe5b72cb,0x1b6db6d9,0x36eb2cb2cb9,0] gz 10 55 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_91 : block gz 10 91 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_91 : block gz 10 91 36=true :=
+  @streamBlock #[0x1b6db,0x3,0x6db,0x32cb2e596590659,0x6e59,0x32e5b,0x1b,0x1b6db6,0xdb6593d,0xa5285] gz 10 91 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_127 : block gz 10 127 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_127 : block gz 10 127 36=true :=
+  @streamBlock #[0x6db6db,0x1b6d9,0xcb2cb659659,0,0x3,0x2b6,0x396c99659,0x36d9,0x32cb2,0] gz 10 127 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_163 : block gz 10 163 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_163 : block gz 10 163 36=true :=
+  @streamBlock #[0xff,0x72e59ff,0x1cb2cb,0x39659,0xcb2cb2cbf,0x1965cb2,0xe59659fff6592d,0xcb72dcb2cfb2cb36d,0x190,0x190] gz 10 163 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_199 : block gz 10 199 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_199 : block gz 10 199 36=true :=
+  @streamBlock #[0x19659f,0x1b6dbf,0x6d9659,0x32cb659659,0,0x19,0xe5cb967d9659,0xdb3e,0x6cb9,0x32cb2cb2cb2c8] gz 10 199 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_235 : block gz 10 235 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_235 : block gz 10 235 36=true :=
+  @streamBlock #[0x36db,0x1b19,0x1b2c99,0xcb2,0x3,0xd9,0xe59659659659,0x1bf72db2,0x199659659,0x159659659] gz 10 235 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_271 : block gz 10 271 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_271 : block gz 10 271 36=true :=
+  @streamBlock #[0x66fd,0x5,0x646cce,0,0x5,0,0x659659659,0x2b2cb2cb2cb9,0xe4,0x1400] gz 10 271 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_307 : block gz 10 307 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_307 : block gz 10 307 36=true :=
+  @streamBlock #[0x3,0x199,0x32cb6cb,0xf659,0x1b,0x3,0x32d9,0x1b659659,0x365cb2cb2cb2cb9659659,0x19] gz 10 307 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_343 : block gz 10 343 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_343 : block gz 10 343 36=true :=
+  @streamBlock #[0x5a0c6318a,0xc66d86336db,0x18cdb0c66db,0x2831b2cb6e847f3f2db,0x14b43e55c97e7e7e5b,0x13b436d595cb96db9,0x4800ae25717171f9f9659,0x896817e4ae5cb972db659,0x2f16186cc2331310b665965965965cb965965972cb2e59,0] gz 10 343 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_379 : block gz 10 379 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_379 : block gz 10 379 36=true :=
+  @streamBlock #[0x14031836134d8c66c7a0ce802bc,0xc3500036cc3006cf07dcf,0x66001b198c5072eb36cdbad877aa,0x561aad18c66db30575cbbf2fe5b6dc7,0x14aae2014952fcdae5cdf9655,0xa7542606d2dd3975abb5c5c6b6e5b6242d3,0x2fc807cfc857cfc838dbf3f36b8ffcd33,0x5a2d0053972a50d051ae2e59f1,0x62d06331ba63108cd6d6635b974db2cb2cb2cb2cb2c99,0] gz 10 379 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_415 : block gz 10 415 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_415 : block gz 10 415 36=true :=
+  @streamBlock #[0x1837b6dd360cdb603766140,0x63060c6c6dd395de,0xb8186d8061b6d805,0x1ed5a0e9833972e5be4cb4dad89,0x2d5710538b8b252b972e7e5f36a5c33a7,0x50a130ef62b57f3f2e4e7db5738403,0x4857e40e2f9f900e2e2e2e271bc5c59b4,0xeeb40e0a5f9f9f97272dcda1f1,0x2b7f1f8ad0c6266c331898b3118d6668cb2cb2cb965cb2,0x19000] gz 10 415 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_451 : block gz 10 451 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_451 : block gz 10 451 36=true :=
+  @streamBlock #[0x6fe6800,0xc0666d980ccdb6db56db6dc7fa784f,0x33019b6db3019b6db6c76afbee,0xdeb6621b6db972cdb77e5cb6db624,0x63471072e5c4f9715f973f2db6c6ed,0x625caccdb7f2e472e4dcb72d96d92877,0x3948e0e425c5c71f9571717171f965c6bbd5,0x3b9407cfcb91cb9573f2e7e5b972e85,0x4b33989fc4c36cd2dd8c5ab31316db2cb2cb2e59659725,0] gz 10 451 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_487 : block gz 10 487 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_487 : block gz 10 487 36=true :=
+  @streamBlock #[0x5140a05a6531018a2d,0xe7306d9ce60d96db6d9b6db38,0x1547056e6b9299b3336d8,0xa14e5b92b3960,0x1e82be5f25b5cb6dbbe39,0x389c5581b31662cdda16d815ed,0xe7120dab98bb894f9f97a5,0x154970b5c69896d717c9b6cdb,0x71717c5f1121b2357172e2e4a332fe5432cb2cb2cb2cb2,0xcb34c80] gz 10 487 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_523 : block gz 10 523 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_523 : block gz 10 523 36=true :=
+  @streamBlock #[0x6db65bfc,0x32db2d965b60,0x36cb6d9,0x6db,0x6dc9cb9,0x65b2cb659659,0x36db,0x1b659659,0xf659,0] gz 10 523 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_559 : block gz 10 559 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_559 : block gz 10 559 36=true :=
+  @streamBlock #[0x196db2d87f8,0x196db3e,0x397ec,0x72db,0xcffb2c,0x1b,0x36db6db,0x3f,0x3,0] gz 10 559 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_595 : block gz 10 595 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_595 : block gz 10 595 36=true :=
+  @streamBlock #[0x36db6db,0xdb6db6d9,0x6db,0x6db,0x65b96db65cb,0x1cb2e593239659,0x7cb9632db6,0x6db6db,0xdb659659659659659659659,0xa] gz 10 595 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_631 : block gz 10 631 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_631 : block gz 10 631 36=true :=
+  @streamBlock #[0x19ffffffff,0,0x1b6dbf,0,0x32db,0xe5919,0x67db659659,0x65b6fd9659,0xdb9659659659659659,0] gz 10 631 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_667 : block gz 10 667 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_667 : block gz 10 667 36=true :=
+  @streamBlock #[0x6dbffff,0xcd96cb2d9,0x19b,0x1fb,0x6d9,0xcb91cb9,0x65b972cb6cb9,0x6d965932e5965cb9,0x64c99659659659659,0] gz 10 667 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_703 : block gz 10 703 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_703 : block gz 10 703 36=true :=
+  @streamBlock #[0xdb6,0x6db6db6,0x33,0x72e5b,0xcb6db,0x1cb2e59,0x36cb6f,0x36db659659,0x6db659659659659659659,0x5] gz 10 703 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_739 : block gz 10 739 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_739 : block gz 10 739 36=true :=
+  @streamBlock #[0x1b6dfbffff7fffbfc,0xdb6d9f,0x1b2cb2cb,0x3659,0x36db9,0xcb919,0x6cfb359659,0x1df659659,0xcb2659659,0x2d7] gz 10 739 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_775 : block gz 10 775 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_775 : block gz 10 775 36=true :=
+  @streamBlock #[0x6db6755ffeffff,0x36db05b6c,0x1b6ced9,0x3d9db,0x6cb2db6,0x3909,0x32cb66eb659,0x36c659659,0x3965965965955,0] gz 10 775 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_811 : block gz 10 811 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_811 : block gz 10 811 36=true :=
+  @streamBlock #[0x36db6c,0x6db32,0xdb,0x1b,0x3db33,0x6,0x19b659,0x36659659659,0xcb2659659659659659,0] gz 10 811 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_847 : block gz 10 847 7=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_847 : block gz 10 847 7=true :=
+  @streamBlock #[0,0x6,0,0x3,0,0,0xcb,0,0x1b659659,0] gz 10 847 7 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_854 : block gz 10 854 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_854 : block gz 10 854 36=true :=
+  @streamBlock #[0x3,0x1b6db6db7e,0x1b6db6dbb5b,0x1b6d9b6db39,0x3e5cb9,0x1b6db6db,0x65c7eb2,0xcd19,0xcb7f26e59b2cb6db659,0x1c9cb37e7e4cb972e6d765cd72e5972e5cb2965973f35cb2cb97264cb37e4cb2cb932,0] gz 10 854 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_890 : block gz 10 890 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_890 : block gz 10 890 36=true :=
+  @streamBlock #[0xdb,0x36db6dbfff,0x1cb6db6db6db6ccf,0x7fb6db6db6,0x7b,0x6db6db6db,0x1964,0x7b2cb265b,0x6db35ecb2e7d9adb6cb6cb2dcb,0xcb8b772cb9b5b972e5cb972e7e5cbf965b726596e5dd65cb2cb2c65932cb965b972cb9,0] gz 10 890 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz10_926 : block gz 10 926 15=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz10_926 : block gz 10 926 15=true :=
+  @streamBlock #[0xd9,0xdb,0xdb6db6db,0x36db6db,0,0x36db,0xcb6,0x659,0xcb72db6cb2,0x2fcfcb965cb973f2e5965972e5972cb2cb965cb9,0] gz 10 926 15 11 (by decide +kernel) (by decide +kernel)
 theorem allgz10 : block gz 10 0 941=true := (@block_merge gz 10 0 926 15 (@block_merge gz 10 0 890 36 (@block_merge gz 10 0 854 36 (@block_merge gz 10 0 847 7 (@block_merge gz 10 0 811 36 (@block_merge gz 10 0 775 36 (@block_merge gz 10 0 739 36 (@block_merge gz 10 0 703 36 (@block_merge gz 10 0 667 36 (@block_merge gz 10 0 631 36 (@block_merge gz 10 0 595 36 (@block_merge gz 10 0 559 36 (@block_merge gz 10 0 523 36 (@block_merge gz 10 0 487 36 (@block_merge gz 10 0 451 36 (@block_merge gz 10 0 415 36 (@block_merge gz 10 0 379 36 (@block_merge gz 10 0 343 36 (@block_merge gz 10 0 307 36 (@block_merge gz 10 0 271 36 (@block_merge gz 10 0 235 36 (@block_merge gz 10 0 199 36 (@block_merge gz 10 0 163 36 (@block_merge gz 10 0 127 36 (@block_merge gz 10 0 91 36 (@block_merge gz 10 0 55 36 (@block_merge gz 10 0 19 36 sgz10_0 sgz10_19) sgz10_55) sgz10_91) sgz10_127) sgz10_163) sgz10_199) sgz10_235) sgz10_271) sgz10_307) sgz10_343) sgz10_379) sgz10_415) sgz10_451) sgz10_487) sgz10_523) sgz10_559) sgz10_595) sgz10_631) sgz10_667) sgz10_703) sgz10_739) sgz10_775) sgz10_811) sgz10_847) sgz10_854) sgz10_890) sgz10_926)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_0 : block gz 11 0 12=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_0 : block gz 11 0 12=true :=
+  @streamBlock #[0xa7b6da14f6db45750ba5d22ba85d2ee1d274a42908749d29452e2baa3e8a68aeae174d1e0382407079efef008eee70f4f6dae1e9edb5c0513a28a2971fe7fff4f8,0x57fb6daef5529b6daef6d5b6d4daf6adb6bdaef52f6da1486bdaf6dae94db7edb6dfffb6db6da14a5de14ee73853b97d6d7daea95b4f6bbd486db5c290bdffb6dffff,0xaeb6adb542b6adb4e05d24dae71ddc9b5c9f25c20db49a777236d3f9ddd6d73d3bbadae040b438168109ddc8daeff7bfbed7,0x3853b870a77501d6a80eb4e441cee75073babc1ceeaa0e7724e0e777bc1cee,0xaf6db6bbd5b6db6bbdaea174bdb5ebabbbbdb5ebda94851a90daf6ba5c3528daf6b85c3514535febcfffdfff,0x2bbdb6d77ab5edb6bbdaea974ba6db5d52e974db5d35d290a21486ba7dd29659652cd,0x55b6db6d55b6db6daea174ba6d7aea174ba6d7,0x2ba6db6bbd567edb6bbd,0] gz 11 0 12 9 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_12 : block gz 11 12 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_12 : block gz 11 12 36=true :=
+  @streamBlock #[0x3c9d6db66db6fdb6db66db66d9b6db6db6db6db6db6db6db6d8db6db66db6db6db6db6dd6db6db6db6db6db76bd774800ff5aa3fd7fffffebd777fd148bba2e89ce22f42f5139dffffef,0x7bdffef36ffdb6dde3f3f3f1f97c5b6cc4c5b6da7d3edb3b6fe53f16db6fc793fff7e3f14fc7e2636d7bfef7a7ffffc9ff385dd2ffffebfffef7,0x3c7cdd1fedeab6c716ddaf8fc7e2de9b636dff9cd9b6db6d98fc4dbfaf5dfe8c6bd7731aa1eff8084214db5d7ffdfe77aefaeeae,0x1eee3cd6bdfad62331c7c9bda716621985bedba0db169882fd782df9a312d0b4f6bbdaa0ff5a7b7ed7fa5e15ed,0xff63bdf9de99a9f3f2ceee2e2cc4ee66fafef7e6bb8bd0395eda075701ffff5fe8e77ff7bef1ebbbdaf4,0xaf6bfcba3daaad6d731769ed5ad5e8eaf477fffbff7ffdfe7e2637e3f1aef5ebdaffefbf473db5f7c95fff,0x7f3f35bce77fedb369662e35b8b8d73bf8fc5db3f9ff7fff1ed7ffff71f8b8bb8fc5b6db601ded005ae1bfffffff57dfed7ff739fdfd3ff477,0x4a6ba536bf7edb3ff6dda8a5a52beede53e94d4a5c5fe2cc534262cc7e2f5270b6e2e10a6d76db6dfffc214bcbca6daee385a9a01dd9fff17d966b2167ed65feecd659669fe7e5cb9,0xddb583adba36dd56edbfe3fd2a6ca13b5356b0916b35d94b3ffe508424bffed66d5aff2fffff,0x7a4cadbffe95f70ffff4fa7eb2f4b3e9] gz 11 12 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_48 : block gz 11 48 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_48 : block gz 11 48 36=true :=
+  @streamBlock #[0xf3ef9e1b6cc399b3662f881b6cd136fdfd99b6db6cd9b690db37fffe7fa36dda6dbf8bfc6d36db6dfda9be977b6da1681e7be7beae3ffdbfeff6d7ff9fffef9fcfbfe7fff7ff1c57a4b8ef0510,0x1d6dba7eefa7cedb36db367c5fca6f16dbbee38dbb57fe92db6dfc4c6a5b690bdb696da3cf7dbffffffff6da7ae73ffdebdf3ffffbbffd6f929fff,0xc3c53ff3b536529c4c4c596d61eff31c6db6dff2dab4c5f1016db6daffab47fdb5efffffff,0x13e3d3ffaef89862623898d7a6fc6d47ffd3fbbd0c7e26218bbd009fffff1ff5defffa69ffdfdded7b6d,0x1eacf55fa4b3e2ac5f9ad83a06702b8771c70141eae3dc79e577b4ea7ab8,0x298b897771c626262aa771dc480e4f89fff1ffe1262f8fc40bee74f89ff27ddcf7ffddeffe71d29,0x1ddaa5fdf96f8b4a52e85b987f1316edbfb68eeda14521484213bbbb6db6db612139ded090b5450ab4ef520bfdb6bda9ff79c1b7d37ca977,0xee9129a8859b7f8d986973a5cc7ea7c3e94a69e42c94fc6951a937f8bf5b5ddddada28250eee70441478b54cb29659ae262cfcdf67edf97cb9735965965c55d9fff,0xc6dd155d6da412e92d0555774d866ad3356dacfffffbefb3ee7ffcef5deab8,0x7bdce93bfa7def33e94ffa53f7d97f08] gz 11 48 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_84 : block gz 11 84 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_84 : block gz 11 84 36=true :=
+  @streamBlock #[0x70afdfefaed0627288edb6fefab6db5f8df91e9fbe4fbffff3adac07c536df8a7e2fe2efffd20074a569ffeae053c7fffbfef71e4ff9c07927ab537ef93feffff3ffdf,0xf09b78c66d9b66db6fc6db61b1b6db6d9ff5b7b9b66cd86d8dfc7e36b6db375b6d9b485c29b40007fffffadb43ef81fffff6827fbdfc020091dd1,0x7f828de074a898bb5b74ff76db6c6db6db76bc07ff8a0b6df8829898fc68280b5efa55bf5ebdbea147ffa97defff0,0xf6caf673e2cc75c4ee7fa428001b7ff6bfd77b4cdd75b31f8b8d77b6baddb4145aaf7ffd7ffa6dafeae97af6bd0,0x1bdfb6ddc5fcb76fffcd31f8989cef5edaf6d73bbd7af6b87af5dde9fed7b52ff6bbdb7ffdcffff,0x374e5b0eed717f5ed57a24925efffff9294a5eb8fc4c7e24955680524824925debbffffdfbfeffff4d4aa7ebd,0x78e054ba6fd388074f9dffc3ee9f96db31b6db003852e90e1293920000659af59a907eff9e1fc2925cf54e9f,0x3b86d5b6fbbbff1d7e39c1abeee2ab55ce28c69bb9b6b88217770bbba426db0521777771c485ddcd21485203e290a680c9932cd67fccfc989c7e4c59acb3f2ca99767d9659,0x1f59b76d19b6eb6d770d5d26eb384e1485ddddd967e5fff3ffe17774bb2eca6859fff,0x90e738355ec92fefff56fd3273b36d] gz 11 84 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_120 : block gz 11 120 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_120 : block gz 11 120 36=true :=
+  @streamBlock #[0x60007fbfc7bc38f0dbe3d499410568aab6da94bdac36db0db600c36db6c36db6db6db74aa0a5b6a429a9a295414a0294514a04aee4bbd28a294052aa8a5336db6db6dba55514adb6db6db6dd28a296d7fffbfe528a294052aa8a5ab5e9eda55514a00055014104927cfafeef415400000001c93c01f400000050008a5ddc9389f4fd3fc0a00014aaa2954a0d0ad1556d76b296dbdadb,0x5000050007ff78051800283000f88575776aeae6aeaeed5d5cc9a4a8f4f5e7a751e9e95d5dcaeae00aeaee5757128a428844d2540d268f4ea269340a00a7828009725dc0b92eb682e0bb89725c4b9271dcee12e49c773b89725dc0b92e1e5c8a5ddc05c938e9ff7fa7e9fe,0x4a2d20800ff7fe4f800ff1fe252d20980c452de7e497930007c46beaf2bcaa4f54a8254aa4234f2a3d3d1e9d47a7a575395d5de015d4e57572200bebd47a7af3d3a8f4f40003e80000520923a4e952524923a4e91292411d2748ff7f93e1de4e49ffe07f8f,0x50945bcbcbc052bfdfffada1edf05094b442740a1e5e52d104038d5e55297df5f2a552906a5420682b517a7a1e9d6d7a7a57577a9aeae0057577a9aeae3d70bb83415be9afa3d3ada9a0d02ab80055700148294d794a4885417904926dfff7ffad51f5dedf77,0x140014a78aabe7d7bc1401f341438000c4a551ca5a551ca5528f72954a134a5a5525ca500a5525ca5b5ebdb4a1dca5a50f4a5a5525ca5fa529fee555f57db5efbded,0x2592096790f7ffea74bdfffbdc3b9d276704b046c2eecff2a5458200e1bfb7eabedfb7ded0d55b43685dea5d5ebd77a977a9757af5dea536bd574da9b5dc03daf55eda9b5ddd146a28bbd0babd4d086843ff7ffd6ba7fefffdf738efffe74dff,0x15d5dcaeae00577b5dddd5d34ee91c569d5d5dcaeaeb5c36bd4fca6bad77726ba9c0b4b535debb935d35dc026bbd7726ba6bbaa429a9a9b5ea8536bdae01ed7aa9b6bdae1aee9774d77aee94d74d77f4d77b5ddc2e9ae9a7749bd5b74edb,0x134951e9e8ac6a6b1f97df3d7754f8ff7f9e9d47a7a7177a7f8be355e9d40311f6a6a91b5ed4bda9aab6bda93bd4baa35ebbd4fffd4ffbeffa2f5dd53e09ff5ddfe977,0xd11108d11e4cffd7ef8ffcffe7177774b8c2051184446e8584a1a881610880e91ba1a146d0d440d0a35d144cbbbba5d7effdbf7cfbff5ffccd777748529754d,0x4a24a211289e5e47fbfd9ff1fef7871e1b7c7a9] gz 11 120 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_156 : block gz 11 156 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_156 : block gz 11 156 36=true :=
+  @streamBlock #[0xb405b5ed18a02da783fd1636d4d5a4ba6daf5edab6985b6b0dadaed6d8d876b0db6edadbb5b6636ddb4a30f6da2d242c7aeada5187b6d14332d5b56d0053bd005ab6ada00a055a0a50b4df9b156829429b376a6ad0adaf681474faada9ab52b6bda0516bd5aeb6bdb5c5b5d6db5ead75b5edae2d0b5c1d6d7b6b8a1dfffff6d5ae0eb6bdb5c5a00156d0a2d0507bfe8055b428a029414ae2dfb4121dde8a5052b8b45a9ab42edaf6d716da966ad652ecb6edaf5edb6bd02d,0x96514a0721623fdfafd00a00e0eca2940d81d801451f10361e018ec974b8d838063b5749ba134ea007a709a75003d387725451c4bbbd03b92a28e5772347d054503b9efb9c00d054503b9c528295c3dff7be29414ae1e82228a252af5e2838a289492f5c02280a4df7a50714055a9045c15144a4974b87fbd7efda0a124bc9777f7,0xb52960560051fed3ef0a3dfff80b529605636028f8a2c00c6f1bc5fc7e216c02002fda9004800b6d0934296ba2e04bd04296bbb813680109000dae00e1c02dae0297dfdc07aff0a5777702d0055b42b8f5e02ada15c7004bfe170bf6d00254a52e151b680254a52e176368400941ffee9f7857ffdffff,0x8b03d4b4528b446f223ee838f7ff6fbffa3f110b03d0b0a42c2344db6c2c07016101612a2d11b6dbbb2200294bdfbf4d5dd9201294bdb434c34aa5ae17026d28aa5aeee04bd24111e28e0d7a00e1c51d6bd051485d47f70ffbb8a9094ba8eeee94bb874936b83adaf6d772ad7075b5edaee5a10b911c210852148428d46bd17a4471fffe1ffbf7d3fff6fa3e5f9,0x5a075b5eda0bff6bfd5aeffb6bffdb6b817858da075b5eda02d038b68b687055b4a03db6b8e8eda501edb68cc5ab6ada0714b56d5b40e28ab414a71e82ad052a8eaf6bd5aeb6bda057daf56badaf6816d7ab5d6d7b6bb8f6d7fab5dff5d6d7f7fb6d77396bd,0x61181ad28a2ee06858bf7bffff1ffd1dce077f69189add297700db691890dd21dc1e43ba5b6ef57c00bb874be8ef542022ee2a439535ded77701e922a6bbdaeee03d241ea527140ee701ea5271415c74a5210d44297774a2ee1d24a7fdf7fffc74fbffd79dce3c9d2eef,0x91451cae01eb14a4ae0e35c7025ed77071451cae5a070001c7a97b5c0f29028eb5dc01d2051d6bb921ae1ebba8025e9c0f5dd402da3b8774a4e28eb5dc0fe9495dbf0fae3870a5ed77,0x296ba5c0b4f2574d77ae3de2e01e3dff4f10a5aeee03d2852877700714bd31314d2ab8004bd3c8aae002da5a54d77b5ddc097a495d35deb8ef5fdc01fe97bfef,0x1dcd200d1a5790ef5ff96b8bf2efea52dfe94fbb9a401869423acee37900030d0a6214a558b6ef69212d762b217485d352b4294a4ef6bfcb5d2162b3ee9f74d4bffd29ff,0x2211206a528a514512bc9fe3c645b7ffcf7fb20ffff39] gz 11 156 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_192 : block gz 11 192 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_192 : block gz 11 192 36=true :=
+  @streamBlock #[0x3a5d01101b1b1b1cea8d2c25ad999b6d59b6ecd86c662c75b6cdb28036dbf6db6944a31b6db6db6db6d9b6db6c75514f1d54057b6bffcaf5344a6a541edb4ffff03daf4001d36d1c704db4383fde07e800900ff7b7c5783800000e9b6be8004db40a1d36d5af688a7cf428b941168fe9a8d5,0x1292209bfdbc06cdda94f9efd293ca9b36dbf9f8fc8336dda94ec489916db6f683d7b47efff7a070d4f6861d74824dafffae39369ed74a5dd3e7a74d775486bcbfa69f6d4abd0a40fb69ef80db494813f7fc94a4094b82fd054b82a8949e51a8a7fe9ffedf007ae2d4a7dfffe9f,0xf2c0f7fcb9cdb577f7efda41e8b601b36dfc5fe46db9dfe2fe2d16c06db6f4c5bef6db77d9ed62b6d5b1fc7e2db76b36dd75cc5aae90a02bd054a5ed0ab5c155ff7feba42800bffe001705af05c151705f7f7fb8057af5ffefbdd20a,0x344ff06ff75ce78fe9880de5b331316ae2cc462eb9c469bc9baded071defbfd1e81c1dfe2ff12ba4295c15ed077a07a11e21ea100400002103cffbc3bdfffae9ffff5ae7087e87d,0x11041404abd70e5780a82ad7495eb87f9a2940f47a7ff000f47ae03aa82a8af5341eda1ed7a7a716da01b6877b687aef6a527aef5c3ffdfaf,0x3790d3915b460f4dfbf7fe7fbfb454e098db7687b54fe2fe2d1bc52e0a9b76d0776ffef95eda0edda6cc4c6d3151bb6ba4e4dae93934b6db6a5ddedb6bbbbda886bb8436a8ffa7b7febd2df7dff4df7ff7,0x5724f4798f7e949898947748724edb18beb71f89fc529ff2a2939b7b41d2629f8a5262e97b41c4fa7d29796d24f4f6d39ebdae94bb89659ff4b2cf853e97fa2cfb294b2cbda8ba52ee9,0x2ba42b6fe598371710ba5eba44d36eb82fb7f744fbff0ba5eba4eab6b1429770bb9adac5614bb85dd9d749c9acb85d2cbbbb3413a59acbb2c85d2f5d2049a,0x7b4657b5ea7d2d29502b85d2f6b30deb194f69e921a52a5ae14e174bd740a7b683929fffb7ffdefbf87df70ba5eda0e,0x3cbc91048b3f7dcb7c751e9fffffffff97bde] gz 11 192 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_228 : block gz 11 228 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_228 : block gz 11 228 36=true :=
+  @streamBlock #[0x790299b1b19a9ef04b6db6ccdb6cdb3538fc4c412db6d9b37e96d98db3e2936ccd8db3c149136d72daf1c00ae1b445c0868e3bfffffffd209,0x3c0066c6c6141bb6db66336db36cc0accebb6db674d9b6c6cdb36db6d8db6cc06057594701c77b6b9ffeda0282497385a1028282d7,0xffff5a364d06c036c6f9f8fcdb59b4ab6eb0a6dd6f1bb666fe4d9bb6a807500550efffff5b68eee94d74a85705a,0x5f97cbd92eef6acf556d8c462e262d277313ad9ca8adbf96ed4dbe2ddd6fc634b7dfefff0a52eeffe9fffffb6bbfeda5,0x3c7d263bfdaba8e1cd9d6663b938b738ee53b66cdeee66e2e2eedcee3d352f1dffffcf5edae4bbd71d2eee,0x2bd3954e29b7c8dba1b6dabd39cb4aadc99ba1b747566b55dbbb70a2bdb4e3d2d725dcef6bbfd10e1,0x3c28fcf4ff35691efe35899b6518bf8a2af88c5992d4ffccd97d2311ea7c90928fe8a7d17b5fffff597ba4919ff7659,0xddb6ffd9297bf3f88099ab6db76efe262dd2931371f7f40fbafeb77e5f10bd7bc14ba4cdff6513a7d3fecbd965965967e81485965d96594d,0x3a61efcfcbf95a7f1f895554e76e84753dfdb7dff9450552a49d6b265965965965ecadb5967d964a7fb290faa6fa5d27,0x33f7c2f7f1fe79ee1de50f] gz 11 228 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_264 : block gz 11 264 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_264 : block gz 11 264 36=true :=
+  @streamBlock #[0x1e35e3de4b955bb9866c240b336eb76aeb6e19866dbd6edfbd0d9d2d6a77ea6b336f6dd6db7fffffefffa57bfea25fdf6db6ff81eb41ddffdef80972685e8eea287ff7fb68242,0x7797fffabdff0e3ac50dfcb8fcfcabd31310ce86666dbd066aed72d25edfa36c76d75ab7feb6bd3fdc1e7b6fad7ffff95edff0396db6bbd0ae,0x3c9fed1d586b5feffcdb759dd6caa6262fe7e262dd76b7d8664b5fa6eb71cb6d3b92ee1edbf6db6dafffffefff,0x5b4e4b817bf6b5fe4f96eda725c389da313967d0e3fa7cff12da7725dc0bfffbffd3fe97f2dafef,0xf7fff924dbe73b8f7ffe7f2e3f3f2492e9cff2df171f96ae0512909012ffff124a6dff4bba5dce0afeeffff,0x3fc5af4ef4c915558d62ac16bd3b910283b6c6dd79c1c00b6bd1ded74a48a5dfe7a0aa,0x9f971f9f97fbb527f8b5df1ac62626262f898bb462f89fe2b98dbf66d8df13148ff65967fffcff459b52fff67fd9f1932cb27dae,0x1ed84da4789f17e62cc7fe998bff0da5851485b7b71f7ee2e2f61f7e9adc4dffeebb19dae2f83196591967d965967ffeb2cb2cfb37d9659f67ffd3f7d59,0x6cc5f97f169aeafc5fc8b5fe59b6e8177b4d757d80295c6d7b48e2cb2cb2cb36b2c996535955acb2cf8f1dfffffff699649,0x19f67d9acff859f78f13e65fffdffd933e] gz 11 264 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_300 : block gz 11 300 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_300 : block gz 11 300 36=true :=
+  @streamBlock #[0x18e15bb5b0f4cedb666e39b1b6e87a6edd18dc74effbcced6d9fdd76999b6dd7fffdaa79ff7c75a1687ffbf828e3fc28e3c012e3bbbdb6dfffff7b6db5e87ae,0x7efffdf40ffdb6d831662fe2e2e200dc4c5b6dfffbf37c426277ff3c7700bffeffff003ef87ffdffdffeefffee01ffe,0x399fbbb86c5736674edc5fc5ddc6d8ae6db2d16d52da5adb30db31bb6c5aa2a84bba6fbd5ceeff7b7fc0f15c,0x5a39400c4530ae9311d15c46ca6716977aea6ad99855050de2ab2fc405aab697c4d53ea83fffd352ef5c9,0x55b6db686f7e53652ada2bfcb72e2d6b6ed6d3bb4edd96aab85a5aeab6aadb7ebdae9fbfe7f,0x1b1dc256d18576d99a217701ed0854d5cd9d6dd7af3817e23bd1e80a885debbc4d50774bbd7a10ad7,0x12f65bffee5ac1c55d6a7ef6d3171715ff198be6a2623aef9f99889ff389224a4a5967feb2f6df7a7fdd49659652f0a7df51f7d,0x616c263fd262c0c7fed82ee211bafce3f2e2e29f6f66340dc5c5b8affd6dbbb7edb4bb839a7c195d96597fffbd3ecb26597ffff0f2ffbd9f,0x1694e0777b680b6b8a6d383bbad3fc8f53ffe3e46559659659652ee9197fbbbbdfffffff64977a965965967d9,0x2207fdf642cf8c9dffc9020ffa] gz 11 300 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_336 : block gz 11 336 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_336 : block gz 11 336 36=true :=
+  @streamBlock #[0x123fdbca00051d1c5fc4750cd862b3bf3758eccc036d99b6db6dff80010a42e005a3ffd4ab5fff7dffebff7ffdffcf6fdfa7fbfffdfe7bfff54088508947,0x71c50ff673ed780e9cd5831f96ef9315f9018adbf6cadb2ad137ed54db687ff3bd1d3ffea7fffb8047141feeefffe9b6dfbff40,0xa1c3dfbca3fbf7b6a6766e2cc5c56be462cc69b0f7d6a8efee6238a50e26befffdb5fffdfefbffdffff,0xf7ae4b82893de9a9394939548be7e4e24d4d5f7ed4a0f6ba52e7ffa914fffdff7f7ff9352ee9,0x7bf7fbc7fea0ae5fff6cce4e2e23f971a05751bfaa0394702bfdffffff527ffb43ffd43d75a,0x15c6a8550f914a5f0c4e16a89f951438074edb6db770aff5e8774d513fe14f68a5,0x924f4e3fcb800280ad1bb8bb36f60c974609a1892a07a596529242f6b87f70336d4b2c8905,0x1b75badbff0606337ee6db6ddaadb899ee8f68fbf7edb8bd6db6eec3b39c42eefdf2e2f9717499ff0cb2cb36ab2ca2cb3ecb2fffecbfbfbb2e9,0xd94ea9b5294aaf59c5b651edd1555696d3d746596596593265965932cb2cb368932b6dafffffff6bb2cb2cb2,0xf0c83ffc1597bff97fd919] gz 11 336 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_372 : block gz 11 372 16=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_372 : block gz 11 372 16=true :=
+  @streamBlock #[0xee7efc6ddcc59fc4377ffc005ffff1ee28aef7effffa3e0,0x7b00edc5831980acc180e156bffffd5f405707,0x67f7db6c66634c5d6d82fd6625600af005fbff6d,0xafb689710c6dffffbe079e9fffbefb6fd,0x3f3fcfdb1b8b9f9389b8b6b5c5a0052fbfedf7f25ef,0xeee0f4ee3bba401dc77aeee97707,0x1ed1342d442ac31dd981969108951ce,0xc04bb809776db6da59b6db6d9b6d2cb232259574bd7659,0xe9671b68eadac62dff2da659659aacb2c9964a5a64,0x1fee7f9ecfb3f59] gz 11 372 16 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_388 : block gz 11 388 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_388 : block gz 11 388 36=true :=
+  @streamBlock #[0x6db6db6db6db6db6eb6db6db6db76ffffffd,0x36ce5b6dcb6db6db6db6db754a000,0x36db536db,0xe5c8db66667200,0x36dcb656db,0x1f2e4,0xf0cb6db6d805,0x1b6efdf7fff7659659659659659659,0x37effdfd6dcb72e7e5fcbf97ffffee5cb972e5c8032cb2cb2cb2cb2cb2e59,0xe5bfffadfffffcb6e5cfc9f2db9f9f972666,0] gz 11 388 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_424 : block gz 11 424 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_424 : block gz 11 424 36=true :=
+  @streamBlock #[0x1b6db6db6db6db6db6db6db6db6db6db6db6db,0xe5b6d9b6db6db6db6c0a,0xdcb6dcb6db6db639514,0x1cb60,0x36cdb6db74,0x1b7239a,0x6db72d86,0xdb75edb6dbdb4db659659,0x1b72ffdbf96e7fefb9f6dffcb96db965965965965eb2c99659659659659,0xf9f96ffc37effdcb7fee5c4e5b73f206dcb72e7e5b73f2,0] gz 11 424 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_460 : block gz 11 460 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_460 : block gz 11 460 36=true :=
+  @streamBlock #[0x3972db6db6db6db6db6db6db6db6db6db6db6db6db6db6db,0x75b95,0xe2c36db6c6db6db6db6db6c00,0x1cb90390007272,0xe5cb6d9b6db6dcd0,0x2d39,0xe5b36db6db9add0,0xdd6dd6db6c7bbfff5b,0x36dfbfff7fffeffedb6dffb7edb6ee5cb2cb2cb2cb2cb2cb2cb2cb2cb2cb2cb2cb2cb2,0x1f2cdfcb60dbf97efe5b73f2ce59b72db61b6e2fe5b96fe5cb,0x5] gz 11 460 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_496 : block gz 11 496 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_496 : block gz 11 496 36=true :=
+  @streamBlock #[0xe5c5cb6db3336db6db6db6db6db6d9b6dbfff5fffff,0x1b6e5b6db6fdb6ddbedb673fc,0x36db8b97edb6ff,0xe46db6dbdb7fa8,0xdc9d,0x5555aa,0xdb6db60ffa,0xf96efffbafd36db2cb91b6d9932cad659a659,0x6dfbff6dbe8eb36dcb72e7fffffffdffefff90e5f2e5c991919659659659,0x66fffd9b6d8e5b72e5c8cccdb6db,0] gz 11 496 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_532 : block gz 11 532 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_532 : block gz 11 532 36=true :=
+  @streamBlock #[0x2b0d8db56db6d8db6db6c51cf800ff,0x6db6db6db72db7f5b6db6db6db75b6db6efffdf,0xadb7,0x36d999b972e5800395,0x6db6db7eee1b6d9f5,0x1e0190,0x6db7256dfffd,0x2dfff7f7f6dfb77edb6bb6cb2cb2cb2cb2cab2,0x6fd96db6e7e7e5b97f2fe5ee7db7ffe006dbae5cfabbb2cb2cbb2cb9659,0x61cb7eedfffb3330f96df2e5bf972f9,0] gz 11 532 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_568 : block gz 11 568 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_568 : block gz 11 568 36=true :=
+  @streamBlock #[0x2ad6e6fcd,0x1cb96db6db6db6db6db6db6db6db6db6db6db6db6dbffff,0x1c436db6cdb6e4db6db6db6db6db605a0,0x39725072e5c802b972,0xcb6db6dba6db6c8,0x36db672e6d,0x3a1b0,0x7fadb6ddab9b6d6e59659,0x36db6db7ff7bfedb7ecffb8b6ddcb8fcb9f659659659659659659659659659659659,0x36dffcbf96fe5fcb7ee5cb2c36dfcb8b72d99cb6e7e5c4,0] gz 11 568 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_604 : block gz 11 604 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_604 : block gz 11 604 36=true :=
+  @streamBlock #[0xff336db6dd36c5fafff,0x1cb8b972db6db6db6edb6dbadb6db6db6db6dbb6db6db6dfe,0x5ad81b6dad603d,0x3636de0e66d,0x31b66db60,0xf96c6dcaad,0x1fcb6d8e45,0x1f2cfcf92ddfddb6d9b6dcdacecbb2cb9,0xdbf97effdb6d9df65b717f2d9f9bfffedb0e5cb975b659659659659659659659659659,0x3b7fe6d87cb7f2cdee5b72e5b6db6396dcb,0] gz 11 604 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_640 : block gz 11 640 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_640 : block gz 11 640 36=true :=
+  @streamBlock #[0x3938be5b72dfcb6dcb336db6db6db6db6edb542d7b6dffff,0xdb97f9fcb6db,0xe26db6db37f2e7db6db6cdb6db36cdd6c,0x7cdf9b4e5c872ea9cad00d850,0x36dbe4dd,0x1ee4e5b60e,0x6db6d9b6e7e4,0xedb7e9f4ffcffbb7fef65932cb2659659,0xdb93fff7cbf97f2db7fff3fedb7f3f2e3ef953939acb2cb2cb2cb2cb2cb29659,0x7cb6e2e2fe52db6d838b7f2e7e5b8b972db72dcb3,0x57] gz 11 640 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_676 : block gz 11 676 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_676 : block gz 11 676 36=true :=
+  @streamBlock #[0x7ffffbf96596e5972e5cb9ff6cb2fde,0x36cb6db96db9f96db6db6db66dbad6da0b6d0,0x39f9f6cdb6db66db36db6db66dcb0,0xe5b6e4dcd0dbbe680,0xcb6db6db6e5b,0x396db66c6c,0x7b96dc7f2a,0x1cb2e5ffffcb6dd966ffd3b659659,0x32cb2dbfff72e5cfcfdf6e5cb73f3f2dcb2cb2cb2cb2659659659659,0x1bf96dcb72dcb9096dc5b65b97f2df2fe5b3e5bf96cb9f9,0] gz 11 676 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_712 : block gz 11 712 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_712 : block gz 11 712 36=true :=
+  @streamBlock #[0x14abfffffeff6df3f272e5965cb2fe59fffffffff6db6cb972cb2dcb96fdffefffffffff,0x1b6fe5d6db36db6db294b68,0x3364d4db6c94570,0xf6cb6cb6c,0x1b66dd,0x35,0x3cdb6db96dbf9ae5b6f9aea,0x1972fdfffbf65cb965972e6fdfff7ffffe19,0x14a72cb267e9feffffff6db6cb2e5967e5972cb9,0xdb6d86d9665b659965965965972e59f9,0] gz 11 712 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_748 : block gz 11 748 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_748 : block gz 11 748 36=true :=
+  @streamBlock #[0x4a9697dff7fdfecd998d9b6ddb9764baee59726634baddad7fffffcc6975b1ab6db72d9675fb6cd134ffffffffffffffff,0x4b18e9b6d98dd9b1d372db6db6db3660c66db6d9b3a1ab0db6db6db6d86c2bec6b94e,0x4b18f6212db31bb363d89b3170b6db75cb3660c66db6db66ce86acdb967e5b616db6c50c5ab52ae,0xf5251fac649b73a8c4d8c36292f0cedb70b92498d49a5db972dbf549ffe9,0x3a92b5695cea1471b6292a5a577739534753b495,0x1788adebfdbe2d9249d6188c36e40667fbe2db694a4696ef20c59b6fcee,0x5525150af8a2aaaf472d3e7e2149014b69e5e82e5a512,0x5622a2a776c4fe289a492d1cbb13f9316c141ddb154a525a772ec4e832f7d9659,0x15496e358f311972dabaa963178bdcf6fffde1d24c318fb72cb6d6b54a2d149be3f2db7ffefeb1965964d9,0x6301f10c67104f1f895db776df5dff7ff0c6880620c601c40bedbfb7ef7ee2fee2ac664d2fdb1ffbe59,0x25944721e19] gz 11 748 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_784 : block gz 11 784 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_784 : block gz 11 784 36=true :=
+  @streamBlock #[0x16a6a47f9fffecb666db6e2c72cb96c6755fffe3326a59b6db6ffd9b2cb6c6fffdb6fff16dffffff0ffffffffff,0x3c0371bf8fb6c7406d8d99986db6d9999b6db03c37fb1fcb0245a17fbb8aaf02a4f,0xfe461c0edc435b76c06ccdb0e336db939b6db19b33d64d4ed815354ffefae550f,0x28348c876ba07b69b3331b66dbacccdd66ce5972c857611af434ee,0xab5477e2e2eba81c5ba16aaabdb4a61522a6d,0x1d78ffa8ff6b16057233a88db612dd84626db380dab47777,0x13aba2c6f49038b614736f4297574411d36d0a9b6d,0x2f138bb94e290514de27051dbfec0570d92d89f8a2e13adf481c659480dff5b7fdd6d9,0x1873affb71f32e5b71cc4037fbfffdfe053f36d170ee2e7331f93d99515b36e59659,0x66033a2256e2ddffff6cb0cc01987128afdb18a2e27974c5b720ccf3e59,0x72cb2659] gz 11 784 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_820 : block gz 11 820 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_820 : block gz 11 820 36=true :=
+  @streamBlock #[0x287fc7fffb76a406cdb6dbb5262dcb96436c01807ffdfffc36c36c6285b6c2fe4ff6db06dffe3c07fffffffff8f,0xd800012f94b6d800606d836c366db76db6db6db0db0d9b6dfe5b6db6db600d8970f5eeea0029fe002,0x600014b5180012db0000125000014b96f34048094af800,0x2800507c4206c25294a52976f5c394a529aa6c1b61b36d9b6db6db6c36d294b75b6c1b6cdb6db6d9b3304a44d086d485c,0x5a001457cf96a5294a5294b9ea4ad96a400055a94a5294a52f5ea6ab6d8b6d7,0x7a30c65621ebb6d5dd7adeb73154d56d85a9030156bbd7b5ed7714d4d7b68f47aef6d,0x50007097f88a94bd77aef692ee76e6d7265a90003b2d4a5ebbd77b5d2ee976a9b6875b6d,0x3e818c5e217e3e1362bbd775dd7315b57fddb7582d483019fc46d6bbd7b5ed7714d4b3fff7b5b6c47fcffb5b659,0x14c63070d8b96e5b2db2b4bb776ef6b77f8b6262ff36fdfbf2d4861986d8db5a94bd77aef5bb73130dbb5bff65,0x6036cccd2c4c06d999be2cf962dadbacc5baffe2d80db3334f1376a436cccd78fc586fffedadbafdbaef1bc46d80332c8f659f9,0x659000032f] gz 11 820 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_856 : block gz 11 856 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_856 : block gz 11 856 36=true :=
+  @streamBlock #[0x2801c5abffe6c1b6db6db6d872e5ca801c7fffa8d81c6db6dbfffff36dcb9723febc01feffffffff1ffe00fffffffff,0x1bf9b6a99b1b6dec5bb6db6db66c6db7f16e72db6db6c17db1f376edb03b9ddddceeeeee1a01c1,0x1198531b4d8660715716dd0830ddd6db003335adbf286807be97d,0x531660f71a626c6e2fe6d71a3138b8b752c632f1fadb676db5df95e26ed6fc97477,0x134012e93c2514fca6b8d38ec74d004ba4b6db437e4e03a6b619ba5,0x1dc00005b6db685f9b6fcdb6bbb636db345b6db6c76ed6db668b95b5db6db6c7a77977a1,0x5005a170ef3f262f5ea9ddba00b42e2db6fcd71539b6dbad9a,0x1cf401731710d31a2d6db7eee35801cf5b36b6dae3422b6db0a9cb9736dbffeb59,0x3a900b7fdda72dcb67c4c7e4c7e37e35462ffffc7b3efdfd6015ffb6db1db6df9ae26bc4db6dfd659659,0x6ccdb16c4623666311883e3e945b4b317fffe0d99be29e206ccce271039bc56b75d7f1f8d71765ecb2e406591ef659,0x1ef32] gz 11 856 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_892 : block gz 11 892 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_892 : block gz 11 892 36=true :=
+  @streamBlock #[0xb405ebbad29fe6db6db6dbf97f2f972f9b41ebbdbffffffffe00b8e016ffffffb972edfffb7fe7,0xf140f7c8006db96dbdb6cc66db6c6db318db6db6db6ca596db6db61b6b4b9763daf451409b7ebffd7df7f00f3fdefad,0xe91c40006db360937e6db6db6c3a4d9b6cb6dfcb65b6fe03ceeb9a912f49f7b56f929a97,0x113c3e52e01b0679b6db752e6189b6e5cad6c3854df,0x283bd77b7cf94b80740f5dddbeca97771c1dca8d,0xf04dbf7fffc7174807ee42df6fff595d29a30ded52bd,0x3e4503c636d00cde00028b6d00c36d4bdb4a49c9b2a4,0xb6d4bf84ae9007e00eda97751095d265191ffd15cb90869ef65965b,0x1fc002807af9b680f3ff9fd7edf7f7bfb6d98cdb6d98db6631b6db7f595e2ef1659659,0x501800c4dc4b41b8bbf98bb7ffe00d470062981d7773b60a4c9964c8f64f19,0x3dcb901cb97c8] gz 11 892 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_928 : block gz 11 928 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_928 : block gz 11 928 36=true :=
+  @streamBlock #[0x2d2db4e7c53768dd6db6db76b96aaddb6bbf4d98eb6db6db6db6ebd6d7b6ff85a5,0xdb0e2db3e2db126cdb6db6db65a6758108696d5b690b6db6c03772f943c,0x3fe3ed80db6db619b32db6d8cd95b6d9bbbbbb857dff705,0xc063036db6db6db90078006dba050,0x54daf2d0a2da9b6f9685,0x3c84fbfe1dc1eb02dbf7fed3b83d0,0x170012904b6db6db6d6d0aa4a412db6db6ea5b,0xe91dddcdc8ee0edb5b5dddea9dc1db6dbbbbd659,0x5a01c7cdcd6c06fde7466cdb6db19b2b6dbb32cd659,0x30cc6199b6db65fbf97ee5bf716575b9746d8666ed33a6db6dc5fb717f3f2dfcb7ff5d6dc9ec6c0cb,0] gz 11 928 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_964 : block gz 11 964 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_964 : block gz 11 964 36=true :=
+  @streamBlock #[0x1b6db6db6db666db6db6db6cdb6db6db,0x6db6db6db6db36db6db6db6db6db6db,0xe5cb6db6db6db6db6db000,0x1b72db96db6e80,0xd9b6dbb5b636db,0x72072,0x36391b655,0x6db6db1b6d9659659,0xdfb6dbf7edb96e4df2fdcb7219659659659659659659659659659659659,0x6e7e7e46fe5b73ffff2db9ffff7f2e5c436e5bf972e7e5cb7f2e5cb9f933,0] gz 11 964 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_1000 : block gz 11 1000 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_1000 : block gz 11 1000 36=true :=
+  @streamBlock #[0x3e5c5972e6b6db6db6db6db6db6db6db6db6db6db7e,0x65cfcb8fc9999b666db6db7c9c9cb96db6db6db6db6db6db6db,0x36e6d,0xdb6dcb96ea6db6fdc0,0x3e6dadcb6db76ab6db6db60,0x65cb6b4072d5,0x32e599947272dcb4aaaf9,0x3e5b6db6eb6db1b66d9659659659,0x36db6667ea66c072db7266b2cb2e4cb2659659659659659659659,0x1b26db6c8db6db9f1f2dcfcfcb33336db636db7f2e58e5fcb8b9,0] gz 11 1000 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_1036 : block gz 11 1036 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_1036 : block gz 11 1036 36=true :=
+  @streamBlock #[0xe3edb6e5b6db3adbf6db6db6db6db36db6dfffffdf,0xf72dc9b1b0ccdd36db6c6db6f90dc86df83fc0fff,0xf9336db6db6db6db6db6db6db,0x1f2e5b6fa,0xe7dcb6db735edb6dd6db7e,0x3972,0x3c1b6603e8,0x7b6db72fc6dbacb2cb2cb2cb2cd,0x6db6db6dbceb6d9fb639ae40cb2c99659659659659659659659659,0xcdb1db7ffb72dbfff99b6396dcb91cfcb6e4e7e466,0] gz 11 1036 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_1072 : block gz 11 1072 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_1072 : block gz 11 1072 36=true :=
+  @streamBlock #[0x7cb8b9f967e5b6db6db6db6db6db6db6db6db6db,0x1f5b9b4a,0x1cb965cb972e436c6ccdb36db6db6db6db6db6db6db,0,0x6dd53,0xe5c8000,0x2b96dab7267354db6d94,0x17e5b6db6db0db6db3619,0x6db6db6db6db6db6da99bf96465965964cb35965965932cb2cb2cb2cb2,0x36ccdb6d99be5fcfb9306db1b6db631b9f9f9372,0] gz 11 1072 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_1108 : block gz 11 1108 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_1108 : block gz 11 1108 36=true :=
+  @streamBlock #[0x15b6db6db96fe5b6db76db6dff968156dae,0x6db7f2db6db6dbb6db6dba7a05aa,0x7f96db6dcbb6deb,0x73edcb7372ccdb6e43672f977272e7e5b6cb6db,0x6dd56db6db36db,0x7c9cd,0x1e393330c051472,0xdbf6db6ecb276596596596596597,0x1b6dbf372cfdcf99f97cb90039717165932cb2cb2cb2cb2566b2,0x3f97cb6e3ffef96e27f2dc5c5b72e2e5c5bf972e5c9cb3338b7cb8bf9f93,0] gz 11 1108 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_1144 : block gz 11 1144 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_1144 : block gz 11 1144 36=true :=
+  @streamBlock #[0x71389c81b6d9b36db6db6db6db6db6db6db6dfffffdae5575a1402d,0x1db51b7a6db6db6dbb6a8fffff,0x76cdb99bf9a,0x7cb973e6e436dcb6dd6db6db,0xe7e5c41b6db6db6db6db6db6db,0x1c8,0x7347251b,0x1b6dbf36ed,0x672db6db6db7edb6d86ffdbf6dbff964565965c65ccb2cb2cb2cb2cb2,0x1e36666663e5b71fff97236dcb6e4db930e2dfcb972,0x7] gz 11 1144 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_1180 : block gz 11 1180 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_1180 : block gz 11 1180 36=true :=
+  @streamBlock #[0x7136d999b6db6db6db6701b6db6db6db6b680014fffffff,0x72f9372dcbf96db7f35b6db6db6db6ed3e5f22fffff8b6da,0x1d6dcb6dfcd6db6a5,0x3db6d5b6,0x6db3e4adb00,0x17ffddb7e7e6b90e56db682d,0x74db6c36db6db,0xf966db6dbadb6db6db6cd659659659,0x366db6db3336cdffb601f3f2c99659659659659659659659659659,0x1f20dfcffcb7296fe7ffe5b8b960db96e5fcb7172e5fcfcb6e35cb8bf9f9,0] gz 11 1180 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_1216 : block gz 11 1216 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_1216 : block gz 11 1216 36=true :=
+  @streamBlock #[0x38b898b8fda6c6db6db6cdb6db6db6db6cdaad528f,0x1c5c5b6db33672db6db6db6c36db6aaf6d,0xe5c9b6db73f2dcb6db6db75b6dbb4,0x1edb3535,0x32b661b76fc8,0xb7e6f9d571ab69dc956d5f950,0x726e5fcb6d8a6dbf97c9b,0x3e7e5c7e5b6db19b6db6fe6b6db6db6db659659,0xdb6db6d98d8c36c36cb2cb2cb264cb2cb2c990c99659659659,0x30dc80f97c8f90e2fe7fe586cc372c33331f2dc5cd,0] gz 11 1216 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_1252 : block gz 11 1252 9=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_1252 : block gz 11 1252 9=true :=
+  @streamBlock #[0x3b6e3,0x7b8b972db6dbb6bbda,0x1e,0xf3,0,0x72,0x3,0x3fe5c5b6db,0xdb661932cb2,0x199999b72c,0] gz 11 1252 9 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_1261 : block gz 11 1261 36=true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_1261 : block gz 11 1261 36=true :=
+  @streamBlock #[0,0x2b372db6db6db6db6cc2db6d89a9fffff,0xf6dbb36db6db6db6db18eddfabb921,0x6ddb6ddb6db6db6dbb6755,0x6db262ed,0x159b96db6db6dbb7,0xf9f95f9f9,0x33ecb8b36d9fe5,0x772e5c7e5fb72fd3fedbff77ed9b61b6fe4cb9ffaf,0x673f2d94fcb62df973f23e5cb2e59373fedcab7afee5ffff3f3ff7fffd9ff38a55c52cb8b89c5f2e2e2e5c9cd67e5cb973f3eee7e7df5cbd7aff1eafff67c,0xdcd65c98b263bf2e5c5c5fcd7165b2e7e5cb7cb964cb97172dcb8fcb931f96cc7e5b8b8b2e2dc5c59,0] gz 11 1261 36 12 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz11_1297 : block gz 11 1297 32=true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz11_1297 : block gz 11 1297 32=true :=
+  @streamBlock #[0,0xcb2db6db6db6db0bff,0x193131f96db6db6db8b6db6db6db6db6db6f,0xcb2db6db6db6db6db6db,0x3db,0x1fcb6db6dbb,0x19ffff97f3f3f2f9f9f9727,0x1965bf965b2f9f9667,0xe29a94b8b8b6dffd61f36ddb6dad69f36db7534,0x50a52f9f97b5a529acfc9cd65cfcb2e7e7defbdb5ca7cd97f57cfcffbdcf9cffb2f5295aed4a53f35ca4e3f2e2e297d0fbd4a5ffb9323f3972e7cbe73fee59,0x196e596cb2c72e7e6b898bf965b965b96dc5972db63317e5bae2ce59cb3,0] gz 11 1297 32 12 (by decide +kernel) (by decide +kernel)
 theorem allgz11 : block gz 11 0 1329=true := (@block_merge gz 11 0 1297 32 (@block_merge gz 11 0 1261 36 (@block_merge gz 11 0 1252 9 (@block_merge gz 11 0 1216 36 (@block_merge gz 11 0 1180 36 (@block_merge gz 11 0 1144 36 (@block_merge gz 11 0 1108 36 (@block_merge gz 11 0 1072 36 (@block_merge gz 11 0 1036 36 (@block_merge gz 11 0 1000 36 (@block_merge gz 11 0 964 36 (@block_merge gz 11 0 928 36 (@block_merge gz 11 0 892 36 (@block_merge gz 11 0 856 36 (@block_merge gz 11 0 820 36 (@block_merge gz 11 0 784 36 (@block_merge gz 11 0 748 36 (@block_merge gz 11 0 712 36 (@block_merge gz 11 0 676 36 (@block_merge gz 11 0 640 36 (@block_merge gz 11 0 604 36 (@block_merge gz 11 0 568 36 (@block_merge gz 11 0 532 36 (@block_merge gz 11 0 496 36 (@block_merge gz 11 0 460 36 (@block_merge gz 11 0 424 36 (@block_merge gz 11 0 388 36 (@block_merge gz 11 0 372 16 (@block_merge gz 11 0 336 36 (@block_merge gz 11 0 300 36 (@block_merge gz 11 0 264 36 (@block_merge gz 11 0 228 36 (@block_merge gz 11 0 192 36 (@block_merge gz 11 0 156 36 (@block_merge gz 11 0 120 36 (@block_merge gz 11 0 84 36 (@block_merge gz 11 0 48 36 (@block_merge gz 11 0 12 36 sgz11_0 sgz11_12) sgz11_48) sgz11_84) sgz11_120) sgz11_156) sgz11_192) sgz11_228) sgz11_264) sgz11_300) sgz11_336) sgz11_372) sgz11_388) sgz11_424) sgz11_460) sgz11_496) sgz11_532) sgz11_568) sgz11_604) sgz11_640) sgz11_676) sgz11_712) sgz11_748) sgz11_784) sgz11_820) sgz11_856) sgz11_892) sgz11_928) sgz11_964) sgz11_1000) sgz11_1036) sgz11_1072) sgz11_1108) sgz11_1144) sgz11_1180) sgz11_1216) sgz11_1252) sgz11_1261) sgz11_1297)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz12_0 : block gz 12 0 8=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz12_0 : block gz 12 0 8=true :=
+  @streamBlock #[0x141541455a156892494a4139ddc7bffc39ddd54ef554ef5e75a04eb4f7bffce73bbbc0e7038273bbbdefff,0x1415416aa8aaa02908225ddce3a4979ee738ef6a95ed52fff921ddce2bb9cfaee71dddce3fffbcf,0x505505ab6daab6daa90a4294a6bba5d210d27de7ffe9c2e1086db68436db6bbdbef28a6d57777b55dde5c210df79f79fff,0xa028156db556db4148529b48a28ba6d2490a6d24974da46db6d3db6da45145d36bffd14da,0x1415416adb6aadb6836da94d7b6d77a95b51faeb6bbd7b6d77af36da8fd,0x1405ab6daab6da49290a52949294528a292428bca28a49fffff,0x1415416adb6aadb68290a4294a596594b29659,0xab6daab6da,0x505505] gz 12 0 8 9 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz12_8 : block gz 12 8 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz12_8 : block gz 12 8 36=true :=
+  @streamBlock #[0x5aefbaa7efb333337a6ba5c3f7fb6db6002d752eaef5d99999920666d9b24edb6d16db6002fdf7afbfdd9d6675fd7b68bffebfedb6d800af5c9573bd675999a415db6db057ae9aef5b6db6db6db6d81524bd5be9a1554e36db7aee976db604fdb5346db60573bd5aef42aa836db6db60000bf7e97effb82a8fffffff0015ebd2bd77a0aa0200016d7770e515545aefee9000b6bbb8728aaa2800057b7fd5fdde82a9cfe9b6ffa8000af6a52aeeef4154380003efaad79c50551fff5ddfffe000f5d569d4501400003fd7d36855539ffe1eb97c000252aef6855500000aaa15ee0aa3fefffffffaff800aaa14f4154040db6c0af5d2957777a2aa80b6db02fdfff5ffff71554ef,0x9ae9755aaf331bfefa57efd77cdbf7fb7aeeeab54e66306d7754d7aea4d9b76db92edb6edb69e4f2f29f7eceb67fff7c97beffbdffefdb6dff93effb6da092174b7675b34429ae4927252db6d85214b6db6974a5d2db6d81dd2170450aa74d3fbfa52e4a6bd4802a7aee903ba52e48a154ef4e977739ea5d203dfff24e9777aa95ffeee4bfbfbfdea5d249d2ee75529214bb92e977251b5dded74d24ea14482daeb6d777b5d3493a85282daeb7edb6bcff5552bdeffabbc93ffffbdb6d0474aaa94f6bbab9c38ff77bff4f141ff69cefbf7febd7f874bbd4868e28029b4e73937ef9ff6bd0aa553ff93fe9a9715ea4486d7a154aa77725297a73d4ba5210a42e93aa948852ee4a52ee4a3f7fffffffffdeaa57ffff93fffe9ff,0x26b8aed61eea976afa57ebbf46de75ef7e4d715dac02ea976aa2950d7434db6c2968a42c2dbaf43cabd61effeb4f7dfdeb5df5d8fffaffff5ebd08abd60170a2b4f517082b5c611b5d810a35d1086bd601ded703d3d4da74df7f74df70402bd03bdae07a7a9b4e9a970ba685c88423ffc255e8554fdb4ffef7f4d4b8e1084abd0aa90db4eee0b85e9d5dcb6da0770902adb5e95dcb6da0770e055b6abd34aa50fffff4dabfeae4bcffae14d2a94021485d36a842ae48201ded7a0aef547b5dceb5c03bdaf415dea8f6bb9d6b910840a36bd00852145369d14521085342efff3fed7a1ffffe9b4ffffffe9bee,0x25d5697eaad57f6d555b58f0fe8ac25d56953556abb6d555b58ce9d5cb4169cf2f35ffeaef5effb5dcefbf5dfeffaf7febbff8b4e451a4521577a44886d77383434ae8a24435ea20d77086940ef42e24953d247b5dce4d700077a17124a9e923daee726b80211fe73a6bffcaf5effb4e77dfa02139d341484af41221b4e7041a02f6d46952150122941b681deda9a5775028a53ad16d52bed577af3db542abbff8b6a94f6abbd3adb542a8085dea28d2290abbd224436bb9c1a1a3fddeffd7ffabbd7bfed773befd,0x26db582db7dd53f7edf4ab7bcecf7f9ffa6db582db5175746bda14ab0489d8c288510985175eda66d3ff6bdffdfef6fa853b6ffedffff7bf457b699b4a2f691745cef6d0a8539b75b68bd45177a1a2b6c149014abd3df4d54d577bc70b80014901757a7a17aa9aae091029b680a6da00b86daa90d0a5e842ae09273a6da0777b6aa5ebbdaeeae70e2bdb69c236d771e50553aabdb69c26daee1ca0aa28536da440a2f6a28851745ded0855c1227f4db6bcfffb7fffffffdeffabbde7,0xb5d2eab5dbf5dd9e505b6bdaddde25af6bbbaad76bd77639416dab5b1bb75b4dabdb54f34f37fce02452bedabb1af37dc02fdb5edaa4d26bb9c0a294eb6a6a6bb815e82d70d0692f4040ab6a5e80000b5d349a77a1c0ab6ba95dddebbfba9e9effd0a2416df5b5dddd4f4f5de85282daeb6bbbbdae9a4d77770e5156d75b5dfded7d8d3cdff771e2455b7ded,0x9ae9755ab7ed2a6dffbe975efd4df55bc5bde297ae9755ab51b4a9b536bbbaf5eaa58f6d76ee75eda49d297fff2a7dffff7def7dff24e97ff27fffffffffebdb493a5dc28a2548414bca35c89122452974b851242145d145144073b9d24d1ed4d3a69ddfd29700e77749201cee749347b534ef4eeee939d145145d14514493a5dc28a35521a14bca2ee45d17448bcfffff9274a2ffff553f7fffffdefffe9ff,0x55ab55d5bf6ababf7efd001be9bffc055ab55d5a1b55d546a35e6935d2e5f7436bbe60b0a28bcb606db66db3366dbadd99d6c0db36db6db6db00000294e0a57b680080340773801401b6dbba42e0a497a7a14d3a685d17452f2e6db6ee90b82925e9efa69d37dfdfd3ee,0x16db556bb55bba974ad2ebaebab6db5ea6d4db6b6db6dbb6daab56a9d52a5a955552ad5abeea9d8d2ec52bf7ea848e2b85a15eda793cbca5964c5932ecb266f17166b2ec9933594d7b69932ca5964c5932ecb266f17166b2ec993359f9,0x4d74baad5bf7dd53f436fa55e6fdd8d4a6ba5d56adfbeea9fbff7d2bf7efdf] gz 12 8 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz12_44 : block gz 12 44 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz12_44 : block gz 12 44 36=true :=
+  @streamBlock #[0x3b7c75b31e5e7cdb638005f2d49fe7e36dfff9b6d2f5ed29daeceb66385cdb6cdb0db6ddadb636d83acdb670b9b6db6db6db6db6db75bf0e9d6ebd168ae14a13bd36cdb6eb6e1d3add7a2d15c295b6db60db6db6dbdae909ae9ae4a42aaeee8dba1edb66db7b5dc26bdae74baabbba36e815b6db6ded702a6b83e93570700fff1fe73a7ffded702dae70baab8500a16bd5716bdb4f5d55d27ae2d2bd3cd7b4f55c5af6d3d755749eb8b4a0f6b826bdaeaf45a3d0b4aeffff7b5c135ed757a2d1e85a50557f09a49df7d5d71e85a5be0ff0d5770f54e7aeaae3d0b4a01aa84d0053254141dffe3e9fe7d550f40142541428294e86aeb051d39c00f5fbe3d78a505b6828a75000f401e8f6bb84d7b5ce175574b7aedbb4af6bf84d74d77ffaaba5bd76dda5,0x1ed466ccc6ffcd7cb5207b1b6d8dff9df78096accd998dbb9aa4b5206adb6db69acdb636ee6080adb6db04d958ddd15453ded1e8d9b7e49b2b1bba2a8a57b47a36637436dd36dbca52bbda1c212a80b40494a5af687772a80b4a7b6a684e0a577b46e9f14af7c7af78e0a5af6877714af5c7a0a505b683a2df7db4b457f75282db4145a15b69681c14b5ed154573e840e4bbd79c14b5ed15457135c014a1d687f487878f5e97df0a51568777048047a0a50287772da7d0f4e014a050eee5b44d0f424a52d7b43bb968553423d3ca52bbda1ffcb7dff7c7a,0x1ba9f7c6ad9ffd945a3dcebffcdb3ffb78f7f8dd47ae356ceeeca2d09736db74ee6d9ddd804a26db6ceaf43e10a2a808771fe6f2b3adaeee1455090ee12e619c74ebfe90f850e108ea0754494853ad77770a1ddc7503aba9210a9c28158e9f0e1d21ebd4e140a1ddc387487a145168028f4d2bbd7cf6fbd145a00a029a573abaa9fffe90a2a8fa7fa85552bbbb8515426810a853adaeee14cfe90a0f7bbfe9d6d7770a1ddc281c970a75aeeee143bb814d021392ea75fffff0a1ffcffa7fbdfe,0xfbe7df63de5fa7dbcf89049e16f1bc5bdfa7dffbfdffef13423d76128b4528b0a4482408db53bb22d14a2c293c8046dd7ffbd0f85effb6d57a1c57f87efffffd2521b5ddd494db6abd0e292177b52e8a68214fd487c10429a1485290941ea1052290daeee0928a6a2945294940eaea11aff147bfc35294a7fc078f5f48a450892886a529485201c7aa508b4ea46a2aae7f8bef43ea5716aa9ebaab8948a97aeeaaefbfe924ef6daaf47a3ed2d575aeeea77b6d57a3d0f69691486d777224a28d4528a42912908852177affffbffef7ffdf4fa7fcff1fffe1f,0x768facf3d7b55eab96a41eebfdbebdaaf4f5697ced08d624f5ed57aae5ae066d245a535ed57a700da5eb9e87d2a177af6abd054ef54a977a5d2f5c9a8a2954bbd7b55e82a77aa54ba2974bd77fa429f4fbbd7b55e9414012f5c94a514a6a5debdaaf4a0a08a28ba5eb8a54bbbd7b55e9c3a5c025eb8a5aeef5ed57a70e9703d50b5edab68b48bd57b695ea85af6d5b45a4bd57b6952f5c94a28a5352ef5ed57a45e9145ed2a5ebbfffd3e9f77af6abd7bd7ffda5,0xabe2d28f37dd575f2da3d4556c6fbaafffffeeff55716947aeeabaa4b6871a8af5ebbaae440919eaf8b56d5b45a09febd3dff75af5eab8b56d5b45a49d35e9ea52f6bd7aa916bbda4d0aabba812a903d5716bdb4f5d55dd40ea9135ebd502bda0d4aab9cfaf4b5f7dea816da7aeaae72d7a5a7aae2d7b69ebaaba294421af52f5297abe2d77b5b1beaafef3fff5efbdff,0x1feb283bdbcb797ef3ea2d48f4eca3bf7efffc7c47a3a6b28392d16168a28a8b5c7a66db955da2c2d145101e8dbf7ff147bffd7b55e9c4bbd1ebfdffe174a228ae8a6bdaaf4e577a3d00a23ca245c2114a17085294a290a42005a00bbca22942e8bca5290a514a2005a25dd2e17794452bcba2f2145214a28a272ba5c7af7ff14beffe1f4fa7ffce7ba7c7a,0x3c3523be7829485108521280be0f7bf7a5214421485e9f15ac4453511d444494a5e763ef2979280ae76d4a3e134428a53fffe9f50a9344210a5ea42104210d7b55e8017c0884210fa2979f0d4bca2a8bca6bdaaf400a905defff87d14421484290a210a210a5214421485dd1b6ea933ecb2cffa59ff0fb2ca52cb2cb2965dd1b7ebe,0x1518684095ed57aa2da7f95d02610835ed57a3fbfffdbd47f7c792bdaaf545b445c551e7bff7abdaaf4045e43c2979f7a1790a85e535ed57a09d2ef4145e43ecfffb359f65ecffd7b55e827f77affff,0xf4d44fbe3c92f2f2f2f3ef2f2f2a92d48f2e7fdf3ef9efffffffff5f2d49fe] gz 12 44 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz12_80 : block gz 12 80 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz12_80 : block gz 12 80 36=true :=
+  @streamBlock #[0x1ebef25a51d52df3aca3307fbc195b1b22a945ad2b3aad685bacaccc66c66448b19d66ddacd9d6ed6dc24fb8db6cadba6fc66dda7526db66d9b6dbadd1252e36db2b6e9b08cdbb4eb6db6dd6ccdb696db6db6db6db6db6fe921481489286bdaee9b52e5b49bff692f290291250d7b5dc36a5cb6934ee92913ada36cc3aeaeea90db6da49fffe75b40057577577b6db4e00007269ddc04a5b5da5b6bdb6d282d3bb87296d5a5b6bdb6d28ff26d28073abbaa436db692ffa7ab9c9493694039d5dd5dedb6d2403fc08449435e9ba35b45bffe92f82211211254d7a285b45a0514001a24a1b6db7c061dffbe0f27c013472a6db6d7002d2947383844816bbfd485ed5a4bc1fef39c1dc702d777a90bdab4e4a24bca204224a1af6bb86a42f6db49bfe4ff81089286bdaeff5217b6da4d,0x3742dae809fb7ca33cbcf86cf61fe10fffc6e85b5d0029b5ca33bb8d9b1b120148297773609ddb3d7ffbe025ffe3c82521f1b7fff3fffde776c9aeef5c0082971107777374dddeb80a5173baa707486840ff4853f53e3fd213dea70777ae005294ba6a521dddc3bd12e26803ff9c28d773bbba8ffe077a571e803852777aee777729c0eea05a5b6b85d68714e077502d2db5d2eb41ddcffa5007777ffdb5fffeff3bb95e9401ddc977b69dddc51f5ffef81e287b8b47fbc50f5ddeb80e2825c5a2b3fdedae07fdae00b5e7f8a12ef6d701d36b802d01ddc4bbbbd700290a5d21452173bbb8eee7fbffdf03fffffffffddfffe,0x6c65b7e8aa9fb7c00ce9b37bdfe06cd8cb6bd155c36b80666db366d854ee10336db6cac7bf6ff8685e552b7c0656e7f6fffaad0ccac0d4daee9ae9575ae032b76cda6d74db4db6c011b521ff4a21bff6a4016ba40136bba52e94d70dae00b5d4a3ff2d03d3da005af14572d03d3da005a000b54b6ad2800af4005aa5b569400528ffa7ab9d4f68016ad28a9a3ab9d4f680168a03536bfbd74a6b8a00b5fca1ea6d777ae94d714016b82808536bba52e94d70dae00b5ca3ffedfffffffbff6f802d7,0x7bc96dfa2aa45331ca07aaaf11b281212daf455715b31ca56650ba9dd5b657ad95eef5e7fffde85e4949b630f25aef79fffd8a5b6cfa525dea5145d17ae925cdb18096bb6cc4a28a2949b61adb00a44521485ea510a7c50125ae022912945d17ae94a5c50125ae5156bcd1340e9003ff968ab6d1340e9003a425a07708a2a5b54504bb85283b87752daa2825dc28ab7ed3d69ce00b6969dc55b6d1d69ce00b6968a442f528a2e8bd74a52e2825212d72bffebcffffbd47628a7c50fff2d7,0x7ada53c2a968acaf3fe5ff579c04cfff12b69408556b456508510c94daa18ec2144dc21fb5ed3d69ce3b87915290fbed0e73bbd7dd290db6d02b4e71dc38a14a28801a1ddddea23e91b4a255ce73bbbea697fd215a0da502ae739ddc8d7a5085288ef6da914073bb9ddedb42145100ef6dae280e7773bbdb6bbbb87d3da005145b6db6d15ed3da005145b6db6d014a436d4d02ae739ddc8bbdb68428a2ffffb7fe9eae739dddfff6dbfffe,0x575dc5aa29694a1ed0f8d6e02db4b4f575dc5aa29694a1ed0c2b70b6abdaaed3d3bb879f52d3a2943da573cfda653ad3bb87752d3a2943da51b9ded6571da777090a96d5a5b6b8f69569ddc3ba96d5a5b6b8f694ab68240a516daeef68f71556d0702945b6bbbda2d3bb87752dab4b6d74bbda5fa7770f3ea5b5696dae8bbda5,0x756c2d0ce9ed6533bcff98e6df11b3b71ab1ac6f16756c2d333a7b594ceeee6d99b6ceee999cf5dddb6cef6d7adbac33c9fe1e43ca521f56dd67fffb1ff3bdb6d6dd61822288708bbbbab6d980dadb6dc28a27745eb6db73aada09a0744e909ea689ff4854ab682681c274a27af44bbbba8903bdb6b89a0709d144eef5c28bbbb8ef6dff1340fe7ff3a3b1affffffe,0x1a8525b5347553f6a4e8779f63d923dff85bfd8d5296b6fd1d5451b513a1d1458db664b7d3f451f3088a2d2db6f4885c45214843528914921489094a521451229085145214890da794b9b14bca2f28d48f16c5127fc484a294fa4ff4ffffa7d29fb488522290a42885288514514852f3521128a290a7e9965232965967fd2cb2cffa5967ea7c4ffa59f,0x30a9cedaa6aa9768a1d2c23aedb5daedaecc27335e2c2584db6dbca9cedaa6aa9768a1fdf956d5ab6a873ff3fb57ef607bff2bed7085e52ef763b17945e4342f2794bffc790f29487d17659ff766fffffb359f7b2fff3c7b2967d9,0xf2a9792dbf4554bcda8943bcbcf8f5ff2dbf45567edf28767fc] gz 12 80 36 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz12_116 : block gz 12 116 11=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz12_116 : block gz 12 116 11=true :=
+  @streamBlock #[0x1e7c02ff8005202821285ed4bf8a4fda174453a22d48f7fff2d4877b68e15f68e145b425dc2da1deadff71fff6842e12973dfc0a1dc201fe02d78e901694285a50ab42144242f6fff8fff,0x1a87818631b674cd5b75852318334a4630d9b0a555f0a550771851dca156d0a555a14aa1ffca557fba4252a8294782940028f002811484a557f94aa,0xf290c07fbd867486366779a1a225c1a00ee4d01dcb55dc3c5aaee00000005a28be5a281cff7fb81d24a5c0ee7ae01dcf5c0e9252e0ff7fb8,0x3cb81bc562ea6f1dc1b31de9b312fef42bc3b85e804b536b82d4dae01c003805b4a02da507bbbd7143bbbd703b85eb83dfdeb8,0xf3e01ffef011480a451aa908529770d525d14a2ee8d505cb5eb87dfcb5eba5debb8e14ee38516d285fef96d2bbd451451744294521ffff7ffffff,0xb4005a035a606b5abd2da292a2da2aa96d2bbd16d2bbd02852850a2da577a5b4a17f,0x70000280a77180cee301b60e14070a771c29dc70a,0x180730c0663557596a6d526a4b536aaa7cb535c2ef4b535d9f7f,0xd2c60d99a5986d9fb1815fbad5f4294bf86a92ca597f66a99,0x3ca400cf80] gz 12 116 11 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz12_127 : block gz 12 127 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz12_127 : block gz 12 127 36=true :=
+  @streamBlock #[0x17feb6dbf7fbfdedb6dd66b5a9b6d9b6db6dade358d6db613989cc5f16db6eb35ad4db6cdb6db6d7feb7777f7fbfded5db6db6db6d86db6db6db6278d3bbb84f3c4f3c57895db6db6db6d9cdb6db6db6c739dd27771680a5285a57ffffaaaad5b6d28f4ffd2ffa5ffd3febf6db683d75757773d7fed7777f3fddedbeff7fbcaff6affdaeeefeff7fbcae50b4a,0x1efdb7ff7db6d35db5d5f74ffffbdb6fdb6db6db6db758b6fe358df8b6da6bb6babf174ab171bc558b6db6db6db6db6feebffdfadb6db6db6fdd3fffef754db6db6db6ce574f1b3c6b6db6db6db12bc558af15536db6db6dba7b5c71dc5726a8e7392ab56a536db55529fffb53f6db6a8eeb6dbffe07ffdffd3fff5ffe28f6b8eaee77d5b6daff6bffdfb6a536db557dd3fffef55,0x3db6312fffff6dbfff7ffffedb7ffefdb66db6db6db6c6248a21ac678b6daf1f8b31f8cf14f16db5e3f16db36db6db6feb6db6dbfffff690a7ffd3ffffee85ffe9f6db6db6956db6db68a21bc6b14a4297c4c52562f8a84f8cf14b6db6db4848490927b5c71dc00249ff7bd7af5ebdf0eeaf1fffffe9bffe9fff739c00a012fffff4a429fff4fffff8685ffe9,0xa003dae3abb87aeaeaeee1772800f6b8e3b873ab8eee1772800f6b8eaee1ebababbb802800f6b8e3b873ab8eee171c000af4e5001ed71d5dc3d7575777,0xfffffff4bfff6dfffbff7ff4dffa5ffbf6db6db6e78de3f1bc678b8fc52ef1485b61ac678b4f17f1f9a6fe4c52c62fe2db6db6dffffffffa6fffb07ffdffd3ff4effa5ffd3fe5627c6b118a6fc521021bc6b175629310a9e2975629bc54e9ff2aa94ef5ffe3ffffffd37ffc0fffbffa7fe97fd2ffe9f,0x1fbbb5ddddfbbf77eeaf5352ab5d4dd6da9b8bbb5ddddbbb7766257a9a55a5375b6bfedfbdb5ddddfbbddeeaf5352ab5d5f1f8b18f55dddcee775e257285a530250b4a094d29ebd5f7b6bbbbbddeef757a9a955aea,0x3a6d7ff76da5b6d4d5f6deffb74d566d9d36bb8fc5db696db557e5b5f9316eaacdb3a6d7ffb6da5b6d4d5f67bfe74d5395c636db4b6daaa15589d54a5294affab43a6d7ffb6da5b6d4d5fa7bfe74d5,0x12fed3efffda7da7da7fdffbf7efdfffbff6db6db6da5dc5a4c5cf1ac678b4a2d28b4989d6378bbc59fc5cf19e2758d62db6db6dbf4bfba7efffb4fba7dd3fe9ff7e1f4fa7ffd3ffee48e95ac6f1ac5d28ba5174d624de35881249ac7e24de33c5c91d2a126d774bfba7efffba7dd3ee9ff4ffdf0fa7d3ffe9ff,0x120b690b48496dd76737736eddbba5bbba4887ffde5e5e490bc112124249ed71c770e73ba4eee887ffde5e5e4290ff85b6db6db6db6db6db6db6db6db6c012b529b6daaa50b4a0016da52850b4a089092124f6b8e3b8739dd2777089092124f6b8e3b8739dd2777,0x3dbff8bfbc7fdb7ff17ff1f7ffedfc5fbff8fbffff8b7feffffdb7fefffdfffb7efdfffbffff8b7ff17f78ffb6ffe2ffe3efffdbf8bf7ff1f7fff78b71632c5de32c62c4c5b7f1bc5fc6f1ac5988f11e2dcb17f173c658fc5fc4c4c658b66378b963f131962db31962cc658fc5c58c58c58b778b317f1bc4c598c58fc6f16cc6f1778fc4c4c5b7f1bc5fc6f1f663fedde2cc5fc6f13173c4c4c591964cb2e2cb972e2e2e5cb972e4e5972393265cb932e59,0x7ffffffffffffffffffbfffffdffffefff] gz 12 127 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz12_163 : block gz 12 163 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz12_163 : block gz 12 163 36=true :=
+  @streamBlock #[0x1129f77857fdfdeffe9f79ff79ffff0d4183004dffff7fbffffffffffcc60001801806006cd4e86009aeca743006336c6db3cb7ffb3f7efffdbf6ffdd29774bb986eb3336cd9a6ffffffffffb19b636d8c36ccc36cd8c00c366666d9b34d0c318d54dd0dfb6febf7edbfaffdb6db6db6db6db6db6db6db4d1aa9ba1b36c3acdba636db6db6db6db6db6db6db61400fbff7fffdf7fef9ed7ff0dbff7fc3dfe1400000000005500a9b5edb5ddebfabbd7aaff6bda7f8550000a0000014141c77bffe4d7b7ffd3f5ded77aee26ff8505000028000154504bdae29fff43febfa6fdf17ffc2a8a000505000140a283fc0414a4290ffff4800a3ffffc0a280050500000005fffffff5fa973daee1fff0853fe9283fffffffc000000140005028038eff4f35dddeff9297b6a7fefba681fffffe050000a000003375b6db6db6cdb3adb6db75b6db66db6db4d,0x134db749b7411f4dbff36da7fefb6fdb259b6e96dba75b7adbb5b6db19b6e96dbad214685b758badb6db6db349a9a41b36fcceb37e31b7e1349a9a41b36db6db6db36d5bcb76ede496f5b9e21696db6db6c557715ebffffc000002abb8af40777746bbd4536a428d0ba6bbd49692af4f6db7ffffd6ffa7fd3e5a757a7b6db47aaef5157b6d7aa3d577a957b6db4ed255e92f6ba969d5e92f685a38a7f0a953ffffc714e90b6d5b56d0ad2ee12f47ff8505dc25eaabd573e927ae7b6df7adfffb44d24f5cf6dab6d5b689a4bbba497b5c77ffa79aeeef7fc94bdb49ffbee9be1,0x972416e6db3ffdef6cdb7ffedbff6fc0b920b76db66eedb6db6da23c913cbb6db4a28b6d10b758a2edb6db6c482b04d7ffff8f536c63fbe0415826b6ccc2f510427228abcd6ceebb0acf1ad9d7fef578b5c1e0000109d4116b805a10851b52f5d28a210a510a52f5c29b6bc915b4f5c3fe7db5ceb69eba6da977aa7aeb6d57b5efa5dea9ebadb6da5f7ada7aef6daf7ffef95ceb69ebbba5c15c03e9ffff74b82b826db6dff382487ae7bd5144e4921eb91442e4835cf5d37ffffffdfebf52e89ed770fff8429ff4df,0x14db0f2f2d5e9a6d8ff7402b866d80858db37919b67085d00af5b660d4503c499d62bc2d706a281b63c83b0b4b48e10852570b6d3fe0aa527df4800000213aa523d0a4024202002436820a87ae5a73a87ae4baabb8af55ed725d55dc57a01054ff4a55c39d470a5274851415d214507979382948e10a4ff09082948521fffe928057,0x383d20892d4787d7e97efdb1c090826bb6db6e7629e87add2c2c2dbb6db6314f29a11492db6a53ffe87fb862921a12db752e6d8502f402736dd25514000001d255140136b81084179aee9a1a1b5edaa3e87fadb540683cdb5ddd554216abbbaaa842da550f68777af5c550f68774baa821a1e52e9b5ca53fffe87ffd7f4dfbee,0x2b926f4f2de5de3fff9bd7bf3daef5dd7e2d52737a4585d5d6c49cea51613daef5dd6b6740f6877377aef792b6d794d9d03da1cdb737724ee4db528a290d375b63fea9f53e0b8000004a6a89a909ddeba5ed46bbdaef5dd4a94babd3d77b4a94babd3d77516bd5b55ed4bbb96bd5b55ed2a52eaf528a42ee3bd7ffff26bdb7ffd3f5cf6bbd775,0xf54f52af69ded7a7f57b4dfdd7b5c3d53d0abdb6b7492abbbabd37775ed75add0e2aa42b3db4eb5d5fc71ce1c5508575a56aad77777577ae734babd7715e8000012eaf5dc57a2daf5eb85ded77b5edb6db5eadab6dff77b6d7ab6adb6da977af5de855eda97b5ed7b5ddebffabbd7aaff6bdae,0x6e4bbecf5d157f58fd62ebf3d7f6dffbff24693ba967ae96dd6dba24ee84f5c2db45168a24badb6503cd047d7ffdef7bfca7ff925026826db51a451a49dc8d4684f6ba226a36d7fd516b8000007b494d516b8228a35d1451b51d886d451a8a36db6a52ea8d3d7d8fdbff7ffffdf7fef9ed7fff0dbff7fc9,0x1cc10de5e400000f7fedecffd8005c0022644345105297930d4bbca5ba52d8bcbcec7fde5e421130a205a288002fefdffffffff81450000003c3ca1415b00028a1b1fff7fa5e7d2f2f293a52ee97750411504881a45117fffffffffc10b221a145b06a28ba177fedb7fd7efdb6faffdbadb6db617,0xe98b4284d29660a9d8e25ff9b30c1ba52ee977f8fc5db30c1fc7e274c5a142694d7efc2bf5eb7bfec535cb1bc4eb355ae8add29774bbde32c7dd7efffed7ffff5de378b259b694b6da5d29774bbfb7ff99fbf7fffedfb7fe74a5dd2eecb9,0x11294b92150a5d279779794a42253e65e15ff7ff7bffa7d9ffffffffff] gz 12 163 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz12_199 : block gz 12 199 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz12_199 : block gz 12 199 36=true :=
+  @streamBlock #[0x9240bcffef277f71ceda5d76972f87830f3dfef03000db600003076d2ebb4bd346d544aed6dbab54aed6ccdb3366decf2dbff777fffedbc9b6db6db6ebd8db7b0db7fbfffffdb336ccd9b6db6db6cc6d8306d8db6db6db622cdb186d9b6db6db018574676b5376fdcdb66dbf76db6db75b6dbf15d19dac75ba36d9b6ed6db6db6db6dd50aa2fa5e89574db7ed7a57f15ffeff542a8b4050a014e55a05a53d5aae77f754bbafd73bbd72ad02d0aa00156adb5554ffbff7fffedbef7e9c93eadb5554a5aaa14282da555b4fb7cafffaf7fdaae5b4aab68b450a16a8b4aab6d7bd225211fef7fffd169556d168a142d5a29543ffe94f739dd5eba43e9f7ff2be8a550b45142805aa502d3ff97fcffe904352485354a05a55ab682800552ad5add6db6db6db895725dbafdb6db6fdb6db66db,0x121ef530dbadebb5fec79fa5e6441122eb66db6dbd66dd6f5dae899d13452ea2da5b6db75a6853cd59b6db6dd7fb5a3b36dfab742889ab36db6db6db6db36db6db7448b2ba2766d8966db6db6db6da8f703dff000aa1dc0f453d5a455d1452086a42945dd22aa8fff7ffddd22aa8eb6aadaab6a355c77254ee5a571dc953b9ffcff55015ceef7bf5c95708470aa8a5078b7ffe940116878245252fffaef392091494bb853a8ff50be9770a75025d1447448a92914f56bfffb97fcfef4821a9f2429,0x141b7314bfff46dabc6db67e0ccdb730db736edb75c5c4c68db764b76dbb6d211b6edbb6e9995d70fffe8ca6fcd95b753ffe5a66575c336db6dd93c4045db793576d2945c2299b6dbab5500fe5a0f00a5501554eef5d214a2e1aae970af52e3c94d7ba7d4970af5dc2d5ab54753a8b5d2aea3a9d408fb8eaf7dc3bffdbe171d5ebb8b6db4295e87f9f7c14af401c7577b8f78e3ab92e14a8d45c75774b8bfff4a7b9fceeaf5c90fa7dffca,0x919b3c17ffdb6e3d4cd828d236d890db6dada62dba3bc55db6035c2db6c28aa8dabffec702d15afbd6df0a2aa6d0e978804942912960a21214496a7a70f7a979400aa7a704bd120844922138577b8fe070ae771c28e714ef6ba8e714ee25ef49297fb94492925274b82d2aadbe169556d048292520a5210dfffa38f2fa44a421fef5ffff,0x1e03f6ffdffb2f87ffbcf00081b6dbf96dc678bb78b01a570a3536b6db145fab5e9f6ffe1ff497febcaffafffb5e28a1ab448eac42f8a404351294945682d02daa00516816d486a20851248a942da2f942da282a848b42a848b4b696d51e5b4b6a85b4a1ab6a7ddffc3fe92ffdbe57fffd7bfed5,0x90f57870ae777f87beb00402a0856ee15ceee11c210dadce1bd2aada8d1c2b9debeababf7ebdaa4a9556d0d1db4e15cee10a92c210a277b4e4bb5d4f7dc1c500053d4b838a1a8db5e86a552e915ebb8b689748af5dc55573fbaa877573bbaa80842908421ae171c2b9dfffebfeffffdfb7defd392,0xa0ed2a00a7ab55dc3b3baf8f74c7695030a7ab5d3b7767724e370512aa14f568eee7a52fbfab8144aa968a7ab54ee77752a5c77552a5c0f4a002a95dc0f4eef52ef535ddd5c5551d5dd3475715547573bb92a7714f56abbb9dfdd52775fafe777,0x70a6736f7efdffbf3a594fdd33670a676db6dd6dd6ebbc598b3173c6b9e2ee62bd75db6db6db740b6b8f7ef0ffbfd25b1254fd6ddb1d02dae0ddadb66f8806b13fc52e6c9574d3b6d8dcdd6db3750a05774800550a05241494db6d7b5edb52e915ebb8fe1f787fdfd2e9a12ae9bf6fdaf457,0x141819c0009e36d62e94a678d62a6330cc3063192905bbc9e762efee6effff74a6ff9aba5831dd7ffefc75416800158db78ba529ac6f11ad5010b6800ea82d3794b62f2f2773cbcbcbcb62f3c94bfd5abd25c002e7ffffe7ffbd9b5974a52cb2aaed2e613a176cb2cb2e94b2cb2a75dbf73616cdb77ddb,0x182a8f6fdde378bff1a5821d9ddd8fedfbff7fe360ddccf6fdde378bff1b0660c15418b73c5cb1962fe3f17b4b02793d677aec7458b7f17f1f8b3131a6eaad6ef6bb462dfc5fc7e2cc4c5fdb77fffafeb7f76ccdb797768b6f3dfeff6dfededbff3bbffff37e,0x92409e4ef277f71dfffffff7fcc93e05e7f67fcefeec8e] gz 12 199 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz12_235 : block gz 12 235 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz12_235 : block gz 12 235 36=true :=
+  @streamBlock #[0x3fffdfbfb6db0b485211b6eee171b0b69b7db6db66db6d913ae8b6db0b4852166dbbb85d9b0b696db6dd6db6dfffbf7f6db6db6db6db6db6db6db636db6db6db6db6db6db6d9101b6db6db6db6db6db6db6c6db6db6db6db6db6db6db03d7774bfffffdffff7bffbfff9c29ff0280512eee7a5b4010052dff4fbffa52fe5505516d516db56f85d557ffed7ffb57dfea5fcb694b69479e7ffbdfe80490a423bd7770b88b85c9,0xdb6db7fffadb67ffb6db679edb6db6db6db6db366db6db98de3f1adb6f89145b6db0205b6db6db6db6db66db6db6dfffeb3bbfffda42971e7b36db6d86db6db0a3b845124297010236db6d8e392b7febfdfffed3bbdfeab6956d5b6da28b696bffffbfffffc90a7fc00b7dd6da3efd5a79e785a16851086d3a83fffda777fff9214b8f3c,0x1fb6dffd6ffeb6f4bffad46eb75cdb6db6db36d8c2db778fc6b7f1ac6b6e24b731ad59badd36db6db6eb6d8fdb6ffeb7ffb5ffd2ffed56db6db36dab6db6d80b6d83a58dae26bde36ab6db6da5b6d5b6db6ca5b4a3fd6da0eb6d5773bba5d29fab4a3c3fed7ffb5ffd37fed52da5,0x3dda7c03eebffbae777fdd55b6adff8b6db338052eba7e2ebb89d731756ada56db7eed3e01f75ffed7f777fed6edb6adf886c38038c6d715fe36b65b4a1b4a5257fbeee757ff393e01fb5ffed7f75ffb56db6ad,0x3fffffdfd7fe9f7fe91b63dbfd297feedb36db049a62ed7f171498bac7e2966d8ac5b89d296316dd6db7fffffefebff4fbffa5b6db6fc3ffe94bff1b6db6e8248024f3c678a5b6db6e788474a6ab11b6db6e8121226874bbdaeffffffe9fb7fd3effe92923c3ffe94dff,0x2da77ee05292ef6bbd739ddd2e697777295b9a052b9ded77aee3bb9cd2eeeeb69dfb814ae977b5debbb9ddd2e028a0014a3bdaef5c3bb9c97773d00a2bdb4f7dc0a574bbdaef5ddceee97,0x12ef41d4fba772d039fedd71b0d9d41d4b8ba7755039c4edd0d86fd2ef41d4fda7776d03bffdabbe263a8051dd940e1ca1a8be977a704bbd0b53f69dd6d03bffcae,0x1b6effb6d9d1bfffdffbf7bf7fedb6db6db6db66dbae6b6d9d1988290b9e358b9e3f1345a26db6db6db6dbf6db77fdb6db6ddfffffbff7ffdfbffbfb6d9b6db6d9b6c1b6db6dd0290dac6f1b58845d13b6d9b6db6d805148dbfe052fffffdffbffef7ff7,0xdb690ba52e945210cf14fc5358cf13051ac53f14a4d219e290de2dbf697dffbfe1ffff4ff9bffd3e94fbffff7f87485d2974a29086b1498a6f1ac4051f8a678a521a90d6290fc5deb4bc03de9ff37ffa7d293ffff7ba42e94ba514842ca594b2c80a2ca594a43521652165d2cb2cb2cb2cb216596594b2c8659652ca52cd659659659,0xdb6db6db778bfbc7fdb6dffc7ffdb6fe2dfb6db6db6dfbfffbc5b6dffffc6f16dbf6fdb6db6db6ef17f78fde2db6ffe3ff1bc5b6fe2dfb6db6db6dcb173c658cb1962db6ef1bc4c658fc5b6ef16c78b6db6db6dfc5de3f131f8b6dbac658fc6f1962db72c5b8b16db6db6dbf8bbc7e263f16db7f7898de3f16dbbc5bf7bc03dfffedfffffffedfffef,0xf7dffbfffffffffedfffffffedfffef] gz 12 235 36 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz12_271 : block gz 12 271 1=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz12_271 : block gz 12 271 1=true :=
+  @streamBlock #[0x3e3eff,0xadb6cb7c,0,0x13ef,0x63ef,0x2d5,0xee77,0x76db6,0x1e9259,0xdb6db,0x3] gz 12 271 1 11 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz12_272 : block gz 12 272 33=true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz12_272 : block gz 12 272 33=true :=
+  @streamBlock #[0xab6d0000001ffffffffffffffffff7ffffffffffffe8b40000005169ddce2b8eeeb47752d5b68000001ffffffffffffffffffffffffffffffffe00000000016d515caeeb4b546db6db6db6db6db6db6db6db6db6db6db6db6db6db6db6db6c03fffffffc7ff87fff801fffffffffe00fffffffff0ffff,0x1ef7e9f6dbac5a23c478b697368b68bb778bac5ef1f6db6db6db6da264a5b6d169442da5db68b6176d2c2edb6db6db6dbff7e9f6db6db6db6db6db6db6db6db6db6db6db6db6db6506db6db6db6db6db6db6ebb6db6db6db6db6db6db76ada00000001179af2948224a2112e1102e24174514b8fe1c7fffa947fc210d0da5a39ea3455a121e3e945fdeda01e02f49e4a7d3e1e2ff452d,0x36db61db74db14db6ddbd76db6db6db36db6db6db0edba6d8a6db6edeb6db6db6da2db6db6db6c3b77a614453b5b6db6db6dd6db6db6db61cef40a452d6db6db6db75e51adb6d8000000000038073bd02914b473d779b6bd7a7ffb7fc39deabffbbbbd7af55ded77b6bd7fffbe0515f7b4a1fe9714b7d145145d1,0x1fb6d8dbdb6f75b0b6949edb4b6db6db6db6db6616db4516d10b6c28b6d85b4a42945b6db6db6db6db6d9fb6d8c2f4ec5bf62db6db67b4a5b6db6db6c0b6ddb434294421452db6db76a352945b6e85b6db6dc0000000000010451442885288428a684210d4a42946a521a108435294f9fe97ae3bda17ae9af2e8bcbbd4a7fd3e9,0x2a94002800280eee715c3bad1dd4b54a00000000b6a8ae5775a5aa5aa50000002d52bbb9c571ddd5c77240,0x3fffdf9927e96eda25bd9b7b6db6db6c2482c9694a5852dda4d4baf2d2dd45b6db6db7b1fffff7e64878fa5b6c25be789d62f0fb6d890b6a6bc852db75352f5e43686a2156db7b6adb4000000008521084294a529790a5eda14d4ba5e4294421442f6df4d7a97b6a28bbd,0xf52fd22ad71de8e3b955eb01d4dd6db6d74a5dd52e9aef6db5eb08421b5dea5fa455ae3b871dcaae2ad285b6db5d2977b52e9aef6db5c108686db56da0000003bd4bba6db6dae94bba6a5d2177b6bd7b6db6d77,0x9771d8cef4b69b2d1cf4db9ba49c1a52d2ef5eda4b6f6db5ebd36f5bb7d29771d8e7765a3a5a39ede2c70b6bd776f6da9b5edb6bd7b5db54a00000004a5dc74a52e977af6d0a6d74db6bbbd7b6bfa52f6bd,0xdb7ff6dd76b1fd663f667e96db6db6db6db6dbb9b75dad296134b4d68b0bad16db6db6db6da2db6ffedb6db71fcce3fb55ff6db6db6db60db6db74a5c36a5d35d1b6da8b6ddb6db7685b400000000113bbcdb6db5d2970a352e90ba2886a351b6db6d,0x2d0000000ab6d000000156daeee715caeeae3b92089e7c0789e5e513d23626c4204f3f45a0000003deff7ffffffffffffffffdfffffbfe00000000b56da0000005ab6d77738ae3bbab8ee482201125109fe3c0bc890762000000003c2dbf7ffffffeffffdffb7effb6db6db6db6db6db6db6db6db,0x1b6db6dbbc58f1ff6ffdb778b7f3c5bac5fcb16db6db6eb1688f1bc5bd88f16dcb16d1d8b778bac4162db6db6dde2ffef16ffdb778b7fedfbff6db6db6c78b797945b9e296dec5bd885b0b799e2db6db6da2d2885bbc6f16dcf16c2f2da58762db6db6dcb1758d632c5bbc6f16d82c5bf962dcf173c6f16f01efff3fd9e7f9eff,0x1bdfe1efff3fd9e7f9eff] gz 12 272 33 12 (by decide +kernel) (by decide +kernel)
 theorem allgz12 : block gz 12 0 305=true := (@block_merge gz 12 0 272 33 (@block_merge gz 12 0 271 1 (@block_merge gz 12 0 235 36 (@block_merge gz 12 0 199 36 (@block_merge gz 12 0 163 36 (@block_merge gz 12 0 127 36 (@block_merge gz 12 0 116 11 (@block_merge gz 12 0 80 36 (@block_merge gz 12 0 44 36 (@block_merge gz 12 0 8 36 sgz12_0 sgz12_8) sgz12_44) sgz12_80) sgz12_116) sgz12_127) sgz12_163) sgz12_199) sgz12_235) sgz12_271) sgz12_272)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz13_0 : block gz 13 0 6=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz13_0 : block gz 13 0 6=true :=
+  @streamBlock #[0x4a5dcb6d3fffcb6d1fd4b54b68b68ffff2db43fc2d3fffcb6d2db4ffff,0xa0a0a14a5ded4ba5353ffff6a2e94abbbd5dd6f87fd6db55ffffed45d29be25368ef6a2e94dfffff,0xe070384777791dea4ffa91ddb10f2a2bf8f2744a773fddc777791ddfcff,0x1c0e0774a5dddd214435ffffebbc84213b8415775770ff9deda77790a2177ffff,0x120481214a5c946daa90a2154db445de45b44a36d27c3fe,0x1749d5dd497f7abbaabbab62fef,0x28282a52977a94a2146a7628851a9ffff,0x20080214a5dc2ca59659,0x190320] gz 13 0 6 9 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz13_6 : block gz 13 6 19=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz13_6 : block gz 13 6 19=true :=
+  @streamBlock #[0x3f91f6db6c1feebdafeff6db6dfedc2736db60aedb6db06e13a5b6db576db6db749217ab5db6c9a6dbadb6ae13a53569b6d695b6db6caff756b83fdfe9ffff53a556815c01c54b5a0796bfdf70a5a050029d2ab40ae7ffd14e955a05701fdfe9aed707fbddfffee13a5356815c02faba699c0a78bf5d4f400a017d5d346e07bdffffefff5d49a0038071525ac1e3efffbdc296814a15c274a6ad36dab9fdfe9ab5db6dfe,0x796dbf7a7dd7b5e7dffb6dfbffdffbf4b6dd05dddb6bbb76db6d2db741776eeddb6db0aab9294d0a95a09a95282ee0aeab6bb8ea9fff6fffa7deffe500bbad7777384a955dd7ebbb9c952abbadaeee71a8b56bd795fc02d5af541eabebff5ffffeffff4a955dcaeeee7aadef2d14af7ea94e28a52a9fbcb7fffcffbf54a716bbb8f6d4a941775aeeee7f55f7ffdbffffef,0x3f79afde7cfebdaf2ffdffd7ffe7feffdba6b0a5cd5ed45842db6dd35852e6945842db7521aee14810ab5216ba6829712156829084af5dfe7a7ffd2ff7abd12e25294852486a9ea574df09f6a9543a6bb8eeaba87fffa7affaa94035e8e17febfbd3dfffefffae9a0bd1248528829ae9a0a5c4f8ab56ba69d2e2422ad574d052e242908510437febfff9fffffeff,0x5f796f79f6fa2adbfb16ffb1f6fab6ba59d2eca2ad6d5d2ddd2ec9ab5b5486bb852042ad482ba69d2e242ad2215ebb63e7a455beaf44b8948ab6a9b152b8a5552a8714aaaea1fc156d5528220abfb1afef4f0ab7eba69de890ab6ba69d2e251156dfd8d7fd8f9fe2ad,0xf3ef28ffbb4ff9ed79fffffffff77ffffffe8a28bc9176108f6ec428a5a28a2f2f28bb0851d88514b0a4290bbd4a4215368228a297945e8428854db41452affe7bffefff4fffab8513d085105294852945551508683521092952abb89aeee72b63eab5dff5fe7fa9d2ab4af55c8a28bcbca2f421441453b10a29ffffff7bffefffffff,0x1d68faad57b5ff9d7b1f55aeffceb72ad5b6bae6cdd6e955aeeb9b35242ab5c09aa053a5568168f35e9414556ba514d2290a74aad26bd570145a779b4f25a0169edaa29d2ab4f35eab95b1f55affff5fe,0x7953dd4fabda1f7ec557dd79fa1f7a54aebbabdaee76955aebbd773b0aabaa5342a540952abb82ba9d35caa579faff7d3eff142bb9d35ddce952abb9d35ddcfb155f579faff7c3ef,0x1ba3ede7d3ff5ed4fff9bffbfffff4fff9b84d1451455ed4a2945b370a2d145145e528a516d5d2105294842a6d0a9574a2451451790a9b494528ab851228a28bca514a294528abffbffffd3ffe9fff,0xa4290b85294841b6c0290a42e14ec5216db1e3e3c52791e3e9f0057b43ffd3ffffb1ff00a4290b8529485b6ea6d659652e59659d8b2e5b6ea6d,0xf3ef289e5e7d3eaf6bcb2cb3fffffffffff5ed659659] gz 13 6 19 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz13_25 : block gz 13 25 9=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz13_25 : block gz 13 25 9=true :=
+  @streamBlock #[0x3cfec7fde7ffc01ffffffffe000000000db6db6db6db6db6db6db6db6db6db6db6db6db6d802bbfdffff78000000d8d4dfafeef00000015dfebda978000000fffff4bffbc00000000000000007fd3ffe9f78000000fa9bf7fdde0000001fc3e97b52f00001b6db6db6db6db,0x7fbedb6dfc3edb6dd35db6db6db7485db6db6db000000074d74bdb6d77f6f6a7ffebd7af6db6bdb52edaeef6d7b6db6d7af5edb435ebd7b6d7f0fa5dd4fa5d35d2f6db6800007f0a52f5a7fdfdd35d2f6db5eda9b6bbe17b6bdb6bbba6ba5edafe1f4bda9,0x3cb6feffbf6dfdff696dbd4bb6db4b6dea5db6d800000026daf52f5eb7b6ffbbffdb6da97b6d4db5ebbda9b6bd77b6bb6db5d3f6db6db5ddfea6fd7f7ff4db5ebbd000001a97f7d2ffe9b6bd4bdb6a6daf52f7ea6fdff7,0x7fb17ef3efdffbfff7ec35a210badb6145a210b0b6c000000021452884290a6bba6ffa7efd774d085210d4dfae97a9b6bd77addd35ed4dfaf5ebdb6da1ff4fa5d3e10a290a5d21000002145288429087fd3ffe9f,0,0x3cfec7fd2fffffffd2ffd146a214b0d68a2f28852c28b000000045179442970a2f5dfea5ffebb86a5c28a353435c2e9b6bd77b6bbfd7b537ebd7af6d45179442970a3ffffe97ff,0x377f5edaddfd7b52ddbd7b6b75bb7af6a5ba00000015ebd7b6daee1af6a6daf5ebdb5edb6db6a5edb6db6d7af5edb5dfebda9,0x79b6fb7fbb1a9bedfdd36d76ef5a6a6bb777600000009b6bd77b6d7b6bfbfdb6db5dea6daf5deec6a6fd7f7,0x56fede7ffeb7f7ffff5d0b45146b75b85a28a2f2d80000005770d45145e6d770d45145e6bbfdffff,0x3c7ebcbcec7fe803ffffffffdb6db6db6db6db,0x1e7ebcbcbcbcfdfffffffff] gz 13 25 9 11 (by decide +kernel) (by decide +kernel)
 theorem allgz13 : block gz 13 0 34=true := (@block_merge gz 13 0 25 9 (@block_merge gz 13 0 6 19 sgz13_0 sgz13_6) sgz13_25)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz14_0 : block gz 14 0 1=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz14_0 : block gz 14 0 1=true :=
+  @streamBlock #[0xdb6dbc78f1e03c78f1b,0x17efdb7e9f7edf,0xfeeeff7dcf77f,0x23e1f7fbe911f,0,0x27d297fa9f,0x1435e6df,0x7f77f,0x21f,0x1b] gz 14 0 1 10 (by decide +kernel) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sgz14_1 : block gz 14 1 1=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sgz14_1 : block gz 14 1 1=true :=
+  @streamBlock #[0x15ef1ef7bcf,0x57f777f7bfdf77f,0xa9f4fbfbd29a9f,0xb7eec6bcbedf,0xa1f085fc1f,0xa443c4f,0x57f77f,0x5451f,0x5f] gz 14 1 1 9 (by decide +kernel) (by decide +kernel)
 theorem allgz14 : block gz 14 0 2=true := (@block_merge gz 14 0 1 1 sgz14_0 sgz14_1)
 theorem tablesgz : checkedTables gz 14 := by
   intro k hk
@@ -5784,9 +5407,9 @@ theorem portBound (a b:Fin 9) (C:Circuit) (fan:PEqualNP.MetaComplexity.FanInTwo 
   · exact rawCase k t lim (h ▸ run)
   · exact bothCase k t lim (h ▸ run)
   · exact negCase k t lim (h ▸ run)
-end PEqualNP.Outside.L_meta_4373_aux
+end PEqualNP.Outside.L_meta_4373
 theorem PEqualNP.Outside.L_meta_4373 : have x1 : (Fin (9 : ℕ) → Bool) → Bool := fun (x1 : Fin (9 : ℕ) → Bool) => [(1 : ℕ), (12 : ℕ), (23 : ℕ), (34 : ℕ), (40 : ℕ), (5 : ℕ), (16 : ℕ), (27 : ℕ), (38 : ℕ), (57 : ℕ), (68 : ℕ), (85 : ℕ)].any fun (x2 : ℕ) => x1 (Fin.ofNat (9 : ℕ) (x2 / (10 : ℕ))) && x1 (Fin.ofNat (9 : ℕ) (x2 % (10 : ℕ))); have x2 : (Fin (9 : ℕ) → Bool) → List Bool := fun (x2 : Fin (9 : ℕ) → Bool) => List.ofFn x2 ++ [!x2 (0 : Fin (9 : ℕ))]; have x3 : BitVec (9 : ℕ) → Fin (9 : ℕ) → Bool := fun (x3 : BitVec (9 : ℕ)) (x4 : Fin (9 : ℕ)) => x3.getLsbD ↑x4; ∀ (x4 x5 : Fin (9 : ℕ)),   (11 : ℕ) * ↑x4 + ↑x5 ∈ [(1 : ℕ), (2 : ℕ), (3 : ℕ), (4 : ℕ), (6 : ℕ), (13 : ℕ), (14 : ℕ), (15 : ℕ), (16 : ℕ), (17 : ℕ), (18 : ℕ), (19 : ℕ), (25 : ℕ), (26 : ℕ), (28 : ℕ), (29 : ℕ), (30 : ℕ), (37 : ℕ), (39 : ℕ), (50 : ℕ), (73 : ℕ)] →     ∀ (x7 : PEqualNP.CircuitLowerBounds.Circuit),       PEqualNP.MetaComplexity.FanInTwo x7 →         x7.size ≤ (13 : ℕ) →           ∃ (x10 : BitVec (9 : ℕ)),             have x11 : Fin (9 : ℕ) → Bool := x3 x10;             x7.eval (x2 x11 ++ [x11 x4 || x11 x5]) ≠ x1 x11 := by
   intro f bank decode a b _ C fan cap
-  exact PEqualNP.Outside.L_meta_4373_aux.portBound a b C fan cap
-    (PEqualNP.Outside.L_meta_4373_aux.dead_start (PEqualNP.Outside.L_meta_4373_aux.before_sound PEqualNP.Outside.L_meta_4373_aux.known383 PEqualNP.Outside.L_meta_4373_aux.valid383)
-      PEqualNP.Outside.L_meta_4373_aux.geomdead PEqualNP.Outside.L_meta_4373_aux.tablesdead) PEqualNP.Outside.L_meta_4373_aux.rootA PEqualNP.Outside.L_meta_4373_aux.rootB
+  exact PEqualNP.Outside.L_meta_4373.portBound a b C fan cap
+    (PEqualNP.Outside.L_meta_4373.dead_start (PEqualNP.Outside.L_meta_4373.before_sound PEqualNP.Outside.L_meta_4373.known383 PEqualNP.Outside.L_meta_4373.valid383)
+      PEqualNP.Outside.L_meta_4373.geomdead PEqualNP.Outside.L_meta_4373.tablesdead) PEqualNP.Outside.L_meta_4373.rootA PEqualNP.Outside.L_meta_4373.rootB
