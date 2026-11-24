@@ -1591,6 +1591,4 @@ theorem PEqualNP.Outside.L_meta_612 :
     h5 hshape hused ?_ hout
   intro j hj
   obtain ⟨x, hx⟩ := hlive j hj
-  refine ⟨x, ?_⟩
-  change PEqualNP.Outside.L_meta_612.Count.val C n x (n + j) = true
-  simpa [PEqualNP.Outside.L_meta_612.Count.val] using hx
+  exact ⟨x, by simpa [PEqualNP.Outside.L_meta_612.Count.val] using hx⟩
