@@ -16,7 +16,13 @@ theorem PEqualNP.Outside.R_meta_1910_1
       (∀ k : Fin D.gates.length, ((D.gates.get k).inputs[0]? = some 6 ∨ ((D.gates.get k).op ≠ GateOp.not ∧ 6 ∈ (D.gates.get k).inputs)) ↔ k = i) →
       ∃ x : Fin 9 → Bool, D.eval (List.ofFn x ++ [x 4 || x 6]) ≠ (fun x : Fin 9 → Bool => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)) x) :
     ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit),   PEqualNP.MetaComplexity.FanInTwo x1 →     (∀ (x3 : Fin (9 : ℕ) → Bool), (x1.wires (List.ofFn x3)).getD (9 : ℕ) Bool.false = (x3 (4 : Fin (9 : ℕ)) || x3 (6 : Fin (9 : ℕ)))) →       (PEqualNP.MetaComplexity.circuitFun (9 : ℕ) x1 = fun (x4 : Fin (9 : ℕ) → Bool) => x4 (0 : Fin (9 : ℕ)) && x4 (1 : Fin (9 : ℕ)) || x4 (1 : Fin (9 : ℕ)) && x4 (2 : Fin (9 : ℕ)) || x4 (2 : Fin (9 : ℕ)) && x4 (3 : Fin (9 : ℕ)) || x4 (3 : Fin (9 : ℕ)) && x4 (4 : Fin (9 : ℕ)) || x4 (4 : Fin (9 : ℕ)) && x4 (0 : Fin (9 : ℕ)) || x4 (0 : Fin (9 : ℕ)) && x4 (5 : Fin (9 : ℕ)) || x4 (1 : Fin (9 : ℕ)) && x4 (6 : Fin (9 : ℕ)) || x4 (2 : Fin (9 : ℕ)) && x4 (7 : Fin (9 : ℕ)) || x4 (3 : Fin (9 : ℕ)) && x4 (8 : Fin (9 : ℕ)) || x4 (5 : Fin (9 : ℕ)) && x4 (7 : Fin (9 : ℕ)) || x4 (6 : Fin (9 : ℕ)) && x4 (8 : Fin (9 : ℕ)) || x4 (8 : Fin (9 : ℕ)) && x4 (5 : Fin (9 : ℕ))) →         (∀ x5 ∈ [(4 : ℕ), (6 : ℕ)],             ∃! x7 : Fin (List.drop (1 : ℕ) x1.gates).length,               have x8 : PEqualNP.CircuitLowerBounds.Gate := (List.drop (1 : ℕ) x1.gates).get x7;               x8.inputs[(0 : ℕ)]? = Option.some x5 ∨ x8.op ≠ PEqualNP.CircuitLowerBounds.GateOp.not ∧ x5 ∈ x8.inputs) →           (16 : ℕ) ≤ x1.size := by
-  intro ⟨gs, out⟩ fan first heval uniqueReader
+  have andVal (w : List Bool) : PEqualNP.CircuitLowerBounds.GateOp.and.eval w = w.all id := rfl
+  have orVal (w : List Bool) : PEqualNP.CircuitLowerBounds.GateOp.or.eval w = w.any id := rfl
+  have notVal (w : List Bool) : PEqualNP.CircuitLowerBounds.GateOp.not.eval w = !w.headD false := rfl
+  intro C
+  cases C
+  rename_i gs out
+  intro fan first heval uniqueReader
   by_contra! small
   have keep (s : List Gate) (w : List Bool) (j : ℕ) (hj : j < w.length) :
       ((Circuit.mk s 0).wires w).getD j false = w.getD j false := by
@@ -106,7 +112,7 @@ theorem PEqualNP.Outside.R_meta_1910_1
             by_cases b4 : b = 4 <;> by_cases b6 : b = 6 <;>
             simp [a4, a6, b4, b6, @eq_comm ℕ (4 : ℕ) a, @eq_comm ℕ (6 : ℕ) a,
               @eq_comm ℕ (4 : ℕ) b, @eq_comm ℕ (6 : ℕ) b] at sym <;>
-            first | omega | (simp only [h, List.map_cons, List.map_nil, GateOp.eval,
+            first | omega | (simp only [h, List.map_cons, List.map_nil, andVal, orVal, notVal,
               List.all_cons, List.any_cons, List.any_nil, List.all_nil, List.headD_cons,
               id_eq, repr, a4, a6, b4, b6, v4.2, v6.2]; simp)
         · rw [ins] at len
