@@ -76,7 +76,6 @@ private lemma live_size {k t S} (h : Live target k t S) : t ≤ k ∧ S.card+t �
     have h2 := Finset.card_insert_le (a := b) (s := U)
     exact ⟨by omega,by omega⟩
 
-
 def gv (w : List Sig) (g : Gate) : Sig :=
   let xs := g.inputs.map (fun i => w.getD i zero)
   match g.op with
@@ -274,9 +273,6 @@ private lemma execute_bits (gs : List Gate) (i) (w : List Sig)
     change (execute gs (w++[gv w g])).map _ = _
     rw [ih _ (fun a ha => hg a (by simp [ha]))]
     simp only [List.foldl_cons,List.map_append,List.map_singleton,run_bit i g w (hg g (by simp))]
-
-
-
 
 abbrev Wire (R : Type) := R → Bool
 
@@ -500,7 +496,6 @@ theorem projected_bound {R S : Type} (rows : S → R) {goal s ws} (h : Run goal 
   have hqle := hl q bs hq ht
   omega
 
-
 abbrev Row := Fin 512
 def observe (a : Sig) : Wire Row := fun r => bit r a
 def table (f : Wire Row) : Sig :=
@@ -596,7 +591,6 @@ theorem list_run {T : Sig} {k u S} (h : Live T k u S) (v : List Sig)
       ext j
       by_cases ja : j=a <;> by_cases jb : j=b <;> simp_all [er]
     exact Run.perm (perm.map _) (Run.two d ka kb progress)
-
 
 theorem table_inv (f : Wire Row) : table (inv f) = neg (table f) := by
   rw [←table_observe (neg (table f)),obs_neg,observe_table]
@@ -767,7 +761,6 @@ theorem initial_live (C : Circuit) (legal : PEqualNP.MetaComplexity.FanInTwo C)
     have len : gs.length+1 ≤ 15 := by simpa [Circuit.size,hgs] using small
     exact ⟨k,t,S,by omega,run,hs⟩
 
-
 def rename (f : Row → Row) (a : Sig) := table fun r => bit (f r) a
 theorem bit_rename (f : Row → Row) (a : Sig) (r : Row) :
     bit r (rename f a) = bit (f r) a := bit_table _ _
@@ -923,8 +916,6 @@ theorem lower_slice {roots other : List Sig} {T G : Sig} (pT : proper T) (pG : p
     omega
   omega
 
-
-
 def childOne (ws : List Sig) (a : Sig) (keep : Bool) : List Sig :=
   neg a :: kept keep a (ws.erase a)
 def childTwo (ws : List Sig) (a b : Sig) (d ka kb : Bool) : List Sig :=
@@ -1058,8 +1049,6 @@ theorem cover_required {T cap ws k t} (h : Live T k t (List.toFinset ws))
   have bound := (live_size h).2
   rw [List.toFinset_card_of_nodup hn] at bound
   omega
-
-
 
 def Slice (raw : List Sig) (T d : Sig) (L : Nat) : Prop :=
   ∃ (f : Row → Row) (roots : List Sig), (∀ r, bit (f r) d = true) ∧
@@ -1201,8 +1190,6 @@ theorem poolCut_sound {raw T d L} (slice : Slice raw T d L) (cs : List Choice)
   simp only [Nat.zero_add] at b
   omega
 
-
-
 abbrev Move := Sig × Sig × Row
 def shifted (d r : Row) : Row :=
   if h : r.val < 512-d.val then ⟨d.val+r.val,by omega⟩ else ⟨r.val-(512-d.val),by omega⟩
@@ -1330,8 +1317,6 @@ theorem lift_ok {ms T raw base G xs L} (ok : checkLift ms T raw base G xs = true
     exact ⟨false,funext bit_zero⟩
   · rw [h]
     exact ⟨true,funext bit_one⟩
-
-
 
 def selected (m : Nat) : List (Nat × Sig) :=
   (List.range 9).filterMap fun i => if m.testBit i then some (i,inputs.getD i zero) else none
@@ -1473,7 +1458,6 @@ theorem before_sound (entries : List (Nat × Nat))
     have eq : e.1=q := beq_iff_eq.mp hit
     simpa only [Option.map_some,Option.getD_some,eq] using sound e he
 
-
 abbrev BoundPool := Sig × Nat × Nat × List Sig
 def BoundPool.domain (c : BoundPool) : Sig := c.1
 def BoundPool.bound (c : BoundPool) : Nat := c.2.1
@@ -1565,7 +1549,6 @@ theorem materialize_sound {raw T d L cs c} (slice : Slice raw T d L)
     simp only [he,Option.map_some,Option.some.injEq] at h
     subst c
     exact build_valid slice cs he
-
 
 abbrev Bits := BitVec 768
 abbrev Signals := Bits × Bits
@@ -1759,8 +1742,6 @@ private theorem cov_perm (d : Bool) {l r : List Decor} (h : l.Perm r) : coverage
   | swap a b t => exact add_swap _ _ _
   | trans _ _ h1 h2 => exact h1.trans h2
 
-
-
 theorem cov_word (d : Bool) (v : List Decor) {r s} (good : ∀ a ∈ v, faithful r s a) :
     (coverage d v).1 = covered d (pairSig r s) (v.map Prod.fst) := by
   induction v with
@@ -1810,7 +1791,6 @@ theorem sameWords_sound {xs ys} (h : sameWords xs ys = true) : xs.toFinset=ys.to
   ext a
   simp only [List.mem_toFinset]
   exact ⟨h.1 a,h.2 a⟩
-
 
 def keyWord (v : Sig) :=
   let n := v.toNat % 2305843009213693951
@@ -1958,7 +1938,6 @@ theorem evalMove_sound {raw T r s ws pools links cap a b op ka kb}
   change Live T k t (z.1::rest.map Prod.fst).toFinset at h
   rw [val] at nd' h
   exact closeChild_sound pv lv nd' test k t hk h
-
 
 def testPair (ctx : NodeContext) (a b : Decor) (d : Bool) :=
   let op := if d then 1 else 0
@@ -2112,7 +2091,6 @@ theorem node_sound {raw T r s ws pools links cap}
       exact one b a hbW haW (Ne.symm ne) kb ka (bin_comm d a.1 b.1 ▸ pro)
         (bin_comm d a.1 b.1 ▸ fresh) hh
 
-
 theorem agree_inputs (r s : Row) (h : ∀ a ∈ inputs, bit r a = bit s a) : r=s := by
   apply Fin.ext
   apply Nat.eq_of_testBit_eq
@@ -2172,7 +2150,6 @@ def packedAt (word : Nat → Nat) (pos len : Nat) :=
   if shift+len ≤ 8192 then lo &&& ((1 <<< len)-1)
   else (lo ||| (word (i+1) <<< (8192-shift))) &&& ((1 <<< len)-1)
 
-
 def lookupWord (nb slots sw vw iw pw : Nat) (data : Nat → Nat) (h : Nat) : Option (Nat × Nat) :=
   let a := h % nb
   let sh := packedAt data (a*sw) sw
@@ -2181,7 +2158,6 @@ def lookupWord (nb slots sw vw iw pw : Nat) (data : Nat → Nat) (h : Nat) : Opt
   if (word >>> (iw+pw)) == h/(nb*slots)%16 then
     some (word &&& ((1 <<< iw)-1),(word >>> iw) &&& ((1 <<< pw)-1))
   else none
-
 
 abbrev Forest := Nat × Nat × (Nat → Bits × Bits) × List ColumnInfo × List (List Nat) ×
   (Nat → Packing) × (Nat → Nat → Option (Nat × Nat))
@@ -2331,7 +2307,6 @@ theorem nodeVerified_sound (g : Forest) (k i : Nat)
     have e : ((g.index k tag).bind (linkedSet g (k-1)))=some xs := by simpa using hx
     obtain ⟨pair,_,h⟩ := Option.bind_eq_some_iff.mp e
     exact linkedSet_sound g _ names (prior (by omega)) h
-
 
 def block (g : Forest) (k start : Nat) : Nat → Bool
   | 0 => true
@@ -2524,7 +2499,6 @@ theorem mark_at {α} (f : α → Bits) (xs : List α) (i : Nat) (hi : i<xs.lengt
       have di : 769*(i+1)+768-769=769*i+768 := by omega
       simp only [ge,ite_false,di,List.getElem_cons_succ]
       apply ih i (by omega)
-
 
 abbrev PackedSig := Nat × Nat
 abbrev PackedCov := Nat × Nat × Nat
@@ -2783,7 +2757,6 @@ theorem batchMove_at (k n) (xs : List NodeContext) {i j op : Nat} {ka kb}
       exact beq_iff_eq.mpr hit
     · rw [eval,if_neg small,if_pos (bne_iff_ne.mpr hit)]
 
-
 def batchPair (b : Batch) (xs : List NodeContext) (i j op : Nat) :=
   let f := batchMove b xs i j op
   f false false && f true false && f false true && f true true
@@ -2843,7 +2816,6 @@ def contextOf (g : Forest) (k i : Nat) : NodeContext :=
   let rules := (getPairs data cw depth nr st).filterMap (fun (a,b) => buildRule g ops depth bank a b)
   let ls := fun tag => ((g.index k tag).bind (linkedSet g (k-1))).toList
   (k,ws.length,ws,preCov ws,rules,ls)
-
 
 def prelim (T : Sig) (c : NodeContext) :=
   let ws := c.2.2.1.map Prod.fst
@@ -2955,6 +2927,463 @@ theorem listPieces_all {α f xs d} (h : @listPieces α f xs d) : xs.all f=true :
     have ap : ((xs.take (xs.length/2)) ++ (xs.drop (xs.length/2))).all f=true := by
       simp only [List.all_append,ih h.1,ih h.2,Bool.and_self]
     simpa only [List.take_append_drop] using ap
+namespace MonotoneSuffix
+
+def witness (w : List Sig) (z : Sig) : Prop :=
+  (∃ d a b, a ∈ w ∧ b ∈ w ∧ proper a ∧ proper b ∧ a ≠ b ∧ z = bin d a b)
+
+private lemma bin_rep {w a b} (d : Bool) (ha : represented w a) (hb : represented w b) :
+    represented w (bin d a b) ∨ witness w (bin d a b) := by
+  have rz : represented w zero := Or.inr (fun h => h.1 rfl)
+  have ro : represented w one := Or.inr (fun h => h.2 rfl)
+  obtain ⟨a1,a0,az,ao,aa,aa'⟩ := bin_laws a
+  obtain ⟨b1,b0,bz,bo,bb,bb'⟩ := bin_laws b
+  rcases operand_cases ha with rfl | rfl | ⟨ham,hap⟩
+  · rw [bin_comm]; cases d <;> simp_all
+  · rw [bin_comm]; cases d <;> simp_all
+  rcases operand_cases hb with rfl | rfl | ⟨hbm,hbp⟩
+  · cases d <;> simp_all
+  · cases d <;> simp_all
+  by_cases he : a=b
+  · subst b; cases d <;> simp_all
+  exact Or.inr ⟨d,a,b,ham,hbm,hap,hbp,he,rfl⟩
+
+private lemma gate_rep (w : List Sig) (g : Gate)
+    (h : g.op ∈ ({GateOp.and,GateOp.or} : Set GateOp) ∧ g.inputs.length≤2) :
+    represented w (gv w g) ∨ witness w (gv w g) := by
+  obtain ⟨o,l⟩ := g
+  simp only [Set.mem_insert_iff,Set.mem_singleton_iff] at h
+  obtain ⟨ho,hl⟩ := h
+  have rz : represented w zero := Or.inr (fun h => h.1 rfl)
+  have ro : represented w one := Or.inr (fun h => h.2 rfl)
+  cases l with
+  | nil =>
+    rcases ho with rfl | rfl
+    · exact Or.inl ro
+    · exact Or.inl rz
+  | cons i l =>
+    cases l with
+    | nil =>
+      rcases ho with rfl | rfl
+      · simpa only [gv,List.map_cons,List.map_nil,List.foldr_cons,List.foldr_nil,(bin_laws _).1] using Or.inl (b := witness w (w.getD i zero)) (get_rep w i)
+      · simpa only [gv,List.map_cons,List.map_nil,List.foldr_cons,List.foldr_nil,(bin_laws _).2.1] using Or.inl (b := witness w (w.getD i zero)) (get_rep w i)
+    | cons j l =>
+      cases l with
+      | cons a l => simp at hl
+      | nil =>
+        rcases ho with rfl | rfl
+        · simpa only [gv,List.map_cons,List.map_nil,List.foldr_cons,List.foldr_nil,(bin_laws _).1] using bin_rep false (get_rep w i) (get_rep w j)
+        · simpa only [gv,List.map_cons,List.map_nil,List.foldr_cons,List.foldr_nil,(bin_laws _).2.1] using bin_rep true (get_rep w i) (get_rep w j)
+
+private lemma pull_gate {w : List Sig} {z : Sig} {k S} (h : Live target k 0 S)
+    (hz : represented w z ∨ witness w z) (sub : ∀ a ∈ S, a ∈ w++[z]) :
+    ∃ k' S', k' ≤ k+1 ∧ Live target k' 0 S' ∧ ∀ a ∈ S', a ∈ w := by
+  by_cases hm : z ∈ S
+  · by_cases hw : z ∈ w
+    · refine ⟨k,S,by omega,h,?_⟩
+      intro a ha
+      have hu : a ∈ w ∨ a = z := by simpa using sub a ha
+      rcases hu with hu | rfl
+      · exact hu
+      · exact hw
+    · have hp := live_proper h z hm
+      rcases hz with hr | ⟨d,a,b,ha,hb,pa,pb,hab,eq⟩
+      · exact False.elim ((hr.resolve_left hw) hp)
+      · subst z
+        let U := S.erase (bin d a b)
+        have ht : Live target k 0 (insert (bin d a b) U) := by simpa [U,Finset.insert_erase hm] using h
+        have hu : ∀ v ∈ U, v ∈ w := by
+          intro v hv
+          obtain ⟨hne,hm⟩ := Finset.mem_erase.mp hv
+          simpa [hne] using sub v hm
+        have hf : bin d a b ∉ insert a (insert b U) := by
+          intro hh
+          rcases Finset.mem_insert.mp hh with eq | u
+          · exact hw (eq.symm ▸ ha)
+          rcases Finset.mem_insert.mp u with eq | u
+          · exact hw (eq.symm ▸ hb)
+          · exact hw (hu _ u)
+        exact ⟨_,_,Nat.le_refl _,Live.binary pa pb hab hf ht,by simpa using And.intro ha (And.intro hb hu)⟩
+  · refine ⟨k,S,by omega,h,?_⟩
+    intro a ha
+    have hn : a ≠ z := fun hh => hm (hh ▸ ha)
+    simpa [hn] using sub a ha
+
+private lemma extract (gs : List Gate) (w : List Sig)
+    (legal : ∀ g ∈ gs, g.op ∈ ({GateOp.and,GateOp.or} : Set GateOp) ∧ g.inputs.length≤2)
+    (hp : proper target) (hout : target ∈ execute gs w) :
+    ∃ k S, k ≤ gs.length ∧ Live target k 0 S ∧ ∀ a ∈ S, a ∈ w := by
+  induction gs generalizing w with
+  | nil => exact ⟨0,{target},by simp,Live.stop hp,by simpa [execute] using hout⟩
+  | cons g gs ih =>
+    obtain ⟨k,S,hk,ht,hs⟩ := ih (w++[gv w g]) (fun a ha => legal a (by simp [ha])) hout
+    obtain ⟨l,T,hl,hu,hT⟩ := pull_gate ht (gate_rep w g (legal g (by simp))) hs
+    exact ⟨l,T,by simp; omega,hu,hT⟩
+
+def Impossible (T : Sig) (cap : Nat) (S : Finset Sig) : Prop :=
+  ∀ k t, k ≤ cap → Live T k t S → t = 0 → False
+
+theorem enum_step {T : Sig} {cap : Nat} {ws : List Sig} (hn : ws.Nodup) (out : T ∉ ws)
+    (twoStep : ∀ a ∈ ws, ∀ b ∈ ws, ∀ d ka kb, a ≠ b → bin d a b ∉ ws →
+      proper (bin d a b) → (childTwo ws a b d ka kb).length ≤ cap →
+      Impossible T (cap-1) (childTwo ws a b d ka kb).toFinset) :
+    Impossible T cap ws.toFinset := by
+  classical
+  intro k t hk h zt
+  generalize he : ws.toFinset = S at h
+  induction h using Live.ind with
+  | stop hp =>
+    have mem : T ∈ ws.toFinset := he.symm ▸ Finset.mem_singleton_self _
+    exact out (List.mem_toFinset.mp mem)
+  | unary _ _ _ _ => omega
+  | @binary k t U a b d ha hb hab hf tail _ =>
+    have am : a ∈ ws := List.mem_toFinset.mp (he.symm ▸ Finset.mem_insert_self _ _)
+    have bm : b ∈ ws := List.mem_toFinset.mp (he.symm ▸ Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
+    have fresh : bin d a b ∉ ws := fun h => hf (he ▸ List.mem_toFinset.mpr h)
+    have hz := live_proper tail _ (Finset.mem_insert_self _ _)
+    let ka := decide (a ∈ U)
+    let kb := decide (b ∈ U)
+    let rest := (ws.erase a).erase b
+    have er : rest.toFinset = (ws.toFinset.erase a).erase b := by
+      rw [show rest=(ws.erase a).erase b by rfl,erase_fin (hn.erase _) b,
+        erase_fin hn a]
+    have ke : (kept ka a (kept kb b rest)).toFinset = U := by
+      rw [kept_fin,kept_fin,er,he]
+      ext j
+      by_cases aa : a ∈ U <;> by_cases bb : b ∈ U <;> by_cases ja : j=a <;>
+        by_cases jb : j=b <;> simp_all [ka,kb]
+    have rn : rest.Nodup := (hn.erase _).erase _
+    have ar : a ∉ rest := fun h => (hn.not_mem_erase) (List.mem_of_mem_erase h)
+    have br : b ∉ rest := (hn.erase a).not_mem_erase
+    have nk := kept_nd kb b rest rn br
+    have ax : a ∉ kept kb b rest := by cases kb <;> simp [kept,ar,hab]
+    have nd : (childTwo ws a b d ka kb).Nodup := by
+      refine List.nodup_cons.mpr ⟨?_,kept_nd ka a _ nk ax⟩
+      intro h
+      exact hf (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem (ke ▸ List.mem_toFinset.mpr h)))
+    have eq : (childTwo ws a b d ka kb).toFinset = insert (bin d a b) U := by
+      change (bin d a b::kept ka a (kept kb b rest)).toFinset = _
+      simp [ke]
+    have sc := (live_size tail).2
+    have len : (childTwo ws a b d ka kb).length ≤ cap := by
+      rw [←List.toFinset_card_of_nodup nd,eq]
+      omega
+    exact twoStep a am b bm d ka kb hab fresh hz len k t (by omega) (eq.symm ▸ tail) zt
+
+theorem closeChild_sound {raw T pools links k rest op}
+    (pValid : ∀ p ∈ pools, ValidPool raw T p)
+    (lValid : ∀ tag xs, xs ∈ links tag → Impossible T k (List.toFinset xs))
+    (nd : (choiceVal op :: rest).Nodup)
+    (h : closeChild pools links k rest op = true) :
+    Impossible T k (choiceVal op :: rest).toFinset := by
+  simp only [closeChild,Bool.or_eq_true,List.any_eq_true] at h
+  rcases h with ⟨xs,hx,ok⟩ | ⟨p,hp,ok⟩
+  · rw [sameWords_sound ok]
+    exact lValid _ _ hx
+  · intro k t hk hh _
+    exact scalarPoolCut_sound (pValid _ hp) nd ok k t hk hh
+
+theorem evalMove_sound {raw T r s ws pools links cap a b op ka kb}
+    (pairs : properPairs T r s) (faith : ∀ w ∈ ws, faithful r s w)
+    (nd : (ws.map Prod.fst).Nodup) (ha : a ∈ ws) (hb : b ∈ ws)
+    (ne : (op==2)=false → a≠b) (hcap : 0<cap)
+    (pv : ∀ p ∈ pools, ValidPool raw T p)
+    (lv : ∀ tag xs, xs ∈ links tag → Impossible T (cap-1) (List.toFinset xs))
+    (pro : proper (movedDecor op a b).1) (fresh : (movedDecor op a b).1 ∉ ws.map Prod.fst)
+    (test : evalMove (cap,ws.length,ws,preCov ws,pools,links) op a b (movedDecor op a b) ka kb = true) :
+    Impossible T (cap-1) (moveFront ws op a b ka kb).toFinset := by
+  let z := movedDecor op a b
+  let rest := opKeep (op==2) ka kb a b ws
+  let child := z.1 :: rest.map Prod.fst
+  have sub : rest.Sublist ws := keep_sub _ _ _ _ _ _
+  have ndc : child.Nodup := List.nodup_cons.mpr ⟨fun hm => fresh ((sub.map _).subset hm),
+    nd.sublist (sub.map _)⟩
+  have fr : ws.any (fun v => v.1==z.1) = false := by
+    apply Bool.eq_false_iff.mpr
+    intro hh
+    obtain ⟨x,hx,he⟩ := List.any_eq_true.mp hh
+    exact fresh (beq_iff_eq.mp he ▸ List.mem_map_of_mem hx)
+  have pp : properB z.1 = true := by simpa [properB,proper] using pro
+  have leq : 1+(ws.length-(if ka then 0 else 1)-(if (op==2) || kb then 0 else 1)) = child.length := by
+    change _ = (z.1::rest.map Prod.fst).length
+    rw [List.length_cons,List.length_map,len_keep _ _ _ _ _ _ ha hb ne,Nat.add_comm 1]
+  intro k t hk h zt
+  have hsz := (live_size h).2
+  change child.toFinset.card + t ≤ k+1 at hsz
+  rw [List.toFinset_card_of_nodup ndc] at hsz
+  have len : child.length ≤ cap := by omega
+  unfold evalMove at test
+  change (if 1+(ws.length-_ - _) > cap then true else _) = true at test
+  rw [leq,if_neg (by omega)] at test
+  have sep := cover_required h hk ndc (pair_sep pairs)
+  have ce : cap-1+1=cap := by omega
+  rw [ce] at sep
+  let d := child.length==cap
+  have g : (coverage d rest).1 = covered d (pairSig r s) (rest.map Prod.fst) :=
+    cov_word _ _ (fun v hv => faith _ (sub.subset hv))
+  have rz := rest_coverage ha hb (op==2) ka kb d ne
+  have hf := moved_faithful (faith _ ha) (faith _ hb) op
+  have deq : decide (child.length=cap) = (child.length==cap) := by by_cases he : child.length=cap <;> simp [he]
+  change covered (decide (child.length = cap)) (pairSig r s) child = BitVec.allOnes 768 at sep
+  rw [deq] at sep
+  change column d (pairSig r s z.1) ||| covered d (pairSig r s) (rest.map Prod.fst) = _ at sep
+  change z.2 = pairSig r s z.1 at hf
+  rw [←hf,←g,rz,BitVec.or_comm] at sep
+  have be : ((restCov (getCov (preCov ws) d) (column d a.2) (column d b.2) (op==2) ka kb ||| column d z.2) != BitVec.allOnes 768) = false := by simp [sep]
+  change (if (_ != _) then true else if !properB z.1 || ws.any (fun v => v.1==z.1) then true else _) = true at test
+  rw [be,pp,fr] at test
+  have val := moved_full op a b
+  change z.1 = _ at val
+  change Live T k t child.toFinset at h
+  have nd' := ndc
+  change (z.1::rest.map Prod.fst).Nodup at nd'
+  change Live T k t (z.1::rest.map Prod.fst).toFinset at h
+  rw [val] at nd' h
+  exact closeChild_sound pv lv nd' test k t hk h zt
+
+theorem node_sound {raw T r s ws pools links cap}
+    (pairs : properPairs T r s) (faith : ∀ w ∈ ws, faithful r s w)
+    (nd : (ws.map Prod.fst).Nodup) (out : T ∉ ws.map Prod.fst)
+    (pv : ∀ p ∈ pools, ValidPool raw T p)
+    (lv : ∀ tag xs, xs ∈ links tag → Impossible T (cap-1) (List.toFinset xs))
+    (checks : testAll (cap,ws.length,ws,preCov ws,pools,links) ws = true) :
+    Impossible T cap (ws.map Prod.fst).toFinset := by
+  by_cases hc : cap=0
+  · intro k t hk h _
+    have ke : k=0 := by omega
+    subst k
+    generalize he : (ws.map Prod.fst).toFinset = S at h
+    obtain ⟨_,hS,_⟩ := h
+    exact out (List.mem_toFinset.mp (by rw [he,hS]; exact Finset.mem_singleton_self _))
+  have hc' : 0<cap := by omega
+  apply enum_step nd out
+  · intro a ha b hb d ka kb ne fresh pro len
+    obtain ⟨a,haW,rfl⟩ := List.mem_map.mp ha
+    obtain ⟨b,hbW,rfl⟩ := List.mem_map.mp hb
+    have ab : a≠b := fun e => ne (congrArg Prod.fst e)
+    have one (a b : Decor) (aa : a∈ws) (bb : b∈ws) (ne' : a.1≠b.1) (ka kb : Bool)
+        (pr : proper (bin d a.1 b.1)) (fr : bin d a.1 b.1 ∉ ws.map Prod.fst)
+        (test : testPair (cap,ws.length,ws,preCov ws,pools,links) a b d = true) :
+        Impossible T (cap-1) (childTwo (ws.map Prod.fst) a.1 b.1 d ka kb).toFinset := by
+      rw [←binary_front nd aa bb ne']
+      have eq : (movedDecor (if d then 1 else 0) a b).1 = bin d a.1 b.1 := by cases d <;> rfl
+      exact evalMove_sound pairs faith nd aa bb (fun _ e => ne' (congrArg Prod.fst e)) hc' pv lv
+        (eq ▸ pr) (eq ▸ fr) (testPair_at test ka kb)
+    rcases all_binary checks haW hbW ab d with hh | hh
+    · exact one a b haW hbW ne ka kb pro fresh hh
+    · rw [childTwo_swap _ nd]
+      exact one b a hbW haW (Ne.symm ne) kb ka (bin_comm d a.1 b.1 ▸ pro)
+        (bin_comm d a.1 b.1 ▸ fresh) hh
+
+theorem rotate_excluded {T n} {ws : List Sig} (hi : Impossible T n ws.toFinset)
+    (p : List Move) (ok : autoOK T p = true) : Impossible T n (ws.map (movedWord p.reverse)).toFinset := by
+  simp only [autoOK,Bool.and_eq_true,beq_iff_eq] at ok
+  have onto : Function.Surjective (movedRow p) := fun r => ⟨movedRow p.reverse r,composed_id ok.2 r⟩
+  intro k t hk h zt
+  have run := live_rename h (movedRow p) onto
+  have goal : rename (movedRow p) T = T := (moved_eq_rename p T).symm.trans ok.1.1
+  have inv (x : Sig) : rename (movedRow p) (movedWord p.reverse x) = x := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro j hj
+    change bit ⟨j,hj⟩ _ = bit ⟨j,hj⟩ _
+    rw [bit_rename,bit_moved,composed_id ok.1.2]
+  have back : (ws.map (movedWord p.reverse)).toFinset.image (rename (movedRow p)) = ws.toFinset := by
+    ext a
+    simp only [Finset.mem_image,List.mem_toFinset,List.mem_map]
+    constructor
+    · rintro ⟨v,⟨w,hw,rfl⟩,rfl⟩
+      simpa only [inv] using hw
+    · intro ha
+      exact ⟨_,⟨a,ha,rfl⟩,inv a⟩
+  rw [goal,back] at run
+  exact hi k t hk run zt
+
+theorem linkedSet_sound (g : Forest) (k : Nat)
+    (names : ∀ x ∈ g.autos, autoOK (targetOf g) (x.map swapRows) = true)
+    (earlier : ∀ i < (g.levels k).1, Impossible (targetOf g) k (stateSet g k i).toFinset)
+    {pair out} (h : linkedSet g k pair = some out) :
+    Impossible (targetOf g) k out.toFinset := by
+  unfold linkedSet at h
+  split at h
+  · contradiction
+  next valid =>
+    cases e : g.autos[pair.2]? with
+    | none => simp [e] at h
+    | some perm =>
+      simp only [e,Option.map_some,Option.some.injEq] at h
+      subst out
+      exact rotate_excluded (earlier _ (by omega)) _ (names _ (List.mem_of_getElem? e))
+
+theorem nodeVerified_sound (g : Forest) (k i : Nat)
+    (samples : properPairs (targetOf g) (asRow fun j => (g.samples j).1) (asRow fun j => (g.samples j).2))
+    (cols : ∀ ci ∈ g.cols, Slice (varsX (rawMask g.mask ci)) (targetOf g) (subcube ci.1 ci.2.1) ci.2.2.2.2)
+    (names : ∀ x ∈ g.autos, autoOK (targetOf g) (x.map swapRows) = true)
+    (prior : k>0 → ∀ j < (g.levels (k-1)).1, Impossible (targetOf g) (k-1) (stateSet g (k-1) j).toFinset)
+    (checked : nodeVerified g k i = true) : Impossible (targetOf g) k (stateSet g k i).toFinset := by
+  simp only [nodeVerified,Bool.and_eq_true,decide_eq_true_eq,Bool.not_eq_true',List.contains_eq_mem] at checked
+  have hN := checked.1.1
+  have hT : targetOf g ∉ stateSet g k i := by simpa [stateSet] using checked.1.2
+  by_cases h0 : k=0
+  · subst k
+    intro t u lo h _
+    have ht : t=0 := by omega
+    subst t
+    generalize he : (stateSet g 0 i).toFinset = S at h
+    obtain ⟨_,hS,_⟩ := h
+    exact hT (List.mem_toFinset.mp (by rw [he,hS]; exact Finset.mem_singleton_self _))
+  apply node_sound (raw:=vars g.mask) samples _ hN hT _ _ (by simpa only [h0,if_false] using checked.2)
+  · intro v hv
+    apply decode_faithful _ _ _ _ _ (wires_faithful g) v
+    exact (selectLive_sub _ _).subset hv
+  · intro p hp
+    obtain ⟨⟨a,b⟩,_,h⟩ := List.mem_filterMap.mp hp
+    exact buildRule_sound g cols h
+  · intro tag xs hx
+    have e : ((g.index k tag).bind (linkedSet g (k-1)))=some xs := by simpa using hx
+    obtain ⟨pair,_,h⟩ := Option.bind_eq_some_iff.mp e
+    exact linkedSet_sound g _ names (prior (by omega)) h
+
+-- A monotone suffix needs a live wire that is true on the accepting row and false
+-- on the rejecting row of each sample pair. This leaves 455 of 2630 states in the
+-- final table for the full gate transition check.
+def active (c : NodeContext) := (coverage true c.2.2.1).1 == BitVec.allOnes 768
+def chunk (g : Forest) (k start n ar : Nat) :=
+  let xs := (contexts g k start n).filter active
+  xs.all (fun c => c.2.1 == ar && prelim (targetOf g) c) &&
+    (xs.isEmpty || runBatch k ar xs)
+
+def Rows (g : Forest) (k start n : Nat) : Prop :=
+  ∀ i, start ≤ i → i < start+n → active (contextOf g k i) = true → nodeVerified g k i = true
+
+theorem emptyRows {g k start} : Rows g k start 0 := by
+  intro i lo hi
+  omega
+
+theorem joinRows {g k start a b} (head : Rows g k start a) (tail : Rows g k (start+a) b) :
+    Rows g k start (a+b) := by
+  intro i lo hi
+  by_cases h : i < start+a
+  · exact head i lo h
+  · exact tail i (by omega) (by omega)
+
+theorem chunkRows {g k start n ar} (ok : chunk g k start n ar = true) : Rows g k start n := by
+  intro i lo hi live
+  let xs := (contexts g k start n).filter active
+  have mem : contextOf g k i ∈ xs := by
+    apply List.mem_filter.mpr
+    refine ⟨?_,live⟩
+    apply List.mem_map.mpr
+    exact ⟨i,List.mem_map.mpr ⟨i-start,List.mem_range.mpr (by omega),by omega⟩,rfl⟩
+  obtain ⟨q,hq,eq⟩ := List.getElem_of_mem mem
+  change (xs.all (fun c => c.2.1 == ar && prelim (targetOf g) c) && (xs.isEmpty || runBatch k ar xs)) = true at ok
+  simp only [Bool.and_eq_true] at ok
+  obtain ⟨headers,rest⟩ := ok
+  have header := List.all_eq_true.mp headers _ mem
+  simp only [Bool.and_eq_true,beq_iff_eq] at header
+  have run : runBatch k ar xs = true := by
+    simp only [Bool.or_eq_true] at rest
+    rcases rest with e | r
+    · have emp : xs = [] := List.isEmpty_iff.mp e
+      simp [emp] at mem
+    · exact r
+  have hb : xs[q].1=k := by rw [eq]; rfl
+  have ha : xs[q].2.1=ar := by rw [eq]; exact header.1
+  have hn : xs[q].2.2.1.length=ar := by rw [eq]; exact header.1
+  rw [from_context,Bool.and_eq_true]
+  refine ⟨header.2,?_⟩
+  split
+  · rfl
+  · exact eq ▸ runBatch_at hq hb ha hn run
+
+theorem inactive_sound (g : Forest) (k i : Nat)
+    (pairs : properPairs (targetOf g) (asRow fun j => (g.samples j).1) (asRow fun j => (g.samples j).2))
+    (off : active (contextOf g k i) ≠ true) :
+    Impossible (targetOf g) k (stateSet g k i).toFinset := by
+  intro a t _ run zeroNot
+  have good : ∀ x ∈ (readNode g k i).2.2,
+      faithful (asRow fun j => (g.samples j).1) (asRow fun j => (g.samples j).2) x := by
+    intro x hx
+    apply decode_faithful _ _ _ _ _ (wires_faithful g) x
+    exact (selectLive_sub _ _).subset hx
+  apply off
+  apply beq_iff_eq.mpr
+  change (coverage true (readNode g k i).2.2).1 = _
+  rw [cov_word true _ good]
+  exact cover_sound run rfl (pair_sep pairs) true (fun _ => zeroNot)
+
+def Tables (g : Forest) (top : Nat) := ∀ k ≤ top, Rows g k 0 (g.levels k).1
+
+theorem allNodes (g : Forest) (top : Nat) (prior : Nat → Nat)
+    (lower : ∀ q, Lower (varsX q) (graphGoal q) (prior q))
+    (geometry : graphValid g prior = true) (rows : Tables g top) :
+    ∀ k ≤ top, ∀ i < (g.levels k).1, Impossible (targetOf g) k (stateSet g k i).toFinset := by
+  simp only [graphValid,Bool.and_eq_true,List.all_eq_true,beq_iff_eq] at geometry
+  have pairs := chart_pairs geometry.1.1.1 geometry.1.1.2
+  intro k
+  induction k with
+  | zero =>
+    intro hk i hi
+    by_cases h : active (contextOf g 0 i) = true
+    · exact nodeVerified_sound g 0 i pairs (fun x hx => col_sound _ prior lower (geometry.1.2 x hx))
+        geometry.2 (by omega) (rows 0 hk i (by omega) (by simpa only [Nat.zero_add] using hi) h)
+    · exact inactive_sound g 0 i pairs h
+  | succ k ih =>
+    intro hk i hi
+    by_cases h : active (contextOf g (k+1) i) = true
+    · exact nodeVerified_sound g _ i pairs (fun x hx => col_sound _ prior lower (geometry.1.2 x hx))
+        geometry.2 (fun _ => by simpa using ih (by omega)) (rows (k+1) hk i (by omega) (by simpa only [Nat.zero_add] using hi) h)
+    · exact inactive_sound g _ i pairs h
+
+theorem root {g top prior k i ws} (low : ∀ q, Lower (varsX q) (graphGoal q) (prior q))
+    (geom : graphValid g prior = true) (table : Tables g top) (hk : k ≤ top)
+    (idx : indexedRoot g k i ws = true) : Impossible (targetOf g) k ws.toFinset := by
+  simp only [indexedRoot,Bool.and_eq_true,decide_eq_true_eq] at idx
+  have h := allNodes g top prior low geom table k hk i idx.1
+  rw [← sameWords_sound idx.2]
+  exact h
+
+end MonotoneSuffix
+
+namespace MonotoneSuffix
+theorem initial_live (C : Circuit) (legal : PEqualNP.MetaComplexity.FanInTwo C)
+    (first : ∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = !(y 0))
+    (mono : ∀ g ∈ C.gates.tail, g.op ∈ ({GateOp.and,GateOp.or} : Set GateOp) ∧ g.inputs.length ≤ 2)
+    (computes : PEqualNP.MetaComplexity.circuitFun 9 C = edge) (small : C.size ≤ 15) :
+    ∃ k S, k ≤ 14 ∧ Live graph k 0 S ∧ ∀ a ∈ S, a ∈ inputs++[seed] := by
+  have headEq : (execute C.gates inputs).getD 9 zero = seed := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro j hj
+    let r : Row := ⟨j,hj⟩
+    exact (table_eval C legal 9 r).trans ((first (sample r)).trans (seed_table r).symm)
+  have goalEq : (execute C.gates inputs).getD C.output zero = graph := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro j hj
+    let r : Row := ⟨j,hj⟩
+    exact (table_eval C legal C.output r).trans ((congrFun computes (sample r)).trans (edge_table r).symm)
+  have out := get_rep (execute C.gates inputs) C.output
+  rw [goalEq] at out
+  have targetIn := out.resolve_right (fun hn => hn graph_proper)
+  cases hgs : C.gates with
+  | nil =>
+    rw [hgs] at headEq
+    exact False.elim (seed_nonzero headEq.symm)
+  | cons g gs =>
+    have eq0 : gv inputs g = seed := by
+      rw [hgs] at headEq
+      change (execute gs (inputs++[gv inputs g])).getD 9 zero = seed at headEq
+      obtain ⟨l,hl⟩ := exec_extends gs (inputs++[gv inputs g])
+      rw [hl] at headEq
+      exact headEq
+    rw [hgs] at targetIn
+    change graph ∈ execute gs (inputs++[gv inputs g]) at targetIn
+    rw [eq0] at targetIn
+    have tailLegal : ∀ q ∈ gs, q.op ∈ ({GateOp.and,GateOp.or} : Set GateOp) ∧ q.inputs.length ≤ 2 := by
+      simpa only [hgs,List.tail_cons] using mono
+    obtain ⟨k,S,hk,run,hs⟩ := extract gs _ tailLegal graph_proper targetIn
+    have len : gs.length+1 ≤ 15 := by simpa [Circuit.size,hgs] using small
+    exact ⟨k,S,by omega,run,hs⟩
+
+end MonotoneSuffix
 def g15d3 (i : Nat) : Nat := 0xf
 def g15l3 : Packing := (1,0,0,0,1,0,0,g15d3)
 def g15samples : Array (Bits × Bits) := #[(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbaf3ea78de4d799d,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff450cc90c3c245919),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdf7ff8fe9f9b7ed5,0x20812421801324c4),(0xefbdbf97f9f6bf6a,0x102a401415600a0a),(0xf3a9d7437375f5ba,0xfc028ab620235b0),(0,0),(0,0),(0,0),(0,0),(0,0)]
@@ -5079,624 +5508,366 @@ theorem geomx511 : graphValid x511 (boundsBefore knownx503) = true := by
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_14_0 : block x511 14 0 1=true := by
-  apply cellsBlock (ar:=9) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_14_0 : MonotoneSuffix.Rows x511 14 0 1 :=
+  MonotoneSuffix.chunkRows (ar:=9) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_14_1 : block x511 14 1 1=true := by
-  apply cellsBlock (ar:=10) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem allx511_14 : block x511 14 0 2=true := (@block_merge x511 14 0 1 1 sx511_14_0 sx511_14_1)
+theorem sx511_14_1 : MonotoneSuffix.Rows x511 14 1 1 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_13_0 : block x511 13 0 5=true := by
-  apply cellsBlock (ar:=9) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_13_0 : MonotoneSuffix.Rows x511 13 0 5 :=
+  MonotoneSuffix.chunkRows (ar:=9) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_13_5 : block x511 13 5 19=true := by
-  apply cellsBlock (ar:=10) (rows:=1) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_13_5 : MonotoneSuffix.Rows x511 13 5 19 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_13_24 : block x511 13 24 9=true := by
-  apply cellsBlock (ar:=11) (rows:=1) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem allx511_13 : block x511 13 0 33=true := (@block_merge x511 13 0 24 9 (@block_merge x511 13 0 5 19 sx511_13_0 sx511_13_5) sx511_13_24)
+theorem sx511_13_24 : MonotoneSuffix.Rows x511 13 24 9 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_12_0 : block x511 12 0 8=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_12_0 : MonotoneSuffix.Rows x511 12 0 8 :=
+  MonotoneSuffix.chunkRows (ar:=9) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_12_8 : block x511 12 8 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_12_8 : MonotoneSuffix.Rows x511 12 8 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_12_44 : block x511 12 44 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_12_44 : MonotoneSuffix.Rows x511 12 44 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_12_80 : block x511 12 80 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_12_80 : MonotoneSuffix.Rows x511 12 80 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_12_116 : block x511 12 116 11=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_12_116 : MonotoneSuffix.Rows x511 12 116 11 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_12_127 : block x511 12 127 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_12_127 : MonotoneSuffix.Rows x511 12 127 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_12_163 : block x511 12 163 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_12_163 : MonotoneSuffix.Rows x511 12 163 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_12_199 : block x511 12 199 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_12_199 : MonotoneSuffix.Rows x511 12 199 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_12_235 : block x511 12 235 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_12_235 : MonotoneSuffix.Rows x511 12 235 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_12_271 : block x511 12 271 1=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_12_271 : MonotoneSuffix.Rows x511 12 271 1 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_12_272 : block x511 12 272 33=true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem allx511_12 : block x511 12 0 305=true := (@block_merge x511 12 0 272 33 (@block_merge x511 12 0 271 1 (@block_merge x511 12 0 235 36 (@block_merge x511 12 0 199 36 (@block_merge x511 12 0 163 36 (@block_merge x511 12 0 127 36 (@block_merge x511 12 0 116 11 (@block_merge x511 12 0 80 36 (@block_merge x511 12 0 44 36 (@block_merge x511 12 0 8 36 sx511_12_0 sx511_12_8) sx511_12_44) sx511_12_80) sx511_12_116) sx511_12_127) sx511_12_163) sx511_12_199) sx511_12_235) sx511_12_271) sx511_12_272)
+theorem sx511_12_272 : MonotoneSuffix.Rows x511 12 272 33 :=
+  MonotoneSuffix.chunkRows (ar:=12) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_0 : block x511 11 0 12=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_0 : MonotoneSuffix.Rows x511 11 0 12 :=
+  MonotoneSuffix.chunkRows (ar:=9) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_12 : block x511 11 12 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_12 : MonotoneSuffix.Rows x511 11 12 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_48 : block x511 11 48 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_48 : MonotoneSuffix.Rows x511 11 48 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_84 : block x511 11 84 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_84 : MonotoneSuffix.Rows x511 11 84 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_120 : block x511 11 120 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_120 : MonotoneSuffix.Rows x511 11 120 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_156 : block x511 11 156 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_156 : MonotoneSuffix.Rows x511 11 156 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_192 : block x511 11 192 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_192 : MonotoneSuffix.Rows x511 11 192 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_228 : block x511 11 228 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_228 : MonotoneSuffix.Rows x511 11 228 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_264 : block x511 11 264 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_264 : MonotoneSuffix.Rows x511 11 264 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_300 : block x511 11 300 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_300 : MonotoneSuffix.Rows x511 11 300 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_336 : block x511 11 336 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_336 : MonotoneSuffix.Rows x511 11 336 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_372 : block x511 11 372 16=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_372 : MonotoneSuffix.Rows x511 11 372 16 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_388 : block x511 11 388 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_388 : MonotoneSuffix.Rows x511 11 388 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_424 : block x511 11 424 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_424 : MonotoneSuffix.Rows x511 11 424 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_460 : block x511 11 460 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_460 : MonotoneSuffix.Rows x511 11 460 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_496 : block x511 11 496 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_496 : MonotoneSuffix.Rows x511 11 496 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_532 : block x511 11 532 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_532 : MonotoneSuffix.Rows x511 11 532 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_568 : block x511 11 568 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_568 : MonotoneSuffix.Rows x511 11 568 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_604 : block x511 11 604 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_604 : MonotoneSuffix.Rows x511 11 604 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_640 : block x511 11 640 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_640 : MonotoneSuffix.Rows x511 11 640 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_676 : block x511 11 676 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_676 : MonotoneSuffix.Rows x511 11 676 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_712 : block x511 11 712 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_712 : MonotoneSuffix.Rows x511 11 712 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_748 : block x511 11 748 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_748 : MonotoneSuffix.Rows x511 11 748 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_784 : block x511 11 784 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_784 : MonotoneSuffix.Rows x511 11 784 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_820 : block x511 11 820 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_820 : MonotoneSuffix.Rows x511 11 820 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_856 : block x511 11 856 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_856 : MonotoneSuffix.Rows x511 11 856 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_892 : block x511 11 892 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_892 : MonotoneSuffix.Rows x511 11 892 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_928 : block x511 11 928 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_928 : MonotoneSuffix.Rows x511 11 928 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_964 : block x511 11 964 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_964 : MonotoneSuffix.Rows x511 11 964 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_1000 : block x511 11 1000 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_1000 : MonotoneSuffix.Rows x511 11 1000 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_1036 : block x511 11 1036 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_1036 : MonotoneSuffix.Rows x511 11 1036 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_1072 : block x511 11 1072 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_1072 : MonotoneSuffix.Rows x511 11 1072 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_1108 : block x511 11 1108 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_1108 : MonotoneSuffix.Rows x511 11 1108 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_1144 : block x511 11 1144 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_1144 : MonotoneSuffix.Rows x511 11 1144 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_1180 : block x511 11 1180 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_1180 : MonotoneSuffix.Rows x511 11 1180 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_1216 : block x511 11 1216 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_1216 : MonotoneSuffix.Rows x511 11 1216 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_1252 : block x511 11 1252 9=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_1252 : MonotoneSuffix.Rows x511 11 1252 9 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_1261 : block x511 11 1261 36=true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_11_1261 : MonotoneSuffix.Rows x511 11 1261 36 :=
+  MonotoneSuffix.chunkRows (ar:=12) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_11_1297 : block x511 11 1297 31=true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem allx511_11 : block x511 11 0 1328=true := (@block_merge x511 11 0 1297 31 (@block_merge x511 11 0 1261 36 (@block_merge x511 11 0 1252 9 (@block_merge x511 11 0 1216 36 (@block_merge x511 11 0 1180 36 (@block_merge x511 11 0 1144 36 (@block_merge x511 11 0 1108 36 (@block_merge x511 11 0 1072 36 (@block_merge x511 11 0 1036 36 (@block_merge x511 11 0 1000 36 (@block_merge x511 11 0 964 36 (@block_merge x511 11 0 928 36 (@block_merge x511 11 0 892 36 (@block_merge x511 11 0 856 36 (@block_merge x511 11 0 820 36 (@block_merge x511 11 0 784 36 (@block_merge x511 11 0 748 36 (@block_merge x511 11 0 712 36 (@block_merge x511 11 0 676 36 (@block_merge x511 11 0 640 36 (@block_merge x511 11 0 604 36 (@block_merge x511 11 0 568 36 (@block_merge x511 11 0 532 36 (@block_merge x511 11 0 496 36 (@block_merge x511 11 0 460 36 (@block_merge x511 11 0 424 36 (@block_merge x511 11 0 388 36 (@block_merge x511 11 0 372 16 (@block_merge x511 11 0 336 36 (@block_merge x511 11 0 300 36 (@block_merge x511 11 0 264 36 (@block_merge x511 11 0 228 36 (@block_merge x511 11 0 192 36 (@block_merge x511 11 0 156 36 (@block_merge x511 11 0 120 36 (@block_merge x511 11 0 84 36 (@block_merge x511 11 0 48 36 (@block_merge x511 11 0 12 36 sx511_11_0 sx511_11_12) sx511_11_48) sx511_11_84) sx511_11_120) sx511_11_156) sx511_11_192) sx511_11_228) sx511_11_264) sx511_11_300) sx511_11_336) sx511_11_372) sx511_11_388) sx511_11_424) sx511_11_460) sx511_11_496) sx511_11_532) sx511_11_568) sx511_11_604) sx511_11_640) sx511_11_676) sx511_11_712) sx511_11_748) sx511_11_784) sx511_11_820) sx511_11_856) sx511_11_892) sx511_11_928) sx511_11_964) sx511_11_1000) sx511_11_1036) sx511_11_1072) sx511_11_1108) sx511_11_1144) sx511_11_1180) sx511_11_1216) sx511_11_1252) sx511_11_1261) sx511_11_1297)
+theorem sx511_11_1297 : MonotoneSuffix.Rows x511 11 1297 31 :=
+  MonotoneSuffix.chunkRows (ar:=12) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_0 : block x511 10 0 14=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_0 : MonotoneSuffix.Rows x511 10 0 14 :=
+  MonotoneSuffix.chunkRows (ar:=9) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_14 : block x511 10 14 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_14 : MonotoneSuffix.Rows x511 10 14 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_50 : block x511 10 50 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_50 : MonotoneSuffix.Rows x511 10 50 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_86 : block x511 10 86 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_86 : MonotoneSuffix.Rows x511 10 86 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_122 : block x511 10 122 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_122 : MonotoneSuffix.Rows x511 10 122 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_158 : block x511 10 158 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_158 : MonotoneSuffix.Rows x511 10 158 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_194 : block x511 10 194 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_194 : MonotoneSuffix.Rows x511 10 194 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_230 : block x511 10 230 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_230 : MonotoneSuffix.Rows x511 10 230 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_266 : block x511 10 266 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_266 : MonotoneSuffix.Rows x511 10 266 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_302 : block x511 10 302 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_302 : MonotoneSuffix.Rows x511 10 302 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_338 : block x511 10 338 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_338 : MonotoneSuffix.Rows x511 10 338 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_374 : block x511 10 374 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_374 : MonotoneSuffix.Rows x511 10 374 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_410 : block x511 10 410 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_410 : MonotoneSuffix.Rows x511 10 410 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_446 : block x511 10 446 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_446 : MonotoneSuffix.Rows x511 10 446 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_482 : block x511 10 482 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_482 : MonotoneSuffix.Rows x511 10 482 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_518 : block x511 10 518 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_518 : MonotoneSuffix.Rows x511 10 518 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_554 : block x511 10 554 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_554 : MonotoneSuffix.Rows x511 10 554 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_590 : block x511 10 590 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_590 : MonotoneSuffix.Rows x511 10 590 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_626 : block x511 10 626 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_626 : MonotoneSuffix.Rows x511 10 626 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_662 : block x511 10 662 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_662 : MonotoneSuffix.Rows x511 10 662 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_698 : block x511 10 698 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_698 : MonotoneSuffix.Rows x511 10 698 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_734 : block x511 10 734 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_734 : MonotoneSuffix.Rows x511 10 734 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_770 : block x511 10 770 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_770 : MonotoneSuffix.Rows x511 10 770 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_806 : block x511 10 806 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_806 : MonotoneSuffix.Rows x511 10 806 36 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_842 : block x511 10 842 5=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_842 : MonotoneSuffix.Rows x511 10 842 5 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_847 : block x511 10 847 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_847 : MonotoneSuffix.Rows x511 10 847 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_883 : block x511 10 883 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_10_883 : MonotoneSuffix.Rows x511 10 883 36 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_919 : block x511 10 919 13=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem allx511_10 : block x511 10 0 932=true := (@block_merge x511 10 0 919 13 (@block_merge x511 10 0 883 36 (@block_merge x511 10 0 847 36 (@block_merge x511 10 0 842 5 (@block_merge x511 10 0 806 36 (@block_merge x511 10 0 770 36 (@block_merge x511 10 0 734 36 (@block_merge x511 10 0 698 36 (@block_merge x511 10 0 662 36 (@block_merge x511 10 0 626 36 (@block_merge x511 10 0 590 36 (@block_merge x511 10 0 554 36 (@block_merge x511 10 0 518 36 (@block_merge x511 10 0 482 36 (@block_merge x511 10 0 446 36 (@block_merge x511 10 0 410 36 (@block_merge x511 10 0 374 36 (@block_merge x511 10 0 338 36 (@block_merge x511 10 0 302 36 (@block_merge x511 10 0 266 36 (@block_merge x511 10 0 230 36 (@block_merge x511 10 0 194 36 (@block_merge x511 10 0 158 36 (@block_merge x511 10 0 122 36 (@block_merge x511 10 0 86 36 (@block_merge x511 10 0 50 36 (@block_merge x511 10 0 14 36 sx511_10_0 sx511_10_14) sx511_10_50) sx511_10_86) sx511_10_122) sx511_10_158) sx511_10_194) sx511_10_230) sx511_10_266) sx511_10_302) sx511_10_338) sx511_10_374) sx511_10_410) sx511_10_446) sx511_10_482) sx511_10_518) sx511_10_554) sx511_10_590) sx511_10_626) sx511_10_662) sx511_10_698) sx511_10_734) sx511_10_770) sx511_10_806) sx511_10_842) sx511_10_847) sx511_10_883) sx511_10_919)
+theorem sx511_10_919 : MonotoneSuffix.Rows x511 10 919 13 :=
+  MonotoneSuffix.chunkRows (ar:=11) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_9_0 : block x511 9 0 23=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem sx511_9_0 : MonotoneSuffix.Rows x511 9 0 23 :=
+  MonotoneSuffix.chunkRows (ar:=9) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_9_23 : block x511 9 23 6=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem allx511_9 : block x511 9 0 29=true := (@block_merge x511 9 0 23 6 sx511_9_0 sx511_9_23)
+theorem sx511_9_23 : MonotoneSuffix.Rows x511 9 23 6 :=
+  MonotoneSuffix.chunkRows (ar:=10) (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_8_0 : block x511 8 0 1=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem allx511_8 : block x511 8 0 1=true := sx511_8_0
-theorem tablesx511 : checkedTables x511 14 := by
+theorem sx511_8_0 : MonotoneSuffix.Rows x511 8 0 1 :=
+  MonotoneSuffix.chunkRows (ar:=9) (by decide +kernel)
+theorem allx511_14 : MonotoneSuffix.Rows x511 14 0 2 := (@MonotoneSuffix.joinRows x511 14 0 1 1 sx511_14_0 sx511_14_1)
+theorem allx511_13 : MonotoneSuffix.Rows x511 13 0 33 := (@MonotoneSuffix.joinRows x511 13 0 24 9 (@MonotoneSuffix.joinRows x511 13 0 5 19 sx511_13_0 sx511_13_5) sx511_13_24)
+theorem allx511_12 : MonotoneSuffix.Rows x511 12 0 305 := (@MonotoneSuffix.joinRows x511 12 0 272 33 (@MonotoneSuffix.joinRows x511 12 0 271 1 (@MonotoneSuffix.joinRows x511 12 0 235 36 (@MonotoneSuffix.joinRows x511 12 0 199 36 (@MonotoneSuffix.joinRows x511 12 0 163 36 (@MonotoneSuffix.joinRows x511 12 0 127 36 (@MonotoneSuffix.joinRows x511 12 0 116 11 (@MonotoneSuffix.joinRows x511 12 0 80 36 (@MonotoneSuffix.joinRows x511 12 0 44 36 (@MonotoneSuffix.joinRows x511 12 0 8 36 sx511_12_0 sx511_12_8) sx511_12_44) sx511_12_80) sx511_12_116) sx511_12_127) sx511_12_163) sx511_12_199) sx511_12_235) sx511_12_271) sx511_12_272)
+theorem allx511_11 : MonotoneSuffix.Rows x511 11 0 1328 := (@MonotoneSuffix.joinRows x511 11 0 1297 31 (@MonotoneSuffix.joinRows x511 11 0 1261 36 (@MonotoneSuffix.joinRows x511 11 0 1252 9 (@MonotoneSuffix.joinRows x511 11 0 1216 36 (@MonotoneSuffix.joinRows x511 11 0 1180 36 (@MonotoneSuffix.joinRows x511 11 0 1144 36 (@MonotoneSuffix.joinRows x511 11 0 1108 36 (@MonotoneSuffix.joinRows x511 11 0 1072 36 (@MonotoneSuffix.joinRows x511 11 0 1036 36 (@MonotoneSuffix.joinRows x511 11 0 1000 36 (@MonotoneSuffix.joinRows x511 11 0 964 36 (@MonotoneSuffix.joinRows x511 11 0 928 36 (@MonotoneSuffix.joinRows x511 11 0 892 36 (@MonotoneSuffix.joinRows x511 11 0 856 36 (@MonotoneSuffix.joinRows x511 11 0 820 36 (@MonotoneSuffix.joinRows x511 11 0 784 36 (@MonotoneSuffix.joinRows x511 11 0 748 36 (@MonotoneSuffix.joinRows x511 11 0 712 36 (@MonotoneSuffix.joinRows x511 11 0 676 36 (@MonotoneSuffix.joinRows x511 11 0 640 36 (@MonotoneSuffix.joinRows x511 11 0 604 36 (@MonotoneSuffix.joinRows x511 11 0 568 36 (@MonotoneSuffix.joinRows x511 11 0 532 36 (@MonotoneSuffix.joinRows x511 11 0 496 36 (@MonotoneSuffix.joinRows x511 11 0 460 36 (@MonotoneSuffix.joinRows x511 11 0 424 36 (@MonotoneSuffix.joinRows x511 11 0 388 36 (@MonotoneSuffix.joinRows x511 11 0 372 16 (@MonotoneSuffix.joinRows x511 11 0 336 36 (@MonotoneSuffix.joinRows x511 11 0 300 36 (@MonotoneSuffix.joinRows x511 11 0 264 36 (@MonotoneSuffix.joinRows x511 11 0 228 36 (@MonotoneSuffix.joinRows x511 11 0 192 36 (@MonotoneSuffix.joinRows x511 11 0 156 36 (@MonotoneSuffix.joinRows x511 11 0 120 36 (@MonotoneSuffix.joinRows x511 11 0 84 36 (@MonotoneSuffix.joinRows x511 11 0 48 36 (@MonotoneSuffix.joinRows x511 11 0 12 36 sx511_11_0 sx511_11_12) sx511_11_48) sx511_11_84) sx511_11_120) sx511_11_156) sx511_11_192) sx511_11_228) sx511_11_264) sx511_11_300) sx511_11_336) sx511_11_372) sx511_11_388) sx511_11_424) sx511_11_460) sx511_11_496) sx511_11_532) sx511_11_568) sx511_11_604) sx511_11_640) sx511_11_676) sx511_11_712) sx511_11_748) sx511_11_784) sx511_11_820) sx511_11_856) sx511_11_892) sx511_11_928) sx511_11_964) sx511_11_1000) sx511_11_1036) sx511_11_1072) sx511_11_1108) sx511_11_1144) sx511_11_1180) sx511_11_1216) sx511_11_1252) sx511_11_1261) sx511_11_1297)
+theorem allx511_10 : MonotoneSuffix.Rows x511 10 0 932 := (@MonotoneSuffix.joinRows x511 10 0 919 13 (@MonotoneSuffix.joinRows x511 10 0 883 36 (@MonotoneSuffix.joinRows x511 10 0 847 36 (@MonotoneSuffix.joinRows x511 10 0 842 5 (@MonotoneSuffix.joinRows x511 10 0 806 36 (@MonotoneSuffix.joinRows x511 10 0 770 36 (@MonotoneSuffix.joinRows x511 10 0 734 36 (@MonotoneSuffix.joinRows x511 10 0 698 36 (@MonotoneSuffix.joinRows x511 10 0 662 36 (@MonotoneSuffix.joinRows x511 10 0 626 36 (@MonotoneSuffix.joinRows x511 10 0 590 36 (@MonotoneSuffix.joinRows x511 10 0 554 36 (@MonotoneSuffix.joinRows x511 10 0 518 36 (@MonotoneSuffix.joinRows x511 10 0 482 36 (@MonotoneSuffix.joinRows x511 10 0 446 36 (@MonotoneSuffix.joinRows x511 10 0 410 36 (@MonotoneSuffix.joinRows x511 10 0 374 36 (@MonotoneSuffix.joinRows x511 10 0 338 36 (@MonotoneSuffix.joinRows x511 10 0 302 36 (@MonotoneSuffix.joinRows x511 10 0 266 36 (@MonotoneSuffix.joinRows x511 10 0 230 36 (@MonotoneSuffix.joinRows x511 10 0 194 36 (@MonotoneSuffix.joinRows x511 10 0 158 36 (@MonotoneSuffix.joinRows x511 10 0 122 36 (@MonotoneSuffix.joinRows x511 10 0 86 36 (@MonotoneSuffix.joinRows x511 10 0 50 36 (@MonotoneSuffix.joinRows x511 10 0 14 36 sx511_10_0 sx511_10_14) sx511_10_50) sx511_10_86) sx511_10_122) sx511_10_158) sx511_10_194) sx511_10_230) sx511_10_266) sx511_10_302) sx511_10_338) sx511_10_374) sx511_10_410) sx511_10_446) sx511_10_482) sx511_10_518) sx511_10_554) sx511_10_590) sx511_10_626) sx511_10_662) sx511_10_698) sx511_10_734) sx511_10_770) sx511_10_806) sx511_10_842) sx511_10_847) sx511_10_883) sx511_10_919)
+theorem allx511_9 : MonotoneSuffix.Rows x511 9 0 29 := (@MonotoneSuffix.joinRows x511 9 0 23 6 sx511_9_0 sx511_9_23)
+theorem allx511_8 : MonotoneSuffix.Rows x511 8 0 1 := sx511_8_0
+theorem mTables : MonotoneSuffix.Tables x511 14 := by
   intro k hk
   interval_cases k
-  · exact (rfl : block x511 0 0 0 = true)
-  · exact (rfl : block x511 1 0 0 = true)
-  · exact (rfl : block x511 2 0 0 = true)
-  · exact (rfl : block x511 3 0 0 = true)
-  · exact (rfl : block x511 4 0 0 = true)
-  · exact (rfl : block x511 5 0 0 = true)
-  · exact (rfl : block x511 6 0 0 = true)
-  · exact (rfl : block x511 7 0 0 = true)
+  · exact MonotoneSuffix.emptyRows
+  · exact MonotoneSuffix.emptyRows
+  · exact MonotoneSuffix.emptyRows
+  · exact MonotoneSuffix.emptyRows
+  · exact MonotoneSuffix.emptyRows
+  · exact MonotoneSuffix.emptyRows
+  · exact MonotoneSuffix.emptyRows
+  · exact MonotoneSuffix.emptyRows
   · exact allx511_8
   · exact allx511_9
   · exact allx511_10
@@ -5704,6 +5875,7 @@ theorem tablesx511 : checkedTables x511 14 := by
   · exact allx511_12
   · exact allx511_13
   · exact allx511_14
+
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 theorem caseA : Impossible (graphGoal 1023) 14 (vars 1023).toFinset := by
@@ -5711,31 +5883,32 @@ theorem caseA : Impossible (graphGoal 1023) 14 (vars 1023).toFinset := by
     (i:=0) (ws:=vars 1023) (by decide +kernel)
   have e : targetOf dead=graphGoal 1023 := by decide +kernel
   exact e ▸ h
+
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem caseB : Impossible (graphGoal 1023) 14 (rootB 1023).toFinset :=
-  index_root (g:=x511) (i:=1) rfl (before_sound knownx503 validx503) geomx511 tablesx511 (by decide +kernel)
+theorem caseB : MonotoneSuffix.Impossible (graphGoal 1023) 14 (rootB 1023).toFinset :=
+  MonotoneSuffix.root (g:=x511) (i:=1) (before_sound knownx503 validx503) geomx511 mTables (by decide) (by decide +kernel)
+
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem caseC : Impossible (graphGoal 1023) 14 (rootC 1023).toFinset :=
-  index_root (g:=x511) (i:=0) rfl (before_sound knownx503 validx503) geomx511 tablesx511 (by decide +kernel)
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 0 in
+theorem caseC : MonotoneSuffix.Impossible (graphGoal 1023) 14 (rootC 1023).toFinset :=
+  MonotoneSuffix.root (g:=x511) (i:=0) (before_sound knownx503 validx503) geomx511 mTables (by decide) (by decide +kernel)
+
 theorem bound : ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C →
       (∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = !(y 0)) →
-      PEqualNP.MetaComplexity.circuitFun 9 C = edge → 16 ≤ C.size := by
-  intro C legal first h
+      PEqualNP.MetaComplexity.circuitFun 9 C = edge → (∀ g ∈ C.gates.tail, g.op ∈ ({GateOp.and,GateOp.or} : Set GateOp) ∧ g.inputs.length ≤ 2) → 16 ≤ C.size := by
+  intro C legal first h mono
   by_contra! small
-  obtain ⟨k,t,S,hk,run,sub⟩ := initial_live C legal first h (by omega)
+  obtain ⟨k,S,hk,run,sub⟩ := MonotoneSuffix.initial_live C legal first mono h (by omega)
   have eg : graph=graphGoal 1023 := by decide +kernel
   have er : inputs++[seed]=rootB 1023 := by decide +kernel
   rw [eg] at run
   rw [er] at sub
   have ok : splitOK 1023 13438558465 1 = true := by decide +kernel
   rcases strong_split ok run sub with e | e | e
-  · exact caseA k t hk (e ▸ run)
-  · exact caseB k t hk (e ▸ run)
-  · exact caseC k t hk (e ▸ run)
+  · exact caseA k 0 hk (e ▸ run)
+  · exact caseB k 0 hk (e ▸ run) rfl
+  · exact caseC k 0 hk (e ▸ run) rfl
 
 def stp (w : List Bool) (g : Gate) : List Bool := w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
 theorem wires_eq (C : Circuit) (x : List Bool) : C.wires x = C.gates.foldl stp x := rfl
@@ -5755,8 +5928,8 @@ theorem get9 (y : Fin 9 → Bool) : (List.ofFn y ++ [!y 0]).getD 9 false = !y 0 
 theorem legalNot : (⟨GateOp.not, [0]⟩ : Gate).op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) ∧
     (⟨GateOp.not, [0]⟩ : Gate).inputs.length ≤ 2 := by simp
 
-theorem glue2 (op : GateOp) (hop : op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp)) (L : List ℕ)
-    (hL : L.length ≤ 2) (C : Circuit) (legal : PEqualNP.MetaComplexity.FanInTwo C) (hs : C.size ≤ 13)
+theorem glue2 (op : GateOp) (hop : op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp)) (mop : op ∈ ({GateOp.and,GateOp.or} : Set GateOp)) (L : List ℕ)
+    (hL : L.length ≤ 2) (C : Circuit) (legal : PEqualNP.MetaComplexity.FanInTwo C) (hs : C.size ≤ 13) (mono : PEqualNP.MetaComplexity.Monotone2 C)
     (h : ∀ y : Fin 9 → Bool, C.eval ((List.ofFn y ++ [!y 0]) ++
       [op.eval (L.map fun i => (List.ofFn y ++ [!y 0]).getD i false)]) = edge y) : False := by
   have e : ∀ y : Fin 9 → Bool, (⟨⟨GateOp.not, [0]⟩ :: ⟨op, L⟩ :: C.gates, C.output⟩ : Circuit).wires (List.ofFn y) =
@@ -5778,7 +5951,12 @@ theorem glue2 (op : GateOp) (hop : op ∈ ({GateOp.and, GateOp.or, GateOp.not} :
       rw [← h y]
       show (Circuit.wires _ _).getD _ _ = _
       rw [e]
-      rfl)
+      rfl) (by
+      intro g hg
+      change g ∈ (⟨op,L⟩ : Gate) :: C.gates at hg
+      rcases List.mem_cons.mp hg with rfl | rest
+      · exact ⟨mop,hL⟩
+      · exact mono _ rest)
   have : 16 ≤ C.gates.length + 1 + 1 := b
   have : C.gates.length ≤ 13 := hs
   omega
@@ -5787,8 +5965,18 @@ end PEqualNP.Outside.L_meta_3622
 
 theorem PEqualNP.Outside.L_meta_3622 :
   ∀ (x1 : List ℕ),   x1.length ≤ (2 : ℕ) →     ∀ (x3 : PEqualNP.CircuitLowerBounds.Circuit),       PEqualNP.MetaComplexity.FanInTwo x3 →         (12 : ℕ) ≤ x3.size →           x3.size ≤ (13 : ℕ) →             List.countP (fun (x7 : PEqualNP.CircuitLowerBounds.Gate) => !x7.op.eval [Bool.true]) x3.gates = (0 : ℕ) →               ∃ (x8 : Fin (9 : ℕ) → Bool),                 have x9 : List Bool := List.ofFn x8 ++ [!x8 (0 : Fin (9 : ℕ))];                 x3.eval (x9 ++ [PEqualNP.CircuitLowerBounds.GateOp.and.eval (List.map (fun (x10 : ℕ) => x9.getD x10 Bool.false) x1)]) ≠ (x8 (0 : Fin (9 : ℕ)) && x8 (1 : Fin (9 : ℕ)) || x8 (1 : Fin (9 : ℕ)) && x8 (2 : Fin (9 : ℕ)) || x8 (2 : Fin (9 : ℕ)) && x8 (3 : Fin (9 : ℕ)) || x8 (3 : Fin (9 : ℕ)) && x8 (4 : Fin (9 : ℕ)) || x8 (4 : Fin (9 : ℕ)) && x8 (0 : Fin (9 : ℕ)) || x8 (0 : Fin (9 : ℕ)) && x8 (5 : Fin (9 : ℕ)) || x8 (1 : Fin (9 : ℕ)) && x8 (6 : Fin (9 : ℕ)) || x8 (2 : Fin (9 : ℕ)) && x8 (7 : Fin (9 : ℕ)) || x8 (3 : Fin (9 : ℕ)) && x8 (8 : Fin (9 : ℕ)) || x8 (5 : Fin (9 : ℕ)) && x8 (7 : Fin (9 : ℕ)) || x8 (6 : Fin (9 : ℕ)) && x8 (8 : Fin (9 : ℕ)) || x8 (8 : Fin (9 : ℕ)) && x8 (5 : Fin (9 : ℕ))) := by
-  intro pins arity C fan _ small _
+  intro pins arity C fan _ small noNot
+  have mono : PEqualNP.MetaComplexity.Monotone2 C := by
+    intro g hg
+    obtain ⟨ops,arity⟩ := fan g hg
+    refine ⟨?_,arity⟩
+    simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at ops ⊢
+    rcases ops with h | h | h
+    · exact Or.inl h
+    · exact Or.inr h
+    · have p := List.countP_eq_zero.mp noNot g hg
+      simp [h,PEqualNP.CircuitLowerBounds.GateOp.eval] at p
   by_contra allAgree
-  apply PEqualNP.Outside.L_meta_3622.glue2 .and (by simp) pins arity C fan small
+  apply PEqualNP.Outside.L_meta_3622.glue2 .and (by simp) (by simp) pins arity C fan small mono
   intro x
   exact not_not.mp (not_exists.mp allAgree x)
