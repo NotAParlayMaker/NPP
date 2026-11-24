@@ -3,12 +3,12 @@ import PEqualNP.Defs
 
 theorem PEqualNP.Outside.R_meta_2138_1
     (h_0 : ¬ ∃ D : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo D ∧ D.size ≤ 12 ∧
-      ∀ x : Fin 8 → Bool, D.eval (List.ofFn (Fin.snoc x (!(x 0)) : Fin 9 → Bool)) =
+      ∀ x : Fin 8 → Bool, D.eval (List.ofFn x ++ [!(x 0)]) =
         ((x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 0 && x 4) ||
          (x 1 && x 5) || (x 2 && x 6) || (x 3 && x 7) || (x 4 && x 6) ||
          (x 5 && x 7) || (x 7 && x 4)))
     (h_1 : ¬ ∃ D : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo D ∧ D.size ≤ 12 ∧
-      ∀ x : Fin 8 → Bool, D.eval (List.ofFn (Fin.snoc x (!(x 1)) : Fin 9 → Bool)) =
+      ∀ x : Fin 8 → Bool, D.eval (List.ofFn x ++ [!(x 1)]) =
         ((x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 0 && x 4) ||
          (x 1 && x 5) || (x 2 && x 6) || (x 3 && x 7) || (x 4 && x 6) ||
          (x 5 && x 7) || (x 7 && x 4)))
@@ -26,7 +26,7 @@ theorem PEqualNP.Outside.R_meta_2138_1
       (∃ g ∈ C.gates[1]?.toList, 9 ∈ g.inputs) → PEqualNP.MetaComplexity.FanInTwo C →
       (∀ x : Fin 9 → Bool, (C.wires (List.ofFn x)).getD 9 false = (x 0 && x 6)) → PEqualNP.MetaComplexity.circuitFun 9 C = f →
     ∃ i : Fin 8, ∀ σ : Fin 8 → Fin 8, ∃ D : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo D ∧ D.size+3 ≤ C.size ∧
-      ∀ y : Fin 8 → Bool, D.eval (List.ofFn (Fin.snoc y (!(y (σ i))) : Fin 9 → Bool)) =
+      ∀ y : Fin 8 → Bool, D.eval (List.ofFn y ++ [!(y (σ i))]) =
         f (Fin.insertNth (6 : Fin 9) false (y ∘ σ))) :
     ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), (∃ x2 ∈ x1.gates[(1 : ℕ)]?.toList, (9 : ℕ) ∈ x2.inputs) → PEqualNP.MetaComplexity.FanInTwo x1 → (∀ (x4 : Fin (9 : ℕ) → Bool), (x1.wires (List.ofFn x4)).getD (9 : ℕ) Bool.false = (x4 (0 : Fin (9 : ℕ)) && x4 (6 : Fin (9 : ℕ)))) → (PEqualNP.MetaComplexity.circuitFun (9 : ℕ) x1 = fun (x5 : Fin (9 : ℕ) → Bool) => x5 (0 : Fin (9 : ℕ)) && x5 (1 : Fin (9 : ℕ)) || x5 (1 : Fin (9 : ℕ)) && x5 (2 : Fin (9 : ℕ)) || x5 (2 : Fin (9 : ℕ)) && x5 (3 : Fin (9 : ℕ)) || x5 (3 : Fin (9 : ℕ)) && x5 (4 : Fin (9 : ℕ)) || x5 (4 : Fin (9 : ℕ)) && x5 (0 : Fin (9 : ℕ)) || x5 (0 : Fin (9 : ℕ)) && x5 (5 : Fin (9 : ℕ)) || x5 (1 : Fin (9 : ℕ)) && x5 (6 : Fin (9 : ℕ)) || x5 (2 : Fin (9 : ℕ)) && x5 (7 : Fin (9 : ℕ)) || x5 (3 : Fin (9 : ℕ)) && x5 (8 : Fin (9 : ℕ)) || x5 (5 : Fin (9 : ℕ)) && x5 (7 : Fin (9 : ℕ)) || x5 (6 : Fin (9 : ℕ)) && x5 (8 : Fin (9 : ℕ)) || x5 (8 : Fin (9 : ℕ)) && x5 (5 : Fin (9 : ℕ))) → (16 : ℕ) ≤ x1.size := by
   intro C second fan first computes
