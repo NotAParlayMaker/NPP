@@ -5,37 +5,32 @@ theorem PEqualNP.Outside.R_meta_1031_3
     (h1 : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj],
       (∀ a b c : Fin n, G.Adj a b → G.Adj b c → ¬ G.Adj c a) →
       (∀ a b c d : Fin n, G.Adj a b → G.Adj b c → G.Adj c d → G.Adj d a → a = c ∨ b = d) →
+      ∀ D : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 D →
+        PEqualNP.MetaComplexity.circuitFun n D = PEqualNP.MetaComplexity.NestedCover.graphFun G ∅ →
+        ∃ K : Finset (Fin n), (∀ u v : Fin n, G.Adj u v → u ∈ K ∨ v ∈ K) ∧
+          {p : Fin n × Fin n | p.1 < p.2 ∧ G.Adj p.1 p.2}.ncard + K.card
+            ≤ D.size + 1)
+    (h2 : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj],
       ∃ C : PEqualNP.CircuitLowerBounds.Circuit,
         PEqualNP.MetaComplexity.Monotone2 C ∧
         PEqualNP.MetaComplexity.circuitFun n C = PEqualNP.MetaComplexity.NestedCover.graphFun G ∅ ∧
-        (∀ D : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 D →
-          PEqualNP.MetaComplexity.circuitFun n D = PEqualNP.MetaComplexity.NestedCover.graphFun G ∅ →
-          C.size ≤ D.size) ∧
-        PEqualNP.EdgeOwnership.HasStarProfile n G C)
-    (h2 : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
-      (C : PEqualNP.CircuitLowerBounds.Circuit),
-      (∀ a b c : Fin n, G.Adj a b → G.Adj b c → ¬ G.Adj c a) →
-      (∀ a b c d : Fin n, G.Adj a b → G.Adj b c → G.Adj c d → G.Adj d a → a = c ∨ b = d) →
-      PEqualNP.MetaComplexity.Monotone2 C →
-      PEqualNP.MetaComplexity.circuitFun n C = PEqualNP.MetaComplexity.NestedCover.graphFun G ∅ →
-      (∀ D : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 D →
-        PEqualNP.MetaComplexity.circuitFun n D = PEqualNP.MetaComplexity.NestedCover.graphFun G ∅ →
-        C.size ≤ D.size) →
-      PEqualNP.EdgeOwnership.HasStarProfile n G C →
-      ∃ C' : PEqualNP.CircuitLowerBounds.Circuit,
-        PEqualNP.MetaComplexity.Monotone2 C' ∧
-        PEqualNP.MetaComplexity.circuitFun n C' = PEqualNP.MetaComplexity.NestedCover.graphFun G ∅ ∧
-        C'.size ≤ C.size ∧
-        PEqualNP.EdgeOwnership.HasStarProfile n G C' ∧
-        ∀ j : ℕ, j < C'.gates.length →
-          (PEqualNP.MetaComplexity.NestedCover.gateAt C' j).op = PEqualNP.CircuitLowerBounds.GateOp.and →
-          ∃ u v : Fin n, G.Adj u v ∧ PEqualNP.EdgeOwnership.Owns n C' j u v) :
+        (∀ K : Finset (Fin n), (∀ u v : Fin n, G.Adj u v → u ∈ K ∨ v ∈ K) →
+          C.size ≤ {p : Fin n × Fin n | p.1 < p.2 ∧ G.Adj p.1 p.2}.ncard
+            + K.card - 1) ∧
+        PEqualNP.EdgeOwnership.HasStarProfile n G C ∧
+        ∀ j : ℕ, j < C.gates.length →
+          (PEqualNP.MetaComplexity.NestedCover.gateAt C j).op = PEqualNP.CircuitLowerBounds.GateOp.and →
+          ∃ u v : Fin n, G.Adj u v ∧ PEqualNP.EdgeOwnership.Owns n C j u v) :
     ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj], (∀ a b c : Fin n, G.Adj a b → G.Adj b c → ¬ G.Adj c a) → (∀ a b c d : Fin n, G.Adj a b → G.Adj b c → G.Adj c d → G.Adj d a → a = c ∨ b = d) → ∃ C : PEqualNP.CircuitLowerBounds.Circuit, (∀ g ∈ C.gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length ≤ 2) ∧ (∀ x : Fin n → Bool, C.eval (List.ofFn x) = decide (∃ i j : Fin n, G.Adj i j ∧ x i = true ∧ x j = true)) ∧ (∀ D : PEqualNP.CircuitLowerBounds.Circuit, (∀ g ∈ D.gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length ≤ 2) → (∀ x : Fin n → Bool, D.eval (List.ofFn x) = decide (∃ i j : Fin n, G.Adj i j ∧ x i = true ∧ x j = true)) → C.size ≤ D.size) ∧ ∀ (t : ℕ) (g : PEqualNP.CircuitLowerBounds.Gate), C.gates[t]? = some g → g.op = PEqualNP.CircuitLowerBounds.GateOp.and → ∃ c : Fin n, (∃ u v : Fin n, G.Adj u v ∧ ((C.wires (List.ofFn (fun k : Fin n => decide (k = u ∨ k = v)))).getD (n + t) false = true ∧ ∀ (t' : ℕ) (g' : PEqualNP.CircuitLowerBounds.Gate), C.gates[t']? = some g' → g'.op = PEqualNP.CircuitLowerBounds.GateOp.and → Relation.TransGen (fun a b : ℕ => a < b ∧ ∃ (k : ℕ) (h : PEqualNP.CircuitLowerBounds.Gate), b = n + k ∧ C.gates[k]? = some h ∧ a ∈ h.inputs) (n + t') (n + t) → (C.wires (List.ofFn (fun k : Fin n => decide (k = u ∨ k = v)))).getD (n + t') false = false)) ∧ ∀ u v : Fin n, G.Adj u v → ((C.wires (List.ofFn (fun k : Fin n => decide (k = u ∨ k = v)))).getD (n + t) false = true ∧ ∀ (t' : ℕ) (g' : PEqualNP.CircuitLowerBounds.Gate), C.gates[t']? = some g' → g'.op = PEqualNP.CircuitLowerBounds.GateOp.and → Relation.TransGen (fun a b : ℕ => a < b ∧ ∃ (k : ℕ) (h : PEqualNP.CircuitLowerBounds.Gate), b = n + k ∧ C.gates[k]? = some h ∧ a ∈ h.inputs) (n + t') (n + t) → (C.wires (List.ofFn (fun k : Fin n => decide (k = u ∨ k = v)))).getD (n + t') false = false) → u = c ∨ v = c := by
   open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.MetaComplexity.NestedCover
     PEqualNP.EdgeOwnership in
   (intro n G _ htf hc4
-   obtain ⟨C0, hM0, hF0, hL0, hS0⟩ := h1 n G htf hc4
-   obtain ⟨C, hM, hF, hsz, hS, hN⟩ := h2 n G C0 htf hc4 hM0 hF0 hL0 hS0
+   obtain ⟨C, hM, hF, hcov, hS, hN⟩ := h2 n G
+   have hlst : ∀ D : Circuit, Monotone2 D → circuitFun n D = graphFun G ∅ → C.size ≤ D.size := by
+     intro D hD hFD
+     obtain ⟨K, hK, hle⟩ := h1 n G htf hc4 D hD hFD
+     have := hcov K hK
+     omega
    have key : ∀ x : Fin n → Bool, graphFun G ∅ x = true ↔
        ∃ i j : Fin n, G.Adj i j ∧ x i = true ∧ x j = true := by
      intro x
@@ -213,7 +208,7 @@ theorem PEqualNP.Outside.R_meta_1031_3
        rw [hD2 x]
        refine Bool.eq_iff_iff.mpr ?_
        exact (@decide_eq_true_iff _ _).trans (key x).symm
-     exact le_trans hsz (hL0 D hMD hFD)
+     exact hlst D hMD hFD
    · intro t g hg hop
      obtain ⟨ht, hgt⟩ := List.getElem?_eq_some_iff.mp hg
      have hga : gateAt C t = g := by rw [hgat t ht]; exact hgt
