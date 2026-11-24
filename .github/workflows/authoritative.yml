@@ -352,6 +352,7 @@ jobs:
           # It FAILS OPEN: when the scope's cpu.stat cannot be read, it is off for this run, said in one line.
           ( low=0; tick=0; cpu0=0; still=0; dog=on
             while sleep 15; do
+              [ -e "$RUNNER_TEMP/sampler/done" ] && break
               tick=$((tick + 1))
               cpu=$(awk '/^usage_usec/{print $2}' "$cg/cpu.stat" 2>/dev/null)
               if [ "$dog" = on ] && ! printf '%s' "$cpu" | grep -Eqx '[0-9]+'; then dog=off; echo "no-progress watchdog: OFF for this run (the checker scope's cpu.stat cannot be read)"; fi
@@ -381,7 +382,11 @@ jobs:
           # the moment the old limit fired, a TERM to node alone, each 45 minutes into the checker
           # step). One line goes to the live log first, so even a lost machine shows that the limit
           # was reached and when. `timeout` below stays as a backstop, 60 s later.
-          ( sleep "$limit" </dev/null >/dev/null 2>&1
+          # It acts only if its full sleep ran out AND the check has not ended (2026-11-24: killing its
+          # sleep at cleanup let it act after a 47 s check). DONE is written the moment the check ends.
+          DONE="$RUNNER_TEMP/sampler/done"
+          ( sleep "$limit" </dev/null >/dev/null 2>&1 || exit 0
+            [ -e "$DONE" ] && exit 0
             echo "time limit reached: ${limit} s; ending the whole checker scope now" | tee -a "$RUNNER_TEMP/checker.err" "$MARK"
             sudo systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true ) &
           limiter=$!
@@ -402,7 +407,8 @@ jobs:
             timeout -k 30 "$((limit + 60))" node "$W/base/tools/check-lean.mjs" "$W/base/$file" "$W/in/statement.txt" "$(cat "$W/in/gap.kind")" \
             > "$RUNNER_TEMP/checker.out" 2> "$RUNNER_TEMP/checker.err"
           code=$?
-          pkill -P "$limiter" 2>/dev/null; pkill -P "$watch" 2>/dev/null; kill "$sampler" "$watch" "$limiter" 2>/dev/null
+          touch "$DONE"
+          kill "$limiter" "$watch" "$sampler" 2>/dev/null; pkill -P "$limiter" 2>/dev/null; pkill -P "$watch" 2>/dev/null
           # Ended by the memory watch: a FAULT of the machine, never a verdict on the proof.
           if grep -q '^memory watch: the MACHINE is running short' "$MARK" 2>/dev/null; then
             code=137
