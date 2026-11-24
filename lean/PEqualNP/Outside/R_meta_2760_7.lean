@@ -14,6 +14,10 @@ theorem PEqualNP.Outside.R_meta_2760_7
           x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 || x 6 && x 8 || x 8 && x 5)) :
     ∀ (x1 : List ℕ),   x1.length = (2 : ℕ) →     (∀ x3 ∈ x1, (1 : ℕ) ≤ x3 ∧ x3 < (9 : ℕ)) →       (4 : ℕ) ∈ x1 ∨ (6 : ℕ) ∈ x1 ∨ (7 : ℕ) ∈ x1 →         ∀ (x5 : PEqualNP.CircuitLowerBounds.Circuit),           PEqualNP.MetaComplexity.FanInTwo x5 →             x5.size ≤ (13 : ℕ) →               ∃ (x8 : Fin (9 : ℕ) → Bool),                 have x9 : List Bool := List.ofFn x8 ++ [!x8 (0 : Fin (9 : ℕ))];                 x5.eval (x9 ++ [PEqualNP.CircuitLowerBounds.GateOp.or.eval (List.map (fun (x10 : ℕ) => x9.getD x10 Bool.false) x1)]) ≠ (x8 (0 : Fin (9 : ℕ)) && x8 (1 : Fin (9 : ℕ)) || x8 (1 : Fin (9 : ℕ)) && x8 (2 : Fin (9 : ℕ)) || x8 (2 : Fin (9 : ℕ)) && x8 (3 : Fin (9 : ℕ)) || x8 (3 : Fin (9 : ℕ)) && x8 (4 : Fin (9 : ℕ)) || x8 (4 : Fin (9 : ℕ)) && x8 (0 : Fin (9 : ℕ)) || x8 (0 : Fin (9 : ℕ)) && x8 (5 : Fin (9 : ℕ)) || x8 (1 : Fin (9 : ℕ)) && x8 (6 : Fin (9 : ℕ)) || x8 (2 : Fin (9 : ℕ)) && x8 (7 : Fin (9 : ℕ)) || x8 (3 : Fin (9 : ℕ)) && x8 (8 : Fin (9 : ℕ)) || x8 (5 : Fin (9 : ℕ)) && x8 (7 : Fin (9 : ℕ)) || x8 (6 : Fin (9 : ℕ)) && x8 (8 : Fin (9 : ℕ)) || x8 (8 : Fin (9 : ℕ)) && x8 (5 : Fin (9 : ℕ))) := by
   intro L hl hr hm C hfan hs
+  have hev : ∀ (D : PEqualNP.CircuitLowerBounds.Circuit) (l : List Bool), D.eval l =
+      (D.gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) l).getD
+        D.output false := fun _ _ => rfl
+  have hsz : ∀ D : PEqualNP.CircuitLowerBounds.Circuit, D.size = D.gates.length := fun _ => rfl
   -- the symmetry (1 5)(2 8)(6 7) of the graph, which fixes the vertex 0
   have hF0 : ∀ b0 b1 b2 b3 b4 b5 b6 b7 b8 : Bool,
       (b0 && b5 || b5 && b8 || b8 && b3 || b3 && b4 || b4 && b0 || b0 && b1 ||
@@ -111,7 +115,9 @@ theorem PEqualNP.Outside.R_meta_2760_7
           PEqualNP.CircuitLowerBounds.Gate.mk g.op
             (g.inputs.map fun i => List.getD [0, 5, 8, 3, 4, 1, 7, 6, 2] i i))
         (List.getD [0, 5, 8, 3, 4, 1, 7, 6, 2] D.output D.output)).size ≤ 13 := by
-      simpa [PEqualNP.CircuitLowerBounds.Circuit.size] using hDs
+      rw [hsz]
+      rw [hsz] at hDs
+      simpa using hDs
     obtain ⟨x, hx⟩ := h _ hD' hDs'
     · refine ⟨fun i => x (![0, 5, 8, 3, 4, 1, 7, 6, 2] i), ?_⟩
       have e := hpre D.gates
@@ -121,8 +127,9 @@ theorem PEqualNP.Outside.R_meta_2760_7
             x (![0, 5, 8, 3, 4, 1, 7, 6, 2] (![0, 5, 8, 3, 4, 1, 7, 6, 2] v))])
         (List.ofFn x ++ [!x 0] ++ [x u || x v]) (by simp) (by simp) ?_ D.output
       · have hf := hF0 (x 0) (x 1) (x 2) (x 3) (x 4) (x 5) (x 6) (x 7) (x 8)
-        simp only [PEqualNP.CircuitLowerBounds.Circuit.eval,
-          PEqualNP.CircuitLowerBounds.Circuit.wires] at hx ⊢
+        rw [hev] at hx
+        rw [hev]
+        dsimp only at hx ⊢
         rw [← e]
         intro hc
         apply hx
@@ -188,38 +195,43 @@ theorem PEqualNP.Outside.R_meta_2760_7
     · exact hsw _ _ (h4 u hu)
     · exact hsw _ _ (h6 u hu)
     · exact hsw _ _ (h7 u hu)
-  match L, hl with
-  | [a, b], _ =>
-    have ha := hr a (by simp)
-    have hb := hr b (by simp)
-    have hd : (⟨a, ha.2⟩ : Fin 9) = 4 ∨ (⟨a, ha.2⟩ : Fin 9) = 6 ∨ (⟨a, ha.2⟩ : Fin 9) = 7 ∨
-        (⟨b, hb.2⟩ : Fin 9) = 4 ∨ (⟨b, hb.2⟩ : Fin 9) = 6 ∨ (⟨b, hb.2⟩ : Fin 9) = 7 := by
-      simp only [Fin.ext_iff]
-      simp only [List.mem_cons, List.mem_nil_iff, or_false] at hm
-      simp
-      omega
-    have hu : (⟨a, ha.2⟩ : Fin 9) ≠ 0 := by
-      intro h
-      have := congrArg Fin.val h
-      simp at this
-      omega
-    have hv : (⟨b, hb.2⟩ : Fin 9) ≠ 0 := by
-      intro h
-      have := congrArg Fin.val h
-      simp at this
-      omega
-    obtain ⟨x, hx⟩ := allP _ _ hu hv hd C hfan hs
-    refine ⟨x, ?_⟩
-    have hga : (List.ofFn x ++ [!x 0]).getD a false = x ⟨a, ha.2⟩ := by
-      rw [List.getD_eq_getElem?_getD, List.getElem?_append_left (by simp; omega),
-        List.getElem?_ofFn]
-      simp [ha.2]
-    have hgb : (List.ofFn x ++ [!x 0]).getD b false = x ⟨b, hb.2⟩ := by
-      rw [List.getD_eq_getElem?_getD, List.getElem?_append_left (by simp; omega),
-        List.getElem?_ofFn]
-      simp [hb.2]
-    show C.eval (List.ofFn x ++ [!x 0] ++ [PEqualNP.CircuitLowerBounds.GateOp.or.eval
-      ([a, b].map fun k => (List.ofFn x ++ [!x 0]).getD k false)]) ≠ _
-    simp only [List.map_cons, List.map_nil, hga, hgb, PEqualNP.CircuitLowerBounds.GateOp.eval,
-      List.any_cons, List.any_nil, id, Bool.or_false]
-    exact hx
+  rcases L with _ | ⟨a, _ | ⟨b, _ | ⟨c, rest⟩⟩⟩
+  · simp at hl
+  · simp at hl
+  swap
+  · simp at hl
+  have ha := hr a (by simp)
+  have hb := hr b (by simp)
+  have hd : (⟨a, ha.2⟩ : Fin 9) = 4 ∨ (⟨a, ha.2⟩ : Fin 9) = 6 ∨ (⟨a, ha.2⟩ : Fin 9) = 7 ∨
+      (⟨b, hb.2⟩ : Fin 9) = 4 ∨ (⟨b, hb.2⟩ : Fin 9) = 6 ∨ (⟨b, hb.2⟩ : Fin 9) = 7 := by
+    simp only [Fin.ext_iff]
+    simp only [List.mem_cons, List.mem_nil_iff, or_false] at hm
+    simp
+    omega
+  have hu : (⟨a, ha.2⟩ : Fin 9) ≠ 0 := by
+    intro h
+    have := congrArg Fin.val h
+    simp at this
+    omega
+  have hv : (⟨b, hb.2⟩ : Fin 9) ≠ 0 := by
+    intro h
+    have := congrArg Fin.val h
+    simp at this
+    omega
+  obtain ⟨x, hx⟩ := allP _ _ hu hv hd C hfan hs
+  refine ⟨x, ?_⟩
+  have hga : (List.ofFn x ++ [!x 0]).getD a false = x ⟨a, ha.2⟩ := by
+    rw [List.getD_eq_getElem?_getD, List.getElem?_append_left (by simp; omega),
+      List.getElem?_ofFn]
+    simp [ha.2]
+  have hgb : (List.ofFn x ++ [!x 0]).getD b false = x ⟨b, hb.2⟩ := by
+    rw [List.getD_eq_getElem?_getD, List.getElem?_append_left (by simp; omega),
+      List.getElem?_ofFn]
+    simp [hb.2]
+  show C.eval (List.ofFn x ++ [!x 0] ++ [PEqualNP.CircuitLowerBounds.GateOp.or.eval
+    ([a, b].map fun k => (List.ofFn x ++ [!x 0]).getD k false)]) ≠ _
+  have hor : ∀ u v : Bool, PEqualNP.CircuitLowerBounds.GateOp.or.eval [u, v] = (u || v) := by
+    intro u v
+    cases u <;> cases v <;> rfl
+  simp only [List.map_cons, List.map_nil, hga, hgb, hor]
+  exact hx
