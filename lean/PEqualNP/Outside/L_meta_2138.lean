@@ -4786,6 +4786,8 @@ lemma rootTag_ok {k : Nat} (hk : k ≤ 14) : TagOk k raw.toFinset rootTag := by
   · exact checkV 6 rfl
   · exact checkV 7 rfl
   · exact checkV 8 rfl
+lemma project6_raw6 : homProject6.fn raw6 = zero := by
+  simpa [homProject6, raw] using (project_raw_zero (6 : Fin 9))
 lemma part1_case0_fail : unionSep true (raw.erase raw6 ++ [bin false raw0 raw6]) != top := by
   decide +kernel
 lemma raw6_ne_and06 : raw6 ≠ bin false raw0 raw6 := by decide +kernel
@@ -4824,7 +4826,7 @@ lemma circuit_trestricted (C : Circuit) (hc : C.size ≤ 15)
       · have hz6 : ¬ proper (homProject6.fn raw6) := fun hp => hp.2.1 (project_raw_zero (6 : Fin 9))
         have hz06 : ¬ proper (homProject6.fn (bin false raw0 raw6)) := fun hp =>
           hp.2.1 (by
-            rw [homProject6.hbin, project_raw_zero (6 : Fin 9)]
+            rw [homProject6.hbin, project6_raw6]
             exact (bin_laws (homProject6.valid raw0)).2.2.1)
         obtain ⟨q, hq, hfe⟩ := feasible_two_consts hlive homProject6 raw6 (bin false raw0 raw6)
           h6 h06 raw6_ne_and06 hz6 hz06
@@ -4835,7 +4837,7 @@ lemma circuit_trestricted (C : Circuit) (hc : C.size ≤ 15)
           · exact Finset.mem_image_of_mem _ (List.mem_toFinset.mpr haR)
           · simp only [List.mem_singleton] at haEq; subst a
             have h0 : homProject6.fn (bin false raw0 raw6) = homProject6.fn raw6 := by
-              rw [homProject6.hbin, project_raw_zero (6 : Fin 9)]
+              rw [homProject6.hbin, project6_raw6]
               exact (bin_laws (homProject6.valid raw0)).2.2.1
             rw [h0]
             exact Finset.mem_image_of_mem _ (List.mem_toFinset.mpr (by simp [raw]))
