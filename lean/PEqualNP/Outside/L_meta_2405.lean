@@ -57,13 +57,10 @@ lemma comps_nil {α : Type} (V : Finset α) : (comps V []).card = V.card := by
     · rintro ⟨v, hv, rfl⟩
       refine ⟨v, hv, ?_⟩
       ext w
-      simp only [mem_cls, Finset.mem_singleton, reach]
+      simp only [mem_cls, Finset.mem_singleton]
       constructor
-      · rintro ⟨_, h⟩
-        rw [reach] at h
-        induction h with
-        | refl => rfl
-        | tail _ hstep _ => simp at hstep
+      · rintro ⟨_, hvw⟩
+        exact (Relation.ReflTransGen.cases_head hvw).elim id (fun ⟨_, hstep, _⟩ => by simp at hstep)
       · rintro rfl
         exact ⟨hv, Relation.ReflTransGen.refl⟩
     · rintro ⟨v, hv, rfl⟩
@@ -73,11 +70,8 @@ lemma comps_nil {α : Type} (V : Finset α) : (comps V []).card = V.card := by
       constructor
       · rintro rfl
         exact ⟨hv, Relation.ReflTransGen.refl⟩
-      · rintro ⟨_, h⟩
-        rw [reach] at h
-        induction h with
-        | refl => rfl
-        | tail _ hstep _ => simp at hstep
+      · rintro ⟨_, hvw⟩
+        exact (Relation.ReflTransGen.cases_head hvw).elim id (fun ⟨_, hstep, _⟩ => by simp at hstep)
   rw [heq, Finset.card_image_of_injective _ (fun a b hab => Finset.singleton_injective hab)]
 
 lemma reach_cons_iff {α : Type} {a b : α} {L : List (α × α)} {x y : α} :
@@ -96,7 +90,7 @@ lemma reach_cons_iff {α : Type} {a b : α} {L : List (α × α)} {x y : α} :
           · exact Or.inr (Or.inl ⟨hL, Relation.ReflTransGen.refl⟩)
           · exact Or.inr (Or.inl ⟨hxa, Relation.ReflTransGen.refl⟩)
           · exact Or.inl hxb
-        · have hs := Relation.ReflTransGen.single (Or.inl hin)
+        · have hs : reach L b✝ c✝ := Relation.ReflTransGen.single (Or.inl hin)
           rcases ih with hL | ⟨hxa, hbz⟩ | ⟨hxb, haz⟩
           · exact Or.inl (Relation.ReflTransGen.trans hL hs)
           · exact Or.inr (Or.inl ⟨hxa, Relation.ReflTransGen.trans hbz hs⟩)
@@ -108,7 +102,7 @@ lemma reach_cons_iff {α : Type} {a b : α} {L : List (α × α)} {x y : α} :
           · exact Or.inr (Or.inr ⟨hL, Relation.ReflTransGen.refl⟩)
           · exact Or.inl hxa
           · exact Or.inr (Or.inr ⟨hxb, Relation.ReflTransGen.refl⟩)
-        · have hs := Relation.ReflTransGen.single (Or.inr hin)
+        · have hs : reach L b✝ c✝ := Relation.ReflTransGen.single (Or.inr hin)
           rcases ih with hL | ⟨hxa, hbz⟩ | ⟨hxb, haz⟩
           · exact Or.inl (Relation.ReflTransGen.trans hL hs)
           · exact Or.inr (Or.inl ⟨hxa, Relation.ReflTransGen.trans hbz hs⟩)
@@ -148,8 +142,8 @@ lemma comps_cons_le {α : Type} {V : Finset α} {a b : α} {L : List (α × α)}
       rcases hc with ⟨hcb, hca, hcL⟩
       simp only [comps, Finset.mem_image] at hcL
       rcases hcL with ⟨v, hv, rfl⟩
-      have hva : ¬ reach L v a := fun h => hca (cls_eq_of_reach h).symm
-      have hvb : ¬ reach L v b := fun h => hcb (cls_eq_of_reach h).symm
+      have hva : ¬ reach L v a := fun h => hca (@cls_eq_of_reach α V L v a h).symm
+      have hvb : ¬ reach L v b := fun h => hcb (@cls_eq_of_reach α V L v b h).symm
       have hcl : cls V ((a, b) :: L) v = cls V L v := by
         ext w
         simp only [mem_cls, reach_cons_iff]
@@ -174,10 +168,13 @@ lemma comps_cons_le {α : Type} {V : Finset α} {a b : α} {L : List (α × α)}
       rw [Finset.mem_erase]
       refine ⟨?_, Finset.mem_image_of_mem _ hb⟩
       intro hba
-      have hb_in : b ∈ cls V L b := ⟨hb, Relation.ReflTransGen.refl⟩
+      have hb_in : b ∈ cls V L b := mem_cls.mpr ⟨hb, Relation.ReflTransGen.refl⟩
       rw [hba, mem_cls] at hb_in
       exact hab hb_in.2
     have ha_mem' : cls V ((a, b) :: L) a ∈ comps V ((a, b) :: L) := Finset.mem_image_of_mem _ ha
+    have hpos1 : 0 < ((comps V L).erase (cls V L a)).card := Finset.card_pos.mpr ⟨_, hb_mem⟩
+    have hpos2 : 0 < (comps V ((a, b) :: L)).card := Finset.card_pos.mpr ⟨_, ha_mem'⟩
+    rw [Finset.card_erase_of_mem ha_mem] at hpos1
     rw [Finset.card_erase_of_mem hb_mem, Finset.card_erase_of_mem ha_mem,
       Finset.card_erase_of_mem ha_mem'] at hcard
     omega
@@ -188,7 +185,7 @@ lemma card_le_comps_add_length {α : Type} (V : Finset α) :
   | (a, b) :: L, hL => by
     have hab := hL (a, b) (by simp)
     have ih := card_le_comps_add_length V L (fun e he => hL e (List.mem_cons_of_mem _ he))
-    have hc := comps_cons_le hab.1 hab.2
+    have hc := @comps_cons_le α V a b L hab.1 hab.2
     simp only [List.length_cons]
     omega
 
@@ -213,7 +210,7 @@ lemma main (n : ℕ) (C : Circuit) (α : Type) (S : Finset α) (roots labelled :
   swap
   · rw [Finset.not_nonempty_iff_eq_empty.mp hS_ne, Finset.card_empty]
     exact Nat.zero_le _
-  haveI : Nonempty α := ⟨hS_ne.some⟩
+  have : Nonempty α := ⟨hS_ne.choose⟩
   let sig : ℕ → Set α := fun w => {x : α | ∃ m ∈ labelled, R m w ∧ x ∈ lab m}
   let M : Finset ℕ := (Finset.range C.gates.length).filter fun jm =>
     (gateAt C jm).op = GateOp.or ∧ (∃ r2 ∈ roots, R (n + jm) r2) ∧
@@ -263,8 +260,8 @@ lemma main (n : ℕ) (C : Circuit) (α : Type) (S : Finset α) (roots labelled :
       simp only [edgeT, dif_pos hmT]
       have h2 := Finset.card_eq_two.mp hmT
       have heq := h2.choose_spec.choose_spec.2
-      have h1 : h2.choose ∈ lab m := by simp [heq]
-      have h2' : h2.choose_spec.choose ∈ lab m := by simp [heq]
+      have h1 : h2.choose ∈ lab m := by rw [heq]; exact Finset.mem_insert_self _ _
+      have h2' : h2.choose_spec.choose ∈ lab m := by rw [heq]; exact Finset.mem_insert_of_mem (Finset.mem_singleton_self _)
       exact ⟨Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨m, hml, h1⟩),
         Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨m, hml, h2'⟩)⟩
   have h_sig_conn : ∀ w : ℕ, (∃ r ∈ roots, R w r) →
@@ -288,18 +285,16 @@ lemma main (n : ℕ) (C : Circuit) (α : Type) (S : Finset α) (roots labelled :
           rw [hg]
           exact hao.2.2 _ (List.getElem_mem hjm)
         have hback : ∀ u ∈ (gateAt C jm).inputs, u < n + jm := by
-          have hg : gateAt C jm = C.gates[jm] := by simp [gateAt, hjm]
-          rw [hg]
           intro u hu
           exact hao.2.1 jm hjm u hu
         let u0 := (gateAt C jm).inputs.getD 0 0
         let u1 := (gateAt C jm).inputs.getD 1 0
         have hu0_mem : u0 ∈ (gateAt C jm).inputs := by
-          have : 0 < (gateAt C jm).inputs.length := by omega
-          simpa [u0, List.getD_eq_getElem _ _ this] using List.getElem_mem this
+          rw [show u0 = (gateAt C jm).inputs[0]'(by omega) from List.getD_eq_getElem _ _ (by omega)]
+          exact List.getElem_mem _
         have hu1_mem : u1 ∈ (gateAt C jm).inputs := by
-          have : 1 < (gateAt C jm).inputs.length := by omega
-          simpa [u1, List.getD_eq_getElem _ _ this] using List.getElem_mem this
+          rw [show u1 = (gateAt C jm).inputs[1]'(by omega) from List.getD_eq_getElem _ _ (by omega)]
+          exact List.getElem_mem _
         have hu0_lt : u0 < n + jm := hback u0 hu0_mem
         have hu1_lt : u1 < n + jm := hback u1 hu1_mem
         have hstep0 : R u0 (n + jm) := by
@@ -324,7 +319,7 @@ lemma main (n : ℕ) (C : Circuit) (α : Type) (S : Finset α) (roots labelled :
           rw [hR] at hmR
           rcases Relation.ReflTransGen.cases_tail hmR with rfl | ⟨ra, _, hma, hra⟩
           · exact absurd hm hnotlab
-          · rcases hra with ⟨_, rj, hrj, _, _, hramem⟩
+          · let ⟨rj, hrj, _, _, hramem⟩ := hra.2
             have : rj = jm := by omega
             subst this
             have hinp_eq : (gateAt C jm).inputs = [u0, u1] := by
@@ -382,7 +377,8 @@ lemma main (n : ℕ) (C : Circuit) (α : Type) (S : Finset α) (roots labelled :
           rw [hR] at hmR
           rcases Relation.ReflTransGen.cases_tail hmR with rfl | ⟨ra, _, _, hra⟩
           · rfl
-          · exact absurd ⟨hra.2.choose, hra.2.choose_spec.1, hra.2.choose_spec.2.1, hra.2.choose_spec.2.2.1⟩ hor
+          · let ⟨rj, hrj, hrjlt, hrjop, _⟩ := hra.2
+            exact absurd ⟨rj, hrj, hrjlt, hrjop⟩ hor
         rcases hx with ⟨mx, hmx, hmRx, hxmem⟩
         rcases hy with ⟨my, hmy, hmRy, hymem⟩
         have hmxw := hR_eq mx hmRx
@@ -399,7 +395,7 @@ lemma main (n : ℕ) (C : Circuit) (α : Type) (S : Finset α) (roots labelled :
             simp only [L_all, List.mem_append, List.mem_map, Finset.mem_toList]
             exact Or.inr ⟨w, hmT, rfl⟩
           have h2 := Finset.card_eq_two.mp heq2
-          have he_val : edgeT w = (h2.choose, h2.choose_spec.choose) := by simp [edgeT, dite_eq_left.mpr (fun _ => rfl), heq2]
+          have he_val : edgeT w = (h2.choose, h2.choose_spec.choose) := by simp only [edgeT, dif_pos heq2]
           rw [he_val] at heT
           have hset := h2.choose_spec.choose_spec.2
           rw [hset] at hxmem hymem
