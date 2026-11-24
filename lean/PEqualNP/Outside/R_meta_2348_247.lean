@@ -3,8 +3,22 @@ import PEqualNP.Defs
 open PEqualNP.CircuitLowerBounds PEqualNP.TopForm PEqualNP.MetaComplexity.NestedCover
 
 theorem PEqualNP.Outside.R_meta_2348_247
-    (coreOr : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit),   x1.size ≤ (27 : ℕ) →     PEqualNP.TopForm.IsAO2 (14 : ℕ) x1 →       (∀ x4 < x1.size, PEqualNP.TopForm.opnd x1 x4 (0 : Fin (2 : ℕ)) ≠ PEqualNP.TopForm.opnd x1 x4 (1 : Fin (2 : ℕ))) →         (PEqualNP.MetaComplexity.NestedCover.gateAt x1 (0 : ℕ)).op = PEqualNP.CircuitLowerBounds.GateOp.or →           (∀ (x6 : Fin (14 : ℕ) → Bool), x1.eval (List.ofFn x6) = Bool.true ↔ ∃ (x7 : Fin (7 : ℕ)) (x8 : Fin (7 : ℕ)), (x7 = x8 ∨ x7 = x8 + (1 : Fin (7 : ℕ)) ∨ x7 = x8 + (3 : Fin (7 : ℕ))) ∧ x6 (Fin.castAdd (7 : ℕ) x7) = Bool.true ∧ x6 (Fin.natAdd (7 : ℕ) x8) = Bool.true) →             (PEqualNP.MetaComplexity.NestedCover.gateAt x1 (1 : ℕ)).op = PEqualNP.CircuitLowerBounds.GateOp.or → (∀ (x7 : Bool),                 ∃ (x8 : ℕ → Bool),                   have x9 : List Bool := x1.wires (List.ofFn fun (x9 : Fin (14 : ℕ)) => Decidable.decide (x9 = if x7 = Bool.true then (0 : Fin (14 : ℕ)) else (7 : Fin (14 : ℕ))));                   (∀ x10 < (14 : ℕ), x8 x10 = Decidable.decide (x10 = if x7 = Bool.true then (7 : ℕ) else (0 : ℕ))) ∧                     (∀ x10 < x1.size,                         have x12 : PEqualNP.CircuitLowerBounds.Gate := PEqualNP.MetaComplexity.NestedCover.gateAt x1 x10;                         have x13 : ℕ := PEqualNP.TopForm.opnd x1 x10 (0 : Fin (2 : ℕ));                         have x14 : ℕ := PEqualNP.TopForm.opnd x1 x10 (1 : Fin (2 : ℕ));                         (x12.op = PEqualNP.CircuitLowerBounds.GateOp.and → x8 ((14 : ℕ) + x10) = (x9.getD x13 Bool.false && x8 x14 || x8 x13 && x9.getD x14 Bool.false)) ∧ (x12.op = PEqualNP.CircuitLowerBounds.GateOp.or → x8 ((14 : ℕ) + x10) = (x8 x13 || x8 x14))) ∧                       x8 x1.output = Bool.false ∧ ∃ j < x1.gates.length, (PEqualNP.MetaComplexity.NestedCover.gateAt x1 j).op = PEqualNP.CircuitLowerBounds.GateOp.and ∧ x9.getD (PEqualNP.TopForm.opnd x1 j 0) false = false ∧ x9.getD (PEqualNP.TopForm.opnd x1 j 1) false = false ∧ x8 (PEqualNP.TopForm.opnd x1 j 0) = true ∧ x8 (PEqualNP.TopForm.opnd x1 j 1) = true) → False)
-    (coreOther : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit),   x1.size ≤ (27 : ℕ) →     PEqualNP.TopForm.IsAO2 (14 : ℕ) x1 →       (∀ x4 < x1.size, PEqualNP.TopForm.opnd x1 x4 (0 : Fin (2 : ℕ)) ≠ PEqualNP.TopForm.opnd x1 x4 (1 : Fin (2 : ℕ))) →         (PEqualNP.MetaComplexity.NestedCover.gateAt x1 (0 : ℕ)).op = PEqualNP.CircuitLowerBounds.GateOp.or →           (∀ (x6 : Fin (14 : ℕ) → Bool), x1.eval (List.ofFn x6) = Bool.true ↔ ∃ (x7 : Fin (7 : ℕ)) (x8 : Fin (7 : ℕ)), (x7 = x8 ∨ x7 = x8 + (1 : Fin (7 : ℕ)) ∨ x7 = x8 + (3 : Fin (7 : ℕ))) ∧ x6 (Fin.castAdd (7 : ℕ) x7) = Bool.true ∧ x6 (Fin.natAdd (7 : ℕ) x8) = Bool.true) →             ¬ (PEqualNP.MetaComplexity.NestedCover.gateAt x1 (1 : ℕ)).op = PEqualNP.CircuitLowerBounds.GateOp.or → (∀ (x7 : Bool),                 ∃ (x8 : ℕ → Bool),                   have x9 : List Bool := x1.wires (List.ofFn fun (x9 : Fin (14 : ℕ)) => Decidable.decide (x9 = if x7 = Bool.true then (0 : Fin (14 : ℕ)) else (7 : Fin (14 : ℕ))));                   (∀ x10 < (14 : ℕ), x8 x10 = Decidable.decide (x10 = if x7 = Bool.true then (7 : ℕ) else (0 : ℕ))) ∧                     (∀ x10 < x1.size,                         have x12 : PEqualNP.CircuitLowerBounds.Gate := PEqualNP.MetaComplexity.NestedCover.gateAt x1 x10;                         have x13 : ℕ := PEqualNP.TopForm.opnd x1 x10 (0 : Fin (2 : ℕ));                         have x14 : ℕ := PEqualNP.TopForm.opnd x1 x10 (1 : Fin (2 : ℕ));                         (x12.op = PEqualNP.CircuitLowerBounds.GateOp.and → x8 ((14 : ℕ) + x10) = (x9.getD x13 Bool.false && x8 x14 || x8 x13 && x9.getD x14 Bool.false)) ∧ (x12.op = PEqualNP.CircuitLowerBounds.GateOp.or → x8 ((14 : ℕ) + x10) = (x8 x13 || x8 x14))) ∧                       x8 x1.output = Bool.false ∧ ∃ j < x1.gates.length, (PEqualNP.MetaComplexity.NestedCover.gateAt x1 j).op = PEqualNP.CircuitLowerBounds.GateOp.and ∧ x9.getD (PEqualNP.TopForm.opnd x1 j 0) false = false ∧ x9.getD (PEqualNP.TopForm.opnd x1 j 1) false = false ∧ x8 (PEqualNP.TopForm.opnd x1 j 0) = true ∧ x8 (PEqualNP.TopForm.opnd x1 j 1) = true) → False) :
+    (coreOr : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit),   x1.size ≤ (27 : ℕ) →     PEqualNP.TopForm.IsAO2 (14 : ℕ) x1 →       (∀ x4 < x1.size, PEqualNP.TopForm.opnd x1 x4 (0 : Fin (2 : ℕ)) ≠ PEqualNP.TopForm.opnd x1 x4 (1 : Fin (2 : ℕ))) →         (PEqualNP.MetaComplexity.NestedCover.gateAt x1 (0 : ℕ)).op = PEqualNP.CircuitLowerBounds.GateOp.or →           (∀ (x6 : Fin (14 : ℕ) → Bool), x1.eval (List.ofFn x6) = Bool.true ↔ ∃ (x7 : Fin (7 : ℕ)) (x8 : Fin (7 : ℕ)), (x7 = x8 ∨ x7 = x8 + (1 : Fin (7 : ℕ)) ∨ x7 = x8 + (3 : Fin (7 : ℕ))) ∧ x6 (Fin.castAdd (7 : ℕ) x7) = Bool.true ∧ x6 (Fin.natAdd (7 : ℕ) x8) = Bool.true) →             (PEqualNP.MetaComplexity.NestedCover.gateAt x1 (1 : ℕ)).op = PEqualNP.CircuitLowerBounds.GateOp.or → (∀ (x7 : Bool),
+    have x9 : List Bool := x1.wires (List.ofFn fun (i : Fin 14) => decide (i = if x7 = true then (0 : Fin 14) else 7));
+    have x10 : List Bool := x1.wires (List.ofFn fun (i : Fin 14) => decide (i = 0 ∨ i = 7));
+    ∃ j < x1.gates.length, (gateAt x1 j).op = GateOp.and ∧
+      x9.getD (opnd x1 j 0) false = false ∧
+      x9.getD (opnd x1 j 1) false = false ∧
+      x10.getD (opnd x1 j 0) false = true ∧
+      x10.getD (opnd x1 j 1) false = true) → False)
+    (coreOther : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit),   x1.size ≤ (27 : ℕ) →     PEqualNP.TopForm.IsAO2 (14 : ℕ) x1 →       (∀ x4 < x1.size, PEqualNP.TopForm.opnd x1 x4 (0 : Fin (2 : ℕ)) ≠ PEqualNP.TopForm.opnd x1 x4 (1 : Fin (2 : ℕ))) →         (PEqualNP.MetaComplexity.NestedCover.gateAt x1 (0 : ℕ)).op = PEqualNP.CircuitLowerBounds.GateOp.or →           (∀ (x6 : Fin (14 : ℕ) → Bool), x1.eval (List.ofFn x6) = Bool.true ↔ ∃ (x7 : Fin (7 : ℕ)) (x8 : Fin (7 : ℕ)), (x7 = x8 ∨ x7 = x8 + (1 : Fin (7 : ℕ)) ∨ x7 = x8 + (3 : Fin (7 : ℕ))) ∧ x6 (Fin.castAdd (7 : ℕ) x7) = Bool.true ∧ x6 (Fin.natAdd (7 : ℕ) x8) = Bool.true) →             ¬ (PEqualNP.MetaComplexity.NestedCover.gateAt x1 (1 : ℕ)).op = PEqualNP.CircuitLowerBounds.GateOp.or → (∀ (x7 : Bool),
+    have x9 : List Bool := x1.wires (List.ofFn fun (i : Fin 14) => decide (i = if x7 = true then (0 : Fin 14) else 7));
+    have x10 : List Bool := x1.wires (List.ofFn fun (i : Fin 14) => decide (i = 0 ∨ i = 7));
+    ∃ j < x1.gates.length, (gateAt x1 j).op = GateOp.and ∧
+      x9.getD (opnd x1 j 0) false = false ∧
+      x9.getD (opnd x1 j 1) false = false ∧
+      x10.getD (opnd x1 j 0) false = true ∧
+      x10.getD (opnd x1 j 1) false = true) → False) :
     ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit),   x1.size ≤ (27 : ℕ) →     PEqualNP.TopForm.IsAO2 (14 : ℕ) x1 →       (∀ x4 < x1.size, PEqualNP.TopForm.opnd x1 x4 (0 : Fin (2 : ℕ)) ≠ PEqualNP.TopForm.opnd x1 x4 (1 : Fin (2 : ℕ))) →         (PEqualNP.MetaComplexity.NestedCover.gateAt x1 (0 : ℕ)).op = PEqualNP.CircuitLowerBounds.GateOp.or →           (∀ (x6 : Fin (14 : ℕ) → Bool), x1.eval (List.ofFn x6) = Bool.true ↔ ∃ (x7 : Fin (7 : ℕ)) (x8 : Fin (7 : ℕ)), (x7 = x8 ∨ x7 = x8 + (1 : Fin (7 : ℕ)) ∨ x7 = x8 + (3 : Fin (7 : ℕ))) ∧ x6 (Fin.castAdd (7 : ℕ) x7) = Bool.true ∧ x6 (Fin.natAdd (7 : ℕ) x8) = Bool.true) →             (∀ (x7 : Bool),                 ∃ (x8 : ℕ → Bool),                   have x9 : List Bool := x1.wires (List.ofFn fun (x9 : Fin (14 : ℕ)) => Decidable.decide (x9 = if x7 = Bool.true then (0 : Fin (14 : ℕ)) else (7 : Fin (14 : ℕ))));                   (∀ x10 < (14 : ℕ), x8 x10 = Decidable.decide (x10 = if x7 = Bool.true then (7 : ℕ) else (0 : ℕ))) ∧                     (∀ x10 < x1.size,                         have x12 : PEqualNP.CircuitLowerBounds.Gate := PEqualNP.MetaComplexity.NestedCover.gateAt x1 x10;                         have x13 : ℕ := PEqualNP.TopForm.opnd x1 x10 (0 : Fin (2 : ℕ));                         have x14 : ℕ := PEqualNP.TopForm.opnd x1 x10 (1 : Fin (2 : ℕ));                         (x12.op = PEqualNP.CircuitLowerBounds.GateOp.and → x8 ((14 : ℕ) + x10) = (x9.getD x13 Bool.false && x8 x14 || x8 x13 && x9.getD x14 Bool.false)) ∧ (x12.op = PEqualNP.CircuitLowerBounds.GateOp.or → x8 ((14 : ℕ) + x10) = (x8 x13 || x8 x14))) ∧                       x8 x1.output = Bool.false) →               False := by
   intro C hsize hAO hdistinct hfirst hcomp hlin
   have hbase (b : Bool) :
@@ -179,7 +193,14 @@ theorem PEqualNP.Outside.R_meta_2348_247
       wireVal C x (14+j) = (gateAt C j).op.eval [wireVal C x (opnd C j 0), wireVal C x (opnd C j 1)] := by
     rw [wireVal_gate C x j hj, ← hgate j hj, hinputs j hj]
     simp [hread j hj 0, hread j hj 1]
-  have hsplit : (∀ (x7 : Bool),                 ∃ (x8 : ℕ → Bool),                   have x9 : List Bool := C.wires (List.ofFn fun (x9 : Fin (14 : ℕ)) => Decidable.decide (x9 = if x7 = Bool.true then (0 : Fin (14 : ℕ)) else (7 : Fin (14 : ℕ))));                   (∀ x10 < (14 : ℕ), x8 x10 = Decidable.decide (x10 = if x7 = Bool.true then (7 : ℕ) else (0 : ℕ))) ∧                     (∀ x10 < C.size,                         have x12 : PEqualNP.CircuitLowerBounds.Gate := PEqualNP.MetaComplexity.NestedCover.gateAt C x10;                         have x13 : ℕ := PEqualNP.TopForm.opnd C x10 (0 : Fin (2 : ℕ));                         have x14 : ℕ := PEqualNP.TopForm.opnd C x10 (1 : Fin (2 : ℕ));                         (x12.op = PEqualNP.CircuitLowerBounds.GateOp.and → x8 ((14 : ℕ) + x10) = (x9.getD x13 Bool.false && x8 x14 || x8 x13 && x9.getD x14 Bool.false)) ∧ (x12.op = PEqualNP.CircuitLowerBounds.GateOp.or → x8 ((14 : ℕ) + x10) = (x8 x13 || x8 x14))) ∧                       x8 C.output = Bool.false ∧ ∃ j < C.gates.length, (PEqualNP.MetaComplexity.NestedCover.gateAt C j).op = PEqualNP.CircuitLowerBounds.GateOp.and ∧ x9.getD (PEqualNP.TopForm.opnd C j 0) false = false ∧ x9.getD (PEqualNP.TopForm.opnd C j 1) false = false ∧ x8 (PEqualNP.TopForm.opnd C j 0) = true ∧ x8 (PEqualNP.TopForm.opnd C j 1) = true) → False := by
+  have hsplit : (∀ (x7 : Bool),
+    have x9 : List Bool := C.wires (List.ofFn fun (i : Fin 14) => decide (i = if x7 = true then (0 : Fin 14) else 7));
+    have x10 : List Bool := C.wires (List.ofFn fun (i : Fin 14) => decide (i = 0 ∨ i = 7));
+    ∃ j < C.gates.length, (gateAt C j).op = GateOp.and ∧
+      x9.getD (opnd C j 0) false = false ∧
+      x9.getD (opnd C j 1) false = false ∧
+      x10.getD (opnd C j 0) false = true ∧
+      x10.getD (opnd C j 1) false = true) → False := by
     intro h
     by_cases hsecond : (gateAt C 1).op = GateOp.or
     · exact coreOr C hsize hAO hdistinct hfirst hcomp hsecond h
@@ -187,12 +208,11 @@ theorem PEqualNP.Outside.R_meta_2348_247
   apply hsplit
   intro b
   obtain ⟨d, hdin, hdgate, hdout⟩ := hlin b
-  refine ⟨d, hdin, hdgate, hdout, ?_⟩
   let base := wireVal C (fun i : Fin 14 => decide (i = if b = true then (0 : Fin 14) else 7))
   let pair := wireVal C (fun i : Fin 14 => decide (i = 0 ∨ i = 7))
   change ∃ j < C.gates.length, (gateAt C j).op = GateOp.and ∧
     base (opnd C j 0) = false ∧ base (opnd C j 1) = false ∧
-    d (opnd C j 0) = true ∧ d (opnd C j 1) = true
+    pair (opnd C j 0) = true ∧ pair (opnd C j 1) = true
   apply Classical.byContradiction
   intro hn
   have invariant : ∀ w : ℕ, pair w = true → base w = true ∨ d w = true := by
@@ -253,7 +273,7 @@ theorem PEqualNP.Outside.R_meta_2348_247
                 · have h00 : base (opnd C j 0) = false := Bool.eq_false_iff.mpr h0
                   by_cases h1 : base (opnd C j 1) = true
                   · right; simp [hd, ha1, h1]
-                  · exact False.elim (hn ⟨j,hj,hop,h00,Bool.eq_false_iff.mpr h1,ha1,hb1⟩)
+                  · exact False.elim (hn ⟨j,hj,hop,h00,Bool.eq_false_iff.mpr h1,hpa'.1,hpa'.2⟩)
           · rw [hop] at hpa hba
             change pair w = ([pair (opnd C j 0), pair (opnd C j 1)].any id) at hpa
             simp only [List.any_cons, List.any_nil, Bool.or_false, id_eq] at hpa
