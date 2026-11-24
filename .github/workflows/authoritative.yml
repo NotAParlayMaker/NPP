@@ -29,6 +29,10 @@ on:
         description: Leave empty to judge a proof; refute to judge a refutation (only of a step the desk posts as one); reduce to judge a reduction R_<gap>_<n> (only of a step the desk opens to reductions)
         required: false
         type: string
+      pool:
+        description: Leave empty. The intake sends "standard" to put this one run on the standard runner while the larger runner is the default, so both pools work at once.
+        required: false
+        type: string
 
 # Least privilege: read the code and read the pull request. This run cannot write anything.
 permissions:
@@ -45,7 +49,7 @@ jobs:
     # larger GitHub-hosted runner by a settings change. Unset, it is the standard runner as before. A pull
     # request cannot set a variable, and this workflow is only ever started from the base repository.
     # Only a label on the list below is taken: a mistyped or self-hosted label falls back to the standard runner.
-    runs-on: ${{ contains(fromJSON('["pnp-4core"]'), vars.CHECK_RUNNER) && vars.CHECK_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ${{ inputs.pool != 'standard' && contains(fromJSON('["pnp-4core"]'), vars.CHECK_RUNNER) && vars.CHECK_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 150
     env:
       # Inputs are free text typed by whoever starts the run. They reach the scripts only as
