@@ -189,3 +189,5 @@ theorem PEqualNP.Outside.R_meta_1629_4 (h1 : ∀ (n m s k : ℕ) (L : Fin m → 
   norm_num at hK'
   generalize N * q = A at *
   omega
+
+-- Re-check request: the run on 8b77914 ended with FAULT (runner lost); this file is unchanged apart from this line.
