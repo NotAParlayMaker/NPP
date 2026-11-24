@@ -1552,7 +1552,7 @@ theorem materialize_sound {raw T d L cs c} (slice : Slice raw T d L)
     exact build_valid slice cs he
 
 
-abbrev Bits := BitVec 768
+abbrev Bits := BitVec 191
 abbrev Signals := Bits × Bits
 abbrev Decor := Sig × Signals
 
@@ -1562,24 +1562,24 @@ theorem ofRows_bit {n : Nat} (r : Fin n → Row) (v : Sig) (i : Fin n) :
     (ofRows r v).getLsbD i.val = bit (r i) v := by
   simp only [ofRows,BitVec.getLsbD_cast,BitVec.getLsbD_ofBoolListLE,List.getD_eq_getElem?_getD,List.getElem?_ofFn]
   simp [i.isLt]
-def pairSig (r s : Fin 768 → Row) (a : Sig) : Signals := (ofRows r a,ofRows s a)
-def properPairs (T : Sig) (r s : Fin 768 → Row) :=
+def pairSig (r s : Fin 191 → Row) (a : Sig) : Signals := (ofRows r a,ofRows s a)
+def properPairs (T : Sig) (r s : Fin 191 → Row) :=
   ∀ i, bit (r i) T = true ∧ bit (s i) T = false
-theorem pair_sep {T r s} (h : properPairs T r s) : Sep T 768 r s (pairSig r s) := by
+theorem pair_sep {T r s} (h : properPairs T r s) : Sep T 191 r s (pairSig r s) := by
   exact ⟨h,fun a i => ⟨ofRows_bit _ _ _,ofRows_bit _ _ _⟩⟩
-def faithful (r s : Fin 768 → Row) (x : Decor) := x.2 = pairSig r s x.1
+def faithful (r s : Fin 191 → Row) (x : Decor) := x.2 = pairSig r s x.1
 def dneg (x : Decor) : Decor := (neg x.1,~~~x.2.1,~~~x.2.2)
 def dbin (d : Bool) (x y : Decor) : Decor :=
   if d then (bin d x.1 y.1,x.2.1 ||| y.2.1,x.2.2 ||| y.2.2)
   else (bin d x.1 y.1,x.2.1 &&& y.2.1,x.2.2 &&& y.2.2)
 
-theorem ofRows_neg (r : Fin 768 → Row) (a : Sig) : ofRows r (neg a) = ~~~ofRows r a := by
+theorem ofRows_neg (r : Fin 191 → Row) (a : Sig) : ofRows r (neg a) = ~~~ofRows r a := by
   apply BitVec.eq_of_getLsbD_eq
   intro j hj
   have h := ofRows_bit r (neg a) ⟨j,hj⟩
   rw [bit_neg,←ofRows_bit r a ⟨j,hj⟩] at h
   simpa only [BitVec.getLsbD_not,hj,decide_true,Bool.true_and] using h
-theorem ofRows_bin (r : Fin 768 → Row) (d : Bool) (a b : Sig) :
+theorem ofRows_bin (r : Fin 191 → Row) (d : Bool) (a b : Sig) :
     ofRows r (bin d a b) = if d then ofRows r a ||| ofRows r b else ofRows r a &&& ofRows r b := by
   apply BitVec.eq_of_getLsbD_eq
   intro j hj
@@ -1633,7 +1633,7 @@ theorem decode_faithful (n bits) (ws) (r s) (base : ∀ v ∈ ws, faithful r s v
       · exact faithful_neg (faithful_get base _)
       · exact faithful_bin _ (faithful_get base _) (faithful_get base _)
 
-def asRow (cols : Nat → Bits) (i : Fin 768) : Row :=
+def asRow (cols : Nat → Bits) (i : Fin 191) : Row :=
   (BitVec.ofBoolListLE (List.ofFn (fun j : Fin 9 => (cols j.val).getLsbD i.val))).toFin.cast
     (by simp [List.length_ofFn])
 theorem coordinate0 : ∀ r : Row, bit r (inputs.getD 0 zero) = r.val.testBit 0 := by decide +kernel
@@ -1658,7 +1658,7 @@ theorem input_coords : ∀ (j : Fin 9) (r : Row),
   · exact coordinate6 r
   · exact coordinate7 r
   · exact coordinate8 r
-theorem asRow_bit (cols : Nat → Bits) (i : Fin 768) (j : Fin 9) :
+theorem asRow_bit (cols : Nat → Bits) (i : Fin 191) (j : Fin 9) :
     bit (asRow cols i) (inputs.getD j.val zero) = (cols j.val).getLsbD i.val := by
   rw [input_coords]
   change (BitVec.ofBoolListLE (List.ofFn (fun h : Fin 9 => (cols h.val).getLsbD i.val))).getLsbD j.val = _
@@ -1689,13 +1689,13 @@ def liftGoal (m : Nat) (v : Nat → Bits) : Bits :=
   (x 0 &&& x 1) ||| (x 1 &&& x 2) ||| (x 2 &&& x 3) ||| (x 3 &&& x 4) |||
     (x 4 &&& x 0) ||| (x 0 &&& x 5) ||| (x 1 &&& x 6) ||| (x 2 &&& x 7) |||
     (x 3 &&& x 8) ||| (x 5 &&& x 7) ||| (x 6 &&& x 8) ||| (x 8 &&& x 5)
-theorem bit_vertex (m : Nat) (v : Nat → Bits) (i : Fin 768) (j : Fin 9) :
+theorem bit_vertex (m : Nat) (v : Nat → Bits) (i : Fin 191) (j : Fin 9) :
     bit (asRow v i) (vertex m j.val) =
     ((if m.testBit j.val then v j.val else 0) : Bits).getLsbD i.val := by
   by_cases hh : m.testBit j.val = true
   · simpa [vertex,hh] using asRow_bit v i j
   · simp [vertex,hh,bit_zero]
-theorem bit_liftGoal (m : Nat) (v : Nat → Bits) (i : Fin 768) :
+theorem bit_liftGoal (m : Nat) (v : Nat → Bits) (i : Fin 191) :
     bit (asRow v i) (graphGoal m) = (liftGoal m v).getLsbD i.val := by
   have pos (j : Nat) (hj : j<9) : (vertex m j).getLsbD (asRow v i).val = ((if m.testBit j then v j else 0) : Bits).getLsbD i.val := bit_vertex m v i ⟨j,hj⟩
   simp only [bit,graphGoal,liftGoal,BitVec.getLsbD_and,BitVec.getLsbD_or]
@@ -1879,7 +1879,7 @@ def evalMove (c : NodeContext) (op : Nat) (a b z : Decor) (ka kb : Bool) :=
   if len>cap then true else
     let d := len==cap
     let rs := restCov (getCov cov d) (column d a.2) (column d b.2) un ka kb
-    if (rs ||| column d z.2) != BitVec.allOnes 768 then true else
+    if (rs ||| column d z.2) != BitVec.allOnes 191 then true else
     if !properB z.1 || ws.any (fun v => v.1==z.1) then true else
       let rest := (opKeep un ka kb a b ws).map Prod.fst
       closeChild pools links (cap-1) rest (movedChoice op a b)
@@ -1927,12 +1927,12 @@ theorem evalMove_sound {raw T r s ws pools links cap a b op ka kb}
   have rz := rest_coverage ha hb (op==2) ka kb d ne
   have hf := moved_faithful (faith _ ha) (faith _ hb) op
   have deq : decide (child.length=cap) = (child.length==cap) := by by_cases he : child.length=cap <;> simp [he]
-  change covered (decide (child.length = cap)) (pairSig r s) child = BitVec.allOnes 768 at sep
+  change covered (decide (child.length = cap)) (pairSig r s) child = BitVec.allOnes 191 at sep
   rw [deq] at sep
   change column d (pairSig r s z.1) ||| covered d (pairSig r s) (rest.map Prod.fst) = _ at sep
   change z.2 = pairSig r s z.1 at hf
   rw [←hf,←g,rz,BitVec.or_comm] at sep
-  have be : ((restCov (getCov (preCov ws) d) (column d a.2) (column d b.2) (op==2) ka kb ||| column d z.2) != BitVec.allOnes 768) = false := by simp [sep]
+  have be : ((restCov (getCov (preCov ws) d) (column d a.2) (column d b.2) (op==2) ka kb ||| column d z.2) != BitVec.allOnes 191) = false := by simp [sep]
   change (if (_ != _) then true else if !properB z.1 || ws.any (fun v => v.1==z.1) then true else _) = true at test
   rw [be,pp,fr] at test
   have val := moved_full op a b
@@ -2214,7 +2214,7 @@ theorem wires_faithful (g : Forest) : ∀ a ∈ wiresOf g,
 def targetOf (g : Forest) := chartGoal g.mask
 def chartSamples (m : Nat) (v : Nat → Bits) :=
   if m=1023 then liftGoal m v &&& ~~~(v 0 &&& v 1) else liftGoal m v
-theorem chart_bit (m : Nat) (v : Nat → Bits) (i : Fin 768) :
+theorem chart_bit (m : Nat) (v : Nat → Bits) (i : Fin 191) :
     bit (asRow v i) (chartGoal m) = (chartSamples m v).getLsbD i.val := by
   by_cases e : m=1023
   · have u := asRow_bit v i (0 : Fin 9)
@@ -2228,7 +2228,7 @@ theorem chart_bit (m : Nat) (v : Nat → Bits) (i : Fin 768) :
     rw [h]
   · simpa only [chartGoal,chartSamples,e,ite_false] using bit_liftGoal m v i
 theorem chart_pairs {m : Nat} {p q : Nat → Bits}
-    (hp : chartSamples m p = BitVec.allOnes 768) (hq : chartSamples m q = 0) :
+    (hp : chartSamples m p = BitVec.allOnes 191) (hq : chartSamples m q = 0) :
     properPairs (chartGoal m) (asRow p) (asRow q) := by
   intro i
   simp only [chart_bit,hp,hq,BitVec.getLsbD_allOnes,i.isLt,decide_true,BitVec.getLsbD_zero]
@@ -2377,7 +2377,7 @@ theorem block_merge {g k start a b} (h : block g k start a=true)
 def checkedTables (g : Forest) (top : Nat) :=
   ∀ k ≤ top, block g k 0 (g.levels k).1 = true
 def graphValid (g : Forest) (prior : Nat → Nat) :=
-  (chartSamples g.mask (fun j => (g.samples j).1) == BitVec.allOnes 768) &&
+  (chartSamples g.mask (fun j => (g.samples j).1) == BitVec.allOnes 191) &&
   (chartSamples g.mask (fun j => (g.samples j).2) == 0) &&
   g.cols.values.all (fun c => poolColumn g.mask c prior) &&
   g.autos.toList.all (fun p => autoOK (targetOf g) (p.map swapRows))
@@ -2449,33 +2449,33 @@ theorem extendKnown_ok {old L m relabels} (previous : Known old)
     exact relabel_of (List.all_eq_true.mp ok _ hv) main
   · exact previous e h
 theorem baseKnown : Known [] := by simp [Known]
-def lanePlace (v : Nat) (upper : Nat) := 2^769*upper+v
+def lanePlace (v : Nat) (upper : Nat) := 2^192*upper+v
 def combineLanes {α : Type} (f : α → Bits) : List α → Nat
   | [] => 0
   | x::xs => lanePlace (f x).toNat (combineLanes f xs)
 def units : Nat → Nat
   | 0 => 0
   | n+1 => lanePlace 1 (units n)
-theorem laneSmall (x : Bits) : x.toNat < 2^769 :=
+theorem laneSmall (x : Bits) : x.toNat < 2^192 :=
   lt_trans x.isLt (by decide +kernel)
 theorem place_and (a b : Bits) (u v : Nat) :
     lanePlace a.toNat u &&& lanePlace b.toNat v = lanePlace (a &&& b).toNat (u &&& v) := by
   apply Nat.eq_of_testBit_eq
   intro i
   simp only [lanePlace,Nat.testBit_and,Nat.testBit_two_pow_mul_add _ (laneSmall _)]
-  by_cases h : i<769 <;> simp only [h,ite_true,ite_false,BitVec.toNat_and,Nat.testBit_and]
+  by_cases h : i<192 <;> simp only [h,ite_true,ite_false,BitVec.toNat_and,Nat.testBit_and]
 theorem place_or (a b : Bits) (u v : Nat) :
     lanePlace a.toNat u ||| lanePlace b.toNat v = lanePlace (a ||| b).toNat (u ||| v) := by
   apply Nat.eq_of_testBit_eq
   intro i
   simp only [lanePlace,Nat.testBit_or,Nat.testBit_two_pow_mul_add _ (laneSmall _)]
-  by_cases h : i<769 <;> simp only [h,ite_true,ite_false,BitVec.toNat_or,Nat.testBit_or]
+  by_cases h : i<192 <;> simp only [h,ite_true,ite_false,BitVec.toNat_or,Nat.testBit_or]
 theorem place_xor (a b : Bits) (u v : Nat) :
     lanePlace a.toNat u ^^^ lanePlace b.toNat v = lanePlace (a ^^^ b).toNat (u ^^^ v) := by
   apply Nat.eq_of_testBit_eq
   intro i
   simp only [lanePlace,Nat.testBit_xor,Nat.testBit_two_pow_mul_add _ (laneSmall _)]
-  by_cases h : i<769 <;> simp only [h,ite_true,ite_false,BitVec.toNat_xor,Nat.testBit_xor]
+  by_cases h : i<192 <;> simp only [h,ite_true,ite_false,BitVec.toNat_xor,Nat.testBit_xor]
 theorem lanes_and {α} (f g : α → Bits) (xs) :
     combineLanes f xs &&& combineLanes g xs = combineLanes (fun x => f x &&& g x) xs := by
   induction xs with
@@ -2497,51 +2497,51 @@ theorem broadcast {α} (a : Bits) (xs : List α) :
   | nil => simp [units,combineLanes]
   | cons v xs ih => simp only [List.length_cons,units,combineLanes,lanePlace,Nat.add_mul,Nat.mul_assoc,ih,Nat.one_mul]
 
-def fullMarks (r packed : Nat) := ((packed+r) >>> 768) &&& r
-theorem unit_bit (n i : Nat) (hi : i<n) : (units n).testBit (769*i) = true := by
+def fullMarks (r packed : Nat) := ((packed+r) >>> 191) &&& r
+theorem unit_bit (n i : Nat) (hi : i<n) : (units n).testBit (192*i) = true := by
   induction n generalizing i with
   | zero => omega
   | succ n ih =>
-    rw [units,lanePlace,Nat.testBit_two_pow_mul_add _ (by decide +kernel : 1 < 2^769)]
+    rw [units,lanePlace,Nat.testBit_two_pow_mul_add _ (by decide +kernel : 1 < 2^192)]
     cases i with
     | zero => simp
     | succ i =>
-      have di : 769*(i+1)-769=769*i := by omega
-      have ge : ¬769*(i+1)<769 := by omega
+      have di : 192*(i+1)-192=192*i := by omega
+      have ge : ¬192*(i+1)<192 := by omega
       simp only [ge,ite_false,di]
       exact ih _ (by omega)
 set_option maxRecDepth 8192 in
-theorem guardBit (a : Bits) : (a.toNat+1).testBit 768 = (a==BitVec.allOnes 768) := by
-  by_cases h : a=BitVec.allOnes 768
+theorem guardBit (a : Bits) : (a.toNat+1).testBit 191 = (a==BitVec.allOnes 191) := by
+  by_cases h : a=BitVec.allOnes 191
   · subst a
     decide +kernel
   · have lim := a.isLt
-    have ne : a.toNat ≠ 2^768-1 := by
+    have ne : a.toNat ≠ 2^191-1 := by
       intro eq
       apply h
       apply BitVec.eq_of_toNat_eq
       simpa only [BitVec.toNat_allOnes] using eq
-    have lt : a.toNat+1<2^768 := by omega
+    have lt : a.toNat+1<2^191 := by omega
     rw [Nat.testBit_eq_false_of_lt lt]
     exact (beq_eq_false_iff_ne.mpr h).symm
 
 set_option maxRecDepth 8192 in
 theorem mark_at {α} (f : α → Bits) (xs : List α) (i : Nat) (hi : i<xs.length) :
-    (fullMarks (units xs.length) (combineLanes f xs)).testBit (769*i) =
-      (f xs[i]==BitVec.allOnes 768) := by
+    (fullMarks (units xs.length) (combineLanes f xs)).testBit (192*i) =
+      (f xs[i]==BitVec.allOnes 191) := by
   simp only [fullMarks,Nat.testBit_and,Nat.testBit_shiftRight,unit_bit _ _ hi,Bool.and_true]
   induction xs generalizing i with
   | nil => simp at hi
   | cons a xs ih =>
     simp only [combineLanes,List.length_cons,units,lanePlace]
-    have sum (u v x : Nat) : 2^769*u+x+(2^769*v+1)=2^769*(u+v)+(x+1) := by omega
-    rw [sum,Nat.testBit_two_pow_mul_add _ (show (f a).toNat+1<2^769 from by have := (f a).isLt; omega)]
+    have sum (u v x : Nat) : 2^192*u+x+(2^192*v+1)=2^192*(u+v)+(x+1) := by omega
+    rw [sum,Nat.testBit_two_pow_mul_add _ (show (f a).toNat+1<2^192 from by have := (f a).isLt; omega)]
     have hi' : i < xs.length+1 := hi
     cases i with
     | zero => simpa using guardBit (f a)
     | succ i =>
-      have ge : ¬769*(i+1)+768<769 := by omega
-      have di : 769*(i+1)+768-769=769*i+768 := by omega
+      have ge : ¬192*(i+1)+191<192 := by omega
+      have di : 192*(i+1)+191-192=192*i+191 := by omega
       simp only [ge,ite_false,di,List.getElem_cons_succ]
       apply ih i (by omega)
 
@@ -2570,9 +2570,9 @@ theorem packed_column {α} (s : α → Signals) (xs : List α) (d : Bool) :
 def packedOp (full : Nat) (op : Nat) (a b : PackedSig) : PackedSig :=
   if op=2 then (full ^^^ a.1,full ^^^ a.2) else if op=1 then (a.1 ||| b.1,a.2 ||| b.2)
   else (a.1 &&& b.1,a.2 &&& b.2)
-theorem top_xor (a : Bits) : BitVec.allOnes 768 ^^^ a = ~~~a := BitVec.allOnes_xor
+theorem top_xor (a : Bits) : BitVec.allOnes 191 ^^^ a = ~~~a := BitVec.allOnes_xor
 theorem packed_op {α} (a b : α → Decor) (xs : List α) (op : Nat) :
-    packedOp (units xs.length*(BitVec.allOnes 768).toNat) op
+    packedOp (units xs.length*(BitVec.allOnes 191).toNat) op
       (packedSig (fun x => (a x).2) xs) (packedSig (fun x => (b x).2) xs) =
     packedSig (fun x => (movedDecor op (a x) (b x)).2) xs := by
   by_cases un : op=2
@@ -2607,9 +2607,9 @@ def combField (c : NodeContext) (d un ka kb : Bool) (op i j : Nat) :=
 def onMarks {α : Type} (f : α → Bool) (mask : Nat) : List α → Bool
   | [] => true
   | x::xs => if mask=0 then true else
-    ((mask &&& 1 == 0) || f x) && onMarks f (mask >>> 769) xs
+    ((mask &&& 1 == 0) || f x) && onMarks f (mask >>> 192) xs
 theorem marked_ok {α} (f : α → Bool) (mask : Nat) (xs : List α) (i : Nat) (hi : i<xs.length)
-    (bitOn : mask.testBit (769*i)=true) (ok : onMarks f mask xs=true) : f xs[i]=true := by
+    (bitOn : mask.testBit (192*i)=true) (ok : onMarks f mask xs=true) : f xs[i]=true := by
   induction xs generalizing mask i with
   | nil => simp at hi
   | cons x xs ih =>
@@ -2625,7 +2625,7 @@ theorem marked_ok {α} (f : α → Bool) (mask : Nat) (xs : List α) (i : Nat) (
         simp [bitOn] at at0
       exact ok.1.resolve_left nonzero
     | succ i =>
-      apply ih (mask:=mask >>> 769) (i:=i) (by simpa using hi) _ ok.2
+      apply ih (mask:=mask >>> 192) (i:=i) (by simpa using hi) _ ok.2
       simpa only [Nat.testBit_shiftRight,Nat.mul_succ,Nat.add_comm] using bitOn
 
 abbrev Batch := Nat × Nat × Nat × List PackedSig × PackedCov × PackedCov
@@ -2758,7 +2758,7 @@ def batchMove (b : Batch) (xs : List NodeContext) (i j op : Nat) (ka kb : Bool) 
     let d := len==k
     let a := laneWire b i
     let b' := laneWire b j
-    let z := packedOp (r*(BitVec.allOnes 768).toNat) op a b'
+    let z := packedOp (r*(BitVec.allOnes 191).toNat) op a b'
     let cov := if d then v else u
     let mask := fullMarks r (takePacked cov (packedColumn d a) (packedColumn d b') un ka kb ||| packedColumn d z)
     onMarks (fun c => fallbackAt c i j op ka kb) mask xs
@@ -2771,7 +2771,7 @@ theorem batchMove_at (k n) (xs : List NodeContext) {i j op : Nat} {ka kb}
   let len := 1+(n-(if ka then 0 else 1)-(if (op==2) || kb then 0 else 1))
   let d := len==k
   have eval : checkAt xs[q] i j op ka kb =
-      if len>k then true else if combField xs[q] d (op==2) ka kb op i j != BitVec.allOnes 768 then true
+      if len>k then true else if combField xs[q] d (op==2) ka kb op i j != BitVec.allOnes 191 then true
       else if !properB (movedDecor op (contextWire xs[q] i) (contextWire xs[q] j)).1 ||
         xs[q].2.2.1.any (fun v => v.1==(movedDecor op (contextWire xs[q] i) (contextWire xs[q] j)).1)
       then true else closeChild xs[q].2.2.2.2.1 xs[q].2.2.2.2.2 (k-1)
@@ -2787,7 +2787,7 @@ theorem batchMove_at (k n) (xs : List NodeContext) {i j op : Nat} {ka kb}
             else packedCov (fun c : NodeContext => c.2.2.2.1.1) xs
     change (if len>k then true else onMarks _ (fullMarks r
        (takePacked cov (packedColumn d a) (packedColumn d b) (op==2) ka kb |||
-        packedColumn d (packedOp (r*(BitVec.allOnes 768).toNat) op a b))) xs) = true at pass
+        packedColumn d (packedOp (r*(BitVec.allOnes 191).toNat) op a b))) xs) = true at pass
     rw [if_neg small] at pass
     have chosen : cov = packedCov (fun c => getCov c.2.2.2.1 d) xs := by
       dsimp only [cov]
@@ -2796,7 +2796,7 @@ theorem batchMove_at (k n) (xs : List NodeContext) {i j op : Nat} {ka kb}
     have cb : b = _ := laneWire_at k n xs hj
     dsimp only [r] at pass
     rw [ca,cb,packed_op,packed_column,packed_column,packed_column,chosen,takePacked_ok,lanes_or] at pass
-    by_cases hit : combField xs[q] d (op==2) ka kb op i j = BitVec.allOnes 768
+    by_cases hit : combField xs[q] d (op==2) ka kb op i j = BitVec.allOnes 191
     · apply fallback_sound
       apply marked_ok _ _ _ q hq _ pass
       rw [mark_at _ _ _ hq]
@@ -2965,6 +2965,88 @@ theorem cellsBlock {g k start n ar rows d} (h : cells g k start n ar rows d) :
     have v := block_merge (ih h.1) (ih h.2)
     simpa only [Nat.add_sub_of_le (Nat.div_le_self n 2)] using v
 
+abbrev PreparedNode := NodeContext × List QuickPool
+
+def preparePools (c : NodeContext) : PreparedNode :=
+  (c, c.2.2.2.2.1.map (summarizePool c.2.2.1))
+
+def preparedFallback (p : PreparedNode) (i j op : Nat) (ka kb : Bool) :=
+  let c := p.1
+  let a := contextWire c i
+  let b := contextWire c j
+  (if i<c.2.2.1.length ∧ j<c.2.2.1.length
+   then p.2.any (fun s => fastCost s (c.1-1) a b op ka kb) else false) ||
+    checkAt c i j op ka kb
+
+def batchMovePrepared (b : Batch) (xs : List PreparedNode) (i j op : Nat) (ka kb : Bool) :=
+  let (k,n,r,_,u,v) := b
+  let un := op==2
+  let len := 1+(n-(if ka then 0 else 1)-(if un || kb then 0 else 1))
+  if len>k then true else
+    let d := len==k
+    let a := laneWire b i
+    let b' := laneWire b j
+    let z := packedOp (r*(BitVec.allOnes _ : Bits).toNat) op a b'
+    let cov := if d then v else u
+    let mask := fullMarks r (takePacked cov (packedColumn d a) (packedColumn d b') un ka kb ||| packedColumn d z)
+    onMarks (fun c => preparedFallback c i j op ka kb) mask xs
+
+
+def batchPairPrepared (b : Batch) (xs : List PreparedNode) (i j op : Nat) :=
+  let f := batchMovePrepared b xs i j op
+  f false false && f true false && f false true && f true true
+def batchRowPrepared (b : Batch) (xs : List PreparedNode) (i : Nat) (js : List Nat) :=
+  batchMovePrepared b xs i i 2 false false && batchMovePrepared b xs i i 2 true true &&
+    js.all (fun j => batchPairPrepared b xs i j 0 && batchPairPrepared b xs i j 1)
+
+theorem preparedFallback_eq (c : NodeContext) (i j op : Nat) (ka kb : Bool) :
+    preparedFallback (preparePools c) i j op ka kb = fallbackAt c i j op ka kb := rfl
+
+theorem onMarks_prepared (xs : List NodeContext) (mask i j op : Nat) (ka kb : Bool) :
+    onMarks (fun c => preparedFallback c i j op ka kb) mask (xs.map preparePools) =
+      onMarks (fun c => fallbackAt c i j op ka kb) mask xs := by
+  induction xs generalizing mask with
+  | nil => rfl
+  | cons c xs ih =>
+    simp only [List.map_cons, onMarks, preparedFallback_eq, ih]
+
+theorem batchMovePrepared_eq (b : Batch) (xs : List NodeContext) (i j op : Nat) (ka kb : Bool) :
+    batchMovePrepared b (xs.map preparePools) i j op ka kb = batchMove b xs i j op ka kb := by
+  rcases b with ⟨k,n,r,w,u,v⟩
+  simp only [batchMovePrepared, batchMove, onMarks_prepared]
+
+theorem batchPairPrepared_eq (b : Batch) (xs : List NodeContext) (i j op : Nat) :
+    batchPairPrepared b (xs.map preparePools) i j op = batchPair b xs i j op := by
+  simp only [batchPairPrepared, batchPair, batchMovePrepared_eq]
+
+theorem batchRowPrepared_eq (b : Batch) (xs : List NodeContext) (i : Nat) (js : List Nat) :
+    batchRowPrepared b (xs.map preparePools) i js = batchRow b xs i js := by
+  simp only [batchRowPrepared, batchRow, batchPairPrepared_eq, batchMovePrepared_eq]
+
+def fusedLeaf (g : Forest) (k start n ar : Nat) : Bool :=
+  let xs := contexts g k start n
+  let batch := makeBatch k ar xs
+  let prepared := xs.map preparePools
+  xs.all (fun c => c.2.1==ar && prelim (targetOf g) c) &&
+    (List.range ar).all (fun i => batchRowPrepared batch prepared i (List.range' (i+1) (ar-(i+1))))
+
+def fusedCells (g : Forest) (k start n ar : Nat) : Nat → Prop
+  | 0 => fusedLeaf g k start n ar = true
+  | d+1 =>
+    fusedCells g k start (n/2) ar d ∧ fusedCells g k (start+n/2) (n-n/2) ar d
+
+theorem fusedToCells {g k start n ar d} :
+    fusedCells g k start n ar d → cells g k start n ar 0 d := by
+  induction d generalizing start n with
+  | zero =>
+    change fusedLeaf g k start n ar = true →
+      header g k start n ar = true ∧ rowCut g k start n ar 0 ar = true
+    simpa only [fusedLeaf,header,rowCut,batchRowPrepared_eq,Bool.and_eq_true,Nat.zero_add] using
+      (fun p : fusedLeaf g k start n ar = true => p)
+  | succ d ih =>
+    intro valid
+    exact ⟨ih valid.1,ih valid.2⟩
+
 def listPieces {α} (f : α → Bool) (xs : List α) : Nat → Prop
   | 0 => xs.all f=true
   | d+1 => listPieces f (xs.take (xs.length/2)) d ∧ listPieces f (xs.drop (xs.length/2)) d
@@ -2977,7 +3059,15 @@ theorem listPieces_all {α f xs d} (h : @listPieces α f xs d) : xs.all f=true :
     simpa only [List.take_append_drop] using ap
 def g15d3 (i : Nat) : Nat := 0xf
 def g15l3 : Packing := (1,0,0,0,1,0,0,g15d3)
-def g15samples : Array (Bits × Bits) := #[(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbaf3ea78de4d799d,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff450cc90c3c245919),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdf7ff8fe9f9b7ed5,0x20812421801324c4),(0xefbdbf97f9f6bf6a,0x102a401415600a0a),(0xf3a9d7437375f5ba,0xfc028ab620235b0),(0,0),(0,0),(0,0),(0,0),(0,0)]
+def g15samples : Array (Bits × Bits) := #[(0x16,0x16),
+  (0x2c,0x8),
+  (0x7ffffffffffffffffffffffffffffffffffffffffffffffb,0x7fffffffffffffffffffffffffffffffffffffffffffffe3),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffd7,0x14),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0)]
 def g15columns : IndexTree ColumnInfo := (.leaf [])
 def g15autos : Array (List Nat) := #[[],[33,48]]
 def g15levels : Nat → Packing
@@ -2992,7 +3082,15 @@ def g31d5 (i : Nat) : Nat := 0x84001e90fd02fd01fa00
 def g31l5 : Packing := (3,1,3,0,4,4,0,g31d5)
 def g31d6 (i : Nat) : Nat := 0x11a20bf
 def g31l6 : Packing := (1,0,3,2,4,0,0,g31d6)
-def g31samples : Array (Bits × Bits) := #[(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdafffab2d55fb9f999d9ceeefacb357b78f9ce2bb554a3bac97b2a9d65,0x250142092220460600407048c382809c2160e048740030a88143281c44),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffef5dfed46f26fea572a7ba9effd7341aff97ad1ab5bd2d547d6793334b,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff90aa211010d10141c4300836206168204010183680184d04682483210b),(0x73ef3f3c8ff8df3fe567b556c9567ffcd665219778a6bd6e36bfd946ac,0xc10d0c3000214920a0d648109801012344d60802686b04210115006a4),(0x7c7fd57b7ffa3476e74d6f3fc4bddbd44dc213c5eb8bdea95bf6ee7492,0x38022048645c06490200044a25241818912934541000824c322ae5002),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8fe76ff6451fda6ff84b6daf38f5bb6f6a5ee88a4d6be3f71c64aa3f,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8076989008882001270e063010011622500c04308a174300141c40a239),(0,0),(0,0),(0,0),(0,0)]
+def g31samples : Array (Bits × Bits) := #[(0x2ad2,0x18c2),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffc3a5,0x7fffffffffffffffffffffffffffffffffffffffffffe305),
+  (0x1876,0x72),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffdfc9,0x7fffffffffffffffffffffffffffffffffffffffffffde81),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffe53f,0x213c),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0)]
 def g31columns : IndexTree ColumnInfo := (.fork 2 (.leaf [(1,0,30,0,4),(2,0,29,0,4)]) (.leaf [(4,0,27,0,4),(8,0,23,0,4),(16,0,15,0,4)]))
 def g31autos : Array (List Nat) := #[[],[50,65],[66,16],[67,50,33,16],[67,32],[67,66,49,32],[33,48],[67,50,65,48],[67,66,65,64],[49,64]]
 def g31levels : Nat → Packing
@@ -3004,7 +3102,15 @@ def g31index : Nat → Nat → Option (Nat × Nat)
   | 6 => lookupWord 5 25 2 10 2 4 (key31l6)
   | _ => fun _ => none
 def g31 : Forest := ⟨31,6,fun j => g31samples[j]?.getD (0,0),g31columns,g31autos,g31levels,g31index⟩
-def g47samples : Array (Bits × Bits) := #[(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffddffff5cfaafae7dd35b9ce7bbffd6b6b7b7cfbb8d3b7ad85ddf257b56b575,0x2200a042011011800c00803812181c2009c1061c0107200c09440143143444),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeebefed537937fcb8ab173daa7df7f7691aff9776b2b7dcb92a3f3678b2b59,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff9149112428688034a38448020d64a21d120601022ea84882b022a624830919),(0x77db9fef67fc77f3ffe6e3dd55f86b6fffcab66472f7c57fb768dabfad4eae,0x820641080010508440806b120004c020121a4ec1002247c020840112806a4),(0x78ebe4ae9ffd0d576de696b3cff805db7d426c00d8ded437ed436ff6f66c92,0x71419416322f057a950700411b6b328381c4110e8d4580325370f22d66812),(0,0),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0bf9ebdb2287acd4afec26dbb6d98eabb3768bb508ca4b7f1fdd1c709a3f,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80f74f1424444852a26637058ca3a012d22680c12e48c8e17411561c608a3b),(0,0),(0,0),(0,0)]
+def g47samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x0),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffff),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffff),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0)]
 def g47columns : IndexTree ColumnInfo := (.leaf [(8,0,39,0,4)])
 def g47autos : Array (List Nat) := #[[],[83,32]]
 def g47levels : Nat → Packing
@@ -3012,7 +3118,15 @@ def g47levels : Nat → Packing
 def g47index : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 def g47 : Forest := ⟨47,4,fun j => g47samples[j]?.getD (0,0),g47columns,g47autos,g47levels,g47index⟩
-def g55samples : Array (Bits × Bits) := #[(0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffffdf7defdfafbfd3fcebcfdeffcebffefe76de77fed7f1773f95eb2ebeb,0x400028000010005000000400701010180030103060043200102204010904888),(0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdb7fbfbb9ad3afd94caf0b9db5bbdf7f7d39bfcdadcf77ec9eccd2fb9cf16b5,0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2484444214284026a4e002420468a8a43140a00408d944460a4082569431231),(0xeda5e7e7b2fc29de4ffc371dba2bf0775ff12db9b18bb528fedad96afcd3c5e,0x12589919410293410206d0396285445a082c5d2bf0022b20f0895d2048c2c4e),(0,0),(0xf1cd79264efe956afa7a64bb677ab40beba463600362eda36f3357b7d763926,0xe3a8651b1a36a0acc57538a080f6ea703078a0c13c28dc34c91f3868663126),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe05fe74eda341d5872cbf684d5e2ed19e7e3bba5e964550dd792aec724f479,0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff01fb53db1204342a549861b60b6727a22d48ac0b14da4445855161ae724b471),(0,0),(0,0),(0,0)]
+def g55samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x0),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffff),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffff),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0)]
 def g55columns : IndexTree ColumnInfo := (.leaf [(16,0,39,0,4)])
 def g55autos : Array (List Nat) := #[[],[84]]
 def g55levels : Nat → Packing
@@ -3020,7 +3134,15 @@ def g55levels : Nat → Packing
 def g55index : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 def g55 : Forest := ⟨55,4,fun j => g55samples[j]?.getD (0,0),g55columns,g55autos,g55levels,g55index⟩
-def g63samples : Array (Bits × Bits) := #[(0xdabffdfdbdf61bfbfc7dcbe34f7f1b17917df75df7edd9eff77b6dbd3dcebed3cfbfaddba50fcabded46bc9b579eb7bd3d92776566ad4ad3debe36d74deb7f9faf189ad76da7dc1a6b4eaf21eb254de4ae1f7451bb34d9456fd18e934db17349,0x4400202400040800310000100084000ac0000102800a1100490002240004b2800a001b4000190000008108000574009200040400000594000190004218c0010840002890800550053044a00410008802d0060013000c004400188120c206208),(0xb6678efeffcbf5a9cad5bfd527a7a5bd74d1314b7915f5b2ffdec2fc5d978f8ab3b44b2b5add5b771711b15ce99bf2b3f5bce975ef94cd59a34e76ab937848a94ef6be6c9579db5905539ea703c87a7d4ae11fe2ae423fade4a3c3299b0724e7,0x499461811a200a55004cf88854029340027a680613c002ec00233c1096d01045025d0203d400243150030b7e4900b00499e023395882049d0206ec00041398010bbb1000b7310ad00cc0858112c8207810e917400e423d0034024309910504e5),(0xbfdd27bedf8fade4776ebf9d185bc5bd76aeffb29711f77d628e86e5fffdff6d1a52bff6da987348e3e147dcecdbcc68d1accc4e7d7d77b9734cfbbcefbc022d72eff5a31a72e32584dd5a72accb1256ede309af577ea6b3ab2be572a2769632,0x20983204990108b1910222a2810c12a8041040402e00006394000908008912a582448429aad10a21a0240190b504314209040621245140c82010e8812042049440841100c0c52080310832a5111106e902488a012c82618908a42202729212),(0x77ddb87389d95f9f7bbe7e8eb89e6e76fbf75ca7fd5bb3758b555b578affe964ae7e7fa493e06d03bebc4fb5cff51e46b2dd5bdbb1eab66f60f7d916b9c6944fd85b6f0fc30a2ae7d2afc9dc369ef80bb1b0b2dd52e9331e786f7a5d38e8c8b4,0x1482478012444200420888514440810c402202189081ecc814422aa4c048408050190921c0450c000a080254044021081134422900082c11250884167012813a48094aca870a3283708e41084282480000c012150640581c30655a55288040a4),(0xdca768aafb78ce8d2db2ec3fbdddfa4ec963339dbac7a8e05eccbf0bb99ddf5febcef6dc7762a4a79d9ad8f70324ba6e724754bded1eed86f695f276b70acbd73dc66e39a88d0cfed920a0ee10b5a4dd5893bba709bff6dc1ece388c561e1ed5,0x210938550593284a984457082a220ca002159526023c0223a02100100d271046aa46f2022bb0201ea5730921b3008e848a002106a7520082d20653c8040064810364a00030c5086c0c2084761035a077101508a009ba22e00b822088521e1c51),(0x77dad76bd4ced656e7ec247a694c9eb5b66dc4de71aac18acebb177a9bac7a62d6f3e3996dd9d62d6ecf7b18557229a30b5ebb1ef46b568a8f3400a7c2d3365caade63d0f2234a24623735bcfaee29c0664eddfc63b2a86915f817ca03dc41fa,0x88252894b2b3256598a758928465236453b27d28c68c4c28a24dcc0d24d500d4a845700845b04bd175706d345a20a0a24d641d897dd822a1d52444cad2629c8e732b305273362844202335b73c8d8150424e93e44a78286995ec17c803dc01f2),(0,0),(0,0),(0,0)]
+def g63samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x0),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffff),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffff),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0)]
 def g63columns : IndexTree ColumnInfo := (.leaf [(32,0,31,0,7)])
 def g63autos : Array (List Nat) := #[[],[50,65]]
 def g63levels : Nat → Packing
@@ -3030,7 +3152,15 @@ def g63index : Nat → Nat → Option (Nat × Nat)
 def g63 : Forest := ⟨63,7,fun j => g63samples[j]?.getD (0,0),g63columns,g63autos,g63levels,g63index⟩
 def g111d6 (i : Nat) : Nat := 0x120ff
 def g111l6 : Packing := (1,0,2,0,1,0,0,g111d6)
-def g111samples : Array (Bits × Bits) := #[(0xeafcc7b96fc59ffd26c5e2bb3d7bd378fb35ff5dcb26f92afa5f57eff59a73b7aaa379b2fc8d7a99e2ef9efcf4defd4efabc9c89733cebade5579ad5abbcd64d8557ad3d63bd1c6a75510ce3b9bf05e462ee0edf6dfb2914efc74c7d31727465,0x4d00310a2003881269402d0c00406ccc142a8012908082d00025ac006a88036948003229000032d4001bf20024ec2018680000aaf2500325400423a6f02003840040a8016ea8106822700071012c01d500600ad401ea0010f407087831504444),(0xf771ad34ff2bcf4fbd7f5f5de52efaeb7ebbabfffefbf2eab7c7cf56f8ecea565ddfabcf87cb61db9d6ef4aecff7cebd76fe679cfb9935e6adabc77cdcdb677ed3da5e4f56b4cbe39cfd7aed1f519a6b999796b48a51f4f7b8ad91a66cc6d9cb,0x1204940050200482000010001c10308054448009004424020800871400ac0690000402004e0508404004081210450414000904018220d090010808000a44280600460810104d92040818880c1010088d8400200a10a1400808810604821909),(0xf5be76df5e79b8b5d13f5f6e3ecd176fbeee538a7cfb9f7f6b7fad9b13bb7fed97560ecd71f29f3f1e3ef959a338e3a9e32bd5e7cfc7b51df73d7e9e165479b3baa9a0d59e62e11eead3ad5c624777de8699f96d3766d64d1f3fa2ca8f3d2e52,0x8e4d19200884440101e4a802e100a0c04000830eb000289800c49240c1c411082c325a6812b0485430294040c52402008322a4b0e00c0021216842103a050a9080848145264020288841a770220547500211500d95204c05521120880b352452),(0xde2ebbc73c1cf83c4cedbed77297d7f5b666582db23d5c5d7bf4a54b37a75f4992f88d683d388ea5bafb57791a5deb9b257390777cf70e9d329773c24416edd93fe3d2909bc3b81d7e62dd94d70a759eb42b6b51587d63da2e7eea6ce78912bc,0x10b22099c5638280b403142808691e02bd9d04d1097a9640ce2041351e20e64283892100494815238b12089820999d9858901b4e1903515e001721098578a5416f515492d981d895722018845902b08a5c4a2a2248dd03d08c66ca64e48812ac),(0,0),(0x4a99db5e74fdf3bbfb83b4b12e735e58f515867b75942dba656f9eeac55739b971685432ece5b39368c30fbbb9f895ca9efa5eceda2fea7be4766f052ba5def635ccf928215f7640050f6846acafb2ca6efbba0bffbfdb9043d87d111c3c3ebd,0x12d68401de50564414b80023f49c0203c0413d800068400bbb08034f0177ac0427f40400f6de0023bcc009fc1201950403ff4900082ea08a2fc908010c8a4053de0011e801464d050407f806ac13f8026d9b800bfa055d40038875010c2c3ab9),(0x107b7e8791b6519a9ebd6f37d374faa298392ebad8b5e4afe6bd267679568b3365bebaabdf6ef4e9035a918e8ca50ef74769b2b74aea726a09a6c5e9463715fb76745a9b1b6212a1b9add6dec52a9ba55b57e399ab660ca6d0f217384af881fe,0xadc48a6a24248ac9294916cc74a18dce4988890976a839d0a90054480a8f001149b409fd5690d8d50882129489ae3083c83b5253565cd02541ca4550f495b985581508b28aaa022919a1e755a00eaaa54243a315f06a0c87d4f216384a7880f6),(0,0),(0,0)]
+def g111samples : Array (Bits × Bits) := #[(0x6e92,0x6482),
+  (0x7fffffffffffffffffffffffffffffffffffffffffff8d65,0x944),
+  (0x7ffffffffffffffffffffffffffffffffffffffffffff389,0x7fffffffffffffffffffffffffffffffffffffffffffa289),
+  (0x703e,0x5036),
+  (0x0,0x0),
+  (0x13be,0x133c),
+  (0x7fffffffffffffffffffffffffffffffffffffffffff907f,0x7fffffffffffffffffffffffffffffffffffffffffff903b),
+  (0x0,0x0),
+  (0x0,0x0)]
 def g111columns : IndexTree ColumnInfo := (.leaf [(4,8,99,0,4),(1,32,78,0,4),(64,0,47,0,5)])
 def g111autos : Array (List Nat) := #[[],[83,32]]
 def g111levels : Nat → Packing
@@ -3040,7 +3170,15 @@ def g111index : Nat → Nat → Option (Nat × Nat)
   | 6 => fun _ => none
   | _ => fun _ => none
 def g111 : Forest := ⟨111,6,fun j => g111samples[j]?.getD (0,0),g111columns,g111autos,g111levels,g111index⟩
-def g119samples : Array (Bits × Bits) := #[(0xfab75f3dfbfa3756f92d9ff7baf5ff7dbfebb9b33bef7dcdf77fbffe7bbbf75546cedccfd6f7eb762bef3ffdd2ede7abbef7e4e4b775eb9be6ab6f4d5fde77f2b955ece57b3feb97c6d99b5cdd2fdd2ea315de5f3efbf8d44ddcaa7566eda9cd,0x20100000802449000a820000c1900042800052080010000098c000620802429000050a2000012e00000be20013404000082000047420011240000c8b8000110080002480036500158018000c4009400c9000c0062803a0400e00885042a10888),(0xaf7efcd6de9febfb57d6f5ddedde36f3db7fffeed79fdbfafcf255738c743cbbbff3e3b86b8f9fb9f5bdf54fbff79bd74f5afb3f7fba34f5bf5f9afae879ab5feefe93fa9ee6566f7bbee6bf67d426d75cfb2bace9344fabf72bd58e999b76b3,0x9300010000091004000400382060802420900110020801010208161810541520000000800198110400c004084880812115000049028020c0800220200009220a01801050108206a8408406120184808104430800802442850101410609083421),(0xd3aee9d1a16b8afb579b1b1a2ede96c634714fced4ed35afb8d86696aabedb2eada373270f48f3a9b93de8a90d87d8f6684756adef8eb40bf672fc78b9342c9c7aaa652b2aec9422dd38b32b2a5255bdcc3d35b2da5f372953f3c4ba3a70d996,0x2c07b23e74020fd2aa41748155856818d263d681015680dac92709c7448b08586eaf3a512642c64b613a9091954b38c222671d26711d023332d48951dd0691952839212f8b6888039910b9ac2a42653c283c65315b1b95185ae084b83270c996),(0,0),(0x759a506bc07865de6f37bc2fabe39a5e2705b6a3eec6bd3cca572e3ed72f0325f632aa43d8e0e833eaeab6f86ad5fa72dbaf9c83b9e70faa212acf122e177ae733d8fa39a0b0bb12b7915f7134c3b9a9ed98d75362b1d9c725676c3caf04637c,0x16e5f59c6d01a255c44806523c0cddb5529a2196d082e7c24415d298c0f10d071e6090549dc090f8ed501938009f3fb2169588d90b0b506d102e01343cb84ad135f45369a498be0a36011e712702bb816af81651c4b05c0701a6642cad046374),(0x6339c3e76f77dc41ec6c9766b8b0f93592cd6e58a17db2abb9eea5cd269eeae2dc2c1c9ec755bae6a2821f6b678c3538a75edaf56c57e97ff4e8b90d55c4e75ce36b37ac511be4c610c6f229b9ab77956345b3a117ef6f3608dd37697870ba61,0x84ef690f5888a6bc0049f9381c0ba0115db000874a075d2102333605e754184fe100105f739880fb92c019ec481f2d2102dbf2480954a0ad3f922114724920d57f80032e5018c6a22083e62199863ec06b43378157e41d3d00d937293850b261),(0xd5cc96ab2735f4eedbcfece9fd4d847149d75b8aa71ff3959066dc7566c66ecb75975abde9bb8d684d89311f3151135dd1ce4d97acd9737d0b4d97b62b1596cf57b51ab1b6b408593b67d5bb928b32dabad66fc43367241aeaae177095e247ea,0x481560b0cd924918c5323d4303992d88d1232e6a49f254a2454320824e8122936522ef3572424e688310332525616c12e023da92a435d213539c9243b254cc21b63548a8e4258841b361f1c95a017252ba1c47902bc1245a7a8e167094e243ca),(0,0),(0,0)]
+def g119samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x0),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffff),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffff),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0)]
 def g119columns : IndexTree ColumnInfo := (.leaf [(4,0,115,0,5)])
 def g119autos : Array (List Nat) := #[[],[84],[98],[84,98],[101,66,16],[101,100,66,16],[101,84,82,16],[100,82,16]]
 def g119levels : Nat → Packing
@@ -3053,7 +3191,15 @@ def g189d6 (i : Nat) : Nat := 0x82000f487f40bfa03fa00
 def g189l6 : Packing := (3,1,3,0,4,4,0,g189d6)
 def g189d7 (i : Nat) : Nat := 0x1f5859bf
 def g189l7 : Packing := (1,0,3,2,4,0,0,g189d7)
-def g189samples : Array (Bits × Bits) := #[(0x76b7b935ad7f6fd4d735f26d2df10ff4361bcad97bdde979efcd6e58b7554d7ea7eff73e73de92e56562d7533a4ef3de34b1f6acf1d6e216666babd43dbaabce3ad8d545ed4e53771cb4e6d84ab365f9722155b0decf672135d0ab0e8aab3265,0x8404642124899480a2a81184400c4494a40542200633c0114901482008a100b4c40690c02a500485280025a8300be5004d078022244028e4a0122910034dd0088624c002500565400b4701a401901a06a801c60d40e430038408b0c08aa0264),(0,0),(0xb725f7b34edfbeffaf8e64c99fca263eeb8ebd6e6efba6759d07fff35f0d57cf0f1af1c8e8596f2d9f9a363b65aade972ff9af593499366f72b4e55d5e6f961954d5fce693a74e66d370dbbd59357a0ab5d8c2e2b4913d9ddc0ac963246654eb,0x2019084c910042485050a84580141012107000421c10cd02a29a004c0424911090cb1414ac1a4012048a60a1130c00921224ba8854044c203120d1318881010110848d88109408245548f0845c253042044cc0e02091152804424943044214c9),(0x6b3b37beb0d3b3db67cafb77eb9e1dd789aebdb18d1db77732f653e35977f97f4dd313687fb67a399a5d29e7c5c2df2ae361e9d1a8a6a7bdf9b41bf76bf3c59c972736ba642a6ec8e10ddd388a5d8a2fef454b2f6c5cd8cb4dafd1a5458caf32,0x84c42401462a8882042c15880121e0040f09501440a3008044047580824b00c92204cb801220a2e8d004050a8c13a8082552010080e322ce0002224042220e86c96110212062d680201609100358082de8010e0a0c4e080169249024018caa32),(0xeed4ecfef66eeb7efebdd9aee7077cf1671b7b7a97dfdfd372d0ed94ede3ade9c50737565e265d36d07689d4ac4faafe5abbfdc5676e89f79f8f9a623b38502f3db98ff0fa982b81b88d0790fae9d8d74f74351d5187af7a955e769667c1914c,0x112b0124099000041080680538580102a03620812918016ca82b084951200b0011391441e40a1406003a00a460640102802906c05910d52121d05c00b8012058249003c452192901d049060038a0e052051c011422a1a0780618649266411108),(0xd9cafe65094bbf5f7264b7bbce3ffbefdc6762cbb35969c8ac2ddbae62ff5a5f3ee2cea13be5ccd265ed5a725a1921f7f9e712e69e98fb2d45e97fd5f2e0abe4f3f7676b375491bf662220c7ec1235aaa52f7b260bfdf8f023b73c589c1c3f19,0x2215018860a440b0408528403b942810a5b0009c1c080302094a000184016510830b02e2ac10b810014a60046c8c012e120b028809b84c0105208c4e88802201101131880274018a550300819c02301e012cc3000b90a8a80382305084143519),(0,0),(0xe9cbc8feffb7f8e7b8d17ff4f26deb6af5fadcfef4fa8da189aed6c66eadfbba567e7aa58acda76b57bfee9d03799233ac5e277f4fab9af55d736c18d65d30adcab7ab9d1b9dcbcc02d24b67373e9182d29baedd99bcc115aa3d04dc337a48be,0x1420360100482d00252a00a2440945244a022b202187302c44004bb2035a00002400090800450025fa000d1a80010240a950404582409154ca522280124a1c0c672a40054909a2500214036203d800a092812c0514244211e81d048c33284826),(0,0)]
+def g189samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffffffffffffff14bb3,0xd42b2),
+  (0x0,0x0),
+  (0x7ffffffffffffffffffffffffffffffffffffffffffd5635,0x7ffffffffffffffffffffffffffffffffffffffffff94225),
+  (0xe65d8,0x60598),
+  (0x2b866,0xb844),
+  (0x7ffffffffffffffffffffffffffffffffffffffffff385cd,0x7ffffffffffffffffffffffffffffffffffffffffff2054d),
+  (0x0,0x0),
+  (0x4ba1e,0x4b812),
+  (0x0,0x0)]
 def g189columns : IndexTree ColumnInfo := (.fork 4 (.leaf [(1,0,188,0,5),(12,0,177,0,4),(16,0,173,0,5),(17,0,172,0,4)]) (.leaf [(24,0,165,0,4),(33,0,156,0,4),(132,0,57,0,4),(160,0,29,0,4)]))
 def g189autos : Array (List Nat) := #[[],[84,115],[117,67,32],[116,83,32],[82,48],[84,115,82,48],[117,116,115,114,64],[83,114,64],[116,50,80],[117,84,67,50,80],[84,115,66,112],[66,112]]
 def g189levels : Nat → Packing
@@ -3065,7 +3211,15 @@ def g189index : Nat → Nat → Option (Nat × Nat)
   | 7 => lookupWord 5 18 5 10 2 4 (key189l7)
   | _ => fun _ => none
 def g189 : Forest := ⟨189,7,fun j => g189samples[j]?.getD (0,0),g189columns,g189autos,g189levels,g189index⟩
-def g127samples : Array (Bits × Bits) := #[(0x27ec63be833e95d9cd8b1b0f8c7b949b955ab7ff06f2f46fb53d19a8b89e2cf938ea5b637a679113a99b1a558cf5d3757100e2a2d92956b1df648864a3a84cf9f5aafcc4980f547cd2d2abacb351593072ded0ca36876c216b176a15583d3069,0x215000b22a840210400a1040082a19401000220004808d00802008c02014082088420800402688520818425544410445400040805130408104600820a3600c001020e0440008143510802b10a111102142440000168440214816081150281060),(0xd1272c7d4d43f0bd72e56dab39ddfe7c6a407c139e413a8c95b2f6c7134bd9d2e6151acc0f6f6e61aecc859cb80ab9d38d1f9c08bbd08127631b9fb156aefb042a9049abe4f27cdb8815184a3fa2b5dede495570df2830da3c38c46cf1426d13,0x806000d540888802080408280406213088804000000320c048631024209804006241648090164a10080940a08001912a8109004a2408004431a0101080453200880088a80c0004a880100481a02008819080040c10830122428406420422c11),(0x3757a63bdee4ba3fd3e2275cd925bbac4327c3605b6a92ba668b6b375f5956a61c0ee4c8b6382a0c726a8d674c1d24e187c7697b46618e9a3259ec9e635cb1935494676727a9c6a3df6b34450ca72f271676b8367562d5a985429aaa9a64d626,0xe190134200c030558e6885084d0788a40161e860830e0412a109c61098d030850809a9902628890c322a09e446182064058721691005078a1841cc5c6248a09654242521162044855722240404692506023498262462c48981029a8a9a244222),(0x7c12f7ae7cb67a121957d4766ab145360dad0baa714fd5dd4ad95b9245e39e4cff88a61691dd24ee5570ea624367b54a6aea5375c626bc6f4082772e38770d5a1955fa1dcb198b20afa8d659c70c9ab5dbb42b955b55e374e0f839c3068a9694,0x100b203118264280010702e3020864421484020c18c0438c4090018044060d7096401604915660c20151c00201478d0220604290c2020821402022221025140809114a0c4919231288809339110498f1918002911b15216460582041008a9494),(0x5f0ed2cab79191489f9794fa9f865222c0c45f4f23977137ba6ec87e2fb718cbcb3281372d8190b9e5b2713c276012285f3b185c628f375c96ee95cada25845527c7ad5b31bc018c667be7de6cdf9480211b73e5e0fc0e1e03a683a80feb2399,0x4e04900c0410144f3ce0e018c1840020605099a3823d30032c4ce03413c1e08c412481b32c810028f486342022205010179b1c44008d375c030cd5d908008055e282051134c40088667900c444ea04000013f960e0680e1a03a083a80f412309),(0x64ed11ab034e6565aa5f6f0a73fb2abb553e90eaf5f2056f4f2ad1a6a7112f3107edc462d825611a42150349a39be3bcbdfa3bf68749fd950e410251758bd0aaed7e1f93ab81b400f6cd22629068e5bc2da9dbde283bbf115009f3b1a197a662,0x46299909050b25a18c71e62a5095c63ecb8f04a3c26b60b927cda532c109201915ade64b3091412042050108b390e3bab9cb9877060097580a090251508bf2aae7571e1ba185a2088a6c00621068c596ada8d9f5a83bbf101009f3a0a197a602),(0xed72aa63cb994444b8dcf183254b4e7cee24db3ad729ab4a1ba98c700af5e5480459e832e1cc5750368c89edf172492ed4565f186db3259850f427f3943aea1f7b1d745054d56ed5059c9e36e00b68fdae413f628aa9c64ad98b04d0b38dd9ac,0x4400b2628be723745844a119668f0ccc9303b92a933d014173710ec9a0c0658c41596832a4cc13563c0629c5d4a2402c44020f584d31651810e10cda143b2c95631f726414156f15141896b3a1182c75a6e53b222aa1c648d9830490938dd1ac),(0,0),(0,0)]
+def g127samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x0),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffff),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffff),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0)]
 def g127columns : IndexTree ColumnInfo := (.leaf [(32,0,95,0,8)])
 def g127autos : Array (List Nat) := #[[],[101,66,16]]
 def g127levels : Nat → Packing
@@ -3087,7 +3241,15 @@ def g191d9 (i : Nat) : Nat := 0x180327c7c11a70600f8f1304b1c05f0c3c541303017c38f1
 def g191l9 : Packing := (12,1,6,7,2,9,0,g191d9)
 def g191d10 (i : Nat) : Nat := 0x1f3c11ff
 def g191l10 : Packing := (1,0,6,4,2,0,0,g191d10)
-def g191samples : Array (Bits × Bits) := #[(0x6acfda3c2cb83a92b793db4cbe83faea9cb2634793e21db352fb83fe8df2bc07a86d83614e9e1d6652f73c866931a299021d0d35cea03b8bca899a3ae9b0852968ae39aed598c502d3cc66c95e3918558ba9636cd1546c95b4522b12e41c6251,0x8027018c1220821109402382a0c04040242201142810004800310a01021028020024504420900008134444101889108100844480011218a0808a088000429588a002494484002118004005c4110108908c2000154441190520210a0142200),(0x7913ceb593e8bd03514889e55f4c93639759259376fb3230720c9a865196f27cc74c193b9b758265cc3f7b6a39d891145642471fe1a3e402ed12036d66f3fc532a7d00122732be1cd6f8a0d631223ddb153772d463789a2c383ce02e7842d163,0x88036081c60419a2c82401d04754b2b302101402821d5c654204040641a4c69d42c491108805a675482c4b1a3210132646402113b58224122512010966d1b044833550122312b410427aa086012a6ec1101538c042289a0c282ca02a5842d161),(0x557693cafd0fd9424efb95e75ddf8ed5bd78c8ecb52fa208a8d45cb3574ccaab77d93b1e650b4399e9518160864e914bee471a4d6078d8cd3710b8c5462d299957d5836e24a95a7b253cdb2e6196070b78eaa32a2b4a267149c447650cd138a6,0x10c082401088400012d0c4008000004018ca8080142020182010002082500860100b028600824082a011044180428040210612040030c884904098c2002801191040822880a108c8040449084010010648220108084220210140474504110882),(0x9c642d62a2f2f7ba22bc048df67d49f5212576be5994f8cdc5e270babb8959b792802cb3e87f90d4054ae918d4ab1ce241d9cf541d5d16b72277276810cef58c9e0f2a3137066d66292bcd81a96583d025d9fd03afbb585aa2b81e898b063d44,0x8024093988519a8e002822a41919198600217873085849c0c483198871885081c08060615e498874054ab3104029780240914c50140c132321226228088464808a9608100702c12708ba84812c642a102598ac01a5195852a098180889063544),(0xd23eefb5d75806b89dcda38864b64661c9f5e2babc176a70b2d3a56f26f32e727e31fe7789e6e58a36284c9dbcb30e74d59821a10b67441120e71511dbf31ab50b42210b3baf1a3e4c47734dcff8958cfd1109f7ce27c18a062741ac46d7cd91,0x7413208444084451d48501104604c068b3980408840422121160844600658c78341c18180024668a9220480b8c940760b50821038273441010c51501633a18440140258228a50a1044455344031a81ae1001013e42228188062541a446c1c891),(0x44ee3263ec00331534507b30f50239085a477dc26fc97fafdd3677e1adedabf5a6627a917685fed951e16b05c441608531a6eebab7bf0ffa2c9d6923c000425ae070ded9cbf43ff0702d561449016826463c1cddf881bbc98109fdb0912bda0a,0x5c9601812402000310c10a308504200a188ca4d220b13a418220c4ac1700cc49329049900289169c4a408a09044020043184b638a739649c2011540242004250a0701ac901871eb02048c310010048264632184cec01aac801096da0110b580a),(0,0),(0x3ab08ab4b6d74c50e56bc9651caf5894b179e03465572acbdca5615696769c27053d6dc580568c9318a62a712d4d06df8fcf0933a8a96615b24c8891d85dee28deccf746ecda09546a23c7138dbf2215a9d969340b49504d34d905859a5a4fc,0x8020482e4971b288ed202044508b9ca5050108094844412451461041282e3192c9648008d0242841110660a6538444294c484083188002614b0e00011891a8820d8e45006648e00548a230c32acf32918089829300b41504d204901848a4a474),(0,0)]
+def g191samples : Array (Bits × Bits) := #[(0x140a40c54aad51c92c,0x2ca4408142ad118820),
+  (0x7fffffffffffffffffffffffffffffe40277b1d4460e8789,0x5a370894420c0788),
+  (0x7fffffffffffffffffffffffffffffe8a0bc350aa83a58d3,0x7fffffffffffffffffffffffffffffe6a108710828324851),
+  (0x260198ae4d6f524ca,0x1102f28a6486c5248a),
+  (0x240094eb1510e5f54,0x2400d6491500a5354),
+  (0x7fffffffffffffffffffffffffffffd11d02683d62e927e1,0x7fffffffffffffffffffffffffffffd109187a38426825c1),
+  (0x0,0x0),
+  (0x997c600d71a84321e,0x816c780c71084120e),
+  (0x0,0x0)]
 def g191columns : IndexTree ColumnInfo := (.fork 19 (.fork 9 (.fork 4 (.leaf [(1,0,190,0,7),(2,0,189,0,8),(3,0,188,0,5),(4,0,187,0,7)]) (.fork 2 (.leaf [(6,0,185,0,5),(8,0,183,0,8)]) (.leaf [(0,8,163,20,6),(10,0,181,0,5),(12,0,179,0,5)]))) (.fork 5 (.fork 2 (.leaf [(4,8,163,16,5),(14,0,177,0,4)]) (.leaf [(16,0,175,0,8),(0,16,166,9,6),(1,16,166,8,5)])) (.fork 2 (.leaf [(19,0,172,0,4),(24,0,167,0,7)]) (.leaf [(16,8,163,4,5),(8,16,166,1,5),(25,0,166,0,4)])))) (.fork 9 (.fork 4 (.leaf [(9,16,166,0,4),(20,8,163,0,4),(32,0,159,0,8),(1,32,30,128,5)]) (.fork 2 (.leaf [(35,0,156,0,4),(40,0,151,0,5)]) (.leaf [(48,0,143,0,5),(56,0,135,0,4),(128,0,63,0,8)]))) (.fork 5 (.fork 2 (.leaf [(130,0,61,0,5),(4,128,27,32,5)]) (.leaf [(136,0,55,0,5),(160,0,31,0,7),(128,32,30,1,5)])) (.fork 2 (.leaf [(32,128,27,4,5),(161,0,30,0,4)]) (.leaf [(129,32,30,0,4),(164,0,27,0,4),(36,128,27,0,4)])))))
 def g191autos : Array (List Nat) := #[[],[84,115],[117,67,32],[116,83,32]]
 def g191levels : Nat → Packing
@@ -3105,7 +3267,15 @@ def g191index : Nat → Nat → Option (Nat × Nat)
   | 10 => lookupWord 9 46 4 10 4 2 (key191l10)
   | _ => fun _ => none
 def g191 : Forest := ⟨191,10,fun j => g191samples[j]?.getD (0,0),g191columns,g191autos,g191levels,g191index⟩
-def g251samples : Array (Bits × Bits) := #[(0x7c5b1073c997e37379da30f398119ee6fb6b9ec3f472bcb960b6e16b764eab308775a6f93b85666e9d3190b2b24d642ca5712b6de7ab3f7906c1699135342a691b3ae0a5aa4ef7bb316cf861cfcc30541d6a6cc4992b1a999615c8e8d911c1e1,0x2118206040004a02130d09680103a002090a061080141a8c00302460220208340600a251588102029c90b010225400202065234404234e080480294178042009180840240246b20a0024c060c50410001a48a084882a181106058840c1114140),(0xcce5a5f376b735aeaefe578ced15d32ecca61663a9af3bd1860bc21b19116b79223f9d41251db7915d2d676e62aaa4f819f9d341f91890478f7c179edecb18b88452ff03ce59b2503e9c1117dab8cd95ebc956b7a216470f30e3a2b3ec2d18bb,0x4842cb022293909020208080c0985104462050200a232050248f580a09002349282c0500277025a04229050a00aa2098018840837118b0c40a78400806c358a084123a0140090810bc8810142aa8e601010152222014470a10a222b02c2818b9),(0,0),(0x615f43b7c5899d56d0ed540d07e5651da134ed341e9bc1f74f237fc0ae8a342e74d0d54381c29b89aafb968c73300f2ad24e70d94c925aaf7c71d97b8e42ee34b1eb0d1c78f57307cdbb8ab0333b96f243ce283ea4988c525a6cf93575cb22d6,0x600508638c1a9f0381c44ce96aa5f40532886e32158a42c5402a7e6c4a89343c9410964685c08b09acb0120c353c06229a6c00c94c92de87444159522882ae0499430c1549527146cd2ac810537252985246622c84980c521a4cf835558922d2),(0x743743261165c64a5893c74b56706899b56f313d76fa70640bd59bea9f4cd6cd40c9796a92725dcea2baccf628444b5fc70e36349d152cf473b98c6d967cf8571ea4949a30a5a9a67c52f2db3fa12e66e966315b35ec80fa603e034c2e56ad7c,0x8e228200012500a04432a202145800c8c044118122412020998581138524c38140cb492802205484420a48e00002411d45001410a1402070b13084088559515204a0a28a24a10ca03050168720812c4621201151314480a8603203082a468c2c),(0xf3d9bb1a8ffcdc97c518eaf4c8cf14e122f0fafd99d5fdca7ef0f64eebb658a39d280ab679b66835384c18039df39cc970c09cab32e75b6d986af50aa1e14f67f56dcf6f41924d79e9e39f3990e7fa0a34138f4a5e417d209f607f101fc4fe09,0x9201861738918010c41062040c8818244620088911c0e1638783100880a45083c120082600262524204640020401ded90000982b30080131d06c4002816148a041658f0100904561e8880e0910f0e60220020e2216414120916065101cc4aa09),(0x8c34b489b6743f0cbbb4f14fa7d16d9fa49b993f9ba2b3789eb911d5e1cd7a6f64e2a177140a8013c504eb6dd8b5e7f7e94f5a351463882a81261e97691b96dcefd6ddbc37c1e3432aa0876640524995f6a595fd43d7d81429dbe94302afe942,0x269c30c1984c0e0408d2577d35632830a8c6a4165540daa693102041644d9ca647426045188a80110514e824d9155760ee46136c04410a2a918614976910825e2b85c52c35a0b36b4200852245520814f6b484dd43c398142959c9430287e142),(0x1bb2ab4aa0e85ba9e596de5ec3ce129b01134cce9757f2d674620576a8bd96bf3a893c9457f0a28da9ccac591d7731877093a6c205d64d4c2bcaa6363cd0b55e770f7a466dfb2a9c82572d4ce3aa90cf64d9c30549ce2fe50b809671629a567c,0xd9639e04222012901869c59f133e18908110146a61f169c201c69140019863c2e851098d7d900098988b54119762026501322c440c64c4e0e9086343c860556368a70222d632a1a145321c6e30c00cc44fdf181498e2ec50a809261621a5474),(0,0)]
+def g251samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x0),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffff),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffff),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0)]
 def g251columns : IndexTree ColumnInfo := (.leaf [(8,0,243,0,7)])
 def g251autos : Array (List Nat) := #[[],[84,115],[99,65],[118,84,115,65],[118,81],[118,84,99,81]]
 def g251levels : Nat → Packing
@@ -3113,7 +3283,15 @@ def g251levels : Nat → Packing
 def g251index : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 def g251 : Forest := ⟨251,7,fun j => g251samples[j]?.getD (0,0),g251columns,g251autos,g251levels,g251index⟩
-def g255samples : Array (Bits × Bits) := #[(0x9b665c544a8481c32c829a3849d25a0c2e734bceaece0410b1910c9246b692285657c973ca335d593cb00f0546b90059eb43e97a932728851785431870f031165ac8b80393ba6e576270cc58c906b870841734e15dc89803598ab05c2460a6b1,0x104454110880808228020a2041d8002c08600a02808c02009111060244ac12008614a1024802115108904700443200508241c8821224200116051018407029164080a01212302c0942400010c90428108414142154888803090a9048202086a0),(0xf315668af28fdb1ca228365b7ccc05a0011317731e21482f697635c521d4e57b4580944cacd08190116899ef79421d834fcee4e488905930903982805fb1c61927af17aaf49049a676974192f0d0160363a1bd03830701b0dc1f8281c2dc6123,0x83112a82400c43108201140b24040542001210600e014836084820c40800442b4181104024900000902098cc210099010006246088901220003082011981800902040620cc814002101041843090160043212902810201b054050081825c2101),(0x380526282fa13ac851f4c9c505254980d6e8ec3804b3594a769d93b950ebc251b0d8e2a15610b8154799066089743516386914b45de9a6e1e91c2d64aa4bec2945782990b2d68e61aa4d3cd1b24a6ab680984b4c1298da14a63264e421a50a46,0x184000082381184051a442400021c800c760240c008201086414493150c8805030586481420228050588002082640402084818905528808149002d00020c144045280184104604602a043c40824a60b20098024012185a048212646400810a02),(0x96903da21572f2b1f1c959078994a771bc47364121282ac5966e24786e0f6b8886ae49c27124b27b7242ff2e0094e0b4b1b582696d3c94568c371a6b03b30075a8d6353ad9672c0089eb12ba6325f80dd24d451b8459a7c113618d0b812f118c,0x86100cb01034a2a12848198388d4226018030240202c8a411a0a044824066a838a240842212092185a40cf0a0080e094a530c6680a1400448645526011312024a0c7343889210800016b021a61259805924545098441a1c11120810b812e1184),(0xca830c6ee5a1c1ac77b2c4bb013b84b271c7189edce77b42164b82b2ec44ccc2202552493f52e619512b4f09e2177ba801c291327039cbf4fba1fd7ca29d36ceca40c4508827295a1b45be11b7c00687be220f65622167c80c13fe90c415919,0x1282044674a181cc515204830038803270c71014e5265b22464b9241a4004482002443590d10ca0850630203a411b2a000c201185038c3861ba0d078200d6480c204804048212d4a89449e11258006869a220d60222163c80c12ea00c414819),(0xadcb89db333a54791fc5b16de6a74b1fbdaa5224c4caa060c8434905e130b3e50875189fa3aee40ebf67487ce98db2673644923b555505294552488c144494c2312ef3656d2d51ee39b1b44e04f3d3ec4d148000ab72771f011403179f478e82,0xa991884a13221d3803c5e045a0014312e78660240442614040424905201081f109410899826ca6043646807ca808b20b342020284941850001124c8410049440302c118d6904416438b533460072d3ec490080008b50771c0014031517470802),(0xccf1d170b069949f14600d7679a83ea985e068495997ad010287ff4ea745b576050c4fa9e8e0fabd2497448bd27a5aa8acea4ac0268e4d44dc2df9de452a225ad1457b3d721818b9bf9e05034d50ecb938aed67098a522a72856072e55b8d214,0xce85130b040942f1560095449a91aad8dc0e80b5196a18140955b282345b194266c47298868eeb9221d4601c27a00e8acf04a8036004c04cc8c58ecc43a23d68161791d311c0cb9abcc24434d40e8b9388ed67018a522072852072e55a0d214),(0x442aa5b9d884c622461c21eaaaf556fac8da8923687abbfb99c9c28096422e0eb83cb34c1d8918aec8c55d99f53bc2670104934ee2f27258616b2c55a56fa8970e02486406e9b92b5242282d15890d903f02672424a3e96d3ce1d022fa0aa8e8,0x460a679588446000a40a01aa08c414e80818810338389a92898982c08602320ec02091061180118a88016c815113416481048146a2821250206d8051a4632a958802cc600689381b004a400915810c003602652424a380613ce19002e808a0e8),(0,0)]
+def g255samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x0),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffff),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffff),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0),
+  (0x0,0x0)]
 def g255columns : IndexTree ColumnInfo := (.leaf [(64,0,191,0,11)])
 def g255autos : Array (List Nat) := #[[],[84,115],[117,67,32],[116,83,32]]
 def g255levels : Nat → Packing
@@ -3135,7 +3313,15 @@ def g383d11 (i : Nat) : Nat := 0x540b1d9a02e3804632e686a85e3b342382008507c4a8582
 def g383l11 : Packing := (6,1,6,6,3,8,0,g383d11)
 def g383d12 (i : Nat) : Nat := 0x11b280e4ff
 def g383l12 : Packing := (1,0,6,3,3,0,0,g383d12)
-def g383samples : Array (Bits × Bits) := #[(0x22c0d3a3723e453b61b292904161c19166ba4156452239cb2ce776d1285888036922ca069735ba1c39466bb49cb80c880d6801ee650cd2ea8938a452f08d3169a1612a59384753bad95626662c63076161205bac29b905015369815a61884cb1,0x22a042a308281022412222104041018102a0455c0820218028210490004898014122a802062510400900403480940c80084001804506910881200012c0203148e041211030641239500420000c630440212052a0291101014268811220880c80),(0x3e4782180591e1e8ca415c93fb0e30440ddb7b080a80044a5e58703417b0ed0da2975b6df4e0151155ba1024096257dc7280e61c3739c9924483ab0a0d0a407f268250f5cf15b48886f76ba0ccf46838068d8de07060e07838bc1a040b61c283,0x9028018810161088ac0504223081040850928000290004c425070241b00400822080144b0c0241004a20000482053184202c40808184882448102000d0800b3040a404084018c8080110220c214483800898940502040781814120409604201),(0xc3b0d0243e2c92704a6d0bb89a642e3e324709614c855ba1b03c2574c53f0c84bca3b709607618aaaaca1686a79e094292d1a5b2e1a729d1ef4c761d2455891cd68664af136132ce19aaa19e6c55a2caed1460758145348a6cc923aa16a49516,0xc22070243c088a32102908b09820ae3610c20125cc051d809026055084360c62d8a3320940364922a8484682858e00c384d420b061233141a94434152055010c599024a50348105611a2a11e2441a2c2e41460350145348264c921aa12049512),(0x4138264952b1d12493a4452d72585b389605825093cff11edb60090262cf75191c382db2876b8a708e04945dba40fc5c0117030382d504a579e551698e39d387601c521a9a75d96750089c8958b895e01b82b803f01d0be08606741604bc230c,0x1080c0b03b031008084040c42504188060180103100c00a0a40008040890111041009902b010250040410442a404c140103030210c08ca050a00048c0a8c022200c1018d83149210000148108b815200b021800b00809600202141404b82204),(0x7a0c641d50044e150338db871c0d9c6d8b49b017941b1c71c485efc79a14e6ae159b09d8c200cd085276a758cd18f3623c4db7d00870524c281de7f5fe3e2adc1756b294808a0882ea6a1f2df107bc01d0df010f4d40469e2105ef94c107b239,0xd004201450464809021899a3188eb82288483003841b1c31c500f247991664ae92090048c000c90e723223084509b040f48cd45008304046281cf3843e140e8407928284000804822b6a8b24f004a801d0dd010f4440469e21056a80c1079039),(0xcc62da0a5fa8f5e2c996caf343c42faac6de9a345ff56a94813a6425060416282f4d23c281526277465dd835f65817a533b901ad51024edaaa84a94a69219208d911c25be8aad34a7f39eda22807bafd8e8540012ec5ecf42900c6dcd341c02,0x8452d0021128d5c8c9144a91d1c007ab845a00141d69e1982122246c02041428290423d28902225305595421e41c17a5023985a908040a15a0c4800269208200d9018058b1aa90485c38f99a2803baf58c8040010ec1ece00900c4d4d341002),(0xdaef1c77688221978d1e0c4ad4cf460c43747468370c9781a044ccfb808507cfc7550e6f05834be93d3c1e4e94918217a4e0da637baa95002472c84f89f63e421033ad28de7ab208228bfb0281a229d272553696158289b300da2c9976c32464,0x92e959624882001701040c005417432c02544069252c9701a0048cc280a00e56d4150e31071309c931151f4c9213080304e00a4233c09500a002c04d90b29c403071012c5a3a310c128ab91220a221c27244349605808983008a2c9966812464),(0,0),(0x941a1aee99450a81362f36506691ad42486aa7b56b55a36c2710c35afdccd2f0604110c2892f54d343a9228b60c516b3ea6e18394813263b179331842a516d8adc29c7c000c846f164b52014130d4016a078833106127956c94690a3b81ad1d8,0x4120210904c02803268a2402080b401402a07040a01006405204110294490a020401002d0205402c22800a1400c2280a20c04a14813021a0411310009012188c000460020c0069060300020050540108030832102126010c94480229002c198)]
+def g383samples : Array (Bits × Bits) := #[(0x4962a78b4b633025c,0x119125834b6310050),
+  (0x7ffffffffffffffffffffffffffffff81acec7ab4cca8e11,0xe2201078b48ca8200),
+  (0x7ffffffffffffffffffffffffffffff188aa1840d561a4e5,0x7ffffffffffffffffffffffffffffff188aa1800952024e5),
+  (0x74034f5f62199e122,0xc1650e0e62099c100),
+  (0x2e0ac0609037e3d8e,0x2e0ac060901463c8e),
+  (0x7ffffffffffffffffffffffffffffffc068da608a80ee0c1,0x7ffffffffffffffffffffffffffffffc068da600080ae081),
+  (0x3d4cf8071d111948,0x1dccf80405110948),
+  (0x0,0x0),
+  (0x821110b1dd28456b6,0xe0020119d2041636)]
 def g383columns : IndexTree ColumnInfo := (.fork 29 (.fork 14 (.fork 7 (.fork 3 (.leaf [(1,0,382,0,9),(0,1,332,50,7),(2,0,381,0,9)]) (.leaf [(0,2,312,69,7),(3,0,380,0,6),(2,1,332,48,6),(1,2,312,68,6)])) (.fork 3 (.leaf [(4,0,379,0,11),(5,0,378,0,7),(7,0,376,0,5)]) (.leaf [(5,2,312,64,5),(8,0,375,0,9),(0,8,99,276,7),(12,0,371,0,8)]))) (.fork 7 (.fork 3 (.leaf [(13,0,354,0,4),(14,0,369,0,5),(16,0,367,0,11)]) (.leaf [(17,0,366,0,8),(18,0,365,0,7),(19,0,364,0,5),(18,1,332,32,5)])) (.fork 4 (.leaf [(24,0,359,0,8),(25,0,358,0,5),(28,0,355,0,7),(20,8,99,256,5)]) (.leaf [(32,0,351,0,11),(33,0,350,0,8),(32,1,332,18,6),(35,0,348,0,5)])))) (.fork 15 (.fork 7 (.fork 3 (.leaf [(34,1,332,16,5),(44,0,339,0,5),(49,0,334,0,7)]) (.leaf [(48,1,332,2,5),(33,16,326,8,5),(56,0,327,0,5),(64,0,319,0,11)])) (.fork 4 (.leaf [(65,0,318,0,7),(66,0,317,0,8),(67,0,316,0,5),(65,2,312,4,5)]) (.leaf [(70,0,313,0,7),(34,64,29,256,5),(256,0,127,0,9),(0,256,23,104,7)]))) (.fork 7 (.fork 3 (.leaf [(264,0,119,0,6),(256,8,99,20,6),(8,256,23,96,6)]) (.leaf [(268,0,115,0,5),(260,8,99,16,5),(280,0,103,0,5),(272,8,99,4,5)])) (.fork 4 (.leaf [(288,0,95,0,8),(289,0,94,0,5),(40,256,23,64,5),(304,0,79,0,5)]) (.leaf [(320,0,63,0,8),(322,0,61,0,5),(258,64,61,0,5),(352,0,31,0,7)])))))
 def g383autos : Array (List Nat) := #[[],[84,131,98],[101,66,16],[100,131,82,16],[82,129,48],[101,100,131,98,129,48],[100,49,128],[101,84,131,66,49,128]]
 def g383levels : Nat → Packing
@@ -3182,7 +3368,8 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s15_3_0 : block g15 3 0 1=true := by
   apply cellsBlock (ar:=4) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl15_3 : block g15 3 0 1 = true := s15_3_0
@@ -3233,14 +3420,16 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s31_5_0 : block g31 5 0 1=true := by
   apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s31_5_1 : block g31 5 1 2=true := by
   apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl31_5 : block g31 5 0 3 = true := (@block_merge g31 5 0 1 2 s31_5_0 s31_5_1)
@@ -3250,7 +3439,8 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s31_6_0 : block g31 6 0 1=true := by
   apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl31_6 : block g31 6 0 1 = true := s31_6_0
@@ -3315,7 +3505,8 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s111_6_0 : block g111 6 0 1=true := by
   apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl111_6 : block g111 6 0 1 = true := s111_6_0
@@ -3362,14 +3553,16 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s189_6_0 : block g189 6 0 1=true := by
   apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s189_6_1 : block g189 6 1 2=true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl189_6 : block g189 6 0 3 = true := (@block_merge g189 6 0 1 2 s189_6_0 s189_6_1)
@@ -3379,7 +3572,8 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s189_7_0 : block g189 7 0 1=true := by
   apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl189_7 : block g189 7 0 1 = true := s189_7_0
@@ -3435,7 +3629,8 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_6_0 : block g191 6 0 1=true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_6 : block g191 6 0 1 = true := s191_6_0
@@ -3445,14 +3640,16 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_7_0 : block g191 7 0 13=true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_7_1 : block g191 7 13 15=true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_7 : block g191 7 0 28 = true := (@block_merge g191 7 0 13 15 s191_7_0 s191_7_1)
@@ -3462,21 +3659,24 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_8_0 : block g191 8 0 7=true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_8_1 : block g191 8 7 61=true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_8_2 : block g191 8 68 32=true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_8 : block g191 8 0 100 = true := (@block_merge g191 8 0 68 32 (@block_merge g191 8 0 7 61 s191_8_0 s191_8_1) s191_8_2)
@@ -3486,14 +3686,16 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_9_0 : block g191 9 0 3=true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_9_1 : block g191 9 3 9=true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_9 : block g191 9 0 12 = true := (@block_merge g191 9 0 3 9 s191_9_0 s191_9_1)
@@ -3503,7 +3705,8 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_10_0 : block g191 10 0 1=true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_10 : block g191 10 0 1 = true := s191_10_0
@@ -3563,14 +3766,16 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_8_0 : block g383 8 0 23=true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_8_1 : block g383 8 23 2=true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_8 : block g383 8 0 25 = true := (@block_merge g383 8 0 23 2 s383_8_0 s383_8_1)
@@ -3580,21 +3785,24 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_9_0 : block g383 9 0 9=true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_9_1 : block g383 9 9 75=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_9_2 : block g383 9 84 7=true := by
   apply cellsBlock (ar:=10) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_9 : block g383 9 0 91 = true := (@block_merge g383 9 0 84 7 (@block_merge g383 9 0 9 75 s383_9_0 s383_9_1) s383_9_2)
@@ -3604,21 +3812,24 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_10_0 : block g383 10 0 5=true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_10_1 : block g383 10 5 16=true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_10_2 : block g383 10 21 20=true := by
   apply cellsBlock (ar:=10) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_10 : block g383 10 0 41 = true := (@block_merge g383 10 0 21 20 (@block_merge g383 10 0 5 16 s383_10_0 s383_10_1) s383_10_2)
@@ -3628,14 +3839,16 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_11_0 : block g383 11 0 1=true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_11_1 : block g383 11 1 5=true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_11 : block g383 11 0 6 = true := (@block_merge g383 11 0 1 5 s383_11_0 s383_11_1)
@@ -3696,7 +3909,15 @@ def deadd13 (i : Nat) : Nat := 0x22dfc5b6a90e86821a4efdb54c724410d1f7f16a63a18e0
 def deadl13 : Packing := (4,1,7,5,4,8,0,deadd13)
 def deadd14 (i : Nat) : Nat := 0x17e2b6526070604013ff
 def deadl14 : Packing := (1,0,7,2,4,0,0,deadd14)
-def deadsamples : Array (Bits × Bits) := #[(0xf854605d026923a5a16008862c9d18d42fd85e54d221898f1e440284a107a02910c3e03c06c40d2642ca74f54627022c11e389d9b43b30c961ca72386ce81500aa210d1ba1a121108a6c99348979d054ac200727ac054c0970110780155ad581,0x6844620d0040231585204884208800c4270824141201090814040082a10700282003e02402c4084602ca04a440240a1091218919100a2084314a220840a00480aa210819a02120100a4409048968c05484200702a805440920100380144a9480),(0x80b20c31f72bfc4e1481d27000d43c9c5bd438a9c5e0286040f054f111d001ce10920229bde170b8d339029e2bcac4cd494fb74d1052452141a61c5b9ca1e642f40c600258428f0e5c00df481e03202a204cd465e10fe01206e82c7b03150603,0x80100c30e6089040109182600012282018c41889c5e0204002b0604000c009861080028b1c2120a0d12000120908c00d005a724402504200402010501c01c208540860025840090e1400964816012008204cd0254102a00206a0247b01150201),(0x12ce100c308544478a85796a2341d206e4242e31335abb35943abb40be28c8e05c4c115123137950052a02a9ba0d31c096458c656cc338623e92230683d8962194d5145c2aa62229438824d8e06246d0cd124850733918c390189888a426380a,0x10ca0000108540870900790a0240900460282200221a991490081a0028289000cc41010021184410080a0a28a20020c0200184206c0128621092200a03d8103080d5145c02a2022143880090804206d04d100840322918c190088800a4221002),(0x8628ebbd17000228c83c0291b729e17b3643984a392a815889878936d04e41b82b8e28807cc302855ead3105d9868885c748c2b0724ae81086518e259124cd4278a18b4aa01db88524c3a3435a0814469349110c18f0c24c2a8052bd88818268,0xc2206a1d05000020401c0090e509051303449848110100480001811490070429238c000818c508010485900541c68805c240409012420000024186258024450270208b02a00da0842041a3414a08100690490104085040042a8052bc00818028),(0xbc8ccda8781e4d8151cd3cf93a4a0a01509a42078c1bc4a783ea4aec6c7bbbd02ef85be130b1750bcd872a062d01842a34826040203d5b99ac8899721d47b82106b4f88001d04ee6f42e103eb14e0a090b95e84905a08ef7a2230402e2b14bc5,0x148981a0109a5c8210c1a4690a42220050930202c418c4a7837a48680e50b9d00c601bc02020f518c9002a002c1124282402304220255b598c9019921c51b8010494708001d04e62d42a103a30060a090b94e84905a08af280230402e2304b45),(0xd3b19712becef4647857054f8773c68492608a46265cd6cd0106c449284294958830b40e8328a4102841c46a63b66493288c7290c714876750b08cb0eb0a532e014ce7e24f9c08720240400006971f885be46b00080a21145aa7f52cf42a8012,0x92218c003e8654007015040a0c73c50280c0084821449285810a8400004080918c301008002824100801c000230200c0688c40804110046300b00cb28307502a0004c5624f9c086200004000021315805bc46800000a00145205f42ce0200002),(0x3145d24845746a93b60987114c89950ee90ab5809889781e716b0d141d9e036fea797f20c896480c8b565809c5575a81eabcad03980701be24b7e8d7401960b32336416db2f0c4c050f169960250e8b311988b92828b0074bd455ad232c2112c,0x2307720c00346283a400011d4c09950fa108a4001a095004514a0014181e2261ab3d3060c0d6480a2ac41009e4571880ea848181d90321bc24d38a860208103323340169a2b084c040f169960050c8b211800b9082890074b8455a803282012c),(0x49615339cc24bb41a658244591d020101222d0f578b5376254a121290a30cd5c4e2ad1d6dabfa9e032f022500c91031b32331a7a9ace0ca4e96243014a4009cd0d2a3210b66014de852533c420acc80ff443ad9cc5d0f4808cd621151170ac54,0x4900539a4030aa408668006591882010120251355ca1242200a1212102144d6e020a42d6d2878b6832b420400cb9813312321a4a924e408ce04943054c0001c10d2a2200b040149c8425334420acc80fa003859cc5d0e4000cd201111150ac54),(0x2108654280dbc21c532263cad6a2ab60a053058994f658a43b3dd89384745a04932387065124c385d01899e2cc083e3c1e3327061d61ca921a4965c8583262f4485320b5c04953298d1f02098424a39520b6148b236021a80528c3236c545ab4,0xc0001428049001c03a04a4012802a200013019184320c200a34088304a0580410028702010083a440180cc2080827381411260a0400ca0098085048489022c408432094004053098d0e0008842422012032140b21202188052801030c545a90)]
+def deadsamples : Array (Bits × Bits) := #[(0x2890b8838e7285c2e0f1c086000c8,0x344414a81250854240d18082000c8),
+  (0x4c020440e8d428e91c61715ec110,0x29160004409028c91021515ec110),
+  (0x169141a9a16dc5516ab40aa213e0,0x86a0a021b165c5004a94020012c0),
+  (0x1124422e20f91130ce40b40af4c14,0x3100b16c00a10100c240b40af0404),
+  (0x7ffffffffffffffffffcabb4a03ec0e6a3c3c3f91040b639,0x7ffffffffffffffffffcabb4a03ec0e6a3c3c2e01040b231),
+  (0x3202ab8058a87a3c4104757cb3282,0x3a8ab0408a8503c0104507cb3200),
+  (0x7ffffffffffffffffffdd48926c09b024110984ea4b494c5,0x7ffffffffffffffffffdd48926c09b024110884e24a01485),
+  (0x7fffffffffffffffffff40154102041a3c3ba5826d054223,0x7fffffffffffffffffff40154102041a383ba50268044023),
+  (0x7ffffffffffffffffffc21f012151478d8a140809208f97f,0x17009076468882140809000c97a)]
 def deadcolumns : IndexTree ColumnInfo := (.fork 63 (.fork 31 (.fork 15 (.fork 7 (.fork 3 (.leaf [(1,0,510,0,12),(0,1,460,50,8),(2,0,509,0,12)]) (.leaf [(0,2,440,69,8),(3,0,508,0,9),(2,1,460,48,7),(4,0,507,0,12)])) (.fork 4 (.leaf [(0,4,369,138,8),(5,0,506,0,8),(6,0,505,0,9),(4,2,440,65,7)]) (.leaf [(2,4,369,136,7),(7,0,504,0,7),(5,2,440,64,6),(8,0,503,0,12)]))) (.fork 8 (.fork 4 (.leaf [(0,8,227,276,8),(9,0,486,0,8),(10,0,501,0,8),(12,0,499,0,9)]) (.leaf [(8,4,369,130,7),(4,8,227,272,7),(14,0,497,0,7),(10,4,369,128,6)])) (.fork 4 (.leaf [(15,0,480,0,4),(16,0,495,0,13),(0,16,486,9,10),(17,0,494,0,11)]) (.leaf [(16,1,460,34,7),(19,0,492,0,8),(16,4,353,138,7),(21,0,490,0,7)])))) (.fork 16 (.fork 8 (.fork 4 (.leaf [(21,2,424,64,5),(24,0,487,0,11),(8,16,486,1,9),(25,0,486,0,8)]) (.leaf [(9,16,486,0,8),(27,0,484,0,5),(11,16,484,0,5),(24,4,353,130,6)])) (.fork 4 (.leaf [(29,0,482,0,5),(26,4,353,128,5),(32,0,479,0,12),(0,32,94,385,8)]) (.leaf [(32,1,460,18,7),(1,32,94,384,7),(35,0,476,0,7),(34,1,460,16,6)]))) (.fork 8 (.fork 4 (.leaf [(36,0,347,0,8),(39,0,344,0,4),(40,0,471,0,8),(49,0,462,0,8)]) (.leaf [(48,1,460,2,6),(50,1,460,0,5),(56,0,455,0,7),(64,0,447,0,13)])) (.fork 4 (.leaf [(0,64,189,258,10),(66,0,445,0,11),(2,64,189,256,9),(67,0,444,0,8)]) (.leaf [(66,1,396,48,6),(70,0,441,0,8),(69,2,440,0,5),(74,0,437,0,7)]))))) (.fork 31 (.fork 15 (.fork 7 (.fork 3 (.leaf [(74,4,305,128,5),(80,0,431,0,11),(83,0,428,0,7)]) (.leaf [(96,0,415,0,9),(96,1,396,18,6),(98,1,396,16,5),(128,0,383,0,13)])) (.fork 4 (.leaf [(128,1,332,50,7),(3,128,344,36,6),(132,0,379,0,11),(4,128,347,32,9)]) (.leaf [(133,0,378,0,7),(134,0,377,0,8),(132,2,312,65,6),(133,2,312,64,5)]))) (.fork 8 (.fork 4 (.leaf [(136,0,375,0,9),(128,8,99,276,7),(140,0,371,0,8),(132,8,99,272,6)]) (.leaf [(138,4,369,0,5),(144,0,367,0,11),(152,4,353,2,5),(160,0,351,0,11)])) (.fork 4 (.leaf [(160,1,332,18,6),(162,1,332,16,5),(164,0,347,0,8),(36,128,347,0,8)]) (.leaf [(172,0,339,0,5),(176,1,332,2,5),(180,0,331,0,5),(192,0,319,0,11)])))) (.fork 16 (.fork 8 (.fork 4 (.leaf [(198,0,313,0,7),(256,0,255,0,12),(258,0,189,0,8),(260,0,251,0,8)]) (.leaf [(264,0,247,0,9),(256,8,227,20,7),(8,256,151,96,7),(268,0,243,0,7)])) (.fork 4 (.leaf [(260,8,227,16,6),(273,0,238,0,7),(280,0,231,0,8),(276,8,227,0,5)]) (.leaf [(288,0,223,0,9),(256,32,94,129,7),(32,256,151,72,7),(257,32,94,128,6)]))) (.fork 8 (.fork 4 (.leaf [(296,0,215,0,7),(40,256,151,64,6),(304,0,207,0,6),(288,16,198,9,6)]) (.leaf [(273,32,78,128,5),(56,256,135,64,5),(320,0,191,0,11),(256,64,189,2,9)])) (.fork 4 (.leaf [(322,0,189,0,8),(258,64,189,0,8),(324,0,187,0,7),(324,8,163,16,5)]) (.leaf [(321,32,30,128,5),(388,8,99,16,5),(168,256,23,64,5),(224,256,23,8,5)]))))))
 def deadautos : Array (List Nat) := #[[],[118,130,81],[100,131,82,16],[118,133,100,131,50,33,16],[116,83,32],[118,116,83,130,49,32],[118,133,33,48],[82,129,48],[118,133,116,83,82,81,80],[116,50,129,80],[100,49,128],[118,100,83,130,81,128]]
 def deadlevels : Nat → Packing
@@ -3729,7 +3950,8 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead8_0 : block dead 8 0 2=true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead8 : block dead 8 0 2=true := sdead8_0
@@ -3737,14 +3959,16 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead9_0 : block dead 9 0 12=true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead9_12 : block dead 9 12 13=true := by
   apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead9 : block dead 9 0 25=true := (@block_merge dead 9 0 12 13 sdead9_0 sdead9_12)
@@ -3752,42 +3976,48 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_0 : block dead 10 0 6=true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_6 : block dead 10 6 36=true := by
   apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_42 : block dead 10 42 36=true := by
   apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_78 : block dead 10 78 35=true := by
   apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_113 : block dead 10 113 36=true := by
   apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_149 : block dead 10 149 7=true := by
   apply cellsBlock (ar:=11) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead10 : block dead 10 0 156=true := (@block_merge dead 10 0 149 7 (@block_merge dead 10 0 113 36 (@block_merge dead 10 0 78 35 (@block_merge dead 10 0 42 36 (@block_merge dead 10 0 6 36 sdead10_0 sdead10_6) sdead10_42) sdead10_78) sdead10_113) sdead10_149)
@@ -3795,49 +4025,56 @@ set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_0 : block dead 11 0 4=true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_4 : block dead 11 4 36=true := by
   apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_40 : block dead 11 40 15=true := by
   apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_55 : block dead 11 55 36=true := by
   apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_91 : block dead 11 91 36=true := by
   apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_127 : block dead 11 127 29=true := by
   apply cellsBlock (ar:=11) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_156 : block dead 11 156 27=true := by
   apply cellsBlock (ar:=12) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead11 : block dead 11 0 183=true := (@block_merge dead 11 0 156 27 (@block_merge dead 11 0 127 29 (@block_merge dead 11 0 91 36 (@block_merge dead 11 0 55 36 (@block_merge dead 11 0 40 15 (@block_merge dead 11 0 4 36 sdead11_0 sdead11_4) sdead11_40) sdead11_55) sdead11_91) sdead11_127) sdead11_156)
@@ -4027,11 +4264,11 @@ def liveIndex : Nat → Nat → Option (Nat × Nat)
   | 6 => lookupWord 3 8 2 10 2 4 moveIndex6
   | _ => fun _ => none
 
-def orSamples : Array (Bits × Bits) := #[(0x7ff001fffff800fffffc007ff001ffc007ff001ffc007ffffffffff800ffe003fffff001fffff800ffe003ff800ffe003ff800fffffffffff001ffc007ffffe003fffff001ffc007ff001ffc007ff001ffffffffffe003ff800fffffc007ff,0x290520a4148290520a4148290520a4148290520a4148290520a4148290520a4148290520a4148290520a4148290520a4148290520a4148290520a4148290520a4148290520a4148290520a4148290520a4148290520a4148290520a414829052),
-  (0xff800001ffffffffffffffff800001fffff800001fffff800ffe003fffff000003ffffffffffffffff000003fffff000003fffff001ffc007ffffe000007fffffffffffffffe000007ffffe000007ffffe003ff800fffffc00000fffffffffff,0x42284508a1142284508a1142284508a1142284508a1142284508a1142284508a1142284508a1142284508a1142284508a1142284508a1142284508a1142284508a1142284508a1142284508a1142284508a1142284508a1142284508a1142284),
-  (0xfffffffe003fffff001ffffffffffe00000000001ffffffff000003ffffffffffc007ffffe003ffffffffffc00000000003fffffffe000007ffffffffff800fffffc007ffffffffff800000000007fffffffc00000fffffffffff001fffff800,0xc4188310620c4188310620c4188310620c4188310620c4188310620c4188310620c4188310620c4188310620c4188310620c4188310620c4188310620c4188310620c4188310620c4188310620c4188310620c4188310620c4188310620c418),
-  (0xffffffffffc00000001fffffffffffffffffffffe00000000000003fffffffffffff800000003fffffffffffffffffffffc00000000000007fffffffffffff000000007fffffffffffffffffffff80000000000000fffffffffffffe00000000,0x700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e0),
-  (0x1fffffffffffffffffffffffffffffffffffc0000000000000000000003fffffffffffffffffffffffffffffffffff80000000000000000000007fffffffffffffffffffffffffffffffffff0000000000000000000000,0x80700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700e01c0380700),
+def orSamples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffffffffffffff0fe0f,0x7ffffffffffffffffffffffffffffffffffffffffff43e03),
+  (0x7ffffffffffffffffffffffffffffffffffffffffff1007f,0x8005c),
+  (0x107f0,0x192a0),
+  (0xe0780,0x62506),
+  (0xff800,0x9c048),
   (0x0,0x0),
   (0x0,0x0),
   (0x0,0x0),
@@ -4056,7 +4293,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked6At0 : block orForest 6 0 1 = true := by
   apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4064,7 +4302,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked5At0 : block orForest 5 0 4 = true := by
   apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4284,14 +4523,14 @@ def liveIndex : Nat → Nat → Option (Nat × Nat)
   | 6 => lookupWord 1 2 0 4 0 0 moveIndex6
   | _ => fun _ => none
 
-def orSamples : Array (Bits × Bits) := #[(0xfffe0001fffc00007fff00003fff80000ffff00001ffff00000ffffe00001ffffe00000ffff800007fff800007fffffffffffffffffffff00003fffe00003fffffffffffffffffffffffffffffffc00001ffffe000007fffffffffffffffffff,0x12022000280c48020a0104000a0189002240512010480a1200a120142400024024240121204890040902890090902848122409090091005000214014200204014600924024a0121004848024280484002428024240090a00909002490090a012),
-  (0xfffffffe000000007fffffffc00000000ffffffffe000000000fffffffffe0000000000fffffffff8000000007fffc0000fffffffffffffffffc000000003fffe00007fffe0000ffffc00001fffffffffe00000000007ffff800001fffffffff,0xa55d4d55428292a854b4a955a09452550c9aaa4d649150a4a90a4aa9495554950949524a4e952569521452452527529244c972527526aa8ad5482aa14554aaaa90aa24aac91524e559292a895569295549429494955254b52525549255254ea4),
+def orSamples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffe21f,0x7fffffffffffffffffffffffffffffffffffffffffffe22b),
+  (0x7fffffffffffffffffffffffffffffffffffffffffffe007,0x844),
   (0x0,0x0),
-  (0xffffffffffffffff80000000000000000ffffffffffffffffff00000000000000000000ffffffffffffffffff800000000ffff800007ffffffffffffffffc000000007ffffffff0000000001ffffffffffffffffffff80000000001ffff80000,0x3866718670c8e0c3182030610c211c18470cc38638e19c3831c38330706187063070638384e1c18e1c271c11c1c060e018719c1c21c330e318718c38718700c30430c70c71c638418e0e0c30618e0e187070c707061c1821c1c1871c61c18438),
-  (0xfffffffffffffffffffffffffffffffff00000000000000000000000000000000000000fffffffffffffffffffffffffff0000000007fffffffffffffffffffffffff8000000000000000001ffffffffffffffffffffffffffffffe000000000,0xc18986198313030c60c6c18630c6606188100c08410200c0c20c0c01818618184181840c0b0606306058606606058303608020604604c30c618230c18618330c18c3003080184086103030c18630306181831818186060c606061800060608c0),
-  (0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000007fffffffffffffffffffffffffffffffffffffffffffe0000000000000000000000000000000000000000,0x1f007e003e003f000f801f800f8007e001f000f8003e000fc000fc001f8001f8001f8000c0007c000600078000600038001c0007800fc007e003f0007e003f000fc003f001f8007e0003f0007c0007e0003e0001f8000f80007e00078000f00),
+  (0x1e0,0x7fffffffffffffffffffffffffffffffffffffffffffe061),
+  (0x1f8,0x1594),
+  (0x1e00,0x480),
   (0x0,0x0),
-  (0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8000000000000000000000000000000000000000000000000000000000000000000000000000000000000,0xfe01f801fc03fc007f00fe003f007f800fe00ff001fc00ff000ff001fe001fe001fe000ff007f8007f807f8007f803fc00fe007f8007000f8003c001f8003c001f0007c001e000f8003fc001f8003f8001fc001fe0007f0007f8001f8007f000),
+  (0x1c00,0x1906),
   (0x0,0x0)]
 
 def orSymmetries : Array (List Nat) := #[[],[115,84]]
@@ -4313,7 +4552,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked6At0 : block orForest 6 0 1 = true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4321,7 +4561,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked5At0 : block orForest 5 0 1 = true := by
   apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4372,14 +4613,14 @@ def liveIndex : Nat → Nat → Option (Nat × Nat)
   | 7 => lookupWord 3 8 3 9 2 3 moveIndex7
   | _ => fun _ => none
 
-def orSamples : Array (Bits × Bits) := #[(0xffff0001ffff00007fffc0007fffc0001fff00007fff80007fff80003ffff00003fff80001fff80001fffe0000ffffffff80001fffe00007fffc0001ffff0000ffffffffffff00007ffffffffffffffffc0000ffff80001ffffffffffffc0000,0x500b4014a016500928069402280594025415500a28152809280d28029402a500a940aa8054a0b28054a054a00a500a941528054a054a015280a90054a01640124034c02aa02aa015500a98054a015280a9402a501528054c02a500aa80a9402a),
+def orSamples : Array (Bits × Bits) := #[(0x8f1ff0,0x8328f0),
   (0x0,0x0),
-  (0xfffffffe000000007fffffff800000001fffffff800000007fffffffc000000003fffffffe00000001ffffffff00003ffffffffffffffffffffffffe00000000fffe0000ffffffff80003fffe00007ffffffff000000001ffff00003ffffffff,0x4a20946094404a20253012b02510128814604a302460242025602530128c04a3016302518022025180b18094c04a300c6025180d18094604a302518094409441298128c128c094604a302518094602630128c044602518128c04a302a30128c),
-  (0xffffffffffffffff80000000000000001fffffffffffffff800000000000000003fffffffffffffffe0000000000003fffffffe000000007ffffffffffffffff00000000ffffffffffffc000000007ffffffffffffffffe000000003ffffffff,0x610c6218c218610c30841840308618431898610c3098308c3088308418430610c188c30860c4c30860c060c210610c191830860c060c218310c18860c218621804208430c430c218610c10860c218308c184306118308608430610c310c18430),
-  (0xffffffffffffffffffffffffffffffffe000000000000000000000000000000003ffffffffffffffffffffffffffffc00000000000000007ffffffffffffffffffffffff0000000000000000000007fffffffffffffffffffffffffc00000000,0x86308c610c6086304318218c4318218c010086304300431043104318218c086302130431810b0431810d810c60863020604318109810c604630231810c608c6098c118c018c00c600630231810c604330218c086604318118c086300230218c0),
-  (0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc0000000000000000000000000000000000000000000007fffffffffffffffffffffffffffffffffffffffffffff80000000000000000000000000000000000,0x7c00f800f8007c003e001f003e001f001e007c003e003e003e003e001f0007c001c003e000c003e000e000f8007c0018003e000e000f8007c003e000f800f801f001f001f000f8007c003e000f8003c001f00078003e001f0007c003c001f00),
+  (0x7ffffffffffffffffffffffffffffffffffffffff8f0003f,0x7ffffffffffffffffffffffffffffffffffffffff8b10295),
+  (0x7ffffffffffffffffffffffffffffffffffffffff800e03f,0x106202a),
+  (0x400ffc0,0x468d700),
+  (0x70f0000,0x10c040c),
   (0x0,0x0),
-  (0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff800000000000000000000000000000000000000000000000000000000000000000000000000000000,0xf800f001f000f8007c003e007c003e001e00f8007c007c007c007c003e000f8003e007c001f007c001f001f000f8003e007c001f001f00078003c001f000f000e001e000e000f00078003c001f0007c003e000f8007c001e000f8003c003e000),
+  (0x7f00000,0x6409800),
   (0x0,0x0)]
 
 def orSymmetries : Array (List Nat) := #[[],[115,84],[32,67,117],[32,83,116],[48,82],[48,82,112,66],[64,114,50,48,80],[64,114,83],[80,50,116],[80,50,66,32,114],[112,66,48,82],[112,66]]
@@ -4401,7 +4642,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At0 : block orForest 7 0 1 = true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4409,7 +4651,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked6At0 : block orForest 6 0 3 = true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4476,14 +4719,14 @@ def liveLevels : Nat → Packing
 def liveIndex : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 
-def orSamples : Array (Bits × Bits) := #[(0xfffe00007fff800007ff80000ffff00000fffe00003fffffffe00000ffff00003ffff800007fffc0000fffff000003fffffffffffffffff00003ffffffff00000fffffffffc00001fffffffff000003fffffffffffffffffffffffffffffffff,0x42208000221021080224210804422421004242840010844844484202440104001108121001424090802422024210090809088090a024201008012202920240402508090880900804908091102421008440521014880908804888090840244202),
-  (0xffffffff8000000007fffffff000000000ffffffffc0001fffffffffffffffffc0000000007ffffffff00000000003fffc00003ffffffffffffc0000fffffffff00003fffffffffe00003fffffffffffffe00007fffc00001ffffc00000fffff,0x1416282a88040a02a0c38a03608001405214142816850002818280d428aa282a840540a054142b05154140a414055051d05025050d420aa282a800a820ac1815400290502d0502a800250606c14055282a880aa302b0502a85055050154280d4),
+def orSamples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffffffffffffffff81f,0x7ffffffffffffffffffffffffffffffffffffffffffff815),
+  (0x7ffffffffffffffffffffffffffffffffffffffffffff9e3,0x122),
   (0x0,0x0),
   (0x0,0x0),
-  (0xfffffffffffffffff80000000000000000ffffffffffffe000000000ffffffffffffffffff80000000000000000003ffffffffc0000fffffffffffff00000000000003ffffffffffffffc0000000003ffffffff8000000001ffffffffff00000,0x995b32b34ca6cc5334924c524914898a649899315b26299309131498b1ccb173265664c566183226198988c898a6626362633626098b4ccb533254cc08c892998853226536265331253624a4898a6632b30cacc22322623316366262998b1498),
-  (0xffffffffffffffffffffffffffffffffff0000000000000000000000fffffffffffffffffffffffffffffffffffffc0000000000000ffffffffffffffffffffffffffc0000000000000000000000003fffffffffffffffffe000000000000000,0x19c033c00c70063c01b00638018c00c780000019c003100100018e001f001bc006780067800bc003e000cf000c78001800238000e018f0063c018f00cf0031e0063c006380063c0063800c7000c78033c00cf0033c0033c002780031e0018e0),
-  (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff000000000000000000000000000000000000000000000000000fffffffffffffffffffffffffffffffffffffffffffffffffffc000000000000000000000000000000000,0xe1e1c3c070f8707c071c707c0e1f0e0f80e0e1c1e0383e1c1e1c1f00c100c1c0387807078060c038200e0f00e0f803820383c038300df00c7c039f00cf00e3e00e7c0387c0387c01c7c038f80e0f8003c010f0043c0383c018380383e00c1f00),
-  (0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000,0xfe01fc007f007f8007e07f800fe00ff000ff01fe003fc01fe01fe000fe00fe003f8007f8007f003fc00ff000ff0003fc03fc003fc00e000f8003e000f000fc000f8003f8003f8001f8003f000ff0003c001f0007c003fc001fc003fc000fe000),
+  (0xc,0x66a),
+  (0x610,0x280),
+  (0x1e0,0xd8),
+  (0x600,0x7ffffffffffffffffffffffffffffffffffffffffffffd03),
   (0x0,0x0)]
 
 def orSymmetries : Array (List Nat) := #[[],[81,118]]
@@ -4505,7 +4748,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked6At0 : block orForest 6 0 1 = true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4588,14 +4832,14 @@ def liveIndex : Nat → Nat → Option (Nat × Nat)
   | 8 => lookupWord 21 69 6 12 6 2 moveIndex8
   | _ => fun _ => none
 
-def orSamples : Array (Bits × Bits) := #[(0x9c078081e01c00f8000781e001f80018fc03f8007f80000c301e03fc00701fc03ffffe0fe007ff803ff00003ff8100e01f0003e01ffffffe01fc007fffff801ffffffffff00fc00fe001ff000007e007ffffffffff007f00003ffff00003ffff,0x10040000200000400005c08400a90000c6110800510900243206005c491009400498d405c4a24b0024512020520000000100082000c0006000140101e05080005404c014900a814080010a100290a0045202300d29005520051491920020a02a),
-  (0x1ff800fe001fff0000f801fffe00001f0003ffff8000000fc01ffc00007fe0003f803ff00007ffffc0000003fffe00ffe00003ffe03fc00ffe00007f800fffe00ffc00003ff0000ffffe00000007fff80ffe00007fff8000003fffffffffffff,0xfd820ea001eae244ae809796d02494d0002d5bba052290b48195e82906b60282b402b680904b4f3480a460aa4be50fae0291109402aca0b9a00446a088a35400bbb14812ad0000f3d6a20a2942515480dad452042ec80c308232e2d694b4f44),
-  (0xe00000ffffe0000000fffe000000001ffffc00000000000fffe00000007fffffc0003ffffff807fffffffffc00ffff00000003ffffc0000fffffff80000ffffff00000003ffffff0000000000007fffff00000007fffffffffc00ffffffc0000,0xc0000014e5600000900002000000021234d80000040042200040000000108383400000106008010481e009b000418700104242f2b5901000214511800204c892e00021061504dc600000000420c2c293604008460c012604518000c092301008),
-  (0xffffff000000000000ffffffffffffe0000000000000000fffffffffff80000000003ffffffff8000000000000fffffffffffc000000000ffffffffffff00000000000003ffffffffffffffffff80000000000007ffffffffffff00000000000,0x351eb2000000080000beedae37db8c6080000111401c0c05e32c64e8e18200000010b3ae8e37382130038240c0121843250c1c000000004fcc9a66334ce81104011186182a6b2185c98d8c38c70000000008610870b658718e3bc30620418470),
-  (0xffffffffffffffffff00000000000000000000000000000fffffffffffffffffffffc000000000000000000000fffffffffffffffffffff00000000000000000000000003fffffffffffffffffffffffffffffff800000000000000000000000,0xca6144db965b33b6e300001040041000208086220060704a0c518b03026cd233b263000010000042008c0c8300e5e2bc5af0635cd93cbc800101804010006018822238200584160a163070c738071be389718e700000008610000408c3821980),
-  (0xfffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000ffffffffffffffffffffffffffffffffffffffffffffffc0000000000000000000000000000000000000000000000000000000,0xec71871cc78c3c38fc300e2078101f9b38e0e03c06007f800000000000000002000200000000200401000f0000f9fccf9c7f839f1e1f1f0cf1e1f87c1f0f7e1f03c03fc00600180007c04007c000030201800f8000382007e0020800fc001e00),
+def orSamples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffc0003e060b3f403ffc0303f,0x7ffffffffffffffffffffffffc0101692010950922c2b0b3),
+  (0x7fffffffffffffffffffffffff180880730c080480003fff,0x31a288051044a9084040c0c),
+  (0x7f834f800700ffdfc0,0x7ffffffffffffffffffffffffc004023824b90270a68d3c1),
+  (0x600c801c700ff800ffe000,0x6238801430255800972826),
+  (0x3800f001f800fffff000000,0x38446124b824aa6dc200108),
+  (0x3fff0001ffff00000000000,0x12870001fef60c010380208),
   (0x0,0x0),
-  (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,0x138678e11813c0c700c771df81e7e004c30307c0787f800fbf9ff3f3fc4f1c3c3c7c3dcf1fc7c6783e0ff003f8000010008000000020200100020000600000000c03c0000808200c180180f800041c040e01f00000c040f8003c000f0003e000),
+  (0x3ffffffe000000000000000,0x2d78fdc6000030060000c30),
   (0x0,0x0)]
 
 def orSymmetries : Array (List Nat) := #[[],[115,84],[32,67,117],[32,83,116]]
@@ -4617,7 +4861,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At0 : block orForest 10 0 1 = true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4625,7 +4870,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At0 : block orForest 9 0 18 = true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4633,7 +4879,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At18 : block orForest 9 18 28 = true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4641,47 +4888,53 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At0 : block orForest 8 0 2 = true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At2 : block orForest 8 2 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At58 : block orForest 8 58 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At114 : block orForest 8 114 40 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At154 : block orForest 8 154 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At210 : block orForest 8 210 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4689,7 +4942,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At266 : block orForest 8 266 16 = true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4697,15 +4951,17 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At0 : block orForest 7 0 27 = true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At27 : block orForest 7 27 33 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4849,15 +5105,15 @@ def liveIndex : Nat → Nat → Option (Nat × Nat)
   | 6 => lookupWord 1 3 0 5 1 0 moveIndex6
   | _ => fun _ => none
 
-def orSamples : Array (Bits × Bits) := #[(0x3080e060f803c03e000201f007e00fc1fc003801fe000041f80601f803f003ffffffe1f807e007fe0000fe007ff8100700f8001f007ffffff01fe003fffff001ffffffffffc07e003e001fe00003f003ffffffffffe03f80003fffc00003ffff,0x100020206100001a1002809004a80a40aca090018e240100680200a8008100a9414d615a228204962404984814d0000000080041000300030010a0080c0a100140a02600524014050800014200885000c5008c0355202a900509c6480060a02a),
-  (0xc0ff007f0003ffc0001c01fff8000ffe00003ffe0000007e0007fe0003fffc07f001fe0007fff8000000ffffffffe007ff00001fff80ff007fe00003fc01fffe001fe00000ff80003fffe0000003fffc00ff80001fffc000003fffffffffffff,0x40f7114b0003adc0a214116b5201249400022d6a2088a41e02055a0201546c04b48006000534e90088c82291492be287d70148882500ab5059a0022351114b54001dc852049680003356a408a51084a400eb21480856402308323892d2894f44),
-  (0xff00007ffffc0000001ffe0000000fffffffc0000000007ffff8000003fffff80001fffff80000000000ffff800ffff80000001fffff00007ffffffc0001ffffffe0000000ffffffc00000000003ffffff0000001fffffffffc0fffffffc0000,0xbf000034d5dc0011044be60000100969daccc011053108615ce0000482a992d90909b98f480006053100cd6210441c3800821217cad64080021a388c00409489a5c01484186867718000001308236b4ab6104a119180b35c5180832d24329008),
-  (0xffffff8000000000001ffffffffff000000000000000007ffffffffffc0000000001ffffffffffffffff0000000fffffffffffe0000000007ffffffffffe00000000000000fffffffffffffffffc0000000000001fffffffffff000000000000,0x84618000000000001418719bc1b000000000200800310200080230140000000000421031c0b038006e0000008120c2192860e0000000027cc4c331999d011008088018609318061c18c18031c00000000200420e1b0c018e3c0c0040c00470),
-  (0xffffffffffffffffffe0000000000000000000000000007ffffffffffffffffffffe00000000000000000000000fffffffffffffffffffff80000000000000000000000000ffffffffffffffffffffffffffffffe00000000000000000000000,0xed599a5e9e6af6a5c7612002000200010308064001c1c07597759d072b3e3b163e10100400180001c1900180610e5f15e2d7831af364f2e400080c0202000600311118e0802c61d821e31e1dce038df338dc739c000000661000103187031980),
-  (0xffffffffffffffffffffffffffffffffffffffffffffff800000000000000000000000000000000000000000000fffffffffffffffffffffffffffffffffffffffffffffff000000000000000000000000000000000000000000000000000000,0x69e43871870c70407983c43e303c18e100f087c3001fe000040100030002000200000004000c02001e00000000f97e67ce3fc1c7c787cf86f0f0fc3e3e1e7e03e1e00ff00300060007c0801f0020180206003e0001c1007e0202001f8001e00),
+def orSamples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffff0000cc030bbe40fffe0607,0x7fffffffffffffffffffffffff00404c600082424436220f),
+  (0x7fffffffffffffffffffffffff3403300fb04180200007ff,0x34853087900d9429400530),
+  (0xc803000c347000c007f9f8,0xc90a0108247000d692c8c8),
+  (0x3ff0c781ff0007fe00,0x14308184cf00253612),
+  (0xf003c000f801fffff80000,0xf21382027a2930bbc04060),
+  (0xfffc0000fffe0000000000,0x581c0000ff7c1803018080),
   (0x0,0x0),
   (0x0,0x0),
-  (0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,0xf8609c78e7833839f803c18c041c0e31e3f03781c1fe0079e787e1c7c3cfc3e7cfe19de7861f07c1fe00f1fc7e00080080040000800080000010100000000801c0001f00000041800180101e00000e03c0807c00100020780000c03e0003e000)]
+  (0xffffffff00000000000000,0xa7e3ebcf0000201c000104)]
 
 def orSymmetries : Array (List Nat) := #[[],[81,130],[48,33,133],[48,129,82]]
 
@@ -4878,7 +5134,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At0 : block orForest 10 0 1 = true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4886,7 +5143,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At0 : block orForest 9 0 14 = true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4894,7 +5152,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At14 : block orForest 9 14 22 = true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4902,23 +5161,26 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At0 : block orForest 8 0 3 = true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At3 : block orForest 8 3 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At59 : block orForest 8 59 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4926,39 +5188,44 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At115 : block orForest 8 115 25 = true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At140 : block orForest 8 140 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At196 : block orForest 8 196 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At252 : block orForest 8 252 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At308 : block orForest 8 308 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4966,39 +5233,44 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At364 : block orForest 8 364 6 = true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At0 : block orForest 7 0 43 = true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=7) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At43 : block orForest 7 43 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At99 : block orForest 7 99 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At155 : block orForest 7 155 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5006,7 +5278,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At211 : block orForest 7 211 17 = true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5014,15 +5287,17 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked6At0 : block orForest 6 0 1 = true := by
   apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked6At1 : block orForest 6 1 34 = true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=7) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5030,7 +5305,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked5At0 : block orForest 5 0 2 = true := by
   apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5107,15 +5383,15 @@ def liveIndex : Nat → Nat → Option (Nat × Nat)
   | 7 => lookupWord 1 2 0 4 0 0 moveIndex7
   | _ => fun _ => none
 
-def orSamples : Array (Bits × Bits) := #[(0x4c0f0303f00e07e0027fc0e1fc01e07fe001fc01ffc000083f00c07f007e007ffffffc3f007f007ff00007f003ffdfe00407f807c01fffc007fffc3fc00fe007fe03fe0000307e001f01fe00001f003fffffffffffc1ff80007fffe00007ffff,0x44050001500003200275d4a15549405d68a0784196c48a800d00402d001020152851ac2b4234104ab12524c240a6c5a1040171014012894001c74c2ad50aa52352816a4540901402840094250445000d2808ce0d6a41da928a54f32460415c2a),
-  (0x8ff003fc000ff800038000fe0001ff800001fffe0000000fc000ff80007fff80fc003fc0007fff80000007ffffffe00007f80007ffe003fff801ffc0000fffffffffffffffff80001ffe0000001fffc007f800007ffe0000007fffffffffffff,0xab00264000b500800000016000088000001828600110023c040aa80402a8980952000c00049a290044041148a49000000580000104000a0b010104000415048041604a01926800019aa40802888424004b200501092002010090c4902928144),
-  (0xf00003fffff0000003ffff000001fffffffe00000000000fffff0000007fffff00003fffff800000000007fffc007ffff8000007fffffc000001fffffff00007fffc0000003fffffe0000000001ffffff80000007fffffffff807ffffff80000,0xf000919bfab0021112c66600021176e65dcc11010426230c2b9c00009055365b22413731e48000602989066b10823179a0044445aabb2c110480668c6610000599c8415182186758c00001314116b4abb104a4866325635ce3005196b4652808),
-  (0xfffffc000000000003fffffffffe0000000000000000000fffffffffff80000000003ffffffffffffffff80000007ffffffffff8000000000001fffffffffff800000000003fffffffffffffffe00000000000007fffffffffff800000000000,0x457040000000000411898ec646200080000201418800c204001008e02800000000008420b1e0703c0067000000446020d1199880000000421059970986d8672000188060c2318230e0c98060e000000002008181c188c031c6e060040801070),
-  (0xfffffffffffffffffc00000000000000000000000000000fffffffffffffffffffffc000000000000000000000007ffffffffffffffffffffffe00000000000000000000003fffffffffffffffffffffffffffff800000000000000000000000,0xbb28dbdeacdfbc5d9800000000000400110902002038300eb2eeb340e567c762c78602008000c0000e08800c0308385c326606163ccc32b9c61802002000080401100198100c61cc10f161d87018df32c7c730e0000000642000081887062180),
+def orSamples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffe8066003c04f0060f,0x8226201c0544220c),
+  (0x7ffffffffffffffffffffffffffffffe019802c1f82807ff,0x7ffffffffffffffffffffffffffffffe08984840b83844b3),
+  (0xe180020e00cff9f0,0xf300820400c58944),
+  (0x1ffd0f9f0ffe00,0x7ffffffffffffffffffffffffffffffe000a0d0bed1a7621),
+  (0x101e001f01ff00000,0x111c100e012a08042),
   (0x0,0x0),
-  (0xfffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000007fffffffffffffffffffffffffffffffffffffffffffffc00000000000000000000000000000000000000000000000000000,0x54461d10c0e42061e39f1fc8787c670f81f03c183f003fc00008000806000400000400000c100403000f000000007f8fc787e7e7cf0fc31e07e1e3bf3f8e0f87e1e1f01fe00000700000801f8000180302003f002020f007c0701000f8003e00),
+  (0x1fe0001ffe0000000,0x1220001bf40030004),
   (0x0,0x0),
-  (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,0xab88e2e30f09c79e00602011838198701e01c3e1c03fc00f3cf0fc70f879f87cfbf833bcf060f87c0ff0078fe3f0001000000000301000200000000000001000000201e00000418000c101e00000e03c0407c000400100780000601f0007c000)]
+  (0x1fffffe0000000000,0xddf5f20000040188)]
 
 def orSymmetries : Array (List Nat) := #[[],[64,49,134],[96,132],[128,49,100]]
 
@@ -5136,7 +5412,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At0 : block orForest 10 0 1 = true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5144,7 +5421,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At0 : block orForest 9 0 7 = true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5152,23 +5430,26 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At7 : block orForest 9 7 7 = true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At0 : block orForest 8 0 40 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At40 : block orForest 8 40 43 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5176,7 +5457,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At0 : block orForest 7 0 7 = true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5184,7 +5466,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At7 : block orForest 7 7 10 = true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5192,7 +5475,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked6At0 : block orForest 6 0 1 = true := by
   apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5310,15 +5594,15 @@ def liveIndex : Nat → Nat → Option (Nat × Nat)
   | 9 => lookupWord 29 87 6 14 7 3 moveIndex9
   | _ => fun _ => none
 
-def orSamples : Array (Bits × Bits) := #[(0x10200c100800f021e034f03f8038f8000030303802042f0303c000044218ffff9c1c0780001c07e80c081f067000ff07fc03fb807841ff80ff9e00f80e078000043030183ffe1e1fff81fffffffcc601c0000207ffffff83e00007fc0001ffff,0x40008005000a034d42da218f10a8000001002002a4103050c040200281996140592285482800000040010002502a80079805a4055001b9a28aa0a0691600000100002000601488188123038c2008450100229130d8364c041748600530a),
-  (0x4030203003003e000700c0003f000000c03fc004383003fc0000087c1f0700e01ff800001ffff0300fe1f9800f03f81ffc0407807e03ff01e000fffffffffff83fc01fc1c3e01f03fe03f0000307fe000003f8070003fc000007ffffffffff,0x10003002003a080100800024020030403ac404381002b41203406c0a0540200b6824068925200000202880030008043800018002008d002000106009280fd83ac00a01436016011603a40a0105ea100a42900640c2640818860121daa0f4),
-  (0x9f80403fc013ffc0003800ffffc0000004ffc00007c03ffc0000000f801ff800ffe00000001ff81fc00ffe01fff003ffe00007f8007ffc0001ffff000ff800001fc0001ffe03ffe003fffc000003f800000003fff80003fffffff83ffffe0000,0x9f88403ec111fb8010100076f740854304bec00043402dfc0224440e8015b090db2000588816ca1dc20dde003a5003f7608126e8006d6c4040cccd000fd4544007400214f6108a8002e9ec0b1092600026108167f09928885663103ad2254908),
-  (0xe0007fc0001c0000003fff00000000000700000007ffc0000000000fffe00000ffffffffffe0001ffff00001fffffc00000007ffff80000001fffffff00000001fffffe00003fffffc0000000003fffffffffc00000003ffffffffc000000000,0x20003ec002040000002f7e000000202c11000000049740002000298004200000244c718073e0000214b00001c4afbc0001104112eb000000113332df70000384881374800003353bec100100a3208e4cc163180000064373818ce7800c880650),
-  (0xffff8000001fffffffc000000000000007fffffff80000000000000fffffffff000000000000001ffffffffe00000000000007fffffffffffe000000000000001ffffffffffc0000000000000003fffffffffffffffffc000000000000000000,0xddfd8004001badf75d4000004400064026ff7f6ee80000800038420b795ec7e2000200608403041ceb0ef3fe080000800222066d04378aeee00040000080640917ac8b3f79b800000020420d0c0331b13a8ce3fdc6e8b0001a11000311318880),
-  (0xffffffffffe00000000000000000000007fffffffffffffffffffff000000000000000000000001ffffffffffffffffffffff8000000000000000000000000001ffffffffffffffffffffffffffc000000000000000000000000000000000000,0xf6eefb7753a00100000008000000007035d79388f4df8118384073e00000000000004000c700001f7fdf7bb7ef3acadc57ff804000000008800180044100060e1fff2fdfbdffd9dcb37c73c1cfc000c0030f0040840cc040031e040019c00ce0),
-  (0xfffffffffffffffffffffffffffffffff8000000000000000000000000000000000000000000001fffffffffffffffffffffffffffffffffffffffffffffffffe000000000000000000000000000000000000000000000000000000000000000,0xf76f6fb783dd31c461be6f470789387fc00400008002001000007c000000000000000100f800001fbfef9dc57fccf3e79bc3f7f677f9f370fdddfce78de607f002000c0020200000c0408001f000000003f00001000f000203e000001e000f00),
+def orSamples : Array (Bits × Bits) := #[(0x7fffffffffffffffffe6000807c301e91e4002cfe403d1ef,0x66500800c350418e600042040318f4),
+  (0x7fffffffffffffffff8806305a3c0ff6607fe6b0180421ff,0x88631cb3c81a22019e290d2a0210a),
+  (0x3000401c400e000380053e0007be30,0x31604414400e000280052f00078c30),
+  (0x400080607ff01883f079c01ff83fc0,0x420080a00910188974b8c07cc03386),
+  (0x7007f800000fc007e001fffc000,0x1a7055f2009047001460983344408),
+  (0x7ff8000001f00007fffe0000000,0x23d18000001e0001ffbde0c00000),
+  (0x7ff8000000001fffff800000000000,0x6238000000001ddfe6102101000004),
   (0x0,0x0),
-  (0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,0x81000082c02ce399e0080b87836c78002282c3703203ee3c3bf800ff39ffefcdb93867f001bf7c000000000000000000000000000000000000000000000780000000000000000000001000e000001003c00018600f000001c000023e001f000)]
+  (0x7fffffffffffe00000000000000000,0x1dc42e5ff2edc00008000002064818)]
 
 def orSymmetries : Array (List Nat) := #[[],[98,131,84],[16,66,101],[16,82,131,100],[48,129,82],[48,129,98,16,66,84],[128,49,100],[128,49,66,16,82,98]]
 
@@ -5339,7 +5623,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked12At0 : block orForest 12 0 1 = true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5347,7 +5632,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At0 : block orForest 11 0 13 = true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5355,7 +5641,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At13 : block orForest 11 13 15 = true := by
   apply cellsBlock (ar:=10) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5363,15 +5650,17 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At0 : block orForest 10 0 2 = true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At2 : block orForest 10 2 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5379,31 +5668,35 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At58 : block orForest 10 58 17 = true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At75 : block orForest 10 75 56 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At131 : block orForest 10 131 56 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At187 : block orForest 10 187 56 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5411,15 +5704,17 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At243 : block orForest 10 243 7 = true := by
   apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At250 : block orForest 10 250 52 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5427,55 +5722,62 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At0 : block orForest 9 0 10 = true := by
   apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At10 : block orForest 9 10 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At66 : block orForest 9 66 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At122 : block orForest 9 122 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At178 : block orForest 9 178 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At234 : block orForest 9 234 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At290 : block orForest 9 290 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5483,31 +5785,35 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At346 : block orForest 9 346 21 = true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At367 : block orForest 9 367 56 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At423 : block orForest 9 423 48 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At0 : block orForest 8 0 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5515,7 +5821,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At56 : block orForest 8 56 15 = true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5652,15 +5959,15 @@ def liveIndex : Nat → Nat → Option (Nat × Nat)
   | 9 => lookupWord 1 3 0 5 1 0 moveIndex9
   | _ => fun _ => none
 
-def orSamples : Array (Bits × Bits) := #[(0x4041d9800230081ff0f898380810200339c230000220000446300000043fff91e0000c780518e060c47f41e1800044080600000f043f9e1fdf0000780071b071f80e187c1e60c10c00014011ff61fc7ffffff41c0000fffff1e0003e0003ffff,0x400159800024080160ba9c100000000339c23521000000006224c88000089ed1e92228500508e060403f41e18000040806a8080b00019e085e54102800201020f002182c0660910951000000002024442a883415510022a221ea881ca8815425),
-  (0xf800e03cfc0711c1f00e038100001c1c003c000003f009807c00001c7c3001e00000ffa4601018107907f01f8f07830f80000301830601fe00000790f8e419e1ff12083e180fffffffe781e31819f83800007e0000718001e00003fffffffff,0xd800643cf8871141f0060200000018040010810303b809805c804614283400e101186a8020100010080120038a96910e902873058344093a0830c400082408008600000e0804416087a681421810883c105034208e11c119c1046210476231a),
-  (0x8001001040041e06000ffc5e01c7e0201fc00000bc000e07800000607fc03e000000f83801e0001f81f81fe0300003f000000001fc07fe0ffffff860ff07e1fe001c0fc01ff01f00003801fc1fe1ffc000018000007e0001fffffc7fffc0000,0x60200009c5e01c7602017c03098bc0082078028284056c1360030a0942801e0000100001260300002e0060280000c00200533053860b703a1fa109c0f6112d01a0c50181098808177418481800c506e18a004629466288c0a4),
-  (0x9001e00208007e007fff000600e04003fe0000000c0000ff80000007f80003fffffff00407e001fe001ffe001c007fc00000003fe0007fff00000007f0007fe00001ff0001fffe000003ffe001ffe00000001ffffff800001ffffff800000000,0x9001a008080002000213000000e00001de000036100000d700800d30000000866034f00007e090e8001bfe0110007fc0400b121a600179dd08062400700045e00240150000d2fe001a200a4001f3e001032184741a4800349f80d2b00d200648),
-  (0x1ffe0003f0007fff80000007ff007ffc000000000fffff0000000007fffffc0000000007f80001ffffe000001fff80000000003fffff800000000007ffff80000001fffffe0000000003fffffe00000000001fffffffffffe000000000000000,0xffa0003f10075de80004107ff007b6c00100a482ffddd00000b1247ffb3600012490007f8000113bec000100fff80048154242496fe000000a849058ddf88080401e2c3d8040002a453f5bffc00022254460b8aa4b7dd494015240152528890),
-  (0xe0000003ffff800000000007ffff8000000000000ffffffffffffff80000000000000007fffffe00000000001fffffffffffffc00000000000000007fffffffffffe0000000000000003ffffffffffffffffe000000000000000000000000000,0x4000000000000006bdbd80000400000c3ace1eff88d0037800000004000dc006da540400000000040a33c877080037800000000000006e07dfdbefdd0ffc0000801820000663ffdfffdddbbb8077c00006c4000d80003700036000d8),
-  (0xfffffffc0000000000000007fffffffffffffffff0000000000000000000000000000007ffffffffffffffffe0000000000000000000000000000007fffffffffffffffffffffffffffc00000000000000000000000000000000000000000000,0xd04df88c0000000000000006ded9424b9658506fc080100200001b8000000000006e0007f5feffdeff7de5bfc00202000018380800801100000c7007ee6d3f7fd78fbffb1d7fb9c83780060100000040067800003700806e0001b8001b800ce0),
-  (0xfffffffffffffffffffffff8000000000000000000000000000000000000000000000007fffffffffffffffffffffffffffffffffffffffffffffff8000000000000000000000000000000000000000000000000000000000000000000000000,0xfeeffdefaffeef9b5bdff6380000000000000c7000000000000c1c00220080015c7002012581d9fde7fef8d9f4cc3780f79fc03fff2ffdfeaccf8070000000000000040000000003380000000000000067800013380016700919c0019c030f00),
-  (0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,0x2f300773b7ff7dfffce4ffb900023db021a3af800530e000772fe007b7fefb799f800ff000000000000000000000000005e000000008000010f00000000000000000000000000003c00000000000000078000203c0000780001e0001e003f000)]
+def orSamples : Array (Bits × Bits) := #[(0x7fffffffffce4880010380280080f6e0072e0039f200f027,0xe48800180c508008012f0030e280022808622),
+  (0x7fffffffffd04100860d1062f903870098d0fed64401083f,0x7fffffffffd00100864518a0794ba5048800065244482915),
+  (0x38e03080e6041020009fe612740e788018ff8,0x8e1b488a644102000020213248ada821c4e8),
+  (0x1c100010107f800c030e017e0787000ffe0fc0,0x7fffffffffd41000102001880d110e855e05b20012d22b01),
+  (0x3e01f80123003f001803807f80ffff000,0x33e05f08123062e00880b005fd4d2d501c),
+  (0x202003ffe0001c3ffc0001ffc007fff0000000,0x7fffffffffc02011f260008016040001fcc117ffd0316181),
+  (0x3ffc0000001fc0000001fffff80000000000,0x3a3c0000011f8000000977fff80021b04200),
+  (0x3fc0000000001ffffffffe0000000000000000,0x3f40200000091ee9fbffde0000200001c00214),
+  (0x3fffffffffffe0000000000000000000000000,0x2bc5c20d9ffe6000c04010000000000400041e)]
 
 def orSymmetries : Array (List Nat) := #[[],[81,130,118],[16,82,131,100],[16,32,48,128,100,80,116],[32,83,116],[32,49,128,81,116,100],[48,33,133,118],[48,129,82],[80,16,33,50,116,131,100],[80,129,50,116],[128,49,100],[128,81,32,49,100,116]]
 
@@ -5681,7 +5988,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked14At0 : block orForest 14 0 1 = true := by
   apply cellsBlock (ar:=10) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5689,7 +5997,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked13At0 : block orForest 13 0 8 = true := by
   apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5697,23 +6006,26 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked13At8 : block orForest 13 8 6 = true := by
   apply cellsBlock (ar:=11) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked12At0 : block orForest 12 0 38 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked12At38 : block orForest 12 38 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5721,7 +6033,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked12At94 : block orForest 12 94 12 = true := by
   apply cellsBlock (ar:=11) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5729,7 +6042,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked12At106 : block orForest 12 106 28 = true := by
   apply cellsBlock (ar:=12) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5737,15 +6051,17 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At0 : block orForest 11 0 2 = true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At2 : block orForest 11 2 56 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5753,55 +6069,62 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At58 : block orForest 11 58 30 = true := by
   apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At88 : block orForest 11 88 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At144 : block orForest 11 144 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At200 : block orForest 11 200 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At256 : block orForest 11 256 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At312 : block orForest 11 312 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At368 : block orForest 11 368 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5809,23 +6132,26 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At424 : block orForest 11 424 3 = true := by
   apply cellsBlock (ar:=11) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At427 : block orForest 11 427 56 = true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=12) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At483 : block orForest 11 483 56 = true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=12) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5833,7 +6159,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At539 : block orForest 11 539 7 = true := by
   apply cellsBlock (ar:=12) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5841,47 +6168,53 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At0 : block orForest 10 0 6 = true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At6 : block orForest 10 6 56 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At62 : block orForest 10 62 56 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At118 : block orForest 10 118 38 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At156 : block orForest 10 156 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At212 : block orForest 10 212 34 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5889,7 +6222,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At0 : block orForest 9 0 14 = true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5897,7 +6231,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At14 : block orForest 9 14 27 = true := by
   apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5905,7 +6240,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At0 : block orForest 8 0 2 = true := by
   apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply fusedToCells
+  simp only [fusedCells,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
