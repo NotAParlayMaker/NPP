@@ -178,7 +178,7 @@ theorem PEqualNP.Outside.R_meta_1482_2 (h63 : ∀ C : PEqualNP.CircuitLowerBound
           have := (τ ⟨a - 13, by omega⟩).isLt
           simp [w', show 13 + (τ ⟨a - 13, by omega⟩).val < 26 by omega]
         · rw [hb a (by omega)]; exact hwb a (by omega)
-    refine ⟨by simp [Circuit.size], ?_, ?_, (hcol p l).2 hI, ⟨v', ?_, ?_, ?_⟩, ⟨w', ?_, ?_, ?_⟩⟩
+    refine ⟨(by show (List.map _ C.gates).length = C.gates.length; simp only [List.length_map]), ?_, ?_, (hcol p l).2 hI, ⟨v', ?_, ?_, ?_⟩, ⟨w', ?_, ?_, ?_⟩⟩
     · intro j g hg
       obtain ⟨g0, hg0, rfl⟩ := gate_rel j g hg
       obtain ⟨hop, a, b, hab, hne, ha, hb'⟩ := hS j g0 hg0
