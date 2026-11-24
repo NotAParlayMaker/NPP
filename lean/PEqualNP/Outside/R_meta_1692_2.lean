@@ -61,13 +61,16 @@ theorem PEqualNP.Outside.R_meta_1692_2 :
       ∃ y, (Circuit.wires ⟨gs, 0⟩ x) = x ++ y ∧ y.length = gs.length := by
     intro gs
     induction gs with
-    | nil => intro x; exact ⟨[], by simp [Circuit.wires], rfl⟩
+    | nil => intro x; exact ⟨[], (List.append_nil x).symm, rfl⟩
     | cons g gs ih =>
       intro x
       let z := g.op.eval (g.inputs.map fun i => x.getD i false)
       obtain ⟨y, hy, hyl⟩ := ih (x ++ [z])
       refine ⟨z :: y, ?_, by simp [hyl]⟩
-      simpa [Circuit.wires, List.append_assoc, z] using hy
+      have hstep : Circuit.wires ⟨g :: gs, 0⟩ x =
+          Circuit.wires ⟨gs, 0⟩ (x ++ [z]) := rfl
+      rw [hstep, hy]
+      simp [List.append_assoc]
   have wires_len (gs : List Gate) (x : List Bool) :
       (Circuit.wires ⟨gs, 0⟩ x).length = x.length + gs.length := by
     obtain ⟨y, hy, hl⟩ := extend gs x
@@ -80,7 +83,10 @@ theorem PEqualNP.Outside.R_meta_1692_2 :
   have append (gs rest : List Gate) (x : List Bool) :
       Circuit.wires ⟨gs ++ rest, 0⟩ x =
         Circuit.wires ⟨rest, 0⟩ (Circuit.wires ⟨gs, 0⟩ x) := by
-    simp [Circuit.wires, List.foldl_append]
+    let step (w : List Bool) (g : Gate) :=
+      w ++ [g.op.eval (g.inputs.map (fun i => w.getD i false))]
+    change (gs ++ rest).foldl step x = rest.foldl step (gs.foldl step x)
+    rw [List.foldl_append]
   have finalValue (pre post : List Gate) (g : Gate) (x : List Bool) (hx : x.length = 26) :
       V (pre ++ g :: post) (26 + pre.length) x =
         g.op.eval (g.inputs.map (fun w => V pre w x)) := by
@@ -117,9 +123,13 @@ theorem PEqualNP.Outside.R_meta_1692_2 :
   by_contra hsize
   have ready : W gates.length := by
     refine ⟨gates, out, rfl, ?_, ?_, hpos, ?_⟩
-    · simpa [Monotone2] using hmon
+    · intro g hg
+      refine ⟨?_, (hmon g hg).2⟩
+      simpa only [Set.mem_insert_iff, Set.mem_singleton_iff] using (hmon g hg).1
     · intro i hi w hw
-      exact hread ⟨i, hi⟩ w (by simpa [NestedCover.gateAt, List.getD_eq_getElem?_getD, hi] using hw)
+      change i < gates.length at hi
+      change w ∈ (gates.getD i ⟨GateOp.or, []⟩).inputs at hw
+      exact hread ⟨i, hi⟩ w (by simpa [List.getD_eq_getElem?_getD, hi] using hw)
     · intro Q hQ
       exact hneg Q hQ.1 hQ.2
   have existsW : ∃ n, W n := ⟨_, ready⟩
@@ -170,7 +180,10 @@ theorem PEqualNP.Outside.R_meta_1692_2 :
     change j < pre.length at hj
     have hj' : j < gs.length := by rw [hs, List.length_append]; omega
     apply hr j hj' w
-    simpa only [NestedCover.gateAt, hs, List.getD_append _ _ _ _ hj] using hw
+    change w ∈ (pre.getD j ⟨GateOp.or, []⟩).inputs at hw
+    change w ∈ (gs.getD j ⟨GateOp.or, []⟩).inputs
+    rw [hs, List.getD_append _ _ _ _ hj]
+    exact hw
   have hgm := hm g (by rw [hs]; simp)
   have hOp : g.op = GateOp.and ∨ g.op = GateOp.or := by
     simpa only [Set.mem_insert_iff, Set.mem_singleton_iff] using hgm.1
@@ -178,7 +191,8 @@ theorem PEqualNP.Outside.R_meta_1692_2 :
     have hj : pre.length < gs.length := by rw [hs, List.length_append]; simp
     intro w hw
     apply hr pre.length hj w
-    simpa [NestedCover.gateAt, hs, List.getD_append_right] using hw
+    change w ∈ (gs.getD pre.length ⟨GateOp.or, []⟩).inputs
+    simpa [hs, List.getD_append_right] using hw
   have valid (w : ℕ) (ha : ∀ p l : Fin 13, p - l ∈ D → V pre w (P p l) = true)
       (hb : ∀ Q : Finset (Fin 13), Good Q → V pre w (N Q) = false) : False :=
     earlierBad pre hpre ⟨pre, w, rfl, hpm, hpr, ha, hb⟩
@@ -186,14 +200,23 @@ theorem PEqualNP.Outside.R_meta_1692_2 :
       V gs u x = g.op.eval (g.inputs.map (fun w => V pre w x)) := by
     rw [hs, hu]
     exact finalValue pre post g x hx
+  have unary (op : GateOp) (hop : op = GateOp.and ∨ op = GateOp.or) (b : Bool) :
+      op.eval [b] = b := by
+    rcases hop with rfl | rfl <;> cases b <;> rfl
+  have evalAnd (a b : Bool) : GateOp.and.eval [a, b] = (a && b) := by
+    cases a <;> cases b <;> rfl
+  have evalOr (a b : Bool) : GateOp.or.eval [a, b] = (a || b) := by
+    cases a <;> cases b <;> rfl
   cases he : g.inputs with
   | nil =>
     rcases hOp with ha | ho
     · have H := hq {0, 1, 2, 5} goodOne
-      rw [gate _ (n_len _), he] at H
-      simp [GateOp.eval, ha] at H
-    · rw [gate _ (p_len _ _), he] at h00
-      simp [GateOp.eval, ho] at h00
+      rw [gate _ (n_len _), he, ha] at H
+      change true = false at H
+      cases H
+    · rw [gate _ (p_len _ _), he, ho] at h00
+      change false = true at h00
+      cases h00
   | cons a rest =>
     cases er : rest with
     | nil =>
@@ -201,11 +224,11 @@ theorem PEqualNP.Outside.R_meta_1692_2 :
       · intro p l hpl
         have he' := hp p l hpl
         rw [gate _ (p_len _ _), he, er] at he'
-        rcases hOp with h | h <;> simpa [GateOp.eval, h] using he'
+        simpa only [List.map_cons, List.map_nil, unary g.op hOp] using he'
       · intro Q hQ
         have he' := hq Q hQ
         rw [gate _ (n_len _), he, er] at he'
-        rcases hOp with h | h <;> simpa [GateOp.eval, h] using he'
+        simpa only [List.map_cons, List.map_nil, unary g.op hOp] using he'
     | cons b rest' =>
       have er' : rest' = [] := by
         have h := hgm.2
@@ -221,16 +244,18 @@ theorem PEqualNP.Outside.R_meta_1692_2 :
             V pre a (P p l) = true ∧ V pre b (P p l) = true := by
           intro p l h
           have z := hp p l h
-          rw [gate _ (p_len _ _), he, er] at z
-          simpa [GateOp.eval, hAnd] using z
+          rw [gate _ (p_len _ _), he, er, hAnd] at z
+          simp only [List.map_cons, List.map_nil, evalAnd] at z
+          simpa using z
         have B : ∀ Q : Finset (Fin 13), Good Q →
             V pre a (N Q) = false ∨ V pre b (N Q) = false := by
           intro Q h
           have z := hq Q h
-          rw [gate _ (n_len _), he, er] at z
+          rw [gate _ (n_len _), he, er, hAnd] at z
+          simp only [List.map_cons, List.map_nil, evalAnd] at z
           cases hx : V pre a (N Q) with
           | false => exact Or.inl rfl
-          | true => exact Or.inr (by simpa [GateOp.eval, hAnd, hx] using z)
+          | true => exact Or.inr (by simpa [hx] using z)
         have E1 : ∃ Q : Finset (Fin 13), Good Q ∧
             V pre a (N Q) = false ∧ V pre b (N Q) = true := by
           by_contra E
@@ -254,14 +279,16 @@ theorem PEqualNP.Outside.R_meta_1692_2 :
             V pre a (P p l) = true ∨ V pre b (P p l) = true := by
           intro p l h
           have z := hp p l h
-          rw [gate _ (p_len _ _), he, er] at z
-          simpa [GateOp.eval, hOr] using z
+          rw [gate _ (p_len _ _), he, er, hOr] at z
+          simp only [List.map_cons, List.map_nil, evalOr] at z
+          simpa using z
         have B : ∀ Q : Finset (Fin 13), Good Q →
             V pre a (N Q) = false ∧ V pre b (N Q) = false := by
           intro Q h
           have z := hq Q h
-          rw [gate _ (n_len _), he, er] at z
-          simpa [GateOp.eval, hOr] using z
+          rw [gate _ (n_len _), he, er, hOr] at z
+          simp only [List.map_cons, List.map_nil, evalOr] at z
+          simpa using z
         have E1 : ∃ p l : Fin 13, p - l ∈ D ∧
             V pre a (P p l) = true ∧ V pre b (P p l) = false := by
           by_contra E
