@@ -1728,105 +1728,6 @@ theorem bound_eae8eaa8 (s : Nat) (h : HasCircuitSize 5 (targetFn 0xeae8eaa8) s) 
 end PEqualNP.Outside.L_meta_1433.Live
 
 
-namespace PEqualNP.Outside.L_meta_1433.Live
-open PEqualNP.MetaComplexity PEqualNP.CircuitLowerBounds
-
-def rows_eee8e888 : List ℕ := [0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x3, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f]
-
-def tail_eee8e888 : List ℕ := [0xdb77db77db77db77db77db77db77db77db77db77db77db77db77db77db77db77000000000000ffff000000000000ffff00000000ffff00000000ffff00000000, 0xe3bae3bae3bae3bae3bae3bae3bae3bae3bae3bae3bae3bae3bae3bae3bae3baffff0000ffff000000000000ffff000000000000ffffffffffff000000000000, 0xfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cffffffff0000000000000000ffffffffffffffff000000000000000000000000, 0xffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffffffffffffffffffffffff0000000000000000000000000000000000000000]
-
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 1600000 in
-theorem bound_eee8e888 (s : Nat) (h : HasCircuitSize 5 (targetFn 0xeee8e888) s) : 7 < s := by
-  apply size_from_barrier 0xeee8e888 256 7 rows_eee8e888 0xb6efb6efb6efb6efb6efb6efb6efb6efb6efb6efb6efb6efb6efb6efb6efb6ef0000000000000000ffff000000000000ffff00000000ffff00000000ffff0000 tail_eee8e888 (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) _ h
-  apply none_from_barrier
-  decide +kernel
-
-def rows_eee8e8a0 : List ℕ := [0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x2, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x3, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x4, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x6, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x8, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0x9, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xa, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0xc, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x12, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x14, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x1c, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f, 0x5, 0x7, 0xb, 0xd, 0xe, 0xf, 0x13, 0x15, 0x16, 0x17, 0x19, 0x1a, 0x1b, 0x1d, 0x1e, 0x1f]
-
-def tail_eee8e8a0 : List ℕ := [0xdb76db76db76db76db76db76db76db76db76db76db76db76db76db76db76db76000000000000ffff000000000000ffff00000000ffff0000ffffffff00000000, 0xe3bbe3bbe3bbe3bbe3bbe3bbe3bbe3bbe3bbe3bbe3bbe3bbe3bbe3bbe3bbe3bbffff0000ffff000000000000ffff000000000000ffffffff0000000000000000, 0xfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cfc3cffffffff0000000000000000ffffffffffffffff000000000000000000000000, 0xffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffc0ffffffffffffffffffffffff0000000000000000000000000000000000000000]
-
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 1600000 in
-theorem bound_eee8e8a0 (s : Nat) (h : HasCircuitSize 5 (targetFn 0xeee8e8a0) s) : 7 < s := by
-  apply size_from_barrier 0xeee8e8a0 256 7 rows_eee8e8a0 0xb6efb6efb6efb6efb6efb6efb6efb6efb6efb6efb6efb6efb6efb6efb6efb6ef0000000000000000ffff000000000000ffff000000000000ffff0000ffff0000 tail_eee8e8a0 (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) _ h
-  apply none_from_barrier
-  decide +kernel
-
-end PEqualNP.Outside.L_meta_1433.Live
-
-
-namespace PEqualNP.Outside.L_meta_1433
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-
-theorem hasSize1433 (T s : Nat) (gs : List Gate) (o : Nat)
-    (shape : ∀ g ∈ gs, (g.op=.and ∨ g.op=.or ∨ g.op=.not) ∧ g.inputs.length ≤ 2)
-    (sz : gs.length ≤ s) (ev : realizes1433 T gs o) :
-    HasCircuitSize 5 (Live.targetFn T) s := by
-  refine ⟨⟨gs,o⟩,?_,sz,ev⟩
-  intro g hg
-  obtain ⟨hop,hfan⟩ := shape g hg
-  exact ⟨by simpa using hop,hfan⟩
-
-def win1433 (T s : Nat) : Prop :=
-  ∃ (gs : List Gate) (o : Nat), monoGates1433 gs ∧ gs.length ≤ s ∧ realizes1433 T gs o
-
-theorem choose1433 {T s n o : Nat} {gs : List Gate}
-    (cert : monoGates1433 gs ∧ gs.length = n ∧ realizes1433 T gs o)
-    (small : n ≤ s) : win1433 T s :=
-  ⟨gs,o,cert.1,cert.2.1 ▸ small,cert.2.2⟩
-
-theorem win_eaeaea80 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeaeaea80) s) : win1433 0xeaeaea80 s :=
-  choose1433 upper_eaeaea80 (Live.bound_eaeaea80 s h)
-
-theorem win_eee0e8e0 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeee0e8e0) s) : win1433 0xeee0e8e0 s :=
-  choose1433 upper_eee0e8e0 (Live.bound_eee0e8e0 s h)
-
-theorem win_eee0eac0 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeee0eac0) s) : win1433 0xeee0eac0 s :=
-  choose1433 upper_eee0eac0 (Live.bound_eee0eac0 s h)
-
-theorem win_eee8e888 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeee8e888) s) : win1433 0xeee8e888 s :=
-  choose1433 upper_eee8e888 (Live.bound_eee8e888 s h)
-
-theorem win_eee8e8a0 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeee8e8a0) s) : win1433 0xeee8e8a0 s :=
-  choose1433 upper_eee8e8a0 (Live.bound_eee8e8a0 s h)
-
-theorem win_eaaaaaaa (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeaaaaaaa) s) : win1433 0xeaaaaaaa s :=
-  choose1433 upper_eaaaaaaa (Live.bound_eaaaaaaa s h)
-
-theorem win_eaaaeaa8 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeaaaeaa8) s) : win1433 0xeaaaeaa8 s :=
-  choose1433 upper_eaaaeaa8 (Live.bound_eaaaeaa8 s h)
-
-theorem win_eae8e8e8 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeae8e8e8) s) : win1433 0xeae8e8e8 s :=
-  choose1433 upper_eae8e8e8 (Live.bound_eae8e8e8 s h)
-
-theorem win_eae8eaa8 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeae8eaa8) s) : win1433 0xeae8eaa8 s :=
-  choose1433 upper_eae8eaa8 (Live.bound_eae8eaa8 s h)
-
-end PEqualNP.Outside.L_meta_1433
-
-namespace PEqualNP.Outside.L_meta_1433
-open PEqualNP.MetaComplexity PEqualNP.CircuitLowerBounds
-theorem solveWithMajority (majorityLower : ∀ s, HasCircuitSize 5 (Live.targetFn 0xfee8e880) s → 9 < s) :
-∀ T ∈ ({0xeaeaea80, 0xeee0e8e0, 0xeee0eac0, 0xeee8e888, 0xeee8e8a0, 0xfee8e880, 0xeaaaaaaa, 0xeaaaeaa8, 0xeae8e8e8, 0xeae8eaa8} : Finset ℕ), ∀ (gates : List PEqualNP.CircuitLowerBounds.Gate) (o : ℕ), (∀ g ∈ gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.not) ∧ g.inputs.length ≤ 2) → (∀ i j : Fin gates.length, (gates.get i).op = PEqualNP.CircuitLowerBounds.GateOp.not → (gates.get j).op = PEqualNP.CircuitLowerBounds.GateOp.not → i = j) → (∀ x : Fin 5 → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, o⟩ (List.ofFn x) = Nat.testBit T (∑ i : Fin 5, if x i then 2 ^ (i : ℕ) else 0)) → ∃ (gates' : List PEqualNP.CircuitLowerBounds.Gate) (o' : ℕ), (∀ g ∈ gates', (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length ≤ 2) ∧ gates'.length ≤ gates.length ∧ ∀ x : Fin 5 → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates', o'⟩ (List.ofFn x) = Nat.testBit T (∑ i : Fin 5, if x i then 2 ^ (i : ℕ) else 0) := by
-  intro T hT gs o shape _ ev
-  have h := hasSize1433 T gs.length gs o shape le_rfl ev
-  change win1433 T gs.length
-  simp only [Finset.mem_insert, Finset.mem_singleton] at hT
-  rcases hT with rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl
-  · exact win_eaeaea80 _ h
-  · exact win_eee0e8e0 _ h
-  · exact win_eee0eac0 _ h
-  · exact win_eee8e888 _ h
-  · exact win_eee8e8a0 _ h
-  · exact choose1433 upper_fee8e880 (majorityLower _ h)
-  · exact win_eaaaaaaa _ h
-  · exact win_eaaaeaa8 _ h
-  · exact win_eae8e8e8 _ h
-  · exact win_eae8eaa8 _ h
-end PEqualNP.Outside.L_meta_1433
-
-
 -- The reader elimination argument is from the public L-meta-609 proof.
 
 open PEqualNP.MetaComplexity
@@ -3552,6 +3453,263 @@ theorem bound_fee8e880 (s : Nat) (hs : HasCircuitSize 5 (targetFn 0xfee8e880) s)
     omega
 
 end PEqualNP.Outside.L_meta_1433.Live
+
+namespace PEqualNP.Outside.L_meta_1433.Live
+open PEqualNP.MetaComplexity
+open PEqualNP.Outside.L_meta_1433.Elimination.Readers
+
+def subset_a880 : List Nat := [3, 3, 5, 5, 6, 9, 9, 10, 12, 14, 7, 11, 7, 13, 7, 11, 13, 11, 13, 15]
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1200000 in
+theorem cofactor_a880 (s : Nat) (h : HasCircuitSize 4 (targetFour 0xa880) s) : 4 < s := by
+  apply size_from_fourBarrier 0xa880 10 4 subset_a880 0xffc6f [0xade93,0xd771c,0xfabe0]
+    (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) _ h
+  apply none_from_barrier
+  decide +kernel
+
+
+def subset_feea : List Nat := [0, 2, 2, 2, 4, 4, 4, 8, 8, 8, 1, 3, 6, 10, 5, 6, 12, 9, 10, 12]
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1200000 in
+theorem cofactor_feea (s : Nat) (h : HasCircuitSize 4 (targetFour 0xfeea) s) : 4 < s := by
+  apply size_from_fourBarrier 0xfeea 10 4 subset_feea 0x24c00 [0x4b80e,0x9d070,0xf2380]
+    (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) _ h
+  apply none_from_barrier
+  decide +kernel
+
+
+def subset_e888 : List Nat := [1, 2, 5, 5, 6, 6, 9, 9, 10, 10, 12, 12, 3, 3, 7, 13, 7, 14, 11, 13, 11, 14, 13, 14]
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1200000 in
+theorem cofactor_e888 (s : Nat) (h : HasCircuitSize 4 (targetFour 0xe888) s) : 4 < s := by
+  apply size_from_fourBarrier 0xe888 12 4 subset_e888 0x5df0cd [0xb77332,0xebcc3c,0xfe8fc0]
+    (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) _ h
+  apply none_from_barrier
+  decide +kernel
+
+
+def subset_eee8 : List Nat := [1, 1, 1, 2, 2, 2, 4, 4, 8, 8, 12, 12, 3, 5, 9, 3, 6, 10, 5, 6, 9, 10, 13, 14]
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1200000 in
+theorem cofactor_eee8 (s : Nat) (h : HasCircuitSize 4 (targetFour 0xeee8) s) : 4 < s := by
+  apply size_from_fourBarrier 0xeee8 12 4 subset_eee8 0x54f007 [0xab9038,0xcd2cc0,0xf24f00]
+    (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) _ h
+  apply none_from_barrier
+  decide +kernel
+
+
+def subset_feec : List Nat := [0, 1, 1, 1, 4, 4, 4, 8, 8, 8, 2, 3, 5, 9, 5, 6, 12, 9, 10, 12]
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1200000 in
+theorem cofactor_feec (s : Nat) (h : HasCircuitSize 4 (targetFour 0xfeec) s) : 4 < s := by
+  apply size_from_fourBarrier 0xfeec 10 4 subset_feec 0x2780e [0x48c00,0x9d070,0xf2380]
+    (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) _ h
+  apply none_from_barrier
+  decide +kernel
+
+
+def subset_e8a0 : List Nat := [1, 3, 3, 4, 6, 6, 9, 9, 10, 10, 12, 12, 5, 7, 11, 5, 7, 14, 11, 13, 11, 14, 13, 14]
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1200000 in
+theorem cofactor_e8a0 (s : Nat) (h : HasCircuitSize 4 (targetFour 0xe8a0) s) : 4 < s := by
+  apply size_from_fourBarrier 0xe8a0 12 4 subset_e8a0 0x5df0c7 [0xb76336,0xebbc38,0xfe4fc0]
+    (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) _ h
+  apply none_from_barrier
+  decide +kernel
+
+def table_eee8e888 : Fin 5 → Bool → Nat
+  | 0, b => if b then 0xfeea else 0xa880
+  | 1, b => if b then 0xfeea else 0xa880
+  | 2, b => if b then 0xeee8 else 0xe888
+  | 3, b => if b then 0xeee8 else 0xe888
+  | _, b => if b then 0xeee8 else 0xe888
+def rank_eee8e888 : Fin 5 → Bool → Nat
+  | 0, b => if b then 5 else 5
+  | 1, b => if b then 5 else 5
+  | 2, b => if b then 5 else 5
+  | 3, b => if b then 5 else 5
+  | _, b => if b then 5 else 5
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1200000 in
+theorem bound_eee8e888 (s : Nat) (hs : HasCircuitSize 5 (targetFn 0xeee8e888) s) : 7 < s := by
+  let f := targetFn 0xeee8e888
+  have hd : ∃ p : Fin 5, ∃ x : Fin 5 → Bool, f (Function.update x p (!x p)) ≠ f x := by decide +kernel
+  have nc : ∀ p : Fin 5, ∀ b : Bool, ∃ x y : Fin 5 → Bool,
+      f (Function.update x p b) ≠ f (Function.update y p b) := by decide +kernel
+  have noF : ∀ p q : Fin 5, p ≠ q → ¬ ∃ a b : Bool, ∀ x : Fin 5→Bool,
+      f (Function.update (Function.update x p (!a)) q b) =
+        f (Function.update (Function.update x p a) q (!b)) ∧
+      f (Function.update (Function.update x p a) q (!b)) =
+        f (Function.update (Function.update x p (!a)) q (!b)) := by decide +kernel
+  have ren : ∀ (p : Fin 5) (b : Bool) (x : Fin 4→Bool),
+      f (Function.update (x ∘ deleteInput1433 p) p b) = targetFour (table_eee8e888 p b) x := by decide +kernel
+  have bound (p : Fin 5) (b : Bool) (j : Nat) (hc : HasCircuitSize 5 (fun x => f (Function.update x p b)) j) :
+      rank_eee8e888 p b ≤ j := by
+    have hc' := PEqualNP.Outside.L_meta_1433.Elimination.PermInputs.relabel_size
+      (deleteInput1433 p) (fun x => f (Function.update x p b)) j hc
+    change HasCircuitSize 4 (fun x => f (Function.update (x ∘ deleteInput1433 p) p b)) j at hc'
+    rw [show (fun x => f (Function.update (x ∘ deleteInput1433 p) p b)) =
+        targetFour (table_eee8e888 p b) from funext (ren p b)] at hc'
+    fin_cases p <;> cases b
+    · exact cofactor_a880 _ hc'
+    · exact cofactor_feea _ hc'
+    · exact cofactor_a880 _ hc'
+    · exact cofactor_feea _ hc'
+    · exact cofactor_e888 _ hc'
+    · exact cofactor_eee8 _ hc'
+    · exact cofactor_e888 _ hc'
+    · exact cofactor_eee8 _ hc'
+    · exact cofactor_e888 _ hc'
+    · exact cofactor_eee8 _ hc'
+  have nums : ∀ p : Fin 5,
+      (8 ≤ rank_eee8e888 p false + 3 ∨ 8 ≤ rank_eee8e888 p true + 3) ∧
+      (8 ≤ rank_eee8e888 p false + 4 ∨ 8 ≤ rank_eee8e888 p true + 2) ∧
+      (8 ≤ rank_eee8e888 p false + 2 ∨ 8 ≤ rank_eee8e888 p true + 4) := by decide +kernel
+  obtain ⟨p, _, hp⟩ := fanout_step 4 f s hd (fun p _ => nc p) (fun p q pq _ _ => noF p q pq) hs
+  rcases hp with ⟨⟨j, jl, jc⟩, ⟨k, kl, kc⟩⟩ | ⟨⟨j, jl, jc⟩, ⟨k, kl, kc⟩⟩ | ⟨⟨j, jl, jc⟩, ⟨k, kl, kc⟩⟩
+  · have := bound p false j jc
+    have := bound p true k kc
+    rcases (nums p).1 with h | h <;> omega
+  · have := bound p false j jc
+    have := bound p true k kc
+    rcases (nums p).2.1 with h | h <;> omega
+  · have := bound p false j jc
+    have := bound p true k kc
+    rcases (nums p).2.2 with h | h <;> omega
+
+def table_eee8e8a0 : Fin 5 → Bool → Nat
+  | 0, b => if b then 0xfeec else 0xa880
+  | 1, b => if b then 0xfee8 else 0xa888
+  | 2, b => if b then 0xeeea else 0xe880
+  | 3, b => if b then 0xeee8 else 0xe8a0
+  | _, b => if b then 0xeee8 else 0xe8a0
+def rank_eee8e8a0 : Fin 5 → Bool → Nat
+  | 0, b => if b then 5 else 5
+  | 1, b => if b then 7 else 0
+  | 2, b => if b then 0 else 7
+  | 3, b => if b then 5 else 5
+  | _, b => if b then 5 else 5
+set_option maxRecDepth 4096 in
+set_option maxHeartbeats 1200000 in
+theorem bound_eee8e8a0 (s : Nat) (hs : HasCircuitSize 5 (targetFn 0xeee8e8a0) s) : 7 < s := by
+  let f := targetFn 0xeee8e8a0
+  have hd : ∃ p : Fin 5, ∃ x : Fin 5 → Bool, f (Function.update x p (!x p)) ≠ f x := by decide +kernel
+  have nc : ∀ p : Fin 5, ∀ b : Bool, ∃ x y : Fin 5 → Bool,
+      f (Function.update x p b) ≠ f (Function.update y p b) := by decide +kernel
+  have noF : ∀ p q : Fin 5, p ≠ q → ¬ ∃ a b : Bool, ∀ x : Fin 5→Bool,
+      f (Function.update (Function.update x p (!a)) q b) =
+        f (Function.update (Function.update x p a) q (!b)) ∧
+      f (Function.update (Function.update x p a) q (!b)) =
+        f (Function.update (Function.update x p (!a)) q (!b)) := by decide +kernel
+  have ren : ∀ (p : Fin 5) (b : Bool) (x : Fin 4→Bool),
+      f (Function.update (x ∘ deleteInput1433 p) p b) = targetFour (table_eee8e8a0 p b) x := by decide +kernel
+  have bound (p : Fin 5) (b : Bool) (j : Nat) (hc : HasCircuitSize 5 (fun x => f (Function.update x p b)) j) :
+      rank_eee8e8a0 p b ≤ j := by
+    have hc' := PEqualNP.Outside.L_meta_1433.Elimination.PermInputs.relabel_size
+      (deleteInput1433 p) (fun x => f (Function.update x p b)) j hc
+    change HasCircuitSize 4 (fun x => f (Function.update (x ∘ deleteInput1433 p) p b)) j at hc'
+    rw [show (fun x => f (Function.update (x ∘ deleteInput1433 p) p b)) =
+        targetFour (table_eee8e8a0 p b) from funext (ren p b)] at hc'
+    fin_cases p <;> cases b
+    · exact cofactor_a880 _ hc'
+    · exact cofactor_feec _ hc'
+    · exact Nat.zero_le _
+    · exact fourLower2 _ hc'
+    · exact fourLower3 _ hc'
+    · exact Nat.zero_le _
+    · exact cofactor_e8a0 _ hc'
+    · exact cofactor_eee8 _ hc'
+    · exact cofactor_e8a0 _ hc'
+    · exact cofactor_eee8 _ hc'
+  have nums : ∀ p : Fin 5,
+      (8 ≤ rank_eee8e8a0 p false + 3 ∨ 8 ≤ rank_eee8e8a0 p true + 3) ∧
+      (8 ≤ rank_eee8e8a0 p false + 4 ∨ 8 ≤ rank_eee8e8a0 p true + 2) ∧
+      (8 ≤ rank_eee8e8a0 p false + 2 ∨ 8 ≤ rank_eee8e8a0 p true + 4) := by decide +kernel
+  obtain ⟨p, _, hp⟩ := fanout_step 4 f s hd (fun p _ => nc p) (fun p q pq _ _ => noF p q pq) hs
+  rcases hp with ⟨⟨j, jl, jc⟩, ⟨k, kl, kc⟩⟩ | ⟨⟨j, jl, jc⟩, ⟨k, kl, kc⟩⟩ | ⟨⟨j, jl, jc⟩, ⟨k, kl, kc⟩⟩
+  · have := bound p false j jc
+    have := bound p true k kc
+    rcases (nums p).1 with h | h <;> omega
+  · have := bound p false j jc
+    have := bound p true k kc
+    rcases (nums p).2.1 with h | h <;> omega
+  · have := bound p false j jc
+    have := bound p true k kc
+    rcases (nums p).2.2 with h | h <;> omega
+
+end PEqualNP.Outside.L_meta_1433.Live
+
+
+namespace PEqualNP.Outside.L_meta_1433
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
+
+theorem hasSize1433 (T s : Nat) (gs : List Gate) (o : Nat)
+    (shape : ∀ g ∈ gs, (g.op=.and ∨ g.op=.or ∨ g.op=.not) ∧ g.inputs.length ≤ 2)
+    (sz : gs.length ≤ s) (ev : realizes1433 T gs o) :
+    HasCircuitSize 5 (Live.targetFn T) s := by
+  refine ⟨⟨gs,o⟩,?_,sz,ev⟩
+  intro g hg
+  obtain ⟨hop,hfan⟩ := shape g hg
+  exact ⟨by simpa using hop,hfan⟩
+
+def win1433 (T s : Nat) : Prop :=
+  ∃ (gs : List Gate) (o : Nat), monoGates1433 gs ∧ gs.length ≤ s ∧ realizes1433 T gs o
+
+theorem choose1433 {T s n o : Nat} {gs : List Gate}
+    (cert : monoGates1433 gs ∧ gs.length = n ∧ realizes1433 T gs o)
+    (small : n ≤ s) : win1433 T s :=
+  ⟨gs,o,cert.1,cert.2.1 ▸ small,cert.2.2⟩
+
+theorem win_eaeaea80 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeaeaea80) s) : win1433 0xeaeaea80 s :=
+  choose1433 upper_eaeaea80 (Live.bound_eaeaea80 s h)
+
+theorem win_eee0e8e0 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeee0e8e0) s) : win1433 0xeee0e8e0 s :=
+  choose1433 upper_eee0e8e0 (Live.bound_eee0e8e0 s h)
+
+theorem win_eee0eac0 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeee0eac0) s) : win1433 0xeee0eac0 s :=
+  choose1433 upper_eee0eac0 (Live.bound_eee0eac0 s h)
+
+theorem win_eee8e888 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeee8e888) s) : win1433 0xeee8e888 s :=
+  choose1433 upper_eee8e888 (Live.bound_eee8e888 s h)
+
+theorem win_eee8e8a0 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeee8e8a0) s) : win1433 0xeee8e8a0 s :=
+  choose1433 upper_eee8e8a0 (Live.bound_eee8e8a0 s h)
+
+theorem win_eaaaaaaa (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeaaaaaaa) s) : win1433 0xeaaaaaaa s :=
+  choose1433 upper_eaaaaaaa (Live.bound_eaaaaaaa s h)
+
+theorem win_eaaaeaa8 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeaaaeaa8) s) : win1433 0xeaaaeaa8 s :=
+  choose1433 upper_eaaaeaa8 (Live.bound_eaaaeaa8 s h)
+
+theorem win_eae8e8e8 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeae8e8e8) s) : win1433 0xeae8e8e8 s :=
+  choose1433 upper_eae8e8e8 (Live.bound_eae8e8e8 s h)
+
+theorem win_eae8eaa8 (s : Nat) (h : HasCircuitSize 5 (Live.targetFn 0xeae8eaa8) s) : win1433 0xeae8eaa8 s :=
+  choose1433 upper_eae8eaa8 (Live.bound_eae8eaa8 s h)
+
+end PEqualNP.Outside.L_meta_1433
+
+namespace PEqualNP.Outside.L_meta_1433
+open PEqualNP.MetaComplexity PEqualNP.CircuitLowerBounds
+theorem solveWithMajority (majorityLower : ∀ s, HasCircuitSize 5 (Live.targetFn 0xfee8e880) s → 9 < s) :
+∀ T ∈ ({0xeaeaea80, 0xeee0e8e0, 0xeee0eac0, 0xeee8e888, 0xeee8e8a0, 0xfee8e880, 0xeaaaaaaa, 0xeaaaeaa8, 0xeae8e8e8, 0xeae8eaa8} : Finset ℕ), ∀ (gates : List PEqualNP.CircuitLowerBounds.Gate) (o : ℕ), (∀ g ∈ gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.not) ∧ g.inputs.length ≤ 2) → (∀ i j : Fin gates.length, (gates.get i).op = PEqualNP.CircuitLowerBounds.GateOp.not → (gates.get j).op = PEqualNP.CircuitLowerBounds.GateOp.not → i = j) → (∀ x : Fin 5 → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, o⟩ (List.ofFn x) = Nat.testBit T (∑ i : Fin 5, if x i then 2 ^ (i : ℕ) else 0)) → ∃ (gates' : List PEqualNP.CircuitLowerBounds.Gate) (o' : ℕ), (∀ g ∈ gates', (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length ≤ 2) ∧ gates'.length ≤ gates.length ∧ ∀ x : Fin 5 → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates', o'⟩ (List.ofFn x) = Nat.testBit T (∑ i : Fin 5, if x i then 2 ^ (i : ℕ) else 0) := by
+  intro T hT gs o shape _ ev
+  have h := hasSize1433 T gs.length gs o shape le_rfl ev
+  change win1433 T gs.length
+  simp only [Finset.mem_insert, Finset.mem_singleton] at hT
+  rcases hT with rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl
+  · exact win_eaeaea80 _ h
+  · exact win_eee0e8e0 _ h
+  · exact win_eee0eac0 _ h
+  · exact win_eee8e888 _ h
+  · exact win_eee8e8a0 _ h
+  · exact choose1433 upper_fee8e880 (majorityLower _ h)
+  · exact win_eaaaaaaa _ h
+  · exact win_eaaaeaa8 _ h
+  · exact win_eae8e8e8 _ h
+  · exact win_eae8eaa8 _ h
+end PEqualNP.Outside.L_meta_1433
+
 
 theorem PEqualNP.Outside.L_meta_1433 : ∀ T ∈ ({0xeaeaea80, 0xeee0e8e0, 0xeee0eac0, 0xeee8e888, 0xeee8e8a0, 0xfee8e880, 0xeaaaaaaa, 0xeaaaeaa8, 0xeae8e8e8, 0xeae8eaa8} : Finset ℕ), ∀ (gates : List PEqualNP.CircuitLowerBounds.Gate) (o : ℕ), (∀ g ∈ gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.not) ∧ g.inputs.length ≤ 2) → (∀ i j : Fin gates.length, (gates.get i).op = PEqualNP.CircuitLowerBounds.GateOp.not → (gates.get j).op = PEqualNP.CircuitLowerBounds.GateOp.not → i = j) → (∀ x : Fin 5 → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, o⟩ (List.ofFn x) = Nat.testBit T (∑ i : Fin 5, if x i then 2 ^ (i : ℕ) else 0)) → ∃ (gates' : List PEqualNP.CircuitLowerBounds.Gate) (o' : ℕ), (∀ g ∈ gates', (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length ≤ 2) ∧ gates'.length ≤ gates.length ∧ ∀ x : Fin 5 → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates', o'⟩ (List.ofFn x) = Nat.testBit T (∑ i : Fin 5, if x i then 2 ^ (i : ℕ) else 0) :=
   PEqualNP.Outside.L_meta_1433.solveWithMajority PEqualNP.Outside.L_meta_1433.Live.bound_fee8e880
