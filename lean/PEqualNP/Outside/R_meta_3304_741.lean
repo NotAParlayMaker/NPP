@@ -117,8 +117,9 @@ have x1 : (Fin (8 : ℕ) → Bool) → Bool := fun (x1 : Fin (8 : ℕ) → Bool)
       rfl
     have hy : step (y :: a) ⟨.not,[0]⟩ = b := by rfl
     have hz : step B ⟨.and,[f j,9]⟩ = B ++ [z && !y] := by
-      simp only [step, PEqualNP.CircuitLowerBounds.GateOp.eval, List.map_cons, List.map_nil,
-        List.all_cons, List.all_nil, id_eq, Bool.and_true, hneg, show B.getD (f j) false = z from hsim j]
+      change B ++ [[B.getD (f j) false, B.getD 9 false].all id] = _
+      simp only [List.all_cons, List.all_nil, id_eq, Bool.and_true, hneg,
+        show B.getD (f j) false = z from hsim j]
     have hout : lift.eval (y :: a) = S.eval (A ++ [z && !y]) := by
       change (List.foldl step (y :: a) lift.gates).getD (f S.output) false = _
       simp only [lift, List.foldl_append, List.foldl_cons, List.foldl_nil, hy]
@@ -147,7 +148,8 @@ have x1 : (Fin (8 : ℕ) → Bool) → Bool := fun (x1 : Fin (8 : ℕ) → Bool)
     change 1 + (P.gates.filter p).length + 0 + (S.gates.filter p).length = _
     omega
   have hlength : lift.size = P.size + S.size + 2 := by
-    simp [lift, PEqualNP.CircuitLowerBounds.Circuit.size]
+    change lift.gates.length = P.gates.length + S.gates.length + 2
+    simp [lift]
     omega
   have hsn : 1 ≤ nc S := by
     by_contra! h0
@@ -168,13 +170,17 @@ have x1 : (Fin (8 : ℕ) → Bool) → Bool := fun (x1 : Fin (8 : ℕ) → Bool)
         have hvals : g.op.eval (g.inputs.map fun i => p.getD i false) ≤
             g.op.eval (g.inputs.map fun i => q.getD i false) := by
           rcases fan g (by simp) with he | he
-          · rw [he]; simp only [PEqualNP.CircuitLowerBounds.GateOp.eval, Bool.le_iff_imp,
-              List.all_eq_true, List.mem_map, id_eq]
+          · rw [he]
+            change (g.inputs.map fun i => p.getD i false).all id ≤
+              (g.inputs.map fun i => q.getD i false).all id
+            simp only [Bool.le_iff_imp, List.all_eq_true, List.mem_map, id_eq]
             intro h i hi
             obtain ⟨k, hk, rfl⟩ := hi
             exact Bool.le_iff_imp.mp (hle k) (h _ ⟨k, hk, rfl⟩)
-          · rw [he]; simp only [PEqualNP.CircuitLowerBounds.GateOp.eval, Bool.le_iff_imp,
-              List.any_eq_true, List.mem_map, id_eq]
+          · rw [he]
+            change (g.inputs.map fun i => p.getD i false).any id ≤
+              (g.inputs.map fun i => q.getD i false).any id
+            simp only [Bool.le_iff_imp, List.any_eq_true, List.mem_map, id_eq]
             rintro ⟨_, ⟨k, hk, rfl⟩, h⟩
             exact ⟨_, ⟨k, hk, rfl⟩, Bool.le_iff_imp.mp (hle k) h⟩
         simp only [List.foldl_cons]
