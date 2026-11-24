@@ -17,7 +17,13 @@ theorem PEqualNP.Outside.R_meta_2163_2
         let v := ins.map (fun i => w.getD i false)
         D.eval (w ++ [if b then v.all id else v.any id]) ≠ (fun x : Fin 9 → Bool => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)) x) :
     ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.FanInTwo x1 → (∃ (x3 : Fin x1.gates.length) (x4 : Fin x1.gates.length), x3 ≠ x4 ∧ (x1.gates.get x3).op = PEqualNP.CircuitLowerBounds.GateOp.not ∧ (x1.gates.get x4).op = PEqualNP.CircuitLowerBounds.GateOp.not ∧ ∀ (x5 : Fin x1.gates.length), (x1.gates.get x5).op = PEqualNP.CircuitLowerBounds.GateOp.not → x5 = x3 ∨ x5 = x4) → (∀ (x4 : Fin (9 : ℕ) → Bool), (x1.wires (List.ofFn x4)).getD (9 : ℕ) Bool.false = (x4 (0 : Fin (9 : ℕ)) || x4 (2 : Fin (9 : ℕ)))) → (PEqualNP.MetaComplexity.circuitFun (9 : ℕ) x1 = fun (x5 : Fin (9 : ℕ) → Bool) => x5 (0 : Fin (9 : ℕ)) && x5 (1 : Fin (9 : ℕ)) || x5 (1 : Fin (9 : ℕ)) && x5 (2 : Fin (9 : ℕ)) || x5 (2 : Fin (9 : ℕ)) && x5 (3 : Fin (9 : ℕ)) || x5 (3 : Fin (9 : ℕ)) && x5 (4 : Fin (9 : ℕ)) || x5 (4 : Fin (9 : ℕ)) && x5 (0 : Fin (9 : ℕ)) || x5 (0 : Fin (9 : ℕ)) && x5 (5 : Fin (9 : ℕ)) || x5 (1 : Fin (9 : ℕ)) && x5 (6 : Fin (9 : ℕ)) || x5 (2 : Fin (9 : ℕ)) && x5 (7 : Fin (9 : ℕ)) || x5 (3 : Fin (9 : ℕ)) && x5 (8 : Fin (9 : ℕ)) || x5 (5 : Fin (9 : ℕ)) && x5 (7 : Fin (9 : ℕ)) || x5 (6 : Fin (9 : ℕ)) && x5 (8 : Fin (9 : ℕ)) || x5 (8 : Fin (9 : ℕ)) && x5 (5 : Fin (9 : ℕ))) → (16 : ℕ) ≤ x1.size := by
-  intro ⟨gs, out⟩ fan nots first heval
+  have andVal (w : List Bool) : PEqualNP.CircuitLowerBounds.GateOp.and.eval w = w.all id := rfl
+  have orVal (w : List Bool) : PEqualNP.CircuitLowerBounds.GateOp.or.eval w = w.any id := rfl
+  have notVal (w : List Bool) : PEqualNP.CircuitLowerBounds.GateOp.not.eval w = !w.headD false := rfl
+  intro C
+  cases C
+  rename_i gs out
+  intro fan nots first heval
   by_contra! small
   obtain ⟨a, b, ab, ha, hb, hall⟩ := nots
   cases gs with
@@ -71,9 +77,9 @@ theorem PEqualNP.Outside.R_meta_2163_2
         simpa using pigeon i.succ.succ j.succ.succ k.succ.succ hi hj hk
       rcases ht with hand | hor | hn
       · obtain ⟨x, bad⟩ := binary D true t.inputs hd sz hlen bound
-        exact bad (by simpa only [hand, GateOp.eval, W, ite_true] using run x)
+        exact bad (by simpa only [hand, andVal, orVal, notVal, W, ite_true] using run x)
       · obtain ⟨x, bad⟩ := binary D false t.inputs hd sz hlen bound
-        exact bad (by simpa only [hor, GateOp.eval, W, Bool.false_eq_true, ite_false] using run x)
+        exact bad (by simpa only [hor, andVal, orVal, notVal, W, Bool.false_eq_true, ite_false] using run x)
       · have one : ∀ i j : Fin D.gates.length, (D.gates.get i).op = GateOp.not →
             (D.gates.get j).op = GateOp.not → i = j := by
           intro i j hi hj
@@ -93,7 +99,7 @@ theorem PEqualNP.Outside.R_meta_2163_2
           have h : (W x).getD 10 false = false := List.getD_eq_default _ _ (by simp [W])
           change D.eval (W x ++ [!(W x).getD 10 false]) = _
           rw [h]
-          simpa only [hn, htins, List.map_nil, GateOp.eval, List.headD_nil] using run x
+          simpa only [hn, htins, List.map_nil, andVal, orVal, notVal, List.headD_nil] using run x
         | cons i rest =>
           obtain ⟨x, bad⟩ := neg D i hd sz one
-          exact bad (by simpa only [hn, htins, List.map_cons, GateOp.eval, List.headD_cons, W] using run x)
+          exact bad (by simpa only [hn, htins, List.map_cons, andVal, orVal, notVal, List.headD_cons, W] using run x)
