@@ -122,6 +122,9 @@ def encode(n, T, k, relevant=None):
                     cl.append([-J[g, j], -J[h, j], isnot[g], isnot[h], -s1[g, i], -s1[h, i2]])
                 # full tie: op(g) <= op(h): forbid g AND, h OR
                 cl.append([-J[g, j], -J[h, j], isnot[g], isnot[h], -s1[g, i], -s1[h, i], -isand[g], isand[h]])
+    import os
+    if os.environ.get('MONO'):
+        for g in range(n, m): cl.append([-isnot[g]])
     info = dict(s1=s1, s2=s2, isnot=isnot, isand=isand, n=n, m=m)
     return cl, info
 
