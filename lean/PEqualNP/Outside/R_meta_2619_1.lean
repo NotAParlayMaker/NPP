@@ -56,16 +56,23 @@ theorem PEqualNP.Outside.R_meta_2619_1
 
   have wiresMake (C : Circuit) (a b : ℕ) (x : Fin 26 → Bool) :
       (make C a b).wires (List.ofFn x) = C.wires (List.ofFn x) ++ [pairValue C a b x] := by
-    simp [make, Circuit.wires, pairValue, List.foldl_append, GateOp.eval]
+    change (C.gates ++ [Gate.mk .and [a, b]]).foldl step (List.ofFn x) =
+      C.gates.foldl step (List.ofFn x) ++ [pairValue C a b x]
+    rw [List.foldl_append]
+    let w := C.wires (List.ofFn x)
+    change w ++ [(w.getD a false && (w.getD b false && true))] =
+      w ++ [(w.getD a false && w.getD b false)]
+    rw [Bool.and_true]
 
   have len (C : Circuit) (x : Fin 26 → Bool) :
       (C.wires (List.ofFn x)).length = 26 + C.size := by
-    change (C.gates.foldl step (List.ofFn x)).length = _
-    simp [wireLen, Circuit.size]
+    change (C.gates.foldl step (List.ofFn x)).length = 26 + C.gates.length
+    rw [wireLen, List.length_ofFn]
 
   have evalMake (C : Circuit) (a b : ℕ) (x : Fin 26 → Bool) :
       (make C a b).eval (List.ofFn x) = pairValue C a b x := by
-    rw [Circuit.eval, wiresMake]
+    change ((make C a b).wires (List.ofFn x)).getD (26 + C.size) false = _
+    rw [wiresMake]
     change (_ ++ [_]).getD (26 + C.size) false = _
     rw [← len C x]
     simp [List.getD_eq_getElem?_getD]
@@ -83,12 +90,15 @@ theorem PEqualNP.Outside.R_meta_2619_1
     · intro j hj i hi
       by_cases hlt : j < C.gates.length
       · apply hr j hlt i
-        simpa only [gateAt, make, List.getD_append _ _ _ _ hlt] using hi
+        change i ∈ ((C.gates ++ [Gate.mk .and [a, b]]).getD j (Gate.mk .or [])).inputs at hi
+        rw [List.getD_append _ _ _ _ hlt] at hi
+        exact hi
       · have heq : j = C.gates.length := by
           simp [make] at hj
           omega
         subst j
-        simp [gateAt, make, List.getD_eq_getElem?_getD] at hi
+        change i ∈ ((C.gates ++ [Gate.mk .and [a, b]]).getD C.gates.length (Gate.mk .or [])).inputs at hi
+        simp [List.getD_eq_getElem?_getD] at hi
         rcases hi with rfl | rfl
         · exact ha
         · exact hb
@@ -106,7 +116,8 @@ theorem PEqualNP.Outside.R_meta_2619_1
   have hd := legal C a b hlegal ha hb
   refine ⟨D, ?_, hd, ?_, ?_, C.size, a, b, rfl, ?_, ?_⟩
   · change (C.gates ++ [_]).length ≤ 64
-    simpa [Circuit.size] using Nat.succ_le_succ hs
+    change C.gates.length ≤ 63 at hs
+    simpa using Nat.succ_le_succ hs
   · intro g hg
     simp only [D, make, List.mem_append, List.mem_singleton] at hg
     rcases hg with h | rfl
