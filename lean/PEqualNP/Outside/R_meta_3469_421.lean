@@ -27,15 +27,19 @@ theorem PEqualNP.Outside.R_meta_3469_421 :
   intro hfront hbound q n S C hq hn hsize hpair hao hlo hhi hand hok hreject
   obtain ⟨F, hgates, hrows⟩ := hfront n S C (by omega)
     (fun l => by rw [hsize]; omega) hok hhi hao
+  have hlength (X Y : Finset (Fin n)) : (incidenceInput X Y).length = n + n := by
+    change ((List.ofFn fun i : Fin n => decide (i ∈ X)) ++
+      (List.ofFn fun i : Fin n => decide (i ∈ Y))).length = n + n
+    simp only [List.length_append, List.length_ofFn]
   apply hbound q n S C F hq hn hsize hpair hao hlo hhi hand hgates hrows
   · intro l p hp
-    exact (hrows (incidenceInput {p} {l}) (by simp [incidenceInput])).mp (hok l p hp)
+    exact (hrows (incidenceInput {p} {l}) (hlength {p} {l})).mp (hok l p hp)
   · intro X Y hy hfalse
     by_contra hnone
     push Not at hnone
     have hall : ∀ j ∈ F, (C.wires (incidenceInput X Y)).getD (n + n + j) false = true := by
       intro j hj
       simpa using hnone j hj
-    have htrue := (hrows (incidenceInput X Y) (by simp [incidenceInput])).mpr hall
+    have htrue := (hrows (incidenceInput X Y) (hlength X Y)).mpr hall
     rw [hreject X Y hy hfalse] at htrue
     contradiction
