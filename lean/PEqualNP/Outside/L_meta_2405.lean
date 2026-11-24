@@ -49,6 +49,16 @@ lemma cls_eq_of_reach {α : Type} {V : Finset α} {L : List (α × α)} {u v : �
   · rintro ⟨hw, hvw⟩
     exact ⟨hw, Relation.ReflTransGen.trans h hvw⟩
 
+lemma reach_nil {α : Type} {v w : α} : reach ([] : List (α × α)) v w ↔ v = w := by
+  constructor
+  · intro h
+    rw [reach] at h
+    induction h with
+    | refl => rfl
+    | tail _ hstep _ => simp at hstep
+  · rintro rfl
+    exact Relation.ReflTransGen.refl
+
 lemma comps_nil {α : Type} (V : Finset α) : (comps V []).card = V.card := by
   have heq : comps V [] = V.image (fun v => ({v} : Finset α)) := by
     ext c
@@ -57,21 +67,13 @@ lemma comps_nil {α : Type} (V : Finset α) : (comps V []).card = V.card := by
     · rintro ⟨v, hv, rfl⟩
       refine ⟨v, hv, ?_⟩
       ext w
-      simp only [mem_cls, Finset.mem_singleton]
-      constructor
-      · rintro ⟨_, hvw⟩
-        exact (Relation.ReflTransGen.cases_head hvw).elim id (fun ⟨_, hstep, _⟩ => by simp at hstep)
-      · rintro rfl
-        exact ⟨hv, Relation.ReflTransGen.refl⟩
+      simp only [mem_cls, Finset.mem_singleton, reach_nil]
+      exact ⟨fun h => by subst h; exact ⟨hv, rfl⟩, fun ⟨_, h⟩ => h.symm⟩
     · rintro ⟨v, hv, rfl⟩
       refine ⟨v, hv, ?_⟩
       ext w
-      simp only [mem_cls, Finset.mem_singleton]
-      constructor
-      · rintro rfl
-        exact ⟨hv, Relation.ReflTransGen.refl⟩
-      · rintro ⟨_, hvw⟩
-        exact (Relation.ReflTransGen.cases_head hvw).elim id (fun ⟨_, hstep, _⟩ => by simp at hstep)
+      simp only [mem_cls, Finset.mem_singleton, reach_nil]
+      exact ⟨fun ⟨_, h⟩ => h.symm, fun h => by subst h; exact ⟨hv, rfl⟩⟩
   rw [heq, Finset.card_image_of_injective _ (fun a b hab => Finset.singleton_injective hab)]
 
 lemma reach_cons_iff {α : Type} {a b : α} {L : List (α × α)} {x y : α} :
@@ -81,7 +83,7 @@ lemma reach_cons_iff {α : Type} {a b : α} {L : List (α × α)} {x y : α} :
   · intro h
     induction h with
     | refl => exact Or.inl Relation.ReflTransGen.refl
-    | tail _ hstep ih =>
+    | @tail u z _ hstep ih =>
       rcases hstep with h1 | h2
       · simp only [List.mem_cons] at h1
         rcases h1 with heq | hin
@@ -90,7 +92,7 @@ lemma reach_cons_iff {α : Type} {a b : α} {L : List (α × α)} {x y : α} :
           · exact Or.inr (Or.inl ⟨hL, Relation.ReflTransGen.refl⟩)
           · exact Or.inr (Or.inl ⟨hxa, Relation.ReflTransGen.refl⟩)
           · exact Or.inl hxb
-        · have hs : reach L b✝ c✝ := Relation.ReflTransGen.single (Or.inl hin)
+        · have hs : reach L u z := Relation.ReflTransGen.single (Or.inl hin)
           rcases ih with hL | ⟨hxa, hbz⟩ | ⟨hxb, haz⟩
           · exact Or.inl (Relation.ReflTransGen.trans hL hs)
           · exact Or.inr (Or.inl ⟨hxa, Relation.ReflTransGen.trans hbz hs⟩)
@@ -102,7 +104,7 @@ lemma reach_cons_iff {α : Type} {a b : α} {L : List (α × α)} {x y : α} :
           · exact Or.inr (Or.inr ⟨hL, Relation.ReflTransGen.refl⟩)
           · exact Or.inl hxa
           · exact Or.inr (Or.inr ⟨hxb, Relation.ReflTransGen.refl⟩)
-        · have hs : reach L b✝ c✝ := Relation.ReflTransGen.single (Or.inr hin)
+        · have hs : reach L u z := Relation.ReflTransGen.single (Or.inr hin)
           rcases ih with hL | ⟨hxa, hbz⟩ | ⟨hxb, haz⟩
           · exact Or.inl (Relation.ReflTransGen.trans hL hs)
           · exact Or.inr (Or.inl ⟨hxa, Relation.ReflTransGen.trans hbz hs⟩)
@@ -142,8 +144,8 @@ lemma comps_cons_le {α : Type} {V : Finset α} {a b : α} {L : List (α × α)}
       rcases hc with ⟨hcb, hca, hcL⟩
       simp only [comps, Finset.mem_image] at hcL
       rcases hcL with ⟨v, hv, rfl⟩
-      have hva : ¬ reach L v a := fun h => hca (@cls_eq_of_reach α V L v a h).symm
-      have hvb : ¬ reach L v b := fun h => hcb (@cls_eq_of_reach α V L v b h).symm
+      have hva : ¬ reach L v a := fun h => hca (@cls_eq_of_reach α V L v a h)
+      have hvb : ¬ reach L v b := fun h => hcb (@cls_eq_of_reach α V L v b h)
       have hcl : cls V ((a, b) :: L) v = cls V L v := by
         ext w
         simp only [mem_cls, reach_cons_iff]
@@ -157,9 +159,9 @@ lemma comps_cons_le {α : Type} {V : Finset α} {a b : α} {L : List (α × α)}
       rw [Finset.mem_erase]
       refine ⟨?_, ?_⟩
       · intro hceq
-        have ha_in : a ∈ cls V ((a, b) :: L) a := ⟨ha, Relation.ReflTransGen.refl⟩
-        rw [← hceq, hcl, mem_cls] at ha_in
-        exact hva (reach_symm ha_in.2)
+        have ha_in : a ∈ cls V ((a, b) :: L) a := mem_cls.mpr ⟨ha, Relation.ReflTransGen.refl⟩
+        rw [← hceq, mem_cls] at ha_in
+        exact hva ha_in.2
       · rw [← hcl]
         exact Finset.mem_image_of_mem _ hv
     have hcard := Finset.card_le_card hsub
@@ -260,8 +262,10 @@ lemma main (n : ℕ) (C : Circuit) (α : Type) (S : Finset α) (roots labelled :
       simp only [edgeT, dif_pos hmT]
       have h2 := Finset.card_eq_two.mp hmT
       have heq := h2.choose_spec.choose_spec.2
-      have h1 : h2.choose ∈ lab m := by rw [heq]; exact Finset.mem_insert_self _ _
-      have h2' : h2.choose_spec.choose ∈ lab m := by rw [heq]; exact Finset.mem_insert_of_mem (Finset.mem_singleton_self _)
+      have h1 : h2.choose ∈ lab m :=
+        Eq.mp (congrArg (h2.choose ∈ ·) heq.symm) (Finset.mem_insert_self _ _)
+      have h2' : h2.choose_spec.choose ∈ lab m :=
+        Eq.mp (congrArg (h2.choose_spec.choose ∈ ·) heq.symm) (Finset.mem_insert_of_mem (Finset.mem_singleton_self _))
       exact ⟨Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨m, hml, h1⟩),
         Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨m, hml, h2'⟩)⟩
   have h_sig_conn : ∀ w : ℕ, (∃ r ∈ roots, R w r) →
@@ -317,11 +321,10 @@ lemma main (n : ℕ) (C : Circuit) (α : Type) (S : Finset α) (roots labelled :
           intro z hz
           rcases hz with ⟨m, hm, hmR, hzm⟩
           rw [hR] at hmR
-          rcases Relation.ReflTransGen.cases_tail hmR with rfl | ⟨ra, _, hma, hra⟩
+          rcases Relation.ReflTransGen.cases_tail hmR with rfl | ⟨ra, hma, hlt_hra⟩
           · exact absurd hm hnotlab
-          · let ⟨rj, hrj, _, _, hramem⟩ := hra.2
-            have : rj = jm := by omega
-            subst this
+          · rcases hlt_hra.2 with ⟨rj, hrj, _, _, hramem⟩
+            rw [show rj = jm by omega] at hramem
             have hinp_eq : (gateAt C jm).inputs = [u0, u1] := by
               cases hL : (gateAt C jm).inputs with
               | nil => simp [hL] at hinp_len
@@ -377,7 +380,7 @@ lemma main (n : ℕ) (C : Circuit) (α : Type) (S : Finset α) (roots labelled :
           rw [hR] at hmR
           rcases Relation.ReflTransGen.cases_tail hmR with rfl | ⟨ra, _, _, hra⟩
           · rfl
-          · let ⟨rj, hrj, hrjlt, hrjop, _⟩ := hra.2
+          · rcases hra with ⟨rj, hrj, hrjlt, hrjop, _⟩
             exact absurd ⟨rj, hrj, hrjlt, hrjop⟩ hor
         rcases hx with ⟨mx, hmx, hmRx, hxmem⟩
         rcases hy with ⟨my, hmy, hmRy, hymem⟩
