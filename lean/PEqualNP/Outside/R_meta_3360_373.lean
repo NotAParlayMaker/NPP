@@ -84,11 +84,15 @@ theorem PEqualNP.Outside.R_meta_3360_373
         have same : k = i := congrArg Fin.val e
         exact unused (same ▸ hk)
       exact (readInput x index).trans ((eqBit index differs).trans (readInput y index).symm)
+  change C.gates.length = 8 at size
   cases eq : C.gates with
-  | nil => simp [PEqualNP.CircuitLowerBounds.Circuit.size, eq] at size
+  | nil =>
+    rw [eq] at size
+    have impossible : (0 : ℕ) = 8 := size
+    exact ((by decide : (0 : ℕ) ≠ 8) impossible).elim
   | cons g gs =>
     have count : gs.length = 7 := by
-      simp [PEqualNP.CircuitLowerBounds.Circuit.size, eq] at size
+      rw [eq, List.length_cons] at size
       omega
     let fixed : PEqualNP.CircuitLowerBounds.Gate := ⟨.or, [0, 2]⟩
     let normalize (j : ℕ) (q : PEqualNP.CircuitLowerBounds.Gate) :
@@ -142,7 +146,8 @@ theorem PEqualNP.Outside.R_meta_3360_373
       have len : w.length = 9 := List.length_ofFn
       have hlen : (step w g).length = 10 := by simp [step, len]
       have h := first x
-      simp only [PEqualNP.CircuitLowerBounds.Circuit.wires, eq, List.foldl_cons] at h
+      change (C.gates.foldl step w).getD 9 false = (x 0 || x 2) at h
+      rw [eq, List.foldl_cons] at h
       rw [keep gs (step w g) 9 (by omega)] at h
       have val : (step w g).getD 9 false = g.op.eval (g.inputs.map fun i => w.getD i false) := by
         rw [← len]
@@ -150,15 +155,15 @@ theorem PEqualNP.Outside.R_meta_3360_373
         rfl
       rw [val] at h
       have fixedValue : fixed.op.eval (fixed.inputs.map fun i => w.getD i false) = (x 0 || x 2) := by
-        simp only [fixed, List.map_cons, List.map_nil, PEqualNP.CircuitLowerBounds.GateOp.eval,
-          List.any_cons, List.any_nil, id_eq, Bool.or_false]
+        change (w.getD 0 false || (w.getD 2 false || false)) = (x 0 || x 2)
+        rw [Bool.or_false]
         exact congrArg₂ (· || ·) (readInput x 0) (readInput x 2)
       change w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)] =
         w ++ [fixed.op.eval (fixed.inputs.map fun i => w.getD i false)]
       rw [h, fixedValue]
     have wires (x : Fin 9 → Bool) : N.wires (List.ofFn x) = C.wires (List.ofFn x) := by
-      simp only [N, PEqualNP.CircuitLowerBounds.Circuit.wires, eq, List.foldl_cons]
-      change ns.foldl step (step (List.ofFn x) fixed) = gs.foldl step (step (List.ofFn x) g)
+      change (fixed :: ns).foldl step (List.ofFn x) = C.gates.foldl step (List.ofFn x)
+      rw [eq, List.foldl_cons, List.foldl_cons]
       rw [base]
       simpa only [ns, Nat.zero_add] using fold gs (step (List.ofFn x) fixed) 0
         (by simp [step]) (by omega)
