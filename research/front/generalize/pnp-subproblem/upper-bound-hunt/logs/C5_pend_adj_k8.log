@@ -1,0 +1,3 @@
+C5_pend_adj: n=7 |E|=7 k=8 monotone=False
+UNSAT on 53 rows after 1 iterations, 325.6s
+RESULT UNSAT k=8 time=325.6s

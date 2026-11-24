@@ -1,0 +1,4 @@
+C4_control: n=4 |E|=4 k=4 monotone=False
+  iter 1: rows=14 candidate wrong on 0 rows (0.0s)
+RESULT SAT k=4 size=3 time=0.0s
+[["OR", 1, 3], ["OR", 0, 2], ["AND", 4, 5]]
