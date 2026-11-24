@@ -10,8 +10,8 @@ theorem PEqualNP.Outside.R_meta_2504_1
       let input : Bool → (Fin 8 → Bool) → List Bool := fun b x =>
         [x 1, x 0, x 4, x 7, x 5, x 2, b, x 6, x 3, x 1 || b]
       let z : (Fin 8 → Bool) → Bool := fun x =>
-        (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 0 && x 4) || (x 1 && x 5) ||
-        (x 2 && x 6) || (x 3 && x 7) || (x 4 && x 6) || (x 5 && x 7) || (x 7 && x 4)
+        let k := tableIndex x
+        (([18369897887404062920,18446740762289764600,18446744073709551560,18446744073709551608] : List ℕ).getD (k / 64) 0).testBit (k % 64)
       ∀ (pre post : List Gate) (g : Gate) (out : ℕ),
         let D : Circuit := ⟨pre ++ g :: post, out⟩
         FanInTwo D → pre.length + post.length ≤ 13 →
@@ -28,8 +28,8 @@ theorem PEqualNP.Outside.R_meta_2504_1
       let input : Bool → (Fin 8 → Bool) → List Bool := fun b x =>
         [x 1, x 0, x 4, x 7, x 5, x 2, b, x 6, x 3, x 1 || b]
       let z : (Fin 8 → Bool) → Bool := fun x =>
-        (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 0 && x 4) || (x 1 && x 5) ||
-        (x 2 && x 6) || (x 3 && x 7) || (x 4 && x 6) || (x 5 && x 7) || (x 7 && x 4)
+        let k := tableIndex x
+        (([18369897887404062920,18446740762289764600,18446744073709551560,18446744073709551608] : List ℕ).getD (k / 64) 0).testBit (k % 64)
       ∀ (pre post : List Gate) (g : Gate) (out : ℕ),
         let D : Circuit := ⟨pre ++ g :: post, out⟩
         FanInTwo D → pre.length + post.length ≤ 13 →
@@ -46,8 +46,8 @@ theorem PEqualNP.Outside.R_meta_2504_1
       let input : Bool → (Fin 8 → Bool) → List Bool := fun b x =>
         [x 1, x 0, x 4, x 7, x 5, x 2, b, x 6, x 3, x 1 || b]
       let z : (Fin 8 → Bool) → Bool := fun x =>
-        (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 0 && x 4) || (x 1 && x 5) ||
-        (x 2 && x 6) || (x 3 && x 7) || (x 4 && x 6) || (x 5 && x 7) || (x 7 && x 4)
+        let k := tableIndex x
+        (([18369897887404062920,18446740762289764600,18446744073709551560,18446744073709551608] : List ℕ).getD (k / 64) 0).testBit (k % 64)
       ∀ (pre post : List Gate) (g : Gate) (out : ℕ),
         let D : Circuit := ⟨pre ++ g :: post, out⟩
         FanInTwo D → pre.length + post.length ≤ 13 →
@@ -72,6 +72,12 @@ theorem PEqualNP.Outside.R_meta_2504_1
         (∀ x : Fin 8 → Bool, D.eval (input false x) = z x) →
         ∃ x : Fin 8 → Bool, D.eval (input true x) ≠ (z x || x 0 || x 3) := by
   intro read input z D fan size count correct
+  let packed : (Fin 8 → Bool) → Bool := fun x =>
+        let k := tableIndex x
+        (([18369897887404062920,18446740762289764600,18446744073709551560,18446744073709551608] : List ℕ).getD (k / 64) 0).testBit (k % 64)
+  have unpack : ∀ x, packed x = z x := by
+    dsimp only [packed,z]
+    decide +kernel
   have noReadGate (g : Gate) (basis : g.op = .and ∨ g.op = .or ∨ g.op = .not)
       (skip : read g = false) (w w' : List Bool)
       (agree : ∀ i, i ≠ 6 → w.getD i false = w'.getD i false) :
@@ -84,20 +90,23 @@ theorem PEqualNP.Outside.R_meta_2504_1
       intro i hi
       apply agree
       rintro rfl
-      have exclude : ∀ x ∈ pins, x ≠ 6 := by simpa [read,GateOp.eval] using skip
+      change (pins.any (fun j => decide (j = 6))) = false at skip
+      have exclude : ∀ x ∈ pins, x ≠ 6 := by simpa using skip
       exact exclude 6 hi rfl
     · apply congrArg GateOp.or.eval
       apply List.map_congr_left
       intro i hi
       apply agree
       rintro rfl
-      have exclude : ∀ x ∈ pins, x ≠ 6 := by simpa [read,GateOp.eval] using skip
+      change (pins.any (fun j => decide (j = 6))) = false at skip
+      have exclude : ∀ x ∈ pins, x ≠ 6 := by simpa using skip
       exact exclude 6 hi rfl
     · cases pins with
       | nil => rfl
       | cons i rest =>
-        have ne : i ≠ 6 := by simpa [read,GateOp.eval] using skip
-        simpa [GateOp.eval] using congrArg Bool.not (agree i ne)
+        change (decide (i = 6) || false) = false at skip
+        have ne : i ≠ 6 := by simpa using skip
+        exact congrArg Bool.not (agree i ne)
   let stepSix (w : List Bool) (g : Gate) :=
     w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
   have noReadSuffix (gs : List Gate)
@@ -199,13 +208,19 @@ theorem PEqualNP.Outside.R_meta_2504_1
       apply finish
       have same := noReadSuffix post (okPart post (fun _ h => List.mem_append_right _ h))
         _ _ (by simp only [stepSix,List.length_append,List.length_cons,List.length_nil,lengthsEq]) next out outputSix
-      simpa only [Circuit.eval,Circuit.wires,List.foldl_append,List.foldl_cons] using same
+      change ((pre ++ g :: post).foldl stepSix _).getD out false = ((pre ++ g :: post).foldl stepSix _).getD out false
+      rw [List.foldl_append,List.foldl_append,List.foldl_cons,List.foldl_cons]
+      exact same
     have allowed := (fan g (by simp)).1
     simp only [Set.mem_insert_iff,Set.mem_singleton_iff] at allowed
-    rcases allowed with h|h|h
-    · exact case_and pre post g out fan lengths rest rg h test correct
-    · exact case_or pre post g out fan lengths rest rg h test correct
-    · exact case_not pre post g out fan lengths rest rg h test correct
+    have packedCorrect : ∀ x, (Circuit.mk (pre ++ g :: post) out).eval (input false x) = packed x :=
+      fun x => (correct x).trans (unpack x).symm
+    have result : ∃ x, (Circuit.mk (pre ++ g :: post) out).eval (input true x) ≠ (packed x || x 0 || x 3) := by
+      rcases allowed with h|h|h
+      · exact case_and pre post g out fan lengths rest rg h test packedCorrect
+      · exact case_or pre post g out fan lengths rest rg h test packedCorrect
+      · exact case_not pre post g out fan lengths rest rg h test packedCorrect
+    simpa only [unpack] using result
   · have empty : D.gates.countP read = 0 := by omega
     have ok (g : Gate) (hg : g ∈ D.gates) :
         (g.op = .and ∨ g.op = .or ∨ g.op = .not) ∧ read g = false := by
