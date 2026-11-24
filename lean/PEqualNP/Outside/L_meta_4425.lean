@@ -2,7 +2,9 @@ import PEqualNP.Defs
 
 -- The lower-bound certificate is errornesttorn's checked L-meta-2960, PR #5972.
 -- Canonical source blob 4b382847535b94e984790b94ae301d236378b804. Only its namespaces change.
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace PEqualNP.Outside.L_meta_4425
+
+namespace Reused2960Aux
 
 /- Each sampled signal carries its phase. The four binary operations represent AND and OR on signed inputs, and inverting a signal changes only its phase. -/
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
@@ -111,9 +113,9 @@ lemma gate_priced (w : List Wire) (g : Gate) : priced w (counted g) (gate w g).2
   | mod _ | maj => exact Or.inl (Or.inl rfl)
   | _ => exact Or.inl (get_simple w _)
 
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 
 /- Trace the output backwards and keep the signals that still feed a gate. Each step uses one binary gate. Every surviving set separates every sampled pair, and its cardinality is at most one more than the remaining gate count. -/
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
@@ -232,9 +234,9 @@ lemma enoughLive {m k S} (h : Live m k S) (v : List ℕ) (rep : v.toFinset=S) : 
     have mark := (coverBit m i v).2 ⟨x,xc,good⟩
     simp [mark,bit,hi]
   · simp [bit,hi]
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 
 /- The search enumerates distinct operands, the four signed operations and the four choices of which operands are needed again. -/
 
@@ -367,9 +369,9 @@ theorem complete (m fuel : ℕ) {n S} (h : Live m n S) (lim : n≤fuel)
     | done hg hn => exact Or.inl (ends hg v (List.mem_toFinset.mp (rep ▸ Finset.mem_singleton_self _)))
     | step hd _ _ ab fresh tail =>
       exact Or.inr (transition hd ab fresh rep nd (by omega) tail (fun v hv nv => ih tail (by omega) v hv nv))
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 
 /- A restriction can force several live signals to zero. Projecting the rest of a trace saves at least one binary gate for each such signal. -/
 
@@ -468,9 +470,9 @@ theorem projectLive {m h k S} (p : Projection m h) (live : Live m k S) :
     rw [←p.combineEq d a b hd] at lim
     have bound := countCharge p hd U fz av ma mb
     exact ⟨l,V,by omega,good,by simpa [av] using sub⟩
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 
 /- A restricted bank keeps selected pairs of rows. Duplicate one retained pair in the other positions to preserve the two-column representation. -/
 lemma full_bit (m i : ℕ) : (full m).testBit i=decide (i<m) := by
@@ -597,9 +599,9 @@ theorem cut_complete {m k S} (hm : 0<m) (h : Live m k S) (v : List ℕ) (rep : v
   have test := start_complete live xs has (fuel-xs.count 0) (by omega)
   change (decide (xs.count 0≤fuel) && start m (fuel-xs.count 0) xs)=true
   simp [test,show xs.count 0≤fuel by omega]
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 
 /- The certificate selects a restriction or enumerates a complete level of successors. Its hints can select any bank. Soundness follows from the projected trace and complete successor enumeration. -/
 def oneOutput (m fuel : ℕ) (rest : List ℕ) (n cv a b z : ℕ) (ka kb : Bool) : List (List ℕ) :=
@@ -655,9 +657,9 @@ def zeroPairs (m : ℕ) : List ℕ → ℕ → ℕ → ℕ
   | x::xs, code, acc => zeroPairs m xs (code >>> 1)
       (if code % 2=1 then acc ^^^ (acc &&& (x ||| (x >>> m))) else acc)
 
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 
 /- Permutations of sampled row pairs preserve every gate operation and the condition that the output separates all pairs. -/
 def flipSwap (i j a : ℕ) := if a.testBit i = a.testBit j then a else a ^^^ ((1 <<< i) ||| (1 <<< j))
@@ -737,9 +739,9 @@ theorem perm_feasible {m fuel : ℕ} {v w : List ℕ} (ss : List (ℕ×ℕ)) (sa
   have imageEq : (v.map (permute m ss)).toFinset = v.toFinset.image (permute m ss) := by ext x;simp
   rw [←eq,imageEq]
   exact tr
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 def Excluded (m k : ℕ) (v : List ℕ) := ¬feasible m k v
 def Block (m k : ℕ) (vs : List (List ℕ)) (i n : ℕ) := ∀ v∈(vs.drop i).take n,Excluded m k v
 lemma blocks_cover {m k width q : ℕ} {vs : List (List ℕ)} (pw : 0<width) (size : vs.length≤q*width)
@@ -761,9 +763,9 @@ lemma join_exclusions {m k : ℕ} {v : List ℕ} (term : terminal m v=false)
   rcases move h with e|⟨w,hw,hf⟩
   · exact Bool.noConfusion (term.symm.trans e)
   · exact no w hw hf
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 
 /- A stored bound proves that a smaller set of signals needs a stated number of gates. A receipt reconstructs all the restricted live signals from that set. Combining the bound with the zero signals lost by restriction excludes the proposed continuation. -/
 structure FloorData where
@@ -906,9 +908,9 @@ lemma offMemoRows {m k : ℕ} {vs : List (List ℕ)} {i n code : ℕ} {gs : List
     (e : memoRows (audited m db k) ((vs.drop i).take n) code gs=false) : Block m k vs i n := by
   intro w hw h
   exact Bool.noConfusion (e.symm.trans (memoRows_ok hw (fun g => audited_complete pos db safe k w h g) code gs))
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 
 /- The 87 pairs below differ in one input bit. Every pair contains one positive and one negative assignment for the specified graph. -/
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
@@ -950,9 +952,9 @@ theorem trace (C : Circuit) (fan : FanInTwo C) (eq : circuitFun 7 C=graph) :
   obtain ⟨k,S,limit,live,sub⟩ := extract good nz C.gates seeds found
   have stays : ∀ a∈S, a∈inputs := by simpa [reps,seeds,List.map_map,Function.comp_def] using sub
   exact ⟨k,limit,initial live stays ▸ live⟩
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 
 /- The matching upper bound groups the eight edges at vertices 1, 4, 5 and 6. -/
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
@@ -970,9 +972,9 @@ theorem upper_match : circuitFun 7 eleven=graph := by
   conv_lhs => rw [tab]
   conv_rhs => rw [tab]
   apply all
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 
 /- These are all 84 possibilities after the first live binary gate. The lists of transpositions below are graph automorphisms acting on the 87 pairs. -/
 def s00 : List ℕ := [0x3c000003c70000000000007800008f8e000002004000,0x3c01e003c7000003c079c1f807c08f8e08922f81f387,0x3fc003ffffc000000000007fc007ffffa22082244410,0x3e00000003c0f007800e08fc4110929785e09f10bd,0x3c3f83c0703f801f011088f87f0790e47f203e8,0x3ff803fffe0022111221257ff007fffc00,0x3fc003ffffc000000442227fa087ffff9002102,0x3ffffc00000000000000007ffffc4440444914488a40]
@@ -1087,9 +1089,9 @@ set_option maxHeartbeats 0 in
 theorem safe3 : ∀ p∈perm3,p.1<87 ∧ p.2<87 := by
   have good : perm3.all (fun p => decide (p.1<87 ∧ p.2<87))=true := by decide +kernel
   intro p hp;exact of_decide_eq_true (List.all_eq_true.mp good p hp)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 
 /- The orbit identities reduce the first layer to 28 representatives. -/
 set_option maxRecDepth 50000 in
@@ -1260,9 +1262,9 @@ theorem sym82 : feasible 87 9 s82 → feasible 87 9 s06 := perm_feasible perm3 s
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem sym83 : feasible 87 9 s83 → feasible 87 9 s07 := perm_feasible perm3 safe3 (by decide +kernel) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 
 /- These 41 restricted instances are checked independently. The receipts below contain at most two binary operations for each retained symmetry representative. -/
 def floorData0 : FloorData := ⟨0x7f83f7071f76dd07e0c78,8,[0x0,0x3c0000000380e007000c00f80110109705c01e0038,0x3803838060038003001080f0070710c40720068,0x3bb0003f060002101220217760007e0c00,0x3b8003bb6e80000007c27e7ff8e7fffff81f387,0x3fc3e3ffffc44917c0f9c3ffc7c7ffffaab2afa5f797,0x3ffffc47c7044917c0f9c3fffffccfce4cdb3fc9fbc7]⟩
@@ -1487,15 +1489,15 @@ def database : Memo := fun i => (floorLibrary.getD (receipt i).1 emptyFloor,(rec
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem certifiedDB : Certified 87 database := fun i => storedFloor (receipt i).1
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc0 : Excluded 87 9 s00 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem b1x0 : Block 87 8 (successors 87 8 s01) 0 10 := offMemoRows (code:=0x40f400001401402001001001402401) (gs:=[(.fork 0x40c40b09240b00040a40b40b40a40a40940808a408000407408408407407000406052406000022000405022405404404403403402402 []),(.fork 0x8440e08440d404409403402402401 []),(.fork 0x40241140240a41140a40241040240741040740240240640640200000040640240240240240540205240540f40040040f40040f40f40004a402 []),(.fork 0x4405240440240108a04a04a [])]) certifiedDB (by decide) (by decide +kernel)
@@ -1562,21 +1564,21 @@ theorem exc1 : Excluded 87 9 s01 := by
   · exact b1x12
   · exact b1x13
   · exact b1x14
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc2 : Excluded 87 9 s02 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc4 : Excluded 87 9 s04 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem b5x0 : Block 87 8 (successors 87 8 s05) 0 10 := offMemoRows (code:=0x401400400400400400400400401400) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
@@ -1647,15 +1649,15 @@ theorem exc5 : Excluded 87 9 s05 := by
   · exact b5x13
   · exact b5x14
   · exact b5x15
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc6 : Excluded 87 9 s06 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem b7x0 : Block 87 8 (successors 87 8 s07) 0 10 := offMemoRows (code:=0x40100140140f400400400400400401) (gs:=[(.fork 0x40344440340a44440a40340340340740340740300440340600040640100002440340340504640540140140344340340044340040140140140140040f40f400 [])]) certifiedDB (by decide) (by decide +kernel)
@@ -1718,15 +1720,15 @@ theorem exc7 : Excluded 87 9 s07 := by
   · exact b7x11
   · exact b7x12
   · exact b7x13
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc8 : Excluded 87 9 s08 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem b9x0 : Block 87 8 (successors 87 8 s09) 0 10 := offMemoRows (code:=0x41540141a40f41500100100141540f) (gs:=[(.fork 0x41740a41740a416407416407000406026406414414402402415415401000022401 []),(.fork 0x41441840241541540f []),(.fork 0x41540a42a40a41641a41540741640741540642440641541541541540040f40040f41a00e40141502240140040540540041a415 [])]) certifiedDB (by decide) (by decide +kernel)
@@ -1789,9 +1791,9 @@ theorem exc9 : Excluded 87 9 s09 := by
   · exact b9x11
   · exact b9x12
   · exact b9x13
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem b10x0 : Block 87 8 (successors 87 8 s10) 0 10 := offMemoRows (code:=0x40500140540f400400405400400400) (gs:=[(.fork 0x41741841440a41740a41440743840741444641440644640641802241441841440041840040540540540540f40040f400405405401414046401 [])]) certifiedDB (by decide) (by decide +kernel)
@@ -1854,15 +1856,15 @@ theorem exc10 : Excluded 87 9 s10 := by
   · exact b10x11
   · exact b10x12
   · exact b10x13
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc11 : Excluded 87 9 s11 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem b16x0 : Block 87 8 (successors 87 8 s16) 0 10 := offMemoRows (code:=0x405001405400405401405405405405) (gs:=[(.fork 0x41542a41540a42a40a41504741540700040741542441540642440640540540540540040540040541504740140140540540f41500040f401400400401 [])]) certifiedDB (by decide) (by decide +kernel)
@@ -1925,9 +1927,9 @@ theorem exc16 : Excluded 87 9 s16 := by
   · exact b16x11
   · exact b16x12
   · exact b16x13
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem b17x0 : Block 87 8 (successors 87 8 s17) 0 10 := offMemoRows (code:=0x401405405405401405001401401401) (gs:=[(.fork 0x2b41404c41441445702b41441545742a41501c45701c45740540540540541443443841445743402b43442343443c42341543402b41502b43408c43440540540540541442344642345742343042341542342441500c02e42300c42300740540540540502b40541441504b41501b41504c415405405405405405405405405405001405001 [(.fork 0x1541403341441445703341441545742a41500d45701b45741443443841445743403343442343443c42341543403341501543405343441442344642345742343042341542342441500d42302b42341441503341500d41502b415 []),(.fork 0x41403441400045701c45700043405443402a00000042302c02b42300f02b02b00041502c415405405 [])])]) certifiedDB (by decide) (by decide +kernel)
@@ -1994,9 +1996,9 @@ theorem exc17 : Excluded 87 9 s17 := by
   · exact b17x12
   · exact b17x13
   · exact b17x14
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem b18x0 : Block 87 8 (successors 87 8 s18) 0 10 := offMemoRows (code:=0x405001405400405001405405405405) (gs:=[(.fork 0x40104200040f02240f40501200040a02240a405082000407022407405052401052052000000406052003406406401042000400012400401405405405405401405405405 []),(.fork 0x40542a41540a42a40a41540700040741542441540642440640540540540540040540040541504441502240540540f41504440f400415012400 [])]) certifiedDB (by decide) (by decide +kernel)
@@ -2063,15 +2065,15 @@ theorem exc18 : Excluded 87 9 s18 := by
   · exact b18x12
   · exact b18x13
   · exact b18x14
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc20 : Excluded 87 9 s20 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem b21x0 : Block 87 8 (successors 87 8 s21) 0 10 := offMemoRows (code:=0x42040142140f42000100100142040f) (gs:=[(.fork 0x41d41f41d40a41d40a41c42242242142240742240741f02a42105202600000040502600040540541f00041e41e04a41c41c41d41c02a40240242100042042040100a046401 []),(.fork 0x4442441e41f40242042040f []),(.fork 0x46f42042040a46f40a42042242040742240742042442001242042000042042046f42042442042040040640040640142000a401405420424405400406406400421420 [])]) certifiedDB (by decide) (by decide +kernel)
@@ -2138,27 +2140,27 @@ theorem exc21 : Excluded 87 9 s21 := by
   · exact b21x12
   · exact b21x13
   · exact b21x14
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc22 : Excluded 87 9 s22 := offAudit (g:=(.saved 6)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc23 : Excluded 87 9 s23 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc24 : Excluded 87 9 s24 := offAudit (g:=(.saved 6)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem b25x0 : Block 87 8 (successors 87 8 s25) 0 10 := offMemoRows (code:=0x42340f424400423001424001423400) (gs:=[(.fork 0x42440a42f40a42440704440742042041541542342340142404640140f42402440f []),(.fork 0x42f42442340a42f40a42340705340742342340640040640042342340540040540042401640142300a40140f42344640f424423 [])]) certifiedDB (by decide) (by decide +kernel)
@@ -2221,15 +2223,15 @@ theorem exc25 : Excluded 87 9 s25 := by
   · exact b25x11
   · exact b25x12
   · exact b25x13
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc26 : Excluded 87 9 s26 := offAudit (g:=(.saved 6)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem b27x0 : Block 87 8 (successors 87 8 s27) 0 10 := offMemoRows (code:=0x400405405405001405400406406406) (gs:=[(.fork 0x41540a42a40a42400041540704440740540540040640040600042442442a40540541542441540042440041502440540540141504640140f41500040f [])]) certifiedDB (by decide) (by decide +kernel)
@@ -2296,15 +2298,15 @@ theorem exc27 : Excluded 87 9 s27 := by
   · exact b27x12
   · exact b27x13
   · exact b27x14
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc40 : Excluded 87 9 s40 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem b41x0 : Block 87 8 (successors 87 8 s41) 0 10 := offMemoRows (code:=0x43640140d40f40d40d40d40d40d40f) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
@@ -2371,33 +2373,33 @@ theorem exc41 : Excluded 87 9 s41 := by
   · exact b41x12
   · exact b41x13
   · exact b41x14
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc42 : Excluded 87 9 s42 := offAudit (g:=(.saved 7)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc56 : Excluded 87 9 s56 := offAudit (g:=(.saved 7)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc57 : Excluded 87 9 s57 := offAudit (g:=(.saved 13)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc58 : Excluded 87 9 s58 := offAudit (g:=(.saved 7)) certifiedDB (by decide) (by decide +kernel)
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-namespace PEqualNP.Outside.L_meta_4425.Reused2960Aux
+namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem theta_excluded : Excluded 87 10 inputs := by
@@ -2500,12 +2502,12 @@ theorem resolved : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.Meta
   by_contra small
   obtain ⟨k,lim,live⟩ := trace C fan eq
   exact theta_excluded ⟨k,by omega,live,by decide +kernel⟩
-end PEqualNP.Outside.L_meta_4425.Reused2960Aux
+end Reused2960Aux
 
-theorem PEqualNP.Outside.L_meta_4425.Reused2960 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.FanInTwo x1 → (PEqualNP.MetaComplexity.circuitFun (7 : ℕ) x1 = fun (x3 : Fin (7 : ℕ) → Bool) => [((0 : Fin (7 : ℕ)), (1 : Fin (7 : ℕ))), ((1 : Fin (7 : ℕ)), (2 : Fin (7 : ℕ))), ((0 : Fin (7 : ℕ)), (4 : Fin (7 : ℕ))), ((1 : Fin (7 : ℕ)), (5 : Fin (7 : ℕ))), ((2 : Fin (7 : ℕ)), (6 : Fin (7 : ℕ))), ((3 : Fin (7 : ℕ)), (5 : Fin (7 : ℕ))), ((4 : Fin (7 : ℕ)), (6 : Fin (7 : ℕ))), ((6 : Fin (7 : ℕ)), (3 : Fin (7 : ℕ)))].any fun (x4 : Fin (7 : ℕ) × Fin (7 : ℕ)) => x3 x4.1 && x3 x4.2) → (11 : ℕ) ≤ List.countP (fun (x4 : PEqualNP.CircuitLowerBounds.Gate) => PEqualNP.CircuitLowerBounds.GateOp.rec Bool.true Bool.true Bool.false (fun (x5 : ℕ) => Bool.true) Bool.true x4.op) x1.gates := by
+theorem Reused2960 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.FanInTwo x1 → (PEqualNP.MetaComplexity.circuitFun (7 : ℕ) x1 = fun (x3 : Fin (7 : ℕ) → Bool) => [((0 : Fin (7 : ℕ)), (1 : Fin (7 : ℕ))), ((1 : Fin (7 : ℕ)), (2 : Fin (7 : ℕ))), ((0 : Fin (7 : ℕ)), (4 : Fin (7 : ℕ))), ((1 : Fin (7 : ℕ)), (5 : Fin (7 : ℕ))), ((2 : Fin (7 : ℕ)), (6 : Fin (7 : ℕ))), ((3 : Fin (7 : ℕ)), (5 : Fin (7 : ℕ))), ((4 : Fin (7 : ℕ)), (6 : Fin (7 : ℕ))), ((6 : Fin (7 : ℕ)), (3 : Fin (7 : ℕ)))].any fun (x4 : Fin (7 : ℕ) × Fin (7 : ℕ)) => x3 x4.1 && x3 x4.2) → (11 : ℕ) ≤ List.countP (fun (x4 : PEqualNP.CircuitLowerBounds.Gate) => PEqualNP.CircuitLowerBounds.GateOp.rec Bool.true Bool.true Bool.false (fun (x5 : ℕ) => Bool.true) Bool.true x4.op) x1.gates := by
   exact PEqualNP.Outside.L_meta_4425.Reused2960Aux.resolved
 
-namespace PEqualNP.Outside.L_meta_4425.Adapter
+namespace Adapter
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
@@ -2698,8 +2700,10 @@ private theorem close
   change 11 ≤ gs.countP charged at low
   omega
 
-end PEqualNP.Outside.L_meta_4425.Adapter
+end Adapter
 
+
+end PEqualNP.Outside.L_meta_4425
 
 -- Each charged trace step becomes one AND with optional NOT gates; the original certificate supplies the lower bound.
 theorem PEqualNP.Outside.L_meta_4425 :
