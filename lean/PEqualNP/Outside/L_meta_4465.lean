@@ -2,7 +2,9 @@ import Mathlib
 import PEqualNP.Defs
 
 
-namespace LMeta4465Aux.Graph
+namespace PEqualNP.Outside.L_meta_4465
+
+namespace Graph
 
 open PEqualNP.CircuitLowerBounds
 
@@ -1543,10 +1545,10 @@ private lemma main_proof
       rw [hu0] at hu
       exact (G.ne_of_adj hu rfl).elim
 
-end LMeta4465Aux.Graph
 
 
-namespace LMeta4465Aux
+
+end Graph
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
@@ -2069,16 +2071,14 @@ theorem linear (q N : ℕ) (I : Fin N → Fin N → Prop) [DecidableRel I]
     apply coverBudget q N I rows degrees S
     intro p l inc
     exact coverS (L p) (R l) ((leftRight I p l).mpr inc) (atLeastTwo _) (atLeastTwo _)
-  have floor := LMeta4465Aux.Graph.main_proof (N+N) t G C
+  have floor := Graph.main_proof (N+N) t G C
     (fun v => by obtain ⟨a,_,_,adj,_⟩ := neighbors v; exact ⟨a,adj⟩)
     (fun v w distinct _ _ _ => noTwins v w distinct)
     (fun v w edge _ _ => adjacent v w edge)
     ⟨S,coverS,count⟩ minimum cmono (pairTests q N I q2 C positive negative)
   omega
 
-end LMeta4465Aux
 
-namespace LMeta4465Aux
 
 /-- Finite certificates, transported to the natural-number index type used by `linear`. -/
 def certSet {m : ℕ} (F : ℕ → Finset (Finset (Fin m))) (w : ℕ) : Set (Finset ℕ) :=
@@ -2151,9 +2151,9 @@ theorem finite_linear (q N : ℕ) (I : Fin N → Fin N → Prop) [DecidableRel I
     rw [mem_map_val,mem_map_val]
     exact ⟨specLeft p,specRight p⟩
 
-end LMeta4465Aux
+end PEqualNP.Outside.L_meta_4465
 
 theorem PEqualNP.Outside.L_meta_4465 : ∀ (x1 x2 : ℕ) (x3 : Fin x2 → Fin x2 → Prop) [x4 : DecidableRel x3], (250 : ℕ) ≤ x1 → x2 = x1 ^ (2 : ℕ) + x1 + (1 : ℕ) → (∀ (x7 : Fin x2), Fintype.card { x8 : Fin x2 // x3 x8 x7 } = x1 + (1 : ℕ)) → (∀ (x8 x9 : Fin x2), x8 ≠ x9 → ∃! x11 : Fin x2, x3 x8 x11 ∧ x3 x9 x11) → ∀ (x9 x10 : ℕ) (x11 : ℕ → Finset (Finset (Fin (x2 + x2)))), x10 < x2 + x2 + x9 → (∀ (x13 : Fin (x2 + x2)), x11 ↑x13 = {{x13}}) → (∀ x14 < x9, ∃ (x16 : ℕ) (x17 : ℕ), x16 < x17 ∧ x17 < x2 + x2 + x14 ∧ (x11 (x2 + x2 + x14) = x11 x16 ∪ x11 x17 ∨ x11 (x2 + x2 + x14) = (x11 x16).biUnion fun (x18 : Finset (Fin (x2 + x2))) => Finset.image (fun (x19 : Finset (Fin (x2 + x2))) => x18 ∪ x19) (x11 x17))) → (∀ x15 ∈ x11 x10, ∀ (x17 x18 : Fin x2), x3 x17 x18 → Fin.castAdd x2 x17 ∈ x15 ∨ Fin.natAdd x2 x18 ∈ x15) → (∀ (x16 : Finset (Fin x2)), x16.card ≤ x1 → ∃ x18 ∈ x11 x10, (∀ (x19 : Fin x2), Fin.castAdd x2 x19 ∈ x18 ↔ ∃ x20 ∈ x16, x3 x19 x20) ∧ ∀ (x19 : Fin x2), Fin.natAdd x2 x19 ∈ x18 ↔ x19 ∉ x16) → (3 : ℕ) * x2 ≤ x9 + (1 : ℕ) := by
   intro q N I dec qbig order degrees unique s o F room inputs gates safe saturated
-  exact LMeta4465Aux.finite_linear q N I (by omega) order degrees unique s o F
+  exact PEqualNP.Outside.L_meta_4465.finite_linear q N I (by omega) order degrees unique s o F
     room inputs gates safe saturated
