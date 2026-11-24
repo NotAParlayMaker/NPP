@@ -1,3 +1,4 @@
+import Mathlib.Tactic.FinCases
 import Mathlib.Data.Fintype.Pi
 import Mathlib.Data.Nat.BitIndices
 import PEqualNP.Defs
@@ -7,7 +8,7 @@ namespace PEqualNP.Outside.L_meta_4713
 def edges : List (ℕ × ℕ) := [(0, 9), (0, 10), (1, 4), (1, 8), (2, 5), (2, 10), (3, 6), (3, 7), (4, 8), (4, 10), (5, 8), (5, 9), (6, 7), (6, 10), (7, 9), (8, 9)]
 def patterns : List ℕ := [513, 1025, 18, 258, 36, 1028, 72, 136, 272, 1040, 288, 544, 192, 1088, 640, 768, 274, 200, 800, 1573, 1809, 1729, 1332]
 
-def table : Array (ℕ × List ℕ) := #[
+def page0 : Array (ℕ × List ℕ) := #[
   (1451, [274, 200, 1573]),
   (1450, [18, 1028, 200, 800]),
   (1449, [513, 200, 1332]),
@@ -71,7 +72,9 @@ def table : Array (ℕ × List ℕ) := #[
   (579, [258, 1729]),
   (578, [258, 1088, 640]),
   (577, [1025, 192, 768]),
-  (576, [192, 768]),
+  (576, [192, 768])]
+
+def page1 : Array (ℕ × List ℕ) := #[
   (1443, [136, 274, 1573]),
   (1442, [18, 1028, 136, 800]),
   (1441, [513, 136, 1332]),
@@ -135,7 +138,9 @@ def table : Array (ℕ × List ℕ) := #[
   (515, [1025, 258, 640]),
   (514, [258, 640]),
   (513, [1025, 640]),
-  (512, [640]),
+  (512, [640])]
+
+def page2 : Array (ℕ × List ℕ) := #[
   (1323, [72, 274, 1573]),
   (1322, [18, 1028, 72, 800]),
   (1321, [513, 72, 1332]),
@@ -199,7 +204,9 @@ def table : Array (ℕ × List ℕ) := #[
   (321, [513, 258, 1088]),
   (320, [258, 1088]),
   (1536, [513, 1088]),
-  (320, [1088, 768]),
+  (320, [1088, 768])]
+
+def page3 : Array (ℕ × List ℕ) := #[
   (1315, [274, 1573]),
   (1314, [18, 1028, 800]),
   (1313, [513, 1332]),
@@ -263,7 +270,9 @@ def table : Array (ℕ × List ℕ) := #[
   (257, [513, 258]),
   (256, [258]),
   (257, [1025, 768]),
-  (256, [768]),
+  (256, [768])]
+
+def page4 : Array (ℕ × List ℕ) := #[
   (1195, [18, 200, 1573]),
   (1194, [18, 1028, 544, 200]),
   (1193, [513, 36, 1040, 200]),
@@ -327,7 +336,9 @@ def table : Array (ℕ × List ℕ) := #[
   (193, [1729]),
   (192, [1088, 640]),
   (193, [1729]),
-  (192, [1088, 640]),
+  (192, [1088, 640])]
+
+def page5 : Array (ℕ × List ℕ) := #[
   (1187, [18, 136, 1573]),
   (1186, [18, 1028, 136, 544]),
   (1185, [513, 36, 136, 1040]),
@@ -391,7 +402,9 @@ def table : Array (ℕ × List ℕ) := #[
   (129, [1025, 640]),
   (128, [640]),
   (129, [1025, 640]),
-  (128, [640]),
+  (128, [640])]
+
+def page6 : Array (ℕ × List ℕ) := #[
   (1067, [18, 72, 1573]),
   (1066, [18, 1028, 72, 544]),
   (1065, [513, 36, 72, 1040]),
@@ -455,7 +468,9 @@ def table : Array (ℕ × List ℕ) := #[
   (65, [513, 1088]),
   (64, [1088]),
   (65, [513, 1088]),
-  (64, [1088]),
+  (64, [1088])]
+
+def page7 : Array (ℕ × List ℕ) := #[
   (1059, [18, 1573]),
   (1058, [18, 1028, 544]),
   (1057, [513, 36, 1040]),
@@ -519,7 +534,9 @@ def table : Array (ℕ × List ℕ) := #[
   (1, [513]),
   (0, []),
   (1, [513]),
-  (0, []),
+  (0, [])]
+
+def page8 : Array (ℕ × List ℕ) := #[
   (349, [1025, 36, 274, 200]),
   (348, [18, 1028, 288, 200]),
   (1356, [1025, 36, 272, 200]),
@@ -583,7 +600,9 @@ def table : Array (ℕ × List ℕ) := #[
   (67, [1025, 258, 192]),
   (66, [258, 192]),
   (65, [1025, 192]),
-  (64, [192]),
+  (64, [192])]
+
+def page9 : Array (ℕ × List ℕ) := #[
   (285, [1025, 36, 136, 274]),
   (284, [18, 1028, 136, 288]),
   (1292, [1025, 36, 136, 272]),
@@ -647,7 +666,9 @@ def table : Array (ℕ × List ℕ) := #[
   (3, [1025, 258]),
   (2, [258]),
   (1, [1025]),
-  (0, []),
+  (0, [])]
+
+def page10 : Array (ℕ × List ℕ) := #[
   (341, [1025, 36, 72, 274]),
   (340, [18, 1028, 72, 288]),
   (1292, [1025, 36, 72, 272]),
@@ -711,7 +732,9 @@ def table : Array (ℕ × List ℕ) := #[
   (1026, [1025, 258]),
   (66, [258, 1088]),
   (1024, [1025]),
-  (64, [1088]),
+  (64, [1088])]
+
+def page11 : Array (ℕ × List ℕ) := #[
   (277, [1025, 36, 274]),
   (276, [18, 1028, 288]),
   (1284, [1025, 36, 272]),
@@ -775,7 +798,9 @@ def table : Array (ℕ × List ℕ) := #[
   (3, [1025, 258]),
   (2, [258]),
   (1, [1025]),
-  (0, []),
+  (0, [])]
+
+def page12 : Array (ℕ × List ℕ) := #[
   (93, [1025, 18, 36, 200]),
   (92, [18, 36, 136, 1088]),
   (1100, [1025, 36, 200]),
@@ -839,7 +864,9 @@ def table : Array (ℕ × List ℕ) := #[
   (65, [1025, 192]),
   (64, [192]),
   (65, [1025, 192]),
-  (64, [192]),
+  (64, [192])]
+
+def page13 : Array (ℕ × List ℕ) := #[
   (29, [1025, 18, 36, 136]),
   (28, [18, 36, 136]),
   (1036, [1025, 36, 136]),
@@ -903,7 +930,9 @@ def table : Array (ℕ × List ℕ) := #[
   (1, [1025]),
   (0, []),
   (1, [1025]),
-  (0, []),
+  (0, [])]
+
+def page14 : Array (ℕ × List ℕ) := #[
   (85, [1025, 18, 36, 72]),
   (84, [18, 36, 72]),
   (1036, [1025, 36, 72]),
@@ -967,7 +996,9 @@ def table : Array (ℕ × List ℕ) := #[
   (1024, [1025]),
   (64, [1088]),
   (1024, [1025]),
-  (64, [1088]),
+  (64, [1088])]
+
+def page15 : Array (ℕ × List ℕ) := #[
   (21, [1025, 18, 36]),
   (20, [18, 36]),
   (1028, [1025, 36]),
@@ -1031,7 +1062,9 @@ def table : Array (ℕ × List ℕ) := #[
   (1, [1025]),
   (0, []),
   (1, [1025]),
-  (0, []),
+  (0, [])]
+
+def page16 : Array (ℕ × List ℕ) := #[
   (427, [513, 36, 274, 200]),
   (426, [18, 36, 768, 200]),
   (425, [513, 36, 272, 200]),
@@ -1095,7 +1128,9 @@ def table : Array (ℕ × List ℕ) := #[
   (385, [513, 258, 192]),
   (384, [258, 192]),
   (576, [513, 192]),
-  (576, [192, 768]),
+  (576, [192, 768])]
+
+def page17 : Array (ℕ × List ℕ) := #[
   (419, [513, 36, 136, 274]),
   (418, [18, 36, 136, 768]),
   (417, [513, 36, 136, 272]),
@@ -1159,7 +1194,9 @@ def table : Array (ℕ × List ℕ) := #[
   (514, [513, 258]),
   (514, [258, 640]),
   (512, [513]),
-  (512, [640]),
+  (512, [640])]
+
+def page18 : Array (ℕ × List ℕ) := #[
   (299, [513, 36, 72, 274]),
   (298, [18, 36, 72, 768]),
   (297, [513, 36, 72, 272]),
@@ -1223,7 +1260,9 @@ def table : Array (ℕ × List ℕ) := #[
   (257, [513, 258]),
   (256, [258]),
   (512, [513]),
-  (256, [768]),
+  (256, [768])]
+
+def page19 : Array (ℕ × List ℕ) := #[
   (291, [513, 36, 274]),
   (290, [18, 36, 768]),
   (289, [513, 36, 272]),
@@ -1287,7 +1326,9 @@ def table : Array (ℕ × List ℕ) := #[
   (257, [513, 258]),
   (256, [258]),
   (512, [513]),
-  (256, [768]),
+  (256, [768])]
+
+def page20 : Array (ℕ × List ℕ) := #[
   (171, [513, 18, 36, 200]),
   (170, [18, 36, 72, 640]),
   (169, [513, 36, 200]),
@@ -1351,7 +1392,9 @@ def table : Array (ℕ × List ℕ) := #[
   (129, [513, 192]),
   (128, [192]),
   (129, [513, 192]),
-  (128, [192]),
+  (128, [192])]
+
+def page21 : Array (ℕ × List ℕ) := #[
   (163, [513, 18, 36, 136]),
   (162, [18, 36, 136]),
   (161, [513, 36, 136]),
@@ -1415,7 +1458,9 @@ def table : Array (ℕ × List ℕ) := #[
   (512, [513]),
   (128, [640]),
   (512, [513]),
-  (128, [640]),
+  (128, [640])]
+
+def page22 : Array (ℕ × List ℕ) := #[
   (43, [513, 18, 36, 72]),
   (42, [18, 36, 72]),
   (41, [513, 36, 72]),
@@ -1479,7 +1524,9 @@ def table : Array (ℕ × List ℕ) := #[
   (1, [513]),
   (0, []),
   (1, [513]),
-  (0, []),
+  (0, [])]
+
+def page23 : Array (ℕ × List ℕ) := #[
   (35, [513, 18, 36]),
   (34, [18, 36]),
   (33, [513, 36]),
@@ -1543,7 +1590,9 @@ def table : Array (ℕ × List ℕ) := #[
   (1, [513]),
   (0, []),
   (1, [513]),
-  (0, []),
+  (0, [])]
+
+def page24 : Array (ℕ × List ℕ) := #[
   (334, [36, 274, 200]),
   (334, [36, 274, 200]),
   (332, [36, 272, 200]),
@@ -1607,7 +1656,9 @@ def table : Array (ℕ × List ℕ) := #[
   (66, [258, 192]),
   (66, [258, 192]),
   (64, [192]),
-  (64, [192]),
+  (64, [192])]
+
+def page25 : Array (ℕ × List ℕ) := #[
   (270, [36, 136, 274]),
   (270, [36, 136, 274]),
   (268, [36, 136, 272]),
@@ -1671,7 +1722,9 @@ def table : Array (ℕ × List ℕ) := #[
   (2, [258]),
   (2, [258]),
   (0, []),
-  (0, []),
+  (0, [])]
+
+def page26 : Array (ℕ × List ℕ) := #[
   (270, [36, 72, 274]),
   (270, [36, 72, 274]),
   (268, [36, 72, 272]),
@@ -1735,7 +1788,9 @@ def table : Array (ℕ × List ℕ) := #[
   (2, [258]),
   (2, [258]),
   (0, []),
-  (0, []),
+  (0, [])]
+
+def page27 : Array (ℕ × List ℕ) := #[
   (262, [36, 274]),
   (262, [36, 274]),
   (260, [36, 272]),
@@ -1799,7 +1854,9 @@ def table : Array (ℕ × List ℕ) := #[
   (2, [258]),
   (2, [258]),
   (0, []),
-  (0, []),
+  (0, [])]
+
+def page28 : Array (ℕ × List ℕ) := #[
   (78, [18, 36, 200]),
   (78, [18, 36, 200]),
   (76, [36, 200]),
@@ -1863,7 +1920,9 @@ def table : Array (ℕ × List ℕ) := #[
   (64, [192]),
   (64, [192]),
   (64, [192]),
-  (64, [192]),
+  (64, [192])]
+
+def page29 : Array (ℕ × List ℕ) := #[
   (14, [18, 36, 136]),
   (14, [18, 36, 136]),
   (12, [36, 136]),
@@ -1927,7 +1986,9 @@ def table : Array (ℕ × List ℕ) := #[
   (0, []),
   (0, []),
   (0, []),
-  (0, []),
+  (0, [])]
+
+def page30 : Array (ℕ × List ℕ) := #[
   (14, [18, 36, 72]),
   (14, [18, 36, 72]),
   (12, [36, 72]),
@@ -1991,7 +2052,9 @@ def table : Array (ℕ × List ℕ) := #[
   (0, []),
   (0, []),
   (0, []),
-  (0, []),
+  (0, [])]
+
+def page31 : Array (ℕ × List ℕ) := #[
   (6, [18, 36]),
   (6, [18, 36]),
   (4, [36]),
@@ -2057,6 +2120,12 @@ def table : Array (ℕ × List ℕ) := #[
   (0, []),
   (0, [])]
 
+def pages := #[page0, page1, page2, page3, page4, page5, page6, page7, page8, page9, page10, page11, page12, page13, page14, page15, page16, page17, page18, page19, page20, page21, page22, page23, page24, page25, page26, page27, page28, page29, page30, page31]
+
+def witness (s : ℕ) : ℕ × List ℕ :=
+  let page := pages[s / 64]?.getD #[]
+  page[s % 64]?.getD (0, [])
+
 def vertices (m : ℕ) : Finset (Fin 11) := Finset.univ.filter fun i => m.testBit i.val = true
 
 def enc (s : Finset (Fin 11)) : BitVec 11 :=
@@ -2079,14 +2148,14 @@ def spec (s y : ℕ) (ps : List ℕ) : Prop :=
   (vertices y).card ≤ (ps.map fun p => (p.bitIndices.length + 1) / 2).sum
 
 def test (s : ℕ) : Bool :=
-  let w := table[s]?.getD (0, [])
+  let w := witness s
   @decide (spec s w.1 w.2) (by unfold spec; infer_instance)
 
 theorem assemble (checkedRows : ∀ i : Fin 2048, test i.val = true) : have x1 : SimpleGraph (Fin (11 : ℕ)) := PEqualNP.EdgeOwnership.edgeGraph (11 : ℕ) [((0 : ℕ), (9 : ℕ)), ((0 : ℕ), (10 : ℕ)), ((1 : ℕ), (4 : ℕ)), ((1 : ℕ), (8 : ℕ)), ((2 : ℕ), (5 : ℕ)), ((2 : ℕ), (10 : ℕ)), ((3 : ℕ), (6 : ℕ)), ((3 : ℕ), (7 : ℕ)), ((4 : ℕ), (8 : ℕ)), ((4 : ℕ), (10 : ℕ)), ((5 : ℕ), (8 : ℕ)), ((5 : ℕ), (9 : ℕ)), ((6 : ℕ), (7 : ℕ)), ((6 : ℕ), (10 : ℕ)), ((7 : ℕ), (9 : ℕ)), ((8 : ℕ), (9 : ℕ))]; have x2 : List ℕ := [(513 : ℕ), (1025 : ℕ), (18 : ℕ), (258 : ℕ), (36 : ℕ), (1028 : ℕ), (72 : ℕ), (136 : ℕ), (272 : ℕ), (1040 : ℕ), (288 : ℕ), (544 : ℕ), (192 : ℕ), (1088 : ℕ), (640 : ℕ), (768 : ℕ), (274 : ℕ), (200 : ℕ), (800 : ℕ), (1573 : ℕ), (1809 : ℕ), (1729 : ℕ), (1332 : ℕ)]; ∀ (x3 : Finset (Fin (11 : ℕ))), ∃ (x4 : List ℕ) (x5 : Finset (Fin (11 : ℕ))), List.Pairwise (fun (x6 x7 : ℕ) => x6 &&& x7 = (0 : ℕ)) x4 ∧ (∀ x6 ∈ x4, x6 ∈ x2 ∧ ∀ x8 ∈ x3, x6.testBit ↑x8 = Bool.false) ∧ x1.IsVertexCover ↑(x3 ∪ x5) ∧ x5.card ≤ (List.map (fun (x6 : ℕ) => (x6.bitIndices.length + (1 : ℕ)) / (2 : ℕ)) x4).sum := by
   dsimp only
   intro s
   let m : Fin 2048 := (enc s).toFin
-  let w := table[m.val]?.getD (0, [])
+  let w := witness m.val
   have hb (i : Fin 11) : m.val.testBit i.val = decide (i ∈ s) := enc_bit s i
   letI : Decidable (spec m.val w.1 w.2) := by unfold spec; infer_instance
   have hrow : spec m.val w.1 w.2 := of_decide_eq_true (checkedRows m)
@@ -2106,10 +2175,208 @@ theorem assemble (checkedRows : ∀ i : Fin 2048, test i.val = true) : have x1 :
     · exact lift i j h
     · exact (lift j i h).symm
 
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 16000000 in
-theorem rows : ∀ i : Fin 2048, test i.val = true := by
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block0 : ∀ j : Fin 64, test (0 * 64 + j.val) = true := by
   decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block1 : ∀ j : Fin 64, test (1 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block2 : ∀ j : Fin 64, test (2 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block3 : ∀ j : Fin 64, test (3 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block4 : ∀ j : Fin 64, test (4 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block5 : ∀ j : Fin 64, test (5 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block6 : ∀ j : Fin 64, test (6 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block7 : ∀ j : Fin 64, test (7 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block8 : ∀ j : Fin 64, test (8 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block9 : ∀ j : Fin 64, test (9 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block10 : ∀ j : Fin 64, test (10 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block11 : ∀ j : Fin 64, test (11 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block12 : ∀ j : Fin 64, test (12 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block13 : ∀ j : Fin 64, test (13 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block14 : ∀ j : Fin 64, test (14 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block15 : ∀ j : Fin 64, test (15 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block16 : ∀ j : Fin 64, test (16 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block17 : ∀ j : Fin 64, test (17 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block18 : ∀ j : Fin 64, test (18 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block19 : ∀ j : Fin 64, test (19 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block20 : ∀ j : Fin 64, test (20 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block21 : ∀ j : Fin 64, test (21 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block22 : ∀ j : Fin 64, test (22 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block23 : ∀ j : Fin 64, test (23 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block24 : ∀ j : Fin 64, test (24 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block25 : ∀ j : Fin 64, test (25 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block26 : ∀ j : Fin 64, test (26 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block27 : ∀ j : Fin 64, test (27 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block28 : ∀ j : Fin 64, test (28 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block29 : ∀ j : Fin 64, test (29 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block30 : ∀ j : Fin 64, test (30 * 64 + j.val) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 4000000 in
+theorem block31 : ∀ j : Fin 64, test (31 * 64 + j.val) = true := by
+  decide +kernel
+
+theorem blocks (k : Fin 32) (j : Fin 64) : test (k.val * 64 + j.val) = true := by
+  fin_cases k
+  · exact block0 j
+  · exact block1 j
+  · exact block2 j
+  · exact block3 j
+  · exact block4 j
+  · exact block5 j
+  · exact block6 j
+  · exact block7 j
+  · exact block8 j
+  · exact block9 j
+  · exact block10 j
+  · exact block11 j
+  · exact block12 j
+  · exact block13 j
+  · exact block14 j
+  · exact block15 j
+  · exact block16 j
+  · exact block17 j
+  · exact block18 j
+  · exact block19 j
+  · exact block20 j
+  · exact block21 j
+  · exact block22 j
+  · exact block23 j
+  · exact block24 j
+  · exact block25 j
+  · exact block26 j
+  · exact block27 j
+  · exact block28 j
+  · exact block29 j
+  · exact block30 j
+  · exact block31 j
+
+theorem rows (i : Fin 2048) : test i.val = true := by
+  have hk : i.val / 64 < 32 := by have hi := i.isLt; omega
+  have hj : i.val % 64 < 64 := Nat.mod_lt _ (by decide)
+  have h := blocks ⟨i.val / 64, hk⟩ ⟨i.val % 64, hj⟩
+  change test (i.val / 64 * 64 + i.val % 64) = true at h
+  have he : i.val / 64 * 64 + i.val % 64 = i.val := by omega
+  simpa only [he] using h
 
 end PEqualNP.Outside.L_meta_4713
 
