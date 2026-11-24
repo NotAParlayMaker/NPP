@@ -408,18 +408,24 @@ jobs:
             > "$RUNNER_TEMP/checker.out" 2> "$RUNNER_TEMP/checker.err"
           code=$?
           touch "$DONE"
+          # A check ENDED ON ITS OWN only if the checker wrote its own final line: an ACCEPTED or REJECTED
+          # last line on stdout, or a CHECKER FAULT line on stderr. Only then is a marker of ours ignored;
+          # with no such line the run is a FAULT, whatever exit code the wrapper returned (red team).
+          ended_own() {
+            case "$(tail -n 1 "$RUNNER_TEMP/checker.out" 2>/dev/null)" in ACCEPTED*|REJECTED*) return 0 ;; esac
+            grep -aq '^CHECKER FAULT: ' "$RUNNER_TEMP/checker.err" 2>/dev/null
+          }
           kill "$limiter" "$watch" "$sampler" 2>/dev/null; pkill -P "$limiter" 2>/dev/null; pkill -P "$watch" 2>/dev/null
           # Ended by the memory watch: a FAULT of the machine, never a verdict on the proof.
-          if grep -q '^memory watch: the MACHINE is running short' "$MARK" 2>/dev/null && { [ "$code" = 124 ] || [ "$code" = 137 ]; }; then
+          if grep -q '^memory watch: the MACHINE is running short' "$MARK" 2>/dev/null && ! ended_own; then
             code=137
-          elif grep -q '^no progress: ' "$MARK" 2>/dev/null && { [ "$code" = 124 ] || [ "$code" = 137 ]; }; then
+          elif grep -q '^no progress: ' "$MARK" 2>/dev/null && ! ended_own; then
             # Ended by the no-progress watchdog: a FAULT of the run, never a verdict on the proof.
             code=137
           else
             # 124 or 137: the time limit ended the checker. A FAULT, never a verdict on the proof.
-            # The time-limit marker counts only when the checker was really stopped (124 or 137): a check
-            # that ended on its own (0, 1, 3) in the microseconds the limiter was acting keeps its own code.
-            if grep -q '^time limit reached' "$MARK" 2>/dev/null && { [ "$code" = 124 ] || [ "$code" = 137 ]; }; then
+            # The time-limit marker counts only when the checker did not end on its own (no final line).
+            if grep -q '^time limit reached' "$MARK" 2>/dev/null && ! ended_own; then
               code=124
               # C3 (red team): a REDUCTION that reached its limit while making progress is the file's
               # doing: REFUSED with one fixed sentence, never re-run. (A hang ends above, as no progress.)
