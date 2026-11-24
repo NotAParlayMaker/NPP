@@ -74,3 +74,4 @@ Dn{ k=7 UNSAT 3.8s
 D~{ k=6 UNSAT 0.5s
 Dn{ k=8 SAT 2.1s
 D~{ k=7 UNSAT 4.1s
+D~{ k=8 UNSAT 35.6s
