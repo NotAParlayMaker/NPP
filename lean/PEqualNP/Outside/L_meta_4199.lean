@@ -10,4 +10,4 @@ theorem PEqualNP.Outside.L_meta_4199 :
     (21 : ℕ) ≤ List.countP (fun (x4 : PEqualNP.CircuitLowerBounds.Gate) => PEqualNP.CircuitLowerBounds.GateOp.casesOn x4.op Bool.true Bool.false Bool.false (fun (x5 : ℕ) => Bool.false) Bool.false) x1.gates := by
   sorry
 
-end PEqualNP.Outside.L_meta_4199
+end PEqualNP.Outside.L_meta_4199# trigger
