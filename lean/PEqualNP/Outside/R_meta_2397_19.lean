@@ -1,27 +1,11 @@
-import Mathlib
+import Mathlib.Data.List.Forall2
 import PEqualNP.Defs
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
 theorem PEqualNP.Outside.R_meta_2397_19
-    (compile : ∀ (m n : ℕ) (X : Fin m → Fin n → Bool) (C : Circuit), Monotone2 C →
-    let B : Set (Set (Fin m)) := {∅, Set.univ} ∪ Set.range (fun i => {r | X r i = true})
-    ∃ s : List (Set (Fin m)), s.length ≤ C.size ∧
-      (∀ i : Fin s.length, let V := B ∪ {a | a ∈ s.take i.val}
-        s[i.val] ∉ V ∧ ∃ a ∈ V, ∃ b ∈ V, s[i.val] = a ∪ b ∨ s[i.val] = a ∩ b) ∧
-      {r | circuitFun n C (X r) = true} ∈ B ∪ {a | a ∈ s})
-    (separate : let I := fun (p l : Fin 13) => p = l ∨ p = l+1 ∨ p = l+3 ∨ p = l+9
-    ∃ (m : ℕ) (P L : Fin m → Finset (Fin 13)) (T : Set (Fin m)),
-      (∀ r ∈ T, ∃ p l, I p l ∧ P r = {p} ∧ L r = {l}) ∧
-      (∀ r ∉ T, (∀ p ∈ P r, ∀ l ∈ L r, ¬ I p l) ∧
-        (∀ l, ((P r).filter (fun p => I p l)).card ≤ 2) ∧
-        (∀ p, ((L r).filter (fun l => I p l)).card ≤ 2)) ∧
-      let X := fun (r : Fin m) => Fin.addCases (motive := fun _ => Bool)
-        (fun i : Fin 13 => decide (i ∈ P r)) (fun j : Fin 13 => decide (j ∈ L r))
-      let B : Set (Set (Fin m)) := {∅, Set.univ} ∪ Set.range (fun i => {r | X r i = true})
-      ∀ s : List (Set (Fin m)), s.length ≤ 63 → (∀ i : Fin s.length, let V := B ∪ {a | a ∈ s.take i.val}
-        s[i.val] ∉ V ∧ ∃ a ∈ V, ∃ b ∈ V, s[i.val] = a ∪ b ∨ s[i.val] = a ∩ b) →
-        T ∉ B ∪ {a | a ∈ s}) :
+    (compile : ∀ (x1 x2 : ℕ) (x3 : Fin x1 → Fin x2 → Bool) (x4 : PEqualNP.CircuitLowerBounds.Circuit),   PEqualNP.MetaComplexity.Monotone2 x4 →     have x6 : Set (Set (Fin x1)) := {∅, Set.univ} ∪ Set.range fun (x6 : Fin x2) => {x7 : Fin x1 | x3 x7 x6 = Bool.true};     ∃ (x7 : List (Set (Fin x1))),       x7.length ≤ x4.size ∧         (∀ (x8 : Fin x7.length),             have x9 : Set (Set (Fin x1)) := x6 ∪ {x9 : Set (Fin x1) | x9 ∈ List.take (↑x8) x7};             x7[↑x8] ∉ x9 ∧ ∃ x10 ∈ x9, ∃ x11 ∈ x9, x7[↑x8] = x10 ∪ x11 ∨ x7[↑x8] = x10 ∩ x11) ∧           {x8 : Fin x1 | PEqualNP.MetaComplexity.circuitFun x2 x4 (x3 x8) = Bool.true} ∈ x6 ∪ {x8 : Set (Fin x1) | x8 ∈ x7})
+    (separate : let x1 : Fin (13 : ℕ) → Fin (13 : ℕ) → Prop := fun (x1 x2 : Fin (13 : ℕ)) => x1 = x2 ∨ x1 = x2 + (1 : Fin (13 : ℕ)) ∨ x1 = x2 + (3 : Fin (13 : ℕ)) ∨ x1 = x2 + (9 : Fin (13 : ℕ)); ∃ (x2 : ℕ) (x3 : Fin x2 → Finset (Fin (13 : ℕ))) (x4 : Fin x2 → Finset (Fin (13 : ℕ))) (x5 : Set (Fin x2)),   (∀ x6 ∈ x5, ∃ (x8 : Fin (13 : ℕ)) (x9 : Fin (13 : ℕ)), x1 x8 x9 ∧ x3 x6 = {x8} ∧ x4 x6 = {x9}) ∧     (∀ x6 ∉ x5, (∀ x8 ∈ x3 x6, ∀ x10 ∈ x4 x6, ¬x1 x8 x10) ∧ (∀ (x8 : Fin (13 : ℕ)), {x9 ∈ x3 x6 | x1 x9 x8}.card ≤ (2 : ℕ)) ∧ ∀ (x8 : Fin (13 : ℕ)), {x9 ∈ x4 x6 | x1 x8 x9}.card ≤ (2 : ℕ)) ∧       have x6 : Fin x2 → Fin ((13 : ℕ) + (13 : ℕ)) → Bool := fun (x6 : Fin x2) => Fin.addCases (fun (x7 : Fin (13 : ℕ)) => Decidable.decide (x7 ∈ x3 x6)) fun (x7 : Fin (13 : ℕ)) => Decidable.decide (x7 ∈ x4 x6);       have x7 : Set (Set (Fin x2)) := {∅, Set.univ} ∪ Set.range fun (x7 : Fin ((13 : ℕ) + (13 : ℕ))) => {x8 : Fin x2 | x6 x8 x7 = Bool.true};       ∀ (x8 : List (Set (Fin x2))),         x8.length ≤ (63 : ℕ) →           (∀ (x10 : Fin x8.length),               have x11 : Set (Set (Fin x2)) := x7 ∪ {x11 : Set (Fin x2) | x11 ∈ List.take (↑x10) x8};               x8[↑x10] ∉ x11 ∧ ∃ x12 ∈ x11, ∃ x13 ∈ x11, x8[↑x10] = x12 ∪ x13 ∨ x8[↑x10] = x12 ∩ x13) →             x5 ∉ x7 ∪ {x11 : Set (Fin x2) | x11 ∈ x8}) :
     let x1 : Fin (13 : ℕ) → Fin (13 : ℕ) → Prop := fun (x1 x2 : Fin (13 : ℕ)) => x1 = x2 ∨ x1 = x2 + (1 : Fin (13 : ℕ)) ∨ x1 = x2 + (3 : Fin (13 : ℕ)) ∨ x1 = x2 + (9 : Fin (13 : ℕ)); ∀ (x2 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.Monotone2 x2 → x2.size ≤ (63 : ℕ) → (∀ (x5 x6 : Fin (13 : ℕ)), x1 x5 x6 → (PEqualNP.MetaComplexity.circuitFun (26 : ℕ) x2 fun (x8 : Fin (26 : ℕ)) => Decidable.decide (x8 = Fin.castAdd (13 : ℕ) x5 ∨ x8 = Fin.natAdd (13 : ℕ) x6)) = Bool.true) → ∃ (x6 : Finset (Fin (13 : ℕ))) (x7 : Finset (Fin (13 : ℕ))), (∀ x8 ∈ x6, ∀ x10 ∈ x7, ¬x1 x8 x10) ∧ (∀ (x8 : Fin (13 : ℕ)), {x9 ∈ x6 | x1 x9 x8}.card ≤ (2 : ℕ)) ∧ (∀ (x8 : Fin (13 : ℕ)), {x9 ∈ x7 | x1 x8 x9}.card ≤ (2 : ℕ)) ∧ ∀ (x8 : Fin (26 : ℕ) → Bool), (∀ x9 ∈ x6, x8 (Fin.castAdd (13 : ℕ) x9) = Bool.true) → (∀ x10 ∈ x7, x8 (Fin.natAdd (13 : ℕ) x10) = Bool.true) → PEqualNP.MetaComplexity.circuitFun (26 : ℕ) x2 x8 = Bool.true := by
   classical
   have grow : ∀ (n : ℕ) (C : Circuit), Monotone2 C → ∀ x y : Fin n → Bool,
