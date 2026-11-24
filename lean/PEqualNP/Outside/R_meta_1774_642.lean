@@ -43,7 +43,13 @@ theorem PEqualNP.Outside.R_meta_1774_642
     intro i hi
     obtain ⟨p,q,r,s,h₁,h₂,o₁,o₂,pr,ps,qr,qs⟩ := hi
     rcases retain i with ⟨v,star⟩ | ⟨dist,old⟩
-    · rcases star p q ⟨h₁,o₁⟩ with e | e <;> rcases star r s ⟨h₂,o₂⟩ with g | g <;> grind
+    · rcases star p q ⟨h₁,o₁⟩ with h | h
+      · rcases star r s ⟨h₂,o₂⟩ with k | k
+        · exact False.elim (pr (h.trans k.symm))
+        · exact False.elim (ps (h.trans k.symm))
+      · rcases star r s ⟨h₂,o₂⟩ with k | k
+        · exact False.elim (qr (h.trans k.symm))
+        · exact False.elim (qs (h.trans k.symm))
     · exact ⟨⟨p,q,r,s,h₁,h₂,(old p q ⟨h₁,o₁⟩).2,(old r s ⟨h₂,o₂⟩).2,pr,ps,qr,qs⟩,dist⟩
   have le := Set.ncard_le_ncard_of_injOn f into f.injective.injOn ((finite C).subset Set.sdiff_subset)
   have mem : j ∈ bad C := ⟨a,b,c,d,ab,cd,jab,jcd,ac,ad,bc,bd⟩
