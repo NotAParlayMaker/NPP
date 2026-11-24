@@ -69,10 +69,6 @@ const writeAll = (fd, text) => {
 };
 const out = (line) => writeAll(1, `${line}\n`);
 const fault = (msg) => { writeAll(2, `CHECKER FAULT: ${msg}\n`); process.exit(3); };
-// Progress, one fixed line per stage on stderr (our words only, never the file's), so a run that
-// stops making progress shows where it stood (2026-11-24: eleven runs hung in this step).
-const T0 = Date.now();
-const stage = (name) => writeAll(2, `checker stage: ${name} t=${Math.round((Date.now() - T0) / 1000)}s\n`);
 const reject = (cls, msg) => { out(`REJECTED (${cls}): ${msg}`); process.exit(1); };
 // Anything this script did not foresee is a fault of the checker, never a verdict on the proof.
 process.on('uncaughtException', (e) => fault(`the checker stopped on an error of its own: ${e?.message ?? e}`));
@@ -117,7 +113,6 @@ if (!existsSync(join(LEAN_DIR, '.lake', 'packages', 'mathlib', '.lake', 'build',
   fault('the prebuilt Mathlib cache is missing. Run `lake exe cache get` in lean/ (RUNBOOK.md, section 2).');
 }
 
-stage('started');
 // One build at a time in this directory.
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 for (;;) {
@@ -127,7 +122,6 @@ for (;;) {
     if (age > LOCK_STALE_MS) { try { rmdirSync(LOCK); } catch { /* another run took it */ } } else sleep(500);
   }
 }
-stage('build lock taken');
 const unlock = () => { try { rmdirSync(LOCK); } catch { /* already gone */ } };
 process.on('exit', unlock);
 for (const s of ['SIGINT', 'SIGTERM']) process.on(s, () => process.exit(3));
@@ -153,7 +147,6 @@ const lakeNow = (args) => spawnSync(SHIM, args, opts(LEAN_DIR, { ...lakeEnv, PEQ
 const tail = (r, n = 30) => (r.stdout + r.stderr).trim().split('\n').slice(-n).join('\n');
 
 // The verifier is part of the checker: built from this repository, by the pinned toolchain.
-stage('building the verifier');
 const exe = lakeIn(CHECKER_LEAN_DIR, ['build', 'checklemma']);
 if (exe.error || exe.status !== 0) fault(`the verifier did not build.\n${exe.error?.message ?? tail(exe)}`);
 // The verifier that judges is the one that was just built: the same bytes before the judged
@@ -162,7 +155,6 @@ const VERIFIER = join(CHECKER_LEAN_DIR, '.lake', 'build', 'bin', 'checklemma');
 const verifierHash = sha256(readFileSync(VERIFIER));
 
 // 1. The file builds in the pinned environment, and so does the definitions root.
-stage('building the file and the definitions root');
 const build = lake(['build', `+${module}`, `+${DEFS_ROOT}`]);
 if (build.error) fault(`the build could not run: ${build.error.message}`);
 if (build.status !== 0) {
@@ -188,7 +180,6 @@ const PRIVATE = mkdtempSync(join(tmpdir(), 'pequalnp-check-'));
 process.on('exit', () => { try { rmSync(PRIVATE, { recursive: true, force: true }); } catch { /* gone */ } });
 const statementCopy = join(PRIVATE, 'statement.lean');
 writeFileSync(statementCopy, statementBytes, { mode: 0o400 });
-stage('verifier reading the built file');
 const verify = lakeNow(['env', VERIFIER, module, statementCopy, kind]);
 if (verify.error) fault(`the verifier could not run: ${verify.error.message}`);
 if (!readFileSync(statementCopy).equals(statementBytes)) fault('the private copy of the statement changed while the verifier ran. Nothing was judged.');
