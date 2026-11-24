@@ -17,3 +17,4 @@ test('the checker wrapper never sets the lake it builds with', () => {
 test('the workflow runs the checker with the locked lake', () => {
   assert.match(workflow, /PEQUALNP_REAL_LAKE="\$W\/base\/\.github\/scripts\/lake-locked\.sh"[^\n]*\\\n(?:[^\n]*\\\n)*[^\n]*node "\$W\/base\/tools\/check-lean\.mjs"/, 'the check-lean.mjs call is not given lake-locked.sh as its lake');
 });
+
