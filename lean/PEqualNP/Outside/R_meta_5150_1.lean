@@ -113,7 +113,9 @@ theorem PEqualNP.Outside.R_meta_5150_1
     obtain ⟨g0, hg0, rfl⟩ := List.mem_map.1 hg
     obtain ⟨h1', h2'⟩ := hC g0 hg0
     exact ⟨h1', by simpa [tr] using h2'⟩
-  have hC'size : C'.size = C.size := by simp [C', PEqualNP.CircuitLowerBounds.Circuit.size]
+  have hC'size : C'.size = C.size := by
+    show (C.gates.map tr).length = C.gates.length
+    exact List.length_map _
   -- every input y on 9 inputs comes from an input x on 10 inputs with x v = false
   have hagree : ∀ y : Fin 9 → Bool,
       let x : Fin 10 → Bool := fun w => (List.ofFn y).getD (sg v w) false
@@ -142,8 +144,9 @@ theorem PEqualNP.Outside.R_meta_5150_1
           List.getD_eq_default _ _ (by simp; omega)]
     have := key C.gates (List.ofFn x) (List.ofFn y) (by simp) (by simp)
       (by simp [B]) hinit C.output
-    simpa [PEqualNP.CircuitLowerBounds.Circuit.eval, PEqualNP.CircuitLowerBounds.Circuit.wires,
-      C', step] using this.symm
+    show ((C.gates.map tr).foldl step (List.ofFn y)).getD (φ C.output) false =
+      (C.gates.foldl step (List.ofFn x)).getD C.output false
+    exact this.symm
   by_contra hne
   push Not at hne
   cases b with
@@ -168,7 +171,8 @@ theorem PEqualNP.Outside.R_meta_5150_1
       · exact hC' g hg
       · simp at hg; subst hg; simp
     have hDsize : D.size = C.size + 1 := by
-      simp [D, PEqualNP.CircuitLowerBounds.Circuit.size, C']
+      show (C'.gates ++ [_]).length = C.gates.length + 1
+      simp [C']
     have hDe : ∀ y : Fin 9 → Bool, D.eval (List.ofFn y) = !C'.eval (List.ofFn y) := by
       intro y
       have hl := hlen C'.gates (List.ofFn y)
