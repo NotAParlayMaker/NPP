@@ -1,10 +1,12 @@
+import PEqualNP.Defs
+
 -- A three-hypothesis cut for the meta-complexity step. A two-pin circuit
 -- on nine inputs with a hint wire is separated from the printed Boolean
 -- polynomial by an assignment reading only the input wires, except that a
 -- pin on the hint wire or a pin pair on an edge of the printed graph is
 -- routed to the added hypotheses (which state exactly those obstructions
 -- for the set of pins, the head pin, and the tail pin).
-import PEqualNP.Defs
+
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
 namespace PEqualNP.Outside.R_meta_1912_1_aux
