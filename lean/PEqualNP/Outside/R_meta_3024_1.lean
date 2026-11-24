@@ -37,7 +37,7 @@ theorem PEqualNP.Outside.R_meta_3024_1
       x 2 && x 3 || x 1 && x 6 || x 0 && x 4 || x 5 && x 8 || x 3 && x 4 ||
       x 6 && x 8 || x 8 && x 3) = edge x
     dsimp only [edge]
-    first | ac_rfl | bv_decide
+    ac_rfl
   have reps : ∀ i : Fin 9, i ∈ ([0, 1, 3, 4, 6, 8] : List (Fin 9)) ∨
       p i ∈ ([0, 1, 3, 4, 6, 8] : List (Fin 9)) := by
     change ∀ i : Fin 9, i ∈ ([0, 1, 3, 4, 6, 8] : List (Fin 9)) ∨
