@@ -1,7 +1,9 @@
 import Mathlib
 import PEqualNP.Defs
 
-theorem PEqualNP.Outside.L_meta_4689.poly (a d : ℤ) (ha : 1 ≤ a) (hd : 0 ≤ d) (h : 2 * a + d ≤ 4513) :
+namespace PEqualNP.Outside.L_meta_4689
+
+theorem poly (a d : ℤ) (ha : 1 ≤ a) (hd : 0 ≤ d) (h : 2 * a + d ≤ 4513) :
     a * (a + d) * (a - 1) < (48 * a + 24 * d - 23) * (47 * a + 23 * d - 23) := by
   have ha2 : a ≤ 2256 := by omega
   rcases le_or_gt a 2233 with h1 | h1
@@ -18,7 +20,7 @@ theorem PEqualNP.Outside.L_meta_4689.poly (a d : ℤ) (ha : 1 ≤ a) (hd : 0 ≤
     have hsq : 0 ≤ d * d := mul_nonneg hd hd
     interval_cases a <;> nlinarith
 
-theorem PEqualNP.Outside.L_meta_4689.core (a b E s : ℕ) (hs : s ≤ 4512) (hab : a + b ≤ s + 1) (hle : a ≤ b)
+theorem core (a b E s : ℕ) (hs : s ≤ 4512) (hab : a + b ≤ s + 1) (hle : a ≤ b)
     (h0 : E ≤ a * b) (h1 : E * E ≤ b * (a * (a - 1) + E)) : E ≤ 24 * s := by
   by_contra hcon
   rcases Nat.eq_zero_or_pos a with h | h
@@ -34,6 +36,8 @@ theorem PEqualNP.Outside.L_meta_4689.core (a b E s : ℕ) (hs : s ≤ 4512) (hab
     have hmul : 0 ≤ ((E : ℤ) - (48 * (a + 1) + 24 * d - 23)) *
         (E + (48 * (a + 1) + 24 * d - 23) - (a + 1 + d)) := mul_nonneg (by omega) (by omega)
     nlinarith
+
+end PEqualNP.Outside.L_meta_4689
 
 theorem PEqualNP.Outside.L_meta_4689 : ∀ (x1 x2 x3 x4 : ℕ), x1 ≤ (4512 : ℕ) → x2 + x3 ≤ x1 + (1 : ℕ) → x4 ≤ x2 * x3 → x4 * x4 ≤ x3 * (x2 * (x2 - (1 : ℕ)) + x4) → x4 * x4 ≤ x2 * (x3 * (x3 - (1 : ℕ)) + x4) → x4 ≤ (24 : ℕ) * x1 := by
   intro s a b E hs hab h0 h1 h2
