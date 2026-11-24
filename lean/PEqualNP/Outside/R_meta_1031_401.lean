@@ -242,8 +242,14 @@ theorem PEqualNP.Outside.R_meta_1031_401
         simp only [List.getElem_cons_succ]
         rw [e]
         exact key
+  have evalAnd (l : List Bool) : GateOp.and.eval l = l.all id := rfl
+  have evalOr (l : List Bool) : GateOp.or.eval l = l.any id := rfl
+  have pairInputTrue (a b w : Fin n) : pairInput a b w = true ↔ w = a ∨ w = b := by
+    show decide (w = a ∨ w = b) = true ↔ _
+    simp
   have gateAtEq (j : ℕ) (hj : j < C.gates.length) : gateAt C j = C.gates[j] := by
-    simp [gateAt, List.getD_eq_getElem?_getD, hj]
+    show C.gates.getD j ⟨GateOp.or, []⟩ = C.gates[j]
+    simp [List.getD_eq_getElem?_getD, hj]
   have gateAtMem (j : ℕ) (hj : j < C.gates.length) : gateAt C j ∈ C.gates := by
     rw [gateAtEq j hj]; exact List.getElem_mem hj
   have valGate (x : List Bool) (hx : x.length = n) (j : ℕ) (hj : j < C.gates.length) :
@@ -256,7 +262,7 @@ theorem PEqualNP.Outside.R_meta_1031_401
       (C.wires x).getD (n + r) false = true ↔
         ∃ i ∈ (gateAt C r).inputs, i < n + r ∧ (C.wires x).getD i false = true := by
     rw [valGate x hx r hr, hop]
-    simp only [GateOp.eval, List.any_map, List.any_eq_true, Function.comp_apply, id_eq]
+    simp only [evalOr, List.any_map, List.any_eq_true, Function.comp_apply, id_eq]
     constructor
     · rintro ⟨i, hi, h⟩
       by_cases hlt : i < n + r
@@ -269,7 +275,7 @@ theorem PEqualNP.Outside.R_meta_1031_401
       (C.wires x).getD (n + r) false = true ↔
         ∀ i ∈ (gateAt C r).inputs, i < n + r ∧ (C.wires x).getD i false = true := by
     rw [valGate x hx r hr, hop]
-    simp only [GateOp.eval, List.all_map, List.all_eq_true, Function.comp_apply, id_eq]
+    simp only [evalAnd, List.all_map, List.all_eq_true, Function.comp_apply, id_eq]
     constructor
     · intro h i hi
       have h' := h i hi
@@ -302,7 +308,7 @@ theorem PEqualNP.Outside.R_meta_1031_401
       by_cases hin : i < n
       · rw [inputWire _ i hin] at hval
         refine ⟨⟨i, hin⟩, ?_, fun z hz => by rw [inputWire z i hin]; exact hz⟩
-        simpa [pairInput] using hval
+        simpa [pairInputTrue] using hval
       · obtain ⟨k, rfl⟩ : ∃ k, i = n + k := ⟨i - n, by omega⟩
         have hkj : k < j := by omega
         have hcone' : InCone n C k j := by
@@ -358,8 +364,8 @@ theorem PEqualNP.Outside.R_meta_1031_401
       refine ⟨s, s', hs, hs', ?_⟩
       intro x y hxy
       rcases hxy with rfl | rfl
-      · exact hsd _ (by simp [pairInput])
-      · exact hsd' _ (by simp [pairInput])
+      · exact hsd _ ((pairInputTrue _ _ _).2 (by simp))
+      · exact hsd' _ ((pairInputTrue _ _ _).2 (by simp))
     have dis : ∀ s s' : Fin n, (s = u ∨ s = v) → (s' = p ∨ s' = q) → s ≠ s' := by
       intro s s' hs hs' h
       rcases hs with rfl | rfl <;> rcases hs' with rfl | rfl <;>
