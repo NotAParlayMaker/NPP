@@ -43,18 +43,26 @@ theorem PEqualNP.Outside.R_meta_5198_1
     | nil => intro w; simp
     | cons g gs ih => intro w; rw [List.foldl_cons, ih]; simp; omega
   have hsize : C'.size = C.size + 1 := by
-    simp [C', Circuit.size]
+    show (C.gates ++ [(⟨GateOp.or, [a, b]⟩ : Gate)]).length = C.gates.length + 1
+    rw [List.length_append, List.length_singleton]
   have hwires : ∀ x : List Bool, C'.wires x =
       C.wires x ++ [(C.wires x).getD a false || (C.wires x).getD b false] := by
     intro x
-    simp [C', Circuit.wires, List.foldl_append, GateOp.eval]
+    have e : C'.wires x = C.wires x ++ [([a, b].map fun i => (C.wires x).getD i false).any id] := by
+      show List.foldl _ x (C.gates ++ [(⟨GateOp.or, [a, b]⟩ : Gate)]) = _
+      rw [List.foldl_append]
+      rfl
+    rw [e, List.map_cons, List.map_cons, List.map_nil, List.any_cons, List.any_cons, List.any_nil,
+      id_eq, id_eq, Bool.or_false]
   have hXlen : ∀ T L : Finset (Fin 13),
       ((List.ofFn fun q : Fin 13 => decide (q ∈ T)) ++ (List.ofFn fun q : Fin 13 => decide (q ∈ L))).length = 26 := by
     intro T L
     simp
   have hWlen : ∀ x : List Bool, x.length = 26 → (C.wires x).length = 26 + C.size := by
     intro x hx
-    rw [Circuit.wires, hlen, hx, Circuit.size]
+    have h := hlen C.gates x
+    rw [hx] at h
+    exact h
   -- value of the new output wire
   have hout : ∀ x : List Bool, x.length = 26 →
       (C'.wires x).getD (26 + C.size) false = ((C.wires x).getD a false || (C.wires x).getD b false) := by
@@ -64,10 +72,13 @@ theorem PEqualNP.Outside.R_meta_5198_1
   -- gates of C' below C.size are those of C
   have hgate : ∀ j, j < C.size → gateAt C' j = gateAt C j := by
     intro j hj
-    simp only [gateAt, C', List.getD_eq_getElem?_getD]
-    rw [List.getElem?_append_left (by simpa [Circuit.size] using hj)]
+    have hj0 : j < C.gates.length := hj
+    show (C.gates ++ [(⟨GateOp.or, [a, b]⟩ : Gate)]).getD j (⟨GateOp.or, []⟩ : Gate) = C.gates.getD j (⟨GateOp.or, []⟩ : Gate)
+    rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_append_left hj0]
   have hgateN : gateAt C' C.size = ⟨GateOp.or, [a, b]⟩ := by
-    simp [gateAt, C', Circuit.size, List.getD_eq_getElem?_getD]
+    show (C.gates ++ [(⟨GateOp.or, [a, b]⟩ : Gate)]).getD C.gates.length (⟨GateOp.or, []⟩ : Gate) = (⟨GateOp.or, [a, b]⟩ : Gate)
+    rw [List.getD_eq_getElem?_getD, List.getElem?_append_right (le_refl _), Nat.sub_self]
+    rfl
   have hm' : Monotone2 C' := by
     intro g hg
     simp only [C', List.mem_append, List.mem_singleton] at hg
@@ -76,14 +87,17 @@ theorem PEqualNP.Outside.R_meta_5198_1
     · subst hg; simp
   have hr' : ReadsBack 26 C' := by
     intro j hj i hi
-    have hj' : j < C.gates.length + 1 := by simpa [C'] using hj
+    have hj' : j < C.gates.length + 1 := by
+      have h : j < C'.size := hj
+      rw [hsize] at h
+      exact h
     rcases Nat.lt_succ_iff_lt_or_eq.mp hj' with hj2 | hj2
     · rw [hgate j hj2] at hi
       exact hr j hj2 i hi
     · subst hj2
       rw [show C.gates.length = C.size from rfl, hgateN] at hi
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hi
-      rcases hi with hi | hi <;> subst hi <;> simpa [Circuit.size] using (by assumption : _ < 26 + C.size)
+      rcases hi with hi | hi <;> subst hi <;> exact (by assumption : _ < 26 + C.size)
   -- aa transfers
   have haa : ∀ j, j < C.size →
       (((gateAt C' j).op = GateOp.and ∧ ∃ i ∈ (gateAt C' j).inputs, 26 ≤ i ∧ (gateAt C' (i - 26)).op = GateOp.and) ↔
