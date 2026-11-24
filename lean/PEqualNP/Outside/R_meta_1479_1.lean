@@ -42,9 +42,15 @@ theorem PEqualNP.Outside.R_meta_1479_1
       · simp only [hz, List.getD_cons_zero] at hi ⊢
         obtain ⟨ho,a,b,hab⟩ := hg
         rcases ho with ho | ho
-        · simp [ho, hab, GateOp.eval, Bool.and_eq_true] at hi ⊢
+        · rw [ho, hab] at hi ⊢
+          change ([u.getD a false, u.getD b false].all id) = true at hi
+          change ([v.getD a false, v.getD b false].all id) = true
+          simp only [List.all_cons, List.all_nil, Bool.and_true, id_eq, Bool.and_eq_true] at hi ⊢
           exact ⟨h a hi.1, h b hi.2⟩
-        · simp [ho, hab, GateOp.eval, Bool.or_eq_true] at hi ⊢
+        · rw [ho, hab] at hi ⊢
+          change ([u.getD a false, u.getD b false].any id) = true at hi
+          change ([v.getD a false, v.getD b false].any id) = true
+          simp only [List.any_cons, List.any_nil, Bool.or_false, id_eq, Bool.or_eq_true] at hi ⊢
           exact hi.elim (fun ha => Or.inl (h a ha)) (fun hb => Or.inr (h b hb))
       · rw [List.getD_eq_default _ _ (by simp; omega)] at hi
         contradiction
