@@ -1,0 +1,36 @@
+name: Check assigned reduction
+on:
+  push:
+    branches: [pnp-workbench]
+    paths: [.github/workflows/pnp-proof-check.yml]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: R-meta-1882-1
+          persist-credentials: false
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.elan
+            lean/.lake
+          key: pnp-linux-lean4360-${{ hashFiles('lean/lake-manifest.json') }}
+      - name: Install pinned Lean
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -x "$HOME/.elan/bin/elan" ]; then
+            curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          fi
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+          "$HOME/.elan/bin/elan" toolchain install "$(cat lean/lean-toolchain)"
+      - name: Build reduction
+        working-directory: lean
+        run: |
+          lake exe cache get
+          lake build PEqualNP.Outside.R_meta_1882_1
