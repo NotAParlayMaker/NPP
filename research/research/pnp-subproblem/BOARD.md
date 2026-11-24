@@ -73,7 +73,7 @@ K_{a,b}: a + b - 1 gates, vs ab + min(a, b) - 1. Triangle K3: C4-free, so S5 giv
 | R0 | C4: size 3 (SAT k=3), no 2-gate circuit (UNSAT k=2) | finite computation, `sat-girth34/synth2.py` (synth2 unreviewed; cross-check pending) | done |
 | R1 | Note 1 sec 6 "is it known?": NOT FOUND in the sources opened. Only exact value found in this basis/measure: Red'kin 1973, parity needs 4n-4 (via Jukna draft Table 1.2; Red'kin itself not opened) | reading, `lit/REPORT.md` | done (search, not proof of novelty) |
 | R2 | S1-S5 above | hand argument | written, for tractability |
-| L4 aig | does `Std.Sat.AIG` (Lean v4.36.0) fit as verified circuit infrastructure? (asked by tractability) | sonnet baby "aig", `aig/` | running |
+| R3 | `Std.Sat.AIG` (v4.36.0): would replace DAG type, `denote`, atom relabel, Tseitin CNF; cannot do exact AND/OR/NOT size (NOT free, no OR node), restrict-to-constants, cones, deletion+reindex, minimality. Decl/Fanin/no-GC spot-checked by the board owner | reading source, nothing compiled, `aig/REPORT.md` | done, sent to tractability |
 
 ## log
 
