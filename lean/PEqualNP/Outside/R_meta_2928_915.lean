@@ -7,7 +7,7 @@ theorem PEqualNP.Outside.R_meta_2928_915
             | x :: y :: rest => (if u.2 then x && y else x || y) :: rest
             | _ => []) []).headD false
       ∀ (p s : List (Nat × Bool)), p.length ≤ 9 → p.length + s.length ≤ 30 →
-        ∃ z : BitVec 9, run (fun i => if i=9 then run z.getLsbD p else z.getLsbD i) s ≠ (13407807929942597099574024998205833215954161342674683743641748147961386925543098525491161778167860937561653934618390979850991987668714682019968625024891080 : Nat).testBit z.toNat))
+        ∃ z : BitVec 9, run (fun i => if i=9 then run z.getLsbD p else z.getLsbD i) s ≠ (([18440827511444797640, 18441957826578283724, 18446744073709222136, 18446744073709485308, 18446744073708175304, 18446744073709551615, 18446744073709223928, 18446744073709551615] : List Nat).foldr (fun digit rest => digit + 2^64 * rest) 0).testBit z.toNat))
     (h2 : (let run := fun (input : Nat → Bool) (prog : List (Nat × Bool)) =>
         (prog.foldl (fun (ws : List Bool) u => if u.1 < 10 then (input u.1 ^^ u.2) :: ws
           else match ws with
@@ -61,7 +61,7 @@ theorem PEqualNP.Outside.R_meta_2928_915
   rcases h2 a b c hf hc with high | ⟨p,s,hp,hn,agree⟩
   · exact h3 a b c hab hf hc high
   obtain ⟨z, mismatch⟩ := h1 p s hp hn
-  have table : ∀ u : BitVec 9, (13407807929942597099574024998205833215954161342674683743641748147961386925543098525491161778167860937561653934618390979850991987668714682019968625024891080 : Nat).testBit u.toNat =
+  have table : ∀ u : BitVec 9, (([18440827511444797640, 18441957826578283724, 18446744073709222136, 18446744073709485308, 18446744073708175304, 18446744073709551615, 18446744073709223928, 18446744073709551615] : List Nat).foldr (fun digit rest => digit + 2^64 * rest) 0).testBit u.toNat =
       (let x : Fin 9 → Bool := fun i => u.getLsbD i.val
        ([(0,1), (1,2), (2,3), (3,4), (4,0), (0,5), (1,6), (2,7), (3,8), (5,7), (6,8), (8,5)] : List (Fin 9 × Fin 9)).any (fun e => x e.1 && x e.2)) := by decide +kernel
   refine ⟨z, ?_⟩
