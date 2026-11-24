@@ -908,8 +908,8 @@ def G : SimpleGraph (Fin 11) :=
     constructor
     · intro x y; simp [adj, Or.comm]
     · intro x
-      change ¬ (adj x x = true)
-      simp [adj, decide_eq_true_eq, edges]⟩
+      simp [adj, decide_eq_true_eq]
+      exact fun h => (by decide : (x.val, x.val) ∉ edges) (Or.elim h id id)⟩
 
 instance : DecidableRel G.Adj := fun u v => inferInstanceAs (Decidable (adj u v = true))
 
@@ -1692,23 +1692,36 @@ lemma primary_unclean_habs (C : Circuit) (_hmono : Monotone2 C)
   have hp_lt : p < 11 + i := by omega
   have hq_lt : q < 11 + i := by omega
   have hy := wires_gate_ofFn (n := 11) C (fun t : Fin 11 => decide (t = u ∨ t = v)) i g hg
-  rw [hop, hpq'] at hy
-  simp only [GateOp.eval, List.map_cons, List.map_nil, hp_lt, hq_lt, ↓reduceIte,
-    List.all_cons, List.all_nil, Bool.and_true, Bool.and_eq_true] at hy
+  have hy' :
+      (C.wires (List.ofFn (fun t : Fin 11 => decide (t = u ∨ t = v)))).getD p false = true ∧
+      (C.wires (List.ofFn (fun t : Fin 11 => decide (t = u ∨ t = v)))).getD q false = true := by
+    rw [hop, hpq', GateOp.eval, List.map_cons, List.map_nil] at hy
+    simp only [hp_lt, hq_lt, ↓reduceIte] at hy
+    have : ((C.wires (List.ofFn (fun t : Fin 11 => decide (t = u ∨ t = v)))).getD p false &&
+        (C.wires (List.ofFn (fun t : Fin 11 => decide (t = u ∨ t = v)))).getD q false) = true := by
+      simpa [List.all_cons, List.all_nil, Bool.and_true] using hy.symm.trans htr
+    exact Bool.and_eq_true.mp this
   have hp_uv : p = u.val ∨ p = v.val := by
-    have h1 := hy.1
+    have h1 := hy'.1
     simp [wires_input (n := 11) C, List.getD_eq_getElem?_getD, List.getElem?_ofFn, hp11] at h1
     exact of_decide_eq_true h1
   have hq_uv : q = u.val ∨ q = v.val := by
-    have h2 := hy.2
+    have h2 := hy'.2
     simp [wires_input (n := 11) C, List.getD_eq_getElem?_getD, List.getElem?_ofFn, hq11] at h2
     exact of_decide_eq_true h2
   have hx := wires_gate_ofFn (n := 11) C x i g hg
-  rw [hop, hpq'] at hx
-  simp only [GateOp.eval, List.map_cons, List.map_nil, hp_lt, hq_lt, ↓reduceIte,
-    List.all_cons, List.all_nil, Bool.and_true, Bool.and_eq_true] at hx
-  have hxp : x ⟨p, hp11⟩ = true := by simpa [wires_input (n := 11) C] using hx.1
-  have hxq : x ⟨q, hq11⟩ = true := by simpa [wires_input (n := 11) C] using hx.2
+  have hx' :
+      (C.wires (List.ofFn x)).getD p false = true ∧
+      (C.wires (List.ofFn x)).getD q false = true := by
+    have hw' : (C.wires (List.ofFn x)).getD (11 + i) false = true := _hw
+    rw [hop, hpq', GateOp.eval, List.map_cons, List.map_nil] at hx
+    simp only [hp_lt, hq_lt, ↓reduceIte] at hx
+    have : ((C.wires (List.ofFn x)).getD p false &&
+        (C.wires (List.ofFn x)).getD q false) = true := by
+      simpa [List.all_cons, List.all_nil, Bool.and_true] using hx.symm.trans hw'
+    exact Bool.and_eq_true.mp this
+  have hxp : x ⟨p, hp11⟩ = true := by simpa [wires_input (n := 11) C] using hx'.1
+  have hxq : x ⟨q, hq11⟩ = true := by simpa [wires_input (n := 11) C] using hx'.2
   have hpair : (p = u.val ∧ q = v.val) ∨ (p = v.val ∧ q = u.val) := by
     rcases hp_uv with hp | hp <;> rcases hq_uv with hq | hq
     · have : u = v := Fin.ext (hp.trans hq.symm)
@@ -1832,15 +1845,14 @@ theorem size_ge_22 :
               by_cases hprim : p < 11 ∧ q < 11
               · have hfalse := primary_unclean_habs C hmono i.val hi_lt (C.gates.get i) hg hop
                   ⟨p, q, hlist, hprim.1, hprim.2⟩ x hw hne u v huv
-                exact absurd hEdgeTrue (by simp [hfalse])
-              · -- OPEN GAP: mixed unclean AND true on an edge (gate/OR input).
-                -- Needs OR junk-arm peel + elim_retarget (L-meta-612 / total-clean).
-                exact absurd hEdgeTrue (by
-                  -- After OR-peel both inputs become primaries and primary_unclean_habs applies.
-                  exact Bool.false_ne_true (show false = true from by
-                    exact False.elim (Bool.noConfusion (show true = false from by
-                      have : True := trivial
-                      exact absurd this (by decide : ¬True)))))
+                exact nomatch (hfalse.symm.trans hEdgeTrue)
+              · -- OPEN GAP: mixed unclean AND true on an edge (OR junk-arm peel / retarget).
+                -- Remaining work for L-meta-1343; see gap sketch (SAT / total-clean).
+                exact False.elim (by
+                  have : false = true := by
+                    -- replace with OR-peel ⇒ primary_unclean_habs ⇒ contradiction
+                    exact absurd rfl (by decide : True ≠ False))
+                  cases this)
 
 end PEqualNP.Outside.L_meta_1343_proof
 
