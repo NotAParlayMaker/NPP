@@ -306,3 +306,13 @@ test('reduce cli: gap with kind reduce writes gap.kind reduce; without reduction
   r = cli('closure', d, pj(d, 'imports.json'), KF, d, 'reduce');
   assert.equal(r.status, 1); assert.match(r.stdout, /judges only a reduction file/);
 });
+
+// A step that left the desk: the refusal says why, from the desk file (checked, or withdrawn with its reason).
+import { checkGap as checkGapLeft } from './outside-guard.mjs';
+const LF = 'lean/PEqualNP/Outside/L_meta_701.lean';
+const leftDesk = { gaps: [{ id: 'L-meta-700', file: 'lean/PEqualNP/Outside/L_meta_700.lean', module: 'PEqualNP.Outside.L_meta_700', statement: 'True', imports: [] }],
+  checked: [{ id: 'L-meta-701', file: LF }], withdrawn: { 'L-meta-702': 'restated as L-meta-703 (basis named in the title)' } };
+test('a step already checked: the refusal says so', () => { assert.throws(() => checkGapLeft(leftDesk, (x) => x.id === 'L-meta-701', LF), /L-meta-701 is already CHECKED/); });
+test('a withdrawn step: the refusal gives the desk reason', () => { assert.throws(() => checkGapLeft(leftDesk, (x) => x.id === 'L-meta-702', 'lean/PEqualNP/Outside/L_meta_702.lean'), /L-meta-702 was WITHDRAWN from the desk \(restated as L-meta-703/); });
+test('a step the desk never had: the refusal says it is not on the desk', () => { assert.throws(() => checkGapLeft(leftDesk, (x) => x.id === 'L-meta-799', 'lean/PEqualNP/Outside/L_meta_799.lean'), /not on the desk/); });
+test('a withdrawn reason with odd characters is cleaned and cut', () => { const d = { gaps: [], checked: [], withdrawn: { 'L-meta-704': '`$(x)` "q" ' + 'a'.repeat(300) } }; assert.throws(() => checkGapLeft(d, (x) => x.id === 'L-meta-704', 'lean/PEqualNP/Outside/L_meta_704.lean'), (e) => !/[`$"]/.test(e.message) && e.message.length < 400); });

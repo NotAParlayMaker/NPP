@@ -80,7 +80,20 @@ export function checkPr(pr, files, tree, repo, defaultBranch) {
 export function checkGap(gaps, pick, file, want) {
   const all = Array.isArray(gaps?.gaps) ? gaps.gaps : refuse('the gap list has no gaps');
   const found = all.filter(pick);
-  if (found.length !== 1) refuse('the gap is not posted (it may be checked already, or withdrawn)');
+  if (found.length !== 1) {
+    // Say WHY the step is not open, from the desk file itself, so an agent working from a saved list
+    // learns to ask the desk again (hub-oncall and the red team, 2026-11-24: one handle had 20 of 24
+    // runs refused only for this). The desk file carries no time for these, so none is given.
+    // The reason text is the desk's own (the fleet's), already public in the same file.
+    const done = Array.isArray(gaps?.checked) ? gaps.checked.find((c) => c && pick(c)) : undefined;
+    if (done) refuse(`the step ${GAP_RE.test(String(done.id)) ? done.id : ''} is already CHECKED (it is in the desk file's checked list): ask the desk for a step that is still open`);
+    const w = gaps?.withdrawn && typeof gaps.withdrawn === 'object' ? Object.keys(gaps.withdrawn).find((id) => pick({ id })) : undefined;
+    if (w) {
+      const why = String(gaps.withdrawn[w] ?? '').replace(/[^A-Za-z0-9 .,;:()'_+=<>-]/g, '').slice(0, 200);
+      refuse(`the step ${GAP_RE.test(w) ? w : ''} was WITHDRAWN from the desk (${why || 'no reason given'}): ask the desk for a step that is still open`);
+    }
+    refuse('the step is not on the desk (not open, not in its checked or withdrawn lists): ask the desk for a step that is still open');
+  }
   const g = found[0];
   if (typeof g.id !== 'string' || !GAP_RE.test(g.id)) refuse('the posted gap has a malformed id');
   checkFileKind(file, want);
