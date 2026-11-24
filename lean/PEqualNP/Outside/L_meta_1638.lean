@@ -161,11 +161,14 @@ theorem part3 {N : ℕ} (gates : List Gate) (u : ℕ) (L0 : Finset (Fin N)) (r :
       have he : N + (Y - N) = Y := by omega
       rcases (hg gates[Y - N] (List.getElem_mem hi)).1 with ha | ho
       · right
-        exact ⟨Y, hY, ⟨⟨Y - N, hi⟩, he.symm, ha⟩, hv⟩
+        refine ⟨Y, hY, ⟨⟨Y - N, hi⟩, he.symm, ?_⟩, hv⟩
+        simpa [List.get_eq_getElem] using ha
       · have hv' : val gates (N + (Y - N)) x = true := by rw [he]; exact hv
         have hY' : InTop gates N u (N + (Y - N)) := by rw [he]; exact hY
+        have ho' : (gates.get ⟨Y - N, hi⟩).op = GateOp.or := by
+          simpa [List.get_eq_getElem] using ho
         obtain ⟨c, hc, hclt, hct⟩ := (val_or gates x (Y - N) hi ho).mp hv'
-        exact ih c (by omega) (top_step gates N u ⟨Y - N, hi⟩ hY' ho c hc) hct
+        exact ih c (by omega) (top_step gates N u ⟨Y - N, hi⟩ hY' ho' c hc) hct
     · rw [val_big gates x Y (by omega)] at hv
       exact absurd hv (by simp)
 
@@ -189,17 +192,29 @@ theorem PEqualNP.Outside.L_meta_1638 : ∀ (q m N : ℕ) (L : Fin N → Finset (
   intro q m N L i0 T0 _ _ _ _ _ _ _ _ _ gates u hg hb1 hb2 hu
   have hb : ∀ i : Fin gates.length, 1 ≤ (gates.get i).inputs.length ∧
       ∀ a ∈ (gates.get i).inputs, a < N + (i : ℕ) := fun i => ⟨hb1 i, hb2 i⟩
+  have hu' : val gates u (fun v : Fin N => decide (v ∉ L i0)) = false := by
+    simpa [val, eval_eq] using hu
   have h1 : ∀ Y : ℕ, InTop gates N u Y →
-      val gates Y (fun v : Fin N => decide (v ∉ L i0)) = false :=
-    fun Y hY => part1 gates u (fun v : Fin N => decide (v ∉ L i0)) hb hu Y hY
+      Circuit.eval ⟨gates, Y⟩ (List.ofFn fun v : Fin N => decide (v ∉ L i0)) = false := by
+    intro Y hY
+    simpa [val, eval_eq] using part1 gates u (fun v : Fin N => decide (v ∉ L i0)) hb hu' Y hY
   have h2 : ∀ p : Fin N, InTop gates N u (p : ℕ) → p ∈ L i0 := by
     intro p hp
-    have h := h1 p hp
+    have h := part1 gates u (fun v : Fin N => decide (v ∉ L i0)) hb hu' p hp
     rw [val_input gates _ p p.2] at h
-    simpa using h
+    exact not_not.mp (of_decide_eq_false h)
   refine ⟨h1, h2, ?_, ?_⟩
   · intro r hr hv
-    exact part3 gates u (L i0) r (fun v : Fin N => decide (v ∉ L i0 ∨ v = r))
-      (by intro v hv; simpa using hv) hg h2 u (fun S hS _ => hS) hv
+    have hv' : val gates u (fun v : Fin N => decide (v ∉ L i0 ∨ v = r)) = true := by
+      simpa [val, eval_eq] using hv
+    rcases part3 gates u (L i0) r (fun v : Fin N => decide (v ∉ L i0 ∨ v = r))
+      (by intro v hv; exact of_decide_eq_true hv) hg h2 u (fun S hS _ => hS) hv' with h | ⟨a, ha, hand, haval⟩
+    · exact Or.inl h
+    · exact Or.inr ⟨a, ha, hand, by simpa [val, eval_eq] using haval⟩
   · intro a c hop _ hc _ r _ hv
-    exact ((val_and gates (fun v : Fin N => decide (v ∉ L i0 ∨ v = r)) a a.2 hop).mp hv c hc).2
+    have hop' : gates[a.1].op = GateOp.and := by simpa [List.get_eq_getElem] using hop
+    have hc' : c ∈ gates[a.1].inputs := by simpa [List.get_eq_getElem] using hc
+    have hv' : val gates (N + (a : ℕ)) (fun v : Fin N => decide (v ∉ L i0 ∨ v = r)) = true := by
+      simpa [val, eval_eq] using hv
+    have := ((val_and gates (fun v : Fin N => decide (v ∉ L i0 ∨ v = r)) a.1 a.2 hop').mp hv' c hc').2
+    simpa [val, eval_eq] using this
