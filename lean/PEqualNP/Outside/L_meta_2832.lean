@@ -1,20 +1,20 @@
 import Mathlib
 import PEqualNP.Defs
 
-namespace PEqualNP.Outside.L_meta_2832
-namespace Live514
+-- Theta certificate adapted from stierms, PR 553; plain-type encoding reused from PR 3806.
+namespace PEqualNP.Outside.L_meta_2832.Theta
 open PEqualNP.MetaComplexity PEqualNP.CircuitLowerBounds
 
 def wiresFrom (gs : List Gate) (w : List Bool) : List Bool :=
   gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w
 
-theorem wires_eq (C : Circuit) (x : List Bool) : C.wires x = wiresFrom C.gates x := rfl
+lemma wires_eq (C : Circuit) (x : List Bool) : C.wires x = wiresFrom C.gates x := rfl
 
-theorem wiresFrom_append (gs gs' : List Gate) (w : List Bool) :
+lemma wiresFrom_append (gs gs' : List Gate) (w : List Bool) :
     wiresFrom (gs ++ gs') w = wiresFrom gs' (wiresFrom gs w) := by
   simp [wiresFrom, List.foldl_append]
 
-theorem wiresFrom_start (gs : List Gate) : ∀ w : List Bool,
+lemma wiresFrom_start (gs : List Gate) : ∀ w : List Bool,
     ∃ t : List Bool, wiresFrom gs w = w ++ t ∧ t.length = gs.length := by
   induction gs with
   | nil => intro w; exact ⟨[], by simp [wiresFrom], rfl⟩
@@ -26,12 +26,12 @@ theorem wiresFrom_start (gs : List Gate) : ∀ w : List Bool,
         = wiresFrom gs (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) := rfl
     rw [this, ht]; simp
 
-theorem length_wiresFrom (gs : List Gate) (w : List Bool) :
+lemma length_wiresFrom (gs : List Gate) (w : List Bool) :
     (wiresFrom gs w).length = w.length + gs.length := by
   obtain ⟨t, ht, hl⟩ := wiresFrom_start gs w
   rw [ht]; simp [hl]
 
-theorem getD_wiresFrom (gs : List Gate) (w : List Bool) (i : ℕ) (h : i < w.length) :
+lemma getD_wiresFrom (gs : List Gate) (w : List Bool) (i : ℕ) (h : i < w.length) :
     (wiresFrom gs w).getD i false = w.getD i false := by
   obtain ⟨t, ht, _⟩ := wiresFrom_start gs w
   rw [ht, List.getD_append _ _ _ _ h]
@@ -41,25 +41,25 @@ def Ok (g : Gate) : Prop :=
 
 variable {n : ℕ}
 
-theorem getD_snoc_ne {α : Type} (L : List α) (S d : α) (j : ℕ) (h : j ≠ L.length) :
+lemma getD_snoc_ne {α : Type} (L : List α) (S d : α) (j : ℕ) (h : j ≠ L.length) :
     (L ++ [S]).getD j d = L.getD j d := by
   by_cases hj : j < L.length
   · exact List.getD_append _ _ _ _ hj
   · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by omega)]
 
-theorem getD_snoc_eq {α : Type} (L : List α) (S d : α) : (L ++ [S]).getD L.length d = S := by
+lemma getD_snoc_eq {α : Type} (L : List α) (S d : α) : (L ++ [S]).getD L.length d = S := by
   simp
 
 def gateSupp (L : List (Finset (Fin n))) (g : Gate) : Finset (Fin n) :=
   (g.inputs.map fun a => L.getD a ∅).foldr (· ∪ ·) ∅
 
-theorem mem_foldr_union (l : List ℕ) (F : ℕ → Finset (Fin n)) (i : Fin n) :
+lemma mem_foldr_union (l : List ℕ) (F : ℕ → Finset (Fin n)) (i : Fin n) :
     i ∈ (l.map F).foldr (· ∪ ·) ∅ ↔ ∃ a ∈ l, i ∈ F a := by
   induction l with
   | nil => simp
   | cons b l ih => simp [ih]
 
-theorem mem_gateSupp (L : List (Finset (Fin n))) (g : Gate) (i : Fin n) :
+lemma mem_gateSupp (L : List (Finset (Fin n))) (g : Gate) (i : Fin n) :
     i ∈ gateSupp L g ↔ ∃ a ∈ g.inputs, i ∈ L.getD a ∅ :=
   mem_foldr_union _ _ _
 
@@ -72,7 +72,7 @@ def Agree (x y : Fin n → Bool) (L : List (Finset (Fin n))) (w w' : List Bool) 
   L.length = w.length ∧ w.length = w'.length ∧
     ∀ j : ℕ, (∀ i ∈ L.getD j ∅, x i = y i) → w.getD j false = w'.getD j false
 
-theorem agree_wiresFrom (x y : Fin n → Bool) (gs : List Gate) :
+lemma agree_wiresFrom (x y : Fin n → Bool) (gs : List Gate) :
     ∀ (L : List (Finset (Fin n))) (w w' : List Bool), Agree x y L w w' →
       Agree x y (suppsFrom gs L) (wiresFrom gs w) (wiresFrom gs w') := by
   induction gs with
@@ -97,7 +97,7 @@ theorem agree_wiresFrom (x y : Fin n → Bool) (gs : List Gate) :
       rw [getD_snoc_ne _ _ _ _ (by omega), getD_snoc_ne _ _ _ _ (by omega)]
       exact h3 j hj
 
-theorem agree_inputs (x y : Fin n → Bool) :
+lemma agree_inputs (x y : Fin n → Bool) :
     Agree x y (inputSupps n) (List.ofFn x) (List.ofFn y) := by
   refine ⟨by simp [inputSupps], by simp, ?_⟩
   intro j hj
@@ -109,7 +109,7 @@ theorem agree_inputs (x y : Fin n → Bool) :
 def Cnt (t : ℕ) (L : List (Finset (Fin n))) : Prop :=
   ∀ W : Finset ℕ, (W.biUnion fun j => L.getD j ∅).card ≤ t + W.card
 
-theorem cnt_inputs : Cnt 0 (inputSupps n) := by
+lemma cnt_inputs : Cnt 0 (inputSupps n) := by
   intro W
   refine le_trans Finset.card_biUnion_le ?_
   rw [zero_add, Finset.card_eq_sum_ones]
@@ -119,7 +119,7 @@ theorem cnt_inputs : Cnt 0 (inputSupps n) := by
   · simp [inputSupps, hjn]
   · rw [List.getD_eq_default _ _ (by simp [inputSupps]; omega)]; simp
 
-theorem cnt_step (t : ℕ) (L : List (Finset (Fin n))) (g : Gate) (hg : g.inputs.length ≤ 2)
+lemma cnt_step (t : ℕ) (L : List (Finset (Fin n))) (g : Gate) (hg : g.inputs.length ≤ 2)
     (h : Cnt t L) : Cnt (t + 1) (L ++ [gateSupp L g]) := by
   intro W
   by_cases hW : L.length ∈ W
@@ -152,7 +152,7 @@ theorem cnt_step (t : ℕ) (L : List (Finset (Fin n))) (g : Gate) (hg : g.inputs
     have := h W
     omega
 
-theorem cnt_suppsFrom (gs : List Gate) : ∀ (t : ℕ) (L : List (Finset (Fin n))),
+lemma cnt_suppsFrom (gs : List Gate) : ∀ (t : ℕ) (L : List (Finset (Fin n))),
     (∀ g ∈ gs, Ok g) → Cnt t L → Cnt (t + gs.length) (suppsFrom gs L) := by
   induction gs with
   | nil => intro t L _ h; exact h
@@ -163,7 +163,7 @@ theorem cnt_suppsFrom (gs : List Gate) : ∀ (t : ℕ) (L : List (Finset (Fin n)
     rw [List.length_cons, show t + (gs.length + 1) = t + 1 + gs.length by omega]
     exact this
 
-theorem dep_lower (n : ℕ) (f : (Fin n → Bool) → Bool)
+lemma dep_lower (n : ℕ) (f : (Fin n → Bool) → Bool)
     (hdep : ∀ i : Fin n, ∃ x : Fin n → Bool, f (Function.update x i (!x i)) ≠ f x)
     (s : ℕ) (h : HasCircuitSize n f s) : n ≤ s + 1 := by
   obtain ⟨C, ok, hsz, hev⟩ := h
@@ -193,7 +193,7 @@ def normGate (g : Gate) : Gate :=
   | GateOp.not => ⟨GateOp.not, g.inputs.take 1⟩
   | _ => g
 
-theorem normGate_eval (g : Gate) (F : ℕ → Bool) :
+lemma normGate_eval (g : Gate) (F : ℕ → Bool) :
     (normGate g).op.eval ((normGate g).inputs.map F) = g.op.eval (g.inputs.map F) := by
   obtain ⟨op, inputs⟩ := g
   cases op <;> simp only [normGate]
@@ -201,7 +201,7 @@ theorem normGate_eval (g : Gate) (F : ℕ → Bool) :
 
 def NOk (g : Gate) : Prop := Ok g ∧ (g.op = GateOp.not → g.inputs.length ≤ 1)
 
-theorem normGate_nok (g : Gate) (h : Ok g) : NOk (normGate g) := by
+lemma normGate_nok (g : Gate) (h : Ok g) : NOk (normGate g) := by
   obtain ⟨op, inputs⟩ := g
   obtain ⟨hop, hlen⟩ := h
   rcases hop with h | h | h
@@ -213,7 +213,7 @@ theorem normGate_nok (g : Gate) (h : Ok g) : NOk (normGate g) := by
     subst this
     refine ⟨⟨Or.inr (Or.inr rfl), ?_⟩, fun _ => ?_⟩ <;> simp [normGate] <;> omega
 
-theorem wiresFrom_norm (gs : List Gate) : ∀ w : List Bool,
+lemma wiresFrom_norm (gs : List Gate) : ∀ w : List Bool,
     wiresFrom (gs.map normGate) w = wiresFrom gs w := by
   induction gs with
   | nil => intro w; rfl
@@ -225,51 +225,49 @@ theorem wiresFrom_norm (gs : List Gate) : ∀ w : List Bool,
         = wiresFrom gs (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) := rfl
     rw [s1, s2, normGate_eval, ih]
 
-inductive Stat : Type
-  | const (c : Bool)
-  | wire (j : ℕ)
+abbrev Stat := Bool ⊕ ℕ
 
 def Stat.val (w : List Bool) : Stat → Bool
-  | Stat.const c => c
-  | Stat.wire j => w.getD j false
+  | Sum.inl c => c
+  | Sum.inr j => w.getD j false
 
 def Stat.Valid (m : ℕ) : Stat → Prop
-  | Stat.const _ => True
-  | Stat.wire j => j < m
+  | Sum.inl _ => True
+  | Sum.inr j => j < m
 
 def simpNot (m : ℕ) : List Stat → Option Gate × Stat
-  | [] => (none, Stat.const true)
-  | Stat.const c :: _ => (none, Stat.const (!c))
-  | Stat.wire j :: _ => (some ⟨GateOp.not, [j]⟩, Stat.wire m)
+  | [] => (none, Sum.inl true)
+  | Sum.inl c :: _ => (none, Sum.inl (!c))
+  | Sum.inr j :: _ => (some ⟨GateOp.not, [j]⟩, Sum.inr m)
 
 def simpAnd (m : ℕ) : List Stat → Option Gate × Stat
-  | [] => (none, Stat.const true)
-  | [Stat.const c] => (none, Stat.const c)
-  | [Stat.wire j] => (none, Stat.wire j)
-  | [Stat.const c, Stat.const d] => (none, Stat.const (c && d))
-  | [Stat.const c, Stat.wire j] => (none, bif c then Stat.wire j else Stat.const false)
-  | [Stat.wire j, Stat.const c] => (none, bif c then Stat.wire j else Stat.const false)
-  | [Stat.wire j, Stat.wire k] => (some ⟨GateOp.and, [j, k]⟩, Stat.wire m)
-  | _ => (none, Stat.const false)
+  | [] => (none, Sum.inl true)
+  | [Sum.inl c] => (none, Sum.inl c)
+  | [Sum.inr j] => (none, Sum.inr j)
+  | [Sum.inl c, Sum.inl d] => (none, Sum.inl (c && d))
+  | [Sum.inl c, Sum.inr j] => (none, bif c then Sum.inr j else Sum.inl false)
+  | [Sum.inr j, Sum.inl c] => (none, bif c then Sum.inr j else Sum.inl false)
+  | [Sum.inr j, Sum.inr k] => (some ⟨GateOp.and, [j, k]⟩, Sum.inr m)
+  | _ => (none, Sum.inl false)
 
 def simpOr (m : ℕ) : List Stat → Option Gate × Stat
-  | [] => (none, Stat.const false)
-  | [Stat.const c] => (none, Stat.const c)
-  | [Stat.wire j] => (none, Stat.wire j)
-  | [Stat.const c, Stat.const d] => (none, Stat.const (c || d))
-  | [Stat.const c, Stat.wire j] => (none, bif c then Stat.const true else Stat.wire j)
-  | [Stat.wire j, Stat.const c] => (none, bif c then Stat.const true else Stat.wire j)
-  | [Stat.wire j, Stat.wire k] => (some ⟨GateOp.or, [j, k]⟩, Stat.wire m)
-  | _ => (none, Stat.const false)
+  | [] => (none, Sum.inl false)
+  | [Sum.inl c] => (none, Sum.inl c)
+  | [Sum.inr j] => (none, Sum.inr j)
+  | [Sum.inl c, Sum.inl d] => (none, Sum.inl (c || d))
+  | [Sum.inl c, Sum.inr j] => (none, bif c then Sum.inl true else Sum.inr j)
+  | [Sum.inr j, Sum.inl c] => (none, bif c then Sum.inl true else Sum.inr j)
+  | [Sum.inr j, Sum.inr k] => (some ⟨GateOp.or, [j, k]⟩, Sum.inr m)
+  | _ => (none, Sum.inl false)
 
 def simplify (op : GateOp) (m : ℕ) (ins : List Stat) : Option Gate × Stat :=
   match op with
   | GateOp.and => simpAnd m ins
   | GateOp.or => simpOr m ins
   | GateOp.not => simpNot m ins
-  | _ => (none, Stat.const false)
+  | _ => (none, Sum.inl false)
 
-theorem simplify_ok (op : GateOp) (m : ℕ) (ins : List Stat) :
+lemma simplify_ok (op : GateOp) (m : ℕ) (ins : List Stat) :
     ∀ g ∈ (simplify op m ins).1, Ok g := by
   intro g hg
   cases op <;> simp only [simplify] at hg
@@ -282,9 +280,9 @@ theorem simplify_ok (op : GateOp) (m : ℕ) (ins : List Stat) :
   · simp at hg
   · simp at hg
 
-theorem simplify_count (op : GateOp) (m : ℕ) (ins : List Stat)
+lemma simplify_count (op : GateOp) (m : ℕ) (ins : List Stat)
     (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not) (hlen : ins.length ≤ 2)
-    (hnot : op = GateOp.not → ins.length ≤ 1) (hc : ∃ c, Stat.const c ∈ ins) :
+    (hnot : op = GateOp.not → ins.length ≤ 1) (hc : ∃ c, Sum.inl c ∈ ins) :
     (simplify op m ins).1 = none := by
   obtain ⟨c, hc⟩ := hc
   rcases hop with rfl | rfl | rfl
@@ -295,7 +293,7 @@ theorem simplify_count (op : GateOp) (m : ℕ) (ins : List Stat)
   · have := hnot rfl
     rcases ins with _ | ⟨a, _ | ⟨b, l⟩⟩ <;> (try cases a) <;> simp_all [simplify, simpNot]
 
-theorem simplify_sound (op : GateOp) (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not)
+lemma simplify_sound (op : GateOp) (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not)
     (w : List Bool) (ins : List Stat) (hlen : ins.length ≤ 2)
     (hv : ∀ s ∈ ins, s.Valid w.length) :
     ((simplify op w.length ins).2).Valid (w.length + (simplify op w.length ins).1.toList.length) ∧
@@ -320,18 +318,18 @@ theorem simplify_sound (op : GateOp) (hop : op = GateOp.and ∨ op = GateOp.or �
 
 def elimStep (n : ℕ) (acc : List Stat × List Gate) (g : Gate) : List Stat × List Gate :=
   (acc.1 ++ [(simplify g.op (n + acc.2.length)
-      (g.inputs.map fun i => acc.1.getD i (Stat.const false))).2],
+      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).2],
     acc.2 ++ (simplify g.op (n + acc.2.length)
-      (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1.toList)
+      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList)
 
 def elim (n : ℕ) (gs : List Gate) (acc : List Stat × List Gate) : List Stat × List Gate :=
   gs.foldl (elimStep n) acc
 
-theorem getD_snoc_len {α : Type} (L : List α) (S d : α) (k : ℕ) (h : L.length = k) :
+lemma getD_snoc_len {α : Type} (L : List α) (S d : α) (k : ℕ) (h : L.length = k) :
     (L ++ [S]).getD k d = S := by
   subst h; simp
 
-theorem elim_getD (n k : ℕ) (d : Stat) (gs : List Gate) : ∀ acc : List Stat × List Gate,
+lemma elim_getD (n k : ℕ) (d : Stat) (gs : List Gate) : ∀ acc : List Stat × List Gate,
     k < acc.1.length → (elim n gs acc).1.getD k d = acc.1.getD k d := by
   induction gs with
   | nil => intro acc _; rfl
@@ -341,10 +339,10 @@ theorem elim_getD (n k : ℕ) (d : Stat) (gs : List Gate) : ∀ acc : List Stat 
     rw [h3, ih (elimStep n acc g) (by simp [elimStep]; omega)]
     exact getD_snoc_ne _ _ _ _ (by omega)
 
-theorem toList_length_le {α : Type} (o : Option α) : o.toList.length ≤ 1 := by
+lemma toList_length_le {α : Type} (o : Option α) : o.toList.length ≤ 1 := by
   cases o <;> simp
 
-theorem elim_ok (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
+lemma elim_ok (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
     (∀ g ∈ acc.2, Ok g) → ∀ g ∈ (elim n gs acc).2, Ok g := by
   induction gs with
   | nil => intro acc h; exact h
@@ -356,7 +354,7 @@ theorem elim_ok (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
     · exact h g' h1
     · exact simplify_ok _ _ _ g' (by simpa using h1)
 
-theorem elim_len (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
+lemma elim_len (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
     (elim n gs acc).2.length ≤ acc.2.length + gs.length := by
   induction gs with
   | nil => intro acc; simp [elim]
@@ -366,13 +364,13 @@ theorem elim_len (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
     have h2 : (elimStep n acc g).2.length ≤ acc.2.length + 1 := by
       simp only [elimStep, List.length_append]
       have := toList_length_le (simplify g.op (n + acc.2.length)
-        (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1
+        (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1
       omega
     have h3 : elim n (g :: gs) acc = elim n gs (elimStep n acc g) := rfl
     rw [h3, List.length_cons]; omega
 
-theorem elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
-    (∀ g ∈ gs, NOk g) → k < acc.1.length → (∃ c, acc.1.getD k (Stat.const false) = Stat.const c) →
+lemma elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
+    (∀ g ∈ gs, NOk g) → k < acc.1.length → (∃ c, acc.1.getD k (Sum.inl false) = Sum.inl c) →
     (∃ g ∈ gs, k ∈ g.inputs) → (elim n gs acc).2.length + 1 ≤ acc.2.length + gs.length := by
   induction gs with
   | nil => intro acc _ _ _ h; obtain ⟨g, hg, _⟩ := h; simp at hg
@@ -384,7 +382,7 @@ theorem elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat × List G
     · obtain ⟨c, hc⟩ := hc
       have hnok := hok g List.mem_cons_self
       have hnone : (simplify g.op (n + acc.2.length)
-          (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1 = none := by
+          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1 = none := by
         apply simplify_count
         · exact hnok.1.1
         · simpa using hnok.1.2
@@ -392,7 +390,7 @@ theorem elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat × List G
         · exact ⟨c, List.mem_map.2 ⟨k, hkg, hc⟩⟩
       have h2 : (elimStep n acc g).2.length = acc.2.length := by
         show (acc.2 ++ (simplify g.op (n + acc.2.length)
-          (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1.toList).length = _
+          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList).length = _
         rw [hnone]; simp
       have := elim_len n gs (elimStep n acc g)
       omega
@@ -412,25 +410,25 @@ theorem elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat × List G
       have h2 : (elimStep n acc g).2.length ≤ acc.2.length + 1 := by
         simp only [elimStep, List.length_append]
         have := toList_length_le (simplify g.op (n + acc.2.length)
-          (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1
+          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1
         omega
       omega
 
-theorem Stat.valid_mono {m m' : ℕ} (h : m ≤ m') : ∀ s : Stat, s.Valid m → s.Valid m'
-  | Stat.const _, _ => trivial
-  | Stat.wire _, hj => lt_of_lt_of_le hj h
+lemma Stat.valid_mono {m m' : ℕ} (h : m ≤ m') : ∀ s : Stat, s.Valid m → s.Valid m'
+  | Sum.inl _, _ => trivial
+  | Sum.inr _, hj => lt_of_lt_of_le hj h
 
-theorem Stat.val_append (w t : List Bool) : ∀ s : Stat, s.Valid w.length →
+lemma Stat.val_append (w t : List Bool) : ∀ s : Stat, s.Valid w.length →
     s.val (w ++ t) = s.val w
-  | Stat.const _, _ => rfl
-  | Stat.wire _, hj => List.getD_append _ _ _ _ hj
+  | Sum.inl _, _ => rfl
+  | Sum.inr _, hj => List.getD_append _ _ _ _ hj
 
 def Inv (n : ℕ) (y : List Bool) (w : List Bool) (acc : List Stat × List Gate) : Prop :=
   acc.1.length = w.length ∧ ∀ i : ℕ,
-    (acc.1.getD i (Stat.const false)).Valid (n + acc.2.length) ∧
-    (acc.1.getD i (Stat.const false)).val (wiresFrom acc.2 y) = w.getD i false
+    (acc.1.getD i (Sum.inl false)).Valid (n + acc.2.length) ∧
+    (acc.1.getD i (Sum.inl false)).val (wiresFrom acc.2 y) = w.getD i false
 
-theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) :
+lemma inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) :
     ∀ (w : List Bool) (acc : List Stat × List Gate), (∀ g ∈ gs, Ok g) → Inv n y w acc →
       Inv n y (wiresFrom gs w) (elim n gs acc) := by
   induction gs with
@@ -442,7 +440,7 @@ theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) 
     obtain ⟨hl, hi⟩ := h
     set w' := wiresFrom acc.2 y with hw'
     have lw' : w'.length = n + acc.2.length := by rw [hw', length_wiresFrom, hy]
-    set ins := g.inputs.map fun i => acc.1.getD i (Stat.const false) with hins
+    set ins := g.inputs.map fun i => acc.1.getD i (Sum.inl false) with hins
     have hgok := hok g List.mem_cons_self
     have hs := simplify_sound g.op hgok.1 w' ins (by simpa [hins] using hgok.2)
       (by
@@ -461,8 +459,8 @@ theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) 
     obtain ⟨t, ht, htl⟩ := wiresFrom_start r.1.toList w'
     refine ⟨by simp [elimStep, hl], ?_⟩
     intro i
-    show ((acc.1 ++ [r.2]).getD i (Stat.const false)).Valid (n + (acc.2 ++ r.1.toList).length) ∧
-      ((acc.1 ++ [r.2]).getD i (Stat.const false)).val (wiresFrom (acc.2 ++ r.1.toList) y) = _
+    show ((acc.1 ++ [r.2]).getD i (Sum.inl false)).Valid (n + (acc.2 ++ r.1.toList).length) ∧
+      ((acc.1 ++ [r.2]).getD i (Sum.inl false)).val (wiresFrom (acc.2 ++ r.1.toList) y) = _
     rw [hnew, List.length_append, ← Nat.add_assoc]
     by_cases hil : i = acc.1.length
     · subst hil
@@ -474,13 +472,13 @@ theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) 
       exact (hi i).2
 
 def initStats (n : ℕ) (b : Bool) : List Stat :=
-  List.ofFn (fun i : Fin n => Stat.wire i) ++ [Stat.const b]
+  List.ofFn (fun i : Fin n => (Sum.inr (i : ℕ) : Stat)) ++ [Sum.inl b]
 
-theorem inv_init (n : ℕ) (b : Bool) (y : Fin n → Bool) :
+lemma inv_init (n : ℕ) (b : Bool) (y : Fin n → Bool) :
     Inv n (List.ofFn y) (List.ofFn y ++ [b]) (initStats n b, []) := by
   refine ⟨by simp [initStats], ?_⟩
   intro i
-  have l1 : (List.ofFn (fun i : Fin n => Stat.wire i)).length = n := by simp
+  have l1 : (List.ofFn (fun i : Fin n => (Sum.inr (i : ℕ) : Stat))).length = n := by simp
   have l2 : (List.ofFn y).length = n := by simp
   by_cases hin : i = n
   · subst hin
@@ -494,12 +492,12 @@ theorem inv_init (n : ℕ) (b : Bool) (y : Fin n → Bool) :
     · rw [List.getD_eq_default _ _ (by omega), List.getD_eq_default _ _ (by omega)]
       exact ⟨trivial, rfl⟩
 
-theorem ofFn_snoc (n : ℕ) (y : Fin n → Bool) (b : Bool) :
+lemma ofFn_snoc (n : ℕ) (y : Fin n → Bool) (b : Bool) :
     List.ofFn (Fin.snoc y b : Fin (n + 1) → Bool) = List.ofFn y ++ [b] := by
   rw [List.ofFn_succ']
   simp
 
-theorem supp_noread (n : ℕ) (gs : List Gate) : ∀ L : List (Finset (Fin (n + 1))),
+lemma supp_noread (n : ℕ) (gs : List Gate) : ∀ L : List (Finset (Fin (n + 1))),
     (∀ g ∈ gs, n ∉ g.inputs) → (∀ j : ℕ, j ≠ n → Fin.last n ∉ L.getD j ∅) →
     ∀ j : ℕ, j ≠ n → Fin.last n ∉ (suppsFrom gs L).getD j ∅ := by
   induction gs with
@@ -516,11 +514,11 @@ theorem supp_noread (n : ℕ) (gs : List Gate) : ∀ L : List (Finset (Fin (n + 
       exact h a (fun e => hno g List.mem_cons_self (e ▸ ha)) hia
     · rw [getD_snoc_ne _ _ _ _ hjl]; exact h j hj
 
-theorem inputSupps_getD (m j : ℕ) (h : j < m) :
+lemma inputSupps_getD (m j : ℕ) (h : j < m) :
     (inputSupps m).getD j ∅ = {⟨j, h⟩} := by
   simp [inputSupps, h]
 
-theorem inputSupps_noread (n : ℕ) : ∀ j : ℕ, j ≠ n →
+lemma inputSupps_noread (n : ℕ) : ∀ j : ℕ, j ≠ n →
     Fin.last n ∉ (inputSupps (n + 1)).getD j ∅ := by
   intro j hj
   by_cases hlt : j < n + 1
@@ -530,7 +528,7 @@ theorem inputSupps_noread (n : ℕ) : ∀ j : ℕ, j ≠ n →
     exact hj (by have := congrArg Fin.val e'; simpa using this.symm)
   · rw [List.getD_eq_default _ _ (by simp [inputSupps]; omega)]; simp
 
-theorem gate_elim (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (b : Bool) (s : ℕ)
+lemma gate_elim (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (b : Bool) (s : ℕ)
     (hdep : ∃ x : Fin (n + 1) → Bool, f (Function.update x (Fin.last n) (!x (Fin.last n))) ≠ f x)
     (hnc : ∃ y y' : Fin n → Bool, f (Fin.snoc y b) ≠ f (Fin.snoc y' b))
     (h : HasCircuitSize (n + 1) f (s + 1)) :
@@ -552,20 +550,20 @@ theorem gate_elim (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (b : Bool) (s 
     rw [ofFn_snoc]
     exact inv_elim n _ (by simp) gs _ _ (fun g hg => (hnok g hg).1) (inv_init n b y)
   have hval : ∀ y : Fin n → Bool,
-      (acc.1.getD C.output (Stat.const false)).val (wiresFrom acc.2 (List.ofFn y))
+      (acc.1.getD C.output (Sum.inl false)).val (wiresFrom acc.2 (List.ofFn y))
         = f (Fin.snoc y b) := by
     intro y
     rw [((hinv y).2 C.output).2, hevg]
-  have hvalid : (acc.1.getD C.output (Stat.const false)).Valid (n + acc.2.length) := by
+  have hvalid : (acc.1.getD C.output (Sum.inl false)).Valid (n + acc.2.length) := by
     obtain ⟨y, _, _⟩ := hnc
     exact ((hinv y).2 C.output).1
-  cases hst : acc.1.getD C.output (Stat.const false) with
-  | const c =>
+  cases hst : acc.1.getD C.output (Sum.inl false) with
+  | inl c =>
     exfalso
     obtain ⟨y, y', hne⟩ := hnc
     apply hne
     rw [← hval y, ← hval y', hst]; rfl
-  | wire j =>
+  | inr j =>
     have hlen : acc.2.length ≤ s := by
       by_cases hread : ∃ g ∈ gs, n ∈ g.inputs
       · have := elim_len_lt n n gs (initStats n b, []) hnok (by simp [initStats])
@@ -579,7 +577,7 @@ theorem gate_elim (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (b : Bool) (s 
         have hout : C.output ≠ n := by
           intro e
           rw [e, hacc, elim_getD n n _ gs _ (by simp [initStats])] at hst
-          have hb : (initStats n b).getD n (Stat.const false) = Stat.const b :=
+          have hb : (initStats n b).getD n (Sum.inl false) = Sum.inl b :=
             getD_snoc_len _ _ _ _ (by simp)
           rw [show ((initStats n b, ([] : List Gate))).1 = initStats n b from rfl, hb] at hst
           cases hst
@@ -599,14 +597,14 @@ theorem gate_elim (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (b : Bool) (s 
     rw [hst] at this
     exact this
 
-theorem elim_cons (n : ℕ) (g : Gate) (gs : List Gate) (acc : List Stat × List Gate) :
+lemma elim_cons (n : ℕ) (g : Gate) (gs : List Gate) (acc : List Stat × List Gate) :
     elim n (g :: gs) acc = elim n gs (elimStep n acc g) := rfl
 
-theorem elim_append (n : ℕ) (pre post : List Gate) (acc : List Stat × List Gate) :
+lemma elim_append (n : ℕ) (pre post : List Gate) (acc : List Stat × List Gate) :
     elim n (pre ++ post) acc = elim n post (elim n pre acc) := by
   simp [elim, List.foldl_append]
 
-theorem elim_fst_len (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
+lemma elim_fst_len (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
     (elim n gs acc).1.length = acc.1.length + gs.length := by
   induction gs with
   | nil => intro acc; rfl
@@ -616,15 +614,15 @@ theorem elim_fst_len (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Ga
     simp only [elimStep, List.length_append, List.length_cons, List.length_nil]
     omega
 
-theorem initStats_last (n : ℕ) (b : Bool) :
-    (initStats n b).getD n (Stat.const false) = Stat.const b :=
+lemma initStats_last (n : ℕ) (b : Bool) :
+    (initStats n b).getD n (Sum.inl false) = Sum.inl b :=
   getD_snoc_len _ _ _ _ (by simp)
 
-theorem simplify_const (op : GateOp) (m : ℕ) (ins : List Stat)
+lemma simplify_const (op : GateOp) (m : ℕ) (ins : List Stat)
     (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not) (hlen : ins.length ≤ 2)
     (hnot : op = GateOp.not → ins.length ≤ 1) (b : Bool)
     (hand : op = GateOp.and → b = false) (hor : op = GateOp.or → b = true)
-    (hc : Stat.const b ∈ ins) : ∃ c, (simplify op m ins).2 = Stat.const c := by
+    (hc : Sum.inl b ∈ ins) : ∃ c, (simplify op m ins).2 = Sum.inl c := by
   rcases hop with rfl | rfl | rfl
   · have := hand rfl
     subst this
@@ -637,18 +635,18 @@ theorem simplify_const (op : GateOp) (m : ℕ) (ins : List Stat)
   · have := hnot rfl
     rcases ins with _ | ⟨a, _ | ⟨d, l⟩⟩ <;> (try cases a) <;> simp_all [simplify, simpNot]
 
-theorem elimStep_none (n : ℕ) (acc : List Stat × List Gate) (g : Gate) (hg : NOk g) (k : ℕ)
-    (hk : k ∈ g.inputs) (c : Bool) (hc : acc.1.getD k (Stat.const false) = Stat.const c) :
+lemma elimStep_none (n : ℕ) (acc : List Stat × List Gate) (g : Gate) (hg : NOk g) (k : ℕ)
+    (hk : k ∈ g.inputs) (c : Bool) (hc : acc.1.getD k (Sum.inl false) = Sum.inl c) :
     (elimStep n acc g).2.length = acc.2.length := by
   have hnone : (simplify g.op (n + acc.2.length)
-      (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1 = none := by
+      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1 = none := by
     apply simplify_count
     · exact hg.1.1
     · simpa using hg.1.2
     · intro h; simpa using hg.2 h
     · exact ⟨c, List.mem_map.2 ⟨k, hk, hc⟩⟩
   show (acc.2 ++ (simplify g.op (n + acc.2.length)
-    (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1.toList).length = _
+    (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList).length = _
   rw [hnone]; simp
 
 def fixBit (g : Gate) : Bool :=
@@ -656,12 +654,12 @@ def fixBit (g : Gate) : Bool :=
   | GateOp.or => true
   | _ => false
 
-theorem elimStep_const (n : ℕ) (acc : List Stat × List Gate) (g : Gate) (hg : NOk g) (k : ℕ)
-    (hk : k ∈ g.inputs) (hc : acc.1.getD k (Stat.const false) = Stat.const (fixBit g)) :
-    ∃ c, (elimStep n acc g).1.getD acc.1.length (Stat.const false) = Stat.const c := by
-  have e : (elimStep n acc g).1.getD acc.1.length (Stat.const false)
+lemma elimStep_const (n : ℕ) (acc : List Stat × List Gate) (g : Gate) (hg : NOk g) (k : ℕ)
+    (hk : k ∈ g.inputs) (hc : acc.1.getD k (Sum.inl false) = Sum.inl (fixBit g)) :
+    ∃ c, (elimStep n acc g).1.getD acc.1.length (Sum.inl false) = Sum.inl c := by
+  have e : (elimStep n acc g).1.getD acc.1.length (Sum.inl false)
       = (simplify g.op (n + acc.2.length)
-        (g.inputs.map fun i => acc.1.getD i (Stat.const false))).2 := getD_snoc_eq _ _ _
+        (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).2 := getD_snoc_eq _ _ _
   rw [e]
   apply simplify_const _ _ _ hg.1.1 (by simpa using hg.1.2) (fun h => by simpa using hg.2 h)
     (fixBit g)
@@ -669,11 +667,11 @@ theorem elimStep_const (n : ℕ) (acc : List Stat × List Gate) (g : Gate) (hg :
   · intro h; simp [fixBit, h]
   · exact List.mem_map.2 ⟨k, hk, hc⟩
 
-theorem suppsFrom_append {n : ℕ} (pre post : List Gate) (L : List (Finset (Fin n))) :
+lemma suppsFrom_append {n : ℕ} (pre post : List Gate) (L : List (Finset (Fin n))) :
     suppsFrom (pre ++ post) L = suppsFrom post (suppsFrom pre L) := by
   simp [suppsFrom, List.foldl_append]
 
-theorem length_suppsFrom {n : ℕ} (gs : List Gate) : ∀ L : List (Finset (Fin n)),
+lemma length_suppsFrom {n : ℕ} (gs : List Gate) : ∀ L : List (Finset (Fin n)),
     (suppsFrom gs L).length = L.length + gs.length := by
   induction gs with
   | nil => intro L; rfl
@@ -691,7 +689,7 @@ def CleanGate (m : ℕ) (g : Gate) : Prop :=
 def CleanL (m : ℕ) (gs : List Gate) : Prop :=
   ∀ (p : ℕ) (g : Gate), gs[p]? = some g → CleanGate (m + p) g
 
-theorem CleanGate.nok {m : ℕ} {g : Gate} (h : CleanGate m g) : NOk g := by
+lemma CleanGate.nok {m : ℕ} {g : Gate} (h : CleanGate m g) : NOk g := by
   rcases h with ⟨h1, j, _, h2⟩ | ⟨h1 | h1, j, k, _, _, h2⟩
   · refine ⟨⟨?_, ?_⟩, ?_⟩
     · rw [h1]; exact Or.inr (Or.inr rfl)
@@ -706,7 +704,7 @@ theorem CleanGate.nok {m : ℕ} {g : Gate} (h : CleanGate m g) : NOk g := by
     · rw [h2]; simp
     · intro h; rw [h1] at h; cases h
 
-theorem CleanGate.lt {m : ℕ} {g : Gate} (h : CleanGate m g) : ∀ a ∈ g.inputs, a < m := by
+lemma CleanGate.lt {m : ℕ} {g : Gate} (h : CleanGate m g) : ∀ a ∈ g.inputs, a < m := by
   intro a ha
   rcases h with ⟨_, j, hj, h2⟩ | ⟨_, j, k, hj, hk, h2⟩
   · rw [h2] at ha
@@ -718,12 +716,12 @@ theorem CleanGate.lt {m : ℕ} {g : Gate} (h : CleanGate m g) : ∀ a ∈ g.inpu
     · exact hj
     · exact hk
 
-theorem clean_nok (m : ℕ) (gs : List Gate) (h : CleanL m gs) : ∀ g ∈ gs, NOk g := by
+lemma clean_nok (m : ℕ) (gs : List Gate) (h : CleanL m gs) : ∀ g ∈ gs, NOk g := by
   intro g hg
   obtain ⟨p, hp⟩ := List.mem_iff_getElem?.1 hg
   exact (h p g hp).nok
 
-theorem simplify_clean (op : GateOp) (m : ℕ) (ins : List Stat) (hv : ∀ s ∈ ins, s.Valid m) :
+lemma simplify_clean (op : GateOp) (m : ℕ) (ins : List Stat) (hv : ∀ s ∈ ins, s.Valid m) :
     ∀ g ∈ (simplify op m ins).1, CleanGate m g := by
   intro g hg
   cases op <;> simp only [simplify] at hg
@@ -746,7 +744,7 @@ theorem simplify_clean (op : GateOp) (m : ℕ) (ins : List Stat) (hv : ∀ s ∈
   · simp at hg
   · simp at hg
 
-theorem toList_getElem? {α : Type} (o : Option α) (k : ℕ) (a : α)
+lemma toList_getElem? {α : Type} (o : Option α) (k : ℕ) (a : α)
     (h : o.toList[k]? = some a) : k = 0 ∧ a ∈ o := by
   cases o with
   | none => simp at h
@@ -755,7 +753,7 @@ theorem toList_getElem? {α : Type} (o : Option α) (k : ℕ) (a : α)
     | zero => simp at h; simp [h]
     | succ k => simp at h
 
-theorem clean_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) :
+lemma clean_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) :
     ∀ (w : List Bool) (acc : List Stat × List Gate), (∀ g ∈ gs, Ok g) → Inv n y w acc →
       CleanL n acc.2 → CleanL n (elim n gs acc).2 := by
   induction gs with
@@ -767,7 +765,7 @@ theorem clean_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate
     refine ih _ (elimStep n acc g) (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg')) hinv' ?_
     intro p g' hp
     have hp' : (acc.2 ++ (simplify g.op (n + acc.2.length)
-        (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1.toList)[p]? = some g' := hp
+        (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList)[p]? = some g' := hp
     by_cases hlt : p < acc.2.length
     · rw [List.getElem?_append_left hlt] at hp'
       exact hcl p g' hp'
@@ -783,9 +781,9 @@ def HasClean (n : ℕ) (f : (Fin n → Bool) → Bool) (s : ℕ) : Prop :=
   ∃ (gs : List Gate) (o : ℕ), CleanL n gs ∧ gs.length ≤ s ∧
     ∀ x : Fin n → Bool, (wiresFrom gs (List.ofFn x)).getD o false = f x
 
-def idStats (n : ℕ) : List Stat := List.ofFn (fun i : Fin n => Stat.wire i)
+def idStats (n : ℕ) : List Stat := List.ofFn (fun i : Fin n => (Sum.inr (i : ℕ) : Stat))
 
-theorem inv_id (n : ℕ) (y : Fin n → Bool) :
+lemma inv_id (n : ℕ) (y : Fin n → Bool) :
     Inv n (List.ofFn y) (List.ofFn y) (idStats n, []) := by
   refine ⟨by simp [idStats], ?_⟩
   intro i
@@ -795,7 +793,7 @@ theorem inv_id (n : ℕ) (y : Fin n → Bool) :
       List.getD_eq_default _ _ (by simp; omega)]
     exact ⟨trivial, rfl⟩
 
-theorem clean_of (n : ℕ) (f : (Fin n → Bool) → Bool) (s : ℕ)
+lemma clean_of (n : ℕ) (f : (Fin n → Bool) → Bool) (s : ℕ)
     (hnc : ∃ y y' : Fin n → Bool, f y ≠ f y') (h : HasCircuitSize n f s) : HasClean n f s := by
   obtain ⟨C, ok, hsz, hev⟩ := h
   have hsz' : C.gates.length ≤ s := hsz
@@ -805,16 +803,16 @@ theorem clean_of (n : ℕ) (f : (Fin n → Bool) → Bool) (s : ℕ)
       Inv n (List.ofFn y) (wiresFrom C.gates (List.ofFn y)) acc :=
     fun y => inv_elim n _ (by simp) C.gates _ _ hok (inv_id n y)
   have hval : ∀ y : Fin n → Bool,
-      (acc.1.getD C.output (Stat.const false)).val (wiresFrom acc.2 (List.ofFn y)) = f y := by
+      (acc.1.getD C.output (Sum.inl false)).val (wiresFrom acc.2 (List.ofFn y)) = f y := by
     intro y
     rw [((hinv y).2 C.output).2, ← hev y]; rfl
-  cases hst : acc.1.getD C.output (Stat.const false) with
-  | const c =>
+  cases hst : acc.1.getD C.output (Sum.inl false) with
+  | inl c =>
     exfalso
     obtain ⟨y, y', hne⟩ := hnc
     apply hne
     rw [← hval y, ← hval y', hst]; rfl
-  | wire j =>
+  | inr j =>
     refine ⟨acc.2, j, ?_, ?_, ?_⟩
     · exact clean_elim n (List.ofFn fun _ : Fin n => false) (by simp) C.gates _ _ hok
         (inv_id n _) (by intro p g hp; simp at hp)
@@ -827,10 +825,10 @@ theorem clean_of (n : ℕ) (f : (Fin n → Bool) → Bool) (s : ℕ)
       rw [hst] at this
       exact this
 
-theorem getD_ofFn {α : Type} (m : ℕ) (F : Fin m → α) (d : α) (j : Fin m) :
+lemma getD_ofFn {α : Type} (m : ℕ) (F : Fin m → α) (d : α) (j : Fin m) :
     (List.ofFn F).getD j d = F j := by
   simp
-theorem split_at {α : Type} : ∀ (l : List α) (p : ℕ) (g : α), l[p]? = some g →
+lemma split_at {α : Type} : ∀ (l : List α) (p : ℕ) (g : α), l[p]? = some g →
     ∃ pre post, l = pre ++ g :: post ∧ pre.length = p := by
   intro l
   induction l with
@@ -847,45 +845,89 @@ theorem split_at {α : Type} : ∀ (l : List α) (p : ℕ) (g : α), l[p]? = som
       obtain ⟨pre, post, rfl, rfl⟩ := ih p g h
       exact ⟨x :: pre, post, rfl, rfl⟩
 
-end Live514
+end PEqualNP.Outside.L_meta_2832.Theta
 
-namespace Live514
+namespace PEqualNP.Outside.L_meta_2832.Theta
 open PEqualNP.MetaComplexity PEqualNP.CircuitLowerBounds
 
 def kept {α : Type} (b : Bool) (x : α) (xs : List α) : List α :=
   if b then x :: xs else xs
 
-inductive Run {α : Type} (inv : α → α) (meet join : α → α → α) (y : α) : ℕ → List α → Prop
-  | done : Run inv meet join y 0 [y]
-  | perm {s xs zs} : xs.Perm zs → Run inv meet join y s xs → Run inv meet join y s zs
-  | one {s a rest} (neg save : Bool) :
-      Run inv meet join y s ((if neg then inv a else a) :: kept save a rest) →
-      Run inv meet join y (s+1) (a :: rest)
-  | two {s a b rest} (conj ka kb : Bool) :
-      Run inv meet join y s ((if conj then meet a b else join a b) :: kept ka a (kept kb b rest)) →
-      Run inv meet join y (s+1) (a :: b :: rest)
+def Run {α : Type} (inv : α → α) (meet join : α → α → α) (y : α)
+    (s : ℕ) (xs : List α) : Prop :=
+  ∀ P : ℕ → List α → Prop,
+    P 0 [y] →
+    (∀ {s xs zs}, xs.Perm zs → P s xs → P s zs) →
+    (∀ {s a rest} (neg save : Bool),
+      P s ((if neg then inv a else a) :: kept save a rest) → P (s+1) (a :: rest)) →
+    (∀ {s a b rest} (conj ka kb : Bool),
+      P s ((if conj then meet a b else join a b) :: kept ka a (kept kb b rest)) →
+      P (s+1) (a :: b :: rest)) → P s xs
 
-theorem kept_map {α β : Type} (e : α → β) (b : Bool) (x : α) (xs : List α) :
+lemma Run.done {α inv meet join y} : @Run α inv meet join y 0 [y] := by
+  intro P hd _ _ _
+  exact hd
+
+lemma Run.perm {α inv meet join y s xs zs} (hp : xs.Perm zs)
+    (h : @Run α inv meet join y s xs) : Run inv meet join y s zs := by
+  intro P hd hperm hone htwo
+  exact hperm hp (h P hd hperm hone htwo)
+
+lemma Run.one {α inv meet join y s a rest} (neg save : Bool)
+    (h : @Run α inv meet join y s ((if neg then inv a else a) :: kept save a rest)) :
+    Run inv meet join y (s+1) (a :: rest) := by
+  intro P hd hperm hone htwo
+  exact hone neg save (h P hd hperm hone htwo)
+
+lemma Run.two {α inv meet join y s a b rest} (conj ka kb : Bool)
+    (h : @Run α inv meet join y s
+      ((if conj then meet a b else join a b) :: kept ka a (kept kb b rest))) :
+    Run inv meet join y (s+1) (a :: b :: rest) := by
+  intro P hd hperm hone htwo
+  exact htwo conj ka kb (h P hd hperm hone htwo)
+
+lemma Run.induction {α inv meet join y}
+    {motive : ∀ s xs, @Run α inv meet join y s xs → Prop}
+    (done : motive 0 [y] Run.done)
+    (perm : ∀ {s xs zs} (hp : xs.Perm zs) (h : @Run α inv meet join y s xs),
+      motive s xs h → motive s zs (Run.perm hp h))
+    (one : ∀ {s a rest} (neg save : Bool)
+      (h : Run inv meet join y s ((if neg then inv a else a) :: kept save a rest)),
+      motive s ((if neg then inv a else a) :: kept save a rest) h →
+      motive (s+1) (a :: rest) (Run.one neg save h))
+    (two : ∀ {s a b rest} (conj ka kb : Bool)
+      (h : Run inv meet join y s ((if conj then meet a b else join a b) :: kept ka a (kept kb b rest))),
+      motive s ((if conj then meet a b else join a b) :: kept ka a (kept kb b rest)) h →
+      motive (s+1) (a :: b :: rest) (Run.two conj ka kb h))
+    {s xs} (h : Run inv meet join y s xs) : motive s xs h := by
+  obtain ⟨h', hm⟩ := h (fun s xs => ∃ h : Run inv meet join y s xs, motive s xs h)
+    ⟨Run.done, done⟩
+    (fun hp ⟨h, hm⟩ => ⟨Run.perm hp h, perm hp h hm⟩)
+    (fun neg save ⟨h, hm⟩ => ⟨Run.one neg save h, one neg save h hm⟩)
+    (fun conj ka kb ⟨h, hm⟩ => ⟨Run.two conj ka kb h, two conj ka kb h hm⟩)
+  exact hm
+
+lemma kept_map {α β : Type} (e : α → β) (b : Bool) (x : α) (xs : List α) :
     (kept b x xs).map e = kept b (e x) (xs.map e) := by
   cases b <;> simp [kept]
 
-theorem mem_kept {α : Type} (b : Bool) (x a : α) (xs : List α) :
+lemma mem_kept {α : Type} (b : Bool) (x a : α) (xs : List α) :
     a ∈ kept b x xs ↔ (b = true ∧ a = x) ∨ a ∈ xs := by
   cases b <;> simp [kept]
 
-theorem nodup_kept {α : Type} (b : Bool) (x : α) (xs : List α) (h : xs.Nodup) (hx : x ∉ xs) :
+lemma nodup_kept {α : Type} (b : Bool) (x : α) (xs : List α) (h : xs.Nodup) (hx : x ∉ xs) :
     (kept b x xs).Nodup := by
   cases b
   · simpa [kept] using h
   · simpa [kept] using And.intro hx h
 
-theorem Run.map {α β : Type} (e : α → β) {inv : α → α} {meet join : α → α → α}
+lemma Run.map {α β : Type} (e : α → β) {inv : α → α} {meet join : α → α → α}
     {inv' : β → β} {meet' join' : β → β → β}
     (hi : ∀ a, e (inv a) = inv' (e a)) (hm : ∀ a b, e (meet a b) = meet' (e a) (e b))
     (hj : ∀ a b, e (join a b) = join' (e a) (e b))
     {y : α} {s : ℕ} {ws : List α} (h : Run inv meet join y s ws) :
     Run inv' meet' join' (e y) s (ws.map e) := by
-  induction h with
+  induction h using Run.induction with
   | done => exact Run.done
   | perm hp _ ih => exact Run.perm (hp.map e) ih
   | @one s a rest neg save _ ih =>
@@ -907,13 +949,13 @@ abbrev BFn (n : ℕ) := (Fin n → Bool) → Bool
 def val (gs : List Gate) (n : ℕ) (a : ℕ) : BFn n :=
   fun x => (wiresFrom gs (List.ofFn x)).getD a false
 
-theorem val_input (gs : List Gate) (n : ℕ) (i : Fin n) : val gs n i = fun x => x i := by
+lemma val_input (gs : List Gate) (n : ℕ) (i : Fin n) : val gs n i = fun x => x i := by
   funext x
   unfold val
   rw [getD_wiresFrom _ _ _ (by simp)]
   simp
 
-theorem val_gate (n : ℕ) (gs : List Gate) (p : ℕ) (g : Gate) (hp : gs[p]? = some g)
+lemma val_gate (n : ℕ) (gs : List Gate) (p : ℕ) (g : Gate) (hp : gs[p]? = some g)
     (hlt : ∀ a ∈ g.inputs, a < n + p) (x : Fin n → Bool) :
     val gs n (n + p) x = g.op.eval (g.inputs.map fun a => val gs n a x) := by
   obtain ⟨pre, post, rfl, hlen⟩ := split_at gs p g hp
@@ -942,7 +984,7 @@ def RelD (K : ℕ) (W W' : List Bool) : Prop :=
   W.length = W'.length + 1 ∧ K ≤ W'.length ∧
     ∀ a, a ≠ K → W'.getD (shift K a) false = W.getD a false
 
-theorem relD_wires (K : ℕ) (post : List Gate) : ∀ W W' : List Bool,
+lemma relD_wires (K : ℕ) (post : List Gate) : ∀ W W' : List Bool,
     (∀ g ∈ post, K ∉ g.inputs) → RelD K W W' →
     RelD K (wiresFrom post W) (wiresFrom (post.map (shGate K)) W') := by
   induction post with
@@ -978,7 +1020,7 @@ theorem relD_wires (K : ℕ) (post : List Gate) : ∀ W W' : List Bool,
         unfold shift; split <;> omega
       rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega)]
 
-theorem del_gate (n : ℕ) (pre : List Gate) (g : Gate) (post : List Gate) (o : ℕ) (f : BFn n)
+lemma del_gate (n : ℕ) (pre : List Gate) (g : Gate) (post : List Gate) (o : ℕ) (f : BFn n)
     (hok : ∀ g' ∈ pre ++ g :: post, Ok g')
     (hno : ∀ g' ∈ post, n + pre.length ∉ g'.inputs) (ho : o ≠ n + pre.length)
     (hev : ∀ x, val (pre ++ g :: post) n o x = f x) :
@@ -1018,18 +1060,18 @@ open Classical in
 noncomputable def liveList (gs : List Gate) (n o p : ℕ) : List ℕ :=
   (List.range (n + p)).filter (fun a => decide (Live gs o p a))
 
-theorem mem_liveList (gs : List Gate) (n o p a : ℕ) :
+lemma mem_liveList (gs : List Gate) (n o p a : ℕ) :
     a ∈ liveList gs n o p ↔ a < n + p ∧ Live gs o p a := by
   simp [liveList]
 
-theorem nodup_liveList (gs : List Gate) (n o p : ℕ) : (liveList gs n o p).Nodup :=
+lemma nodup_liveList (gs : List Gate) (n o p : ℕ) : (liveList gs n o p).Nodup :=
   List.Nodup.filter _ List.nodup_range
 
 abbrev invF {n : ℕ} : BFn n → BFn n := fun a x => !a x
 abbrev meetF {n : ℕ} : BFn n → BFn n → BFn n := fun a b x => a x && b x
 abbrev joinF {n : ℕ} : BFn n → BFn n → BFn n := fun a b x => a x || b x
 
-theorem live_succ (n : ℕ) (gs : List Gate) (o : ℕ) (hcl : CleanL n gs)
+lemma live_succ (n : ℕ) (gs : List Gate) (o : ℕ) (hcl : CleanL n gs)
     (hnd : ∀ p, p < gs.length → n + p = o ∨ ∃ (q : ℕ) (g : Gate), gs[q]? = some g ∧ n + p ∈ g.inputs)
     (p : ℕ) (g : Gate) (hg : gs[p]? = some g) (a : ℕ) :
     a ∈ liveList gs n o (p + 1) ↔
@@ -1062,7 +1104,7 @@ theorem live_succ (n : ℕ) (gs : List Gate) (o : ℕ) (hcl : CleanL n gs)
         · exact Or.inr ⟨q, by omega, g', hg', hin⟩
 
 open Classical in
-theorem run_live (n : ℕ) (gs : List Gate) (o : ℕ) (hcl : CleanL n gs) (ho : o < n + gs.length)
+lemma run_live (n : ℕ) (gs : List Gate) (o : ℕ) (hcl : CleanL n gs) (ho : o < n + gs.length)
     (hnd : ∀ p, p < gs.length → n + p = o ∨ ∃ (q : ℕ) (g : Gate), gs[q]? = some g ∧ n + p ∈ g.inputs) :
     ∀ d p, p + d = gs.length →
       Run (invF (n := n)) meetF joinF (val gs n o) d ((liveList gs n o p).map (val gs n)) := by
@@ -1194,7 +1236,7 @@ theorem run_live (n : ℕ) (gs : List Gate) (o : ℕ) (hcl : CleanL n gs) (ho : 
         rw [List.map_cons, kept_map, kept_map, hval] at IH'
         exact Run.perm (hp1.map (val gs n)).symm (Run.two _ _ _ IH')
 
-theorem exists_run {n : ℕ} (f : BFn n) (hnc : ∃ y y' : Fin n → Bool, f y ≠ f y') (s : ℕ)
+lemma exists_run {n : ℕ} (f : BFn n) (hnc : ∃ y y' : Fin n → Bool, f y ≠ f y') (s : ℕ)
     (h : HasCircuitSize n f s) :
     ∃ s', s' ≤ s ∧ ∃ ws : List (BFn n),
       ws.Sublist (List.ofFn fun (i : Fin n) => (fun x : Fin n → Bool => x i)) ∧
@@ -1252,13 +1294,13 @@ theorem exists_run {n : ℕ} (f : BFn n) (hnc : ∃ y y' : Fin n → Bool, f y �
     rw [← hf]
     exact run_live n gs o hcl ho hnd gs.length 0 (by omega)
 
-end Live514
+end PEqualNP.Outside.L_meta_2832.Theta
 
-namespace Live514
+namespace PEqualNP.Outside.L_meta_2832.Theta
 
-theorem run_len {α inv meet join y s xs} (h : @Run α inv meet join y s xs) :
+lemma run_len {α inv meet join y s xs} (h : @Run α inv meet join y s xs) :
     xs.length ≤ s + 1 := by
-  induction h with
+  induction h using Run.induction with
   | done => simp
   | perm hp _ ih => rwa [←hp.length_eq]
   | one neg save h ih => cases save <;> simp_all [kept] <;> omega
@@ -1266,10 +1308,10 @@ theorem run_len {α inv meet join y s xs} (h : @Run α inv meet join y s xs) :
 
 abbrev NatRun (m : Nat) := Run (· ^^^ m) (· &&& ·) (· ||| ·)
 
-theorem run_bits {m y s xs} (h : NatRun m y s xs) (i j : Nat)
+lemma run_bits {m y s xs} (h : NatRun m y s xs) (i j : Nat)
     (hm : m.testBit i = m.testBit j)
     (hw : ∀ w ∈ xs, w.testBit i = w.testBit j) : y.testBit i = y.testBit j := by
-  induction h with
+  induction h using Run.induction with
   | done => exact hw _ (by simp)
   | perm hp _ ih => exact ih (fun w h => hw w (hp.mem_iff.1 h))
   | one neg save h ih =>
@@ -1295,7 +1337,7 @@ def cov (k : Nat) : List Nat → Nat
   | [] => 0
   | a :: t => diff k a ||| cov k t
 
-theorem cov_bit (k i : Nat) (ws : List Nat) : (cov k ws).testBit i = true ↔
+lemma cov_bit (k i : Nat) (ws : List Nat) : (cov k ws).testBit i = true ↔
     ∃ a ∈ ws, a.testBit i ≠ a.testBit (k+i) := by
   induction ws with
   | nil => simp [cov]
@@ -1308,7 +1350,7 @@ def lo (k : Nat) := 2^k - 1
 def mask (k : Nat) := lo (k+k)
 def goal (k : Nat) := lo k <<< k
 
-theorem required {k s ws} (h : NatRun (mask k) (goal k) s ws) :
+lemma required {k s ws} (h : NatRun (mask k) (goal k) s ws) :
     (cov k ws &&& lo k) = lo k := by
   apply Nat.eq_of_testBit_eq
   intro i
@@ -1348,7 +1390,7 @@ def next (m : Nat) (slack : Nat) (ws : List Nat) (f : Nat → List Nat → Bool)
           f (tagB ws a b conj false false) (w :: r) || (slack ≥ 1 && (f (tagB ws a b conj true false) (w :: a :: r) || f (tagB ws a b conj false true) (w :: b :: r))) ||
             (slack ≥ 2 && f (tagB ws a b conj true true) (w :: a :: b :: r)))
 
-theorem next_one {k a rest} {neg save : Bool} {s ws} (p : (a :: rest).Perm ws)
+lemma next_one {k a rest} {neg save : Bool} {s ws} (p : (a :: rest).Perm ws)
     (h : NatRun (mask k) (goal k) s ((if neg then a ^^^ mask k else a) :: kept save a rest))
     (f : Nat → List Nat → Bool)
     (hf : ∀ (t : Nat) ys, NatRun (mask k) (goal k) s ys → f t ys = true) :
@@ -1371,7 +1413,7 @@ theorem next_one {k a rest} {neg save : Bool} {s ws} (p : (a :: rest).Perm ws)
     have hsl2 : 2 ≤ s+2-ws.length := by omega
     simp [ht,hsl2]
 
-theorem next_two_sorted {k a b rest} {conj ka kb : Bool} {s ws} (hab : a ≤ b)
+lemma next_two_sorted {k a b rest} {conj ka kb : Bool} {s ws} (hab : a ≤ b)
     (p : (a :: b :: rest).Perm ws)
     (h : NatRun (mask k) (goal k) s
       ((if conj then a &&& b else a ||| b) :: kept ka a (kept kb b rest)))
@@ -1395,7 +1437,7 @@ theorem next_two_sorted {k a b rest} {conj ka kb : Bool} {s ws} (hab : a ≤ b)
     simp only [ht, Bool.true_or, Bool.or_true, Bool.and_true, Bool.true_and] <;>
     first | (simp [show 2 ≤ s+2-ws.length by omega]) | (simp [show 1 ≤ s+2-ws.length by omega])
 
-theorem next_two {k a b rest} {conj ka kb : Bool} {s ws}
+lemma next_two {k a b rest} {conj ka kb : Bool} {s ws}
     (p : (a :: b :: rest).Perm ws)
     (h : NatRun (mask k) (goal k) s
       ((if conj then a &&& b else a ||| b) :: kept ka a (kept kb b rest)))
@@ -1412,27 +1454,27 @@ theorem next_two {k a b rest} {conj ka kb : Bool} {s ws}
     cases ka <;> cases kb <;> simp [kept]
     exact List.Perm.swap _ _ _
 
-theorem zero_done {α inv meet join y t ws} (h : @Run α inv meet join y t ws) :
+lemma zero_done {α inv meet join y t ws} (h : @Run α inv meet join y t ws) :
     t = 0 → ws = [y] := by
-  induction h with
+  induction h using Run.induction with
   | done => simp
   | perm p h ih => intro ht; rw [ih ht] at p; exact List.perm_singleton.1 p.symm
   | one => simp
   | two => simp
 
-theorem next_complete {k t ws} (h : NatRun (mask k) (goal k) t ws) :
+lemma next_complete {k t ws} (h : NatRun (mask k) (goal k) t ws) :
     ∀ s, t = s+1 → ∀ zs, ws.Perm zs → ∀ f : Nat → List Nat → Bool,
       (∀ (t : Nat) ys, NatRun (mask k) (goal k) s ys → f t ys = true) →
       next (mask k) (s+2-zs.length) zs f = true := by
-  induction h with
+  induction h using Run.induction with
   | done => simp
   | perm p h ih => intro s he zs q; exact ih s he zs (p.trans q)
   | one neg save h ih => intro s he zs p f hf; cases he; exact next_one p h f hf
   | two conj ka kb h ih => intro s he zs p f hf; cases he; exact next_two p h f hf
 
-end Live514
+end PEqualNP.Outside.L_meta_2832.Theta
 
-namespace Live514
+namespace PEqualNP.Outside.L_meta_2832.Theta
 open PEqualNP.MetaComplexity PEqualNP.CircuitLowerBounds
 
 def pt (n : ℕ) (v : ℕ) : Fin n → Bool := fun i => v.testBit i
@@ -1441,13 +1483,13 @@ def encL {n : ℕ} (a : BFn n) : List ℕ → ℕ
   | [] => 0
   | v :: t => Nat.bit (a (pt n v)) (encL a t)
 
-theorem encL_testBit {n : ℕ} (a : BFn n) : ∀ (l : List ℕ) (j : ℕ),
+lemma encL_testBit {n : ℕ} (a : BFn n) : ∀ (l : List ℕ) (j : ℕ),
     (encL a l).testBit j = (l.map fun v => a (pt n v)).getD j false
   | [], j => by simp [encL]
   | v :: t, 0 => by simp [encL, Nat.testBit_bit_zero]
   | v :: t, j + 1 => by simp [encL, Nat.testBit_bit_succ, encL_testBit a t j]
 
-theorem encL_inv {n : ℕ} (a : BFn n) (l : List ℕ) :
+lemma encL_inv {n : ℕ} (a : BFn n) (l : List ℕ) :
     encL (invF a) l = encL a l ^^^ (2 ^ l.length - 1) := by
   apply Nat.eq_of_testBit_eq
   intro j
@@ -1457,7 +1499,7 @@ theorem encL_inv {n : ℕ} (a : BFn n) (l : List ℕ) :
   · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega)]
     simp [h]
 
-theorem encL_and {n : ℕ} (a b : BFn n) (l : List ℕ) :
+lemma encL_and {n : ℕ} (a b : BFn n) (l : List ℕ) :
     encL (meetF a b) l = encL a l &&& encL b l := by
   apply Nat.eq_of_testBit_eq
   intro j
@@ -1468,7 +1510,7 @@ theorem encL_and {n : ℕ} (a b : BFn n) (l : List ℕ) :
       List.getD_eq_default _ _ (by simp; omega)]
     rfl
 
-theorem encL_or {n : ℕ} (a b : BFn n) (l : List ℕ) :
+lemma encL_or {n : ℕ} (a b : BFn n) (l : List ℕ) :
     encL (joinF a b) l = encL a l ||| encL b l := by
   apply Nat.eq_of_testBit_eq
   intro j
@@ -1485,27 +1527,27 @@ def xs517 : List ℕ := [0xf4d849641ddb12bd3612590776c4aa3c0228ae44945e8f008a2b9
 
 abbrev f517 : BFn 7 := (fun x : Fin 7 → Bool => (x 0 && x 2) || (x 2 && x 1) || (x 0 && x 3) || (x 3 && x 4) || (x 4 && x 1) || (x 0 && x 5) || (x 5 && x 6) || (x 6 && x 1))
 
-theorem rows517_len : rows517.length = 464 := by decide +kernel
+lemma rows517_len : rows517.length = 464 := by decide +kernel
 
-theorem enc_inputs517 :
+lemma enc_inputs517 :
     (List.ofFn fun (i : Fin 7) => (fun x : Fin 7 → Bool => x i)).map (fun a => encL a rows517)
       = xs517 := by decide +kernel
 
-theorem enc_goal517 : encL f517 rows517 = goal 232 := by decide +kernel
+lemma enc_goal517 : encL f517 rows517 = goal 232 := by decide +kernel
 
-theorem mask517 : mask 232 = 2 ^ rows517.length - 1 := by rw [rows517_len]; rfl
+lemma mask517 : mask 232 = 2 ^ rows517.length - 1 := by rw [rows517_len]; rfl
 
-theorem proper_fail517 : ∀ zs ∈ xs517.sublists, zs ≠ xs517 →
+lemma proper_fail517 : ∀ zs ∈ xs517.sublists, zs ≠ xs517 →
     (cov 232 zs &&& lo 232) ≠ lo 232 := by decide +kernel
 
-theorem no_sub517 (noRunFull : ∀ s ≤ 10, ¬ NatRun (mask 232) (goal 232) s xs517) :
+lemma no_sub517 (noRunFull : ∀ s ≤ 10, ¬ NatRun (mask 232) (goal 232) s xs517) :
     ∀ s ≤ 10, ∀ zs : List ℕ, zs.Sublist xs517 → NatRun (mask 232) (goal 232) s zs → False := by
   intro s hs zs hz h
   by_cases e : zs = xs517
   · subst e; exact noRunFull s hs h
   · exact proper_fail517 zs (List.mem_sublists.2 hz) e (required h)
 
-theorem main517 (noRunFull : ∀ s ≤ 10, ¬ NatRun (mask 232) (goal 232) s xs517) :
+lemma main517 (noRunFull : ∀ s ≤ 10, ¬ NatRun (mask 232) (goal 232) s xs517) :
     ∀ s : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 2) || (x 2 && x 1) || (x 0 && x 3) || (x 3 && x 4) || (x 4 && x 1) || (x 0 && x 5) || (x 5 && x 6) || (x 6 && x 1)) s → 11 ≤ s := by
   intro s h
   by_contra hlt
@@ -1520,14 +1562,14 @@ theorem main517 (noRunFull : ∀ s ≤ 10, ¬ NatRun (mask 232) (goal 232) s xs5
   rw [← enc_inputs517]
   exact hsub.map _
 
-end Live514
+end PEqualNP.Outside.L_meta_2832.Theta
 
-namespace Live514
+namespace PEqualNP.Outside.L_meta_2832.Theta
 
 def moveBits (tag d w : Nat) : Nat :=
   ((w &&& tag) <<< d) ||| ((w >>> d) &&& tag)
 
-theorem moved (tag d i w : Nat) (h : (tag &&& (tag <<< d)) = 0) :
+lemma moved (tag d i w : Nat) (h : (tag &&& (tag <<< d)) = 0) :
     (moveBits tag d w).testBit i =
       (if tag.testBit i then w.testBit (d+i)
        else if (tag <<< d).testBit i then w.testBit (i-d) else false) := by
@@ -1536,7 +1578,7 @@ theorem moved (tag d i w : Nat) (h : (tag &&& (tag <<< d)) = 0) :
   simp only [moveBits,Nat.testBit_or,Nat.testBit_shiftLeft,Nat.testBit_and,Nat.testBit_shiftRight] at *
   by_cases hi : d ≤ i <;> simp [hi] at * <;> grind
 
-theorem move_hom (tag d : Nat) (h : (tag &&& (tag <<< d)) = 0) (a b : Nat) :
+lemma move_hom (tag d : Nat) (h : (tag &&& (tag <<< d)) = 0) (a b : Nat) :
     moveBits tag d (a &&& b) = (moveBits tag d a &&& moveBits tag d b) ∧
     moveBits tag d (a ||| b) = (moveBits tag d a ||| moveBits tag d b) ∧
     moveBits tag d (a ^^^ b) = (moveBits tag d a ^^^ moveBits tag d b) := by
@@ -1544,7 +1586,7 @@ theorem move_hom (tag d : Nat) (h : (tag &&& (tag <<< d)) = 0) (a b : Nat) :
     simp only [Nat.testBit_and,Nat.testBit_or,Nat.testBit_xor,moved tag d i _ h] <;>
     split_ifs <;> simp
 
-theorem move_run {k s ws} (h : NatRun (mask k) (goal k) s ws) (tag d : Nat)
+lemma move_run {k s ws} (h : NatRun (mask k) (goal k) s ws) (tag d : Nat)
     (hz : (tag &&& (tag <<< d)) = 0) (hm : moveBits tag d (mask k) = mask k)
     (hy : moveBits tag d (goal k) = goal k) :
     NatRun (mask k) (goal k) s (ws.map (moveBits tag d)) := by
@@ -1558,11 +1600,11 @@ def deltaB : Nat := lo 116 ||| ((lo 116) <<< 232)
 def setA (xs : List Nat) := xs.map (moveBits deltaA 58)
 def setB (xs : List Nat) := xs.map (moveBits deltaB 116)
 
-theorem runA {s ws} (h : NatRun (mask 232) (goal 232) s ws) :
+lemma runA {s ws} (h : NatRun (mask 232) (goal 232) s ws) :
     NatRun (mask 232) (goal 232) s (setA ws) :=
   move_run h _ _ (by decide +kernel) (by decide +kernel) (by decide +kernel)
 
-theorem runB {s ws} (h : NatRun (mask 232) (goal 232) s ws) :
+lemma runB {s ws} (h : NatRun (mask 232) (goal 232) s ws) :
     NatRun (mask 232) (goal 232) s (setB ws) :=
   move_run h _ _ (by decide +kernel) (by decide +kernel) (by decide +kernel)
 
@@ -1585,7 +1627,7 @@ def orient (ws : List Nat) : List Nat :=
   else if h2 ≤ h3 then setB ws
   else setA (setB ws)
 
-theorem runOrient {s ws} (h : NatRun (mask 232) (goal 232) s ws) :
+lemma runOrient {s ws} (h : NatRun (mask 232) (goal 232) s ws) :
     NatRun (mask 232) (goal 232) s (orient ws) := by
   unfold orient
   dsimp only
@@ -1611,13 +1653,13 @@ def recipeVal (ma : Nat) (lit : Nat → Nat) : Nat → Nat → List Nat → Nat
     if ops = 0 then stack.headD 0 else
       recipeVal ma lit t (ops >>> 4) (recipeStep ma lit (ops &&& 15) stack)
 
-end Live514
+end PEqualNP.Outside.L_meta_2832.Theta
 
-namespace Live514
+namespace PEqualNP.Outside.L_meta_2832.Theta
 
-theorem bits_le {m y s ws} (h : NatRun m y s ws) (hl : ws.length = s+1) (i j : Nat)
+lemma bits_le {m y s ws} (h : NatRun m y s ws) (hl : ws.length = s+1) (i j : Nat)
     (hw : ∀ a ∈ ws, a.testBit i ≤ a.testBit j) : y.testBit i ≤ y.testBit j := by
-  induction h with
+  induction h using Run.induction with
   | done => exact hw _ (by simp)
   | perm hp _ ih =>
     exact ih (hp.length_eq.trans hl) (fun a ha => hw a (hp.mem_iff.1 ha))
@@ -1643,14 +1685,14 @@ def covUp (k : Nat) : List Nat → Nat
   | [] => 0
   | a :: t => diffUp k a ||| covUp k t
 
-theorem covUp_bit (k i : Nat) (hi : i < k) (ws : List Nat) : (covUp k ws).testBit i = true ↔
+lemma covUp_bit (k i : Nat) (hi : i < k) (ws : List Nat) : (covUp k ws).testBit i = true ↔
     ∃ a ∈ ws, a.testBit i = false ∧ a.testBit (k+i) = true := by
   induction ws with
   | nil => simp [covUp]
   | cons a t ih =>
     simp [covUp, diffUp, lo, hi, ih, and_comm]
 
-theorem required_up {k s ws} (h : NatRun (mask k) (goal k) s ws) (hl : ws.length = s+1) :
+lemma required_up {k s ws} (h : NatRun (mask k) (goal k) s ws) (hl : ws.length = s+1) :
     (covUp k ws &&& lo k) = lo k := by
   apply Nat.eq_of_testBit_eq
   intro i
@@ -1672,33 +1714,33 @@ theorem required_up {k s ws} (h : NatRun (mask k) (goal k) s ws) (hl : ws.length
 def covers (k s : Nat) (ws : List Nat) : Bool :=
   if ws.length == s+1 then covUp k ws &&& lo k == lo k else cov k ws &&& lo k == lo k
 
-theorem covers_ok {k s ws} (h : NatRun (mask k) (goal k) s ws) : covers k s ws = true := by
+lemma covers_ok {k s ws} (h : NatRun (mask k) (goal k) s ws) : covers k s ws = true := by
   by_cases he : ws.length = s+1
   · simp [covers,he,required_up h he]
   · simp [covers,he,required h]
 
-end Live514
+end PEqualNP.Outside.L_meta_2832.Theta
 
-namespace Live514
+namespace PEqualNP.Outside.L_meta_2832.Theta
 
 def value6 (a b c d e f : Bool) : Nat :=
   let x := b.toNat+c.toNat
   let y := (!e).toNat+(!f).toNat
   if a then (if d then y else max x (max y (x+y-1))) else (if d then 0 else x)
 
-theorem value6_and : ∀ a b c d e f g h i j l m : Bool,
+lemma value6_and : ∀ a b c d e f g h i j l m : Bool,
     value6 (a && g) (b && h) (c && i) (d && j) (e && l) (f && m)
       ≤ value6 a b c d e f + value6 g h i j l m := by decide +kernel
 
-theorem value6_or : ∀ a b c d e f g h i j l m : Bool,
+lemma value6_or : ∀ a b c d e f g h i j l m : Bool,
     value6 (a || g) (b || h) (c || i) (d || j) (e || l) (f || m)
       ≤ value6 a b c d e f + value6 g h i j l m := by decide +kernel
 
-theorem score_bound {m y s ws} (h : NatRun m y s ws) (hl : ws.length = s+1)
+lemma score_bound {m y s ws} (h : NatRun m y s ws) (hl : ws.length = s+1)
     (v : Nat → Nat) (hand : ∀ a b, v (a &&& b) ≤ v a + v b)
     (hor : ∀ a b, v (a ||| b) ≤ v a + v b) :
     v y ≤ (ws.map v).sum := by
-  induction h with
+  induction h using Run.induction with
   | done => simp
   | perm p h ih =>
     rw [← (p.map v).sum_eq]
@@ -1715,7 +1757,7 @@ theorem score_bound {m y s ws} (h : NatRun m y s ws) (hl : ws.length = s+1)
 def eval6 (a b c d e f v : Nat) := value6 (v.testBit a) (v.testBit b) (v.testBit c)
     (v.testBit d) (v.testBit e) (v.testBit f)
 
-theorem eval6_bound {m y s ws} (h : NatRun m y s ws) (hl : ws.length = s+1)
+lemma eval6_bound {m y s ws} (h : NatRun m y s ws) (hl : ws.length = s+1)
     (a b c d e f : Nat) : eval6 a b c d e f y ≤ (ws.map (eval6 a b c d e f)).sum := by
   apply score_bound h hl
   · intro v w
@@ -1737,7 +1779,7 @@ def scoreCheck (k s : Nat) (ws : List Nat) (code : Nat) : Bool :=
     let f := (code >>> 50) &&& 1023
     ws.length == s+1 && (ws.map (eval6 a b c d e f)).sum < eval6 a b c d e f (goal k)
 
-theorem scoreCheck_no {k s ws} (h : NatRun (mask k) (goal k) s ws) (code : Nat) :
+lemma scoreCheck_no {k s ws} (h : NatRun (mask k) (goal k) s ws) (code : Nat) :
     scoreCheck k s ws code = false := by
   unfold scoreCheck
   split
@@ -1747,9 +1789,9 @@ theorem scoreCheck_no {k s ws} (h : NatRun (mask k) (goal k) s ws) (code : Nat) 
     · simp [hl,Nat.not_lt_of_ge (eval6_bound h hl _ _ _ _ _ _)]
     · simp [hl]
 
-end Live514
+end PEqualNP.Outside.L_meta_2832.Theta
 
-namespace Live514
+namespace PEqualNP.Outside.L_meta_2832.Theta
 
 def unpackWords (wt : Nat → Nat) (bits : Nat) : Nat → Nat → List Nat
   | 0, _ => []
@@ -1760,7 +1802,7 @@ def span (f : Nat → Bool) : Nat → Nat → Bool
   | 0, _ => true
   | n+1, i => f i && span f n (i+1)
 
-theorem span_ok {f n o} (h : span f n o = true) : ∀ i, o ≤ i → i < o+n → f i = true := by
+lemma span_ok {f n o} (h : span f n o = true) : ∀ i, o ≤ i → i < o+n → f i = true := by
   induction n generalizing o with
   | zero => omega
   | succ n ih =>
@@ -1770,7 +1812,7 @@ theorem span_ok {f n o} (h : span f n o = true) : ∀ i, o ≤ i → i < o+n →
     · exact h.1
     · exact ih h.2 i (by omega) (by omega)
 
-theorem span_join {f a o b} (ha : span f a o = true) (hb : span f b (o+a) = true) :
+lemma span_join {f a o b} (ha : span f a o = true) (hb : span f b (o+a) = true) :
     span f (a+b) o = true := by
   induction a generalizing o with
   | zero => simpa using hb
@@ -1779,15 +1821,15 @@ theorem span_join {f a o b} (ha : span f a o = true) (hb : span f b (o+a) = true
     rw [Nat.succ_add, span, Bool.and_eq_true]
     exact ⟨ha.1, ih ha.2 (by simpa [Nat.add_assoc,Nat.add_comm,Nat.add_left_comm] using hb)⟩
 
-theorem extend_run {α inv meet join y s t a r} (h : @Run α inv meet join y s (a::r))
+lemma extend_run {α inv meet join y s t a r} (h : @Run α inv meet join y s (a::r))
     (hle : s ≤ t) : Run inv meet join y t (a::r) := by
   induction t, hle using Nat.le_induction with
   | base => exact h
   | succ t hle ih => exact Run.one false false ih
 
-end Live514
+end PEqualNP.Outside.L_meta_2832.Theta
 
-namespace Live514
+namespace PEqualNP.Outside.L_meta_2832.Theta
 
 def edgeHash : List Nat → Nat
   | [] => 0
@@ -1805,7 +1847,7 @@ def barrier (k : Nat) (S : Nat → Nat → List Nat) (N : Nat → Nat)
           if v % 2 = 1 then !scoreCheck k s zs (wits (v/2))
           else !(v/8 < N s && (rot (v/2 % 4) zs).isPerm (S s (v/8)))))
 
-theorem barrier_sound {k S N act wits rot} {s i} (hb : barrier k S N act wits rot s i = true)
+lemma barrier_sound {k S N act wits rot} {s i} (hb : barrier k S N act wits rot s i = true)
     (hr : ∀ g {u ys}, NatRun (mask k) (goal k) u ys → NatRun (mask k) (goal k) u (rot g ys))
     (h : NatRun (mask k) (goal k) s (S s i)) :
     ∃ q < s, ∃ j < N q, NatRun (mask k) (goal k) q (S q j) := by
@@ -1831,7 +1873,7 @@ theorem barrier_sound {k S N act wits rot} {s i} (hb : barrier k S N act wits ro
     rw [hN] at hb
     contradiction
 
-theorem barrier_all {k S N act wits rot} {cap : Nat}
+lemma barrier_all {k S N act wits rot} {cap : Nat}
     (hr : ∀ g {u ys}, NatRun (mask k) (goal k) u ys → NatRun (mask k) (goal k) u (rot g ys))
     (hc : ∀ s ≤ cap, ∀ i < N s, barrier k S N act wits rot s i = true) :
     ∀ s ≤ cap, ∀ i < N s, ¬ NatRun (mask k) (goal k) s (S s i) := by
@@ -1842,9 +1884,9 @@ theorem barrier_all {k S N act wits rot} {cap : Nat}
     obtain ⟨q,hq,j,hj,h⟩ := barrier_sound (hc s hs i hi) hr hh
     exact ih q hq (by omega) j hj h
 
-end Live514
+end PEqualNP.Outside.L_meta_2832.Theta
 
-namespace Live514
+namespace PEqualNP.Outside.L_meta_2832.Theta
 
 def t1 : Nat := 0x0
 
@@ -2537,7 +2579,7 @@ def actionE (s i h : Nat) : Nat :=
 
 def rotateE (g : Nat) (ws : List Nat) := if g = 0 then ws else if g = 1 then setA ws else if g = 2 then setB ws else setA (setB ws)
 
-theorem rotateE_ok (g : Nat) {s ws} (h : NatRun (mask 232) (goal 232) s ws) : NatRun (mask 232) (goal 232) s (rotateE g ws) := by
+lemma rotateE_ok (g : Nat) {s ws} (h : NatRun (mask 232) (goal 232) s ws) : NatRun (mask 232) (goal 232) s (rotateE g ws) := by
   unfold rotateE
 
   split
@@ -2549,191 +2591,191 @@ theorem rotateE_ok (g : Nat) {s ws} (h : NatRun (mask 232) (goal 232) s ws) : Na
       · exact runA (runB h)
 
 def Z (s : Nat) := barrier 232 stateE nsE actionE sixE rotateE s
-end Live514
+end PEqualNP.Outside.L_meta_2832.Theta
 
-namespace Live514
+namespace PEqualNP.Outside.L_meta_2832.Theta
 
-theorem h0y0 : span (Z 0) 1 0 = true := by decide +kernel
+lemma h0y0 : span (Z 0) 1 0 = true := by decide +kernel
 
-theorem z0 : span (Z 0) 1 0 = true := h0y0
+lemma z0 : span (Z 0) 1 0 = true := h0y0
 
-theorem h1y0 : span (Z 1) 1 0 = true := by decide +kernel
+lemma h1y0 : span (Z 1) 1 0 = true := by decide +kernel
 
-theorem z1 : span (Z 1) 1 0 = true := h1y0
+lemma z1 : span (Z 1) 1 0 = true := h1y0
 
-theorem h2y0 : span (Z 2) 1 0 = true := by decide +kernel
+lemma h2y0 : span (Z 2) 1 0 = true := by decide +kernel
 
-theorem z2 : span (Z 2) 1 0 = true := h2y0
+lemma z2 : span (Z 2) 1 0 = true := h2y0
 
-theorem h3y0 : span (Z 3) 1 0 = true := by decide +kernel
+lemma h3y0 : span (Z 3) 1 0 = true := by decide +kernel
 
-theorem z3 : span (Z 3) 1 0 = true := h3y0
+lemma z3 : span (Z 3) 1 0 = true := h3y0
 
-theorem h4y0 : span (Z 4) 1 0 = true := by decide +kernel
+lemma h4y0 : span (Z 4) 1 0 = true := by decide +kernel
 
-theorem z4 : span (Z 4) 1 0 = true := h4y0
+lemma z4 : span (Z 4) 1 0 = true := h4y0
 
-theorem h5y0 : span (Z 5) 1 0 = true := by decide +kernel
+lemma h5y0 : span (Z 5) 1 0 = true := by decide +kernel
 
-theorem z5 : span (Z 5) 1 0 = true := h5y0
+lemma z5 : span (Z 5) 1 0 = true := h5y0
 
-theorem h6y0 : span (Z 6) 10 0 = true := by decide +kernel
+lemma h6y0 : span (Z 6) 10 0 = true := by decide +kernel
 
-theorem h6y1 : span (Z 6) 9 10 = true := by decide +kernel
+lemma h6y1 : span (Z 6) 9 10 = true := by decide +kernel
 
-theorem z6 : span (Z 6) 19 0 = true := (@span_join (Z 6) 10 0 9 h6y0 h6y1)
+lemma z6 : span (Z 6) 19 0 = true := (@span_join (Z 6) 10 0 9 h6y0 h6y1)
 
-theorem h7y0 : span (Z 7) 10 0 = true := by decide +kernel
+lemma h7y0 : span (Z 7) 10 0 = true := by decide +kernel
 
-theorem h7y1 : span (Z 7) 10 10 = true := by decide +kernel
+lemma h7y1 : span (Z 7) 10 10 = true := by decide +kernel
 
-theorem h7y2 : span (Z 7) 10 20 = true := by decide +kernel
+lemma h7y2 : span (Z 7) 10 20 = true := by decide +kernel
 
-theorem h7y3 : span (Z 7) 10 30 = true := by decide +kernel
+lemma h7y3 : span (Z 7) 10 30 = true := by decide +kernel
 
-theorem h7y4 : span (Z 7) 10 40 = true := by decide +kernel
+lemma h7y4 : span (Z 7) 10 40 = true := by decide +kernel
 
-theorem h7y5 : span (Z 7) 10 50 = true := by decide +kernel
+lemma h7y5 : span (Z 7) 10 50 = true := by decide +kernel
 
-theorem h7y6 : span (Z 7) 10 60 = true := by decide +kernel
+lemma h7y6 : span (Z 7) 10 60 = true := by decide +kernel
 
-theorem h7y7 : span (Z 7) 10 70 = true := by decide +kernel
+lemma h7y7 : span (Z 7) 10 70 = true := by decide +kernel
 
-theorem h7y8 : span (Z 7) 10 80 = true := by decide +kernel
+lemma h7y8 : span (Z 7) 10 80 = true := by decide +kernel
 
-theorem h7y9 : span (Z 7) 10 90 = true := by decide +kernel
+lemma h7y9 : span (Z 7) 10 90 = true := by decide +kernel
 
-theorem h7y10 : span (Z 7) 10 100 = true := by decide +kernel
+lemma h7y10 : span (Z 7) 10 100 = true := by decide +kernel
 
-theorem h7y11 : span (Z 7) 10 110 = true := by decide +kernel
+lemma h7y11 : span (Z 7) 10 110 = true := by decide +kernel
 
-theorem h7y12 : span (Z 7) 10 120 = true := by decide +kernel
+lemma h7y12 : span (Z 7) 10 120 = true := by decide +kernel
 
-theorem h7y13 : span (Z 7) 10 130 = true := by decide +kernel
+lemma h7y13 : span (Z 7) 10 130 = true := by decide +kernel
 
-theorem h7y14 : span (Z 7) 10 140 = true := by decide +kernel
+lemma h7y14 : span (Z 7) 10 140 = true := by decide +kernel
 
-theorem h7y15 : span (Z 7) 10 150 = true := by decide +kernel
+lemma h7y15 : span (Z 7) 10 150 = true := by decide +kernel
 
-theorem h7y16 : span (Z 7) 10 160 = true := by decide +kernel
+lemma h7y16 : span (Z 7) 10 160 = true := by decide +kernel
 
-theorem h7y17 : span (Z 7) 10 170 = true := by decide +kernel
+lemma h7y17 : span (Z 7) 10 170 = true := by decide +kernel
 
-theorem h7y18 : span (Z 7) 10 180 = true := by decide +kernel
+lemma h7y18 : span (Z 7) 10 180 = true := by decide +kernel
 
-theorem h7y19 : span (Z 7) 10 190 = true := by decide +kernel
+lemma h7y19 : span (Z 7) 10 190 = true := by decide +kernel
 
-theorem h7y20 : span (Z 7) 10 200 = true := by decide +kernel
+lemma h7y20 : span (Z 7) 10 200 = true := by decide +kernel
 
-theorem h7y21 : span (Z 7) 10 210 = true := by decide +kernel
+lemma h7y21 : span (Z 7) 10 210 = true := by decide +kernel
 
-theorem h7y22 : span (Z 7) 10 220 = true := by decide +kernel
+lemma h7y22 : span (Z 7) 10 220 = true := by decide +kernel
 
-theorem h7y23 : span (Z 7) 10 230 = true := by decide +kernel
+lemma h7y23 : span (Z 7) 10 230 = true := by decide +kernel
 
-theorem h7y24 : span (Z 7) 10 240 = true := by decide +kernel
+lemma h7y24 : span (Z 7) 10 240 = true := by decide +kernel
 
-theorem h7y25 : span (Z 7) 10 250 = true := by decide +kernel
+lemma h7y25 : span (Z 7) 10 250 = true := by decide +kernel
 
-theorem h7y26 : span (Z 7) 10 260 = true := by decide +kernel
+lemma h7y26 : span (Z 7) 10 260 = true := by decide +kernel
 
-theorem h7y27 : span (Z 7) 10 270 = true := by decide +kernel
+lemma h7y27 : span (Z 7) 10 270 = true := by decide +kernel
 
-theorem h7y28 : span (Z 7) 10 280 = true := by decide +kernel
+lemma h7y28 : span (Z 7) 10 280 = true := by decide +kernel
 
-theorem h7y29 : span (Z 7) 2 290 = true := by decide +kernel
+lemma h7y29 : span (Z 7) 2 290 = true := by decide +kernel
 
-theorem z7 : span (Z 7) 292 0 = true := (@span_join (Z 7) 160 0 132 (@span_join (Z 7) 80 0 80 (@span_join (Z 7) 40 0 40 (@span_join (Z 7) 20 0 20 (@span_join (Z 7) 10 0 10 h7y0 h7y1) (@span_join (Z 7) 10 20 10 h7y2 h7y3)) (@span_join (Z 7) 20 40 20 (@span_join (Z 7) 10 40 10 h7y4 h7y5) (@span_join (Z 7) 10 60 10 h7y6 h7y7))) (@span_join (Z 7) 40 80 40 (@span_join (Z 7) 20 80 20 (@span_join (Z 7) 10 80 10 h7y8 h7y9) (@span_join (Z 7) 10 100 10 h7y10 h7y11)) (@span_join (Z 7) 20 120 20 (@span_join (Z 7) 10 120 10 h7y12 h7y13) (@span_join (Z 7) 10 140 10 h7y14 h7y15)))) (@span_join (Z 7) 80 160 52 (@span_join (Z 7) 40 160 40 (@span_join (Z 7) 20 160 20 (@span_join (Z 7) 10 160 10 h7y16 h7y17) (@span_join (Z 7) 10 180 10 h7y18 h7y19)) (@span_join (Z 7) 20 200 20 (@span_join (Z 7) 10 200 10 h7y20 h7y21) (@span_join (Z 7) 10 220 10 h7y22 h7y23))) (@span_join (Z 7) 40 240 12 (@span_join (Z 7) 20 240 20 (@span_join (Z 7) 10 240 10 h7y24 h7y25) (@span_join (Z 7) 10 260 10 h7y26 h7y27)) (@span_join (Z 7) 10 280 2 h7y28 h7y29))))
+lemma z7 : span (Z 7) 292 0 = true := (@span_join (Z 7) 160 0 132 (@span_join (Z 7) 80 0 80 (@span_join (Z 7) 40 0 40 (@span_join (Z 7) 20 0 20 (@span_join (Z 7) 10 0 10 h7y0 h7y1) (@span_join (Z 7) 10 20 10 h7y2 h7y3)) (@span_join (Z 7) 20 40 20 (@span_join (Z 7) 10 40 10 h7y4 h7y5) (@span_join (Z 7) 10 60 10 h7y6 h7y7))) (@span_join (Z 7) 40 80 40 (@span_join (Z 7) 20 80 20 (@span_join (Z 7) 10 80 10 h7y8 h7y9) (@span_join (Z 7) 10 100 10 h7y10 h7y11)) (@span_join (Z 7) 20 120 20 (@span_join (Z 7) 10 120 10 h7y12 h7y13) (@span_join (Z 7) 10 140 10 h7y14 h7y15)))) (@span_join (Z 7) 80 160 52 (@span_join (Z 7) 40 160 40 (@span_join (Z 7) 20 160 20 (@span_join (Z 7) 10 160 10 h7y16 h7y17) (@span_join (Z 7) 10 180 10 h7y18 h7y19)) (@span_join (Z 7) 20 200 20 (@span_join (Z 7) 10 200 10 h7y20 h7y21) (@span_join (Z 7) 10 220 10 h7y22 h7y23))) (@span_join (Z 7) 40 240 12 (@span_join (Z 7) 20 240 20 (@span_join (Z 7) 10 240 10 h7y24 h7y25) (@span_join (Z 7) 10 260 10 h7y26 h7y27)) (@span_join (Z 7) 10 280 2 h7y28 h7y29))))
 
-theorem h8y0 : span (Z 8) 10 0 = true := by decide +kernel
+lemma h8y0 : span (Z 8) 10 0 = true := by decide +kernel
 
-theorem h8y1 : span (Z 8) 10 10 = true := by decide +kernel
+lemma h8y1 : span (Z 8) 10 10 = true := by decide +kernel
 
-theorem h8y2 : span (Z 8) 10 20 = true := by decide +kernel
+lemma h8y2 : span (Z 8) 10 20 = true := by decide +kernel
 
-theorem h8y3 : span (Z 8) 10 30 = true := by decide +kernel
+lemma h8y3 : span (Z 8) 10 30 = true := by decide +kernel
 
-theorem h8y4 : span (Z 8) 10 40 = true := by decide +kernel
+lemma h8y4 : span (Z 8) 10 40 = true := by decide +kernel
 
-theorem h8y5 : span (Z 8) 10 50 = true := by decide +kernel
+lemma h8y5 : span (Z 8) 10 50 = true := by decide +kernel
 
-theorem h8y6 : span (Z 8) 10 60 = true := by decide +kernel
+lemma h8y6 : span (Z 8) 10 60 = true := by decide +kernel
 
-theorem h8y7 : span (Z 8) 10 70 = true := by decide +kernel
+lemma h8y7 : span (Z 8) 10 70 = true := by decide +kernel
 
-theorem h8y8 : span (Z 8) 10 80 = true := by decide +kernel
+lemma h8y8 : span (Z 8) 10 80 = true := by decide +kernel
 
-theorem h8y9 : span (Z 8) 10 90 = true := by decide +kernel
+lemma h8y9 : span (Z 8) 10 90 = true := by decide +kernel
 
-theorem h8y10 : span (Z 8) 10 100 = true := by decide +kernel
+lemma h8y10 : span (Z 8) 10 100 = true := by decide +kernel
 
-theorem h8y11 : span (Z 8) 10 110 = true := by decide +kernel
+lemma h8y11 : span (Z 8) 10 110 = true := by decide +kernel
 
-theorem h8y12 : span (Z 8) 10 120 = true := by decide +kernel
+lemma h8y12 : span (Z 8) 10 120 = true := by decide +kernel
 
-theorem h8y13 : span (Z 8) 10 130 = true := by decide +kernel
+lemma h8y13 : span (Z 8) 10 130 = true := by decide +kernel
 
-theorem h8y14 : span (Z 8) 10 140 = true := by decide +kernel
+lemma h8y14 : span (Z 8) 10 140 = true := by decide +kernel
 
-theorem h8y15 : span (Z 8) 10 150 = true := by decide +kernel
+lemma h8y15 : span (Z 8) 10 150 = true := by decide +kernel
 
-theorem h8y16 : span (Z 8) 10 160 = true := by decide +kernel
+lemma h8y16 : span (Z 8) 10 160 = true := by decide +kernel
 
-theorem h8y17 : span (Z 8) 10 170 = true := by decide +kernel
+lemma h8y17 : span (Z 8) 10 170 = true := by decide +kernel
 
-theorem h8y18 : span (Z 8) 10 180 = true := by decide +kernel
+lemma h8y18 : span (Z 8) 10 180 = true := by decide +kernel
 
-theorem h8y19 : span (Z 8) 10 190 = true := by decide +kernel
+lemma h8y19 : span (Z 8) 10 190 = true := by decide +kernel
 
-theorem h8y20 : span (Z 8) 10 200 = true := by decide +kernel
+lemma h8y20 : span (Z 8) 10 200 = true := by decide +kernel
 
-theorem h8y21 : span (Z 8) 10 210 = true := by decide +kernel
+lemma h8y21 : span (Z 8) 10 210 = true := by decide +kernel
 
-theorem h8y22 : span (Z 8) 10 220 = true := by decide +kernel
+lemma h8y22 : span (Z 8) 10 220 = true := by decide +kernel
 
-theorem h8y23 : span (Z 8) 10 230 = true := by decide +kernel
+lemma h8y23 : span (Z 8) 10 230 = true := by decide +kernel
 
-theorem h8y24 : span (Z 8) 10 240 = true := by decide +kernel
+lemma h8y24 : span (Z 8) 10 240 = true := by decide +kernel
 
-theorem h8y25 : span (Z 8) 10 250 = true := by decide +kernel
+lemma h8y25 : span (Z 8) 10 250 = true := by decide +kernel
 
-theorem h8y26 : span (Z 8) 10 260 = true := by decide +kernel
+lemma h8y26 : span (Z 8) 10 260 = true := by decide +kernel
 
-theorem h8y27 : span (Z 8) 10 270 = true := by decide +kernel
+lemma h8y27 : span (Z 8) 10 270 = true := by decide +kernel
 
-theorem h8y28 : span (Z 8) 10 280 = true := by decide +kernel
+lemma h8y28 : span (Z 8) 10 280 = true := by decide +kernel
 
-theorem h8y29 : span (Z 8) 10 290 = true := by decide +kernel
+lemma h8y29 : span (Z 8) 10 290 = true := by decide +kernel
 
-theorem h8y30 : span (Z 8) 10 300 = true := by decide +kernel
+lemma h8y30 : span (Z 8) 10 300 = true := by decide +kernel
 
-theorem h8y31 : span (Z 8) 10 310 = true := by decide +kernel
+lemma h8y31 : span (Z 8) 10 310 = true := by decide +kernel
 
-theorem h8y32 : span (Z 8) 10 320 = true := by decide +kernel
+lemma h8y32 : span (Z 8) 10 320 = true := by decide +kernel
 
-theorem h8y33 : span (Z 8) 10 330 = true := by decide +kernel
+lemma h8y33 : span (Z 8) 10 330 = true := by decide +kernel
 
-theorem h8y34 : span (Z 8) 10 340 = true := by decide +kernel
+lemma h8y34 : span (Z 8) 10 340 = true := by decide +kernel
 
-theorem h8y35 : span (Z 8) 10 350 = true := by decide +kernel
+lemma h8y35 : span (Z 8) 10 350 = true := by decide +kernel
 
-theorem h8y36 : span (Z 8) 5 360 = true := by decide +kernel
+lemma h8y36 : span (Z 8) 5 360 = true := by decide +kernel
 
-theorem z8 : span (Z 8) 365 0 = true := (@span_join (Z 8) 320 0 45 (@span_join (Z 8) 160 0 160 (@span_join (Z 8) 80 0 80 (@span_join (Z 8) 40 0 40 (@span_join (Z 8) 20 0 20 (@span_join (Z 8) 10 0 10 h8y0 h8y1) (@span_join (Z 8) 10 20 10 h8y2 h8y3)) (@span_join (Z 8) 20 40 20 (@span_join (Z 8) 10 40 10 h8y4 h8y5) (@span_join (Z 8) 10 60 10 h8y6 h8y7))) (@span_join (Z 8) 40 80 40 (@span_join (Z 8) 20 80 20 (@span_join (Z 8) 10 80 10 h8y8 h8y9) (@span_join (Z 8) 10 100 10 h8y10 h8y11)) (@span_join (Z 8) 20 120 20 (@span_join (Z 8) 10 120 10 h8y12 h8y13) (@span_join (Z 8) 10 140 10 h8y14 h8y15)))) (@span_join (Z 8) 80 160 80 (@span_join (Z 8) 40 160 40 (@span_join (Z 8) 20 160 20 (@span_join (Z 8) 10 160 10 h8y16 h8y17) (@span_join (Z 8) 10 180 10 h8y18 h8y19)) (@span_join (Z 8) 20 200 20 (@span_join (Z 8) 10 200 10 h8y20 h8y21) (@span_join (Z 8) 10 220 10 h8y22 h8y23))) (@span_join (Z 8) 40 240 40 (@span_join (Z 8) 20 240 20 (@span_join (Z 8) 10 240 10 h8y24 h8y25) (@span_join (Z 8) 10 260 10 h8y26 h8y27)) (@span_join (Z 8) 20 280 20 (@span_join (Z 8) 10 280 10 h8y28 h8y29) (@span_join (Z 8) 10 300 10 h8y30 h8y31))))) (@span_join (Z 8) 40 320 5 (@span_join (Z 8) 20 320 20 (@span_join (Z 8) 10 320 10 h8y32 h8y33) (@span_join (Z 8) 10 340 10 h8y34 h8y35)) h8y36))
+lemma z8 : span (Z 8) 365 0 = true := (@span_join (Z 8) 320 0 45 (@span_join (Z 8) 160 0 160 (@span_join (Z 8) 80 0 80 (@span_join (Z 8) 40 0 40 (@span_join (Z 8) 20 0 20 (@span_join (Z 8) 10 0 10 h8y0 h8y1) (@span_join (Z 8) 10 20 10 h8y2 h8y3)) (@span_join (Z 8) 20 40 20 (@span_join (Z 8) 10 40 10 h8y4 h8y5) (@span_join (Z 8) 10 60 10 h8y6 h8y7))) (@span_join (Z 8) 40 80 40 (@span_join (Z 8) 20 80 20 (@span_join (Z 8) 10 80 10 h8y8 h8y9) (@span_join (Z 8) 10 100 10 h8y10 h8y11)) (@span_join (Z 8) 20 120 20 (@span_join (Z 8) 10 120 10 h8y12 h8y13) (@span_join (Z 8) 10 140 10 h8y14 h8y15)))) (@span_join (Z 8) 80 160 80 (@span_join (Z 8) 40 160 40 (@span_join (Z 8) 20 160 20 (@span_join (Z 8) 10 160 10 h8y16 h8y17) (@span_join (Z 8) 10 180 10 h8y18 h8y19)) (@span_join (Z 8) 20 200 20 (@span_join (Z 8) 10 200 10 h8y20 h8y21) (@span_join (Z 8) 10 220 10 h8y22 h8y23))) (@span_join (Z 8) 40 240 40 (@span_join (Z 8) 20 240 20 (@span_join (Z 8) 10 240 10 h8y24 h8y25) (@span_join (Z 8) 10 260 10 h8y26 h8y27)) (@span_join (Z 8) 20 280 20 (@span_join (Z 8) 10 280 10 h8y28 h8y29) (@span_join (Z 8) 10 300 10 h8y30 h8y31))))) (@span_join (Z 8) 40 320 5 (@span_join (Z 8) 20 320 20 (@span_join (Z 8) 10 320 10 h8y32 h8y33) (@span_join (Z 8) 10 340 10 h8y34 h8y35)) h8y36))
 
-theorem h9y0 : span (Z 9) 10 0 = true := by decide +kernel
+lemma h9y0 : span (Z 9) 10 0 = true := by decide +kernel
 
-theorem h9y1 : span (Z 9) 10 10 = true := by decide +kernel
+lemma h9y1 : span (Z 9) 10 10 = true := by decide +kernel
 
-theorem h9y2 : span (Z 9) 6 20 = true := by decide +kernel
+lemma h9y2 : span (Z 9) 6 20 = true := by decide +kernel
 
-theorem z9 : span (Z 9) 26 0 = true := (@span_join (Z 9) 20 0 6 (@span_join (Z 9) 10 0 10 h9y0 h9y1) h9y2)
+lemma z9 : span (Z 9) 26 0 = true := (@span_join (Z 9) 20 0 6 (@span_join (Z 9) 10 0 10 h9y0 h9y1) h9y2)
 
-theorem h10y0 : span (Z 10) 1 0 = true := by decide +kernel
+lemma h10y0 : span (Z 10) 1 0 = true := by decide +kernel
 
-theorem z10 : span (Z 10) 1 0 = true := h10y0
+lemma z10 : span (Z 10) 1 0 = true := h10y0
 
-theorem checkedE (s : Nat) (hs : s ≤ 10) : ∀ i < nsE s, Z s i = true := by
+lemma checkedE (s : Nat) (hs : s ≤ 10) : ∀ i < nsE s, Z s i = true := by
   interval_cases s
 
   · exact fun i hi => span_ok z0 i (Nat.zero_le i) hi
@@ -2758,38 +2800,39 @@ theorem checkedE (s : Nat) (hs : s ≤ 10) : ∀ i < nsE s, Z s i = true := by
 
   · exact fun i hi => span_ok z10 i (Nat.zero_le i) hi
 
-theorem noRunFull (s : Nat) (hs : s ≤ 10) (h : NatRun (mask 232) (goal 232) s xs517) : False := by
+lemma noRunFull (s : Nat) (hs : s ≤ 10) (h : NatRun (mask 232) (goal 232) s xs517) : False := by
   have h10 : NatRun (mask 232) (goal 232) 10 xs517 := extend_run h hs
   have p : xs517.Perm (stateE 10 0) := by decide +kernel
   exact barrier_all rotateE_ok checkedE 10 (by decide) 0 (by decide) (Run.perm p h10)
-end Live514
+end PEqualNP.Outside.L_meta_2832.Theta
 
-theorem lower517 : ∀ s : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 2) || (x 2 && x 1) || (x 0 && x 3) || (x 3 && x 4) || (x 4 && x 1) || (x 0 && x 5) || (x 5 && x 6) || (x 6 && x 1)) s → 11 ≤ s :=
-  Live514.main517 Live514.noRunFull
 
-namespace Relabel
+
+-- Circuit relabeling adapted from visez, PR 3773.
+namespace PEqualNP.Outside.L_meta_2832.Relabel
+
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
-private lemma getD_snoc_eq {α : Type} (L : List α) (S d : α) : (L ++ [S]).getD L.length d = S := by
+lemma getD_snoc_eq {α : Type} (L : List α) (S d : α) : (L ++ [S]).getD L.length d = S := by
   simp
 
-private def wmap (n m : ℕ) (π : Fin n → Fin m) (w : ℕ) : ℕ :=
+def wmap (n m : ℕ) (π : Fin n → Fin m) (w : ℕ) : ℕ :=
   if h : w < n then (π ⟨w, h⟩ : ℕ) else w - n + m
 
-private def relGate (n m : ℕ) (π : Fin n → Fin m) (g : Gate) : Gate :=
+def relGate (n m : ℕ) (π : Fin n → Fin m) (g : Gate) : Gate :=
   ⟨g.op, g.inputs.map (wmap n m π)⟩
 
-private def relabel (n m : ℕ) (π : Fin n → Fin m) (C : Circuit) : Circuit :=
+def relabel (n m : ℕ) (π : Fin n → Fin m) (C : Circuit) : Circuit :=
   ⟨C.gates.map (relGate n m π), wmap n m π C.output⟩
 
-private def step (w : List Bool) (g : Gate) : List Bool :=
+def step (w : List Bool) (g : Gate) : List Bool :=
   w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
 
-private def Rel (n m : ℕ) (π : Fin n → Fin m) (W W' : List Bool) : Prop :=
+def Rel (n m : ℕ) (π : Fin n → Fin m) (W W' : List Bool) : Prop :=
   n ≤ W.length ∧ W'.length + n = W.length + m ∧
     ∀ w : ℕ, W'.getD (wmap n m π w) false = W.getD w false
 
-private lemma rel_step (n m : ℕ) (π : Fin n → Fin m) (W W' : List Bool) (g : Gate)
+lemma rel_step (n m : ℕ) (π : Fin n → Fin m) (W W' : List Bool) (g : Gate)
     (h : Rel n m π W W') : Rel n m π (step W g) (step W' (relGate n m π g)) := by
   obtain ⟨h1, h2, h3⟩ := h
   have hv : (relGate n m π g).op.eval
@@ -2824,7 +2867,7 @@ private lemma rel_step (n m : ℕ) (π : Fin n → Fin m) (W W' : List Bool) (g 
       · omega
     rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega)]
 
-private lemma rel_fold (n m : ℕ) (π : Fin n → Fin m) (gs : List Gate) :
+lemma rel_fold (n m : ℕ) (π : Fin n → Fin m) (gs : List Gate) :
     ∀ W W' : List Bool, Rel n m π W W' →
       Rel n m π (gs.foldl step W) ((gs.map (relGate n m π)).foldl step W') := by
   induction gs with
@@ -2833,7 +2876,7 @@ private lemma rel_fold (n m : ℕ) (π : Fin n → Fin m) (gs : List Gate) :
     intro W W' h
     exact ih _ _ (rel_step n m π W W' g h)
 
-private lemma rel_init (n m : ℕ) (π : Fin n → Fin m) (x : Fin m → Bool) :
+lemma rel_init (n m : ℕ) (π : Fin n → Fin m) (x : Fin m → Bool) :
     Rel n m π (List.ofFn (x ∘ π)) (List.ofFn x) := by
   refine ⟨by simp, by simp; omega, ?_⟩
   intro w
@@ -2845,7 +2888,7 @@ private lemma rel_init (n m : ℕ) (π : Fin n → Fin m) (x : Fin m → Bool) :
   · rename_i hw
     rw [List.getD_eq_default _ _ (by simp), List.getD_eq_default _ _ (by simp; omega)]
 
-private lemma relabel_size {n m : ℕ} (π : Fin n → Fin m) (h : (Fin n → Bool) → Bool) (s : ℕ)
+lemma relabel_size {n m : ℕ} (π : Fin n → Fin m) (h : (Fin n → Bool) → Bool) (s : ℕ)
     (hc : HasCircuitSize n h s) : HasCircuitSize m (fun x => h (x ∘ π)) s := by
   obtain ⟨C, ok, hsz, hev⟩ := hc
   refine ⟨relabel n m π C, ?_, ?_, ?_⟩
@@ -2856,31 +2899,46 @@ private lemma relabel_size {n m : ℕ} (π : Fin n → Fin m) (h : (Fin n → Bo
   · intro x
     show _ = h (x ∘ π)
     rw [← hev (x ∘ π)]
-    exact (rel_fold n m π C.gates _ _ (rel_init n m π x)).2.2 C.output
+    have := (rel_fold n m π C.gates _ _ (rel_init n m π x)).2.2 C.output
+    exact this
 
-def perm : Fin 7 → Fin 7
-  | 0 => 3
-  | 1 => 0
-  | 2 => 2
-  | 3 => 6
-  | 4 => 4
-  | 5 => 5
-  | 6 => 1
+end PEqualNP.Outside.L_meta_2832.Relabel
 
-theorem bad (hc : HasCircuitSize 7 (fun x1 : Fin 7 → Bool => x1 0 && x1 1 || x1 1 && x1 2 ||
-    x1 0 && x1 4 || x1 1 && x1 5 || x1 2 && x1 6 || x1 3 && x1 5 || x1 4 && x1 6 || x1 6 && x1 3) 10) :
-    False := by
-  have key : ∀ a b c d e f g : Bool,
-      (d && a || a && c || d && e || a && f || c && b || g && f || e && b || b && g) =
-        ((a && c) || (c && b) || (a && d) || (d && e) || (e && b) || (a && f) || (f && g) || (g && b)) := by
-    decide
-  obtain ⟨C, ok, sz, ev⟩ := relabel_size perm _ 10 hc
-  have h := lower517 10 ⟨C, ok, sz, fun x => (ev x).trans (key (x 0) (x 1) (x 2) (x 3) (x 4) (x 5) (x 6))⟩
+namespace PEqualNP.Outside.L_meta_2832
+
+open PEqualNP.MetaComplexity
+
+def target (x : Fin 9 → Bool) : Bool :=
+  [1, 12, 23, 34, 40, 5, 16, 27, 38, 57, 68, 85].any
+    fun e : ℕ => x (Fin.ofNat 9 (e / 10)) && x (Fin.ofNat 9 (e % 10))
+
+def restricted (x : Fin 7 → Bool) : Bool :=
+  target (Fin.insertNth (0 : Fin 9) false (Fin.insertNth (3 : Fin 8) false x))
+
+def rel : Fin 7 → Fin 7 := ![3, 0, 2, 6, 4, 5, 1]
+
+def theta (x : Fin 7 → Bool) : Bool :=
+  (x 0 && x 2) || (x 2 && x 1) || (x 0 && x 3) || (x 3 && x 4) ||
+  (x 4 && x 1) || (x 0 && x 5) || (x 5 && x 6) || (x 6 && x 1)
+
+lemma relabel_eq : (fun x : Fin 7 → Bool => restricted (x ∘ rel)) = theta := by
+  decide +kernel
+
+lemma main (s : ℕ) (h : HasCircuitSize 7 restricted s) : 11 ≤ s := by
+  have h' := Relabel.relabel_size rel restricted s h
+  rw [relabel_eq] at h'
+  exact Theta.main517 Theta.noRunFull s h'
+
+lemma same : (fun x1 : Fin 7 → Bool => x1 0 && x1 1 || x1 1 && x1 2 || x1 0 && x1 4 || x1 1 && x1 5 || x1 2 && x1 6 || x1 3 && x1 5 || x1 4 && x1 6 || x1 6 && x1 3) = restricted := by
+  decide +kernel
+
+lemma bad (hc : HasCircuitSize 7 (fun x1 : Fin 7 → Bool => x1 0 && x1 1 || x1 1 && x1 2 || x1 0 && x1 4 || x1 1 && x1 5 || x1 2 && x1 6 || x1 3 && x1 5 || x1 4 && x1 6 || x1 6 && x1 3) 10) : False := by
+  rw [same] at hc
+  have h := main 10 hc
   omega
 
-end Relabel
 end PEqualNP.Outside.L_meta_2832
 
 theorem PEqualNP.Outside.L_meta_2832 : ¬PEqualNP.MetaComplexity.HasCircuitSize (7 : ℕ) (fun (x1 : Fin (7 : ℕ) → Bool) => x1 (0 : Fin (7 : ℕ)) && x1 (1 : Fin (7 : ℕ)) || x1 (1 : Fin (7 : ℕ)) && x1 (2 : Fin (7 : ℕ)) || x1 (0 : Fin (7 : ℕ)) && x1 (4 : Fin (7 : ℕ)) || x1 (1 : Fin (7 : ℕ)) && x1 (5 : Fin (7 : ℕ)) || x1 (2 : Fin (7 : ℕ)) && x1 (6 : Fin (7 : ℕ)) || x1 (3 : Fin (7 : ℕ)) && x1 (5 : Fin (7 : ℕ)) || x1 (4 : Fin (7 : ℕ)) && x1 (6 : Fin (7 : ℕ)) || x1 (6 : Fin (7 : ℕ)) && x1 (3 : Fin (7 : ℕ))) (10 : ℕ) := by
   intro hc
-  exact PEqualNP.Outside.L_meta_2832.Relabel.bad hc
+  exact PEqualNP.Outside.L_meta_2832.bad hc
