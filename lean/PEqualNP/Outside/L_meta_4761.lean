@@ -6889,14 +6889,15 @@ private theorem add_complements (bound : ∀ D : Circuit, FanInTwo D → D.size 
     simp only [D, List.countP_cons]
     change 2 ≤ (C.gates.countP (fun g => g.op.eval [false]) + 1) + 1
     omega
-  apply bound D legal ?_ count
-  · change C.gates.length + 1 + 1 ≤ 15
+  have sized : D.size ≤ 15 := by
+    change C.gates.length + 1 + 1 ≤ 15
     change C.gates.length ≤ 13 at small
     omega
-  · funext x
-    have ext : circuitFun 9 D x = C.eval (List.ofFn x ++ [!x 0, !x i]) := by
-      rcases hi with e | e | e <;> subst i <;> rfl
-    exact ext.trans (h x)
+  apply bound D legal sized count
+  funext x
+  have ext : circuitFun 9 D x = C.eval (List.ofFn x ++ [!x 0, !x i]) := by
+    rcases hi with e | e | e <;> subst i <;> rfl
+  exact ext.trans (h x)
 
 end PEqualNP.Outside.L_meta_4761
 
