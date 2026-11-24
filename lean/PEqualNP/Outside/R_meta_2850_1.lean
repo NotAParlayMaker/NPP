@@ -1,55 +1,6 @@
 import Mathlib
 import PEqualNP.Defs
 
-namespace PEqualNP.Outside.R_meta_2850_1
-
-lemma foldl_getD_zero (gs : List PEqualNP.CircuitLowerBounds.Gate) (b : Bool) (t : List Bool) :
-    (gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) (b :: t)).getD 0 false = b := by
-  induction gs generalizing t with
-  | nil => rfl
-  | cons g gs ih =>
-    simpa [List.foldl, List.cons_append] using ih (t ++ [g.op.eval (g.inputs.map fun i => (b :: t).getD i false)])
-
-lemma foldl_wires_eq_nonzero (gs : List PEqualNP.CircuitLowerBounds.Gate)
-    (hno0 : ∀ g ∈ gs, g.inputs.contains 0 = false)
-    (w1 w2 : List Bool) (hlen : w1.length = w2.length)
-    (heq : ∀ k, k ≠ 0 → w1.getD k false = w2.getD k false) :
-    ∀ k, k ≠ 0 →
-      (gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w1).getD k false =
-      (gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w2).getD k false := by
-  induction gs generalizing w1 w2 with
-  | nil => exact heq
-  | cons g gs ih =>
-    have hg0 : g.inputs.contains 0 = false := hno0 g (by simp)
-    have hmap : (g.inputs.map fun i => w1.getD i false) = (g.inputs.map fun i => w2.getD i false) := by
-      apply List.map_congr_left
-      intro i hi
-      apply heq i
-      intro h0
-      subst h0
-      have : g.inputs.contains 0 = true := by simp [hi]
-      rw [hg0] at this
-      exact Bool.false_ne_true this
-    have hv : g.op.eval (g.inputs.map fun i => w1.getD i false) = g.op.eval (g.inputs.map fun i => w2.getD i false) := by
-      rw [hmap]
-    apply ih (fun g' hg' => hno0 g' (by simp [hg']))
-    · simp [hlen]
-    · intro k hk
-      dsimp only
-      rw [hv]
-      by_cases hlt : k < w1.length
-      · have hlt2 : k < w2.length := by omega
-        rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD,
-            List.getElem?_append_left hlt, List.getElem?_append_left hlt2]
-        have := heq k hk
-        rwa [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD] at this
-      · have hle1 : w1.length ≤ k := by omega
-        have hle2 : w2.length ≤ k := by omega
-        rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD,
-            List.getElem?_append_right hle1, List.getElem?_append_right hle2, hlen]
-
-end PEqualNP.Outside.R_meta_2850_1
-
 theorem PEqualNP.Outside.R_meta_2850_1
     (h1 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit) (x2 : Bool),
       PEqualNP.MetaComplexity.FanInTwo x1 →
@@ -70,6 +21,53 @@ theorem PEqualNP.Outside.R_meta_2850_1
       x2 = Bool.true →
       ∃ (x7 : Fin (9 : ℕ) → Bool), (PEqualNP.MetaComplexity.circuitFun (9 : ℕ) x1 fun (x8 : Fin (9 : ℕ)) => if x8 = (0 : Fin (9 : ℕ)) then x2 != x7 (0 : Fin (9 : ℕ)) else x7 x8) ≠ (x7 (0 : Fin (9 : ℕ)) && x7 (1 : Fin (9 : ℕ)) || x7 (1 : Fin (9 : ℕ)) && x7 (2 : Fin (9 : ℕ)) || x7 (2 : Fin (9 : ℕ)) && x7 (3 : Fin (9 : ℕ)) || x7 (3 : Fin (9 : ℕ)) && x7 (4 : Fin (9 : ℕ)) || x7 (4 : Fin (9 : ℕ)) && x7 (0 : Fin (9 : ℕ)) || x7 (0 : Fin (9 : ℕ)) && x7 (5 : Fin (9 : ℕ)) || x7 (1 : Fin (9 : ℕ)) && x7 (6 : Fin (9 : ℕ)) || x7 (2 : Fin (9 : ℕ)) && x7 (7 : Fin (9 : ℕ)) || x7 (3 : Fin (9 : ℕ)) && x7 (8 : Fin (9 : ℕ)) || x7 (5 : Fin (9 : ℕ)) && x7 (7 : Fin (9 : ℕ)) || x7 (6 : Fin (9 : ℕ)) && x7 (8 : Fin (9 : ℕ)) || x7 (8 : Fin (9 : ℕ)) && x7 (5 : Fin (9 : ℕ)))) :
     ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit) (x2 : Bool), PEqualNP.MetaComplexity.FanInTwo x1 → x1.size ≤ (14 : ℕ) → (List.filter (fun (x5 : PEqualNP.CircuitLowerBounds.Gate) => x5.inputs.contains (0 : ℕ)) x1.gates).length ≤ (1 : ℕ) → x2 = Bool.true → ∃ (x7 : Fin (9 : ℕ) → Bool), (PEqualNP.MetaComplexity.circuitFun (9 : ℕ) x1 fun (x8 : Fin (9 : ℕ)) => if x8 = (0 : Fin (9 : ℕ)) then x2 != x7 (0 : Fin (9 : ℕ)) else x7 x8) ≠ (x7 (0 : Fin (9 : ℕ)) && x7 (1 : Fin (9 : ℕ)) || x7 (1 : Fin (9 : ℕ)) && x7 (2 : Fin (9 : ℕ)) || x7 (2 : Fin (9 : ℕ)) && x7 (3 : Fin (9 : ℕ)) || x7 (3 : Fin (9 : ℕ)) && x7 (4 : Fin (9 : ℕ)) || x7 (4 : Fin (9 : ℕ)) && x7 (0 : Fin (9 : ℕ)) || x7 (0 : Fin (9 : ℕ)) && x7 (5 : Fin (9 : ℕ)) || x7 (1 : Fin (9 : ℕ)) && x7 (6 : Fin (9 : ℕ)) || x7 (2 : Fin (9 : ℕ)) && x7 (7 : Fin (9 : ℕ)) || x7 (3 : Fin (9 : ℕ)) && x7 (8 : Fin (9 : ℕ)) || x7 (5 : Fin (9 : ℕ)) && x7 (7 : Fin (9 : ℕ)) || x7 (6 : Fin (9 : ℕ)) && x7 (8 : Fin (9 : ℕ)) || x7 (8 : Fin (9 : ℕ)) && x7 (5 : Fin (9 : ℕ))) := by
+  have foldl_getD_zero : ∀ (gs : List PEqualNP.CircuitLowerBounds.Gate) (b : Bool) (t : List Bool),
+      (gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) (b :: t)).getD 0 false = b := by
+    intro gs
+    induction gs with
+    | nil => intro b t; rfl
+    | cons g gs ih =>
+      intro b t
+      simpa [List.foldl, List.cons_append] using ih b (t ++ [g.op.eval (g.inputs.map fun i => (b :: t).getD i false)])
+  have foldl_wires_eq_nonzero : ∀ (gs : List PEqualNP.CircuitLowerBounds.Gate),
+      (∀ g ∈ gs, g.inputs.contains 0 = false) →
+      ∀ (w1 w2 : List Bool), w1.length = w2.length →
+      (∀ k, k ≠ 0 → w1.getD k false = w2.getD k false) →
+      ∀ k, k ≠ 0 →
+        (gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w1).getD k false =
+        (gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w2).getD k false := by
+    intro gs
+    induction gs with
+    | nil => intro _ w1 w2 _ heq; exact heq
+    | cons g gs ih =>
+      intro hno0 w1 w2 hlen heq
+      have hg0 : g.inputs.contains 0 = false := hno0 g (by simp)
+      have hmap : (g.inputs.map fun i => w1.getD i false) = (g.inputs.map fun i => w2.getD i false) := by
+        apply List.map_congr_left
+        intro i hi
+        apply heq i
+        intro h0
+        subst h0
+        have : g.inputs.contains 0 = true := by simp [hi]
+        rw [hg0] at this
+        exact Bool.false_ne_true this
+      have hv : g.op.eval (g.inputs.map fun i => w1.getD i false) = g.op.eval (g.inputs.map fun i => w2.getD i false) := by
+        rw [hmap]
+      apply ih (fun g' hg' => hno0 g' (by simp [hg']))
+      · simp [hlen]
+      · intro k hk
+        dsimp only
+        rw [hv]
+        by_cases hlt : k < w1.length
+        · have hlt2 : k < w2.length := by omega
+          rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD,
+              List.getElem?_append_left hlt, List.getElem?_append_left hlt2]
+          have := heq k hk
+          rwa [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD] at this
+        · have hle1 : w1.length ≤ k := by omega
+          have hle2 : w2.length ≤ k := by omega
+          rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD,
+              List.getElem?_append_right hle1, List.getElem?_append_right hle2, hlen]
   intro x1 x2 hfit hsize hfilt hx2
   subst hx2
   match hfl : List.filter (fun (x5 : PEqualNP.CircuitLowerBounds.Gate) => x5.inputs.contains (0 : ℕ)) x1.gates with
@@ -86,7 +84,7 @@ theorem PEqualNP.Outside.R_meta_2850_1
         PEqualNP.CircuitLowerBounds.Circuit.wires, hout]
       have hof : List.ofFn (fun (x8 : Fin 9) => if x8 = 0 then true != false else false) =
           true :: List.replicate 8 false := by decide
-      rw [hof, PEqualNP.Outside.R_meta_2850_1.foldl_getD_zero]
+      rw [hof, foldl_getD_zero]
       decide
     · let a : Fin 9 → Bool := fun i => decide (i = 1)
       let b : Fin 9 → Bool := fun i => decide (i = 0 ∨ i = 1)
@@ -95,7 +93,7 @@ theorem PEqualNP.Outside.R_meta_2850_1
           PEqualNP.MetaComplexity.circuitFun 9 x1 (fun x8 => if x8 = 0 then true != b 0 else b x8) := by
         simp only [PEqualNP.MetaComplexity.circuitFun, PEqualNP.CircuitLowerBounds.Circuit.eval,
           PEqualNP.CircuitLowerBounds.Circuit.wires]
-        apply PEqualNP.Outside.R_meta_2850_1.foldl_wires_eq_nonzero x1.gates hno0
+        apply foldl_wires_eq_nonzero x1.gates hno0
         · simp
         · intro k hk
           by_cases hlt : k < 9
