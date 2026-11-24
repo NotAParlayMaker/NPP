@@ -8,30 +8,20 @@ theorem PEqualNP.Outside.R_meta_3507_1
         (∀ x : Fin 9 → Bool, C.eval (List.ofFn x) =
           (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 || x 0 && x 5 || x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 || x 6 && x 8 || x 8 && x 5)) →
         13 ≤ C.size - PEqualNP.NotBracket.notCount C)
-    (orb_12 :
-      ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C → C.size ≤ 13 →
-        PEqualNP.NotBracket.notCount C ≤ 2 →
-        (∀ x : Fin 9 → Bool, C.eval (List.ofFn x ++ [x 0 || x 4, x 1 || x 2]) =
-          (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 || x 0 && x 5 || x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 || x 6 && x 8 || x 8 && x 5)) →
-        False)
-    (orb_23 :
-      ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C → C.size ≤ 13 →
-        PEqualNP.NotBracket.notCount C ≤ 2 →
-        (∀ x : Fin 9 → Bool, C.eval (List.ofFn x ++ [x 0 || x 4, x 2 || x 3]) =
-          (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 || x 0 && x 5 || x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 || x 6 && x 8 || x 8 && x 5)) →
-        False)
-    (orb_16 :
-      ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C → C.size ≤ 13 →
-        PEqualNP.NotBracket.notCount C ≤ 2 →
-        (∀ x : Fin 9 → Bool, C.eval (List.ofFn x ++ [x 0 || x 4, x 1 || x 6]) =
-          (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 || x 0 && x 5 || x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 || x 6 && x 8 || x 8 && x 5)) →
-        False)
-    (orb_27 :
-      ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C → C.size ≤ 13 →
-        PEqualNP.NotBracket.notCount C ≤ 2 →
-        (∀ x : Fin 9 → Bool, C.eval (List.ofFn x ++ [x 0 || x 4, x 2 || x 7]) =
-          (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 || x 0 && x 5 || x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 || x 6 && x 8 || x 8 && x 5)) →
-        False) :
+    (orb_deg3 :
+      ∀ p ∈ ([(1, 2), (2, 3)] : List (Fin 9 × Fin 9)),
+        ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C → C.size ≤ 13 →
+          PEqualNP.NotBracket.notCount C ≤ 2 →
+          (∀ x : Fin 9 → Bool, C.eval (List.ofFn x ++ [x 0 || x 4, x p.1 || x p.2]) =
+            (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 || x 0 && x 5 || x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 || x 6 && x 8 || x 8 && x 5)) →
+          False)
+    (orb_deg2 :
+      ∀ p ∈ ([(1, 6), (2, 7)] : List (Fin 9 × Fin 9)),
+        ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C → C.size ≤ 13 →
+          PEqualNP.NotBracket.notCount C ≤ 2 →
+          (∀ x : Fin 9 → Bool, C.eval (List.ofFn x ++ [x 0 || x 4, x p.1 || x p.2]) =
+            (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 || x 0 && x 5 || x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 || x 6 && x 8 || x 8 && x 5)) →
+          False) :
     ∀ (x1 x2 : Fin (9 : ℕ)) (x3 : PEqualNP.CircuitLowerBounds.Circuit), x1 ≠ (0 : Fin (9 : ℕ)) → x1 ≠ (4 : Fin (9 : ℕ)) → x2 ≠ (0 : Fin (9 : ℕ)) → x2 ≠ (4 : Fin (9 : ℕ)) → x1 ≠ x2 → ↑x1 * (10 : ℕ) + ↑x2 ∈ [(12 : ℕ), (21 : ℕ), (23 : ℕ), (32 : ℕ), (16 : ℕ), (61 : ℕ), (27 : ℕ), (72 : ℕ), (38 : ℕ), (83 : ℕ), (57 : ℕ), (75 : ℕ), (68 : ℕ), (86 : ℕ), (58 : ℕ), (85 : ℕ)] → PEqualNP.MetaComplexity.FanInTwo x3 → x3.size ≤ (13 : ℕ) → (∀ (x12 : Fin (9 : ℕ) → Bool), x3.eval (List.ofFn x12 ++ [x12 (0 : Fin (9 : ℕ)) || x12 (4 : Fin (9 : ℕ)), x12 x1 || x12 x2]) = (x12 (0 : Fin (9 : ℕ)) && x12 (1 : Fin (9 : ℕ)) || x12 (1 : Fin (9 : ℕ)) && x12 (2 : Fin (9 : ℕ)) || x12 (2 : Fin (9 : ℕ)) && x12 (3 : Fin (9 : ℕ)) || x12 (3 : Fin (9 : ℕ)) && x12 (4 : Fin (9 : ℕ)) || x12 (4 : Fin (9 : ℕ)) && x12 (0 : Fin (9 : ℕ)) || x12 (0 : Fin (9 : ℕ)) && x12 (5 : Fin (9 : ℕ)) || x12 (1 : Fin (9 : ℕ)) && x12 (6 : Fin (9 : ℕ)) || x12 (2 : Fin (9 : ℕ)) && x12 (7 : Fin (9 : ℕ)) || x12 (3 : Fin (9 : ℕ)) && x12 (8 : Fin (9 : ℕ)) || x12 (5 : Fin (9 : ℕ)) && x12 (7 : Fin (9 : ℕ)) || x12 (6 : Fin (9 : ℕ)) && x12 (8 : Fin (9 : ℕ)) || x12 (8 : Fin (9 : ℕ)) && x12 (5 : Fin (9 : ℕ)))) → False := by
   classical
   intro a b C _ _ _ _ _ hcode hfan hsz heq
@@ -244,19 +234,19 @@ theorem PEqualNP.Outside.R_meta_3507_1
                      ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
                      ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
                      ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-  · exact orb_12 C hfan hsz hnot_le2 heq
-  · exact orb_12 C hfan hsz hnot_le2 heq_comm
-  · exact orb_23 C hfan hsz hnot_le2 heq
-  · exact orb_23 C hfan hsz hnot_le2 heq_comm
-  · exact orb_16 C hfan hsz hnot_le2 heq
-  · exact orb_16 C hfan hsz hnot_le2 heq_comm
-  · exact orb_27 C hfan hsz hnot_le2 heq
-  · exact orb_27 C hfan hsz hnot_le2 heq_comm
-  · exact orb_23 Cr hCr_fan hCr_sz hCr_not heq_r_comm
-  · exact orb_23 Cr hCr_fan hCr_sz hCr_not heq_r
-  · exact orb_16 Cr hCr_fan hCr_sz hCr_not heq_r
-  · exact orb_16 Cr hCr_fan hCr_sz hCr_not heq_r_comm
-  · exact orb_27 Cr hCr_fan hCr_sz hCr_not heq_r_comm
-  · exact orb_27 Cr hCr_fan hCr_sz hCr_not heq_r
-  · exact orb_12 Cr hCr_fan hCr_sz hCr_not heq_r
-  · exact orb_12 Cr hCr_fan hCr_sz hCr_not heq_r_comm
+  · exact orb_deg3 (1, 2) (by decide) C hfan hsz hnot_le2 heq
+  · exact orb_deg3 (1, 2) (by decide) C hfan hsz hnot_le2 heq_comm
+  · exact orb_deg3 (2, 3) (by decide) C hfan hsz hnot_le2 heq
+  · exact orb_deg3 (2, 3) (by decide) C hfan hsz hnot_le2 heq_comm
+  · exact orb_deg2 (1, 6) (by decide) C hfan hsz hnot_le2 heq
+  · exact orb_deg2 (1, 6) (by decide) C hfan hsz hnot_le2 heq_comm
+  · exact orb_deg2 (2, 7) (by decide) C hfan hsz hnot_le2 heq
+  · exact orb_deg2 (2, 7) (by decide) C hfan hsz hnot_le2 heq_comm
+  · exact orb_deg3 (2, 3) (by decide) Cr hCr_fan hCr_sz hCr_not heq_r_comm
+  · exact orb_deg3 (2, 3) (by decide) Cr hCr_fan hCr_sz hCr_not heq_r
+  · exact orb_deg2 (1, 6) (by decide) Cr hCr_fan hCr_sz hCr_not heq_r
+  · exact orb_deg2 (1, 6) (by decide) Cr hCr_fan hCr_sz hCr_not heq_r_comm
+  · exact orb_deg2 (2, 7) (by decide) Cr hCr_fan hCr_sz hCr_not heq_r_comm
+  · exact orb_deg2 (2, 7) (by decide) Cr hCr_fan hCr_sz hCr_not heq_r
+  · exact orb_deg3 (1, 2) (by decide) Cr hCr_fan hCr_sz hCr_not heq_r
+  · exact orb_deg3 (1, 2) (by decide) Cr hCr_fan hCr_sz hCr_not heq_r_comm
