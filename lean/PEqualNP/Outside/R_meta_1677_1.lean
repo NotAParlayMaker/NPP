@@ -1,114 +1,98 @@
 import Mathlib
 import PEqualNP.Defs
 
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity in
 theorem PEqualNP.Outside.R_meta_1677_1
-    (cofactor : ¬ PEqualNP.MetaComplexity.HasCircuitSize 8
-      (fun x : Fin 8 → Bool => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 0 && x 4) ||
-        (x 1 && x 5) || (x 2 && x 6) || (x 3 && x 7) || (x 4 && x 6) || (x 5 && x 7) || (x 7 && x 4)) 12)
-    (eliminate :
-      let read : PEqualNP.CircuitLowerBounds.Gate → Bool := fun g =>
-        (if g.op.eval [false, false] then g.inputs.take 1 else g.inputs).any (fun i => decide (i = 6))
-      let input : Bool → (Fin 8 → Bool) → List Bool := fun b x =>
-        [x 1, x 0, x 4, x 7, x 5, x 2, b, x 6, x 3, x 1 || b]
-      ∀ D : PEqualNP.CircuitLowerBounds.Circuit,
-        PEqualNP.MetaComplexity.FanInTwo D →
-        2 ≤ D.gates.countP read →
-        (∃ x : Fin 8 → Bool, D.eval (input false x) = false) →
-        ∃ R : PEqualNP.CircuitLowerBounds.Circuit,
-          PEqualNP.MetaComplexity.FanInTwo R ∧ R.size + 2 ≤ D.size ∧
-          ∀ x : Fin 8 → Bool, R.eval (List.ofFn x) = D.eval (input false x))
-    (singleRead :
-      let read : PEqualNP.CircuitLowerBounds.Gate → Bool := fun g =>
-        (if g.op.eval [false, false] then g.inputs.take 1 else g.inputs).any (fun i => decide (i = 6))
-      let input : Bool → (Fin 8 → Bool) → List Bool := fun b x =>
-        [x 1, x 0, x 4, x 7, x 5, x 2, b, x 6, x 3, x 1 || b]
-      let z : (Fin 8 → Bool) → Bool := fun x =>
-        (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 0 && x 4) || (x 1 && x 5) ||
-        (x 2 && x 6) || (x 3 && x 7) || (x 4 && x 6) || (x 5 && x 7) || (x 7 && x 4)
-      ∀ D : PEqualNP.CircuitLowerBounds.Circuit,
-        PEqualNP.MetaComplexity.FanInTwo D →
-        D.size ≤ 14 →
-        D.gates.countP read ≤ 1 →
-        (∀ x : Fin 8 → Bool, D.eval (input false x) = z x) →
-        ∃ x : Fin 8 → Bool, D.eval (input true x) ≠ (z x || x 0 || x 3)) :
+    (optimalBudget : ∀ C : Circuit, FanInTwo C → C.size ≤ 15 →
+      (∀ x : Fin 9 → Bool, C.eval (List.ofFn x) =
+        (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 ||
+          x 0 && x 5 || x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 ||
+          x 6 && x 8 || x 8 && x 5)) →
+      C.size = 15 ∧ C.gates.countP (fun g => g.op.eval [false]) ≤ 2)
+    (withoutNot : ∀ D : Circuit, FanInTwo D → D.size = 14 →
+      D.gates.countP (fun g => g.op.eval [false]) = 0 →
+      ∃ x : Fin 9 → Bool, D.eval (List.ofFn x ++ [x 0 || x 6]) ≠
+        (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 ||
+          x 0 && x 5 || x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 ||
+          x 6 && x 8 || x 8 && x 5))
+    (withNot : ∀ D : Circuit, FanInTwo D → D.size = 14 →
+      1 ≤ D.gates.countP (fun g => g.op.eval [false]) →
+      D.gates.countP (fun g => g.op.eval [false]) ≤ 2 →
+      ∃ x : Fin 9 → Bool, D.eval (List.ofFn x ++ [x 0 || x 6]) ≠
+        (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 ||
+          x 0 && x 5 || x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 ||
+          x 6 && x 8 || x 8 && x 5)) :
     ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C → (∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = (y 0 || y 6)) → PEqualNP.MetaComplexity.circuitFun 9 C = (fun x : Fin 9 → Bool => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)) → 16 ≤ C.size := by
-  let f : (Fin 8 → Bool) → Bool := fun x =>
-    (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 0 && x 4) || (x 1 && x 5) ||
-    (x 2 && x 6) || (x 3 && x 7) || (x 4 && x 6) || (x 5 && x 7) || (x 7 && x 4)
-  let input : Bool → (Fin 8 → Bool) → List Bool := fun b x =>
-    [x 1, x 0, x 4, x 7, x 5, x 2, b, x 6, x 3, x 1 || b]
-  let lift : Bool → (Fin 8 → Bool) → Fin 9 → Bool := fun b x =>
-    ![x 1, x 0, x 4, x 7, x 5, x 2, b, x 6, x 3]
-  let read : PEqualNP.CircuitLowerBounds.Gate → Bool := fun g =>
-    (if g.op.eval [false, false] then g.inputs.take 1 else g.inputs).any (fun i => decide (i = 6))
-  let step (w : List Bool) (g : PEqualNP.CircuitLowerBounds.Gate) :=
-    w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
-  have preserved (gs : List PEqualNP.CircuitLowerBounds.Gate) (w : List Bool) (i : ℕ) (hi : i < w.length) :
-      (gs.foldl step w).getD i false = w.getD i false := by
-    induction gs generalizing w with
+  intro C fan first computes
+  by_contra! small
+  change C.gates.length < 16 at small
+  let target (x : Fin 9 → Bool) := (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 ||
+          x 0 && x 5 || x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 ||
+          x 6 && x 8 || x 8 && x 5)
+  have evalTarget (x : Fin 9 → Bool) : C.eval (List.ofFn x) = target x := congrFun computes x
+  let tag (g : Gate) := g.op.eval [false]
+  obtain ⟨optimal, notBound⟩ := optimalBudget C fan (by change C.gates.length ≤ 15; omega) evalTarget
+  let step (bits : List Bool) (g : Gate) :=
+    bits ++ [g.op.eval (g.inputs.map fun i => bits.getD i false)]
+  have prefixRead (gs : List Gate) (bits : List Bool) (i : ℕ) (hi : i < bits.length) :
+      (gs.foldl step bits).getD i false = bits.getD i false := by
+    induction gs generalizing bits with
     | nil => rfl
     | cons g gs ih =>
-      rw [List.foldl_cons]
-      have hlt : i < (step w g).length := by
+      have hstep : i < (step bits g).length := by
         simp only [step, List.length_append, List.length_cons, List.length_nil]
         omega
-      rw [ih (step w g) hlt]
-      simp only [step, List.getD_eq_getElem?_getD, List.getElem?_append_left hi]
-  have atEnd (w : List Bool) (b : Bool) : (w ++ [b]).getD w.length false = b := by
-    simp only [List.getD_eq_getElem?_getD]
-    rw [List.getElem?_append_right (le_refl w.length)]
-    simp
-  have headVal (g : PEqualNP.CircuitLowerBounds.Gate) (tail : List PEqualNP.CircuitLowerBounds.Gate) (o : ℕ) (x : Fin 9 → Bool) :
-      (PEqualNP.CircuitLowerBounds.Circuit.wires ⟨g :: tail, o⟩ (List.ofFn x)).getD 9 false =
-        g.op.eval (g.inputs.map fun i => (List.ofFn x).getD i false) := by
-    let w := List.ofFn x
-    have hl : w.length = 9 := by simp [w]
-    change (tail.foldl step (step w g)).getD 9 false = _
-    rw [preserved tail (step w g) 9 (by simp [step, hl])]
-    simpa only [step, w, List.length_ofFn] using
-      atEnd (List.ofFn x) (g.op.eval (g.inputs.map fun i => (List.ofFn x).getD i false))
-  have truth : ∀ (b : Bool) (x : Fin 8 → Bool),
-      (let t := lift b x
-       (t 0 && t 1) || (t 1 && t 2) || (t 2 && t 3) || (t 3 && t 4) || (t 4 && t 0) ||
-       (t 0 && t 5) || (t 1 && t 6) || (t 2 && t 7) || (t 3 && t 8) || (t 5 && t 7) ||
-       (t 6 && t 8) || (t 8 && t 5)) = (if b then (f x || x 0 || x 3) else f x) := by
-    decide +kernel
-  have listed : ∀ (b : Bool) (x : Fin 8 → Bool),
-      List.ofFn (lift b x) ++ [lift b x 0 || lift b x 6] = input b x := by
-    decide +kernel
-  intro C fan first eq
-  rcases C with ⟨gs, o⟩
-  cases gs with
-  | nil =>
-    have h := first (fun _ => true)
-    change (List.ofFn (fun _ : Fin 9 => true)).getD 9 false = true at h
-    rw [List.getD_eq_default _ _ (by simp)] at h
-    contradiction
-  | cons g rest =>
-    by_contra small
-    let D : PEqualNP.CircuitLowerBounds.Circuit := ⟨rest, o⟩
-    have size : D.size ≤ 14 := by
-      change ¬ 16 ≤ rest.length + 1 at small
-      change rest.length ≤ 14
+      rw [List.foldl_cons, ih _ hstep]
+      exact List.getD_append _ _ _ _ hi
+  have nonempty : ∃ g gs, C.gates = g :: gs := by
+    cases h : C.gates with
+    | nil =>
+      let x (i : Fin 9) := decide (i = 0)
+      have wire := first x
+      change (C.gates.foldl step (List.ofFn x)).getD 9 false = (x 0 || x 6) at wire
+      rw [h] at wire
+      exact False.elim (Bool.false_ne_true wire)
+    | cons g gs => exact ⟨g, gs, rfl⟩
+  obtain ⟨g, gs, gates⟩ := nonempty
+  let D : Circuit := ⟨gs, C.output⟩
+  have firstValue (x : Fin 9 → Bool) : step (List.ofFn x) g = List.ofFn x ++ [x 0 || x 6] := by
+    have wire := first x
+    change (C.gates.foldl step (List.ofFn x)).getD 9 false = (x 0 || x 6) at wire
+    have rawLen : (List.ofFn x).length = 9 := List.length_ofFn
+    rw [gates, List.foldl_cons, prefixRead] at wire
+    · change (List.ofFn x ++ [g.op.eval (g.inputs.map fun i =>
+        (List.ofFn x).getD i false)]).getD 9 false = (x 0 || x 6) at wire
+      rw [List.getD_append_right _ _ _ _ (by omega), rawLen] at wire
+      change g.op.eval (g.inputs.map fun i => (List.ofFn x).getD i false) = (x 0 || x 6) at wire
+      change List.ofFn x ++ [g.op.eval (g.inputs.map fun i => (List.ofFn x).getD i false)] =
+        List.ofFn x ++ [x 0 || x 6]
+      rw [wire]
+    · simp only [step, List.length_append, List.length_cons, List.length_nil, rawLen]
       omega
-    have mon : PEqualNP.MetaComplexity.FanInTwo D := fun a ha => fan a (List.mem_cons_of_mem g ha)
-    have common (b : Bool) (x : Fin 8 → Bool) :
-        D.eval (input b x) = (if b then (f x || x 0 || x 3) else f x) := by
-      let t := lift b x
-      have val := (headVal g rest o t).symm.trans (first t)
-      change g.op.eval (g.inputs.map fun i => (List.ofFn t).getD i false) = (t 0 || t 6) at val
-      have start : step (List.ofFn t) g = input b x := by
-        change List.ofFn t ++ [g.op.eval _] = _
-        rw [val]
-        exact listed b x
-      have orig := congrFun eq t
-      change D.eval (step (List.ofFn t) g) = _ at orig
-      rw [start] at orig
-      exact orig.trans (truth b x)
-    have zero (x : Fin 8 → Bool) : D.eval (input false x) = f x := common false x
-    by_cases two : 2 ≤ D.gates.countP read
-    · obtain ⟨R, fr, sr, e⟩ := eliminate D mon two ⟨fun _ => false, by simpa [f, input] using zero (fun _ => false)⟩
-      apply cofactor
-      exact ⟨R, fr, by omega, fun x => (e x).trans (zero x)⟩
-    · obtain ⟨x, bad⟩ := singleRead D mon size (by omega : D.gates.countP read ≤ 1) zero
-      exact bad (common true x)
+  have tailComputes (x : Fin 9 → Bool) :
+      D.eval (List.ofFn x ++ [x 0 || x 6]) = target x := by
+    have value := evalTarget x
+    change (C.gates.foldl step (List.ofFn x)).getD C.output false = target x at value
+    rw [gates, List.foldl_cons, firstValue] at value
+    exact value
+  have tailFan : FanInTwo D := by
+    intro q hq
+    apply fan q
+    rw [gates]
+    exact List.mem_cons_of_mem _ hq
+  have tailSize : D.size = 14 := by
+    change gs.length = 14
+    change C.gates.length = 15 at optimal
+    rw [gates, List.length_cons] at optimal
+    omega
+  have tailNotBound : D.gates.countP tag ≤ 2 := by
+    change gs.countP tag ≤ 2
+    change C.gates.countP tag ≤ 2 at notBound
+    rw [gates, List.countP_cons] at notBound
+    split at notBound <;> omega
+  by_cases h : D.gates.countP tag = 0
+  · obtain ⟨x, hx⟩ := withoutNot D tailFan tailSize h
+    exact hx (tailComputes x)
+  · have positive : 1 ≤ D.gates.countP tag := by omega
+    obtain ⟨x, hx⟩ := withNot D tailFan tailSize positive tailNotBound
+    exact hx (tailComputes x)
