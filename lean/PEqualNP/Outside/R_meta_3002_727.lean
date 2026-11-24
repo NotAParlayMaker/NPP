@@ -1,5 +1,5 @@
-import Mathlib.Data.Fintype.Card
-import Mathlib.Data.Set.Prod
+import Mathlib
+import PEqualNP.Defs
 
 theorem PEqualNP.Outside.R_meta_3002_727
     (splitGate : ∀ (A B : Set (Finset ℕ)) (X Y : Set ℕ),
