@@ -16,12 +16,13 @@
 #   locked-ns.sh <ready file> <toolchain bin> <threads> <git config> <writable dirs, colon-separated> <command...>
 # The ready file (the caller's, in a directory only the caller's account can enter) gets one line,
 # "namespace ready", only after the check below passed; the caller treats anything else as our fault.
-# It is opened FIRST, before any mount turns read-only, and closed before the build account starts.
+# It arrives OPEN on descriptor 4, opened by the caller BEFORE the namespace was made (rehearsal 1: a
+# file opened for writing inside it, on the root mount, keeps / from turning read-only: "mount point is
+# busy"); it is closed before the build account starts. The first argument names it, for the record.
 # The system's own tools only (red team, second wall): sudo hands this root process its secure path,
 # which lists /usr/local/bin ahead of /usr/bin.
 PATH=/usr/bin:/bin; export PATH
 set -eu
-exec 4>>"$1"
 tc=$2; threads=$3; gitcfg=$4; rwdirs=$5; shift 5
 mount --make-rprivate /
 # 0. Our own /proc for our own process namespace, mounted by THIS script (red team, 2026-11-24: a proc
@@ -30,19 +31,26 @@ mount --make-rprivate /
 #    The new proc is mounted at a spare directory first and moved into place, so the mount tool never
 #    runs without a /proc (red team note, 15:37Z).
 mkdir -p /tmp/.pnp-proc
-mount -t proc -o nosuid,nodev,noexec proc /tmp/.pnp-proc
-umount -l /proc
-mount --move /tmp/.pnp-proc /proc
+mount -n -t proc -o nosuid,nodev,noexec proc /tmp/.pnp-proc
+umount -n -l /proc
+mount -n --move /tmp/.pnp-proc /proc
 # 1. every mount read-only, no set-user-id, no device files (except /dev and /dev/pts, which hold the
 #    standard device nodes; the world-writable odd ones there are closed by the workflow beforehand).
 #    Mount points are read from this namespace's own table; octal escapes (\040) decoded. A remount by
 #    path reaches the TOP mount at that path; a mount covered by another is judged below as covered.
+#    Every remount is made with -n (no bookkeeping written): rehearsal 1 saw the snap images' remount
+#    succeed and the mount tool then fail writing its own table under /run, by then read-only (red team).
+#    A mount that still cannot be remounted is DETACHED from this private namespace instead (the runner
+#    keeps it; the build needs none of them). Whatever is left, the judge below reads the final table:
+#    a mount still writable, or allowing set-user-id or device files, stops the build. So a failure here
+#    can only ever stop a build, never open one.
 awk '{print $5}' /proc/self/mountinfo | while IFS= read -r m; do
   m=$(printf '%b' "$m")
   case "$m" in
-    (/dev|/dev/pts) mount -o remount,bind,ro,nosuid "$m" ;;
-    (*) mount -o remount,bind,ro,nosuid,nodev "$m" ;;
+    (/dev|/dev/pts) o=remount,bind,ro,nosuid ;;
+    (*) o=remount,bind,ro,nosuid,nodev ;;
   esac
+  mount -n -o "$o" "$m" 2>/dev/null || umount -n -l "$m" 2>/dev/null || true
 done
 # 2. the places the build may write, each recorded by its MOUNT ID the moment it is made, so the judge
 #    allows exactly these mounts and not whatever sits at their paths. Mode 1777 makes the tmpfs places
@@ -52,7 +60,7 @@ top_id() { awk -v m="$1" '$5 == m { id = $1 } END { print id }' /proc/self/mount
 TMPS="/tmp /var/tmp /dev/shm /run /var/crash /home/outsider"
 for d in $TMPS; do
   if [ -d "$d" ]; then
-    mount -t tmpfs -o size=256m,nosuid,nodev,mode=1777 pnp-tmp "$d"
+    mount -n -t tmpfs -o size=256m,nosuid,nodev,mode=1777 pnp-tmp "$d"
     ours="$ours$(top_id "$d") "
   fi
 done
@@ -61,7 +69,7 @@ chown outsider:outsider /home/outsider; chmod 0700 /home/outsider
 IFS=:
 for d in $rwdirs; do
   [ -d "$d" ] && [ ! -L "$d" ] || { echo "not a directory: an output directory of the build" >&2; exit 98; }
-  mount --bind "$d" "$d" && mount -o remount,bind,rw,nosuid,nodev "$d"
+  mount -n --bind "$d" "$d" && mount -n -o remount,bind,rw,nosuid,nodev "$d"
   ours="$ours$(top_id "$d") "
 done
 unset IFS

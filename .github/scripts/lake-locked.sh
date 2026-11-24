@@ -26,8 +26,9 @@ case "${1:-}" in
     # when the build ends the kernel ends everything it started; its own IPC objects; its own mounts,
     # where everything is read-only but the places it must write (locked-ns.sh, which says why).
     : > "$log/ns"
-    sudo -n /usr/bin/unshare --net --ipc --mount --pid --fork -- /bin/sh "$here/locked-ns.sh" \
-        "$log/ns" "$PNP_TC_BIN" "${PNP_LEAN_THREADS:-${LEAN_NUM_THREADS:-3}}" "$PNP_GITCONFIG" "$PNP_RW_DIRS" "$PNP_TC_BIN/lake" "$@" \
+    # The ready file is opened (as root, descriptor 4) BEFORE the namespace is made, and inherited.
+    sudo -n /bin/sh -c 'exec 4>>"$1"; shift; exec /usr/bin/unshare --net --ipc --mount --pid --fork -- /bin/sh "$@"' pnp-ready \
+        "$log/ns" "$here/locked-ns.sh" "$log/ns" "$PNP_TC_BIN" "${PNP_LEAN_THREADS:-${LEAN_NUM_THREADS:-3}}" "$PNP_GITCONFIG" "$PNP_RW_DIRS" "$PNP_TC_BIN/lake" "$@" \
       > "$log/out" 2> "$log/err" || code=$?
     # Nothing a build started may outlive it: the compiled result is read only once it is still.
     sudo -n /usr/bin/pkill -KILL -u outsider || true
@@ -43,8 +44,8 @@ case "${1:-}" in
     # The same namespace with a command that does nothing, run by the workflow BEFORE any outside file
     # is placed: a runner on which the namespace cannot be made ready stops there, with no file judged.
     log=$(mktemp -d "${PNP_BUILD_LOGS:-${TMPDIR:-/tmp}}/probe.XXXXXX"); : > "$log/ns"; code=0
-    sudo -n /usr/bin/unshare --net --ipc --mount --pid --fork -- /bin/sh "$here/locked-ns.sh" \
-        "$log/ns" "$PNP_TC_BIN" 1 "$PNP_GITCONFIG" "$PNP_RW_DIRS" /bin/true 2> "$log/err" || code=$?
+    sudo -n /bin/sh -c 'exec 4>>"$1"; shift; exec /usr/bin/unshare --net --ipc --mount --pid --fork -- /bin/sh "$@"' pnp-ready \
+        "$log/ns" "$here/locked-ns.sh" "$log/ns" "$PNP_TC_BIN" 1 "$PNP_GITCONFIG" "$PNP_RW_DIRS" /bin/true 2> "$log/err" || code=$?
     if grep -qx 'namespace ready' "$log/ns" 2>/dev/null && [ "$code" = 0 ]; then echo "the namespace of the locked build: ready; $(grep -m 1 '^mounts: ' "$log/ns")"; exit 0; fi
     why=`tr -cd 'A-Za-z0-9_./:, \n-' < "$log/err" | head -n 5 | tr '\n' ' '`
     echo "the namespace of the locked build could not be made ready (exit $code): $why"

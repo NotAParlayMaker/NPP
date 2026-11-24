@@ -31,13 +31,14 @@ const locked = readFileSync(new URL('.github/scripts/lake-locked.sh', root), 'ut
 const ns = readFileSync(new URL('.github/scripts/locked-ns.sh', root), 'utf8');
 test('the locked build always runs inside locked-ns.sh, never setpriv directly (red team, 2026-11-24)', () => {
   assert.doesNotMatch(locked, /setpriv/, 'lake-locked.sh starts the build account itself');
-  assert.match(locked, /unshare --net --ipc --mount --pid --fork -- \/bin\/sh "\$here\/locked-ns\.sh"/);
+  assert.match(locked, /exec 4>>"\$1"; shift; exec \/usr\/bin\/unshare --net --ipc --mount --pid --fork -- \/bin\/sh "\$@"' pnp-ready \\\n\s+"\$log\/ns" "\$here\/locked-ns\.sh"/, 'the ready file is not opened before the namespace, or locked-ns.sh is not what runs in it');
+  assert.doesNotMatch(ns, /exec 4>>/, 'locked-ns.sh opens the ready file inside the namespace (it keeps / from turning read-only)');
   assert.doesNotMatch(locked, /--mount-proc/, "a proc mounted on top of the inherited one leaves the covered one writable");
   assert.match(locked, /grep -qx 'namespace ready'/, 'lake-locked.sh does not read the ready file');
 });
 test('locked-ns.sh: every mount read-only, then the writable places, then the check, then the account', () => {
   const at = (re) => { const m = ns.search(re); assert.ok(m >= 0, `missing ${re}`); return m; };
-  const ro = at(/mount -o remount,bind,ro,nosuid,nodev/), tmp = at(/mount -t tmpfs/), bind = at(/remount,bind,rw/);
+  const ro = at(/remount,bind,ro,nosuid,nodev/), tmp = at(/mount -n -t tmpfs/), bind = at(/remount,bind,rw/);
   const judge = at(/^bad=\$\(judge\)/m), ready = at(/echo "namespace ready" >&4/), drop = at(/^exec setpriv/m);
   assert.ok(ro < tmp && tmp < bind && bind < judge && judge < ready && ready < drop, 'the order of the steps changed');
   assert.match(ns, /exec 4>&-\n/, 'the ready file stays open for the build account');

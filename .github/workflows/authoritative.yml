@@ -523,6 +523,12 @@ jobs:
             echo "the namespace of the locked build was not ready for a build; this says nothing about the proof" >> "$RUNNER_TEMP/checker.err"
             code=3
           fi
+          # The build's two output directories are writable to it by design (rehearsal 1 of the read-only
+          # patch: a hostile file left a file there). Nothing runs from them; the verifier reads only the
+          # compiled module files. A count of names not of the build's own shape, as a sign, no verdict change.
+          odd_out=$(find "$W/base/lean/.lake/build/lib/lean/PEqualNP/Outside" "$W/base/lean/.lake/build/ir/PEqualNP/Outside" \
+                      -mindepth 1 \( ! -type f -o ! -regex '.*/[LR]_[a-z0-9_]+\(\.[a-z]+\)+' \) -print 2>/dev/null | wc -l | tr -d ' ')
+          echo "files in the build's output directories not of the build's own shape: $odd_out"
           # THE LOCKED BUILD, read from its side effect (red team, 2026-11-24): a compile that ran as
           # this run's account instead of `outsider` would leave files of ours in the build tree.
           # Any file written under lean/.lake/build during the check that the locked account does not
