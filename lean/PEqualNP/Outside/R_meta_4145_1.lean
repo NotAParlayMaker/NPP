@@ -7,7 +7,7 @@ open PEqualNP.HeptadCover PEqualNP.GenericRejection PEqualNP.EdgeOwnership
 -- Reduction for L-meta-4145: harden a valid circuit below 64 gates.
 -- Split on the existence of a nested AND pair, then on whether the circuit is already hard.
 -- The two remaining pieces are the no-nest bound (h1) and the bad-pair hardening step (h2).
--- h2's premise is stated as "a nested pair exists and C is not hard" (not expanded):
+-- h2's premise is stated as: a nested pair exists and C is not hard (not expanded):
 -- expanding the two witness failures inline made child 2 print 2260 chars, over the
 -- checker's 2000-char reduce-child limit.
 
