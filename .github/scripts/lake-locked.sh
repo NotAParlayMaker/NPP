@@ -20,7 +20,7 @@ case "${1:-}" in
     log=$(mktemp -d "${PNP_BUILD_LOGS:-${TMPDIR:-/tmp}}/build.XXXXXX")
     sudo -n unshare --net -- setpriv --reuid=outsider --regid=outsider --init-groups --no-new-privs \
       env -i HOME=/home/outsider LANG=C.UTF-8 PATH="$PNP_TC_BIN:/usr/bin:/bin" \
-        LAKE_ARTIFACT_CACHE=false LEAN_NUM_THREADS="${LEAN_NUM_THREADS:-3}" \
+        LAKE_ARTIFACT_CACHE=false LEAN_NUM_THREADS="${PNP_LEAN_THREADS:-${LEAN_NUM_THREADS:-3}}" \
         GIT_CONFIG_GLOBAL="$PNP_GITCONFIG" GIT_CONFIG_NOSYSTEM=1 \
       "$PNP_TC_BIN/lake" "$@" > "$log/out" 2> "$log/err" || code=$?
     # Nothing a build started may outlive it: the compiled result is read only once it is still.
