@@ -357,6 +357,7 @@ jobs:
               if [ "$dog" = on ] && ! printf '%s' "$cpu" | grep -Eqx '[0-9]+'; then dog=off; echo "no-progress watchdog: OFF for this run (the checker scope's cpu.stat cannot be read)"; fi
               if [ "$dog" = on ]; then
                 if [ "$cpu" -ge $((cpu0 + 2000000)) ]; then cpu0=$cpu; still=0; else still=$((still + 1)); fi
+                echo "$still" > "$RUNNER_TEMP/sampler/still"
               fi
               if [ "$dog" = on ] && [ "$still" -ge 32 ]; then
                 echo "no progress: the check made no progress for 8 minutes (CPU time $((cpu / 1000000)) s; last: $(stage_now)); ending the whole checker scope" | tee -a "$RUNNER_TEMP/checker.err" "$MARK"
@@ -414,7 +415,13 @@ jobs:
               code=124
               # C3 (red team): a REDUCTION that reached its limit while making progress is the file's
               # doing: REFUSED with one fixed sentence, never re-run. (A hang ends above, as no progress.)
-              [ "$(cat "$W/in/gap.kind")" = reduce ] && code=5
+              # Only with progress in the last two minutes (fewer than 8 still samples); a reduction that
+              # worked and then hung is our fault: the no-progress FAULT, re-run (red team).
+              if [ "$(cat "$W/in/gap.kind")" = reduce ]; then
+                still_now=$(cat "$RUNNER_TEMP/sampler/still" 2>/dev/null || echo 99)
+                if printf '%s' "$still_now" | grep -Eqx '[0-9]+' && [ "$still_now" -lt 8 ]; then code=5
+                else echo "no progress: the reduction made no progress for the last $((still_now * 15)) s before its limit; a FAULT, not a refusal" | tee -a "$RUNNER_TEMP/checker.err" "$MARK"; code=137; fi
+              fi
             fi
             case "$code" in 124|137) echo "the checker was stopped after $limit seconds" >> "$RUNNER_TEMP/checker.err" ;; esac
           fi
