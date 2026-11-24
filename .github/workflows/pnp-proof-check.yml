@@ -12,7 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: R-meta-1882-1
+          repository: brilliant-hq/pequalnp-proofs
+          ref: main
           persist-credentials: false
       - uses: actions/cache@v4
         with:
@@ -33,4 +34,5 @@ jobs:
         working-directory: lean
         run: |
           lake exe cache get
+          curl -fsSL https://raw.githubusercontent.com/OrazioNicolosi/pequalnp-proofs/R-meta-1882-1/lean/PEqualNP/Outside/R_meta_1882_1.lean -o PEqualNP/Outside/R_meta_1882_1.lean
           lake build PEqualNP.Outside.R_meta_1882_1
