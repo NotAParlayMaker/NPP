@@ -262,6 +262,9 @@ function plainProblems(text, problems) {
     // A limit option set for the whole file (no `in`) is refused, as before; the sentence names the
     // one fix, so an honest prover passes in one push (red team, 2026-11-23: the rule stays narrow).
     if (m && /^\s*set_option (maxRecDepth|maxHeartbeats|synthInstance\.maxSize|synthInstance\.maxHeartbeats) [0-9]+\s*$/u.test(line)) hint = '; a limit option holds only for one declaration: write it as set_option <option> <value> in, directly before the declaration that needs it';
+    // bv_decide calls a SAT solver while the file builds; honest contributors reach for it on the
+    // packed-column statements (a repeated honest mistake). The line says what to use instead.
+    if (m && m[0].trim() === 'bv_decide') hint = '; bv_decide runs a SAT solver as the file builds, so use tactics the kernel checks alone, e.g. decide (small sizes), simp, omega, rfl';
     if (m) problems.push({ at: k + 1, why: `line ${k + 1}: "${sayWord(m[0].trim())}" is not allowed in a proof file, in code or in a comment (no code that runs at build time, no new syntax, no string literals, no attributes but simp, no options but the four limits)${hint}` });
     if (/^\s*(@\[(local )?simp\] )?((private|protected) )?theorem /u.test(line)) theorems += 1;
   });

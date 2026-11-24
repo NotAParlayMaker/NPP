@@ -401,3 +401,6 @@ test('a matched word that is not one of the listed literals is still sanitised',
   assert.throws(() => run(`${thm}  exact \x60(foo| y)\n`), (e) => e.message.startsWith('line 5: "??foo?" is not allowed'));
   assert.throws(() => run(`${thm}  exact \x60(tactic| y)\n`), (e) => e.message.startsWith('line 5: "\x60(tactic|" is not allowed'));
 });
+test('the bv_decide refusal says what to use instead (a repeated honest mistake)', () => {
+  assert.throws(() => checkPlainAll(`theorem PEqualNP.Outside.L_x : True := by\n  bv_decide\n`), (e) => /bv_decide runs a SAT solver as the file builds, so use tactics the kernel checks alone, e\.g\. decide \(small sizes\), simp, omega, rfl$/.test(e.message));
+});
