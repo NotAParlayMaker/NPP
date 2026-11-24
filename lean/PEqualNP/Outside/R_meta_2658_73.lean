@@ -4,7 +4,7 @@ import PEqualNP.Defs
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.EdgeOwnership
 
--- Extend the sound prefix of a minimum circuit one gate at a time.
+-- Extend soundness to one more gate of a minimum circuit.
 -- It suffices to repair the gate on maximal independent assignments.
 set_option maxHeartbeats 1800000 in
 set_option maxRecDepth 14000 in
