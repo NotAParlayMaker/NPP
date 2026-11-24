@@ -418,10 +418,12 @@ jobs:
             # The checker's step never started, so no outside code ran. steps.log was written
             # only by the guard steps before that step, as this account (0600). A REFUSED
             # line in it is a guard's refusal of the pull request; without one, the run itself
-            # failed, which says nothing of the proof.
+            # failed, which says nothing of the proof. A guard step stops the job at its refusal,
+            # so every REFUSED line is that one refusal's: a check of the file's text gives one
+            # line per problem (at most 40, then "... and N more"), and all of them are printed.
             if grep -aq '^REFUSED' "$RUNNER_TEMP/steps.log" 2>/dev/null; then
               echo "::stop-commands::$stop"
-              grep -a '^REFUSED' "$RUNNER_TEMP/steps.log" | tail -n 1 | quoted
+              grep -a '^REFUSED' "$RUNNER_TEMP/steps.log" | tail -n 41 | quoted
               echo "::$stop::"
               echo "VERDICT: REFUSED (before any build; the reason is the quoted line above)" | tee -a "$GITHUB_STEP_SUMMARY"
               exit 1

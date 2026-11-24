@@ -316,3 +316,66 @@ test('a step already checked: the refusal says so', () => { assert.throws(() => 
 test('a withdrawn step: the refusal gives the desk reason', () => { assert.throws(() => checkGapLeft(leftDesk, (x) => x.id === 'L-meta-702', 'lean/PEqualNP/Outside/L_meta_702.lean'), /L-meta-702 was WITHDRAWN from the desk \(restated as L-meta-703/); });
 test('a step the desk never had: the refusal says it is not on the desk', () => { assert.throws(() => checkGapLeft(leftDesk, (x) => x.id === 'L-meta-799', 'lean/PEqualNP/Outside/L_meta_799.lean'), /not on the desk/); });
 test('a withdrawn reason with odd characters is cleaned and cut', () => { const d = { gaps: [], checked: [], withdrawn: { 'L-meta-704': '`$(x)` "q" ' + 'a'.repeat(300) } }; assert.throws(() => checkGapLeft(d, (x) => x.id === 'L-meta-704', 'lean/PEqualNP/Outside/L_meta_704.lean'), (e) => !/[`$"]/.test(e.message) && e.message.length < 400); });
+
+// The checks of the file's text give EVERY problem at once, in file order, one per line (outside
+// feedback: one author needed five pushes for five problems). The rules are unchanged.
+import { checkProofFile, checkPlain as checkPlainAll, MAX_PROBLEMS, MAX_REFUSAL } from './outside-guard.mjs';
+const FIVE = `${head}import Evil.Module\nset_option maxHeartbeats 400000\nprivate def f : ℕ := 1\ndef g : ℕ := sorry\n`;
+const fiveSays = ['line 4: import Evil.Module is not allowed', 'line 5: "set_option" is not allowed', 'write it as set_option <option> <value> in',
+  'line 6: a declaration or command outside the file\'s own namespace', 'line 7: "sorry" is not allowed', 'the file holds no theorem'];
+test('all problems: one file with 5 problems is refused once, naming all 5 with their lines, in file order', () => {
+  let msg;
+  assert.throws(() => checkProofFile(new TextEncoder().encode(FIVE), ['PEqualNP.Defs'], 'PEqualNP.Outside.L_x_1'), (e) => { msg = e.message; return true; });
+  const at = fiveSays.map((w) => msg.indexOf(w));
+  assert.ok(at.every((i) => i >= 0), msg);
+  assert.deepEqual([...at].sort((a, b) => a - b), at, 'not in file order');
+  assert.ok(msg.split('\n').every((l) => !l.startsWith('REFUSED')));
+});
+test('all problems: the command line prints every problem on its own REFUSED line, the first line as before', () => {
+  const d = mkdtempSync(pj(tmpdir(), 'guard-all-'));
+  wf(pj(d, 'imports.json'), '["PEqualNP.Defs"]'); wf(pj(d, 'f.lean'), FIVE);
+  const r = cli('imports', pj(d, 'f.lean'), pj(d, 'imports.json'), 'lean/PEqualNP/Outside/L_x_1.lean', 'check');
+  assert.equal(r.status, 1);
+  const lines = r.stdout.trimEnd().split('\n');
+  assert.ok(lines.every((l) => l.startsWith('REFUSED: ')), r.stdout);
+  assert.match(lines[0], /^REFUSED: line 4: import Evil\.Module is not allowed \(only Mathlib and the modules the gap lists\)$/);
+  for (const w of fiveSays) assert.ok(r.stdout.includes(w), w);
+  // A file with one problem still gives the one line it gave before.
+  wf(pj(d, 'one.lean'), `${head}${thm}  #eval 1\n`);
+  const one = cli('imports', pj(d, 'one.lean'), pj(d, 'imports.json'), 'lean/PEqualNP/Outside/L_x_1.lean', 'check');
+  assert.equal(one.status, 1);
+  assert.equal(one.stdout, 'REFUSED: line 5: "#eval" is not allowed in a proof file, in code or in a comment (no code that runs at build time, no new syntax, no string literals, no attributes but simp, no options but the four limits)\n');
+});
+test('all problems: the cap, 60 problems give 40 lines and "... and 20 more"', () => {
+  assert.equal(MAX_PROBLEMS, 40);
+  const body = Array.from({ length: 60 }, (_, k) => `import Evil.M${k}`).join('\n') + `\n${thm}`;
+  assert.throws(() => run(body), (e) => {
+    const l = e.message.split('\n');
+    return l.length === 41 && l[0].startsWith('line 4: import Evil.M0 ') && l[39].startsWith('line 43: import Evil.M39 ') && l[40] === '... and 20 more' && e.message.length <= MAX_REFUSAL;
+  });
+});
+test('all problems: the character cap comes first for long sentences (60 forbidden words: 29 lines, then the count)', () => {
+  const body = Array.from({ length: 60 }, () => '-- sorry').join('\n') + `\n${thm}`;
+  assert.throws(() => run(body), (e) => {
+    const l = e.message.split('\n');
+    return e.message.length <= MAX_REFUSAL && l.length < 41 && l.at(-1) === `... and ${60 - (l.length - 1)} more` && l[0].startsWith('line 4: "sorry"');
+  });
+});
+test('all problems: at most 6000 characters, however long each line', () => {
+  assert.equal(MAX_REFUSAL, 6000);
+  const long = (k) => `namespace N${k}${'a'.repeat(900)}\nend N${k}${'a'.repeat(900)}`;
+  const body = Array.from({ length: 30 }, (_, k) => long(k)).join('\n') + `\n${t9}`;
+  assert.throws(() => own(M, body), (e) => e.message.length <= MAX_REFUSAL && /\.\.\. and \d+ more$/.test(e.message) && e.message.startsWith('line 4: `namespace N0'));
+});
+test('all problems: text that cannot be read stops first, alone', () => {
+  const bad = new Uint8Array([...new TextEncoder().encode(FIVE), 0xff]);
+  assert.throws(() => checkProofFile(bad, [], 'PEqualNP.Outside.L_x_1'), (e) => e.message === 'the file is not UTF-8 text');
+  assert.throws(() => checkProofFile(new TextEncoder().encode(`${FIVE}\0`), [], 'PEqualNP.Outside.L_x_1'), (e) => e.message === 'the file holds a NUL byte');
+});
+test('all problems: control and invisible characters are named before the lines, with the rest', () => {
+  assert.throws(() => checkPlainAll(`-- ‮\n  #eval 1\n`), (e) => e.message === 'the file holds invisible or direction-changing characters\nline 2: "#eval" is not allowed in a proof file, in code or in a comment (no code that runs at build time, no new syntax, no string literals, no attributes but simp, no options but the four limits)\nthe file holds no theorem');
+});
+test('all problems: a listed outside module names every problem too', () => {
+  assert.throws(() => closure(['PEqualNP.Outside.L_x_2'], { 'PEqualNP.Outside.L_x_2': `import Mathlib\ninitialize pure ()\n#eval 1\n${thm}` }),
+    (e) => e.message.startsWith('the listed outside module PEqualNP.Outside.L_x_2: line 2: "initialize"') && e.message.includes('\nline 3: "#eval"'));
+});
