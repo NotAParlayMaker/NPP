@@ -12,7 +12,15 @@ open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
   circuit is sensitive (a 2-hot incident input versus the 1-hot input
   obtained by switching one of its two wires off), so the sensitivity
   bound gives `2N ≤ C.size + 1`, and `N * q ≤ 100 * C.size` follows
-  for `q ≤ 100` by arithmetic. -/
+  for `q ≤ 100` by arithmetic.
+  Note (fix for the checker's REJECTED verdict on the first version):
+  the counting hypotheses of `h_large` are stated with
+  `Fintype.card {p // ...}` rather than `(Finset.univ.filter ...).card`,
+  because the filter form pretty-prints as `{x | ...}.card`, which
+  re-elaborates as a `Set` (no `Set.card`) and so fails the checker's
+  re-elaboration of the child statement. The two forms are equal by
+  `Fintype.card_subtype`, which is used to convert the desk-statement
+  hypotheses before applying `h_large`. -/
 theorem PEqualNP.Outside.R_meta_1629_4
     (h_sens : ∀ (n : ℕ) (C : Circuit), Monotone2 C →
       (∀ k : Fin n, ∃ x y : Fin n → Bool, (∀ j : Fin n, j ≠ k → x j = y j) ∧
@@ -20,13 +28,13 @@ theorem PEqualNP.Outside.R_meta_1629_4
       n ≤ C.size + 1)
     (h_large : ∀ (q N : ℕ) (I : Fin N → Fin N → Prop) [DecidableRel I] (C : Circuit),
       100 < q → N = q ^ 2 + q + 1 →
-      (∀ l : Fin N, (Finset.univ.filter (fun p => I p l)).card = q + 1) →
+      (∀ l : Fin N, Fintype.card {p : Fin N // I p l} = q + 1) →
       (∀ p p' : Fin N, p ≠ p' → ∃! l : Fin N, I p l ∧ I p' l) →
       Monotone2 C →
       (∀ p l : Fin N, I p l → circuitFun (N + N) C
         (fun k => decide (k = Fin.castAdd N p ∨ k = Fin.natAdd N l)) = true) →
       (∀ z : Fin (N + N) → Bool,
-        (Finset.univ.filter (fun l : Fin N => z (Fin.natAdd N l) = true)).card ≤ q →
+        Fintype.card {l : Fin N // z (Fin.natAdd N l) = true} ≤ q →
         (¬ ∃ p l : Fin N, I p l ∧ z (Fin.castAdd N p) = true ∧ z (Fin.natAdd N l) = true) →
         circuitFun (N + N) C z = false) →
       N * q ≤ 100 * C.size) :
@@ -144,4 +152,21 @@ theorem PEqualNP.Outside.R_meta_1629_4
       rw [hN]
       nlinarith [hq3, hq]
     omega
-  · exact h_large q N I C (Nat.lt_of_not_ge hq100) hN hcard hline hmono hacc hsound
+  · -- Convert the desk-statement counting hypotheses (Finset filter card)
+    -- to the subtype-card form used by `h_large` (see the fix note in the
+    -- header: the filter form prints as `{x | ...}.card`, which
+    -- re-elaborates as a `Set` and has no `.card`).
+    have hcard' : ∀ l : Fin N, Fintype.card {p : Fin N // I p l} = q + 1 := by
+      intro l
+      rw [Fintype.card_subtype]
+      exact hcard l
+    have hsound' : ∀ z : Fin (N + N) → Bool,
+        Fintype.card {l : Fin N // z (Fin.natAdd N l) = true} ≤ q →
+        (¬ ∃ p l : Fin N, I p l ∧ z (Fin.castAdd N p) = true ∧ z (Fin.natAdd N l) = true) →
+        circuitFun (N + N) C z = false := by
+      intro z hz hne
+      apply hsound z
+      · rw [Fintype.card_subtype] at hz
+        exact hz
+      · exact hne
+    exact h_large q N I C (Nat.lt_of_not_ge hq100) hN hcard' hline hmono hacc hsound'
