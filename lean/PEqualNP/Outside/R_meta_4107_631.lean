@@ -42,7 +42,7 @@ theorem PEqualNP.Outside.R_meta_4107_631
       rw [← List.drop_eq_getElem_cons hj, List.take_append_drop]
     have hlen : (C.gates.take j).length = j := by
       simp [Nat.min_eq_left (Nat.le_of_lt hj)]
-    have hgate : gateAt C j = C.gates[j] := List.getD_eq_getElem hj
+    have hgate : gateAt C j = C.gates[j] := List.getD_eq_getElem C.gates _ hj
     rw [hgate] at hw
     rcases hshape _ _ _ hsplit with ⟨_, a, ha, hin⟩ | ⟨_, a, ha, b, hb, _, hin⟩
     · rw [hin] at hw
@@ -70,7 +70,9 @@ theorem PEqualNP.Outside.R_meta_4107_631
         funext i
         by_cases hi : i = z <;> simp [Function.update, hi]
       rw [heval, hup]
-      simp [f, graphFun]
+      change (decide (∃ a ∈ A, (false : Bool) = true) ||
+        decide (∃ a b, G.Adj a b ∧ (false : Bool) = true ∧ (false : Bool) = true)) = false
+      simp
     obtain ⟨s, hs, hcofactor⟩ := eliminate n C z S hmin.1 hback
       (fun g hg => (harity g hg).2.1) hzero hconst
     exact ⟨z, hz, s, by omega, by simpa only [heval] using hcofactor⟩
