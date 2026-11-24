@@ -4549,10 +4549,10 @@ theorem core_two (low : ∀ z, z = goal ∨ z = ~~~goal → ¬ build basicOps z 
   have hc := cost_count C.gates
   change C.gates.length ≤ 12 at hs
   omega
-set_option maxRecDepth 16000
 
-set_option maxHeartbeats 0
 
+set_option maxRecDepth 16000 in
+set_option maxHeartbeats 0 in
 def descend (k : Nat) (ws : List W) (f : List W → Bool) : Bool :=
   (pairs ws).any fun (a,b,r) =>
     let c := cuts r
@@ -4567,6 +4567,8 @@ def descend (k : Nat) (ws : List W) (f : List W → Bool) : Bool :=
       (decide (n+1 ≤ k) && (dz ||| cb == -1) && f (z :: b :: r)) ||
       (decide (n+2 ≤ k) && (dz ||| cab == -1) && f (z :: a :: b :: r))
 
+set_option maxRecDepth 16000 in
+set_option maxHeartbeats 0 in
 theorem descend_hit {k ws a b r z kept f}
     (hm : (a,b,r) ∈ pairs ws) (hz : z ∈ ops a b)
     (hk : kept ∈ keepChoices a b r) (hl : kept.length ≤ k)
@@ -4587,6 +4589,8 @@ theorem descend_hit {k ws a b r z kept f}
     change r.length+2 ≤ k at hl
     simp [hl,hc,hf]
 
+set_option maxRecDepth 16000 in
+set_option maxHeartbeats 0 in
 theorem descend_sound {k : Nat} {g : W} (hg : g = goal ∨ g = ~~~goal)
     {ws : List W} (hn : ws.Nodup) (h : live basicOps g (k+1) ws.toFinset)
     (f : List W → Bool) (hf : ∀ ys : List W, ys.Nodup → live basicOps g k ys.toFinset → f ys = true) :
@@ -4614,10 +4618,14 @@ theorem descend_sound {k : Nat} {g : W} (hg : g = goal ∨ g = ~~~goal)
     · exact go hp direct hs hz
     · exact go (hp.trans (.swap _ _ _)) swap (by rw [hs, Finset.insert_comm]) (ops_swap a b ▸ hz)
 
+set_option maxRecDepth 16000 in
+set_option maxHeartbeats 0 in
 def ahead : Nat → Nat → List W → Bool
   | 0, _, _ => true
   | _+1, 0, ws => doneTest ws
   | d+1, k+1, ws => doneTest ws || descend k ws (ahead d k)
+set_option maxRecDepth 16000 in
+set_option maxHeartbeats 0 in
 theorem ahead_sound {g : W} (hg : g = goal ∨ g = ~~~goal) (d k : Nat)
     {ws : List W} (hn : ws.Nodup) (h : live basicOps g k ws.toFinset) : ahead d k ws = true := by
   induction d generalizing k ws with
@@ -4629,48 +4637,76 @@ theorem ahead_sound {g : W} (hg : g = goal ∨ g = ~~~goal) (d k : Nat)
       rcases hg with rfl | rfl <;> simp [ahead,eq,doneTest]
     | succ k => exact descend_sound hg hn h _ (fun _ hn' h' => ih _ hn' h')
 
-set_option maxRecDepth 8000
-set_option maxHeartbeats 0
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def packBits (f : Fin 304 → Bool) : W :=
   (BitVec.ofBoolListLE (List.ofFn f)).cast (by simp)
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma packBits_bit (f : Fin 304 → Bool) (j : Fin 304) : (packBits f)[j.val] = f j := by
   rw [← BitVec.getLsbD_eq_getElem]
   simp only [packBits, BitVec.getLsbD_cast, BitVec.getLsbD_ofBoolListLE, List.getD_eq_getElem?_getD]
   rw [List.getElem?_eq_getElem (by simpa only [List.length_ofFn] using j.isLt)]
   exact List.getElem_ofFn _
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def freeP (i : Fin 8) : Nat := ![0x97969594939291908f8e8d8c8b8a898887868584838281807f7e7d7c7b7a797877767574737271706f6e6d6c6b6a696867666564636261605f5e5d5c5b5a595857565554535251504f4e4d4c4b4a494847464544434241403f3e3d3c3b3a393837363534333231302f2e2d2c2b2a292827262524232221201f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100, 0x484647494538353639373331323488898586878384808182211f20221e0b08090a070506717073726d6c6f6e69686b6a656467664c4d4b4e4a3e3d403f3b3a3c434244412e302f2c2d606263615f9497959693555756545c5b5e5d585a598f928e90918a8d8b8c5251534f5028292a2b27131415127c7f7d7e7b1a1b1c1d19030402242526230f0e11100c0d7a7778797674751718160001, 0x48494546474d4e4a4b4c43444142292a2b27281b1c1d191a21221e1f2025262324171816727370716a6b68696e6f6c6d6667646537383935363f403d3e2f302e333431323c3a3b2d2c91928e8f9096979394958c8d8a8b5d5e5b5c5351526162635f6056575455595a58504f8788898586797a77787e7f7b7c7d82838480817576740a0b080910110e0f0100141512130402030705060d0c, 0x979493969562605f6163575554562a2928272b1c1b1a191d7f7c7b7e7d141312150403027071727368696a6b6c6d6e6f646566678e928f91905b5c5d5e5152538d8a8c8b58595a4f5035383739364648454947313334323d3e3f402e2f304b4d4c4a4e424341443a3b3c2c2d8589888786080b0a091f211e22208084838281050706777a79780e0f10110001252423261716187675740c0d, 0x272b2a28294a4e4d4c4b232625244745494846201e22211f191d1c1a1b41444342161817727371705d5e5c5b3f403e3d10110f0e615f6360626e6f6d6c595a58121513143c3b3a0d0c91908f8e9287868985887978777a6a6b696853525137363938350a090b082f302e010096959394978c8b8a8d82818480837e7d7b7c7f7574765654555766676564504f323433310607050203042d2c, 0x8685898788363538373909080b0a45474648491e201f2122818084828332313334060507717072735c5b5d5e3e3d3f400f0e10118f908e919269686a6b5251537877797a2e2f300001605f61636228272a2b29131215146d6c6e6f58595a4c4a4b4d4e242325263b3a3c0c0d9493959697555456571a191c1d1b7c7b7d7e7f0302048a8b8c8d656466674f50414243441617187475762c2d, 0x86878885899091928e8f78797a7793959697947b7d7e7f7c81828380848b8c8d8a74757673727071403f3d3e5e5d5b5c11100e0f39363735386b6a6869302f2e090a080b53515201004e4a4b4c4d2b2729282a262324256f6e6c6d3c3a3b635f616260151214135a59580d0c4945474648444142431d191b1a1c221e201f2118161734323133676664652d2c54565755020403060507504f, 0x2728292b2a5f606263611213141595939497967d7b7c7f7e191a1b1d1c54555756020304707173723d3e403f5b5c5e5d0e0f11104b4a4c4e4d6c6d6f6e3a3b3c23242625585a590c0d3536393738858688878908090a0b68696b6a2e302f8e908f929177787a79515253000146474549483132343380818382841f201e222105060742414443646567662c2d8b8a8d8c7476751618174f50] i
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def co (i : Fin 8) (j : Fin 304) : Fin 304 :=
   let lo := (freeP i >>> (8 * (j.val % 152))) &&& 255
   ⟨(lo + (j.val / 152) * 152) % 304, Nat.mod_lt _ (by decide)⟩
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def sym (i : Fin 8) (w : W) : W := packBits (fun j => w[(co i j).val])
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma sym_bit (i : Fin 8) (w : W) (j : Fin 304) :
     (sym i w)[j.val] = w[(co i j).val] := packBits_bit _ _
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def invSym (i : Fin 8) : Fin 8 := ![0, 1, 2, 3, 4, 7, 6, 5] i
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma inv_co (i : Fin 8) (j : Fin 304) : co i (co (invSym i) j) = j := by
   revert i j
   decide +kernel
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma sym_injective (i : Fin 8) : Function.Injective (sym i) := by
   intro a b h
   apply BitVec.eq_of_getElem_eq
   intro j hj
   have eq := congrArg (fun w : W => w[(co (invSym i) ⟨j,hj⟩).val]) h
   simpa only [sym_bit, inv_co] using eq
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma sym_and (i : Fin 8) (a b : W) : sym i (a &&& b) = sym i a &&& sym i b := by
   apply BitVec.eq_of_getElem_eq; intro j hj
   rw [sym_bit i _ ⟨j,hj⟩, BitVec.getElem_and, BitVec.getElem_and, sym_bit i a ⟨j,hj⟩, sym_bit i b ⟨j,hj⟩]
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma sym_or (i : Fin 8) (a b : W) : sym i (a ||| b) = sym i a ||| sym i b := by
   apply BitVec.eq_of_getElem_eq; intro j hj
   rw [sym_bit i _ ⟨j,hj⟩, BitVec.getElem_or, BitVec.getElem_or, sym_bit i a ⟨j,hj⟩, sym_bit i b ⟨j,hj⟩]
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma sym_not (i : Fin 8) (a : W) : sym i (~~~a) = ~~~(sym i a) := by
   apply BitVec.eq_of_getElem_eq; intro j hj
   rw [sym_bit i _ ⟨j,hj⟩, BitVec.getElem_not, BitVec.getElem_not, sym_bit i a ⟨j,hj⟩]
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma sym_goal (i : Fin 8) : sym i goal = goal := by revert i; decide +kernel
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma sym_basic (i : Fin 8) {a b z : W} (h : z ∈ basicOps a b) :
     sym i z ∈ basicOps (sym i a) (sym i b) := by
   simp only [basicOps, ops, List.mem_toFinset, List.mem_cons, List.not_mem_nil, or_false] at h ⊢
   rcases h with rfl | rfl | rfl | rfl <;> simp [sym_and, sym_or, sym_not]
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma sym_live (i : Fin 8) {k g s} (hg : g = goal ∨ g = ~~~goal) (h : live basicOps g k s) :
     live basicOps g k (s.image (sym i)) := by
   have hfix : sym i g = g := by rcases hg with rfl|rfl <;> simp [sym_not,sym_goal]
@@ -4685,6 +4721,8 @@ lemma sym_live (i : Fin 8) {k g s} (hg : g = goal ∨ g = ~~~goal) (h : live bas
       · simp [hs]
       · simpa using ih ht
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem symOK (i : Fin 8) (k : ℕ) (g : W) (hg : g = goal ∨ g = ~~~goal) (ws : List W)
     (h : live basicOps g k ws.toFinset) : live basicOps g k ((ws.map (sym i)).toFinset) := by
   have eq : (ws.map (sym i)).toFinset = ws.toFinset.image (sym i) := by
@@ -4693,9 +4731,13 @@ theorem symOK (i : Fin 8) (k : ℕ) (g : W) (hg : g = goal ∨ g = ~~~goal) (ws 
   rw [eq]
   exact sym_live i hg h
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def certRow (k : Nat) (tr : BinaryTree (List W)) (ws : List W) : Bool :=
   !(doneTest ws || descend k ws (fun zs => !containsKey (ordered zs) tr))
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem checkedLayer (k : Nat) (hk : k < 12) (tr next : BinaryTree (List W))
     (hs : Closed k next) (hc : everyKey (certRow k next) tr = true) :
     Closed (k+1) tr := by
@@ -4714,10 +4756,14 @@ theorem checkedLayer (k : Nat) (hk : k < 12) (tr next : BinaryTree (List W))
   simp only [certRow,Bool.not_eq_true'] at ok
   cases hd : doneTest ws <;> cases hh : descend k ws (fun zs => !containsKey (ordered zs) next) <;> simp_all
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem splitCheck {f : List W → Bool} {ws} {l r : BinaryTree (List W)}
     (m : f ws = true) (a : everyKey f l = true) (b : everyKey f r = true) :
     everyKey f (.node ws l r) = true := by simp [everyKey,m,a,b]
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem closedEmpty (k : Nat) : Closed k .nil := by
   intro g hg ws hn hl hm
   contradiction
@@ -6037,815 +6083,1623 @@ def wuj : W := wao|||wfp
 def wuk : W := waE&&&~~~weQ
 def wul : W := wl|||wsx
 def tree5 : BinaryTree (List W) := .nil
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem closed5 : Closed 5 tree5 := closedEmpty 5
 def tree6aaa : BinaryTree (List W) := (.node [we,we7,wd,wc,wb,wsy,wg] (.node [wba,wd,wf,wa,wn3,wg,wh] (.node [wgC,wd,wf,wqn,wa,wb,wh] (.node [wpM,wd,wf,wc,wpL,wg,wh] .nil .nil) (.node [wF,wf,wl1,wa,wb,wg,wh] .nil .nil)) (.node [we,wuj,wc,wa,wb,wg,wh] (.node [we,wsB,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wbh,wa,wn3,wg,wh] (.node [we,wbd,wf,wa,wn3,wg,wh] (.node [we,wep,wc,wr4,wb,wg,wh] .nil .nil) (.node [we,wd,wcJ,wa,wb,wg,wqM] .nil .nil)) (.node [we,wd,wf,wc,wa,wo0,wo2] (.node [we,wd,wf,wqO,wa,wb,wqM] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6aaa : everyKey (certRow 5 tree5) tree6aaa = true := by decide +kernel
 def tree6aab : BinaryTree (List W) := (.node [we,wd,wf,wa,wb,wqM,wqN] (.node [we,wd,wf,wbl,wn3,wg,wh] (.node [we,wd,wf,wc,wb,wul,wg] (.node [we,wd,wf,wc,wb,wsy,wg] .nil .nil) (.node [we,wd,wf,woC,wa,wo0,wh] .nil .nil)) (.node [we,wd,wf,wa,wb,wg,wug] (.node [we,wd,wf,wa,wb,wg,wqM] .nil .nil) .nil)) (.node [we,wd,wf,wa,wn3,wg,wbr] (.node [we,wd,wf,wa,wn3,wg,wbt] (.node [we,wd,wf,wa,wn3,wbp,wh] .nil .nil) (.node [we,wd,wf,wa,wn3,wg,wh] .nil .nil)) (.node [we,wd,wf,wbj,wn3,wg,wh] (.node [we,wd,wf,wa,wn3,wbn,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6aab : everyKey (certRow 5 tree5) tree6aab = true := by decide +kernel
 def tree6aa : BinaryTree (List W) := .node [we,wd,wf,wc,woY,wo0,wh] tree6aaa tree6aab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6aa : everyKey (certRow 5 tree5) tree6aa = true := splitCheck (by decide +kernel) ok_tree6aaa ok_tree6aab
 def tree6aba : BinaryTree (List W) := (.node [we,wd,we5,wc,wb,wsy,wg] (.node [we,wd,woW,wc,wa,wb,wo2] (.node [we,wd,wbf,wa,wn,wg,wbr] (.node [we,wd,wbf,wa,wn3,wg,wh] .nil .nil) (.node [we,wd,wbf,wa,wn,wbn,wh] .nil .nil)) (.node [we,wd,wcH,wa,wb,wg,wqM] (.node [we,wd,woW,wc,wa,wo0,wh] .nil .nil) .nil)) (.node [we,wd,wqz,wa,wb,wg,wh] (.node [we,wd,wc,wuk,wb,wg,wh] (.node [we,wd,wc,wsh,wb,wg,wh] .nil .nil) (.node [we,wd,wc,wa,wb,wry,wh] .nil .nil)) (.node [we,wbb,wf,wa,wn3,wg,wh] (.node [we,wd,wuf,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6aba : everyKey (certRow 5 tree5) tree6aba = true := by decide +kernel
 def tree6abb : BinaryTree (List W) := (.node [we,wf,wc,wr4,wb,wez,wh] (.node [we,woU,wf,wc,woY,wb,wh] (.node [we,wbb,wbf,wa,wn,wg,wh] (.node [we,wbb,wf,wbj,wn,wg,wh] .nil .nil) (.node [we,woU,wf,wc,wa,wb,wo2] .nil .nil)) (.node [we,wL,wl1,wa,wb,wg,wh] (.node [we,woU,wf,woC,wa,wb,wh] .nil .nil) .nil)) (.node [we,wf,wc,wa,wb,wq5,wh] (.node [we,wf,wc,wr4,wb,wey,wh] (.node [we,wf,wc,wr4,wb,wg,wh] .nil .nil) .nil) (.node [we,wf,wc,wa,wb,wg,wsP] (.node [we,wf,wc,wa,wb,wui,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6abb : everyKey (certRow 5 tree5) tree6abb = true := by decide +kernel
 def tree6ab : BinaryTree (List W) := .node [we,wbb,wf,wa,wn,wg,wbr] tree6aba tree6abb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6ab : everyKey (certRow 5 tree5) tree6ab = true := splitCheck (by decide +kernel) ok_tree6aba ok_tree6abb
 def tree6a : BinaryTree (List W) := .node [we,wd,wf,wbj,wn,wbn,wh] tree6aa tree6ab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6a : everyKey (certRow 5 tree5) tree6a = true := splitCheck (by decide +kernel) ok_tree6aa ok_tree6ab
 def tree6baa : BinaryTree (List W) := (.node [we,wf,wl1,wa,wb,wg,w0] (.node [we,wf,wl1,wa,wb,wY,wh] (.node [we,wf,wl1,wQ,wb,wg,wh] (.node [we,wf,wlE,wa,wS,wg,wh] .nil .nil) (.node [we,wf,wl1,wa,wU,wg,wh] .nil .nil)) (.node [we,wf,wl1,wa,wb,wg,wh] (.node [we,wf,wl1,wa,wb,wg,w2] .nil .nil) .nil)) (.node [we,wf,wq,wa,wb,wW,w0] (.node [we,wf,wl1,wa,wS,wg,wh] (.node [we,wf,wl1,wa,wb,wW,wh] .nil .nil) (.node [we,wf,wl1,wO,wb,wg,wh] .nil .nil)) (.node [we,wf,wq,wO,wS,wg,wh] (.node [we,wf,wq,wa,wS,wg,w0] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6baa : everyKey (certRow 5 tree5) tree6baa = true := by decide +kernel
 def tree6bab : BinaryTree (List W) := (.node [we,wen,wc,wr4,wb,wg,wh] (.node [we,wlC,wc,wa,wb,wW,wh] (.node [we,wJ,wq,wa,wS,wg,wh] (.node [we,wJ,wq,wa,wb,wg,w0] .nil .nil) (.node [we,wlC,wc,wa,wb,wg,w0] .nil .nil)) (.node [we,wua,wc,wa,wb,wg,w0] (.node [we,wlC,wc,wa,wS,wg,wh] .nil .nil) .nil)) (.node [wD,wf,wq,wa,wb,wW,wh] (.node [wD,wf,wl1,wa,wb,wg,wh] (.node [we,wen,wc,wj,wb,wey,wh] .nil .nil) (.node [wD,wf,wq,wa,wb,wg,w0] .nil .nil)) (.node [wa8,wd,wf,wa,wn3,wg,wh] (.node [wD,wf,wq,wO,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6bab : everyKey (certRow 5 tree5) tree6bab = true := by decide +kernel
 def tree6ba : BinaryTree (List W) := .node [we,wJ,wl1,wa,wb,wg,wh] tree6baa tree6bab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6ba : everyKey (certRow 5 tree5) tree6ba = true := splitCheck (by decide +kernel) ok_tree6baa ok_tree6bab
 def tree6bba : BinaryTree (List W) := (.node [wlA,wf,wc,wa,wS,wg,wh] (.node [wn7,wd,wf,wc,woY,wb,wh] (.node [wa8,wd,wf,wbj,wn,wg,wh] (.node [wa8,wd,wf,wa,wn,wbn,wh] .nil .nil) (.node [wn7,wd,wf,wc,wa,wb,wo2] .nil .nil)) (.node [wlA,wf,wc,wa,wb,wW,wh] (.node [wlA,wf,wc,wa,wb,wg,w0] .nil .nil) .nil)) (.node [wbx,wf,wc,wa,wpL,wg,wh] (.node [wqY,wf,wc,wa,wb,wg,wh] (.node [wub,wf,wc,wa,wb,wg,w0] .nil .nil) (.node [wuh,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [wd,wpX,wc,wa,wb,wg,wh] (.node [wd,wpX,wc,wpZ,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6bba : everyKey (certRow 5 tree5) tree6bba = true := by decide +kernel
 def tree6bbb : BinaryTree (List W) := (.node [wd,wf,wc,wpL,wpN,wg,wh] (.node [wd,wf,wc,wa,wb,wrq,wh] (.node [wd,wqh,wqn,wa,wb,wg,wh] (.node [wd,wud,wc,wa,wb,wg,wh] .nil .nil) (.node [wd,wf,wc,wa,wb,wg,wro] .nil .nil)) (.node [wd,wf,wc,wa,wuc,wg,wh] (.node [wd,wf,wc,wa,wpL,wg,wh] .nil .nil) .nil)) (.node [wd,wf,wue,wa,wb,wg,wh] (.node [wd,wf,wqn,wa,wb,wg,wh] (.node [wd,wf,wqn,wgE,wa,wb,wh] .nil .nil) .nil) (.node [wbv,wf,wc,wa,wpL,wg,wh] (.node [wd,wpu,wqn,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6bbb : everyKey (certRow 5 tree5) tree6bbb = true := by decide +kernel
 def tree6bb : BinaryTree (List W) := .node [wd,wpX,wc,wpY,wb,wg,wh] tree6bba tree6bbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6bb : everyKey (certRow 5 tree5) tree6bb = true := splitCheck (by decide +kernel) ok_tree6bba ok_tree6bbb
 def tree6b : BinaryTree (List W) := .node [wa8,wd,wf,wa,wn,wg,wbr] tree6ba tree6bb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6b : everyKey (certRow 5 tree5) tree6b = true := splitCheck (by decide +kernel) ok_tree6ba ok_tree6bb
 def tree6 : BinaryTree (List W) := .node [we,wf,wlE,wa,wb,wW,wh] tree6a tree6b
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree6 : everyKey (certRow 5 tree5) tree6 = true := splitCheck (by decide +kernel) ok_tree6a ok_tree6b
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem closed6 : Closed 6 tree6 := checkedLayer 5 (by decide) _ _ closed5 ok_tree6
 def tree7aaaaaaa : BinaryTree (List W) := (.node [wp,we,wf,wlQ,wa,wb,wg,wh] (.node [wp,we,wf,wlE,wa,wb,wg,wh] (.node [wp,we,wL,wq,wa,wb,wg,wh] (.node [wp,wF,wf,wq,wa,wb,wg,wh] .nil .nil) .nil) (.node [wp,we,wf,wlN,wa,wb,wg,wh] .nil .nil)) (.node [wp,we,wf,wq,wa,wU,wg,wh] (.node [wp,we,wf,wq,wQ,wb,wg,wh] (.node [wp,we,wf,wl1,wa,wb,wg,wh] .nil .nil) .nil) (.node [wp,we,wf,wq,wa,wb,wY,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaaaaa : everyKey (certRow 6 tree6) tree7aaaaaaa = true := by decide +kernel
 def tree7aaaaaab : BinaryTree (List W) := (.node [wp,we,wf,wq,wO,wb,wg,wh] (.node [wp,we,wf,wq,wa,wb,wW,wh] (.node [wp,we,wf,wq,wa,wb,wg,w0] (.node [wp,we,wf,wq,wa,wb,wg,wh] .nil .nil) .nil) (.node [wp,we,wf,wq,wa,wS,wg,wh] .nil .nil)) (.node [wp,wD,wf,wq,wa,wb,wg,wh] (.node [wp,we,wlC,wc,wa,wb,wg,wh] (.node [wp,we,wJ,wq,wa,wb,wg,wh] .nil .nil) .nil) (.node [wp,wlA,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaaaab : everyKey (certRow 6 tree6) tree7aaaaaab = true := by decide +kernel
 def tree7aaaaaa : BinaryTree (List W) := .node [wp,we,wf,wq,wa,wb,wg,w2] tree7aaaaaaa tree7aaaaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaaaa : everyKey (certRow 6 tree6) tree7aaaaaa = true := splitCheck (by decide +kernel) ok_tree7aaaaaaa ok_tree7aaaaaab
 def tree7aaaaaba : BinaryTree (List W) := (.node [wm,we,wbd,wf,wa,wn,wg,wh] (.node [wpM,wo,wd,wf,wc,wae,wg,wh] (.node [wtL,we,wd,wf,wc,wb,wg,wh] (.node [wtJ,we,wd,wf,wc,wb,wg,wh] .nil .nil) .nil) (.node [wm,wba,wd,wf,wa,wn,wg,wh] .nil .nil)) (.node [wm,we,wd,wf,wa,wn3,wg,wh] (.node [wm,we,wd,wf,wbl,wn,wg,wh] (.node [wm,we,wd,wbh,wa,wn,wg,wh] .nil .nil) .nil) (.node [wm,we,wd,wf,wa,wn,wbp,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaaaba : everyKey (certRow 6 tree6) tree7aaaaaba = true := by decide +kernel
 def tree7aaaaabb : BinaryTree (List W) := (.node [wm,we,wd,wbf,wa,wn,wg,wh] (.node [wm,we,wd,wf,wa,wn,wbn,wh] (.node [wm,we,wd,wf,wa,wn,wg,wbr] (.node [wm,we,wd,wf,wa,wn,wg,wh] .nil .nil) .nil) (.node [wm,we,wd,wf,wbj,wn,wg,wh] .nil .nil)) (.node [wm,wa8,wd,wf,wa,wn,wg,wh] (.node [wm,we,wbb,wf,wa,wn,wg,wh] .nil .nil) (.node [wlZ,we,wd,wf,wa,wn,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaaabb : everyKey (certRow 6 tree6) tree7aaaaabb = true := by decide +kernel
 def tree7aaaaab : BinaryTree (List W) := .node [wm,we,wd,wf,wa,wn,wg,wbt] tree7aaaaaba tree7aaaaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaaab : everyKey (certRow 6 tree6) tree7aaaaab = true := splitCheck (by decide +kernel) ok_tree7aaaaaba ok_tree7aaaaabb
 def tree7aaaaa : BinaryTree (List W) := .node [waZ,we,wd,wf,wc,wfc,wg,wh] tree7aaaaaa tree7aaaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaaa : everyKey (certRow 6 tree6) tree7aaaaa = true := splitCheck (by decide +kernel) ok_tree7aaaaaa ok_tree7aaaaab
 def tree7aaaabaa : BinaryTree (List W) := (.node [way,we,wf,wc,wa,wb,wg,w0] (.node [wlY,we,wf,wq,wa,wb,wg,wh] (.node [wn2,we,wd,wf,wa,wn,wg,wh] (.node [wte,we,wd,wf,wc,wa,wb,wh] .nil .nil) .nil) (.node [wn4,we,wd,wf,wa,wn,wg,wh] .nil .nil)) (.node [way,we,wf,wc,wa,wb,wW,wh] (.node [way,we,wf,wc,wa,wb,wg,waz] (.node [way,we,wf,wc,wa,wb,wg,wdf] .nil .nil) .nil) (.node [way,we,wf,wc,wa,wS,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaabaa : everyKey (certRow 6 tree6) tree7aaaabaa = true := by decide +kernel
 def tree7aaaabab : BinaryTree (List W) := (.node [wgC,w9,wd,wf,wr,wa,wb,wh] (.node [wah,wd,wf,wc,wa,wb,wai,wh] (.node [wlz,we,wf,wq,wa,wb,wg,wh] (.node [wlz,we,wf,wc,wa,wb,wg,w0] .nil .nil) .nil) (.node [wak,wd,wf,wc,wa,wb,wg,wal] .nil .nil)) (.node [wgC,we,woV,wf,wc,wa,wb,wh] (.node [wgC,wz,wd,wf,wc,wa,wb,wh] .nil .nil) (.node [wgC,we,wd,woX,wc,wa,wb,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaabab : everyKey (certRow 6 tree6) tree7aaaabab = true := by decide +kernel
 def tree7aaaaba : BinaryTree (List W) := .node [wlz,we,wf,wc,wa,wb,wg,wh] tree7aaaabaa tree7aaaabab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaaba : everyKey (certRow 6 tree6) tree7aaaaba = true := splitCheck (by decide +kernel) ok_tree7aaaabaa ok_tree7aaaabab
 def tree7aaaabba : BinaryTree (List W) := (.node [wgC,we,wd,wf,wc,wa,wb,wo2] (.node [wgC,we,wd,wf,wc,wa,wb,wo3] (.node [wgC,we,wd,wf,wc,wa,wo1,wh] (.node [wgC,we,wd,wf,wc,woZ,wb,wh] .nil .nil) .nil) (.node [wgC,we,wd,wf,wc,wa,wb,wh] .nil .nil)) (.node [wgC,we,wd,wf,woC,wa,wb,wh] (.node [wgC,we,wd,wf,wc,woY,wb,wh] (.node [wgC,we,wd,wf,wc,wa,wo0,wh] .nil .nil) .nil) (.node [wgC,we,wd,wf,wa,wb,waU,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaabba : everyKey (certRow 6 tree6) tree7aaaabba = true := by decide +kernel
 def tree7aaaabbb : BinaryTree (List W) := (.node [wfX,wd,wf,wc,wa,wb,wg,wal] (.node [wgC,wd,wf,wc,wa,wb,wai,wh] (.node [wgC,wn7,wd,wf,wc,wa,wb,wh] (.node [wgC,we,woU,wf,wc,wa,wb,wh] .nil .nil) .nil) (.node [wfX,we,wf,wc,wa,wb,wg,waz] .nil .nil)) (.node [wgj,we,wd,wc,wa,wb,wg,waM] (.node [wn5,we,wd,wf,wa,wn,wg,wh] .nil .nil) (.node [wgj,we,wf,wc,wa,wb,wg,waz] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaabbb : everyKey (certRow 6 tree6) tree7aaaabbb = true := by decide +kernel
 def tree7aaaabb : BinaryTree (List W) := .node [wgC,we,wd,woW,wc,wa,wb,wh] tree7aaaabba tree7aaaabbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaabb : everyKey (certRow 6 tree6) tree7aaaabb = true := splitCheck (by decide +kernel) ok_tree7aaaabba ok_tree7aaaabbb
 def tree7aaaab : BinaryTree (List W) := .node [wgC,we,wd,wf,waV,wa,wb,wh] tree7aaaaba tree7aaaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaab : everyKey (certRow 6 tree6) tree7aaaab = true := splitCheck (by decide +kernel) ok_tree7aaaaba ok_tree7aaaabb
 def tree7aaaa : BinaryTree (List W) := .node [wlZ,we,wf,wq,wa,wb,wg,wh] tree7aaaaa tree7aaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaa : everyKey (certRow 6 tree6) tree7aaaa = true := splitCheck (by decide +kernel) ok_tree7aaaaa ok_tree7aaaab
 def tree7aaabaaa : BinaryTree (List W) := (.node [wo,wd,wf,wc,wpN,wae,wg,wh] (.node [wo,wd,wf,wc,wa,wpL,wg,wh] (.node [wo,wbx,wf,wc,wa,wae,wg,wh] (.node [wbH,wd,wf,wc,wa,wae,wg,wh] .nil .nil) .nil) (.node [wo,wd,wf,wc,wa,wae,wg,wh] .nil .nil)) (.node [wy,wd,w8,wc,wpZ,wb,wg,wh] (.node [wgy,wd,wf,wc,wa,wae,wg,wh] (.node [wo,wbv,wf,wc,wa,wae,wg,wh] .nil .nil) .nil) (.node [wy,wd,w8,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaabaaa : everyKey (certRow 6 tree6) tree7aaabaaa = true := by decide +kernel
 def tree7aaabaab : BinaryTree (List W) := (.node [wru,wd,wf,wc,wa,wb,wg,wh] (.node [wy,wd,wpX,wc,wa,wb,wg,wh] (.node [wy,wd,wdo,wc,wa,wb,wg,wh] (.node [wy,wd,wpI,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wdY,wd,w8,wc,wa,wb,wg,wh] .nil .nil)) (.node [w9,wd,wqh,wr,wa,wb,wg,wh] (.node [wdJ,wd,wf,wr,wa,wb,wg,wh] .nil .nil) (.node [w9,wd,wf,wqn,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaabaab : everyKey (certRow 6 tree6) tree7aaabaab = true := by decide +kernel
 def tree7aaabaa : BinaryTree (List W) := .node [wy,wd,w8,wc,wpY,wb,wg,wh] tree7aaabaaa tree7aaabaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaabaa : everyKey (certRow 6 tree6) tree7aaabaa = true := splitCheck (by decide +kernel) ok_tree7aaabaaa ok_tree7aaabaab
 def tree7aaababa : BinaryTree (List W) := (.node [wn6,wd,wf,wr,wa,wb,wg,wh] (.node [wfH,wd,wf,wr,wa,wb,wg,wh] (.node [w9,wd,wpu,wr,wa,wb,wg,wh] (.node [w9,wd,wf,wr,wa,wb,wg,wh] .nil .nil) .nil) (.node [wsz,wd,wf,wr,wa,wb,wg,wh] .nil .nil)) (.node [wqP,wd,wf,wr,wa,wb,wg,wh] (.node [wrd,wd,wf,wr,wa,wb,wg,wh] (.node [wrr,wd,wf,wr,wa,wb,wg,wh] .nil .nil) .nil) (.node [wcq,we,wd,waB,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaababa : everyKey (certRow 6 tree6) tree7aaababa = true := by decide +kernel
 def tree7aaababb : BinaryTree (List W) := (.node [wt,we,wd,wcJ,wa,wb,wg,waY] (.node [whx,we,wd,waB,wa,wb,wg,wh] (.node [wf3,we,wd,waB,wa,wb,wg,wh] (.node [ws,we,wd,waB,wa,wb,wg,wh] .nil .nil) .nil) (.node [wt6,we,wd,wc,wa,wb,wg,wh] .nil .nil)) (.node [wt,we,wd,wf,wa,wb,wg,waY] (.node [wt,we,wd,wf,wqO,wa,wb,waY] .nil .nil) (.node [wt,we,wd,wf,wa,wb,wg,wlX] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaababb : everyKey (certRow 6 tree6) tree7aaababb = true := by decide +kernel
 def tree7aaabab : BinaryTree (List W) := .node [ws,we,wd,wqz,wa,wb,wg,wh] tree7aaababa tree7aaababb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaabab : everyKey (certRow 6 tree6) tree7aaabab = true := splitCheck (by decide +kernel) ok_tree7aaababa ok_tree7aaababb
 def tree7aaaba : BinaryTree (List W) := .node [w9,wd,wf,wgE,wr,wa,wb,wh] tree7aaabaa tree7aaabab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaaba : everyKey (certRow 6 tree6) tree7aaaba = true := splitCheck (by decide +kernel) ok_tree7aaabaa ok_tree7aaabab
 def tree7aaabbaa : BinaryTree (List W) := (.node [w4,w5,wf,wc,wa,wb,wg,wh] (.node [wt,we,wd,wf,wa,wb,waY,wqN] (.node [wt,we,wd,wf,wa,wb,wg,wqM] (.node [wt,we,wd,wf,wa,wb,wg,wqy] .nil .nil) .nil) (.node [wt,we,wd,wcH,wa,wb,wg,waY] .nil .nil)) (.node [wcY,w5,wf,wc,wa,wb,wg,wh] (.node [wfk,w5,wf,wc,wa,wb,wg,wh] (.node [w4,wdl,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wq1,wd,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaabbaa : everyKey (certRow 6 tree6) tree7aaabbaa = true := by decide +kernel
 def tree7aaabbab : BinaryTree (List W) := (.node [wp1,wu,wf,wc,wa,wb,wg,wh] (.node [wgn,wu,wf,wc,wa,wb,wg,wh] (.node [w3,wu,wf,wc,wa,wb,wg,wh] (.node [w3,wqY,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wg6,wu,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [wqS,wu,wf,wc,wa,wb,wg,wh] (.node [wt0,we,wf,wc,wa,wb,wg,wh] .nil .nil) (.node [wqR,wu,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaabbab : everyKey (certRow 6 tree6) tree7aaabbab = true := by decide +kernel
 def tree7aaabba : BinaryTree (List W) := .node [wdi,wu,wf,wc,wa,wb,wg,wh] tree7aaabbaa tree7aaabbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaabba : everyKey (certRow 6 tree6) tree7aaabba = true := splitCheck (by decide +kernel) ok_tree7aaabbaa ok_tree7aaabbab
 def tree7aaabbba : BinaryTree (List W) := (.node [ww,we,wf,wc,wa,wb,wlO,wh] (.node [ww,we,wf,wc,wa,wb,wlS,wh] (.node [ww,we,wf,wc,wa,wb,wlU,wh] (.node [ww,we,wf,wc,wa,wb,wax,wh] .nil .nil) .nil) (.node [ww,we,wf,wc,wa,wb,wq5,wh] .nil .nil)) (.node [ww,we,wlC,wc,wa,wb,wg,wh] (.node [ww,we,wf,wlE,wa,wb,wg,wh] (.node [ww,we,wf,wc,wa,wb,wlK,wh] .nil .nil) .nil) (.node [ww,wlA,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaabbba : everyKey (certRow 6 tree6) tree7aaabbba = true := by decide +kernel
 def tree7aaabbbb : BinaryTree (List W) := (.node [wqt,wd,wf,wc,wa,wb,wg,wh] (.node [wlV,wu,wf,wc,wa,wb,wg,wh] (.node [waa,wd,wf,wdM,wa,wb,wg,wh] (.node [waa,wd,wf,wab,wa,wb,wg,wh] .nil .nil) .nil) (.node [wcD,wd,wf,wab,wa,wb,wg,wh] .nil .nil)) (.node [wdm,wd,w7,wc,wa,wb,wg,wh] (.node [wqr,wd,wf,wc,wa,wb,wg,wh] .nil .nil) (.node [w6,wd,w7,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaabbbb : everyKey (certRow 6 tree6) tree7aaabbbb = true := by decide +kernel
 def tree7aaabbb : BinaryTree (List W) := .node [woa,we,wf,wc,wa,wb,wg,wh] tree7aaabbba tree7aaabbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaabbb : everyKey (certRow 6 tree6) tree7aaabbb = true := splitCheck (by decide +kernel) ok_tree7aaabbba ok_tree7aaabbbb
 def tree7aaabb : BinaryTree (List W) := .node [wpO,wu,wf,wc,wa,wb,wg,wh] tree7aaabba tree7aaabbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaabb : everyKey (certRow 6 tree6) tree7aaabb = true := splitCheck (by decide +kernel) ok_tree7aaabba ok_tree7aaabbb
 def tree7aaab : BinaryTree (List W) := .node [wt,we,wd,wf,wa,wb,wg,wqL] tree7aaaba tree7aaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaab : everyKey (certRow 6 tree6) tree7aaab = true := splitCheck (by decide +kernel) ok_tree7aaaba ok_tree7aaabb
 def tree7aaa : BinaryTree (List W) := .node [ws2,we,wd,wf,wc,wa,wb,wg] tree7aaaa tree7aaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaa : everyKey (certRow 6 tree6) tree7aaa = true := splitCheck (by decide +kernel) ok_tree7aaaa ok_tree7aaab
 def tree7aabaaaa : BinaryTree (List W) := (.node [wA,wd,wf,wc,wa,wb,wg,wcd] (.node [wA,wd,wf,wc,wa,wb,wg,wam] (.node [wpx,wd,wf,wc,wa,wb,wg,wh] (.node [waf,wd,wf,wc,wa,wb5,wg,wh] .nil .nil) .nil) (.node [wA,wd,wf,wc,wa,wb,wg,wqT] .nil .nil)) (.node [wA,woQ,wf,wc,wa,wb,wg,wh] (.node [wA,wd,woI,wc,wa,wb,wg,wh] (.node [wA,wd,wf,wc,wa,wb,wg,wro] .nil .nil) .nil) (.node [wz,we,wd,wf,wc,wa,wn9,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabaaaa : everyKey (certRow 6 tree6) tree7aabaaaa = true := by decide +kernel
 def tree7aabaaab : BinaryTree (List W) := (.node [wz,wd,wf,wc,wa,wb,wrg,wh] (.node [wz,wd,wf,wc,wrp,wa,wb,wh] (.node [wz,wd,wf,waV,wr,wa,wb,wh] (.node [wz,wn7,wd,wf,wc,wa,wb,wh] .nil .nil) .nil) (.node [wz,wd,wf,wc,wa,wb,waj,wh] .nil .nil)) (.node [wz,wd,wf,wc,wa,wb,wrs,wh] (.node [wz,wd,wf,wc,wa,wb,wrq,wh] (.node [wz,wd,wf,wc,wa,wb,wq6,wh] .nil .nil) .nil) (.node [wz,wd,wf,woC,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabaaab : everyKey (certRow 6 tree6) tree7aabaaab = true := by decide +kernel
 def tree7aabaaa : BinaryTree (List W) := .node [wz,we,wn8,wf,wc,wa,wb,wh] tree7aabaaaa tree7aabaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabaaa : everyKey (certRow 6 tree6) tree7aabaaa = true := splitCheck (by decide +kernel) ok_tree7aabaaaa ok_tree7aabaaab
 def tree7aabaaba : BinaryTree (List W) := (.node [wF,wlL,wf,wc,wa,wb,wg,wh] (.node [wlB,wd,wf,wc,wa,wb,wg,wh] (.node [wmF,wd,wf,wc,wa,wb,wg,wh] (.node [wpk,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wF,w5,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [wF,wd,wf,wc,wa,wU,wg,wh] (.node [wF,wd,wf,wc,wQ,wb,wg,wh] (.node [wF,wd,wL,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wF,wd,wf,wc,wa,wb,wY,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabaaba : everyKey (certRow 6 tree6) tree7aabaaba = true := by decide +kernel
 def tree7aabaabb : BinaryTree (List W) := (.node [wF,wd,wf,wc,wO,wb,wg,wh] (.node [wF,wd,wf,wc,wa,wb,wW,wh] (.node [wF,wd,wf,wc,wa,wb,wg,w0] (.node [wF,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wF,wd,wf,wc,wa,wS,wg,wh] .nil .nil)) (.node [wF,wu,wf,wc,wa,wb,wg,wh] (.node [wF,wd,wJ,wc,wa,wb,wg,wh] .nil .nil) (.node [wlm,wd,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabaabb : everyKey (certRow 6 tree6) tree7aabaabb = true := by decide +kernel
 def tree7aabaab : BinaryTree (List W) := .node [wF,wd,wf,wc,wa,wb,wg,w2] tree7aabaaba tree7aabaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabaab : everyKey (certRow 6 tree6) tree7aabaab = true := splitCheck (by decide +kernel) ok_tree7aabaaba ok_tree7aabaabb
 def tree7aabaa : BinaryTree (List W) := .node [we0,wd,wf,wc,wad,wb,wg,wh] tree7aabaaa tree7aabaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabaa : everyKey (certRow 6 tree6) tree7aabaa = true := splitCheck (by decide +kernel) ok_tree7aabaaa ok_tree7aabaab
 def tree7aababaa : BinaryTree (List W) := (.node [wba,wbd,wf,wc,wa,wb,wg,wh] (.node [wjB,wd,wf,wc,wa,wb,wg,wh] (.node [wmx,wd,wf,wc,wa,wb,wg,wh] (.node [wia,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wjs,wd,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [wba,wd,wf,wc,wa,wb,wbp,wh] (.node [wba,wd,wf,wc,wbl,wb,wg,wh] (.node [wba,wd,wbh,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wba,wd,wf,wc,wa,wb,wg,wbt] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aababaa : everyKey (certRow 6 tree6) tree7aababaa = true := by decide +kernel
 def tree7aababab : BinaryTree (List W) := (.node [wba,wbb,wf,wc,wa,wb,wg,wh] (.node [wba,wd,wf,wc,wbj,wb,wg,wh] (.node [wba,wd,wf,wc,wa,wb,wbn,wh] (.node [wba,wd,wf,wc,wa,wb,wg,wbr] .nil .nil) .nil) (.node [wba,wd,wbf,wc,wa,wb,wg,wh] .nil .nil)) (.node [wh3,wd,wf,wc,wa,wb,wg,wh] (.node [wnI,wd,wf,wc,wa,wb,wg,wh] .nil .nil) (.node [wle,wd,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aababab : everyKey (certRow 6 tree6) tree7aababab = true := by decide +kernel
 def tree7aababa : BinaryTree (List W) := .node [wba,wd,wf,wc,wa,wb,wg,wh] tree7aababaa tree7aababab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aababa : everyKey (certRow 6 tree6) tree7aababa = true := splitCheck (by decide +kernel) ok_tree7aababaa ok_tree7aababab
 def tree7aababba : BinaryTree (List W) := (.node [we,wB,wd,wc,wa,wb,wqx,wh] (.node [wiE,wd,wf,wc,wa,wb,wg,wh] (.node [whN,wd,wf,wc,wa,wb,wg,wh] (.node [wiq,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wB,wd,wc,wa,wb,waL,wh] .nil .nil)) (.node [we,whu,wf,wc,wa,was,wg,wh] (.node [we,wB,wd,wc,wa,wb,wry,wh] (.node [we,wB,wd,wc,wa,wb,wp0,wh] .nil .nil) .nil) (.node [we,wt4,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aababba : everyKey (certRow 6 tree6) tree7aababba = true := by decide +kernel
 def tree7aababbb : BinaryTree (List W) := (.node [we,wao,wfp,wc,wa,wb,wg,wh] (.node [we,wfP,wf,wc,wa,was,wg,wh] (.node [we,wgb,wf,wc,wa,was,wg,wh] (.node [we,wgU,wf,wc,wa,was,wg,wh] .nil .nil) .nil) (.node [we,wao,wap,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wao,wL,wc,wa,wb,wg,wh] (.node [we,wao,wc2,wc,wa,wb,wg,wh] .nil .nil) (.node [we,wao,wf,wc,wa,wb,wg,w0] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aababbb : everyKey (certRow 6 tree6) tree7aababbb = true := by decide +kernel
 def tree7aababb : BinaryTree (List W) := .node [we,whf,wf,wc,wa,was,wg,wh] tree7aababba tree7aababbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aababb : everyKey (certRow 6 tree6) tree7aababb = true := splitCheck (by decide +kernel) ok_tree7aababba ok_tree7aababbb
 def tree7aabab : BinaryTree (List W) := .node [wnP,wd,wf,wc,wa,wb,wg,wh] tree7aababa tree7aababb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabab : everyKey (certRow 6 tree6) tree7aabab = true := splitCheck (by decide +kernel) ok_tree7aababa ok_tree7aababb
 def tree7aaba : BinaryTree (List W) := .node [wi5,wd,wf,wc,wa,wb,wg,wh] tree7aabaa tree7aabab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aaba : everyKey (certRow 6 tree6) tree7aaba = true := splitCheck (by decide +kernel) ok_tree7aabaa ok_tree7aabab
 def tree7aabbaaa : BinaryTree (List W) := (.node [we,wlM,wv,wc,wa,wb,wg,wh] (.node [we,wlM,wL,wc,wa,wb,wg,wh] (.node [we,wlM,wcJ,wc,wa,wb,wg,wh] (.node [we,wao,wf,wc,wa,wS,wg,wh] .nil .nil) .nil) (.node [we,wlM,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wq4,wf,wc,wa,wb,wg,wh] (.node [we,wsS,wf,wc,wa,wb,wg,wh] (.node [we,ws1,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wsJ,wd,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabbaaa : everyKey (certRow 6 tree6) tree7aabbaaa = true := by decide +kernel
 def tree7aabbaab : BinaryTree (List W) := (.node [we,wsB,wf,wc,wa,wb,wg,wh] (.node [we,wsB,wan,wc,wa,wb,wg,wh] (.node [we,wsD,wd,wc,wa,wb,wg,wh] (.node [we,wsF,wd,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wsB,wd,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wsB,wc,wa,wb,wg,wh] (.node [we,wsB,wv,wc,wa,wb,wg,wh] .nil .nil) (.node [we,waq,wf,wc,war,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabbaab : everyKey (certRow 6 tree6) tree7aabbaab = true := by decide +kernel
 def tree7aabbaa : BinaryTree (List W) := .node [we,wsH,wv,wc,wa,wb,wg,wh] tree7aabbaaa tree7aabbaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabbaa : everyKey (certRow 6 tree6) tree7aabbaa = true := splitCheck (by decide +kernel) ok_tree7aabbaaa ok_tree7aabbaab
 def tree7aabbaba : BinaryTree (List W) := (.node [we,waF,wd,wc,waG,wb,wg,wh] (.node [we,wsd,wf,wc,wa,wb,wg,wh] (.node [we,wsj,wf,wc,wa,wb,wg,wh] (.node [we,wsn,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wsb,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,we7,wd,wc,wnb,wb,wg,wh] (.node [we,we7,wd,wc,waG,wb,wg,wh] (.node [we,we7,wl,wd,wc,wb,wa3,wg] .nil .nil) .nil) (.node [we,we7,wd,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabbaba : everyKey (certRow 6 tree6) tree7aabbaba = true := by decide +kernel
 def tree7aabbabb : BinaryTree (List W) := (.node [we,wr7,wd,wc,wa,wb,wg,wh] (.node [we,wsp,wd,wc,wa,wb,wg,wh] (.node [we,wst,wd,wc,wa,wb,wg,wh] (.node [we,wsv,wd,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wsl,wd,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wep,wd,wc,wa,wb,wez,wh] (.node [we,wep,wi,wc,wj,wb,wg,wh] .nil .nil) (.node [we,wep,wd,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabbabb : everyKey (certRow 6 tree6) tree7aabbabb = true := by decide +kernel
 def tree7aabbab : BinaryTree (List W) := .node [we,we7,wd,wc,waE,wb,wg,wh] tree7aabbaba tree7aabbabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabbab : everyKey (certRow 6 tree6) tree7aabbab = true := splitCheck (by decide +kernel) ok_tree7aabbaba ok_tree7aabbabb
 def tree7aabba : BinaryTree (List W) := .node [we,we4,wf,wc,war,wb,wg,wh] tree7aabbaa tree7aabbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabba : everyKey (certRow 6 tree6) tree7aabba = true := splitCheck (by decide +kernel) ok_tree7aabbaa ok_tree7aabbab
 def tree7aabbbaa : BinaryTree (List W) := (.node [we,wrM,wd,wc,wa,wb,wg,wh] (.node [we,wrW,wd,wc,wa,wb,wg,wh] (.node [we,wrS,wd,wc,wa,wb,wg,wh] (.node [we,wr0,wd,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wrO,wd,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wi,wf,wc,wj,wb,wg,wh] (.node [we,wi,wf,wc,wj,wb,wez,wh] (.node [we,wi,wf,wc,wr4,wb,wg,wh] .nil .nil) .nil) (.node [we,wi,wf,wc,wj,wb,wey,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabbbaa : everyKey (certRow 6 tree6) tree7aabbbaa = true := by decide +kernel
 def tree7aabbbab : BinaryTree (List W) := (.node [we,wrI,wf,wc,wj,wb,wg,wh] (.node [we,wtN,wf,wc,wj,wb,wg,wh] (.node [we,wfL,wf,wc,wj,wb,wg,wh] (.node [we,wl0,wf,wc,wj,wb,wg,wh] .nil .nil) .nil) (.node [we,wtO,wd,wf,wc,wb,wg,wh] .nil .nil)) (.node [we,wk,wd,wc,wsh,wb,wg,wh] (.node [we,weQ,wd,wc,waE,wb,wg,wh] .nil .nil) (.node [we,wk,wd,wc,waE,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabbbab : everyKey (certRow 6 tree6) tree7aabbbab = true := by decide +kernel
 def tree7aabbba : BinaryTree (List W) := .node [we,wi,wen,wc,wj,wb,wg,wh] tree7aabbbaa tree7aabbbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabbba : everyKey (certRow 6 tree6) tree7aabbba = true := splitCheck (by decide +kernel) ok_tree7aabbbaa ok_tree7aabbbab
 def tree7aabbbba : BinaryTree (List W) := (.node [we,wl,wd,wf,wc,wb,wsy,wg] (.node [we,wl,wd,wf,wc,wb,wsx,wg] (.node [we,wl,wd,wf,wc,wb,wr3,wg] (.node [we,wl,wd,wf,wc,wb,wa3,wg] .nil .nil) .nil) (.node [we,wl,wd,wf,wc,wb,wsg,wg] .nil .nil)) (.node [we,wl,wd,wf,wnj,wb,wg,wh] (.node [we,wl,wd,wf,wc,wb,wg,wnk] (.node [we,wl,wd,wf,wc,wb,wsw,wg] .nil .nil) .nil) (.node [we,wl,wd,wni,wc,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabbbba : everyKey (certRow 6 tree6) tree7aabbbba = true := by decide +kernel
 def tree7aabbbbb : BinaryTree (List W) := (.node [we,wl2,wv,wc,wa,wb,wg,wh] (.node [we,wfm,wv,wc,wa,wb,wg,wh] (.node [we,wng,wd,wf,wc,wb,wg,wh] (.node [we,wl,wnh,wf,wc,wb,wg,wh] .nil .nil) .nil) (.node [we,wan,wv,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wt8,wv,wc,wa,wb,wg,wh] (.node [we,wrC,wv,wc,wa,wb,wg,wh] .nil .nil) (.node [we,wsQ,wv,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabbbbb : everyKey (certRow 6 tree6) tree7aabbbbb = true := by decide +kernel
 def tree7aabbbb : BinaryTree (List W) := .node [we,wl,wd,we5,wc,wb,wa3,wg] tree7aabbbba tree7aabbbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabbbb : everyKey (certRow 6 tree6) tree7aabbbb = true := splitCheck (by decide +kernel) ok_tree7aabbbba ok_tree7aabbbbb
 def tree7aabbb : BinaryTree (List W) := .node [we,wf7,wd,wc,waE,wb,wg,wh] tree7aabbba tree7aabbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabbb : everyKey (certRow 6 tree6) tree7aabbb = true := splitCheck (by decide +kernel) ok_tree7aabbba ok_tree7aabbbb
 def tree7aabb : BinaryTree (List W) := .node [we,wep,wd,wc,wa,wb,wey,wh] tree7aabba tree7aabbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aabb : everyKey (certRow 6 tree6) tree7aabb = true := splitCheck (by decide +kernel) ok_tree7aabba ok_tree7aabbb
 def tree7aab : BinaryTree (List W) := .node [we,wao,wf,wc,wa,wb,wW,wh] tree7aaba tree7aabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aab : everyKey (certRow 6 tree6) tree7aab = true := splitCheck (by decide +kernel) ok_tree7aaba ok_tree7aabb
 def tree7aa : BinaryTree (List W) := .node [waf,wd,wf,wc,wa,wag,wg,wh] tree7aaa tree7aab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aa : everyKey (certRow 6 tree6) tree7aa = true := splitCheck (by decide +kernel) ok_tree7aaa ok_tree7aab
 def tree7abaaaaa : BinaryTree (List W) := (.node [we,wfT,wf,wc,wa,wb,waw,wh] (.node [we,wav,wf,wc,wa,wb,waw,wh] (.node [we,wrB,wf,wc,wa,wb,wg,wh] (.node [we,wt9,wv,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wgY,wf,wc,wa,wb,waw,wh] .nil .nil)) (.node [we,w5,wf,wc,wa,wb,wg,w0] (.node [we,wrj,wf,wc,wa,wb,wg,wh] (.node [we,wtg,wd,wf,wc,wa,wb,wh] .nil .nil) .nil) (.node [we,w5,wf,wc,wa,wb,wW,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaaaaa : everyKey (certRow 6 tree6) tree7abaaaaa = true := by decide +kernel
 def tree7abaaaab : BinaryTree (List W) := (.node [we,wrf,wf,wc,wa,wb,wg,wh] (.node [we,wrc,wf,wc,wa,wb,wg,wh] (.node [we,wlL,wf,wc,wa,wb,wg,wh] (.node [we,w5,wf,wc,wO,wb,wg,wh] .nil .nil) .nil) (.node [we,wdF,wf,wc,wa,wb,waw,wh] .nil .nil)) (.node [we,wpU,wf,wc,wa,wb,wg,wh] (.node [we,wqY,wf,wc,wa,wb,wg,wh] (.node [we,wq8,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wpQ,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaaaab : everyKey (certRow 6 tree6) tree7abaaaab = true := by decide +kernel
 def tree7abaaaa : BinaryTree (List W) := .node [we,w5,wf,wc,wa,wS,wg,wh] tree7abaaaaa tree7abaaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaaaa : everyKey (certRow 6 tree6) tree7abaaaa = true := splitCheck (by decide +kernel) ok_tree7abaaaaa ok_tree7abaaaab
 def tree7abaaaba : BinaryTree (List W) := (.node [we,wpB,wf,wc,wa,wb,wg,wh] (.node [we,wpz,wf,wc,wa,wb,wg,wh] (.node [we,wpF,wf,wc,wa,wb,wg,wh] (.node [we,wpH,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wpD,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wx,wf,wc,wa,wb,wg,wlP] (.node [we,wx,wf,wc,wa,wb,wg,wlT] (.node [we,wx,wf,wc,wa,wb,wg,waA] .nil .nil) .nil) (.node [we,wx,wf,wc,wa,wb,wg,wsP] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaaaba : everyKey (certRow 6 tree6) tree7abaaaba = true := by decide +kernel
 def tree7abaaabb : BinaryTree (List W) := (.node [we,wrD,wf,wc,wa,wb,wg,wh] (.node [we,wH,wf,wc,wa,wb,wW,wh] (.node [we,wH,wf,wc5,wa,wb,wg,wh] (.node [we,wH,wf,wM,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wH,wf,wc,wa,wS,wg,wh] .nil .nil)) (.node [we,woV,wf,wc,wa,wb,wg,wh] (.node [we,wm8,wf,wc,wa,wb,wg,wh] .nil .nil) (.node [we,wka,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaaabb : everyKey (certRow 6 tree6) tree7abaaabb = true := by decide +kernel
 def tree7abaaab : BinaryTree (List W) := .node [we,wx,wlC,wc,wa,wb,wg,wh] tree7abaaaba tree7abaaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaaab : everyKey (certRow 6 tree6) tree7abaaab = true := splitCheck (by decide +kernel) ok_tree7abaaaba ok_tree7abaaabb
 def tree7abaaa : BinaryTree (List W) := .node [we,wbx,wf,wc,wa,wb,wg,wh] tree7abaaaa tree7abaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaaa : everyKey (certRow 6 tree6) tree7abaaa = true := splitCheck (by decide +kernel) ok_tree7abaaaa ok_tree7abaaab
 def tree7abaabaa : BinaryTree (List W) := (.node [we,wpf,wv,wc,wa,wb,wg,wh] (.node [we,wjd,wf,wc,wa,wb,wg,wh] (.node [we,wcG,wf,wM,wa,wb,wg,wh] (.node [we,wjT,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wju,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wos,wf,wc,wa,wb,wg,wh] (.node [we,wiO,wf,wc,wa,wb,wg,wh] (.node [we,wiF,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,woc,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaabaa : everyKey (certRow 6 tree6) tree7abaabaa = true := by decide +kernel
 def tree7abaabab : BinaryTree (List W) := (.node [we,wbd,wf,wc,wa,wb,wg,wbr] (.node [we,wbd,wf,wc,wa,wb,wg,wbt] (.node [we,wbd,wf,wc,wa,wb,wbp,wh] (.node [we,wbd,wf,wc,wbl,wb,wg,wh] .nil .nil) .nil) (.node [we,wbd,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wbd,wf,wc,wbj,wb,wg,wh] (.node [we,wbd,wf,wc,wa,wb,wbn,wh] .nil .nil) (.node [we,wbd,wbf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaabab : everyKey (certRow 6 tree6) tree7abaabab = true := by decide +kernel
 def tree7abaaba : BinaryTree (List W) := .node [we,wbd,wbh,wc,wa,wb,wg,wh] tree7abaabaa tree7abaabab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaaba : everyKey (certRow 6 tree6) tree7abaaba = true := splitCheck (by decide +kernel) ok_tree7abaabaa ok_tree7abaabab
 def tree7abaabba : BinaryTree (List W) := (.node [we,wkm,wf,wc,wa,wb,wg,wh] (.node [we,wmH,wf,wc,wa,wb,wg,wh] (.node [we,wmX,wf,wc,wa,wb,wg,wh] (.node [we,wnn,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wmm,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,woH,wf,wc,wa,wb,wg,wh] (.node [we,wmc,wf,wc,wa,wb,wg,wh] (.node [we,wic,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wok,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaabba : everyKey (certRow 6 tree6) tree7abaabba = true := by decide +kernel
 def tree7abaabbb : BinaryTree (List W) := (.node [we,wd,wti,wf,wc,wa,wb,wh] (.node [we,wd,wrF,wc,wa,wb,wg,wh] (.node [we,whP,wf,wc,wa,wb,wg,wh] (.node [we,whW,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,waJ,wc,wa,wb,waK,wh] .nil .nil)) (.node [we,wd,wrl,wc,wa,wb,wg,wh] (.node [we,wd,wpI,wc,wa,wb,wg,wh] .nil .nil) (.node [we,wd,wrn,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaabbb : everyKey (certRow 6 tree6) tree7abaabbb = true := by decide +kernel
 def tree7abaabb : BinaryTree (List W) := .node [we,wkL,wf,wc,wa,wb,wg,wh] tree7abaabba tree7abaabbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaabb : everyKey (certRow 6 tree6) tree7abaabb = true := splitCheck (by decide +kernel) ok_tree7abaabba ok_tree7abaabbb
 def tree7abaab : BinaryTree (List W) := .node [we,wnW,wf,wc,wa,wb,wg,wh] tree7abaaba tree7abaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaab : everyKey (certRow 6 tree6) tree7abaab = true := splitCheck (by decide +kernel) ok_tree7abaaba ok_tree7abaabb
 def tree7abaa : BinaryTree (List W) := .node [we,wjJ,wf,wc,wa,wb,wg,wh] tree7abaaa tree7abaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abaa : everyKey (certRow 6 tree6) tree7abaa = true := splitCheck (by decide +kernel) ok_tree7abaaa ok_tree7abaab
 def tree7ababaaa : BinaryTree (List W) := (.node [we,wd,wcJ,waD,wa,wb,wg,wh] (.node [we,wd,waC,waD,wa,wb,wg,wh] (.node [we,wd,wq3,wc,wa,wb,wg,wh] (.node [we,wd,wra,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,waC,wd5,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wcJ,waB,wa,wb,wg,wh] (.node [we,wd,wcJ,wc,wa,wb,wg,wh] (.node [we,wd,wcJ,wmz,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wqF,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7ababaaa : everyKey (certRow 6 tree6) tree7ababaaa = true := by decide +kernel
 def tree7ababaab : BinaryTree (List W) := (.node [we,wd,wql,wc,wa,wb,wg,wh] (.node [we,wd,wqp,wc,wa,wb,wg,wh] (.node [we,wd,wqv,wc,wa,wb,wg,wh] (.node [we,wd,wqB,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wqh,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wqd,wc,wa,wb,wg,wh] (.node [we,wd,wqj,wc,wa,wb,wg,wh] .nil .nil) (.node [we,wd,wqb,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7ababaab : everyKey (certRow 6 tree6) tree7ababaab = true := by decide +kernel
 def tree7ababaa : BinaryTree (List W) := .node [we,wd,wqD,wc,wa,wb,wg,wh] tree7ababaaa tree7ababaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7ababaa : everyKey (certRow 6 tree6) tree7ababaa = true := splitCheck (by decide +kernel) ok_tree7ababaaa ok_tree7ababaab
 def tree7abababa : BinaryTree (List W) := (.node [we,wd,woX,wc,wa,wb,wg,wh] (.node [we,wd,wlD,wc,wa,wb,wg,wh] (.node [we,wd,wo5,wc,wa,wb,wg,wh] (.node [we,wd,wp3,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wmQ,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wjL,wc,wa,wb,wg,wh] (.node [we,wd,wjU,wc,wa,wb,wg,wh] (.node [we,wd,wkc,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wjv,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abababa : everyKey (certRow 6 tree6) tree7abababa = true := by decide +kernel
 def tree7abababb : BinaryTree (List W) := (.node [we,wd,wL,wc,wa,wb,wg,w0] (.node [we,wd,wL,wc,wa,wb,wg,w2] (.node [we,wd,wL,wc,wa,wb,wY,wh] (.node [we,wd,wL,wc,wa,wU,wg,wh] .nil .nil) .nil) (.node [we,wd,wL,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wL,wc,wa,wS,wg,wh] (.node [we,wd,wL,wc,wa,wb,wW,wh] .nil .nil) (.node [we,wd,wL,wc,wO,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abababb : everyKey (certRow 6 tree6) tree7abababb = true := by decide +kernel
 def tree7ababab : BinaryTree (List W) := .node [we,wd,wL,wc,wQ,wb,wg,wh] tree7abababa tree7abababb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7ababab : everyKey (certRow 6 tree6) tree7ababab = true := splitCheck (by decide +kernel) ok_tree7abababa ok_tree7abababb
 def tree7ababa : BinaryTree (List W) := .node [we,wd,wp7,wc,wa,wb,wg,wh] tree7ababaa tree7ababab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7ababa : everyKey (certRow 6 tree6) tree7ababa = true := splitCheck (by decide +kernel) ok_tree7ababaa ok_tree7ababab
 def tree7ababbaa : BinaryTree (List W) := (.node [we,wd,wkv,wc,wa,wb,wg,wh] (.node [we,wd,wiP,wc,wa,wb,wg,wh] (.node [we,wd,wkS,wc,wa,wb,wg,wh] (.node [we,wd,wjf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wiH,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wk7,wc,wa,wb,wg,wh] (.node [we,wd,wl5,wc,wa,wb,wg,wh] (.node [we,wd,wmo,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wij,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7ababbaa : everyKey (certRow 6 tree6) tree7ababbaa = true := by decide +kernel
 def tree7ababbab : BinaryTree (List W) := (.node [we,wd,wbh,wc,wa,wb,wg,wbr] (.node [we,wd,wbh,wc,wa,wb,wg,wbt] (.node [we,wd,wbh,wc,wa,wb,wbp,wh] (.node [we,wd,wbh,wc,wbl,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wbh,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wbh,wc,wbj,wb,wg,wh] (.node [we,wd,wbh,wc,wa,wb,wbn,wh] .nil .nil) (.node [we,wd,wnw,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7ababbab : everyKey (certRow 6 tree6) tree7ababbab = true := by decide +kernel
 def tree7ababba : BinaryTree (List W) := .node [we,wd,wme,wc,wa,wb,wg,wh] tree7ababbaa tree7ababbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7ababba : everyKey (certRow 6 tree6) tree7ababba = true := splitCheck (by decide +kernel) ok_tree7ababbaa ok_tree7ababbab
 def tree7ababbba : BinaryTree (List W) := (.node [we,wd,wf,wtX,wc,wa,wb,wh] (.node [we,wd,wf,ws3,wc,wa,wb,wg] (.node [we,wd,wkE,wc,wa,wb,wg,wh] (.node [we,wd,wnY,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wtZ,wc,wa,wb,wh] .nil .nil)) (.node [we,wd,wf,whB,waO,wb,wg,wh] (.node [we,wd,wf,wgu,waO,wb,wg,wh] (.node [we,wd,wf,whc,waO,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wtQ,wc,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7ababbba : everyKey (certRow 6 tree6) tree7ababbba = true := by decide +kernel
 def tree7ababbbb : BinaryTree (List W) := (.node [we,wd,wf,wqW,wa,wb,wg,wh] (.node [we,wd,wf,wg2,wa,wb,wg,waX] (.node [we,wd,wf,waW,wa,wb,wg,waX] (.node [we,wd,wf,wtv,wc,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wgG,wa,wb,wg,waX] .nil .nil)) (.node [we,wd,wf,waV,wdK,wa,wb,wh] (.node [we,wd,wf,wfa,waQ,wb,wg,wh] .nil .nil) (.node [we,wd,wf,waR,wa,waS,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7ababbbb : everyKey (certRow 6 tree6) tree7ababbbb = true := by decide +kernel
 def tree7ababbb : BinaryTree (List W) := .node [we,wd,wf,wtx,wc,wb,wg,wh] tree7ababbba tree7ababbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7ababbb : everyKey (certRow 6 tree6) tree7ababbb = true := splitCheck (by decide +kernel) ok_tree7ababbba ok_tree7ababbbb
 def tree7ababb : BinaryTree (List W) := .node [we,wd,whY,wc,wa,wb,wg,wh] tree7ababba tree7ababbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7ababb : everyKey (certRow 6 tree6) tree7ababb = true := splitCheck (by decide +kernel) ok_tree7ababba ok_tree7ababbb
 def tree7abab : BinaryTree (List W) := .node [we,wd,wlt,wc,wa,wb,wg,wh] tree7ababa tree7ababb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abab : everyKey (certRow 6 tree6) tree7abab = true := splitCheck (by decide +kernel) ok_tree7ababa ok_tree7ababb
 def tree7aba : BinaryTree (List W) := .node [we,wd,wpX,wc,wa,wb,wg,wh] tree7abaa tree7abab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7aba : everyKey (certRow 6 tree6) tree7aba = true := splitCheck (by decide +kernel) ok_tree7abaa ok_tree7abab
 def tree7abbaaaa : BinaryTree (List W) := (.node [we,wd,wf,wmq,wa,wb,wg,wh] (.node [we,wd,wf,wna,wa,wb,wg,wh] (.node [we,wd,wf,wmz,wa,wb,wg,wh] (.node [we,wd,wf,wpn,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wo7,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wm0,wa,wb,wg,wh] (.node [we,wd,wf,wmg,wa,wb,wg,wh] (.node [we,wd,wf,woK,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wM,wa,wb,wg,w0] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbaaaa : everyKey (certRow 6 tree6) tree7abbaaaa = true := by decide +kernel
 def tree7abbaaab : BinaryTree (List W) := (.node [we,wd,wf,wie,wa,wb,wg,wh] (.node [we,wd,wf,wke,wa,wb,wg,wh] (.node [we,wd,wf,wkF,wa,wb,wg,wh] (.node [we,wd,wf,wmS,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wh5,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wjW,wa,wb,wg,wh] (.node [we,wd,wf,wj4,wa,wb,wg,wh] .nil .nil) (.node [we,wd,wf,wi0,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbaaab : everyKey (certRow 6 tree6) tree7abbaaab = true := by decide +kernel
 def tree7abbaaa : BinaryTree (List W) := .node [we,wd,wf,wk0,wa,wb,wg,wh] tree7abbaaaa tree7abbaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbaaa : everyKey (certRow 6 tree6) tree7abbaaa = true := splitCheck (by decide +kernel) ok_tree7abbaaaa ok_tree7abbaaab
 def tree7abbaaba : BinaryTree (List W) := (.node [we,wd,wf,wc,wtj,wa,wb,wh] (.node [we,wd,wf,wc,wgE,wa,wb,wh] (.node [we,wd,wf,wc,wtf,wa,wb,wh] (.node [we,wd,wf,wov,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wth,wa,wb,wh] .nil .nil)) (.node [we,wd,wf,wc,wtV,wa,wb,wg] (.node [we,wd,wf,wc,wtT,wa,wb,wh] (.node [we,wd,wf,wc,wtt,wa,wb,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wt3,wa,wb,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbaaba : everyKey (certRow 6 tree6) tree7abbaaba = true := by decide +kernel
 def tree7abbaabb : BinaryTree (List W) := (.node [we,wd,wf,wc,ws6,wb,wg,wh] (.node [we,wd,wf,wc,wta,wb,wg,wh] (.node [we,wd,wf,wc,wqK,wb,wg,wh] (.node [we,wd,wf,wc,wtd,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,ws8,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wa1,wb,wg,wa2] (.node [we,wd,wf,wc,wqI,wb,wg,wh] .nil .nil) (.node [we,wd,wf,wc,whn,wb,wg,wa2] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbaabb : everyKey (certRow 6 tree6) tree7abbaabb = true := by decide +kernel
 def tree7abbaab : BinaryTree (List W) := .node [we,wd,wf,wc,wts,wa,wb,wh] tree7abbaaba tree7abbaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbaab : everyKey (certRow 6 tree6) tree7abbaab = true := splitCheck (by decide +kernel) ok_tree7abbaaba ok_tree7abbaabb
 def tree7abbaa : BinaryTree (List W) := .node [we,wd,wf,wiR,wa,wb,wg,wh] tree7abbaaa tree7abbaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbaa : everyKey (certRow 6 tree6) tree7abbaa = true := splitCheck (by decide +kernel) ok_tree7abbaaa ok_tree7abbaab
 def tree7abbabaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wr4,wb,wg,wh] (.node [we,wd,wf,wc,wrx,wb,wg,wh] (.node [we,wd,wf,wc,wsU,wb,wg,wh] (.node [we,wd,wf,wc,wpZ,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wsh,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wp9,wb,wg,wh] (.node [we,wd,wf,wc,wqf,wb,wg,wh] (.node [we,wd,wf,wc,wrH,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wp5,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbabaa : everyKey (certRow 6 tree6) tree7abbabaa = true := by decide +kernel
 def tree7abbabab : BinaryTree (List W) := (.node [we,wd,wf,wc,woE,wb,wg,wh] (.node [we,wd,wf,wc,woZ,wb,wg,wh] (.node [we,wd,wf,wc,wo9,wb,wg,wh] (.node [we,wd,wf,wc,wnb,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,woM,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wlG,wb,wg,wh] (.node [we,wd,wf,wc,wox,wb,wg,wh] .nil .nil) (.node [we,wd,wf,wc,wmK,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbabab : everyKey (certRow 6 tree6) tree7abbabab = true := by decide +kernel
 def tree7abbaba : BinaryTree (List W) := .node [we,wd,wf,wc,wpp,wb,wg,wh] tree7abbabaa tree7abbabab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbaba : everyKey (certRow 6 tree6) tree7abbaba = true := splitCheck (by decide +kernel) ok_tree7abbabaa ok_tree7abbabab
 def tree7abbabba : BinaryTree (List W) := (.node [we,wd,wf,wc,wQ,wb,wg,w2] (.node [we,wd,wf,wc,wQ,wU,wg,wh] (.node [we,wd,wf,wc,wl8,wb,wg,wh] (.node [we,wd,wf,wc,wms,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wQ,wb,wY,wh] .nil .nil)) (.node [we,wd,wf,wc,wQ,wb,wW,wh] (.node [we,wd,wf,wc,wQ,wb,wg,w0] (.node [we,wd,wf,wc,wQ,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wQ,wS,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbabba : everyKey (certRow 6 tree6) tree7abbabba = true := by decide +kernel
 def tree7abbabbb : BinaryTree (List W) := (.node [we,wd,wf,wc,wbl,wb,wg,wh] (.node [we,wd,wf,wc,wbl,wb,wbp,wh] (.node [we,wd,wf,wc,wk2,wb,wg,wh] (.node [we,wd,wf,wc,wk9,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wbl,wb,wg,wbt] .nil .nil)) (.node [we,wd,wf,wc,wbl,wb,wbn,wh] (.node [we,wd,wf,wc,wbl,wb,wg,wbr] .nil .nil) (.node [we,wd,wf,wc,wnS,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbabbb : everyKey (certRow 6 tree6) tree7abbabbb = true := by decide +kernel
 def tree7abbabb : BinaryTree (List W) := .node [we,wd,wf,wc,wlg,wb,wg,wh] tree7abbabba tree7abbabbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbabb : everyKey (certRow 6 tree6) tree7abbabb = true := splitCheck (by decide +kernel) ok_tree7abbabba ok_tree7abbabbb
 def tree7abbab : BinaryTree (List W) := .node [we,wd,wf,wc,wmB,wb,wg,wh] tree7abbaba tree7abbabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbab : everyKey (certRow 6 tree6) tree7abbab = true := splitCheck (by decide +kernel) ok_tree7abbaba ok_tree7abbabb
 def tree7abba : BinaryTree (List W) := .node [we,wd,wf,wc,wsZ,wb,wg,wh] tree7abbaa tree7abbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abba : everyKey (certRow 6 tree6) tree7abba = true := splitCheck (by decide +kernel) ok_tree7abbaa ok_tree7abbab
 def tree7abbbaaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wjh,wb,wg,wh] (.node [we,wd,wf,wc,wjx,wb,wg,wh] (.node [we,wd,wf,wc,wjF,wb,wg,wh] (.node [we,wd,wf,wc,wkg,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wjo,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wkp,wb,wg,wh] (.node [we,wd,wf,wc,wiS,wb,wg,wh] (.node [we,wd,wf,wc,wi7,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wiA,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbbaaa : everyKey (certRow 6 tree6) tree7abbbaaa = true := by decide +kernel
 def tree7abbbaab : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wtD,wb,wg] (.node [we,wd,wf,wc,wa,wtF,wb,wh] (.node [we,wd,wf,wc,wa,wpK,wb,wh] (.node [we,wd,wf,wc,wa,wtI,wb,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wtB,wb,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wtS,wb,wh] (.node [we,wd,wf,wc,wa,whF,wa4,wh] .nil .nil) (.node [we,wd,wf,wc,wa,wtz,wb,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbbaab : everyKey (certRow 6 tree6) tree7abbbaab = true := by decide +kernel
 def tree7abbbaa : BinaryTree (List W) := .node [we,wd,wf,wc,wh7,wb,wg,wh] tree7abbbaaa tree7abbbaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbbaa : everyKey (certRow 6 tree6) tree7abbbaa = true := splitCheck (by decide +kernel) ok_tree7abbbaaa ok_tree7abbbaab
 def tree7abbbaba : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wo1,wg,wh] (.node [we,wd,wf,wc,wa,wpr,wg,wh] (.node [we,wd,wf,wc,wa,wpS,wg,wh] (.node [we,wd,wf,wc,wa,wdT,wa4,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wpb,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wlI,wg,wh] (.node [we,wd,wf,wc,wa,wog,wg,wh] (.node [we,wd,wf,wc,wa,woo,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,waS,wbn,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbbaba : everyKey (certRow 6 tree6) tree7abbbaba = true := by decide +kernel
 def tree7abbbabb : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wjH,wg,wh] (.node [we,wd,wf,wc,wa,wma,wg,wh] (.node [we,wd,wf,wc,wa,wmu,wg,wh] (.node [we,wd,wf,wc,wa,wmM,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wki,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wU,wg,w2] (.node [we,wd,wf,wc,wa,wU,wY,wh] .nil .nil) (.node [we,wd,wf,wc,wa,wU,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbbabb : everyKey (certRow 6 tree6) tree7abbbabb = true := by decide +kernel
 def tree7abbbab : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wnq,wg,wh] tree7abbbaba tree7abbbabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbbab : everyKey (certRow 6 tree6) tree7abbbab = true := splitCheck (by decide +kernel) ok_tree7abbbaba ok_tree7abbbabb
 def tree7abbba : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wpW,wg,wh] tree7abbbaa tree7abbbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbba : everyKey (certRow 6 tree6) tree7abbba = true := splitCheck (by decide +kernel) ok_tree7abbbaa ok_tree7abbbab
 def tree7abbbbaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wim,wg,wh] (.node [we,wd,wf,wc,wa,wjj,wg,wh] (.node [we,wd,wf,wc,wa,wlw,wg,wh] (.node [we,wd,wf,wc,wa,wU,wW,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wlb,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wtp,wh] (.node [we,wd,wf,wc,wa,wjO,wg,wh] (.node [we,wd,wf,wc,wa,whS,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wtn,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbbbaa : everyKey (certRow 6 tree6) tree7abbbbaa = true := by decide +kernel
 def tree7abbbbab : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wry,wh] (.node [we,wd,wf,wc,wa,wb,wt2,wh] (.node [we,wd,wf,wc,wa,wb,wsy,wg] (.node [we,wd,wf,wc,wa,wb,wtr,wg] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wsW,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wsN,wh] (.node [we,wd,wf,wc,wa,wb,wlS,wh] .nil .nil) (.node [we,wd,wf,wc,wa,wb,wsL,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbbbab : everyKey (certRow 6 tree6) tree7abbbbab = true := by decide +kernel
 def tree7abbbba : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wtl,wh] tree7abbbbaa tree7abbbbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbbba : everyKey (certRow 6 tree6) tree7abbbba = true := splitCheck (by decide +kernel) ok_tree7abbbbaa ok_tree7abbbbab
 def tree7abbbbba : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wr2,wh] (.node [we,wd,wf,wc,wa,wb,wr9,wh] (.node [we,wd,wf,wc,wa,wb,wsf,wh] (.node [we,wd,wf,wc,wa,wb,wsr,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wez,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wrQ,wh] (.node [we,wd,wf,wc,wa,wb,wrY,wh] (.node [we,wd,wf,wc,wa,wb,wrU,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wrK,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbbbba : everyKey (certRow 6 tree6) tree7abbbbba = true := by decide +kernel
 def tree7abbbbbb : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wlK,wh] (.node [we,wd,wf,wc,wa,wb,woP,wh] (.node [we,wd,wf,wc,wa,wb,wpd,wh] (.node [we,wd,wf,wc,wa,wb,wpt,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,woq,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wbp,wh] (.node [we,wd,wf,wc,wa,wb,wbp,wbt] .nil .nil) (.node [we,wd,wf,wc,wa,wb,wbp,wbr] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbbbbb : everyKey (certRow 6 tree6) tree7abbbbbb = true := by decide +kernel
 def tree7abbbbb : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wrA,wh] tree7abbbbba tree7abbbbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbbbb : everyKey (certRow 6 tree6) tree7abbbbb = true := splitCheck (by decide +kernel) ok_tree7abbbbba ok_tree7abbbbbb
 def tree7abbbb : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wq5,wh] tree7abbbba tree7abbbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbbb : everyKey (certRow 6 tree6) tree7abbbb = true := splitCheck (by decide +kernel) ok_tree7abbbba ok_tree7abbbbb
 def tree7abbb : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wU,wg,w0] tree7abbba tree7abbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abbb : everyKey (certRow 6 tree6) tree7abbb = true := splitCheck (by decide +kernel) ok_tree7abbba ok_tree7abbbb
 def tree7abb : BinaryTree (List W) := .node [we,wd,wf,wc,wnE,wb,wg,wh] tree7abba tree7abbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7abb : everyKey (certRow 6 tree6) tree7abb = true := splitCheck (by decide +kernel) ok_tree7abba ok_tree7abbb
 def tree7ab : BinaryTree (List W) := .node [we,wd,wf,waR,wbj,wb,wg,wh] tree7aba tree7abb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7ab : everyKey (certRow 6 tree6) tree7ab = true := splitCheck (by decide +kernel) ok_tree7aba ok_tree7abb
 def tree7a : BinaryTree (List W) := .node [we,wr5,wv,wc,wa,wb,wg,wh] tree7aa tree7ab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7a : everyKey (certRow 6 tree6) tree7a = true := splitCheck (by decide +kernel) ok_tree7aa ok_tree7ab
 def tree7baaaaaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wj7,wh] (.node [we,wd,wf,wc,wa,wb,wm3,wh] (.node [we,wd,wf,wc,wa,wb,wne,wh] (.node [we,wd,wf,wc,wa,wb,wnG,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wmV,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wY,w2] (.node [we,wd,wf,wc,wa,wb,wjQ,wh] (.node [we,wd,wf,wc,wa,wb,wjZ,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wY,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaaaaa : everyKey (certRow 6 tree6) tree7baaaaaa = true := by decide +kernel
 def tree7baaaaab : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wiU,wh] (.node [we,wd,wf,wc,wa,wb,wkV,wh] (.node [we,wd,wf,wc,wa,wb,wja,wh] (.node [we,wd,wf,wc,wa,wb,wlq,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wi2,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wlj,wh] (.node [we,wd,wf,wc,wa,wb,wky,wh] (.node [we,wd,wf,wc,wa,wb,wiK,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wiC,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaaaab : everyKey (certRow 6 tree6) tree7baaaaab = true := by decide +kernel
 def tree7baaaaa : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wY,w0] tree7baaaaaa tree7baaaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaaaa : everyKey (certRow 6 tree6) tree7baaaaa = true := splitCheck (by decide +kernel) ok_tree7baaaaaa ok_tree7baaaaab
 def tree7baaaaba : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wg,wbt] (.node [we,wd,wf,wc,wa,wb,wg,woA] (.node [we,wd,wf,wc,wa,wb,wg,wo3] (.node [we,wd,wf,wc,wa,wb,wg,wqM] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,woi] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wg,wm5] (.node [we,wd,wf,wc,wa,wb,wg,wns] (.node [we,wd,wf,wc,wa,wb,wg,wnz] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wmk] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaaaba : everyKey (certRow 6 tree6) tree7baaaaba = true := by decide +kernel
 def tree7baaaabb : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wg,wks] (.node [we,wd,wf,wc,wa,wb,wg,wkI] (.node [we,wd,wf,wc,wa,wb,wg,wkP] (.node [we,wd,wf,wc,wa,wb,wg,wkX] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wkA] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wg,whU] (.node [we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) (.node [we,wd,wf,wc,wa,wb,wg,wkH] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaaabb : everyKey (certRow 6 tree6) tree7baaaabb = true := by decide +kernel
 def tree7baaaab : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wg,w2] tree7baaaaba tree7baaaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaaab : everyKey (certRow 6 tree6) tree7baaaab = true := splitCheck (by decide +kernel) ok_tree7baaaaba ok_tree7baaaabb
 def tree7baaaa : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wiu,wh] tree7baaaaa tree7baaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaaa : everyKey (certRow 6 tree6) tree7baaaa = true := splitCheck (by decide +kernel) ok_tree7baaaaa ok_tree7baaaab
 def tree7baaabaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wg,wkr] (.node [we,wd,wf,wc,wa,wb,wg,wmj] (.node [we,wd,wf,wc,wa,wb,wg,wkO] (.node [we,wd,wf,wc,wa,wb,wg,wh9] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wih] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wg,wnN] (.node [we,wd,wf,wc,wa,wb,wg,wlc] (.node [we,wd,wf,wc,wa,wb,wg,wio] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wm4] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaabaa : everyKey (certRow 6 tree6) tree7baaabaa = true := by decide +kernel
 def tree7baaabab : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wg,wbr] (.node [we,wd,wf,wc,wa,wb,wg,wn1] (.node [we,wd,wf,wc,wa,wb,wg,wnU] (.node [we,wd,wf,wc,wa,wb,wg,wnr] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wny] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wg,woh] (.node [we,wd,wf,wc,wa,wb,wg,wlk] .nil .nil) (.node [we,wd,wf,wc,wa,wb,wg,woz] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaabab : everyKey (certRow 6 tree6) tree7baaabab = true := by decide +kernel
 def tree7baaaba : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wg,wiv] tree7baaabaa tree7baaabab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaaba : everyKey (certRow 6 tree6) tree7baaaba = true := splitCheck (by decide +kernel) ok_tree7baaabaa ok_tree7baaabab
 def tree7baaabba : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wg,wjb] (.node [we,wd,wf,wc,wa,wb,wg,wi3] (.node [we,wd,wf,wc,wa,wb,wg,wiV] (.node [we,wd,wf,wc,wa,wb,wg,wiL] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wkW] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wg,wly] (.node [we,wd,wf,wc,wa,wb,wg,wjk] (.node [we,wd,wf,wc,wa,wb,wg,wlr] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,w0] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaabba : everyKey (certRow 6 tree6) tree7baaabba = true := by decide +kernel
 def tree7baaabbb : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wg,wkj] (.node [we,wd,wf,wc,wa,wb,wg,wj0] (.node [we,wd,wf,wc,wa,wb,wg,wjR] (.node [we,wd,wf,wc,wa,wb,wg,wjI] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wj8] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wg,wro] (.node [we,wd,wf,wc,wa,wb,wg,wo2] .nil .nil) (.node [we,wd,wf,wc,wa,wb,wg,wtq] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaabbb : everyKey (certRow 6 tree6) tree7baaabbb = true := by decide +kernel
 def tree7baaabb : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wg,wjz] tree7baaabba tree7baaabbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaabb : everyKey (certRow 6 tree6) tree7baaabb = true := splitCheck (by decide +kernel) ok_tree7baaabba ok_tree7baaabbb
 def tree7baaab : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wg,wkz] tree7baaaba tree7baaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaab : everyKey (certRow 6 tree6) tree7baaab = true := splitCheck (by decide +kernel) ok_tree7baaaba ok_tree7baaabb
 def tree7baaa : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wg,wh1] tree7baaaa tree7baaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaa : everyKey (certRow 6 tree6) tree7baaa = true := splitCheck (by decide +kernel) ok_tree7baaaa ok_tree7baaab
 def tree7baabaaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wiJ,wh] (.node [we,wd,wf,wc,wa,wb,whT,wh] (.node [we,wd,wf,wc,wa,wb,wg,wsP] (.node [we,wd,wf,wc,wa,wb,wg,wtU] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wit,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wh0,wh] (.node [we,wd,wf,wc,wa,wb,wi1,wh] (.node [we,wd,wf,wc,wa,wb,wiT,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wh8,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baabaaa : everyKey (certRow 6 tree6) tree7baabaaa = true := by decide +kernel
 def tree7baabaab : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,win,wh] (.node [we,wd,wf,wc,wa,wb,wj6,wh] (.node [we,wd,wf,wc,wa,wb,wjY,wh] (.node [we,wd,wf,wc,wa,wb,wjP,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wig,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wjq,wh] (.node [we,wd,wf,wc,wa,wb,wi9,wh] .nil .nil) (.node [we,wd,wf,wc,wa,wb,wop,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baabaab : everyKey (certRow 6 tree6) tree7baabaab = true := by decide +kernel
 def tree7baabaa : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wiB,wh] tree7baabaaa tree7baabaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baabaa : everyKey (certRow 6 tree6) tree7baabaa = true := splitCheck (by decide +kernel) ok_tree7baabaaa ok_tree7baabaab
 def tree7baababa : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wnT,wh] (.node [we,wd,wf,wc,wa,wb,wkG,wh] (.node [we,wd,wf,wc,wa,wb,wkx,wh] (.node [we,wd,wf,wc,wa,wb,wnx,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wnF,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wbn,wbt] (.node [we,wd,wf,wc,wa,wb,wnL,wh] (.node [we,wd,wf,wc,wa,wb,wn0,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wbn,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baababa : everyKey (certRow 6 tree6) tree7baababa = true := by decide +kernel
 def tree7baababb : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wlx,wh] (.node [we,wd,wf,wc,wa,wb,wk4,wh] (.node [we,wd,wf,wc,wa,wb,wmU,wh] (.node [we,wd,wf,wc,wa,wb,wkU,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wli,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wW,w2] (.node [we,wd,wf,wc,wa,wb,wlp,wh] .nil .nil) (.node [we,wd,wf,wc,wa,wb,wW,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baababb : everyKey (certRow 6 tree6) tree7baababb = true := by decide +kernel
 def tree7baabab : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wbn,wbr] tree7baababa tree7baababb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baabab : everyKey (certRow 6 tree6) tree7baabab = true := splitCheck (by decide +kernel) ok_tree7baababa ok_tree7baababb
 def tree7baaba : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wkq,wh] tree7baabaa tree7baabab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baaba : everyKey (certRow 6 tree6) tree7baaba = true := splitCheck (by decide +kernel) ok_tree7baabaa ok_tree7baabab
 def tree7baabbaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wmv,wh] (.node [we,wd,wf,wc,wa,wb,wmi,wh] (.node [we,wd,wf,wc,wa,wb,wm2,wh] (.node [we,wd,wf,wc,wa,wb,wlJ,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,woO,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wmD,wh] (.node [we,wd,wf,wc,wa,wb,wnd,wh] (.node [we,wd,wf,wc,wa,wb,wpc,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wmN,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baabbaa : everyKey (certRow 6 tree6) tree7baabbaa = true := by decide +kernel
 def tree7baabbab : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wrX,wh] (.node [we,wd,wf,wc,wa,wb,wrP,wh] (.node [we,wd,wf,wc,wa,wb,wrJ,wh] (.node [we,wd,wf,wc,wa,wb,wrz,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wrT,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wey,wh] (.node [we,wd,wf,wc,wa,wb,wr1,wh] .nil .nil) (.node [we,wd,wf,wc,wa,wb,wr8,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baabbab : everyKey (certRow 6 tree6) tree7baabbab = true := by decide +kernel
 def tree7baabba : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wps,wh] tree7baabbaa tree7baabbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baabba : everyKey (certRow 6 tree6) tree7baabba = true := splitCheck (by decide +kernel) ok_tree7baabbaa ok_tree7baabbab
 def tree7baabbba : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wsO,wh] (.node [we,wd,wf,wc,wa,wb,wsM,wh] (.node [we,wd,wf,wc,wa,wb,wsK,wh] (.node [we,wd,wf,wc,wa,wb,wsq,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wlR,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wtk,wh] (.node [we,wd,wf,wc,wa,wb,wrq,wh] (.node [we,wd,wf,wc,wa,wb,wsV,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wtm,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baabbba : everyKey (certRow 6 tree6) tree7baabbba = true := by decide +kernel
 def tree7baabbbb : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wtG,wh] (.node [we,wd,wf,wc,wa,wb,wtE,wh] (.node [we,wd,wf,wc,wa,wb,wtA,wh] (.node [we,wd,wf,wc,wa,wb,wty,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wpJ,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wb,wtW,wh] (.node [we,wd,wf,wc,wa,wb,wtH,wh] .nil .nil) (.node [we,wd,wf,wc,wa,wb,wtY,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baabbbb : everyKey (certRow 6 tree6) tree7baabbbb = true := by decide +kernel
 def tree7baabbb : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wto,wh] tree7baabbba tree7baabbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baabbb : everyKey (certRow 6 tree6) tree7baabbb = true := splitCheck (by decide +kernel) ok_tree7baabbba ok_tree7baabbbb
 def tree7baabb : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wse,wh] tree7baabba tree7baabbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baabb : everyKey (certRow 6 tree6) tree7baabb = true := splitCheck (by decide +kernel) ok_tree7baabba ok_tree7baabbb
 def tree7baab : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wW,w0] tree7baaba tree7baabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baab : everyKey (certRow 6 tree6) tree7baab = true := splitCheck (by decide +kernel) ok_tree7baaba ok_tree7baabb
 def tree7baa : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wg,wtC] tree7baaa tree7baab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baa : everyKey (certRow 6 tree6) tree7baa = true := splitCheck (by decide +kernel) ok_tree7baaa ok_tree7baab
 def tree7babaaaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wjG,wg,wh] (.node [we,wd,wf,wc,wa,wjp,wg,wh] (.node [we,wd,wf,wc,wa,wji,wg,wh] (.node [we,wd,wf,wc,wa,wi8,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wjy,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wj5,wg,wh] (.node [we,wd,wf,wc,wa,wjX,wg,wh] (.node [we,wd,wf,wc,wa,wjN,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wkh,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babaaaa : everyKey (certRow 6 tree6) tree7babaaaa = true := by decide +kernel
 def tree7babaaab : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wlv,wg,wh] (.node [we,wd,wf,wc,wa,wla,wg,wh] (.node [we,wd,wf,wc,wa,wk3,wg,wh] (.node [we,wd,wf,wc,wa,wkT,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wlh,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wS,wg,wh] (.node [we,wd,wf,wc,wa,wS,wg,w2] (.node [we,wd,wf,wc,wa,wS,wY,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wS,wg,w0] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babaaab : everyKey (certRow 6 tree6) tree7babaaab = true := by decide +kernel
 def tree7babaaa : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wkw,wg,wh] tree7babaaaa tree7babaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babaaa : everyKey (certRow 6 tree6) tree7babaaa = true := splitCheck (by decide +kernel) ok_tree7babaaaa ok_tree7babaaab
 def tree7babaaba : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wmL,wg,wh] (.node [we,wd,wf,wc,wa,wmt,wg,wh] (.node [we,wd,wf,wc,wa,wmh,wg,wh] (.node [we,wd,wf,wc,wa,wl9,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wmC,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wlH,wg,wh] (.node [we,wd,wf,wc,wa,wmT,wg,wh] (.node [we,wd,wf,wc,wa,wn9,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wm1,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babaaba : everyKey (certRow 6 tree6) tree7babaaba = true := by decide +kernel
 def tree7babaabb : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wpa,wg,wh] (.node [we,wd,wf,wc,wa,woT,wg,wh] (.node [we,wd,wf,wc,wa,woN,wg,wh] (.node [we,wd,wf,wc,wa,woF,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wo0,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wpq,wg,wh] (.node [we,wd,wf,wc,wa,wnc,wg,wh] .nil .nil) (.node [we,wd,wf,wc,wa,wpR,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babaabb : everyKey (certRow 6 tree6) tree7babaabb = true := by decide +kernel
 def tree7babaab : BinaryTree (List W) := .node [we,wd,wf,wc,wa,woy,wg,wh] tree7babaaba tree7babaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babaab : everyKey (certRow 6 tree6) tree7babaab = true := splitCheck (by decide +kernel) ok_tree7babaaba ok_tree7babaabb
 def tree7babaa : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wS,wW,wh] tree7babaaa tree7babaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babaa : everyKey (certRow 6 tree6) tree7babaa = true := splitCheck (by decide +kernel) ok_tree7babaaa ok_tree7babaab
 def tree7bababaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wh6,wb,wg,wh] (.node [we,wd,wf,wc,wa,wn,wbn,wh] (.node [we,wd,wf,wc,wa,wn3,wg,wh] (.node [we,wd,wf,wc,wa,wpL,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,whZ,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wis,wb,wg,wh] (.node [we,wd,wf,wc,wik,wb,wg,wh] (.node [we,wd,wf,wc,wif,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wiz,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bababaa : everyKey (certRow 6 tree6) tree7bababaa = true := by decide +kernel
 def tree7bababab : BinaryTree (List W) := (.node [we,wd,wf,wc,wkf,wb,wg,wh] (.node [we,wd,wf,wc,wjw,wb,wg,wh] (.node [we,wd,wf,wc,wjn,wb,wg,wh] (.node [we,wd,wf,wc,wjg,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wjE,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wkN,wb,wg,wh] (.node [we,wd,wf,wc,wko,wb,wg,wh] .nil .nil) (.node [we,wd,wf,wc,wk1,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bababab : everyKey (certRow 6 tree6) tree7bababab = true := by decide +kernel
 def tree7bababa : BinaryTree (List W) := .node [we,wd,wf,wc,wi6,wb,wg,wh] tree7bababaa tree7bababab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bababa : everyKey (certRow 6 tree6) tree7bababa = true := splitCheck (by decide +kernel) ok_tree7bababaa ok_tree7bababab
 def tree7bababba : BinaryTree (List W) := (.node [we,wd,wf,wc,wO,wb,wY,wh] (.node [we,wd,wf,wc,wlu,wb,wg,wh] (.node [we,wd,wf,wc,wlo,wb,wg,wh] (.node [we,wd,wf,wc,wlf,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wO,wU,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wO,wb,wg,w0] (.node [we,wd,wf,wc,wO,wb,wg,wh] (.node [we,wd,wf,wc,wO,wb,wg,w2] .nil .nil) .nil) (.node [we,wd,wf,wc,wO,wb,wW,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bababba : everyKey (certRow 6 tree6) tree7bababba = true := by decide +kernel
 def tree7bababbb : BinaryTree (List W) := (.node [we,wd,wf,wc,wnp,wb,wg,wh] (.node [we,wd,wf,wc,wmA,wb,wg,wh] (.node [we,wd,wf,wc,wmr,wb,wg,wh] (.node [we,wd,wf,wc,wl7,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wmJ,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wnK,wb,wg,wh] (.node [we,wd,wf,wc,wnD,wb,wg,wh] .nil .nil) (.node [we,wd,wf,wc,wnR,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bababbb : everyKey (certRow 6 tree6) tree7bababbb = true := by decide +kernel
 def tree7bababb : BinaryTree (List W) := .node [we,wd,wf,wc,wO,wS,wg,wh] tree7bababba tree7bababbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bababb : everyKey (certRow 6 tree6) tree7bababb = true := splitCheck (by decide +kernel) ok_tree7bababba ok_tree7bababbb
 def tree7babab : BinaryTree (List W) := .node [we,wd,wf,wc,wk8,wb,wg,wh] tree7bababa tree7bababb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babab : everyKey (certRow 6 tree6) tree7babab = true := splitCheck (by decide +kernel) ok_tree7bababa ok_tree7bababb
 def tree7baba : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wpV,wg,wh] tree7babaa tree7babab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7baba : everyKey (certRow 6 tree6) tree7baba = true := splitCheck (by decide +kernel) ok_tree7babaa ok_tree7babab
 def tree7babbaaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wbj,wb,wbn,wh] (.node [we,wd,wf,wc,wbj,wb,wg,wh] (.node [we,wd,wf,wc,wbj,wb,wg,wbt] (.node [we,wd,wf,wc,wbj,wb,wbp,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wbj,wb,wg,wbr] .nil .nil)) (.node [we,wd,wf,wc,won,wb,wg,wh] (.node [we,wd,wf,wc,wof,wb,wg,wh] (.node [we,wd,wf,wc,wlF,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wow,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babbaaa : everyKey (certRow 6 tree6) tree7babbaaa = true := by decide +kernel
 def tree7babbaab : BinaryTree (List W) := (.node [we,wd,wf,wc,wpo,wb,wg,wh] (.node [we,wd,wf,wc,woY,wb,wg,wh] (.node [we,wd,wf,wc,woS,wb,wg,wh] (.node [we,wd,wf,wc,woL,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wo8,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wp8,wb,wg,wh] (.node [we,wd,wf,wc,wp4,wb,wg,wh] .nil .nil) (.node [we,wd,wf,wc,wqe,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babbaab : everyKey (certRow 6 tree6) tree7babbaab = true := by decide +kernel
 def tree7babbaa : BinaryTree (List W) := .node [we,wd,wf,wc,woD,wb,wg,wh] tree7babbaaa tree7babbaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babbaa : everyKey (certRow 6 tree6) tree7babbaa = true := splitCheck (by decide +kernel) ok_tree7babbaaa ok_tree7babbaab
 def tree7babbaba : BinaryTree (List W) := (.node [we,wd,wf,wc,wqH,wb,wg,wh] (.node [we,wd,wf,wc,wsX,wb,wg,wh] (.node [we,wd,wf,wc,wsT,wb,wg,wh] (.node [we,wd,wf,wc,wrw,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wsY,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,ws9,wb,wg,wh] (.node [we,wd,wf,wc,ws7,wb,wg,wh] (.node [we,wd,wf,wc,ws5,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wqJ,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babbaba : everyKey (certRow 6 tree6) tree7babbaba = true := by decide +kernel
 def tree7babbabb : BinaryTree (List W) := (.node [we,wd,wf,wc,wb,wtM,wg,wh] (.node [we,wd,wf,wc,wtw,wb,wg,wh] (.node [we,wd,wf,wc,wtu,wb,wg,wh] (.node [we,wd,wf,wc,wtc,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wb,wtK,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wb,wtR,wg,wh] (.node [we,wd,wf,wc,wb,wtP,wg,wh] .nil .nil) (.node [we,wd,wf,wc,wb,wa3,wsy,wg] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babbabb : everyKey (certRow 6 tree6) tree7babbabb = true := by decide +kernel
 def tree7babbab : BinaryTree (List W) := .node [we,wd,wf,wc,wtb,wb,wg,wh] tree7babbaba tree7babbabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babbab : everyKey (certRow 6 tree6) tree7babbab = true := splitCheck (by decide +kernel) ok_tree7babbaba ok_tree7babbabb
 def tree7babba : BinaryTree (List W) := .node [we,wd,wf,wc,wrG,wb,wg,wh] tree7babbaa tree7babbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babba : everyKey (certRow 6 tree6) tree7babba = true := splitCheck (by decide +kernel) ok_tree7babbaa ok_tree7babbab
 def tree7babbbaa : BinaryTree (List W) := (.node [we,wd,wf,wiQ,wa,wb,wg,wh] (.node [we,wd,wf,wid,wa,wb,wg,wh] (.node [we,wd,wf,whR,wa,wb,wg,wh] (.node [we,wd,wf,wc,wb,wsy,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wiI,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wjV,wa,wb,wg,wh] (.node [we,wd,wf,wjM,wa,wb,wg,wh] (.node [we,wd,wf,wiZ,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wj3,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babbbaa : everyKey (certRow 6 tree6) tree7babbbaa = true := by decide +kernel
 def tree7babbbab : BinaryTree (List W) := (.node [we,wd,wf,wmI,wa,wb,wg,wh] (.node [we,wd,wf,wmp,wa,wb,wg,wh] (.node [we,wd,wf,wl6,wa,wb,wg,wh] (.node [we,wd,wf,wmf,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wkn,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wmZ,wa,wb,wg,wh] (.node [we,wd,wf,wmR,wa,wb,wg,wh] .nil .nil) (.node [we,wd,wf,ws4,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babbbab : everyKey (certRow 6 tree6) tree7babbbab = true := by decide +kernel
 def tree7babbba : BinaryTree (List W) := .node [we,wd,wf,wkd,wa,wb,wg,wh] tree7babbbaa tree7babbbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babbba : everyKey (certRow 6 tree6) tree7babbba = true := splitCheck (by decide +kernel) ok_tree7babbbaa ok_tree7babbbab
 def tree7babbbba : BinaryTree (List W) := (.node [we,wd,wf,wou,wa,wb,wg,wh] (.node [we,wd,wf,woe,wa,wb,wg,wh] (.node [we,wd,wf,wlE,wa,wb,wg,wh] (.node [we,wd,wf,wnj,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wom,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,woR,wa,wb,wg,wh] (.node [we,wd,wf,woJ,wa,wb,wg,wh] (.node [we,wd,wf,woC,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wo6,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babbbba : everyKey (certRow 6 tree6) tree7babbbba = true := by decide +kernel
 def tree7babbbbb : BinaryTree (List W) := (.node [we,wd,wf,wq,wa,wb,wg,w0] (.node [we,wd,wf,wqn,wa,wb,wg,wh] (.node [we,wd,wf,wqV,wa,wb,wg,wh] (.node [we,wd,wf,wpm,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wl1,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wa,wb,wn3,wg,wh] (.node [we,wd,wf,wqz,wa,wb,wg,wh] .nil .nil) (.node [we,wd,wf,wa,wb,wg,waY,wqM] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babbbbb : everyKey (certRow 6 tree6) tree7babbbbb = true := by decide +kernel
 def tree7babbbb : BinaryTree (List W) := .node [we,wd,wf,wpg,wa,wb,wg,wh] tree7babbbba tree7babbbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babbbb : everyKey (certRow 6 tree6) tree7babbbb = true := splitCheck (by decide +kernel) ok_tree7babbbba ok_tree7babbbbb
 def tree7babbb : BinaryTree (List W) := .node [we,wd,wf,wm9,wa,wb,wg,wh] tree7babbba tree7babbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babbb : everyKey (certRow 6 tree6) tree7babbb = true := splitCheck (by decide +kernel) ok_tree7babbba ok_tree7babbbb
 def tree7babb : BinaryTree (List W) := .node [we,wd,wf,wc,wb,wsy,wg] tree7babba tree7babbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7babb : everyKey (certRow 6 tree6) tree7babb = true := splitCheck (by decide +kernel) ok_tree7babba ok_tree7babbb
 def tree7bab : BinaryTree (List W) := .node [we,wd,wf,wc,wnZ,wb,wg,wh] tree7baba tree7babb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bab : everyKey (certRow 6 tree6) tree7bab = true := splitCheck (by decide +kernel) ok_tree7baba ok_tree7babb
 def tree7ba : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wil,wg,wh] tree7baa tree7bab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7ba : everyKey (certRow 6 tree6) tree7ba = true := splitCheck (by decide +kernel) ok_tree7baa ok_tree7bab
 def tree7bbaaaaa : BinaryTree (List W) := (.node [we,wd,whQ,wc,wa,wb,wg,wh] (.node [we,wd,wf,wa,wn3,wg,wh] (.node [we,wd,wf,wa,wn3,wn,wg,wh] (.node [we,wd,wf,wa,wb,wg,wqM,wh] .nil .nil) .nil) (.node [we,wd,wf,wbj,wb,wn,wg,wh] .nil .nil)) (.node [we,wd,wjK,wc,wa,wb,wg,wh] (.node [we,wd,wii,wc,wa,wb,wg,wh] (.node [we,wd,whX,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wj2,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaaaaa : everyKey (certRow 6 tree6) tree7bbaaaaa = true := by decide +kernel
 def tree7bbaaaab : BinaryTree (List W) := (.node [we,wd,wjm,wc,wa,wb,wg,wh] (.node [we,wd,wiy,wc,wa,wb,wg,wh] (.node [we,wd,wir,wc,wa,wb,wg,wh] (.node [we,wd,wiY,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wje,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wku,wc,wa,wb,wg,wh] (.node [we,wd,wkb,wc,wa,wb,wg,wh] (.node [we,wd,wjD,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wkD,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaaaab : everyKey (certRow 6 tree6) tree7bbaaaab = true := by decide +kernel
 def tree7bbaaaa : BinaryTree (List W) := .node [we,wd,wiG,wc,wa,wb,wg,wh] tree7bbaaaaa tree7bbaaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaaaa : everyKey (certRow 6 tree6) tree7bbaaaa = true := splitCheck (by decide +kernel) ok_tree7bbaaaaa ok_tree7bbaaaab
 def tree7bbaaaba : BinaryTree (List W) := (.node [we,wd,wls,wc,wa,wb,wg,wh] (.node [we,wd,wk6,wc,wa,wb,wg,wh] (.node [we,wd,wkZ,wc,wa,wb,wg,wh] (.node [we,wd,wkR,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wln,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wJ,wc,wa,wb,wY,wh] (.node [we,wd,wJ,wc,wa,wU,wg,wh] (.node [we,wd,wJ,wc,wQ,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wJ,wc,wa,wb,wg,w2] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaaaba : everyKey (certRow 6 tree6) tree7bbaaaba = true := by decide +kernel
 def tree7bbaaabb : BinaryTree (List W) := (.node [we,wd,wl4,wc,wa,wb,wg,wh] (.node [we,wd,wJ,wc,wa,wS,wg,wh] (.node [we,wd,wJ,wc,wa,wb,wW,wh] (.node [we,wd,wJ,wc,wa,wb,wg,w0] .nil .nil) .nil) (.node [we,wd,wJ,wc,wO,wb,wg,wh] .nil .nil)) (.node [we,wd,wmn,wc,wa,wb,wg,wh] (.node [we,wd,wmd,wc,wa,wb,wg,wh] .nil .nil) (.node [we,wd,wmP,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaaabb : everyKey (certRow 6 tree6) tree7bbaaabb = true := by decide +kernel
 def tree7bbaaab : BinaryTree (List W) := .node [we,wd,wJ,wc,wa,wb,wg,wh] tree7bbaaaba tree7bbaaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaaab : everyKey (certRow 6 tree6) tree7bbaaab = true := splitCheck (by decide +kernel) ok_tree7bbaaaba ok_tree7bbaaabb
 def tree7bbaaa : BinaryTree (List W) := .node [we,wd,wkM,wc,wa,wb,wg,wh] tree7bbaaaa tree7bbaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaaa : everyKey (certRow 6 tree6) tree7bbaaa = true := splitCheck (by decide +kernel) ok_tree7bbaaaa ok_tree7bbaaab
 def tree7bbaabaa : BinaryTree (List W) := (.node [we,wd,wnX,wc,wa,wb,wg,wh] (.node [we,wd,wnC,wc,wa,wb,wg,wh] (.node [we,wd,wnv,wc,wa,wb,wg,wh] (.node [we,wd,wno,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wnJ,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wbf,wc,wa,wb,wbp,wh] (.node [we,wd,wbf,wc,wbl,wb,wg,wh] (.node [we,wd,wbf,waR,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wbf,wc,wa,wb,wg,wbt] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaabaa : everyKey (certRow 6 tree6) tree7bbaabaa = true := by decide +kernel
 def tree7bbaabab : BinaryTree (List W) := (.node [we,wd,wlC,wc,wa,wb,wg,wh] (.node [we,wd,wbf,wc,wbj,wb,wg,wh] (.node [we,wd,wbf,wc,wa,wb,wbn,wh] (.node [we,wd,wbf,wc,wa,wb,wg,wbr] .nil .nil) .nil) (.node [we,wd,wbf,wa,wb,wn,wg,wh] .nil .nil)) (.node [we,wd,wol,wc,wa,wb,wg,wh] (.node [we,wd,wod,wc,wa,wb,wg,wh] .nil .nil) (.node [we,wd,wot,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaabab : everyKey (certRow 6 tree6) tree7bbaabab = true := by decide +kernel
 def tree7bbaaba : BinaryTree (List W) := .node [we,wd,wbf,wc,wa,wb,wg,wh] tree7bbaabaa tree7bbaabab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaaba : everyKey (certRow 6 tree6) tree7bbaaba = true := splitCheck (by decide +kernel) ok_tree7bbaabaa ok_tree7bbaabab
 def tree7bbaabba : BinaryTree (List W) := (.node [we,wd,wqa,wc,wa,wb,wg,wh] (.node [we,wd,wp2,wc,wa,wb,wg,wh] (.node [we,wd,wo4,wc,wa,wb,wg,wh] (.node [we,wd,woW,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wp6,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wqk,wc,wa,wb,wg,wh] (.node [we,wd,wqi,wc,wa,wb,wg,wh] (.node [we,wd,wqc,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wpu,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaabba : everyKey (certRow 6 tree6) tree7bbaabba = true := by decide +kernel
 def tree7bbaabbb : BinaryTree (List W) := (.node [we,wd,wcH,wc,wa,wb,wg,wh] (.node [we,wd,wqC,wc,wa,wb,wg,wh] (.node [we,wd,wqA,wc,wa,wb,wg,wh] (.node [we,wd,wqu,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wqE,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wq9,wc,wa,wb,wg,wh] (.node [we,wd,wq2,wc,wa,wb,wg,wh] .nil .nil) (.node [we,wd,wrk,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaabbb : everyKey (certRow 6 tree6) tree7bbaabbb = true := by decide +kernel
 def tree7bbaabb : BinaryTree (List W) := .node [we,wd,wqo,wc,wa,wb,wg,wh] tree7bbaabba tree7bbaabbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaabb : everyKey (certRow 6 tree6) tree7bbaabb = true := splitCheck (by decide +kernel) ok_tree7bbaabba ok_tree7bbaabbb
 def tree7bbaab : BinaryTree (List W) := .node [we,wd,woI,wc,wa,wb,wg,wh] tree7bbaaba tree7bbaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaab : everyKey (certRow 6 tree6) tree7bbaab = true := splitCheck (by decide +kernel) ok_tree7bbaaba ok_tree7bbaabb
 def tree7bbaa : BinaryTree (List W) := .node [we,wd,wmY,wc,wa,wb,wg,wh] tree7bbaaa tree7bbaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaa : everyKey (certRow 6 tree6) tree7bbaa = true := splitCheck (by decide +kernel) ok_tree7bbaaa ok_tree7bbaab
 def tree7bbabaaa : BinaryTree (List W) := (.node [we,wd,wrR,wc,wa,wb,wg,wh] (.node [we,wd,wrL,wc,wa,wb,wg,wh] (.node [we,wd,wrE,wc,wa,wb,wg,wh] (.node [we,wd,wpv,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wrN,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wen,wc,wa,wb,wez,wh] (.node [we,wd,wrV,wc,wa,wb,wg,wh] (.node [we,wd,wrZ,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wen,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbabaaa : everyKey (certRow 6 tree6) tree7bbabaaa = true := by decide +kernel
 def tree7bbabaab : BinaryTree (List W) := (.node [we,wd,wss,wc,wa,wb,wg,wh] (.node [we,wd,wso,wc,wa,wb,wg,wh] (.node [we,wd,wsk,wc,wa,wb,wg,wh] (.node [we,wd,wr6,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wsu,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wgd,wc,wa,waI,wg,wh] (.node [we,wd,we5,wc,wa,wb,wg,wh] .nil .nil) (.node [we,wd,wsC,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbabaab : everyKey (certRow 6 tree6) tree7bbabaab = true := by decide +kernel
 def tree7bbabaa : BinaryTree (List W) := .node [we,wd,wen,wc,wa,wb,wey,wh] tree7bbabaaa tree7bbabaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbabaa : everyKey (certRow 6 tree6) tree7bbabaa = true := splitCheck (by decide +kernel) ok_tree7bbabaaa ok_tree7bbabaab
 def tree7bbababa : BinaryTree (List W) := (.node [we,wd,wv,wpg,wa,wb,wg,wh] (.node [we,wd,wv,wc,wa,wb,wg,wpi] (.node [we,wd,wsI,wc,wa,wb,wg,wh] (.node [we,wd,wsG,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wv,wc,wph,wb,wg,wh] .nil .nil)) (.node [we,wd,wc,wsh,waE,wb,wg,wh] (.node [we,wd,wc,wsh,wa,wb,wg,wh] (.node [we,wd,wc,wqz,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wc,wsh,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbababa : everyKey (certRow 6 tree6) tree7bbababa = true := by decide +kernel
 def tree7bbababb : BinaryTree (List W) := (.node [we,wd,wqz,waB,wa,wb,wg,wh] (.node [we,wd,wc,wa,wb,wg,wh,wt7] (.node [we,wd,wc,wa,wb,wry,wh] (.node [we,wd,wc,wa,wb,wry,wg,wh] .nil .nil) .nil) (.node [we,wd,wc,waE,wb,weP,wg,wh] .nil .nil)) (.node [we,wd,waB,wa,wb,wcp,wg,wh] (.node [we,wd,wqz,wa,wb,wg,wh] .nil .nil) (.node [we,whO,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbababb : everyKey (certRow 6 tree6) tree7bbababb = true := by decide +kernel
 def tree7bbabab : BinaryTree (List W) := .node [we,wd,wc,wa,wb,waL,wry,wh] tree7bbababa tree7bbababb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbabab : everyKey (certRow 6 tree6) tree7bbabab = true := splitCheck (by decide +kernel) ok_tree7bbababa ok_tree7bbababb
 def tree7bbaba : BinaryTree (List W) := .node [we,wd,wsE,wc,wa,wb,wg,wh] tree7bbabaa tree7bbabab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbaba : everyKey (certRow 6 tree6) tree7bbaba = true := splitCheck (by decide +kernel) ok_tree7bbabaa ok_tree7bbabab
 def tree7bbabbaa : BinaryTree (List W) := (.node [we,wiX,wf,wc,wa,wb,wg,wh] (.node [we,wix,wf,wc,wa,wb,wg,wh] (.node [we,wib,wf,wc,wa,wb,wg,wh] (.node [we,wh4,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wiN,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wjS,wf,wc,wa,wb,wg,wh] (.node [we,wjC,wf,wc,wa,wb,wg,wh] (.node [we,wjt,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wj1,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbabbaa : everyKey (certRow 6 tree6) tree7bbabbaa = true := by decide +kernel
 def tree7bbabbab : BinaryTree (List W) := (.node [we,wml,wf,wc,wa,wb,wg,wh] (.node [we,wkK,wf,wc,wa,wb,wg,wh] (.node [we,wkC,wf,wc,wa,wb,wg,wh] (.node [we,wkl,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wmb,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wmG,wf,wc,wa,wb,wg,wh] (.node [we,wmy,wf,wc,wa,wb,wg,wh] .nil .nil) (.node [we,wmW,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbabbab : everyKey (certRow 6 tree6) tree7bbabbab = true := by decide +kernel
 def tree7bbabba : BinaryTree (List W) := .node [we,wj9,wf,wc,wa,wb,wg,wh] tree7bbabbaa tree7bbabbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbabba : everyKey (certRow 6 tree6) tree7bbabba = true := splitCheck (by decide +kernel) ok_tree7bbabbaa ok_tree7bbabbab
 def tree7bbabbba : BinaryTree (List W) := (.node [we,wnB,wf,wc,wa,wb,wg,wh] (.node [we,wnm,wf,wc,wa,wb,wg,wh] (.node [we,wnh,wf,wc,wa,wb,wg,wh] (.node [we,wm7,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wnu,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wbb,wbh,wc,wa,wb,wg,wh] (.node [we,wnV,wf,wc,wa,wb,wg,wh] (.node [we,wnQ,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wbb,wf,wc,wbl,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbabbba : everyKey (certRow 6 tree6) tree7bbabbba = true := by decide +kernel
 def tree7bbabbbb : BinaryTree (List W) := (.node [we,wbb,wf,wc,wa,wb,wbn,wh] (.node [we,wbb,wf,wc,wa,wb,wg,wh] (.node [we,wbb,wf,wc,wa,wb,wg,wbt] (.node [we,wbb,wf,wc,wa,wb,wbp,wh] .nil .nil) .nil) (.node [we,wbb,wf,wc,wa,wb,wg,wbr] .nil .nil)) (.node [we,wbb,wf,wc,wbj,wb,wg,wh] (.node [we,wbb,wf,wc,wa,wn,wg,wh] .nil .nil) (.node [we,wbb,wbf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbabbbb : everyKey (certRow 6 tree6) tree7bbabbbb = true := by decide +kernel
 def tree7bbabbb : BinaryTree (List W) := .node [we,wbb,wf,wc,wa,waS,wg,wh] tree7bbabbba tree7bbabbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbabbb : everyKey (certRow 6 tree6) tree7bbabbb = true := splitCheck (by decide +kernel) ok_tree7bbabbba ok_tree7bbabbbb
 def tree7bbabb : BinaryTree (List W) := .node [we,wqZ,wf,wc,wa,wb,wg,wh] tree7bbabba tree7bbabbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbabb : everyKey (certRow 6 tree6) tree7bbabb = true := splitCheck (by decide +kernel) ok_tree7bbabba ok_tree7bbabbb
 def tree7bbab : BinaryTree (List W) := .node [we,whV,wf,wc,wa,wb,wg,wh] tree7bbaba tree7bbabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbab : everyKey (certRow 6 tree6) tree7bbab = true := splitCheck (by decide +kernel) ok_tree7bbaba ok_tree7bbabb
 def tree7bba : BinaryTree (List W) := .node [we,wd,wrm,wc,wa,wb,wg,wh] tree7bbaa tree7bbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bba : everyKey (certRow 6 tree6) tree7bba = true := splitCheck (by decide +kernel) ok_tree7bbaa ok_tree7bbab
 def tree7bbbaaaa : BinaryTree (List W) := (.node [we,woG,wf,wc,wa,wb,wg,wh] (.node [we,wor,wf,wc,wa,wb,wg,wh] (.node [we,woj,wf,wc,wa,wb,wg,wh] (.node [we,wob,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,woB,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wpe,wf,wc,wa,wb,wg,wh] (.node [we,woU,wf,wc,wa,wb,wg,wh] (.node [we,woQ,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wpl,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbaaaa : everyKey (certRow 6 tree6) tree7bbbaaaa = true := by decide +kernel
 def tree7bbbaaab : BinaryTree (List W) := (.node [we,wbv,wf,wc,wa,wb,wg,wh] (.node [we,wpE,wf,wc,wa,wb,wg,wh] (.node [we,wpC,wf,wc,wa,wb,wg,wh] (.node [we,wpA,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wpG,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wpT,wf,wc,wa,wb,wg,wh] (.node [we,wpP,wf,wc,wa,wb,wg,wh] .nil .nil) (.node [we,wq7,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbaaab : everyKey (certRow 6 tree6) tree7bbbaaab = true := by decide +kernel
 def tree7bbbaaa : BinaryTree (List W) := .node [we,wpy,wf,wc,wa,wb,wg,wh] tree7bbbaaaa tree7bbbaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbaaa : everyKey (certRow 6 tree6) tree7bbbaaa = true := splitCheck (by decide +kernel) ok_tree7bbbaaaa ok_tree7bbbaaab
 def tree7bbbaaba : BinaryTree (List W) := (.node [we,wri,wf,wc,wa,wb,wg,wh] (.node [we,wqg,wf,wc,wa,wb,wg,wh] (.node [we,wfJ,wf,wM,wa,wb,wg,wh] (.node [we,wre,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wrh,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wu,wf,wc,wa,wS,wg,wh] (.node [we,wu,wf,wc,wa,wb,wW,wh] (.node [we,wu,wf,wc,wa,wb,wg,w0] .nil .nil) .nil) (.node [we,wu,wf,wc,wO,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbaaba : everyKey (certRow 6 tree6) tree7bbbaaba = true := by decide +kernel
 def tree7bbbaabb : BinaryTree (List W) := (.node [we,wlW,wv,wc,wa,wb,wg,wh] (.node [we,wsm,wf,wc,wa,wb,wg,wh] (.node [we,wsi,wf,wc,wa,wb,wg,wh] (.node [we,wsc,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wqU,wv,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wL,wv,wc,wa,wb,wg,wh] (.node [we,wcJ,wqG,wc,wa,wb,wg,wh] .nil .nil) (.node [we,wf,wgf,wc,wa,wb,waw,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbaabb : everyKey (certRow 6 tree6) tree7bbbaabb = true := by decide +kernel
 def tree7bbbaab : BinaryTree (List W) := .node [we,wsa,wf,wc,wa,wb,wg,wh] tree7bbbaaba tree7bbbaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbaab : everyKey (certRow 6 tree6) tree7bbbaab = true := splitCheck (by decide +kernel) ok_tree7bbbaaba ok_tree7bbbaabb
 def tree7bbbaa : BinaryTree (List W) := .node [we,wrb,wf,wc,wa,wb,wg,wh] tree7bbbaaa tree7bbbaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbaa : everyKey (certRow 6 tree6) tree7bbbaa = true := splitCheck (by decide +kernel) ok_tree7bbbaaa ok_tree7bbbaab
 def tree7bbbabaa : BinaryTree (List W) := (.node [we,wf,wqG,wc,wa,wb,wg,wh] (.node [we,wf,wf5,wM,wa,wb,wg,wh] (.node [we,wf,ws0,wc,wa,wb,wg,wh] (.node [we,wf,wsR,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wf,wqw,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wf,wv,wc,wa,wS,wg,wh] (.node [we,wf,wv,wc,wa,wb,wW,wh] (.node [we,wf,wv,wc,wa,wb,wg,w0] .nil .nil) .nil) (.node [we,wf,wc,wl1,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbabaa : everyKey (certRow 6 tree6) tree7bbbabaa = true := by decide +kernel
 def tree7bbbabab : BinaryTree (List W) := (.node [we,wf,wc,wa,wb,wax,wq5,wh] (.node [we,wf,wc,wr4,wj,wb,wg,wh] (.node [we,wf,wc,wr4,wa,wb,wg,wh] (.node [we,wf,wc,wq,wa,wS,wg,wh] .nil .nil) .nil) (.node [we,wf,wc,wr4,wb,wg,wh] .nil .nil)) (.node [we,wf,wc,wa,wb,wq5,wh] (.node [we,wf,wc,wa,wb,wq5,wg,wh] .nil .nil) (.node [we,wf,wc,wa,wb,wg,waA,w0] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbabab : everyKey (certRow 6 tree6) tree7bbbabab = true := by decide +kernel
 def tree7bbbaba : BinaryTree (List W) := .node [we,wf,wc,wq,wa,wb,wW,wh] tree7bbbabaa tree7bbbabab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbaba : everyKey (certRow 6 tree6) tree7bbbaba = true := splitCheck (by decide +kernel) ok_tree7bbbabaa ok_tree7bbbabab
 def tree7bbbabba : BinaryTree (List W) := (.node [we,wf,wc,wa,wb,wg,wsP] (.node [we,wf,wc,wa,wb,wg,wh,wt5] (.node [we,wf,wc,wa,wb,wg,wh,wt1] (.node [we,wf,wc,wa,wb,wg,wh,wqQ] .nil .nil) .nil) (.node [we,wf,wc,wa,wb,wg,wh,wsP] .nil .nil)) (.node [we,wf,wl1,wq,wa,wb,wg,wh] (.node [we,wf,wc,wa,wS,wg,waA,wh] (.node [we,wf,wc,wa,wb,wW,waA,wh] .nil .nil) .nil) (.node [we,wf,wl1,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbabba : everyKey (certRow 6 tree6) tree7bbbabba = true := by decide +kernel
 def tree7bbbabbb : BinaryTree (List W) := (.node [wiM,wd,wf,wc,wa,wb,wg,wh] (.node [wiw,wd,wf,wc,wa,wb,wg,wh] (.node [wip,wd,wf,wc,wa,wb,wg,wh] (.node [wh2,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wiD,wd,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [wi4,wd,wf,wc,wa,wb,wg,wh] (.node [wiW,wd,wf,wc,wa,wb,wg,wh] .nil .nil) (.node [wjc,wd,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbabbb : everyKey (certRow 6 tree6) tree7bbbabbb = true := by decide +kernel
 def tree7bbbabb : BinaryTree (List W) := .node [we,wv,wc,wa,wb,wg,wh,wsA] tree7bbbabba tree7bbbabbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbabb : everyKey (certRow 6 tree6) tree7bbbabb = true := splitCheck (by decide +kernel) ok_tree7bbbabba ok_tree7bbbabbb
 def tree7bbbab : BinaryTree (List W) := .node [we,wf,wc,wa,wb,wg,waA,wsP] tree7bbbaba tree7bbbabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbab : everyKey (certRow 6 tree6) tree7bbbab = true := splitCheck (by decide +kernel) ok_tree7bbbaba ok_tree7bbbabb
 def tree7bbba : BinaryTree (List W) := .node [we,wf,wrv,wc,wa,wb,wg,wh] tree7bbbaa tree7bbbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbba : everyKey (certRow 6 tree6) tree7bbba = true := splitCheck (by decide +kernel) ok_tree7bbbaa ok_tree7bbbab
 def tree7bbbbaaa : BinaryTree (List W) := (.node [wkB,wd,wf,wc,wa,wb,wg,wh] (.node [wkk,wd,wf,wc,wa,wb,wg,wh] (.node [wjA,wd,wf,wc,wa,wb,wg,wh] (.node [wjr,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wkt,wd,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [wkY,wd,wf,wc,wa,wb,wg,wh] (.node [wkQ,wd,wf,wc,wa,wb,wg,wh] (.node [wkJ,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wk5,wd,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbbaaa : everyKey (certRow 6 tree6) tree7bbbbaaa = true := by decide +kernel
 def tree7bbbbaab : BinaryTree (List W) := (.node [wD,wd,wf,wc,wa,wb,wY,wh] (.node [wD,wd,wf,wc,wQ,wb,wg,wh] (.node [wD,wd,wL,wc,wa,wb,wg,wh] (.node [wll,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wD,wd,wf,wc,wa,wU,wg,wh] .nil .nil)) (.node [wD,wd,wf,wc,wa,wb,wg,wh] (.node [wD,wd,wf,wc,wa,wb,wg,w2] .nil .nil) (.node [wD,wd,wf,wc,wa,wb,wg,w0] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbbaab : everyKey (certRow 6 tree6) tree7bbbbaab = true := by decide +kernel
 def tree7bbbbaa : BinaryTree (List W) := .node [wld,wd,wf,wc,wa,wb,wg,wh] tree7bbbbaaa tree7bbbbaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbbaa : everyKey (certRow 6 tree6) tree7bbbbaa = true := splitCheck (by decide +kernel) ok_tree7bbbbaaa ok_tree7bbbbaab
 def tree7bbbbaba : BinaryTree (List W) := (.node [wmw,wd,wf,wc,wa,wb,wg,wh] (.node [wD,wd,wJ,wc,wa,wb,wg,wh] (.node [wD,wd,wf,wc,wO,wb,wg,wh] (.node [wD,wd,wf,wc,wa,wS,wg,wh] .nil .nil) .nil) (.node [wl3,wd,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [wm6,wd,wf,wc,wa,wb,wg,wh] (.node [wmO,wd,wf,wc,wa,wb,wg,wh] (.node [wmE,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wnf,wl,wd,wf,wc,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbbaba : everyKey (certRow 6 tree6) tree7bbbbaba = true := by decide +kernel
 def tree7bbbbabb : BinaryTree (List W) := (.node [wa8,wbd,wf,wc,wa,wb,wg,wh] (.node [wnH,wd,wf,wc,wa,wb,wg,wh] (.node [wnA,wd,wf,wc,wa,wb,wg,wh] (.node [wnt,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wnO,wd,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [wa8,wd,wf,wc,wbl,wb,wg,wh] (.node [wa8,wd,wbh,wc,wa,wb,wg,wh] .nil .nil) (.node [wa8,wd,wf,wc,wa,wb,wbp,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbbabb : everyKey (certRow 6 tree6) tree7bbbbabb = true := by decide +kernel
 def tree7bbbbab : BinaryTree (List W) := .node [wnl,wd,wf,wc,wa,wb,wg,wh] tree7bbbbaba tree7bbbbabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbbab : everyKey (certRow 6 tree6) tree7bbbbab = true := splitCheck (by decide +kernel) ok_tree7bbbbaba ok_tree7bbbbabb
 def tree7bbbba : BinaryTree (List W) := .node [wD,wd,wf,wc,wa,wb,wW,wh] tree7bbbbaa tree7bbbbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbba : everyKey (certRow 6 tree6) tree7bbbba = true := splitCheck (by decide +kernel) ok_tree7bbbbaa ok_tree7bbbbab
 def tree7bbbbbaa : BinaryTree (List W) := (.node [wa8,wd,wbf,wc,wa,wb,wg,wh] (.node [wa8,wd,wf,wc,wa,wb,wbn,wh] (.node [wa8,wd,wf,wc,wa,wb,wg,wbr] (.node [wa8,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wa8,wd,wf,wc,wbj,wb,wg,wh] .nil .nil)) (.node [wlA,wx,wf,wc,wa,wb,wg,wh] (.node [wn7,wd,wf,wc,wa,wb,wg,wh] (.node [wa8,wbb,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wlA,wd,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbbbaa : everyKey (certRow 6 tree6) tree7bbbbbaa = true := by decide +kernel
 def tree7bbbbbab : BinaryTree (List W) := (.node [wrt,wd,wf,wc,wa,wb,wg,wh] (.node [wqs,wd,wf,wc,wa,wb,wg,wh] (.node [wqq,wd,wf,wc,wa,wb,wg,wh] (.node [wpw,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wq0,wd,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [wqY,wd,wf,wc,wa,wb,wg,wh] (.node [wlL,wu,wf,wc,wa,wb,wg,wh] .nil .nil) (.node [wqY,wu,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbbbab : everyKey (certRow 6 tree6) tree7bbbbbab = true := by decide +kernel
 def tree7bbbbba : BinaryTree (List W) := .node [wpj,wd,wf,wc,wa,wb,wg,wh] tree7bbbbbaa tree7bbbbbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbbba : everyKey (certRow 6 tree6) tree7bbbbba = true := splitCheck (by decide +kernel) ok_tree7bbbbbaa ok_tree7bbbbbab
 def tree7bbbbbba : BinaryTree (List W) := (.node [wd,wf,wc,wa,wbG,wae,wg,wh] (.node [wd,wpX,wc,wa,wb,wg,wh] (.node [wd,wpX,wf,wc,wa,wb,wg,wh] (.node [wd,w8,wpX,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wd,wf,wc,wqn,wa,wb,wg,wh] .nil .nil)) (.node [wd,wf,wc,wa,wb,wg,wrq,wh] (.node [wd,wf,wc,wa,wb,waj,wrq,wh] (.node [wd,wf,wc,wa,wb,wpL,wg,wh] .nil .nil) .nil) (.node [wd,wf,wc,wa,wb,wg,wam,wro] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbbbba : everyKey (certRow 6 tree6) tree7bbbbbba = true := by decide +kernel
 def tree7bbbbbbb : BinaryTree (List W) := (.node [wd,wf,wqn,wr,wa,wb,wg,wh] (.node [wd,wf,wc,wa,wpL,wae,wg,wh] (.node [wd,wf,wc,wa,wb,wrq,wh] (.node [wd,wf,wc,wa,wb,wg,wro] .nil .nil) .nil) (.node [wd,wf,wc,wa,wpL,wg,wh] .nil .nil)) (.node [wd,wf,wr,wa,wb,wg,wqm,wh] (.node [wd,wf,wqn,wa,wb,wg,wh] .nil .nil) (.node [wu,wf,wc,wa,wb,wg,wh,wqX] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbbbbb : everyKey (certRow 6 tree6) tree7bbbbbbb = true := by decide +kernel
 def tree7bbbbbb : BinaryTree (List W) := .node [wd,wf,wc,wa,wb,wg,wh,wro] tree7bbbbbba tree7bbbbbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbbbb : everyKey (certRow 6 tree6) tree7bbbbbb = true := splitCheck (by decide +kernel) ok_tree7bbbbbba ok_tree7bbbbbbb
 def tree7bbbbb : BinaryTree (List W) := .node [wqY,wf,wc,wa,wb,wg,wh] tree7bbbbba tree7bbbbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbbb : everyKey (certRow 6 tree6) tree7bbbbb = true := splitCheck (by decide +kernel) ok_tree7bbbbba ok_tree7bbbbbb
 def tree7bbbb : BinaryTree (List W) := .node [wa8,wd,wf,wc,wa,wb,wg,wbt] tree7bbbba tree7bbbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbbb : everyKey (certRow 6 tree6) tree7bbbb = true := splitCheck (by decide +kernel) ok_tree7bbbba ok_tree7bbbbb
 def tree7bbb : BinaryTree (List W) := .node [wjl,wd,wf,wc,wa,wb,wg,wh] tree7bbba tree7bbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bbb : everyKey (certRow 6 tree6) tree7bbb = true := splitCheck (by decide +kernel) ok_tree7bbba ok_tree7bbbb
 def tree7bb : BinaryTree (List W) := .node [we,wn8,wf,wc,wa,wb,wg,wh] tree7bba tree7bbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7bb : everyKey (certRow 6 tree6) tree7bb = true := splitCheck (by decide +kernel) ok_tree7bba ok_tree7bbb
 def tree7b : BinaryTree (List W) := .node [we,wd,wf,wa,wb,wg,wqM] tree7ba tree7bb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7b : everyKey (certRow 6 tree6) tree7b = true := splitCheck (by decide +kernel) ok_tree7ba ok_tree7bb
 def tree7 : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wnM,wh] tree7a tree7b
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree7 : everyKey (certRow 6 tree6) tree7 = true := splitCheck (by decide +kernel) ok_tree7a ok_tree7b
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem closed7 : Closed 7 tree7 := checkedLayer 6 (by decide) _ _ closed6 ok_tree7
 def tree8aaaaaa : BinaryTree (List W) := (.node [wR,we,wd,wf,wc,wa,wb,wg,wh] (.node [wbe,we,wd,wf,wc,wa,wb,wg,wh] (.node [wbF,we,wd,wf,wc,wa,wb,wg,wh] (.node [wG,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) (.node [wa7,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [wC,we,wd,wf,wc,wa,wb,wg,wh] (.node [wby,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [weO,we,wd,wf,wc,wa,wb,wg,wh] (.node [wet,we,wd,wf,wc,wa,wb,wg,wh] (.node [wbs,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wI,we,wd,wf,wc,wa,wb,wg,wh] (.node [wfb,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaaaaa : everyKey (certRow 7 tree7) tree8aaaaaa = true := by decide +kernel
 def tree8aaaaab : BinaryTree (List W) := (.node [wds,we,wd,wf,wc,wa,wb,wg,wh] (.node [wcR,we,wd,wf,wc,wa,wb,wg,wh] (.node [wcs,we,wd,wf,wc,wa,wb,wg,wh] (.node [w1,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [weE,we,wd,wf,wc,wa,wb,wg,wh] (.node [wei,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wP,we,wd,wf,wc,wa,wb,wg,wh] (.node [wea,we,wd,wf,wc,wa,wb,wg,wh] (.node [wdz,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wbo,we,wd,wf,wc,wa,wb,wg,wh] (.node [wbi,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaaaab : everyKey (certRow 7 tree7) tree8aaaaab = true := by decide +kernel
 def tree8aaaaa : BinaryTree (List W) := .node [wV,we,wd,wf,wc,wa,wb,wg,wh] tree8aaaaaa tree8aaaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaaaa : everyKey (certRow 7 tree7) tree8aaaaa = true := splitCheck (by decide +kernel) ok_tree8aaaaaa ok_tree8aaaaab
 def tree8aaaaba : BinaryTree (List W) := (.node [wp,way,we,wf,wc,wa,wb,wg,wh] (.node [wK,we,wd,wf,wc,wa,wb,wg,wh] (.node [wX,we,wd,wf,wc,wa,wb,wg,wh] (.node [wZ,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wE,we,wd,wf,wc,wa,wb,wg,wh] (.node [wT,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wp,we,w5,wf,wc,wa,wb,wg,wh] (.node [wp,we,wao,wf,wc,wa,wb,wg,wh] (.node [wp,wF,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wp,we,wd,wL,wc,wa,wb,wg,wh] (.node [wp,we,wH,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaaaba : everyKey (certRow 7 tree7) tree8aaaaba = true := by decide +kernel
 def tree8aaaabb : BinaryTree (List W) := (.node [wp,we,wd,wf,wc,wa,wb,wg,w0] (.node [wp,we,wd,wf,wc,wa,wb,wY,wh] (.node [wp,we,wd,wf,wc,wa,wU,wg,wh] (.node [wp,we,wd,wf,wc,wQ,wb,wg,wh] .nil .nil) .nil) (.node [wp,we,wd,wf,wc,wa,wb,wg,wh] (.node [wp,we,wd,wf,wc,wa,wb,wg,w2] .nil .nil) .nil)) (.node [wp,we,wd,wf,wc,wO,wb,wg,wh] (.node [wp,we,wd,wf,wc,wa,wS,wg,wh] (.node [wp,we,wd,wf,wc,wa,wb,wW,wh] .nil .nil) .nil) (.node [wp,we,wd,wJ,wc,wa,wb,wg,wh] (.node [wp,we,wd,wf,wq,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaaabb : everyKey (certRow 7 tree7) tree8aaaabb = true := by decide +kernel
 def tree8aaaab : BinaryTree (List W) := .node [wp,we,wd,wf,wM,wa,wb,wg,wh] tree8aaaaba tree8aaaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaaab : everyKey (certRow 7 tree7) tree8aaaab = true := splitCheck (by decide +kernel) ok_tree8aaaaba ok_tree8aaaabb
 def tree8aaaa : BinaryTree (List W) := .node [wN,we,wd,wf,wc,wa,wb,wg,wh] tree8aaaaa tree8aaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaaa : everyKey (certRow 7 tree7) tree8aaaa = true := splitCheck (by decide +kernel) ok_tree8aaaaa ok_tree8aaaab
 def tree8aaabaa : BinaryTree (List W) := (.node [wde,we,wd,wf,wc,wa,wb,wg,wh] (.node [wp,we,wf,wc,wa,wb,wg,waA,wh] (.node [wp,we,wf,wc,wq,wa,wb,wg,wh] (.node [wp,we,wf,wv,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wp,wD,wd,wf,wc,wa,wb,wg,wh] (.node [wp,we,wf,wq,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wcw,we,wd,wf,wc,wa,wb,wg,wh] (.node [wdU,we,wd,wf,wc,wa,wb,wg,wh] (.node [wdN,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [weA,we,wd,wf,wc,wa,wb,wg,wh] (.node [wee,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaabaa : everyKey (certRow 7 tree7) tree8aaabaa = true := by decide +kernel
 def tree8aaabab : BinaryTree (List W) := (.node [wbc,we,wd,wf,wc,wa,wb,wg,wh] (.node [wbm,we,wd,wf,wc,wa,wb,wg,wh] (.node [waZ,we,wl,wd,wf,wc,wb,wg,wh] (.node [weV,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wbq,we,wd,wf,wc,wa,wb,wg,wh] (.node [wbk,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wm,wba,wd,wf,wc,wa,wb,wg,wh] (.node [wa9,we,wd,wf,wc,wa,wb,wg,wh] (.node [wbg,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wm,we,wd,wbh,wc,wa,wb,wg,wh] (.node [wm,we,wbd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaabab : everyKey (certRow 7 tree7) tree8aaabab = true := by decide +kernel
 def tree8aaaba : BinaryTree (List W) := .node [wbZ,we,wd,wf,wc,wa,wb,wg,wh] tree8aaabaa tree8aaabab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaaba : everyKey (certRow 7 tree7) tree8aaaba = true := splitCheck (by decide +kernel) ok_tree8aaabaa ok_tree8aaabab
 def tree8aaabba : BinaryTree (List W) := (.node [wm,we,wd,wf,wc,wa,wb,wg,wbr] (.node [wm,we,wd,wf,wc,wa,wb,wbp,wh] (.node [wm,we,wd,wf,wc,wa,waS,wg,wh] (.node [wm,we,wd,wf,wc,wbl,wb,wg,wh] .nil .nil) .nil) (.node [wm,we,wd,wf,wc,wa,wb,wg,wh] (.node [wm,we,wd,wf,wc,wa,wb,wg,wbt] .nil .nil) .nil)) (.node [wm,we,wd,wf,wc,wbj,wb,wg,wh] (.node [wm,we,wd,wf,wc,wa,wn,wg,wh] (.node [wm,we,wd,wf,wc,wa,wb,wbn,wh] .nil .nil) .nil) (.node [wm,we,wd,wf,wa,wn,wg,wh] (.node [wm,we,wd,wf,wa,wb,wn,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaabba : everyKey (certRow 7 tree7) tree8aaabba = true := by decide +kernel
 def tree8aaabbb : BinaryTree (List W) := (.node [way,we,wd,wf,wc,wa,wb,wg,wh] (.node [waT,wz,we,wd,wf,wc,wa,wb,wh] (.node [wm,wa8,wd,wf,wc,wa,wb,wg,wh] (.node [wm,we,wbb,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [way,we,wx,wf,wc,wa,wb,wg,wh] (.node [way,ww,we,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wb6,we,wd,wf,wc,wa,wb,wg,wh] (.node [wbN,we,wd,wf,wc,wa,wb,wg,wh] (.node [wbJ,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wah,we,wd,wf,wc,wa,wb,wg,wh] (.node [wah,wz,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaabbb : everyKey (certRow 7 tree7) tree8aaabbb = true := by decide +kernel
 def tree8aaabb : BinaryTree (List W) := .node [wm,we,wd,wbf,wc,wa,wb,wg,wh] tree8aaabba tree8aaabbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaabb : everyKey (certRow 7 tree7) tree8aaabb = true := splitCheck (by decide +kernel) ok_tree8aaabba ok_tree8aaabbb
 def tree8aaab : BinaryTree (List W) := .node [wm,we,wd,wf,waR,wa,wb,wg,wh] tree8aaaba tree8aaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaab : everyKey (certRow 7 tree7) tree8aaab = true := splitCheck (by decide +kernel) ok_tree8aaaba ok_tree8aaabb
 def tree8aaa : BinaryTree (List W) := .node [wp,we,wu,wf,wc,wa,wb,wg,wh] tree8aaaa tree8aaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaa : everyKey (certRow 7 tree7) tree8aaa = true := splitCheck (by decide +kernel) ok_tree8aaaa ok_tree8aaab
 def tree8aabaaa : BinaryTree (List W) := (.node [wfX,we,wd,wf,wc,wa,wb,wg,wh] (.node [wgC,we,wd,wf,wc,wr,wa,wb,wh] (.node [wak,we,wd,wf,wc,wa,wb,wg,wh] (.node [wak,wA,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wgC,we,wd,wf,wc,wa,wb,wh] (.node [wgC,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wbw,we,wd,wf,wc,wa,wb,wg,wh] (.node [wgj,we,wd,wf,wc,wa,wb,wg,wh] (.node [waH,we,wd,wv,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wcI,we,wd,wf,wc,wa,wb,wg,wh] (.node [wbV,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aabaaa : everyKey (certRow 7 tree7) tree8aabaaa = true := by decide +kernel
 def tree8aabaab : BinaryTree (List W) := (.node [wbA,we,wd,wf,wc,wa,wb,wg,wh] (.node [wda,we,wd,wf,wc,wa,wb,wg,wh] (.node [wbu,we,wd,wf,wc,wa,wb,wg,wh] (.node [wb4,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wbL,we,wd,wf,wc,wa,wb,wg,wh] (.node [wbP,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wo,waf,wd,wf,wc,wa,wb,wg,wh] (.node [wbH,we,wd,wf,wc,wa,wb,wg,wh] (.node [wbD,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wo,we,wd,wf,wc,wa,wag,wg,wh] (.node [wo,we,wbx,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aabaab : everyKey (certRow 7 tree7) tree8aabaab = true := by decide +kernel
 def tree8aabaa : BinaryTree (List W) := .node [wbT,we,wd,wf,wc,wa,wb,wg,wh] tree8aabaaa tree8aabaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aabaa : everyKey (certRow 7 tree7) tree8aabaa = true := splitCheck (by decide +kernel) ok_tree8aabaaa ok_tree8aabaab
 def tree8aababa : BinaryTree (List W) := (.node [wbR,we,wd,wf,wc,wa,wb,wg,wh] (.node [wo,wd,wf,wc,wa,wb,wae,wg,wh] (.node [wo,we,wbv,wf,wc,wa,wb,wg,wh] (.node [wo,we,wd,wf,wc,wa,wae,wg,wh] .nil .nil) .nil) (.node [wgy,we,wd,wf,wc,wa,wb,wg,wh] (.node [wo,wd,wf,wc,wa,wae,wg,wh] .nil .nil) .nil)) (.node [wcc,we,wd,wf,wc,wa,wb,wg,wh] (.node [wbX,we,wd,wf,wc,wa,wb,wg,wh] (.node [wc1,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wb1,we,wd,wf,wc,wa,wb,wg,wh] (.node [wb8,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aababa : everyKey (certRow 7 tree7) tree8aababa = true := by decide +kernel
 def tree8aababb : BinaryTree (List W) := (.node [wy,wd,w8,wf,wc,wa,wb,wg,wh] (.node [wy,we,wd,w8,wc,wa,wb,wg,wh] (.node [wy,wA,wd,wf,wc,wa,wb,wg,wh] (.node [wy,waf,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wy,we,wd,w7,wc,wa,wb,wg,wh] (.node [wy,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wy,wd,wf,wc,wa,wb,wg,wh,wal] (.node [wy,wd,wf,wc,wa,wb,wae,wg,wh] (.node [wy,wd,w8,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wcl,we,wd,wf,wc,wa,wb,wg,wh] (.node [wdY,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aababb : everyKey (certRow 7 tree7) tree8aababb = true := by decide +kernel
 def tree8aabab : BinaryTree (List W) := .node [wy,w6,wd,wf,wc,wa,wb,wg,wh] tree8aababa tree8aababb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aabab : everyKey (certRow 7 tree7) tree8aabab = true := splitCheck (by decide +kernel) ok_tree8aababa ok_tree8aababb
 def tree8aaba : BinaryTree (List W) := .node [wo,we,wd,wf,wc,wa,wb,wg,wh] tree8aabaa tree8aabab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aaba : everyKey (certRow 7 tree7) tree8aaba = true := splitCheck (by decide +kernel) ok_tree8aabaa ok_tree8aabab
 def tree8aabbaa : BinaryTree (List W) := (.node [wcX,we,wd,wf,wc,wa,wb,wg,wh] (.node [wc6,we,wd,wf,wc,wa,wb,wg,wh] (.node [wcC,we,wd,wf,wc,wa,wb,wg,wh] (.node [wcg,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wfh,we,wd,wf,wc,wa,wb,wg,wh] (.node [wd6,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wce,we,wd,wf,wc,wa,wb,wg,wh] (.node [wgL,we,wd,wf,wc,wa,wb,wg,wh] (.node [wdZ,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wdJ,we,wd,wf,wc,wa,wb,wg,wh] (.node [wcA,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aabbaa : everyKey (certRow 7 tree7) tree8aabbaa = true := by decide +kernel
 def tree8aabbab : BinaryTree (List W) := (.node [wcM,we,wd,wf,wc,wa,wb,wg,wh] (.node [wfH,we,wd,wf,wc,wa,wb,wg,wh] (.node [w9,wd,wf,wr,wa,wb,wg,wh] (.node [w9,wd,wf,wc,wr,wa,wb,wg,wh] .nil .nil) .nil) (.node [wcn,we,wd,wf,wc,wa,wb,wg,wh] (.node [whr,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wcj,we,wd,wf,wc,wa,wb,wg,wh] (.node [wcu,we,wd,wf,wc,wa,wb,wg,wh] (.node [wcy,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [ws,we,wd,waC,wc,wa,wb,wg,wh] (.node [wcq,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aabbab : everyKey (certRow 7 tree7) tree8aabbab = true := by decide +kernel
 def tree8aabba : BinaryTree (List W) := .node [w9,we,wd,wf,wr,wa,wb,wg,wh] tree8aabbaa tree8aabbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aabba : everyKey (certRow 7 tree7) tree8aabba = true := splitCheck (by decide +kernel) ok_tree8aabbaa ok_tree8aabbab
 def tree8aabbba : BinaryTree (List W) := (.node [whx,we,wd,wf,wc,wa,wb,wg,wh] (.node [ws,we,wd,wc,waB,wa,wb,wg,wh] (.node [ws,we,wd,wf,waB,wa,wb,wg,wh] (.node [ws,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wf3,we,wd,wf,wc,wa,wb,wg,wh] (.node [ws,we,wd,waB,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wcP,we,wd,wf,wc,wa,wb,wg,wh] (.node [wcF,we,wd,wf,wc,wa,wb,wg,wh] (.node [wcT,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wt,we,wd,wf,waW,wa,wb,wg,wh] (.node [wt,we,wd,wcJ,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aabbba : everyKey (certRow 7 tree7) tree8aabbba = true := by decide +kernel
 def tree8aabbbb : BinaryTree (List W) := (.node [wt,we,wd,wf,wr,wa,wb,wg,wh] (.node [wt,we,wd,wf,wc,wa,wb,wg,waY] (.node [wt,we,wd,wf,wM,wa,wb,wg,wh] (.node [wt,we,wd,wf,wab,wa,wb,wg,wh] .nil .nil) .nil) (.node [wt,we,wd,wf,wc,wa,wb,wg,waX] (.node [wt,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wt,we,wd,wf,wa,wb,wg,waY] (.node [wt,we,wd,wf,waB,wa,wb,wg,wh] (.node [wt,we,wd,wf,wq,wa,wb,wg,wh] .nil .nil) .nil) (.node [wt,we,wd,wcH,wc,wa,wb,wg,wh] (.node [wt,we,wd,wf,wa,wb,wg,waY,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aabbbb : everyKey (certRow 7 tree7) tree8aabbbb = true := by decide +kernel
 def tree8aabbb : BinaryTree (List W) := .node [wt,we,wd,wf,waD,wa,wb,wg,wh] tree8aabbba tree8aabbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aabbb : everyKey (certRow 7 tree7) tree8aabbb = true := splitCheck (by decide +kernel) ok_tree8aabbba ok_tree8aabbbb
 def tree8aabb : BinaryTree (List W) := .node [ws,we,wd,wf,waD,wa,wb,wg,wh] tree8aabba tree8aabbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aabb : everyKey (certRow 7 tree7) tree8aabb = true := splitCheck (by decide +kernel) ok_tree8aabba ok_tree8aabbb
 def tree8aab : BinaryTree (List W) := .node [wcK,we,wd,wf,wc,wa,wb,wg,wh] tree8aaba tree8aabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aab : everyKey (certRow 7 tree7) tree8aab = true := splitCheck (by decide +kernel) ok_tree8aaba ok_tree8aabb
 def tree8aa : BinaryTree (List W) := .node [wca,we,wd,wf,wc,wa,wb,wg,wh] tree8aaa tree8aab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aa : everyKey (certRow 7 tree7) tree8aa = true := splitCheck (by decide +kernel) ok_tree8aaa ok_tree8aab
 def tree8abaaaa : BinaryTree (List W) := (.node [w4,wd,wf,wc,wr,wa,wb,wg,wh] (.node [w4,wA,wd,wf,wc,wa,wb,wg,wh] (.node [wg7,we,wd,wf,wc,wa,wb,wg,wh] (.node [wdE,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [w4,we,wu,wf,wc,wa,wb,wg,wh] (.node [w4,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wd1,we,wd,wf,wc,wa,wb,wg,wh] (.node [wcY,we,wd,wf,wc,wa,wb,wg,wh] (.node [wfk,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wdi,we,wd,wf,wc,wa,wb,wg,wh] (.node [wcV,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abaaaa : everyKey (certRow 7 tree7) tree8abaaaa = true := by decide +kernel
 def tree8abaaab : BinaryTree (List W) := (.node [wcZ,we,wd,wf,wc,wa,wb,wg,wh] (.node [wgn,we,wd,wf,wc,wa,wb,wg,wh] (.node [w3,wu,wf,wc,wa,wb,wg,wh] (.node [w3,wd,wu,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wc8,we,wd,wf,wc,wa,wb,wg,wh] (.node [wg6,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wc4,we,wd,wf,wc,wa,wb,wg,wh] (.node [wdg,we,wd,wf,wc,wa,wb,wg,wh] (.node [wdc,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [ww,we,wav,wf,wc,wa,wb,wg,wh] (.node [ww,we,wao,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abaaab : everyKey (certRow 7 tree7) tree8abaaab = true := by decide +kernel
 def tree8abaaa : BinaryTree (List W) := .node [w3,we,wu,wf,wc,wa,wb,wg,wh] tree8abaaaa tree8abaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abaaa : everyKey (certRow 7 tree7) tree8abaaa = true := splitCheck (by decide +kernel) ok_tree8abaaaa ok_tree8abaaab
 def tree8abaaba : BinaryTree (List W) := (.node [ww,we,wf,wv,wc,wa,wb,wg,wh] (.node [ww,we,wd,wf,wc,wa,wb,wg,wh] (.node [ww,we,wd,wf,wc,wa,wb,wax,wh] (.node [ww,we,wH,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [ww,we,wu,wf,wc,wa,wb,wg,wh] (.node [ww,we,wd,wf,wc,wa,wb,waw,wh] .nil .nil) .nil)) (.node [ww,we,wf,wc,wa,wb,wax,wh] (.node [ww,we,wf,wc,wa,wb,wax,wg,wh] (.node [ww,we,wf,wc,wq,wa,wb,wg,wh] .nil .nil) .nil) (.node [whs,we,wd,wf,wc,wa,wb,wg,wh] (.node [ww,we,wf,wc,wa,wb,wg,waA,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abaaba : everyKey (certRow 7 tree7) tree8abaaba = true := by decide +kernel
 def tree8abaabb : BinaryTree (List W) := (.node [wcD,we,wd,wf,wc,wa,wb,wg,wh] (.node [waa,we,wd,wf,wc,wa,wb,wg,wh] (.node [waa,wz,wd,wf,wc,wa,wb,wg,wh] (.node [wdL,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [waa,wd,wu,wf,wc,wa,wb,wg,wh] (.node [waa,we,wd,wf,wr,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wgK,we,wd,wf,wc,wa,wb,wg,wh] (.node [wd4,we,wd,wf,wc,wa,wb,wg,wh] (.node [wch,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wdm,we,wd,wf,wc,wa,wb,wg,wh] (.node [wdG,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abaabb : everyKey (certRow 7 tree7) tree8abaabb = true := by decide +kernel
 def tree8abaab : BinaryTree (List W) := .node [wdq,we,wd,wf,wc,wa,wb,wg,wh] tree8abaaba tree8abaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abaab : everyKey (certRow 7 tree7) tree8abaab = true := splitCheck (by decide +kernel) ok_tree8abaaba ok_tree8abaabb
 def tree8abaa : BinaryTree (List W) := .node [ww,we,w5,wf,wc,wa,wb,wg,wh] tree8abaaa tree8abaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abaa : everyKey (certRow 7 tree7) tree8abaa = true := splitCheck (by decide +kernel) ok_tree8abaaa ok_tree8abaab
 def tree8ababaa : BinaryTree (List W) := (.node [wdB,we,wd,wf,wc,wa,wb,wg,wh] (.node [waf,we,wd,wf,wc,wa,wb,wg,wh] (.node [wdS,we,wd,wf,wc,wa,wb,wg,wh] (.node [wdx,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wf1,we,wd,wf,wc,wa,wb,wg,wh] (.node [waf,wd,wf,wc,wr,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wA,we,wd,wf,wc,wa,wb,wg,wh] (.node [wA,we,wd,wf,wc,wa,wb,wg,wam] (.node [wdu,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [wA,wd,wu,wf,wc,wa,wb,wg,wh] (.node [wA,we,wd,wf,wc,wa,wb,wg,wal] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8ababaa : everyKey (certRow 7 tree7) tree8ababaa = true := by decide +kernel
 def tree8ababab : BinaryTree (List W) := (.node [wz,we,wd,wf,wc,wa,wb,wax,wh] (.node [wdP,we,wd,wf,wc,wa,wb,wg,wh] (.node [wA,wd,wf,wc,wa,wb,wg,wam,wh] (.node [wA,wd,wf,wc,wa,wb,wg,wam] .nil .nil) .nil) (.node [wz,we,wd,wf,wc,wa,wa6,wb,wh] (.node [wz,we,wd,wf,waV,wc,wa,wb,wh] .nil .nil) .nil)) (.node [wz,we,wd,wf,wc,wa,wb,waw,wh] (.node [wz,we,wd,wf,wc,wa,wb,wg,wh] (.node [wz,we,wd,wf,wc,wa,wb,waj,wh] .nil .nil) .nil) (.node [wz,we,wd,wf,wc,wa,wb,wa4,wh] (.node [wz,we,wd,wf,wc,wa,wb,wai,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8ababab : everyKey (certRow 7 tree7) tree8ababab = true := by decide +kernel
 def tree8ababa : BinaryTree (List W) := .node [wA,wd,wf,w7,wc,wa,wb,wg,wh] tree8ababaa tree8ababab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8ababa : everyKey (certRow 7 tree7) tree8ababa = true := splitCheck (by decide +kernel) ok_tree8ababaa ok_tree8ababab
 def tree8ababba : BinaryTree (List W) := (.node [wF,we,wd,wf,wc,wa,wb,wg,wh] (.node [we0,we,wd,wf,wc,wa,wb,wg,wh] (.node [wz,wd,wf,wc,wa,wb,waj,wh] (.node [wz,wd,wf,wc,wa,wb,waj,wg,wh] .nil .nil) .nil) (.node [wek,we,wd,wf,wc,wa,wb,wg,wh] (.node [weG,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wba,wd,wf,wc,wa,wb,wg,wh] (.node [wba,we,wd,wf,wc,wa,wb,wg,wh] (.node [wF,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wD,wd,wf,wc,wa,wb,wg,wh] (.node [we,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8ababba : everyKey (certRow 7 tree7) tree8ababba = true := by decide +kernel
 def tree8ababbb : BinaryTree (List W) := (.node [we,wfV,wd,wf,wc,wa,wb,wg,wh] (.node [we,wgI,wd,wf,wc,wa,wb,wg,wh] (.node [we,wcf,wd,wf,wc,wa,wb,wg,wh] (.node [we,wgq,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd8,wd,wf,wc,wa,wb,wg,wh] (.node [we,wcB,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wec,wd,wf,wc,wa,wb,wg,wh] (.node [we,weg,wd,wf,wc,wa,wb,wg,wh] (.node [we,wcW,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wB,wd,w8,wc,wa,wb,wg,wh] (.node [we,wB,wd,waJ,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8ababbb : everyKey (certRow 7 tree7) tree8ababbb = true := by decide +kernel
 def tree8ababb : BinaryTree (List W) := .node [we,wa8,wd,wf,wc,wa,wb,wg,wh] tree8ababba tree8ababbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8ababb : everyKey (certRow 7 tree7) tree8ababb = true := splitCheck (by decide +kernel) ok_tree8ababba ok_tree8ababbb
 def tree8abab : BinaryTree (List W) := .node [wz,wd,wf,wc,wr,wa,wb,wg,wh] tree8ababa tree8ababb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abab : everyKey (certRow 7 tree7) tree8abab = true := splitCheck (by decide +kernel) ok_tree8ababa ok_tree8ababb
 def tree8aba : BinaryTree (List W) := .node [w6,we,wd,wf,wc,wa,wb,wg,wh] tree8abaa tree8abab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8aba : everyKey (certRow 7 tree7) tree8aba = true := splitCheck (by decide +kernel) ok_tree8abaa ok_tree8abab
 def tree8abbaaa : BinaryTree (List W) := (.node [we,wB,wd,wc,wa,wb,waL,wg,wh] (.node [we,wB,wd,wf,wc,wa,wb,waK,wh] (.node [we,wB,wd,wf,wc,wa,wb,wg,wh] (.node [we,wB,wd,wf,wc,wa,wb,waL,wh] .nil .nil) .nil) (.node [we,wB,wd,wc,waB,wa,wb,wg,wh] (.node [we,wB,wd,w7,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wdX,wd,wf,wc,wa,wb,wg,wh] (.node [we,wgh,wd,wf,wc,wa,wb,wg,wh] (.node [we,wB,wd,wc,wa,wb,waL,wh] .nil .nil) .nil) (.node [we,we6,wd,wf,wc,wa,wb,wg,wh] (.node [we,weo,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abbaaa : everyKey (certRow 7 tree7) tree8abbaaa = true := by decide +kernel
 def tree8abbaab : BinaryTree (List W) := (.node [we,whL,wd,wf,wc,wa,wb,wg,wh] (.node [we,wgU,wd,wf,wc,wa,wb,wg,wh] (.node [we,whf,wd,wf,wc,wa,wb,wg,wh] (.node [we,whu,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wfP,wd,wf,wc,wa,wb,wg,wh] (.node [we,wgb,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wao,wd,wf,wc,wa,wb,wg,wh] (.node [we,wao,wx,wf,wc,wa,wb,wg,wh] (.node [we,wfo,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wfF,wd,wf,wc,wa,wb,wg,wh] (.node [we,wao,wd,wv,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abbaab : everyKey (certRow 7 tree7) tree8abbaab = true := by decide +kernel
 def tree8abbaa : BinaryTree (List W) := .node [we,wfw,wd,wf,wc,wa,wb,wg,wh] tree8abbaaa tree8abbaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abbaa : everyKey (certRow 7 tree7) tree8abbaa = true := splitCheck (by decide +kernel) ok_tree8abbaaa ok_tree8abbaab
 def tree8abbaba : BinaryTree (List W) := (.node [we,wap,wf,wv,wc,wa,wb,wg,wh] (.node [we,wfG,wd,wf,wc,wa,wb,wg,wh] (.node [we,we3,wd,wf,wc,wa,wb,wg,wh] (.node [we,weJ,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wap,wd,wf,wc,wa,wb,wg,wh] (.node [we,wgO,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,waq,wi,wf,wc,wa,wb,wg,wh] (.node [we,wfu,wd,wf,wc,wa,wb,wg,wh] (.node [we,wfp,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,waq,wd,wf,wc,wj,wb,wg,wh] (.node [we,waq,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abbaba : everyKey (certRow 7 tree7) tree8abbaba = true := by decide +kernel
 def tree8abbabb : BinaryTree (List W) := (.node [we,waF,wd,wv,wc,wa,wb,wg,wh] (.node [we,weK,wd,wf,wc,wa,wb,wg,wh] (.node [we,wfN,wd,wf,wc,wa,wb,wg,wh] (.node [we,we4,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,waF,wd,wf,wc,wa,wb,wg,wh] (.node [we,waF,wk,wd,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,we7,wd,wc,wa,wb,wg,wh] (.node [we,we7,wd,wf,wc,wa,wb,wg,wh] (.node [we,we7,wl,wd,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wep,wi,wd,wc,wa,wb,wg,wh] (.node [we,wf9,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abbabb : everyKey (certRow 7 tree7) tree8abbabb = true := by decide +kernel
 def tree8abbab : BinaryTree (List W) := .node [we,waq,wu,wf,wc,wa,wb,wg,wh] tree8abbaba tree8abbabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abbab : everyKey (certRow 7 tree7) tree8abbab = true := splitCheck (by decide +kernel) ok_tree8abbaba ok_tree8abbabb
 def tree8abba : BinaryTree (List W) := .node [we,wha,wd,wf,wc,wa,wb,wg,wh] tree8abbaa tree8abbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abba : everyKey (certRow 7 tree7) tree8abba = true := splitCheck (by decide +kernel) ok_tree8abbaa ok_tree8abbab
 def tree8abbbaa : BinaryTree (List W) := (.node [we,wel,wd,wf,wc,wa,wb,wg,wh] (.node [we,wex,wd,wf,wc,wa,wb,wg,wh] (.node [we,wem,wd,wf,wc,wa,wb,wg,wh] (.node [we,wep,wd,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wer,wd,wf,wc,wa,wb,wg,wh] (.node [we,weC,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wi,wd,wf,wc,wa,wb,wez,wh] (.node [we,wi,wd,wf,wc,war,wb,wg,wh] (.node [we,wev,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wi,wd,wf,wc,wa,wb,wey,wh] (.node [we,wi,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abbbaa : everyKey (certRow 7 tree7) tree8abbbaa = true := by decide +kernel
 def tree8abbbab : BinaryTree (List W) := (.node [we,weS,wd,wf,wc,wa,wb,wg,wh] (.node [we,wi,wf,wc,wj,wb,wg,wh] (.node [we,wi,wf,wc,wa,wj,wb,wg,wh] (.node [we,wi,wd,wen,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wej,wd,wf,wc,wa,wb,wg,wh] (.node [we,wfL,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,weH,wd,wf,wc,wa,wb,wg,wh] (.node [we,weX,wd,wf,wc,wa,wb,wg,wh] (.node [we,weM,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wk,wd,wf,wc,waG,wb,wg,wh] (.node [we,weQ,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abbbab : everyKey (certRow 7 tree7) tree8abbbab = true := by decide +kernel
 def tree8abbba : BinaryTree (List W) := .node [we,wi,wd,wf,wc,wj,wb,wg,wh] tree8abbbaa tree8abbbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abbba : everyKey (certRow 7 tree7) tree8abbba = true := splitCheck (by decide +kernel) ok_tree8abbbaa ok_tree8abbbab
 def tree8abbbba : BinaryTree (List W) := (.node [we,wff,wd,wf,wc,wa,wb,wg,wh] (.node [we,wk,wd,wc,waE,wb,wg,wh] (.node [we,wk,wd,wc,wa,waE,wb,wg,wh] (.node [we,wk,wd,wf,wc,waE,wb,wg,wh] .nil .nil) .nil) (.node [we,wf7,wd,wf,wc,wa,wb,wg,wh] (.node [we,weF,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wfd,wd,wf,wc,wa,wb,wg,wh] (.node [we,we1,wd,wf,wc,wa,wb,wg,wh] (.node [we,we9,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wl,wd,wf,wc,wa1,wb,wg,wh] (.node [we,wl,wd,wf,wc,waQ,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abbbba : everyKey (certRow 7 tree7) tree8abbbba = true := by decide +kernel
 def tree8abbbbb : BinaryTree (List W) := (.node [we,wl,wd,wf,wc,wac,wb,wg,wh] (.node [we,wl,wd,wf,wc,wa,wb,wa3,wg] (.node [we,wl,wd,wf,wc,wad,wb,wg,wh] (.node [we,wl,wd,wf,wc,war,wb,wg,wh] .nil .nil) .nil) (.node [we,wl,wd,wf,wc,wa,wb,wg,wa2] (.node [we,wl,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wl,wd,wf,wc,waO,wb,wg,wh] (.node [we,wl,wd,wf,wc,waE,wb,wg,wh] (.node [we,wl,wd,wf,wc,wj,wb,wg,wh] .nil .nil) .nil) (.node [we,wl,wd,wf,wc,wb,wa3,wg] (.node [we,wl,wd,wf,wc,wa0,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abbbbb : everyKey (certRow 7 tree7) tree8abbbbb = true := by decide +kernel
 def tree8abbbb : BinaryTree (List W) := .node [we,wl,wd,wf,wc,waG,wb,wg,wh] tree8abbbba tree8abbbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abbbb : everyKey (certRow 7 tree7) tree8abbbb = true := splitCheck (by decide +kernel) ok_tree8abbbba ok_tree8abbbbb
 def tree8abbb : BinaryTree (List W) := .node [we,wk,wd,wf,wc,wa,wb,wg,wh] tree8abbba tree8abbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abbb : everyKey (certRow 7 tree7) tree8abbb = true := splitCheck (by decide +kernel) ok_tree8abbba ok_tree8abbbb
 def tree8abb : BinaryTree (List W) := .node [we,wep,wd,wf,wc,wa,wb,wg,wh] tree8abba tree8abbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8abb : everyKey (certRow 7 tree7) tree8abb = true := splitCheck (by decide +kernel) ok_tree8abba ok_tree8abbb
 def tree8ab : BinaryTree (List W) := .node [we,wB,wd,waC,wc,wa,wb,wg,wh] tree8aba tree8abb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8ab : everyKey (certRow 7 tree7) tree8ab = true := splitCheck (by decide +kernel) ok_tree8aba ok_tree8abb
 def tree8a : BinaryTree (List W) := .node [wdk,we,wd,wf,wc,wa,wb,wg,wh] tree8aa tree8ab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8a : everyKey (certRow 7 tree7) tree8a = true := splitCheck (by decide +kernel) ok_tree8aa ok_tree8ab
 def tree8baaaaa : BinaryTree (List W) := (.node [we,wan,wv,wc,wa,wb,wg,wh] (.node [we,wfm,wd,wf,wc,wa,wb,wg,wh] (.node [we,weZ,wd,wf,wc,wa,wb,wg,wh] (.node [we,wl,wd,we5,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wan,wf,wv,wc,wa,wb,wg,wh] (.node [we,wan,wd,wv,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wfy,wd,wf,wc,wa,wb,wg,wh] (.node [we,wfD,wd,wf,wc,wa,wb,wg,wh] (.node [we,wgN,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wat,wu,wf,wc,wa,wb,wg,wh] (.node [we,whv,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baaaaa : everyKey (certRow 7 tree7) tree8baaaaa = true := by decide +kernel
 def tree8baaaab : BinaryTree (List W) := (.node [we,wgY,wd,wf,wc,wa,wb,wg,wh] (.node [we,wfR,wd,wf,wc,wa,wb,wg,wh] (.node [we,wat,wf,wc,wa,wj,wb,wg,wh] (.node [we,wat,wf,wc,wq,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wav,wd,wf,wc,wa,wb,wg,wh] (.node [we,wfA,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wfl,wd,wf,wc,wa,wb,wg,wh] (.node [we,wd2,wd,wf,wc,wa,wb,wg,wh] (.node [we,wfT,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,w5,wx,wf,wc,wa,wb,wg,wh] (.node [we,wgo,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baaaab : everyKey (certRow 7 tree7) tree8baaaab = true := by decide +kernel
 def tree8baaaa : BinaryTree (List W) := .node [we,wat,wf,wv,wc,wa,wb,wg,wh] tree8baaaaa tree8baaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baaaa : everyKey (certRow 7 tree7) tree8baaaa = true := splitCheck (by decide +kernel) ok_tree8baaaaa ok_tree8baaaab
 def tree8baaaba : BinaryTree (List W) := (.node [we,wbx,wf,wc,wa,wb,wg,wh] (.node [we,wdF,wd,wf,wc,wa,wb,wg,wh] (.node [we,wdl,wd,wf,wc,wa,wb,wg,wh] (.node [we,w5,wf,wc,wa,wj,wb,wg,wh] .nil .nil) .nil) (.node [we,wbx,wd,wf,wc,wa,wb,wg,wh] (.node [we,wbU,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wx,wd,wf,wc,wa,wb,wg,wh] (.node [we,wx,wd,wf,wc,wa,wb,wg,waA] (.node [we,wfr,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wx,wu,wf,wc,wa,wb,wg,wh] (.node [we,wx,wd,wf,wc,wa,wb,wg,waz] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baaaba : everyKey (certRow 7 tree7) tree8baaaba = true := by decide +kernel
 def tree8baaabb : BinaryTree (List W) := (.node [we,wck,wd,wf,wc,wa,wb,wg,wh] (.node [we,wH,wd,wf,wc,wa,wb,wg,wh] (.node [we,wx,wf,wc,wa,wb,wg,waA,wh] (.node [we,wx,wf,wc,wa,wb,wg,waA] .nil .nil) .nil) (.node [we,wcG,wd,wf,wc,wa,wb,wg,wh] (.node [we,wH,wd,wf,wq,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wd,wf,wc,wa,wb,wg,wh] (.node [we,wbd,wf,wc,wa,wb,wg,wh] (.node [we,wbd,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wbv,wf,wc,wa,wb,wg,wh] (.node [we,wd,wbb,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baaabb : everyKey (certRow 7 tree7) tree8baaabb = true := by decide +kernel
 def tree8baaab : BinaryTree (List W) := .node [we,wx,wf,wv,wc,wa,wb,wg,wh] tree8baaaba tree8baaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baaab : everyKey (certRow 7 tree7) tree8baaab = true := splitCheck (by decide +kernel) ok_tree8baaaba ok_tree8baaabb
 def tree8baaa : BinaryTree (List W) := .node [we,w5,wd,wf,wc,wa,wb,wg,wh] tree8baaaa tree8baaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baaa : everyKey (certRow 7 tree7) tree8baaa = true := splitCheck (by decide +kernel) ok_tree8baaaa ok_tree8baaab
 def tree8baabaa : BinaryTree (List W) := (.node [we,wd,wdj,wf,wc,wa,wb,wg,wh] (.node [we,wd,wg4,wf,wc,wa,wb,wg,wh] (.node [we,wd,wci,wf,wc,wa,wb,wg,wh] (.node [we,wd,wfJ,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wfZ,wf,wc,wa,wb,wg,wh] (.node [we,wd,wcE,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wu,wf,wc,wa,wb,wg,wh] (.node [we,wd,wfj,wf,wc,wa,wb,wg,wh] (.node [we,wd,wdD,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wg9,wf,wc,wa,wb,wg,wh] (.node [we,wd,wd0,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baabaa : everyKey (certRow 7 tree7) tree8baabaa = true := by decide +kernel
 def tree8baabab : BinaryTree (List W) := (.node [we,wd,wdI,wf,wc,wa,wb,wg,wh] (.node [we,wd,waJ,wf,wc,wa,wb,wg,wh] (.node [we,wd,we2,wf,wc,wa,wb,wg,wh] (.node [we,wd,whp,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wdo,wf,wc,wa,wb,wg,wh] (.node [we,wd,wgs,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,waC,wf,wc,wa,wb,wg,wh] (.node [we,wd,whz,wf,wc,wa,wb,wg,wh] (.node [we,wd,wc2,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wcJ,wf,wc,wa,wb,wg,wh] (.node [we,wd,waC,wv,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baabab : everyKey (certRow 7 tree7) tree8baabab = true := by decide +kernel
 def tree8baaba : BinaryTree (List W) := .node [we,wd,weI,wf,wc,wa,wb,wg,wh] tree8baabaa tree8baabab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baaba : everyKey (certRow 7 tree7) tree8baaba = true := splitCheck (by decide +kernel) ok_tree8baabaa ok_tree8baabab
 def tree8baabba : BinaryTree (List W) := (.node [we,wd,wbh,wc,wa,wb,wg,wh] (.node [we,wd,wL,wc,wa,wb,wg,wh] (.node [we,wd,wL,wf,wc,wa,wb,wg,wh] (.node [we,wd,waN,wv,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wbh,wf,wc,wa,wb,wg,wh] (.node [we,wd,wbB,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wbf,wc,wa,wb,wg,wh] (.node [we,wd,wf,wJ,wc,wa,wb,wg,wh] (.node [we,wd,wf,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wbz,wc,wa,wb,wg,wh] (.node [we,wd,wf,wcH,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baabba : everyKey (certRow 7 tree7) tree8baabba = true := by decide +kernel
 def tree8baabbb : BinaryTree (List W) := (.node [we,wd,wf,wgd,wc,wa,wb,wg,wh] (.node [we,wd,wf,w7,wc,wa,wb,wg,wh] (.node [we,wd,wf,wdH,wc,wa,wb,wg,wh] (.node [we,wd,wf,wdn,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,we5,wc,wa,wb,wg,wh] (.node [we,wd,wf,wen,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wf5,wc,wa,wb,wg,wh] (.node [we,wd,wf,wf2,wc,wa,wb,wg,wh] (.node [we,wd,wf,wgf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wfn,wc,wa,wb,wg,wh] (.node [we,wd,wf,wgl,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baabbb : everyKey (certRow 7 tree7) tree8baabbb = true := by decide +kernel
 def tree8baabb : BinaryTree (List W) := .node [we,wd,wf,wc0,wc,wa,wb,wg,wh] tree8baabba tree8baabbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baabb : everyKey (certRow 7 tree7) tree8baabb = true := splitCheck (by decide +kernel) ok_tree8baabba ok_tree8baabbb
 def tree8baab : BinaryTree (List W) := .node [we,wd,wcJ,wc,wa,wb,wg,wh] tree8baaba tree8baabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baab : everyKey (certRow 7 tree7) tree8baab = true := splitCheck (by decide +kernel) ok_tree8baaba ok_tree8baabb
 def tree8baa : BinaryTree (List W) := .node [we,wd,wbS,wf,wc,wa,wb,wg,wh] tree8baaa tree8baab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baa : everyKey (certRow 7 tree7) tree8baa = true := splitCheck (by decide +kernel) ok_tree8baaa ok_tree8baab
 def tree8babaaa : BinaryTree (List W) := (.node [we,wd,wf,wgw,wc,wa,wb,wg,wh] (.node [we,wd,wf,whd,wc,wa,wb,wg,wh] (.node [we,wd,wf,wa5,wc,wa,wn,wg,wh] (.node [we,wd,wf,wfE,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,waP,wa,wb,wn,wg,wh] (.node [we,wd,wf,waP,wr,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wgu,wc,wa,wb,wg,wh] (.node [we,wd,wf,whc,wc,wa,wb,wg,wh] (.node [we,wd,wf,wgS,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wgQ,wc,wa,wb,wg,wh] (.node [we,wd,wf,whB,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8babaaa : everyKey (certRow 7 tree7) tree8babaaa = true := by decide +kernel
 def tree8babaab : BinaryTree (List W) := (.node [we,wd,wf,waD,wa,wb,wn,wg,wh] (.node [we,wd,wf,wgG,wc,wa,wb,wg,wh] (.node [we,wd,wf,wg2,wc,wa,wb,wg,wh] (.node [we,wd,wf,waW,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,waD,wc,wa,wb,wg,wh] (.node [we,wd,wf,wf6,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wfK,wc,wa,wb,wg,wh] (.node [we,wd,wf,wgt,wc,wa,wb,wg,wh] (.node [we,wd,wf,wd5,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wdM,wc,wa,wb,wg,wh] (.node [we,wd,wf,wab,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8babaab : everyKey (certRow 7 tree7) tree8babaab = true := by decide +kernel
 def tree8babaa : BinaryTree (List W) := .node [we,wd,wf,whl,wc,wa,wb,wg,wh] tree8babaaa tree8babaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8babaa : everyKey (certRow 7 tree7) tree8babaa = true := splitCheck (by decide +kernel) ok_tree8babaaa ok_tree8babaab
 def tree8bababa : BinaryTree (List W) := (.node [we,wd,wf,waR,wc,wa,wn,wg,wh] (.node [we,wd,wf,wbY,wc,wa,wb,wg,wh] (.node [we,wd,wf,weN,wc,wa,wb,wg,wh] (.node [we,wd,wf,wfa,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,waR,wc,wa,wb,wg,wh] (.node [we,wd,wf,waV,wr,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wes,wc,wa,wb,wg,wh] (.node [we,wd,wf,wc5,wc,wa,wb,wg,wh] (.node [we,wd,wf,wM,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wbE,wc,wa,wb,wg,wh] (.node [we,wd,wf,wfs,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bababa : everyKey (certRow 7 tree7) tree8bababa = true := by decide +kernel
 def tree8bababb : BinaryTree (List W) := (.node [we,wd,wf,wc,wgA,wa,wb,wg,wh] (.node [we,wd,wf,wc,wgp,wa,wb,wg,wh] (.node [we,wd,wf,wc,wbW,wa,wb,wg,wh] (.node [we,wd,wf,wc,wbC,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wc3,wa,wb,wg,wh] (.node [we,wd,wf,wc,wg0,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,wgE,wa,wb,wh] (.node [we,wd,wf,wc,wgE,wa,wb,wg,wh] (.node [we,wd,wf,wc,wgE,wr,wa,wb,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wdK,wa,wb,wg,wh] (.node [we,wd,wf,wc,wdp,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bababb : everyKey (certRow 7 tree7) tree8bababb = true := by decide +kernel
 def tree8babab : BinaryTree (List W) := .node [we,wd,wf,wc,wc,wa,wb,wg,wh] tree8bababa tree8bababb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8babab : everyKey (certRow 7 tree7) tree8babab = true := splitCheck (by decide +kernel) ok_tree8bababa ok_tree8bababb
 def tree8baba : BinaryTree (List W) := .node [we,wd,wf,wdr,wc,wa,wb,wg,wh] tree8babaa tree8babab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8baba : everyKey (certRow 7 tree7) tree8baba = true := splitCheck (by decide +kernel) ok_tree8babaa ok_tree8babab
 def tree8babbaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wgW,wa,wb,wg,wh] (.node [we,wd,wf,wc,weq,wa,wb,wg,wh] (.node [we,wd,wf,wc,wgP,wa,wb,wg,wh] (.node [we,wd,wf,wc,wd3,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,we8,wa,wb,wg,wh] (.node [we,wd,wf,wc,weL,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,wq,wa,wb,wg,wh] (.node [we,wd,wf,wc,wfq,wa,wb,wg,wh] (.node [we,wd,wf,wc,wgM,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wgr,wa,wb,wg,wh] (.node [we,wd,wf,wc,wfI,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8babbaa : everyKey (certRow 7 tree7) tree8babbaa = true := by decide +kernel
 def tree8babbab : BinaryTree (List W) := (.node [we,wd,wf,wc,waQ,wj,wb,wg,wh] (.node [we,wd,wf,wc,wgT,wa,wb,wg,wh] (.node [we,wd,wf,wc,whj,wa,wb,wg,wh] (.node [we,wd,wf,wc,whH,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wgx,wa,wb,wg,wh] (.node [we,wd,wf,wc,whD,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,whn,wa,wb,wg,wh] (.node [we,wd,wf,wc,wa1,wa,wb,wg,wh] (.node [we,wd,wf,wc,whe,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,waG,wa,wb,wg,wh] (.node [we,wd,wf,wc,wga,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8babbab : everyKey (certRow 7 tree7) tree8babbab = true := by decide +kernel
 def tree8babba : BinaryTree (List W) := .node [we,wd,wf,wc,wf4,wa,wb,wg,wh] tree8babbaa tree8babbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8babba : everyKey (certRow 7 tree7) tree8babba = true := splitCheck (by decide +kernel) ok_tree8babbaa ok_tree8babbab
 def tree8babbba : BinaryTree (List W) := (.node [we,wd,wf,wc,wcN,wa,wb,wg,wh] (.node [we,wd,wf,wc,wfv,wa,wb,wg,wh] (.node [we,wd,wf,wc,war,wa,wb,wg,wh] (.node [we,wd,wf,wc,wfO,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wc9,wa,wb,wg,wh] (.node [we,wd,wf,wc,wd9,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,wdQ,wa,wb,wg,wh] (.node [we,wd,wf,wc,wb2,wa,wb,wg,wh] (.node [we,wd,wf,wc,wco,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wQ,wb,wg,wh] (.node [we,wd,wf,wc,wQ,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8babbba : everyKey (certRow 7 tree7) tree8babbba = true := by decide +kernel
 def tree8babbbb : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wbj,wb,wg,wh] (.node [we,wd,wf,wc,wbI,wa,wb,wg,wh] (.node [we,wd,wf,wc,wdv,wa,wb,wg,wh] (.node [we,wd,wf,wc,wbl,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wO,wb,wg,wh] (.node [we,wd,wf,wc,wa,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,wa,wcm,wb,wg,wh] (.node [we,wd,wf,wc,wa,wb0,wb,wg,wh] (.node [we,wd,wf,wc,wa,wbG,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wc7,wb,wg,wh] (.node [we,wd,wf,wc,wa,wcL,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8babbbb : everyKey (certRow 7 tree7) tree8babbbb = true := by decide +kernel
 def tree8babbb : BinaryTree (List W) := .node [we,wd,wf,wc,wbl,wa,wb,wg,wh] tree8babbba tree8babbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8babbb : everyKey (certRow 7 tree7) tree8babbb = true := splitCheck (by decide +kernel) ok_tree8babbba ok_tree8babbbb
 def tree8babb : BinaryTree (List W) := .node [we,wd,wf,wc,whb,wa,wb,wg,wh] tree8babba tree8babbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8babb : everyKey (certRow 7 tree7) tree8babb = true := splitCheck (by decide +kernel) ok_tree8babba ok_tree8babbb
 def tree8bab : BinaryTree (List W) := .node [we,wd,wf,wc,wr,wa,wb,wg,wh] tree8baba tree8babb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bab : everyKey (certRow 7 tree7) tree8bab = true := splitCheck (by decide +kernel) ok_tree8baba ok_tree8babb
 def tree8ba : BinaryTree (List W) := .node [we,wd,wf,wv,wc,wa,wb,wg,wh] tree8baa tree8bab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8ba : everyKey (certRow 7 tree7) tree8ba = true := splitCheck (by decide +kernel) ok_tree8baa ok_tree8bab
 def tree8bbaaaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wj,wb,wg,wh] (.node [we,wd,wf,wc,wa,whh,wb,wg,wh] (.node [we,wd,wf,wc,wa,wd7,wb,wg,wh] (.node [we,wd,wf,wc,wa,wdO,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wft,wb,wg,wh] (.node [we,wd,wf,wc,wa,wg8,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,wa,wgv,wb,wg,wh] (.node [we,wd,wf,wc,wa,wf8,wb,wg,wh] (.node [we,wd,wf,wc,wa,wfM,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,whI,wb,wg,wh] (.node [we,wd,wf,wc,wa,wgR,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbaaaa : everyKey (certRow 7 tree7) tree8bbaaaa = true := by decide +kernel
 def tree8bbaaab : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wau,wn,wg,wh] (.node [we,wd,wf,wc,wa,wge,wb,wg,wh] (.node [we,wd,wf,wc,wa,wfS,wb,wg,wh] (.node [we,wd,wf,wc,wa,whF,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,whi,wb,wg,wh] (.node [we,wd,wf,wc,wa,wgX,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,wa,wag,wb,wg,wh] (.node [we,wd,wf,wc,wa,wgB,wb,wg,wh] (.node [we,wd,wf,wc,wa,wfz,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wdT,wb,wg,wh] (.node [we,wd,wf,wc,wa,wb5,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbaaab : everyKey (certRow 7 tree7) tree8bbaaab = true := by decide +kernel
 def tree8bbaaa : BinaryTree (List W) := .node [we,wd,wf,wc,wa,whM,wb,wg,wh] tree8bbaaaa tree8bbaaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbaaa : everyKey (certRow 7 tree7) tree8bbaaa = true := splitCheck (by decide +kernel) ok_tree8bbaaaa ok_tree8bbaaab
 def tree8bbaaba : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wew,wb,wg,wh] (.node [we,wd,wf,wc,wa,wed,wb,wg,wh] (.node [we,wd,wf,wc,wa,waS,wb,wg,wh] (.node [we,wd,wf,wc,wa,wdd,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,weR,wb,wg,wh] (.node [we,wd,wf,wc,wa,wfe,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,wa,wU,wg,wh] (.node [we,wd,wf,wc,wa,wU,wb,wg,wh] (.node [we,wd,wf,wc,wa,wcQ,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wb,wg,wh] (.node [we,wd,wf,wc,wa,wcr,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbaaba : everyKey (certRow 7 tree7) tree8bbaaba = true := by decide +kernel
 def tree8bbaabb : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wdR,wg,wh] (.node [we,wd,wf,wc,wa,wb,wcO,wg,wh] (.node [we,wd,wf,wc,wa,wb,wcp,wg,wh] (.node [we,wd,wf,wc,wa,wb,wb3,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wdw,wg,wh] (.node [we,wd,wf,wc,wa,wb,wdb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,wa,wb,weP,wg,wh] (.node [we,wd,wf,wc,wa,wb,weu,wg,wh] (.node [we,wd,wf,wc,wa,wb,web,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wfx,wg,wh] (.node [we,wd,wf,wc,wa,wb,wfc,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbaabb : everyKey (certRow 7 tree7) tree8bbaabb = true := by decide +kernel
 def tree8bbaab : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wS,wg,wh] tree8bbaaba tree8bbaabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbaab : everyKey (certRow 7 tree7) tree8bbaab = true := splitCheck (by decide +kernel) ok_tree8bbaaba ok_tree8bbaabb
 def tree8bbaa : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wdy,wb,wg,wh] tree8bbaaa tree8bbaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbaa : everyKey (certRow 7 tree7) tree8bbaa = true := splitCheck (by decide +kernel) ok_tree8bbaaa ok_tree8bbaab
 def tree8bbabaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wht,wg,wh] (.node [we,wd,wf,wc,wa,wb,whJ,wg,wh] (.node [we,wd,wf,wc,wa,wb,whE,wg,wh] (.node [we,wd,wf,wc,wa,wb,wgc,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,whA,wg,wh] (.node [we,wd,wf,wc,wa,wb,whw,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,wa,wb,wgV,wg,wh] (.node [we,wd,wf,wc,wa,wb,wgz,wg,wh] (.node [we,wd,wf,wc,wa,wb,wn,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,whm,wg,wh] (.node [we,wd,wf,wc,wa,wb,why,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbabaa : everyKey (certRow 7 tree7) tree8bbabaa = true := by decide +kernel
 def tree8bbabab : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wfC,wg,wh] (.node [we,wd,wf,wc,wa,wb,wgi,wg,wh] (.node [we,wd,wf,wc,wa,wb,whC,wg,wh] (.node [we,wd,wf,wc,wa,wb,whg,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg1,wg,wh] (.node [we,wd,wf,wc,wa,wb,wfW,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,wa,wb,wez,wg,wh] (.node [we,wd,wf,wc,wa,wb,weU,wg,wh] (.node [we,wd,wf,wc,wa,wb,wfi,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wgF,wg,wh] (.node [we,wd,wf,wc,wa,wb,wez,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbabab : everyKey (certRow 7 tree7) tree8bbabab = true := by decide +kernel
 def tree8bbaba : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,whq,wg,wh] tree8bbabaa tree8bbabab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbaba : everyKey (certRow 7 tree7) tree8bbaba = true := splitCheck (by decide +kernel) ok_tree8bbabaa ok_tree8bbabab
 def tree8bbabba : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wcv,wg,wh] (.node [we,wd,wf,wc,wa,wb,wbp,wh] (.node [we,wd,wf,wc,wa,wb,wbp,wg,wh] (.node [we,wd,wf,wc,wa,wb,wbM,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wcU,wg,wh] (.node [we,wd,wf,wc,wa,wb,wdC,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,wa,wb,wg,wg,wh] (.node [we,wd,wf,wc,wa,wb,wY,wh] (.node [we,wd,wf,wc,wa,wb,wY,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wW,wh] (.node [we,wd,wf,wc,wa,wb,wg,wbn,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbabba : everyKey (certRow 7 tree7) tree8bbabba = true := by decide +kernel
 def tree8bbabbb : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wg,wcS,wh] (.node [we,wd,wf,wc,wa,wb,wg,weT,wh] (.node [we,wd,wf,wc,wa,wb,wg,wey,wh] (.node [we,wd,wf,wc,wa,wb,wg,wb7,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wct,wh] (.node [we,wd,wf,wc,wa,wb,wg,wfg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,wa,wb,wg,wdA,wh] (.node [we,wd,wf,wc,wa,wb,wg,waw,wh] (.node [we,wd,wf,wc,wa,wb,wg,wfB,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wfU,wh] (.node [we,wd,wf,wc,wa,wb,wg,wai,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbabbb : everyKey (certRow 7 tree7) tree8bbabbb = true := by decide +kernel
 def tree8bbabb : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wg,wbK,wh] tree8bbabba tree8bbabbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbabb : everyKey (certRow 7 tree7) tree8bbabb = true := splitCheck (by decide +kernel) ok_tree8bbabba ok_tree8bbabbb
 def tree8bbab : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wb9,wg,wh] tree8bbaba tree8bbabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbab : everyKey (certRow 7 tree7) tree8bbab = true := splitCheck (by decide +kernel) ok_tree8bbaba ok_tree8bbabb
 def tree8bba : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wfQ,wg,wh] tree8bbaa tree8bbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bba : everyKey (certRow 7 tree7) tree8bba = true := splitCheck (by decide +kernel) ok_tree8bbaa ok_tree8bbab
 def tree8bbbaaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wg,wgD,wh] (.node [we,wd,wf,wc,wa,wb,wg,wg5,wh] (.node [we,wd,wf,wc,wa,wb,wg,wgJ,wh] (.node [we,wd,wf,wc,wa,wb,wg,wgg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wgZ,wh] (.node [we,wd,wf,wc,wa,wb,wg,whk,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,wa,wb,wg,wf0,wh] (.node [we,wd,wf,wc,wa,wb,wg,wgm,wh] (.node [we,wd,wf,wc,wa,wb,wg,whG,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wbQ,wh] (.node [we,wd,wf,wc,wa,wb,wg,wcd,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbbaaa : everyKey (certRow 7 tree7) tree8bbbaaa = true := by decide +kernel
 def tree8bbbaab : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wg,wdW,wh] (.node [we,wd,wf,wc,wa,wb,wg,weD,wh] (.node [we,wd,wf,wc,wa,wb,wg,weY,wh] (.node [we,wd,wf,wc,wa,wb,wg,wbt,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wcz,wh] (.node [we,wd,wf,wc,wa,wb,wg,weh,wh] .nil .nil) .nil)) (.node [we,wd,wf,wc,wa,wb,wg,w2,wh] (.node [we,wd,wf,wc,wa,wb,wg,w2] (.node [we,wd,wf,wc,wa,wb,wg,wdh,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wh,wh] (.node [we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbbaab : everyKey (certRow 7 tree7) tree8bbbaab = true := by decide +kernel
 def tree8bbbaa : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wg,wbt] tree8bbbaaa tree8bbbaab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbbaa : everyKey (certRow 7 tree7) tree8bbbaa = true := splitCheck (by decide +kernel) ok_tree8bbbaaa ok_tree8bbbaab
 def tree8bbbaba : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wg,wh,wdf] (.node [we,wd,wf,wc,wa,wb,wg,wh,wcb] (.node [we,wd,wf,wc,wa,wb,wg,wh,wbO] (.node [we,wd,wf,wc,wa,wb,wg,wh,w0] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wh,waX] (.node [we,wd,wf,wc,wa,wb,wg,wh,wcx] .nil .nil) .nil)) (.node [we,wd,wf,wc,wa,wb,wg,wh,wgH] (.node [we,wd,wf,wc,wa,wb,wg,wh,wal] (.node [we,wd,wf,wc,wa,wb,wg,wh,wdV] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wh,whK] (.node [we,wd,wf,wc,wa,wb,wg,wh,wef] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbbaba : everyKey (certRow 7 tree7) tree8bbbaba = true := by decide +kernel
 def tree8bbbabb : BinaryTree (List W) := (.node [we,wd,wf,wc,wa,wb,wg,wh,who] (.node [we,wd,wf,wc,wa,wb,wg,wh,waz] (.node [we,wd,wf,wc,wa,wb,wg,wh,wa2] (.node [we,wd,wf,wc,wa,wb,wg,wh,weW] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wg,wh,wfY] (.node [we,wd,wf,wc,wa,wb,wg,wh,wg3] .nil .nil) .nil)) (.node [we,wd,wf,wc,wa,wb,wg,w0] (.node [we,wd,wf,wc,wa,wb,wg,wbr] (.node [we,wd,wf,wc,wa,wb,wg,wh,wgk] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wW,wh] (.node [we,wd,wf,wc,wa,wb,wbn,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbbabb : everyKey (certRow 7 tree7) tree8bbbabb = true := by decide +kernel
 def tree8bbbab : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wg,wh,weB] tree8bbbaba tree8bbbabb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbbab : everyKey (certRow 7 tree7) tree8bbbab = true := splitCheck (by decide +kernel) ok_tree8bbbaba ok_tree8bbbabb
 def tree8bbba : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wg,wh,wbr] tree8bbbaa tree8bbbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbba : everyKey (certRow 7 tree7) tree8bbba = true := splitCheck (by decide +kernel) ok_tree8bbbaa ok_tree8bbbab
 def tree8bbbbaa : BinaryTree (List W) := (.node [we,wd,wf,wc,wj,waO,wb,wg,wh] (.node [we,wd,wf,wc,wa,wn,wg,wa4,wh] (.node [we,wd,wf,wc,wa,was,wn,wg,wh] (.node [we,wd,wf,wc,wa,wS,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wbj,wb,wg,wh] (.node [we,wd,wf,wc,wO,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wf,wr,wa,wb,wg,waU,wh] (.node [we,wd,wf,wr,wa,waO,wb,wg,wh] (.node [we,wd,wf,wc,wj,wb,wg,wh,wa2] .nil .nil) .nil) (.node [we,wd,wf,wq,wa,wb,wg,wh,waX] (.node [we,wd,wf,wr,wa,wb,wg,wh,waX] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbbbaa : everyKey (certRow 7 tree7) tree8bbbbaa = true := by decide +kernel
 def tree8bbbbab : BinaryTree (List W) := (.node [we,wd,wen,wc,wa,wb,wg,wh] (.node [we,wd,wJ,wc,wa,wb,wg,wh] (.node [we,wd,wf,wa,waS,wb,wn,wg,wh] (.node [we,wd,wf,wa,waO,wb,wn,wg,wh] .nil .nil) .nil) (.node [we,wd,wcH,wc,wa,wb,wg,wh] (.node [we,wd,wbf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [we,wd,wv,wc,wa,waE,wb,wg,wh] (.node [we,wd,wv,wc,waB,wa,wb,wg,wh] (.node [we,wd,we5,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wv,wc,wa,wb,wg,wh,waM] (.node [we,wd,wv,wc,wa,waI,wb,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbbbab : everyKey (certRow 7 tree7) tree8bbbbab = true := by decide +kernel
 def tree8bbbba : BinaryTree (List W) := .node [we,wd,wf,waB,wa,wb,wn,wg,wh] tree8bbbbaa tree8bbbbab
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbbba : everyKey (certRow 7 tree7) tree8bbbba = true := splitCheck (by decide +kernel) ok_tree8bbbbaa ok_tree8bbbbab
 def tree8bbbbba : BinaryTree (List W) := (.node [we,wu,wf,wc,wa,wb,wg,wh,waz] (.node [we,wu,wf,wc,wa,wj,wb,wg,wh] (.node [we,wu,wf,wM,wc,wa,wb,wg,wh] (.node [we,wbv,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wu,wf,wc,wa,wb,wg,waw,wh] (.node [we,wu,wf,wc,wa,wb,was,wg,wh] .nil .nil) .nil)) (.node [we,wf,wv,wc,wa,wb,wg,waw,wh] (.node [we,wf,wv,wc,wa,wb,was,wg,wh] (.node [we,wf,wv,wM,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wf,wM,wc,wq,wa,wb,wg,wh] (.node [we,wf,wv,wc,wa,wb,wg,wh,waz] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbbbba : everyKey (certRow 7 tree7) tree8bbbbba = true := by decide +kernel
 def tree8bbbbbb : BinaryTree (List W) := (.node [w5,wd,wu,wf,wc,wa,wb,wg,wh] (.node [we,wf,wc,wa,wj,wb,was,wg,wh] (.node [we,wf,wc,war,wa,wj,wb,wg,wh] (.node [we,wf,wc,wq,wa,wb,wg,waw,wh] .nil .nil) .nil) (.node [wa8,wd,wf,wc,wa,wb,wg,wh] (.node [wD,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wd,wf,wab,wc,wr,wa,wb,wg,wh] (.node [wd,wu,wf,wc,wa,wb,wg,wh,wal] (.node [wd,wu,wf,wc,wr,wa,wb,wg,wh] .nil .nil) .nil) (.node [wd,wf,wc,wr,wa,wb,wg,wai,wh] (.node [wd,wf,wc,wr,wa,wb,wae,wg,wh] .nil .nil) .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbbbbb : everyKey (certRow 7 tree7) tree8bbbbbb = true := by decide +kernel
 def tree8bbbbb : BinaryTree (List W) := .node [we,wf,wc,wq,wa,wb,was,wg,wh] tree8bbbbba tree8bbbbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbbbb : everyKey (certRow 7 tree7) tree8bbbbb = true := splitCheck (by decide +kernel) ok_tree8bbbbba ok_tree8bbbbbb
 def tree8bbbb : BinaryTree (List W) := .node [we,wbb,wf,wc,wa,wb,wg,wh] tree8bbbba tree8bbbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbbb : everyKey (certRow 7 tree7) tree8bbbb = true := splitCheck (by decide +kernel) ok_tree8bbbba ok_tree8bbbbb
 def tree8bbb : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wey,wh] tree8bbba tree8bbbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bbb : everyKey (certRow 7 tree7) tree8bbb = true := splitCheck (by decide +kernel) ok_tree8bbba ok_tree8bbbb
 def tree8bb : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wb,wg,waK,wh] tree8bba tree8bbb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8bb : everyKey (certRow 7 tree7) tree8bb = true := splitCheck (by decide +kernel) ok_tree8bba ok_tree8bbb
 def tree8b : BinaryTree (List W) := .node [we,wd,wf,wc,wa,wdt,wb,wg,wh] tree8ba tree8bb
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8b : everyKey (certRow 7 tree7) tree8b = true := splitCheck (by decide +kernel) ok_tree8ba ok_tree8bb
 def tree8 : BinaryTree (List W) := .node [we,wl,wd,wf,wc,wb,wa3,wg,wh] tree8a tree8b
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree8 : everyKey (certRow 7 tree7) tree8 = true := splitCheck (by decide +kernel) ok_tree8a ok_tree8b
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem closed8 : Closed 8 tree8 := checkedLayer 7 (by decide) _ _ closed7 ok_tree8
 def tree9a : BinaryTree (List W) := (.node [wt,we,wd,wf,wc,wa,wb,wg,wh] (.node [wo,we,wd,wf,wc,wa,wb,wg,wh] (.node [wm,we,wd,wf,wc,wa,wb,wg,wh] (.node [wp,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [ws,we,wd,wf,wc,wa,wb,wg,wh] (.node [wy,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil)) (.node [wz,we,wd,wf,wc,wa,wb,wg,wh] (.node [wA,we,wd,wf,wc,wa,wb,wg,wh] (.node [ww,we,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wB,wd,wf,wc,wa,wb,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree9a : everyKey (certRow 8 tree8) tree9a = true := by decide +kernel
 def tree9b : BinaryTree (List W) := (.node [we,wd,wf,wv,wc,wa,wb,wg,wh] (.node [we,wx,wd,wf,wc,wa,wb,wg,wh] (.node [we,wl,wd,wf,wc,wa,wb,wg,wh] (.node [we,wk,wd,wf,wc,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wu,wf,wc,wa,wb,wg,wh] .nil .nil)) (.node [we,wd,wf,wc,wa,wj,wb,wg,wh] (.node [we,wd,wf,wc,wq,wa,wb,wg,wh] (.node [we,wd,wf,wc,wr,wa,wb,wg,wh] .nil .nil) .nil) (.node [we,wd,wf,wc,wa,wb,wn,wg,wh] .nil .nil)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree9b : everyKey (certRow 8 tree8) tree9b = true := by decide +kernel
 def tree9 : BinaryTree (List W) := .node [we,wi,wd,wf,wc,wa,wb,wg,wh] tree9a tree9b
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem ok_tree9 : everyKey (certRow 8 tree8) tree9 = true := splitCheck (by decide +kernel) ok_tree9a ok_tree9b
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem closed9 : Closed 9 tree9 := checkedLayer 8 (by decide) _ _ closed8 ok_tree9
 
 
-set_option maxRecDepth 8000
-set_option maxHeartbeats 0
 def orbitRep0 : List W := [0x4200022001110010804844011100089240, 0x7ffe00000fffffc000004210844224444222497ffe80808fffffc10402, 0xff00fff007c01fc000ff8003ff000210842211ff00fff007c81fc440ff9003ff240, 0xffff000007ffffffff00000000000842108844ffff400807ffffffff20008100010, 0x3ff00000000000003e003fe0007c0000fe01087ff10022221112493e04bfe0117c4089fe8, 0x7c3e0078f0f00780e0001e3e1c0000003cf030fc3e00f8f0f00f81e0423e3e1c0884247cf07, 0xf80000f800000f80f0000000000f803e3c001cf84021f881111f88f2084424225f80be3c413d, 0xfffc00000fffffffff80000000000000000000fffe10000fffffffffa1080108042210800880, 0xfffffffff00000000000000000000000000000fffffffff88888440042111211284421222000]
 def orbitRep1 : List W := [0x10002110000001002000400022010084080128, 0x7ffe00000fffffc000004210844224444222497ffe80808fffffc10402, 0xff00fff007c01fc000ff8003ff000210842211ff00fff007c81fc440ff9003ff240, 0xffff000007ffffffff00000000000842108844ffff400807ffffffff20008100010, 0x3ff00000000000003e003fe0007c0000fe01087ff10022221112493e04bfe0117c4089fe8, 0x7c3e0078f0f00780e0001e3e1c0000003cf030fc3e00f8f0f00f81e0423e3e1c0884247cf07, 0xf80000f800000f80f0000000000f803e3c001cf84021f881111f88f2084424225f80be3c413d, 0xfffc00000fffffffff80000000000000000000fffe10000fffffffffa1080108042210800880, 0xfffffffff00000000000000000000000000000fffffffff88888440042111211284421222000]
 def orbitRep2 : List W := [0xf803e000000400000400000020040084400000f80be000000, 0x7ffe00000fffffc000004210844224444222497ffe80808fffffc10402, 0xff00fff007c01fc000ff8003ff000210842211ff00fff007c81fc440ff9003ff240, 0xffff000007ffffffff00000000000842108844ffff400807ffffffff20008100010, 0x3ff00000000000003e003fe0007c0000fe01087ff10022221112493e04bfe0117c4089fe8, 0x7c3e0078f0f00780e0001e3e1c0000003cf030fc3e00f8f0f00f81e0423e3e1c0884247cf07, 0xf80000f800000f80f0000000000f803e3c001cf84021f881111f88f2084424225f80be3c413d, 0xfffc00000fffffffff80000000000000000000fffe10000fffffffffa1080108042210800880, 0xfffffffff00000000000000000000000000000fffffffff88888440042111211284421222000]
@@ -6867,9 +7721,13 @@ def orbitRep17 : List W := [0x7ffe00000fffffc000004210844224444222497ffe80808fff
 def orbitRep18 : List W := [0x7ffe00000fffffc000004210844224444222497ffe80808fffffc10402, 0xff00fff007c01fc000ff8003ff000210842211ff00fff007c81fc440ff9003ff240, 0xffff000007ffffffff00000000000842108844ffff400807ffffffff20008100010, 0x3ff00000000000003e003fe0007c0000fe01087ff10022221112493e04bfe0117c4089fe8, 0x7c3e0078f0f00780e0001e3e1c0000003cf030fc3e00f8f0f00f81e0423e3e1c0884247cf07, 0x7c3e0078fff0fff0e7c01ffe1cff8003fff032fcbe22f9fff0fff1e7ca3ffe5cff9427fff47, 0xf80000f800000f80f0000000000f803e3c001cf84021f881111f88f2084424225f80be3c413d, 0xfffc00000fffffffff80000000000000000000fffe10000fffffffffa1080108042210800880, 0xfffffffff00000000000000000000000000000fffffffff88888440042111211284421222000]
 def orbitRep19 : List W := [0x7ffe00000fffffc000004210844224444222497ffe80808fffffc10402, 0xff00fff007c01fc000ff8003ff000210842211ff00fff007c81fc440ff9003ff240, 0xffff000007ffffffff00000000000842108844ffff400807ffffffff20008100010, 0x3ff00000000000003e003fe0007c0000fe01087ff10022221112493e04bfe0117c4089fe8, 0x7c3e0078f0f00780e0001e3e1c0000003cf030fc3e00f8f0f00f81e0423e3e1c0884247cf07, 0xf80000f800000f80f0000000000f803e3c001cf84021f881111f88f2084424225f80be3c413d, 0xf803fff800000f80f003e003fe0f87fe3c0ffcf8c7fff883333f99f69be46ffe5f97fe3cdffd, 0xfffc00000fffffffff80000000000000000000fffe10000fffffffffa1080108042210800880, 0xfffffffff00000000000000000000000000000fffffffff88888440042111211284421222000]
 def orbitTree : BinaryTree (List W) := (.node orbitRep10 (.node orbitRep5 (.node orbitRep2 (.node orbitRep1 (.node orbitRep0 .nil .nil) .nil) (.node orbitRep4 (.node orbitRep3 .nil .nil) .nil)) (.node orbitRep8 (.node orbitRep7 (.node orbitRep6 .nil .nil) .nil) (.node orbitRep9 .nil .nil))) (.node orbitRep15 (.node orbitRep13 (.node orbitRep12 (.node orbitRep11 .nil .nil) .nil) (.node orbitRep14 .nil .nil)) (.node orbitRep18 (.node orbitRep17 (.node orbitRep16 .nil .nil) .nil) (.node orbitRep19 .nil .nil))))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def orbitHash : List W → Nat
   | [] => 0
   | w :: t => ((w.toNat % 65521 + 1) ^ 3) % 65521 + orbitHash t
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def proposed (j : Nat) : Fin 8 :=
   match j with
   | 144 => 3
@@ -6965,11 +7823,19 @@ def proposed (j : Nat) : Fin 8 :=
   | 12742 => 7
   | 10146 => 4
   | _ => 0
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def sourceWord (j : Nat) : W := ins.getD (j % 8) 0
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def rotatedIndex (i : Fin 8) : Nat := ![0xfac688, 0x5717e0, 0x977053, 0x3aa13b, 0x8c7c8d, 0x2c2be6, 0xe1ca56, 0x419d3d] i
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def rotatedWord (i : Fin 8) (j : Nat) : W :=
-  ins.getD ((rotatedIndex i >>> (3*(j%8))) &&& 7) 0
+  ins.getD ((rotatedIndex i >>> (3 * (j % 8))) &&& 7) 0
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma rotatedWord_eq (i : Fin 8) (j : Nat) : sym i (sourceWord j) = rotatedWord i j := by
   have bits : ∀ (i a : Fin 8) (b : Fin 304), (sourceWord a.val)[(co i b).val] =
         (rotatedWord i a.val)[b.val] := by decide +kernel
@@ -6980,6 +7846,8 @@ lemma rotatedWord_eq (i : Fin 8) (j : Nat) : sym i (sourceWord j) = rotatedWord 
     exact bits i j ⟨b,hb⟩
   simpa only [sourceWord,rotatedWord,Nat.mod_mod] using hb i ⟨j % 8, Nat.mod_lt _ (by decide)⟩
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def evalCode (raw : Nat → W) (c : Nat) : W :=
   if c < 8 then raw c else
     let j := c - 8
@@ -6990,6 +7858,8 @@ def evalCode (raw : Nat → W) (c : Nat) : W :=
     | 1 => a ||| b
     | 2 => a &&& ~~~b
     | _ => b &&& ~~~a
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma evalCode_sym (i : Fin 8) (c : Nat) : sym i (evalCode sourceWord c) = evalCode (rotatedWord i) c := by
   unfold evalCode
   split
@@ -6997,6 +7867,8 @@ lemma evalCode_sym (i : Fin 8) (c : Nat) : sym i (evalCode sourceWord c) = evalC
   · dsimp only
     split <;> simp [sym_and, sym_or, sym_not, rotatedWord_eq]
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def wordCode (w : W) : Nat :=
   match w.toNat % 65521 with
   | 16243 => 84
@@ -7121,11 +7993,19 @@ def wordCode (w : W) : Nat :=
   | 23773 => 229
   | _ => 0
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def orbitKey (ws : List W) : List W :=
   let i := proposed (orbitHash ws % 16381)
   ordered (ws.map (fun w => evalCode (rotatedWord i) (wordCode w)))
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def goodCodes (ws : List W) : Bool := ws.all (fun w => evalCode sourceWord (wordCode w) == w)
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 def outsideReps (ws : List W) : Bool := !(goodCodes ws && containsKey (orbitKey ws) orbitTree)
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma orbit_sound {ys : List W} (hc : goodCodes ys = true) : orbitKey ys =
     ordered (ys.map (sym (proposed (orbitHash ys % 16381)))) := by
   apply congrArg ordered
@@ -7134,10 +8014,18 @@ lemma orbit_sound {ys : List W} (hc : goodCodes ys = true) : orbitKey ys =
   have h := beq_iff_eq.mp (List.all_eq_true.mp hc w hw)
   rw [← evalCode_sym, h]
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma firstSetCovers : (doneTest ins || descend 9 ins outsideReps) = false := by decide +kernel
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma subCover : ins.sublists.all (fun ys => !(cuts ys == -1) || ys == ins) = true := by decide +kernel
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 lemma distinctIns : ins.Nodup := by unfold ins; decide +kernel
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem lower_of_tree9 (tr : BinaryTree (List W)) (hc : Closed 9 tr)
     (hm : everyKey (fun q => containsKey q tr) orbitTree = true)
     (g : W) (hg : g = goal ∨ g = ~~~goal) : ¬ build basicOps g 10 ins.toFinset := by
@@ -7174,6 +8062,8 @@ theorem lower_of_tree9 (tr : BinaryTree (List W)) (hc : Closed 9 tr)
   have no := firstSetCovers
   cases hd : doneTest ins <;> cases ht : descend 9 ins outsideReps <;> simp [hd,ht] at hit no
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 0 in
 theorem lower (g : W) (hg : g = goal ∨ g = ~~~goal) : ¬ build basicOps g 10 ins.toFinset := lower_of_tree9 tree9 closed9 (by decide +kernel) g hg
 end H8Free
 
