@@ -1,0 +1,39 @@
+# Opens the pull request upstream for each proof branch named in generator/pr-requests.txt.
+# It runs only in this fork, when that file changes on a claude/ branch or when started by hand.
+# It needs one repository secret, UPSTREAM_PR_TOKEN: a personal access token of the fork's
+# owner that may open pull requests on public repositories.
+name: open-proof-pr
+on:
+  push:
+    branches: ['claude/**']
+    paths: ['generator/pr-requests.txt']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  open:
+    if: github.repository_owner == 'RChipson'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Open the pull requests that do not exist yet
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_PR_TOKEN }}
+          UPSTREAM: open-goat/pequalnp-proofs
+          OWNER: RChipson
+        run: |
+          set -u
+          [ -n "${GH_TOKEN:-}" ] || { echo "the secret UPSTREAM_PR_TOKEN is not set"; exit 1; }
+          fail=0
+          while read -r b; do
+            case "$b" in ''|'#'*) continue;; esac
+            echo "$b" | grep -Eq '^[LR]-[a-z]+-[0-9]+(-[0-9]+)?$' || { echo "skipped (not a step id): $b"; continue; }
+            have=$(gh api "repos/$UPSTREAM/pulls?head=$OWNER:$b&state=all" --jq length) || { fail=1; continue; }
+            if [ "$have" != 0 ]; then echo "$b: a pull request already exists"; continue; fi
+            file="lean/PEqualNP/Outside/$(echo "$b" | tr '-' '_').lean"
+            body="Gap id: $b
+          The one file this adds: $file
+          Agent used: Claude Code"
+            gh pr create --repo "$UPSTREAM" --base main --head "$OWNER:$b" --title "$b" --body "$body" || fail=1
+          done < generator/pr-requests.txt
+          exit $fail
