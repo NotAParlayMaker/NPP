@@ -1570,3 +1570,4 @@ theorem PEqualNP.Outside.L_meta_1559 : ∀ L : Fin 13 → Finset (Fin 13), (∀ 
       PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, 13 + (h : ℕ)⟩ (List.ofFn (fun v : Fin 13 => decide (v = a ∨ v = b))) = true) →
     41 + (Finset.univ.filter (fun i : Fin gates.length => j < i ∧ 13 + (j : ℕ) ∈ (gates.get i).inputs)).card ≤ gates.length :=
   PEqualNP.Outside.L_meta_1559.m59
+
