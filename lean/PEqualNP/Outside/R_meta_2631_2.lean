@@ -4,7 +4,7 @@ import PEqualNP.Defs
 -- Split by the least vertex cover against the ordinary vertices read three times, as in
 -- R_meta_2633_2: a small cover gives the four gates by the slot count and the cover circuit on
 -- the graph without one cover vertex; what is left is the case of a large cover.
-theorem PEqualNP.Outside.R_meta_2631_1
+theorem PEqualNP.Outside.R_meta_2631_2
     (h1 : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
       (A : Finset (Fin n)) (C : PEqualNP.CircuitLowerBounds.Circuit),
       have F : (Fin n → Bool) → Bool := PEqualNP.MetaComplexity.NestedCover.graphFun G A;
