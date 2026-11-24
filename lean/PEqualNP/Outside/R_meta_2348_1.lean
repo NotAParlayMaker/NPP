@@ -143,7 +143,7 @@ theorem PEqualNP.Outside.R_meta_2348_1
     rw [edgeTest, edgeTest, hAdj]
   let σ := Equiv.ofBijective (maps k) (Finite.injective_iff_bijective.mp hi)
   let τ := σ.symm
-  -- Relabel external inputs while preserving all gate wire numbers.
+  -- Relabel input wires while preserving all gate wire numbers.
   let M (ρ : Equiv.Perm (Fin 14)) (w : ℕ) : ℕ :=
     if h : w < 14 then (ρ ⟨w, h⟩).val else w
   have hMlt (ρ : Equiv.Perm (Fin 14)) (i : ℕ) : M ρ i < 14 ↔ i < 14 := by
