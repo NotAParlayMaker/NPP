@@ -1,0 +1,87 @@
+import Mathlib
+import PEqualNP.Defs
+
+namespace PEqualNP.Outside.L_meta_3027
+
+open PEqualNP.CircuitLowerBounds
+
+abbrev inc (p : Fin 3) (l : Fin 2) : Prop :=
+  ((p : ℕ), (l : ℕ)) ∈ ([(0, 0), (1, 1), (2, 0), (2, 1)] : List (ℕ × ℕ))
+
+def ckt : Circuit :=
+  ⟨[⟨GateOp.or, [0, 4]⟩, ⟨GateOp.or, [3, 1]⟩, ⟨GateOp.and, [5, 6]⟩, ⟨GateOp.or, [2, 7]⟩, ⟨GateOp.or, [0, 1]⟩,
+    ⟨GateOp.or, [3, 4]⟩, ⟨GateOp.and, [9, 10]⟩, ⟨GateOp.and, [8, 11]⟩, ⟨GateOp.and, [2, 10]⟩, ⟨GateOp.or, [12, 13]⟩], 14⟩
+
+end PEqualNP.Outside.L_meta_3027
+
+set_option synthInstance.maxSize 100000 in
+set_option synthInstance.maxHeartbeats 4000000 in
+set_option maxHeartbeats 4000000 in
+set_option maxRecDepth 100000 in
+theorem PEqualNP.Outside.L_meta_3027 :
+    ¬ (∀ (Np Nl : ℕ) (I : Fin Np → Fin Nl → Prop) [DecidableRel I] (C : PEqualNP.CircuitLowerBounds.Circuit) (c : ℕ), (∀ p p' : Fin Np, ∀ l l' : Fin Nl, p ≠ p' → l ≠ l' → ¬ (I p l ∧ I p l' ∧ I p' l ∧ I p' l')) → PEqualNP.TopForm.IsAO2 (Np + Nl) C → (∀ z : Fin (Np + Nl) → Bool, PEqualNP.MetaComplexity.circuitFun (Np + Nl) C z = decide (∃ p : Fin Np, ∃ l : Fin Nl, I p l ∧ z (Fin.castAdd Nl p) = true ∧ z (Fin.natAdd Np l) = true)) → (∀ j1 < C.gates.length, (∃ z2 : Fin (Np + Nl) → Bool, (C.wires (List.ofFn z2)).getD ((Np + Nl) + j1) false = true) ∧ ((Np + Nl) + j1 = C.output ∨ ∃ k3 < C.gates.length, (Np + Nl) + j1 ∈ (PEqualNP.MetaComplexity.NestedCover.gateAt C k3).inputs)) → (∀ j4 < C.gates.length, ((PEqualNP.MetaComplexity.NestedCover.gateAt C j4).op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ ¬ (∀ z6 : Fin (Np + Nl) → Bool, (C.wires (List.ofFn z6)).getD ((Np + Nl) + j4) false = true → ∃ p7 : Fin Np, ∃ l8 : Fin Nl, I p7 l8 ∧ z6 (Fin.castAdd Nl p7) = true ∧ z6 (Fin.natAdd Np l8) = true)) → ∀ w5 ∈ (PEqualNP.MetaComplexity.NestedCover.gateAt C j4).inputs, ¬ (∀ z9 : Fin (Np + Nl) → Bool, (C.wires (List.ofFn z9)).getD (w5) false = true → ∃ p10 : Fin Np, ∃ l11 : Fin Nl, I p10 l11 ∧ z9 (Fin.castAdd Nl p10) = true ∧ z9 (Fin.natAdd Np l11) = true)) → (∀ j12 < C.gates.length, (∀ z15 : Fin (Np + Nl) → Bool, (C.wires (List.ofFn z15)).getD ((Np + Nl) + j12) false = true → ∃ p16 : Fin Np, ∃ l17 : Fin Nl, I p16 l17 ∧ z15 (Fin.castAdd Nl p16) = true ∧ z15 (Fin.natAdd Np l17) = true) → ((PEqualNP.MetaComplexity.NestedCover.gateAt C j12).op = PEqualNP.CircuitLowerBounds.GateOp.or → ∀ w13 ∈ (PEqualNP.MetaComplexity.NestedCover.gateAt C j12).inputs, (∀ z18 : Fin (Np + Nl) → Bool, (C.wires (List.ofFn z18)).getD (w13) false = true → ∃ p19 : Fin Np, ∃ l20 : Fin Nl, I p19 l20 ∧ z18 (Fin.castAdd Nl p19) = true ∧ z18 (Fin.natAdd Np l20) = true)) ∧ ((Np + Nl) + j12 ≠ C.output → PEqualNP.MetaComplexity.NestedCover.readsIn C (Finset.range C.gates.length) ((Np + Nl) + j12) = 1 ∧ ∀ k14 < C.gates.length, (Np + Nl) + j12 ∈ (PEqualNP.MetaComplexity.NestedCover.gateAt C k14).inputs → (PEqualNP.MetaComplexity.NestedCover.gateAt C k14).op = PEqualNP.CircuitLowerBounds.GateOp.or ∧ (∀ z21 : Fin (Np + Nl) → Bool, (C.wires (List.ofFn z21)).getD ((Np + Nl) + k14) false = true → ∃ p22 : Fin Np, ∃ l23 : Fin Nl, I p22 l23 ∧ z21 (Fin.castAdd Nl p22) = true ∧ z21 (Fin.natAdd Np l23) = true))) → (∀ j24 < C.gates.length, ∀ k25 < C.gates.length, (PEqualNP.MetaComplexity.NestedCover.gateAt C j24).op = PEqualNP.CircuitLowerBounds.GateOp.and → (∀ z28 : Fin (Np + Nl) → Bool, (C.wires (List.ofFn z28)).getD ((Np + Nl) + j24) false = true → ∃ p29 : Fin Np, ∃ l30 : Fin Nl, I p29 l30 ∧ z28 (Fin.castAdd Nl p29) = true ∧ z28 (Fin.natAdd Np l30) = true) → (PEqualNP.MetaComplexity.NestedCover.gateAt C k25).op = PEqualNP.CircuitLowerBounds.GateOp.and → (∀ z31 : Fin (Np + Nl) → Bool, (C.wires (List.ofFn z31)).getD ((Np + Nl) + k25) false = true → ∃ p32 : Fin Np, ∃ l33 : Fin Nl, I p32 l33 ∧ z31 (Fin.castAdd Nl p32) = true ∧ z31 (Fin.natAdd Np l33) = true) → ((PEqualNP.MetaComplexity.NestedCover.gateAt C j24).inputs.Nodup ∧ ∀ w26 ∈ (PEqualNP.MetaComplexity.NestedCover.gateAt C j24).inputs, w26 ∈ (PEqualNP.MetaComplexity.NestedCover.gateAt C k25).inputs → j24 = k25)) → c < C.gates.length → ¬ (∀ z34 : Fin (Np + Nl) → Bool, (C.wires (List.ofFn z34)).getD ((Np + Nl) + c) false = true → ∃ p35 : Fin Np, ∃ l36 : Fin Nl, I p35 l36 ∧ z34 (Fin.castAdd Nl p35) = true ∧ z34 (Fin.natAdd Np l36) = true) → (∀ k37 < C.gates.length, ¬ PEqualNP.SplitCount.InConeOrSelf (Np + Nl) C k37 c → ∀ g38 < C.gates.length, PEqualNP.EdgeOwnership.InCone (Np + Nl) C g38 c → (Np + Nl) + g38 ∉ (PEqualNP.MetaComplexity.NestedCover.gateAt C k37).inputs) → (∃ v39 : Fin (Np + Nl), (C.wires (List.ofFn (fun i40 : Fin (Np + Nl) => decide (i40 = v39)))).getD ((Np + Nl) + c) false = true) → (∃ p41 : Fin Np, ∃ l42 : Fin Nl, (I p41 l42 ∧ (C.wires (List.ofFn (fun i43 : Fin (Np + Nl) => decide (i43 = Fin.castAdd Nl p41)))).getD ((Np + Nl) + c) false = false ∧ (C.wires (List.ofFn (fun i44 : Fin (Np + Nl) => decide (i44 = Fin.natAdd Np l42)))).getD ((Np + Nl) + c) false = false ∧ PEqualNP.MetaComplexity.circuitFun (Np + Nl) C (fun i45 : Fin (Np + Nl) => decide (i45 = Fin.castAdd Nl p41 ∨ i45 = Fin.natAdd Np l42)) = true ∧ PEqualNP.MetaComplexity.circuitFun (Np + Nl) (PEqualNP.CircuitLowerBounds.Circuit.mk (C.gates.set c (PEqualNP.CircuitLowerBounds.Gate.mk PEqualNP.CircuitLowerBounds.GateOp.or [])) C.output) (fun i46 : Fin (Np + Nl) => decide (i46 = Fin.castAdd Nl p41 ∨ i46 = Fin.natAdd Np l42)) = false)) → (Finset.univ.filter fun v47 : Fin (Np + Nl) => (C.wires (List.ofFn (fun i53 : Fin (Np + Nl) => decide (i53 = v47)))).getD ((Np + Nl) + c) false = true).card + (Finset.univ.filter fun p48 : Fin Np => ∃ l49 : Fin Nl, (I p48 l49 ∧ (C.wires (List.ofFn (fun i54 : Fin (Np + Nl) => decide (i54 = Fin.castAdd Nl p48)))).getD ((Np + Nl) + c) false = false ∧ (C.wires (List.ofFn (fun i55 : Fin (Np + Nl) => decide (i55 = Fin.natAdd Np l49)))).getD ((Np + Nl) + c) false = false ∧ PEqualNP.MetaComplexity.circuitFun (Np + Nl) C (fun i56 : Fin (Np + Nl) => decide (i56 = Fin.castAdd Nl p48 ∨ i56 = Fin.natAdd Np l49)) = true ∧ PEqualNP.MetaComplexity.circuitFun (Np + Nl) (PEqualNP.CircuitLowerBounds.Circuit.mk (C.gates.set c (PEqualNP.CircuitLowerBounds.Gate.mk PEqualNP.CircuitLowerBounds.GateOp.or [])) C.output) (fun i57 : Fin (Np + Nl) => decide (i57 = Fin.castAdd Nl p48 ∨ i57 = Fin.natAdd Np l49)) = false)).card + (Finset.univ.filter fun l51 : Fin Nl => ∃ p50 : Fin Np, (I p50 l51 ∧ (C.wires (List.ofFn (fun i58 : Fin (Np + Nl) => decide (i58 = Fin.castAdd Nl p50)))).getD ((Np + Nl) + c) false = false ∧ (C.wires (List.ofFn (fun i59 : Fin (Np + Nl) => decide (i59 = Fin.natAdd Np l51)))).getD ((Np + Nl) + c) false = false ∧ PEqualNP.MetaComplexity.circuitFun (Np + Nl) C (fun i60 : Fin (Np + Nl) => decide (i60 = Fin.castAdd Nl p50 ∨ i60 = Fin.natAdd Np l51)) = true ∧ PEqualNP.MetaComplexity.circuitFun (Np + Nl) (PEqualNP.CircuitLowerBounds.Circuit.mk (C.gates.set c (PEqualNP.CircuitLowerBounds.Gate.mk PEqualNP.CircuitLowerBounds.GateOp.or [])) C.output) (fun i61 : Fin (Np + Nl) => decide (i61 = Fin.castAdd Nl p50 ∨ i61 = Fin.natAdd Np l51)) = false)).card ≤ ((Finset.range C.gates.length).filter fun k52 => PEqualNP.SplitCount.InConeOrSelf (Np + Nl) C k52 c).card) := by
+  intro h
+  have hfinal := h 3 2 PEqualNP.Outside.L_meta_3027.inc PEqualNP.Outside.L_meta_3027.ckt 3
+    (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
+    (by
+      intro j hj hor
+      have hj10 : j < 10 := hj
+      clear hj
+      interval_cases j
+      case «9» =>
+        exfalso
+        rcases hor with e | e
+        · exact nomatch (show PEqualNP.CircuitLowerBounds.GateOp.or = PEqualNP.CircuitLowerBounds.GateOp.and from e)
+        · exact e (by decide +kernel)
+      all_goals (clear hor; decide +kernel))
+    (by
+      intro j hj hb
+      have hj10 : j < 10 := hj
+      clear hj
+      interval_cases j
+      case «7» =>
+        refine ⟨fun e => (nomatch (show PEqualNP.CircuitLowerBounds.GateOp.and = PEqualNP.CircuitLowerBounds.GateOp.or from e)),
+          fun _ => ⟨by decide +kernel, ?_⟩⟩
+        intro k hk hm
+        have hk10 : k < 10 := hk
+        clear hk hb
+        interval_cases k
+        case «9» => exact ⟨rfl, by decide +kernel⟩
+        all_goals (exfalso; revert hm; decide +kernel)
+      case «8» =>
+        refine ⟨fun e => (nomatch (show PEqualNP.CircuitLowerBounds.GateOp.and = PEqualNP.CircuitLowerBounds.GateOp.or from e)),
+          fun _ => ⟨by decide +kernel, ?_⟩⟩
+        intro k hk hm
+        have hk10 : k < 10 := hk
+        clear hk hb
+        interval_cases k
+        case «9» => exact ⟨rfl, by decide +kernel⟩
+        all_goals (exfalso; revert hm; decide +kernel)
+      case «9» =>
+        exact ⟨fun _ => by decide +kernel, fun hne => absurd rfl hne⟩
+      all_goals (exfalso; revert hb; decide +kernel))
+    (by
+      intro j hj k hk hoj hbj hok hbk
+      have hj10 : j < 10 := hj
+      have hk10 : k < 10 := hk
+      clear hj hk
+      have hj78 : j = 7 ∨ j = 8 := by
+        clear hok hbk hk10
+        interval_cases j
+        case «7» => exact Or.inl rfl
+        case «8» => exact Or.inr rfl
+        case «9» => exact nomatch (show PEqualNP.CircuitLowerBounds.GateOp.or = PEqualNP.CircuitLowerBounds.GateOp.and from hoj)
+        all_goals (clear hoj; exfalso; revert hbj; decide +kernel)
+      have hk78 : k = 7 ∨ k = 8 := by
+        clear hoj hbj hj10 hj78
+        interval_cases k
+        case «7» => exact Or.inl rfl
+        case «8» => exact Or.inr rfl
+        case «9» => exact nomatch (show PEqualNP.CircuitLowerBounds.GateOp.or = PEqualNP.CircuitLowerBounds.GateOp.and from hok)
+        all_goals (clear hok; exfalso; revert hbk; decide +kernel)
+      clear hoj hbj hok hbk hj10 hk10
+      rcases hj78 with rfl | rfl <;> rcases hk78 with rfl | rfl <;> decide +kernel)
+    (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
+  revert hfinal
+  clear h
+  decide +kernel
