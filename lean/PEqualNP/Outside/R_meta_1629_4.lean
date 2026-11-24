@@ -5,6 +5,8 @@ theorem PEqualNP.Outside.R_meta_1629_4 (h1 : ∀ (n m s k : ℕ) (L : Fin m → 
   have h4 : ∀ (n : ℕ) (C : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.Monotone2 C → ∃ D : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 D ∧ PEqualNP.MetaComplexity.NestedCover.ReadsBack n D ∧ D.size ≤ C.size ∧ PEqualNP.MetaComplexity.circuitFun n D = PEqualNP.MetaComplexity.circuitFun n C := by
       intro n C0 hC
       classical
+      have hevA : ∀ l : List Bool, PEqualNP.CircuitLowerBounds.GateOp.eval PEqualNP.CircuitLowerBounds.GateOp.and l = l.all id := fun _ => rfl
+      have hevO : ∀ l : List Bool, PEqualNP.CircuitLowerBounds.GateOp.eval PEqualNP.CircuitLowerBounds.GateOp.or l = l.any id := fun _ => rfl
       let fx : ℕ → PEqualNP.CircuitLowerBounds.Gate → PEqualNP.CircuitLowerBounds.Gate := fun j g =>
         if g.op = PEqualNP.CircuitLowerBounds.GateOp.and then (if ∀ i ∈ g.inputs, i < n + j then g else ⟨PEqualNP.CircuitLowerBounds.GateOp.or, []⟩)
         else ⟨g.op, g.inputs.filter (fun i => decide (i < n + j))⟩
@@ -21,12 +23,12 @@ theorem PEqualNP.Outside.R_meta_1629_4 (h1 : ∀ (n m s k : ℕ) (L : Fin m → 
           · simp only [fx, hop, if_neg hall, ite_true]
             push_neg at hall
             obtain ⟨i, hi, hge⟩ := hall
-            simp only [PEqualNP.CircuitLowerBounds.GateOp.eval, List.map_nil, List.any_nil]
+            simp only [hevA, hevO, List.map_nil, List.any_nil]
             symm
             rw [List.all_eq_false]
             exact ⟨false, List.mem_map.mpr ⟨i, hi, hfw i hge⟩, by simp⟩
         · have hne : g.op ≠ PEqualNP.CircuitLowerBounds.GateOp.and := by rw [hop]; intro h; cases h
-          simp only [fx, if_neg hne, hop, PEqualNP.CircuitLowerBounds.GateOp.eval]
+          simp only [fx, if_neg hne, hop, hevO]
           rw [Bool.eq_iff_iff]
           simp only [List.any_eq_true, List.mem_map, List.mem_filter, decide_eq_true_eq, id]
           constructor
@@ -72,7 +74,8 @@ theorem PEqualNP.Outside.R_meta_1629_4 (h1 : ∀ (n m s k : ℕ) (L : Fin m → 
       · intro j hj i hi
         simp only [List.length_mapIdx] at hj
         have hgd : PEqualNP.MetaComplexity.NestedCover.gateAt ⟨C0.gates.mapIdx fx, C0.output⟩ j = fx j (C0.gates[j]) := by
-          simp [PEqualNP.MetaComplexity.NestedCover.gateAt, List.getD_eq_getElem?_getD, hj]
+          show (C0.gates.mapIdx fx).getD j ⟨PEqualNP.CircuitLowerBounds.GateOp.or, []⟩ = fx j (C0.gates[j])
+          simp [List.getD_eq_getElem?_getD, hj]
         rw [hgd] at hi
         by_cases ha : (C0.gates[j]).op = PEqualNP.CircuitLowerBounds.GateOp.and
         · by_cases hall : ∀ i ∈ (C0.gates[j]).inputs, i < n + j
@@ -82,9 +85,10 @@ theorem PEqualNP.Outside.R_meta_1629_4 (h1 : ∀ (n m s k : ℕ) (L : Fin m → 
             simp at hi
         · simp only [fx, if_neg ha, List.mem_filter, decide_eq_true_eq] at hi
           exact hi.2
-      · simp [PEqualNP.CircuitLowerBounds.Circuit.size]
+      · show (C0.gates.mapIdx fx).length ≤ C0.gates.length
+        simp
       · funext x
-        simp only [PEqualNP.MetaComplexity.circuitFun, PEqualNP.CircuitLowerBounds.Circuit.eval, PEqualNP.CircuitLowerBounds.Circuit.wires]
+        show ((C0.gates.mapIdx fx).foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) (List.ofFn x)).getD C0.output false = (C0.gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) (List.ofFn x)).getD C0.output false
         rw [(key C0.gates hop (List.ofFn x) (by simp)).1]
   intro q N I _ C hq hN hline huniq hmono hacc hsound
   have hlin := h2 q N I C hq hN hline huniq hmono hacc hsound
