@@ -2,7 +2,8 @@ import PEqualNP.Defs
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
--- Cut by a normal form: a correct circuit never reads x0, and reads NOT x0 at one AND gate only.
+-- Cut by a normal form: a correct circuit never reads x0, reads NOT x0 at one AND gate only,
+-- and reads the given OR wire.
 theorem PEqualNP.Outside.R_meta_3178_2
     (normalForm : ∀ b : Fin 9, b ≠ 0 → ∀ C : Circuit, FanInTwo C → C.size ≤ 13 →
       (∀ x : Fin 9 → Bool, C.eval (List.ofFn x ++ [!x 0, x 0 || x b]) =
@@ -13,12 +14,14 @@ theorem PEqualNP.Outside.R_meta_3178_2
         (List.countP (fun g : Gate => decide (0 ∈ g.inputs ∨ 9 ∈ g.inputs)) D.gates = 1 ∧
         ∀ g ∈ D.gates, 0 ∈ g.inputs ∨ 9 ∈ g.inputs →
           g.op = GateOp.and ∧ ∃ w : ℕ, w ≠ 0 ∧ w ≠ 9 ∧ (g.inputs = [9, w] ∨ g.inputs = [w, 9])) ∧
+        (∃ g ∈ D.gates, 10 ∈ g.inputs) ∧
         ∀ x : Fin 9 → Bool, D.eval (List.ofFn x ++ [!x 0, x 0 || x b]) =
           C.eval (List.ofFn x ++ [!x 0, x 0 || x b]))
     (normalSearch : ∀ b : Fin 9, b ≠ 0 → ∀ D : Circuit, FanInTwo D → D.size ≤ 13 →
       (List.countP (fun g : Gate => decide (0 ∈ g.inputs ∨ 9 ∈ g.inputs)) D.gates = 1 ∧
         ∀ g ∈ D.gates, 0 ∈ g.inputs ∨ 9 ∈ g.inputs →
           g.op = GateOp.and ∧ ∃ w : ℕ, w ≠ 0 ∧ w ≠ 9 ∧ (g.inputs = [9, w] ∨ g.inputs = [w, 9])) →
+      (∃ g ∈ D.gates, 10 ∈ g.inputs) →
       ∃ x : Fin 9 → Bool, D.eval (List.ofFn x ++ [!x 0, x 0 || x b]) ≠
         (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 ||
           x 0 && x 5 || x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 ||
@@ -74,6 +77,6 @@ theorem PEqualNP.Outside.R_meta_3178_2
     intro x
     by_contra hx
     exact hno ⟨x, hx⟩
-  obtain ⟨D, hD, hDs, hDn, hDe⟩ := normalForm b hb0 C hfan hsize hall
-  obtain ⟨x, hx⟩ := normalSearch b hb0 D hD hDs hDn
+  obtain ⟨D, hD, hDs, hDn, hDt, hDe⟩ := normalForm b hb0 C hfan hsize hall
+  obtain ⟨x, hx⟩ := normalSearch b hb0 D hD hDs hDn hDt
   exact hx ((hDe x).trans (hall x))
