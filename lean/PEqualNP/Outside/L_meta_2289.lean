@@ -13,7 +13,7 @@ import PEqualNP.Defs
 
 -- The finite certificate is adapted from the L-meta-2140 submission by thctamm.
 
-namespace PEqualNP.Outside.L_meta_2140
+namespace PEqualNP.Outside.L_meta_2289
 namespace Base1007
 abbrev B:=BitVec 252
 abbrev Sig:=B × B
@@ -7131,7 +7131,7 @@ theorem finalBound :
   obtain ⟨k, hk, t, ht, hr⟩ := circuit_trestricted C hle hf hw9 he'
   exact rootImpossible t ht k hk raw.toFinset rootTag rootWires_rep hr
 end Main2140
-end PEqualNP.Outside.L_meta_2140
+end PEqualNP.Outside.L_meta_2289
 
 theorem PEqualNP.Outside.L_meta_2289 : ∀ (x1 : List PEqualNP.CircuitLowerBounds.Gate) (x2 x3 : ℕ), PEqualNP.MetaComplexity.FanInTwo { gates := x1, output := (0 : ℕ) : PEqualNP.CircuitLowerBounds.Circuit } → x1.length ≤ (13 : ℕ) → x2 < x3 → x3 < (10 : ℕ) + x1.length → (fun (x8 : Fin (9 : ℕ) → Bool) => { gates := x1, output := x2 : PEqualNP.CircuitLowerBounds.Circuit }.eval (List.ofFn x8 ++ [x8 (0 : Fin (9 : ℕ)) && x8 (6 : Fin (9 : ℕ))]) && { gates := x1, output := x3 : PEqualNP.CircuitLowerBounds.Circuit }.eval (List.ofFn x8 ++ [x8 (0 : Fin (9 : ℕ)) && x8 (6 : Fin (9 : ℕ))])) ≠ fun (x8 : Fin (9 : ℕ) → Bool) => x8 (0 : Fin (9 : ℕ)) && x8 (1 : Fin (9 : ℕ)) || x8 (1 : Fin (9 : ℕ)) && x8 (2 : Fin (9 : ℕ)) || x8 (2 : Fin (9 : ℕ)) && x8 (3 : Fin (9 : ℕ)) || x8 (3 : Fin (9 : ℕ)) && x8 (4 : Fin (9 : ℕ)) || x8 (4 : Fin (9 : ℕ)) && x8 (0 : Fin (9 : ℕ)) || x8 (0 : Fin (9 : ℕ)) && x8 (5 : Fin (9 : ℕ)) || x8 (1 : Fin (9 : ℕ)) && x8 (6 : Fin (9 : ℕ)) || x8 (2 : Fin (9 : ℕ)) && x8 (7 : Fin (9 : ℕ)) || x8 (3 : Fin (9 : ℕ)) && x8 (8 : Fin (9 : ℕ)) || x8 (5 : Fin (9 : ℕ)) && x8 (7 : Fin (9 : ℕ)) || x8 (6 : Fin (9 : ℕ)) && x8 (8 : Fin (9 : ℕ)) || x8 (8 : Fin (9 : ℕ)) && x8 (5 : Fin (9 : ℕ)) := by
   open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity in
@@ -7194,7 +7194,7 @@ theorem PEqualNP.Outside.L_meta_2289 : ∀ (x1 : List PEqualNP.CircuitLowerBound
     rw [← hlen]
     simp only [step, endWire]
     simpa [last, Circuit.eval, Circuit.wires, step, seed, GateOp.eval] using hx
-  have bound := PEqualNP.Outside.L_meta_2140.Main2140.finalBound
+  have bound := PEqualNP.Outside.L_meta_2289.Main2140.finalBound
     circuit fan firstValue correct
   change 16 ≤ (first :: (tail ++ [last])).length at bound
   simp at bound
