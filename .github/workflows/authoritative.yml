@@ -331,6 +331,10 @@ jobs:
           # hard limit the checker works at its limit and swaps, which is how a heavy honest proof
           # passes; it is the machine running short that loses a runner.
           unit="pnp-check-$GITHUB_RUN_ID"
+          # The lines that DECIDE how this step ends (machine short, no progress, time limit) go to a
+          # file of their own, written only by this step's own watchers, never by the checker or the
+          # build (red team): checker.err gets a copy, for the reader.
+          MARK="$RUNNER_TEMP/sampler/markers"; : > "$MARK"
           cg="/sys/fs/cgroup/system.slice/$unit.scope"
           # The checker's last stage, printed ONLY as one of our own fixed stage names (red team: once
           # Lean runs on the file, stderr can carry the author's text; nothing of it is printed).
@@ -345,13 +349,17 @@ jobs:
           # THE NO-PROGRESS WATCHDOG (2026-11-24: eleven runs hung for the whole limit). The scope's
           # CPU time (cpu.stat usage_usec) must grow by at least 2 s in every 8 minutes; a check that
           # waits on a lock or a queue uses none. Then the scope is ended: a FAULT with that line.
-          ( low=0; tick=0; cpu0=0; still=0
+          # It FAILS OPEN: when the scope's cpu.stat cannot be read, it is off for this run, said in one line.
+          ( low=0; tick=0; cpu0=0; still=0; dog=on
             while sleep 15; do
               tick=$((tick + 1))
-              cpu=$(awk '/^usage_usec/{print $2}' "$cg/cpu.stat" 2>/dev/null || echo 0)
-              if [ "${cpu:-0}" -ge $((cpu0 + 2000000)) ]; then cpu0=${cpu:-0}; still=0; else still=$((still + 1)); fi
-              if [ "$still" -ge 32 ]; then
-                echo "no progress: the check made no progress for 8 minutes (CPU time $((cpu / 1000000)) s; last: $(stage_now)); ending the whole checker scope" | tee -a "$RUNNER_TEMP/checker.err"
+              cpu=$(awk '/^usage_usec/{print $2}' "$cg/cpu.stat" 2>/dev/null)
+              if [ "$dog" = on ] && ! printf '%s' "$cpu" | grep -Eqx '[0-9]+'; then dog=off; echo "no-progress watchdog: OFF for this run (the checker scope's cpu.stat cannot be read)"; fi
+              if [ "$dog" = on ]; then
+                if [ "$cpu" -ge $((cpu0 + 2000000)) ]; then cpu0=$cpu; still=0; else still=$((still + 1)); fi
+              fi
+              if [ "$dog" = on ] && [ "$still" -ge 32 ]; then
+                echo "no progress: the check made no progress for 8 minutes (CPU time $((cpu / 1000000)) s; last: $(stage_now)); ending the whole checker scope" | tee -a "$RUNNER_TEMP/checker.err" "$MARK"
                 sudo systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true
                 break
               fi
@@ -362,7 +370,7 @@ jobs:
               [ $((tick % 4)) -eq 0 ] || [ "$avail" -lt $((total / 10)) ] && echo "memory watch t=$(( $(date +%s) - t0 ))s: available $((avail / 1024)) MB of $((total / 1024)), swap used $((swap / 1024)) MB, checker now $((now / 1048576)) MB, peak $((peak / 1048576)) MB of $((cap / 1024)), pressure full $full%, processes lean $(pgrep -xc lean 2>/dev/null; true) lake $(pgrep -xc lake 2>/dev/null; true) node $(pgrep -xc node 2>/dev/null; true) sleep $(pgrep -xc sleep 2>/dev/null; true), cpu busy $(top -bn1 2>/dev/null | awk '/^%Cpu/{print int(100-$8)}')%, $(stage_now)"
               if [ "$avail" -lt $((total / 20)) ]; then low=$((low + 1)); else low=0; fi
               if [ "$low" -ge 2 ] || [ "${full:-0}" -gt 40 ]; then
-                echo "memory watch: the MACHINE is running short (available $((avail / 1024)) MB, pressure full $full%): ending the checker before the runner is lost" | tee -a "$RUNNER_TEMP/checker.err"
+                echo "memory watch: the MACHINE is running short (available $((avail / 1024)) MB, pressure full $full%): ending the checker before the runner is lost" | tee -a "$RUNNER_TEMP/checker.err" "$MARK"
                 sudo systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true
                 break
               fi
@@ -372,9 +380,8 @@ jobs:
           # the moment the old limit fired, a TERM to node alone, each 45 minutes into the checker
           # step). One line goes to the live log first, so even a lost machine shows that the limit
           # was reached and when. `timeout` below stays as a backstop, 60 s later.
-          ( sleep "$limit"
-            echo "time limit reached: ${limit} s; ending the whole checker scope now" | tee -a "$RUNNER_TEMP/checker.err"
-            [ "$(cat "$W/in/gap.kind")" = reduce ] && echo "a reduction's own proof must be short: move the work into a child" | tee -a "$RUNNER_TEMP/checker.err"
+          ( sleep "$limit" </dev/null >/dev/null 2>&1
+            echo "time limit reached: ${limit} s; ending the whole checker scope now" | tee -a "$RUNNER_TEMP/checker.err" "$MARK"
             sudo systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true ) &
           limiter=$!
           # ONE JOB PER MACHINE: no other check can hold the build queue or the build lock here, so a
@@ -394,16 +401,21 @@ jobs:
             timeout -k 30 "$((limit + 60))" node "$W/base/tools/check-lean.mjs" "$W/base/$file" "$W/in/statement.txt" "$(cat "$W/in/gap.kind")" \
             > "$RUNNER_TEMP/checker.out" 2> "$RUNNER_TEMP/checker.err"
           code=$?
-          kill "$sampler" "$watch" "$limiter" 2>/dev/null
+          pkill -P "$limiter" 2>/dev/null; pkill -P "$watch" 2>/dev/null; kill "$sampler" "$watch" "$limiter" 2>/dev/null
           # Ended by the memory watch: a FAULT of the machine, never a verdict on the proof.
-          if grep -q '^memory watch: the MACHINE is running short' "$RUNNER_TEMP/checker.err" 2>/dev/null; then
+          if grep -q '^memory watch: the MACHINE is running short' "$MARK" 2>/dev/null; then
             code=137
-          elif grep -q '^no progress: ' "$RUNNER_TEMP/checker.err" 2>/dev/null; then
+          elif grep -q '^no progress: ' "$MARK" 2>/dev/null; then
             # Ended by the no-progress watchdog: a FAULT of the run, never a verdict on the proof.
             code=137
           else
             # 124 or 137: the time limit ended the checker. A FAULT, never a verdict on the proof.
-            if grep -q '^time limit reached' "$RUNNER_TEMP/checker.err" 2>/dev/null; then code=124; fi
+            if grep -q '^time limit reached' "$MARK" 2>/dev/null; then
+              code=124
+              # C3 (red team): a REDUCTION that reached its limit while making progress is the file's
+              # doing: REFUSED with one fixed sentence, never re-run. (A hang ends above, as no progress.)
+              [ "$(cat "$W/in/gap.kind")" = reduce ] && code=5
+            fi
             case "$code" in 124|137) echo "the checker was stopped after $limit seconds" >> "$RUNNER_TEMP/checker.err" ;; esac
           fi
           # Nothing the compile started may outlive it, and neither may the verifier.
@@ -563,6 +575,12 @@ jobs:
             fi
           else
             grep -aq '^CHILD' "$RUNNER_TEMP/checker.out" || kids_ok=yes
+          fi
+          # A reduction that reached its own limit while making progress (code 5): REFUSED, one fixed
+          # sentence, no re-run (red team, 2026-11-24).
+          if [ "$CODE" = 5 ]; then
+            echo "VERDICT: REFUSED (a reduction's own proof must be short: move the work into a child)" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
           verdict=FAULT
           case "$CODE" in
