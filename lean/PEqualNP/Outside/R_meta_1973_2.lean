@@ -163,7 +163,12 @@ theorem PEqualNP.Outside.R_meta_1973_2
         simp [fSpec, z]
       have hy : f y = true := (fSpec y).mpr (Or.inl ⟨a, ha, by simp [y]⟩)
       exact fun eq => hz (eq.trans hy)
-    exact hne (by simpa [circuitFun, Circuit.eval, Circuit.wires] using ev)
+    exact hne (by
+      change (C.gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
+          (List.ofFn z)).getD C.output false =
+        (C.gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
+          (List.ofFn y)).getD C.output false
+      exact ev)
   have allocation : ∀ I : Finset (Fin n), I ⊆ Aᶜ →
       (∀ u ∈ I, ∀ v ∈ I, ¬ G.Adj u v) →
       Aᶜ.card + 2 * I.card ≤ 2 * (Aᶜ.filter fun v => (readers v).length = 2).card := by
