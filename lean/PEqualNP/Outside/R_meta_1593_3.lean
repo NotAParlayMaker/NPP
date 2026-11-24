@@ -7,7 +7,7 @@ import PEqualNP.Defs
 -- independent set inside a minimum cover, so the prover may choose Z freely.
 -- Second child: putting one vertex with at most three neighbours back costs at most four gates.
 -- Putting back all of Z but one vertex gives the step for that vertex.
-theorem PEqualNP.Outside.R_meta_1593_2
+theorem PEqualNP.Outside.R_meta_1593_3
     (hset : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) (A : Finset (Fin n)),
       (∀ v : Fin n, v ∉ A → (G.neighborSet v).ncard = 3) →
       (∀ (w : Fin n) (c : G.Walk w w), c.IsCycle → 7 ≤ c.length) →
