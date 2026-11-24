@@ -34,11 +34,11 @@ lemma cnt_gate (f g : Nat → Bool) (n : Nat) :
     cases f n <;> cases g n <;> simp_all [Bool.toNat] <;> omega
 
 def slow (n x : Nat) : Nat := cnt n x.testBit
-def digit (x : Nat) : Nat := (6200905725313299744266893093789502126063071545881165772838446113976729779337224604478033454164508541879741555464632174598044869083865094223170395258822928 >>> (4*(x%128))) &&& 15
+def digit (x : Nat) : Nat := (6200905725313299744266893093789502126063071545881165772838446113976729779337224604478033454164508541879741555464632174598044869083865094223170395258822928 >>> (4*(x % 128))) &&& 15
 
 lemma digit_correct (x : Nat) : digit x = slow 7 x := by
   have table : ∀ i : Fin 128, digit i.val = slow 7 i.val := by decide +kernel
-  let i : Fin 128 := ⟨x%128, Nat.mod_lt _ (by decide)⟩
+  let i : Fin 128 := ⟨x % 128, Nat.mod_lt _ (by decide)⟩
   have eq : digit x = digit i.val := by simp [digit,i]
   rw [eq, table i]
   apply cnt_congr
