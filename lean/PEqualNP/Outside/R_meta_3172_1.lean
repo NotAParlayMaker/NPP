@@ -38,9 +38,9 @@ theorem PEqualNP.Outside.R_meta_3172_1
       PEqualNP.CircuitLowerBounds.GateOp.or.eval
         (List.map (fun k : ℕ => (List.ofFn x ++ [!x 0]).getD k false) [i.val, j.val]) = y := by
     intro i j y x e
-    simp only [List.map_cons, List.map_nil, key, PEqualNP.CircuitLowerBounds.GateOp.eval,
-      List.any_cons, List.any_nil, id, Bool.or_false]
-    exact e
+    rw [← e, ← key x i, ← key x j]
+    exact congrArg (fun t => (List.ofFn x ++ [!x 0]).getD i.val false || t)
+      (Bool.or_false ((List.ofFn x ++ [!x 0]).getD j.val false))
   have close : ∀ (i j : Fin 9) (o : (Fin 9 → Bool) → Bool), a = i.val → b = j.val →
       (∀ x, (x i || x j) = o x) →
       (∃ x : Fin 9 → Bool, C.eval ((List.ofFn x ++ [!x 0]) ++ [o x]) ≠
@@ -49,7 +49,8 @@ theorem PEqualNP.Outside.R_meta_3172_1
         [PEqualNP.CircuitLowerBounds.GateOp.or.eval
           (List.map (fun k : ℕ => (List.ofFn x ++ [!x 0]).getD k false) [a, b])]) ≠
         (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 || x 0 && x 5 || x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 || x 6 && x 8 || x 8 && x 5) := by
-    intro i j o ea eb eo ⟨x, hx⟩
+    intro i j o ea eb eo hex
+    obtain ⟨x, hx⟩ := hex
     refine ⟨x, ?_⟩
     rw [ea, eb, conv i j (o x) x (eo x)]
     exact hx
