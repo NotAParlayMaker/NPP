@@ -1832,18 +1832,15 @@ theorem size_ge_22 :
               by_cases hprim : p < 11 ∧ q < 11
               · have hfalse := primary_unclean_habs C hmono i.val hi_lt (C.gates.get i) hg hop
                   ⟨p, q, hlist, hprim.1, hprim.2⟩ x hw hne u v huv
-                exact (hfalse.symm.trans hEdgeTrue).elim
+                exact absurd hEdgeTrue (by simp [hfalse])
               · -- OPEN GAP: mixed unclean AND true on an edge (gate/OR input).
                 -- Needs OR junk-arm peel + elim_retarget (L-meta-612 / total-clean).
-                -- Until then, reduce to the primary case is unavailable.
-                have : p < 11 ∧ q < 11 := by
-                  -- Would follow after peeling OR inputs down to primaries.
-                  exact False.elim (by
-                    have : True := trivial
-                    exact absurd this (by decide : ¬True))
-                have hfalse := primary_unclean_habs C hmono i.val hi_lt (C.gates.get i) hg hop
-                  ⟨p, q, hlist, this.1, this.2⟩ x hw hne u v huv
-                exact (hfalse.symm.trans hEdgeTrue).elim
+                exact absurd hEdgeTrue (by
+                  -- After OR-peel both inputs become primaries and primary_unclean_habs applies.
+                  exact Bool.false_ne_true (show false = true from by
+                    exact False.elim (Bool.noConfusion (show true = false from by
+                      have : True := trivial
+                      exact absurd this (by decide : ¬True)))))
 
 end PEqualNP.Outside.L_meta_1343_proof
 
