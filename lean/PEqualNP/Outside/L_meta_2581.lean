@@ -1,4 +1,4 @@
-import Mathlib
+import Mathlib.Combinatorics.Pigeonhole
 
 import PEqualNP.Defs
 
