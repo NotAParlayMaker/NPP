@@ -1,30 +1,21 @@
 import Mathlib
 import PEqualNP.Defs
 
-namespace PEqualNP.Outside.R_meta_2268_1_aux
-
-open PEqualNP.CircuitLowerBounds
-open PEqualNP.MetaComplexity
-
-def IsClean (n : ℕ) (C : Circuit) : Prop :=
-  FanInTwo C ∧
-  C.output < n + C.gates.length ∧
-  ∀ i : Fin C.gates.length,
-    let g := C.gates.get i
-    (g.op = GateOp.not → g.inputs.length = 1) ∧
-    ((g.op = GateOp.and ∨ g.op = GateOp.or) →
-      g.inputs.length = 2 ∧ g.inputs.headD 0 ≠ g.inputs.tail.headD 0) ∧
-    (∀ w ∈ g.inputs, w < n + (i : ℕ))
-
-end PEqualNP.Outside.R_meta_2268_1_aux
-
 theorem PEqualNP.Outside.R_meta_2268_1
     (h1 : ∀ (n : ℕ) (f : (Fin n → Bool) → Bool) (C : PEqualNP.CircuitLowerBounds.Circuit),
       PEqualNP.MetaComplexity.FanInTwo C →
       (∀ x : Fin n → Bool, C.eval (List.ofFn x) = f x) →
       (∃ x y : Fin n → Bool, f x ≠ f y) →
       ∃ D : PEqualNP.CircuitLowerBounds.Circuit,
-        PEqualNP.Outside.R_meta_2268_1_aux.IsClean n D ∧ D.size ≤ C.size ∧
+        (PEqualNP.MetaComplexity.FanInTwo D ∧
+          D.output < n + D.gates.length ∧
+          ∀ i : Fin D.gates.length,
+            let g := D.gates.get i
+            (g.op = PEqualNP.CircuitLowerBounds.GateOp.not → g.inputs.length = 1) ∧
+            ((g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) →
+              g.inputs.length = 2 ∧ g.inputs.headD 0 ≠ g.inputs.tail.headD 0) ∧
+            (∀ w ∈ g.inputs, w < n + (i : ℕ))) ∧
+        D.size ≤ C.size ∧
         ∀ x : Fin n → Bool, D.eval (List.ofFn x) = f x)
     (h2 : ∀ (x1 : ℕ) (x2 : SimpleGraph (Fin x1)) (x3 : Finset (Fin x1))
       (x4 : (Fin x1 → Bool) → Bool),
@@ -37,7 +28,14 @@ theorem PEqualNP.Outside.R_meta_2268_1
         (∃ x11 ∈ x3, x10 x11 = Bool.true) ∨
         ∃ (x11 : Fin x1) (x12 : Fin x1), x2.Adj x11 x12 ∧ x10 x11 = Bool.true ∧ x10 x12 = Bool.true) →
       ∀ (D : PEqualNP.CircuitLowerBounds.Circuit),
-        PEqualNP.Outside.R_meta_2268_1_aux.IsClean x1 D →
+        (PEqualNP.MetaComplexity.FanInTwo D ∧
+          D.output < x1 + D.gates.length ∧
+          ∀ i : Fin D.gates.length,
+            let g := D.gates.get i
+            (g.op = PEqualNP.CircuitLowerBounds.GateOp.not → g.inputs.length = 1) ∧
+            ((g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) →
+              g.inputs.length = 2 ∧ g.inputs.headD 0 ≠ g.inputs.tail.headD 0) ∧
+            (∀ w ∈ g.inputs, w < x1 + (i : ℕ))) →
         (∀ x : Fin x1 → Bool, D.eval (List.ofFn x) = x4 x) →
         ∃ (x13 : Fin x1) (x14 : Fin x1),
           x13 ∉ x3 ∧ x14 ∉ x3 ∧ x13 ≠ x14 ∧ ¬x2.Adj x13 x14 ∧
