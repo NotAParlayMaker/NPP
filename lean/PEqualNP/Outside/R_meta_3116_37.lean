@@ -68,7 +68,7 @@ theorem PEqualNP.Outside.R_meta_3116_37
             ![false,false,true,true,false,false,false,false,false], by decide +kernel⟩
       obtain ⟨a,b,hab,off⟩ := wit
       by_contra noRead
-      have eq := unread C (w a) (w b) v.val (by simp [w]) (by simpa [w] using v.isLt)
+      have eq := unread C (w a) (w b) v.val (by simp [w]) (by simp [w])
         (by omega) (fun k hk => by
           by_cases h : k < 11
           · exact off ⟨k,h⟩ (fun e => hk (congrArg Fin.val e))
