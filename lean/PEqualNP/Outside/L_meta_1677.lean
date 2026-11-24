@@ -4062,7 +4062,7 @@ def seedMeta (k i : Nat) : Nat × Nat :=
   let h := seedHeader k i
   let ofs := getFieldV h 15 20
   let pw := getFieldV h 71 4
-  let w := packedAt (seedNodes k) (ofs+(22+pw)*(i%32)) (10+pw)
+  let w := packedAt (seedNodes k) (ofs+(22+pw)*(i % 32)) (10+pw)
   (unpackGate (w &&& 1023), getFieldV h 0 15 + (w >>> 10))
 
 def seedTrace : Nat → Nat → Nat × Nat
@@ -4136,7 +4136,7 @@ def seedListOffsets (k i : Nat) : Nat × Nat × Nat × Nat :=
   let ss := getFieldV h 55 16
   let ofs := getFieldV h 15 20
   let pw := getFieldV h 71 4
-  let row := i%32
+  let row := i % 32
   let w := 22+pw
   let bits := packedAt (seedNodes k) ofs (w*(row+1))
   let metadata := fun j => getFieldV bits (j*w+10+pw) 12
@@ -4160,14 +4160,14 @@ def countBits32 (x : Nat) : Nat :=
 def seedHashLookup (k h : Nat) : Nat × Nat :=
   let (nb,slots,dw,iw) := seedHashParams k
   let key := h % 18446744073709551616
-  let a := key%nb
+  let a := key % nb
   let disp := packedAt (seedLookup k) (a*dw) dw
   let row := (key/nb+disp)%slots
   let idx := packedAt (seedLookup k) (nb*dw+row*iw) iw
   let start := nb*dw+slots*iw
   let rotBlock := packedAt (seedLookup k) (start+46*(row/32)) 46
   let mask := rotBlock >>> 14
-  let slot := row%32
+  let slot := row % 32
   let ord := (rotBlock &&& 16383) + countBits32 (mask &&& ((1 <<< slot)-1))
   (idx, if mask.testBit slot then
     packedAt (seedLookup k) (start+46*((slots+31)/32)+4*ord) 4 else 0)
@@ -4297,7 +4297,7 @@ abbrev SeedChunk := Nat × Nat × Nat
 def seedChunk (k : Nat) (p : SeedChunk) : Bool :=
   let (start,n,ar) := p
   let grouped := n/16
-  seedBatchSpan k start ar grouped && seedSpan k (start+16*grouped) (n%16)
+  seedBatchSpan k start ar grouped && seedSpan k (start+16*grouped) (n % 16)
 
 theorem seedChunk_sound {k : Nat} {p : SeedChunk} (ok : seedChunk k p=true)
     {i : Nat} (lo : p.1 ≤ i) (hi : i < p.1 + p.2.1) : seedVerify k i=true := by
@@ -4305,7 +4305,7 @@ theorem seedChunk_sound {k : Nat} {p : SeedChunk} (ok : seedChunk k p=true)
   change o ≤ i at lo
   change i < o+n at hi
   simp only [seedChunk,Bool.and_eq_true] at ok
-  have hcalc : 16*(n/16)+n%16=n := Nat.div_add_mod n 16
+  have hcalc : 16*(n/16)+n % 16=n := Nat.div_add_mod n 16
   by_cases h : i<o+16*(n/16)
   · exact seedBatchSpan_at ok.1 lo h
   · exact seedSpan_at ok.2 i (by omega) (by omega)
