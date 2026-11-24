@@ -12,6 +12,7 @@ theorem PEqualNP.Outside.R_meta_3977_617
         FanInTwo C →
         (∃ a b : Fin C.gates.length, a ≠ b ∧ reads (C.gates.get a) ∧ reads (C.gates.get b)) →
         (∀ x, C.eval ((false :: List.ofFn x) ++ [true,x i]) = f x) →
+        f (fun _ => false) = false →
         HasCircuitSize 8 f (C.size - 2))
     (lower : ∀ (x1 : ℕ), PEqualNP.MetaComplexity.HasCircuitSize (8 : ℕ) (fun (x2 : Fin (8 : ℕ) → Bool) => [((0 : Fin (8 : ℕ)), (1 : Fin (8 : ℕ))), ((0 : Fin (8 : ℕ)), (5 : Fin (8 : ℕ))), ((1 : Fin (8 : ℕ)), (2 : Fin (8 : ℕ))), ((1 : Fin (8 : ℕ)), (6 : Fin (8 : ℕ))), ((2 : Fin (8 : ℕ)), (3 : Fin (8 : ℕ))), ((2 : Fin (8 : ℕ)), (7 : Fin (8 : ℕ))), ((4 : Fin (8 : ℕ)), (6 : Fin (8 : ℕ))), ((4 : Fin (8 : ℕ)), (7 : Fin (8 : ℕ))), ((5 : Fin (8 : ℕ)), (7 : Fin (8 : ℕ)))].any fun (x3 : Fin (8 : ℕ) × Fin (8 : ℕ)) => x2 x3.1 && x2 x3.2) x1 → (12 : ℕ) ≤ x1) :
 ∀ x1 ∈ [((1 : Fin (12 : ℕ)), (9 : Fin (12 : ℕ))), ((2 : Fin (12 : ℕ)), (9 : Fin (12 : ℕ))), ((3 : Fin (12 : ℕ)), (9 : Fin (12 : ℕ))), ((4 : Fin (12 : ℕ)), (9 : Fin (12 : ℕ))), ((6 : Fin (12 : ℕ)), (9 : Fin (12 : ℕ)))],   ∀ (x3 : PEqualNP.CircuitLowerBounds.Circuit),     PEqualNP.MetaComplexity.FanInTwo x3 →       x3.size ≤ (13 : ℕ) →         (∃ (x6 : Fin x3.gates.length) (x7 : Fin x3.gates.length), x6 ≠ x7 ∧ ((x3.gates.get x6).inputs[(0 : ℕ)]? = Option.some (0 : ℕ) ∨ (x3.gates.get x6).inputs[(0 : ℕ)]? = Option.some (9 : ℕ) ∨ (x3.gates.get x6).op ≠ PEqualNP.CircuitLowerBounds.GateOp.not ∧ ((0 : ℕ) ∈ (x3.gates.get x6).inputs ∨ (9 : ℕ) ∈ (x3.gates.get x6).inputs)) ∧ ((x3.gates.get x7).inputs[(0 : ℕ)]? = Option.some (0 : ℕ) ∨ (x3.gates.get x7).inputs[(0 : ℕ)]? = Option.some (9 : ℕ) ∨ (x3.gates.get x7).op ≠ PEqualNP.CircuitLowerBounds.GateOp.not ∧ ((0 : ℕ) ∈ (x3.gates.get x7).inputs ∨ (9 : ℕ) ∈ (x3.gates.get x7).inputs))) →           ∃ (x7 : Fin (9 : ℕ) → Bool),             have x8 : List Bool := List.ofFn x7 ++ [!x7 (0 : Fin (9 : ℕ))];             have x9 : Fin (12 : ℕ) → Bool := fun (x9 : Fin (12 : ℕ)) => if x9 = (11 : Fin (12 : ℕ)) then Bool.true else x8.getD (↑x9) Bool.false;             x3.eval (x8 ++ [x9 x1.1 && x9 x1.2]) ≠ (x7 (0 : Fin (9 : ℕ)) && x7 (1 : Fin (9 : ℕ)) || x7 (1 : Fin (9 : ℕ)) && x7 (2 : Fin (9 : ℕ)) || x7 (2 : Fin (9 : ℕ)) && x7 (3 : Fin (9 : ℕ)) || x7 (3 : Fin (9 : ℕ)) && x7 (4 : Fin (9 : ℕ)) || x7 (4 : Fin (9 : ℕ)) && x7 (0 : Fin (9 : ℕ)) || x7 (0 : Fin (9 : ℕ)) && x7 (5 : Fin (9 : ℕ)) || x7 (1 : Fin (9 : ℕ)) && x7 (6 : Fin (9 : ℕ)) || x7 (2 : Fin (9 : ℕ)) && x7 (7 : Fin (9 : ℕ)) || x7 (3 : Fin (9 : ℕ)) && x7 (8 : Fin (9 : ℕ)) || x7 (5 : Fin (9 : ℕ)) && x7 (7 : Fin (9 : ℕ)) || x7 (6 : Fin (9 : ℕ)) && x7 (8 : Fin (9 : ℕ)) || x7 (8 : Fin (9 : ℕ)) && x7 (5 : Fin (9 : ℕ)))
@@ -69,7 +70,7 @@ theorem PEqualNP.Outside.R_meta_3977_617
     have h8 : y 8 = x 7 := rfl
     simpa only [f,zero,h1,h2,h3,h4,h5,h6,h7,h8,Bool.false_and,Bool.and_false,
       Bool.false_or,Bool.or_false] using h
-  obtain ⟨D,fanD,sizeD,correct⟩ := trim C i f fan reads restricted
+  obtain ⟨D,fanD,sizeD,correct⟩ := trim C i f fan reads restricted rfl
   have small' : D.size ≤ 11 := by omega
   have listEval (x : Fin 8 → Bool) :
       f x = ([(0,1),(0,5),(1,2),(1,6),(2,3),(2,7),(4,6),(4,7),(5,7)] :
