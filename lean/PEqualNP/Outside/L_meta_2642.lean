@@ -332,7 +332,7 @@ theorem pinCircuit_eval (n : ℕ) (u v : Fin n) (C : Circuit) (x : Fin n → Boo
       (List.ofFn y).getD i false := by
     intro i
     by_cases hp : i = u.val ∨ i = v.val
-    · rw [pinWire, if_pos hp, getD_of_length_le _ _ (by simp; omega)]
+    · rw [pinWire, if_pos hp, getD_of_length_le _ _ (by simp)]
       rcases hp with rfl | rfl
       · rw [ofFn_getD y u.val u.isLt]
         simp [y, Function.update_apply]
