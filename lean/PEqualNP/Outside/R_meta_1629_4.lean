@@ -17,8 +17,8 @@ open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
   the counting hypotheses of `h_large` are stated with
   `Fintype.card {p // ...}` rather than `(Finset.univ.filter ...).card`,
   because the filter form pretty-prints as `{x | ...}.card`, which
-  re-elaborates as a `Set` (no `Set.card`) and so fails the checker's
-  re-elaboration of the child statement. The two forms are equal by
+  re-prints as a `Set` (no `Set.card`) and so fails the checker's
+  re-printing of the child statement. The two forms are equal by
   `Fintype.card_subtype`, which is used to convert the desk-statement
   hypotheses before applying `h_large`. -/
 theorem PEqualNP.Outside.R_meta_1629_4
@@ -155,7 +155,7 @@ theorem PEqualNP.Outside.R_meta_1629_4
   · -- Convert the desk-statement counting hypotheses (Finset filter card)
     -- to the subtype-card form used by `h_large` (see the fix note in the
     -- header: the filter form prints as `{x | ...}.card`, which
-    -- re-elaborates as a `Set` and has no `.card`).
+    -- re-prints as a `Set` and has no `.card`).
     have hcard' : ∀ l : Fin N, Fintype.card {p : Fin N // I p l} = q + 1 := by
       intro l
       rw [Fintype.card_subtype]
