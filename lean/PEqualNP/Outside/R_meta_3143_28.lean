@@ -84,7 +84,9 @@ theorem PEqualNP.Outside.R_meta_3143_28
         rw [late i hn, List.getD_append_right _ _ _ _ (by simpa using hn),
           List.getD_append_right _ _ _ _ (by simpa using hn)]
         simp)
-    simpa [rewired,Circuit.size] using hb
+    change 13 ≤ (C.gates.map (mapGate σ)).length at hb
+    rw [List.length_map] at hb
+    exact hb
   fin_cases j
   · exact degreeTwo C hf computes
   · exact degreeThree C hf computes
