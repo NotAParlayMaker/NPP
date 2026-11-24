@@ -1665,7 +1665,7 @@ lemma elim_absorb_false {n : ℕ} (G : SimpleGraph (Fin n))
 
 end Elim
 
-namespace PEqualNP.Outside.L_meta_1343_proof
+namespace Proof
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 open PEqualNP.Outside.L_meta_1343_graph
@@ -1856,7 +1856,7 @@ theorem size_ge_22 :
                     exact absurd rfl (by decide : True ≠ False))
                   cases this)
 
-end PEqualNP.Outside.L_meta_1343_proof
+end Proof
 
 open PEqualNP.Outside.L_meta_1343_graph
 open PEqualNP.Outside.L_meta_1343_proof
