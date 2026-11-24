@@ -155,8 +155,9 @@ export function buildChain(git, list, heads, tip0, names) {
   return { tip, results };
 }
 
-export function report(results) {
-  return results.map((r) => (r.landed ? `landed #${r.pr}` : `left out #${r.pr}: ${r.why}`)).join('\n');
+// Before the push a head is only 'in the chain'; 'landed' is said only after the push went through (red team, 20:46Z).
+export function report(results, pushed = false) {
+  return results.map((r) => (r.landed ? `${pushed ? 'landed' : 'in the chain'} #${r.pr}` : `left out #${r.pr}: ${r.why}`)).join('\n');
 }
 
 // The job: fetch, build, push (never forced), rebuild once on a moved main.
@@ -202,9 +203,12 @@ export function run({ dir, remote, listJson, extraNames, auth, parentsOf, log = 
   }
   for (let attempt = 0; attempt < 2; attempt++) {
     const { tip, results } = buildChain(git, list, heads, tip0, names);
-    if (!results.some((r) => r.landed)) { log(report(results)); return results; }
-    if (git.ok(['push', '-q', 'origin', `${tip}:refs/heads/main`])) { log(report(results)); return results; }
-    if (attempt === 0) { log('main moved during the job: rebuilt once on the new main'); tip0 = fetchMain(); }
+    // Each entry's line is printed BEFORE the push, so a refused push still shows what was judged (rehearsal 1).
+    log(report(results));
+    if (!results.some((r) => r.landed)) { log('nothing to land: no push'); return results; }
+    if (git.ok(['push', '-q', 'origin', `${tip}:refs/heads/main`])) { log('pushed: these heads are on main'); log(results.filter((r) => r.landed).map((r) => `landed #${r.pr}`).join('\n')); return results; }
+    log('the push was refused');
+    if (attempt === 0) { log('rebuilding once on a fresh read of main'); tip0 = fetchMain(); }
   }
   throw new Error('the push was refused twice: nothing landed, nothing forced');
 }
