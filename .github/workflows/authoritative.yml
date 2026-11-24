@@ -312,6 +312,10 @@ jobs:
           # build compiles first, at most 45 minutes.
           limit=$(( 1200 + 240 * $(grep -c . "$W/in/outside-imports.txt" || true) ))
           [ "$limit" -le 2700 ] || limit=2700
+          # A REDUCTION's own proof only assembles its children, so it is short: of 110 accepted
+          # reduce runs (intake logs, 2026-11-24) the checker step took 58 s at the median and 251 s
+          # at most. Its limit is 600 s, whatever it imports; past it the work belongs in a child.
+          if [ "$(cat "$W/in/gap.kind")" = reduce ]; then limit=600; fi
           echo "time limit for the checker: $limit s"
           # THE MEMORY WATCH (2026-11-23: three public runs lost their machine in this step and left
           # no log; 2026-11-24: one more, L-meta-1690's closing, lost inside its 24-minute limit with
@@ -370,6 +374,7 @@ jobs:
           # was reached and when. `timeout` below stays as a backstop, 60 s later.
           ( sleep "$limit"
             echo "time limit reached: ${limit} s; ending the whole checker scope now" | tee -a "$RUNNER_TEMP/checker.err"
+            [ "$(cat "$W/in/gap.kind")" = reduce ] && echo "a reduction's own proof must be short: move the work into a child" | tee -a "$RUNNER_TEMP/checker.err"
             sudo systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true ) &
           limiter=$!
           # ONE JOB PER MACHINE: no other check can hold the build queue or the build lock here, so a
