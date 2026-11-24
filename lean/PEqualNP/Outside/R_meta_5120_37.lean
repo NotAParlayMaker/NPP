@@ -38,7 +38,9 @@ theorem PEqualNP.Outside.R_meta_5120_37
     unfold PEqualNP.CircuitLowerBounds.Circuit.wires
     simp only [C, List.foldl_cons]
     congr 1
-    simp [g0, PEqualNP.CircuitLowerBounds.GateOp.eval, List.ofFn_succ]
+    change List.ofFn y ++ [[(List.ofFn y).getD 0 false, (List.ofFn y).getD 3 false].any id] =
+      List.ofFn y ++ [y 0 || y 3]
+    simp [List.ofFn_succ]
   have firstC : ∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = (y 0 || y 3) := by
     intro y
     rw [wiresC]
@@ -52,8 +54,12 @@ theorem PEqualNP.Outside.R_meta_5120_37
     intro v hv
     have hb := reads v hv
     have hv' : v = 4 ∨ v = 6 ∨ v = 7 := by simpa using hv
-    rcases hv' with rfl | rfl | rfl <;>
-      simpa [C, g0, List.countP_cons, PEqualNP.CircuitLowerBounds.GateOp.eval] using hb
+    have skip : ¬ ((g0.inputs.head? == some v || (!g0.op.eval [false] && g0.inputs.contains v)) = true) := by
+      rcases hv' with rfl | rfl | rfl <;> decide
+    show List.countP (fun g : PEqualNP.CircuitLowerBounds.Gate =>
+      g.inputs.head? == some v || (!g.op.eval [false] && g.inputs.contains v)) (g0 :: D.gates) ≤ 2
+    rw [List.countP_cons, if_neg skip, Nat.add_zero]
+    exact hb
   have computesC : PEqualNP.MetaComplexity.circuitFun 9 C = (fun x : Fin 9 → Bool =>
       (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) ||
       (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) ||
