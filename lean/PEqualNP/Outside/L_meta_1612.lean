@@ -6,7 +6,7 @@ import PEqualNP.Defs
 -- among the other three points of the line. Each gate of I joins two classes not yet joined by
 -- the earlier gates of I; three such joins on three points are impossible.
 
-namespace PEqualNP.Outside.L_meta_1612_proof
+namespace PEqualNP.Outside.L_meta_1612
 
 open PEqualNP.CircuitLowerBounds
 
@@ -295,9 +295,9 @@ theorem gen (gates : List Gate)
     | exact hT _ hc' _ ha _ hb h'' h
     | exact hT _ hc' _ hb _ ha h' h
 
-end PEqualNP.Outside.L_meta_1612_proof
+end PEqualNP.Outside.L_meta_1612
 
-open PEqualNP.Outside.L_meta_1612_proof in
+open PEqualNP.Outside.L_meta_1612 in
 theorem PEqualNP.Outside.L_meta_1612 : ∀ L : Fin 13 → Finset (Fin 13), (∀ t : Fin 13, L t = {t, t + 1, t + 3, t + 9}) →
     ∀ (T : Fin 13 → Fin 13 → Fin 13 → Bool) (gates : List PEqualNP.CircuitLowerBounds.Gate),
     (∀ t : Fin 13, ∀ p ∈ L t, ∀ v ∈ L t, T t p v = true ↔ v = p) → (∀ l ∈ ({4, 10, 12} : Finset (Fin 13)), T l 0 = (fun v : Fin 13 => decide (v = 0))) → (∀ m ∈ ({1, 5, 11} : Finset (Fin 13)), T m 1 = (fun v : Fin 13 => decide (v = 1))) → (∀ g ∈ gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length ≤ 2) → (∀ (i : Fin gates.length), ∀ w ∈ (gates.get i).inputs, w < 13 + (i : ℕ)) →
