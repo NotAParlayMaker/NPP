@@ -143,7 +143,8 @@ theorem PEqualNP.Outside.R_meta_1894_1
           · exact b
         have on' : (C.gates[i].inputs.map (read y w)).any id = true := by
           have h := evalGate y i iok
-          rw [iw,op,GateOp.eval] at h
+          rw [iw,op] at h
+          change value C y w = (C.gates[i].inputs.map (read y w)).any id at h
           exact h.symm.trans on
         obtain ⟨b, bmem, rtrue⟩ := List.any_eq_true.mp on'
         obtain ⟨r, hr, rfl⟩ := List.mem_map.mp bmem
@@ -154,12 +155,14 @@ theorem PEqualNP.Outside.R_meta_1894_1
         obtain ⟨p,hp,hprop⟩ := ih r rw' (rw'.trans lt) ry
         refine ⟨p,hp,fun x hx => ?_⟩
         have eval := evalGate x i iok
-        rw [iw,op,GateOp.eval] at eval
+        rw [iw,op] at eval
+        change value C x w = (C.gates[i].inputs.map (read x w)).any id at eval
         exact eval.trans (List.any_eq_true.mpr ⟨_, List.mem_map.mpr ⟨r,hr,rfl⟩,
           by simpa [read,rw'] using hprop x hx⟩)
     have andTrue (x : Fin n → Bool) : value C x (n+j) = true ↔
         ∀ r ∈ g.inputs, read x (n+j) r = true := by
-      rw [evalGate x j valid, gEq, hand, GateOp.eval]
+      rw [evalGate x j valid, gEq, hand]
+      change (g.inputs.map (read x (n+j))).all id = true ↔ _
       simp [List.all_eq_true]
     let Parents := g.inputs.toFinset
     have chooseInput (r : { i // i ∈ Parents }) :
