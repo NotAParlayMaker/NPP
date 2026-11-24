@@ -74,12 +74,16 @@ theorem PEqualNP.Outside.R_meta_3503_62
     rw [exactD]
     apply decide_eq_false
     rintro ⟨p, l, _, _, hl⟩
-    simp [Fin.natAdd] at hl
+    have bad := of_decide_eq_true hl
+    change m + l.val < m at bad
+    omega
   have rightOff : circuitFun (m+n) D (fun i => decide (m ≤ i.val)) = false := by
     rw [exactD]
     apply decide_eq_false
     rintro ⟨p, l, _, hp, _⟩
-    simp [Fin.castAdd, p.isLt.not_ge] at hp
+    have bad := of_decide_eq_true hp
+    change m ≤ p.val at bad
+    exact Nat.not_le_of_lt p.isLt bad
   obtain ⟨S, closed, prod⟩ := typeProducts m n D hD.1 least zero leftOff rightOff
   refine ⟨D, S false, S true, hD.1, exactD, least C hC hD.2.symm, ?_, ?_, ?_⟩
   · intro w hw
