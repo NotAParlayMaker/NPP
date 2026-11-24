@@ -41,13 +41,19 @@ theorem PEqualNP.Outside.R_meta_2913_1
     let step := fun (w : List Bool) (g : Gate) =>
       w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
     have firstValue : step (List.ofFn x) first = row x := by
-      simp [step, first, row, GateOp.eval, List.getD_eq_getElem?_getD]
+      change List.ofFn x ++ [!((List.ofFn x).getD 0 false)] = List.ofFn x ++ [!x 0]
+      simp [List.getD_eq_getElem?_getD]
     change (C.gates.foldl step (step (step (List.ofFn x) first) second)).getD C.output false = _
     rw [firstValue]
     exact computes x
   have cost := binaryBound D legalD correctD
-  have count : notCount D = notCount C + 2 := by simp [notCount, D, first, second]
-  have size : D.size = C.size + 2 := by simp [D, Circuit.size]
+  have count : notCount D = notCount C + 2 := by
+    let isNot := fun g : Gate => @decide (g.op = GateOp.not) (lineDegreeGateOpDecEq _ _)
+    change (List.filter isNot (first :: second :: C.gates)).length = (List.filter isNot C.gates).length + 2
+    simp [isNot, first, second]
+  have size : D.size = C.size + 2 := by
+    change (first :: second :: C.gates).length = C.gates.length + 2
+    simp
   have zero : notCount C = 0 := by
     rw [size, count] at cost
     omega
@@ -76,7 +82,8 @@ theorem PEqualNP.Outside.R_meta_2913_1
       rcases atZeroOrAbove with rfl | above
       · refine ⟨1, ?_⟩
         intro x
-        simp [row, GateOp.eval, List.getD_eq_getElem?_getD]
+        change (!((row x).getD 0 false)) = !x 0
+        simp [row, List.getD_eq_getElem?_getD]
       · by_cases atNine : a = 9
         · subst a
           refine ⟨2, ?_⟩
