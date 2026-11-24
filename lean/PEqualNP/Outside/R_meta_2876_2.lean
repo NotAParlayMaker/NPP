@@ -42,7 +42,11 @@ theorem PEqualNP.Outside.R_meta_2876_2
   have ones : ∀ r : Fin 58, (2097151 : Nat).testBit r.val = decide (r.val < 21) := by decide
   have combine (d : Bool) (A B : Nat) (r : Nat) : (op d).eval [A.testBit r,B.testBit r] =
       (if d then A &&& B else A ||| B).testBit r := by
-    cases d <;> simp [op, GateOp.eval,Nat.testBit_and,Nat.testBit_or]
+    cases d
+    · change [A.testBit r,B.testBit r].any id = (A ||| B).testBit r
+      simp [Nat.testBit_or]
+    · change [A.testBit r,B.testBit r].all id = (A &&& B).testBit r
+      simp [Nat.testBit_and]
   obtain ⟨gs,a,b,j,d,limit,ha,hab,hb,hj,truth,swap,ex,ey⟩ := search
   let w := gs.foldl (fun (w : List Nat) (g : Bool × Nat × Nat) => w ++ [
     if g.1 then w.getD g.2.1 0 &&& w.getD g.2.2 0 else w.getD g.2.1 0 ||| w.getD g.2.2 0]) inputs
