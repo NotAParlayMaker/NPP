@@ -1,0 +1,19 @@
+import PEqualNP.Defs
+
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
+
+theorem PEqualNP.Outside.R_meta_2956_713
+    (tree : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), x1.gates.length = (15 : ℕ) → PEqualNP.MetaComplexity.FanInTwo x1 → (∃ (x4 : Fin x1.gates.length) (x5 : Fin x1.gates.length), x4 < x5 ∧ (4 : ℕ) ≤ ↑x4 ∧ ↑x4 ≤ (7 : ℕ) ∧ (x1.gates.get x4).op = PEqualNP.CircuitLowerBounds.GateOp.not ∧ (x1.gates.get x5).op = PEqualNP.CircuitLowerBounds.GateOp.not ∧ ∀ (x6 : Fin x1.gates.length), (x1.gates.get x6).op = PEqualNP.CircuitLowerBounds.GateOp.not → x6 = x4 ∨ x6 = x5) → (∀ (x5 : Fin (9 : ℕ) → Bool), (x1.wires (List.ofFn x5)).getD (9 : ℕ) Bool.false = (x5 (0 : Fin (9 : ℕ)) || x5 (2 : Fin (9 : ℕ)))) → ¬ (∃ j < x1.gates.length, 0 < j ∧ 2 ≤ PEqualNP.MetaComplexity.NestedCover.readsIn x1 (Finset.range x1.gates.length) (9+j)) →
+      ∃ f : DMFormula 10, f.leaves ≤ 13 ∧ ∀ x : Fin 9 → Bool,
+        f.eval (Fin.lastCases (x 0 || x 2) x) = circuitFun 9 x1 x)
+    (leaves : ∀ f : DMFormula 10, f.leaves ≤ 13 → ∃ x : Fin 9 → Bool,
+      f.eval (Fin.lastCases (x 0 || x 2) x) ≠ ([(18440827511444797640 : ℕ), (18441957826578283724 : ℕ), (18446744073709222136 : ℕ), (18446744073709485308 : ℕ), (18446744073708175304 : ℕ), (18446744073709551615 : ℕ), (18446744073709223928 : ℕ), (18446744073709551615 : ℕ)].getD (PEqualNP.MetaComplexity.tableIndex x / (64 : ℕ)) (0 : ℕ)).testBit (PEqualNP.MetaComplexity.tableIndex x % (64 : ℕ)))
+    (shared : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), x1.gates.length = (15 : ℕ) → PEqualNP.MetaComplexity.FanInTwo x1 → (∃ (x4 : Fin x1.gates.length) (x5 : Fin x1.gates.length), x4 < x5 ∧ (4 : ℕ) ≤ ↑x4 ∧ ↑x4 ≤ (7 : ℕ) ∧ (x1.gates.get x4).op = PEqualNP.CircuitLowerBounds.GateOp.not ∧ (x1.gates.get x5).op = PEqualNP.CircuitLowerBounds.GateOp.not ∧ ∀ (x6 : Fin x1.gates.length), (x1.gates.get x6).op = PEqualNP.CircuitLowerBounds.GateOp.not → x6 = x4 ∨ x6 = x5) → (∀ (x5 : Fin (9 : ℕ) → Bool), (x1.wires (List.ofFn x5)).getD (9 : ℕ) Bool.false = (x5 (0 : Fin (9 : ℕ)) || x5 (2 : Fin (9 : ℕ)))) → (∃ j < x1.gates.length, 0 < j ∧ 2 ≤ PEqualNP.MetaComplexity.NestedCover.readsIn x1 (Finset.range x1.gates.length) (9+j)) → ∃ (x6 : Fin (9 : ℕ) → Bool), x1.eval (List.ofFn x6) ≠ ([(18440827511444797640 : ℕ), (18441957826578283724 : ℕ), (18446744073709222136 : ℕ), (18446744073709485308 : ℕ), (18446744073708175304 : ℕ), (18446744073709551615 : ℕ), (18446744073709223928 : ℕ), (18446744073709551615 : ℕ)].getD (PEqualNP.MetaComplexity.tableIndex x6 / (64 : ℕ)) (0 : ℕ)).testBit (PEqualNP.MetaComplexity.tableIndex x6 % (64 : ℕ))) :
+    ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), x1.gates.length = (15 : ℕ) → PEqualNP.MetaComplexity.FanInTwo x1 → (∃ (x4 : Fin x1.gates.length) (x5 : Fin x1.gates.length), x4 < x5 ∧ (4 : ℕ) ≤ ↑x4 ∧ ↑x4 ≤ (7 : ℕ) ∧ (x1.gates.get x4).op = PEqualNP.CircuitLowerBounds.GateOp.not ∧ (x1.gates.get x5).op = PEqualNP.CircuitLowerBounds.GateOp.not ∧ ∀ (x6 : Fin x1.gates.length), (x1.gates.get x6).op = PEqualNP.CircuitLowerBounds.GateOp.not → x6 = x4 ∨ x6 = x5) → (∀ (x5 : Fin (9 : ℕ) → Bool), (x1.wires (List.ofFn x5)).getD (9 : ℕ) Bool.false = (x5 (0 : Fin (9 : ℕ)) || x5 (2 : Fin (9 : ℕ)))) → ∃ (x6 : Fin (9 : ℕ) → Bool), x1.eval (List.ofFn x6) ≠ ([(18440827511444797640 : ℕ), (18441957826578283724 : ℕ), (18446744073709222136 : ℕ), (18446744073709485308 : ℕ), (18446744073708175304 : ℕ), (18446744073709551615 : ℕ), (18446744073709223928 : ℕ), (18446744073709551615 : ℕ)].getD (PEqualNP.MetaComplexity.tableIndex x6 / (64 : ℕ)) (0 : ℕ)).testBit (PEqualNP.MetaComplexity.tableIndex x6 % (64 : ℕ)) := by
+  intro C size ops inv first
+  by_cases used : ∃ j < C.gates.length, 0 < j ∧ 2 ≤
+      PEqualNP.MetaComplexity.NestedCover.readsIn C (Finset.range C.gates.length) (9+j)
+  · exact shared C size ops inv first used
+  · obtain ⟨f,cost,eval⟩ := tree C size ops inv first used
+    obtain ⟨x,hx⟩ := leaves f cost
+    exact ⟨x,fun h => hx ((eval x).trans h)⟩
