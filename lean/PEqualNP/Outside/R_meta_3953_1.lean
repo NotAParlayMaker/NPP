@@ -1,0 +1,13 @@
+import Mathlib
+import PEqualNP.Defs
+
+set_option linter.unusedVariables false
+
+theorem PEqualNP.Outside.R_meta_3953_1
+  (h1 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit),   PEqualNP.MetaComplexity.Monotone2 x1 →     x1.size < (14 : ℕ) →       (∀ x4 ∈ [(4 : ℕ), (6 : ℕ)], ∃! x6 : Fin x1.gates.length, x4 ∈ (x1.gates.get x6).inputs) →         (∀ x5 ∈ [(3 : ℕ), (6 : ℕ), (12 : ℕ), (17 : ℕ), (24 : ℕ), (33 : ℕ), (66 : ℕ), (132 : ℕ), (160 : ℕ), (264 : ℕ), (288 : ℕ), (320 : ℕ)] ++ [(42 : ℕ), (50 : ℕ), (69 : ℕ), (104 : ℕ), (116 : ℕ), (138 : ℕ), (201 : ℕ), (208 : ℕ), (261 : ℕ), (276 : ℕ), (385 : ℕ), (402 : ℕ)],             have x7 : Fin (9 : ℕ) → Bool := fun (x7 : Fin (9 : ℕ)) => x5.testBit ↑x7;             x1.eval (List.ofFn x7 ++ [x7 (4 : Fin (9 : ℕ)) || x7 (6 : Fin (9 : ℕ))]) = Decidable.decide (x5 ∈ [(3 : ℕ), (6 : ℕ), (12 : ℕ), (17 : ℕ), (24 : ℕ), (33 : ℕ), (66 : ℕ), (132 : ℕ), (160 : ℕ), (264 : ℕ), (288 : ℕ), (320 : ℕ)])) →           False)
+  (h2 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit),   PEqualNP.MetaComplexity.Monotone2 x1 →     x1.size = (14 : ℕ) →       (∀ x4 ∈ [(4 : ℕ), (6 : ℕ)], ∃! x6 : Fin x1.gates.length, x4 ∈ (x1.gates.get x6).inputs) →         (∀ x5 ∈ [(3 : ℕ), (6 : ℕ), (12 : ℕ), (17 : ℕ), (24 : ℕ), (33 : ℕ), (66 : ℕ), (132 : ℕ), (160 : ℕ), (264 : ℕ), (288 : ℕ), (320 : ℕ)] ++ [(42 : ℕ), (50 : ℕ), (69 : ℕ), (104 : ℕ), (116 : ℕ), (138 : ℕ), (201 : ℕ), (208 : ℕ), (261 : ℕ), (276 : ℕ), (385 : ℕ), (402 : ℕ)],             have x7 : Fin (9 : ℕ) → Bool := fun (x7 : Fin (9 : ℕ)) => x5.testBit ↑x7;             x1.eval (List.ofFn x7 ++ [x7 (4 : Fin (9 : ℕ)) || x7 (6 : Fin (9 : ℕ))]) = Decidable.decide (x5 ∈ [(3 : ℕ), (6 : ℕ), (12 : ℕ), (17 : ℕ), (24 : ℕ), (33 : ℕ), (66 : ℕ), (132 : ℕ), (160 : ℕ), (264 : ℕ), (288 : ℕ), (320 : ℕ)])) →           False) :
+  ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit),   PEqualNP.MetaComplexity.Monotone2 x1 →     x1.size ≤ (14 : ℕ) →       (∀ x4 ∈ [(4 : ℕ), (6 : ℕ)], ∃! x6 : Fin x1.gates.length, x4 ∈ (x1.gates.get x6).inputs) →         (∀ x5 ∈ [(3 : ℕ), (6 : ℕ), (12 : ℕ), (17 : ℕ), (24 : ℕ), (33 : ℕ), (66 : ℕ), (132 : ℕ), (160 : ℕ), (264 : ℕ), (288 : ℕ), (320 : ℕ)] ++ [(42 : ℕ), (50 : ℕ), (69 : ℕ), (104 : ℕ), (116 : ℕ), (138 : ℕ), (201 : ℕ), (208 : ℕ), (261 : ℕ), (276 : ℕ), (385 : ℕ), (402 : ℕ)],             have x7 : Fin (9 : ℕ) → Bool := fun (x7 : Fin (9 : ℕ)) => x5.testBit ↑x7;             x1.eval (List.ofFn x7 ++ [x7 (4 : Fin (9 : ℕ)) || x7 (6 : Fin (9 : ℕ))]) = Decidable.decide (x5 ∈ [(3 : ℕ), (6 : ℕ), (12 : ℕ), (17 : ℕ), (24 : ℕ), (33 : ℕ), (66 : ℕ), (132 : ℕ), (160 : ℕ), (264 : ℕ), (288 : ℕ), (320 : ℕ)])) →           False := by
+  intro x1 hmono hs hinputs heval
+  rcases lt_or_eq_of_le hs with hlt | heq
+  · exact h1 x1 hmono hlt hinputs heval
+  · exact h2 x1 hmono heq hinputs heval
