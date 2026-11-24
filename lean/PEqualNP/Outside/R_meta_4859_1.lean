@@ -65,8 +65,8 @@ theorem PEqualNP.Outside.R_meta_4859_1
     have h0 : PEqualNP.MetaComplexity.NestedCover.graphFun x2 x4 (fun _ => Bool.false) = Bool.false := by
       simp [PEqualNP.MetaComplexity.NestedCover.graphFun]
     have h1v : PEqualNP.MetaComplexity.NestedCover.graphFun x2 x4 (fun _ => Bool.true) = Bool.true := by
-      simp only [PEqualNP.MetaComplexity.NestedCover.graphFun, decide_eq_true_eq]
-      exact Or.inr ⟨x7 ⟨0, hx6_pos⟩, x8 ⟨0, hx6_pos⟩, hedge, rfl, rfl⟩
+      simp only [PEqualNP.MetaComplexity.NestedCover.graphFun, Bool.or_eq_true, decide_eq_true_eq]
+      exact Or.inr ⟨x7 ⟨0, hx6_pos⟩, x8 ⟨0, hx6_pos⟩, hedge, trivial, trivial⟩
     rw [h0, h1v]
     decide
   obtain ⟨D, hDfan, hDsize, hDfun, hDout, hDclean⟩ :=
