@@ -6906,7 +6906,7 @@ private theorem add_pair (bound : ∀ D : Circuit, FanInTwo D → D.size ≤ 15 
     omega
   apply bound D legal sized count
   funext x
-  exact h x
+  exact Classical.byContradiction (h x)
 
 end PEqualNP.Outside.L_meta_4773
 
