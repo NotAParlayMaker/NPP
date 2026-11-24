@@ -17,7 +17,7 @@ theorem PEqualNP.Outside.R_meta_1971_41
       u ∉ S → (C.gates.filter (fun g =>
         (g.inputs.take (bif g.op.eval [false] then 1 else 2)).contains u.val)).length = 1 →
       ∃ v ∉ S, ∃ moves : List (ℕ × ℕ), moves.length = 4 ∧
-        (∀ i : Fin moves.length, moves[i].1 + i.val < C.size) ∧
+        (∀ i : Fin moves.length, (moves.get i).1 + i.val < C.size) ∧
         ∀ x : Fin n → Bool, x v = false →
           circuitFun n (moves.foldl (fun D mp => eraseGate n D mp.1 mp.2) C) x =
           circuitFun n C x)
@@ -33,7 +33,8 @@ theorem PEqualNP.Outside.R_meta_1971_41
     rw [computes]
     funext x
     apply Bool.eq_iff_iff.mpr
-    simpa [graphFun] using semantics x
+    delta graphFun
+    simpa using semantics x
   obtain ⟨u,hu,huReads⟩ := low
   have fold1971Essential
       {n : ℕ} {G : SimpleGraph (Fin n)} {S : Finset (Fin n)}
@@ -114,12 +115,24 @@ theorem PEqualNP.Outside.R_meta_1971_41
         g.op.eval (g.inputs.map F) = g.op.eval ((eff g).map F) := by
       obtain ⟨ops, hi⟩ := fan g hg
       rcases ops with a | a | a
-      · simp [eff, a, PEqualNP.CircuitLowerBounds.GateOp.eval, List.take_of_length_le hi]
-      · simp [eff, a, PEqualNP.CircuitLowerBounds.GateOp.eval, List.take_of_length_le hi]
-      · change g.op = PEqualNP.CircuitLowerBounds.GateOp.not at a
+      · change g.op = GateOp.and at a
+        have eg : eff g = g.inputs := by
+          change g.inputs.take (bif g.op.eval [false] then 1 else 2) = g.inputs
+          rw [a]
+          exact List.take_of_length_le hi
+        rw [eg]
+      · change g.op = GateOp.or at a
+        have eg : eff g = g.inputs := by
+          change g.inputs.take (bif g.op.eval [false] then 1 else 2) = g.inputs
+          rw [a]
+          exact List.take_of_length_le hi
+        rw [eg]
+      · change g.op = GateOp.not at a
+        dsimp only [eff]
+        rw [a]
         cases inp : g.inputs with
-        | nil => simp [eff, a, inp, PEqualNP.CircuitLowerBounds.GateOp.eval]
-        | cons k rest => simp [eff, a, inp, PEqualNP.CircuitLowerBounds.GateOp.eval]
+        | nil => rfl
+        | cons k rest => rfl
     have snoc (l : List Bool) (b : Bool) (j : ℕ) (hj : j ≠ l.length) :
         (l ++ [b]).getD j false = l.getD j false := by
       by_cases h : j < l.length
@@ -200,16 +213,20 @@ theorem PEqualNP.Outside.R_meta_1971_41
     | cons m ms ih =>
       intro hD valid
       have hm : m.1 < D.gates.length := by
-        simpa [Circuit.size] using valid ⟨0, by simp⟩
+        change m.1 < D.size
+        simpa using valid ⟨0, by simp⟩
       have fan : FanInTwo (eraseGate n D m.1 m.2) := by
         intro g hg
-        simp only [eraseGate, hm, ↓reduceIte, List.mem_append, List.mem_map] at hg
+        delta eraseGate at hg
+        simp only [hm, ↓reduceIte, List.mem_append, List.mem_map] at hg
         rcases hg with ht | ⟨a,ha,rfl⟩
         · exact hD g (List.mem_of_mem_take ht)
         · obtain ⟨hop,hlen⟩ := hD a (List.mem_of_mem_drop ha)
           exact ⟨hop, by simpa using hlen⟩
       have sz : (eraseGate n D m.1 m.2).size + 1 = D.size := by
-        simp [eraseGate, hm, Circuit.size, Nat.min_eq_left (Nat.le_of_lt hm)]
+        change (eraseGate n D m.1 m.2).gates.length + 1 = D.gates.length
+        delta eraseGate
+        simp [hm, Nat.min_eq_left (Nat.le_of_lt hm)]
         omega
       obtain ⟨hh,hs⟩ := ih (eraseGate n D m.1 m.2) fan (by
         intro i
