@@ -107,27 +107,30 @@ theorem PEqualNP.Outside.R_meta_3116_37
     have projected (y : Fin 8 → Bool) : C.eval (w (lift v y)) = H y :=
       (correct _).trans (graph v hv y)
     have changes : C.eval (w (lift v (fun _ => false))) ≠ C.eval (w (lift v (fun _ => true))) := by
-      rw [projected,projected]
-      decide +kernel
+      have distinct : H (fun _ => false) ≠ H (fun _ => true) := by decide +kernel
+      intro eq
+      exact distinct ((projected (fun _ => false)).symm.trans (eq.trans (projected (fun _ => true))))
     have reduced := restrict C 8 11 (fun y => w (lift v y)) {k,j} fan high (by simp [w])
       (fun i hi _ => cols v ⟨i,hi⟩) (fun d hd => by
         simp only [Finset.mem_insert, Finset.mem_singleton] at hd
         rcases hd with rfl | rfl
         · exact ⟨v.val,by omega,hk,fixedCol v hv ⟨v.val,by omega⟩ (Or.inl rfl)⟩
-        · exact ⟨p.val,p.isLt,hj,fixedCol v hv p (Or.inr hp)⟩) ⟨_,_,changes⟩
-    rw [show (fun y => C.eval (w (lift v y))) = H from funext projected] at reduced
-    have lb := deleted _ reduced
+        · exact ⟨p.val,p.isLt,hj,fixedCol v hv p (Or.inr hp)⟩) ⟨(fun _ : Fin 8 => false), (fun _ : Fin 8 => true), changes⟩
+    obtain ⟨D,hf,hs,he⟩ := reduced
+    have lb := deleted (C.size - ({k,j} : Finset (Fin C.size)).card)
+      ⟨D,hf,hs,fun y => (he y).trans (projected y)⟩
     simp [hkj] at lb
     omega
   · have cols : ∀ (i : Fin 9), ∀ x, (w x).getD i.val false = x i := by decide +kernel
     have changes : C.eval (w (fun _ => false)) ≠ C.eval (w (fun _ => true)) := by
-      rw [correct,correct]
-      decide +kernel
+      have distinct : F (fun _ => false) ≠ F (fun _ => true) := by decide +kernel
+      intro eq
+      exact distinct ((correct (fun _ => false)).symm.trans (eq.trans (correct (fun _ => true))))
     have reduced := restrict C 9 11 w ∅ fan high (by simp [w]) (fun i hi hread => by
       obtain ⟨j,hj⟩ := hread
       by_cases h : i < 9
       · exact Or.inr ⟨⟨i,h⟩,cols ⟨i,h⟩⟩
-      · exact False.elim (used ⟨j,⟨i,hi⟩,by omega,hj⟩)) (by simp) ⟨_,_,changes⟩
-    rw [show (fun y => C.eval (w y)) = F from funext correct] at reduced
+      · exact False.elim (used ⟨j,(⟨i,hi⟩ : Fin 11),Nat.le_of_not_gt h,hj⟩)) (by simp) ⟨(fun _ : Fin 9 => false), (fun _ : Fin 9 => true), changes⟩
     obtain ⟨D,hf,hs,he⟩ := reduced
-    exact raw ⟨D,hf,by simp only [Finset.card_empty, Nat.sub_zero] at hs; omega,he⟩
+    exact raw ⟨D,hf,by simp only [Finset.card_empty, Nat.sub_zero] at hs; omega,
+      fun x => (he x).trans (correct x)⟩
