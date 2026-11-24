@@ -1,9 +1,17 @@
 # Opens a pull request to brilliant-hq/pequalnp-proofs for every proof branch
 # in this fork that has none yet. Uses the UPSTREAM_PR_TOKEN repository secret
 # (a classic token with the public_repo scope). Does nothing without it.
+# Triggered by a repository_dispatch ping or a push to main right after a
+# proof branch is pushed, with a 10-minute schedule as a fallback.
 name: open-upstream-pr
 
 on:
+  # Fast path: run right after a proof branch is pushed (the session pings it).
+  repository_dispatch:
+    types: [open-pr]
+  push:
+    branches: [main]
+  # Fallback in case a ping is missed.
   schedule:
     - cron: '*/10 * * * *'
   workflow_dispatch:
