@@ -48,11 +48,11 @@ theorem PEqualNP.Outside.R_meta_1936_1
     | nil => exact ⟨11,11,by intro x; rfl⟩
     | cons i rest =>
       cases rest with
-      | nil => exact ⟨clip i,11,by intro x; rw [readClip]; simp [GateOp.eval,tok]⟩
+      | nil => exact ⟨clip i,11,by intro x; rw [readClip]; rfl⟩
       | cons j rest =>
         have he : rest = [] := List.length_eq_zero_iff.mp (by simp only [List.length_cons] at hlen; omega)
         subst rest
-        exact ⟨clip i,clip j,by intro x; rw [readClip,readClip]; simp [GateOp.eval]⟩
+        exact ⟨clip i,clip j,by intro x; rw [readClip,readClip]; change (_ && (_ && true)) = _; simp⟩
   let maps : Fin 2 → Fin 9 → Fin 9 := ![![0,1,2,3,4,5,6,7,8],
       ![0,5,8,3,4,1,7,6,2]]
   let table (x : Fin 9 → Bool) : Fin 12 → Bool := fun i =>
@@ -107,7 +107,10 @@ theorem PEqualNP.Outside.R_meta_1936_1
     intro g hg
     obtain ⟨j,hj,rfl⟩ := List.mem_map.mp hg
     simpa [rename] using hf j hj
-  have sizeE : E.size ≤ 13 := by simpa [E,Circuit.size] using hs
+  have sizeE : E.size ≤ 13 := by
+    change (D.gates.map rename).length ≤ 13
+    rw [List.length_map]
+    exact hs
   obtain ⟨x,bad⟩ : ∃ x, E.eval (w x ++ [tok x ab.1 && tok x ab.2]) ≠ target x := by
     rcases hrep with h|h|h
     · exact literal ab h E heFan sizeE
