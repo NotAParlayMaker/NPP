@@ -31,6 +31,14 @@ theorem PEqualNP.Outside.R_meta_2744_7
       16 ≤ C.size) :
     ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.FanInTwo x1 → (∀ (x3 : Fin (9 : ℕ) → Bool), (x1.wires (List.ofFn x3)).getD (9 : ℕ) Bool.false = (x3 (4 : Fin (9 : ℕ)) || x3 (6 : Fin (9 : ℕ)))) → (PEqualNP.MetaComplexity.circuitFun (9 : ℕ) x1 = fun (x4 : Fin (9 : ℕ) → Bool) => x4 (0 : Fin (9 : ℕ)) && x4 (1 : Fin (9 : ℕ)) || x4 (1 : Fin (9 : ℕ)) && x4 (2 : Fin (9 : ℕ)) || x4 (2 : Fin (9 : ℕ)) && x4 (3 : Fin (9 : ℕ)) || x4 (3 : Fin (9 : ℕ)) && x4 (4 : Fin (9 : ℕ)) || x4 (4 : Fin (9 : ℕ)) && x4 (0 : Fin (9 : ℕ)) || x4 (0 : Fin (9 : ℕ)) && x4 (5 : Fin (9 : ℕ)) || x4 (1 : Fin (9 : ℕ)) && x4 (6 : Fin (9 : ℕ)) || x4 (2 : Fin (9 : ℕ)) && x4 (7 : Fin (9 : ℕ)) || x4 (3 : Fin (9 : ℕ)) && x4 (8 : Fin (9 : ℕ)) || x4 (5 : Fin (9 : ℕ)) && x4 (7 : Fin (9 : ℕ)) || x4 (6 : Fin (9 : ℕ)) && x4 (8 : Fin (9 : ℕ)) || x4 (8 : Fin (9 : ℕ)) && x4 (5 : Fin (9 : ℕ))) → (∃ (x5 : PEqualNP.CircuitLowerBounds.Gate), x1.gates[(1 : ℕ)]? = Option.some x5) → (16 : ℕ) ≤ x1.size := by
   intro C hfan h9 hfun hg1
+  have hwi : ∀ (D : PEqualNP.CircuitLowerBounds.Circuit) (l : List Bool), D.wires l =
+      D.gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) l :=
+    fun _ _ => rfl
+  have hcf : ∀ (D : PEqualNP.CircuitLowerBounds.Circuit) (x : Fin 9 → Bool),
+      PEqualNP.MetaComplexity.circuitFun 9 D x =
+        (D.gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
+          (List.ofFn x)).getD D.output false := fun _ _ => rfl
+  have hsz : ∀ D : PEqualNP.CircuitLowerBounds.Circuit, D.size = D.gates.length := fun _ => rfl
   obtain ⟨g, hg⟩ := hg1
   -- the symmetry (0 1)(2 5)(3 8)(4 6) of the graph, which fixes the first gate x4 OR x6
   have hF0 : ∀ b0 b1 b2 b3 b4 b5 b6 b7 b8 : Bool,
@@ -153,7 +161,9 @@ theorem PEqualNP.Outside.R_meta_2744_7
       (PEqualNP.CircuitLowerBounds.Gate.mk g.op
         (g.inputs.map fun i => List.getD [1, 0, 5, 8, 6, 2, 4, 7, 3] i i))
       ?_ rfl ?_
-    · simpa [PEqualNP.CircuitLowerBounds.Circuit.size] using hsize
+    · rw [hsz] at hsize
+      rw [hsz]
+      simpa using hsize
     · intro d hd
       simp only [List.mem_map] at hd
       obtain ⟨d0, hd0, rfl⟩ := hd
@@ -162,7 +172,8 @@ theorem PEqualNP.Outside.R_meta_2744_7
     · intro y
       have e := hW y 9
       rw [hge 9 (le_refl _)] at e
-      simp only [PEqualNP.CircuitLowerBounds.Circuit.wires]
+      rw [hwi]
+      dsimp only
       rw [e]
       refine (h9 _).trans ?_
       show (y 6 || y 4) = (y 4 || y 6)
@@ -170,8 +181,9 @@ theorem PEqualNP.Outside.R_meta_2744_7
     · funext y
       have e := hW y C.output
       have hf := congrFun hfun (fun i => y (![1, 0, 5, 8, 6, 2, 4, 7, 3] i))
-      simp only [PEqualNP.MetaComplexity.circuitFun, PEqualNP.CircuitLowerBounds.Circuit.eval,
-        PEqualNP.CircuitLowerBounds.Circuit.wires] at hf ⊢
+      rw [hcf] at hf
+      rw [hcf]
+      dsimp only at hf ⊢
       rw [e]
       rw [hf]
       exact hF0 (y 0) (y 1) (y 2) (y 3) (y 4) (y 5) (y 6) (y 7) (y 8)
