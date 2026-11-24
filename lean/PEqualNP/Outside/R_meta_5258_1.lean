@@ -1,8 +1,6 @@
 import Mathlib
 import PEqualNP.Defs
 
-set_option maxHeartbeats 800000
-
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 open PEqualNP.MetaComplexity.NestedCover PEqualNP.EdgeOwnership
 
@@ -11,6 +9,7 @@ open PEqualNP.MetaComplexity.NestedCover PEqualNP.EdgeOwnership
 -- property. The second is a shrink that keeps the two distinguished wires
 -- (allowing the second wire to grow only where the first is already false).
 -- The glue is the case split, then a transport of the two-wire property.
+set_option maxHeartbeats 800000 in
 theorem PEqualNP.Outside.R_meta_5258_1
     (hDirect :
       let D : Finset (Fin 13) := {0, 1, 3, 9}
