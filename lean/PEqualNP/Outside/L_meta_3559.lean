@@ -1,4 +1,4 @@
-import Mathlib
+import Mathlib.Tactic
 import PEqualNP.Defs
 
 namespace PEqualNP.Outside.L_meta_3559_aux
@@ -225,49 +225,47 @@ theorem wiresFrom_norm (gs : List Gate) : ∀ w : List Bool,
         = wiresFrom gs (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) := rfl
     rw [s1, s2, normGate_eval, ih]
 
-inductive Stat : Type
-  | const (c : Bool)
-  | wire (j : ℕ)
+abbrev Stat := Sum Bool ℕ
 
 def Stat.val (w : List Bool) : Stat → Bool
-  | Stat.const c => c
-  | Stat.wire j => w.getD j false
+  | Sum.inl c => c
+  | Sum.inr j => w.getD j false
 
 def Stat.Valid (m : ℕ) : Stat → Prop
-  | Stat.const _ => True
-  | Stat.wire j => j < m
+  | Sum.inl _ => True
+  | Sum.inr j => j < m
 
 def simpNot (m : ℕ) : List Stat → Option Gate × Stat
-  | [] => (none, Stat.const true)
-  | Stat.const c :: _ => (none, Stat.const (!c))
-  | Stat.wire j :: _ => (some ⟨GateOp.not, [j]⟩, Stat.wire m)
+  | [] => (none, Sum.inl true)
+  | Sum.inl c :: _ => (none, Sum.inl (!c))
+  | Sum.inr j :: _ => (some ⟨GateOp.not, [j]⟩, Sum.inr m)
 
 def simpAnd (m : ℕ) : List Stat → Option Gate × Stat
-  | [] => (none, Stat.const true)
-  | [Stat.const c] => (none, Stat.const c)
-  | [Stat.wire j] => (none, Stat.wire j)
-  | [Stat.const c, Stat.const d] => (none, Stat.const (c && d))
-  | [Stat.const c, Stat.wire j] => (none, bif c then Stat.wire j else Stat.const false)
-  | [Stat.wire j, Stat.const c] => (none, bif c then Stat.wire j else Stat.const false)
-  | [Stat.wire j, Stat.wire k] => (some ⟨GateOp.and, [j, k]⟩, Stat.wire m)
-  | _ => (none, Stat.const false)
+  | [] => (none, Sum.inl true)
+  | [Sum.inl c] => (none, Sum.inl c)
+  | [Sum.inr j] => (none, Sum.inr j)
+  | [Sum.inl c, Sum.inl d] => (none, Sum.inl (c && d))
+  | [Sum.inl c, Sum.inr j] => (none, bif c then Sum.inr j else Sum.inl false)
+  | [Sum.inr j, Sum.inl c] => (none, bif c then Sum.inr j else Sum.inl false)
+  | [Sum.inr j, Sum.inr k] => (some ⟨GateOp.and, [j, k]⟩, Sum.inr m)
+  | _ => (none, Sum.inl false)
 
 def simpOr (m : ℕ) : List Stat → Option Gate × Stat
-  | [] => (none, Stat.const false)
-  | [Stat.const c] => (none, Stat.const c)
-  | [Stat.wire j] => (none, Stat.wire j)
-  | [Stat.const c, Stat.const d] => (none, Stat.const (c || d))
-  | [Stat.const c, Stat.wire j] => (none, bif c then Stat.const true else Stat.wire j)
-  | [Stat.wire j, Stat.const c] => (none, bif c then Stat.const true else Stat.wire j)
-  | [Stat.wire j, Stat.wire k] => (some ⟨GateOp.or, [j, k]⟩, Stat.wire m)
-  | _ => (none, Stat.const false)
+  | [] => (none, Sum.inl false)
+  | [Sum.inl c] => (none, Sum.inl c)
+  | [Sum.inr j] => (none, Sum.inr j)
+  | [Sum.inl c, Sum.inl d] => (none, Sum.inl (c || d))
+  | [Sum.inl c, Sum.inr j] => (none, bif c then Sum.inl true else Sum.inr j)
+  | [Sum.inr j, Sum.inl c] => (none, bif c then Sum.inl true else Sum.inr j)
+  | [Sum.inr j, Sum.inr k] => (some ⟨GateOp.or, [j, k]⟩, Sum.inr m)
+  | _ => (none, Sum.inl false)
 
 def simplify (op : GateOp) (m : ℕ) (ins : List Stat) : Option Gate × Stat :=
   match op with
   | GateOp.and => simpAnd m ins
   | GateOp.or => simpOr m ins
   | GateOp.not => simpNot m ins
-  | _ => (none, Stat.const false)
+  | _ => (none, Sum.inl false)
 
 theorem simplify_ok (op : GateOp) (m : ℕ) (ins : List Stat) :
     ∀ g ∈ (simplify op m ins).1, Ok g := by
@@ -284,7 +282,7 @@ theorem simplify_ok (op : GateOp) (m : ℕ) (ins : List Stat) :
 
 theorem simplify_count (op : GateOp) (m : ℕ) (ins : List Stat)
     (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not) (hlen : ins.length ≤ 2)
-    (hnot : op = GateOp.not → ins.length ≤ 1) (hc : ∃ c, Stat.const c ∈ ins) :
+    (hnot : op = GateOp.not → ins.length ≤ 1) (hc : ∃ c, Sum.inl c ∈ ins) :
     (simplify op m ins).1 = none := by
   obtain ⟨c, hc⟩ := hc
   rcases hop with rfl | rfl | rfl
@@ -320,9 +318,9 @@ theorem simplify_sound (op : GateOp) (hop : op = GateOp.and ∨ op = GateOp.or �
 
 def elimStep (n : ℕ) (acc : List Stat × List Gate) (g : Gate) : List Stat × List Gate :=
   (acc.1 ++ [(simplify g.op (n + acc.2.length)
-      (g.inputs.map fun i => acc.1.getD i (Stat.const false))).2],
+      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).2],
     acc.2 ++ (simplify g.op (n + acc.2.length)
-      (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1.toList)
+      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList)
 
 def elim (n : ℕ) (gs : List Gate) (acc : List Stat × List Gate) : List Stat × List Gate :=
   gs.foldl (elimStep n) acc
@@ -366,13 +364,13 @@ theorem elim_len (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
     have h2 : (elimStep n acc g).2.length ≤ acc.2.length + 1 := by
       simp only [elimStep, List.length_append]
       have := toList_length_le (simplify g.op (n + acc.2.length)
-        (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1
+        (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1
       omega
     have h3 : elim n (g :: gs) acc = elim n gs (elimStep n acc g) := rfl
     rw [h3, List.length_cons]; omega
 
 theorem elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
-    (∀ g ∈ gs, NOk g) → k < acc.1.length → (∃ c, acc.1.getD k (Stat.const false) = Stat.const c) →
+    (∀ g ∈ gs, NOk g) → k < acc.1.length → (∃ c, acc.1.getD k (Sum.inl false) = Sum.inl c) →
     (∃ g ∈ gs, k ∈ g.inputs) → (elim n gs acc).2.length + 1 ≤ acc.2.length + gs.length := by
   induction gs with
   | nil => intro acc _ _ _ h; obtain ⟨g, hg, _⟩ := h; simp at hg
@@ -384,7 +382,7 @@ theorem elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat × List G
     · obtain ⟨c, hc⟩ := hc
       have hnok := hok g List.mem_cons_self
       have hnone : (simplify g.op (n + acc.2.length)
-          (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1 = none := by
+          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1 = none := by
         apply simplify_count
         · exact hnok.1.1
         · simpa using hnok.1.2
@@ -392,7 +390,7 @@ theorem elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat × List G
         · exact ⟨c, List.mem_map.2 ⟨k, hkg, hc⟩⟩
       have h2 : (elimStep n acc g).2.length = acc.2.length := by
         show (acc.2 ++ (simplify g.op (n + acc.2.length)
-          (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1.toList).length = _
+          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList).length = _
         rw [hnone]; simp
       have := elim_len n gs (elimStep n acc g)
       omega
@@ -412,23 +410,23 @@ theorem elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat × List G
       have h2 : (elimStep n acc g).2.length ≤ acc.2.length + 1 := by
         simp only [elimStep, List.length_append]
         have := toList_length_le (simplify g.op (n + acc.2.length)
-          (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1
+          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1
         omega
       omega
 
 theorem Stat.valid_mono {m m' : ℕ} (h : m ≤ m') : ∀ s : Stat, s.Valid m → s.Valid m'
-  | Stat.const _, _ => trivial
-  | Stat.wire _, hj => lt_of_lt_of_le hj h
+  | Sum.inl _, _ => trivial
+  | Sum.inr _, hj => lt_of_lt_of_le hj h
 
 theorem Stat.val_append (w t : List Bool) : ∀ s : Stat, s.Valid w.length →
     s.val (w ++ t) = s.val w
-  | Stat.const _, _ => rfl
-  | Stat.wire _, hj => List.getD_append _ _ _ _ hj
+  | Sum.inl _, _ => rfl
+  | Sum.inr _, hj => List.getD_append _ _ _ _ hj
 
 def Inv (n : ℕ) (y : List Bool) (w : List Bool) (acc : List Stat × List Gate) : Prop :=
   acc.1.length = w.length ∧ ∀ i : ℕ,
-    (acc.1.getD i (Stat.const false)).Valid (n + acc.2.length) ∧
-    (acc.1.getD i (Stat.const false)).val (wiresFrom acc.2 y) = w.getD i false
+    (acc.1.getD i (Sum.inl false)).Valid (n + acc.2.length) ∧
+    (acc.1.getD i (Sum.inl false)).val (wiresFrom acc.2 y) = w.getD i false
 
 theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) :
     ∀ (w : List Bool) (acc : List Stat × List Gate), (∀ g ∈ gs, Ok g) → Inv n y w acc →
@@ -442,7 +440,7 @@ theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) 
     obtain ⟨hl, hi⟩ := h
     set w' := wiresFrom acc.2 y with hw'
     have lw' : w'.length = n + acc.2.length := by rw [hw', length_wiresFrom, hy]
-    set ins := g.inputs.map fun i => acc.1.getD i (Stat.const false) with hins
+    set ins := g.inputs.map fun i => acc.1.getD i (Sum.inl false) with hins
     have hgok := hok g List.mem_cons_self
     have hs := simplify_sound g.op hgok.1 w' ins (by simpa [hins] using hgok.2)
       (by
@@ -461,8 +459,8 @@ theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) 
     obtain ⟨t, ht, htl⟩ := wiresFrom_start r.1.toList w'
     refine ⟨by simp [elimStep, hl], ?_⟩
     intro i
-    show ((acc.1 ++ [r.2]).getD i (Stat.const false)).Valid (n + (acc.2 ++ r.1.toList).length) ∧
-      ((acc.1 ++ [r.2]).getD i (Stat.const false)).val (wiresFrom (acc.2 ++ r.1.toList) y) = _
+    show ((acc.1 ++ [r.2]).getD i (Sum.inl false)).Valid (n + (acc.2 ++ r.1.toList).length) ∧
+      ((acc.1 ++ [r.2]).getD i (Sum.inl false)).val (wiresFrom (acc.2 ++ r.1.toList) y) = _
     rw [hnew, List.length_append, ← Nat.add_assoc]
     by_cases hil : i = acc.1.length
     · subst hil
@@ -474,13 +472,13 @@ theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) 
       exact (hi i).2
 
 def initStats (n : ℕ) (b : Bool) : List Stat :=
-  List.ofFn (fun i : Fin n => Stat.wire i) ++ [Stat.const b]
+  List.ofFn (fun i : Fin n => (Sum.inr (i : ℕ) : Stat)) ++ [(Sum.inl b : Stat)]
 
 theorem inv_init (n : ℕ) (b : Bool) (y : Fin n → Bool) :
     Inv n (List.ofFn y) (List.ofFn y ++ [b]) (initStats n b, []) := by
   refine ⟨by simp [initStats], ?_⟩
   intro i
-  have l1 : (List.ofFn (fun i : Fin n => Stat.wire i)).length = n := by simp
+  have l1 : (List.ofFn (fun i : Fin n => (Sum.inr (i : ℕ) : Stat))).length = n := by simp
   have l2 : (List.ofFn y).length = n := by simp
   by_cases hin : i = n
   · subst hin
@@ -552,20 +550,20 @@ theorem gate_elim (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (b : Bool) (s 
     rw [ofFn_snoc]
     exact inv_elim n _ (by simp) gs _ _ (fun g hg => (hnok g hg).1) (inv_init n b y)
   have hval : ∀ y : Fin n → Bool,
-      (acc.1.getD C.output (Stat.const false)).val (wiresFrom acc.2 (List.ofFn y))
+      (acc.1.getD C.output (Sum.inl false)).val (wiresFrom acc.2 (List.ofFn y))
         = f (Fin.snoc y b) := by
     intro y
     rw [((hinv y).2 C.output).2, hevg]
-  have hvalid : (acc.1.getD C.output (Stat.const false)).Valid (n + acc.2.length) := by
+  have hvalid : (acc.1.getD C.output (Sum.inl false)).Valid (n + acc.2.length) := by
     obtain ⟨y, _, _⟩ := hnc
     exact ((hinv y).2 C.output).1
-  cases hst : acc.1.getD C.output (Stat.const false) with
-  | const c =>
+  cases hst : acc.1.getD C.output (Sum.inl false) with
+  | inl c =>
     exfalso
     obtain ⟨y, y', hne⟩ := hnc
     apply hne
     rw [← hval y, ← hval y', hst]; rfl
-  | wire j =>
+  | inr j =>
     have hlen : acc.2.length ≤ s := by
       by_cases hread : ∃ g ∈ gs, n ∈ g.inputs
       · have := elim_len_lt n n gs (initStats n b, []) hnok (by simp [initStats])
@@ -579,7 +577,7 @@ theorem gate_elim (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (b : Bool) (s 
         have hout : C.output ≠ n := by
           intro e
           rw [e, hacc, elim_getD n n _ gs _ (by simp [initStats])] at hst
-          have hb : (initStats n b).getD n (Stat.const false) = Stat.const b :=
+          have hb : (initStats n b).getD n (Sum.inl false) = Sum.inl b :=
             getD_snoc_len _ _ _ _ (by simp)
           rw [show ((initStats n b, ([] : List Gate))).1 = initStats n b from rfl, hb] at hst
           cases hst
@@ -617,14 +615,14 @@ theorem elim_fst_len (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Ga
     omega
 
 theorem initStats_last (n : ℕ) (b : Bool) :
-    (initStats n b).getD n (Stat.const false) = Stat.const b :=
+    (initStats n b).getD n (Sum.inl false) = Sum.inl b :=
   getD_snoc_len _ _ _ _ (by simp)
 
 theorem simplify_const (op : GateOp) (m : ℕ) (ins : List Stat)
     (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not) (hlen : ins.length ≤ 2)
     (hnot : op = GateOp.not → ins.length ≤ 1) (b : Bool)
     (hand : op = GateOp.and → b = false) (hor : op = GateOp.or → b = true)
-    (hc : Stat.const b ∈ ins) : ∃ c, (simplify op m ins).2 = Stat.const c := by
+    (hc : Sum.inl b ∈ ins) : ∃ c, (simplify op m ins).2 = Sum.inl c := by
   rcases hop with rfl | rfl | rfl
   · have := hand rfl
     subst this
@@ -638,17 +636,17 @@ theorem simplify_const (op : GateOp) (m : ℕ) (ins : List Stat)
     rcases ins with _ | ⟨a, _ | ⟨d, l⟩⟩ <;> (try cases a) <;> simp_all [simplify, simpNot]
 
 theorem elimStep_none (n : ℕ) (acc : List Stat × List Gate) (g : Gate) (hg : NOk g) (k : ℕ)
-    (hk : k ∈ g.inputs) (c : Bool) (hc : acc.1.getD k (Stat.const false) = Stat.const c) :
+    (hk : k ∈ g.inputs) (c : Bool) (hc : acc.1.getD k (Sum.inl false) = Sum.inl c) :
     (elimStep n acc g).2.length = acc.2.length := by
   have hnone : (simplify g.op (n + acc.2.length)
-      (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1 = none := by
+      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1 = none := by
     apply simplify_count
     · exact hg.1.1
     · simpa using hg.1.2
     · intro h; simpa using hg.2 h
     · exact ⟨c, List.mem_map.2 ⟨k, hk, hc⟩⟩
   show (acc.2 ++ (simplify g.op (n + acc.2.length)
-    (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1.toList).length = _
+    (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList).length = _
   rw [hnone]; simp
 
 def fixBit (g : Gate) : Bool :=
@@ -657,11 +655,11 @@ def fixBit (g : Gate) : Bool :=
   | _ => false
 
 theorem elimStep_const (n : ℕ) (acc : List Stat × List Gate) (g : Gate) (hg : NOk g) (k : ℕ)
-    (hk : k ∈ g.inputs) (hc : acc.1.getD k (Stat.const false) = Stat.const (fixBit g)) :
-    ∃ c, (elimStep n acc g).1.getD acc.1.length (Stat.const false) = Stat.const c := by
-  have e : (elimStep n acc g).1.getD acc.1.length (Stat.const false)
+    (hk : k ∈ g.inputs) (hc : acc.1.getD k (Sum.inl false) = Sum.inl (fixBit g)) :
+    ∃ c, (elimStep n acc g).1.getD acc.1.length (Sum.inl false) = Sum.inl c := by
+  have e : (elimStep n acc g).1.getD acc.1.length (Sum.inl false)
       = (simplify g.op (n + acc.2.length)
-        (g.inputs.map fun i => acc.1.getD i (Stat.const false))).2 := getD_snoc_eq _ _ _
+        (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).2 := getD_snoc_eq _ _ _
   rw [e]
   apply simplify_const _ _ _ hg.1.1 (by simpa using hg.1.2) (fun h => by simpa using hg.2 h)
     (fixBit g)
@@ -767,7 +765,7 @@ theorem clean_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate
     refine ih _ (elimStep n acc g) (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg')) hinv' ?_
     intro p g' hp
     have hp' : (acc.2 ++ (simplify g.op (n + acc.2.length)
-        (g.inputs.map fun i => acc.1.getD i (Stat.const false))).1.toList)[p]? = some g' := hp
+        (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList)[p]? = some g' := hp
     by_cases hlt : p < acc.2.length
     · rw [List.getElem?_append_left hlt] at hp'
       exact hcl p g' hp'
@@ -783,7 +781,7 @@ def HasClean (n : ℕ) (f : (Fin n → Bool) → Bool) (s : ℕ) : Prop :=
   ∃ (gs : List Gate) (o : ℕ), CleanL n gs ∧ gs.length ≤ s ∧
     ∀ x : Fin n → Bool, (wiresFrom gs (List.ofFn x)).getD o false = f x
 
-def idStats (n : ℕ) : List Stat := List.ofFn (fun i : Fin n => Stat.wire i)
+def idStats (n : ℕ) : List Stat := List.ofFn (fun i : Fin n => (Sum.inr (i : ℕ) : Stat))
 
 theorem inv_id (n : ℕ) (y : Fin n → Bool) :
     Inv n (List.ofFn y) (List.ofFn y) (idStats n, []) := by
@@ -805,16 +803,16 @@ theorem clean_of (n : ℕ) (f : (Fin n → Bool) → Bool) (s : ℕ)
       Inv n (List.ofFn y) (wiresFrom C.gates (List.ofFn y)) acc :=
     fun y => inv_elim n _ (by simp) C.gates _ _ hok (inv_id n y)
   have hval : ∀ y : Fin n → Bool,
-      (acc.1.getD C.output (Stat.const false)).val (wiresFrom acc.2 (List.ofFn y)) = f y := by
+      (acc.1.getD C.output (Sum.inl false)).val (wiresFrom acc.2 (List.ofFn y)) = f y := by
     intro y
     rw [((hinv y).2 C.output).2, ← hev y]; rfl
-  cases hst : acc.1.getD C.output (Stat.const false) with
-  | const c =>
+  cases hst : acc.1.getD C.output (Sum.inl false) with
+  | inl c =>
     exfalso
     obtain ⟨y, y', hne⟩ := hnc
     apply hne
     rw [← hval y, ← hval y', hst]; rfl
-  | wire j =>
+  | inr j =>
     refine ⟨acc.2, j, ?_, ?_, ?_⟩
     · exact clean_elim n (List.ofFn fun _ : Fin n => false) (by simp) C.gates _ _ hok
         (inv_id n _) (by intro p g hp; simp at hp)
@@ -855,15 +853,62 @@ open PEqualNP.MetaComplexity PEqualNP.CircuitLowerBounds
 def kept {α : Type} (b : Bool) (x : α) (xs : List α) : List α :=
   if b then x :: xs else xs
 
-inductive Run {α : Type} (inv : α → α) (meet join : α → α → α) (y : α) : ℕ → List α → Prop
-  | done : Run inv meet join y 0 [y]
-  | perm {s xs zs} : xs.Perm zs → Run inv meet join y s xs → Run inv meet join y s zs
-  | one {s a rest} (neg save : Bool) :
-      Run inv meet join y s ((if neg then inv a else a) :: kept save a rest) →
-      Run inv meet join y (s+1) (a :: rest)
-  | two {s a b rest} (conj ka kb : Bool) :
-      Run inv meet join y s ((if conj then meet a b else join a b) :: kept ka a (kept kb b rest)) →
-      Run inv meet join y (s+1) (a :: b :: rest)
+def runStep {α : Type} (inv : α → α) (meet join : α → α → α) (v w : ℕ × List α) : Prop :=
+  (v.1 = w.1 ∧ v.2.Perm w.2) ∨
+  (∃ (s : ℕ) (a : α) (rest : List α) (neg save : Bool), v = (s, (if neg then inv a else a) :: kept save a rest) ∧ w = (s+1, a :: rest)) ∨
+  (∃ (s : ℕ) (a b : α) (rest : List α) (conj ka kb : Bool), v = (s, (if conj then meet a b else join a b) :: kept ka a (kept kb b rest)) ∧ w = (s+1, a :: b :: rest))
+
+def Run {α : Type} (inv : α → α) (meet join : α → α → α) (y : α) (s : ℕ) (xs : List α) : Prop :=
+  Relation.ReflTransGen (runStep inv meet join) (0, [y]) (s, xs)
+
+theorem Run.done {α inv meet join y} : @Run α inv meet join y 0 [y] := .refl
+
+theorem Run.perm {α inv meet join y s xs zs} (hp : xs.Perm zs)
+    (h : @Run α inv meet join y s xs) : Run inv meet join y s zs :=
+  h.tail (Or.inl ⟨rfl, hp⟩)
+
+theorem Run.one {α inv meet join y s a rest} (neg save : Bool)
+    (h : @Run α inv meet join y s ((if neg then inv a else a) :: kept save a rest)) :
+    Run inv meet join y (s+1) (a :: rest) :=
+  h.tail (Or.inr (Or.inl ⟨s, a, rest, neg, save, rfl, rfl⟩))
+
+theorem Run.two {α inv meet join y s a b rest} (conj ka kb : Bool)
+    (h : @Run α inv meet join y s ((if conj then meet a b else join a b) :: kept ka a (kept kb b rest))) :
+    Run inv meet join y (s+1) (a :: b :: rest) :=
+  h.tail (Or.inr (Or.inr ⟨s, a, b, rest, conj, ka, kb, rfl, rfl⟩))
+
+theorem Run.induction {α inv meet join y}
+    {P : ∀ (s : ℕ) (xs : List α), @Run α inv meet join y s xs → Prop}
+    (done : P 0 [y] Run.done)
+    (perm : ∀ {s xs zs} (hp : xs.Perm zs) (h : Run inv meet join y s xs),
+      P s xs h → P s zs (Run.perm hp h))
+    (one : ∀ {s a rest} (neg save : Bool)
+      (h : Run inv meet join y s ((if neg then inv a else a) :: kept save a rest)),
+      P s _ h → P (s+1) (a::rest) (Run.one neg save h))
+    (two : ∀ {s a b rest} (conj ka kb : Bool)
+      (h : Run inv meet join y s ((if conj then meet a b else join a b) :: kept ka a (kept kb b rest))),
+      P s _ h → P (s+1) (a::b::rest) (Run.two conj ka kb h))
+    {s xs} (h : Run inv meet join y s xs) : P s xs h := by
+  let Q : ∀ z : ℕ × List α,
+      Relation.ReflTransGen (runStep inv meet join) (0, [y]) z → Prop :=
+    fun z hz => P z.1 z.2 hz
+  have all : ∀ z (hz : Relation.ReflTransGen (runStep inv meet join) (0, [y]) z), Q z hz := by
+    intro z hz
+    induction hz with
+    | refl => exact done
+    | @tail v w h hs ih =>
+      rcases hs with ⟨heq, hp⟩ | ⟨s, a, rest, neg, save, hv, hw⟩ | ⟨s, a, b, rest, conj, ka, kb, hv, hw⟩
+      · cases v with | mk sv vs =>
+          cases w with | mk sw ws =>
+            dsimp at heq
+            subst sw
+            exact perm hp h ih
+      · subst v; subst w
+        exact one neg save h ih
+      · subst v; subst w
+        exact two conj ka kb h ih
+  exact all (s,xs) h
+
 
 theorem kept_map {α β : Type} (e : α → β) (b : Bool) (x : α) (xs : List α) :
     (kept b x xs).map e = kept b (e x) (xs.map e) := by
@@ -885,7 +930,7 @@ theorem Run.map {α β : Type} (e : α → β) {inv : α → α} {meet join : α
     (hj : ∀ a b, e (join a b) = join' (e a) (e b))
     {y : α} {s : ℕ} {ws : List α} (h : Run inv meet join y s ws) :
     Run inv' meet' join' (e y) s (ws.map e) := by
-  induction h with
+  induction h using Run.induction with
   | done => exact Run.done
   | perm hp _ ih => exact Run.perm (hp.map e) ih
   | @one s a rest neg save _ ih =>
@@ -1258,7 +1303,7 @@ namespace Live514
 
 theorem run_len {α inv meet join y s xs} (h : @Run α inv meet join y s xs) :
     xs.length ≤ s + 1 := by
-  induction h with
+  induction h using Run.induction with
   | done => simp
   | perm hp _ ih => rwa [←hp.length_eq]
   | one neg save h ih => cases save <;> simp_all [kept] <;> omega
@@ -1269,7 +1314,7 @@ abbrev NatRun (m : Nat) := Run (· ^^^ m) (· &&& ·) (· ||| ·)
 theorem run_bits {m y s xs} (h : NatRun m y s xs) (i j : Nat)
     (hm : m.testBit i = m.testBit j)
     (hw : ∀ w ∈ xs, w.testBit i = w.testBit j) : y.testBit i = y.testBit j := by
-  induction h with
+  induction h using Run.induction with
   | done => exact hw _ (by simp)
   | perm hp _ ih => exact ih (fun w h => hw w (hp.mem_iff.1 h))
   | one neg save h ih =>
@@ -1414,7 +1459,7 @@ theorem next_two {k a b rest} {conj ka kb : Bool} {s ws}
 
 theorem zero_done {α inv meet join y t ws} (h : @Run α inv meet join y t ws) :
     t = 0 → ws = [y] := by
-  induction h with
+  induction h using Run.induction with
   | done => simp
   | perm p h ih => intro ht; rw [ih ht] at p; exact List.perm_singleton.1 p.symm
   | one => simp
@@ -1424,7 +1469,7 @@ theorem next_complete {k t ws} (h : NatRun (mask k) (goal k) t ws) :
     ∀ s, t = s+1 → ∀ zs, ws.Perm zs → ∀ f : Nat → List Nat → Bool,
       (∀ (t : Nat) ys, NatRun (mask k) (goal k) s ys → f t ys = true) →
       next (mask k) (s+2-zs.length) zs f = true := by
-  induction h with
+  induction h using Run.induction with
   | done => simp
   | perm p h ih => intro s he zs q; exact ih s he zs (p.trans q)
   | one neg save h ih => intro s he zs p f hf; cases he; exact next_one p h f hf
@@ -1617,7 +1662,7 @@ namespace Live514
 
 theorem bits_le {m y s ws} (h : NatRun m y s ws) (hl : ws.length = s+1) (i j : Nat)
     (hw : ∀ a ∈ ws, a.testBit i ≤ a.testBit j) : y.testBit i ≤ y.testBit j := by
-  induction h with
+  induction h using Run.induction with
   | done => exact hw _ (by simp)
   | perm hp _ ih =>
     exact ih (hp.length_eq.trans hl) (fun a ha => hw a (hp.mem_iff.1 ha))
@@ -1698,7 +1743,7 @@ theorem score_bound {m y s ws} (h : NatRun m y s ws) (hl : ws.length = s+1)
     (v : Nat → Nat) (hand : ∀ a b, v (a &&& b) ≤ v a + v b)
     (hor : ∀ a b, v (a ||| b) ≤ v a + v b) :
     v y ≤ (ws.map v).sum := by
-  induction h with
+  induction h using Run.induction with
   | done => simp
   | perm p h ih =>
     rw [← (p.map v).sum_eq]
@@ -2884,11 +2929,11 @@ def traceAt (n : Nat) (a : Acc) (C : Circuit) (j : Nat) : Acc :=
   elim n (C.gates.take j) a
 
 def status (n : Nat) (a : Acc) (C : Circuit) (w : Nat) : Stat :=
-  (elim n C.gates a).1.getD w (.const false)
+  (elim n C.gates a).1.getD w (.inl false)
 
 def oneAt (n : Nat) (a : Acc) (C : Circuit) (j : Nat) (g : Gate) :=
   simplify g.op (n + (traceAt n a C j).2.length)
-    (g.inputs.map fun i => (traceAt n a C j).1.getD i (.const false))
+    (g.inputs.map fun i => (traceAt n a C j).1.getD i (.inl false))
 
 def FoldAt (n : Nat) (a : Acc) (C : Circuit) (j : Nat) : Prop :=
   ∃ h : j < C.gates.length, (oneAt n a C j C.gates[j]).1 = none
@@ -2921,7 +2966,7 @@ lemma trace_succ {n : Nat} {a : Acc} {C : Circuit} {j : Nat} (h : j < C.gates.le
 
 lemma status_at {n : Nat} {a : Acc} {C : Circuit} {j w : Nat}
     (hj : j ≤ C.gates.length) (hw : w < a.1.length+j) :
-    status n a C w = (traceAt n a C j).1.getD w (.const false) := by
+    status n a C w = (traceAt n a C j).1.getD w (.inl false) := by
   unfold status traceAt
   have hf : elim n C.gates a = elim n (C.gates.drop j) (elim n (C.gates.take j) a) := by
     rw [← elim_append, List.take_append_drop]
@@ -2975,7 +3020,7 @@ lemma gateStatus {n : Nat} {a : Acc} {C : Circuit} {j : Nat} (hj : j < C.gates.l
 lemma fold_if_read_constant {n : Nat} {a : Acc} {C : Circuit} {j w : Nat} {b : Bool}
     (hj : j < C.gates.length) (hw : w < a.1.length+j)
     (hok : NOk C.gates[j]) (hr : w ∈ C.gates[j].inputs)
-    (hb : status n a C w = .const b) : j ∈ folds n a C := by
+    (hb : status n a C w = .inl b) : j ∈ folds n a C := by
   apply mem_folds.2
   refine ⟨hj, ?_⟩
   unfold oneAt
@@ -2987,7 +3032,7 @@ lemma fold_if_read_constant {n : Nat} {a : Acc} {C : Circuit} {j w : Nat} {b : B
     rw [← status_at (Nat.le_of_lt hj) hw, hb]
 
 lemma status_initial {n : Nat} {a : Acc} {C : Circuit} {w : Nat} (h : w<a.1.length) :
-    status n a C w = a.1.getD w (.const false) :=
+    status n a C w = a.1.getD w (.inl false) :=
   elim_getD _ _ _ _ _ h
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity Live514
@@ -3010,9 +3055,9 @@ def projectedInput (p : Fin 3) (y : Fin 7 → Bool) : Fin 9 → Bool :=
     ![y 2 && (y 1 || y 6), y 1, y 0, false, true, y 6, y 5, y 4, y 3]] : Fin 3 → (Fin 9 → Bool)) p
 
 def projectAcc (p : Fin 3) : Acc :=
-  (![([.const false,.wire 1,.wire 0,.const false,.const false,.wire 6,.wire 5,.wire 4,.wire 3,.wire 2,.wire 2], []),
-    ([.const false,.wire 0,.wire 1,.wire 2,.const false,.wire 3,.wire 4,.wire 5,.wire 6,.const false,.wire 2], []),
-    ([.const false,.wire 1,.wire 0,.const false,.const true,.wire 6,.wire 5,.wire 4,.wire 3,.const true,.wire 8],
+  (![([.inl false,.inr 1,.inr 0,.inl false,.inl false,.inr 6,.inr 5,.inr 4,.inr 3,.inr 2,.inr 2], []),
+    ([.inl false,.inr 0,.inr 1,.inr 2,.inl false,.inr 3,.inr 4,.inr 5,.inr 6,.inl false,.inr 2], []),
+    ([.inl false,.inr 1,.inr 0,.inl false,.inl true,.inr 6,.inr 5,.inr 4,.inr 3,.inl true,.inr 8],
       [⟨.or,[1,6]⟩,⟨.and,[2,7]⟩])] : Fin 3 → Acc) p
 
 set_option maxHeartbeats 0 in
@@ -3045,18 +3090,18 @@ lemma projectedSize {C : Circuit} (hc : FanInTwo C)
   have ep (y : Fin 7 → Bool) :=
     (inv_elim 7 (List.ofFn y) (by simp) C.gates (src (projectedInput p y)) (projectAcc p)
       (fun g hg => by simpa [Ok] using hc g hg) (projectInv p y)).2 C.output
-  have hv (y : Fin 7 → Bool) : ((a.1.getD C.output (.const false))).val
+  have hv (y : Fin 7 → Bool) : ((a.1.getD C.output (.inl false))).val
       (wiresFrom a.2 (List.ofFn y)) = theta y := by
     have h := (ep y).2
     change _ = C.eval (src (projectedInput p y)) at h
     simpa only [he, projectTarget] using h
-  cases e : a.1.getD C.output (.const false) with
-  | const c =>
+  cases e : a.1.getD C.output (.inl false) with
+  | inl c =>
     have h0 := hv (fun _ => false)
     have h1 := hv (fun _ => true)
     rw [e] at h0 h1
     cases c <;> simp [Stat.val,theta] at h0 h1
-  | wire u =>
+  | inr u =>
     refine ⟨⟨a.2,u⟩, ?_, by rfl, ?_⟩
     · intro g hg
       have h := elim_ok 7 C.gates (projectAcc p) (projectOk p) g hg
@@ -3215,7 +3260,7 @@ lemma emitted_shape {op : GateOp} {m : Nat} {ins : List Stat} {g : Gate}
   · simp at h
 
 lemma stat_getD_valid {ss : List Stat} {m : Nat} (h : ∀ s∈ss,s.Valid m) (w : Nat) :
-    (ss.getD w (.const false)).Valid m := by
+    (ss.getD w (.inl false)).Valid m := by
   by_cases hw : w<ss.length
   · rw [List.getD_eq_getElem _ _ hw]
     exact h _ (List.getElem_mem (l:=ss) hw)
@@ -3242,15 +3287,15 @@ lemma elim_shaped (n : Nat) (gs : List Gate) (a : Acc)
   induction gs generalizing a with
   | nil => exact ⟨ha,hs⟩
   | cons g gs ih =>
-    let op := simplify g.op (n+a.2.length) (g.inputs.map fun i => a.1.getD i (.const false))
-    have hv : ∀ s∈g.inputs.map (fun i => a.1.getD i (.const false)), s.Valid (n+a.2.length) := by
+    let op := simplify g.op (n+a.2.length) (g.inputs.map fun i => a.1.getD i (.inl false))
+    have hv : ∀ s∈g.inputs.map (fun i => a.1.getD i (.inl false)), s.Valid (n+a.2.length) := by
       intro s hm
       obtain ⟨i,_,rfl⟩ := List.mem_map.1 hm
       exact stat_getD_valid hs i
     have hsout :
         op.2.Valid (n+a.2.length+op.1.toList.length) := by
       have h := simplify_sound g.op (ho _ (by simp)).1 (List.replicate (n+a.2.length) false)
-        (g.inputs.map fun i => a.1.getD i (.const false))
+        (g.inputs.map fun i => a.1.getD i (.inl false))
         (by simpa using (ho _ (by simp)).2) (by simpa using hv)
       simpa only [List.length_replicate] using h.1
     change Shaped n (elim n gs (elimStep n a g)).2 ∧
@@ -3272,7 +3317,7 @@ lemma elim_shaped (n : Nat) (gs : List Gate) (a : Acc)
 abbrev Full := fun (C : Circuit) => ∀ x : Fin 9→Bool, C.eval (src x) = target x
 
 def normAcc : Acc :=
-  (List.ofFn (fun i : Fin 11 => if i=0 then .const false else .wire i.val), [])
+  (List.ofFn (fun i : Fin 11 => if i=0 then .inl false else .inr i.val), [])
 
 lemma normInv (x : Fin 9→Bool) : Inv 11 (src x) (src x) normAcc := by
   refine ⟨by simp [normAcc,srcLen],?_⟩
@@ -3280,8 +3325,8 @@ lemma normInv (x : Fin 9→Bool) : Inv 11 (src x) (src x) normAcc := by
   by_cases hi : i<11
   · by_cases e : i=0
     · subst i; simp [normAcc,Stat.Valid,Stat.val,wiresFrom,src]
-    · have hw : (normAcc.1.getD i (.const false)) = .wire i := by
-        change (List.ofFn (fun j : Fin 11 => if j=0 then Stat.const false else Stat.wire j.val)).getD i (.const false) = _
+    · have hw : (normAcc.1.getD i (.inl false)) = .inr i := by
+        change (List.ofFn (fun j : Fin 11 => if j=0 then Sum.inl false else Sum.inr j.val)).getD i (.inl false) = _
         rw [List.getD_eq_getElem _ _ (by simpa using hi),List.getElem_ofFn]
         have hn : (⟨i,hi⟩ : Fin 11)≠0 := fun h => e (congrArg Fin.val h)
         simp [hn]
@@ -3294,7 +3339,7 @@ lemma normInv (x : Fin 9→Bool) : Inv 11 (src x) (src x) normAcc := by
 lemma norm_no_const {n : Nat} {a : Acc} {C : Circuit} (hc : FanInTwo C)
     (he : Full C) (x y : Fin 9→Bool) (hne : target x ≠ target y)
     (ix : ∃ vx vy, Inv n vx (src x) a ∧ Inv n vy (src y) a ∧ vx.length=n ∧ vy.length=n) :
-    ∀ b, status n a C C.output ≠ .const b := by
+    ∀ b, status n a C C.output ≠ .inl b := by
   intro b hb
   obtain ⟨vx,vy,hx,hy,hvx,hvy⟩ := ix
   have ok : ∀ g∈C.gates, Ok g := fun g hg => by simpa [Ok] using hc g hg
@@ -3312,8 +3357,8 @@ lemma normalized {C : Circuit} (hc : FanInTwo C) (he : Full C) :
   have hb := norm_no_const hc he (fun _=>false) (fun _=>true) (by decide)
     ⟨src (fun _=>false), src (fun _=>true), normInv _,normInv _,srcLen _,srcLen _⟩
   cases e : status 11 normAcc C C.output with
-  | const b => exact (hb b e).elim
-  | wire w =>
+  | inl b => exact (hb b e).elim
+  | inr w =>
     refine ⟨⟨a.2,w⟩, ?_,?_, ?_, ?_, ?_⟩
     · intro g h
       have hg := elim_ok 11 C.gates normAcc (by simp [normAcc]) g h
@@ -3456,7 +3501,7 @@ lemma replace_folded {C : Circuit} (q : Nat) (hq : q<C.gates.length) (is : List 
   rcases is with _ | ⟨i,_|⟨j,tail⟩⟩
   · rfl
   · simp only [List.map_cons,List.map_nil]
-    cases (traceAt 11 normAcc (replaceAt C q ⟨.or,[i]⟩) q).1.getD i (.const false) <;> rfl
+    cases (traceAt 11 normAcc (replaceAt C q ⟨.or,[i]⟩) q).1.getD i (.inl false) <;> rfl
   · simp at hil
 
 lemma no_replaced {C : Circuit} (hc : FanInTwo C) (hm : Minimal C) (q : Nat)
@@ -3480,7 +3525,7 @@ lemma has_later_reader {C : Circuit} (hc : FanInTwo C) (he : Full C)
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity Live514
 
 def Known (C : Circuit) (p : Fin 3) (w : Nat) (b : Bool) : Prop :=
-  status 7 (projectAcc p) C w = .const b
+  status 7 (projectAcc p) C w = .inl b
 
 lemma shape_pair {g : Gate} {w u : Nat} (hs : Shape g) (wn : w≠u)
     (hw : w∈g.inputs) (hu : u∈g.inputs) :
@@ -3508,7 +3553,7 @@ lemma shapedEarlier {C : Circuit} (hs : Shaped 11 C.gates) : ReadsEarlier C :=
 
 lemma knownPrefix {C : Circuit} {p : Fin 3} {j w : Nat} {b : Bool}
     (hs : Shaped 11 C.gates) (hr : read C j w) (h : Known C p w b) :
-    (traceAt 7 (projectAcc p) C j).1.getD w (.const false) = .const b := by
+    (traceAt 7 (projectAcc p) C j).1.getD w (.inl false) = .inl b := by
   obtain ⟨hj,hw⟩ := hr
   rw [← status_at (Nat.le_of_lt hj) (by rw [projectLen]; exact (hs j hj).2 _ hw)]
   exact h
@@ -3526,20 +3571,20 @@ lemma knownGateValue {C : Circuit} (p : Fin 3) (j : Nat) (h : j<C.gates.length) 
   exact gateStatus h
 
 private lemma andAbsorbL (m : ℕ) (s : Stat) :
-    (simpAnd m [.const false,s]).2 = .const false := by
-  cases s with | wire _ => rfl | const a => cases a <;> rfl
+    (simpAnd m [.inl false,s]).2 = .inl false := by
+  cases s with | inr _ => rfl | inl a => cases a <;> rfl
 
 private lemma andAbsorbR (m : ℕ) (s : Stat) :
-    (simpAnd m [s,.const false]).2 = .const false := by
-  cases s with | wire _ => rfl | const a => cases a <;> rfl
+    (simpAnd m [s,.inl false]).2 = .inl false := by
+  cases s with | inr _ => rfl | inl a => cases a <;> rfl
 
 private lemma orAbsorbL (m : ℕ) (s : Stat) :
-    (simpOr m [.const true,s]).2 = .const true := by
-  cases s with | wire _ => rfl | const a => cases a <;> rfl
+    (simpOr m [.inl true,s]).2 = .inl true := by
+  cases s with | inr _ => rfl | inl a => cases a <;> rfl
 
 private lemma orAbsorbR (m : ℕ) (s : Stat) :
-    (simpOr m [s,.const true]).2 = .const true := by
-  cases s with | wire _ => rfl | const a => cases a <;> rfl
+    (simpOr m [s,.inl true]).2 = .inl true := by
+  cases s with | inr _ => rfl | inl a => cases a <;> rfl
 
 lemma forceNonOrKnown {C : Circuit} {p : Fin 3} {j w : Nat}
     (hs : Shaped 11 C.gates) (hk : Known C p w false) (hr : read C j w) (hn : ¬ isOr C j) :
@@ -3815,38 +3860,6 @@ theorem semanticQ4Escapes {C : Circuit} (hb : ReadsEarlier C)
             orTrue hb o3 h3 (getRawTrue C (m:=25) (w:=3) (by decide) (by decide +kernel))]
 
 namespace Logic
-structure Data where
-  m : ℕ
-  read : ℕ → ℕ → Prop
-  isOr : ℕ → Prop
-  known : Fin 3 → ℕ → Bool → Prop
-  folded : Fin 3 → Finset ℕ
-  bound : ∀ {j w}, read j w → j < m ∧ w < 11 + j
-  someRead : ∀ w, (w = 3 ∨ w = 4 ∨ w = 9) → ∃ j, read j w
-  noA4 : ∀ j, read j 4 → ¬ read j 9
-  foldKnown : ∀ {p j w v}, known p w v → read j w → j ∈ folded p
-  forceNonOr : ∀ {p j w}, known p w false → read j w → ¬ isOr j →
-    ∃ v, known p (11+j) v
-  forcePair : ∀ {p j w u v b}, w ≠ u → read j w → read j u →
-    known p w v → known p u b → ∃ c, known p (11+j) c
-  forceOrTrue : ∀ {p j w}, isOr j → read j w → known p w true → known p (11+j) true
-  aliveKnown : ∀ {p j v}, j < m → known p (11+j) v → ∃ k, read k (11+j)
-  cap0 : (folded 0).card ≤ 2
-  cap1 : (folded 1).card ≤ 2
-  cap2 : (folded 2).card ≤ 4
-  p03 : known 0 3 false
-  p04 : known 0 4 false
-  p14 : known 1 4 false
-  p19 : known 1 9 false
-  p23 : known 2 3 false
-  p24 : known 2 4 true
-  p29 : known 2 9 true
-  sole4Not3 : ∀ q, (∀ j, read j 4 ↔ j=q) → ¬ read q 3
-  raw3NotA : ∀ q, (∀ j, read j 3 ↔ j=q) → isOr q → ¬ read q 9
-  aNotSuccessor : ∀ r qA qr, (r=3∨r=4) → (∀ j,read j r↔j=qr) →
-    isOr qA → isOr qr → read qA 9 → ¬read qr (11+qA)
-  q4Escapes : ∀ qA q3 q4, (∀ j,read j 4↔j=q4) → isOr qA → isOr q3 → isOr q4 →
-    read qA 9 → read q3 3 → (∀ g, read g (11+q4) → g=qA∨g=q3) → False
 
 private theorem coverTwo {s : Finset ℕ} {i j : ℕ} (hi : i ∈ s) (hj : j ∈ s)
     (hij : i ≠ j) (hc : s.card ≤ 2) : ∀ k ∈ s, k = i ∨ k = j := by
@@ -3874,108 +3887,154 @@ private theorem coverFour {s : Finset ℕ} {a b c d : ℕ} (ha : a∈s) (hb : b�
   intro k hk
   simpa [← heq] using hk
 
-private theorem earlier (D : Data) {i j : ℕ} (h : D.read j (11+i)) : i < j := by
-  have b := (D.bound h).2
+private theorem earlier
+    (m : ℕ)
+    (read : ℕ → ℕ → Prop)
+    (bound : ∀ {j w}, read j w → j < m ∧ w < 11 + j) {i j : ℕ} (h : read j (11+i)) : i < j := by
+  have b := (bound h).2
   omega
 
-private theorem forceOr (D : Data) {p : Fin 3} {i j r u : ℕ} (hi : D.read i r)
-    (hj : D.read j u) (hu : u < 11) (hr : D.known p r false) (hp : D.known p u false)
-    (hij : i ≠ j) (hc : (D.folded p).card ≤ 2) : D.isOr i := by
+private theorem forceOr
+    (m : ℕ)
+    (read : ℕ → ℕ → Prop)
+    (isOr : ℕ → Prop)
+    (known : Fin 3 → ℕ → Bool → Prop)
+    (folded : Fin 3 → Finset ℕ)
+    (bound : ∀ {j w}, read j w → j < m ∧ w < 11 + j)
+    (foldKnown : ∀ {p j w v}, known p w v → read j w → j ∈ folded p)
+    (forceNonOr : ∀ {p j w}, known p w false → read j w → ¬ isOr j →
+    ∃ v, known p (11+j) v)
+    (forcePair : ∀ {p j w u v b}, w ≠ u → read j w → read j u →
+    known p w v → known p u b → ∃ c, known p (11+j) c)
+    (aliveKnown : ∀ {p j v}, j < m → known p (11+j) v → ∃ k, read k (11+j)) {p : Fin 3} {i j r u : ℕ} (hi : read i r)
+    (hj : read j u) (hu : u < 11) (hr : known p r false) (hp : known p u false)
+    (hij : i ≠ j) (hc : (folded p).card ≤ 2) : isOr i := by
   by_contra hn
-  have cover := coverTwo (D.foldKnown hr hi) (D.foldKnown hp hj) hij hc
-  obtain ⟨v,hv⟩ := D.forceNonOr hr hi hn
-  obtain ⟨k,hk⟩ := D.aliveKnown (D.bound hi).1 hv
-  have hik := earlier D hk
-  have he : k=j := (cover k (D.foldKnown hv hk)).resolve_left (by omega)
+  have cover := coverTwo (foldKnown hr hi) (foldKnown hp hj) hij hc
+  obtain ⟨v,hv⟩ := forceNonOr hr hi hn
+  obtain ⟨k,hk⟩ := aliveKnown (bound hi).1 hv
+  have hik := earlier m read bound hk
+  have he : k=j := (cover k (foldKnown hv hk)).resolve_left (by omega)
   subst k
-  obtain ⟨v',hv'⟩ := D.forcePair (by omega : u ≠ 11+i) hj hk hp hv
-  obtain ⟨k,hk⟩ := D.aliveKnown (D.bound hj).1 hv'
-  have hjk := earlier D hk
-  have hcontra := cover k (D.foldKnown hv' hk)
+  obtain ⟨v',hv'⟩ := forcePair (by omega : u ≠ 11+i) hj hk hp hv
+  obtain ⟨k,hk⟩ := aliveKnown (bound hj).1 hv'
+  have hjk := earlier m read bound hk
+  have hcontra := cover k (foldKnown hv' hk)
   omega
 
-theorem impossible (D : Data) : False := by
-  obtain ⟨q4,h4⟩ := D.someRead 4 (by simp)
-  obtain ⟨qA,hA⟩ := D.someRead 9 (by simp)
+theorem impossible
+    (m : ℕ)
+    (read : ℕ → ℕ → Prop)
+    (isOr : ℕ → Prop)
+    (known : Fin 3 → ℕ → Bool → Prop)
+    (folded : Fin 3 → Finset ℕ)
+    (bound : ∀ {j w}, read j w → j < m ∧ w < 11 + j)
+    (someRead : ∀ w, (w = 3 ∨ w = 4 ∨ w = 9) → ∃ j, read j w)
+    (noA4 : ∀ j, read j 4 → ¬ read j 9)
+    (foldKnown : ∀ {p j w v}, known p w v → read j w → j ∈ folded p)
+    (forceNonOr : ∀ {p j w}, known p w false → read j w → ¬ isOr j →
+    ∃ v, known p (11+j) v)
+    (forcePair : ∀ {p j w u v b}, w ≠ u → read j w → read j u →
+    known p w v → known p u b → ∃ c, known p (11+j) c)
+    (forceOrTrue : ∀ {p j w}, isOr j → read j w → known p w true → known p (11+j) true)
+    (aliveKnown : ∀ {p j v}, j < m → known p (11+j) v → ∃ k, read k (11+j))
+    (cap0 : (folded 0).card ≤ 2)
+    (cap1 : (folded 1).card ≤ 2)
+    (cap2 : (folded 2).card ≤ 4)
+    (p03 : known 0 3 false)
+    (p04 : known 0 4 false)
+    (p14 : known 1 4 false)
+    (p19 : known 1 9 false)
+    (p23 : known 2 3 false)
+    (p24 : known 2 4 true)
+    (p29 : known 2 9 true)
+    (sole4Not3 : ∀ q, (∀ j, read j 4 ↔ j=q) → ¬ read q 3)
+    (raw3NotA : ∀ q, (∀ j, read j 3 ↔ j=q) → isOr q → ¬ read q 9)
+    (aNotSuccessor : ∀ r qA qr, (r=3∨r=4) → (∀ j,read j r↔j=qr) →
+    isOr qA → isOr qr → read qA 9 → ¬read qr (11+qA))
+    (q4Escapes : ∀ qA q3 q4, (∀ j,read j 4↔j=q4) → isOr qA → isOr q3 → isOr q4 →
+    read qA 9 → read q3 3 → (∀ g, read g (11+q4) → g=qA∨g=q3) → False) : False := by
+  obtain ⟨q4,h4⟩ := someRead 4 (by simp)
+  obtain ⟨qA,hA⟩ := someRead 9 (by simp)
   have h4A : q4 ≠ qA := by
     intro e
     subst qA
-    exact D.noA4 q4 h4 hA
-  have cover1 := coverTwo (D.foldKnown D.p14 h4) (D.foldKnown D.p19 hA) h4A D.cap1
-  have sole4 : ∀ j,D.read j 4 ↔ j=q4 := by
+    exact noA4 q4 h4 hA
+  have cover1 := coverTwo (foldKnown p14 h4) (foldKnown p19 hA) h4A cap1
+  have sole4 : ∀ j,read j 4 ↔ j=q4 := by
     intro j
     refine ⟨fun hr => ?_, fun he => by subst j; exact h4⟩
-    have ht := cover1 j (D.foldKnown D.p14 hr)
+    have ht := cover1 j (foldKnown p14 hr)
     rcases ht with ht | ht
     · exact ht
     · subst j
-      exact (D.noA4 qA hr hA).elim
-  obtain ⟨q3,h3⟩ := D.someRead 3 (by simp)
+      exact (noA4 qA hr hA).elim
+  obtain ⟨q3,h3⟩ := someRead 3 (by simp)
   have h34 : q3 ≠ q4 := by
     intro e
     subst q3
-    exact D.sole4Not3 q4 sole4 h3
-  have cover0 := coverTwo (D.foldKnown D.p03 h3) (D.foldKnown D.p04 h4) h34 D.cap0
-  have sole3 : ∀ j,D.read j 3 ↔ j=q3 := by
+    exact sole4Not3 q4 sole4 h3
+  have cover0 := coverTwo (foldKnown p03 h3) (foldKnown p04 h4) h34 cap0
+  have sole3 : ∀ j,read j 3 ↔ j=q3 := by
     intro j
     refine ⟨fun hr => ?_, fun he => by subst j; exact h3⟩
-    have ht := cover0 j (D.foldKnown D.p03 hr)
+    have ht := cover0 j (foldKnown p03 hr)
     rcases ht with ht | ht
     · exact ht
     · subst j
-      exact (D.sole4Not3 q4 sole4 hr).elim
-  have o3 := forceOr D h3 h4 (by decide) D.p03 D.p04 h34 D.cap0
-  have o4 := forceOr D h4 h3 (by decide) D.p04 D.p03 h34.symm D.cap0
-  have oA := forceOr D hA h4 (by decide) D.p19 D.p14 h4A.symm D.cap1
+      exact (sole4Not3 q4 sole4 hr).elim
+  have o3 := forceOr m read isOr known folded bound foldKnown forceNonOr forcePair aliveKnown h3 h4 (by decide) p03 p04 h34 cap0
+  have o4 := forceOr m read isOr known folded bound foldKnown forceNonOr forcePair aliveKnown h4 h3 (by decide) p04 p03 h34.symm cap0
+  have oA := forceOr m read isOr known folded bound foldKnown forceNonOr forcePair aliveKnown hA h4 (by decide) p19 p14 h4A.symm cap1
   have h3A : q3 ≠ qA := by
     intro e
     subst qA
-    exact D.raw3NotA q3 sole3 o3 hA
-  have vA := D.forceOrTrue oA hA D.p29
-  have v4 := D.forceOrTrue o4 h4 D.p24
-  obtain ⟨g,hg⟩ := D.aliveKnown (D.bound hA).1 vA
-  have hAg : qA ≠ g := by have := earlier D hg; omega
+    exact raw3NotA q3 sole3 o3 hA
+  have vA := forceOrTrue oA hA p29
+  have v4 := forceOrTrue o4 h4 p24
+  obtain ⟨g,hg⟩ := aliveKnown (bound hA).1 vA
+  have hAg : qA ≠ g := by have := earlier m read bound hg; omega
   have h3g : q3 ≠ g := by
     intro e
     subst g
-    exact D.aNotSuccessor 3 qA q3 (Or.inl rfl) sole3 oA o3 hA hg
+    exact aNotSuccessor 3 qA q3 (Or.inl rfl) sole3 oA o3 hA hg
   have h4g : q4 ≠ g := by
     intro e
     subst g
-    exact D.aNotSuccessor 4 qA q4 (Or.inr rfl) sole4 oA o4 hA hg
-  have cover2 := coverFour (D.foldKnown D.p23 h3) (D.foldKnown D.p24 h4)
-    (D.foldKnown D.p29 hA) (D.foldKnown vA hg) h34 h3A h3g h4A h4g hAg D.cap2
-  have hgg : D.read g (11+q4) := by
+    exact aNotSuccessor 4 qA q4 (Or.inr rfl) sole4 oA o4 hA hg
+  have cover2 := coverFour (foldKnown p23 h3) (foldKnown p24 h4)
+    (foldKnown p29 hA) (foldKnown vA hg) h34 h3A h3g h4A h4g hAg cap2
+  have hgg : read g (11+q4) := by
     by_contra hn
-    apply D.q4Escapes qA q3 q4 sole4 oA o3 o4 hA h3
+    apply q4Escapes qA q3 q4 sole4 oA o3 o4 hA h3
     intro k hk
-    rcases cover2 k (D.foldKnown v4 hk) with he | he | he | he
+    rcases cover2 k (foldKnown v4 hk) with he | he | he | he
     · exact Or.inr he
-    · have := earlier D hk
+    · have := earlier m read bound hk
       omega
     · exact Or.inl he
     · subst k
       exact (hn hk).elim
-  obtain ⟨v,hv⟩ := D.forcePair (by omega : 11+qA ≠ 11+q4) hg hgg vA v4
-  obtain ⟨k,hk⟩ := D.aliveKnown (D.bound hg).1 hv
-  have hkg := earlier D hk
-  have hga := earlier D hg
-  have hg4 := earlier D hgg
+  obtain ⟨v,hv⟩ := forcePair (by omega : 11+qA ≠ 11+q4) hg hgg vA v4
+  obtain ⟨k,hk⟩ := aliveKnown (bound hg).1 hv
+  have hkg := earlier m read bound hk
+  have hga := earlier m read bound hg
+  have hg4 := earlier m read bound hgg
   have hk3 : k=q3 := by
-    have hc := cover2 k (D.foldKnown hv hk)
+    have hc := cover2 k (foldKnown hv hk)
     omega
   subst k
-  obtain ⟨v',hv'⟩ := D.forcePair (by omega : 3 ≠ 11+g) h3 hk D.p23 hv
-  obtain ⟨l,hl⟩ := D.aliveKnown (D.bound h3).1 hv'
-  have hl3 := earlier D hl
-  have hc := cover2 l (D.foldKnown hv' hl)
+  obtain ⟨v',hv'⟩ := forcePair (by omega : 3 ≠ 11+g) h3 hk p23 hv
+  obtain ⟨l,hl⟩ := aliveKnown (bound h3).1 hv'
+  have hl3 := earlier m read bound hl
+  have hc := cover2 l (foldKnown hv' hl)
   omega
 end Logic
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity Live514
 
 lemma initialKnown {C : Circuit} (p : Fin 3) (w : Nat) (b : Bool)
-    (hw : w<11) (e : (projectAcc p).1.getD w (.const false)=.const b) :
+    (hw : w<11) (e : (projectAcc p).1.getD w (.inl false)=.inl b) :
     Known C p w b := by
   unfold Known
   rw [status_initial (by rw [projectLen]; exact hw),e]
@@ -4001,36 +4060,34 @@ lemma closeWithTheta (lower : ¬ HasCircuitSize 7 theta 10)
     rcases (hsh j hj).1 with ⟨hop,i,hi⟩ | ⟨hop,_,_,_⟩
     · simp [hi]
     · exact hop.elim Or.inl (fun q => Or.inr (Or.inl q))
-  apply PEqualNP.Outside.L_meta_3559_aux.Logic.impossible
-  exact {
-    m := E.gates.length
-    read := read E
-    isOr := isOr E
-    known := Known E
-    folded := fun p => folds 7 (projectAcc p) E
-    bound := fun ⟨hj,hw⟩ => ⟨hj,hbe _ _ _ hw⟩
-    someRead := semanticSomeRead hbe hEt
-    noA4 := fun j a b => excludesBothA4 hE hEt hsh hEm j a b
-    foldKnown := foldsKnown hsh
-    forceNonOr := forceNonOrKnown hsh
-    forcePair := forcePairKnown hsh
-    forceOrTrue := forceOrKnown hsh
-    aliveKnown := aliveKnownGate hE hEt hsh hEm
-    cap0 := by simpa [projectAcc] using caps 0
-    cap1 := by simpa [projectAcc] using caps 1
-    cap2 := by simpa [projectAcc] using caps 2
-    p03 := initialKnown 0 3 false (by decide) rfl
-    p04 := initialKnown 0 4 false (by decide) rfl
-    p14 := initialKnown 1 4 false (by decide) rfl
-    p19 := initialKnown 1 9 false (by decide) rfl
-    p23 := initialKnown 2 3 false (by decide) rfl
-    p24 := initialKnown 2 4 true (by decide) rfl
-    p29 := initialKnown 2 9 true (by decide) rfl
-    sole4Not3 := semanticSole4Not3 hbe hEt ops
-    raw3NotA := semanticRaw3NotA hbe hEt
-    aNotSuccessor := semanticANotSuccessor hbe hEt
-    q4Escapes := semanticQ4Escapes hbe hEt
-  }
+  exact PEqualNP.Outside.L_meta_3559_aux.Logic.impossible
+    (E.gates.length)
+    (read E)
+    (isOr E)
+    (Known E)
+    (fun p => folds 7 (projectAcc p) E)
+    (fun ⟨hj,hw⟩ => ⟨hj,hbe _ _ _ hw⟩)
+    (semanticSomeRead hbe hEt)
+    (fun j a b => excludesBothA4 hE hEt hsh hEm j a b)
+    (foldsKnown hsh)
+    (forceNonOrKnown hsh)
+    (forcePairKnown hsh)
+    (forceOrKnown hsh)
+    (aliveKnownGate hE hEt hsh hEm)
+    (by simpa [projectAcc] using caps 0)
+    (by simpa [projectAcc] using caps 1)
+    (by simpa [projectAcc] using caps 2)
+    (initialKnown 0 3 false (by decide) rfl)
+    (initialKnown 0 4 false (by decide) rfl)
+    (initialKnown 1 4 false (by decide) rfl)
+    (initialKnown 1 9 false (by decide) rfl)
+    (initialKnown 2 3 false (by decide) rfl)
+    (initialKnown 2 4 true (by decide) rfl)
+    (initialKnown 2 9 true (by decide) rfl)
+    (semanticSole4Not3 hbe hEt ops)
+    (semanticRaw3NotA hbe hEt)
+    (semanticANotSuccessor hbe hEt)
+    (semanticQ4Escapes hbe hEt)
 
 
 open PEqualNP.MetaComplexity
