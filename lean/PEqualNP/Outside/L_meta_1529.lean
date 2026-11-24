@@ -1,10 +1,10 @@
 import Mathlib
 import PEqualNP.Defs
 
-def PEqualNP.TopForm.NoFourCycle {n : ℕ} (G : SimpleGraph (Fin n)) : Prop :=
-  ∀ a b c d : Fin n, a ≠ c → b ≠ d → ¬ (G.Adj a b ∧ G.Adj b c ∧ G.Adj c d ∧ G.Adj d a)
-
 namespace PEqualNP.Outside.L_meta_1529
+
+def NoFourCycle {n : ℕ} (G : SimpleGraph (Fin n)) : Prop :=
+  ∀ a b c d : Fin n, a ≠ c → b ≠ d → ¬ (G.Adj a b ∧ G.Adj b c ∧ G.Adj c d ∧ G.Adj d a)
 
 open SimpleGraph
 
@@ -68,7 +68,7 @@ theorem PQ_not_W (P Q W : Finset (Fin n))
   have hsP : s ∈ P := Finset.mem_of_mem_inter_left hs
   exact w_not_in_Q G P Q W hW hsW hsP (Finset.mem_of_mem_inter_right hs)
 
-theorem W_card_le_one (hC4 : PEqualNP.TopForm.NoFourCycle G) (P Q W : Finset (Fin n))
+theorem W_card_le_one (hC4 : NoFourCycle G) (P Q W : Finset (Fin n))
     (hW : ∀ w, w ∈ W ↔ ∀ p ∈ P, ∀ q ∈ Q, G.Adj p q ∨ G.Adj p w ∨ G.Adj q w)
     (h2 : 2 ≤ (P ∩ Q).card) : W.card ≤ 1 := by
   by_contra h
@@ -83,7 +83,7 @@ theorem W_card_le_one (hC4 : PEqualNP.TopForm.NoFourCycle G) (P Q W : Finset (Fi
 
 end PEqualNP.Outside.L_meta_1529
 
-theorem PEqualNP.Outside.L_meta_1529 : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj], PEqualNP.TopForm.NoFourCycle G → ∀ (P Q W : Finset (Fin n)),
+theorem PEqualNP.Outside.L_meta_1529 : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj], PEqualNP.Outside.L_meta_1529.NoFourCycle G → ∀ (P Q W : Finset (Fin n)),
     (∀ w, w ∈ W ↔ ∀ p ∈ P, ∀ q ∈ Q, G.Adj p q ∨ G.Adj p w ∨ G.Adj q w) →
     (∀ w ∈ W, w ∈ P → w ∉ Q ∧ ∀ q ∈ Q, G.Adj w q) ∧
     (∀ w ∈ W, w ∈ Q → w ∉ P ∧ ∀ p ∈ P, G.Adj w p) ∧
