@@ -630,6 +630,28 @@ theorem packedExtract (gates : List PackedGate) (wires : List Sig)
     obtain ⟨next, nots, used, limit, live, subset⟩ := pull_gate run legal uses
     exact ⟨next, nots, used, by simp; omega, live, subset⟩
 
+theorem coordinate0 : ∀ r : Row, bit r (inputs.getD 0 zero) = r.val.testBit 0 := by decide +kernel
+theorem coordinate1 : ∀ r : Row, bit r (inputs.getD 1 zero) = r.val.testBit 1 := by decide +kernel
+theorem coordinate2 : ∀ r : Row, bit r (inputs.getD 2 zero) = r.val.testBit 2 := by decide +kernel
+theorem coordinate3 : ∀ r : Row, bit r (inputs.getD 3 zero) = r.val.testBit 3 := by decide +kernel
+theorem coordinate4 : ∀ r : Row, bit r (inputs.getD 4 zero) = r.val.testBit 4 := by decide +kernel
+theorem coordinate5 : ∀ r : Row, bit r (inputs.getD 5 zero) = r.val.testBit 5 := by decide +kernel
+theorem coordinate6 : ∀ r : Row, bit r (inputs.getD 6 zero) = r.val.testBit 6 := by decide +kernel
+theorem coordinate7 : ∀ r : Row, bit r (inputs.getD 7 zero) = r.val.testBit 7 := by decide +kernel
+theorem coordinate8 : ∀ r : Row, bit r (inputs.getD 8 zero) = r.val.testBit 8 := by decide +kernel
+theorem input_coords : ∀ (j : Fin 9) (r : Row),
+    bit r (inputs.getD j.val zero) = r.val.testBit j.val := by
+  intro j r
+  fin_cases j
+  · exact coordinate0 r
+  · exact coordinate1 r
+  · exact coordinate2 r
+  · exact coordinate3 r
+  · exact coordinate4 r
+  · exact coordinate5 r
+  · exact coordinate6 r
+  · exact coordinate7 r
+  · exact coordinate8 r
 def edgeAt (row : Row) :=
   let input (index : Fin 9) := row.val.testBit index.val
   ([1,12,23,34,40,5,16,27,38,57,68,85] : List Nat).any fun pair =>
@@ -637,9 +659,32 @@ def edgeAt (row : Row) :=
 
 theorem seedRows : ∀ row : Row, (inputs ++ [orSeed]).map (bit row) =
     List.ofFn (fun index : Fin 9 => row.val.testBit index.val) ++ [row.val.testBit 0 || row.val.testBit 4] := by
-  decide +kernel
+  intro row
+  have raw : inputs.map (bit row) = List.ofFn (fun j : Fin 9 => row.val.testBit j.val) := by
+    conv_lhs => rw [←input_list]
+    simp only [List.map_ofFn,Function.comp_def,input_coords]
+  simp only [List.map_append,raw,List.map_cons,List.map_nil]
+  have seedAt : bit row orSeed = (row.val.testBit 0 || row.val.testBit 4) := by
+    change bit row (bin true _ _) = _
+    rw [bit_bin,ite_eq_left rfl,coordinate0,coordinate4]
+  rw [seedAt]
 
-theorem outputRows : ∀ row : Row, bit row graph = edgeAt row := by decide +kernel
+def edgeWord (pairs : List Nat) : Sig := pairs.foldr (fun code rest =>
+  bin true (bin false (inputs.getD ((Fin.ofNat 9 (code/10)).val) zero)
+    (inputs.getD ((Fin.ofNat 9 (code%10)).val) zero)) rest) zero
+
+theorem edgeWord_bit (row : Row) (pairs : List Nat) : bit row (edgeWord pairs) =
+    pairs.any (fun code => row.val.testBit ((Fin.ofNat 9 (code/10)).val) &&
+      row.val.testBit ((Fin.ofNat 9 (code%10)).val)) := by
+  induction pairs with
+  | nil => exact bit_zero row
+  | cons code tail ih =>
+    simp only [edgeWord,List.foldr_cons,bit_bin,ite_true,Bool.false_eq_true,ite_false,
+      input_coords,List.any_cons,←ih]
+
+theorem outputRows (row : Row) : bit row graph = edgeAt row := by
+  have same : graph = edgeWord [1,12,23,34,40,5,16,27,38,57,68,85] := by decide +kernel
+  exact same ▸ edgeWord_bit row _
 
 theorem mismatch (gates : List PackedGate) (out : Fin 26) (limit : gates.length ≤ 14)
     (bare : ∀ cost count, cost ≤ 14 → ¬ Live graph cost count inputs.toFinset)
@@ -1569,28 +1614,6 @@ theorem decode_faithful (n bits) (ws) (r s) (base : ∀ v ∈ ws, faithful r s v
 def asRow (cols : Nat → Bits) (i : Fin 768) : Row :=
   (BitVec.ofBoolListLE (List.ofFn (fun j : Fin 9 => (cols j.val).getLsbD i.val))).toFin.cast
     (by simp [List.length_ofFn])
-theorem coordinate0 : ∀ r : Row, bit r (inputs.getD 0 zero) = r.val.testBit 0 := by decide +kernel
-theorem coordinate1 : ∀ r : Row, bit r (inputs.getD 1 zero) = r.val.testBit 1 := by decide +kernel
-theorem coordinate2 : ∀ r : Row, bit r (inputs.getD 2 zero) = r.val.testBit 2 := by decide +kernel
-theorem coordinate3 : ∀ r : Row, bit r (inputs.getD 3 zero) = r.val.testBit 3 := by decide +kernel
-theorem coordinate4 : ∀ r : Row, bit r (inputs.getD 4 zero) = r.val.testBit 4 := by decide +kernel
-theorem coordinate5 : ∀ r : Row, bit r (inputs.getD 5 zero) = r.val.testBit 5 := by decide +kernel
-theorem coordinate6 : ∀ r : Row, bit r (inputs.getD 6 zero) = r.val.testBit 6 := by decide +kernel
-theorem coordinate7 : ∀ r : Row, bit r (inputs.getD 7 zero) = r.val.testBit 7 := by decide +kernel
-theorem coordinate8 : ∀ r : Row, bit r (inputs.getD 8 zero) = r.val.testBit 8 := by decide +kernel
-theorem input_coords : ∀ (j : Fin 9) (r : Row),
-    bit r (inputs.getD j.val zero) = r.val.testBit j.val := by
-  intro j r
-  fin_cases j
-  · exact coordinate0 r
-  · exact coordinate1 r
-  · exact coordinate2 r
-  · exact coordinate3 r
-  · exact coordinate4 r
-  · exact coordinate5 r
-  · exact coordinate6 r
-  · exact coordinate7 r
-  · exact coordinate8 r
 theorem asRow_bit (cols : Nat → Bits) (i : Fin 768) (j : Fin 9) :
     bit (asRow cols i) (inputs.getD j.val zero) = (cols j.val).getLsbD i.val := by
   rw [input_coords]
@@ -2561,15 +2584,6 @@ theorem marked_ok {α} (f : α → Bool) (mask : Nat) (xs : List α) (i : Nat) (
       apply ih (mask:=mask >>> 769) (i:=i) (by simpa using hi) _ ok.2
       simpa only [Nat.testBit_shiftRight,Nat.mul_succ,Nat.add_comm] using bitOn
 
-abbrev Batch := Nat × Nat × Nat × List PackedSig × PackedCov × PackedCov
-def makeBatch (k n : Nat) (xs : List NodeContext) : Batch :=
-  (k,n,units xs.length,(List.range n).map (fun i => packedSig (fun c => (contextWire c i).2) xs),
-    packedCov (fun c => c.2.2.2.1.1) xs,packedCov (fun c => c.2.2.2.1.2) xs)
-def laneWire (b : Batch) (i : Nat) := b.2.2.2.1.getD i (0,0)
-theorem laneWire_at (k n) (xs) {i : Nat} (h : i<n) :
-    laneWire (makeBatch k n xs) i = packedSig (fun c => (contextWire c i).2) xs := by
-  simp [laneWire,makeBatch,List.getD_eq_getElem?_getD,List.getElem?_map,List.getElem?_range,h]
-
 def availableMasked (p : BoundPool) (m : Sig) :=
   m==zero || m==p.domain || (p.wires.map (masked p.domain)).any (fun v => v==m)
 theorem available_mask (p : BoundPool) (x : Sig) :
@@ -2683,107 +2697,6 @@ theorem fallback_sound {c i j op ka kb} (h : fallbackAt c i j op ka kb=true) :
     next yes => exact quickAt_good yes.1 yes.2 h
     next => contradiction
   · exact h
-def batchMove (b : Batch) (xs : List NodeContext) (i j op : Nat) (ka kb : Bool) :=
-  let (k,n,r,_,u,v) := b
-  let un := op==2
-  let len := 1+(n-(if ka then 0 else 1)-(if un || kb then 0 else 1))
-  if len>k then true else
-    let d := len==k
-    let a := laneWire b i
-    let b' := laneWire b j
-    let z := packedOp (r*(BitVec.allOnes 768).toNat) op a b'
-    let cov := if d then v else u
-    let mask := fullMarks r (takePacked cov (packedColumn d a) (packedColumn d b') un ka kb ||| packedColumn d z)
-    onMarks (fun c => fallbackAt c i j op ka kb) mask xs
-
-theorem batchMove_at (k n) (xs : List NodeContext) {i j op : Nat} {ka kb}
-    (hi : i<n) (hj : j<n) {q : Nat} (hq : q<xs.length)
-    (budget : xs[q].1=k) (arity : xs[q].2.1=n)
-    (pass : batchMove (makeBatch k n xs) xs i j op ka kb=true) :
-    checkAt xs[q] i j op ka kb=true := by
-  let len := 1+(n-(if ka then 0 else 1)-(if (op==2) || kb then 0 else 1))
-  let d := len==k
-  have eval : checkAt xs[q] i j op ka kb =
-      if len>k then true else if combField xs[q] d (op==2) ka kb op i j != BitVec.allOnes 768 then true
-      else if !properB (movedDecor op (contextWire xs[q] i) (contextWire xs[q] j)).1 ||
-        xs[q].2.2.1.any (fun v => v.1==(movedDecor op (contextWire xs[q] i) (contextWire xs[q] j)).1)
-      then true else closeChild xs[q].2.2.2.2.1 xs[q].2.2.2.2.2 (k-1)
-        ((opKeep (op==2) ka kb (contextWire xs[q] i) (contextWire xs[q] j) xs[q].2.2.1).map Prod.fst)
-        (movedChoice op (contextWire xs[q] i) (contextWire xs[q] j)) := by
-    simp only [checkAt,evalMove,budget,arity,len,d,combField] <;> rfl
-  by_cases small : len>k
-  · simp [eval,small]
-  · let r := units xs.length
-    let a := laneWire (makeBatch k n xs) i
-    let b := laneWire (makeBatch k n xs) j
-    let cov := if d then packedCov (fun c : NodeContext => c.2.2.2.1.2) xs
-            else packedCov (fun c : NodeContext => c.2.2.2.1.1) xs
-    change (if len>k then true else onMarks _ (fullMarks r
-       (takePacked cov (packedColumn d a) (packedColumn d b) (op==2) ka kb |||
-        packedColumn d (packedOp (r*(BitVec.allOnes 768).toNat) op a b))) xs) = true at pass
-    rw [if_neg small] at pass
-    have chosen : cov = packedCov (fun c => getCov c.2.2.2.1 d) xs := by
-      dsimp only [cov]
-      cases d <;> rfl
-    have ca : a = _ := laneWire_at k n xs hi
-    have cb : b = _ := laneWire_at k n xs hj
-    dsimp only [r] at pass
-    rw [ca,cb,packed_op,packed_column,packed_column,packed_column,chosen,takePacked_ok,lanes_or] at pass
-    by_cases hit : combField xs[q] d (op==2) ka kb op i j = BitVec.allOnes 768
-    · apply fallback_sound
-      apply marked_ok _ _ _ q hq _ pass
-      rw [mark_at _ _ _ hq]
-      exact beq_iff_eq.mpr hit
-    · rw [eval,if_neg small,if_pos (bne_iff_ne.mpr hit)]
-
-
-def batchPair (b : Batch) (xs : List NodeContext) (i j op : Nat) :=
-  let f := batchMove b xs i j op
-  f false false && f true false && f false true && f true true
-def batchRow (b : Batch) (xs : List NodeContext) (i : Nat) (js : List Nat) :=
-  batchMove b xs i i 2 false false && batchMove b xs i i 2 true true &&
-    js.all (fun j => batchPair b xs i j 0 && batchPair b xs i j 1)
-def batchRows (b : Batch) (xs : List NodeContext) : List Nat → Bool
-  | [] => true
-  | i::js => batchRow b xs i js && batchRows b xs js
-
-theorem batchRows_at (k n) (xs : List NodeContext) {q : Nat} (hq : q<xs.length)
-    (budget : xs[q].1=k) (arity : xs[q].2.1=n) (js : List Nat)
-    (bounds : ∀ j ∈ js, j<n) (allRows : batchRows (makeBatch k n xs) xs js=true) :
-    testAll xs[q] (js.map (contextWire xs[q])) = true := by
-  induction js with
-  | nil => rfl
-  | cons i js ih =>
-    simp only [batchRows,Bool.and_eq_true,batchRow,List.all_eq_true] at allRows
-    simp only [List.map_cons,testAll,testRow,Bool.and_eq_true,List.all_eq_true,List.mem_map]
-    have hi := bounds i List.mem_cons_self
-    have check := @batchMove_at k n xs
-    refine ⟨⟨⟨check hi hi hq budget arity allRows.1.1.1,check hi hi hq budget arity allRows.1.1.2⟩,?_⟩,
-      ih (fun j hj => bounds j (List.mem_cons_of_mem _ hj)) allRows.2⟩
-    rintro _ ⟨j,hj,rfl⟩
-    have hj' := bounds j (List.mem_cons_of_mem _ hj)
-    have both := allRows.1.2 j hj
-    have opCheck (d : Bool) (pass : batchPair (makeBatch k n xs) xs i j (if d then 1 else 0)=true) :
-        testPair xs[q] (contextWire xs[q] i) (contextWire xs[q] j) d=true := by
-      simp only [batchPair,Bool.and_eq_true] at pass
-      simp only [testPair,Bool.and_eq_true]
-      exact ⟨⟨⟨check hi hj' hq budget arity pass.1.1.1,check hi hj' hq budget arity pass.1.1.2⟩,
-        check hi hj' hq budget arity pass.1.2⟩,check hi hj' hq budget arity pass.2⟩
-    exact ⟨opCheck false both.1,opCheck true both.2⟩
-
-def runBatch (k n : Nat) (xs : List NodeContext) :=
-    batchRows (makeBatch k n xs) xs (List.range n)
-theorem runBatch_at {k n} {xs : List NodeContext} {q} (hq : q<xs.length)
-    (hb : xs[q].1=k) (ha : xs[q].2.1=n) (hn : xs[q].2.2.1.length=n)
-    (pass : runBatch k n xs=true) : testAll xs[q] xs[q].2.2.1=true := by
-  have all := batchRows_at k n xs hq hb ha (List.range n) (fun _ => List.mem_range.mp) pass
-  have eq : (List.range n).map (contextWire xs[q]) = xs[q].2.2.1 := by
-    apply List.ext_getElem
-    · simp [hn]
-    · intro i h1 h2
-      simp [contextWire,List.getD_eq_getElem?_getD,h2]
-  rwa [eq] at all
-
 def contextOf (g : Forest) (k i : Nat) : NodeContext :=
   let raw := wiresOf g
   let (num,depth,cw,iw,pw,offw,lw,data) := g.levels k
@@ -2813,90 +2726,134 @@ theorem makeBlock {g k start n} (h : ∀ (i : Nat), start ≤ i → i < start + 
     simp only [block,Bool.and_eq_true]
     exact ⟨h _ (by omega) (by omega),ih (fun i le lt => h i le (by omega))⟩
 
-def contexts (g : Forest) (k start n : Nat) :=
-  ((List.range n).map (start+·)).map (contextOf g k)
-def header (g : Forest) (k start n ar : Nat) :=
-  (contexts g k start n).all (fun c => c.2.1==ar && prelim (targetOf g) c)
-def rowCut (g : Forest) (k start n ar lo len : Nat) :=
-  let xs := contexts g k start n
-  let b := makeBatch k ar xs
-  (List.range len).all (fun d =>
-    let i := lo+d
-    batchRow b xs i (List.range' (i+1) (ar-(i+1))))
-theorem rowCut_at {g k start n ar lo len} (h : rowCut g k start n ar lo len=true)
-    (i : Nat) (l : lo ≤ i) (r : i < lo+len) :
-    batchRow (makeBatch k ar (contexts g k start n)) (contexts g k start n)
-      i (List.range' (i+1) (ar-(i+1)))=true := by
-  have ha := List.all_eq_true.mp h (i-lo) (List.mem_range.mpr (by omega))
-  simpa only [Nat.add_sub_of_le l] using ha
+def pairIndices : List Nat → List (Nat × Nat)
+  | [] => []
+  | i::tail => tail.map (i,·) ++ pairIndices tail
 
-theorem rowCut_merge {g k start n ar lo a b}
-    (h : rowCut g k start n ar lo a=true) (t : rowCut g k start n ar (lo+a) b=true) :
-    rowCut g k start n ar lo (a+b)=true := by
-  apply List.all_eq_true.mpr
-  intro j hj
-  have jlt := List.mem_range.mp hj
-  by_cases first : j<a
-  · exact rowCut_at h (lo+j) (by omega) (by omega)
-  · exact rowCut_at t (lo+j) (by omega) (by omega)
+def uniformCov (r : Nat) (v : Cov) : PackedCov :=
+  (r*v.1.toNat,r*v.2.1.toNat,r*v.2.2.toNat)
 
-theorem cutsRun {g k start n ar} (h : rowCut g k start n ar 0 ar=true) :
-    runBatch k ar (contexts g k start n)=true := by
-  let xs := contexts g k start n
-  have go (lo num : Nat) (eq : lo+num=ar) :
-      batchRows (makeBatch k ar xs) xs (List.range' lo num)=true := by
-    induction num generalizing lo with
-    | zero => rfl
-    | succ num ih =>
-      simp only [List.range'_succ,batchRows,Bool.and_eq_true]
-      refine ⟨?_,ih (lo+1) (by omega)⟩
-      have ok := rowCut_at h lo (by omega) (by omega)
-      simpa only [show ar-(lo+1)=num by omega] using ok
-  unfold runBatch
-  rw [List.range_eq_range']
-  exact go 0 ar (by omega)
+def pairPass (c : NodeContext) (pairs : List (Nat × Nat)) (r : Nat)
+    (a b : PackedSig) (op : Nat) (ka kb : Bool) : Bool :=
+  let n := 1+(c.2.1-(if ka then 0 else 1)-(if kb then 0 else 1))
+  if n>c.1 then true else
+    let d := n==c.1
+    let z := packedOp (r*(BitVec.allOnes 768).toNat) op a b
+    let rest := takePacked (uniformCov r (getCov c.2.2.2.1 d))
+      (packedColumn d a) (packedColumn d b) false ka kb
+    let marks := fullMarks r (rest ||| packedColumn d z)
+    onMarks (fun ij => fallbackAt c ij.1 ij.2 op ka kb) marks pairs
 
-theorem cutsBlock {g k start n ar} (hd : header g k start n ar=true)
-    (h : rowCut g k start n ar 0 ar=true) : block g k start n=true := by
-  apply makeBlock
-  intro i lo hi
-  let xs := contexts g k start n
-  have hm : contextOf g k i ∈ xs := by
-    apply List.mem_map.mpr
-    exact ⟨i,List.mem_map.mpr ⟨i-start,List.mem_range.mpr (by omega),by omega⟩,rfl⟩
-  obtain ⟨q,hq,e⟩ := List.getElem_of_mem hm
-  have one := List.all_eq_true.mp hd _ hm
-  simp only [Bool.and_eq_true,beq_iff_eq] at one
-  have hb : xs[q].1=k := by rw [e]; rfl
-  have ha : xs[q].2.1=ar := e ▸ one.1
-  have hn : xs[q].2.2.1.length=ar := by rw [e]; exact one.1
+def pairPasses (c : NodeContext) (pairs : List (Nat × Nat)) :=
+  let r := units pairs.length
+  let a := packedSig (fun ij => (contextWire c ij.1).2) pairs
+  let b := packedSig (fun ij => (contextWire c ij.2).2) pairs
+  let pass := pairPass c pairs r a b
+  let four := fun op => pass op false false && pass op true false &&
+    pass op false true && pass op true true
+  four 0 && four 1
+
+def verifyPairs (c : NodeContext) :=
+  let indices := List.range c.2.2.1.length
+  indices.all (fun i => checkAt c i i 2 false false && checkAt c i i 2 true true) &&
+    pairPasses c (pairIndices indices)
+
+def cert (g : Forest) (k i : Nat) :=
+  let c := contextOf g k i
+  prelim (targetOf g) c && verifyPairs c
+
+theorem uniform_packed {α} (v : Cov) (xs : List α) :
+    uniformCov (units xs.length) v = packedCov (fun _ => v) xs := by
+  simp only [uniformCov,packedCov,broadcast]
+
+theorem pairPassAt (c : NodeContext) (pairs : List (Nat × Nat)) (op : Nat) (hop : op ≠ 2)
+    (ka kb : Bool) (ij : Nat × Nat) (mem : ij ∈ pairs)
+    (pass : pairPass c pairs (units pairs.length)
+      (packedSig (fun p => (contextWire c p.1).2) pairs)
+      (packedSig (fun p => (contextWire c p.2).2) pairs) op ka kb = true) :
+    checkAt c ij.1 ij.2 op ka kb = true := by
+  let n := 1+(c.2.1-(if ka then 0 else 1)-(if kb then 0 else 1))
+  let d := n==c.1
+  have un : (op==2)=false := beq_eq_false_iff_ne.mpr hop
+  let field := fun p : Nat × Nat => combField c d false ka kb op p.1 p.2
+  by_cases over : n>c.1
+  · simp only [checkAt,evalMove,un,Bool.false_or,show 1+(c.2.1-_-_)>c.1 from over,ite_true]
+  · by_cases hit : field ij = BitVec.allOnes 768
+    · unfold pairPass at pass
+      change (if n>c.1 then true else _) = true at pass
+      rw [ite_eq_right over] at pass
+      simp only [uniform_packed,packed_op,packed_column,takePacked_ok,lanes_or] at pass
+      change onMarks _ (fullMarks (units pairs.length) (combineLanes field pairs)) pairs=true at pass
+      obtain ⟨i,hi,eq⟩ := List.getElem_of_mem mem
+      have mark := mark_at field pairs i hi
+      rw [eq,hit] at mark
+      have ok := marked_ok _ _ _ i hi (mark.trans (beq_self_eq_true _)) pass
+      rw [eq] at ok
+      exact fallback_sound ok
+    · have no : (field ij != BitVec.allOnes 768) = true := bne_iff_ne.mpr hit
+      simp only [checkAt,evalMove,un,Bool.false_or]
+      change (if n>c.1 then true else if field ij != BitVec.allOnes 768 then true else _) = true
+      rw [ite_eq_right over,no]
+      rfl
+
+theorem pairPassesAt (c : NodeContext) (pairs : List (Nat × Nat)) (pass : pairPasses c pairs=true)
+    (i j : Nat) (mem : (i,j) ∈ pairs) (d : Bool) :
+    testPair c (contextWire c i) (contextWire c j) d = true := by
+  simp only [pairPasses,Bool.and_eq_true] at pass
+  cases d <;> simp only [testPair,Bool.false_eq_true,ite_false,ite_true,Bool.and_eq_true] <;>
+    repeat' apply And.intro
+  all_goals apply pairPassAt c pairs _ (by decide) _ _ (i,j) mem <;> tauto
+
+theorem verifyPairs_ok (c : NodeContext) (pass : verifyPairs c=true) :
+    testAll c c.2.2.1 = true := by
+  let ids := List.range c.2.2.1.length
+  simp only [verifyPairs,Bool.and_eq_true] at pass
+  obtain ⟨unary,binary⟩ := pass
+  have go (js : List Nat) (one : ∀ i ∈ js, i ∈ ids)
+      (two : ∀ p ∈ pairIndices js, p ∈ pairIndices ids) : testAll c (js.map (contextWire c))=true := by
+    induction js with
+    | nil => rfl
+    | cons i js ih =>
+      have hu := List.all_eq_true.mp unary i (one i List.mem_cons_self)
+      simp only [List.map_cons,testAll,testRow,Bool.and_eq_true,List.all_eq_true,List.mem_map]
+      simp only [Bool.and_eq_true] at hu
+      refine ⟨⟨hu,?_⟩,ih (fun j hj => one j (List.mem_cons_of_mem _ hj))
+        (fun p hp => two p (List.mem_append_right _ hp))⟩
+      rintro _ ⟨j,hj,rfl⟩
+      have hm := two (i,j) (List.mem_append_left _ (List.mem_map_of_mem (f:=(i,·)) hj))
+      exact ⟨pairPassesAt c _ binary i j hm false,pairPassesAt c _ binary i j hm true⟩
+  have eq : ids.map (contextWire c) = c.2.2.1 := by
+    apply List.ext_getElem
+    · simp [ids]
+    · intro i h1 h2
+      simp [ids,contextWire,List.getD_eq_getElem?_getD,h2]
+  rw [←eq]
+  exact go ids (fun _ => id) (fun _ => id)
+
+theorem cert_ok {g k i} (pass : cert g k i=true) : nodeVerified g k i=true := by
+  simp only [cert,Bool.and_eq_true] at pass
+  obtain ⟨hd,hv⟩ := pass
   rw [from_context,Bool.and_eq_true]
-  refine ⟨one.2,?_⟩
-  split
-  · rfl
-  · exact e ▸ runBatch_at hq hb ha hn (cutsRun h)
+  exact ⟨hd,by split <;> first | rfl | exact verifyPairs_ok _ hv⟩
 
-def boxes (g : Forest) (k start n ar lo num : Nat) : Nat → Prop
-  | 0 => rowCut g k start n ar lo num=true
-  | d+1 => boxes g k start n ar lo (num/2) d ∧ boxes g k start n ar (lo+num/2) (num-num/2) d
-theorem boxesCut {g k start n ar lo num d} (h : boxes g k start n ar lo num d) :
-    rowCut g k start n ar lo num=true := by
-  induction d generalizing lo num with
-  | zero => exact h
-  | succ d ih =>
-    have v := rowCut_merge (ih h.1) (ih h.2)
-    simpa only [Nat.add_sub_of_le (Nat.div_le_self num 2)] using v
+def certRange (g : Forest) (k start n : Nat) :=
+  (List.range' start n).all (cert g k)
 
-def cells (g : Forest) (k start n ar rows : Nat) : Nat → Prop
-  | 0 => header g k start n ar=true ∧ boxes g k start n ar 0 ar rows
-  | d+1 => cells g k start (n/2) ar rows d ∧ cells g k (start+n/2) (n-n/2) ar rows d
-theorem cellsBlock {g k start n ar rows d} (h : cells g k start n ar rows d) :
-    block g k start n=true := by
-  induction d generalizing start n with
-  | zero => exact cutsBlock h.1 (boxesCut h.2)
-  | succ d ih =>
-    have v := block_merge (ih h.1) (ih h.2)
-    simpa only [Nat.add_sub_of_le (Nat.div_le_self n 2)] using v
+def certPieces (g : Forest) (k start n : Nat) : Nat → Prop
+  | 0 => certRange g k start n = true
+  | depth+1 => certPieces g k start (n/2) depth ∧
+      certPieces g k (start+n/2) (n-n/2) depth
+
+theorem certBlock {g k start n depth} (h : certPieces g k start n depth) :
+    block g k start n = true := by
+  induction depth generalizing start n with
+  | zero =>
+    apply makeBlock
+    intro i lo hi
+    exact cert_ok (List.all_eq_true.mp h i (by simpa using And.intro lo hi))
+  | succ depth ih =>
+    have both := block_merge (ih h.1) (ih h.2)
+    simpa only [Nat.add_sub_of_le (Nat.div_le_self n 2)] using both
 
 def listPieces {α} (f : α → Bool) (xs : List α) : Nat → Prop
   | 0 => xs.all f=true
@@ -3114,8 +3071,8 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s15_3_0 : block g15 3 0 1=true := by
-  apply cellsBlock (ar:=4) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl15_3 : block g15 3 0 1 = true := s15_3_0
@@ -3165,15 +3122,15 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s31_5_0 : block g31 5 0 1=true := by
-  apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s31_5_1 : block g31 5 1 2=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl31_5 : block g31 5 0 3 = true := (@block_merge g31 5 0 1 2 s31_5_0 s31_5_1)
@@ -3182,8 +3139,8 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s31_6_0 : block g31 6 0 1=true := by
-  apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl31_6 : block g31 6 0 1 = true := s31_6_0
@@ -3247,8 +3204,8 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s111_6_0 : block g111 6 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl111_6 : block g111 6 0 1 = true := s111_6_0
@@ -3294,15 +3251,15 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s189_6_0 : block g189 6 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s189_6_1 : block g189 6 1 2=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl189_6 : block g189 6 0 3 = true := (@block_merge g189 6 0 1 2 s189_6_0 s189_6_1)
@@ -3311,8 +3268,8 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s189_7_0 : block g189 7 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl189_7 : block g189 7 0 1 = true := s189_7_0
@@ -3367,8 +3324,8 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_6_0 : block g191 6 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_6 : block g191 6 0 1 = true := s191_6_0
@@ -3377,15 +3334,15 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_7_0 : block g191 7 0 13=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_7_1 : block g191 7 13 15=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_7 : block g191 7 0 28 = true := (@block_merge g191 7 0 13 15 s191_7_0 s191_7_1)
@@ -3394,22 +3351,22 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_8_0 : block g191 8 0 7=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_8_1 : block g191 8 7 61=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_8_2 : block g191 8 68 32=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_8 : block g191 8 0 100 = true := (@block_merge g191 8 0 68 32 (@block_merge g191 8 0 7 61 s191_8_0 s191_8_1) s191_8_2)
@@ -3418,15 +3375,15 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_9_0 : block g191 9 0 3=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_9_1 : block g191 9 3 9=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_9 : block g191 9 0 12 = true := (@block_merge g191 9 0 3 9 s191_9_0 s191_9_1)
@@ -3435,8 +3392,8 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_10_0 : block g191 10 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_10 : block g191 10 0 1 = true := s191_10_0
@@ -3495,15 +3452,15 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_8_0 : block g383 8 0 23=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_8_1 : block g383 8 23 2=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_8 : block g383 8 0 25 = true := (@block_merge g383 8 0 23 2 s383_8_0 s383_8_1)
@@ -3512,22 +3469,22 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_9_0 : block g383 9 0 9=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_9_1 : block g383 9 9 75=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_9_2 : block g383 9 84 7=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_9 : block g383 9 0 91 = true := (@block_merge g383 9 0 84 7 (@block_merge g383 9 0 9 75 s383_9_0 s383_9_1) s383_9_2)
@@ -3536,22 +3493,22 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_10_0 : block g383 10 0 5=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_10_1 : block g383 10 5 16=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_10_2 : block g383 10 21 20=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_10 : block g383 10 0 41 = true := (@block_merge g383 10 0 21 20 (@block_merge g383 10 0 5 16 s383_10_0 s383_10_1) s383_10_2)
@@ -3560,15 +3517,15 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_11_0 : block g383 11 0 1=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_11_1 : block g383 11 1 5=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_11 : block g383 11 0 6 = true := (@block_merge g383 11 0 1 5 s383_11_0 s383_11_1)
@@ -3577,8 +3534,8 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_12_0 : block g383 12 0 1=true := by
-  apply cellsBlock (ar:=8) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_12 : block g383 12 0 1 = true := s383_12_0
@@ -3661,161 +3618,161 @@ theorem geomdead : graphValid dead (boundsBefore known383) = true := by
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead8_0 : block dead 8 0 2=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead8 : block dead 8 0 2=true := sdead8_0
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead9_0 : block dead 9 0 12=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead9_12 : block dead 9 12 13=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead9 : block dead 9 0 25=true := (@block_merge dead 9 0 12 13 sdead9_0 sdead9_12)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_0 : block dead 10 0 6=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_6 : block dead 10 6 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_42 : block dead 10 42 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_78 : block dead 10 78 35=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_113 : block dead 10 113 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_149 : block dead 10 149 7=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead10 : block dead 10 0 156=true := (@block_merge dead 10 0 149 7 (@block_merge dead 10 0 113 36 (@block_merge dead 10 0 78 35 (@block_merge dead 10 0 42 36 (@block_merge dead 10 0 6 36 sdead10_0 sdead10_6) sdead10_42) sdead10_78) sdead10_113) sdead10_149)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_0 : block dead 11 0 4=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_4 : block dead 11 4 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_40 : block dead 11 40 15=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_55 : block dead 11 55 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_91 : block dead 11 91 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_127 : block dead 11 127 29=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_156 : block dead 11 156 27=true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead11 : block dead 11 0 183=true := (@block_merge dead 11 0 156 27 (@block_merge dead 11 0 127 29 (@block_merge dead 11 0 91 36 (@block_merge dead 11 0 55 36 (@block_merge dead 11 0 40 15 (@block_merge dead 11 0 4 36 sdead11_0 sdead11_4) sdead11_40) sdead11_55) sdead11_91) sdead11_127) sdead11_156)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead12_0 : block dead 12 0 3=true := by
-  apply cellsBlock (ar:=9) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead12_3 : block dead 12 3 14=true := by
-  apply cellsBlock (ar:=10) (rows:=1) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead12_17 : block dead 12 17 15=true := by
-  apply cellsBlock (ar:=11) (rows:=1) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead12 : block dead 12 0 32=true := (@block_merge dead 12 0 17 15 (@block_merge dead 12 0 3 14 sdead12_0 sdead12_3) sdead12_17)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead13_0 : block dead 13 0 1=true := by
-  apply cellsBlock (ar:=9) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead13_1 : block dead 13 1 3=true := by
-  apply cellsBlock (ar:=10) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead13 : block dead 13 0 4=true := (@block_merge dead 13 0 1 3 sdead13_0 sdead13_1)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead14_0 : block dead 14 0 1=true := by
-  apply cellsBlock (ar:=9) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead14 : block dead 14 0 1=true := sdead14_0
@@ -3988,16 +3945,16 @@ theorem orGeometry : graphValid orForest (boundsBefore entries27) = true := by
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked6At0 : block orForest 6 0 1 = true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked5At0 : block orForest 5 0 4 = true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4245,16 +4202,16 @@ theorem orGeometry : graphValid orForest (boundsBefore entries183) = true := by
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked6At0 : block orForest 6 0 1 = true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked5At0 : block orForest 5 0 1 = true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4333,16 +4290,16 @@ theorem orGeometry : graphValid orForest (boundsBefore entries187) = true := by
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At0 : block orForest 7 0 1 = true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked6At0 : block orForest 6 0 3 = true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4437,8 +4394,8 @@ theorem orGeometry : graphValid orForest (boundsBefore entries215) = true := by
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked6At0 : block orForest 6 0 1 = true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4549,96 +4506,96 @@ theorem orGeometry : graphValid orForest (boundsBefore entries127) = true := by
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At0 : block orForest 10 0 1 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At0 : block orForest 9 0 18 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At18 : block orForest 9 18 28 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At0 : block orForest 8 0 2 = true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At2 : block orForest 8 2 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At58 : block orForest 8 58 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At114 : block orForest 8 114 40 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At154 : block orForest 8 154 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At210 : block orForest 8 210 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At266 : block orForest 8 266 16 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At0 : block orForest 7 0 27 = true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At27 : block orForest 7 27 33 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -4810,160 +4767,160 @@ theorem orGeometry : graphValid orForest (boundsBefore entries251) = true := by
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At0 : block orForest 10 0 1 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At0 : block orForest 9 0 14 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At14 : block orForest 9 14 22 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At0 : block orForest 8 0 3 = true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At3 : block orForest 8 3 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At59 : block orForest 8 59 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At115 : block orForest 8 115 25 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At140 : block orForest 8 140 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At196 : block orForest 8 196 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At252 : block orForest 8 252 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At308 : block orForest 8 308 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At364 : block orForest 8 364 6 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At0 : block orForest 7 0 43 = true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At43 : block orForest 7 43 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At99 : block orForest 7 99 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At155 : block orForest 7 155 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At211 : block orForest 7 211 17 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked6At0 : block orForest 6 0 1 = true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked6At1 : block orForest 6 1 34 = true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked5At0 : block orForest 5 0 2 = true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5068,64 +5025,64 @@ theorem orGeometry : graphValid orForest (boundsBefore entries319) = true := by
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At0 : block orForest 10 0 1 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At0 : block orForest 9 0 7 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At7 : block orForest 9 7 7 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At0 : block orForest 8 0 40 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At40 : block orForest 8 40 43 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At0 : block orForest 7 0 7 = true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked7At7 : block orForest 7 7 10 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked6At0 : block orForest 6 0 1 = true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5271,184 +5228,184 @@ theorem orGeometry : graphValid orForest (boundsBefore entries255) = true := by
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked12At0 : block orForest 12 0 1 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At0 : block orForest 11 0 13 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At13 : block orForest 11 13 15 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At0 : block orForest 10 0 2 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At2 : block orForest 10 2 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At58 : block orForest 10 58 17 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At75 : block orForest 10 75 56 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At131 : block orForest 10 131 56 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At187 : block orForest 10 187 56 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At243 : block orForest 10 243 7 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At250 : block orForest 10 250 52 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At0 : block orForest 9 0 10 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At10 : block orForest 9 10 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At66 : block orForest 9 66 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At122 : block orForest 9 122 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At178 : block orForest 9 178 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At234 : block orForest 9 234 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At290 : block orForest 9 290 56 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At346 : block orForest 9 346 21 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At367 : block orForest 9 367 56 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At423 : block orForest 9 423 48 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At0 : block orForest 8 0 56 = true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At56 : block orForest 8 56 15 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
@@ -5613,232 +5570,232 @@ theorem orGeometry : graphValid orForest (boundsBefore entries503) = true := by
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked14At0 : block orForest 14 0 1 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked13At0 : block orForest 13 0 8 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked13At8 : block orForest 13 8 6 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked12At0 : block orForest 12 0 38 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked12At38 : block orForest 12 38 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked12At94 : block orForest 12 94 12 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked12At106 : block orForest 12 106 28 = true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At0 : block orForest 11 0 2 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At2 : block orForest 11 2 56 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At58 : block orForest 11 58 30 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At88 : block orForest 11 88 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At144 : block orForest 11 144 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At200 : block orForest 11 200 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At256 : block orForest 11 256 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At312 : block orForest 11 312 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At368 : block orForest 11 368 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At424 : block orForest 11 424 3 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At427 : block orForest 11 427 56 = true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At483 : block orForest 11 483 56 = true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked11At539 : block orForest 11 539 7 = true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At0 : block orForest 10 0 6 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=1)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At6 : block orForest 10 6 56 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At62 : block orForest 10 62 56 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At118 : block orForest 10 118 38 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At156 : block orForest 10 156 56 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked10At212 : block orForest 10 212 34 = true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=4)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At0 : block orForest 9 0 14 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked9At14 : block orForest 9 14 27 = true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=3)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
 theorem checked8At0 : block orForest 8 0 2 = true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=0)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 
