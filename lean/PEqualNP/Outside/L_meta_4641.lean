@@ -2,7 +2,9 @@ import PEqualNP.Defs
 
 -- The lower-bound certificate comes from Loris Olsem's checked L-meta-1667, PR 4332.
 -- The canonical source blob is fc4ba1121de31fdfa08b135ece199d4d4a9852e8.
-namespace PEqualNP.Outside.L_meta_4641.Reused1667
+namespace PEqualNP.Outside.L_meta_4641
+
+namespace Reused1667
 open PEqualNP.CircuitLowerBounds
 abbrev Sig := BitVec 512
 def zero : Sig := 0
@@ -4215,17 +4217,17 @@ theorem restricted_start {prior : Nat → Nat}
     (i:=0) (ws:=clippedInputs) (by decide +kernel)
   have tgt : targetOf restricted=clippedGraph := by decide +kernel
   exact tgt ▸ noRun
-end PEqualNP.Outside.L_meta_4641.Reused1667
+end Reused1667
 
-theorem PEqualNP.Outside.L_meta_4641.Reused1667 : ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C → (∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = (y 0 && y 1)) → PEqualNP.MetaComplexity.circuitFun 9 C = (fun x : Fin 9 → Bool => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)) → 16 ≤ C.size :=
+theorem Reused1667 : ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C → (∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = (y 0 && y 1)) → PEqualNP.MetaComplexity.circuitFun 9 C = (fun x : Fin 9 → Bool => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)) → 16 ≤ C.size :=
   PEqualNP.Outside.L_meta_4641.Reused1667.completedRoots (PEqualNP.Outside.L_meta_4641.Reused1667.dead_start (PEqualNP.Outside.L_meta_4641.Reused1667.before_sound PEqualNP.Outside.L_meta_4641.Reused1667.known383 PEqualNP.Outside.L_meta_4641.Reused1667.valid383) PEqualNP.Outside.L_meta_4641.Reused1667.geomdead PEqualNP.Outside.L_meta_4641.Reused1667.tablesdead) (PEqualNP.Outside.L_meta_4641.Reused1667.restricted_start (PEqualNP.Outside.L_meta_4641.Reused1667.before_sound PEqualNP.Outside.L_meta_4641.Reused1667.known383 PEqualNP.Outside.L_meta_4641.Reused1667.valid383) PEqualNP.Outside.L_meta_4641.Reused1667.geomrestricted PEqualNP.Outside.L_meta_4641.Reused1667.tablesrestricted)
 
 
-namespace PEqualNP.Outside.L_meta_4641.Adapter
+namespace Adapter
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
--- One-gate specialization of the unused-prefix construction in Deep3957Adapter.
+-- Uses the same unused first gate construction as Deep3957Adapter.
 private def shift (n i : ℕ) : ℕ := if i < n then i else i + 1
 
 private def shiftGate (n : ℕ) (g : Gate) : Gate := ⟨g.op,g.inputs.map (shift n)⟩
@@ -4324,7 +4326,7 @@ private theorem target (x : Fin 9 → Bool) :
   simp only [List.any_cons, List.any_nil, Bool.or_false, Bool.or_assoc]
   rfl
 
-theorem _root_.PEqualNP.Outside.L_meta_4641 :
+theorem rawBound :
     have x1 : (Fin (9 : ℕ) → Bool) → Bool := fun (x1 : Fin (9 : ℕ) → Bool) => [(1 : ℕ), (12 : ℕ), (23 : ℕ), (34 : ℕ), (40 : ℕ), (5 : ℕ), (16 : ℕ), (27 : ℕ), (38 : ℕ), (57 : ℕ), (68 : ℕ), (85 : ℕ)].any fun (x2 : ℕ) => x1 (Fin.ofNat (9 : ℕ) (x2 / (10 : ℕ))) && x1 (Fin.ofNat (9 : ℕ) (x2 % (10 : ℕ))); ∀ (x2 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.FanInTwo x2 → PEqualNP.MetaComplexity.circuitFun (9 : ℕ) x2 = x1 → (15 : ℕ) ≤ x2.size := by
   intro goal C fan computes
   have padded := PEqualNP.Outside.L_meta_4641.Reused1667
@@ -4334,4 +4336,11 @@ theorem _root_.PEqualNP.Outside.L_meta_4641 :
   rw [padSize] at padded
   omega
 
-end PEqualNP.Outside.L_meta_4641.Adapter
+end Adapter
+
+end PEqualNP.Outside.L_meta_4641
+
+-- An unused first AND preserves the edge function and increases the gate count by one.
+theorem PEqualNP.Outside.L_meta_4641 :
+    have x1 : (Fin (9 : ℕ) → Bool) → Bool := fun (x1 : Fin (9 : ℕ) → Bool) => [(1 : ℕ), (12 : ℕ), (23 : ℕ), (34 : ℕ), (40 : ℕ), (5 : ℕ), (16 : ℕ), (27 : ℕ), (38 : ℕ), (57 : ℕ), (68 : ℕ), (85 : ℕ)].any fun (x2 : ℕ) => x1 (Fin.ofNat (9 : ℕ) (x2 / (10 : ℕ))) && x1 (Fin.ofNat (9 : ℕ) (x2 % (10 : ℕ))); ∀ (x2 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.FanInTwo x2 → PEqualNP.MetaComplexity.circuitFun (9 : ℕ) x2 = x1 → (15 : ℕ) ≤ x2.size :=
+  PEqualNP.Outside.L_meta_4641.Adapter.rawBound
