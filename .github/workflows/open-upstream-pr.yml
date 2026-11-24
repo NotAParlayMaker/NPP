@@ -1,0 +1,47 @@
+# Opens a pull request to brilliant-hq/pequalnp-proofs for every proof branch
+# in this fork that has none yet. Uses the UPSTREAM_PR_TOKEN repository secret
+# (a classic token with the public_repo scope). Does nothing without it.
+name: open-upstream-pr
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: open-upstream-pr
+  cancel-in-progress: false
+
+jobs:
+  open:
+    if: github.repository == 'ernis2077/pequalnp-proofs'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Open missing pull requests
+        env:
+          GH_TOKEN: ${{ secrets.UPSTREAM_PR_TOKEN }}
+          UPSTREAM: brilliant-hq/pequalnp-proofs
+          FORK_OWNER: ernis2077
+          FORK: ernis2077/pequalnp-proofs
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN}" ]; then echo 'secret UPSTREAM_PR_TOKEN is not set; nothing to do'; exit 0; fi
+          gh api --paginate "repos/${FORK}/branches" --jq '.[].name' > branches.txt
+          while IFS= read -r b; do
+            # Only proof branches: L-<prog>-<n> or R-<prog>-<n>-<k>.
+            if ! printf '%s' "$b" | grep -Eqx '(L-[a-z]+-[0-9]+|R-[a-z]+-[0-9]+-[1-9][0-9]{0,2})'; then continue; fi
+            n=$(gh pr list --repo "$UPSTREAM" --head "$b" --state all --json headRepositoryOwner \
+                  --jq "[.[] | select(.headRepositoryOwner.login == \"${FORK_OWNER}\")] | length")
+            if [ "$n" != "0" ]; then continue; fi
+            # The branch must add exactly one file under lean/PEqualNP/Outside/.
+            files=$(gh api "repos/${UPSTREAM}/compare/main...${FORK_OWNER}:${b}" --jq '[.files[] | .filename + " " + .status] | join(",")')
+            if ! printf '%s' "$files" | grep -Eqx 'lean/PEqualNP/Outside/[A-Za-z0-9_]+\.lean added'; then
+              echo "skip $b: unexpected changes: $files"; continue
+            fi
+            echo "opening pull request for $b"
+            gh pr create --repo "$UPSTREAM" --head "${FORK_OWNER}:${b}" --base main --title "$b" --body '' || echo "failed for $b"
+          done < branches.txt
