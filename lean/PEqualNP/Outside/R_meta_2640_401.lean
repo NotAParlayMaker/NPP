@@ -4,45 +4,38 @@ import PEqualNP.Defs
 theorem PEqualNP.Outside.R_meta_2640_401
   (h1 : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) (A K : Finset (Fin n))
     (D : PEqualNP.CircuitLowerBounds.Circuit) (u : Fin n),
-    (∀ a ∉ A, (G.neighborSet a).ncard = 3) →
-    (7 : ℕ∞) ≤ G.egirth →
-    (∀ a b : Fin n, G.Adj a b → a ∉ A) →
+    ((∀ a ∉ A, (G.neighborSet a).ncard = 3) ∧ 7 ≤ G.egirth ∧ ∀ a b : Fin n, G.Adj a b → a ∉ A) →
     PEqualNP.MetaComplexity.IsMinimalCircuit n D →
     (∀ x : Fin n → Bool, D.eval (List.ofFn x) = true ↔
       (∃ a ∈ A, x a = true) ∨ ∃ a b : Fin n, G.Adj a b ∧ x a = true ∧ x b = true) →
     (∀ a b : Fin n, G.Adj a b → a ∈ K ∨ b ∈ K) →
-    (∀ K' : Finset (Fin n), (∀ a b : Fin n, G.Adj a b → a ∈ K' ∨ b ∈ K') →
-      K.card ≤ K'.card) →
+    (∀ K' : Finset (Fin n), (∀ a b : Fin n, G.Adj a b → a ∈ K' ∨ b ∈ K') → K.card ≤ K'.card) →
     u ∈ K →
     ∃ C : ℕ → PEqualNP.CircuitLowerBounds.Circuit,
-      PEqualNP.MetaComplexity.FanInTwo (C 0) ∧ (C 0).size ≤ D.size ∧
-      PEqualNP.MetaComplexity.circuitFun n (C 0) = PEqualNP.MetaComplexity.circuitFun n D ∧
-      (∀ i : ℕ, i < 4 → ∃ m p : ℕ,
-        m < (C i).size ∧ (p < n + m ∨ n + (C i).size ≤ p) ∧
-        C (i + 1) = PEqualNP.CircuitMoves.eraseGate n (C i) m p ∧
+      (PEqualNP.MetaComplexity.FanInTwo (C 0) ∧ (C 0).size ≤ D.size ∧
+        PEqualNP.MetaComplexity.circuitFun n (C 0) = PEqualNP.MetaComplexity.circuitFun n D) ∧
+      (∀ x : Fin n → Bool, x u = false → (C 4).eval (List.ofFn x) = D.eval (List.ofFn x)) ∧
+      ∀ i < 4, ∃ m p : ℕ,
+        (m < (C i).size ∧ (p < n + m ∨ n + (C i).size ≤ p) ∧
+          C (i + 1) = PEqualNP.CircuitMoves.eraseGate n (C i) m p) ∧
         ((∀ x : Fin n → Bool, x u = false →
           let w := (C i).wires (List.ofFn x)
           w.getD (n + m) false = w.getD p false) ∨
-        ((C i).output ≠ n + m ∧ ∀ g ∈ (C i).gates.drop (m + 1), n + m ∉ g.inputs))) ∧
-      ∀ x : Fin n → Bool, x u = false → (C 4).eval (List.ofFn x) = D.eval (List.ofFn x))
+        ((C i).output ≠ n + m ∧ ∀ g ∈ (C i).gates.drop (m + 1), n + m ∉ g.inputs)))
   (h2 : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) (A K : Finset (Fin n))
     (D E : PEqualNP.CircuitLowerBounds.Circuit) (u v : Fin n),
-    (∀ a ∉ A, (G.neighborSet a).ncard = 3) →
-    (7 : ℕ∞) ≤ G.egirth →
-    (∀ a b : Fin n, G.Adj a b → a ∉ A) →
+    ((∀ a ∉ A, (G.neighborSet a).ncard = 3) ∧ 7 ≤ G.egirth ∧ ∀ a b : Fin n, G.Adj a b → a ∉ A) →
     PEqualNP.MetaComplexity.IsMinimalCircuit n D →
     (∀ x : Fin n → Bool, D.eval (List.ofFn x) = true ↔
       (∃ a ∈ A, x a = true) ∨ ∃ a b : Fin n, G.Adj a b ∧ x a = true ∧ x b = true) →
     (∀ a b : Fin n, G.Adj a b → a ∈ K ∨ b ∈ K) →
-    (∀ K' : Finset (Fin n), (∀ a b : Fin n, G.Adj a b → a ∈ K' ∨ b ∈ K') →
-      K.card ≤ K'.card) →
-    G.Adj u v → u ∈ K → v ∈ K →
-    PEqualNP.MetaComplexity.FanInTwo E → E.size + 4 ≤ D.size →
+    (∀ K' : Finset (Fin n), (∀ a b : Fin n, G.Adj a b → a ∈ K' ∨ b ∈ K') → K.card ≤ K'.card) →
+    (G.Adj u v ∧ u ∈ K ∧ v ∈ K ∧ PEqualNP.MetaComplexity.FanInTwo E ∧ E.size + 4 ≤ D.size) →
     (∀ x : Fin n → Bool, x u = false → E.eval (List.ofFn x) = D.eval (List.ofFn x)) →
     ∃ C : ℕ → PEqualNP.CircuitLowerBounds.Circuit, C 0 = E ∧
-      ∀ i : ℕ, i < 3 → ∃ m p : ℕ,
-        m < (C i).size ∧ (p < n + m ∨ n + (C i).size ≤ p) ∧
-        C (i + 1) = PEqualNP.CircuitMoves.eraseGate n (C i) m p ∧
+      ∀ i < 3, ∃ m p : ℕ,
+        (m < (C i).size ∧ (p < n + m ∨ n + (C i).size ≤ p) ∧
+          C (i + 1) = PEqualNP.CircuitMoves.eraseGate n (C i) m p) ∧
         ((∀ x : Fin n → Bool, x u = false → x v = false →
           let w := (C i).wires (List.ofFn x)
           w.getD (n + m) false = w.getD p false) ∨
@@ -100,22 +93,22 @@ theorem PEqualNP.Outside.R_meta_2640_401
     SimpleGraph.le_egirth.2 (fun a w hw => by exact_mod_cast hgirth a w hw)
   obtain ⟨K, hK, hKmin, u, v, huv, hu, hv⟩ :=
     cover_edge n G hnon
-  obtain ⟨C, h0F, h0s, h0f, hst, h4fun⟩ :=
-    h1 n G A K D u hdeg hg hiso hmin hfun hK hKmin hu
+  obtain ⟨C, ⟨h0F, h0s, h0f⟩, h4fun, hst⟩ :=
+    h1 n G A K D u ⟨hdeg, hg, hiso⟩ hmin hfun hK hKmin hu
   have hFan : ∀ i, i ≤ 4 → PEqualNP.MetaComplexity.FanInTwo (C i) ∧ (C i).size + i = (C 0).size := by
     intro i
     induction i with
     | zero => intro _; exact ⟨h0F, rfl⟩
     | succ k ih =>
       intro hk
-      obtain ⟨m, p, hm, -, he, -⟩ := hst k (by omega)
+      obtain ⟨m, p, ⟨hm, -, he⟩, -⟩ := hst k (by omega)
       obtain ⟨ihF, ihs⟩ := ih (by omega)
       have hsz := size_eraseGate n (C k) m p hm
       rw [he]
       exact ⟨fanInTwo_eraseGate n (C k) m p ihF, by omega⟩
   obtain ⟨hF4, hs4⟩ := hFan 4 le_rfl
-  obtain ⟨E, hE0, hEst⟩ := h2 n G A K D (C 4) u v hdeg hg hiso hmin hfun hK hKmin huv hu hv
-    hF4 (by omega) h4fun
+  obtain ⟨E, hE0, hEst⟩ := h2 n G A K D (C 4) u v ⟨hdeg, hg, hiso⟩ hmin hfun hK hKmin
+    ⟨huv, hu, hv, hF4, by omega⟩ h4fun
   have huv' : v ≠ u := (G.ne_of_adj huv).symm
   refine ⟨u, v, huv, fun i => if i ≤ 4 then C i else E (i - 4), ?_, ?_, ?_, ?_⟩
   · simpa using h0F
@@ -123,7 +116,7 @@ theorem PEqualNP.Outside.R_meta_2640_401
   · simpa using h0f
   · intro i hi
     by_cases hi4 : i < 4
-    · obtain ⟨m, p, hm, hp, he, hj⟩ := hst i hi4
+    · obtain ⟨m, p, ⟨hm, hp, he⟩, hj⟩ := hst i hi4
       refine ⟨m, p, ?_, ?_, ?_, ?_⟩
       · simpa [show i ≤ 4 by omega] using hm
       · simpa [show i ≤ 4 by omega] using hp
@@ -142,7 +135,7 @@ theorem PEqualNP.Outside.R_meta_2640_401
           subst this
           simp [hE0]
         · simp [hj4]
-      obtain ⟨m, p, hm, hp, he, hj⟩ := hEst (i - 4) (by omega)
+      obtain ⟨m, p, ⟨hm, hp, he⟩, hj⟩ := hEst (i - 4) (by omega)
       have hi' : i + 1 - 4 = i - 4 + 1 := by omega
       refine ⟨m, p, ?_, ?_, ?_, ?_⟩
       · beta_reduce; rw [hk i (by omega)]; exact hm
