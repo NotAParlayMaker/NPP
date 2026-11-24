@@ -59,7 +59,11 @@ theorem PEqualNP.Outside.R_meta_4453_421
         I p l ∧ circuitFun (n+n) C (pair p l) = true := (Finset.mem_filter.mp h).2
     have free : ∀ p r l m : Fin n, p ≠ r → l ≠ m →
         ¬ ((p,l) ∈ E ∧ (r,l) ∈ E ∧ (p,m) ∈ E ∧ (r,m) ∈ E) := by
-      intro p r l m hpr hlm ⟨a,b,c,d⟩
+      intro p r l m hpr hlm fourEdges
+      have a := fourEdges.1
+      have b := fourEdges.2.1
+      have c := fourEdges.2.2.1
+      have d := fourEdges.2.2.2
       obtain ⟨k, _, hu⟩ := hPairs p r hpr
       exact hlm ((hu l ⟨(edgeInfo a).1, (edgeInfo b).1⟩).trans
         (hu m ⟨(edgeInfo c).1, (edgeInfo d).1⟩).symm)
