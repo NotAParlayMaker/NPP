@@ -999,6 +999,7 @@ theorem edge_certificate (hq : 2 ≤ q)
   · exact ⟨pt p', ln l', e₂, ne₂, e₁, ne₁, Or.inr
       (fun e => hOff ((adj_pt_ln p' l').1 e))⟩
 
+omit [DecidableRel I] in
 theorem graph_eval (C : Circuit)
     (pairs : ∀ a b : Fin (N + N),
       circuitFun (N + N) C (fun i => decide (i = a ∨ i = b)) = true ↔
