@@ -45,6 +45,8 @@ mount -n --move /tmp/.pnp-proc /proc
 #    a mount still writable, or allowing set-user-id or device files, stops the build. So a failure here
 #    can only ever stop a build, never open one.
 n0=$(wc -l < /proc/self/mountinfo)
+# Snap images mounted at this moment (red team, a permanent line: rehearsal 1 saw them stop 3 runs of 15).
+snaps=$(awk '$5 ~ "^/snap/" { n++ } END { print n + 0 }' /proc/self/mountinfo)
 awk '{print $5}' /proc/self/mountinfo | while IFS= read -r m; do
   m=$(printf '%b' "$m")
   case "$m" in
@@ -98,7 +100,7 @@ if [ -n "$bad" ]; then
   exit 98
 fi
 # One line for the log: how many mounts are read-only, and which are writable (our own places only).
-awk '{print $5, $6}' /proc/self/mountinfo | awk -v d="$detached" '{ split($2, f, ","); if (f[1] == "ro") r++; else w = w " " $1 } END { print "mounts: " r " read-only; detached: " d "; writable:" w }' \
+awk '{print $5, $6}' /proc/self/mountinfo | awk -v d="$detached" -v sn="$snaps" '{ split($2, f, ","); if (f[1] == "ro") r++; else w = w " " $1 } END { print "mounts: " r " read-only; detached: " d "; snap images at the probe: " sn "; writable:" w }' \
   | tr -cd 'A-Za-z0-9_./:;, \n-' >&4
 echo "namespace ready" >&4
 exec 4>&-

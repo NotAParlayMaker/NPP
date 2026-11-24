@@ -47,7 +47,7 @@ test('locked-ns.sh: every mount read-only, then the writable places, then the ch
   assert.match(ns, /exec 4>&-\n/, 'the ready file stays open for the build account');
 });
 test('after the build: the system PATH only, and the checker on the node copied before it (second wall)', () => {
-  assert.match(workflow, /export PATH=\/usr\/bin:\/bin\n\s+node_bin="\$RUNNER_TEMP\/node"/, 'the run step does not pin PATH and the node copy');
+  assert.match(workflow, /export PATH=\/usr\/bin:\/bin\n\s+echo "the checker step runs with PATH=\$PATH"\n\s+node_bin="\$RUNNER_TEMP\/node"/, 'the run step does not pin PATH and the node copy');
   assert.match(workflow, /install -m 0700 "\$src" "\$RUNNER_TEMP\/node\/node"/, 'no node copy is taken before the build');
   assert.ok((workflow.match(/export PATH=\/usr\/bin:\/bin/g) || []).length >= 2, 'the verdict step does not pin PATH');
 });
@@ -72,4 +72,13 @@ test('the launch line RUNS: locked-ns.sh gets the ready file first, then the too
     assert.equal(out, `${ready}|TC|3|CFG|RW|lake|build|X|`, 'the script got its arguments in the wrong order');
     assert.equal(readFileSync(ready, 'utf8'), 'namespace ready\n', 'the ready line did not arrive through descriptor 4');
   } finally { rmSync(d, { recursive: true, force: true }); }
+});
+// Two permanent lines asked before the merge (red team, rehearsal 2): the snap images mounted at the moment of the
+// probe, counted inside the namespace before the remount loop, on the mounts line; and the checker step's PATH.
+test('the mounts line names the snap images at the probe; the checker step prints its PATH', () => {
+  const ns = readFileSync(new URL('./locked-ns.sh', import.meta.url), 'utf8');
+  assert.match(ns, /n0=\$\(wc -l < \/proc\/self\/mountinfo\)\n(#[^\n]*\n)*snaps=\$\(awk '\$5 ~ "\^\/snap\/"/, 'the snap count is not taken before the remount loop');
+  assert.match(ns, /snap images at the probe: " sn/, 'the mounts line does not carry the snap count');
+  const wf = readFileSync(new URL('../workflows/authoritative.yml', import.meta.url), 'utf8');
+  assert.match(wf, /echo "the checker step runs with PATH=\$PATH"/);
 });

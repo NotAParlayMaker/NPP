@@ -325,6 +325,7 @@ jobs:
           # ahead of /usr/bin on the runner's PATH (/usr/local/bin, /opt/pipx_bin) cannot shadow one, and
           # the checker runs on the node copied before any outside code, checked against its hash now.
           export PATH=/usr/bin:/bin
+          echo "the checker step runs with PATH=$PATH"
           node_bin="$RUNNER_TEMP/node"
           if [ "$(sha256sum "$node_bin/node" | cut -d' ' -f1)" != "$(cat "$RUNNER_TEMP/node.sha256")" ]; then
             echo "the checker's node copy does not match its hash; no check run" >> "$RUNNER_TEMP/checker.err"
