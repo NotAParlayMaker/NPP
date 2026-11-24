@@ -6,6 +6,9 @@ theorem PEqualNP.Outside.R_meta_4261_417
     (h2 : have x1 : (Fin (9 : ℕ) → Bool) → Bool := fun (x1 : Fin (9 : ℕ) → Bool) => [(1 : ℕ), (12 : ℕ), (23 : ℕ), (34 : ℕ), (40 : ℕ), (5 : ℕ), (16 : ℕ), (27 : ℕ), (38 : ℕ), (57 : ℕ), (68 : ℕ), (85 : ℕ)].any fun (x2 : ℕ) => x1 (Fin.ofNat (9 : ℕ) (x2 / (10 : ℕ))) && x1 (Fin.ofNat (9 : ℕ) (x2 % (10 : ℕ))); ¬PEqualNP.MetaComplexity.HasCircuitSize (9 : ℕ) x1 (14 : ℕ))
     : ∀ (x1 : List ℕ),   x1.length = (2 : ℕ) →     (∀ x3 ∈ x1, x3 < (10 : ℕ)) →       (0 : ℕ) ∈ x1 ∨ (9 : ℕ) ∈ x1 →         (¬∀ x5 ∈ x1, x5 = (0 : ℕ) ∨ x5 = (9 : ℕ)) ∧ (9 : ℕ) ∈ x1 →           (1 : ℕ) ∈ x1 ∨ (4 : ℕ) ∈ x1 ∨ (5 : ℕ) ∈ x1 →             ∀ (x7 : PEqualNP.CircuitLowerBounds.Circuit),               PEqualNP.MetaComplexity.FanInTwo x7 →                 x7.size ≤ (13 : ℕ) →                   ∃ (x10 : Fin (9 : ℕ) → Bool),                     have x11 : List Bool := List.ofFn x10 ++ [!x10 (0 : Fin (9 : ℕ))];                     x7.eval (x11 ++ [PEqualNP.CircuitLowerBounds.GateOp.or.eval (List.map (fun (x12 : ℕ) => x11.getD x12 Bool.false) x1)]) ≠ (x10 (0 : Fin (9 : ℕ)) && x10 (1 : Fin (9 : ℕ)) || x10 (1 : Fin (9 : ℕ)) && x10 (2 : Fin (9 : ℕ)) || x10 (2 : Fin (9 : ℕ)) && x10 (3 : Fin (9 : ℕ)) || x10 (3 : Fin (9 : ℕ)) && x10 (4 : Fin (9 : ℕ)) || x10 (4 : Fin (9 : ℕ)) && x10 (0 : Fin (9 : ℕ)) || x10 (0 : Fin (9 : ℕ)) && x10 (5 : Fin (9 : ℕ)) || x10 (1 : Fin (9 : ℕ)) && x10 (6 : Fin (9 : ℕ)) || x10 (2 : Fin (9 : ℕ)) && x10 (7 : Fin (9 : ℕ)) || x10 (3 : Fin (9 : ℕ)) && x10 (8 : Fin (9 : ℕ)) || x10 (5 : Fin (9 : ℕ)) && x10 (7 : Fin (9 : ℕ)) || x10 (6 : Fin (9 : ℕ)) && x10 (8 : Fin (9 : ℕ)) || x10 (8 : Fin (9 : ℕ)) && x10 (5 : Fin (9 : ℕ))) := by
   classical
+  have evA : ∀ l : List Bool, PEqualNP.CircuitLowerBounds.GateOp.and.eval l = l.all id := fun _ => rfl
+  have evO : ∀ l : List Bool, PEqualNP.CircuitLowerBounds.GateOp.or.eval l = l.any id := fun _ => rfl
+  have evN : ∀ l : List Bool, PEqualNP.CircuitLowerBounds.GateOp.not.eval l = !(l.headD false) := fun _ => rfl
   -- wire bookkeeping
   have snoc_ne : ∀ (L : List Bool) (t : Bool) (j : ℕ), j ≠ L.length →
       (L ++ [t]).getD j false = L.getD j false := by
@@ -69,7 +72,7 @@ theorem PEqualNP.Outside.R_meta_4261_417
       | cons a l =>
         have := h a (by rw [hrd]; simp)
         rw [hval]
-        simp only [PEqualNP.CircuitLowerBounds.GateOp.eval, List.map_cons, List.headD_cons, this]
+        simp only [evA, evO, evN, List.map_cons, List.headD_cons, this]
   -- Elimination: wires 0, 9, 10 constant, every gate that uses one of them is saved.
   have elim : ∀ gs : List PEqualNP.CircuitLowerBounds.Gate, (∀ g ∈ gs, ok g) →
       ∀ (old new : (Fin 8 → Bool) → List Bool) (n m : ℕ),
@@ -108,18 +111,18 @@ theorem PEqualNP.Outside.R_meta_4261_417
             ∃ j, j < m ∧ ∀ y, (old y).getD i false = (new y).getD j false :=
           fun i h => (hrep i).resolve_left h
         obtain ⟨l, hl, rfl | rfl | rfl⟩ := shape g hg
-        · match l, hl with
-          | [], _ => exact Or.inl ⟨true, fun y => by rw [hval]; rfl⟩
-          | [a], _ =>
+        · rcases l with _ | ⟨a, _ | ⟨c, _ | ⟨c', l⟩⟩⟩
+          · exact Or.inl ⟨true, fun y => by rw [hval]; rfl⟩
+          ·
             have e : ∀ y, val ⟨PEqualNP.CircuitLowerBounds.GateOp.and, [a]⟩ (old y) = (old y).getD a false := by
-              intro y; rw [hval]; simp [PEqualNP.CircuitLowerBounds.GateOp.eval]
+              intro y; rw [hval]; simp [evA, evO, evN]
             rcases hrep a with ⟨b, h⟩ | ⟨j, hj, h⟩
             · exact Or.inl ⟨b, fun y => (e y).trans (h y)⟩
             · exact Or.inr (Or.inl ⟨j, hj, fun y => (e y).trans (h y)⟩)
-          | [a, c], _ =>
+          ·
             have e : ∀ y, val ⟨PEqualNP.CircuitLowerBounds.GateOp.and, [a, c]⟩ (old y)
                 = ((old y).getD a false && (old y).getD c false) := by
-              intro y; rw [hval]; simp [PEqualNP.CircuitLowerBounds.GateOp.eval]
+              intro y; rw [hval]; simp [evA, evO, evN]
             by_cases ha : ∃ b, ∀ y, (old y).getD a false = b
             · obtain ⟨b, ha⟩ := ha
               cases b
@@ -144,20 +147,20 @@ theorem PEqualNP.Outside.R_meta_4261_417
                 · obtain ⟨j, _, h⟩ := wire a ha
                   obtain ⟨k, _, h'⟩ := wire c hc
                   refine ⟨⟨PEqualNP.CircuitLowerBounds.GateOp.and, [j, k]⟩, okand _ (by simp), fun y => ?_⟩
-                  rw [e, h, h', hval]; simp [PEqualNP.CircuitLowerBounds.GateOp.eval]
-          | _ :: _ :: _ :: _, hl => simp at hl
-        · match l, hl with
-          | [], _ => exact Or.inl ⟨false, fun y => by rw [hval]; rfl⟩
-          | [a], _ =>
+                  rw [e, h, h', hval]; simp [evA, evO, evN]
+          · simp at hl
+        · rcases l with _ | ⟨a, _ | ⟨c, _ | ⟨c', l⟩⟩⟩
+          · exact Or.inl ⟨false, fun y => by rw [hval]; rfl⟩
+          ·
             have e : ∀ y, val ⟨PEqualNP.CircuitLowerBounds.GateOp.or, [a]⟩ (old y) = (old y).getD a false := by
-              intro y; rw [hval]; simp [PEqualNP.CircuitLowerBounds.GateOp.eval]
+              intro y; rw [hval]; simp [evA, evO, evN]
             rcases hrep a with ⟨b, h⟩ | ⟨j, hj, h⟩
             · exact Or.inl ⟨b, fun y => (e y).trans (h y)⟩
             · exact Or.inr (Or.inl ⟨j, hj, fun y => (e y).trans (h y)⟩)
-          | [a, c], _ =>
+          ·
             have e : ∀ y, val ⟨PEqualNP.CircuitLowerBounds.GateOp.or, [a, c]⟩ (old y)
                 = ((old y).getD a false || (old y).getD c false) := by
-              intro y; rw [hval]; simp [PEqualNP.CircuitLowerBounds.GateOp.eval]
+              intro y; rw [hval]; simp [evA, evO, evN]
             by_cases ha : ∃ b, ∀ y, (old y).getD a false = b
             · obtain ⟨b, ha⟩ := ha
               cases b
@@ -182,13 +185,13 @@ theorem PEqualNP.Outside.R_meta_4261_417
                 · obtain ⟨j, _, h⟩ := wire a ha
                   obtain ⟨k, _, h'⟩ := wire c hc
                   refine ⟨⟨PEqualNP.CircuitLowerBounds.GateOp.or, [j, k]⟩, okor _ (by simp), fun y => ?_⟩
-                  rw [e, h, h', hval]; simp [PEqualNP.CircuitLowerBounds.GateOp.eval]
-          | _ :: _ :: _ :: _, hl => simp at hl
+                  rw [e, h, h', hval]; simp [evA, evO, evN]
+          · simp at hl
         · cases l with
           | nil => exact Or.inl ⟨true, fun y => by rw [hval]; rfl⟩
           | cons a l =>
             have e : ∀ y, val ⟨PEqualNP.CircuitLowerBounds.GateOp.not, a :: l⟩ (old y) = !(old y).getD a false := by
-              intro y; rw [hval]; simp [PEqualNP.CircuitLowerBounds.GateOp.eval]
+              intro y; rw [hval]; simp [evA, evO, evN]
             by_cases ha : ∃ b, ∀ y, (old y).getD a false = b
             · obtain ⟨b, ha⟩ := ha
               exact Or.inl ⟨!b, fun y => by rw [e, ha]⟩
@@ -200,7 +203,7 @@ theorem PEqualNP.Outside.R_meta_4261_417
                 rw [← this]; exact ha
               · obtain ⟨j, _, h⟩ := wire a ha
                 refine ⟨⟨PEqualNP.CircuitLowerBounds.GateOp.not, [j]⟩, oknot _ (by simp), fun y => ?_⟩
-                rw [e, h, hval]; simp [PEqualNP.CircuitLowerBounds.GateOp.eval]
+                rw [e, h, hval]; simp [evA, evO, evN]
       have hn' : ∀ y, (old y ++ [val g (old y)]).length = n + 1 := fun y => by simp [hn]
       have hS' : ∀ i, i = 0 ∨ i = 9 ∨ i = 10 → ∃ b, ∀ y, (old y ++ [val g (old y)]).getD i false = b := by
         intro i hi
@@ -260,8 +263,8 @@ theorem PEqualNP.Outside.R_meta_4261_417
     have h9 : ∀ x : Fin 9 → Bool, (List.ofFn x ++ [!x 0]).getD 9 false = !x 0 := fun x => rfl
     have hj : ∀ (x : Fin 9 → Bool) (j : Fin 9), (List.ofFn x ++ [!x 0]).getD j.val false = x j := by
       intro x j; fin_cases j <;> rfl
-    match l, hl with
-    | [p, q], _ =>
+    obtain ⟨p, q, rfl⟩ := List.length_eq_two.1 hl
+    ·
       have key : ∃ c : Fin 9, (c = 1 ∨ c = 4 ∨ c = 5) ∧ ([p, q] = [9, c.val] ∨ [p, q] = [c.val, 9]) := by
         have m9 := hl9.2
         simp only [List.mem_cons, List.not_mem_nil, or_false] at m9 hla
@@ -287,10 +290,10 @@ theorem PEqualNP.Outside.R_meta_4261_417
         intro x
         rcases hpq with e | e
         · rw [e]
-          simp only [List.map_cons, List.map_nil, h9, hj, PEqualNP.CircuitLowerBounds.GateOp.eval,
+          simp only [List.map_cons, List.map_nil, h9, hj, evA, evO, evN,
             List.any_cons, List.any_nil, id, Bool.or_false]
         · rw [e]
-          simp only [List.map_cons, List.map_nil, h9, hj, PEqualNP.CircuitLowerBounds.GateOp.eval,
+          simp only [List.map_cons, List.map_nil, h9, hj, evA, evO, evN,
             List.any_cons, List.any_nil, id, Bool.or_false]
           exact Bool.or_comm _ _
       subst hE
@@ -534,12 +537,12 @@ theorem PEqualNP.Outside.R_meta_4261_417
         simp only [List.mem_filter, decide_eq_true_eq]; exact ⟨hg, Or.inr (Or.inr hg10)⟩
       have m2 : g' ∈ C.gates.filter (fun g => decide (rd g 0 ∨ rd g 9 ∨ rd g 10)) := by
         simp only [List.mem_filter, decide_eq_true_eq]; exact ⟨hg', hr⟩
-      match hfil : C.gates.filter (fun g => decide (rd g 0 ∨ rd g 9 ∨ rd g 10)), few with
-      | [], _ => rw [hfil] at m1; simp at m1
-      | [z], _ =>
-        rw [hfil, List.mem_singleton] at m1 m2
+      generalize C.gates.filter (fun g => decide (rd g 0 ∨ rd g 9 ∨ rd g 10)) = L at m1 m2 few
+      rcases L with _ | ⟨z, _ | ⟨z', L⟩⟩
+      · simp at m1
+      · rw [List.mem_singleton] at m1 m2
         rw [m1, m2]
-      | _ :: _ :: _, few => simp at few
+      · simp at few
     -- From a property of g alone.
     have viaA : (∀ w w' : List Bool, (∀ i, i ≠ 0 → i ≠ 9 → i ≠ 10 → w.getD i false = w'.getD i false) →
         w.getD 10 false = true → w'.getD 10 false = true → val g w = val g w') → False := by
@@ -582,16 +585,16 @@ theorem PEqualNP.Outside.R_meta_4261_417
         have pairs : ∀ w : List Bool, val g w = (w.getD 10 false && w.getD 9 false) := by
           intro w
           rw [e, hval]
-          match l', hl' with
-          | [], _ => simp at hmem
-          | [p], _ => simp only [List.mem_singleton] at hmem h9; omega
-          | [p, q], _ =>
+          rcases l' with _ | ⟨p, _ | ⟨q, _ | ⟨q', l'⟩⟩⟩
+          · simp at hmem
+          · simp only [List.mem_singleton] at hmem h9; omega
+          ·
             simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem h9
             have : (p = 10 ∧ q = 9) ∨ (p = 9 ∧ q = 10) := by omega
             rcases this with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-            · simp [PEqualNP.CircuitLowerBounds.GateOp.eval]
-            · simp [PEqualNP.CircuitLowerBounds.GateOp.eval, Bool.and_comm]
-          | _ :: _ :: _ :: _, hl' => simp at hl'
+            · simp [evA, evO, evN]
+            · simp [evA, evO, evN, Bool.and_comm]
+          · simp at hl'
         obtain ⟨φ, hφ⟩ : ∃ φ : PEqualNP.CircuitLowerBounds.Gate → PEqualNP.CircuitLowerBounds.Gate,
             φ = fun g' => if rd g' 10 then ⟨PEqualNP.CircuitLowerBounds.GateOp.and, [9]⟩ else g' := ⟨_, rfl⟩
         have φok : ∀ g' ∈ C.gates, ok (φ g') := by
@@ -629,7 +632,7 @@ theorem PEqualNP.Outside.R_meta_4261_417
                 split
                 · next hr =>
                   rw [only g1 (hm g1 List.mem_cons_self) (Or.inr (Or.inr hr)), pairs w, p9, p10, hval]
-                  simp only [PEqualNP.CircuitLowerBounds.GateOp.eval, List.map_cons, List.map_nil, p9]
+                  simp only [evA, evO, evN, List.map_cons, List.map_nil, p9]
                   cases x 0 <;> simp
                 · rfl
               rw [hv]
@@ -642,7 +645,7 @@ theorem PEqualNP.Outside.R_meta_4261_417
           have z : ∀ w : List Bool, (w.getD 0 false = false ∨ w.getD 10 false = false) → val g w = false := by
             intro w hz
             rw [e, hval]
-            simp only [PEqualNP.CircuitLowerBounds.GateOp.eval]
+            simp only [evA, evO, evN]
             rw [Bool.eq_false_iff]
             intro hall
             rw [List.all_map, List.all_eq_true] at hall
@@ -669,7 +672,7 @@ theorem PEqualNP.Outside.R_meta_4261_417
       have t : ∀ w : List Bool, w.getD 10 false = true → val g w = true := by
         intro w hw
         rw [e, hval]
-        simp only [PEqualNP.CircuitLowerBounds.GateOp.eval, List.any_map, List.any_eq_true]
+        simp only [evA, evO, evN, List.any_map, List.any_eq_true]
         exact ⟨10, hmem, hw⟩
       intro w w' _ p10 p10'
       rw [t w p10, t w' p10']
@@ -684,6 +687,6 @@ theorem PEqualNP.Outside.R_meta_4261_417
       | cons p l' =>
         simp only [List.head?_cons, Option.some.injEq] at hh
         subst hh
-        simp only [PEqualNP.CircuitLowerBounds.GateOp.eval, List.map_cons, List.headD_cons]
+        simp only [evA, evO, evN, List.map_cons, List.headD_cons]
         rw [p10, p10']
   · exact drop C.gates okC hsz (fun g hg hr => hex ⟨g, hg, hr⟩) C.output out10 h
