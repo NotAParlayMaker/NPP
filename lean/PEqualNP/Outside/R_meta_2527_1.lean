@@ -4,9 +4,6 @@ import PEqualNP.Defs
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
--- Compile the suffix to finite selectors and establish the mandatory raw input reads.
--- A checked table gives, for each nonexceptional pair of selectors and raw input,
--- two assignments differing only at that input, with equal prefix and unequal output.
 set_option maxHeartbeats 9000000 in
 set_option maxRecDepth 10000 in
 theorem PEqualNP.Outside.R_meta_2527_1
