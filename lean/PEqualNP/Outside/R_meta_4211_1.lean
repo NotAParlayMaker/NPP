@@ -66,7 +66,9 @@ theorem PEqualNP.Outside.R_meta_4211_1
     have hlen0 : w < (List.ofFn x).length := by
       simpa [List.length_ofFn] using hw
     have := fold_getD_lt C.gates (List.ofFn x) w hlen0
-    rw [Circuit.wires, this, List.getD_eq_getElem (l := List.ofFn x) (n := w) false hlen0]
+    change (C.gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
+        (List.ofFn x)).getD w false = x ⟨w, hw⟩
+    rw [this, List.getD_eq_getElem (l := List.ofFn x) (n := w) false hlen0]
     exact List.getElem_ofFn (f := x) hlen0
   have mem0 : (0 : ℕ) ∈ [(8191 : ℕ), (7668 : ℕ), (6624 : ℕ), (5584 : ℕ), (3492 : ℕ), (1408 : ℕ),
       (7492 : ℕ), (7316 : ℕ), (6272 : ℕ), (7472 : ℕ), (4176 : ℕ), (2084 : ℕ), (6144 : ℕ),
@@ -78,9 +80,11 @@ theorem PEqualNP.Outside.R_meta_4211_1
       (0 : ℕ)].toFinset := by
     decide
   have or_true_left (u v : Bool) (h : u = true) : GateOp.or.eval [u, v] = true := by
-    simp [GateOp.eval, h]
+    change (u || (v || false)) = true
+    simp only [h, Bool.true_or]
   have or_true_right (u v : Bool) (h : v = true) : GateOp.or.eval [u, v] = true := by
-    simp [GateOp.eval, h]
+    change (u || (v || false)) = true
+    simp only [h, Bool.or_false, Bool.or_true]
   have testBit_all : ∀ p : Fin 13, (8191 : ℕ).testBit p.val = true := by decide
   let D : Finset (Fin 13) := [(0 : Fin 13), 1, 3, 9].toFinset
   let Sall : Finset (Fin 13) :=
