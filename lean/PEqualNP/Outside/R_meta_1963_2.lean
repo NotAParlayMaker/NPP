@@ -39,13 +39,15 @@ theorem PEqualNP.Outside.R_meta_1963_2
   have quad (Q : Finset (Fin 13)) : Q∈quadrangles singerLines3 ↔
       Q.card=4 ∧ ∀ k : Fin 13, (Q.filter (fun u => u-k∈Delta)).card≤2 := by
     have eq (k : Fin 13) : Q∩singerLines3 k=Q.filter (fun u=>u-k∈Delta) := by ext u;simp [inc u k]
-    simp only [quadrangles,Finset.mem_filter,Finset.mem_powersetCard,Finset.subset_univ,true_and,eq]
+    delta quadrangles
+    simp only [Finset.mem_filter,Finset.mem_powersetCard,Finset.subset_univ,true_and,eq]
   have tail (Q : Finset (Fin 13)) : bits (missLines singerLines3 Q)=
       List.ofFn (fun v : Fin 13 => decide (∀ u∈Q, u-v∉Delta)) := by
     apply congrArg List.ofFn
     funext v
     apply decide_eq_decide.mpr
-    simp only [missLines,Finset.mem_filter,Finset.mem_univ,true_and,Finset.disjoint_left,←inc]
+    delta missLines
+    simp only [Finset.mem_filter,Finset.mem_univ,true_and,Finset.disjoint_left,←inc]
     exact ⟨fun h u hu e => h e hu,fun h u e hu => h u hu e⟩
   have corr (B : Circuit) : Correct B ↔ req (fun x b => B.eval x=b) := by
     constructor
