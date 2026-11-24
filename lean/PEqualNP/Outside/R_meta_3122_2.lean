@@ -3,8 +3,8 @@ import PEqualNP.Defs
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
--- Size at most 12, or an unused prefix wire, is left as one case. The tight
--- 13-gate case with both prefix wires used is split on the first gate.
+-- Size at most 12, or an unused extra wire, is left as one case. The tight
+-- 13-gate case with both extra wires used is split on the first gate.
 theorem PEqualNP.Outside.R_meta_3122_2
     (hshort :
       ∀ (ops : List ℕ), ops.length ≤ 2 →
