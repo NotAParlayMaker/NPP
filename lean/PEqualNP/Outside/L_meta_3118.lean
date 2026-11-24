@@ -8,11 +8,11 @@ abbrev Sig:=B × B
 def top: B:=BitVec.allOnes 252
 def zero: Sig:=(0,0)
 def one: Sig:=(top,top)
-def zapi: Sig:=(top,0)
+def zaox: Sig:=(top,0)
 def neg (a: Sig): Sig:=(~~~a.1,~~~a.2)
 def bin (isOr : Bool) (a b : Sig) : Sig :=
   if isOr then (a.1|||b.1,a.2|||b.2) else (a.1&&&b.1,a.2&&&b.2)
-def zapj (a: Sig): Prop:=a≠ zero/\a≠ one
+def zaoi (a: Sig): Prop:=a≠ zero/\a≠ one
 def raw0: Sig:=(0x988c662c60004200118004e25321040016c0030d9e4a00039fffd8007000fff,0x988c622c6d1042d111b44462532105c212dc21048e4ae20089c49b883710712)
 def raw1: Sig:=(0x2130860080010c00060007c01c3e180027000332607ffff2640020007ffffff,0x2130840090850d0886422180040e1a2125221210201110d226222444488a88c)
 def raw2: Sig:=(0xf88f000070001800070463c0200039fffcc3878c001c78003fff9fff000,0x288f043070431810c6040140208600486843828c4604588c09191234230)
@@ -23,12 +23,12 @@ def raw6: Sig:=(0xfffffe00000000000000003fffffffffffffff000000000000000000000000
 def raw7: Sig:=(0xffffffffffffffffffffffc0000000000000000000000000000000000000000,0x35eafe0ade006be01d7807c000000380003800000001c000038007000e00e00)
 def raw: List Sig:=[raw0,raw1,raw2,raw3,raw4,raw5,raw6,raw7]
 inductive Live : Nat->Nat->Finset Sig->Prop
-  | stop: Live 0 0 {zapi}
-  | unary {k t : Nat} {U : Finset Sig} {a : Sig} (ha : zapj a)
+  | stop: Live 0 0 {zaox}
+  | unary {k t : Nat} {U : Finset Sig} {a : Sig} (ha : zaoi a)
       (hfresh: neg a∉ insert a U) (tail: Live k t (insert (neg a) U)) :
       Live (k+1) (t+1) (insert a U)
   | binary {k t : Nat} {U : Finset Sig} {a b : Sig} {d : Bool}
-      (ha: zapj a) (hb: zapj b) (hab: a≠ b)
+      (ha: zaoi a) (hb: zaoi b) (hab: a≠ b)
       (hfresh: bin d a b∉ insert a (insert b U)) (tail: Live k t (insert (bin d a b) U)) :
       Live (k+1) t (insert a (insert b U))
 namespace Theta
@@ -71,8 +71,8 @@ theorem zaji {α inv meet join y s xs} (h : @Run α inv meet join y s xs) : xs.l
   | perm hp _ ih=>rwa [←hp.length_eq]
   | one _ save _ ih=>cases save <;> simp_all [kept] <;> omega
   | two _ ka kb _ ih=>cases ka <;> cases kb <;> simp_all [kept] <;> omega
-abbrev zapk (m: Nat):=Run (·^^^m) (·&&&·) (·|||·)
-lemma q29 {m y s xs} (h : zapk m y s xs) (i j : Nat)
+abbrev zaon (m: Nat):=Run (·^^^m) (·&&&·) (·|||·)
+lemma q29 {m y s xs} (h : zaon m y s xs) (i j : Nat)
     (hm: m.testBit i=m.testBit j) (hw: ∀ w∈ xs,w.testBit i=w.testBit j) :
     y.testBit i=y.testBit j:= by
   induction h with
@@ -113,7 +113,7 @@ lemma q11 (i : Nat) (ws : List Nat) : (s9 ws).testBit i=true ↔
   | cons a t ih =>
     simp only [s9,Nat.testBit_or,Bool.or_eq_true,ih,vd,Nat.testBit_xor,Nat.testBit_shiftRight,List.mem_cons]
     cases hx: a.testBit i <;> cases hy: a.testBit (232+i) <;> simp_all
-lemma vl {s ws} (h : zapk q7 qe s ws) :
+lemma vl {s ws} (h : zaon q7 qe s ws) :
     (s9 ws&&&se)=se:= by
   rw [vb,vc] at h; rw [yx]
   apply Nat.eq_of_testBit_eq; intro i; rw [Nat.testBit_and]
@@ -126,7 +126,7 @@ lemma vl {s ws} (h : zapk q7 qe s ws) :
       apply (q11 i ws).2; by_contra! hh; exact hy (q29 h i (232+i) hm hh)
     simp [hc]
   · simp [u4,hi]
-lemma q34 {m y s ws} (h : zapk m y s ws) (hl : ws.length=s+1) (i j : Nat)
+lemma q34 {m y s ws} (h : zaon m y s ws) (hl : ws.length=s+1) (i j : Nat)
     (hw: ∀ a∈ ws,a.testBit i≤ a.testBit j): y.testBit i≤ y.testBit j:= by
   induction h with
   | done=>exact hw _ (by simp)
@@ -147,7 +147,7 @@ lemma zu (i : Nat) (hi : i<232) (ws : List Nat) : (rd ws).testBit i=true ↔
   induction ws with
   | nil=>simp [rd]
   | cons a t ih=>simp [rd,sq,yx,u4,hi,ih,and_comm]
-lemma rl {s ws} (h : zapk q7 qe s ws) (hl : ws.length=s+1) :
+lemma rl {s ws} (h : zaon q7 qe s ws) (hl : ws.length=s+1) :
     (rd ws&&&se)=se:= by
   rw [vb,vc] at h; rw [yx]
   apply Nat.eq_of_testBit_eq; intro i; rw [Nat.testBit_and]
@@ -200,8 +200,8 @@ def vy (s : Nat) (ws : List Nat) (f : Bool->List Nat->Bool) : Bool :=
           ((if t2 then dwu|||(dau|||(dbu|||cru)) else dw|||(da|||(db|||cr)))&&&se==se) &&
           f t2 (w :: a :: b :: r)))
 lemma q08 {a rest} {neg save : Bool} {s ws} (p : (a :: rest).Perm ws)
-    (h: zapk q7 qe s ((if neg then a^^^q7 else a) :: kept save a rest))
-    (f: Bool->List Nat->Bool) (hf: ∀ ys,zapk q7 qe s ys->f (decide (ys.length=s+1)) ys=true) :
+    (h: zaon q7 qe s ((if neg then a^^^q7 else a) :: kept save a rest))
+    (f: Bool->List Nat->Bool) (hf: ∀ ys,zaon q7 qe s ys->f (decide (ys.length=s+1)) ys=true) :
     vy s ws f=true:= by
   have ha:=p.mem_iff.1 List.mem_cons_self
   have pr: rest.Perm (ws.erase a):=(p.trans (List.perm_cons_erase ha)).cons_inv
@@ -243,8 +243,8 @@ lemma q08 {a rest} {neg save : Bool} {s ws} (p : (a :: rest).Perm ws)
       simp [decide_eq_true hsl2,hcov,ht]
 lemma u9 {a b rest} {conj ka kb : Bool} {s ws} (hab : a ≤ b)
     (p: (a :: b :: rest).Perm ws)
-    (h: zapk q7 qe s ((if conj then a&&&b else a|||b) :: kept ka a (kept kb b rest)))
-    (f: Bool->List Nat->Bool) (hf: ∀ ys,zapk q7 qe s ys->f (decide (ys.length=s+1)) ys=true) :
+    (h: zaon q7 qe s ((if conj then a&&&b else a|||b) :: kept ka a (kept kb b rest)))
+    (f: Bool->List Nat->Bool) (hf: ∀ ys,zaon q7 qe s ys->f (decide (ys.length=s+1)) ys=true) :
     vy s ws f=true:= by
   have ha:=p.mem_iff.1 List.mem_cons_self
   have pp:=(p.trans (List.perm_cons_erase ha)).cons_inv
@@ -315,8 +315,8 @@ lemma u9 {a b rest} {conj ka kb : Bool} {s ws} (hab : a ≤ b)
       simp [decide_eq_true hsl2,hcov,ht]
 lemma q07 {a b rest} {conj ka kb : Bool} {s ws}
     (p: (a :: b :: rest).Perm ws)
-    (h: zapk q7 qe s ((if conj then a&&&b else a|||b) :: kept ka a (kept kb b rest)))
-    (f: Bool->List Nat->Bool) (hf: ∀ ys,zapk q7 qe s ys->f (decide (ys.length=s+1)) ys=true) :
+    (h: zaon q7 qe s ((if conj then a&&&b else a|||b) :: kept ka a (kept kb b rest)))
+    (f: Bool->List Nat->Bool) (hf: ∀ ys,zaon q7 qe s ys->f (decide (ys.length=s+1)) ys=true) :
     vy s ws f=true:= by
   rcases le_total a b with hab | hba
   · exact u9 hab p h f hf
@@ -332,16 +332,16 @@ lemma q1f {α inv meet join y t ws} (h : @Run α inv meet join y t ws) :
   | perm p _ ih=>intro ht; rw [ih ht] at p; exact List.perm_singleton.1 p.symm
   | one=>simp
   | two=>simp
-lemma y0 {t ws} (h : zapk q7 qe t ws) :
+lemma y0 {t ws} (h : zaon q7 qe t ws) :
     ∀ s,t=s+1->∀ zs,ws.Perm zs->∀ f : Bool->List Nat->Bool,
-      (∀ ys,zapk q7 qe s ys->f (decide (ys.length=s+1)) ys=true)->vy s zs f=true:= by
+      (∀ ys,zaon q7 qe s ys->f (decide (ys.length=s+1)) ys=true)->vy s zs f=true:= by
   induction h with
   | done=>simp
   | perm p _ ih=>intro s he zs q; exact ih s he zs (p.trans q)
   | one _ _ h _=>intro s he zs p f hf; cases he; exact q08 p h f hf
   | two _ _ _ h _=>intro s he zs p f hf; cases he; exact q07 p h f hf
-def zaqp: List ℕ:=[0xf4d849641ddb12bd3612590776c4aa3c0228ae44945e8f008a2b91251724386c0009da09c90e1b0002768270350420a044145c0d410828110517,0xa3c0228ae44945e8f008a2b912517f4d849641ddb12bd3612590776c4a0350420a044145c0d41082811051724386c0009da09c90e1b000276827,0x911898c4c8749724462631321d25c911898c4c8749724462631321d25c808390c5d024922020e4317409248808390c5d024922020e4317409248,0x6f20c0b39707a20109d54109a92380850a05d229a2000a9c790c46d3e3004002ba9605a20001c441a981418000dbd45209a0000282330446c2e0,0x850a05d229a2000a9c790c46d3e36f20c0b39707a20109d54109a9238000dbd45209a0000282330446c2e0004002ba9605a20001c441a981418,0x427550426a48e1bc8302ce5c1e8802a71e4311b4f8c214281748a688000071106a60506001000aea58168800a08cc111b0b800036f514826800,0x2a71e4311b4f8c214281748a68800427550426a48e1bc8302ce5c1e8800a08cc111b0b800036f51482680000071106a60506001000aea581688]
-lemma yn : ∀ zs ∈ zaqp.sublists,zs ≠ zaqp →
+def zapa: List ℕ:=[0xf4d849641ddb12bd3612590776c4aa3c0228ae44945e8f008a2b91251724386c0009da09c90e1b0002768270350420a044145c0d410828110517,0xa3c0228ae44945e8f008a2b912517f4d849641ddb12bd3612590776c4a0350420a044145c0d41082811051724386c0009da09c90e1b000276827,0x911898c4c8749724462631321d25c911898c4c8749724462631321d25c808390c5d024922020e4317409248808390c5d024922020e4317409248,0x6f20c0b39707a20109d54109a92380850a05d229a2000a9c790c46d3e3004002ba9605a20001c441a981418000dbd45209a0000282330446c2e0,0x850a05d229a2000a9c790c46d3e36f20c0b39707a20109d54109a9238000dbd45209a0000282330446c2e0004002ba9605a20001c441a981418,0x427550426a48e1bc8302ce5c1e8802a71e4311b4f8c214281748a688000071106a60506001000aea58168800a08cc111b0b800036f514826800,0x2a71e4311b4f8c214281748a68800427550426a48e1bc8302ce5c1e8800a08cc111b0b800036f51482680000071106a60506001000aea581688]
+lemma yn : ∀ zs ∈ zapa.sublists,zs ≠ zapa →
     (s9 zs&&&se)≠ se:= by decide +kernel
 def r2 (tag d w: Nat): Nat:=((w&&&tag)<<<d)|||((w>>>d)&&&tag)
 lemma q3l (tag d i w : Nat) (h : (tag&&&(tag<<<d))=0) :
@@ -359,10 +359,10 @@ lemma yw (tag d : Nat) (h : (tag&&&(tag<<<d))=0) (a b : Nat) :
   refine ⟨?_,?_,?_⟩ <;> apply Nat.eq_of_testBit_eq <;> intro i <;>
     simp only [Nat.testBit_and,Nat.testBit_or,Nat.testBit_xor,q3l tag d i _ h] <;>
     split_ifs <;> simp
-lemma q0b {s ws} (h : zapk q7 qe s ws) (tag d : Nat)
+lemma q0b {s ws} (h : zaon q7 qe s ws) (tag d : Nat)
     (hz: (tag&&&(tag<<<d))=0) (hm: r2 tag d q7=q7)
     (hy: r2 tag d qe=qe) :
-    zapk q7 qe s (ws.map (r2 tag d)):= by
+    zaon q7 qe s (ws.map (r2 tag d)):= by
   rw [← hy]
   exact Run.map _ (fun a=>(yw tag d hz a q7).2.2.trans (by rw [hm]))
     (fun a b=>(yw tag d hz a b).1) (fun a b=>(yw tag d hz a b).2.1) h
@@ -370,9 +370,9 @@ def q3e: Nat:=0x3ffffffffffffff000000000000003ffffffffffffff000000000000003fffff
 def q3d: Nat:=0xfffffffffffffffffffffffffffff00000000000000000000000000000fffffffffffffffffffffffffffff
 def q38 (xs: List Nat):=xs.map (r2 q3e 58)
 def q37 (xs: List Nat):=xs.map (r2 q3d 116)
-lemma q3j {s ws} (h : zapk q7 qe s ws) : zapk q7 qe s (q38 ws) :=
+lemma q3j {s ws} (h : zaon q7 qe s ws) : zaon q7 qe s (q38 ws) :=
   q0b h _ _ (by decide +kernel) (by decide +kernel) (by decide +kernel)
-lemma q3i {s ws} (h : zapk q7 qe s ws) : zapk q7 qe s (q37 ws) :=
+lemma q3i {s ws} (h : zaon q7 qe s ws) : zaon q7 qe s (q37 ws) :=
   q0b h _ _ (by decide +kernel) (by decide +kernel) (by decide +kernel)
 def vf (a b c d e f : Bool) : Nat :=
   let x:=b.toNat+c.toNat; let y:=(!e).toNat+(!f).toNat
@@ -389,7 +389,7 @@ lemma q05 {l r : List Nat} (h : l.Perm r) : l.sum=r.sum:= by
   | cons _ _ ih=>simp [ih]
   | swap=>simp; omega
   | trans _ _ ih1 ih2=>exact ih1.trans ih2
-lemma q01 {m y s ws} (h : zapk m y s ws) (hl : ws.length=s+1)
+lemma q01 {m y s ws} (h : zaon m y s ws) (hl : ws.length=s+1)
     (v: Nat->Nat) (hand: ∀ a b,v (a&&&b)≤ v a+v b)
     (hor: ∀ a b,v (a|||b)≤ v a+v b): v y≤ (ws.map v).sum:= by
   induction h with
@@ -415,7 +415,7 @@ lemma q0e (a b c d e f v : Nat) :
       (v.testBit d) (v.testBit e) (v.testBit f):= by
   unfold yz vf
   cases v.testBit a <;> cases v.testBit d <;> rfl
-lemma q0f {m y s ws} (h : zapk m y s ws) (hl : ws.length=s+1)
+lemma q0f {m y s ws} (h : zaon m y s ws) (hl : ws.length=s+1)
     (a b c d e f: Nat): yz a b c d e f y≤ (ws.map (yz a b c d e f)).sum:= by
   apply q01 h hl
   · intro v w; simp only [q0e,Nat.testBit_and]; exact q0q _ _ _ _ _ _ _ _ _ _ _ _
@@ -442,7 +442,7 @@ lemma zo (a b c d e f : Nat) (ws : List Nat) (acc : Nat)
       omega
 def q0x (ws : List Nat) : Bool :=
   q26.any (fun t=>yh t.1 t.2.1 t.2.2.1 t.2.2.2.1 t.2.2.2.2.1 t.2.2.2.2.2 0 ws)
-lemma q1n {s ws} (h : zapk q7 qe s ws) (hl : ws.length=s+1) :
+lemma q1n {s ws} (h : zaon q7 qe s ws) (hl : ws.length=s+1) :
     q0x ws=false:= by
   rw [Bool.eq_false_iff]; intro hk
   obtain ⟨t,ht,hlt⟩:=List.any_eq_true.mp hk
@@ -564,8 +564,8 @@ def q16 (s : Nat) (zs : List Nat) : Nat :=
   | _=>0
 def yd (g : Nat) (ws : List Nat) :=
   if g=0 then ws else if g=1 then q38 ws else if g=2 then q37 ws else q38 (q37 ws)
-lemma q0v (g : Nat) {s ws} (h : zapk q7 qe s ws) :
-    zapk q7 qe s (yd g ws):= by
+lemma q0v (g : Nat) {s ws} (h : zaon q7 qe s ws) :
+    zaon q7 qe s (yd g ws):= by
   unfold yd; split
   · exact h
   · split
@@ -581,15 +581,15 @@ def qh : Nat->Nat->Bool
       !(tight&&q0x zs) &&
       (let v:=q16 s zs; !(v/4<q25 s&&(yd (v %4) zs).isPerm (vj s (v/4)))))
 lemma zc {s i} (hb : qh s i=true)
-    (h: zapk q7 qe s (vj s i)) :
-    ∃ q<s,∃ j<q25 q,zapk q7 qe q (vj q j):= by
+    (h: zaon q7 qe s (vj s i)) :
+    ∃ q<s,∃ j<q25 q,zaon q7 qe q (vj q j):= by
   cases s with
   | zero=>simp [qh,q1f h rfl] at hb
   | succ s =>
     by_contra! hn
     let F (tight : Bool) (zs : List Nat):=!(tight&&q0x zs) &&
       (let v:=q16 s zs; !(v/4<q25 s&&(yd (v %4) zs).isPerm (vj s (v/4))))
-    have hF (zs) (hz : zapk q7 qe s zs) : F (decide (zs.length=s+1)) zs=true:= by
+    have hF (zs) (hz : zaon q7 qe s zs) : F (decide (zs.length=s+1)) zs=true:= by
       simp only [F,Bool.and_eq_true,Bool.not_eq_true']
       constructor
       · by_cases hl : zs.length=s+1
@@ -603,7 +603,7 @@ lemma zc {s i} (hb : qh s i=true)
     change !(vy _ _ F)=true at hb; rw [hN] at hb; contradiction
 lemma q0k {cap : Nat}
     (hc: ∀ s≤ cap,∀ i<q25 s,qh s i=true) :
-    ∀ s≤ cap,∀ i<q25 s,¬ zapk q7 qe s (vj s i):= by
+    ∀ s≤ cap,∀ i<q25 s,¬ zaon q7 qe s (vj s i):= by
   intro s; induction s using Nat.strong_induction_on with
   | ind s ih =>
     intro hs i hi hh
@@ -637,14 +637,14 @@ lemma q2x (s : Nat) (hs : s ≤ 10) : ∀ i<q25 s,qh s i=true:= by
   · exact fun i hi=>zajk z8 i (Nat.zero_le i) hi
   · exact fun i hi=>zajk z9 i (Nat.zero_le i) hi
   · exact fun i hi=>zajk q3z i (Nat.zero_le i) hi
-theorem zags (s : Nat) (hs : s ≤ 10) (h : zapk (mask 232) (goal 232) s zaqp) : False:= by
+theorem zags (s : Nat) (hs : s ≤ 10) (h : zaon (mask 232) (goal 232) s zapa) : False:= by
   rw [← vb,← vc] at h
-  have h10: zapk q7 qe 10 zaqp:=q10 h hs
-  have p: zaqp.Perm (vj 10 0):= by decide +kernel
+  have h10: zaon q7 qe 10 zapa:=q10 h hs
+  have p: zapa.Perm (vj 10 0):= by decide +kernel
   exact q0k q2x 10 (by decide) 0 (by decide) (Run.perm p h10)
-theorem zaku {s : Nat} {ws : List Nat} (hs : s ≤ 10) (hsub : ws.Sublist zaqp)
-    (h: zapk (mask 232) (goal 232) s ws): False:= by
-  by_cases eq: ws=zaqp
+theorem zaku {s : Nat} {ws : List Nat} (hs : s ≤ 10) (hsub : ws.Sublist zapa)
+    (h: zaon (mask 232) (goal 232) s ws): False:= by
+  by_cases eq: ws=zapa
   · subst ws; exact zags _ hs h
   · rw [← vb,← vc] at h
     exact yn _ (List.mem_sublists.2 hsub) eq (vl h)
@@ -750,7 +750,7 @@ lemma xn : Function.Injective y7:= by
 lemma q28: y7 zero=rv:=rfl
 lemma q2y : y7 one=v5:= by
   apply Prod.ext <;> exact (by decide: (BitVec.allOnes 252).toNat=rx)
-lemma q0t : y7 zapi=qc:= by
+lemma q0t : y7 zaox=qc:= by
   apply Prod.ext
   · exact (by decide: (BitVec.allOnes 252).toNat=rx)
   · rfl
@@ -764,7 +764,7 @@ lemma q13 (a : Sig) : y7 (neg a)=qx (y7 a):= by
   exact Prod.ext (hnot a.1) (hnot a.2)
 lemma q14 (d : Bool) (a b : Sig) : y7 (bin d a b)=qn d (y7 a) (y7 b):= by
   cases d <;> simp [bin,qn,y7]
-lemma xc {a : Sig} (ha : zapj a) : qd (y7 a):= by
+lemma xc {a : Sig} (ha : zaoi a) : qd (y7 a):= by
   refine ⟨q1h a,fun h=>ha.1 (xn (h.trans q28.symm)),
     fun h=>ha.2 (xn (h.trans q2y.symm))⟩
 inductive qy : Nat->Nat->Finset q0->Prop
@@ -1505,8 +1505,8 @@ lemma yg: vi.toFinset=rj.toFinset.erase x3:= by decide +kernel
 lemma x4 (i : Fin 4) : s5 i ∈ rj.toFinset:= by
   fin_cases i <;> decide +kernel
 set_option maxRecDepth 10000 in
-lemma uk: rc.map r4=Theta.zaqp:= by decide +kernel
-lemma xx: Theta.zaqp.Nodup:= by decide +kernel
+lemma uk: rc.map r4=Theta.zapa:= by decide +kernel
+lemma xx: Theta.zapa.Nodup:= by decide +kernel
 lemma y8 : rc.Nodup:= by
   have h:=xx; rw [← uk] at h; exact List.Nodup.of_map _ h
 lemma q04 (i : Fin 4) :
@@ -2749,24 +2749,24 @@ def top: Nat:= 0x3ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 def bnot (x: Nat): Nat:= x^^^ top
 def zero: Sig:= (0,0)
 def one: Sig:= (top,top)
-def zapi: Sig:= (top,0)
+def zaox: Sig:= (top,0)
 def neg (a: Sig): Sig:= (bnot a.1,bnot a.2)
 def bin (isOr : Bool) (a b : Sig) : Sig :=
   if isOr then (a.1||| b.1,a.2||| b.2) else (a.1&&& b.1,a.2&&& b.2)
 def sep (d : Bool) (a : Sig) : Nat :=
   if d then a.1^^^ a.2 else a.1&&& bnot a.2
-def zani (d : Bool) : List Sig → Nat
+def zanj (d : Bool) : List Sig → Nat
   | []=> 0
-  | a :: l=> sep d a||| zani d l
-def zaph (x: Nat): Prop:= ∀ j,414≤ j→ x.testBit j= false
-def zap6 (a: Sig): Prop:= zaph a.1∧ zaph a.2
-def zapj (a: Sig): Prop:= zap6 a∧ a≠ zero∧ a≠ one
+  | a :: l=> sep d a||| zanj d l
+def zaom (x: Nat): Prop:= ∀ j,414≤ j→ x.testBit j= false
+def zaoy (a: Sig): Prop:= zaom a.1∧ zaom a.2
+def zaoi (a: Sig): Prop:= zaoy a∧ a≠ zero∧ a≠ one
 lemma zaf3: top= 2 ^ 207* 2 ^ 207- 1:= by decide
 lemma zabj (a b j : Nat) : (2 ^ a * 2 ^ b - 1).testBit j = decide (j < a + b) := by
   rw [← Nat.pow_add,Nat.testBit_two_pow_sub_one]
 lemma zaek (j : Nat) : top.testBit j = decide (j < 414) := by
   rw [zaf3]; exact zabj 207 207 j
-lemma zad4 {x : Nat} (hx : zaph x) (j : Nat) :
+lemma zad4 {x : Nat} (hx : zaom x) (j : Nat) :
     (bnot x).testBit j= if j< 414 then !(x.testBit j) else false:= by
   simp only [bnot,Nat.testBit_xor,zaek]
   by_cases hj: j< 414
@@ -2775,38 +2775,38 @@ lemma zad4 {x : Nat} (hx : zaph x) (j : Nat) :
 lemma zabr (x : Nat) {j : Nat} (hj : j < 414) :
     (bnot x).testBit j= !(x.testBit j):= by
   simp [bnot,Nat.testBit_xor,zaek,hj]
-lemma zae7: zaph 0:= fun _ _=> Nat.zero_testBit _
-lemma zafm: zaph top:= fun j hj=> by rw [zaek]; simp [show ¬ j< 414 by omega]
-lemma zaer {x : Nat} (hx : zaph x) : zaph (bnot x) := fun j hj => by
+lemma zae7: zaom 0:= fun _ _=> Nat.zero_testBit _
+lemma zafm: zaom top:= fun j hj=> by rw [zaek]; simp [show ¬ j< 414 by omega]
+lemma zaer {x : Nat} (hx : zaom x) : zaom (bnot x) := fun j hj => by
   rw [zad4 hx]; simp [show ¬ j< 414 by omega]
-lemma zafu {x y : Nat} (hx : zaph x) : zaph (x &&& y) := fun j hj => by
+lemma zafu {x y : Nat} (hx : zaom x) : zaom (x &&& y) := fun j hj => by
   rw [Nat.testBit_and,hx j hj]; rfl
-lemma zahk {x y : Nat} (hx : zaph x) (hy : zaph y) : zaph (x ||| y) := fun j hj => by
+lemma zahk {x y : Nat} (hx : zaom x) (hy : zaom y) : zaom (x ||| y) := fun j hj => by
   rw [Nat.testBit_or,hx j hj,hy j hj]; rfl
-lemma zafq {x y : Nat} (hx : zaph x) (hy : zaph y) : zaph (x ^^^ y) := fun j hj => by
+lemma zafq {x y : Nat} (hx : zaom x) (hy : zaom y) : zaom (x ^^^ y) := fun j hj => by
   rw [Nat.testBit_xor,hx j hj,hy j hj]; rfl
 lemma zaan {a b x j : Nat} (hx : x < 2 ^ a * 2 ^ b) (hj : a + b ≤ j) :
     x.testBit j= false:= by
   rw [← Nat.pow_add] at hx
   exact Nat.testBit_lt_two_pow (lt_of_lt_of_le hx (Nat.pow_le_pow_right (by omega) hj))
-lemma zabd {x : Nat} (h : x ≤ top) : zaph x := fun j hj => by
+lemma zabd {x : Nat} (h : x ≤ top) : zaom x := fun j hj => by
   have hlt : x < 2 ^ 207 * 2 ^ 207 := by
     have hp: 0< 2 ^ 207* 2 ^ 207:= by decide
     rw [zaf3] at h; omega
   exact zaan hlt hj
-lemma zafg: zap6 zero:= ⟨zae7,zae7⟩
-lemma zagr: zap6 one:= ⟨zafm,zafm⟩
-lemma zaeh: zap6 zapi:= ⟨zafm,zae7⟩
-lemma zagd {a: Sig} (ha: zap6 a): zap6 (neg a):= ⟨zaer ha.1,zaer ha.2⟩
-lemma zagq {d : Bool} {a b : Sig} (ha : zap6 a) (hb : zap6 b) : zap6 (bin d a b) := by
+lemma zafg: zaoy zero:= ⟨zae7,zae7⟩
+lemma zagr: zaoy one:= ⟨zafm,zafm⟩
+lemma zaeh: zaoy zaox:= ⟨zafm,zae7⟩
+lemma zagd {a: Sig} (ha: zaoy a): zaoy (neg a):= ⟨zaer ha.1,zaer ha.2⟩
+lemma zagq {d : Bool} {a b : Sig} (ha : zaoy a) (hb : zaoy b) : zaoy (bin d a b) := by
   cases d
   · exact ⟨zafu ha.1,zafu ha.2⟩
   · exact ⟨zahk ha.1 hb.1,zahk ha.2 hb.2⟩
-lemma zaha {d : Bool} {a : Sig} (ha : zap6 a) : zaph (sep d a) := by
+lemma zaha {d : Bool} {a : Sig} (ha : zaoy a) : zaom (sep d a) := by
   cases d
   · exact zafu ha.1
   · exact zafq ha.1 ha.2
-lemma zacd {d : Bool} {v : List Sig} (hv : ∀ a ∈ v, zap6 a) : zaph (zani d v) := by
+lemma zacd {d : Bool} {v : List Sig} (hv : ∀ a ∈ v, zaoy a) : zaom (zanj d v) := by
   induction v with
   | nil=> exact zae7
   | cons a l ih =>
@@ -2815,18 +2815,18 @@ lemma zaiu (d : Bool) (a b : Sig) : bin d a b = bin d b a := by
   cases d
   · simp [bin,Nat.and_comm]
   · simp [bin,Nat.or_comm]
-lemma zai0 {a : Sig} (ha : zap6 a) :
+lemma zai0 {a : Sig} (ha : zaoy a) :
     bin false a one= a∧ bin true a zero= a ∧
     bin false a zero= zero∧ bin true a one= one ∧
     bin false a a= a∧ bin true a a= a:= by
   obtain ⟨p,n⟩:= a
   obtain ⟨hp,hn⟩:= ha
-  have land_top {x : Nat} (hx : zaph x) : x &&& top = x := by
+  have land_top {x : Nat} (hx : zaom x) : x &&& top = x := by
     apply Nat.eq_of_testBit_eq; intro j
     rw [Nat.testBit_and,zaek]
     by_cases hj: j< 414 <;> simp [hj]
     exact hx j (by omega)
-  have lor_top {x : Nat} (hx : zaph x) : x ||| top = top := by
+  have lor_top {x : Nat} (hx : zaom x) : x ||| top = top := by
     apply Nat.eq_of_testBit_eq; intro j
     rw [Nat.testBit_or,zaek]
     by_cases hj: j< 414 <;> simp [hj]
@@ -2836,150 +2836,150 @@ lemma zaik : neg zero = one ∧ neg one = zero := by
   have h1: bnot 0= top:= by simp [bnot]
   have h2: bnot top= 0:= by simp [bnot]
   exact ⟨Prod.ext h1 h1,Prod.ext h2 h2⟩
-lemma zadn : zapj zapi :=
-  ⟨zaeh, by unfold zapi zero top; decide,by unfold zapi one top; decide⟩
+lemma zadn : zaoi zaox :=
+  ⟨zaeh, by unfold zaox zero top; decide,by unfold zaox one top; decide⟩
 lemma zaea (x y i: Nat): (Nat.land x y).testBit i= (x.testBit i&& y.testBit i):= Nat.testBit_and x y i
 lemma zaev (x y i: Nat): (Nat.lor x y).testBit i= (x.testBit i|| y.testBit i):= Nat.testBit_or x y i
 lemma zadt (x y i : Nat) : (Nat.xor x y).testBit i = (x.testBit i != y.testBit i) := by
   simp [bne]
 abbrev Cov:= Nat × Nat × Nat
 def zanh (c : Cov) : Prop :=
-  zaph c.1∧ zaph c.2.1∧ zaph c.2.2 ∧
+  zaom c.1∧ zaom c.2.1∧ zaom c.2.2 ∧
   (∀ i,c.2.1.testBit i= true→ c.1.testBit i= true) ∧
   (∀ i,c.2.2.testBit i= true→ c.1.testBit i= true)
-def zap0 (z : Nat) (c : Cov) : Cov :=
+def zaor (z : Nat) (c : Cov) : Cov :=
   (Nat.lor z c.1,
    Nat.land (Nat.xor z c.1) (Nat.lor z c.2.1),
    Nat.xor c.2.2 (Nat.land z (Nat.xor c.2.2 c.2.1)))
-def zann (d : Bool) (v : List Sig) : Cov :=
-  v.foldr (fun a c=> zap0 (sep d a) c) (0,0,0)
-def zaod (c: Cov) (a: Nat): Nat:= Nat.xor c.1 (Nat.land c.2.1 a)
-def zao9 (c : Cov) (a b : Nat) : Nat :=
+def zano (d : Bool) (v : List Sig) : Cov :=
+  v.foldr (fun a c=> zaor (sep d a) c) (0,0,0)
+def zanz (c: Cov) (a: Nat): Nat:= Nat.xor c.1 (Nat.land c.2.1 a)
+def zaoc (c : Cov) (a b : Nat) : Nat :=
   Nat.xor c.1 (Nat.lor (Nat.land c.2.1 (Nat.lor a b)) (Nat.land c.2.2 (Nat.land a b)))
 lemma zadk : zanh (0, 0, 0) :=
   ⟨zae7, zae7,zae7,fun _ h=> by simp at h,fun _ h=> by simp at h⟩
-lemma zad2 {z : Nat} {c : Cov} (hz : zaph z) (hc : zanh c) : zanh (zap0 z c) := by
+lemma zad2 {z : Nat} {c : Cov} (hz : zaom z) (hc : zanh c) : zanh (zaor z c) := by
   refine ⟨zahk hz hc.1,zafu (zafq hz hc.1),zafq hc.2.2.1 (zafu hz),?_,?_⟩
   · intro i h; have h1 := hc.2.2.2.1 i
-    simp only [zap0,zaea,zaev,zadt] at h ⊢
+    simp only [zaor,zaea,zaev,zadt] at h ⊢
     revert h h1; cases z.testBit i <;> cases c.1.testBit i <;> cases c.2.1.testBit i <;> simp
   · intro i h; have h1 := hc.2.2.2.1 i; have h2 := hc.2.2.2.2 i
-    simp only [zap0,zaea,zaev,zadt] at h ⊢
+    simp only [zaor,zaea,zaev,zadt] at h ⊢
     revert h h1 h2; cases z.testBit i <;> cases c.1.testBit i <;> cases c.2.1.testBit i <;>
       cases c.2.2.testBit i <;> simp
-lemma zaas (d : Bool) {v : List Sig} (hv : ∀ a ∈ v, zap6 a) : zanh (zann d v) := by
+lemma zaas (d : Bool) {v : List Sig} (hv : ∀ a ∈ v, zaoy a) : zanh (zano d v) := by
   induction v with
   | nil=> exact zadk
   | cons a l ih=> exact zad2 (zaha (hv a (by simp))) (ih (fun x hx=> hv x (by simp [hx])))
-lemma zaj2 {c : Cov} {a : Nat} (hc : zanh c) : zaod (zap0 a c) a = c.1 := by
+lemma zaj2 {c : Cov} {a : Nat} (hc : zanh c) : zanz (zaor a c) a = c.1 := by
   apply Nat.eq_of_testBit_eq; intro i
   have h1:= hc.2.2.2.1 i
-  simp only [zaod,zap0,zaea,zaev,zadt]
+  simp only [zanz,zaor,zaea,zaev,zadt]
   revert h1; cases a.testBit i <;> cases c.1.testBit i <;> cases c.2.1.testBit i <;> simp
 lemma zaj1 {c : Cov} {a b : Nat} (hc : zanh c) :
-    zao9 (zap0 a (zap0 b c)) a b= c.1:= by
+    zaoc (zaor a (zaor b c)) a b= c.1:= by
   apply Nat.eq_of_testBit_eq; intro i
   have h1:= hc.2.2.2.1 i; have h2:= hc.2.2.2.2 i
-  simp only [zao9,zap0,zaea,zaev,zadt]
+  simp only [zaoc,zaor,zaea,zaev,zadt]
   revert h1 h2; cases a.testBit i <;> cases b.testBit i <;> cases c.1.testBit i <;>
     cases c.2.1.testBit i <;> cases c.2.2.testBit i <;> simp
 lemma zaak {c : Cov} {a b : Nat} (hc : zanh c) :
-    Nat.land (Nat.land (zap0 a (zap0 b c)).2.1 a) b= 0:= by
+    Nat.land (Nat.land (zaor a (zaor b c)).2.1 a) b= 0:= by
   apply Nat.eq_of_testBit_eq; intro i
   have h1:= hc.2.2.2.1 i
-  simp only [zap0,zaea,zaev,zadt,Nat.zero_testBit]
+  simp only [zaor,zaea,zaev,zadt,Nat.zero_testBit]
   revert h1; cases a.testBit i <;> cases b.testBit i <;> cases c.1.testBit i <;>
     cases c.2.1.testBit i <;> simp
 lemma zae3 {c : Cov} {a b : Nat} (hc : zanh c) :
-    zap0 a (zap0 b c)= zap0 b (zap0 a c):= by
+    zaor a (zaor b c)= zaor b (zaor a c):= by
   have h1:= hc.2.2.2.1; have h2:= hc.2.2.2.2
   refine Prod.ext (Nat.eq_of_testBit_eq fun i => ?_)
     (Prod.ext (Nat.eq_of_testBit_eq fun i=> ?_) (Nat.eq_of_testBit_eq fun i=> ?_))
-  · simp only [zap0,zaev]; cases a.testBit i <;> cases b.testBit i <;> rfl
-  · have h1i := h1 i; simp only [zap0, zaea, zaev, zadt]
+  · simp only [zaor,zaev]; cases a.testBit i <;> cases b.testBit i <;> rfl
+  · have h1i := h1 i; simp only [zaor, zaea, zaev, zadt]
     revert h1i; cases a.testBit i <;> cases b.testBit i <;> cases c.1.testBit i <;>
       cases c.2.1.testBit i <;> simp
-  · have h1i := h1 i; have h2i := h2 i; simp only [zap0, zaea, zaev, zadt]
+  · have h1i := h1 i; have h2i := h2 i; simp only [zaor, zaea, zaev, zadt]
     revert h1i h2i; cases a.testBit i <;> cases b.testBit i <;> cases c.1.testBit i <;>
       cases c.2.1.testBit i <;> cases c.2.2.testBit i <;> simp
-lemma zaii (d : Bool) {l r : List Sig} (hl : ∀ a ∈ l, zap6 a) (h : l.Perm r) :
-    zann d l= zann d r:= by
+lemma zaii (d : Bool) {l r : List Sig} (hl : ∀ a ∈ l, zaoy a) (h : l.Perm r) :
+    zano d l= zano d r:= by
   induction h with
   | nil=> rfl
   | cons a _ ih =>
-    exact congrArg (zap0 (sep d a)) (ih (fun x hx=> hl x (by simp [hx])))
+    exact congrArg (zaor (sep d a)) (ih (fun x hx=> hl x (by simp [hx])))
   | swap a b t =>
     exact zae3 (zaas d (fun x hx=> hl x (by simp [hx])))
   | trans h1 _ ih1 ih2 =>
     exact (ih1 hl).trans (ih2 (fun x hx=> hl x (h1.mem_iff.2 hx)))
-lemma zagz (d : Bool) (v : List Sig) : (zann d v).1 = zani d v := by
+lemma zagz (d : Bool) (v : List Sig) : (zano d v).1 = zanj d v := by
   induction v with
   | nil=> rfl
-  | cons a v ih=> change sep d a||| (zann d v).1= sep d a||| zani d v; rw [ih]
-def zanu (del v: List Sig): List Sig:= v.filter (fun x=> !(del.contains x))
-def zapu (U: Finset Sig) (del: List Sig): List Sig:= del.filter (fun a=> decide (a∈ U))
+  | cons a v ih=> change sep d a||| (zano d v).1= sep d a||| zanj d v; rw [ih]
+def zan4 (del v: List Sig): List Sig:= v.filter (fun x=> !(del.contains x))
+def zaop (U: Finset Sig) (del: List Sig): List Sig:= del.filter (fun a=> decide (a∈ U))
 lemma zagh {v del : List Sig} {U : Finset Sig}
     (hv: v.Nodup) (hd: del.Nodup) (he: v.toFinset= del.toFinset∪ U) :
-    (zapu U del++ zanu del v).Nodup∧ (zapu U del++ zanu del v).toFinset= U:= by
+    (zaop U del++ zan4 del v).Nodup∧ (zaop U del++ zan4 del v).toFinset= U:= by
   have memv (x : Sig) : x ∈ v ↔ x ∈ del ∨ x ∈ U := by
     rw [← List.mem_toFinset,he]; simp
   constructor
   · rw [List.nodup_append]
     refine ⟨hd.filter _,hv.filter _,?_⟩
     intro a ha b hb eq; subst b
-    simp [zapu] at ha; simp [zanu] at hb; exact hb.2 ha.1
+    simp [zaop] at ha; simp [zan4] at hb; exact hb.2 ha.1
   · ext x
-    simp only [List.mem_toFinset, List.mem_append, List.mem_filter, zapu, zanu,
+    simp only [List.mem_toFinset, List.mem_append, List.mem_filter, zaop, zan4,
       decide_eq_true_eq, Bool.not_eq_true',List.contains_eq_mem,memv]
     by_cases h: x∈ del <;> simp_all
 lemma zad5 (del v : List Sig) (hv : v.Nodup) (hd : del.Nodup)
-    (hs: ∀ x∈ del,x∈ v): v.Perm (del++ zanu del v):= by
+    (hs: ∀ x∈ del,x∈ v): v.Perm (del++ zan4 del v):= by
   apply List.perm_of_nodup_nodup_toFinset_eq hv
   · rw [List.nodup_append]
     refine ⟨hd,hv.filter _,?_⟩
-    intro a ha b hb e; subst b; simp [zanu] at hb; exact hb.2 ha
+    intro a ha b hb e; subst b; simp [zan4] at hb; exact hb.2 ha
   · ext x
-    simp only [List.mem_toFinset, List.mem_append, zanu, List.mem_filter, Bool.not_eq_true',
+    simp only [List.mem_toFinset, List.mem_append, zan4, List.mem_filter, Bool.not_eq_true',
       List.contains_eq_mem, decide_eq_false_iff_not]
     by_cases h: x∈ del <;> simp_all
-lemma zaie (d : Bool) {v : List Sig} {a : Sig} (hv : v.Nodup) (hval : ∀ x ∈ v, zap6 x)
+lemma zaie (d : Bool) {v : List Sig} {a : Sig} (hv : v.Nodup) (hval : ∀ x ∈ v, zaoy x)
     (ha: a∈ v) :
-    v.length - 1 = (zanu [a] v).length ∧
-      zaod (zann d v) (sep d a)= zani d (zanu [a] v):= by
+    v.length - 1 = (zan4 [a] v).length ∧
+      zanz (zano d v) (sep d a)= zanj d (zan4 [a] v):= by
   have p:= zad5 [a] v hv (by simp) (by simpa using ha)
   constructor
   · have l:= p.length_eq; simp at l; omega
   · rw [zaii d hval p]
-    have hrest : ∀ x ∈ zanu [a] v, zap6 x := fun x hx =>
+    have hrest : ∀ x ∈ zan4 [a] v, zaoy x := fun x hx =>
       hval x (List.mem_of_mem_filter hx)
     exact (zaj2 (zaas d hrest)).trans (zagz d _)
-lemma zaip (d : Bool) {v : List Sig} {a b : Sig} (hv : v.Nodup) (hval : ∀ x ∈ v, zap6 x)
+lemma zaip (d : Bool) {v : List Sig} {a b : Sig} (hv : v.Nodup) (hval : ∀ x ∈ v, zaoy x)
     (ha: a∈ v) (hb: b∈ v) (hab: a≠ b) :
-    v.length - 2 = (zanu [a, b] v).length ∧
-      zao9 (zann d v) (sep d a) (sep d b)= zani d (zanu [a,b] v):= by
+    v.length - 2 = (zan4 [a, b] v).length ∧
+      zaoc (zano d v) (sep d a) (sep d b)= zanj d (zan4 [a,b] v):= by
   have p:= zad5 [a,b] v hv (by simp [hab]) (by simp [ha,hb])
   constructor
   · have l:= p.length_eq; simp at l; omega
   · rw [zaii d hval p]
-    have hrest : ∀ x ∈ zanu [a, b] v, zap6 x := fun x hx =>
+    have hrest : ∀ x ∈ zan4 [a, b] v, zaoy x := fun x hx =>
       hval x (List.mem_of_mem_filter hx)
     exact (zaj1 (zaas d hrest)).trans (zagz d _)
-lemma zac1 (d : Bool) {v : List Sig} {a b : Sig} (hv : v.Nodup) (hval : ∀ x ∈ v, zap6 x)
+lemma zac1 (d : Bool) {v : List Sig} {a b : Sig} (hv : v.Nodup) (hval : ∀ x ∈ v, zaoy x)
     (ha: a∈ v) (hb: b∈ v) (hab: a≠ b) :
-    Nat.land (Nat.land (zann d v).2.1 (sep d a)) (sep d b)= 0:= by
+    Nat.land (Nat.land (zano d v).2.1 (sep d a)) (sep d b)= 0:= by
   have p:= zad5 [a,b] v hv (by simp [hab]) (by simp [ha,hb])
   rw [zaii d hval p]
   exact zaak (zaas d (fun x hx=> hval x (List.mem_of_mem_filter hx)))
 inductive Live : Nat → Nat → Finset Sig → Prop
-  | stop: Live 0 0 {zapi}
-  | unary {k t : Nat} {U : Finset Sig} {a : Sig} (ha : zapj a)
+  | stop: Live 0 0 {zaox}
+  | unary {k t : Nat} {U : Finset Sig} {a : Sig} (ha : zaoi a)
       (hfresh: neg a∉ insert a U) (tail: Live k t (insert (neg a) U)) :
       Live (k+ 1) (t+ 1) (insert a U)
   | binary {k t : Nat} {U : Finset Sig} {a b : Sig} {d : Bool}
-      (ha: zapj a) (hb: zapj b) (hab: a≠ b)
+      (ha: zaoi a) (hb: zaoi b) (hab: a≠ b)
       (hfresh: bin d a b∉ insert a (insert b U)) (tail: Live k t (insert (bin d a b) U)) :
       Live (k+ 1) t (insert a (insert b U))
-lemma zaet {k t S} (h : Live k t S) : ∀ a ∈ S, zapj a := by
+lemma zaet {k t S} (h : Live k t S) : ∀ a ∈ S, zaoi a := by
   induction h with
   | stop=> simpa using zadn
   | unary ha _ _ ih=> simpa using And.intro ha (fun a h=> ih a (Finset.mem_insert_of_mem h))
@@ -3000,7 +3000,7 @@ lemma zah4 {k t S} (h : Live k t S) : t ≤ k ∧ S.card + t ≤ k + 1 := by
     have h1:= Finset.card_insert_le (a:= a) (s:= insert b U)
     have h2:= Finset.card_insert_le (a:= b) (s:= U)
     exact ⟨by omega,by omega⟩
-lemma zagv (t : Nat) {a : Sig} (ha : zap6 a) (i : Nat) (hi : i < 414)
+lemma zagv (t : Nat) {a : Sig} (ha : zaoy a) (i : Nat) (hi : i < 414)
     (h: (sep (decide (0< t)) (neg a)).testBit i= true) :
     (sep true a).testBit i= true:= by
   cases ht: decide (0< t)
@@ -3011,7 +3011,7 @@ lemma zagv (t : Nat) {a : Sig} (ha : zap6 a) (i : Nat) (hi : i < 414)
   · simp only [sep, neg, ht, ite_true, Nat.testBit_xor,
       zad4 ha.1,zad4 ha.2,hi] at h ⊢
     cases hx: a.1.testBit i <;> cases hy: a.2.testBit i <;> simp [hx,hy] at h ⊢
-lemma zaf0 (t d : Bool) {a b : Sig} (_ha : zap6 a) (_hb : zap6 b) (i : Nat) (hi : i < 414)
+lemma zaf0 (t d : Bool) {a b : Sig} (_ha : zaoy a) (_hb : zaoy b) (i : Nat) (hi : i < 414)
     (h: (sep t (bin d a b)).testBit i= true) :
     (sep t a).testBit i= true∨ (sep t b).testBit i= true:= by
   cases t <;> cases d <;>
@@ -3020,7 +3020,7 @@ lemma zaf0 (t d : Bool) {a b : Sig} (_ha : zap6 a) (_hb : zap6 b) (i : Nat) (hi 
     revert h <;>
     cases a.1.testBit i <;> cases a.2.testBit i <;>
     cases b.1.testBit i <;> cases b.2.testBit i <;> simp
-lemma zafz (t : Nat) {a : Sig} (ha : zap6 a) (i : Nat) (hi : i < 414)
+lemma zafz (t : Nat) {a : Sig} (ha : zaoy a) (i : Nat) (hi : i < 414)
     (h: (sep (decide (0< t)) a).testBit i= true): (sep true a).testBit i= true:= by
   cases ht: decide (0< t)
   · simp only [sep, ht, Bool.false_eq_true, ite_false, ite_true, Nat.testBit_and,
@@ -3031,8 +3031,8 @@ lemma zai6 {k t S} (h : Live k t S) (i : Nat) (hi : i < 414) :
     ∃ a∈ S,(sep (decide (0< t)) a).testBit i= true:= by
   induction h with
   | stop =>
-    refine ⟨zapi,by simp,?_⟩
-    simp [sep,zapi,Nat.testBit_and,zaek,zad4 zae7,hi]
+    refine ⟨zaox,by simp,?_⟩
+    simp [sep,zaox,Nat.testBit_and,zaek,zad4 zae7,hi]
   | unary ha _ tail ih =>
     obtain ⟨x,hx,h⟩:= ih
     simp only [Finset.mem_insert] at hx
@@ -3049,14 +3049,14 @@ lemma zai6 {k t S} (h : Live k t S) (i : Nat) (hi : i < 414) :
       · exact ⟨_,Finset.mem_insert_of_mem (Finset.mem_insert_self _ _),h⟩
     · exact ⟨x,Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hU),h⟩
 lemma zads (d : Bool) (v : List Sig) (i : Nat) :
-    (zani d v).testBit i= true↔ ∃ a∈ v,(sep d a).testBit i= true:= by
+    (zanj d v).testBit i= true↔ ∃ a∈ v,(sep d a).testBit i= true:= by
   induction v with
-  | nil=> simp [zani]
+  | nil=> simp [zanj]
   | cons a v ih =>
-    simp only [zani,Nat.testBit_or,Bool.or_eq_true,ih,List.mem_cons,exists_eq_or_imp]
+    simp only [zanj,Nat.testBit_or,Bool.or_eq_true,ih,List.mem_cons,exists_eq_or_imp]
 lemma zafy {k t S} {v : List Sig} (h : Live k t S) (he : v.toFinset = S) :
-    zani (decide (0< t)) v= top:= by
-  have hv: ∀ a∈ v,zap6 a:= fun a ha=> (zaet h a (he▸ List.mem_toFinset.mpr ha)).1
+    zanj (decide (0< t)) v= top:= by
+  have hv: ∀ a∈ v,zaoy a:= fun a ha=> (zaet h a (he▸ List.mem_toFinset.mpr ha)).1
   apply Nat.eq_of_testBit_eq; intro i
   rw [zaek]
   by_cases hi: i< 414
@@ -3066,10 +3066,10 @@ lemma zafy {k t S} {v : List Sig} (h : Live k t S) (he : v.toFinset = S) :
   · simp only [hi, decide_false]
     exact zacd hv i (by omega)
 lemma zadx (d : Bool) (l r : List Sig) :
-    zani d (l++ r)= zani d l||| zani d r:= by
+    zanj d (l++ r)= zanj d l||| zanj d r:= by
   induction l with
-  | nil=> simp [zani]
-  | cons a l ih=> simp [zani,ih,Nat.or_assoc]
+  | nil=> simp [zanj]
+  | cons a l ih=> simp [zanj,ih,Nat.or_assoc]
 open PEqualNP.CircuitLowerBounds
 def gv (w : List Sig) (g : Gate) : Sig :=
   let xs:= g.inputs.map (fun i=> w.getD i zero)
@@ -3078,23 +3078,23 @@ def gv (w : List Sig) (g : Gate) : Sig :=
   | .or=> xs.foldr (bin true) zero
   | .not=> neg (xs.headD zero)
   | _=> zero
-def zaox (gs : List Gate) (w : List Sig) : List Sig :=
+def zan7 (gs : List Gate) (w : List Sig) : List Sig :=
   gs.foldl (fun l g=> l++ [gv l g]) w
-lemma zafs {w : List Sig} (hw : ∀ a ∈ w, zap6 a) (i : Nat) : zap6 (w.getD i zero) := by
+lemma zafs {w : List Sig} (hw : ∀ a ∈ w, zaoy a) (i : Nat) : zaoy (w.getD i zero) := by
   simp only [List.getD_eq_getElem?_getD]
   cases h: w[i]? with
   | none=> exact zafg
   | some a=> exact hw a (List.mem_of_getElem? h)
-lemma zaid {w : List Sig} (hw : ∀ a ∈ w, zap6 a) (g : Gate) : zap6 (gv w g) := by
+lemma zaid {w : List Sig} (hw : ∀ a ∈ w, zaoy a) (g : Gate) : zaoy (gv w g) := by
   obtain ⟨o,l⟩:= g
   cases o with
   | and =>
-    change zap6 ((l.map (fun i=> w.getD i zero)).foldr (bin false) one)
+    change zaoy ((l.map (fun i=> w.getD i zero)).foldr (bin false) one)
     induction l with
     | nil=> exact zagr
     | cons i l ih=> exact zagq (zafs hw i) ih
   | or =>
-    change zap6 ((l.map (fun i=> w.getD i zero)).foldr (bin true) zero)
+    change zaoy ((l.map (fun i=> w.getD i zero)).foldr (bin true) zero)
     induction l with
     | nil=> exact zafg
     | cons i l ih=> exact zagq (zafs hw i) ih
@@ -3104,27 +3104,27 @@ lemma zaid {w : List Sig} (hw : ∀ a ∈ w, zap6 a) (g : Gate) : zap6 (gv w g) 
     | cons i _=> exact zagd (zafs hw i)
   | mod _=> exact zafg
   | maj=> exact zafg
-def zalo (w: List Sig) (v: Sig): Prop:= v∈ w∨ ¬ zapj v
-lemma zajh (w : List Sig) (i : Nat) : zalo w (w.getD i zero) := by
+def zals (w: List Sig) (v: Sig): Prop:= v∈ w∨ ¬ zaoi v
+lemma zajh (w : List Sig) (i : Nat) : zals w (w.getD i zero) := by
   simp only [List.getD_eq_getElem?_getD]
   cases h: w[i]? with
   | none=> exact Or.inr (fun h=> h.2.1 rfl)
   | some a=> exact Or.inl (List.mem_of_getElem? h)
-lemma zacp {w : List Sig} {a : Sig} (hva : zap6 a) (h : zalo w a) :
-    a= zero∨ a= one∨ a∈ w∧ zapj a:= by
+lemma zacp {w : List Sig} {a : Sig} (hva : zaoy a) (h : zals w a) :
+    a= zero∨ a= one∨ a∈ w∧ zaoi a:= by
   by_cases hz: a= zero
   · exact Or.inl hz
   by_cases ho: a= one
   · exact Or.inr (Or.inl ho)
   exact Or.inr (Or.inr ⟨h.resolve_right (fun x=> x ⟨hva,hz,ho⟩),hva,hz,ho⟩)
-def zao0 (w : List Sig) (z : Sig) : Prop :=
-  (∃ a∈ w,zapj a∧ z= neg a) ∨
-  (∃ d a b,a∈ w∧ b∈ w∧ zapj a∧ zapj b∧ a≠ b∧ z= bin d a b)
-lemma zajj {w a b} (d : Bool) (hva : zap6 a) (hvb : zap6 b)
-    (ha: zalo w a) (hb: zalo w b) :
-    zalo w (bin d a b)∨ zao0 w (bin d a b):= by
-  have rz: zalo w zero:= Or.inr (fun h=> h.2.1 rfl)
-  have ro: zalo w one:= Or.inr (fun h=> h.2.2 rfl)
+def zaod (w : List Sig) (z : Sig) : Prop :=
+  (∃ a∈ w,zaoi a∧ z= neg a) ∨
+  (∃ d a b,a∈ w∧ b∈ w∧ zaoi a∧ zaoi b∧ a≠ b∧ z= bin d a b)
+lemma zajj {w a b} (d : Bool) (hva : zaoy a) (hvb : zaoy b)
+    (ha: zals w a) (hb: zals w b) :
+    zals w (bin d a b)∨ zaod w (bin d a b):= by
+  have rz: zals w zero:= Or.inr (fun h=> h.2.1 rfl)
+  have ro: zals w one:= Or.inr (fun h=> h.2.2 rfl)
   obtain ⟨a1,a0,az,ao,aa,aa'⟩:= zai0 hva
   obtain ⟨b1,b0,bz,bo,bb,bb'⟩:= zai0 hvb
   rcases zacp hva ha with rfl | rfl | ⟨ham,hap⟩
@@ -3136,16 +3136,16 @@ lemma zajj {w a b} (d : Bool) (hva : zap6 a) (hvb : zap6 b)
   by_cases he: a= b
   · subst b; cases d <;> simp_all
   exact Or.inr (Or.inr ⟨d,a,b,ham,hbm,hap,hbp,he,rfl⟩)
-lemma zaiy {w : List Sig} (hw : ∀ a ∈ w, zap6 a) (g : Gate)
+lemma zaiy {w : List Sig} (hw : ∀ a ∈ w, zaoy a) (g : Gate)
     (h: g.op∈ ({GateOp.and,GateOp.or,GateOp.not}: Set GateOp)∧ g.inputs.length≤ 2) :
-    zalo w (gv w g)∨ zao0 w (gv w g):= by
+    zals w (gv w g)∨ zaod w (gv w g):= by
   obtain ⟨o,l⟩:= g
   simp only [Set.mem_insert_iff,Set.mem_singleton_iff] at h
   obtain ⟨ho,hl⟩:= h
-  have rz: zalo w zero:= Or.inr (fun h=> h.2.1 rfl)
-  have ro: zalo w one:= Or.inr (fun h=> h.2.2 rfl)
-  have nx (a : Sig) (hva : zap6 a) (ha : zalo w a) :
-      zalo w (neg a)∨ zao0 w (neg a):= by
+  have rz: zals w zero:= Or.inr (fun h=> h.2.1 rfl)
+  have ro: zals w one:= Or.inr (fun h=> h.2.2 rfl)
+  have nx (a : Sig) (hva : zaoy a) (ha : zals w a) :
+      zals w (neg a)∨ zaod w (neg a):= by
     rcases zacp hva ha with rfl | rfl | ⟨hm,hp⟩
     · exact Or.inl (zaik.1▸ ro)
     · exact Or.inl (zaik.2▸ rz)
@@ -3161,9 +3161,9 @@ lemma zaiy {w : List Sig} (hw : ∀ a ∈ w, zap6 a) (g : Gate)
     | nil =>
       rcases ho with rfl | rfl | rfl
       · simpa only [gv, List.map_cons, List.map_nil, List.foldr_cons, List.foldr_nil,
-          (zai0 (zafs hw i)).1] using Or.inl (b:= zao0 w (w.getD i zero)) (zajh w i)
+          (zai0 (zafs hw i)).1] using Or.inl (b:= zaod w (w.getD i zero)) (zajh w i)
       · simpa only [gv, List.map_cons, List.map_nil, List.foldr_cons, List.foldr_nil,
-          (zai0 (zafs hw i)).2.1] using Or.inl (b:= zao0 w (w.getD i zero)) (zajh w i)
+          (zai0 (zafs hw i)).2.1] using Or.inl (b:= zaod w (w.getD i zero)) (zajh w i)
       · exact nx _ (zafs hw i) (zajh w i)
     | cons j l =>
       cases l with
@@ -3178,7 +3178,7 @@ lemma zaiy {w : List Sig} (hw : ∀ a ∈ w, zap6 a) (g : Gate)
             zajj true (zafs hw i) (zafs hw j) (zajh w i) (zajh w j)
         · exact nx _ (zafs hw i) (zajh w i)
 lemma zahf {w : List Sig} {z : Sig} {k t S} (h : Live k t S)
-    (hz: zalo w z∨ zao0 w z) (sub: ∀ a∈ S,a∈ w++ [z]) :
+    (hz: zals w z∨ zaod w z) (sub: ∀ a∈ S,a∈ w++ [z]) :
     ∃ k' t' S',k'≤ k+ 1∧ Live k' t' S'∧ ∀ a∈ S',a∈ w:= by
   by_cases hm: z∈ S
   · by_cases hw : z ∈ w
@@ -3215,14 +3215,14 @@ lemma zahf {w : List Sig} {z : Sig} {k t S} (h : Live k t S)
           by simpa using And.intro ha (And.intro hb hu)⟩
   · refine ⟨k, t, S, by omega, h, ?_⟩
     intro a ha; have hn: a≠ z:= fun hh=> hm (hh▸ ha); simpa [hn] using sub a ha
-lemma zaj7 (gs : List Gate) (w : List Sig) (hw : ∀ a ∈ w, zap6 a)
+lemma zaj7 (gs : List Gate) (w : List Sig) (hw : ∀ a ∈ w, zaoy a)
     (legal: ∀ g∈ gs,g.op∈ ({GateOp.and,GateOp.or,GateOp.not}: Set GateOp)∧ g.inputs.length≤ 2)
-    (hout: zapi∈ zaox gs w) :
+    (hout: zaox∈ zan7 gs w) :
     ∃ k t S,k≤ gs.length∧ Live k t S∧ ∀ a∈ S,a∈ w:= by
   induction gs generalizing w with
-  | nil=> exact ⟨0,0,{zapi},by simp,Live.stop,by simpa [zaox] using hout⟩
+  | nil=> exact ⟨0,0,{zaox},by simp,Live.stop,by simpa [zan7] using hout⟩
   | cons g gs ih =>
-    have hw' : ∀ a ∈ w ++ [gv w g], zap6 a := by
+    have hw' : ∀ a ∈ w ++ [gv w g], zaoy a := by
       intro a ha; rcases List.mem_append.mp ha with ha | ha
       · exact hw a ha
       · simp only [List.mem_singleton] at ha; exact ha▸ zaid hw g
@@ -3234,7 +3234,7 @@ def bit (side : Bool) (i : Fin 414) (a : Sig) : Bool :=
 lemma zair (s i): bit s i zero= false:= by cases s <;> simp [bit,zero]
 lemma zaja (s i) : bit s i one = true := by
   cases s <;> simp [bit,one,zaek,i.isLt]
-lemma zajt (s i) {a : Sig} (ha : zap6 a) : bit s i (neg a) = !(bit s i a) := by
+lemma zajt (s i) {a : Sig} (ha : zaoy a) : bit s i (neg a) = !(bit s i a) := by
   cases s
   · simp [bit,neg,zad4 ha.2,i.isLt]
   · simp [bit,neg,zad4 ha.1,i.isLt]
@@ -3247,7 +3247,7 @@ lemma zake (s i) (w : List Sig) (j : Nat) :
   cases w[j]? with
   | none=> exact (zair _ _).symm
   | some a=> rfl
-lemma zajv (s i) (g : Gate) (w : List Sig) (hw : ∀ a ∈ w, zap6 a)
+lemma zajv (s i) (g : Gate) (w : List Sig) (hw : ∀ a ∈ w, zaoy a)
     (hg: g.op∈ ({GateOp.and,GateOp.or,GateOp.not}: Set GateOp)) :
     bit s i (gv w g)= g.op.eval (g.inputs.map fun j=> (w.map (bit s i)).getD j false):= by
   obtain ⟨o,l⟩:= g
@@ -3267,19 +3267,19 @@ lemma zajv (s i) (g : Gate) (w : List Sig) (hw : ∀ a ∈ w, zap6 a)
   · cases l with
     | nil=> exact (zajt s i zafg).trans (by rw [zair]; rfl)
     | cons a l=> exact zajt s i (zafs hw a)
-lemma zad9 (gs : List Gate) (s i) (w : List Sig) (hw : ∀ a ∈ w, zap6 a)
+lemma zad9 (gs : List Gate) (s i) (w : List Sig) (hw : ∀ a ∈ w, zaoy a)
     (hg: ∀ g∈ gs,g.op∈ ({GateOp.and,GateOp.or,GateOp.not}: Set GateOp)) :
-    (zaox gs w).map (bit s i) =
+    (zan7 gs w).map (bit s i) =
     gs.foldl (fun (l : List Bool) g => l ++ [g.op.eval (g.inputs.map fun j => l.getD j false)])
       (w.map (bit s i)):= by
   induction gs generalizing w with
   | nil=> rfl
   | cons g gs ih =>
-    have hw' : ∀ a ∈ w ++ [gv w g], zap6 a := by
+    have hw' : ∀ a ∈ w ++ [gv w g], zaoy a := by
       intro a ha; rcases List.mem_append.mp ha with ha | ha
       · exact hw a ha
       · simp only [List.mem_singleton] at ha; exact ha▸ zaid hw g
-    change (zaox gs (w++ [gv w g])).map _= _
+    change (zan7 gs (w++ [gv w g])).map _= _
     rw [ih _ hw' (fun a ha=> hg a (by simp [ha]))]
     simp only [List.foldl_cons,List.map_append,List.map_singleton,zajv s i g w hw (hg g (by simp))]
 def raw0: Sig:= (0xc4000000000000000003fffffc000000003ffc210fe00847f007e01f83e01107e03e042084423f0fc3c08220842122287e3e0f,0x15115115115115115115115115115115115100007e00003f003e00f83e00003e01e000000001f0fc3c00000000000003e3e07)
@@ -3292,29 +3292,29 @@ def raw6: Sig:= (0x1100003ffc000000003ffc0000000000000000021084108421044213fffff
 def raw7: Sig:= (0xa00000003ffc003ffc000000000000000000003ffffff0002080003ffffffffffffffa108211000041004208821085000002100,0x3383383383383383383383383383383383383fffffe0000000003ffffffffffffff8000000000000000000000000000000000)
 def raw8: Sig:= (0x3403fffffc003ffc000000000000000000000003fffffffffffffffe084210008210004210422110882228411042108004210000,0x3c03c03c03c03c03c03c03c03c03c03c03c03fffffffffffffffc000000000000000000000000000000000000000000000000)
 def raw: List Sig:= [raw0,raw1,raw2,raw3,raw4,raw5,raw6,raw7,raw8]
-def zao7: Nat:= 0x32799cc653399bc965b2b9acee5e25108bc5a2b1488c66271887c3ab558afd7abb5cacd86b760abd5a9d4ca9d4aa350a6d569f54a5d2a3d1c91c8a43208ec963f248dc6afd7cc1e0b0380bee16ff84bddeae570bbddaeb74b8de6e778b7dba0d0485c2a130882c360f0c81c0a6d349dcea73389acf66f3c99cca552897cba5b2c94cc6573093c9acd64b5daad368b2db6cf6cb1d8b1588c7e3b1b8cc4e471790c3e1a8540a3d1a8b44a0d2687489fcf90a8342219046c351acda693a9cce87639168ac582b96cb2542914caae774391cae67192890492591c482211885b0d96a359aad76934d9ed0688c05c2f188b41a090582818080301d7cbd5fb0580bc5c2dd72bb5d2cd64b45b2d55cad57ac560aa54ab156803f1fd027d3319cd0653c9ecf07a3e1dcc26031190c65d2e178be70379c4dc4e27944a04c26bfa02ff803f54aa85329d489b4f2713e9d4d3d1eef57b3cd1c9047a35f2fc7d3edf0a15128d40964aa5d329848a492893773c9daf077bc5d2ec753ad148945a310e886fb89c0e16f108884521918821e1007c3a381d0ec723c1b85c32180d05996ce663359429150ac58280201406dd6db71b43f1f1007a1c0d8cc6a341b0c8241109854280e0784192c563b1990c46130c4c27128000202
-def zaoj: Nat:= 0x32995cce6b3796c9e63399dcbe4a411f8ec6a43259247a471b8e48a592b94c9a5b31984aa5f27944bab95bacd5abb61b056abf57ac57ad167b2d8ad36db659ad763b25aae973b8dbaeb79bc5caef6fb85da71379acca733d9e4da77339a4ea291388c3a2b198c44a2f0f8845aa14fa6d2aa355aa53aa74ba654b017fbedeb0385c25fb077bbe60b198bc4e1b1b91c862b1f87c463a8943a0cfa8b49a450a8f3fa051a110782c0a130d8641a17038242972b85dae96eb459ad96ab24ba5932984aa71369e4fa75349248a51267b3d1e4f8773c188c26431980bc5d2f97076391c0e878371a8d066361904c24150a04430170c8682c0f070417ebe60b0178bd7fbfa03007ebe9f2fc7dbe14ca55429d48a250a8d40af572c560ad552b156a977bc1dcf278bb5eaf47bbd9e6ea74bb1d68b45231128e4823d1a87442110a864120cd66c369a4d4e57439dcce372124944b23920462410888fe80409f4fc6734194cce06fb89c2de6db75b8da219148444231047c3f200f43e1e10074381b3a1d4ec723995cb4582d964ac532a154a4d56cb59b0d76a341a6d268b3c5e30188b45c0a0682c1809038200c70389b8de4f289409c4d263198ec96431598cb6733594c26230c5629150b05026138940202000100a03
-def zanx: Nat:= 0x5dad9eeb158ab158f678bad3e9f4ca6528947a365b2d369bb5da7c3b1c4c85f2d96caa5567144a24d269349a4d269349a4d269349a3c1b35c6231160b190271389c4e271389c4e271389c4ed56806834150a84020100804020100804020100835196cb62b15747b3d9d56070382e166b74f278b45a2a1515a90480ec76981a8d4602b15a304c26130984c26130984c2613099369648a552a8e0683410080402010080402010080402112893a1d0743a3198ce6592c8a854502815cae532998032192b1489c05028140a05028140a05028140a38178bc6e140a0a4520c060a00402010080402010080402010082e0a0501c0e070381c0e070381c0e07038442209020100804020100804020100804000000000000000000000000000
-def zaom: Nat:= 0x5bac9e6ed56ba552f376ba5e69a76a55d29179bb5a8e967bcdda77391b8c05c6a1599e52653149cf376b5184b74d1dce456260df2437193519e2d650a18af376b5184b74d1dce4561b89724d467b282cc508bcddad4612dd3477391586e0ec93519eca653156eb23b9c95aa9372dd64b7592695a56549495aa946a686e95488c85a8d14225e6ed6a2dd34873b9c8ac3712e49349548a692a8d44825e6ed6a2dd34873b9c8ac37036491a893b9c8ee373b980e4722b1b8506e27180ac5c29180b8162b1489cf376b516e9a3b9c8ac4c1b80f2437190b46e32088b4502d048a1e6ed6a2dd3477391586e25006482c1104bcddad45ba68ee722b0dc1c06c9058220979bb5a8b74d1dce4561b818079279bb5a8b74d1dce4561b80c0192
-def zao4: Nat:= 0xf68011960702a38581a189545653038984c260ca389a35178984e080d1d0080526acc582a0d041582903bd120293ab406a742a8eca4cb1d89c542f1325136101889da0086981c4c8e56250aa31480bc0e05028146a8e13864a605268112874040984e38561c12810161500ef415950e6d00c9d0629e1834d3c4d3814c0a1a4d840aa4d68134aa10029c4a85369b2ce01a080984c260c9c408354a098102729a7c9a05020f0a8902981c52ac081d854ac7b3406a9f659ed9c553d8212094130bcf80769821a027188404c71148bd96d3152502005028146a71040643405021345e9f1389810b6148ac5e072a0b02076380b1eed00ca7da63a758c47404158680a533e01d9604
-def zant: Nat:= 0xe076480d92c901984c2193285acf292a522b23bb3ca4b2391c994a91b9dc0603652c9e6774d0395237033cd1a2d3933c647229268a4f31bb08503216ba534cf67b3c1d920364b240661308b8e92933c5a280b0dceecf168dce472748a1647743a1dd237799dd340e142c80cf346948e4cf2e1c85a9a16bcd64c254970a4ca4d33d9ecf076498592c93080c0648949d2cf650a064374d33d943779bcca42859268984c290dce49a3b83850b2611c8dce979b3d22f3651dd9472590195291748b4eecf67b3c1d926164b24c2030182c2d6533dd2a92e2c934cf74ac9e6f316aa46e9a128945ab239268ee0e548dd847237329e6cf0b3cdd277749c86e061405994523bb3d9ecf
+def zaoe: Nat:= 0x32799cc653399bc965b2b9acee5e25108bc5a2b1488c66271887c3ab558afd7abb5cacd86b760abd5a9d4ca9d4aa350a6d569f54a5d2a3d1c91c8a43208ec963f248dc6afd7cc1e0b0380bee16ff84bddeae570bbddaeb74b8de6e778b7dba0d0485c2a130882c360f0c81c0a6d349dcea73389acf66f3c99cca552897cba5b2c94cc6573093c9acd64b5daad368b2db6cf6cb1d8b1588c7e3b1b8cc4e471790c3e1a8540a3d1a8b44a0d2687489fcf90a8342219046c351acda693a9cce87639168ac582b96cb2542914caae774391cae67192890492591c482211885b0d96a359aad76934d9ed0688c05c2f188b41a090582818080301d7cbd5fb0580bc5c2dd72bb5d2cd64b45b2d55cad57ac560aa54ab156803f1fd027d3319cd0653c9ecf07a3e1dcc26031190c65d2e178be70379c4dc4e27944a04c26bfa02ff803f54aa85329d489b4f2713e9d4d3d1eef57b3cd1c9047a35f2fc7d3edf0a15128d40964aa5d329848a492893773c9daf077bc5d2ec753ad148945a310e886fb89c0e16f108884521918821e1007c3a381d0ec723c1b85c32180d05996ce663359429150ac58280201406dd6db71b43f1f1007a1c0d8cc6a341b0c8241109854280e0784192c563b1990c46130c4c27128000202
+def zanq: Nat:= 0x32995cce6b3796c9e63399dcbe4a411f8ec6a43259247a471b8e48a592b94c9a5b31984aa5f27944bab95bacd5abb61b056abf57ac57ad167b2d8ad36db659ad763b25aae973b8dbaeb79bc5caef6fb85da71379acca733d9e4da77339a4ea291388c3a2b198c44a2f0f8845aa14fa6d2aa355aa53aa74ba654b017fbedeb0385c25fb077bbe60b198bc4e1b1b91c862b1f87c463a8943a0cfa8b49a450a8f3fa051a110782c0a130d8641a17038242972b85dae96eb459ad96ab24ba5932984aa71369e4fa75349248a51267b3d1e4f8773c188c26431980bc5d2f97076391c0e878371a8d066361904c24150a04430170c8682c0f070417ebe60b0178bd7fbfa03007ebe9f2fc7dbe14ca55429d48a250a8d40af572c560ad552b156a977bc1dcf278bb5eaf47bbd9e6ea74bb1d68b45231128e4823d1a87442110a864120cd66c369a4d4e57439dcce372124944b23920462410888fe80409f4fc6734194cce06fb89c2de6db75b8da219148444231047c3f200f43e1e10074381b3a1d4ec723995cb4582d964ac532a154a4d56cb59b0d76a341a6d268b3c5e30188b45c0a0682c1809038200c70389b8de4f289409c4d263198ec96431598cb6733594c26230c5629150b05026138940202000100a03
+def zaoa: Nat:= 0x5dad9eeb158ab158f678bad3e9f4ca6528947a365b2d369bb5da7c3b1c4c85f2d96caa5567144a24d269349a4d269349a4d269349a3c1b35c6231160b190271389c4e271389c4e271389c4ed56806834150a84020100804020100804020100835196cb62b15747b3d9d56070382e166b74f278b45a2a1515a90480ec76981a8d4602b15a304c26130984c26130984c2613099369648a552a8e0683410080402010080402010080402112893a1d0743a3198ce6592c8a854502815cae532998032192b1489c05028140a05028140a05028140a38178bc6e140a0a4520c060a00402010080402010080402010082e0a0501c0e070381c0e070381c0e07038442209020100804020100804020100804000000000000000000000000000
+def zanx: Nat:= 0x5bac9e6ed56ba552f376ba5e69a76a55d29179bb5a8e967bcdda77391b8c05c6a1599e52653149cf376b5184b74d1dce456260df2437193519e2d650a18af376b5184b74d1dce4561b89724d467b282cc508bcddad4612dd3477391586e0ec93519eca653156eb23b9c95aa9372dd64b7592695a56549495aa946a686e95488c85a8d14225e6ed6a2dd34873b9c8ac3712e49349548a692a8d44825e6ed6a2dd34873b9c8ac37036491a893b9c8ee373b980e4722b1b8506e27180ac5c29180b8162b1489cf376b516e9a3b9c8ac4c1b80f2437190b46e32088b4502d048a1e6ed6a2dd3477391586e25006482c1104bcddad45ba68ee722b0dc1c06c9058220979bb5a8b74d1dce4561b818079279bb5a8b74d1dce4561b80c0192
+def zanw: Nat:= 0xf68011960702a38581a189545653038984c260ca389a35178984e080d1d0080526acc582a0d041582903bd120293ab406a742a8eca4cb1d89c542f1325136101889da0086981c4c8e56250aa31480bc0e05028146a8e13864a605268112874040984e38561c12810161500ef415950e6d00c9d0629e1834d3c4d3814c0a1a4d840aa4d68134aa10029c4a85369b2ce01a080984c260c9c408354a098102729a7c9a05020f0a8902981c52ac081d854ac7b3406a9f659ed9c553d8212094130bcf80769821a027188404c71148bd96d3152502005028146a71040643405021345e9f1389810b6148ac5e072a0b02076380b1eed00ca7da63a758c47404158680a533e01d9604
+def zan0: Nat:= 0xe076480d92c901984c2193285acf292a522b23bb3ca4b2391c994a91b9dc0603652c9e6774d0395237033cd1a2d3933c647229268a4f31bb08503216ba534cf67b3c1d920364b240661308b8e92933c5a280b0dceecf168dce472748a1647743a1dd237799dd340e142c80cf346948e4cf2e1c85a9a16bcd64c254970a4ca4d33d9ecf076498592c93080c0648949d2cf650a064374d33d943779bcca42859268984c290dce49a3b83850b2611c8dce979b3d22f3651dd9472590195291748b4eecf67b3c1d926164b24c2030182c2d6533dd2a92e2c934cf74ac9e6f316aa46e9a128945ab239268ee0e548dd847237329e6cf0b3cdd277749c86e061405994523bb3d9ecf
 def zald: Fin 12→ Nat:= ![0x876543210,0x267143850,0x374268501,0x364872105,0x547068321,0x146072385,0x846375012,0x247361058,0x64175832,0x74561238,0x567840123,0x176240583]
-def zaqo: Fin 9→ Nat:= ![0,5,8,3,4,1,7,6,2]
-def zaqi: Fin 9→ Nat:= ![1,0,5,8,6,2,4,7,3]
+def zao9: Fin 9→ Nat:= ![0,5,8,3,4,1,7,6,2]
+def zao3: Fin 9→ Nat:= ![1,0,5,8,6,2,4,7,3]
 def gOfV: Fin 9→ Fin 12:= ![0,2,6,10,0,4,2,4,8]
-def zamj: Nat:= 12
-def zak3: Nat:= 128
-def zalk: Nat:= 8
-def zal0: Nat:= 255
-def zakx: Nat:= 48
+def zal3: Nat:= 12
+def zak9: Nat:= 128
+def zalr: Nat:= 8
+def zamm: Nat:= 255
+def zak0: Nat:= 48
 def zaky: Nat:= 0xffffffffffff
-def zalv: Nat:= 0x1090409000301000500000002030803000000000101000201000c150a060404010000000000020000000300000d00010000000000030000010000000000030000000200040000020200000001010505000002000005050201010000000001000b0000010104000000010200000000000000000000000102000000010802
-def zal9: Nat:= 0xc2900000bc36c29000000000000000000ac6c21000000000000000000000000000c1bc19c640000cac6c24900000000ac69000000cac2970000000c4c630000c1cac6230000000000a300000bc19c64000000cac2360000000b1c64000000cac633000000000c230000cac2c634000000000c3900000000ac16c3bcac297c29000000cac3640000000c9c160000000c6c2900000bc63c140000000c1c36000000cac2610000000c4c2300bcac297c2900000000ac13000000000001cbcac297c299000000cac16900000bc29c1400000cc13c6400000cc36c2400000000000000000000ac19000000cac64200000bc14c2600000000000000000000000200000000000000000000ac630000000c2c6300000c4c1c9600000bc94c160000000000000000000000000000000000000000000c2c4100cac9c14c9400000000000000000000000000000000000000000000000000000000000000000cc92c64000000000000c1bcac297c2900cac2c41c24000000000c3400000c9c2c61000000cac264000000cac16100000000ac120000000000040000000000000000000000000000000000000000c1cac9270000000c4c6900cac2c63c26000000bac6340000000000070000000c9c1400000000000600000cc19c2400000000000000000000000000000000000900000000000000000000000000000000000000cac4c63c460000c1cac4150000c3cac638cbcac927c925000000000000000000cac6380000cac2c631cbcac297c2980000c3cac92700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ac940000c9cac145000000cac14500000000000000000000000000000000ac26000000000000000000000000000000000000000000cac36600000bc16c260000000c6c410000cac2c6380000c3cac1450000c1cac269000000000c1400000000ac2400000bc14c64000000000c640000000000050000000c3c140000cac2c63900000000ac6400000000ac14000000000000000000000000000000000000000000ac6c41000000000c240000000c9c360000000000000000000000000000000000000000000000000000c9cac461000000000c2600cac2c46c2600cac2c63c63000000000000000000000c940000000000000000000000000000000c1c390000000000000000000000000000c9cac4660000000000000000000000000000c4cac297000000000000000000000000000c7bc19c64000000000000000000000000000000000000c4bcac927c92000000cac46100000cc41c3900cac4c63c630000c3cac4610000000000a90000000000a6c6bcac927c92000c3bc19c64000000000000000000000000000000cac623000000000000000000000000000000000000000000000000000000000000000000000c120000000000a400000000ac340000000000080000000c3c920000cac2c64300000c3c6c210000c1cac622000000000000cbcac927c9220000c2cac4150000000c3c1200cac3c14c34000000000000000000000000000000cac1630000000b1c2600000bc14c240000000c9c34000000cac644000000cac14400000cc26c39000000cac639000000000c63000000cac6430000000000000000000000000000000000a2000000000000000000000c19000000cac466000000000000000000000000000000000c16000000000c130000000000000000000000000000000000000000000000a100000cc14c2600000000000000000bc26c3900000000000000000000000000cac2c63c2300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000bc41c39000000000000000000000000000000000000000000000c6900000000000300bcac145c140000000c1c92000000cac3620000000c6c2100000000000000000bc12c9400000000000000000000000000000000000000000000000000000000ac290000000c2c64000000000000000000cac64900000000000000000000000000000bc19c24000000000000000000cac631000000000000000000ac2c640000000000000000000c4c29000000bac641
-def zak8: Nat:= 10
+def zalm: Nat:= 0x1090409000301000500000002030803000000000101000201000c150a060404010000000000020000000300000d00010000000000030000010000000000030000000200040000020200000001010505000002000005050201010000000001000b0000010104000000010200000000000000000000000102000000010802
+def zal5: Nat:= 0xc2900000bc36c29000000000000000000ac6c21000000000000000000000000000c1bc19c640000cac6c24900000000ac69000000cac2970000000c4c630000c1cac6230000000000a300000bc19c64000000cac2360000000b1c64000000cac633000000000c230000cac2c634000000000c3900000000ac16c3bcac297c29000000cac3640000000c9c160000000c6c2900000bc63c140000000c1c36000000cac2610000000c4c2300bcac297c2900000000ac13000000000001cbcac297c299000000cac16900000bc29c1400000cc13c6400000cc36c2400000000000000000000ac19000000cac64200000bc14c2600000000000000000000000200000000000000000000ac630000000c2c6300000c4c1c9600000bc94c160000000000000000000000000000000000000000000c2c4100cac9c14c9400000000000000000000000000000000000000000000000000000000000000000cc92c64000000000000c1bcac297c2900cac2c41c24000000000c3400000c9c2c61000000cac264000000cac16100000000ac120000000000040000000000000000000000000000000000000000c1cac9270000000c4c6900cac2c63c26000000bac6340000000000070000000c9c1400000000000600000cc19c2400000000000000000000000000000000000900000000000000000000000000000000000000cac4c63c460000c1cac4150000c3cac638cbcac927c925000000000000000000cac6380000cac2c631cbcac297c2980000c3cac92700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ac940000c9cac145000000cac14500000000000000000000000000000000ac26000000000000000000000000000000000000000000cac36600000bc16c260000000c6c410000cac2c6380000c3cac1450000c1cac269000000000c1400000000ac2400000bc14c64000000000c640000000000050000000c3c140000cac2c63900000000ac6400000000ac14000000000000000000000000000000000000000000ac6c41000000000c240000000c9c360000000000000000000000000000000000000000000000000000c9cac461000000000c2600cac2c46c2600cac2c63c63000000000000000000000c940000000000000000000000000000000c1c390000000000000000000000000000c9cac4660000000000000000000000000000c4cac297000000000000000000000000000c7bc19c64000000000000000000000000000000000000c4bcac927c92000000cac46100000cc41c3900cac4c63c630000c3cac4610000000000a90000000000a6c6bcac927c92000c3bc19c64000000000000000000000000000000cac623000000000000000000000000000000000000000000000000000000000000000000000c120000000000a400000000ac340000000000080000000c3c920000cac2c64300000c3c6c210000c1cac622000000000000cbcac927c9220000c2cac4150000000c3c1200cac3c14c34000000000000000000000000000000cac1630000000b1c2600000bc14c240000000c9c34000000cac644000000cac14400000cc26c39000000cac639000000000c63000000cac6430000000000000000000000000000000000a2000000000000000000000c19000000cac466000000000000000000000000000000000c16000000000c130000000000000000000000000000000000000000000000a100000cc14c2600000000000000000bc26c3900000000000000000000000000cac2c63c2300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000bc41c39000000000000000000000000000000000000000000000c6900000000000300bcac145c140000000c1c92000000cac3620000000c6c2100000000000000000bc12c9400000000000000000000000000000000000000000000000000000000ac290000000c2c64000000000000000000cac64900000000000000000000000000000bc19c24000000000000000000cac631000000000000000000ac2c640000000000000000000c4c29000000bac641
+def zak5: Nat:= 10
 def zak7: Nat:= 1023
-def zal1: Nat:= 0x3de7fffffffffffc003fffffffffffc000003fffbdefbc077c0077ffbef7bbddf7bdbb03fd83c1fdd003f07bfef41de1bf7b802f1bf000000000ffffff000ffffffffffffffffff39cff9fe73ffe7f937fff91dffff9fbf2fff1faffffff3e39ffff8cfbffffff7d77c003ffc003ffffffffc003ffffffffffffffef7bdf7bdef7ddef6fbdef777def76e8000003ff7fdfef0000000001fffefeffb2ff000000fff000ffffffffffffffffffffffff00000000000000007def7bffdf7bffef7bef77bbddf775efbbef7bdffef7bffffef3ffffffffffffffc003fffffffffffc0000001f07dfe83fef03dfdf7bdc0f03de1df7bef77bbeefbbae81e07fa0fa183dfd86fceffffffffffffffffff000000fffffffff000f7bc07fdee03fe07f81f07fbbe07f07ef7deef703c0f0fdf77def7b775e0707c3bcfffffffffc003fffffffffffc000003ffffff7bdf7bdef7deefbb7003ffbb0001ffef606ff7600f77fdf7a0037ff768003b7f000000000000000000000000000000000000000f87ff807f1fc3ff803e180103ff8000000600007c620801207e1040021ff81000480000000003ffc000003ffc000000000000000a52fe4294ff117e40c630000a3181014bf9440188a03028a7ffca12004311004800fff0000000000000000000000000000000004a53fa1295fc89fa03e8800009fa0014a7f48007c220829257ffa420001f81002887ffc003ffc000000003ffc000000000003ffd284a28425092252904a128982528b37fffffc00902414fffffffffe02052120d020000000000000000000fff0000000000000006018a000c0280c5003e140303ff8240318633007c4a0407f8fe11fc821ff8501173c003ffc003ffffffffc000003fffffffffffff6f837b7e81dfc36e0dc37f6fc37e2884108bdc1f07c717e1f805f1df7c3c3f9feefffffffffffffffffffff000fffffffff000f7bc87fdee23fe47f91f47fbbe47f47fffffff723c8f4fffffffffff75e4747d1738003ffc003ffffffffc000003ffffffffc002d6b017b5a80dd816e05c1766d817408000003dc0f03c30000000001dd781c1f0d0cffffff000fff000000000000ffffff000000ffffffffffffffffa3ff84113fff8014a7f48a67fe2a8a9257ffa42225fff120034c000000000003fffffc003ffc000003fffffc00000000000000007000e73300016e80000016600554d0000000001768002b7b18e000000000ffffff000000000fffffffff000318c31fe62ffe61133ff1119bfff913f27ff0fa7ffff03e317fff887b5fffff436dffffffc003fffffc003fffffc003ffffffffffffffffffffffffe5fcbf4338ff27efe32fe7f3fafffefc731cff3be6cff7fdfbbffff000fffffffff000ffffffffffffffffff7bdffbfef7ffeffb77fffb3fffffbfffffffffaffffff3ffffffffffbffffff7c01c000000000000000000000000003ffffffffc6018a030c0318c600f8820300fe2621802980c1f20cc4306018cc30c60fe46d9003000000000000000000000000000000ffffff18c7f8fe31ffe3f80220880c038818920012090442199241806090c118388096753ffffffc003ffc003ffc000003fffffffffffffffffffffffffffeaffe33f4ffffe25adfdaaddff8ee7b7f5ffedf8df7ffc6f9143000000000fff000fff000000000000fffffff93e290df20c7f190a3108fc3f8c7882144221146411145f87f017c179f8c09e4084000000000000000003ffc000000000003ffca02a20014090152004a52050fd283214bf9440091241428a7ffca120a7d2120df73ffffffffffff000fffffffff000000ffffffffffffffffffffffcff9fefe7ffe7fdffffff9dfe7f9fffffffffff9fbffcf9ffcc7fffffffffffc000003fffffc000000003fffffffffffffffffff1fe3f899a7f8bf7fffffe33f8fe3efffffffffe22c7f3e0f831fff000000000000000ffffff000000000fff4a53fa1295fc89fa07e0f80441f80f918c31908fc3f0f230cc318c688a1f8f83e087ffc000000000000003ffc000000000003fffe8fa2857d092fd28048120108520324630c64009024148c330c631a02452120df6fffffffffffff000ffffff000ffffffffffffffffffffffffffffebffceff3ffffcdffffffb77febbdffffffffffb7dfff5bf75fffffffc003ffc003ffffffffffffffffffffffffffffffffffffebffff3f5fffffe5effdeefffffeffbff7ffeffaffffffefffb0fffffffffffffff000ffffff000000000000ffffffffffffffffd610f702e0840779cc19dccc23cceb306c10cc3c83084e418f38000003fffffffffffc000003ffffffffc0008420842108211045effc0feeffffc1b9dfb99cdff09c173cdffdce5dd7ffc5f038c000000fffffffff000000000ffffff000000210821084208441173ff0313bfff806c67ec4627fc26018237ff601625fff1603e03ffffffffffffffc000000000000000000003ffffffffffffffff48421c0a821001e31063311088322c41904310d004210100fbcfffffffffffffff000ffffffffffff00000027c9f7fa4ffbc4f7f7fff713ffff877deffddeefffeeeba27fffe83ea7ffff61bdfffffffffffffc003fffffffffffffffffffffffffffffffffffffbffffbfdffffff7fffffefffffefffffffffffeffffffeff3cf000000ffffffffffff000000fffffffffffff93e290df20c7f197bff0bffbffff8ee77ee6737fc3715dfb7ff77d77dfff1fe4b0c000003ffc003fffffc000000000003ffffffe0f82017c010fc2160842ffafc21e3a9412994411054557e9f815f55e7c20379921fff000000fff000000fff000000000000ffffb3eab1df62cff5b03f0480421fc0c918c319007e0b05230cc318c68091fc58375cffffffc003ffc003ffffffffc000003fffffffffffffffffffffe3fc7f3f1fff1fe4e71cee77f9fe7f9ff3fc67fa7efff3e7f963fff000000fff000ffffff000000000fffffffb3eab1df62cff5b0bf148fc3ffc7c939c73b117e4b1567fcff19fe979ffc59f4ac4000003ffc003ffc003fffffc000000003ffc210fe00847f007e15f83ec1b07e03fa520a5523f0fd3c482a0852172287e3f0f900fff000000fff0000000000000000000000006318a318c628cc53023100303f8c20129452a0046400025fc7f097e021f8c0000404000000003ffc000000000000000000003ffca52fe4294ff117e408c62050fe302200110000119842400a1fc00100a7e30209131000000000fff000000ffffff000000000fff294bf90a53fc45f907f0f80461fc0f810c21108fe3f0f0208c3108488b1fcf83ff0bfffffffffffffffffc000000000003ffc003ffffffffffffffff68421faa8211c1eb506bb55088363d7590435ed544210170beefff000fffffffffffffff000fffffffff0006318a318c628cc537bff43fbbffff47ffffff737fca747ffffffffff75fff57d3cf7fffffffffffc000003fffffffffffc003fffffffffffffffffff9ffff8ddfffebf7fffffebbfffebefffffffffeabffffe8f6df000ffffff000ffffff000fffffffffffffff9ce75ce739d733acfc0fbfffde03fbee73ce6ff81f5fbdcf33ce7397fee03afee4b3ffc000003ffc000003ffc003fffffc0000018c628c6318a3314c8ffd0044fffe1056bfd6489ff2890acb7ffeb1a897ffd484ba0fff000fffffffff000fff000000000000000ffffffd8c6aacc53fffffffffffffff9ce39d407e1a44338ee39ce7c011fcd412483ffc000003ffc000003ffc0000000000000018c628c6318a3314c0fc1000087f0104630c6401f828108c330c631a0047f1404101000000000fff000000000000000000000ffff93e290df20c7f1903f0080421fc088004200007e030101084310440091fc1827673fffffc003fffffc000003ffffffffc000003fffffffffffffffedb5ad40782d60cc210423bb6edbaa8411042109a1c2ded82dd3ffffff000fffffffff000fff000000ffffffffffffffffffffff9e10bdcce0845bb084108ddc235dbe1044108425db084adef70bfffffc003ffffffffc000000000003ffc003fffffffffffffffe68421722821140c2104235508836384110421095442101705df000fff000fffffffff000ffffffffffffffffdff7deffbdf7fbdbef7bdfdffbdfba210422ffdff7fbc5f87e017c7fffbfbfeedffffc003fffffc003fffffffffffffffffffffedffec7fdff3ffedbfffebfdffffff7fffffceffffcfdfffffffffeffffffeff12d000000000fff000000fff000ffffff000fff290aa908522c455923ff48153fff8c852fe51227fcb250a29fff284a2dfff5a356f4003ffc003fffffc003fffffffffffc003ffcb72ff7a96ffd17f6dffff457fffe3e94bf947bbffffbe28a7ffca13abfffff8f4f3000fff000000ffffffffffff000000fffffffcfffce7f9ff3ffc9fe1fdfcfff87fa318633ddfc7fdfc7f8fe11fcdfbff8fdffef7ffffffffffffffc003fffffffffffc003ffd3f4fffea7fff27ffdffbfc9f27febffffffffbbfeffbeffffffffffa387fff8f5bd000fff000ffffff000ffffffffffff000fff0dc3fdea1bff41fdb7f6fd05c1fd8fa108211eeffbfef8208821084e8e1fffe3d2c4003ffc000003ffc003fffffc000000003ffc330ff38867fc07f25f83f41307e03e842084733f0ff3e08220842132287e3f0ffbcfffffffffffffff000ffffffffffff00000067d9f7facffbccf7f7fff733ffffa77ffffffeefffeeebfffffffffea7ffff61bef3ffffffffffffffc003fffffffffffc0000011f47dfea3fef23dfdf7bdc8f23de9dfffffffbbeefbbaffffffffffa183dfd864d3000fff000000ffffff000fff000000fffffffcff5ce7f9d73fac9c21bdfcff087ba210422dd8475dbc5f87e017c5fbf08aded30c003ffc000003fffffc000000000003fffffff2f83397e01cfc32608437f2fc21e2884108b5411074717e1f805f15e7c20379ef3fffffffff000ffffffffffff000000ffffffdef7fef7bdffbbfedfe0ffeec1f87ffbd83bfddfc3fdff7de821dffdda1f8fdfff7bfffffffffffffffffc003fffffffffffc003fff19ffffc6ff8dffffc9fffffffc9fffffbbffff1bcbfffffffdedfffffcdf2fceffffffffffffffffff000000fffffffff000f7bc27fdee0bfe17fbff07fbbffff07ef7feef77fc2f0fdf77fff7b775fff17c177c003ffc003ffffffffc003ffffffffffffffef7bdf7bdef7ddef6fffef777ffff6e909f903ffffdfef2085ffc801fffffeffb5ce000fff000fffffffff000000fffffffff000b5ac25ed6a0b7615bbff05d9bfffd02427e40f77fc2f0c8217ff200775fff17c3fbbffffffffffffffffffffc003ffffffffc003def29ff7b8aff95feffd1feeffffd1fffffffddff2bd3ffffffffffdd7ffd5f4ef3fffffffff000ffffffffffff000000ffffffdef7fef7bdffbbfedfe8ffeec9fa7ffffffffddfc3fdfffffffffffdda1f8fdffbebffffffffc003ffffffffffffffc003ffc003ffd31bfffccee99bf6319fff318dd9ffffffffec4335bffffffffffff91899764da000fff000000ffffff000ffffff000fff000ffe444ffff133224fc8425ffc421523ff9000ff9104d2ffff8840007fe42225cbb8bffffffffc003ffffffffc000000003ffc0035ad21bd6b08ee91b64211faa2109d1fffffff54802353ffffffffff540101174fceffffffffffffffffff000000fffffffff000f7bc17ffeefffe07f85f17fbbe17f17ff7dfeff0bfff0fff77deffb7f5e17ffc3adbffffffffc003ffc003fffffc003fffffc0005b175bf8b7ff8b9b510bdc2b08425dff227f7f222fffaf85a10be2fe48847fd6006000000000000000000000000000ffffff0001004000c200c6200004200080210900600860300883300c100423083102111b43ac7ffffffffc003ffc003fffffc000000003ffc3b0ffbc877fe07fb5f83fc1b07e03fe720e7733f0ff3ec83a08721f2287e3f0f001000000000000000000000000000000000fff08022800100c011803e0080401f8088000200007c030100080210040081f818274c7fffffc003ffc000003fffffc000000003ffffffffffffffffffe1fc3f01187f03e4630c6633f8fe3e8c330c631a22c7f3e0fd3dffffff000fff000000ffffffffffff000fffffffffffffffffffa7fffc157fff8f95aff59aeffffafab2dfffac6aafffffa3fc83fffffffffffc000003ffc000000000000003ffffffffffffffff0c631888a318917fffffe1188a232fffffffffe004311004f2cffffffffffff000000fff000ffffff000000ffffffffffffffffe3ffc6333fffa45ffffffa67feaacbfffffffffa25fff52113cc003ffc000003fffffffffffc000003fffffe739ff39ce7fccff27f83f73307e17e842084777f0ff7f08220842137687e3f7f5ff000fff000fffffffffffffffffffffffffffbdeffdef7bff77fdbffffdddffffdfa52fe51ffffffffca29fff284fffffffffc4b0000000003ffc000003ffc003fffffc0000008422842108a111448ffd0044fffe1014bf94489ff289028a7ffca12897ffd484b3dfff000ffffff000000ffffffffffff000fff6b5bfb1ad7fccdfb67fffa377fffafdffffff2affff2f3fffffffffaafffffa3fbcfffffffffc003fffffffffffc000003ffffff7bdf7bdef7deefbb7423ffbb2109fffffffff7680f77fffffffffff768103b7f4d3000fff000000ffffff000fff000000ffffff9ce75ce739d733ac9c00bdccc0005ba000000dd8035dbc0000000005da000adec5fc000000003ffc003fffffffffffffffffffffe5ffe43fcff1ffe4bfffe3f5fffffe1cff9cceffffcfd3fe7ffcff2ffffffeffeb0fffffffff000fff000ffffff00000000000046d1d6f28df388e6d508f722c842277ffffffcca03ccebfffffffffc82040e41977c003ffc003ffffffffc003ffffffffffffffff7fdf7bfef7dfef6fffef7f7ffffee98df98bffffdfef37e5ffcdf1fffffeffb490000fff000000fff000000fff00000000000004c154e209d300a49400b500c000032000000cc8034ca8000000000482000a40977c003ffc003ffffffffc003ffffffffffffffef7bdf7fdefffdef6fbdef777def76efc027c3ff7fffeff84010be21fffeffffb55d000fff000fff000fff000fffffffff000fffad6b6d095b0855bdafffacd57fffca8427e4027ffc22bc8217ff20026ffff12afdf7fffffffffffc003ffffffffffffffc003fffbdefbc677ca377ffbfffbbddffffbb7fffffc9fff28bffffffffffe9bfffd4afa24fff000fff000000000fff000000fff000000421082188428c842414a42220a52a45ffffff20288a243fffffffffa002515213fe7ffffffffffffffffffffffffffc000003fffffffff477e8a77ffffffffffffffffffffffd1fdd613fffffffffff1bf7bb12ff79ffffffffffff000ffffffffffff000000fffef7bef11df209dffefbdeef77def6edffffff07f7480fffffffffff86fdee40bca00000003ffc003ffc0000000000000000000014a524b000208000145294caa294ad5a1082110000410042088210850000021007d9000fffffffffffffff000ffffff000000fffffffffc15b8215bdffffffffffffffe84208447d7504bd08220842146fdae84ae09bffc000000000000003ffc000003fffffc000000000fa91f7a908000000000000005ef7deee0a2bed0bdf77def7ae40945ed4559000fff000fff000fff000ffffff000000fffad6b6d015b0015bdaeb5acd575ad4a800000007d7400bc00000000006fdae00ac2dc000000000003ffc003fffffc003ffffffffc631fe3f8c7ff8fe05f8be4330fe27efc22fc7e3f2fffcf86218fe33e68fe7fdf59e000fff000ffffff000000ffffffffffff00015c575fe2bffe2b5b6d6b509c2b5933f009f0fedbbffabe10042f887962b7ff4bf9fffffffffffffffffffffc000003fffffffffffffffffffffffff6def7ffaff7bf7ffffffff5bbfff7fffffffffffe7f77ffdfa6fffffffffffffff000fff000000ffffff000ffffffffffffffffd35ad72aaad6b57fffffffc6abffcbffffffffff912d5ff53d8ffffffffffffc003fffffc000000003ffffffffffffffffffffff2ce73bf8ff39f37fffffe5599a677fffffffffe5e7f3127ddc7ffffff000fffffffff000000000fffffffffffffffffffffffff9a739dfcbf9cf9bf94dfafd4efff9fffc7f2ffe7f9f9dffe41cc000000000000003ffffffffc000003ffffffe1ffe01fc7f0ffe03f87e3f1ffe1fe0c618cc67f1fc7d1fe3f847f27effe3e7f14f000000000fff000fff000000fffffffffffff93e290df20c7f192bff08fd3ffff88637e62337fc3314df97ff37c37dfff1be556c003ffc003ffc003ffc003fffffc003fffffff5fdb417ec10fef6bad6b3f5feb5ea08410885f5d046f17e1f805f05ffeb827baf7fff000fff000ffffffffffff000ffffffffffafffafff5fffffa5febfbfefffaffffffffff9fcffff7fffffffffffbff9fffeadfffc003ffc003ffc003fffffc003ffffffffd6b5febfad7ffafe95fabecbb2feafffffffffe3f2fffcffffffffffe68fe7fdfa73fff000fff000000fffffffff000000fffffffa7ffa17f5fcbffa4fe9fafe7ffa7fdffffff19fc7f1f7fffffffff9fbff8f9fc3dc000000000003fffffffffffc003fffffffffe3ffe3ffc7ffffe07f8fe7f3ffe3fefc63fcfe7f3fffdffe3f8fff3feffe7fffbeffff000fffffffffffffff000fffffffffffffbbebbfff6ffff5b7bff5bffbffffdffffffffb7ffff57fffffffffffdffffff6ebbffc003ffffffffc003ffc003ffffffffc001ce72cffb9bffb94dcffd4ceefffed5fffffffe9ffffd0ffffffffffed7ffffd4b6ffff000ffffff000ffffff000fffffffffffffb3eab1df62cff5b6bff4aff3ffffcdffffff337fcb357fffffffffb7dfff5bf473c000000003ffffffffc000003ffffffffffffe6f8e7ffcbfffc64effc67f6ffffe6fcdffcbedffffc5ffe5fffff1ff7fffff9ae7fff000fff000fffffffff000000ffffffffffabe9afff4ffff4a596b5bfebf5afdffffffff92cfff57fffffffffff9f59fff7ce3fffffffffffc000003ffffffffc0000000011d479c423c8223df9e73988d239c997fffffc1bcc203afffffffffe018399006fbefffffffffffffff000fffffffffffffff00057d5f7feafffeaf7f7def72bcaf7b77fffffffefbbffebffffffffff962f7ff5bdeffffffffffffc003fffffffffffc003fffffffdffbc57fc92ffffbef7bbfdffbdfb7fffffc5fdd247ffffffffffe5fffb927f5df000fff000fffffffff000ffffffffffffffffdff7dfffbffffbdbef7bdfdffbdfbbf10df2ffdffffbfff87e2ffc7fffbfffede60003fffffffffffc000003fffffc000000003ffffff002e0802d7ffffffffffffffa1082111b4c412a420882108501829a1020c7000000000000ffffff000000000ffffffffff8be18fff0ffff08186319fcbf18f9bf10df2f90cfff17ff87e2ffc7f9f19ffe5460003ffc003ffc000000003fffffc000000000150594002c0002d69a52900502940800000001b4c002a0000000000018298002aa6fff000fff000fff000fff000000ffffff000529492fea4ffea42514a532a8a52b57fffffff828bff43ffffffffff90251ff5361bfffffc003fffffc000000000003fffffc003fffffffffffffffe494a54228a5244fe127e3f12affe2fc5114bf29e44a57fd0500000fff000fff000000000000000000000000ad6b6d015b0015bd821084002084000000000044200088000000000001084000298fffc003ffc000003fffffc000000003ffffffe8fa2857d092fd2924a52bf8fd29f37fffffc44912455fffffffffe5e7d2127dd43ffffff000fff000fff000000000000ffffffffffffffffffffff8a318cfc3f8c78929452a95466199e5fc7f097e179f8c09e5400003ffc003ffc0000000000000000000000001705d7a82f6d02d608421000021000000000211088222000000000000021000011c000000000fff000000000fffffffff0000002948610a5318443127ff20157fff82052fe402affc6220a29fff2002affff3208a60000003ffc003ffc000003fffffc000000003ffffff294e480083ffffffffffffffb5ac211aa4451086aaea31085ab908a902a38fff000fff000000000fffffffff0000000006b50c21ad7308862658c62374c63265ffffff2ab10c063fffffffffaae462601bb6bffffffffc003fffffc003fffffc003ffc003ffd11bfffc4ee89bf2109fff1085c9ffe46bbfe44134bfffe2135edff9088972443000fff000000000fff000000000000fffffffc3f0c25f8453f8c8a318cfc3f0878929452a95466199c5f87e017c179f0809e44f4000000003ffc000003fffffffffffc003ffca52fe4294ff117e49fffe055fffe3e14bf944abfffcbc28a7ffca12abffffe8fa31fff000fff000000000ffffff000000000fff4a53fa1295fc89fa47e8fa2649fa2fdffffff08fc3f0f3fffffffff88a1f8f83ecb3ffc003fffffc000003ffc003fffffc0000018c628c6318a3314d8ffd08ccfffe917fffffc89ff2890fffffffffe897ffd484458000fff000000000fff000ffffff000000000ffe1447fff5110a4feb5acffd421421ffd52affd7659bffff9840107fec22208bbf3ffffffffc003fffffffffffffffffc00000318c618c63186631bffffff8f61cf9dfffffffffffffffffffffffffb1a1cfda6e60fffffffff000000ffffff000000000000000c63186318c6198c6cb39cee21842645ffffff9566699dffffffffff8408404091bf0003fffffc003fffffffffffffffffc0000021084108421044213ffffff0f41cf1dfffffffffffffff690e43da47b1a1cfda6440000fff000000000fff00000000000000000084210421084110848a318cc0100040129452a95466199c0401000100408000083403fffffc003ffc000000000000000000000003fffffffffffffffe084210008210004210422110882228411042108004210000280000000fff000fff000000000000000000000ffffffc000820000ffffffffffffffe8420844000104010822084214000008401100003ffc000000003ffc0000000000000000021084108421044213ffffff004001007ffffffffffffff0100400040102000020a20fff000fff000000000fff0000000000000004210821084208842410842220842245ffffff002008043fffffffff8000404010060000000000000000000003fffffc000000003ff0101fffc400083f21081ff1084087fe4003fe441008fffe210001ff908880210c000000000fff000000000000ffffff000000210821084208441123ff00113fff800427e40227fc22008217ff200225fff1200218000000000003ffc000000000003fffffc000421043f883ff880041084422084244fc027c3e022ffc0f84010be21e40847fd0043000000000000000fff000000000000fffffff83e0805f0043f08082108fc3f087882104221104411145f87e017c179f0809e40c4000000000000000003fffffc000000003ffc210fe00847f007e01f83e01107e03e042084423f0fc3c08220842122287e3e0f
-def zame: Nat:= 0x3fff3af3af3af3af3af3af3af3af3af3af3af3affffffe07fc007fffffffffffffffff83ff83c1fff003f07ffffc1fe1ffffc03f00077d77d77d77d77d77d77d77d77d77d77d77d0001f87e00ffe0f803fff8003fff879f07ff0f87fffff3e007fff80781fffff1fffff93f93f93f93f93f93f93f93f93f93f93f93ffffffffffffffffffffffffffffff8000003ffffffff0000000001ffffffffffff0ff0ff0ff0ff0ff0ff0ff0ff0ff0ff0ff0ff0000000000000000fffffffffffffffffffffffffffffffffffffffffffffffffffdf71f71f71f71f71f71f71f71f71f71f71f701f07fff83fff83fffffffe0f03fe1fffffffffffffffff81e07fe0fe183fffc7fffabbabbabbabbabbabbabbabbabbabbabbabbfffe07ffff03ff07fc1f07ffff07f87ffffffff83c0f0ffffffffffffff0707e3fffe5be5be5be5be5be5be5be5be5be5be5be5bfffffffffffffffff003ffff0001ffffe07fffe00fffffffe003fffff8003fff000d61d61d61d61d61d61d61d61d61d61d61d61f83ff801f0fc1ff803e000003ff8000000000007c000000007e0000001ff800000014254254254254254254254254254254254240007e00003f003e000000000000000001f800000000000001ffc0000000000000005495495495495495495495495495495495490001f80000fc00f803e0000000f8000007e00007c000000007ff0000000f8000000006c06c06c06c06c06c06c06c06c06c06c06c0000000000000000000000000000007fffffc00000000fffffffffe000000000000063063063063063063063063063063063063000000000000000003e000003ff8000000000007c000001f87e007c001ff80003ffea8ea8ea8ea8ea8ea8ea8ea8ea8ea8ea8ea8ffff81ffffc0ffc1ff07c1ffffc1fe18000003fe0f03c307e1f801f1fffc1c1f8fffabbabbabbabbabbabbabbabbabbabbabbabbfffe07ffff03ff07fc1f07ffff07f87ffffffff83c0f0ffffffffffffff0707e3ffea82a82a82a82a82a82a82a82a82a82a82a83fff81ffffc0ffc1ff07c1ffffc1fe18000003fe0f03c30000000001fffc1c1f8000f69f69f69f69f69f69f69f69f69f69f69f69ffffffffffffffff03ff00003fff800007e00007fc00000007ff000001fff0003ffc2102102102102102102102102102102102100000000000000003f003ffff0001ff8000003fe00ffff0000000001ff8003fff00037d37d37d37d37d37d37d37d37d37d37d37d0000007e00ffe00003ff00003fff801f07ff0f87ffff03e007fff80781fffff00003d53d53d53d53d53d53d53d53d53d53d53d53fffffffffffffffc0f83e00003e01e7c007c3e1f0fffcf800003e01e003e3fc700077f77f77f77f77f77f77f77f77f77f77f77f0001f87e00ffe0f803fff8003fff879fffffff87fffff3ffffffffff81fffff1c00010010010010010010010010010010010010000000000000000000f80000003e000000000001f0000000000000000003e00000007007007007007007007007007007007007000001f87e00ffe0f80000000000000000000000000000000000000000000000000003dafdafdafdafdafdafdafdafdafdafdafdaffffffffffffffffc0ffc01f0ffffe0001f80001ff000007e1ffc1f01e7ffc038000823823823823823823823823823823823823f83e0001f0001f000000007c3f007800000000000000001f87e007c079f0000e00000a40a40a40a40a40a40a40a40a40a40a40a4000000000000000000000000fc0000001f800000000000001ffc000007c00000000f7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7fffffffffffffffff03e0f87c3ff87f9ffffff007c3f0f3fffffffff879ff8f8fc003d7fd7fd7fd7fd7fd7fd7fd7fd7fd7fd7fd7ffffffffffffffffc0f83e00003e01e7fffffc01f0fc3cfffffffffe0003e3e070005445445445445445445445445445445445440001f80000fc00f803e0f80000f8078000000007c3f0f00000000000000f8f81c002002002002002002002002002002002002003e0f80007c0007c00000000000000000000000000000000000000000000000000000f7bf7bf7bf7bf7bf7bf7bf7bf7bf7bf7bf7bffffffffffffffff03ff007c3ffff81ffffff007fc0003fffffffff879fff00e0003dbfdbfdbfdbfdbfdbfdbfdbfdbfdbfdbfdbffffffffffffffffc0fffe1f0fffffe001f80001fffc3c07e1ffc1f01e7fffe3fffff94f94f94f94f94f94f94f94f94f94f94f94fffffffffffffffffc00ff83c00007fff81ffff803ffffe07800f83f86000ff1fffc3ec3ec3ec3ec3ec3ec3ec3ec3ec3ec3ec3ec0000000000000003fffc1fffffffe1fffffffffff03c3fffffffffffffffc1f8fff0f90f90f90f90f90f90f90f90f90f90f90f90000000000000000ffff0783ffff807ffffffffffc0f0fe07ffff83f87fff0703fffe43e43e43e43e43e43e43e43e43e43e43e43fffffffffffffffff0001e0f000001ffe07fffe0003c3f81e003e0fe180001c0fff7fd7fd7fd7fd7fd7fd7fd7fd7fd7fd7fd7fd07c1fffe0fffe0ffffffff83ffff87ffffffffffffffffe07ffff83f87fffff1c003dffdffdffdffdffdffdffdffdffdffdffdfffffffffffffffffc0fffe1f0fffffe7fffffc01fffc3cfffffffffe1e7fffe3ffff8fb8fb8fb8fb8fb8fb8fb8fb8fb8fb8fb8fbf83e0001f0001f00ffff07fffffff87ffffffffffc0f0ffffffffffffffff07e3ffe2ce2ce2ce2ce2ce2ce2ce2ce2ce2ce2ce2cfe0f80007c0007c03f0001ffffc01e1ffe07fffe0003c3fffff83ffffffc001f8000840840840840840840840840840840840840f83e0001f0001f0003e0000000f8000000000007c000000000000000000f80000003d9fd9fd9fd9fd9fd9fd9fd9fd9fd9fd9fd9ffffffffffffffffc0f83e1f0ffe1fe000000001f0fc3c07e1f801f01e7fe3e3f000863863863863863863863863863863863863f83e0001f0001f0003e0007c3ff8780000000007c000001f87e007c079ff800e3ffd7517517517517517517517517517517517500007e00003f003e3ff83fe0f03e01fffe07fffff0fffff81e003e0fe183e3fc70000230230230230230230230230230230230230000000000000000000000003f000000000000000000001f87e007c001f0000000014854854854854854854854854854854854840007e00003f003e000000000fc00000000000000000000001f80000007c000000005445445445445445445445445445445445440001f80000fc00f803e0f80000f8078000000007c3f0f00000000000000f8f81ffffe4be4be4be4be4be4be4be4be4be4be4be4bfffffffffffffffff0001fff0001e1ffe07fffe0003c3fffe003fffff80001f8fff0fb0fb0fb0fb0fb0fb0fb0fb0fb0fb0fb0fb0000000000000000ffff07fffffff87ffffffffffc0f0ffffffffffffffff07e0003dffdffdffdffdffdffdffdffdffdffdffdfffffffffffffffffc0fffe000fffe1e7fffffc01fffc3cfffffffffe007fffe07ffffbffbffbffbffbffbffbffbffbffbffbffbffffffffffffffffffc1fffffff07fffffffffff83ffffffffffffffffff07fffc0001a41a41a41a41a41a41a41a41a41a41a41a400000000000000000ffc0000fffe00001f80001ff00000001ffc000007ffc000000ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ffffff8000000000ffffffffffffffe000000007c000000000000000000f8000000010010010010010010010010010010010010000000000000000000f80000003e000000000001f0000000000000000003e0000000840840840840840840840840840840840840f83e0001f0001f0003e0000000f8000000000007c000000000000000000f80003ffff13f13f13f13f13f13f13f13f13f13f13f13fffffffffffffffffffffe0f03fe1f8000003ffffffff0000000001e183fffc7ffff84f84f84f84f84f84f84f84f84f84f84f84fffffffffffffffffc00ffffc0007fe000000ff803fffc0000000007fe000fffffffe03e03e03e03e03e03e03e03e03e03e03e03fffffffffffffffff0001fff0001e18000003fe0003c30000000001ff80001f8ffffe7fe7fe7fe7fe7fe7fe7fe7fe7fe7fe7fe7ffffffffffffffffffffffffffffffe000000ffffffffc1f87e007c7ffffffffc0035ff5ff5ff5ff5ff5ff5ff5ff5ff5ff5ff5ffe0ffe007c3f07fe00fffe1f0fffffe7fffffc01fffc3cfffffffffe1e7fffe3f000069069069069069069069069069069069069000000000000000003ff00003fff800007e00007fc00000007ff000001fff0003ffdfb5fb5fb5fb5fb5fb5fb5fb5fb5fb5fb5fb41f07fff83fff83fffffffe0ffffe1f801f803ffffffff0001ffc001e1fffffc7ffffe7fe7fe7fe7fe7fe7fe7fe7fe7fe7fe7fe7ffffffffffffffffffe0fffffff87fe000000fffc3fffc1f87e007c7ffff8ffffffdf7df7df7df7df7df7df7df7df7df7df7df7c1f07fff83fff83fffffffe0f03fe1ffffffffffffffffffffffffffe183fffc7fff7c47c47c47c47c47c47c47c47c47c47c47c407c1fffe0fffe0ffffffff83c0ff87e000000ffffffffc0000000007860ffff1fffdf11f11f11f11f11f11f11f11f11f11f11f101f07fff83fff83ffff83fe0f03e01f8000003fff0ffff0000000001e183e3fc7fff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff07c1fffe0fffe0ffffffff83ffff87ffffffffffffffffffffffffff87fffff1fffdf7df7df7df7df7df7df7df7df7df7df7df7c1f07fff83fff83fffffffe0f03fe1ffffffffffffffffffffffffffe183fffc7ffffa7fa7fa7fa7fa7fa7fa7fa7fa7fa7fa7fa7fffffffffffffffffc00ffffff007fe000000ff803fffc1f87e007c7fff00ffffffea8ea8ea8ea8ea8ea8ea8ea8ea8ea8ea8ea8ffff81ffffc0ffc1ff0001ffffc01e18000003fe0003c307e1f801f1fffc001f8ffffd6fd6fd6fd6fd6fd6fd6fd6fd6fd6fd6fd6ffffffffffffffffffe0ffffc0f87ffff81fffffc3fffffff800fffffe0f8ffffffebeebeebeebeebeebeebeebeebeebeebeebeffff81ffffc0ffc1ffffc1fffffffe1fffffffffff03c3fffffffffffffffc1f8fffafbafbafbafbafbafbafbafbafbafbafbafbfffe07ffff03ff07ffff07fffffff87ffffffffffc0f0ffffffffffffffff07e3ffffb7fb7fb7fb7fb7fb7fb7fb7fb7fb7fb7fb7ffffffffffffffffffffffffffffff801f803ffffffff0001ffc001ffffffffffffae9ae9ae9ae9ae9ae9ae9ae9ae9ae9ae9ae9fffe07ffff03ff07ffff07fffffff86007e00ffffc0f0c0007ff0007fffff07e3ffebeebeebeebeebeebeebeebeebeebeebeebeffff81ffffc0ffc1ffffc1fffffffe1fffffffffff03c3fffffffffffffffc1f8ffffdffdffdffdffdffdffdffdffdffdffdffdfffffffffffffffffffe0ffffc0f87fffffffffffc3fffffffffffffffe0f8ffffffea6ea6ea6ea6ea6ea6ea6ea6ea6ea6ea6ea6ffff81ffffc0ffc1ff0001fff0001e1ffffffffe0003c3ffffffffffff80001f8fffa92a92a92a92a92a92a92a92a92a92a92a92fffe07ffff03ff07fc0007ffc000787ff8000ff8000f0ffff8000007fe00007e3ffea6ea6ea6ea6ea6ea6ea6ea6ea6ea6ea6ea6ffff81ffffc0ffc1ff0001fff0001e1ffffffffe0003c3ffffffffffff80001f8fffbbfbbfbbfbbfbbfbbfbbfbbfbbfbbfbbfbbffffe07ffffffff07fc1f07ffff07f87ffffffff83fff0ffffffffffffff07ffe3ffde51e51e51e51e51e51e51e51e51e51e51e501f07fff83fff83fff003fe0f00001fffe07fffe00fffff81e003e0fe18003fc700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003ffdf51f51f51f51f51f51f51f51f51f51f51f501f07fff83fff83ffff83fe0f03e01fffe07fffff0fffff81e003e0fe183e3fc7000040040040040040040040040040040040040000000000000000003e0000000f8000000000007c000000000000000000f80000003d13d13d13d13d13d13d13d13d13d13d13d13fffffffffffffffc0f83e00003e01e000000001f0fc3c00000000000003e3e07000f6df6df6df6df6df6df6df6df6df6df6df6dffffffffffffffff03fff8003fff878007e00007fff0f00007ff000001ffff81c003c6fc6fc6fc6fc6fc6fc6fc6fc6fc6fc6fc6ffffffffffffffffc000000000000007fffffc00000000fffffffffe000000000000f7bf7bf7bf7bf7bf7bf7bf7bf7bf7bf7bf7bffffffffffffffff03ff00003fff801ffffff007fc0003fffffffff801fff0003ffff13f13f13f13f13f13f13f13f13f13f13f13ffffffffffffffffff83ffff03e1ff8000003fff0ffff0000000001ff83e3fffffffedfedfedfedfedfedfedfedfedfedfedfedffffffffffffffffffffffffffffffe007e00ffffffffc0007ff0007ffffffffc0001a41a41a41a41a41a41a41a41a41a41a41a400000000000000000ffc0000fffe00001f80001ff00000001ffc000007ffc00000057f57f57f57f57f57f57f57f57f57f57f57f0001f80000fc00f803fff8003fff879ffffff007fff0f3fffffffff801ffff81ffffe7fe7fe7fe7fe7fe7fe7fe7fe7fe7fe7fe7ffffffffffffffffff003ffff0001ffffffffffe00ffffffffffffffff8003fffffff84f84f84f84f84f84f84f84f84f84f84f84fffffffffffffffffc00ffffc0007fe000000ff803fffc0000000007fe000fffc0035bf5bf5bf5bf5bf5bf5bf5bf5bf5bf5bf5bfe0ffe007c3f07fe00fffe1f0fffffe001f80001fffc3c07e1ffc1f01e7fffe3ffff79f79f79f79f79f79f79f79f79f79f79f79f07c1fffe0fffe0fffc00ff83c00007fffffffff803ffffffffffffff86000ff1fffffbffbffbffbffbffbffbffbffbffbffbffbfffffffffffffffffffffffffffffff801f803ffffffff07e1ffc1f1ffffffffffff78478478478478478478478478478478478407c1fffe0fffe0fffc00ff83c00007e000000ff803fffc000000000786000ff1fffffd3fd3fd3fd3fd3fd3fd3fd3fd3fd3fd3fd3fffffffffffffffffffffffffffffffc007c3fffffffff800003e01ffffffffffffce9ce9ce9ce9ce9ce9ce9ce9ce9ce9ce9ce9ffffff81ff001fffffffffffffffffe007e0007ffc00fc0007ff00007ffff00fffff3ef3ef3ef3ef3ef3ef3ef3ef3ef3ef3ef3effffffe07fc007fffffffffffffffffffffffc1fff003ffffffffffe1ffffc03f00001b01b01b01b01b01b01b01b01b01b01b01b0000000000000000000000000000001ffffff000000003fffffffff8000000003fff3ef3ef3ef3ef3ef3ef3ef3ef3ef3ef3ef3effffffe07fc007fffffffffffffffffffffffc1fff003ffffffffffe1ffffc03ffffcfbcfbcfbcfbcfbcfbcfbcfbcfbcfbcfbcfbffffff81ff001ffffffffffffffffffffffff07ffc00fffffffffff87ffff00fc0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fffce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ffffff81ff001fffffffffffffffffe00000007ffc00fc00000000007ffff00fc000c7cc7cc7cc7cc7cc7cc7cc7cc7cc7cc7cc7c000001f803ff8000000000000000007ffffffe000ffc0ffffffffffe00003fc0fffce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ffffff81ff001fffffffffffffffffe00000007ffc00fc00000000007ffff00fc001d51d51d51d51d51d51d51d51d51d51d51d500007e1f803ff83e00f83e00003e01e7c007c3e1f0fffcf800003e01e003e3fc7fff7d47d47d47d47d47d47d47d47d47d47d47d407c1fffe0fffe0ffffffff83c0ff87ff001f0fffffffffe00000f807860ffff1c003cffcffcffcffcffcffcffcffcffcffcffcfffffffffffffffffc000001f0fc01e07ffffffe000ffc0fffffffffffe7c03ff8000f1ff1ff1ff1ff1ff1ff1ff1ff1ff1ff1ff1fffffffffffffffff000000000000001fffffff8003ff03ffffffffff80000ff00003cefcefcefcefcefcefcefcefcefcefcefceffffffffffffffffc000001f0fc01e07fffffc00000000fffffffffe1e7c00038000f37f37f37f37f37f37f37f37f37f37f37f37ffffffffffffffff0000007c3f00781f001f0f8003ff03ff87e0ffc7f9f00ffe000359f59f59f59f59f59f59f59f59f59f59f59fe0ffe007c3f07fe00f83e1f0ffe1fe000000001f0fc3c07e1f801f01e7fe3e3f00086b86b86b86b86b86b86b86b86b86b86b86bf83e0001f0001f0003ff007c3ffff80007e00007fc00001f87ff07c079fff00e3fff38f38f38f38f38f38f38f38f38f38f38f38ffffffe07fc007fffffffffffffffff80000001fff003f07e1f801f01ffffc03f000f7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff83ff87ff0fffff803e0f87c3ff87f9fffffff87c3fff3fffffffffff9ff8fffc001d7dd7dd7dd7dd7dd7dd7dd7dd7dd7dd7dd7c0007e1f803ff83e00f83e00003e01e7ffffffe1f0fffcffffffffffe003e3fc7000d7fd7fd7fd7fd7fd7fd7fd7fd7fd7fd7fd7ff83ff801f0fc1ff803e0f87c3ff87f9ffffff007c3f0f3fffffffff879ff8f8fc003ddfddfddfddfddfddfddfddfddfddfddfddfe0ffe1ffc3ffffe00f83e1f0ffe1fe7c007c3e1f0fffcffe1f83ff1fe7fe3fff000b7fb7fb7fb7fb7fb7fb7fb7fb7fb7fb7fb7ff83e007ff0ffff0003ff007c3ffff81fffffff87ffff03fffffffffff9fffffe0000dfcdfcdfcdfcdfcdfcdfcdfcdfcdfcdfcdfc000001f803ff80000ffc0000fffe007ffffffe1ffffc0ffffffffffe07ffffc000087b87b87b87b87b87b87b87b87b87b87b87bf83e0001f0001f0003ff007c3ffff81ffffff007fc0003fffffffff879fff00e0002dfedfedfedfedfedfedfedfedfedfedfedffe0f801ffc3fffc000ffc01f0ffffe07c1ffc3e1ffffc0ffe1fffff1fe7fffff8000b3fb3fb3fb3fb3fb3fb3fb3fb3fb3fb3fb3ff83e007ff0ffff000000007c3f00781fffffff8003ff03fffffffffff9f00ffe3ffd36d36d36d36d36d36d36d36d36d36d36d36c1f07fe003c0003fffffffe0f03fe1fffffffc1fff003ffffffffffe0183fc007fff7df7df7df7df7df7df7df7df7df7df7df7df07c1fffe0fffe0ffffffff83c0ff87ffffffffffffffffffffffffff860ffff1ffff3ef3ef3ef3ef3ef3ef3ef3ef3ef3ef3ef3effffffe07fc007fffffffffffffffffffffffc1fff003ffffffffffe1ffffc03ffffff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ffffffffffffffffffffffffffffffff001f0fffffffffff87e0ffc7ffffffffffff383383383383383383383383383383383383fffffe003c0003ffffffffffffffff80000001fff003f00000000000183fc007000b37b37b37b37b37b37b37b37b37b37b37b37f83e007ff0ffff000000007c3f00781f001f0f8003ff03ff87e0ffc7f9f00ffe3ffd3013013013013013013013013013013013001f07fe003c0003fffffffe0f03fe1f80000001fff003f00000000000183fc00700031f31f31f31f31f31f31f31f31f31f31f31f0000007e00ffe000000000000000001fffffff8003ff03ffffffffff80000ff00003c53c53c53c53c53c53c53c53c53c53c53c53fffffffffffffffc000000000000007c007c3e000ffc0f800003e01e00003fc0000c00c00c00c00c00c00c00c00c00c00c00c00ffffff81ff001fff00000000000000000000000000000000000000000000000000020ee0ee0ee0ee0ee0ee0ee0ee0ee0ee0ee0efe0f80007c0007c00000001f0fc01e07fffffc00000000fffffffffe1e7c00038000f23f23f23f23f23f23f23f23f23f23f23f23ffffffffffffffff0000007c3f007800000000000000001f87e007c079f0000e0001c01c01c01c01c01c01c01c01c01c01c01c001f07fff83fff83fc000000000000000000000000000000000000000000000000000069069069069069069069069069069069069000000000000000003ff00003fff800007e00007fc00000007ff000001fff0000003383383383383383383383383383383383383fffffe0000000003ffffffffffffff800000000000000000000000000000000000001b01b01b01b01b01b01b01b01b01b01b01b0000000000000000000000000000001ffffff000000003fffffffff8000000003ffea4aa4aa4aa4aa4aa4aa4aa4aa4aa4aa4aa4bfff81ffffc0ffc1ff0001fff0001e1ffe07fffe0003c3fffe003fffff80001f8000823823823823823823823823823823823823f83e0001f0001f000000007c3f007800000000000000001f87e007c079f0000e00015b55b55b55b55b55b55b55b55b55b55b55b40007e00003f003e00fffe000fffe1e001f80001fffc3c0001ffc000007fffe0700055f55f55f55f55f55f55f55f55f55f55f55f0001f80000fc00f803e0f80000f8079ffffff007c3f0f3fffffffff8000f8f81c0001ec1ec1ec1ec1ec1ec1ec1ec1ec1ec1ec1ec00000000000000000ffc0000fffe007fffffc01ff0000fffffffffe007ffc000000a92a92a92a92a92a92a92a92a92a92a92a92ffc0007fff000000fc00007fc000001ff8000ff8000003fff8000007fe0000003ffc37c37c37c37c37c37c37c37c37c37c37c37c0000000000000003fffffe0f03fe1ffffffffffffffffffffffffffe183fffc700001b01b01b01b01b01b01b01b01b01b01b01b0000000000000000000000000000001ffffff000000003fffffffff8000000003ffc3703703703703703703703703703703703700000000000000003fffffe0f03fe1fffffffffffffffff81e07fe0fe183fffc700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003c03c03c03c03c03c03c03c03c03c03c03c03fffffffffffffffc000000000000000000000000000000000000000000000000000ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ffffff8000000000ffffffffffffffe00000000000000000000000000000000000003703703703703703703703703703703703700000000000000003fffffe000000007ffffffffffffff000000000000000000000001b01b01b01b01b01b01b01b01b01b01b01b0000000000000000000000000000001ffffff000000003fffffffff8000000000002a4aa4aa4aa4aa4aa4aa4aa4aa4aa4aa4aa4bff0001fffc000003f00001ff0000007fe0003fe000000fffe000001ff8000000000069069069069069069069069069069069069000000000000000003ff00003fff800007e00007fc00000007ff000001fff0000000c50c50c50c50c50c50c50c50c50c50c50c50000001f803ff8000000000000000007c007c3e000ffc0f800003e01e00003fc0000823823823823823823823823823823823823f83e0001f0001f000000007c3f007800000000000000001f87e007c079f0000e00015115115115115115115115115115115115100007e00003f003e00f83e00003e01e000000001f0fc3c00000000000003e3e07
-def zak6 : Nat → Nat → Nat
+def zami: Nat:= 0x3de7fffffffffffc003fffffffffffc000003fffbdefbc077c0077ffbef7bbddf7bdbb03fd83c1fdd003f07bfef41de1bf7b802f1bf000000000ffffff000ffffffffffffffffff39cff9fe73ffe7f937fff91dffff9fbf2fff1faffffff3e39ffff8cfbffffff7d77c003ffc003ffffffffc003ffffffffffffffef7bdf7bdef7ddef6fbdef777def76e8000003ff7fdfef0000000001fffefeffb2ff000000fff000ffffffffffffffffffffffff00000000000000007def7bffdf7bffef7bef77bbddf775efbbef7bdffef7bffffef3ffffffffffffffc003fffffffffffc0000001f07dfe83fef03dfdf7bdc0f03de1df7bef77bbeefbbae81e07fa0fa183dfd86fceffffffffffffffffff000000fffffffff000f7bc07fdee03fe07f81f07fbbe07f07ef7deef703c0f0fdf77def7b775e0707c3bcfffffffffc003fffffffffffc000003ffffff7bdf7bdef7deefbb7003ffbb0001ffef606ff7600f77fdf7a0037ff768003b7f000000000000000000000000000000000000000f87ff807f1fc3ff803e180103ff8000000600007c620801207e1040021ff81000480000000003ffc000003ffc000000000000000a52fe4294ff117e40c630000a3181014bf9440188a03028a7ffca12004311004800fff0000000000000000000000000000000004a53fa1295fc89fa03e8800009fa0014a7f48007c220829257ffa420001f81002887ffc003ffc000000003ffc000000000003ffd284a28425092252904a128982528b37fffffc00902414fffffffffe02052120d020000000000000000000fff0000000000000006018a000c0280c5003e140303ff8240318633007c4a0407f8fe11fc821ff8501173c003ffc003ffffffffc000003fffffffffffff6f837b7e81dfc36e0dc37f6fc37e2884108bdc1f07c717e1f805f1df7c3c3f9feefffffffffffffffffffff000fffffffff000f7bc87fdee23fe47f91f47fbbe47f47fffffff723c8f4fffffffffff75e4747d1738003ffc003ffffffffc000003ffffffffc002d6b017b5a80dd816e05c1766d817408000003dc0f03c30000000001dd781c1f0d0cffffff000fff000000000000ffffff000000ffffffffffffffffa3ff84113fff8014a7f48a67fe2a8a9257ffa42225fff120034c000000000003fffffc003ffc000003fffffc00000000000000007000e73300016e80000016600554d0000000001768002b7b18e000000000ffffff000000000fffffffff000318c31fe62ffe61133ff1119bfff913f27ff0fa7ffff03e317fff887b5fffff436dffffffc003fffffc003fffffc003ffffffffffffffffffffffffe5fcbf4338ff27efe32fe7f3fafffefc731cff3be6cff7fdfbbffff000fffffffff000ffffffffffffffffff7bdffbfef7ffeffb77fffb3fffffbfffffffffaffffff3ffffffffffbffffff7c01c000000000000000000000000003ffffffffc6018a030c0318c600f8820300fe2621802980c1f20cc4306018cc30c60fe46d9003000000000000000000000000000000ffffff18c7f8fe31ffe3f80220880c038818920012090442199241806090c118388096753ffffffc003ffc003ffc000003fffffffffffffffffffffffffffeaffe33f4ffffe25adfdaaddff8ee7b7f5ffedf8df7ffc6f9143000000000fff000fff000000000000fffffff93e290df20c7f190a3108fc3f8c7882144221146411145f87f017c179f8c09e4084000000000000000003ffc000000000003ffca02a20014090152004a52050fd283214bf9440091241428a7ffca120a7d2120df73ffffffffffff000fffffffff000000ffffffffffffffffffffffcff9fefe7ffe7fdffffff9dfe7f9fffffffffff9fbffcf9ffcc7fffffffffffc000003fffffc000000003fffffffffffffffffff1fe3f899a7f8bf7fffffe33f8fe3efffffffffe22c7f3e0f831fff000000000000000ffffff000000000fff4a53fa1295fc89fa07e0f80441f80f918c31908fc3f0f230cc318c688a1f8f83e087ffc000000000000003ffc000000000003fffe8fa2857d092fd28048120108520324630c64009024148c330c631a02452120df6fffffffffffff000ffffff000ffffffffffffffffffffffffffffebffceff3ffffcdffffffb77febbdffffffffffb7dfff5bf75fffffffc003ffc003ffffffffffffffffffffffffffffffffffffebffff3f5fffffe5effdeefffffeffbff7ffeffaffffffefffb0fffffffffffffff000ffffff000000000000ffffffffffffffffd610f702e0840779cc19dccc23cceb306c10cc3c83084e418f38000003fffffffffffc000003ffffffffc0008420842108211045effc0feeffffc1b9dfb99cdff09c173cdffdce5dd7ffc5f038c000000fffffffff000000000ffffff000000210821084208441173ff0313bfff806c67ec4627fc26018237ff601625fff1603e03ffffffffffffffc000000000000000000003ffffffffffffffff48421c0a821001e31063311088322c41904310d004210100fbcfffffffffffffff000ffffffffffff00000027c9f7fa4ffbc4f7f7fff713ffff877deffddeefffeeeba27fffe83ea7ffff61bdfffffffffffffc003fffffffffffffffffffffffffffffffffffffbffffbfdffffff7fffffefffffefffffffffffeffffffeff3cf000000ffffffffffff000000fffffffffffff93e290df20c7f197bff0bffbffff8ee77ee6737fc3715dfb7ff77d77dfff1fe4b0c000003ffc003fffffc000000000003ffffffe0f82017c010fc2160842ffafc21e3a9412994411054557e9f815f55e7c20379921fff000000fff000000fff000000000000ffffb3eab1df62cff5b03f0480421fc0c918c319007e0b05230cc318c68091fc58375cffffffc003ffc003ffffffffc000003fffffffffffffffffffffe3fc7f3f1fff1fe4e71cee77f9fe7f9ff3fc67fa7efff3e7f963fff000000fff000ffffff000000000fffffffb3eab1df62cff5b0bf148fc3ffc7c939c73b117e4b1567fcff19fe979ffc59f4ac4000003ffc003ffc003fffffc000000003ffc210fe00847f007e15f83ec1b07e03fa520a5523f0fd3c482a0852172287e3f0f900fff000000fff0000000000000000000000006318a318c628cc53023100303f8c20129452a0046400025fc7f097e021f8c0000404000000003ffc000000000000000000003ffca52fe4294ff117e408c62050fe302200110000119842400a1fc00100a7e30209131000000000fff000000ffffff000000000fff294bf90a53fc45f907f0f80461fc0f810c21108fe3f0f0208c3108488b1fcf83ff0bfffffffffffffffffc000000000003ffc003ffffffffffffffff68421faa8211c1eb506bb55088363d7590435ed544210170beefff000fffffffffffffff000fffffffff0006318a318c628cc537bff43fbbffff47ffffff737fca747ffffffffff75fff57d3cf7fffffffffffc000003fffffffffffc003fffffffffffffffffff9ffff8ddfffebf7fffffebbfffebefffffffffeabffffe8f6df000ffffff000ffffff000fffffffffffffff9ce75ce739d733acfc0fbfffde03fbee73ce6ff81f5fbdcf33ce7397fee03afee4b3ffc000003ffc000003ffc003fffffc0000018c628c6318a3314c8ffd0044fffe1056bfd6489ff2890acb7ffeb1a897ffd484ba0fff000fffffffff000fff000000000000000ffffffd8c6aacc53fffffffffffffff9ce39d407e1a44338ee39ce7c011fcd412483ffc000003ffc000003ffc0000000000000018c628c6318a3314c0fc1000087f0104630c6401f828108c330c631a0047f1404101000000000fff000000000000000000000ffff93e290df20c7f1903f0080421fc088004200007e030101084310440091fc1827673fffffc003fffffc000003ffffffffc000003fffffffffffffffedb5ad40782d60cc210423bb6edbaa8411042109a1c2ded82dd3ffffff000fffffffff000fff000000ffffffffffffffffffffff9e10bdcce0845bb084108ddc235dbe1044108425db084adef70bfffffc003ffffffffc000000000003ffc003fffffffffffffffe68421722821140c2104235508836384110421095442101705df000fff000fffffffff000ffffffffffffffffdff7deffbdf7fbdbef7bdfdffbdfba210422ffdff7fbc5f87e017c7fffbfbfeedffffc003fffffc003fffffffffffffffffffffedffec7fdff3ffedbfffebfdffffff7fffffceffffcfdfffffffffeffffffeff12d000000000fff000000fff000ffffff000fff290aa908522c455923ff48153fff8c852fe51227fcb250a29fff284a2dfff5a356f4003ffc003fffffc003fffffffffffc003ffcb72ff7a96ffd17f6dffff457fffe3e94bf947bbffffbe28a7ffca13abfffff8f4f3000fff000000ffffffffffff000000fffffffcfffce7f9ff3ffc9fe1fdfcfff87fa318633ddfc7fdfc7f8fe11fcdfbff8fdffef7ffffffffffffffc003fffffffffffc003ffd3f4fffea7fff27ffdffbfc9f27febffffffffbbfeffbeffffffffffa387fff8f5bd000fff000ffffff000ffffffffffff000fff0dc3fdea1bff41fdb7f6fd05c1fd8fa108211eeffbfef8208821084e8e1fffe3d2c4003ffc000003ffc003fffffc000000003ffc330ff38867fc07f25f83f41307e03e842084733f0ff3e08220842132287e3f0ffbcfffffffffffffff000ffffffffffff00000067d9f7facffbccf7f7fff733ffffa77ffffffeefffeeebfffffffffea7ffff61bef3ffffffffffffffc003fffffffffffc0000011f47dfea3fef23dfdf7bdc8f23de9dfffffffbbeefbbaffffffffffa183dfd864d3000fff000000ffffff000fff000000fffffffcff5ce7f9d73fac9c21bdfcff087ba210422dd8475dbc5f87e017c5fbf08aded30c003ffc000003fffffc000000000003fffffff2f83397e01cfc32608437f2fc21e2884108b5411074717e1f805f15e7c20379ef3fffffffff000ffffffffffff000000ffffffdef7fef7bdffbbfedfe0ffeec1f87ffbd83bfddfc3fdff7de821dffdda1f8fdfff7bfffffffffffffffffc003fffffffffffc003fff19ffffc6ff8dffffc9fffffffc9fffffbbffff1bcbfffffffdedfffffcdf2fceffffffffffffffffff000000fffffffff000f7bc27fdee0bfe17fbff07fbbffff07ef7feef77fc2f0fdf77fff7b775fff17c177c003ffc003ffffffffc003ffffffffffffffef7bdf7bdef7ddef6fffef777ffff6e909f903ffffdfef2085ffc801fffffeffb5ce000fff000fffffffff000000fffffffff000b5ac25ed6a0b7615bbff05d9bfffd02427e40f77fc2f0c8217ff200775fff17c3fbbffffffffffffffffffffc003ffffffffc003def29ff7b8aff95feffd1feeffffd1fffffffddff2bd3ffffffffffdd7ffd5f4ef3fffffffff000ffffffffffff000000ffffffdef7fef7bdffbbfedfe8ffeec9fa7ffffffffddfc3fdfffffffffffdda1f8fdffbebffffffffc003ffffffffffffffc003ffc003ffd31bfffccee99bf6319fff318dd9ffffffffec4335bffffffffffff91899764da000fff000000ffffff000ffffff000fff000ffe444ffff133224fc8425ffc421523ff9000ff9104d2ffff8840007fe42225cbb8bffffffffc003ffffffffc000000003ffc0035ad21bd6b08ee91b64211faa2109d1fffffff54802353ffffffffff540101174fceffffffffffffffffff000000fffffffff000f7bc17ffeefffe07f85f17fbbe17f17ff7dfeff0bfff0fff77deffb7f5e17ffc3adbffffffffc003ffc003fffffc003fffffc0005b175bf8b7ff8b9b510bdc2b08425dff227f7f222fffaf85a10be2fe48847fd6006000000000000000000000000000ffffff0001004000c200c6200004200080210900600860300883300c100423083102111b43ac7ffffffffc003ffc003fffffc000000003ffc3b0ffbc877fe07fb5f83fc1b07e03fe720e7733f0ff3ec83a08721f2287e3f0f001000000000000000000000000000000000fff08022800100c011803e0080401f8088000200007c030100080210040081f818274c7fffffc003ffc000003fffffc000000003ffffffffffffffffffe1fc3f01187f03e4630c6633f8fe3e8c330c631a22c7f3e0fd3dffffff000fff000000ffffffffffff000fffffffffffffffffffa7fffc157fff8f95aff59aeffffafab2dfffac6aafffffa3fc83fffffffffffc000003ffc000000000000003ffffffffffffffff0c631888a318917fffffe1188a232fffffffffe004311004f2cffffffffffff000000fff000ffffff000000ffffffffffffffffe3ffc6333fffa45ffffffa67feaacbfffffffffa25fff52113cc003ffc000003fffffffffffc000003fffffe739ff39ce7fccff27f83f73307e17e842084777f0ff7f08220842137687e3f7f5ff000fff000fffffffffffffffffffffffffffbdeffdef7bff77fdbffffdddffffdfa52fe51ffffffffca29fff284fffffffffc4b0000000003ffc000003ffc003fffffc0000008422842108a111448ffd0044fffe1014bf94489ff289028a7ffca12897ffd484b3dfff000ffffff000000ffffffffffff000fff6b5bfb1ad7fccdfb67fffa377fffafdffffff2affff2f3fffffffffaafffffa3fbcfffffffffc003fffffffffffc000003ffffff7bdf7bdef7deefbb7423ffbb2109fffffffff7680f77fffffffffff768103b7f4d3000fff000000ffffff000fff000000ffffff9ce75ce739d733ac9c00bdccc0005ba000000dd8035dbc0000000005da000adec5fc000000003ffc003fffffffffffffffffffffe5ffe43fcff1ffe4bfffe3f5fffffe1cff9cceffffcfd3fe7ffcff2ffffffeffeb0fffffffff000fff000ffffff00000000000046d1d6f28df388e6d508f722c842277ffffffcca03ccebfffffffffc82040e41977c003ffc003ffffffffc003ffffffffffffffff7fdf7bfef7dfef6fffef7f7ffffee98df98bffffdfef37e5ffcdf1fffffeffb490000fff000000fff000000fff00000000000004c154e209d300a49400b500c000032000000cc8034ca8000000000482000a40977c003ffc003ffffffffc003ffffffffffffffef7bdf7fdefffdef6fbdef777def76efc027c3ff7fffeff84010be21fffeffffb55d000fff000fff000fff000fffffffff000fffad6b6d095b0855bdafffacd57fffca8427e4027ffc22bc8217ff20026ffff12afdf7fffffffffffc003ffffffffffffffc003fffbdefbc677ca377ffbfffbbddffffbb7fffffc9fff28bffffffffffe9bfffd4afa24fff000fff000000000fff000000fff000000421082188428c842414a42220a52a45ffffff20288a243fffffffffa002515213fe7ffffffffffffffffffffffffffc000003fffffffff477e8a77ffffffffffffffffffffffd1fdd613fffffffffff1bf7bb12ff79ffffffffffff000ffffffffffff000000fffef7bef11df209dffefbdeef77def6edffffff07f7480fffffffffff86fdee40bca00000003ffc003ffc0000000000000000000014a524b000208000145294caa294ad5a1082110000410042088210850000021007d9000fffffffffffffff000ffffff000000fffffffffc15b8215bdffffffffffffffe84208447d7504bd08220842146fdae84ae09bffc000000000000003ffc000003fffffc000000000fa91f7a908000000000000005ef7deee0a2bed0bdf77def7ae40945ed4559000fff000fff000fff000ffffff000000fffad6b6d015b0015bdaeb5acd575ad4a800000007d7400bc00000000006fdae00ac2dc000000000003ffc003fffffc003ffffffffc631fe3f8c7ff8fe05f8be4330fe27efc22fc7e3f2fffcf86218fe33e68fe7fdf59e000fff000ffffff000000ffffffffffff00015c575fe2bffe2b5b6d6b509c2b5933f009f0fedbbffabe10042f887962b7ff4bf9fffffffffffffffffffffc000003fffffffffffffffffffffffff6def7ffaff7bf7ffffffff5bbfff7fffffffffffe7f77ffdfa6fffffffffffffff000fff000000ffffff000ffffffffffffffffd35ad72aaad6b57fffffffc6abffcbffffffffff912d5ff53d8ffffffffffffc003fffffc000000003ffffffffffffffffffffff2ce73bf8ff39f37fffffe5599a677fffffffffe5e7f3127ddc7ffffff000fffffffff000000000fffffffffffffffffffffffff9a739dfcbf9cf9bf94dfafd4efff9fffc7f2ffe7f9f9dffe41cc000000000000003ffffffffc000003ffffffe1ffe01fc7f0ffe03f87e3f1ffe1fe0c618cc67f1fc7d1fe3f847f27effe3e7f14f000000000fff000fff000000fffffffffffff93e290df20c7f192bff08fd3ffff88637e62337fc3314df97ff37c37dfff1be556c003ffc003ffc003ffc003fffffc003fffffff5fdb417ec10fef6bad6b3f5feb5ea08410885f5d046f17e1f805f05ffeb827baf7fff000fff000ffffffffffff000ffffffffffafffafff5fffffa5febfbfefffaffffffffff9fcffff7fffffffffffbff9fffeadfffc003ffc003ffc003fffffc003ffffffffd6b5febfad7ffafe95fabecbb2feafffffffffe3f2fffcffffffffffe68fe7fdfa73fff000fff000000fffffffff000000fffffffa7ffa17f5fcbffa4fe9fafe7ffa7fdffffff19fc7f1f7fffffffff9fbff8f9fc3dc000000000003fffffffffffc003fffffffffe3ffe3ffc7ffffe07f8fe7f3ffe3fefc63fcfe7f3fffdffe3f8fff3feffe7fffbeffff000fffffffffffffff000fffffffffffffbbebbfff6ffff5b7bff5bffbffffdffffffffb7ffff57fffffffffffdffffff6ebbffc003ffffffffc003ffc003ffffffffc001ce72cffb9bffb94dcffd4ceefffed5fffffffe9ffffd0ffffffffffed7ffffd4b6ffff000ffffff000ffffff000fffffffffffffb3eab1df62cff5b6bff4aff3ffffcdffffff337fcb357fffffffffb7dfff5bf473c000000003ffffffffc000003ffffffffffffe6f8e7ffcbfffc64effc67f6ffffe6fcdffcbedffffc5ffe5fffff1ff7fffff9ae7fff000fff000fffffffff000000ffffffffffabe9afff4ffff4a596b5bfebf5afdffffffff92cfff57fffffffffff9f59fff7ce3fffffffffffc000003ffffffffc0000000011d479c423c8223df9e73988d239c997fffffc1bcc203afffffffffe018399006fbefffffffffffffff000fffffffffffffff00057d5f7feafffeaf7f7def72bcaf7b77fffffffefbbffebffffffffff962f7ff5bdeffffffffffffc003fffffffffffc003fffffffdffbc57fc92ffffbef7bbfdffbdfb7fffffc5fdd247ffffffffffe5fffb927f5df000fff000fffffffff000ffffffffffffffffdff7dfffbffffbdbef7bdfdffbdfbbf10df2ffdffffbfff87e2ffc7fffbfffede60003fffffffffffc000003fffffc000000003ffffff002e0802d7ffffffffffffffa1082111b4c412a420882108501829a1020c7000000000000ffffff000000000ffffffffff8be18fff0ffff08186319fcbf18f9bf10df2f90cfff17ff87e2ffc7f9f19ffe5460003ffc003ffc000000003fffffc000000000150594002c0002d69a52900502940800000001b4c002a0000000000018298002aa6fff000fff000fff000fff000000ffffff000529492fea4ffea42514a532a8a52b57fffffff828bff43ffffffffff90251ff5361bfffffc003fffffc000000000003fffffc003fffffffffffffffe494a54228a5244fe127e3f12affe2fc5114bf29e44a57fd0500000fff000fff000000000000000000000000ad6b6d015b0015bd821084002084000000000044200088000000000001084000298fffc003ffc000003fffffc000000003ffffffe8fa2857d092fd2924a52bf8fd29f37fffffc44912455fffffffffe5e7d2127dd43ffffff000fff000fff000000000000ffffffffffffffffffffff8a318cfc3f8c78929452a95466199e5fc7f097e179f8c09e5400003ffc003ffc0000000000000000000000001705d7a82f6d02d608421000021000000000211088222000000000000021000011c000000000fff000000000fffffffff0000002948610a5318443127ff20157fff82052fe402affc6220a29fff2002affff3208a60000003ffc003ffc000003fffffc000000003ffffff294e480083ffffffffffffffb5ac211aa4451086aaea31085ab908a902a38fff000fff000000000fffffffff0000000006b50c21ad7308862658c62374c63265ffffff2ab10c063fffffffffaae462601bb6bffffffffc003fffffc003fffffc003ffc003ffd11bfffc4ee89bf2109fff1085c9ffe46bbfe44134bfffe2135edff9088972443000fff000000000fff000000000000fffffffc3f0c25f8453f8c8a318cfc3f0878929452a95466199c5f87e017c179f0809e44f4000000003ffc000003fffffffffffc003ffca52fe4294ff117e49fffe055fffe3e14bf944abfffcbc28a7ffca12abffffe8fa31fff000fff000000000ffffff000000000fff4a53fa1295fc89fa47e8fa2649fa2fdffffff08fc3f0f3fffffffff88a1f8f83ecb3ffc003fffffc000003ffc003fffffc0000018c628c6318a3314d8ffd08ccfffe917fffffc89ff2890fffffffffe897ffd484458000fff000000000fff000ffffff000000000ffe1447fff5110a4feb5acffd421421ffd52affd7659bffff9840107fec22208bbf3ffffffffc003fffffffffffffffffc00000318c618c63186631bffffff8f61cf9dfffffffffffffffffffffffffb1a1cfda6e60fffffffff000000ffffff000000000000000c63186318c6198c6cb39cee21842645ffffff9566699dffffffffff8408404091bf0003fffffc003fffffffffffffffffc0000021084108421044213ffffff0f41cf1dfffffffffffffff690e43da47b1a1cfda6440000fff000000000fff00000000000000000084210421084110848a318cc0100040129452a95466199c0401000100408000083403fffffc003ffc000000000000000000000003fffffffffffffffe084210008210004210422110882228411042108004210000280000000fff000fff000000000000000000000ffffffc000820000ffffffffffffffe8420844000104010822084214000008401100003ffc000000003ffc0000000000000000021084108421044213ffffff004001007ffffffffffffff0100400040102000020a20fff000fff000000000fff0000000000000004210821084208842410842220842245ffffff002008043fffffffff8000404010060000000000000000000003fffffc000000003ff0101fffc400083f21081ff1084087fe4003fe441008fffe210001ff908880210c000000000fff000000000000ffffff000000210821084208441123ff00113fff800427e40227fc22008217ff200225fff1200218000000000003ffc000000000003fffffc000421043f883ff880041084422084244fc027c3e022ffc0f84010be21e40847fd0043000000000000000fff000000000000fffffff83e0805f0043f08082108fc3f087882104221104411145f87e017c179f0809e40c4000000000000000003fffffc000000003ffc210fe00847f007e01f83e01107e03e042084423f0fc3c08220842122287e3e0f
+def zamc: Nat:= 0x3fff3af3af3af3af3af3af3af3af3af3af3af3affffffe07fc007fffffffffffffffff83ff83c1fff003f07ffffc1fe1ffffc03f00077d77d77d77d77d77d77d77d77d77d77d77d0001f87e00ffe0f803fff8003fff879f07ff0f87fffff3e007fff80781fffff1fffff93f93f93f93f93f93f93f93f93f93f93f93ffffffffffffffffffffffffffffff8000003ffffffff0000000001ffffffffffff0ff0ff0ff0ff0ff0ff0ff0ff0ff0ff0ff0ff0000000000000000fffffffffffffffffffffffffffffffffffffffffffffffffffdf71f71f71f71f71f71f71f71f71f71f71f701f07fff83fff83fffffffe0f03fe1fffffffffffffffff81e07fe0fe183fffc7fffabbabbabbabbabbabbabbabbabbabbabbabbfffe07ffff03ff07fc1f07ffff07f87ffffffff83c0f0ffffffffffffff0707e3fffe5be5be5be5be5be5be5be5be5be5be5be5bfffffffffffffffff003ffff0001ffffe07fffe00fffffffe003fffff8003fff000d61d61d61d61d61d61d61d61d61d61d61d61f83ff801f0fc1ff803e000003ff8000000000007c000000007e0000001ff800000014254254254254254254254254254254254240007e00003f003e000000000000000001f800000000000001ffc0000000000000005495495495495495495495495495495495490001f80000fc00f803e0000000f8000007e00007c000000007ff0000000f8000000006c06c06c06c06c06c06c06c06c06c06c06c0000000000000000000000000000007fffffc00000000fffffffffe000000000000063063063063063063063063063063063063000000000000000003e000003ff8000000000007c000001f87e007c001ff80003ffea8ea8ea8ea8ea8ea8ea8ea8ea8ea8ea8ea8ffff81ffffc0ffc1ff07c1ffffc1fe18000003fe0f03c307e1f801f1fffc1c1f8fffabbabbabbabbabbabbabbabbabbabbabbabbfffe07ffff03ff07fc1f07ffff07f87ffffffff83c0f0ffffffffffffff0707e3ffea82a82a82a82a82a82a82a82a82a82a82a83fff81ffffc0ffc1ff07c1ffffc1fe18000003fe0f03c30000000001fffc1c1f8000f69f69f69f69f69f69f69f69f69f69f69f69ffffffffffffffff03ff00003fff800007e00007fc00000007ff000001fff0003ffc2102102102102102102102102102102102100000000000000003f003ffff0001ff8000003fe00ffff0000000001ff8003fff00037d37d37d37d37d37d37d37d37d37d37d37d0000007e00ffe00003ff00003fff801f07ff0f87ffff03e007fff80781fffff00003d53d53d53d53d53d53d53d53d53d53d53d53fffffffffffffffc0f83e00003e01e7c007c3e1f0fffcf800003e01e003e3fc700077f77f77f77f77f77f77f77f77f77f77f77f0001f87e00ffe0f803fff8003fff879fffffff87fffff3ffffffffff81fffff1c00010010010010010010010010010010010010000000000000000000f80000003e000000000001f0000000000000000003e00000007007007007007007007007007007007007000001f87e00ffe0f80000000000000000000000000000000000000000000000000003dafdafdafdafdafdafdafdafdafdafdafdaffffffffffffffffc0ffc01f0ffffe0001f80001ff000007e1ffc1f01e7ffc038000823823823823823823823823823823823823f83e0001f0001f000000007c3f007800000000000000001f87e007c079f0000e00000a40a40a40a40a40a40a40a40a40a40a40a4000000000000000000000000fc0000001f800000000000001ffc000007c00000000f7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7fffffffffffffffff03e0f87c3ff87f9ffffff007c3f0f3fffffffff879ff8f8fc003d7fd7fd7fd7fd7fd7fd7fd7fd7fd7fd7fd7ffffffffffffffffc0f83e00003e01e7fffffc01f0fc3cfffffffffe0003e3e070005445445445445445445445445445445445440001f80000fc00f803e0f80000f8078000000007c3f0f00000000000000f8f81c002002002002002002002002002002002002003e0f80007c0007c00000000000000000000000000000000000000000000000000000f7bf7bf7bf7bf7bf7bf7bf7bf7bf7bf7bf7bffffffffffffffff03ff007c3ffff81ffffff007fc0003fffffffff879fff00e0003dbfdbfdbfdbfdbfdbfdbfdbfdbfdbfdbfdbffffffffffffffffc0fffe1f0fffffe001f80001fffc3c07e1ffc1f01e7fffe3fffff94f94f94f94f94f94f94f94f94f94f94f94fffffffffffffffffc00ff83c00007fff81ffff803ffffe07800f83f86000ff1fffc3ec3ec3ec3ec3ec3ec3ec3ec3ec3ec3ec3ec0000000000000003fffc1fffffffe1fffffffffff03c3fffffffffffffffc1f8fff0f90f90f90f90f90f90f90f90f90f90f90f90000000000000000ffff0783ffff807ffffffffffc0f0fe07ffff83f87fff0703fffe43e43e43e43e43e43e43e43e43e43e43e43fffffffffffffffff0001e0f000001ffe07fffe0003c3f81e003e0fe180001c0fff7fd7fd7fd7fd7fd7fd7fd7fd7fd7fd7fd7fd07c1fffe0fffe0ffffffff83ffff87ffffffffffffffffe07ffff83f87fffff1c003dffdffdffdffdffdffdffdffdffdffdffdfffffffffffffffffc0fffe1f0fffffe7fffffc01fffc3cfffffffffe1e7fffe3ffff8fb8fb8fb8fb8fb8fb8fb8fb8fb8fb8fb8fbf83e0001f0001f00ffff07fffffff87ffffffffffc0f0ffffffffffffffff07e3ffe2ce2ce2ce2ce2ce2ce2ce2ce2ce2ce2ce2cfe0f80007c0007c03f0001ffffc01e1ffe07fffe0003c3fffff83ffffffc001f8000840840840840840840840840840840840840f83e0001f0001f0003e0000000f8000000000007c000000000000000000f80000003d9fd9fd9fd9fd9fd9fd9fd9fd9fd9fd9fd9ffffffffffffffffc0f83e1f0ffe1fe000000001f0fc3c07e1f801f01e7fe3e3f000863863863863863863863863863863863863f83e0001f0001f0003e0007c3ff8780000000007c000001f87e007c079ff800e3ffd7517517517517517517517517517517517500007e00003f003e3ff83fe0f03e01fffe07fffff0fffff81e003e0fe183e3fc70000230230230230230230230230230230230230000000000000000000000003f000000000000000000001f87e007c001f0000000014854854854854854854854854854854854840007e00003f003e000000000fc00000000000000000000001f80000007c000000005445445445445445445445445445445445440001f80000fc00f803e0f80000f8078000000007c3f0f00000000000000f8f81ffffe4be4be4be4be4be4be4be4be4be4be4be4bfffffffffffffffff0001fff0001e1ffe07fffe0003c3fffe003fffff80001f8fff0fb0fb0fb0fb0fb0fb0fb0fb0fb0fb0fb0fb0000000000000000ffff07fffffff87ffffffffffc0f0ffffffffffffffff07e0003dffdffdffdffdffdffdffdffdffdffdffdfffffffffffffffffc0fffe000fffe1e7fffffc01fffc3cfffffffffe007fffe07ffffbffbffbffbffbffbffbffbffbffbffbffbffffffffffffffffffc1fffffff07fffffffffff83ffffffffffffffffff07fffc0001a41a41a41a41a41a41a41a41a41a41a41a400000000000000000ffc0000fffe00001f80001ff00000001ffc000007ffc000000ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ffffff8000000000ffffffffffffffe000000007c000000000000000000f8000000010010010010010010010010010010010010000000000000000000f80000003e000000000001f0000000000000000003e0000000840840840840840840840840840840840840f83e0001f0001f0003e0000000f8000000000007c000000000000000000f80003ffff13f13f13f13f13f13f13f13f13f13f13f13fffffffffffffffffffffe0f03fe1f8000003ffffffff0000000001e183fffc7ffff84f84f84f84f84f84f84f84f84f84f84f84fffffffffffffffffc00ffffc0007fe000000ff803fffc0000000007fe000fffffffe03e03e03e03e03e03e03e03e03e03e03e03fffffffffffffffff0001fff0001e18000003fe0003c30000000001ff80001f8ffffe7fe7fe7fe7fe7fe7fe7fe7fe7fe7fe7fe7ffffffffffffffffffffffffffffffe000000ffffffffc1f87e007c7ffffffffc0035ff5ff5ff5ff5ff5ff5ff5ff5ff5ff5ff5ffe0ffe007c3f07fe00fffe1f0fffffe7fffffc01fffc3cfffffffffe1e7fffe3f000069069069069069069069069069069069069000000000000000003ff00003fff800007e00007fc00000007ff000001fff0003ffdfb5fb5fb5fb5fb5fb5fb5fb5fb5fb5fb5fb41f07fff83fff83fffffffe0ffffe1f801f803ffffffff0001ffc001e1fffffc7ffffe7fe7fe7fe7fe7fe7fe7fe7fe7fe7fe7fe7ffffffffffffffffffe0fffffff87fe000000fffc3fffc1f87e007c7ffff8ffffffdf7df7df7df7df7df7df7df7df7df7df7df7c1f07fff83fff83fffffffe0f03fe1ffffffffffffffffffffffffffe183fffc7fff7c47c47c47c47c47c47c47c47c47c47c47c407c1fffe0fffe0ffffffff83c0ff87e000000ffffffffc0000000007860ffff1fffdf11f11f11f11f11f11f11f11f11f11f11f101f07fff83fff83ffff83fe0f03e01f8000003fff0ffff0000000001e183e3fc7fff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff07c1fffe0fffe0ffffffff83ffff87ffffffffffffffffffffffffff87fffff1fffdf7df7df7df7df7df7df7df7df7df7df7df7c1f07fff83fff83fffffffe0f03fe1ffffffffffffffffffffffffffe183fffc7ffffa7fa7fa7fa7fa7fa7fa7fa7fa7fa7fa7fa7fffffffffffffffffc00ffffff007fe000000ff803fffc1f87e007c7fff00ffffffea8ea8ea8ea8ea8ea8ea8ea8ea8ea8ea8ea8ffff81ffffc0ffc1ff0001ffffc01e18000003fe0003c307e1f801f1fffc001f8ffffd6fd6fd6fd6fd6fd6fd6fd6fd6fd6fd6fd6ffffffffffffffffffe0ffffc0f87ffff81fffffc3fffffff800fffffe0f8ffffffebeebeebeebeebeebeebeebeebeebeebeebeffff81ffffc0ffc1ffffc1fffffffe1fffffffffff03c3fffffffffffffffc1f8fffafbafbafbafbafbafbafbafbafbafbafbafbfffe07ffff03ff07ffff07fffffff87ffffffffffc0f0ffffffffffffffff07e3ffffb7fb7fb7fb7fb7fb7fb7fb7fb7fb7fb7fb7ffffffffffffffffffffffffffffff801f803ffffffff0001ffc001ffffffffffffae9ae9ae9ae9ae9ae9ae9ae9ae9ae9ae9ae9fffe07ffff03ff07ffff07fffffff86007e00ffffc0f0c0007ff0007fffff07e3ffebeebeebeebeebeebeebeebeebeebeebeebeffff81ffffc0ffc1ffffc1fffffffe1fffffffffff03c3fffffffffffffffc1f8ffffdffdffdffdffdffdffdffdffdffdffdffdfffffffffffffffffffe0ffffc0f87fffffffffffc3fffffffffffffffe0f8ffffffea6ea6ea6ea6ea6ea6ea6ea6ea6ea6ea6ea6ffff81ffffc0ffc1ff0001fff0001e1ffffffffe0003c3ffffffffffff80001f8fffa92a92a92a92a92a92a92a92a92a92a92a92fffe07ffff03ff07fc0007ffc000787ff8000ff8000f0ffff8000007fe00007e3ffea6ea6ea6ea6ea6ea6ea6ea6ea6ea6ea6ea6ffff81ffffc0ffc1ff0001fff0001e1ffffffffe0003c3ffffffffffff80001f8fffbbfbbfbbfbbfbbfbbfbbfbbfbbfbbfbbfbbffffe07ffffffff07fc1f07ffff07f87ffffffff83fff0ffffffffffffff07ffe3ffde51e51e51e51e51e51e51e51e51e51e51e501f07fff83fff83fff003fe0f00001fffe07fffe00fffff81e003e0fe18003fc700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003ffdf51f51f51f51f51f51f51f51f51f51f51f501f07fff83fff83ffff83fe0f03e01fffe07fffff0fffff81e003e0fe183e3fc7000040040040040040040040040040040040040000000000000000003e0000000f8000000000007c000000000000000000f80000003d13d13d13d13d13d13d13d13d13d13d13d13fffffffffffffffc0f83e00003e01e000000001f0fc3c00000000000003e3e07000f6df6df6df6df6df6df6df6df6df6df6df6dffffffffffffffff03fff8003fff878007e00007fff0f00007ff000001ffff81c003c6fc6fc6fc6fc6fc6fc6fc6fc6fc6fc6fc6ffffffffffffffffc000000000000007fffffc00000000fffffffffe000000000000f7bf7bf7bf7bf7bf7bf7bf7bf7bf7bf7bf7bffffffffffffffff03ff00003fff801ffffff007fc0003fffffffff801fff0003ffff13f13f13f13f13f13f13f13f13f13f13f13ffffffffffffffffff83ffff03e1ff8000003fff0ffff0000000001ff83e3fffffffedfedfedfedfedfedfedfedfedfedfedfedffffffffffffffffffffffffffffffe007e00ffffffffc0007ff0007ffffffffc0001a41a41a41a41a41a41a41a41a41a41a41a400000000000000000ffc0000fffe00001f80001ff00000001ffc000007ffc00000057f57f57f57f57f57f57f57f57f57f57f57f0001f80000fc00f803fff8003fff879ffffff007fff0f3fffffffff801ffff81ffffe7fe7fe7fe7fe7fe7fe7fe7fe7fe7fe7fe7ffffffffffffffffff003ffff0001ffffffffffe00ffffffffffffffff8003fffffff84f84f84f84f84f84f84f84f84f84f84f84fffffffffffffffffc00ffffc0007fe000000ff803fffc0000000007fe000fffc0035bf5bf5bf5bf5bf5bf5bf5bf5bf5bf5bf5bfe0ffe007c3f07fe00fffe1f0fffffe001f80001fffc3c07e1ffc1f01e7fffe3ffff79f79f79f79f79f79f79f79f79f79f79f79f07c1fffe0fffe0fffc00ff83c00007fffffffff803ffffffffffffff86000ff1fffffbffbffbffbffbffbffbffbffbffbffbffbfffffffffffffffffffffffffffffff801f803ffffffff07e1ffc1f1ffffffffffff78478478478478478478478478478478478407c1fffe0fffe0fffc00ff83c00007e000000ff803fffc000000000786000ff1fffffd3fd3fd3fd3fd3fd3fd3fd3fd3fd3fd3fd3fffffffffffffffffffffffffffffffc007c3fffffffff800003e01ffffffffffffce9ce9ce9ce9ce9ce9ce9ce9ce9ce9ce9ce9ffffff81ff001fffffffffffffffffe007e0007ffc00fc0007ff00007ffff00fffff3ef3ef3ef3ef3ef3ef3ef3ef3ef3ef3ef3effffffe07fc007fffffffffffffffffffffffc1fff003ffffffffffe1ffffc03f00001b01b01b01b01b01b01b01b01b01b01b01b0000000000000000000000000000001ffffff000000003fffffffff8000000003fff3ef3ef3ef3ef3ef3ef3ef3ef3ef3ef3ef3effffffe07fc007fffffffffffffffffffffffc1fff003ffffffffffe1ffffc03ffffcfbcfbcfbcfbcfbcfbcfbcfbcfbcfbcfbcfbffffff81ff001ffffffffffffffffffffffff07ffc00fffffffffff87ffff00fc0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fffce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ffffff81ff001fffffffffffffffffe00000007ffc00fc00000000007ffff00fc000c7cc7cc7cc7cc7cc7cc7cc7cc7cc7cc7cc7c000001f803ff8000000000000000007ffffffe000ffc0ffffffffffe00003fc0fffce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ffffff81ff001fffffffffffffffffe00000007ffc00fc00000000007ffff00fc001d51d51d51d51d51d51d51d51d51d51d51d500007e1f803ff83e00f83e00003e01e7c007c3e1f0fffcf800003e01e003e3fc7fff7d47d47d47d47d47d47d47d47d47d47d47d407c1fffe0fffe0ffffffff83c0ff87ff001f0fffffffffe00000f807860ffff1c003cffcffcffcffcffcffcffcffcffcffcffcfffffffffffffffffc000001f0fc01e07ffffffe000ffc0fffffffffffe7c03ff8000f1ff1ff1ff1ff1ff1ff1ff1ff1ff1ff1ff1fffffffffffffffff000000000000001fffffff8003ff03ffffffffff80000ff00003cefcefcefcefcefcefcefcefcefcefcefceffffffffffffffffc000001f0fc01e07fffffc00000000fffffffffe1e7c00038000f37f37f37f37f37f37f37f37f37f37f37f37ffffffffffffffff0000007c3f00781f001f0f8003ff03ff87e0ffc7f9f00ffe000359f59f59f59f59f59f59f59f59f59f59f59fe0ffe007c3f07fe00f83e1f0ffe1fe000000001f0fc3c07e1f801f01e7fe3e3f00086b86b86b86b86b86b86b86b86b86b86b86bf83e0001f0001f0003ff007c3ffff80007e00007fc00001f87ff07c079fff00e3fff38f38f38f38f38f38f38f38f38f38f38f38ffffffe07fc007fffffffffffffffff80000001fff003f07e1f801f01ffffc03f000f7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff83ff87ff0fffff803e0f87c3ff87f9fffffff87c3fff3fffffffffff9ff8fffc001d7dd7dd7dd7dd7dd7dd7dd7dd7dd7dd7dd7c0007e1f803ff83e00f83e00003e01e7ffffffe1f0fffcffffffffffe003e3fc7000d7fd7fd7fd7fd7fd7fd7fd7fd7fd7fd7fd7ff83ff801f0fc1ff803e0f87c3ff87f9ffffff007c3f0f3fffffffff879ff8f8fc003ddfddfddfddfddfddfddfddfddfddfddfddfe0ffe1ffc3ffffe00f83e1f0ffe1fe7c007c3e1f0fffcffe1f83ff1fe7fe3fff000b7fb7fb7fb7fb7fb7fb7fb7fb7fb7fb7fb7ff83e007ff0ffff0003ff007c3ffff81fffffff87ffff03fffffffffff9fffffe0000dfcdfcdfcdfcdfcdfcdfcdfcdfcdfcdfcdfc000001f803ff80000ffc0000fffe007ffffffe1ffffc0ffffffffffe07ffffc000087b87b87b87b87b87b87b87b87b87b87b87bf83e0001f0001f0003ff007c3ffff81ffffff007fc0003fffffffff879fff00e0002dfedfedfedfedfedfedfedfedfedfedfedffe0f801ffc3fffc000ffc01f0ffffe07c1ffc3e1ffffc0ffe1fffff1fe7fffff8000b3fb3fb3fb3fb3fb3fb3fb3fb3fb3fb3fb3ff83e007ff0ffff000000007c3f00781fffffff8003ff03fffffffffff9f00ffe3ffd36d36d36d36d36d36d36d36d36d36d36d36c1f07fe003c0003fffffffe0f03fe1fffffffc1fff003ffffffffffe0183fc007fff7df7df7df7df7df7df7df7df7df7df7df7df07c1fffe0fffe0ffffffff83c0ff87ffffffffffffffffffffffffff860ffff1ffff3ef3ef3ef3ef3ef3ef3ef3ef3ef3ef3ef3effffffe07fc007fffffffffffffffffffffffc1fff003ffffffffffe1ffffc03ffffff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ff7ffffffffffffffffffffffffffffffff001f0fffffffffff87e0ffc7ffffffffffff383383383383383383383383383383383383fffffe003c0003ffffffffffffffff80000001fff003f00000000000183fc007000b37b37b37b37b37b37b37b37b37b37b37b37f83e007ff0ffff000000007c3f00781f001f0f8003ff03ff87e0ffc7f9f00ffe3ffd3013013013013013013013013013013013001f07fe003c0003fffffffe0f03fe1f80000001fff003f00000000000183fc00700031f31f31f31f31f31f31f31f31f31f31f31f0000007e00ffe000000000000000001fffffff8003ff03ffffffffff80000ff00003c53c53c53c53c53c53c53c53c53c53c53c53fffffffffffffffc000000000000007c007c3e000ffc0f800003e01e00003fc0000c00c00c00c00c00c00c00c00c00c00c00c00ffffff81ff001fff00000000000000000000000000000000000000000000000000020ee0ee0ee0ee0ee0ee0ee0ee0ee0ee0ee0efe0f80007c0007c00000001f0fc01e07fffffc00000000fffffffffe1e7c00038000f23f23f23f23f23f23f23f23f23f23f23f23ffffffffffffffff0000007c3f007800000000000000001f87e007c079f0000e0001c01c01c01c01c01c01c01c01c01c01c01c001f07fff83fff83fc000000000000000000000000000000000000000000000000000069069069069069069069069069069069069000000000000000003ff00003fff800007e00007fc00000007ff000001fff0000003383383383383383383383383383383383383fffffe0000000003ffffffffffffff800000000000000000000000000000000000001b01b01b01b01b01b01b01b01b01b01b01b0000000000000000000000000000001ffffff000000003fffffffff8000000003ffea4aa4aa4aa4aa4aa4aa4aa4aa4aa4aa4aa4bfff81ffffc0ffc1ff0001fff0001e1ffe07fffe0003c3fffe003fffff80001f8000823823823823823823823823823823823823f83e0001f0001f000000007c3f007800000000000000001f87e007c079f0000e00015b55b55b55b55b55b55b55b55b55b55b55b40007e00003f003e00fffe000fffe1e001f80001fffc3c0001ffc000007fffe0700055f55f55f55f55f55f55f55f55f55f55f55f0001f80000fc00f803e0f80000f8079ffffff007c3f0f3fffffffff8000f8f81c0001ec1ec1ec1ec1ec1ec1ec1ec1ec1ec1ec1ec00000000000000000ffc0000fffe007fffffc01ff0000fffffffffe007ffc000000a92a92a92a92a92a92a92a92a92a92a92a92ffc0007fff000000fc00007fc000001ff8000ff8000003fff8000007fe0000003ffc37c37c37c37c37c37c37c37c37c37c37c37c0000000000000003fffffe0f03fe1ffffffffffffffffffffffffffe183fffc700001b01b01b01b01b01b01b01b01b01b01b01b0000000000000000000000000000001ffffff000000003fffffffff8000000003ffc3703703703703703703703703703703703700000000000000003fffffe0f03fe1fffffffffffffffff81e07fe0fe183fffc700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003c03c03c03c03c03c03c03c03c03c03c03c03fffffffffffffffc000000000000000000000000000000000000000000000000000ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ce0ffffff8000000000ffffffffffffffe00000000000000000000000000000000000003703703703703703703703703703703703700000000000000003fffffe000000007ffffffffffffff000000000000000000000001b01b01b01b01b01b01b01b01b01b01b01b0000000000000000000000000000001ffffff000000003fffffffff8000000000002a4aa4aa4aa4aa4aa4aa4aa4aa4aa4aa4aa4bff0001fffc000003f00001ff0000007fe0003fe000000fffe000001ff8000000000069069069069069069069069069069069069000000000000000003ff00003fff800007e00007fc00000007ff000001fff0000000c50c50c50c50c50c50c50c50c50c50c50c50000001f803ff8000000000000000007c007c3e000ffc0f800003e01e00003fc0000823823823823823823823823823823823823f83e0001f0001f000000007c3f007800000000000000001f87e007c079f0000e00015115115115115115115115115115115115100007e00003f003e00f83e00003e01e000000001f0fc3c00000000000003e3e07
+def zak2 : Nat → Nat → Nat
   | 9,0=> 15
   | 10,0=> 341
   | 10,1=> 12
@@ -3334,7 +3334,7 @@ def zak6 : Nat → Nat → Nat
   | 13,4=> 4
   | 13,5=> 1
   | _,_=> 0
-def zam5 : Nat → Nat → Nat
+def zamx : Nat → Nat → Nat
   | 9,0=> 15
   | 10,0=> 339
   | 10,1=> 12
@@ -3343,7 +3343,7 @@ def zam5 : Nat → Nat → Nat
   | 11,2=> 81
   | 11,3=> 6
   | _,_=> 0
-def zaju : Nat → Nat → Nat
+def zaj6 : Nat → Nat → Nat
   | 9,0=> 104
   | 10,0=> 114
   | 10,1=> 104
@@ -3363,7 +3363,7 @@ def zaju : Nat → Nat → Nat
   | 13,4=> 104
   | 13,5=> 94
   | _,_=> 0
-def zalh : Nat → Nat → Nat
+def zale : Nat → Nat → Nat
   | 9,0=> 0x151201e1500201421068099000151404803802014210680990004c1201e0380201421068099130161201e038020142106809a000150481e0340111022090099054280481e034011102209009a0541207840038020182209009a0f0160481e034020182209009a0e0160481e038010182209009a000150d01e0340101822090099054340a01e034010182209009a0002c0481e03401018220900990c0160481e034010182209009a0b0160481e034010182209009a0b0280481e034010182209009a
   | 10,0=> 0x150481e0340101822090099000150a0120780d004060882402686c180120784003930018220680ab1803c0481e8f00e4c0060881a02ac94058120780e8e002018220680ab0e0160481e100022f0060881a02ac3805812078403405c018220680ab1b0380481e10002170060881a02ae34058120780e0085c018220680ab1b0160481e03802740060881a02ac3805812078404c074018220680ab250160481e10002018680881a02ad98058120780e008061a0220680ab1b0160481e03802019ac0881a02ad28058120780e008060881a8c00ab0e0160481e038020182206a2c02ac00000150481e100b44c05c0680990012805812078402d1300181a0268000e0160481e101301700606809a00114058120780e4c05c0181a0269140e0160481e039301700606809b300160481e1000e4c05c0181a026e180581207840039301700606809b000000e1280481e101300141a0264600581207840039e04c02206809b000600f0120780d781300881a026800250160481e100021702206809a2506005812078400085c0881a026c9405812078402d0021702206809b300160481e100b40085c0881a026c150481e820402d0021702206809b05412078408a0b40085c0881a026c0005412078402d0028902206809a05412078402d002172240881a026c150481e100b40085c7402206809b0009405812078404c0060881a0268940e0160481e101300182206809b2506005812078404c0060881a026c380581207908101300182206809b250160481e100b44c0060881a026d1405812078402d1300182206809b860160481e100b44c0060881a026c150481e820402d1300182206809b0541207908100b44c0060881a026c941803c0481e039300182206809b450600f0120780e4c0060881a026c600f0120792c039300182206809b660160481e1000e4c0060881a026e1c0581207840039300182206809b05812078408800e4c0060881a026e1c1803c0481e035300182206809b182180f0120780d4c0060881a026c380581207840781300182206809b000600f0120780d850060881a0268600f0120780d4c2140182206809b180160481e1000e840060881a026c00058120784003a100182206809a058120784003930840060881a026c600f0120780d4c2100182206809b000150481e100b4730060881a026800180160481e039cc0182206809a180160481e1000e730060881a026c150481e100b44c1cc0182206809b180160481e03930730060881a026e0c250160481e100020182206809b830380581207840008060881a026c380581207a08100020182206809b250160481e4b040008060881a026c1504a04078402d0020182206809b054127201e100b4008060881a026c007c0160481e038020182206809a7c094058120780e008060881a026c1504a000780e780020182206809b054127f01e039e0008060881a026c38058120780e770020182206809b000160481e039dc008060881a026815049f80780e2e0020182206809b055f40481e2d130008060881a026df0058120780e4c0020182206809b054127b01e03930008060881a026c15049e80780e4c0020182206809b05412078b403930008060881a026c160481e039dc4c0020182206809b250160481e039e4008060881a026c00058120780e790020182206809a058120780e4c1e4008060881a026c94058120780e6c0020182206809b058120780e781b0008060881a026c160481e039dc6c0020182206809b054125901e10002170060881a026c3805812079180085c0182206809b000160481e46002170060881a0268160481e101180085c0182206809b054127601e03802170060881a026c151201e1000e0085c0182206809b054120784003802170060881a026c380581207840009d40182206809b0e0160481e10002740060881a026dc00e0160481e101300142206809b0e0160481e4b0404c0050881a026c3805812078404c1b00142206809b000380581207840730050881a02683805812078404c1cc0142206809b0003805812079b8008050881a026800000160481e6e002014220680994a0160496407840008050881a026c38058127201e100020142206809b00038058126d00e008050881a02680000016049b4038020142206809900016049bc0780e008050881a0269280584807840038020142206809b4a0160481e1000e008050881a026c3805812079b84c0020142206809b000160481e6e130008050881a02683805812079604c0020142206809b0e016049b403930008050881a026c00058126d00e4c0020142206809a440380481e03930008050881a026dc4058120780e4c0020142206809b0e0160481e03930008050881a026c38058120792c6c0020142206809b0e0160481e6e1b0008050881a026c0005812079b86c0020142206809a0e016049b4039b0008050881a026c00058126d00e6c0020142206809a700160481e039b0008050881a026c16049bc0780e6c0020142206809b05812079b84c1b0008050881a026c16049b4039306c0020142206809b05412078402d130019ac0881a026c60058120780d2e0026a02206809b1803c0481e03402019a80881a026ca4058120780d008066a02206809b0e0160481e10002015a40881a026d14058120780e008056902206809b450160481e03802015a00881a026c38058120780e008056802206809b0f0160481e03802015a00881a026c160481e1000e008056802206809b000600f0120780d0099c0841a026860058125b01e1000e0182106809b180160481e1000e610060841a026c001803c0481e035840182106809a000a4058120780d610060841a0268a4180160481e035840182106809b660940581207840008060841a026c60058125901e100020182106809b000940581207994008060841a026800000160481e6500201821068099250160481e10194008060841a026c000581207840650020182106809a520160481e100b4008060841a026c600581207990038020182106809b180161201e1000e008060841a026d781801207840038020182106809b180160481e1000e008060841a026c00620600481e034020182106809a62178180120780d008060841a026d78290600481e034020182106809b000600f0120780d008060841a026800290160481e034020182106809a29060058120780d008060841a026c38058120780e630020182106809b0e0160481e580b8008060841a026d100e0120780e2e0020182106809b0e0160481e038b8008060841a026c94058120780e610020182106809b620600481e03584008060841a026c60058120780d610020182106809b250160481e03920008060841a026c60058120780e600020182106809b05812078b403980008060841a026d7c5e0600481e038010182106809b00104180120780e004060841a026978250600481e038010182106809b00094058120780e004060841a0268000581207900038010182106809a250160481e2d00e004060841a026c160481e400b4038010182106809b0e0160481e100025d0060841a026c38058120780e005740182106809b450160481e038025c0060841a026c38058120780e009700182106809b0f0160481e038025c0060841a026c160481e1000e009700182106809b00038058125b01e100050841a026954058125b01e1000e0142106809b450160496c07840038050841a026c000e0160481e101200142106809a00114058120780e480050841a0269140e0160481e039200142106809b0003c058120780e480050841a0268000581207840039200142106809a00038058120791c008050841a0268000e0161201e100020142106809a000155a04807840008050841a026800440380481e100020142106809a001480e01207840008050841a026800560160481e100020142106809a560380581207840008050841a026c000e0160481e100020142106809a000151216407840008050841a026958058125901e100020142106809b450160496407840008050841a026c00054125901e100020142106809a0e0160481e47040008050841a026d140e0160481e580020142106809b0e0160481e47160008050841a026c00450160481e570020142106809a00038058120795c008050841a0268000581207840570020142106809a00114058480780e008050841a026800450165301e038020142106809a000380594c0780e008050841a0268000f0165301e038020142106809a00148450120780e008050841a026954440380481e038020142106809b001480e0120780e008050841a026910450380481e038020142106809b001480f0120780e008050841a026800560160481e038020142106809a00154058120780e008050841a026800450160481e038020142106809a56038058120780e008050841a026d140e0160481e038020142106809b5503c058120780e008050841a026c00058120791c038020142106809a540161201e1000e008050841a026d480584807840038020142106809b450161201e1000e008050841a026c000544807840038020142106809a000165301e1000e008050841a0269480581207840038020142106809b450160481e1000e008050841a026c160481e47040038020142106809b0e0160481e47120008050841a026c38058120780e480020142106809b001100e0120780e004050841a026800054120780d0045c0182209009a054280481e034011700608824026c00000150481e034020142106808900015049440780d008050841a022800054120780d340020142106808a054125101e034d0008050841a022c001b0160481e034010142106808a00000058120780d004050841a02246c058120780d004050841a3e008b000160481e0340101421068f8022800054120780e004060841a0293ca054125001e03801018210680a4f2c150481e2d00e004060841a0293cb000150481e0380201821068094d2815049380780e008060841a02534b05412078b40380201821068094d2c380581207840340050841a0290cb1b0380481e10002014210680a432c3805812078404c0050881a0250cb0e0160481e4b0020142206809432c384a01207840008050881a0250cb0e1280481e038010142206809432d24058120780e004050881a0250cb250160481e100020182106809432c94058120780e004060841a0250cb0e0160481e101200142106809432c38058120791c008050841a0250cb440380481e100020142106809432c380581207840008050841a0250cb0e0160481e460020142106809432c000581207918008050841a0250ca0581207840460020142106809432d14058120780e008050841a0250cb440380481e038010142106809432c160481e100b4008060841a024fcb1803c0481e0380201821068093f2ca4058120780e008060841a024fcb05812079080380201821068093f2d04180120780e004060841a024fcb05812079000380101821068093f2c6c180120780d3400201821068d4b1b0380481e038d0008050841a352c6c0e0120780e004050841a3e0d4b1b0600481e034b8008210680a352ca8180120780d008060841a028d4b1b0940481e03801018210680a352c6c0e01207840008050841a028d4b1b0380481e3d001014210680a352c6c0e0123700e004050841a028d4b26016048dc03801014210680a352c6c3c0120780e004050841a028d4b1b0380481e03801014210680a352c6c3b0120780e004050841a028d4b0e0ec0481e03801014210680a352c003b0120780e004050841a028d4a260160481e03801014210680a352c6c3a0123700d004050841a028d4b1b0e4048dc03401014210680a352c6c058123700d004050841a028d4b1b0e40481e03401014210680a352c6c058123800d004050841a028d4b00016048e003401014210680a352816048dc3800d004050841a028d4b05812370d803401014210680a352c6c058120780d004061a02206870b230160481e034d0008060841a1c2c6c058120780d340020182106870b058120780d340021d0060841a1c2c8c058120780d004060841a33070b1b0160481e0340101821068cc1c2c160481e034011d0060841a33070b180160481e03401170220680a1c2cc8058120780d004060881a02870b310160481e03401018220680a1c2cc0058120780d004060881a02870b058120780d004bc018220680a1c2c60058120780d2e0020841a02870b05812078b4038011d0210680a1c2c8c058120780d004b00841a02870b180160481e034012c0210680a1c2c160481e034011d0b00841a02870b1803c0481e03402018210680a1c2cac058120780d008060841a02870b2a0160481e03402018210680a1c2ca4058120780d008060841a02870b058120780d28002018210680a1c2c6c0e0120780e004060841a02870b270160481e03801018210680a1c2c98058120780e004060841a02870b250160481e03801018210680a1c2c160481e2400e004060841a02870b230160487803401018210680a1c2c6c058121e00d004060841a02870b180160487803401018210680a1c2c8c220120780d004060841a02870b1b0880481e03401018210680a1c2c60220120780d004060841a02870b210160481e03401018210680a1c2c80058120780d004060841a02870b058120780d0047c018210680a1c2c1604878034011d0060841a02870b1b0160481e03401014680881a192c60058120780d0045c0881a02458b
   | 10,1=> 0x58120784003a100182206809a0003c0481e0361001822068099058120780e770020182206809a000160481e101b001422068099000160481e6e0020142206809900016049b4038020142206809905812079b86c0020142206809a058126d00e6c0020142206809a520161201e038020142106809a0e0123700e004050841a028d4a3a0123700d004050841a028d4a390123700d004050841a028d4a
@@ -3383,7 +3383,7 @@ def zalh : Nat → Nat → Nat
   | 13,4=> 0x541207840038020142106809a0f0160481e034020142106809a0e0160481e038010142106809a000120780d004050841a0267b9
   | 13,5=> 0x120780d004050841a0267b9
   | _,_=> 0
-def zam4 : Nat → Nat → Nat
+def zamv : Nat → Nat → Nat
   | 9,0=> 0xa0940000b100004200009a00004936ab18308d00880000002b000d1e0c0055243d072a0000009f007900192587061f316d937e12611301998e00725b664e
   | 10,0=> 0xde1f79e356d990d750000000000000000000000000000000000000000000000000000000000000f850000000a9e4d0003cd2920000000000000007433310d91b1000000a15f93000000d2d000000000f3050619900043f000000000000000000f61000000ae1aca00027100000000000000033d0000001459be457eca000b278b7558f92c5c6ebaa57db2dd6c10008a2000000516000d995f0901ccd4cb22922b000000000000000000000000000000000e86829c88e6ee059d6fc166e0000006bb3d9c26a5bec589e240000691000000000000000000aff000d39667000f880001c9000000000e580007ea96b00001900052d841000000c83000b4d33a32bf19d15000fa23855469a46aa0005240006d7704000617000a210008e4dce000000000e56000000a9f000000abe2f2000000000a4f8350004e12883087709fdeba1390000000003791f99b2f31d8b00068b00000000000062c2ad0790000008f5a61d611810000004b00002954220000000000006a3b33b8900000036100054df4a6f88aae6520541672140900000000000000000000081db06e10211955c1958ff7767a000b29e7d049f91000000000000000000000000000c9d000000000af700000000054ec6700085300000000000018d9b0000000593000000f9f0006da000e41000f9e00000000060d000000000d818e900000000021d6e300000000000000039d00031f000f2200000083b0000000000006a92ce98c34f00000000015d000fcd4bcf3fcf1000000000f9d000000b9d7bdabb0000000000007edb7d7f6560241ab1000000e4b235000f18ca9f0055700000027000059c0000000000005cc0000000000000fdcce53f0000002c2000a37000000000000000000000b8ad5a0008a19800006cd00000000000000003d8196e58c512d30d0f11159755d1c9bf67515bc5692025f0ae9e589de63a9679f23d7500000000027d00000069b000000000000ded000000294d14dda00074b355f16df8bf50000000000008c2000000618e59cfdfe7000000518000db1000000885ed1267000b5700000000000077c000000000000000000000e4e000000000a6e64f5450003910008b54986389b5175f589311d58790cd50f34974f00afa436dd458050000000000000003b5b7e535e890000000000c12f593db1b000000000000577ea1b110000007818ad548000000000000dc93d309dbdd28b715a6c061a97fbf000d92000fa00000000002d1ac9d090000000000000000000000000007dc000000000737000d38edda81ef73c19bcb71000fad7d2594a75bc6000000000000000000000000000000000000000000bf3c770009193e50005fc4787ff000000000000e330001690004a4000000000000000655a5d7a6bad23e78df6dfa99e2e71151dbdfaa00024d000000a43000a51000d3d505000a3900000000000000000076400000000000006d000eb9e280000000005e40005b91ed9cad550000000004ed30754060e2374bf000000f24000000000000abd00000000094a0000000000009f1000f44000f73000000000286571460c6d0000000000004e7b35fb566dce51e1bdb121000000000000000000758000000aeb0000000000000000000000000000000004db9e5000892620665f6b00000000009100000000027fb053f10e5000000000e11697f0f5170000008d1000000000fe11bdad5cbcb59000000000799584e950006e486d000000000f25000000000000000b41000000055c36000cf20000000000000005a8a7351058a00000000000056cd6ecc2b65c0de57f1b343689000000bd10000000000000000004840007090006df000e2937fd7a5473160005b4000000a2b000000000ba1000fd90b5000998000207000000ff3031000df9000a8d000259000500dd5d8d265e1dcd9000000e7a738000000000000000000744c41000949000000a0900000000000000f000109c49000000eeb53600060800000000000000044bbb97b169cc01000000000000000000000000000da5d2181ee1c886d4ecc846c8cf21f000b3f3fd6af85926e000000643fab289d5d925eb600000042e1a5000000000000ee0000085000000000000d69f8600000000000032c0002a10000000004d5d5100000071c
   | 10,1=> 0x377534900000089002400000000190022000000000000000d0f000000002a0000002b7d00000000478e00006d2c003d005f0000001b0000553b316129000001
@@ -3403,7 +3403,7 @@ def zam4 : Nat → Nat → Nat
   | 13,4=> 0x7403e70803405000004250c0a4405b7c748002114001939a
   | 13,5=> 0x24103750
   | _,_=> 0
-def zaes : Nat → Nat → Nat
+def zaju : Nat → Nat → Nat
   | 9,0=> 0x3420400c3000000000141000081003080000000002000000
   | 10,0=> 0x1000070000000000000000040000002000000040000802000000040003c0000800000000000100000000000000000001000030080000000008010000000006000000000000c0000000000000000000000000000000000000000020000000001000000040000800000000000000001000010000200000000020080000000000090040700005000000000400000000000000000001000000000000000000000000000000004000000000000000000040e00c01000000040000400000000000000800000000100000c040080001c000000000c0000c0001400000000040000004000010040200800000000080000001004000000000000000000040001000008000000000000000000000000000000000000000000000000000000000000010080000000000000000000000000000000000000000000000600000000000000000004000000000000000008000000000003000000000000c00000000000000000000000080000000000000000000001000000000000c0000c00000000080000000000000000000000000000000000000000000080000000000010000000401000000000001000000000000000000000000040300000000000040000c010000000400000000000000001000000000100000000000000300001000000000100000000050040000000000000000000c00000000000000402000000040200403000000000000001000000000000400000000000000000000000000000c010000000c00000010000200001004000000000003004000000100000000000000000001008000080000000000000080100000000000000000000000000040000400004000000000c000000000800000000040000000000000000100000004000000000000
   | 10,1=> 0x40000000000000000000000000000000000000000
@@ -3423,7 +3423,7 @@ def zaes : Nat → Nat → Nat
   | 13,4=> 0x801014010000010000
   | 13,5=> 0x880
   | _,_=> 0
-def zalg : Nat → Nat → Nat
+def zalj : Nat → Nat → Nat
   | 9,0=> 32
   | 10,0=> 512
   | 10,1=> 32
@@ -3463,8 +3463,8 @@ def zakz : Nat → Nat → Nat
   | 13,4=> 1000
   | 13,5=> 1000
   | _,_=> 1
-def zams (_ _: Nat): Nat:= 0
-def zam3 : Nat → Nat → Nat × Nat
+def zamt (_ _: Nat): Nat:= 0
+def zanb : Nat → Nat → Nat × Nat
   | 9,0=> (6,8)
   | 10,0=> (10,12)
   | 10,1=> (6,8)
@@ -3484,34 +3484,34 @@ def zam3 : Nat → Nat → Nat × Nat
   | 13,4=> (5,6)
   | 13,5=> (3,4)
   | _,_=> (1,1)
-def zaps (s : Bool) (i : Fin 414) (j : Fin 9) : Bool :=
+def zaoj (s : Bool) (i : Fin 414) (j : Fin 9) : Bool :=
   bit s i (raw.getD j.val zero)
-def zap5 (x : Fin 9 → Bool) : Bool :=
+def zao8 (x : Fin 9 → Bool) : Bool :=
   (x 0&& x 1)|| (x 1&& x 2)|| (x 2&& x 3)|| (x 3&& x 4)|| (x 4&& x 0) ||
   (x 0&& x 5)|| (x 1&& x 6)|| (x 2&& x 7)|| (x 3&& x 8)|| (x 5&& x 7) ||
   (x 6&& x 8)|| (x 8&& x 5)
 set_option maxRecDepth 20000 in
-lemma zagl: ∀ (s: Bool) (i: Fin 414),zap5 (zaps s i)= s:= by decide +kernel
+lemma zagl: ∀ (s: Bool) (i: Fin 414),zao8 (zaoj s i)= s:= by decide +kernel
 lemma zakm: List.ofFn (fun j: Fin 9=> raw.getD j.val zero)= raw:= rfl
-lemma zaen (s i) : List.ofFn (zaps s i) = raw.map (bit s i) := by
+lemma zaen (s i) : List.ofFn (zaoj s i) = raw.map (bit s i) := by
   calc
     _ = (List.ofFn (fun j : Fin 9 => raw.getD j.val zero)).map (bit s i) := by
       rw [List.map_ofFn]; rfl
     _= _:= by rw [zakm]
 lemma zakj: raw.all (fun a=> decide (a.1≤ top∧ a.2≤ top))= true:= by decide +kernel
-lemma zaf8 : ∀ a ∈ raw, zap6 a := by
+lemma zaf8 : ∀ a ∈ raw, zaoy a := by
   intro a ha
   have h:= of_decide_eq_true (List.all_eq_true.mp zakj a ha)
   exact ⟨zabd h.1,zabd h.2⟩
 lemma zakl: raw.Nodup:= by unfold raw; decide +kernel
-lemma zaep: raw.all (fun a=> zani true (raw.erase a) != top)= true:= by decide +kernel
+lemma zaep: raw.all (fun a=> zanj true (raw.erase a) != top)= true:= by decide +kernel
 lemma zah2 {k t S} (l : Live k t S) (hs : ∀ a ∈ S, a ∈ raw) : raw.toFinset = S := by
   ext a
   rw [List.mem_toFinset]
   refine ⟨fun hr=> ?_,hs a⟩
   by_contra hn
   have fail:= List.all_eq_true.mp zaep a hr
-  have cov : zani true (raw.erase a) = top := by
+  have cov : zanj true (raw.erase a) = top := by
     apply Nat.eq_of_testBit_eq; intro i
     rw [zaek]
     by_cases hi: i< 414
@@ -3523,8 +3523,8 @@ lemma zah2 {k t S} (l : Live k t S) (hs : ∀ a ∈ S, a ∈ raw) : raw.toFinset
     · simp only [hi, decide_false]
       exact zacd (fun x hx=> zaf8 x (List.mem_of_mem_erase hx)) i (by omega)
   simp [cov] at fail
-lemma zacl (gs : List Gate) (w : List Sig) (hw : ∀ a ∈ w, zap6 a) :
-    ∀ a∈ zaox gs w,zap6 a:= by
+lemma zacl (gs : List Gate) (w : List Sig) (hw : ∀ a ∈ w, zaoy a) :
+    ∀ a∈ zan7 gs w,zaoy a:= by
   induction gs generalizing w with
   | nil=> exact hw
   | cons g gs ih =>
@@ -3534,47 +3534,47 @@ lemma zacl (gs : List Gate) (w : List Sig) (hw : ∀ a ∈ w, zap6 a) :
     · exact hw a ha
     · simp only [List.mem_singleton] at ha; exact ha▸ zaid hw g
 lemma zace (C : Circuit) (h : PEqualNP.MetaComplexity.FanInTwo C)
-    (he: ∀ x: Fin 9→ Bool,C.eval (List.ofFn x)= zap5 x): zapi∈ zaox C.gates raw:= by
-  let w:= zaox C.gates raw
-  have hwv: ∀ a∈ w,zap6 a:= zacl C.gates raw zaf8
+    (he: ∀ x: Fin 9→ Bool,C.eval (List.ofFn x)= zao8 x): zaox∈ zan7 C.gates raw:= by
+  let w:= zan7 C.gates raw
+  have hwv: ∀ a∈ w,zaoy a:= zacl C.gates raw zaf8
   have hproj (s : Bool) (i : Fin 414) : bit s i (w.getD C.output zero) = s := by
     rw [← zake]
-    change ((zaox C.gates raw).map _).getD C.output false= _
+    change ((zan7 C.gates raw).map _).getD C.output false= _
     rw [zad9 _ _ _ _ zaf8 (fun g hg=> (h g hg).1)]
-    have eq:= he (zaps s i)
+    have eq:= he (zaoj s i)
     rw [zaen,zagl] at eq
     exact eq
-  have hvout: zap6 (w.getD C.output zero):= zafs hwv C.output
-  have et : w.getD C.output zero = zapi := by
+  have hvout: zaoy (w.getD C.output zero):= zafs hwv C.output
+  have et : w.getD C.output zero = zaox := by
     apply Prod.ext
     · apply Nat.eq_of_testBit_eq; intro i
-      rw [zapi,zaek]
+      rw [zaox,zaek]
       by_cases hi: i< 414
       · simpa [bit,hi] using hproj true ⟨i,hi⟩
       · rw [hvout.1 i (by omega)]; simp [hi]
     · apply Nat.eq_of_testBit_eq; intro i
       by_cases hi: i< 414
-      · simpa [bit,zapi] using hproj false ⟨i,hi⟩
-      · rw [hvout.2 i (by omega),zapi]; exact (Nat.zero_testBit i).symm
+      · simpa [bit,zaox] using hproj false ⟨i,hi⟩
+      · rw [hvout.2 i (by omega),zaox]; exact (Nat.zero_testBit i).symm
   have rep:= zajh w C.output
   rw [et] at rep
   exact rep.resolve_right (fun hn=> hn zadn)
-def zapr (key: Nat) (j: Nat): Nat:= (key>>> (9* j))&&& 511
-def zalu (f : Fin 414 → Fin 414) (x : Nat) : Nat → Nat
+def zaov (key: Nat) (j: Nat): Nat:= (key>>> (9* j))&&& 511
+def zalk (f : Fin 414 → Fin 414) (x : Nat) : Nat → Nat
   | 0=> 0
   | n + 1 =>
-    let rest:= zalu f x n
+    let rest:= zalk f x n
     if h : n < 414 then
       if x.testBit (f ⟨n,h⟩).val then rest||| (1<<< n) else rest
     else rest
-def zaoo (f: Fin 414→ Fin 414) (x: Nat): Nat:= zalu f x 414
+def zanv (f: Fin 414→ Fin 414) (x: Nat): Nat:= zalk f x 414
 lemma zaam (f : Fin 414 → Fin 414) (x : Nat) (m j : Nat) :
-    (zalu f x m).testBit j =
+    (zalk f x m).testBit j =
       if h: j< m∧ j< 414 then x.testBit (f ⟨j,h.2⟩).val else false:= by
   induction m with
-  | zero=> simp [zalu]
+  | zero=> simp [zalk]
   | succ n ih =>
-    unfold zalu
+    unfold zalk
     dsimp only
     by_cases hn: n< 414
     · simp only [hn, dite_true]
@@ -3616,43 +3616,43 @@ lemma zaam (f : Fin 414 → Fin 414) (x : Nat) (m j : Nat) :
         simp [hj,h1,h2]
       · simp [hj]
 lemma zabx (f : Fin 414 → Fin 414) (x : Nat) (j : Nat) :
-    (zaoo f x).testBit j= if h: j< 414 then x.testBit (f ⟨j,h⟩).val else false:= by
-  simpa [zaoo] using zaam f x 414 j
-lemma zaca (f : Fin 414 → Fin 414) (x : Nat) : zaph (zaoo f x) := by
+    (zanv f x).testBit j= if h: j< 414 then x.testBit (f ⟨j,h⟩).val else false:= by
+  simpa [zanv] using zaam f x 414 j
+lemma zaca (f : Fin 414 → Fin 414) (x : Nat) : zaom (zanv f x) := by
   intro j hj; rw [zabx]; simp [show ¬ j< 414 by omega]
 lemma zafa (f : Fin 414 → Fin 414) (a b : Nat) :
-    zaoo f (a&&& b)= zaoo f a&&& zaoo f b:= by
+    zanv f (a&&& b)= zanv f a&&& zanv f b:= by
   apply Nat.eq_of_testBit_eq; intro j
   rw [Nat.testBit_and,zabx,zabx,zabx]
   by_cases hj: j< 414 <;> simp [hj,Nat.testBit_and]
 lemma zafd (f : Fin 414 → Fin 414) (a b : Nat) :
-    zaoo f (a||| b)= zaoo f a||| zaoo f b:= by
+    zanv f (a||| b)= zanv f a||| zanv f b:= by
   apply Nat.eq_of_testBit_eq; intro j
   rw [Nat.testBit_or,zabx,zabx,zabx]
   by_cases hj: j< 414 <;> simp [hj,Nat.testBit_or]
-lemma zaeg (f : Fin 414 → Fin 414) {a : Nat} (ha : zaph a) :
-    zaoo f (bnot a)= bnot (zaoo f a):= by
+lemma zaeg (f : Fin 414 → Fin 414) {a : Nat} (ha : zaom a) :
+    zanv f (bnot a)= bnot (zanv f a):= by
   apply Nat.eq_of_testBit_eq; intro j
   rw [zabx,zad4 (zaca f a),zabx]
   by_cases hj: j< 414
   · simp [hj,zad4 ha,(f ⟨j,hj⟩).isLt]
   · simp [hj]
-lemma zaej (f : Fin 414 → Fin 414) : zaoo f 0 = 0 := by
+lemma zaej (f : Fin 414 → Fin 414) : zanv f 0 = 0 := by
   apply Nat.eq_of_testBit_eq; intro j; rw [zabx]; split <;> simp
-lemma zaey (f : Fin 414 → Fin 414) : zaoo f top = top := by
+lemma zaey (f : Fin 414 → Fin 414) : zanv f top = top := by
   apply Nat.eq_of_testBit_eq; intro j
   rw [zabx,zaek]
   by_cases hj: j< 414
   · simp [hj,zaek,(f ⟨j,hj⟩).isLt]
   · simp [hj]
 lemma zaei (f g : Fin 414 → Fin 414) (x : Nat) :
-    zaoo f (zaoo g x)= zaoo (fun j=> g (f j)) x:= by
+    zanv f (zanv g x)= zanv (fun j=> g (f j)) x:= by
   apply Nat.eq_of_testBit_eq; intro j
   rw [zabx,zabx]
   by_cases hj: j< 414
   · simp [hj,zabx,(f ⟨j,hj⟩).isLt]
   · simp [hj]
-lemma zafh {x : Nat} (hx : zaph x) : zaoo (fun j => j) x = x := by
+lemma zafh {x : Nat} (hx : zaom x) : zanv (fun j => j) x = x := by
   apply Nat.eq_of_testBit_eq; intro j
   rw [zabx]
   by_cases hj: j< 414
@@ -3660,21 +3660,21 @@ lemma zafh {x : Nat} (hx : zaph x) : zaoo (fun j => j) x = x := by
   · simp [hj,hx j (by omega)]
 structure SigHom where
   fn: Sig→ Sig
-  valid: ∀ a,zap6 (fn a)
-  hneg: ∀ {a},zap6 a→ fn (neg a)= neg (fn a)
+  valid: ∀ a,zaoy (fn a)
+  hneg: ∀ {a},zaoy a→ fn (neg a)= neg (fn a)
   hbin: ∀ d a b,fn (bin d a b)= bin d (fn a) (fn b)
   hzero: fn zero= zero
   hone: fn one= one
-  htarget: fn zapi= zapi
-def zaoa (fp fn : Fin 414 → Fin 414) : SigHom where
-  fn a:= (zaoo fp a.1,zaoo fn a.2)
+  htarget: fn zaox= zaox
+def zany (fp fn : Fin 414 → Fin 414) : SigHom where
+  fn a:= (zanv fp a.1,zanv fn a.2)
   valid a:= ⟨zaca fp a.1,zaca fn a.2⟩
   hneg ha:= Prod.ext (zaeg fp ha.1) (zaeg fn ha.2)
   hbin d a b:= by cases d <;> simp [bin,zafa,zafd]
   hzero:= Prod.ext (zaej fp) (zaej fn)
   hone:= Prod.ext (zaey fp) (zaey fn)
   htarget:= Prod.ext (zaey fp) (zaej fn)
-def zao2 (h1 h2 : SigHom) : SigHom where
+def zanr (h1 h2 : SigHom) : SigHom where
   fn a:= h1.fn (h2.fn a)
   valid a:= h1.valid (h2.fn a)
   hneg ha:= by rw [h2.hneg ha,h1.hneg (h2.valid _)]
@@ -3682,8 +3682,8 @@ def zao2 (h1 h2 : SigHom) : SigHom where
   hzero:= by rw [h2.hzero,h1.hzero]
   hone:= by rw [h2.hone,h1.hone]
   htarget:= by rw [h2.htarget,h1.htarget]
-def sym1 (j: Fin 414): Fin 414:= Fin.ofNat 414 (zapr zao7 j.val)
-def sym2 (j: Fin 414): Fin 414:= Fin.ofNat 414 (zapr zaoj j.val)
+def sym1 (j: Fin 414): Fin 414:= Fin.ofNat 414 (zaov zaoe j.val)
+def sym2 (j: Fin 414): Fin 414:= Fin.ofNat 414 (zaov zanq j.val)
 set_option maxRecDepth 20000 in
 lemma zafb: ∀ j: Fin 414,sym1 (sym1 j)= j:= by decide +kernel
 set_option maxRecDepth 20000 in
@@ -3692,118 +3692,118 @@ set_option maxRecDepth 20000 in
 lemma zail : ∀ j : Fin 414,
     sym1 (sym2 (sym1 (sym2 (sym1 (sym2 j)))))= sym2 (sym1 (sym2 (sym1 (sym2 (sym1 j))))):= by
   decide +kernel
-def hom1: SigHom:= zaoa sym1 sym1
-def hom2: SigHom:= zaoa sym2 sym2
-abbrev zaok (a: Sig): Sig:= hom1.fn a
-abbrev zan6 (a: Sig): Sig:= hom2.fn a
-lemma zac4 {a : Sig} (ha : zap6 a) : zaok (zaok a) = a := by
-  apply Prod.ext <;> dsimp [zaok, hom1, zaoa] <;> rw [zaei] <;>
+def hom1: SigHom:= zany sym1 sym1
+def hom2: SigHom:= zany sym2 sym2
+abbrev zan6 (a: Sig): Sig:= hom1.fn a
+abbrev zan3 (a: Sig): Sig:= hom2.fn a
+lemma zac4 {a : Sig} (ha : zaoy a) : zan6 (zan6 a) = a := by
+  apply Prod.ext <;> dsimp [zan6, hom1, zany] <;> rw [zaei] <;>
     simpa [zafb] using zafh (by first | exact ha.1 | exact ha.2)
-lemma zadp {a : Sig} (ha : zap6 a) : zan6 (zan6 a) = a := by
-  apply Prod.ext <;> dsimp [zan6, hom2, zaoa] <;> rw [zaei] <;>
+lemma zadp {a : Sig} (ha : zaoy a) : zan3 (zan3 a) = a := by
+  apply Prod.ext <;> dsimp [zan3, hom2, zany] <;> rw [zaei] <;>
     simpa [zaff] using zafh (by first | exact ha.1 | exact ha.2)
 lemma zadc (a : Sig) :
-    zaok (zan6 (zaok (zan6 (zaok (zan6 a))))) =
-    zan6 (zaok (zan6 (zaok (zan6 (zaok a))))):= by
-  apply Prod.ext <;> dsimp [zaok, zan6, hom1, hom2, zaoa] <;>
+    zan6 (zan3 (zan6 (zan3 (zan6 (zan3 a))))) =
+    zan3 (zan6 (zan3 (zan6 (zan3 (zan6 a))))):= by
+  apply Prod.ext <;> dsimp [zan6, zan3, hom1, hom2, zany] <;>
     simp only [zaei] <;>
-    exact congrArg (fun f=> zaoo f _) (funext fun j=> (zail j).symm)
+    exact congrArg (fun f=> zanv f _) (funext fun j=> (zail j).symm)
 def homG (g : Fin 12) : SigHom :=
   match g.val with
-  | 0=> zaoa id id
+  | 0=> zany id id
   | 1=> hom1
   | 2=> hom2
-  | 3=> zao2 hom1 hom2
-  | 4=> zao2 hom2 hom1
-  | 5=> zao2 hom1 (zao2 hom2 hom1)
-  | 6=> zao2 hom2 (zao2 hom1 hom2)
-  | 7=> zao2 hom1 (zao2 hom2 (zao2 hom1 hom2))
-  | 8=> zao2 hom2 (zao2 hom1 (zao2 hom2 hom1))
-  | 9=> zao2 hom1 (zao2 hom2 (zao2 hom1 (zao2 hom2 hom1)))
-  | 10=> zao2 hom2 (zao2 hom1 (zao2 hom2 (zao2 hom1 hom2)))
-  | _=> zao2 hom1 (zao2 hom2 (zao2 hom1 (zao2 hom2 (zao2 hom1 hom2))))
-abbrev zapm (g: Fin 12) (a: Sig): Sig:= (homG g).fn a
+  | 3=> zanr hom1 hom2
+  | 4=> zanr hom2 hom1
+  | 5=> zanr hom1 (zanr hom2 hom1)
+  | 6=> zanr hom2 (zanr hom1 hom2)
+  | 7=> zanr hom1 (zanr hom2 (zanr hom1 hom2))
+  | 8=> zanr hom2 (zanr hom1 (zanr hom2 hom1))
+  | 9=> zanr hom1 (zanr hom2 (zanr hom1 (zanr hom2 hom1)))
+  | 10=> zanr hom2 (zanr hom1 (zanr hom2 (zanr hom1 hom2)))
+  | _=> zanr hom1 (zanr hom2 (zanr hom1 (zanr hom2 (zanr hom1 hom2))))
+abbrev zaoq (g: Fin 12) (a: Sig): Sig:= (homG g).fn a
 def invG (g : Fin 12) : Fin 12 :=
   ![0, 1,2,4,3,5,6,8,7,9,10,11] g
-lemma zaf4 {a : Sig} (ha : zap6 a) : zapm 0 a = a :=
+lemma zaf4 {a : Sig} (ha : zaoy a) : zaoq 0 a = a :=
   Prod.ext (zafh ha.1) (zafh ha.2)
-lemma zad7 (g: Fin 12) (a: Sig): zap6 (zapm g a):= (homG g).valid a
-lemma zafk (g : Fin 12) {a : Sig} (ha : zap6 a) : zapm g (neg a) = neg (zapm g a) :=
+lemma zad7 (g: Fin 12) (a: Sig): zaoy (zaoq g a):= (homG g).valid a
+lemma zafk (g : Fin 12) {a : Sig} (ha : zaoy a) : zaoq g (neg a) = neg (zaoq g a) :=
   (homG g).hneg ha
 lemma zafw (g : Fin 12) (d : Bool) (a b : Sig) :
-    zapm g (bin d a b)= bin d (zapm g a) (zapm g b):= (homG g).hbin d a b
-lemma zae2 (g: Fin 12): zapm g zero= zero:= (homG g).hzero
-lemma zafc (g: Fin 12): zapm g one= one:= (homG g).hone
-lemma zadm (g: Fin 12): zapm g zapi= zapi:= (homG g).htarget
-lemma zaf2 (g : Fin 12) {a : Sig} (ha : zap6 a) :
-    zapm (invG g) (zapm g a)= a:= by
+    zaoq g (bin d a b)= bin d (zaoq g a) (zaoq g b):= (homG g).hbin d a b
+lemma zae2 (g: Fin 12): zaoq g zero= zero:= (homG g).hzero
+lemma zafc (g: Fin 12): zaoq g one= one:= (homG g).hone
+lemma zadm (g: Fin 12): zaoq g zaox= zaox:= (homG g).htarget
+lemma zaf2 (g : Fin 12) {a : Sig} (ha : zaoy a) :
+    zaoq (invG g) (zaoq g a)= a:= by
   fin_cases g
   · exact (zaf4 (zad7 0 a)).trans (zaf4 ha)
   · exact zac4 ha
   · exact zadp ha
-  · change zan6 (zaok (zaok (zan6 a))) = a
+  · change zan3 (zan6 (zan6 (zan3 a))) = a
     rw [zac4 (hom2.valid a),zadp ha]
-  · change zaok (zan6 (zan6 (zaok a))) = a
+  · change zan6 (zan3 (zan3 (zan6 a))) = a
     rw [zadp (hom1.valid a),zac4 ha]
-  · change zaok (zan6 (zaok (zaok (zan6 (zaok a))))) = a
+  · change zan6 (zan3 (zan6 (zan6 (zan3 (zan6 a))))) = a
     rw [zac4 (hom2.valid _),zadp (hom1.valid _),zac4 ha]
-  · change zan6 (zaok (zan6 (zan6 (zaok (zan6 a))))) = a
+  · change zan3 (zan6 (zan3 (zan3 (zan6 (zan3 a))))) = a
     rw [zadp (hom1.valid _),zac4 (hom2.valid _),zadp ha]
-  · change zan6 (zaok (zan6 (zaok (zaok (zan6 (zaok (zan6 a))))))) = a
+  · change zan3 (zan6 (zan3 (zan6 (zan6 (zan3 (zan6 (zan3 a))))))) = a
     rw [zac4 (hom2.valid _), zadp (hom1.valid _),
         zac4 (hom2.valid _),zadp ha]
-  · change zaok (zan6 (zaok (zan6 (zan6 (zaok (zan6 (zaok a))))))) = a
+  · change zan6 (zan3 (zan6 (zan3 (zan3 (zan6 (zan3 (zan6 a))))))) = a
     rw [zadp (hom1.valid _), zac4 (hom2.valid _),
         zadp (hom1.valid _),zac4 ha]
-  · change zaok (zan6 (zaok (zan6 (zaok (zaok (zan6 (zaok (zan6 (zaok a))))))))) = a
+  · change zan6 (zan3 (zan6 (zan3 (zan6 (zan6 (zan3 (zan6 (zan3 (zan6 a))))))))) = a
     rw [zac4 (hom2.valid _), zadp (hom1.valid _),
         zac4 (hom2.valid _),zadp (hom1.valid _),zac4 ha]
-  · change zan6 (zaok (zan6 (zaok (zan6 (zan6 (zaok (zan6 (zaok (zan6 a))))))))) = a
+  · change zan3 (zan6 (zan3 (zan6 (zan3 (zan3 (zan6 (zan3 (zan6 (zan3 a))))))))) = a
     rw [zadp (hom1.valid _), zac4 (hom2.valid _),
         zadp (hom1.valid _),zac4 (hom2.valid _),zadp ha]
-  · change zaok (zan6 (zaok (zan6 (zaok (zan6 (zaok (zan6 (zaok (zan6 (zaok (zan6 a))))))))))) = a
+  · change zan6 (zan3 (zan6 (zan3 (zan6 (zan3 (zan6 (zan3 (zan6 (zan3 (zan6 (zan3 a))))))))))) = a
     rw [zadc]
     rw [zac4 (hom2.valid _), zadp (hom1.valid _),
         zac4 (hom2.valid _),zadp (hom1.valid _),
         zac4 (hom2.valid _),zadp ha]
-lemma zaft {g : Fin 12} {a b : Sig} (ha : zap6 a) (hb : zap6 b)
-    (he: zapm g a= zapm g b): a= b:= by
-  have:= congrArg (zapm (invG g)) he
+lemma zaft {g : Fin 12} {a b : Sig} (ha : zaoy a) (hb : zaoy b)
+    (he: zaoq g a= zaoq g b): a= b:= by
+  have:= congrArg (zaoq (invG g)) he
   rwa [zaf2 g ha,zaf2 g hb] at this
-lemma zacy (g : Fin 12) {a : Sig} (ha : zapj a) : zapj (zapm g a) := by
+lemma zacy (g : Fin 12) {a : Sig} (ha : zaoi a) : zaoi (zaoq g a) := by
   refine ⟨zad7 g a,?_,?_⟩
   · intro h0; exact ha.2.1 (zaft ha.1 zafg (h0.trans (zae2 g).symm))
   · intro h1; exact ha.2.2 (zaft ha.1 zagr (h1.trans (zafc g).symm))
-def zanf (g : Fin 12) (i : Fin 9) : Sig :=
+def zand (g : Fin 12) (i : Fin 9) : Sig :=
   raw.getD ((zald g>>> (4* i.val))&&& 15) zero
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zajp : ∀ i : Fin 9, raw.getD (zaqo i) zero = zaok (raw.getD i.val zero) := by
+lemma zajp : ∀ i : Fin 9, raw.getD (zao9 i) zero = zan6 (raw.getD i.val zero) := by
   decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zajl : ∀ i : Fin 9, raw.getD (zaqi i) zero = zan6 (raw.getD i.val zero) := by
+lemma zajl : ∀ i : Fin 9, raw.getD (zao3 i) zero = zan3 (raw.getD i.val zero) := by
   decide +kernel
-def p1 (i: Fin 9): Fin 9:= Fin.ofNat 9 (zaqo i)
-def p2 (i: Fin 9): Fin 9:= Fin.ofNat 9 (zaqi i)
-lemma zae1 (g : Fin 12) (i : Fin 9) : zanf g i = zapm g (raw.getD i.val zero) := by
+def p1 (i: Fin 9): Fin 9:= Fin.ofNat 9 (zao9 i)
+def p2 (i: Fin 9): Fin 9:= Fin.ofNat 9 (zao3 i)
+lemma zae1 (g : Fin 12) (i : Fin 9) : zand g i = zaoq g (raw.getD i.val zero) := by
   have h1 : ∀ j : Fin 9, hom1.fn (raw.getD j.val zero) = raw.getD (p1 j).val zero := fun j =>
     (zajp j).symm.trans (by fin_cases j <;> rfl)
   have h2 : ∀ j : Fin 9, hom2.fn (raw.getD j.val zero) = raw.getD (p2 j).val zero := fun j =>
     (zajl j).symm.trans (by fin_cases j <;> rfl)
   fin_cases g
-  · have hr0 : zanf ⟨0, by decide⟩ i = raw.getD i.val zero := by
-      unfold zanf; apply congrArg (fun k=> raw.getD k zero); revert i; decide
+  · have hr0 : zand ⟨0, by decide⟩ i = raw.getD i.val zero := by
+      unfold zand; apply congrArg (fun k=> raw.getD k zero); revert i; decide
     exact hr0.trans (zaf4 (zafs zaf8 i.val)).symm
   all_goals
-    dsimp only [zapm,homG,zao2]
+    dsimp only [zaoq,homG,zanr]
     simp only [h1,h2]
-    unfold zanf
+    unfold zand
     apply congrArg (fun k=> raw.getD k zero)
     revert i; decide
-lemma zad1 (g : Fin 12) (i : Fin 9) : zanf g i ∈ raw := by
-  fin_cases g <;> fin_cases i <;> simp [zanf,zald,raw]
-lemma zaa2 (g : Fin 12) : raw.toFinset.image (zapm g) ⊆ raw.toFinset := by
+lemma zad1 (g : Fin 12) (i : Fin 9) : zand g i ∈ raw := by
+  fin_cases g <;> fin_cases i <;> simp [zand,zald,raw]
+lemma zaa2 (g : Fin 12) : raw.toFinset.image (zaoq g) ⊆ raw.toFinset := by
   intro a ha
   obtain ⟨b,hb,rfl⟩:= Finset.mem_image.mp ha
   rw [List.mem_toFinset] at hb ⊢
@@ -3822,24 +3822,24 @@ lemma zaa2 (g : Fin 12) : raw.toFinset.image (zapm g) ⊆ raw.toFinset := by
   obtain ⟨i,rfl⟩:= hex
   rw [← zae1 g i]
   exact zad1 g i
-def zand (H : SigHom) (k : Nat) (S : Finset Sig) : Prop :=
+def zanc (H : SigHom) (k : Nat) (S : Finset Sig) : Prop :=
   ∃ m≤ k,∃ t T,Live m t T∧ T⊆ S.image H.fn
 lemma zacu {H : SigHom} {k k' : Nat} {S : Finset Sig}
-    (h: zand H k S) (hk: k≤ k'): zand H k' S:= by
+    (h: zanc H k S) (hk: k≤ k'): zanc H k' S:= by
   obtain ⟨m,hm,t,T,hl,hs⟩:= h; exact ⟨m,hm.trans hk,t,T,hl,hs⟩
 lemma zabw {H : SigHom} {k : Nat} {S S' : Finset Sig}
-    (h: zand H k S) (hsub: S.image H.fn⊆ S'.image H.fn): zand H k S':= by
+    (h: zanc H k S) (hsub: S.image H.fn⊆ S'.image H.fn): zanc H k S':= by
   obtain ⟨m,hm,t,T,hl,hs⟩:= h; exact ⟨m,hm,t,T,hl,hs.trans hsub⟩
-lemma zajn (w : List Sig) {a : Sig} (hva : zap6 a) (ha : a ∈ w) :
-    zalo w (neg a)∨ zao0 w (neg a):= by
-  rcases zacp hva (Or.inl ha: zalo w a) with rfl | rfl | ⟨hm,hp⟩
+lemma zajn (w : List Sig) {a : Sig} (hva : zaoy a) (ha : a ∈ w) :
+    zals w (neg a)∨ zaod w (neg a):= by
+  rcases zacp hva (Or.inl ha: zals w a) with rfl | rfl | ⟨hm,hp⟩
   · exact Or.inl (Or.inr (fun hh=> hh.2.2 zaik.1))
   · exact Or.inl (Or.inr (fun hh=> hh.2.1 zaik.2))
   · exact Or.inr (Or.inl ⟨a,hm,hp,rfl⟩)
 lemma zac9 {H : SigHom} {q : Nat} {S S' : Finset Sig} {g : Sig}
     (hs: S'⊆ insert g S)
-    (hr: zalo (S.image H.fn).toList (H.fn g)∨ zao0 (S.image H.fn).toList (H.fn g))
-    (h: zand H q S'): zand H (q+ 1) S:= by
+    (hr: zals (S.image H.fn).toList (H.fn g)∨ zaod (S.image H.fn).toList (H.fn g))
+    (h: zanc H q S'): zanc H (q+ 1) S:= by
   obtain ⟨m,hm,t,T,hl,ht⟩:= h
   have sub : ∀ a ∈ T, a ∈ (S.image H.fn).toList ++ [H.fn g] := by
     intro a ha
@@ -3851,8 +3851,8 @@ lemma zac9 {H : SigHom} {q : Nat} {S S' : Finset Sig} {g : Sig}
   exact ⟨m',by omega,t',T',h',fun a ha=> Finset.mem_toList.mp (hT' _ ha)⟩
 lemma zacm {H : SigHom} {q : Nat} {S S' : Finset Sig} {g : Sig}
     (hs: S'⊆ insert g S)
-    (hr: zalo (S.image H.fn).toList (H.fn g))
-    (h: zand H q S'): zand H q S:= by
+    (hr: zals (S.image H.fn).toList (H.fn g))
+    (h: zanc H q S'): zanc H q S:= by
   obtain ⟨m,hm,t,T,hl,ht⟩:= h
   refine ⟨m,hm,t,T,hl,?_⟩
   intro a ha
@@ -3860,30 +3860,30 @@ lemma zacm {H : SigHom} {q : Nat} {S S' : Finset Sig} {g : Sig}
   rcases Finset.mem_insert.mp (hs hb) with rfl | hb
   · exact Finset.mem_toList.mp (hr.resolve_right (fun hp=> hp (zaet hl _ ha)))
   · exact Finset.mem_image_of_mem _ hb
-lemma zafi {H : SigHom} {q : Nat} {a : Sig} {U : Finset Sig} (hva : zap6 a)
-    (h: zand H q (insert (neg a) U)): zand H (q+ 1) (insert a U):= by
+lemma zafi {H : SigHom} {q : Nat} {a : Sig} {U : Finset Sig} (hva : zaoy a)
+    (h: zanc H q (insert (neg a) U)): zanc H (q+ 1) (insert a U):= by
   apply zac9 (g:= neg a) (by intro x hx; rcases Finset.mem_insert.mp hx with rfl | hx <;> simp [hx]) _ h
   rw [H.hneg hva]
   exact zajn _ (H.valid a) (by simp)
 lemma zae4 {H : SigHom} {q : Nat} {a b : Sig} {d : Bool} {U : Finset Sig}
-    (h: zand H q (insert (bin d a b) U)): zand H (q+ 1) (insert a (insert b U)):= by
+    (h: zanc H q (insert (bin d a b) U)): zanc H (q+ 1) (insert a (insert b U)):= by
   apply zac9 (g:= bin d a b) (by intro x hx; rcases Finset.mem_insert.mp hx with rfl | hx <;> simp [hx]) _ h
   rw [H.hbin]
   exact zajj _ (H.valid a) (H.valid b) (Or.inl (by simp)) (Or.inl (by simp))
-lemma zaf1 {H : SigHom} {q : Nat} {a : Sig} {U : Finset Sig} (hva : zap6 a)
-    (ha: ¬ zapj (H.fn a)) (h: zand H q (insert (neg a) U)) :
-    zand H q (insert a U):= by
+lemma zaf1 {H : SigHom} {q : Nat} {a : Sig} {U : Finset Sig} (hva : zaoy a)
+    (ha: ¬ zaoi (H.fn a)) (h: zanc H q (insert (neg a) U)) :
+    zanc H q (insert a U):= by
   apply zacm (g:= neg a) (by intro x hx; rcases Finset.mem_insert.mp hx with rfl | hx <;> simp [hx]) _ h
-  rcases zacp (H.valid a) (Or.inr ha: zalo [] (H.fn a)) with hz | ho | hm
+  rcases zacp (H.valid a) (Or.inr ha: zals [] (H.fn a)) with hz | ho | hm
   · exact Or.inr (fun hp=> hp.2.2 (by rw [H.hneg hva,hz,zaik.1]))
   · exact Or.inr (fun hp=> hp.2.1 (by rw [H.hneg hva,ho,zaik.2]))
   · simp at hm
 lemma zabc {H : SigHom} {q : Nat} {a b : Sig} {d : Bool} {U : Finset Sig}
-    (ha: ¬ zapj (H.fn a)) (h: zand H q (insert (bin d a b) U)) :
-    zand H q (insert a (insert b U)):= by
+    (ha: ¬ zaoi (H.fn a)) (h: zanc H q (insert (bin d a b) U)) :
+    zanc H q (insert a (insert b U)):= by
   apply zacm (g:= bin d a b) (by intro x hx; rcases Finset.mem_insert.mp hx with rfl | hx <;> simp [hx]) _ h
   rw [H.hbin,zaiu]
-  rcases zacp (H.valid a) (Or.inr ha: zalo [] (H.fn a)) with hz | ho | hm
+  rcases zacp (H.valid a) (Or.inr ha: zals [] (H.fn a)) with hz | ho | hm
   · rw [hz]
     cases d
     · exact Or.inr (fun hp=> hp.2.1 (zai0 (H.valid b)).2.2.1)
@@ -3894,23 +3894,23 @@ lemma zabc {H : SigHom} {q : Nat} {a b : Sig} {d : Bool} {U : Finset Sig}
     · exact Or.inr (fun hp=> hp.2.2 (zai0 (H.valid b)).2.2.2.1)
   · simp at hm
 lemma zaaw {H : SigHom} {q : Nat} {a b : Sig} {d : Bool} {U : Finset Sig}
-    (hb: ¬ zapj (H.fn b)) (h: zand H q (insert (bin d a b) U)) :
-    zand H q (insert a (insert b U)):= by
+    (hb: ¬ zaoi (H.fn b)) (h: zanc H q (insert (bin d a b) U)) :
+    zanc H q (insert a (insert b U)):= by
   rw [zaiu] at h
   rw [Finset.insert_comm]
   exact zabc hb h
 lemma zadi {k t : Nat} {S : Finset Sig} (h : Live k t S) (H : SigHom) :
-    zand H k S:= by
+    zanc H k S:= by
   induction h with
-  | stop=> refine ⟨0,Nat.le_refl _,0,{zapi},Live.stop,?_⟩; simp [H.htarget]
+  | stop=> refine ⟨0,Nat.le_refl _,0,{zaox},Live.stop,?_⟩; simp [H.htarget]
   | unary ha _ _ ih=> exact zafi ha.1 ih
   | binary _ _ _ _ _ ih=> exact zae4 ih
 lemma zaci {k t : Nat} {S : Finset Sig} (h : Live k t S) (H : SigHom)
-    (a: Sig) (ha: a∈ S) (hc: ¬ zapj (H.fn a)) :
-    ∃ q< k,zand H q S:= by
+    (a: Sig) (ha: a∈ S) (hc: ¬ zaoi (H.fn a)) :
+    ∃ q< k,zanc H q S:= by
   induction h with
   | stop =>
-    have ht: a= zapi:= Finset.mem_singleton.mp ha
+    have ht: a= zaox:= Finset.mem_singleton.mp ha
     exact (hc (by rw [ht,H.htarget]; exact zadn)).elim
   | @unary k t U b hp _ tail ih =>
     rcases Finset.mem_insert.mp ha with rfl | ha
@@ -3925,12 +3925,12 @@ lemma zaci {k t : Nat} {S : Finset Sig} (h : Live k t S) (H : SigHom)
       · obtain ⟨q, hq, h⟩ := ih (Finset.mem_insert_of_mem hU)
         exact ⟨q+ 1,by omega,zae4 h⟩
 lemma zaae {H : SigHom} {a b : Sig} (d : Bool)
-    (hca: ¬ zapj (H.fn a)) (hcb: ¬ zapj (H.fn b)) :
-    ¬ zapj (H.fn (bin d a b)):= by
+    (hca: ¬ zaoi (H.fn a)) (hcb: ¬ zaoi (H.fn b)) :
+    ¬ zaoi (H.fn (bin d a b)):= by
   rw [H.hbin]
-  rcases zacp (H.valid a) (Or.inr hca: zalo [] (H.fn a)) with ha0 | ha1 | hm
+  rcases zacp (H.valid a) (Or.inr hca: zals [] (H.fn a)) with ha0 | ha1 | hm
   · rw [ha0, zaiu]
-    rcases zacp (H.valid b) (Or.inr hcb: zalo [] (H.fn b)) with hb0 | hb1 | hm'
+    rcases zacp (H.valid b) (Or.inr hcb: zals [] (H.fn b)) with hb0 | hb1 | hm'
     · rw [hb0]; cases d
       · exact fun hp=> hp.2.1 (zai0 zafg).2.2.1
       · exact fun hp=> hp.2.1 (zai0 zafg).2.1
@@ -3939,7 +3939,7 @@ lemma zaae {H : SigHom} {a b : Sig} (d : Bool)
       · exact fun hp=> hp.2.2 (zai0 zagr).2.1
     · simp at hm'
   · rw [ha1, zaiu]
-    rcases zacp (H.valid b) (Or.inr hcb: zalo [] (H.fn b)) with hb0 | hb1 | hm'
+    rcases zacp (H.valid b) (Or.inr hcb: zals [] (H.fn b)) with hb0 | hb1 | hm'
     · rw [hb0]; cases d
       · exact fun hp=> hp.2.1 (zai0 zafg).1
       · exact fun hp=> hp.2.2 (zai0 zafg).2.2.2.1
@@ -3950,8 +3950,8 @@ lemma zaae {H : SigHom} {a b : Sig} (d : Bool)
   · simp at hm
 lemma zaal {k t : Nat} {S : Finset Sig} (h : Live k t S) (H : SigHom)
     (a b: Sig) (ha: a∈ S) (hb: b∈ S) (hab: a≠ b)
-    (hca: ¬ zapj (H.fn a)) (hcb: ¬ zapj (H.fn b)) :
-    ∃ q,q+ 2≤ k∧ zand H q S:= by
+    (hca: ¬ zaoi (H.fn a)) (hcb: ¬ zaoi (H.fn b)) :
+    ∃ q,q+ 2≤ k∧ zanc H q S:= by
   induction h with
   | stop =>
     have e1:= Finset.mem_singleton.mp ha
@@ -3994,37 +3994,37 @@ lemma zaal {k t : Nat} {S : Finset Sig} (h : Live k t S) (H : SigHom)
             exact ⟨q,by omega,zaaw hcb hf⟩
           · obtain ⟨q, hq, hf⟩ := ih (Finset.mem_insert_of_mem haU) (Finset.mem_insert_of_mem hbU)
             exact ⟨q+ 1,by omega,zae4 hf⟩
-def zaob (j : Fin 414) : Fin 414 :=
-  Fin.ofNat 414 (zapr zanx (if j.val< 252 then j.val else 0))
-def zaos (j : Fin 414) : Fin 414 :=
-  Fin.ofNat 414 (zapr zaom (if j.val< 252 then j.val else 0))
-def zalq: SigHom:= zaoa zaob zaos
-abbrev zanl (a: Sig): Sig:= zalq.fn a
+def zan2 (j : Fin 414) : Fin 414 :=
+  Fin.ofNat 414 (zaov zaoa (if j.val< 252 then j.val else 0))
+def zan1 (j : Fin 414) : Fin 414 :=
+  Fin.ofNat 414 (zaov zanx (if j.val< 252 then j.val else 0))
+def zalp: SigHom:= zany zan2 zan1
+abbrev zanl (a: Sig): Sig:= zalp.fn a
 def zan8 (j : Fin 414) : Fin 414 :=
-  Fin.ofNat 414 (zapr zao4 (if j.val< 232 then j.val else 232))
-def zanq (j : Fin 414) : Fin 414 :=
-  Fin.ofNat 414 (zapr zant (if j.val< 232 then j.val else 232))
-def zall: SigHom:= zaoa zan8 zanq
-abbrev zanc (a: Sig): Sig:= zall.fn a
-def zaop (j : Fin 414) : Fin 414 :=
+  Fin.ofNat 414 (zaov zanw (if j.val< 232 then j.val else 232))
+def zant (j : Fin 414) : Fin 414 :=
+  Fin.ofNat 414 (zaov zan0 (if j.val< 232 then j.val else 232))
+def zalt: SigHom:= zany zan8 zant
+abbrev zank (a: Sig): Sig:= zalt.fn a
+def zan5 (j : Fin 414) : Fin 414 :=
   if h: j.val< 232 then ⟨j.val,by omega⟩ else ⟨0,by omega⟩
-def zak0: SigHom:= zaoa zaop zaop
-abbrev zalr (a: Sig): Sig:= zak0.fn a
-def zamb (i : Fin 9) : SigHom :=
-  if i.val= 4∨ i.val= 6∨ i.val= 7 then zao2 zalq (homG (gOfV i))
-  else zao2 zall (homG (gOfV i))
-def zapw (a: Sig): Base1007.Sig:= (BitVec.ofNat 252 a.1,BitVec.ofNat 252 a.2)
+def zak1: SigHom:= zany zan5 zan5
+abbrev zalw (a: Sig): Sig:= zak1.fn a
+def zal8 (i : Fin 9) : SigHom :=
+  if i.val= 4∨ i.val= 6∨ i.val= 7 then zanr zalp (homG (gOfV i))
+  else zanr zalt (homG (gOfV i))
+def zaoo (a: Sig): Base1007.Sig:= (BitVec.ofNat 252 a.1,BitVec.ofNat 252 a.2)
 lemma zad8: Base1007.one= (BitVec.allOnes 252,BitVec.allOnes 252):= rfl
-lemma zabm: Base1007.zapi= (BitVec.allOnes 252,0):= rfl
-lemma zac6: zapw zapi= Base1007.zapi:= by decide +kernel
-lemma zafp (a : Sig) : zapw (neg a) = Base1007.neg (zapw a) := by
+lemma zabm: Base1007.zaox= (BitVec.allOnes 252,0):= rfl
+lemma zac6: zaoo zaox= Base1007.zaox:= by decide +kernel
+lemma zafp (a : Sig) : zaoo (neg a) = Base1007.neg (zaoo a) := by
   apply Prod.ext <;> apply BitVec.eq_of_getLsbD_eq <;> intro i hi <;>
-    simp only [zapw, neg, Base1007.neg, BitVec.getLsbD_ofNat, BitVec.getLsbD_not,
+    simp only [zaoo, neg, Base1007.neg, BitVec.getLsbD_ofNat, BitVec.getLsbD_not,
       zabr _ (show i< 414 by omega),hi,decide_true,Bool.true_and]
 lemma zafn (d : Bool) (a b : Sig) :
-    zapw (bin d a b)= Base1007.bin d (zapw a) (zapw b):= by
+    zaoo (bin d a b)= Base1007.bin d (zaoo a) (zaoo b):= by
   cases d <;> apply Prod.ext <;> apply BitVec.eq_of_getElem_eq <;> intro i hi <;>
-    simp [zapw,bin,Base1007.bin]
+    simp [zaoo,bin,Base1007.bin]
 lemma zabz (a : Base1007.Sig) :
     Base1007.bin false a Base1007.one= a∧ Base1007.bin true a Base1007.zero= a ∧
     Base1007.bin false a Base1007.zero= Base1007.zero∧ Base1007.bin true a Base1007.one= Base1007.one ∧
@@ -4039,19 +4039,19 @@ lemma zab8 (d : Bool) (a b : Base1007.Sig) :
 lemma zacf :
     Base1007.neg Base1007.zero= Base1007.one∧ Base1007.neg Base1007.one= Base1007.zero:= by
   simp [Base1007.neg,Base1007.zero,zad8]
-lemma zaav {k t S} (h : Base1007.Live k t S) : ∀ a ∈ S, Base1007.zapj a := by
+lemma zaav {k t S} (h : Base1007.Live k t S) : ∀ a ∈ S, Base1007.zaoi a := by
   induction h with
   | stop =>
     intro a ha; rw [Finset.mem_singleton.mp ha]
-    unfold Base1007.zapj; rw [zabm,Base1007.zero,zad8]; decide
+    unfold Base1007.zaoi; rw [zabm,Base1007.zero,zad8]; decide
   | unary ha _ _ ih=> simpa using And.intro ha (fun a h=> ih a (Finset.mem_insert_of_mem h))
   | binary ha hb _ _ _ ih =>
     simp only [Finset.forall_mem_insert]
     exact ⟨ha,hb,fun a h=> ih a (Finset.mem_insert_of_mem h)⟩
 lemma zabk {w : Finset Base1007.Sig} {z : Base1007.Sig} {k t S} (h : Base1007.Live k t S)
-    (hz : (z ∈ w ∨ ¬ Base1007.zapj z) ∨
-      (∃ a∈ w,Base1007.zapj a∧ z= Base1007.neg a) ∨
-      (∃ d a b,a∈ w∧ b∈ w∧ Base1007.zapj a∧ Base1007.zapj b∧ a≠ b∧ z= Base1007.bin d a b))
+    (hz : (z ∈ w ∨ ¬ Base1007.zaoi z) ∨
+      (∃ a∈ w,Base1007.zaoi a∧ z= Base1007.neg a) ∨
+      (∃ d a b,a∈ w∧ b∈ w∧ Base1007.zaoi a∧ Base1007.zaoi b∧ a≠ b∧ z= Base1007.bin d a b))
     (sub: S⊆ insert z w) :
     ∃ k' t' S',k'≤ k+ 1∧ Base1007.Live k' t' S'∧ S'⊆ w:= by
   by_cases hm: z∈ S
@@ -4094,75 +4094,75 @@ lemma zabk {w : Finset Base1007.Sig} {z : Base1007.Sig} {k t S} (h : Base1007.Li
   · refine ⟨k, t, S, by omega, h, ?_⟩
     intro a ha; exact (Finset.mem_insert.mp (sub ha)).resolve_left (fun eq=> hm (eq▸ ha))
 lemma zaez {k t S} (h : Live k t S) :
-    ∃ k' t' T,k'≤ k∧ Base1007.Live k' t' T∧ T⊆ S.image zapw:= by
+    ∃ k' t' T,k'≤ k∧ Base1007.Live k' t' T∧ T⊆ S.image zaoo:= by
   induction h with
   | stop =>
-    refine ⟨0,0,{Base1007.zapi},Nat.le_refl _,Base1007.Live.stop,?_⟩
+    refine ⟨0,0,{Base1007.zaox},Nat.le_refl _,Base1007.Live.stop,?_⟩
     simp [zac6]
   | @unary k t U a _ _ _ ih =>
     obtain ⟨k',t',T,hk,hl,hsub⟩:= ih
     rw [Finset.image_insert,zafp] at hsub
-    have hsub' : T ⊆ insert (Base1007.neg (zapw a)) ((insert a U).image zapw) :=
+    have hsub' : T ⊆ insert (Base1007.neg (zaoo a)) ((insert a U).image zaoo) :=
       hsub.trans (Finset.insert_subset_insert _ (Finset.image_subset_image (Finset.subset_insert a U)))
-    have ha_mem: zapw a∈ (insert a U).image zapw:= Finset.mem_image_of_mem _ (Finset.mem_insert_self _ _)
-    have hz : (Base1007.neg (zapw a) ∈ (insert a U).image zapw ∨ ¬ Base1007.zapj (Base1007.neg (zapw a))) ∨
-        (∃ x∈ (insert a U).image zapw,Base1007.zapj x∧ Base1007.neg (zapw a)= Base1007.neg x) ∨
-        (∃ d x y, x ∈ (insert a U).image zapw ∧ y ∈ (insert a U).image zapw ∧
-          Base1007.zapj x∧ Base1007.zapj y∧ x≠ y∧ Base1007.neg (zapw a)= Base1007.bin d x y):= by
-      by_cases h0: zapw a= Base1007.zero
+    have ha_mem: zaoo a∈ (insert a U).image zaoo:= Finset.mem_image_of_mem _ (Finset.mem_insert_self _ _)
+    have hz : (Base1007.neg (zaoo a) ∈ (insert a U).image zaoo ∨ ¬ Base1007.zaoi (Base1007.neg (zaoo a))) ∨
+        (∃ x∈ (insert a U).image zaoo,Base1007.zaoi x∧ Base1007.neg (zaoo a)= Base1007.neg x) ∨
+        (∃ d x y, x ∈ (insert a U).image zaoo ∧ y ∈ (insert a U).image zaoo ∧
+          Base1007.zaoi x∧ Base1007.zaoi y∧ x≠ y∧ Base1007.neg (zaoo a)= Base1007.bin d x y):= by
+      by_cases h0: zaoo a= Base1007.zero
       · exact Or.inl (Or.inr (fun hp=> hp.2 (by rw [h0,zacf.1])))
-      by_cases h1: zapw a= Base1007.one
+      by_cases h1: zaoo a= Base1007.one
       · exact Or.inl (Or.inr (fun hp=> hp.1 (by rw [h1,zacf.2])))
-      exact Or.inr (Or.inl ⟨zapw a,ha_mem,⟨h0,h1⟩,rfl⟩)
+      exact Or.inr (Or.inl ⟨zaoo a,ha_mem,⟨h0,h1⟩,rfl⟩)
     obtain ⟨k'',t'',T',hk',hl',hT'⟩:= zabk hl hz hsub'
     exact ⟨k'',t'',T',by omega,hl',hT'⟩
   | @binary k t U a b d _ _ _ _ _ ih =>
     obtain ⟨k',t',T,hk,hl,hsub⟩:= ih
     rw [Finset.image_insert,zafn] at hsub
-    let W:= (insert a (insert b U)).image zapw
-    have hsub' : T ⊆ insert (Base1007.bin d (zapw a) (zapw b)) W :=
+    let W:= (insert a (insert b U)).image zaoo
+    have hsub' : T ⊆ insert (Base1007.bin d (zaoo a) (zaoo b)) W :=
       hsub.trans (Finset.insert_subset_insert _ (Finset.image_subset_image
         (fun x hx=> Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hx))))
-    have ha_mem: zapw a∈ W:= Finset.mem_image_of_mem _ (Finset.mem_insert_self _ _)
-    have hb_mem: zapw b∈ W:= Finset.mem_image_of_mem _ (Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
-    have hz : (Base1007.bin d (zapw a) (zapw b) ∈ W ∨ ¬ Base1007.zapj (Base1007.bin d (zapw a) (zapw b))) ∨
-        (∃ x∈ W,Base1007.zapj x∧ Base1007.bin d (zapw a) (zapw b)= Base1007.neg x) ∨
-        (∃ d' x y, x ∈ W ∧ y ∈ W ∧ Base1007.zapj x ∧ Base1007.zapj y ∧ x ≠ y ∧
-          Base1007.bin d (zapw a) (zapw b)= Base1007.bin d' x y):= by
-      have la:= zabz (zapw a)
-      have lb:= zabz (zapw b)
-      by_cases ha0: zapw a= Base1007.zero
+    have ha_mem: zaoo a∈ W:= Finset.mem_image_of_mem _ (Finset.mem_insert_self _ _)
+    have hb_mem: zaoo b∈ W:= Finset.mem_image_of_mem _ (Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
+    have hz : (Base1007.bin d (zaoo a) (zaoo b) ∈ W ∨ ¬ Base1007.zaoi (Base1007.bin d (zaoo a) (zaoo b))) ∨
+        (∃ x∈ W,Base1007.zaoi x∧ Base1007.bin d (zaoo a) (zaoo b)= Base1007.neg x) ∨
+        (∃ d' x y, x ∈ W ∧ y ∈ W ∧ Base1007.zaoi x ∧ Base1007.zaoi y ∧ x ≠ y ∧
+          Base1007.bin d (zaoo a) (zaoo b)= Base1007.bin d' x y):= by
+      have la:= zabz (zaoo a)
+      have lb:= zabz (zaoo b)
+      by_cases ha0: zaoo a= Base1007.zero
       · rw [ha0, zab8]; cases d
         · exact Or.inl (Or.inr (fun hp=> hp.1 lb.2.2.1))
         · rw [lb.2.1]; exact Or.inl (Or.inl hb_mem)
-      by_cases ha1: zapw a= Base1007.one
+      by_cases ha1: zaoo a= Base1007.one
       · rw [ha1, zab8]; cases d
         · rw [lb.1]; exact Or.inl (Or.inl hb_mem)
         · exact Or.inl (Or.inr (fun hp=> hp.2 lb.2.2.2.1))
-      by_cases hb0: zapw b= Base1007.zero
+      by_cases hb0: zaoo b= Base1007.zero
       · rw [hb0]; cases d
         · exact Or.inl (Or.inr (fun hp=> hp.1 la.2.2.1))
         · rw [la.2.1]; exact Or.inl (Or.inl ha_mem)
-      by_cases hb1: zapw b= Base1007.one
+      by_cases hb1: zaoo b= Base1007.one
       · rw [hb1]; cases d
         · rw [la.1]; exact Or.inl (Or.inl ha_mem)
         · exact Or.inl (Or.inr (fun hp=> hp.2 la.2.2.2.1))
-      by_cases he: zapw a= zapw b
+      by_cases he: zaoo a= zaoo b
       · rw [← he]; cases d
         · rw [la.2.2.2.2.1]; exact Or.inl (Or.inl ha_mem)
         · rw [la.2.2.2.2.2]; exact Or.inl (Or.inl ha_mem)
-      exact Or.inr (Or.inr ⟨d,zapw a,zapw b,ha_mem,hb_mem,⟨ha0,ha1⟩,⟨hb0,hb1⟩,he,rfl⟩)
+      exact Or.inr (Or.inr ⟨d,zaoo a,zaoo b,ha_mem,hb_mem,⟨ha0,ha1⟩,⟨hb0,hb1⟩,he,rfl⟩)
     obtain ⟨k'',t'',T',hk',hl',hT'⟩:= zabk hl hz hsub'
     exact ⟨k'',t'',T',by omega,hl',hT'⟩
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zado: zalq.fn raw4= zero:= by decide +kernel
-def zale: List Sig:= [raw0,raw1,raw2,raw3,raw5,raw6,raw7,raw8]
+lemma zado: zalp.fn raw4= zero:= by decide +kernel
+def zalc: List Sig:= [raw0,raw1,raw2,raw3,raw5,raw6,raw7,raw8]
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zaaj : zale.map (fun a => zapw (zanl a)) = Base1007.raw := by
+lemma zaaj : zalc.map (fun a => zaoo (zanl a)) = Base1007.raw := by
   decide +kernel
-lemma zaac : ¬ zand zalq 12 raw.toFinset := by
+lemma zaac : ¬ zanc zalp 12 raw.toFinset := by
   rintro ⟨m,hm,t,T,hl,hsub⟩
   obtain ⟨m',t',T',hm',hl',hT'⟩:= zaez hl
   apply Base1007.zahb (hm'.trans hm) hl'
@@ -4172,32 +4172,32 @@ lemma zaac : ¬ zand zalq 12 raw.toFinset := by
   have hcm: c∈ raw:= List.mem_toFinset.mp hc
   by_cases hc4: c= raw4
   · subst c
-    have h0: zapw (zalq.fn raw4)= Base1007.zero:= by rw [zado]; rfl
+    have h0: zaoo (zalp.fn raw4)= Base1007.zero:= by rw [zado]; rfl
     exact False.elim ((zaav hl' _ ha).1 h0)
-  · have hmem : c ∈ zale := by
-      simp only [raw,zale,List.mem_cons,List.not_mem_nil,or_false] at hcm ⊢
+  · have hmem : c ∈ zalc := by
+      simp only [raw,zalc,List.mem_cons,List.not_mem_nil,or_false] at hcm ⊢
       rcases hcm with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp_all
     rw [← zaaj]
     exact List.mem_map_of_mem hmem
-def zaqk: Nat:= 2^232- 1
-def zamx (a: Sig): Nat:= ((a.1&&& zaqk)<<< 232)||| (a.2&&& zaqk)
+def zao7: Nat:= 2^232- 1
+def zana (a: Sig): Nat:= ((a.1&&& zao7)<<< 232)||| (a.2&&& zao7)
 lemma zacx (a : Sig) (j : Nat) :
-    (zamx a).testBit j =
+    (zana a).testBit j =
       if j< 232 then a.2.testBit j else if j< 464 then a.1.testBit (j- 232) else false:= by
-  simp only [zamx, zaqk, Nat.testBit_or, Nat.testBit_and,
+  simp only [zana, zao7, Nat.testBit_or, Nat.testBit_and,
     Nat.testBit_two_pow_sub_one, Nat.testBit_shiftLeft]
   by_cases hj: j< 232
   · simp [hj,show ¬ 232≤ j by omega]
   · by_cases hk : j < 464
     · simp [hj,hk,show 232≤ j by omega,show j- 232< 232 by omega]
     · simp [hj,hk,show 232≤ j by omega,show ¬ j- 232< 232 by omega]
-lemma zaa7: zamx zapi= Base1007.Theta.goal 232:= by decide +kernel
+lemma zaa7: zana zaox= Base1007.Theta.goal 232:= by decide +kernel
 lemma zaax (j : Nat) :
     (Base1007.Theta.mask 232).testBit j= decide (j< 464):= by
   change (2 ^ (232+ 232)- 1).testBit j= decide (j< 464)
   rw [Nat.testBit_two_pow_sub_one]
 lemma zadr {a : Sig} :
-    zamx (neg a)= zamx a^^^ Base1007.Theta.mask 232:= by
+    zana (neg a)= zana a^^^ Base1007.Theta.mask 232:= by
   apply Nat.eq_of_testBit_eq; intro j
   rw [Nat.testBit_xor,zacx,zacx,zaax]
   by_cases hl: j< 232
@@ -4206,99 +4206,99 @@ lemma zadr {a : Sig} :
     · simp [hl,hh,neg,zabr _ (show j- 232< 414 by omega)]
     · simp [hl,hh]
 lemma zadg (d : Bool) (a b : Sig) :
-    zamx (bin d a b) =
-      if d then zamx a||| zamx b else zamx a&&& zamx b:= by
+    zana (bin d a b) =
+      if d then zana a||| zana b else zana a&&& zana b:= by
   apply Nat.eq_of_testBit_eq; intro j
   cases d <;> simp only [bin, Bool.false_eq_true, ite_false, ite_true, Nat.testBit_or,
     Nat.testBit_and, zacx] <;> split_ifs <;> rfl
 lemma zac3 {k t S} (h : Live k t S) (v : List Sig) (hv : v.Nodup) (he : v.toFinset = S) :
-    Base1007.Theta.zapk (Base1007.Theta.mask 232) (Base1007.Theta.goal 232) k (v.map zamx):= by
+    Base1007.Theta.zaon (Base1007.Theta.mask 232) (Base1007.Theta.goal 232) k (v.map zana):= by
   induction h generalizing v with
   | stop =>
-    have hp : ([zapi] : List Sig).Perm v :=
+    have hp : ([zaox] : List Sig).Perm v :=
       List.perm_of_nodup_nodup_toFinset_eq (by simp) hv (by simp [he])
-    have hp':= hp.map zamx
+    have hp':= hp.map zana
     simp only [List.map_cons,List.map_nil,zaa7] at hp'
     exact Base1007.Theta.Run.perm hp' Base1007.Theta.Run.done
   | @unary k t U a ha hf _ ih =>
-    let rest:= zanu [a] v
+    let rest:= zan4 [a] v
     have ham: a∈ v:= List.mem_toFinset.mp (he.symm▸ Finset.mem_insert_self _ _)
     obtain ⟨hn,eq⟩:= zagh (del:= [a]) hv (by simp) (by simpa using he)
     let save:= decide (a∈ U)
-    have hkeep : Base1007.Theta.kept save a rest = zapu U [a] ++ rest := by
-      by_cases hm: a∈ U <;> simp [save,Base1007.Theta.kept,zapu,hm]
+    have hkeep : Base1007.Theta.kept save a rest = zaop U [a] ++ rest := by
+      by_cases hm: a∈ U <;> simp [save,Base1007.Theta.kept,zaop,hm]
     rw [← hkeep] at hn eq
     have hs : (neg a :: Base1007.Theta.kept save a rest).toFinset = insert (neg a) U := by
       rw [List.toFinset_cons,eq]
     have hnd : (neg a :: Base1007.Theta.kept save a rest).Nodup := by
       refine List.nodup_cons.mpr ⟨fun hz=> hf (Finset.mem_insert_of_mem ?_),hn⟩
       exact eq▸ List.mem_toFinset.mpr hz
-    have p:= (zad5 [a] v hv (by simp) (by simpa using ham)).symm.map zamx
+    have p:= (zad5 [a] v hv (by simp) (by simpa using ham)).symm.map zana
     have hdone:= ih _ hnd hs
-    have hmap : (neg a :: Base1007.Theta.kept save a rest).map zamx =
-        (zamx a ^^^ Base1007.Theta.mask 232) ::
-          Base1007.Theta.kept save (zamx a) (rest.map zamx):= by
+    have hmap : (neg a :: Base1007.Theta.kept save a rest).map zana =
+        (zana a ^^^ Base1007.Theta.mask 232) ::
+          Base1007.Theta.kept save (zana a) (rest.map zana):= by
       cases save <;> simp [Base1007.Theta.kept,zadr]
     rw [hmap] at hdone
     exact Base1007.Theta.Run.perm p (Base1007.Theta.Run.one true save hdone)
   | @binary k t U a b d _ _ hab hf _ ih =>
-    let rest:= zanu [a,b] v
+    let rest:= zan4 [a,b] v
     have ah: a∈ v:= List.mem_toFinset.mp (he.symm▸ Finset.mem_insert_self _ _)
     have bh: b∈ v:= List.mem_toFinset.mp (he.symm▸ Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
     obtain ⟨hn,eq⟩:= zagh (del:= [a,b]) hv (by simp [hab]) (by simpa using he)
     let sa:= decide (a∈ U)
     let sb:= decide (b∈ U)
-    have hkeep : Base1007.Theta.kept sa a (Base1007.Theta.kept sb b rest) = zapu U [a, b] ++ rest := by
+    have hkeep : Base1007.Theta.kept sa a (Base1007.Theta.kept sb b rest) = zaop U [a, b] ++ rest := by
       by_cases ham : a ∈ U <;> by_cases hbm : b ∈ U <;>
-        simp [sa,sb,Base1007.Theta.kept,zapu,ham,hbm]
+        simp [sa,sb,Base1007.Theta.kept,zaop,ham,hbm]
     rw [← hkeep] at hn eq
     have hs : (bin d a b :: Base1007.Theta.kept sa a (Base1007.Theta.kept sb b rest)).toFinset =
         insert (bin d a b) U:= by rw [List.toFinset_cons,eq]
     have hnd : (bin d a b :: Base1007.Theta.kept sa a (Base1007.Theta.kept sb b rest)).Nodup := by
       refine List.nodup_cons.mpr ⟨fun hz=> hf (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem ?_)),hn⟩
       exact eq▸ List.mem_toFinset.mpr hz
-    have p:= (zad5 [a,b] v hv (by simp [hab]) (by simp [ah,bh])).symm.map zamx
+    have p:= (zad5 [a,b] v hv (by simp [hab]) (by simp [ah,bh])).symm.map zana
     have hdone:= ih _ hnd hs
     have hkeptMap (x : Sig) (l : List Sig) (fl : Bool) :
-        (Base1007.Theta.kept fl x l).map zamx =
-        Base1007.Theta.kept fl (zamx x) (l.map zamx):= by
+        (Base1007.Theta.kept fl x l).map zana =
+        Base1007.Theta.kept fl (zana x) (l.map zana):= by
       cases fl <;> simp [Base1007.Theta.kept]
     cases d
-    · have hmap : (bin false a b :: Base1007.Theta.kept sa a (Base1007.Theta.kept sb b rest)).map zamx =
-          (zamx a &&& zamx b) ::
-            Base1007.Theta.kept sa (zamx a) (Base1007.Theta.kept sb (zamx b) (rest.map zamx)):= by
+    · have hmap : (bin false a b :: Base1007.Theta.kept sa a (Base1007.Theta.kept sb b rest)).map zana =
+          (zana a &&& zana b) ::
+            Base1007.Theta.kept sa (zana a) (Base1007.Theta.kept sb (zana b) (rest.map zana)):= by
         simp [List.map_cons,zadg,hkeptMap]
       rw [hmap] at hdone
       exact Base1007.Theta.Run.perm p (Base1007.Theta.Run.two true sa sb hdone)
-    · have hmap : (bin true a b :: Base1007.Theta.kept sa a (Base1007.Theta.kept sb b rest)).map zamx =
-          (zamx a ||| zamx b) ::
-            Base1007.Theta.kept sa (zamx a) (Base1007.Theta.kept sb (zamx b) (rest.map zamx)):= by
+    · have hmap : (bin true a b :: Base1007.Theta.kept sa a (Base1007.Theta.kept sb b rest)).map zana =
+          (zana a ||| zana b) ::
+            Base1007.Theta.kept sa (zana a) (Base1007.Theta.kept sb (zana b) (rest.map zana)):= by
         simp [List.map_cons,zadg,hkeptMap]
       rw [hmap] at hdone
       exact Base1007.Theta.Run.perm p (Base1007.Theta.Run.two false sa sb hdone)
-def zal4: List Sig:= [raw2,raw8,raw3,raw1,raw6,raw7,raw5]
-def zalm: List Sig:= zal4.map (fun a=> zalr (zanc a))
+def zamo: List Sig:= [raw2,raw8,raw3,raw1,raw6,raw7,raw5]
+def zalu: List Sig:= zamo.map (fun a=> zalw (zank a))
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zact: zanc raw0= zero:= by decide +kernel
+lemma zact: zank raw0= zero:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zaaa: zalr (zanc raw4)= zero:= by decide +kernel
+lemma zaaa: zalw (zank raw4)= zero:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zabf: zalm.map zamx= Base1007.Theta.zaqp:= by decide +kernel
-lemma zaa4: Base1007.Theta.zaqp.Nodup:= by decide +kernel
-lemma zab7 : zalm.Nodup := by
+lemma zabf: zalu.map zana= Base1007.Theta.zapa:= by decide +kernel
+lemma zaa4: Base1007.Theta.zapa.Nodup:= by decide +kernel
+lemma zab7 : zalu.Nodup := by
   have h:= zaa4
   rw [← zabf] at h
   exact List.Nodup.of_map _ h
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zada : raw.all (fun a => decide (a = raw4) || !(sep true (zanc a)).testBit 232) = true := by
+lemma zada : raw.all (fun a => decide (a = raw4) || !(sep true (zank a)).testBit 232) = true := by
   decide +kernel
-lemma zaab : ¬ zand zall 11 raw.toFinset := by
+lemma zaab : ¬ zanc zalt 11 raw.toFinset := by
   rintro ⟨m,hm,t,T,hl,hsub⟩
-  have h4 : zanc raw4 ∈ T := by
+  have h4 : zank raw4 ∈ T := by
     obtain ⟨x,hxT,hsep⟩:= zai6 hl 232 (by omega)
     obtain ⟨a,haRaw,rfl⟩:= Finset.mem_image.mp (hsub hxT)
     have hsw:= zafz t (zaet hl _ hxT).1 232 (by omega) hsep
@@ -4307,67 +4307,67 @@ lemma zaab : ¬ zand zall 11 raw.toFinset := by
     rcases hall with rfl | hf
     · exact hxT
     · exact False.elim (by rw [hsw] at hf; contradiction)
-  have hz4 : ¬ zapj (zak0.fn (zanc raw4)) := fun hp =>
+  have hz4 : ¬ zaoi (zak1.fn (zank raw4)) := fun hp =>
     hp.2.1 zaaa
-  obtain ⟨q,hq,m',hm',t',T',hl',hT'⟩:= zaci hl zak0 (zanc raw4) h4 hz4
-  have hsubTheta : ∀ a ∈ T', a ∈ zalm := by
+  obtain ⟨q,hq,m',hm',t',T',hl',hT'⟩:= zaci hl zak1 (zank raw4) h4 hz4
+  have hsubTheta : ∀ a ∈ T', a ∈ zalu := by
     intro a ha
     obtain ⟨b,hbT,rfl⟩:= Finset.mem_image.mp (hT' ha)
     obtain ⟨c,hcRaw,rfl⟩:= Finset.mem_image.mp (hsub hbT)
     have hcm:= List.mem_toFinset.mp hcRaw
     by_cases hc0: c= raw0
     · subst c
-      have h0 : zalr (zanc raw0) = zero := by
-        rw [zact]; exact zak0.hzero
+      have h0 : zalw (zank raw0) = zero := by
+        rw [zact]; exact zak1.hzero
       exact False.elim ((zaet hl' _ ha).2.1 h0)
     by_cases hc4: c= raw4
     · subst c
       exact False.elim ((zaet hl' _ ha).2.1 zaaa)
-    · have hmem : c ∈ zal4 := by
-        simp only [raw,zal4,List.mem_cons,List.not_mem_nil,or_false] at hcm ⊢
+    · have hmem : c ∈ zamo := by
+        simp only [raw,zamo,List.mem_cons,List.not_mem_nil,or_false] at hcm ⊢
         rcases hcm with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp_all
       exact List.mem_map_of_mem hmem
-  let v:= zalm.filter (fun a=> decide (a∈ T'))
+  let v:= zalu.filter (fun a=> decide (a∈ T'))
   have he : v.toFinset = T' := by
     ext a; simp only [v,List.mem_toFinset,List.mem_filter,decide_eq_true_eq]
     exact ⟨And.right,fun ha=> ⟨hsubTheta _ ha,ha⟩⟩
   have hrun:= zac3 hl' v (zab7.filter _) he
   apply Base1007.Theta.zaku (show m'≤ 10 by omega) _ hrun
-  have sub:= List.Sublist.map zamx (List.filter_sublist (l:= zalm) (p:= fun a=> decide (a∈ T')))
+  have sub:= List.Sublist.map zana (List.filter_sublist (l:= zalu) (p:= fun a=> decide (a∈ T')))
   rwa [zabf] at sub
 lemma zaat (i : Fin 9) (hi : i.val = 4 ∨ i.val = 6 ∨ i.val = 7) :
-    ¬ zand (zamb i) 12 raw.toFinset:= by
+    ¬ zanc (zal8 i) 12 raw.toFinset:= by
   intro h
   apply zaac
   obtain ⟨m,hm,t,T,hl,hsub⟩:= h
   refine ⟨m,hm,t,T,hl,?_⟩
   intro x hx
   obtain ⟨a,ha,rfl⟩:= Finset.mem_image.mp (hsub hx)
-  simp only [zamb,hi,ite_true,zao2]
+  simp only [zal8,hi,ite_true,zanr]
   exact Finset.mem_image_of_mem _ (zaa2 (gOfV i) (Finset.mem_image_of_mem _ ha))
 lemma zaay (i : Fin 9) (hi : ¬ (i.val = 4 ∨ i.val = 6 ∨ i.val = 7)) :
-    ¬ zand (zamb i) 11 raw.toFinset:= by
+    ¬ zanc (zal8 i) 11 raw.toFinset:= by
   intro h
   apply zaab
   obtain ⟨m,hm,t,T,hl,hsub⟩:= h
   refine ⟨m,hm,t,T,hl,?_⟩
   intro x hx
   obtain ⟨a,ha,rfl⟩:= Finset.mem_image.mp (hsub hx)
-  simp only [zamb,hi,ite_false,zao2]
+  simp only [zal8,hi,ite_false,zanr]
   exact Finset.mem_image_of_mem _ (zaa2 (gOfV i) (Finset.mem_image_of_mem _ ha))
-lemma zaa3 (i : Fin 9) : (zamb i).fn (raw.getD i.val zero) = zero := by
-  have hact : ∀ g : Fin 12, (homG g).fn (raw.getD i.val zero) = zanf g i :=
+lemma zaa3 (i : Fin 9) : (zal8 i).fn (raw.getD i.val zero) = zero := by
+  have hact : ∀ g : Fin 12, (homG g).fn (raw.getD i.val zero) = zand g i :=
     fun g=> (zae1 g i).symm
   fin_cases i
-  · change zanc ((homG (gOfV 0)).fn (raw.getD 0 zero))= zero; rw [hact]; exact zact
-  · change zanc ((homG (gOfV 1)).fn (raw.getD 1 zero))= zero; rw [hact]; exact zact
-  · change zanc ((homG (gOfV 2)).fn (raw.getD 2 zero))= zero; rw [hact]; exact zact
-  · change zanc ((homG (gOfV 3)).fn (raw.getD 3 zero))= zero; rw [hact]; exact zact
-  · change zalq.fn ((homG (gOfV 4)).fn (raw.getD 4 zero))= zero; rw [hact]; exact zado
-  · change zanc ((homG (gOfV 5)).fn (raw.getD 5 zero))= zero; rw [hact]; exact zact
-  · change zalq.fn ((homG (gOfV 6)).fn (raw.getD 6 zero))= zero; rw [hact]; exact zado
-  · change zalq.fn ((homG (gOfV 7)).fn (raw.getD 7 zero))= zero; rw [hact]; exact zado
-  · change zanc ((homG (gOfV 8)).fn (raw.getD 8 zero))= zero; rw [hact]; exact zact
+  · change zank ((homG (gOfV 0)).fn (raw.getD 0 zero))= zero; rw [hact]; exact zact
+  · change zank ((homG (gOfV 1)).fn (raw.getD 1 zero))= zero; rw [hact]; exact zact
+  · change zank ((homG (gOfV 2)).fn (raw.getD 2 zero))= zero; rw [hact]; exact zact
+  · change zank ((homG (gOfV 3)).fn (raw.getD 3 zero))= zero; rw [hact]; exact zact
+  · change zalp.fn ((homG (gOfV 4)).fn (raw.getD 4 zero))= zero; rw [hact]; exact zado
+  · change zank ((homG (gOfV 5)).fn (raw.getD 5 zero))= zero; rw [hact]; exact zact
+  · change zalp.fn ((homG (gOfV 6)).fn (raw.getD 6 zero))= zero; rw [hact]; exact zado
+  · change zalp.fn ((homG (gOfV 7)).fn (raw.getD 7 zero))= zero; rw [hact]; exact zado
+  · change zank ((homG (gOfV 8)).fn (raw.getD 8 zero))= zero; rw [hact]; exact zact
 inductive Tag where
   | tNone
   | tDeg3
@@ -4388,47 +4388,47 @@ def zanp : Nat → Tag
   | 1=> .tDeg3
   | 2=> .tSpec0
   | _=> .tSpec1
-def zaqf (i : Fin 9) (k : Nat) (S : Finset Sig) : Prop :=
-  ∀ q,q+ 1< k→ ¬ zand (zamb i) q S
-def zaqa (i : Fin 9) (k : Nat) (S : Finset Sig) : Prop :=
-  ∀ q,q+ 2< k→ ¬ zand (zamb i) q S
+def zao5 (i : SigHom) (k : Nat) (S : Finset Sig) : Prop :=
+  ∀ q,q+ 1< k→ ¬ zanc i q S
+def zao6 (i : SigHom) (k : Nat) (S : Finset Sig) : Prop :=
+  ∀ q,q+ 2< k→ ¬ zanc i q S
 def zamz (k : Nat) (S : Finset Sig) (a : Sig) : Tag → Prop
   | .tNone=> True
-  | .tDeg3=> ∃ i: Fin 9,(zamb i).fn a= zero∧ zaqa i k S
-  | .tSpec0=> ∃ i: Fin 9,(zamb i).fn a= zero∧ zaqf i k S
-  | .tSpec1=> ∃ i: Fin 9,(zamb i).fn a= one∧ zaqf i k S
-def zaqn (k : Nat) (S : Finset Sig) (τ : Sig → Tag) : Prop :=
+  | .tDeg3=> ∃ i: SigHom,i.fn a= zero∧ zao6 i k S
+  | .tSpec0=> ∃ i: SigHom,i.fn a= zero∧ zao5 i k S
+  | .tSpec1=> ∃ i: SigHom,i.fn a= one∧ zao5 i k S
+def zao0 (k : Nat) (S : Finset Sig) (τ : Sig → Tag) : Prop :=
   ∀ a∈ S,zamz k S a (τ a)
 def zaln (τ : Sig → Tag) (a : Sig) (x : Sig) : Tag :=
   if x= neg a then (if τ a= .tDeg3 then .tSpec1 else .tNone) else τ x
-def zamt (τ : Sig → Tag) (a b : Sig) (x : Sig) : Tag :=
+def zam9 (τ : Sig → Tag) (a b : Sig) (x : Sig) : Tag :=
   if x= bin false a b then (if τ a= .tDeg3∨ τ b= .tDeg3 then .tSpec0 else .tNone) else τ x
-def zanj (τ : Sig → Tag) (a b : Sig) (x : Sig) : Tag :=
+def zang (τ : Sig → Tag) (a b : Sig) (x : Sig) : Tag :=
   if x= bin true a b then .tNone
   else if x= a∧ τ a= .tDeg3 then .tSpec0
   else if x= b∧ τ b= .tDeg3 then .tSpec0
   else τ x
 inductive TRestricted : Nat → Nat → Finset Sig → (Sig → Tag) → Prop
-  | stop {τ}: TRestricted 0 0 {zapi} τ
+  | stop {τ}: TRestricted 0 0 {zaox} τ
   | unary {k t : Nat} {U : Finset Sig} {a : Sig} {τ : Sig → Tag}
-      (ha: zapj a) (hf: neg a∉ insert a U)
+      (ha: zaoi a) (hf: neg a∉ insert a U)
       (hr1: τ a≠ .tSpec0∧ τ a≠ .tSpec1)
       (hr2: τ a= .tDeg3→ a∉ U)
       (tail: TRestricted k t (insert (neg a) U) (zaln τ a)) :
       TRestricted (k+ 1) (t+ 1) (insert a U) τ
   | binaryAnd {k t : Nat} {U : Finset Sig} {a b : Sig} {τ : Sig → Tag}
-      (ha: zapj a) (hb: zapj b) (hab: a≠ b)
+      (ha: zaoi a) (hb: zaoi b) (hab: a≠ b)
       (hf: bin false a b∉ insert a (insert b U))
       (hra: τ a≠ .tSpec0∧ (τ a≠ .tNone→ a∉ U))
       (hrb: τ b≠ .tSpec0∧ (τ b≠ .tNone→ b∉ U))
-      (tail: TRestricted k t (insert (bin false a b) U) (zamt τ a b)) :
+      (tail: TRestricted k t (insert (bin false a b) U) (zam9 τ a b)) :
       TRestricted (k+ 1) t (insert a (insert b U)) τ
   | binaryOr {k t : Nat} {U : Finset Sig} {a b : Sig} {τ : Sig → Tag}
-      (ha: zapj a) (hb: zapj b) (hab: a≠ b)
+      (ha: zaoi a) (hb: zaoi b) (hab: a≠ b)
       (hf: bin true a b∉ insert a (insert b U))
       (hra: τ a≠ .tSpec1∧ (τ a= .tSpec0→ a∉ U))
       (hrb: τ b≠ .tSpec1∧ (τ b= .tSpec0→ b∉ U))
-      (tail: TRestricted k t (insert (bin true a b) U) (zanj τ a b)) :
+      (tail: TRestricted k t (insert (bin true a b) U) (zang τ a b)) :
       TRestricted (k+ 1) t (insert a (insert b U)) τ
 lemma TRestricted.live {k t S τ} (h : TRestricted k t S τ) : Live k t S := by
   induction h with
@@ -4436,7 +4436,7 @@ lemma TRestricted.live {k t S τ} (h : TRestricted k t S τ) : Live k t S := by
   | unary ha hf _ _ _ ih=> exact Live.unary ha hf ih
   | binaryAnd ha hb hab hf _ _ _ ih=> exact Live.binary ha hb hab hf ih
   | binaryOr ha hb hab hf _ _ _ ih=> exact Live.binary ha hb hab hf ih
-lemma zaaf {k : Nat} {U : Finset Sig} {a x : Sig} {tg : Tag} (hva : zap6 a)
+lemma zaaf {k : Nat} {U : Finset Sig} {a x : Sig} {tg : Tag} (hva : zaoy a)
     (h: zamz (k+ 1) (insert a U) x tg): zamz k (insert (neg a) U) x tg:= by
   cases tg with
   | tNone=> trivial
@@ -4463,7 +4463,7 @@ lemma zaad {k : Nat} {U : Finset Sig} {a b x : Sig} {d : Bool} {tg : Tag}
   | tSpec1 =>
     obtain ⟨i,hp,ht⟩:= h
     exact ⟨i,hp,fun q hq hf=> ht (q+ 1) (by omega) (zae4 hf)⟩
-lemma zacs {k t S τ} (h : Live k t S) (ht : zaqn k S τ) : TRestricted k t S τ := by
+lemma zacs {k t S τ} (h : Live k t S) (ht : zao0 k S τ) : TRestricted k t S τ := by
   induction h generalizing τ with
   | stop=> exact TRestricted.stop
   | @unary k t U a ha hf tail ih =>
@@ -4471,29 +4471,29 @@ lemma zacs {k t S τ} (h : Live k t S) (ht : zaqn k S τ) : TRestricted k t S τ
     have hr1 : τ a ≠ .tSpec0 ∧ τ a ≠ .tSpec1 := by
       constructor <;> intro heq <;> rw [heq] at hta
       · obtain ⟨i, hp0, hti⟩ := hta
-        have hz: ¬ zapj ((zamb i).fn a):= fun hp=> hp.2.1 hp0
-        have ho : ¬ zapj ((zamb i).fn (neg a)) := fun hp =>
-          hp.2.2 (by rw [(zamb i).hneg ha.1,hp0,zaik.1])
-        obtain ⟨q,hq,hfe⟩:= zaci tail (zamb i) (neg a) (Finset.mem_insert_self _ _) ho
+        have hz: ¬ zaoi (i.fn a):= fun hp=> hp.2.1 hp0
+        have ho : ¬ zaoi (i.fn (neg a)) := fun hp =>
+          hp.2.2 (by rw [i.hneg ha.1,hp0,zaik.1])
+        obtain ⟨q,hq,hfe⟩:= zaci tail i (neg a) (Finset.mem_insert_self _ _) ho
         exact hti q (by omega) (zaf1 ha.1 hz hfe)
       · obtain ⟨i, hp1, hti⟩ := hta
-        have ho: ¬ zapj ((zamb i).fn a):= fun hp=> hp.2.2 hp1
-        have hz : ¬ zapj ((zamb i).fn (neg a)) := fun hp =>
-          hp.2.1 (by rw [(zamb i).hneg ha.1,hp1,zaik.2])
-        obtain ⟨q,hq,hfe⟩:= zaci tail (zamb i) (neg a) (Finset.mem_insert_self _ _) hz
+        have ho: ¬ zaoi (i.fn a):= fun hp=> hp.2.2 hp1
+        have hz : ¬ zaoi (i.fn (neg a)) := fun hp =>
+          hp.2.1 (by rw [i.hneg ha.1,hp1,zaik.2])
+        obtain ⟨q,hq,hfe⟩:= zaci tail i (neg a) (Finset.mem_insert_self _ _) hz
         exact hti q (by omega) (zaf1 ha.1 ho hfe)
     have hr2 : τ a = .tDeg3 → a ∉ U := by
       intro heq haU
       rw [heq] at hta
       obtain ⟨i,hp0,hsl⟩:= hta
-      have hz: ¬ zapj ((zamb i).fn a):= fun hp=> hp.2.1 hp0
-      have ho : ¬ zapj ((zamb i).fn (neg a)) := fun hp =>
-        hp.2.2 (by rw [(zamb i).hneg ha.1,hp0,zaik.1])
+      have hz: ¬ zaoi (i.fn a):= fun hp=> hp.2.1 hp0
+      have ho : ¬ zaoi (i.fn (neg a)) := fun hp =>
+        hp.2.2 (by rw [i.hneg ha.1,hp0,zaik.1])
       have hne: neg a≠ a:= fun e=> by rw [e] at hf; exact hf (Finset.mem_insert_self _ _)
-      obtain ⟨q, hq, hfe⟩ := zaal tail (zamb i) (neg a) a
+      obtain ⟨q, hq, hfe⟩ := zaal tail i (neg a) a
         (Finset.mem_insert_self _ _) (Finset.mem_insert_of_mem haU) hne ho hz
       exact hsl q (by omega) (zaf1 ha.1 hz hfe)
-    have ht' : zaqn k (insert (neg a) U) (zaln τ a) := by
+    have ht' : zao0 k (insert (neg a) U) (zaln τ a) := by
       intro x hx
       rcases Finset.mem_insert.mp hx with rfl | hxU
       · unfold zaln; simp only [ite_true]
@@ -4501,8 +4501,8 @@ lemma zacs {k t S τ} (h : Live k t S) (ht : zaqn k S τ) : TRestricted k t S τ
         · rename_i hd3
           rw [hd3] at hta
           obtain ⟨i,hp0,hsl⟩:= hta
-          have hz: ¬ zapj ((zamb i).fn a):= fun hp=> hp.2.1 hp0
-          refine ⟨i,by rw [(zamb i).hneg ha.1,hp0]; exact zaik.1,?_⟩
+          have hz: ¬ zaoi (i.fn a):= fun hp=> hp.2.1 hp0
+          refine ⟨i,by rw [i.hneg ha.1,hp0]; exact zaik.1,?_⟩
           intro q hq hfe; exact hsl q (by omega) (zaf1 ha.1 hz hfe)
         · trivial
       · have hne : x ≠ neg a := fun e => hf (e ▸ Finset.mem_insert_of_mem hxU)
@@ -4514,7 +4514,7 @@ lemma zacs {k t S τ} (h : Live k t S) (ht : zaqn k S τ) : TRestricted k t S τ
     have htb:= ht b (Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
     cases d with
     | false =>
-      have sideAnd : ∀ {x y : Sig} (hx : zap6 x) (hy : zap6 y) (hxy : x ≠ y)
+      have sideAnd : ∀ {x y : Sig} (hx : zaoy x) (hy : zaoy y) (hxy : x ≠ y)
           (hfx: bin false x y∉ insert x (insert y U))
           (tail': Live k t (insert (bin false x y) U))
           (htx: zamz (k+ 1) (insert x (insert y U)) x (τ x)),
@@ -4523,10 +4523,10 @@ lemma zacs {k t S τ} (h : Live k t S) (ht : zaqn k S τ) : TRestricted k t S τ
         constructor
         · intro heq; rw [heq] at htx
           obtain ⟨i,hp0,hti⟩:= htx
-          have hz: ¬ zapj ((zamb i).fn x):= fun hp=> hp.2.1 hp0
-          have hg0 : ¬ zapj ((zamb i).fn (bin false x y)) := fun hp =>
-            hp.2.1 (by rw [(zamb i).hbin,hp0,zaiu]; exact (zai0 ((zamb i).valid y)).2.2.1)
-          obtain ⟨q,hq,hfe⟩:= zaci tail' (zamb i) (bin false x y) (Finset.mem_insert_self _ _) hg0
+          have hz: ¬ zaoi (i.fn x):= fun hp=> hp.2.1 hp0
+          have hg0 : ¬ zaoi (i.fn (bin false x y)) := fun hp =>
+            hp.2.1 (by rw [i.hbin,hp0,zaiu]; exact (zai0 (i.valid y)).2.2.1)
+          obtain ⟨q,hq,hfe⟩:= zaci tail' i (bin false x y) (Finset.mem_insert_self _ _) hg0
           exact hti q (by omega) (zabc hz hfe)
         · intro hne hxU
           cases htxc: τ x with
@@ -4534,49 +4534,49 @@ lemma zacs {k t S τ} (h : Live k t S) (ht : zaqn k S τ) : TRestricted k t S τ
           | tSpec0 =>
             rw [htxc] at htx
             obtain ⟨i,hp0,hti⟩:= htx
-            have hz: ¬ zapj ((zamb i).fn x):= fun hp=> hp.2.1 hp0
-            obtain ⟨q,hq,hfe⟩:= zaci tail' (zamb i) x (Finset.mem_insert_of_mem hxU) hz
+            have hz: ¬ zaoi (i.fn x):= fun hp=> hp.2.1 hp0
+            obtain ⟨q,hq,hfe⟩:= zaci tail' i x (Finset.mem_insert_of_mem hxU) hz
             exact hti q (by omega) (zabc hz hfe)
           | tSpec1 =>
             rw [htxc] at htx
             obtain ⟨i,hp1,hti⟩:= htx
-            have ho: ¬ zapj ((zamb i).fn x):= fun hp=> hp.2.2 hp1
-            obtain ⟨q,hq,hfe⟩:= zaci tail' (zamb i) x (Finset.mem_insert_of_mem hxU) ho
+            have ho: ¬ zaoi (i.fn x):= fun hp=> hp.2.2 hp1
+            obtain ⟨q,hq,hfe⟩:= zaci tail' i x (Finset.mem_insert_of_mem hxU) ho
             exact hti q (by omega) (zabc ho hfe)
           | tDeg3 =>
             rw [htxc] at htx
             obtain ⟨i,hp0,hsl⟩:= htx
-            have hz: ¬ zapj ((zamb i).fn x):= fun hp=> hp.2.1 hp0
-            have hg0 : ¬ zapj ((zamb i).fn (bin false x y)) := fun hp =>
-              hp.2.1 (by rw [(zamb i).hbin,hp0,zaiu]; exact (zai0 ((zamb i).valid y)).2.2.1)
+            have hz: ¬ zaoi (i.fn x):= fun hp=> hp.2.1 hp0
+            have hg0 : ¬ zaoi (i.fn (bin false x y)) := fun hp =>
+              hp.2.1 (by rw [i.hbin,hp0,zaiu]; exact (zai0 (i.valid y)).2.2.1)
             have hne': bin false x y≠ x:= fun e=> by rw [e] at hfx; exact hfx (Finset.mem_insert_self _ _)
-            obtain ⟨q, hq, hfe⟩ := zaal tail' (zamb i) (bin false x y) x
+            obtain ⟨q, hq, hfe⟩ := zaal tail' i (bin false x y) x
               (Finset.mem_insert_self _ _) (Finset.mem_insert_of_mem hxU) hne' hg0 hz
             exact hsl q (by omega) (zabc hz hfe)
       have hra:= sideAnd ha.1 hb.1 hab hf tail hta
       have hrb : τ b ≠ .tSpec0 ∧ (τ b ≠ .tNone → b ∉ U) :=
         sideAnd hb.1 ha.1 hab.symm (by rwa [zaiu, Finset.insert_comm])
           (by rwa [zaiu]) (by rwa [Finset.insert_comm])
-      have ht' : zaqn k (insert (bin false a b) U) (zamt τ a b) := by
+      have ht' : zao0 k (insert (bin false a b) U) (zam9 τ a b) := by
         intro x hx
         rcases Finset.mem_insert.mp hx with rfl | hxU
-        · unfold zamt; simp only [ite_true]
+        · unfold zam9; simp only [ite_true]
           split
           · rename_i hd
             rcases hd with hda | hdb
             · rw [hda] at hta
               obtain ⟨i,hp0,hsl⟩:= hta
-              have hz: ¬ zapj ((zamb i).fn a):= fun hp=> hp.2.1 hp0
-              refine ⟨i,by rw [(zamb i).hbin,hp0,zaiu]; exact (zai0 ((zamb i).valid b)).2.2.1,?_⟩
+              have hz: ¬ zaoi (i.fn a):= fun hp=> hp.2.1 hp0
+              refine ⟨i,by rw [i.hbin,hp0,zaiu]; exact (zai0 (i.valid b)).2.2.1,?_⟩
               intro q hq hfe; exact hsl q (by omega) (zabc hz hfe)
             · rw [hdb] at htb
               obtain ⟨i,hp0,hsl⟩:= htb
-              have hz: ¬ zapj ((zamb i).fn b):= fun hp=> hp.2.1 hp0
-              refine ⟨i,by rw [(zamb i).hbin,hp0]; exact (zai0 ((zamb i).valid a)).2.2.1,?_⟩
+              have hz: ¬ zaoi (i.fn b):= fun hp=> hp.2.1 hp0
+              refine ⟨i,by rw [i.hbin,hp0]; exact (zai0 (i.valid a)).2.2.1,?_⟩
               intro q hq hfe; exact hsl q (by omega) (zaaw hz hfe)
           · trivial
         · have hne : x ≠ bin false a b := fun e => hf (e ▸ Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hxU))
-          unfold zamt; simp only [hne,ite_false]
+          unfold zam9; simp only [hne,ite_false]
           exact zaad (ht x (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hxU)))
       exact TRestricted.binaryAnd ha hb hab hf hra hrb (ih ht')
     | true =>
@@ -4588,31 +4588,31 @@ lemma zacs {k t S τ} (h : Live k t S) (ht : zaqn k S τ) : TRestricted k t S τ
         constructor
         · intro heq; rw [heq] at htx
           obtain ⟨i,hp1,hti⟩:= htx
-          have ho: ¬ zapj ((zamb i).fn x):= fun hp=> hp.2.2 hp1
-          have hg1 : ¬ zapj ((zamb i).fn (bin true x y)) := fun hp =>
-            hp.2.2 (by rw [(zamb i).hbin,hp1,zaiu]; exact (zai0 ((zamb i).valid y)).2.2.2.1)
-          obtain ⟨q,hq,hfe⟩:= zaci tail' (zamb i) (bin true x y) (Finset.mem_insert_self _ _) hg1
+          have ho: ¬ zaoi (i.fn x):= fun hp=> hp.2.2 hp1
+          have hg1 : ¬ zaoi (i.fn (bin true x y)) := fun hp =>
+            hp.2.2 (by rw [i.hbin,hp1,zaiu]; exact (zai0 (i.valid y)).2.2.2.1)
+          obtain ⟨q,hq,hfe⟩:= zaci tail' i (bin true x y) (Finset.mem_insert_self _ _) hg1
           exact hti q (by omega) (zabc ho hfe)
         · intro heq hxU; rw [heq] at htx
           obtain ⟨i,hp0,hti⟩:= htx
-          have hz: ¬ zapj ((zamb i).fn x):= fun hp=> hp.2.1 hp0
-          obtain ⟨q,hq,hfe⟩:= zaci tail' (zamb i) x (Finset.mem_insert_of_mem hxU) hz
+          have hz: ¬ zaoi (i.fn x):= fun hp=> hp.2.1 hp0
+          obtain ⟨q,hq,hfe⟩:= zaci tail' i x (Finset.mem_insert_of_mem hxU) hz
           exact hti q (by omega) (zabc hz hfe)
       have hra:= sideOr tail hta
       have hrb : τ b ≠ .tSpec1 ∧ (τ b = .tSpec0 → b ∉ U) :=
         sideOr (by rwa [zaiu]) (by rwa [Finset.insert_comm])
-      have ht' : zaqn k (insert (bin true a b) U) (zanj τ a b) := by
+      have ht' : zao0 k (insert (bin true a b) U) (zang τ a b) := by
         intro x hx
         rcases Finset.mem_insert.mp hx with rfl | hxU
-        · unfold zanj; simp only [ite_true]; trivial
+        · unfold zang; simp only [ite_true]; trivial
         · have hne : x ≠ bin true a b := fun e => hf (e ▸ Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hxU))
-          unfold zanj; simp only [hne,ite_false]
+          unfold zang; simp only [hne,ite_false]
           by_cases hxa: x= a∧ τ a= .tDeg3
           · simp only [hxa]
             obtain ⟨rfl,hd3⟩:= hxa
             rw [hd3] at hta
             obtain ⟨i,hp0,hsl⟩:= hta
-            have hz: ¬ zapj ((zamb i).fn x):= fun hp=> hp.2.1 hp0
+            have hz: ¬ zaoi (i.fn x):= fun hp=> hp.2.1 hp0
             refine ⟨i,hp0,fun q hq hfe=> hsl q (by omega) (zabc hz hfe)⟩
           · simp only [hxa, ite_false]
             by_cases hxb: x= b∧ τ b= .tDeg3
@@ -4620,43 +4620,43 @@ lemma zacs {k t S τ} (h : Live k t S) (ht : zaqn k S τ) : TRestricted k t S τ
               obtain ⟨rfl,hd3⟩:= hxb
               rw [hd3] at htb
               obtain ⟨i,hp0,hsl⟩:= htb
-              have hz: ¬ zapj ((zamb i).fn x):= fun hp=> hp.2.1 hp0
+              have hz: ¬ zaoi (i.fn x):= fun hp=> hp.2.1 hp0
               refine ⟨i,hp0,fun q hq hfe=> hsl q (by omega) (zaaw hz hfe)⟩
             · simp only [hxb, ite_false]
               exact zaad (ht x (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hxU)))
       exact TRestricted.binaryOr ha hb hab hf hra hrb (ih ht')
-def zanr (a : Sig) : Tag :=
+def zan9 (a : Sig) : Tag :=
   if a= raw4∨ a= raw6∨ a= raw7 then .tSpec0
   else if a∈ raw then .tDeg3
   else .tNone
-def zamu : List Wire :=
+def zam0 : List Wire :=
   [(raw0, .tDeg3), (raw1, .tDeg3), (raw2, .tDeg3), (raw3, .tDeg3),
    (raw4, .tSpec0),(raw5,.tDeg3),(raw6,.tSpec0),(raw7,.tSpec0),(raw8,.tDeg3)]
-lemma zafr {k : Nat} (hk : k ≤ 14) : zaqn k raw.toFinset zanr := by
+lemma zafr {k : Nat} (hk : k ≤ 14) : zao0 k raw.toFinset zan9 := by
   intro a ha
   have hm:= List.mem_toFinset.mp ha
-  have checkV (i : Fin 9) (heq : a = raw.getD i.val zero) : zamz k raw.toFinset a (zanr a) := by
+  have checkV (i : Fin 9) (heq : a = raw.getD i.val zero) : zamz k raw.toFinset a (zan9 a) := by
     subst heq
     have hpz:= zaa3 i
     fin_cases i
-    · have hrt : zanr (raw.getD 0 zero) = .tDeg3 := by decide +kernel
-      rw [hrt]; exact ⟨0,hpz,fun q hq hf=> zaay 0 (by decide) (zacu hf (by omega))⟩
-    · have hrt : zanr (raw.getD 1 zero) = .tDeg3 := by decide +kernel
-      rw [hrt]; exact ⟨1,hpz,fun q hq hf=> zaay 1 (by decide) (zacu hf (by omega))⟩
-    · have hrt : zanr (raw.getD 2 zero) = .tDeg3 := by decide +kernel
-      rw [hrt]; exact ⟨2,hpz,fun q hq hf=> zaay 2 (by decide) (zacu hf (by omega))⟩
-    · have hrt : zanr (raw.getD 3 zero) = .tDeg3 := by decide +kernel
-      rw [hrt]; exact ⟨3,hpz,fun q hq hf=> zaay 3 (by decide) (zacu hf (by omega))⟩
-    · have hrt : zanr (raw.getD 4 zero) = .tSpec0 := by decide +kernel
-      rw [hrt]; exact ⟨4,hpz,fun q hq hf=> zaat 4 (by decide) (zacu hf (by omega))⟩
-    · have hrt : zanr (raw.getD 5 zero) = .tDeg3 := by decide +kernel
-      rw [hrt]; exact ⟨5,hpz,fun q hq hf=> zaay 5 (by decide) (zacu hf (by omega))⟩
-    · have hrt : zanr (raw.getD 6 zero) = .tSpec0 := by decide +kernel
-      rw [hrt]; exact ⟨6,hpz,fun q hq hf=> zaat 6 (by decide) (zacu hf (by omega))⟩
-    · have hrt : zanr (raw.getD 7 zero) = .tSpec0 := by decide +kernel
-      rw [hrt]; exact ⟨7,hpz,fun q hq hf=> zaat 7 (by decide) (zacu hf (by omega))⟩
-    · have hrt : zanr (raw.getD 8 zero) = .tDeg3 := by decide +kernel
-      rw [hrt]; exact ⟨8,hpz,fun q hq hf=> zaay 8 (by decide) (zacu hf (by omega))⟩
+    · have hrt : zan9 (raw.getD 0 zero) = .tDeg3 := by decide +kernel
+      rw [hrt]; exact ⟨zal8 0,hpz,fun q hq hf=> zaay 0 (by decide) (zacu hf (by omega))⟩
+    · have hrt : zan9 (raw.getD 1 zero) = .tDeg3 := by decide +kernel
+      rw [hrt]; exact ⟨zal8 1,hpz,fun q hq hf=> zaay 1 (by decide) (zacu hf (by omega))⟩
+    · have hrt : zan9 (raw.getD 2 zero) = .tDeg3 := by decide +kernel
+      rw [hrt]; exact ⟨zal8 2,hpz,fun q hq hf=> zaay 2 (by decide) (zacu hf (by omega))⟩
+    · have hrt : zan9 (raw.getD 3 zero) = .tDeg3 := by decide +kernel
+      rw [hrt]; exact ⟨zal8 3,hpz,fun q hq hf=> zaay 3 (by decide) (zacu hf (by omega))⟩
+    · have hrt : zan9 (raw.getD 4 zero) = .tSpec0 := by decide +kernel
+      rw [hrt]; exact ⟨zal8 4,hpz,fun q hq hf=> zaat 4 (by decide) (zacu hf (by omega))⟩
+    · have hrt : zan9 (raw.getD 5 zero) = .tDeg3 := by decide +kernel
+      rw [hrt]; exact ⟨zal8 5,hpz,fun q hq hf=> zaay 5 (by decide) (zacu hf (by omega))⟩
+    · have hrt : zan9 (raw.getD 6 zero) = .tSpec0 := by decide +kernel
+      rw [hrt]; exact ⟨zal8 6,hpz,fun q hq hf=> zaat 6 (by decide) (zacu hf (by omega))⟩
+    · have hrt : zan9 (raw.getD 7 zero) = .tSpec0 := by decide +kernel
+      rw [hrt]; exact ⟨zal8 7,hpz,fun q hq hf=> zaat 7 (by decide) (zacu hf (by omega))⟩
+    · have hrt : zan9 (raw.getD 8 zero) = .tDeg3 := by decide +kernel
+      rw [hrt]; exact ⟨zal8 8,hpz,fun q hq hf=> zaay 8 (by decide) (zacu hf (by omega))⟩
   simp only [raw,List.mem_cons,List.not_mem_nil,or_false] at hm
   rcases hm with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
   · exact checkV 0 rfl
@@ -4668,106 +4668,106 @@ lemma zafr {k : Nat} (hk : k ≤ 14) : zaqn k raw.toFinset zanr := by
   · exact checkV 6 rfl
   · exact checkV 7 rfl
   · exact checkV 8 rfl
-def zapz (v: List Wire): List Sig:= v.map Prod.fst
-def zamk (v : List Wire) (S : Finset Sig) (τ : Sig → Tag) : Prop :=
-  (zapz v).Nodup∧ (zapz v).toFinset= S∧ ∀ w∈ v,w.2= τ w.1
-def zane (del : List Sig) (v : List Wire) : List Wire :=
+def zaos (v: List Wire): List Sig:= v.map Prod.fst
+def zal9 (v : List Wire) (S : Finset Sig) (τ : Sig → Tag) : Prop :=
+  (zaos v).Nodup∧ (zaos v).toFinset= S∧ ∀ w∈ v,w.2= τ w.1
+def zann (del : List Sig) (v : List Wire) : List Wire :=
   v.filter (fun w=> !(del.contains w.1))
-def zam2 (d : Bool) : List Wire → Nat
+def zamq (d : Bool) : List Wire → Nat
   | []=> 0
-  | w :: l=> sep d w.1||| zam2 d l
-def zamy (d : Bool) (v : List Wire) : Cov :=
-  v.foldr (fun w c=> zap0 (sep d w.1) c) (0,0,0)
+  | w :: l=> sep d w.1||| zamq d l
+def zam4 (d : Bool) (v : List Wire) : Cov :=
+  v.foldr (fun w c=> zaor (sep d w.1) c) (0,0,0)
 lemma zabs (del : List Sig) (v : List Wire) :
-    zapz (zane del v)= zanu del (zapz v):= by
+    zaos (zann del v)= zan4 del (zaos v):= by
   induction v with
   | nil=> rfl
   | cons w l ih =>
-    unfold zapz zane zanu at ih ⊢
+    unfold zaos zann zan4 at ih ⊢
     simp only [List.map_cons,List.filter_cons]
     cases del.contains w.1
     · simp only [Bool.not_false,ite_true,List.map_cons,ih]
     · simp only [Bool.not_true,Bool.false_eq_true,ite_false,ih]
-lemma zad6 (d : Bool) (v : List Wire) : zam2 d v = zani d (zapz v) := by
+lemma zad6 (d : Bool) (v : List Wire) : zamq d v = zanj d (zaos v) := by
   induction v with
   | nil=> rfl
-  | cons w l ih=> simp [zam2,zani,zapz,ih]
-lemma zaec (d : Bool) (v : List Wire) : zamy d v = zann d (zapz v) := by
+  | cons w l ih=> simp [zamq,zanj,zaos,ih]
+lemma zaec (d : Bool) (v : List Wire) : zam4 d v = zano d (zaos v) := by
   induction v with
   | nil=> rfl
   | cons w l ih =>
-    change zap0 (sep d w.1) (zamy d l)= zap0 (sep d w.1) (zann d (zapz l))
+    change zaor (sep d w.1) (zam4 d l)= zaor (sep d w.1) (zano d (zaos l))
     rw [ih]
-lemma zadj (v: List Wire): (zapz v).length= v.length:= List.length_map ..
+lemma zadj (v: List Wire): (zaos v).length= v.length:= List.length_map ..
 lemma zab2 {v : List Wire} {a : Sig} {τ : Sig → Tag}
-    (ht: ∀ w∈ v,w.2= τ w.1): (a,τ a)∈ v↔ a∈ zapz v:= by
+    (ht: ∀ w∈ v,w.2= τ w.1): (a,τ a)∈ v↔ a∈ zaos v:= by
   constructor
   · intro h; exact List.mem_map.mpr ⟨(a,τ a),h,rfl⟩
   · intro h; obtain ⟨w, hw, heq⟩ := List.mem_map.mp h
     have htag:= ht w hw
     have: w= (a,τ a):= Prod.ext heq (by rw [htag,heq])
     rwa [← this]
-def zaqg : Tag → Tag → Bool
+def zaoz : Tag → Tag → Bool
   | .tNone,.tNone=> true
   | .tDeg3,.tDeg3=> true
   | .tSpec0,.tSpec0=> true
   | .tSpec1,.tSpec1=> true
   | _,_=> false
-lemma zahx {a b : Tag} : zaqg a b = true ↔ a = b := by
-  cases a <;> cases b <;> simp [zaqg]
-def zal3: Tag→ Bool | .tSpec0=> false | _=> true
-def zal2: Tag→ Bool | .tSpec1=> false | _=> true
-def zam7: Tag→ Bool | .tNone=> true | _=> false
-def zamr: Tag→ Bool | .tDeg3=> true | _=> false
-def zaqe (a b: Sig): Bool:= Nat.beq a.1 b.1&& Nat.beq a.2 b.2
-lemma zahe {a b : Sig} : zaqe a b = true ↔ a = b := by
+lemma zahx {a b : Tag} : zaoz a b = true ↔ a = b := by
+  cases a <;> cases b <;> simp [zaoz]
+def zamk: Tag→ Bool | .tSpec0=> false | _=> true
+def zame: Tag→ Bool | .tSpec1=> false | _=> true
+def zam1: Tag→ Bool | .tNone=> true | _=> false
+def zam7: Tag→ Bool | .tDeg3=> true | _=> false
+def zao4 (a b: Sig): Bool:= Nat.beq a.1 b.1&& Nat.beq a.2 b.2
+lemma zahe {a b : Sig} : zao4 a b = true ↔ a = b := by
   obtain ⟨a1,a2⟩:= a; obtain ⟨b1,b2⟩:= b
-  simp only [zaqe,Bool.and_eq_true,Nat.beq_eq,Prod.mk.injEq]
+  simp only [zao4,Bool.and_eq_true,Nat.beq_eq,Prod.mk.injEq]
 lemma zadh {a b : Nat} (h : a ≠ b) : Nat.beq a b = false :=
   Bool.eq_false_iff.mpr fun e=> h (Nat.beq_eq.mp e)
-def zamq (g : Sig) : List Wire → Bool
-  | []=> !zaqe g zero&& !zaqe g one
-  | w :: l=> !zaqe w.1 g&& zamq g l
-lemma zaar {v : List Wire} {g : Sig} (hg : g ∉ zapz v) (hp : zapj g) :
-    zamq g v= true:= by
+def zamr (g : Sig) : List Wire → Bool
+  | []=> !zao4 g zero&& !zao4 g one
+  | w :: l=> !zao4 w.1 g&& zamr g l
+lemma zaar {v : List Wire} {g : Sig} (hg : g ∉ zaos v) (hp : zaoi g) :
+    zamr g v= true:= by
   induction v with
   | nil =>
-    simp only [zamq,Bool.and_eq_true,Bool.not_eq_true',Bool.eq_false_iff,ne_eq,zahe]
+    simp only [zamr,Bool.and_eq_true,Bool.not_eq_true',Bool.eq_false_iff,ne_eq,zahe]
     exact ⟨hp.2.1,hp.2.2⟩
   | cons w l ih =>
-    simp only [zapz,List.map_cons,List.mem_cons,not_or] at hg
-    simp only [zamq,Bool.and_eq_true,Bool.not_eq_true',Bool.eq_false_iff,ne_eq,zahe]
+    simp only [zaos,List.map_cons,List.mem_cons,not_or] at hg
+    simp only [zamr,Bool.and_eq_true,Bool.not_eq_true',Bool.eq_false_iff,ne_eq,zahe]
     exact ⟨Ne.symm hg.1,ih hg.2⟩
-def zao8 (a : Sig) : List Wire → List Wire
+def zans (a : Sig) : List Wire → List Wire
   | []=> []
-  | w :: l=> if zaqe w.1 a then zao8 a l else w :: zao8 a l
-lemma zafo (a : Sig) (v : List Wire) : zao8 a v = zane [a] v := by
+  | w :: l=> if zao4 w.1 a then zans a l else w :: zans a l
+lemma zafo (a : Sig) (v : List Wire) : zans a v = zann [a] v := by
   induction v with
   | nil=> rfl
   | cons w l ih =>
-    simp only [zao8,zane,List.filter_cons,List.contains_eq_mem,List.mem_singleton,ih]
+    simp only [zans,zann,List.filter_cons,List.contains_eq_mem,List.mem_singleton,ih]
     by_cases h: w.1= a
-    · have hs : zaqe w.1 a = true := zahe.mpr h
+    · have hs : zao4 w.1 a = true := zahe.mpr h
       rw [hs]; simp [h]
-    · have hs : zaqe w.1 a = false := Bool.eq_false_iff.mpr (fun e => h (zahe.mp e))
+    · have hs : zao4 w.1 a = false := Bool.eq_false_iff.mpr (fun e => h (zahe.mp e))
       rw [hs]; simp [h]
-def zape (a b : Sig) : List Wire → List Wire
+def zaob (a b : Sig) : List Wire → List Wire
   | []=> []
-  | w :: l=> if zaqe w.1 a|| zaqe w.1 b then zape a b l else w :: zape a b l
-lemma zafv (a b : Sig) (v : List Wire) : zape a b v = zane [a, b] v := by
+  | w :: l=> if zao4 w.1 a|| zao4 w.1 b then zaob a b l else w :: zaob a b l
+lemma zafv (a b : Sig) (v : List Wire) : zaob a b v = zann [a, b] v := by
   induction v with
   | nil=> rfl
   | cons w l ih =>
-    simp only [zape, zane, List.filter_cons, List.contains_eq_mem, List.mem_cons,
+    simp only [zaob, zann, List.filter_cons, List.contains_eq_mem, List.mem_cons,
       List.not_mem_nil, or_false,ih]
     by_cases h1: w.1= a
-    · have hs1 : zaqe w.1 a = true := zahe.mpr h1
+    · have hs1 : zao4 w.1 a = true := zahe.mpr h1
       rw [hs1]; simp [h1]
-    · have hs1 : zaqe w.1 a = false := Bool.eq_false_iff.mpr (fun e => h1 (zahe.mp e))
+    · have hs1 : zao4 w.1 a = false := Bool.eq_false_iff.mpr (fun e => h1 (zahe.mp e))
       by_cases h2: w.1= b
-      · have hs2 : zaqe w.1 b = true := zahe.mpr h2
+      · have hs2 : zao4 w.1 b = true := zahe.mpr h2
         rw [hs1,hs2]; simp [h2]
-      · have hs2 : zaqe w.1 b = false := Bool.eq_false_iff.mpr (fun e => h2 (zahe.mp e))
+      · have hs2 : zao4 w.1 b = false := Bool.eq_false_iff.mpr (fun e => h2 (zahe.mp e))
         rw [hs1,hs2]; simp [h1,h2]
 def sep0 (a: Sig): Nat:= Nat.land a.1 (Nat.xor a.2 top)
 def sep1 (a: Sig): Nat:= Nat.xor a.1 a.2
@@ -4779,28 +4779,28 @@ structure WSep where
   n: Nat
   tg: Tag
   s: Nat
-def zapp (w: Wire): WSep:= ⟨w,w.1.1,w.1.2,w.2,sep0 w.1⟩
-def zapn (w: Wire): WSep:= ⟨w,w.1.1,w.1.2,w.2,sep1 w.1⟩
-def zamc : List Wire → List WSep × Cov
-  | []=> ([],(0,0,0))
-  | w :: l =>
-    let (ls,c):= zamc l
-    let s:= sep0 w.1
-    (⟨w, w.1.1,w.1.2,w.2,s⟩ :: ls,zap0 s c)
+def zaol (w: Wire): WSep:= ⟨w,w.1.1,w.1.2,w.2,sep0 w.1⟩
+def zaog (w: Wire): WSep:= ⟨w,w.1.1,w.1.2,w.2,sep1 w.1⟩
 def zamp : List Wire → List WSep × Cov
   | []=> ([],(0,0,0))
   | w :: l =>
     let (ls,c):= zamp l
+    let s:= sep0 w.1
+    (⟨w, w.1.1,w.1.2,w.2,s⟩ :: ls,zaor s c)
+def zamn : List Wire → List WSep × Cov
+  | []=> ([],(0,0,0))
+  | w :: l =>
+    let (ls,c):= zamn l
     let s:= sep1 w.1
-    (⟨w, w.1.1,w.1.2,w.2,s⟩ :: ls,zap0 s c)
-lemma zac8 (v : List Wire) : zamc v = (v.map zapp, zamy false v) := by
+    (⟨w, w.1.1,w.1.2,w.2,s⟩ :: ls,zaor s c)
+lemma zac8 (v : List Wire) : zamp v = (v.map zaol, zam4 false v) := by
   induction v with
   | nil=> rfl
-  | cons w l ih=> simp only [zamc,ih,List.map_cons,zapp]; rfl
-lemma zacv (v : List Wire) : zamp v = (v.map zapn, zamy true v) := by
+  | cons w l ih=> simp only [zamp,ih,List.map_cons,zaol]; rfl
+lemma zacv (v : List Wire) : zamn v = (v.map zaog, zam4 true v) := by
   induction v with
   | nil=> rfl
-  | cons w l ih=> simp only [zamp,ih,List.map_cons,zapn]; rfl
+  | cons w l ih=> simp only [zamn,ih,List.map_cons,zaog]; rfl
 structure WAct0 where
   w: Wire
   p: Nat
@@ -4808,17 +4808,17 @@ structure WAct0 where
   tg: Tag
   s: Nat
   u: Nat
-def zapx (uMask : Nat) (w : Wire) : WAct0 :=
+def zaot (uMask : Nat) (w : Wire) : WAct0 :=
   let s:= sep0 w.1
   ⟨w, w.1.1,w.1.2,w.2,s,Nat.land uMask s⟩
-def zal7 (uMask : Nat) : List WSep → List WAct0
+def zama (uMask : Nat) : List WSep → List WAct0
   | []=> []
-  | a :: l=> ⟨a.w,a.p,a.n,a.tg,a.s,Nat.land uMask a.s⟩ :: zal7 uMask l
+  | a :: l=> ⟨a.w,a.p,a.n,a.tg,a.s,Nat.land uMask a.s⟩ :: zama uMask l
 lemma zab1 (uMask : Nat) (v : List Wire) :
-    zal7 uMask (v.map zapp)= v.map (zapx uMask):= by
+    zama uMask (v.map zaol)= v.map (zaot uMask):= by
   induction v with
   | nil=> rfl
-  | cons w l ih=> simp only [List.map_cons,zal7,zapp,zapx,ih]
+  | cons w l ih=> simp only [List.map_cons,zama,zaol,zaot,ih]
 structure WAct1 where
   w: Wire
   p: Nat
@@ -4827,336 +4827,336 @@ structure WAct1 where
   s: Nat
   up: Nat
   un: Nat
-def zapt (uMask : Nat) (w : Wire) : WAct1 :=
+def zaoh (uMask : Nat) (w : Wire) : WAct1 :=
   let s:= sep1 w.1
   let u:= Nat.land uMask s
   ⟨w, w.1.1,w.1.2,w.2,s,Nat.land u w.1.1,Nat.land u w.1.2⟩
-def zami (uMask : Nat) : List WSep → List WAct1
+def zal7 (uMask : Nat) : List WSep → List WAct1
   | []=> []
   | a :: l =>
     let u:= Nat.land uMask a.s
-    ⟨a.w, a.p,a.n,a.tg,a.s,Nat.land u a.p,Nat.land u a.n⟩ :: zami uMask l
+    ⟨a.w, a.p,a.n,a.tg,a.s,Nat.land u a.p,Nat.land u a.n⟩ :: zal7 uMask l
 lemma zacc (uMask : Nat) (v : List Wire) :
-    zami uMask (v.map zapn)= v.map (zapt uMask):= by
+    zal7 uMask (v.map zaog)= v.map (zaoh uMask):= by
   induction v with
   | nil=> rfl
-  | cons w l ih=> simp only [List.map_cons,zami,zapn,zapt,ih]
-def zam0 (r : List Wire → Bool) (v : List Wire) (c : Cov) (a b : WAct0) : Bool :=
+  | cons w l ih=> simp only [List.map_cons,zal7,zaog,zaoh,ih]
+def zam5 (r : List Wire → Bool) (v : List Wire) (c : Cov) (a b : WAct0) : Bool :=
   let tryAnd :=
-    zal3 a.tg&& zal3 b.tg &&
+    zamk a.tg&& zamk b.tg &&
     Nat.beq (Nat.land a.u b.p) a.u&& Nat.beq (Nat.land b.u a.p) b.u &&
     let gp:= Nat.land a.p b.p
     let gn:= Nat.land a.n b.n
     let g: Sig:= (gp,gn)
-    Nat.beq (Nat.lor (Nat.land gp (Nat.xor gn top)) (zao9 c a.s b.s)) top &&
-    zamq g v &&
-    let gt:= if zamr a.tg|| zamr b.tg then Tag.tSpec0 else Tag.tNone
-    r ((g,gt) :: zape a.w.1 b.w.1 v)
+    Nat.beq (Nat.lor (Nat.land gp (Nat.xor gn top)) (zaoc c a.s b.s)) top &&
+    zamr g v &&
+    let gt:= if zam7 a.tg|| zam7 b.tg then Tag.tSpec0 else Tag.tNone
+    r ((g,gt) :: zaob a.w.1 b.w.1 v)
   let tryOr :=
-    zal2 a.tg&& zal2 b.tg &&
+    zame a.tg&& zame b.tg &&
     Nat.beq (Nat.land a.u b.n) 0&& Nat.beq (Nat.land b.u a.n) 0 &&
     let gp:= Nat.lor a.p b.p
     let gn:= Nat.lor a.n b.n
     let g: Sig:= (gp,gn)
-    Nat.beq (Nat.lor (Nat.land gp (Nat.xor gn top)) (zao9 c a.s b.s)) top &&
-    zamq g v &&
-    r ((g,.tNone) :: zape a.w.1 b.w.1 v)
+    Nat.beq (Nat.lor (Nat.land gp (Nat.xor gn top)) (zaoc c a.s b.s)) top &&
+    zamr g v &&
+    r ((g,.tNone) :: zaob a.w.1 b.w.1 v)
   tryAnd|| tryOr
-def zam6 (r : List Wire → Bool) (v : List Wire) (c : Cov) (a b : WAct1) : Bool :=
+def zamw (r : List Wire → Bool) (v : List Wire) (c : Cov) (a b : WAct1) : Bool :=
   let tryAnd :=
-    zal3 a.tg&& zal3 b.tg &&
+    zamk a.tg&& zamk b.tg &&
     Nat.beq (Nat.land a.up b.p) a.up&& Nat.beq (Nat.land b.up a.p) b.up &&
     Nat.beq (Nat.land a.un b.n) a.un&& Nat.beq (Nat.land b.un a.n) b.un &&
     let gp:= Nat.land a.p b.p
     let gn:= Nat.land a.n b.n
     let g: Sig:= (gp,gn)
-    Nat.beq (Nat.lor (Nat.xor gp gn) (zao9 c a.s b.s)) top &&
-    zamq g v &&
-    let gt:= if zamr a.tg|| zamr b.tg then Tag.tSpec0 else Tag.tNone
-    r ((g,gt) :: zape a.w.1 b.w.1 v)
+    Nat.beq (Nat.lor (Nat.xor gp gn) (zaoc c a.s b.s)) top &&
+    zamr g v &&
+    let gt:= if zam7 a.tg|| zam7 b.tg then Tag.tSpec0 else Tag.tNone
+    r ((g,gt) :: zaob a.w.1 b.w.1 v)
   let tryOr :=
-    zal2 a.tg&& zal2 b.tg &&
+    zame a.tg&& zame b.tg &&
     Nat.beq (Nat.land a.up b.n) 0&& Nat.beq (Nat.land b.up a.n) 0 &&
     Nat.beq (Nat.land a.un b.p) 0&& Nat.beq (Nat.land b.un a.p) 0 &&
     let gp:= Nat.lor a.p b.p
     let gn:= Nat.lor a.n b.n
     let g: Sig:= (gp,gn)
-    Nat.beq (Nat.lor (Nat.xor gp gn) (zao9 c a.s b.s)) top &&
-    zamq g v &&
-    r ((g,.tNone) :: zape a.w.1 b.w.1 v)
+    Nat.beq (Nat.lor (Nat.xor gp gn) (zaoc c a.s b.s)) top &&
+    zamr g v &&
+    r ((g,.tNone) :: zaob a.w.1 b.w.1 v)
   tryAnd|| tryOr
-def zanb (r : List Wire → Bool) (v : List Wire) (a b : Sig)
+def zam8 (r : List Wire → Bool) (v : List Wire) (a b : Sig)
     (base sa sb: Nat) (g wa wb: Wire) (ka kb ua ub: Bool): Bool :=
   let ok0:= ua&& ub&& Nat.beq base top
   let okA:= ka&& ub&& Nat.beq (Nat.lor base sa) top
   let okB:= kb&& ua&& Nat.beq (Nat.lor base sb) top
-  (ok0 || okA || okB) && zamq g.1 v &&
-    let rest:= zape a b v
+  (ok0 || okA || okB) && zamr g.1 v &&
+    let rest:= zaob a b v
     ((ok0 && r (g :: rest)) ||
      (okA&& r (g :: wa :: rest)) ||
      (okB&& r (g :: wb :: rest)))
-def zamw (r : List Wire → Bool) (v : List Wire) (a b : Sig)
+def zamy (r : List Wire → Bool) (v : List Wire) (a b : Sig)
     (base sa sb: Nat) (g wa wb: Wire) (ka kb: Bool): Bool :=
   let ok0:= Nat.beq base top
   let okA:= ka&& Nat.beq (Nat.lor base sa) top
   let okB:= kb&& Nat.beq (Nat.lor base sb) top
   let okAB:= ka&& kb&& Nat.beq (Nat.lor (Nat.lor base sa) sb) top
-  (ok0 || okA || okB || okAB) && zamq g.1 v &&
-    let rest:= zape a b v
+  (ok0 || okA || okB || okAB) && zamr g.1 v &&
+    let rest:= zaob a b v
     ((ok0 && r (g :: rest)) ||
      (okA&& r (g :: wa :: rest)) ||
      (okB&& r (g :: wb :: rest)) ||
      (okAB&& r (g :: wa :: wb :: rest)))
-def zamo (r : List Wire → Bool) (v : List Wire) (c : Cov) (a b : WAct0) : Bool :=
+def zamb (r : List Wire → Bool) (v : List Wire) (c : Cov) (a b : WAct0) : Bool :=
   let tryAnd :=
-    zal3 a.tg&& zal3 b.tg &&
-    let ka:= zam7 a.tg
-    let kb:= zam7 b.tg
+    zamk a.tg&& zamk b.tg &&
+    let ka:= zam1 a.tg
+    let kb:= zam1 b.tg
     let ua:= Nat.beq (Nat.land a.u b.p) a.u
     let ub:= Nat.beq (Nat.land b.u a.p) b.u
     (ua|| ub)&& (ua|| ka)&& (ub|| kb) &&
     let gp:= Nat.land a.p b.p
     let gn:= Nat.land a.n b.n
-    let base:= Nat.lor (Nat.land gp (Nat.xor gn top)) (zao9 c a.s b.s)
-    let gt:= if zamr a.tg|| zamr b.tg then Tag.tSpec0 else Tag.tNone
-    zanb r v a.w.1 b.w.1 base a.s b.s ((gp,gn),gt) a.w b.w ka kb ua ub
+    let base:= Nat.lor (Nat.land gp (Nat.xor gn top)) (zaoc c a.s b.s)
+    let gt:= if zam7 a.tg|| zam7 b.tg then Tag.tSpec0 else Tag.tNone
+    zam8 r v a.w.1 b.w.1 base a.s b.s ((gp,gn),gt) a.w b.w ka kb ua ub
   let tryOr :=
-    zal2 a.tg&& zal2 b.tg &&
-    let ka:= zal3 a.tg
-    let kb:= zal3 b.tg
+    zame a.tg&& zame b.tg &&
+    let ka:= zamk a.tg
+    let kb:= zamk b.tg
     let ua:= Nat.beq (Nat.land a.u b.n) 0
     let ub:= Nat.beq (Nat.land b.u a.n) 0
     (ua|| ub)&& (ua|| ka)&& (ub|| kb) &&
     let gp:= Nat.lor a.p b.p
     let gn:= Nat.lor a.n b.n
-    let base:= Nat.lor (Nat.land gp (Nat.xor gn top)) (zao9 c a.s b.s)
-    let wa: Wire:= (a.w.1,if zamr a.tg then .tSpec0 else .tNone)
-    let wb: Wire:= (b.w.1,if zamr b.tg then .tSpec0 else .tNone)
-    zanb r v a.w.1 b.w.1 base a.s b.s ((gp,gn),.tNone) wa wb ka kb ua ub
+    let base:= Nat.lor (Nat.land gp (Nat.xor gn top)) (zaoc c a.s b.s)
+    let wa: Wire:= (a.w.1,if zam7 a.tg then .tSpec0 else .tNone)
+    let wb: Wire:= (b.w.1,if zam7 b.tg then .tSpec0 else .tNone)
+    zam8 r v a.w.1 b.w.1 base a.s b.s ((gp,gn),.tNone) wa wb ka kb ua ub
   tryAnd|| tryOr
-def zalx (r : List Wire → Bool) (v : List Wire) (c : Cov) (a b : WAct1) : Bool :=
+def zalz (r : List Wire → Bool) (v : List Wire) (c : Cov) (a b : WAct1) : Bool :=
   let tryAnd :=
-    zal3 a.tg&& zal3 b.tg &&
-    let ka:= zam7 a.tg
-    let kb:= zam7 b.tg
+    zamk a.tg&& zamk b.tg &&
+    let ka:= zam1 a.tg
+    let kb:= zam1 b.tg
     let ua:= Nat.beq (Nat.land a.up b.p) a.up&& Nat.beq (Nat.land a.un b.n) a.un
     let ub:= Nat.beq (Nat.land b.up a.p) b.up&& Nat.beq (Nat.land b.un a.n) b.un
     (ua|| ub)&& (ua|| ka)&& (ub|| kb) &&
     let gp:= Nat.land a.p b.p
     let gn:= Nat.land a.n b.n
-    let base:= Nat.lor (Nat.xor gp gn) (zao9 c a.s b.s)
-    let gt:= if zamr a.tg|| zamr b.tg then Tag.tSpec0 else Tag.tNone
-    zanb r v a.w.1 b.w.1 base a.s b.s ((gp,gn),gt) a.w b.w ka kb ua ub
+    let base:= Nat.lor (Nat.xor gp gn) (zaoc c a.s b.s)
+    let gt:= if zam7 a.tg|| zam7 b.tg then Tag.tSpec0 else Tag.tNone
+    zam8 r v a.w.1 b.w.1 base a.s b.s ((gp,gn),gt) a.w b.w ka kb ua ub
   let tryOr :=
-    zal2 a.tg&& zal2 b.tg &&
-    let ka:= zal3 a.tg
-    let kb:= zal3 b.tg
+    zame a.tg&& zame b.tg &&
+    let ka:= zamk a.tg
+    let kb:= zamk b.tg
     let ua:= Nat.beq (Nat.land a.up b.n) 0&& Nat.beq (Nat.land a.un b.p) 0
     let ub:= Nat.beq (Nat.land b.up a.n) 0&& Nat.beq (Nat.land b.un a.p) 0
     (ua|| ub)&& (ua|| ka)&& (ub|| kb) &&
     let gp:= Nat.lor a.p b.p
     let gn:= Nat.lor a.n b.n
-    let base:= Nat.lor (Nat.xor gp gn) (zao9 c a.s b.s)
-    let wa: Wire:= (a.w.1,if zamr a.tg then .tSpec0 else .tNone)
-    let wb: Wire:= (b.w.1,if zamr b.tg then .tSpec0 else .tNone)
-    zanb r v a.w.1 b.w.1 base a.s b.s ((gp,gn),.tNone) wa wb ka kb ua ub
+    let base:= Nat.lor (Nat.xor gp gn) (zaoc c a.s b.s)
+    let wa: Wire:= (a.w.1,if zam7 a.tg then .tSpec0 else .tNone)
+    let wb: Wire:= (b.w.1,if zam7 b.tg then .tSpec0 else .tNone)
+    zam8 r v a.w.1 b.w.1 base a.s b.s ((gp,gn),.tNone) wa wb ka kb ua ub
   tryAnd|| tryOr
-def zaly (r : List Wire → Bool) (v : List Wire) (c : Cov) (a b : WAct0) : Bool :=
+def zamj (r : List Wire → Bool) (v : List Wire) (c : Cov) (a b : WAct0) : Bool :=
   let tryAnd :=
-    zal3 a.tg&& zal3 b.tg &&
-    let ka:= zam7 a.tg
-    let kb:= zam7 b.tg
+    zamk a.tg&& zamk b.tg &&
+    let ka:= zam1 a.tg
+    let kb:= zam1 b.tg
     (ka|| Nat.beq (Nat.land a.u b.p) a.u)&& (kb|| Nat.beq (Nat.land b.u a.p) b.u) &&
     let gp:= Nat.land a.p b.p
     let gn:= Nat.land a.n b.n
-    let base:= Nat.lor (Nat.land gp (Nat.xor gn top)) (zao9 c a.s b.s)
-    let gt:= if zamr a.tg|| zamr b.tg then Tag.tSpec0 else Tag.tNone
-    zamw r v a.w.1 b.w.1 base a.s b.s ((gp,gn),gt) a.w b.w ka kb
+    let base:= Nat.lor (Nat.land gp (Nat.xor gn top)) (zaoc c a.s b.s)
+    let gt:= if zam7 a.tg|| zam7 b.tg then Tag.tSpec0 else Tag.tNone
+    zamy r v a.w.1 b.w.1 base a.s b.s ((gp,gn),gt) a.w b.w ka kb
   let tryOr :=
-    zal2 a.tg&& zal2 b.tg &&
-    let ka:= zal3 a.tg
-    let kb:= zal3 b.tg
+    zame a.tg&& zame b.tg &&
+    let ka:= zamk a.tg
+    let kb:= zamk b.tg
     (ka|| Nat.beq (Nat.land a.u b.n) 0)&& (kb|| Nat.beq (Nat.land b.u a.n) 0) &&
     let gp:= Nat.lor a.p b.p
     let gn:= Nat.lor a.n b.n
-    let base:= Nat.lor (Nat.land gp (Nat.xor gn top)) (zao9 c a.s b.s)
-    let wa: Wire:= (a.w.1,if zamr a.tg then .tSpec0 else .tNone)
-    let wb: Wire:= (b.w.1,if zamr b.tg then .tSpec0 else .tNone)
-    zamw r v a.w.1 b.w.1 base a.s b.s ((gp,gn),.tNone) wa wb ka kb
+    let base:= Nat.lor (Nat.land gp (Nat.xor gn top)) (zaoc c a.s b.s)
+    let wa: Wire:= (a.w.1,if zam7 a.tg then .tSpec0 else .tNone)
+    let wb: Wire:= (b.w.1,if zam7 b.tg then .tSpec0 else .tNone)
+    zamy r v a.w.1 b.w.1 base a.s b.s ((gp,gn),.tNone) wa wb ka kb
   tryAnd|| tryOr
-def zama (r : List Wire → Bool) (v : List Wire) (c : Cov) (a b : WAct1) : Bool :=
+def zalx (r : List Wire → Bool) (v : List Wire) (c : Cov) (a b : WAct1) : Bool :=
   let tryAnd :=
-    zal3 a.tg&& zal3 b.tg &&
-    let ka:= zam7 a.tg
-    let kb:= zam7 b.tg
+    zamk a.tg&& zamk b.tg &&
+    let ka:= zam1 a.tg
+    let kb:= zam1 b.tg
     (ka|| (Nat.beq (Nat.land a.up b.p) a.up&& Nat.beq (Nat.land a.un b.n) a.un)) &&
     (kb|| (Nat.beq (Nat.land b.up a.p) b.up&& Nat.beq (Nat.land b.un a.n) b.un)) &&
     let gp:= Nat.land a.p b.p
     let gn:= Nat.land a.n b.n
-    let base:= Nat.lor (Nat.xor gp gn) (zao9 c a.s b.s)
-    let gt:= if zamr a.tg|| zamr b.tg then Tag.tSpec0 else Tag.tNone
-    zamw r v a.w.1 b.w.1 base a.s b.s ((gp,gn),gt) a.w b.w ka kb
+    let base:= Nat.lor (Nat.xor gp gn) (zaoc c a.s b.s)
+    let gt:= if zam7 a.tg|| zam7 b.tg then Tag.tSpec0 else Tag.tNone
+    zamy r v a.w.1 b.w.1 base a.s b.s ((gp,gn),gt) a.w b.w ka kb
   let tryOr :=
-    zal2 a.tg&& zal2 b.tg &&
-    let ka:= zal3 a.tg
-    let kb:= zal3 b.tg
+    zame a.tg&& zame b.tg &&
+    let ka:= zamk a.tg
+    let kb:= zamk b.tg
     (ka|| (Nat.beq (Nat.land a.up b.n) 0&& Nat.beq (Nat.land a.un b.p) 0)) &&
     (kb|| (Nat.beq (Nat.land b.up a.n) 0&& Nat.beq (Nat.land b.un a.p) 0)) &&
     let gp:= Nat.lor a.p b.p
     let gn:= Nat.lor a.n b.n
-    let base:= Nat.lor (Nat.xor gp gn) (zao9 c a.s b.s)
-    let wa: Wire:= (a.w.1,if zamr a.tg then .tSpec0 else .tNone)
-    let wb: Wire:= (b.w.1,if zamr b.tg then .tSpec0 else .tNone)
-    zamw r v a.w.1 b.w.1 base a.s b.s ((gp,gn),.tNone) wa wb ka kb
+    let base:= Nat.lor (Nat.xor gp gn) (zaoc c a.s b.s)
+    let wa: Wire:= (a.w.1,if zam7 a.tg then .tSpec0 else .tNone)
+    let wb: Wire:= (b.w.1,if zam7 b.tg then .tSpec0 else .tNone)
+    zamy r v a.w.1 b.w.1 base a.s b.s ((gp,gn),.tNone) wa wb ka kb
   tryAnd|| tryOr
-def zalb (r : List Wire → Bool) (v : List Wire) (c : Cov) (a : WAct0) : List WAct0 → Bool
+def zali (r : List Wire → Bool) (v : List Wire) (c : Cov) (a : WAct0) : List WAct0 → Bool
   | []=> false
-  | b :: l=> zam0 r v c a b|| zalb r v c a l
-def zam9 (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WAct0 → Bool
+  | b :: l=> zam5 r v c a b|| zali r v c a l
+def zamu (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WAct0 → Bool
   | []=> false
-  | a :: l=> zalb r v c a l|| zam9 r v c l
-def zalc (r : List Wire → Bool) (v : List Wire) (c : Cov) (a : WAct1) : List WAct1 → Bool
+  | a :: l=> zali r v c a l|| zamu r v c l
+def zalg (r : List Wire → Bool) (v : List Wire) (c : Cov) (a : WAct1) : List WAct1 → Bool
   | []=> false
-  | b :: l=> zam6 r v c a b|| zalc r v c a l
-def zam8 (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WAct1 → Bool
+  | b :: l=> zamw r v c a b|| zalg r v c a l
+def zam3 (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WAct1 → Bool
   | []=> false
-  | a :: l=> zalc r v c a l|| zam8 r v c l
-def zala (r : List Wire → Bool) (v : List Wire) (c : Cov) (a : WAct0) : List WAct0 → Bool
+  | a :: l=> zalg r v c a l|| zam3 r v c l
+def zak6 (r : List Wire → Bool) (v : List Wire) (c : Cov) (a : WAct0) : List WAct0 → Bool
   | []=> false
-  | b :: l=> zamo r v c a b|| zala r v c a l
-def zamm (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WAct0 → Bool
+  | b :: l=> zamb r v c a b|| zak6 r v c a l
+def zal2 (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WAct0 → Bool
   | []=> false
-  | a :: l=> zala r v c a l|| zamm r v c l
-def zak2 (r : List Wire → Bool) (v : List Wire) (c : Cov) (a : WAct1) : List WAct1 → Bool
+  | a :: l=> zak6 r v c a l|| zal2 r v c l
+def zak3 (r : List Wire → Bool) (v : List Wire) (c : Cov) (a : WAct1) : List WAct1 → Bool
   | []=> false
-  | b :: l=> zalx r v c a b|| zak2 r v c a l
-def zal8 (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WAct1 → Bool
+  | b :: l=> zalz r v c a b|| zak3 r v c a l
+def zal6 (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WAct1 → Bool
   | []=> false
-  | a :: l=> zak2 r v c a l|| zal8 r v c l
-def zak4 (r : List Wire → Bool) (v : List Wire) (c : Cov) (a : WAct0) : List WAct0 → Bool
+  | a :: l=> zak3 r v c a l|| zal6 r v c l
+def zak8 (r : List Wire → Bool) (v : List Wire) (c : Cov) (a : WAct0) : List WAct0 → Bool
   | []=> false
-  | b :: l=> zaly r v c a b|| zak4 r v c a l
-def zamd (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WAct0 → Bool
+  | b :: l=> zamj r v c a b|| zak8 r v c a l
+def zamf (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WAct0 → Bool
   | []=> false
-  | a :: l=> zak4 r v c a l|| zamd r v c l
-def zak5 (r : List Wire → Bool) (v : List Wire) (c : Cov) (a : WAct1) : List WAct1 → Bool
+  | a :: l=> zak8 r v c a l|| zamf r v c l
+def zak4 (r : List Wire → Bool) (v : List Wire) (c : Cov) (a : WAct1) : List WAct1 → Bool
   | []=> false
-  | b :: l=> zama r v c a b|| zak5 r v c a l
-def zamf (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WAct1 → Bool
+  | b :: l=> zalx r v c a b|| zak4 r v c a l
+def zal4 (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WAct1 → Bool
   | []=> false
-  | a :: l=> zak5 r v c a l|| zamf r v c l
+  | a :: l=> zak4 r v c a l|| zal4 r v c l
+def zaly (lim n : Nat) (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WSep → Bool
+  | []=> false
+  | a :: l =>
+    (zamk a.tg && zame a.tg &&
+      let gp:= Nat.xor a.p top
+      let gn:= Nat.xor a.n top
+      let base:= Nat.lor (Nat.land gp (Nat.xor gn top)) (zanz c a.s)
+      let ka:= !zam7 a.tg&& Nat.ble (n+ 2) lim
+      let ok0:= Nat.beq base top
+      let okA:= ka&& Nat.beq (Nat.lor base a.s) top
+      (ok0 || okA) && zamr (gp, gn) v &&
+        let gt:= if zam7 a.tg then Tag.tSpec1 else Tag.tNone
+        let rest:= zans a.w.1 v
+        ((ok0 && r (((gp, gn), gt) :: rest)) ||
+         (okA&& r (((gp,gn),gt) :: a.w :: rest)))) ||
+    zaly lim n r v c l
 def zamg (lim n : Nat) (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WSep → Bool
   | []=> false
   | a :: l =>
-    (zal3 a.tg && zal2 a.tg &&
+    (zamk a.tg && zame a.tg &&
       let gp:= Nat.xor a.p top
       let gn:= Nat.xor a.n top
-      let base:= Nat.lor (Nat.land gp (Nat.xor gn top)) (zaod c a.s)
-      let ka:= !zamr a.tg&& Nat.ble (n+ 2) lim
+      let base:= Nat.lor (Nat.xor gp gn) (zanz c a.s)
+      let ka:= !zam7 a.tg&& Nat.ble (n+ 2) lim
       let ok0:= Nat.beq base top
       let okA:= ka&& Nat.beq (Nat.lor base a.s) top
-      (ok0 || okA) && zamq (gp, gn) v &&
-        let gt:= if zamr a.tg then Tag.tSpec1 else Tag.tNone
-        let rest:= zao8 a.w.1 v
+      (ok0 || okA) && zamr (gp, gn) v &&
+        let gt:= if zam7 a.tg then Tag.tSpec1 else Tag.tNone
+        let rest:= zans a.w.1 v
         ((ok0 && r (((gp, gn), gt) :: rest)) ||
          (okA&& r (((gp,gn),gt) :: a.w :: rest)))) ||
     zamg lim n r v c l
-def zal5 (lim n : Nat) (r : List Wire → Bool) (v : List Wire) (c : Cov) : List WSep → Bool
-  | []=> false
-  | a :: l =>
-    (zal3 a.tg && zal2 a.tg &&
-      let gp:= Nat.xor a.p top
-      let gn:= Nat.xor a.n top
-      let base:= Nat.lor (Nat.xor gp gn) (zaod c a.s)
-      let ka:= !zamr a.tg&& Nat.ble (n+ 2) lim
-      let ok0:= Nat.beq base top
-      let okA:= ka&& Nat.beq (Nat.lor base a.s) top
-      (ok0 || okA) && zamq (gp, gn) v &&
-        let gt:= if zamr a.tg then Tag.tSpec1 else Tag.tNone
-        let rest:= zao8 a.w.1 v
-        ((ok0 && r (((gp, gn), gt) :: rest)) ||
-         (okA&& r (((gp,gn),gt) :: a.w :: rest)))) ||
-    zal5 lim n r v c l
-def zalj (k t len : Nat) (r : List Wire → Bool) (v : List Wire) : Bool :=
+def zalo (k t len : Nat) (r : List Wire → Bool) (v : List Wire) : Bool :=
   let lim:= k- t+ 1
   if Nat.beq t 0 then
-    let (seps,c):= zamc v
-    let acts:= zal7 c.2.1 seps
-    if Nat.beq len (lim+ 1) then zam9 r v c acts
-    else if Nat.beq len lim then zamm r v c acts
-    else zamd r v c acts
-  else
     let (seps,c):= zamp v
-    let acts:= zami c.2.1 seps
-    if Nat.beq len (lim+ 1) then zam8 r v c acts
-    else if Nat.beq len lim then zal8 r v c acts
+    let acts:= zama c.2.1 seps
+    if Nat.beq len (lim+ 1) then zamu r v c acts
+    else if Nat.beq len lim then zal2 r v c acts
     else zamf r v c acts
-def zal6 (k t len : Nat) (r : List Wire → Bool) (v : List Wire) : Bool :=
-  if Nat.beq t 0 then
-    let (seps,c):= zamc v
-    zamg (k- t+ 1) (len- 1) r v c seps
   else
+    let (seps,c):= zamn v
+    let acts:= zal7 c.2.1 seps
+    if Nat.beq len (lim+ 1) then zam3 r v c acts
+    else if Nat.beq len lim then zal6 r v c acts
+    else zal4 r v c acts
+def zamh (k t len : Nat) (r : List Wire → Bool) (v : List Wire) : Bool :=
+  if Nat.beq t 0 then
     let (seps,c):= zamp v
-    zal5 (k- t+ 1) (len- 1) r v c seps
-def zanm (k t : Nat) (v : List Wire) (u b : List Wire → Bool) : Bool :=
+    zaly (k- t+ 1) (len- 1) r v c seps
+  else
+    let (seps,c):= zamn v
+    zamg (k- t+ 1) (len- 1) r v c seps
+def zane (k t : Nat) (v : List Wire) (u b : List Wire → Bool) : Bool :=
   let len:= v.length
   if Nat.blt (k + 1) t || Nat.blt (k + 1 - t + 1) len then false else
-    (match v with | [w]=> zaqe w.1 zapi | _=> false) ||
-    (Nat.blt 0 t&& zal6 k (t- 1) len u v) ||
-    zalj k t len b v
-def zapo : Nat → Nat → List Wire → Bool
-  | 0,_,v=> match v with | [w]=> zaqe w.1 zapi | _=> false
-  | k+ 1,t,v=> zanm k t v (zapo k (t- 1)) (zapo k t)
-def zana {α : Type} (p : α → α → Bool) : List α → Bool
+    (match v with | [w]=> zao4 w.1 zaox | _=> false) ||
+    (Nat.blt 0 t&& zamh k (t- 1) len u v) ||
+    zalo k t len b v
+def zaou : Nat → Nat → List Wire → Bool
+  | 0,_,v=> match v with | [w]=> zao4 w.1 zaox | _=> false
+  | k+ 1,t,v=> zane k t v (zaou k (t- 1)) (zaou k t)
+def zams {α : Type} (p : α → α → Bool) : List α → Bool
   | []=> false
-  | a :: t=> t.any (p a)|| zana p t
+  | a :: t=> t.any (p a)|| zams p t
 lemma zaap {α : Type} (p : α → α → Bool) {a b : α} {v : List α}
     (ha: a∈ v) (hb: b∈ v) (hne: a≠ b)
-    (hab: p a b= true) (hba: p b a= true): zana p v= true:= by
+    (hab: p a b= true) (hba: p b a= true): zams p v= true:= by
   induction v with
   | nil=> simp at ha
   | cons h v ih =>
-    simp only [zana,Bool.or_eq_true]
+    simp only [zams,Bool.or_eq_true]
     by_cases eqA: a= h
     · subst h; exact Or.inl (List.any_eq_true.mpr ⟨b,(List.mem_cons.mp hb).resolve_left (Ne.symm hne),hab⟩)
     · have ha' := (List.mem_cons.mp ha).resolve_left eqA
       by_cases eqB: b= h
       · subst h; exact Or.inl (List.any_eq_true.mpr ⟨a,ha',hba⟩)
       · exact Or.inr (ih ha' ((List.mem_cons.mp hb).resolve_left eqB))
-lemma zabu (r v c a l) : zalb r v c a l = l.any (zam0 r v c a) := by
-  induction l with | nil=> rfl | cons b l ih=> simp [zalb,ih]
-lemma zady (r v c l) : zam9 r v c l = zana (zam0 r v c) l := by
-  induction l with | nil=> rfl | cons a l ih=> simp [zam9,zana,zabu,ih]
-lemma zabt (r v c a l) : zalc r v c a l = l.any (zam6 r v c a) := by
-  induction l with | nil=> rfl | cons b l ih=> simp [zalc,ih]
-lemma zaeb (r v c l) : zam8 r v c l = zana (zam6 r v c) l := by
-  induction l with | nil=> rfl | cons a l ih=> simp [zam8,zana,zabt,ih]
-lemma zabb (r v c a l) : zala r v c a l = l.any (zamo r v c a) := by
-  induction l with | nil=> rfl | cons b l ih=> simp [zala,ih]
-lemma zack (r v c l) : zamm r v c l = zana (zamo r v c) l := by
-  induction l with | nil=> rfl | cons a l ih=> simp [zamm,zana,zabb,ih]
-lemma zabe (r v c a l) : zak2 r v c a l = l.any (zalx r v c a) := by
-  induction l with | nil=> rfl | cons b l ih=> simp [zak2,ih]
-lemma zac0 (r v c l) : zal8 r v c l = zana (zalx r v c) l := by
-  induction l with | nil=> rfl | cons a l ih=> simp [zal8,zana,zabe,ih]
-lemma zaa6 (r v c a l) : zak4 r v c a l = l.any (zaly r v c a) := by
+lemma zabu (r v c a l) : zali r v c a l = l.any (zam5 r v c a) := by
+  induction l with | nil=> rfl | cons b l ih=> simp [zali,ih]
+lemma zady (r v c l) : zamu r v c l = zams (zam5 r v c) l := by
+  induction l with | nil=> rfl | cons a l ih=> simp [zamu,zams,zabu,ih]
+lemma zabt (r v c a l) : zalg r v c a l = l.any (zamw r v c a) := by
+  induction l with | nil=> rfl | cons b l ih=> simp [zalg,ih]
+lemma zaeb (r v c l) : zam3 r v c l = zams (zamw r v c) l := by
+  induction l with | nil=> rfl | cons a l ih=> simp [zam3,zams,zabt,ih]
+lemma zabb (r v c a l) : zak6 r v c a l = l.any (zamb r v c a) := by
+  induction l with | nil=> rfl | cons b l ih=> simp [zak6,ih]
+lemma zack (r v c l) : zal2 r v c l = zams (zamb r v c) l := by
+  induction l with | nil=> rfl | cons a l ih=> simp [zal2,zams,zabb,ih]
+lemma zabe (r v c a l) : zak3 r v c a l = l.any (zalz r v c a) := by
+  induction l with | nil=> rfl | cons b l ih=> simp [zak3,ih]
+lemma zac0 (r v c l) : zal6 r v c l = zams (zalz r v c) l := by
+  induction l with | nil=> rfl | cons a l ih=> simp [zal6,zams,zabe,ih]
+lemma zaa6 (r v c a l) : zak8 r v c a l = l.any (zamj r v c a) := by
+  induction l with | nil=> rfl | cons b l ih=> simp [zak8,ih]
+lemma zadd (r v c l) : zamf r v c l = zams (zamj r v c) l := by
+  induction l with | nil=> rfl | cons a l ih=> simp [zamf,zams,zaa6,ih]
+lemma zaa5 (r v c a l) : zak4 r v c a l = l.any (zalx r v c a) := by
   induction l with | nil=> rfl | cons b l ih=> simp [zak4,ih]
-lemma zadd (r v c l) : zamd r v c l = zana (zaly r v c) l := by
-  induction l with | nil=> rfl | cons a l ih=> simp [zamd,zana,zaa6,ih]
-lemma zaa5 (r v c a l) : zak5 r v c a l = l.any (zama r v c a) := by
-  induction l with | nil=> rfl | cons b l ih=> simp [zak5,ih]
-lemma zadb (r v c l) : zamf r v c l = zana (zama r v c) l := by
-  induction l with | nil=> rfl | cons a l ih=> simp [zamf,zana,zaa5,ih]
+lemma zadb (r v c l) : zal4 r v c l = zams (zalx r v c) l := by
+  induction l with | nil=> rfl | cons a l ih=> simp [zal4,zams,zaa5,ih]
 lemma zaee {c : Cov} {a b : Sig} {extra : Nat} (hc : zanh c)
     (hex: Nat.land (Nat.land c.2.1 (sep0 a)) extra= 0)
-    (h: Nat.lor (Nat.lor (sep0 (bin false a b)) (zao9 c (sep0 a) (sep0 b))) extra= top) :
+    (h: Nat.lor (Nat.lor (sep0 (bin false a b)) (zaoc c (sep0 a) (sep0 b))) extra= top) :
     Nat.land (Nat.land c.2.1 (sep0 a)) b.1= Nat.land c.2.1 (sep0 a):= by
   apply Nat.eq_of_testBit_eq; intro i
   have hh:= congrArg (fun z: Nat=> z.testBit i) h
   have hx:= congrArg (fun z: Nat=> z.testBit i) hex
   have h1:= hc.2.2.2.1 i
   by_cases hi: i< 414
-  · simp only [sep0, bin, zao9, zaea, zaev, zadt, zaek,
+  · simp only [sep0, bin, zaoc, zaea, zaev, zadt, zaek,
       Nat.testBit_and, hi,decide_true,Nat.zero_testBit,Bool.false_eq_true,ite_false] at hh hx ⊢
     revert hh hx h1
     cases a.1.testBit i <;> cases a.2.testBit i <;> cases b.1.testBit i <;>
@@ -5165,14 +5165,14 @@ lemma zaee {c : Cov} {a b : Sig} {extra : Nat} (hc : zanh c)
   · simp [hc.2.1 i (by omega)]
 lemma zae9 {c : Cov} {a b : Sig} {extra : Nat} (hc : zanh c)
     (hex: Nat.land (Nat.land c.2.1 (sep0 a)) extra= 0)
-    (h: Nat.lor (Nat.lor (sep0 (bin true a b)) (zao9 c (sep0 a) (sep0 b))) extra= top) :
+    (h: Nat.lor (Nat.lor (sep0 (bin true a b)) (zaoc c (sep0 a) (sep0 b))) extra= top) :
     Nat.land (Nat.land c.2.1 (sep0 a)) b.2= 0:= by
   apply Nat.eq_of_testBit_eq; intro i
   have hh:= congrArg (fun z: Nat=> z.testBit i) h
   have hx:= congrArg (fun z: Nat=> z.testBit i) hex
   have h1:= hc.2.2.2.1 i
   by_cases hi: i< 414
-  · simp only [sep0, bin, zao9, zaea, zaev, zadt, zaek,
+  · simp only [sep0, bin, zaoc, zaea, zaev, zadt, zaek,
       Nat.testBit_or, hi,decide_true,Nat.zero_testBit,ite_true] at hh hx ⊢
     revert hh hx h1
     cases a.1.testBit i <;> cases a.2.testBit i <;> cases b.1.testBit i <;>
@@ -5181,7 +5181,7 @@ lemma zae9 {c : Cov} {a b : Sig} {extra : Nat} (hc : zanh c)
   · simp [hc.2.1 i (by omega)]
 lemma zad3 {c : Cov} {a b : Sig} {extra : Nat} (hc : zanh c)
     (hex: Nat.land (Nat.land c.2.1 (sep1 a)) extra= 0)
-    (h: Nat.lor (Nat.lor (sep1 (bin false a b)) (zao9 c (sep1 a) (sep1 b))) extra= top) :
+    (h: Nat.lor (Nat.lor (sep1 (bin false a b)) (zaoc c (sep1 a) (sep1 b))) extra= top) :
     Nat.land (Nat.land (Nat.land c.2.1 (sep1 a)) a.1) b.1= Nat.land (Nat.land c.2.1 (sep1 a)) a.1 ∧
     Nat.land (Nat.land (Nat.land c.2.1 (sep1 a)) a.2) b.2= Nat.land (Nat.land c.2.1 (sep1 a)) a.2:= by
   constructor <;> (
@@ -5190,7 +5190,7 @@ lemma zad3 {c : Cov} {a b : Sig} {extra : Nat} (hc : zanh c)
     have hx:= congrArg (fun z: Nat=> z.testBit i) hex
     have h1:= hc.2.2.2.1 i
     by_cases hi: i< 414
-    · simp only [sep1, bin, zao9, zaea, zaev, zadt, zaek,
+    · simp only [sep1, bin, zaoc, zaea, zaev, zadt, zaek,
         Nat.testBit_and, hi,decide_true,Nat.zero_testBit,Bool.false_eq_true,ite_false] at hh hx ⊢
       revert hh hx h1
       cases a.1.testBit i <;> cases a.2.testBit i <;> cases b.1.testBit i <;>
@@ -5199,7 +5199,7 @@ lemma zad3 {c : Cov} {a b : Sig} {extra : Nat} (hc : zanh c)
     · simp [hc.2.1 i (by omega)])
 lemma zaem {c : Cov} {a b : Sig} {extra : Nat} (hc : zanh c)
     (hex: Nat.land (Nat.land c.2.1 (sep1 a)) extra= 0)
-    (h: Nat.lor (Nat.lor (sep1 (bin true a b)) (zao9 c (sep1 a) (sep1 b))) extra= top) :
+    (h: Nat.lor (Nat.lor (sep1 (bin true a b)) (zaoc c (sep1 a) (sep1 b))) extra= top) :
     Nat.land (Nat.land (Nat.land c.2.1 (sep1 a)) a.1) b.2= 0 ∧
     Nat.land (Nat.land (Nat.land c.2.1 (sep1 a)) a.2) b.1= 0:= by
   constructor <;> (
@@ -5208,7 +5208,7 @@ lemma zaem {c : Cov} {a b : Sig} {extra : Nat} (hc : zanh c)
     have hx:= congrArg (fun z: Nat=> z.testBit i) hex
     have h1:= hc.2.2.2.1 i
     by_cases hi: i< 414
-    · simp only [sep1, bin, zao9, zaea, zaev, zadt, zaek,
+    · simp only [sep1, bin, zaoc, zaea, zaev, zadt, zaek,
         Nat.testBit_or, hi,decide_true,Nat.zero_testBit,ite_true] at hh hx ⊢
       revert hh hx h1
       cases a.1.testBit i <;> cases a.2.testBit i <;> cases b.1.testBit i <;>
@@ -5217,15 +5217,35 @@ lemma zaem {c : Cov} {a b : Sig} {extra : Nat} (hc : zanh c)
     · simp [hc.2.1 i (by omega)])
 lemma zab9 {lim n : Nat} {r : List Wire → Bool} {v : List Wire} {c : Cov}
     {a: WSep} {l: List WSep} (ha: a∈ l)
-    (hok : (zal3 a.tg && zal2 a.tg &&
+    (hok : (zamk a.tg && zame a.tg &&
       let gp:= Nat.xor a.p top; let gn:= Nat.xor a.n top
-      let base:= Nat.lor (Nat.land gp (Nat.xor gn top)) (zaod c a.s)
-      let ka:= !zamr a.tg&& Nat.ble (n+ 2) lim
+      let base:= Nat.lor (Nat.land gp (Nat.xor gn top)) (zanz c a.s)
+      let ka:= !zam7 a.tg&& Nat.ble (n+ 2) lim
       let ok0:= Nat.beq base top
       let okA:= ka&& Nat.beq (Nat.lor base a.s) top
-      (ok0 || okA) && zamq (gp, gn) v &&
-        let gt:= if zamr a.tg then Tag.tSpec1 else Tag.tNone
-        let rest:= zao8 a.w.1 v
+      (ok0 || okA) && zamr (gp, gn) v &&
+        let gt:= if zam7 a.tg then Tag.tSpec1 else Tag.tNone
+        let rest:= zans a.w.1 v
+        ((ok0&& r (((gp,gn),gt) :: rest))|| (okA&& r (((gp,gn),gt) :: a.w :: rest))))= true) :
+    zaly lim n r v c l= true:= by
+  induction l with
+  | nil=> simp at ha
+  | cons x l ih =>
+    simp only [zaly,Bool.or_eq_true]
+    rcases List.mem_cons.mp ha with rfl | hx
+    · exact Or.inl hok
+    · exact Or.inr (ih hx)
+lemma zab4 {lim n : Nat} {r : List Wire → Bool} {v : List Wire} {c : Cov}
+    {a: WSep} {l: List WSep} (ha: a∈ l)
+    (hok : (zamk a.tg && zame a.tg &&
+      let gp:= Nat.xor a.p top; let gn:= Nat.xor a.n top
+      let base:= Nat.lor (Nat.xor gp gn) (zanz c a.s)
+      let ka:= !zam7 a.tg&& Nat.ble (n+ 2) lim
+      let ok0:= Nat.beq base top
+      let okA:= ka&& Nat.beq (Nat.lor base a.s) top
+      (ok0 || okA) && zamr (gp, gn) v &&
+        let gt:= if zam7 a.tg then Tag.tSpec1 else Tag.tNone
+        let rest:= zans a.w.1 v
         ((ok0&& r (((gp,gn),gt) :: rest))|| (okA&& r (((gp,gn),gt) :: a.w :: rest))))= true) :
     zamg lim n r v c l= true:= by
   induction l with
@@ -5235,59 +5255,39 @@ lemma zab9 {lim n : Nat} {r : List Wire → Bool} {v : List Wire} {c : Cov}
     rcases List.mem_cons.mp ha with rfl | hx
     · exact Or.inl hok
     · exact Or.inr (ih hx)
-lemma zab4 {lim n : Nat} {r : List Wire → Bool} {v : List Wire} {c : Cov}
-    {a: WSep} {l: List WSep} (ha: a∈ l)
-    (hok : (zal3 a.tg && zal2 a.tg &&
-      let gp:= Nat.xor a.p top; let gn:= Nat.xor a.n top
-      let base:= Nat.lor (Nat.xor gp gn) (zaod c a.s)
-      let ka:= !zamr a.tg&& Nat.ble (n+ 2) lim
-      let ok0:= Nat.beq base top
-      let okA:= ka&& Nat.beq (Nat.lor base a.s) top
-      (ok0 || okA) && zamq (gp, gn) v &&
-        let gt:= if zamr a.tg then Tag.tSpec1 else Tag.tNone
-        let rest:= zao8 a.w.1 v
-        ((ok0&& r (((gp,gn),gt) :: rest))|| (okA&& r (((gp,gn),gt) :: a.w :: rest))))= true) :
-    zal5 lim n r v c l= true:= by
-  induction l with
-  | nil=> simp at ha
-  | cons x l ih =>
-    simp only [zal5,Bool.or_eq_true]
-    rcases List.mem_cons.mp ha with rfl | hx
-    · exact Or.inl hok
-    · exact Or.inr (ih hx)
 lemma zaeu {m t k : Nat} {U : Finset Sig} {a : Sig} {τ : Sig → Tag} {v : List Wire}
     {r: List Wire→ Bool}
-    (ha: zapj a) (hrep: zamk v (insert a U) τ) (hle: m≤ k)
+    (ha: zaoi a) (hrep: zal9 v (insert a U) τ) (hle: m≤ k)
     (fresh: neg a∉ insert a U)
     (hr1: τ a≠ .tSpec0∧ τ a≠ .tSpec1) (hr2: τ a= .tDeg3→ a∉ U)
     (l: TRestricted m t (insert (neg a) U) (zaln τ a))
-    (ih: ∀ w: List Wire,zamk w (insert (neg a) U) (zaln τ a)→ r w= true) :
-    zal6 k t v.length r v= true:= by
+    (ih: ∀ w: List Wire,zal9 w (insert (neg a) U) (zaln τ a)→ r w= true) :
+    zamh k t v.length r v= true:= by
   obtain ⟨hndS,heS,htag⟩:= hrep
-  have hval : ∀ x ∈ zapz v, zap6 x := by
+  have hval : ∀ x ∈ zaos v, zaoy x := by
     intro x hx
     rcases Finset.mem_insert.mp (heS▸ List.mem_toFinset.mpr hx) with rfl | hxU
     · exact ha.1
     · exact (zaet l.live x (Finset.mem_insert_of_mem hxU)).1
-  have ahS: a∈ zapz v:= List.mem_toFinset.mp (heS.symm▸ Finset.mem_insert_self _ _)
+  have ahS: a∈ zaos v:= List.mem_toFinset.mp (heS.symm▸ Finset.mem_insert_self _ _)
   have ah: (a,τ a)∈ v:= (zab2 htag).mpr ahS
-  let rest:= zane [a] v
-  let gTag: Tag:= if zamr (τ a) then .tSpec1 else .tNone
+  let rest:= zann [a] v
+  let gTag: Tag:= if zam7 (τ a) then .tSpec1 else .tNone
   let g: Wire:= (neg a,gTag)
   let h: List Wire:= if a∈ U then [(a,τ a)] else []
-  have hSigsH: zapz h= zapu U [a]:= by by_cases hm: a∈ U <;> simp [h,zapz,zapu,hm]
+  have hSigsH: zaos h= zaop U [a]:= by by_cases hm: a∈ U <;> simp [h,zaos,zaop,hm]
   obtain ⟨hn,eq⟩:= zagh (del:= [a]) (U:= U) hndS (by simp) (by simpa using heS)
-  have hSigsHR : zapz (h ++ rest) = zapu U [a] ++ zanu [a] (zapz v) := by
+  have hSigsHR : zaos (h ++ rest) = zaop U [a] ++ zan4 [a] (zaos v) := by
     change (h++ rest).map Prod.fst= _
-    rw [List.map_append, show h.map Prod.fst = zapu U [a] from hSigsH,
-      show rest.map Prod.fst= zanu [a] (zapz v) from zabs [a] v]
-  have nn: neg a∉ zapz v:= fun hm=> fresh (heS▸ List.mem_toFinset.mpr hm)
+    rw [List.map_append, show h.map Prod.fst = zaop U [a] from hSigsH,
+      show rest.map Prod.fst= zan4 [a] (zaos v) from zabs [a] v]
+  have nn: neg a∉ zaos v:= fun hm=> fresh (heS▸ List.mem_toFinset.mpr hm)
   have nz: neg a∉ U:= fun hm=> fresh (Finset.mem_insert_of_mem hm)
-  have hnd : (zapz (g :: (h ++ rest))).Nodup := by
-    change (neg a :: zapz (h++ rest)).Nodup; rw [hSigsHR]
+  have hnd : (zaos (g :: (h ++ rest))).Nodup := by
+    change (neg a :: zaos (h++ rest)).Nodup; rw [hSigsHR]
     exact List.nodup_cons.mpr ⟨fun hm=> nz (eq▸ List.mem_toFinset.mpr hm),hn⟩
-  have e : (zapz (g :: (h ++ rest))).toFinset = insert (neg a) U := by
-    change (neg a :: zapz (h++ rest)).toFinset= _; rw [List.toFinset_cons,hSigsHR,eq]
+  have e : (zaos (g :: (h ++ rest))).toFinset = insert (neg a) U := by
+    change (neg a :: zaos (h++ rest)).toFinset= _; rw [List.toFinset_cons,hSigsHR,eq]
   have htag' : ∀ w ∈ g :: (h ++ rest), w.2 = zaln τ a w.1 := by
     intro w hw; rcases List.mem_cons.mp hw with rfl | hw'
     · simp only [g,gTag,zaln,ite_true]; cases τ a <;> rfl
@@ -5302,306 +5302,306 @@ lemma zaeu {m t k : Nat} {U : Finset Sig} {a : Sig} {τ : Sig → Tag} {v : List
   have hr:= ih _ ⟨hnd,e,htag'⟩
   obtain ⟨ht,hc⟩:= zah4 l.live
   rw [← e,List.toFinset_card_of_nodup hnd] at hc
-  simp only [zapz, List.map_cons, List.map_append, List.length_cons, List.length_append,
+  simp only [zaos, List.map_cons, List.map_append, List.length_cons, List.length_append,
     List.length_map] at hc
-  have hav : zamq (neg a) v = true :=
+  have hav : zamr (neg a) v = true :=
     zaar nn (zaet l.live _ (Finset.mem_insert_self _ _))
-  have hns0: zal3 (τ a)= true:= by cases hta: τ a <;> simp [zal3]; exact hr1.1 hta
-  have hns1: zal2 (τ a)= true:= by cases hta: τ a <;> simp [zal2]; exact hr1.2 hta
+  have hns0: zamk (τ a)= true:= by cases hta: τ a <;> simp [zamk]; exact hr1.1 hta
+  have hns1: zame (τ a)= true:= by cases hta: τ a <;> simp [zame]; exact hr1.2 hta
   have cv:= zafy l.live e
-  simp only [zapz,List.map_cons,List.map_append,zani,zadx] at cv
-  have hcv' : (sep (decide (0 < t)) (neg a) ||| zani (decide (0 < t)) (zapz rest)) |||
-      zam2 (decide (0< t)) h= top:= by
-    rw [zad6,← cv]; unfold zapz; ac_rfl
+  simp only [zaos,List.map_cons,List.map_append,zanj,zadx] at cv
+  have hcv' : (sep (decide (0 < t)) (neg a) ||| zanj (decide (0 < t)) (zaos rest)) |||
+      zamq (decide (0< t)) h= top:= by
+    rw [zad6,← cv]; unfold zaos; ac_rfl
   obtain ⟨hlen,hmask⟩:= zaie (decide (0< t)) hndS hval ahS
   rw [zadj,← zabs,zadj] at hlen
   change v.length- 1= rest.length at hlen
   rw [← zabs] at hmask
-  change zaod (zann (decide (0 < t)) (zapz v)) (sep (decide (0 < t)) a) =
-    zani (decide (0< t)) (zapz rest) at hmask
-  have hdrop: zao8 a v= rest:= zafo a v
-  unfold zal6
+  change zanz (zano (decide (0 < t)) (zaos v)) (sep (decide (0 < t)) a) =
+    zanj (decide (0< t)) (zaos rest) at hmask
+  have hdrop: zans a v= rest:= zafo a v
+  unfold zamh
   by_cases ht0: t= 0
   · subst ht0
     have hdt0: decide (0< 0)= false:= rfl
     rw [hdt0] at hcv' hmask
     simp only [Nat.beq_refl,ite_true,zac8]
-    apply zab9 (a:= zapp (a,τ a)) (List.mem_map_of_mem ah)
-    simp only [zapp,zaec]
-    change (zal3 (τ a) && zal2 (τ a) &&
-      let base:= Nat.lor (sep false (neg a)) (zaod (zann false (zapz v)) (sep false a))
-      let ka:= !zamr (τ a)&& Nat.ble (v.length- 1+ 2) (k- 0+ 1)
+    apply zab9 (a:= zaol (a,τ a)) (List.mem_map_of_mem ah)
+    simp only [zaol,zaec]
+    change (zamk (τ a) && zame (τ a) &&
+      let base:= Nat.lor (sep false (neg a)) (zanz (zano false (zaos v)) (sep false a))
+      let ka:= !zam7 (τ a)&& Nat.ble (v.length- 1+ 2) (k- 0+ 1)
       let ok0:= Nat.beq base top
       let okA:= ka&& Nat.beq (Nat.lor base (sep false a)) top
-      (ok0 || okA) && zamq (neg a) v &&
-        let rest':= zao8 a v
+      (ok0 || okA) && zamr (neg a) v &&
+        let rest':= zans a v
         ((ok0&& r (g :: rest'))|| (okA&& r (g :: (a,τ a) :: rest'))))= true
     rw [hmask,hdrop]
     by_cases haU: a∈ U
-    · have hnd3 : (!zamr (τ a)) = true := by
-        cases hta: τ a <;> simp [zamr]; exact hr2 hta haU
+    · have hnd3 : (!zam7 (τ a)) = true := by
+        cases hta: τ a <;> simp [zam7]; exact hr2 hta haU
       have hlenH: h.length= 1:= by simp [h,haU]
       have hle': Nat.ble (v.length- 1+ 2) (k- 0+ 1)= true:= Nat.ble_eq.mpr (by omega)
-      have hcovA : Nat.lor (Nat.lor (sep false (neg a)) (zani false (zapz rest))) (sep false a) = top := by
-        simpa [h,haU,zam2] using hcv'
+      have hcovA : Nat.lor (Nat.lor (sep false (neg a)) (zanj false (zaos rest))) (sep false a) = top := by
+        simpa [h,haU,zamq] using hcv'
       have hrA: r (g :: (a,τ a) :: rest)= true:= by simpa [h,haU] using hr
       simp only [hns0,hns1,hnd3,hle',hcovA,Nat.beq_refl,hav,hrA,Bool.true_and,Bool.or_true]
-    · have hcov0 : Nat.lor (sep false (neg a)) (zani false (zapz rest)) = top := by
-        simpa [h,haU,zam2] using hcv'
+    · have hcov0 : Nat.lor (sep false (neg a)) (zanj false (zaos rest)) = top := by
+        simpa [h,haU,zamq] using hcv'
       have hr0: r (g :: rest)= true:= by simpa [h,haU] using hr
       simp only [hns0,hns1,hcov0,Nat.beq_refl,hav,hr0,Bool.true_and,Bool.true_or]
   · have hbf : Nat.beq t 0 = false := zadh ht0
     have hdt: decide (0< t)= true:= decide_eq_true (by omega)
     rw [hdt] at hcv' hmask
     simp only [hbf,Bool.false_eq_true,ite_false,zacv]
-    apply zab4 (a:= zapn (a,τ a)) (List.mem_map_of_mem ah)
-    simp only [zapn,zaec]
-    change (zal3 (τ a) && zal2 (τ a) &&
-      let base:= Nat.lor (sep true (neg a)) (zaod (zann true (zapz v)) (sep true a))
-      let ka:= !zamr (τ a)&& Nat.ble (v.length- 1+ 2) (k- t+ 1)
+    apply zab4 (a:= zaog (a,τ a)) (List.mem_map_of_mem ah)
+    simp only [zaog,zaec]
+    change (zamk (τ a) && zame (τ a) &&
+      let base:= Nat.lor (sep true (neg a)) (zanz (zano true (zaos v)) (sep true a))
+      let ka:= !zam7 (τ a)&& Nat.ble (v.length- 1+ 2) (k- t+ 1)
       let ok0:= Nat.beq base top
       let okA:= ka&& Nat.beq (Nat.lor base (sep true a)) top
-      (ok0 || okA) && zamq (neg a) v &&
-        let rest':= zao8 a v
+      (ok0 || okA) && zamr (neg a) v &&
+        let rest':= zans a v
         ((ok0&& r (g :: rest'))|| (okA&& r (g :: (a,τ a) :: rest'))))= true
     rw [hmask,hdrop]
     by_cases haU: a∈ U
-    · have hnd3 : (!zamr (τ a)) = true := by
-        cases hta: τ a <;> simp [zamr]; exact hr2 hta haU
+    · have hnd3 : (!zam7 (τ a)) = true := by
+        cases hta: τ a <;> simp [zam7]; exact hr2 hta haU
       have hlenH: h.length= 1:= by simp [h,haU]
       have hle': Nat.ble (v.length- 1+ 2) (k- t+ 1)= true:= Nat.ble_eq.mpr (by omega)
-      have hcovA : Nat.lor (Nat.lor (sep true (neg a)) (zani true (zapz rest))) (sep true a) = top := by
-        simpa [h,haU,zam2] using hcv'
+      have hcovA : Nat.lor (Nat.lor (sep true (neg a)) (zanj true (zaos rest))) (sep true a) = top := by
+        simpa [h,haU,zamq] using hcv'
       have hrA: r (g :: (a,τ a) :: rest)= true:= by simpa [h,haU] using hr
       simp only [hns0,hns1,hnd3,hle',hcovA,Nat.beq_refl,hav,hrA,Bool.true_and,Bool.or_true]
-    · have hcov0 : Nat.lor (sep true (neg a)) (zani true (zapz rest)) = top := by
-        simpa [h,haU,zam2] using hcv'
+    · have hcov0 : Nat.lor (sep true (neg a)) (zanj true (zaos rest)) = top := by
+        simpa [h,haU,zamq] using hcv'
       have hr0: r (g :: rest)= true:= by simpa [h,haU] using hr
       simp only [hns0,hns1,hcov0,Nat.beq_refl,hav,hr0,Bool.true_and,Bool.true_or]
 lemma zakv {p q: Bool} (h: p= true): (p|| q)= true:= by simp [h]
 lemma zakr {p q: Bool} (h: q= true): (p|| q)= true:= by simp [h]
 lemma zaks {p q: Bool} (hp: p= true) (hq: q= true): (p&& q)= true:= by simp [hp,hq]
 lemma zabh {r v a b base sa sb g wa wb ka kb ua ub}
-    (h: zanb r v a b base sa sb g wa wb ka kb ua ub= true) :
+    (h: zam8 r v a b base sa sb g wa wb ka kb ua ub= true) :
     (ua|| ub)= true∧ (ua|| ka)= true∧ (ub|| kb)= true:= by
-  cases ka <;> cases kb <;> cases ua <;> cases ub <;> simp_all [zanb]
+  cases ka <;> cases kb <;> cases ua <;> cases ub <;> simp_all [zam8]
 lemma zae0 {r v a b base sa sb g wa wb ka kb ua ub}
     (h1: ua= true) (h2: ub= true) (h3: base= top)
-    (h4: zamq g.1 v= true) (h5: r (g :: zape a b v)= true) :
-    zanb r v a b base sa sb g wa wb ka kb ua ub= true:= by
-  simp only [zanb,h1,h2,h3,Nat.beq_refl,h4,h5,Bool.true_and,Bool.true_or]
+    (h4: zamr g.1 v= true) (h5: r (g :: zaob a b v)= true) :
+    zam8 r v a b base sa sb g wa wb ka kb ua ub= true:= by
+  simp only [zam8,h1,h2,h3,Nat.beq_refl,h4,h5,Bool.true_and,Bool.true_or]
 lemma zae8 {r v a b base sa sb g wa wb ka kb ua ub}
     (h1: ka= true) (h2: ub= true) (h3: Nat.lor base sa= top)
-    (h4: zamq g.1 v= true) (h5: r (g :: wa :: zape a b v)= true) :
-    zanb r v a b base sa sb g wa wb ka kb ua ub= true:= by
-  simp only [zanb,h1,h2,h3,Nat.beq_refl,h4,h5,Bool.true_and,Bool.true_or,Bool.or_true]
+    (h4: zamr g.1 v= true) (h5: r (g :: wa :: zaob a b v)= true) :
+    zam8 r v a b base sa sb g wa wb ka kb ua ub= true:= by
+  simp only [zam8,h1,h2,h3,Nat.beq_refl,h4,h5,Bool.true_and,Bool.true_or,Bool.or_true]
 lemma zaeq {r v a b base sa sb g wa wb ka kb ua ub}
     (h1: kb= true) (h2: ua= true) (h3: Nat.lor base sb= top)
-    (h4: zamq g.1 v= true) (h5: r (g :: wb :: zape a b v)= true) :
-    zanb r v a b base sa sb g wa wb ka kb ua ub= true:= by
-  simp only [zanb,h1,h2,h3,Nat.beq_refl,h4,h5,Bool.true_and,Bool.or_true]
+    (h4: zamr g.1 v= true) (h5: r (g :: wb :: zaob a b v)= true) :
+    zam8 r v a b base sa sb g wa wb ka kb ua ub= true:= by
+  simp only [zam8,h1,h2,h3,Nat.beq_refl,h4,h5,Bool.true_and,Bool.or_true]
 lemma zae5 {r v a b base sa sb g wa wb ka kb}
-    (h3: base= top) (h4: zamq g.1 v= true) (h5: r (g :: zape a b v)= true) :
-    zamw r v a b base sa sb g wa wb ka kb= true:= by
-  simp only [zamw,h3,Nat.beq_refl,h4,h5,Bool.true_and,Bool.true_or]
+    (h3: base= top) (h4: zamr g.1 v= true) (h5: r (g :: zaob a b v)= true) :
+    zamy r v a b base sa sb g wa wb ka kb= true:= by
+  simp only [zamy,h3,Nat.beq_refl,h4,h5,Bool.true_and,Bool.true_or]
 lemma zaex {r v a b base sa sb g wa wb ka kb}
     (h1: ka= true) (h3: Nat.lor base sa= top)
-    (h4: zamq g.1 v= true) (h5: r (g :: wa :: zape a b v)= true) :
-    zamw r v a b base sa sb g wa wb ka kb= true:= by
-  simp only [zamw,h1,h3,Nat.beq_refl,h4,h5,Bool.true_and,Bool.true_or,Bool.or_true]
+    (h4: zamr g.1 v= true) (h5: r (g :: wa :: zaob a b v)= true) :
+    zamy r v a b base sa sb g wa wb ka kb= true:= by
+  simp only [zamy,h1,h3,Nat.beq_refl,h4,h5,Bool.true_and,Bool.true_or,Bool.or_true]
 lemma zaeo {r v a b base sa sb g wa wb ka kb}
     (h1: kb= true) (h3: Nat.lor base sb= top)
-    (h4: zamq g.1 v= true) (h5: r (g :: wb :: zape a b v)= true) :
-    zamw r v a b base sa sb g wa wb ka kb= true:= by
-  simp only [zamw,h1,h3,Nat.beq_refl,h4,h5,Bool.true_and,Bool.true_or,Bool.or_true]
+    (h4: zamr g.1 v= true) (h5: r (g :: wb :: zaob a b v)= true) :
+    zamy r v a b base sa sb g wa wb ka kb= true:= by
+  simp only [zamy,h1,h3,Nat.beq_refl,h4,h5,Bool.true_and,Bool.true_or,Bool.or_true]
 lemma zad0 {r v a b base sa sb g wa wb ka kb}
     (h1: ka= true) (h2: kb= true) (h3: Nat.lor (Nat.lor base sa) sb= top)
-    (h4: zamq g.1 v= true) (h5: r (g :: wa :: wb :: zape a b v)= true) :
-    zamw r v a b base sa sb g wa wb ka kb= true:= by
-  simp only [zamw,h1,h2,h3,Nat.beq_refl,h4,h5,Bool.true_and,Bool.or_true]
+    (h4: zamr g.1 v= true) (h5: r (g :: wa :: wb :: zaob a b v)= true) :
+    zamy r v a b base sa sb g wa wb ka kb= true:= by
+  simp only [zamy,h1,h2,h3,Nat.beq_refl,h4,h5,Bool.true_and,Bool.or_true]
 lemma zadf {r v c a b}
-    (h1: zal3 a.tg= true) (h2: zal3 b.tg= true)
+    (h1: zamk a.tg= true) (h2: zamk b.tg= true)
     (h3: Nat.land a.u b.p= a.u) (h4: Nat.land b.u a.p= b.u)
-    (h5: Nat.lor (Nat.land (Nat.land a.p b.p) (Nat.xor (Nat.land a.n b.n) top)) (zao9 c a.s b.s)= top)
-    (h6: zamq (Nat.land a.p b.p,Nat.land a.n b.n) v= true)
+    (h5: Nat.lor (Nat.land (Nat.land a.p b.p) (Nat.xor (Nat.land a.n b.n) top)) (zaoc c a.s b.s)= top)
+    (h6: zamr (Nat.land a.p b.p,Nat.land a.n b.n) v= true)
     (h7 : r (((Nat.land a.p b.p, Nat.land a.n b.n),
-      if zamr a.tg|| zamr b.tg then Tag.tSpec0 else Tag.tNone) :: zape a.w.1 b.w.1 v)= true) :
-    zam0 r v c a b= true:= by
-  simp only [zam0,h1,h2,h3,h4,h5,Nat.beq_refl,h6,h7,Bool.true_and,Bool.true_or]
+      if zam7 a.tg|| zam7 b.tg then Tag.tSpec0 else Tag.tNone) :: zaob a.w.1 b.w.1 v)= true) :
+    zam5 r v c a b= true:= by
+  simp only [zam5,h1,h2,h3,h4,h5,Nat.beq_refl,h6,h7,Bool.true_and,Bool.true_or]
 lemma zadw {r v c a b}
-    (h1: zal2 a.tg= true) (h2: zal2 b.tg= true)
+    (h1: zame a.tg= true) (h2: zame b.tg= true)
     (h3: Nat.land a.u b.n= 0) (h4: Nat.land b.u a.n= 0)
-    (h5: Nat.lor (Nat.land (Nat.lor a.p b.p) (Nat.xor (Nat.lor a.n b.n) top)) (zao9 c a.s b.s)= top)
-    (h6: zamq (Nat.lor a.p b.p,Nat.lor a.n b.n) v= true)
-    (h7: r (((Nat.lor a.p b.p,Nat.lor a.n b.n),.tNone) :: zape a.w.1 b.w.1 v)= true) :
-    zam0 r v c a b= true:= by
-  simp only [zam0,h1,h2,h3,h4,h5,Nat.beq_refl,h6,h7,Bool.true_and,Bool.or_true]
+    (h5: Nat.lor (Nat.land (Nat.lor a.p b.p) (Nat.xor (Nat.lor a.n b.n) top)) (zaoc c a.s b.s)= top)
+    (h6: zamr (Nat.lor a.p b.p,Nat.lor a.n b.n) v= true)
+    (h7: r (((Nat.lor a.p b.p,Nat.lor a.n b.n),.tNone) :: zaob a.w.1 b.w.1 v)= true) :
+    zam5 r v c a b= true:= by
+  simp only [zam5,h1,h2,h3,h4,h5,Nat.beq_refl,h6,h7,Bool.true_and,Bool.or_true]
 lemma zacq {r v c a b}
-    (h1: zal3 a.tg= true) (h2: zal3 b.tg= true)
+    (h1: zamk a.tg= true) (h2: zamk b.tg= true)
     (h3a: Nat.land a.up b.p= a.up) (h3b: Nat.land b.up a.p= b.up)
     (h4a: Nat.land a.un b.n= a.un) (h4b: Nat.land b.un a.n= b.un)
-    (h5: Nat.lor (Nat.xor (Nat.land a.p b.p) (Nat.land a.n b.n)) (zao9 c a.s b.s)= top)
-    (h6: zamq (Nat.land a.p b.p,Nat.land a.n b.n) v= true)
+    (h5: Nat.lor (Nat.xor (Nat.land a.p b.p) (Nat.land a.n b.n)) (zaoc c a.s b.s)= top)
+    (h6: zamr (Nat.land a.p b.p,Nat.land a.n b.n) v= true)
     (h7 : r (((Nat.land a.p b.p, Nat.land a.n b.n),
-      if zamr a.tg|| zamr b.tg then Tag.tSpec0 else Tag.tNone) :: zape a.w.1 b.w.1 v)= true) :
-    zam6 r v c a b= true:= by
-  simp only [zam6,h1,h2,h3a,h3b,h4a,h4b,h5,Nat.beq_refl,h6,h7,Bool.true_and,Bool.true_or]
+      if zam7 a.tg|| zam7 b.tg then Tag.tSpec0 else Tag.tNone) :: zaob a.w.1 b.w.1 v)= true) :
+    zamw r v c a b= true:= by
+  simp only [zamw,h1,h2,h3a,h3b,h4a,h4b,h5,Nat.beq_refl,h6,h7,Bool.true_and,Bool.true_or]
 lemma zaed {r v c a b}
-    (h1: zal2 a.tg= true) (h2: zal2 b.tg= true)
+    (h1: zame a.tg= true) (h2: zame b.tg= true)
     (h3a: Nat.land a.up b.n= 0) (h3b: Nat.land b.up a.n= 0)
     (h4a: Nat.land a.un b.p= 0) (h4b: Nat.land b.un a.p= 0)
-    (h5: Nat.lor (Nat.xor (Nat.lor a.p b.p) (Nat.lor a.n b.n)) (zao9 c a.s b.s)= top)
-    (h6: zamq (Nat.lor a.p b.p,Nat.lor a.n b.n) v= true)
-    (h7: r (((Nat.lor a.p b.p,Nat.lor a.n b.n),.tNone) :: zape a.w.1 b.w.1 v)= true) :
-    zam6 r v c a b= true:= by
-  simp only [zam6,h1,h2,h3a,h3b,h4a,h4b,h5,Nat.beq_refl,h6,h7,Bool.true_and,Bool.or_true]
+    (h5: Nat.lor (Nat.xor (Nat.lor a.p b.p) (Nat.lor a.n b.n)) (zaoc c a.s b.s)= top)
+    (h6: zamr (Nat.lor a.p b.p,Nat.lor a.n b.n) v= true)
+    (h7: r (((Nat.lor a.p b.p,Nat.lor a.n b.n),.tNone) :: zaob a.w.1 b.w.1 v)= true) :
+    zamw r v c a b= true:= by
+  simp only [zamw,h1,h2,h3a,h3b,h4a,h4b,h5,Nat.beq_refl,h6,h7,Bool.true_and,Bool.or_true]
 lemma zab3 {r v c a b}
-    (h1: zal3 a.tg= true) (h2: zal3 b.tg= true)
-    (ht : zanb r v a.w.1 b.w.1
-      (Nat.lor (Nat.land (Nat.land a.p b.p) (Nat.xor (Nat.land a.n b.n) top)) (zao9 c a.s b.s))
+    (h1: zamk a.tg= true) (h2: zamk b.tg= true)
+    (ht : zam8 r v a.w.1 b.w.1
+      (Nat.lor (Nat.land (Nat.land a.p b.p) (Nat.xor (Nat.land a.n b.n) top)) (zaoc c a.s b.s))
       a.s b.s ((Nat.land a.p b.p, Nat.land a.n b.n),
-        if zamr a.tg|| zamr b.tg then Tag.tSpec0 else Tag.tNone)
-      a.w b.w (zam7 a.tg) (zam7 b.tg)
+        if zam7 a.tg|| zam7 b.tg then Tag.tSpec0 else Tag.tNone)
+      a.w b.w (zam1 a.tg) (zam1 b.tg)
       (Nat.beq (Nat.land a.u b.p) a.u) (Nat.beq (Nat.land b.u a.p) b.u)= true) :
-    zamo r v c a b= true:= by
+    zamb r v c a b= true:= by
   obtain ⟨g1,g2,g3⟩:= zabh ht
-  simp only [zamo,h1,h2,g1,g2,g3,ht,Bool.true_and,Bool.true_or]
+  simp only [zamb,h1,h2,g1,g2,g3,ht,Bool.true_and,Bool.true_or]
 lemma zade {r v c a b}
-    (h1: zal2 a.tg= true) (h2: zal2 b.tg= true)
-    (ht : zanb r v a.w.1 b.w.1
-      (Nat.lor (Nat.land (Nat.lor a.p b.p) (Nat.xor (Nat.lor a.n b.n) top)) (zao9 c a.s b.s))
+    (h1: zame a.tg= true) (h2: zame b.tg= true)
+    (ht : zam8 r v a.w.1 b.w.1
+      (Nat.lor (Nat.land (Nat.lor a.p b.p) (Nat.xor (Nat.lor a.n b.n) top)) (zaoc c a.s b.s))
       a.s b.s ((Nat.lor a.p b.p,Nat.lor a.n b.n),.tNone)
-      (a.w.1, if zamr a.tg then .tSpec0 else .tNone)
-      (b.w.1, if zamr b.tg then .tSpec0 else .tNone)
-      (zal3 a.tg) (zal3 b.tg)
+      (a.w.1, if zam7 a.tg then .tSpec0 else .tNone)
+      (b.w.1, if zam7 b.tg then .tSpec0 else .tNone)
+      (zamk a.tg) (zamk b.tg)
       (Nat.beq (Nat.land a.u b.n) 0) (Nat.beq (Nat.land b.u a.n) 0)= true) :
-    zamo r v c a b= true:= by
+    zamb r v c a b= true:= by
   obtain ⟨g1,g2,g3⟩:= zabh ht
-  simp only [zamo,h1,h2,g1,g2,g3,ht,Bool.true_and,Bool.or_true]
+  simp only [zamb,h1,h2,g1,g2,g3,ht,Bool.true_and,Bool.or_true]
 lemma zacj {r v c a b}
-    (h1: zal3 a.tg= true) (h2: zal3 b.tg= true)
-    (ht : zanb r v a.w.1 b.w.1
-      (Nat.lor (Nat.xor (Nat.land a.p b.p) (Nat.land a.n b.n)) (zao9 c a.s b.s))
+    (h1: zamk a.tg= true) (h2: zamk b.tg= true)
+    (ht : zam8 r v a.w.1 b.w.1
+      (Nat.lor (Nat.xor (Nat.land a.p b.p) (Nat.land a.n b.n)) (zaoc c a.s b.s))
       a.s b.s ((Nat.land a.p b.p, Nat.land a.n b.n),
-        if zamr a.tg|| zamr b.tg then Tag.tSpec0 else Tag.tNone)
-      a.w b.w (zam7 a.tg) (zam7 b.tg)
+        if zam7 a.tg|| zam7 b.tg then Tag.tSpec0 else Tag.tNone)
+      a.w b.w (zam1 a.tg) (zam1 b.tg)
       (Nat.beq (Nat.land a.up b.p) a.up&& Nat.beq (Nat.land a.un b.n) a.un)
       (Nat.beq (Nat.land b.up a.p) b.up&& Nat.beq (Nat.land b.un a.n) b.un)= true) :
-    zalx r v c a b= true:= by
+    zalz r v c a b= true:= by
   obtain ⟨g1,g2,g3⟩:= zabh ht
-  simp only [zalx,h1,h2,g1,g2,g3,ht,Bool.true_and,Bool.true_or]
+  simp only [zalz,h1,h2,g1,g2,g3,ht,Bool.true_and,Bool.true_or]
 lemma zacw {r v c a b}
-    (h1: zal2 a.tg= true) (h2: zal2 b.tg= true)
-    (ht : zanb r v a.w.1 b.w.1
-      (Nat.lor (Nat.xor (Nat.lor a.p b.p) (Nat.lor a.n b.n)) (zao9 c a.s b.s))
+    (h1: zame a.tg= true) (h2: zame b.tg= true)
+    (ht : zam8 r v a.w.1 b.w.1
+      (Nat.lor (Nat.xor (Nat.lor a.p b.p) (Nat.lor a.n b.n)) (zaoc c a.s b.s))
       a.s b.s ((Nat.lor a.p b.p,Nat.lor a.n b.n),.tNone)
-      (a.w.1, if zamr a.tg then .tSpec0 else .tNone)
-      (b.w.1, if zamr b.tg then .tSpec0 else .tNone)
-      (zal3 a.tg) (zal3 b.tg)
+      (a.w.1, if zam7 a.tg then .tSpec0 else .tNone)
+      (b.w.1, if zam7 b.tg then .tSpec0 else .tNone)
+      (zamk a.tg) (zamk b.tg)
       (Nat.beq (Nat.land a.up b.n) 0&& Nat.beq (Nat.land a.un b.p) 0)
       (Nat.beq (Nat.land b.up a.n) 0&& Nat.beq (Nat.land b.un a.p) 0)= true) :
-    zalx r v c a b= true:= by
+    zalz r v c a b= true:= by
   obtain ⟨g1,g2,g3⟩:= zabh ht
-  simp only [zalx,h1,h2,g1,g2,g3,ht,Bool.true_and,Bool.or_true]
+  simp only [zalz,h1,h2,g1,g2,g3,ht,Bool.true_and,Bool.or_true]
 lemma zab6 {r v c a b}
-    (h1: zal3 a.tg= true) (h2: zal3 b.tg= true)
-    (ga: (zam7 a.tg|| Nat.beq (Nat.land a.u b.p) a.u)= true)
-    (gb: (zam7 b.tg|| Nat.beq (Nat.land b.u a.p) b.u)= true)
-    (ht : zamw r v a.w.1 b.w.1
-      (Nat.lor (Nat.land (Nat.land a.p b.p) (Nat.xor (Nat.land a.n b.n) top)) (zao9 c a.s b.s))
+    (h1: zamk a.tg= true) (h2: zamk b.tg= true)
+    (ga: (zam1 a.tg|| Nat.beq (Nat.land a.u b.p) a.u)= true)
+    (gb: (zam1 b.tg|| Nat.beq (Nat.land b.u a.p) b.u)= true)
+    (ht : zamy r v a.w.1 b.w.1
+      (Nat.lor (Nat.land (Nat.land a.p b.p) (Nat.xor (Nat.land a.n b.n) top)) (zaoc c a.s b.s))
       a.s b.s ((Nat.land a.p b.p, Nat.land a.n b.n),
-        if zamr a.tg|| zamr b.tg then Tag.tSpec0 else Tag.tNone)
-      a.w b.w (zam7 a.tg) (zam7 b.tg)= true) :
-    zaly r v c a b= true:= by
-  simp only [zaly,h1,h2,ga,gb,ht,Bool.true_and,Bool.true_or]
+        if zam7 a.tg|| zam7 b.tg then Tag.tSpec0 else Tag.tNone)
+      a.w b.w (zam1 a.tg) (zam1 b.tg)= true) :
+    zamj r v c a b= true:= by
+  simp only [zamj,h1,h2,ga,gb,ht,Bool.true_and,Bool.true_or]
 lemma zac7 {r v c a b}
-    (h1: zal2 a.tg= true) (h2: zal2 b.tg= true)
-    (ga: (zal3 a.tg|| Nat.beq (Nat.land a.u b.n) 0)= true)
-    (gb: (zal3 b.tg|| Nat.beq (Nat.land b.u a.n) 0)= true)
-    (ht : zamw r v a.w.1 b.w.1
-      (Nat.lor (Nat.land (Nat.lor a.p b.p) (Nat.xor (Nat.lor a.n b.n) top)) (zao9 c a.s b.s))
+    (h1: zame a.tg= true) (h2: zame b.tg= true)
+    (ga: (zamk a.tg|| Nat.beq (Nat.land a.u b.n) 0)= true)
+    (gb: (zamk b.tg|| Nat.beq (Nat.land b.u a.n) 0)= true)
+    (ht : zamy r v a.w.1 b.w.1
+      (Nat.lor (Nat.land (Nat.lor a.p b.p) (Nat.xor (Nat.lor a.n b.n) top)) (zaoc c a.s b.s))
       a.s b.s ((Nat.lor a.p b.p,Nat.lor a.n b.n),.tNone)
-      (a.w.1, if zamr a.tg then .tSpec0 else .tNone)
-      (b.w.1, if zamr b.tg then .tSpec0 else .tNone)
-      (zal3 a.tg) (zal3 b.tg)= true) :
-    zaly r v c a b= true:= by
-  simp only [zaly,h1,h2,ga,gb,ht,Bool.true_and,Bool.or_true]
+      (a.w.1, if zam7 a.tg then .tSpec0 else .tNone)
+      (b.w.1, if zam7 b.tg then .tSpec0 else .tNone)
+      (zamk a.tg) (zamk b.tg)= true) :
+    zamj r v c a b= true:= by
+  simp only [zamj,h1,h2,ga,gb,ht,Bool.true_and,Bool.or_true]
 lemma zab0 {r v c a b}
-    (h1: zal3 a.tg= true) (h2: zal3 b.tg= true)
-    (ga: (zam7 a.tg|| (Nat.beq (Nat.land a.up b.p) a.up&& Nat.beq (Nat.land a.un b.n) a.un))= true)
-    (gb: (zam7 b.tg|| (Nat.beq (Nat.land b.up a.p) b.up&& Nat.beq (Nat.land b.un a.n) b.un))= true)
-    (ht : zamw r v a.w.1 b.w.1
-      (Nat.lor (Nat.xor (Nat.land a.p b.p) (Nat.land a.n b.n)) (zao9 c a.s b.s))
+    (h1: zamk a.tg= true) (h2: zamk b.tg= true)
+    (ga: (zam1 a.tg|| (Nat.beq (Nat.land a.up b.p) a.up&& Nat.beq (Nat.land a.un b.n) a.un))= true)
+    (gb: (zam1 b.tg|| (Nat.beq (Nat.land b.up a.p) b.up&& Nat.beq (Nat.land b.un a.n) b.un))= true)
+    (ht : zamy r v a.w.1 b.w.1
+      (Nat.lor (Nat.xor (Nat.land a.p b.p) (Nat.land a.n b.n)) (zaoc c a.s b.s))
       a.s b.s ((Nat.land a.p b.p, Nat.land a.n b.n),
-        if zamr a.tg|| zamr b.tg then Tag.tSpec0 else Tag.tNone)
-      a.w b.w (zam7 a.tg) (zam7 b.tg)= true) :
-    zama r v c a b= true:= by
-  simp only [zama,h1,h2,ga,gb,ht,Bool.true_and,Bool.true_or]
+        if zam7 a.tg|| zam7 b.tg then Tag.tSpec0 else Tag.tNone)
+      a.w b.w (zam1 a.tg) (zam1 b.tg)= true) :
+    zalx r v c a b= true:= by
+  simp only [zalx,h1,h2,ga,gb,ht,Bool.true_and,Bool.true_or]
 lemma zacn {r v c a b}
-    (h1: zal2 a.tg= true) (h2: zal2 b.tg= true)
-    (ga: (zal3 a.tg|| (Nat.beq (Nat.land a.up b.n) 0&& Nat.beq (Nat.land a.un b.p) 0))= true)
-    (gb: (zal3 b.tg|| (Nat.beq (Nat.land b.up a.n) 0&& Nat.beq (Nat.land b.un a.p) 0))= true)
-    (ht : zamw r v a.w.1 b.w.1
-      (Nat.lor (Nat.xor (Nat.lor a.p b.p) (Nat.lor a.n b.n)) (zao9 c a.s b.s))
+    (h1: zame a.tg= true) (h2: zame b.tg= true)
+    (ga: (zamk a.tg|| (Nat.beq (Nat.land a.up b.n) 0&& Nat.beq (Nat.land a.un b.p) 0))= true)
+    (gb: (zamk b.tg|| (Nat.beq (Nat.land b.up a.n) 0&& Nat.beq (Nat.land b.un a.p) 0))= true)
+    (ht : zamy r v a.w.1 b.w.1
+      (Nat.lor (Nat.xor (Nat.lor a.p b.p) (Nat.lor a.n b.n)) (zaoc c a.s b.s))
       a.s b.s ((Nat.lor a.p b.p,Nat.lor a.n b.n),.tNone)
-      (a.w.1, if zamr a.tg then .tSpec0 else .tNone)
-      (b.w.1, if zamr b.tg then .tSpec0 else .tNone)
-      (zal3 a.tg) (zal3 b.tg)= true) :
-    zama r v c a b= true:= by
-  simp only [zama,h1,h2,ga,gb,ht,Bool.true_and,Bool.or_true]
+      (a.w.1, if zam7 a.tg then .tSpec0 else .tNone)
+      (b.w.1, if zam7 b.tg then .tSpec0 else .tNone)
+      (zamk a.tg) (zamk b.tg)= true) :
+    zalx r v c a b= true:= by
+  simp only [zalx,h1,h2,ga,gb,ht,Bool.true_and,Bool.or_true]
 lemma zacb {m t k : Nat} {U : Finset Sig} {a b : Sig} {τ : Sig → Tag} {v : List Wire}
     {r: List Wire→ Bool}
-    (ha: zapj a) (hb: zapj b) (hab: a≠ b)
-    (hrep: zamk v (insert a (insert b U)) τ) (hle: m≤ k)
+    (ha: zaoi a) (hb: zaoi b) (hab: a≠ b)
+    (hrep: zal9 v (insert a (insert b U)) τ) (hle: m≤ k)
     (fresh: bin false a b∉ insert a (insert b U))
     (hra: τ a≠ .tSpec0∧ (τ a≠ .tNone→ a∉ U))
     (hrb: τ b≠ .tSpec0∧ (τ b≠ .tNone→ b∉ U))
-    (l: TRestricted m t (insert (bin false a b) U) (zamt τ a b))
-    (ih: ∀ w: List Wire,zamk w (insert (bin false a b) U) (zamt τ a b)→ r w= true) :
+    (l: TRestricted m t (insert (bin false a b) U) (zam9 τ a b))
+    (ih: ∀ w: List Wire,zal9 w (insert (bin false a b) U) (zam9 τ a b)→ r w= true) :
     let lim:= k- t+ 1
-    let c0:= zamy false v
-    let c1:= zamy true v
+    let c0:= zam4 false v
+    let c1:= zam4 true v
     (t = 0 →
-      (v.length= lim+ 1→ zam0 r v c0 (zapx c0.2.1 (a,τ a)) (zapx c0.2.1 (b,τ b))= true) ∧
-      (v.length= lim→ zamo r v c0 (zapx c0.2.1 (a,τ a)) (zapx c0.2.1 (b,τ b))= true) ∧
-      zaly r v c0 (zapx c0.2.1 (a,τ a)) (zapx c0.2.1 (b,τ b))= true) ∧
+      (v.length= lim+ 1→ zam5 r v c0 (zaot c0.2.1 (a,τ a)) (zaot c0.2.1 (b,τ b))= true) ∧
+      (v.length= lim→ zamb r v c0 (zaot c0.2.1 (a,τ a)) (zaot c0.2.1 (b,τ b))= true) ∧
+      zamj r v c0 (zaot c0.2.1 (a,τ a)) (zaot c0.2.1 (b,τ b))= true) ∧
     (t ≠ 0 →
-      (v.length= lim+ 1→ zam6 r v c1 (zapt c1.2.1 (a,τ a)) (zapt c1.2.1 (b,τ b))= true) ∧
-      (v.length= lim→ zalx r v c1 (zapt c1.2.1 (a,τ a)) (zapt c1.2.1 (b,τ b))= true) ∧
-      zama r v c1 (zapt c1.2.1 (a,τ a)) (zapt c1.2.1 (b,τ b))= true):= by
+      (v.length= lim+ 1→ zamw r v c1 (zaoh c1.2.1 (a,τ a)) (zaoh c1.2.1 (b,τ b))= true) ∧
+      (v.length= lim→ zalz r v c1 (zaoh c1.2.1 (a,τ a)) (zaoh c1.2.1 (b,τ b))= true) ∧
+      zalx r v c1 (zaoh c1.2.1 (a,τ a)) (zaoh c1.2.1 (b,τ b))= true):= by
   obtain ⟨hndS,heS,htag⟩:= hrep
-  have hval : ∀ x ∈ zapz v, zap6 x := by
+  have hval : ∀ x ∈ zaos v, zaoy x := by
     intro x hx
     rcases Finset.mem_insert.mp (heS▸ List.mem_toFinset.mpr hx) with rfl | hx1
     · exact ha.1
     rcases Finset.mem_insert.mp hx1 with rfl | hxU
     · exact hb.1
     · exact (zaet l.live x (Finset.mem_insert_of_mem hxU)).1
-  have ahS: a∈ zapz v:= List.mem_toFinset.mp (heS.symm▸ Finset.mem_insert_self _ _)
-  have bhS: b∈ zapz v:= List.mem_toFinset.mp (heS.symm▸ Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
+  have ahS: a∈ zaos v:= List.mem_toFinset.mp (heS.symm▸ Finset.mem_insert_self _ _)
+  have bhS: b∈ zaos v:= List.mem_toFinset.mp (heS.symm▸ Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
   have ah: (a,τ a)∈ v:= (zab2 htag).mpr ahS
   have bh: (b,τ b)∈ v:= (zab2 htag).mpr bhS
-  let rest:= zane [a,b] v
-  let gTag: Tag:= if zamr (τ a)|| zamr (τ b) then .tSpec0 else .tNone
+  let rest:= zann [a,b] v
+  let gTag: Tag:= if zam7 (τ a)|| zam7 (τ b) then .tSpec0 else .tNone
   let g: Wire:= (bin false a b,gTag)
   let h: List Wire:= (if a∈ U then [(a,τ a)] else [])++ (if b∈ U then [(b,τ b)] else [])
-  have hSigsH : zapz h = zapu U [a, b] := by
-    by_cases haU: a∈ U <;> by_cases hbU: b∈ U <;> simp [h,zapz,zapu,haU,hbU]
+  have hSigsH : zaos h = zaop U [a, b] := by
+    by_cases haU: a∈ U <;> by_cases hbU: b∈ U <;> simp [h,zaos,zaop,haU,hbU]
   obtain ⟨hn,eq⟩:= zagh (del:= [a,b]) (U:= U) hndS (by simp [hab]) (by simpa using heS)
-  have hSigsHR : zapz (h ++ rest) = zapu U [a, b] ++ zanu [a, b] (zapz v) := by
+  have hSigsHR : zaos (h ++ rest) = zaop U [a, b] ++ zan4 [a, b] (zaos v) := by
     change (h++ rest).map Prod.fst= _
-    rw [List.map_append, show h.map Prod.fst = zapu U [a, b] from hSigsH,
-      show rest.map Prod.fst= zanu [a,b] (zapz v) from zabs [a,b] v]
-  have nn: bin false a b∉ zapz v:= fun hm=> fresh (heS▸ List.mem_toFinset.mpr hm)
+    rw [List.map_append, show h.map Prod.fst = zaop U [a, b] from hSigsH,
+      show rest.map Prod.fst= zan4 [a,b] (zaos v) from zabs [a,b] v]
+  have nn: bin false a b∉ zaos v:= fun hm=> fresh (heS▸ List.mem_toFinset.mpr hm)
   have nz: bin false a b∉ U:= fun hm=> fresh (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hm))
-  have hnd : (zapz (g :: (h ++ rest))).Nodup := by
-    change (bin false a b :: zapz (h++ rest)).Nodup; rw [hSigsHR]
+  have hnd : (zaos (g :: (h ++ rest))).Nodup := by
+    change (bin false a b :: zaos (h++ rest)).Nodup; rw [hSigsHR]
     exact List.nodup_cons.mpr ⟨fun hm=> nz (eq▸ List.mem_toFinset.mpr hm),hn⟩
-  have e : (zapz (g :: (h ++ rest))).toFinset = insert (bin false a b) U := by
-    change (bin false a b :: zapz (h++ rest)).toFinset= _; rw [List.toFinset_cons,hSigsHR,eq]
-  have htag' : ∀ w ∈ g :: (h ++ rest), w.2 = zamt τ a b w.1 := by
+  have e : (zaos (g :: (h ++ rest))).toFinset = insert (bin false a b) U := by
+    change (bin false a b :: zaos (h++ rest)).toFinset= _; rw [List.toFinset_cons,hSigsHR,eq]
+  have htag' : ∀ w ∈ g :: (h ++ rest), w.2 = zam9 τ a b w.1 := by
     intro w hw; rcases List.mem_cons.mp hw with rfl | hw'
-    · simp only [g,gTag,zamt,ite_true]; cases τ a <;> cases τ b <;> rfl
+    · simp only [g,gTag,zam9,ite_true]; cases τ a <;> cases τ b <;> rfl
     · have hwV : w ∈ v := by
         rcases List.mem_append.mp hw' with hh | hr
         · rcases List.mem_append.mp hh with h1 | h2
@@ -5613,32 +5613,32 @@ lemma zacb {m t k : Nat} {U : Finset Sig} {a b : Sig} {τ : Sig → Tag} {v : Li
             · simp [hbU] at h2
         · exact List.mem_of_mem_filter hr
       have hwNe: w.1≠ bin false a b:= fun heq=> nn (heq▸ List.mem_map_of_mem hwV)
-      simp [zamt,hwNe,htag w hwV]
+      simp [zam9,hwNe,htag w hwV]
   have hr:= ih _ ⟨hnd,e,htag'⟩
   obtain ⟨ht,hc⟩:= zah4 l.live
   rw [← e,List.toFinset_card_of_nodup hnd] at hc
-  simp only [zapz, List.map_cons, List.map_append, List.length_cons, List.length_append,
+  simp only [zaos, List.map_cons, List.map_append, List.length_cons, List.length_append,
     List.length_map] at hc
-  have hav : zamq (bin false a b) v = true :=
+  have hav : zamr (bin false a b) v = true :=
     zaar nn (zaet l.live _ (Finset.mem_insert_self _ _))
-  have hnsa: zal3 (τ a)= true:= by cases hta: τ a <;> simp [zal3]; exact hra.1 hta
-  have hnsb: zal3 (τ b)= true:= by cases htb: τ b <;> simp [zal3]; exact hrb.1 htb
-  have hka : a ∈ U → zam7 (τ a) = true := fun hm => by
-    cases hta: τ a <;> simp [zam7]; all_goals exact hra.2 (by simp [hta]) hm
-  have hkb : b ∈ U → zam7 (τ b) = true := fun hm => by
-    cases htb: τ b <;> simp [zam7]; all_goals exact hrb.2 (by simp [htb]) hm
-  have hdrop: zape a b v= rest:= zafv a b v
+  have hnsa: zamk (τ a)= true:= by cases hta: τ a <;> simp [zamk]; exact hra.1 hta
+  have hnsb: zamk (τ b)= true:= by cases htb: τ b <;> simp [zamk]; exact hrb.1 htb
+  have hka : a ∈ U → zam1 (τ a) = true := fun hm => by
+    cases hta: τ a <;> simp [zam1]; all_goals exact hra.2 (by simp [hta]) hm
+  have hkb : b ∈ U → zam1 (τ b) = true := fun hm => by
+    cases htb: τ b <;> simp [zam1]; all_goals exact hrb.2 (by simp [htb]) hm
+  have hdrop: zaob a b v= rest:= zafv a b v
   have cv:= zafy l.live e
-  simp only [zapz,List.map_cons,List.map_append,zani,zadx] at cv
-  have hcv' : (sep (decide (0 < t)) (bin false a b) ||| zani (decide (0 < t)) (zapz rest)) |||
-      zam2 (decide (0< t)) h= top:= by
-    rw [zad6,← cv]; unfold zapz; ac_rfl
+  simp only [zaos,List.map_cons,List.map_append,zanj,zadx] at cv
+  have hcv' : (sep (decide (0 < t)) (bin false a b) ||| zanj (decide (0 < t)) (zaos rest)) |||
+      zamq (decide (0< t)) h= top:= by
+    rw [zad6,← cv]; unfold zaos; ac_rfl
   obtain ⟨hlen,hmask⟩:= zaip (decide (0< t)) hndS hval ahS bhS hab
   rw [zadj,← zabs,zadj] at hlen
   change v.length- 2= rest.length at hlen
   rw [← zabs] at hmask
-  change zao9 (zann (decide (0 < t)) (zapz v)) (sep (decide (0 < t)) a) (sep (decide (0 < t)) b) =
-    zani (decide (0< t)) (zapz rest) at hmask
+  change zaoc (zano (decide (0 < t)) (zaos v)) (sep (decide (0 < t)) a) (sep (decide (0 < t)) b) =
+    zanj (decide (0< t)) (zaos rest) at hmask
   have hdisjAB:= zac1 (decide (0< t)) hndS hval ahS bhS hab
   have hdisjBA:= zac1 (decide (0< t)) hndS hval bhS ahS hab.symm
   have hvc:= zaas (decide (0< t)) hval
@@ -5646,30 +5646,30 @@ lemma zacb {m t k : Nat} {U : Finset Sig} {a b : Sig} {τ : Sig → Tag} {v : Li
   · intro ht0; subst ht0
     have hdt0: decide (0< 0)= false:= rfl
     rw [hdt0] at hcv' hmask hdisjAB hdisjBA hvc
-    have hcv0 : Nat.lor (Nat.lor (sep0 (bin false a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b)))
-        (zam2 false h)= top:= by simpa [hmask,zaj0] using hcv'
+    have hcv0 : Nat.lor (Nat.lor (sep0 (bin false a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b)))
+        (zamq false h)= top:= by simpa [hmask,zaj0] using hcv'
     have h0zero: ∀ x: Nat,Nat.land x 0= 0:= fun x=> Nat.and_zero x
-    have huA0 : a ∉ U → Nat.land (Nat.land (zann false (zapz v)).2.1 (sep0 a)) b.1 =
-        Nat.land (zann false (zapz v)).2.1 (sep0 a):= fun hna=> by
+    have huA0 : a ∉ U → Nat.land (Nat.land (zano false (zaos v)).2.1 (sep0 a)) b.1 =
+        Nat.land (zano false (zaos v)).2.1 (sep0 a):= fun hna=> by
       by_cases hbU: b∈ U
-      · exact zaee hvc (by simpa [zaj0] using hdisjAB) (by simpa [h,hna,hbU,zam2,zaj0] using hcv0)
-      · exact zaee hvc (h0zero _) (by simpa [h,hna,hbU,zam2] using hcv0)
-    have huB0 : b ∉ U → Nat.land (Nat.land (zann false (zapz v)).2.1 (sep0 b)) a.1 =
-        Nat.land (zann false (zapz v)).2.1 (sep0 b):= fun hnb=> by
-      have hcomm : Nat.lor (Nat.lor (sep0 (bin false b a)) (zao9 (zann false (zapz v)) (sep0 b) (sep0 a)))
-          (zam2 false h)= top:= by
-        rw [zaiu]; simpa [zao9,Nat.or_comm,Nat.and_comm] using hcv0
+      · exact zaee hvc (by simpa [zaj0] using hdisjAB) (by simpa [h,hna,hbU,zamq,zaj0] using hcv0)
+      · exact zaee hvc (h0zero _) (by simpa [h,hna,hbU,zamq] using hcv0)
+    have huB0 : b ∉ U → Nat.land (Nat.land (zano false (zaos v)).2.1 (sep0 b)) a.1 =
+        Nat.land (zano false (zaos v)).2.1 (sep0 b):= fun hnb=> by
+      have hcomm : Nat.lor (Nat.lor (sep0 (bin false b a)) (zaoc (zano false (zaos v)) (sep0 b) (sep0 a)))
+          (zamq false h)= top:= by
+        rw [zaiu]; simpa [zaoc,Nat.or_comm,Nat.and_comm] using hcv0
       by_cases haU: a∈ U
-      · exact zaee hvc (by simpa [zaj0] using hdisjBA) (by simpa [h,haU,hnb,zam2,zaj0] using hcomm)
-      · exact zaee hvc (h0zero _) (by simpa [h,haU,hnb,zam2] using hcomm)
+      · exact zaee hvc (by simpa [zaj0] using hdisjBA) (by simpa [h,haU,hnb,zamq,zaj0] using hcomm)
+      · exact zaee hvc (h0zero _) (by simpa [h,haU,hnb,zamq] using hcomm)
     refine ⟨?_,?_,?_⟩
     · intro hlv
       have hh0: h.length= 0:= by omega
       have hna: a∉ U:= fun hm=> by simp [h,hm] at hh0
       have hnb: b∉ U:= fun hm=> by simp [h,hm] at hh0
-      have htop : Nat.lor (sep0 (bin false a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b)) = top := by
-        simpa [h,hna,hnb,zam2] using hcv0
-      have hr0: r (g :: zape a b v)= true:= by rw [hdrop]; simpa [h,hna,hnb] using hr
+      have htop : Nat.lor (sep0 (bin false a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b)) = top := by
+        simpa [h,hna,hnb,zamq] using hcv0
+      have hr0: r (g :: zaob a b v)= true:= by rw [hdrop]; simpa [h,hna,hnb] using hr
       rw [zaec]
       exact zadf hnsa hnsb (huA0 hna) (huB0 hnb) htop hav hr0
     · intro hlv
@@ -5678,70 +5678,70 @@ lemma zacb {m t k : Nat} {U : Finset Sig} {a b : Sig} {τ : Sig → Tag} {v : Li
       apply zab3 hnsa hnsb
       by_cases haU: a∈ U <;> by_cases hbU: b∈ U
       · simp [h,haU,hbU] at hh1
-      · have htopA : Nat.lor (Nat.lor (sep0 (bin false a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b))) (sep0 a) = top := by
-          simpa [h,haU,hbU,zam2,zaj0] using hcv0
-        have hrA: r (g :: (a,τ a) :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopA : Nat.lor (Nat.lor (sep0 (bin false a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b))) (sep0 a) = top := by
+          simpa [h,haU,hbU,zamq,zaj0] using hcv0
+        have hrA: r (g :: (a,τ a) :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zae8 (hka haU) (Nat.beq_eq.mpr (huB0 hbU)) htopA hav hrA
-      · have htopB : Nat.lor (Nat.lor (sep0 (bin false a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b))) (sep0 b) = top := by
-          simpa [h,haU,hbU,zam2,zaj0] using hcv0
-        have hrB: r (g :: (b,τ b) :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopB : Nat.lor (Nat.lor (sep0 (bin false a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b))) (sep0 b) = top := by
+          simpa [h,haU,hbU,zamq,zaj0] using hcv0
+        have hrB: r (g :: (b,τ b) :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zaeq (hkb hbU) (Nat.beq_eq.mpr (huA0 haU)) htopB hav hrB
-      · have htop : Nat.lor (sep0 (bin false a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b)) = top := by
-          simpa [h,haU,hbU,zam2] using hcv0
-        have hr0: r (g :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htop : Nat.lor (sep0 (bin false a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b)) = top := by
+          simpa [h,haU,hbU,zamq] using hcv0
+        have hr0: r (g :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zae0 (Nat.beq_eq.mpr (huA0 haU)) (Nat.beq_eq.mpr (huB0 hbU)) htop hav hr0
     · rw [zaec]
       by_cases haU: a∈ U <;> by_cases hbU: b∈ U
-      · have htopAB : Nat.lor (Nat.lor (Nat.lor (sep0 (bin false a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b))) (sep0 a)) (sep0 b) = top := by
-          have: zam2 false h= sep0 a||| sep0 b:= by simp [h,haU,hbU,zam2,zaj0]
+      · have htopAB : Nat.lor (Nat.lor (Nat.lor (sep0 (bin false a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b))) (sep0 a)) (sep0 b) = top := by
+          have: zamq false h= sep0 a||| sep0 b:= by simp [h,haU,hbU,zamq,zaj0]
           rw [this] at hcv0; exact (Nat.or_assoc _ _ _).trans hcv0
-        have hrAB: r (g :: (a,τ a) :: (b,τ b) :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+        have hrAB: r (g :: (a,τ a) :: (b,τ b) :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zab6 hnsa hnsb (zakv (hka haU)) (zakv (hkb hbU)) (zad0 (hka haU) (hkb hbU) htopAB hav hrAB)
-      · have htopA : Nat.lor (Nat.lor (sep0 (bin false a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b))) (sep0 a) = top := by
-          simpa [h,haU,hbU,zam2,zaj0] using hcv0
-        have hrA: r (g :: (a,τ a) :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopA : Nat.lor (Nat.lor (sep0 (bin false a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b))) (sep0 a) = top := by
+          simpa [h,haU,hbU,zamq,zaj0] using hcv0
+        have hrA: r (g :: (a,τ a) :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zab6 hnsa hnsb (zakv (hka haU)) (zakr (Nat.beq_eq.mpr (huB0 hbU))) (zaex (hka haU) htopA hav hrA)
-      · have htopB : Nat.lor (Nat.lor (sep0 (bin false a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b))) (sep0 b) = top := by
-          simpa [h,haU,hbU,zam2,zaj0] using hcv0
-        have hrB: r (g :: (b,τ b) :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopB : Nat.lor (Nat.lor (sep0 (bin false a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b))) (sep0 b) = top := by
+          simpa [h,haU,hbU,zamq,zaj0] using hcv0
+        have hrB: r (g :: (b,τ b) :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zab6 hnsa hnsb (zakr (Nat.beq_eq.mpr (huA0 haU))) (zakv (hkb hbU)) (zaeo (hkb hbU) htopB hav hrB)
-      · have htop : Nat.lor (sep0 (bin false a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b)) = top := by
-          simpa [h,haU,hbU,zam2] using hcv0
-        have hr0: r (g :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htop : Nat.lor (sep0 (bin false a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b)) = top := by
+          simpa [h,haU,hbU,zamq] using hcv0
+        have hr0: r (g :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zab6 hnsa hnsb (zakr (Nat.beq_eq.mpr (huA0 haU))) (zakr (Nat.beq_eq.mpr (huB0 hbU))) (zae5 htop hav hr0)
   · intro ht0
     have hdt: decide (0< t)= true:= decide_eq_true (by omega)
     rw [hdt] at hcv' hmask hdisjAB hdisjBA hvc
-    have hcv1 : Nat.lor (Nat.lor (sep1 (bin false a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b)))
-        (zam2 true h)= top:= by simpa [hmask,zajq] using hcv'
+    have hcv1 : Nat.lor (Nat.lor (sep1 (bin false a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b)))
+        (zamq true h)= top:= by simpa [hmask,zajq] using hcv'
     have h0zero: ∀ x: Nat,Nat.land x 0= 0:= fun x=> Nat.and_zero x
     have huA1 : a ∉ U →
-        Nat.land (Nat.land (Nat.land (zann true (zapz v)).2.1 (sep1 a)) a.1) b.1 =
-          Nat.land (Nat.land (zann true (zapz v)).2.1 (sep1 a)) a.1 ∧
-        Nat.land (Nat.land (Nat.land (zann true (zapz v)).2.1 (sep1 a)) a.2) b.2 =
-          Nat.land (Nat.land (zann true (zapz v)).2.1 (sep1 a)) a.2:= fun hna=> by
+        Nat.land (Nat.land (Nat.land (zano true (zaos v)).2.1 (sep1 a)) a.1) b.1 =
+          Nat.land (Nat.land (zano true (zaos v)).2.1 (sep1 a)) a.1 ∧
+        Nat.land (Nat.land (Nat.land (zano true (zaos v)).2.1 (sep1 a)) a.2) b.2 =
+          Nat.land (Nat.land (zano true (zaos v)).2.1 (sep1 a)) a.2:= fun hna=> by
       by_cases hbU: b∈ U
-      · exact zad3 hvc (by simpa [zajq] using hdisjAB) (by simpa [h,hna,hbU,zam2,zajq] using hcv1)
-      · exact zad3 hvc (h0zero _) (by simpa [h,hna,hbU,zam2] using hcv1)
+      · exact zad3 hvc (by simpa [zajq] using hdisjAB) (by simpa [h,hna,hbU,zamq,zajq] using hcv1)
+      · exact zad3 hvc (h0zero _) (by simpa [h,hna,hbU,zamq] using hcv1)
     have huB1 : b ∉ U →
-        Nat.land (Nat.land (Nat.land (zann true (zapz v)).2.1 (sep1 b)) b.1) a.1 =
-          Nat.land (Nat.land (zann true (zapz v)).2.1 (sep1 b)) b.1 ∧
-        Nat.land (Nat.land (Nat.land (zann true (zapz v)).2.1 (sep1 b)) b.2) a.2 =
-          Nat.land (Nat.land (zann true (zapz v)).2.1 (sep1 b)) b.2:= fun hnb=> by
-      have hcomm : Nat.lor (Nat.lor (sep1 (bin false b a)) (zao9 (zann true (zapz v)) (sep1 b) (sep1 a)))
-          (zam2 true h)= top:= by
-        rw [zaiu]; simpa [zao9,Nat.or_comm,Nat.and_comm] using hcv1
+        Nat.land (Nat.land (Nat.land (zano true (zaos v)).2.1 (sep1 b)) b.1) a.1 =
+          Nat.land (Nat.land (zano true (zaos v)).2.1 (sep1 b)) b.1 ∧
+        Nat.land (Nat.land (Nat.land (zano true (zaos v)).2.1 (sep1 b)) b.2) a.2 =
+          Nat.land (Nat.land (zano true (zaos v)).2.1 (sep1 b)) b.2:= fun hnb=> by
+      have hcomm : Nat.lor (Nat.lor (sep1 (bin false b a)) (zaoc (zano true (zaos v)) (sep1 b) (sep1 a)))
+          (zamq true h)= top:= by
+        rw [zaiu]; simpa [zaoc,Nat.or_comm,Nat.and_comm] using hcv1
       by_cases haU: a∈ U
-      · exact zad3 hvc (by simpa [zajq] using hdisjBA) (by simpa [h,haU,hnb,zam2,zajq] using hcomm)
-      · exact zad3 hvc (h0zero _) (by simpa [h,haU,hnb,zam2] using hcomm)
+      · exact zad3 hvc (by simpa [zajq] using hdisjBA) (by simpa [h,haU,hnb,zamq,zajq] using hcomm)
+      · exact zad3 hvc (h0zero _) (by simpa [h,haU,hnb,zamq] using hcomm)
     refine ⟨?_,?_,?_⟩
     · intro hlv
       have hh0: h.length= 0:= by omega
       have hna: a∉ U:= fun hm=> by simp [h,hm] at hh0
       have hnb: b∉ U:= fun hm=> by simp [h,hm] at hh0
-      have htop : Nat.lor (sep1 (bin false a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b)) = top := by
-        simpa [h,hna,hnb,zam2] using hcv1
-      have hr0: r (g :: zape a b v)= true:= by rw [hdrop]; simpa [h,hna,hnb] using hr
+      have htop : Nat.lor (sep1 (bin false a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b)) = top := by
+        simpa [h,hna,hnb,zamq] using hcv1
+      have hr0: r (g :: zaob a b v)= true:= by rw [hdrop]; simpa [h,hna,hnb] using hr
       have ⟨u1,u2⟩:= huA1 hna; have ⟨v1,v2⟩:= huB1 hnb
       rw [zaec]
       exact zacq hnsa hnsb u1 v1 u2 v2 htop hav hr0
@@ -5751,111 +5751,111 @@ lemma zacb {m t k : Nat} {U : Finset Sig} {a b : Sig} {τ : Sig → Tag} {v : Li
       apply zacj hnsa hnsb
       by_cases haU: a∈ U <;> by_cases hbU: b∈ U
       · simp [h,haU,hbU] at hh1
-      · have htopA : Nat.lor (Nat.lor (sep1 (bin false a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b))) (sep1 a) = top := by
-          simpa [h,haU,hbU,zam2,zajq] using hcv1
-        have hrA: r (g :: (a,τ a) :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopA : Nat.lor (Nat.lor (sep1 (bin false a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b))) (sep1 a) = top := by
+          simpa [h,haU,hbU,zamq,zajq] using hcv1
+        have hrA: r (g :: (a,τ a) :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         have ⟨v1,v2⟩:= huB1 hbU
         exact zae8 (hka haU) (zaks (Nat.beq_eq.mpr v1) (Nat.beq_eq.mpr v2)) htopA hav hrA
-      · have htopB : Nat.lor (Nat.lor (sep1 (bin false a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b))) (sep1 b) = top := by
-          simpa [h,haU,hbU,zam2,zajq] using hcv1
-        have hrB: r (g :: (b,τ b) :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopB : Nat.lor (Nat.lor (sep1 (bin false a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b))) (sep1 b) = top := by
+          simpa [h,haU,hbU,zamq,zajq] using hcv1
+        have hrB: r (g :: (b,τ b) :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         have ⟨u1,u2⟩:= huA1 haU
         exact zaeq (hkb hbU) (zaks (Nat.beq_eq.mpr u1) (Nat.beq_eq.mpr u2)) htopB hav hrB
-      · have htop : Nat.lor (sep1 (bin false a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b)) = top := by
-          simpa [h,haU,hbU,zam2] using hcv1
-        have hr0: r (g :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htop : Nat.lor (sep1 (bin false a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b)) = top := by
+          simpa [h,haU,hbU,zamq] using hcv1
+        have hr0: r (g :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         have ⟨u1,u2⟩:= huA1 haU; have ⟨v1,v2⟩:= huB1 hbU
         exact zae0 (zaks (Nat.beq_eq.mpr u1) (Nat.beq_eq.mpr u2)) (zaks (Nat.beq_eq.mpr v1) (Nat.beq_eq.mpr v2)) htop hav hr0
     · rw [zaec]
       by_cases haU: a∈ U <;> by_cases hbU: b∈ U
-      · have htopAB : Nat.lor (Nat.lor (Nat.lor (sep1 (bin false a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b))) (sep1 a)) (sep1 b) = top := by
-          have: zam2 true h= sep1 a||| sep1 b:= by simp [h,haU,hbU,zam2,zajq]
+      · have htopAB : Nat.lor (Nat.lor (Nat.lor (sep1 (bin false a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b))) (sep1 a)) (sep1 b) = top := by
+          have: zamq true h= sep1 a||| sep1 b:= by simp [h,haU,hbU,zamq,zajq]
           rw [this] at hcv1; exact (Nat.or_assoc _ _ _).trans hcv1
-        have hrAB: r (g :: (a,τ a) :: (b,τ b) :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+        have hrAB: r (g :: (a,τ a) :: (b,τ b) :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zab0 hnsa hnsb (zakv (hka haU)) (zakv (hkb hbU)) (zad0 (hka haU) (hkb hbU) htopAB hav hrAB)
-      · have htopA : Nat.lor (Nat.lor (sep1 (bin false a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b))) (sep1 a) = top := by
-          simpa [h,haU,hbU,zam2,zajq] using hcv1
-        have hrA: r (g :: (a,τ a) :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopA : Nat.lor (Nat.lor (sep1 (bin false a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b))) (sep1 a) = top := by
+          simpa [h,haU,hbU,zamq,zajq] using hcv1
+        have hrA: r (g :: (a,τ a) :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         have ⟨v1,v2⟩:= huB1 hbU
         exact zab0 hnsa hnsb (zakv (hka haU)) (zakr (zaks (Nat.beq_eq.mpr v1) (Nat.beq_eq.mpr v2))) (zaex (hka haU) htopA hav hrA)
-      · have htopB : Nat.lor (Nat.lor (sep1 (bin false a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b))) (sep1 b) = top := by
-          simpa [h,haU,hbU,zam2,zajq] using hcv1
-        have hrB: r (g :: (b,τ b) :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopB : Nat.lor (Nat.lor (sep1 (bin false a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b))) (sep1 b) = top := by
+          simpa [h,haU,hbU,zamq,zajq] using hcv1
+        have hrB: r (g :: (b,τ b) :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         have ⟨u1,u2⟩:= huA1 haU
         exact zab0 hnsa hnsb (zakr (zaks (Nat.beq_eq.mpr u1) (Nat.beq_eq.mpr u2))) (zakv (hkb hbU)) (zaeo (hkb hbU) htopB hav hrB)
-      · have htop : Nat.lor (sep1 (bin false a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b)) = top := by
-          simpa [h,haU,hbU,zam2] using hcv1
-        have hr0: r (g :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htop : Nat.lor (sep1 (bin false a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b)) = top := by
+          simpa [h,haU,hbU,zamq] using hcv1
+        have hr0: r (g :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         have ⟨u1,u2⟩:= huA1 haU; have ⟨v1,v2⟩:= huB1 hbU
         exact zab0 hnsa hnsb (zakr (zaks (Nat.beq_eq.mpr u1) (Nat.beq_eq.mpr u2))) (zakr (zaks (Nat.beq_eq.mpr v1) (Nat.beq_eq.mpr v2))) (zae5 htop hav hr0)
 lemma zac5 {m t k : Nat} {U : Finset Sig} {a b : Sig} {τ : Sig → Tag} {v : List Wire}
     {r: List Wire→ Bool}
-    (ha: zapj a) (hb: zapj b) (hab: a≠ b)
-    (hrep: zamk v (insert a (insert b U)) τ) (hle: m≤ k)
+    (ha: zaoi a) (hb: zaoi b) (hab: a≠ b)
+    (hrep: zal9 v (insert a (insert b U)) τ) (hle: m≤ k)
     (fresh: bin true a b∉ insert a (insert b U))
     (hra: τ a≠ .tSpec1∧ (τ a= .tSpec0→ a∉ U))
     (hrb: τ b≠ .tSpec1∧ (τ b= .tSpec0→ b∉ U))
-    (l: TRestricted m t (insert (bin true a b) U) (zanj τ a b))
-    (ih: ∀ w: List Wire,zamk w (insert (bin true a b) U) (zanj τ a b)→ r w= true) :
+    (l: TRestricted m t (insert (bin true a b) U) (zang τ a b))
+    (ih: ∀ w: List Wire,zal9 w (insert (bin true a b) U) (zang τ a b)→ r w= true) :
     let lim:= k- t+ 1
-    let c0:= zamy false v
-    let c1:= zamy true v
+    let c0:= zam4 false v
+    let c1:= zam4 true v
     (t = 0 →
-      (v.length= lim+ 1→ zam0 r v c0 (zapx c0.2.1 (a,τ a)) (zapx c0.2.1 (b,τ b))= true) ∧
-      (v.length= lim→ zamo r v c0 (zapx c0.2.1 (a,τ a)) (zapx c0.2.1 (b,τ b))= true) ∧
-      zaly r v c0 (zapx c0.2.1 (a,τ a)) (zapx c0.2.1 (b,τ b))= true) ∧
+      (v.length= lim+ 1→ zam5 r v c0 (zaot c0.2.1 (a,τ a)) (zaot c0.2.1 (b,τ b))= true) ∧
+      (v.length= lim→ zamb r v c0 (zaot c0.2.1 (a,τ a)) (zaot c0.2.1 (b,τ b))= true) ∧
+      zamj r v c0 (zaot c0.2.1 (a,τ a)) (zaot c0.2.1 (b,τ b))= true) ∧
     (t ≠ 0 →
-      (v.length= lim+ 1→ zam6 r v c1 (zapt c1.2.1 (a,τ a)) (zapt c1.2.1 (b,τ b))= true) ∧
-      (v.length= lim→ zalx r v c1 (zapt c1.2.1 (a,τ a)) (zapt c1.2.1 (b,τ b))= true) ∧
-      zama r v c1 (zapt c1.2.1 (a,τ a)) (zapt c1.2.1 (b,τ b))= true):= by
+      (v.length= lim+ 1→ zamw r v c1 (zaoh c1.2.1 (a,τ a)) (zaoh c1.2.1 (b,τ b))= true) ∧
+      (v.length= lim→ zalz r v c1 (zaoh c1.2.1 (a,τ a)) (zaoh c1.2.1 (b,τ b))= true) ∧
+      zalx r v c1 (zaoh c1.2.1 (a,τ a)) (zaoh c1.2.1 (b,τ b))= true):= by
   obtain ⟨hndS,heS,htag⟩:= hrep
-  have hval : ∀ x ∈ zapz v, zap6 x := by
+  have hval : ∀ x ∈ zaos v, zaoy x := by
     intro x hx
     rcases Finset.mem_insert.mp (heS▸ List.mem_toFinset.mpr hx) with rfl | hx1
     · exact ha.1
     rcases Finset.mem_insert.mp hx1 with rfl | hxU
     · exact hb.1
     · exact (zaet l.live x (Finset.mem_insert_of_mem hxU)).1
-  have ahS: a∈ zapz v:= List.mem_toFinset.mp (heS.symm▸ Finset.mem_insert_self _ _)
-  have bhS: b∈ zapz v:= List.mem_toFinset.mp (heS.symm▸ Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
-  let rest:= zane [a,b] v
+  have ahS: a∈ zaos v:= List.mem_toFinset.mp (heS.symm▸ Finset.mem_insert_self _ _)
+  have bhS: b∈ zaos v:= List.mem_toFinset.mp (heS.symm▸ Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
+  let rest:= zann [a,b] v
   let g: Wire:= (bin true a b,.tNone)
-  let wa: Wire:= (a,if zamr (τ a) then .tSpec0 else .tNone)
-  let wb: Wire:= (b,if zamr (τ b) then .tSpec0 else .tNone)
+  let wa: Wire:= (a,if zam7 (τ a) then .tSpec0 else .tNone)
+  let wb: Wire:= (b,if zam7 (τ b) then .tSpec0 else .tNone)
   let h: List Wire:= (if a∈ U then [wa] else [])++ (if b∈ U then [wb] else [])
-  have hSigsH : zapz h = zapu U [a, b] := by
-    by_cases haU: a∈ U <;> by_cases hbU: b∈ U <;> simp [h,wa,wb,zapz,zapu,haU,hbU]
+  have hSigsH : zaos h = zaop U [a, b] := by
+    by_cases haU: a∈ U <;> by_cases hbU: b∈ U <;> simp [h,wa,wb,zaos,zaop,haU,hbU]
   obtain ⟨hn,eq⟩:= zagh (del:= [a,b]) (U:= U) hndS (by simp [hab]) (by simpa using heS)
-  have hSigsHR : zapz (h ++ rest) = zapu U [a, b] ++ zanu [a, b] (zapz v) := by
+  have hSigsHR : zaos (h ++ rest) = zaop U [a, b] ++ zan4 [a, b] (zaos v) := by
     change (h++ rest).map Prod.fst= _
-    rw [List.map_append, show h.map Prod.fst = zapu U [a, b] from hSigsH,
-      show rest.map Prod.fst= zanu [a,b] (zapz v) from zabs [a,b] v]
-  have nn: bin true a b∉ zapz v:= fun hm=> fresh (heS▸ List.mem_toFinset.mpr hm)
+    rw [List.map_append, show h.map Prod.fst = zaop U [a, b] from hSigsH,
+      show rest.map Prod.fst= zan4 [a,b] (zaos v) from zabs [a,b] v]
+  have nn: bin true a b∉ zaos v:= fun hm=> fresh (heS▸ List.mem_toFinset.mpr hm)
   have nz: bin true a b∉ U:= fun hm=> fresh (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hm))
-  have hnd : (zapz (g :: (h ++ rest))).Nodup := by
-    change (bin true a b :: zapz (h++ rest)).Nodup; rw [hSigsHR]
+  have hnd : (zaos (g :: (h ++ rest))).Nodup := by
+    change (bin true a b :: zaos (h++ rest)).Nodup; rw [hSigsHR]
     exact List.nodup_cons.mpr ⟨fun hm=> nz (eq▸ List.mem_toFinset.mpr hm),hn⟩
-  have e : (zapz (g :: (h ++ rest))).toFinset = insert (bin true a b) U := by
-    change (bin true a b :: zapz (h++ rest)).toFinset= _; rw [List.toFinset_cons,hSigsHR,eq]
-  have htag' : ∀ w ∈ g :: (h ++ rest), w.2 = zanj τ a b w.1 := by
+  have e : (zaos (g :: (h ++ rest))).toFinset = insert (bin true a b) U := by
+    change (bin true a b :: zaos (h++ rest)).toFinset= _; rw [List.toFinset_cons,hSigsHR,eq]
+  have htag' : ∀ w ∈ g :: (h ++ rest), w.2 = zang τ a b w.1 := by
     intro w hw; rcases List.mem_cons.mp hw with rfl | hw'
-    · simp [g,zanj]
+    · simp [g,zang]
     · rcases List.mem_append.mp hw' with hh | hr
       · rcases List.mem_append.mp hh with h1 | h2
         · by_cases haU : a ∈ U
           · simp only [haU, ite_true, List.mem_singleton] at h1; subst w
             have hneG: a≠ bin true a b:= fun eq'=> fresh (eq'▸ Finset.mem_insert_self _ _)
             have hna0: τ a≠ .tSpec0:= fun h0=> hra.2 h0 haU
-            simp only [wa,zanj,hneG,ite_false]
-            cases hta: τ a <;> simp_all [zamr]
+            simp only [wa,zang,hneG,ite_false]
+            cases hta: τ a <;> simp_all [zam7]
           · simp [haU] at h1
         · by_cases hbU : b ∈ U
           · simp only [hbU, ite_true, List.mem_singleton] at h2; subst w
             have hneG : b ≠ bin true a b := fun eq' =>
               fresh (eq'▸ Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
             have hnb0: τ b≠ .tSpec0:= fun h0=> hrb.2 h0 hbU
-            simp only [wb,zanj,hneG,hab.symm,false_and,ite_false]
-            cases htb: τ b <;> simp_all [zamr]
+            simp only [wb,zang,hneG,hab.symm,false_and,ite_false]
+            cases htb: τ b <;> simp_all [zam7]
           · simp [hbU] at h2
       · have hwV := List.mem_of_mem_filter hr
         have hnot : w.1 ≠ a ∧ w.1 ≠ b := by
@@ -5864,32 +5864,32 @@ lemma zac5 {m t k : Nat} {U : Finset Sig} {a b : Sig} {τ : Sig → Tag} {v : Li
             List.mem_cons, List.not_mem_nil,or_false,not_or] at hf
           exact hf
         have hneG: w.1≠ bin true a b:= fun eq'=> nn (eq'▸ List.mem_map_of_mem hwV)
-        simp [zanj,hneG,hnot.1,hnot.2,htag w hwV]
+        simp [zang,hneG,hnot.1,hnot.2,htag w hwV]
   have hr:= ih _ ⟨hnd,e,htag'⟩
   obtain ⟨ht,hc⟩:= zah4 l.live
   rw [← e,List.toFinset_card_of_nodup hnd] at hc
-  simp only [zapz, List.map_cons, List.map_append, List.length_cons, List.length_append,
+  simp only [zaos, List.map_cons, List.map_append, List.length_cons, List.length_append,
     List.length_map] at hc
-  have hav : zamq (bin true a b) v = true :=
+  have hav : zamr (bin true a b) v = true :=
     zaar nn (zaet l.live _ (Finset.mem_insert_self _ _))
-  have hnsa: zal2 (τ a)= true:= by cases hta: τ a <;> simp [zal2]; exact hra.1 hta
-  have hnsb: zal2 (τ b)= true:= by cases htb: τ b <;> simp [zal2]; exact hrb.1 htb
-  have hka : a ∈ U → zal3 (τ a) = true := fun hm => by
-    cases hta: τ a <;> simp [zal3]; exact hra.2 hta hm
-  have hkb : b ∈ U → zal3 (τ b) = true := fun hm => by
-    cases htb: τ b <;> simp [zal3]; exact hrb.2 htb hm
-  have hdrop: zape a b v= rest:= zafv a b v
+  have hnsa: zame (τ a)= true:= by cases hta: τ a <;> simp [zame]; exact hra.1 hta
+  have hnsb: zame (τ b)= true:= by cases htb: τ b <;> simp [zame]; exact hrb.1 htb
+  have hka : a ∈ U → zamk (τ a) = true := fun hm => by
+    cases hta: τ a <;> simp [zamk]; exact hra.2 hta hm
+  have hkb : b ∈ U → zamk (τ b) = true := fun hm => by
+    cases htb: τ b <;> simp [zamk]; exact hrb.2 htb hm
+  have hdrop: zaob a b v= rest:= zafv a b v
   have cv:= zafy l.live e
-  simp only [zapz,List.map_cons,List.map_append,zani,zadx] at cv
-  have hcv' : (sep (decide (0 < t)) (bin true a b) ||| zani (decide (0 < t)) (zapz rest)) |||
-      zam2 (decide (0< t)) h= top:= by
-    rw [zad6,← cv]; unfold zapz; ac_rfl
+  simp only [zaos,List.map_cons,List.map_append,zanj,zadx] at cv
+  have hcv' : (sep (decide (0 < t)) (bin true a b) ||| zanj (decide (0 < t)) (zaos rest)) |||
+      zamq (decide (0< t)) h= top:= by
+    rw [zad6,← cv]; unfold zaos; ac_rfl
   obtain ⟨hlen,hmask⟩:= zaip (decide (0< t)) hndS hval ahS bhS hab
   rw [zadj,← zabs,zadj] at hlen
   change v.length- 2= rest.length at hlen
   rw [← zabs] at hmask
-  change zao9 (zann (decide (0 < t)) (zapz v)) (sep (decide (0 < t)) a) (sep (decide (0 < t)) b) =
-    zani (decide (0< t)) (zapz rest) at hmask
+  change zaoc (zano (decide (0 < t)) (zaos v)) (sep (decide (0 < t)) a) (sep (decide (0 < t)) b) =
+    zanj (decide (0< t)) (zaos rest) at hmask
   have hdisjAB:= zac1 (decide (0< t)) hndS hval ahS bhS hab
   have hdisjBA:= zac1 (decide (0< t)) hndS hval bhS ahS hab.symm
   have hvc:= zaas (decide (0< t)) hval
@@ -5897,28 +5897,28 @@ lemma zac5 {m t k : Nat} {U : Finset Sig} {a b : Sig} {τ : Sig → Tag} {v : Li
   · intro ht0; subst ht0
     have hdt0: decide (0< 0)= false:= rfl
     rw [hdt0] at hcv' hmask hdisjAB hdisjBA hvc
-    have hcv0 : Nat.lor (Nat.lor (sep0 (bin true a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b)))
-        (zam2 false h)= top:= by simpa [hmask,zaj0] using hcv'
+    have hcv0 : Nat.lor (Nat.lor (sep0 (bin true a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b)))
+        (zamq false h)= top:= by simpa [hmask,zaj0] using hcv'
     have h0zero: ∀ x: Nat,Nat.land x 0= 0:= fun x=> Nat.and_zero x
-    have huA0 : a ∉ U → Nat.land (Nat.land (zann false (zapz v)).2.1 (sep0 a)) b.2 = 0 := fun hna => by
+    have huA0 : a ∉ U → Nat.land (Nat.land (zano false (zaos v)).2.1 (sep0 a)) b.2 = 0 := fun hna => by
       by_cases hbU: b∈ U
-      · exact zae9 hvc (by simpa [zaj0] using hdisjAB) (by simpa [h,wa,wb,hna,hbU,zam2,zaj0] using hcv0)
-      · exact zae9 hvc (h0zero _) (by simpa [h,hna,hbU,zam2] using hcv0)
-    have huB0 : b ∉ U → Nat.land (Nat.land (zann false (zapz v)).2.1 (sep0 b)) a.2 = 0 := fun hnb => by
-      have hcomm : Nat.lor (Nat.lor (sep0 (bin true b a)) (zao9 (zann false (zapz v)) (sep0 b) (sep0 a)))
-          (zam2 false h)= top:= by
-        rw [zaiu]; simpa [zao9,Nat.or_comm,Nat.and_comm] using hcv0
+      · exact zae9 hvc (by simpa [zaj0] using hdisjAB) (by simpa [h,wa,wb,hna,hbU,zamq,zaj0] using hcv0)
+      · exact zae9 hvc (h0zero _) (by simpa [h,hna,hbU,zamq] using hcv0)
+    have huB0 : b ∉ U → Nat.land (Nat.land (zano false (zaos v)).2.1 (sep0 b)) a.2 = 0 := fun hnb => by
+      have hcomm : Nat.lor (Nat.lor (sep0 (bin true b a)) (zaoc (zano false (zaos v)) (sep0 b) (sep0 a)))
+          (zamq false h)= top:= by
+        rw [zaiu]; simpa [zaoc,Nat.or_comm,Nat.and_comm] using hcv0
       by_cases haU: a∈ U
-      · exact zae9 hvc (by simpa [zaj0] using hdisjBA) (by simpa [h,wa,wb,haU,hnb,zam2,zaj0] using hcomm)
-      · exact zae9 hvc (h0zero _) (by simpa [h,haU,hnb,zam2] using hcomm)
+      · exact zae9 hvc (by simpa [zaj0] using hdisjBA) (by simpa [h,wa,wb,haU,hnb,zamq,zaj0] using hcomm)
+      · exact zae9 hvc (h0zero _) (by simpa [h,haU,hnb,zamq] using hcomm)
     refine ⟨?_,?_,?_⟩
     · intro hlv
       have hh0: h.length= 0:= by omega
       have hna: a∉ U:= fun hm=> by simp [h,hm] at hh0
       have hnb: b∉ U:= fun hm=> by simp [h,hm] at hh0
-      have htop : Nat.lor (sep0 (bin true a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b)) = top := by
-        simpa [h,hna,hnb,zam2] using hcv0
-      have hr0: r (g :: zape a b v)= true:= by rw [hdrop]; simpa [h,hna,hnb] using hr
+      have htop : Nat.lor (sep0 (bin true a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b)) = top := by
+        simpa [h,hna,hnb,zamq] using hcv0
+      have hr0: r (g :: zaob a b v)= true:= by rw [hdrop]; simpa [h,hna,hnb] using hr
       rw [zaec]
       exact zadw hnsa hnsb (huA0 hna) (huB0 hnb) htop hav hr0
     · intro hlv
@@ -5927,66 +5927,66 @@ lemma zac5 {m t k : Nat} {U : Finset Sig} {a b : Sig} {τ : Sig → Tag} {v : Li
       apply zade hnsa hnsb
       by_cases haU: a∈ U <;> by_cases hbU: b∈ U
       · simp [h,haU,hbU] at hh1
-      · have htopA : Nat.lor (Nat.lor (sep0 (bin true a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b))) (sep0 a) = top := by
-          simpa [h,wa,haU,hbU,zam2,zaj0] using hcv0
-        have hrA: r (g :: wa :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopA : Nat.lor (Nat.lor (sep0 (bin true a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b))) (sep0 a) = top := by
+          simpa [h,wa,haU,hbU,zamq,zaj0] using hcv0
+        have hrA: r (g :: wa :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zae8 (hka haU) (Nat.beq_eq.mpr (huB0 hbU)) htopA hav hrA
-      · have htopB : Nat.lor (Nat.lor (sep0 (bin true a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b))) (sep0 b) = top := by
-          simpa [h,wb,haU,hbU,zam2,zaj0] using hcv0
-        have hrB: r (g :: wb :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopB : Nat.lor (Nat.lor (sep0 (bin true a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b))) (sep0 b) = top := by
+          simpa [h,wb,haU,hbU,zamq,zaj0] using hcv0
+        have hrB: r (g :: wb :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zaeq (hkb hbU) (Nat.beq_eq.mpr (huA0 haU)) htopB hav hrB
-      · have htop : Nat.lor (sep0 (bin true a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b)) = top := by
-          simpa [h,haU,hbU,zam2] using hcv0
-        have hr0: r (g :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htop : Nat.lor (sep0 (bin true a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b)) = top := by
+          simpa [h,haU,hbU,zamq] using hcv0
+        have hr0: r (g :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zae0 (Nat.beq_eq.mpr (huA0 haU)) (Nat.beq_eq.mpr (huB0 hbU)) htop hav hr0
     · rw [zaec]
       by_cases haU: a∈ U <;> by_cases hbU: b∈ U
-      · have htopAB : Nat.lor (Nat.lor (Nat.lor (sep0 (bin true a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b))) (sep0 a)) (sep0 b) = top := by
-          have: zam2 false h= sep0 a||| sep0 b:= by simp [h,wa,wb,haU,hbU,zam2,zaj0]
+      · have htopAB : Nat.lor (Nat.lor (Nat.lor (sep0 (bin true a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b))) (sep0 a)) (sep0 b) = top := by
+          have: zamq false h= sep0 a||| sep0 b:= by simp [h,wa,wb,haU,hbU,zamq,zaj0]
           rw [this] at hcv0; exact (Nat.or_assoc _ _ _).trans hcv0
-        have hrAB: r (g :: wa :: wb :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+        have hrAB: r (g :: wa :: wb :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zac7 hnsa hnsb (zakv (hka haU)) (zakv (hkb hbU)) (zad0 (hka haU) (hkb hbU) htopAB hav hrAB)
-      · have htopA : Nat.lor (Nat.lor (sep0 (bin true a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b))) (sep0 a) = top := by
-          simpa [h,wa,haU,hbU,zam2,zaj0] using hcv0
-        have hrA: r (g :: wa :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopA : Nat.lor (Nat.lor (sep0 (bin true a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b))) (sep0 a) = top := by
+          simpa [h,wa,haU,hbU,zamq,zaj0] using hcv0
+        have hrA: r (g :: wa :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zac7 hnsa hnsb (zakv (hka haU)) (zakr (Nat.beq_eq.mpr (huB0 hbU))) (zaex (hka haU) htopA hav hrA)
-      · have htopB : Nat.lor (Nat.lor (sep0 (bin true a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b))) (sep0 b) = top := by
-          simpa [h,wb,haU,hbU,zam2,zaj0] using hcv0
-        have hrB: r (g :: wb :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopB : Nat.lor (Nat.lor (sep0 (bin true a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b))) (sep0 b) = top := by
+          simpa [h,wb,haU,hbU,zamq,zaj0] using hcv0
+        have hrB: r (g :: wb :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zac7 hnsa hnsb (zakr (Nat.beq_eq.mpr (huA0 haU))) (zakv (hkb hbU)) (zaeo (hkb hbU) htopB hav hrB)
-      · have htop : Nat.lor (sep0 (bin true a b)) (zao9 (zann false (zapz v)) (sep0 a) (sep0 b)) = top := by
-          simpa [h,haU,hbU,zam2] using hcv0
-        have hr0: r (g :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htop : Nat.lor (sep0 (bin true a b)) (zaoc (zano false (zaos v)) (sep0 a) (sep0 b)) = top := by
+          simpa [h,haU,hbU,zamq] using hcv0
+        have hr0: r (g :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zac7 hnsa hnsb (zakr (Nat.beq_eq.mpr (huA0 haU))) (zakr (Nat.beq_eq.mpr (huB0 hbU))) (zae5 htop hav hr0)
   · intro ht0
     have hdt: decide (0< t)= true:= decide_eq_true (by omega)
     rw [hdt] at hcv' hmask hdisjAB hdisjBA hvc
-    have hcv1 : Nat.lor (Nat.lor (sep1 (bin true a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b)))
-        (zam2 true h)= top:= by simpa [hmask,zajq] using hcv'
+    have hcv1 : Nat.lor (Nat.lor (sep1 (bin true a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b)))
+        (zamq true h)= top:= by simpa [hmask,zajq] using hcv'
     have h0zero: ∀ x: Nat,Nat.land x 0= 0:= fun x=> Nat.and_zero x
     have huA1 : a ∉ U →
-        Nat.land (Nat.land (Nat.land (zann true (zapz v)).2.1 (sep1 a)) a.1) b.2= 0 ∧
-        Nat.land (Nat.land (Nat.land (zann true (zapz v)).2.1 (sep1 a)) a.2) b.1= 0:= fun hna=> by
+        Nat.land (Nat.land (Nat.land (zano true (zaos v)).2.1 (sep1 a)) a.1) b.2= 0 ∧
+        Nat.land (Nat.land (Nat.land (zano true (zaos v)).2.1 (sep1 a)) a.2) b.1= 0:= fun hna=> by
       by_cases hbU: b∈ U
-      · exact zaem hvc (by simpa [zajq] using hdisjAB) (by simpa [h,wa,wb,hna,hbU,zam2,zajq] using hcv1)
-      · exact zaem hvc (h0zero _) (by simpa [h,hna,hbU,zam2] using hcv1)
+      · exact zaem hvc (by simpa [zajq] using hdisjAB) (by simpa [h,wa,wb,hna,hbU,zamq,zajq] using hcv1)
+      · exact zaem hvc (h0zero _) (by simpa [h,hna,hbU,zamq] using hcv1)
     have huB1 : b ∉ U →
-        Nat.land (Nat.land (Nat.land (zann true (zapz v)).2.1 (sep1 b)) b.1) a.2= 0 ∧
-        Nat.land (Nat.land (Nat.land (zann true (zapz v)).2.1 (sep1 b)) b.2) a.1= 0:= fun hnb=> by
-      have hcomm : Nat.lor (Nat.lor (sep1 (bin true b a)) (zao9 (zann true (zapz v)) (sep1 b) (sep1 a)))
-          (zam2 true h)= top:= by
-        rw [zaiu]; simpa [zao9,Nat.or_comm,Nat.and_comm] using hcv1
+        Nat.land (Nat.land (Nat.land (zano true (zaos v)).2.1 (sep1 b)) b.1) a.2= 0 ∧
+        Nat.land (Nat.land (Nat.land (zano true (zaos v)).2.1 (sep1 b)) b.2) a.1= 0:= fun hnb=> by
+      have hcomm : Nat.lor (Nat.lor (sep1 (bin true b a)) (zaoc (zano true (zaos v)) (sep1 b) (sep1 a)))
+          (zamq true h)= top:= by
+        rw [zaiu]; simpa [zaoc,Nat.or_comm,Nat.and_comm] using hcv1
       by_cases haU: a∈ U
-      · exact zaem hvc (by simpa [zajq] using hdisjBA) (by simpa [h,wa,wb,haU,hnb,zam2,zajq] using hcomm)
-      · exact zaem hvc (h0zero _) (by simpa [h,haU,hnb,zam2] using hcomm)
+      · exact zaem hvc (by simpa [zajq] using hdisjBA) (by simpa [h,wa,wb,haU,hnb,zamq,zajq] using hcomm)
+      · exact zaem hvc (h0zero _) (by simpa [h,haU,hnb,zamq] using hcomm)
     refine ⟨?_,?_,?_⟩
     · intro hlv
       have hh0: h.length= 0:= by omega
       have hna: a∉ U:= fun hm=> by simp [h,hm] at hh0
       have hnb: b∉ U:= fun hm=> by simp [h,hm] at hh0
-      have htop : Nat.lor (sep1 (bin true a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b)) = top := by
-        simpa [h,hna,hnb,zam2] using hcv1
-      have hr0: r (g :: zape a b v)= true:= by rw [hdrop]; simpa [h,hna,hnb] using hr
+      have htop : Nat.lor (sep1 (bin true a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b)) = top := by
+        simpa [h,hna,hnb,zamq] using hcv1
+      have hr0: r (g :: zaob a b v)= true:= by rw [hdrop]; simpa [h,hna,hnb] using hr
       have ⟨u1,u2⟩:= huA1 hna; have ⟨v1,v2⟩:= huB1 hnb
       rw [zaec]
       exact zaed hnsa hnsb u1 v1 u2 v2 htop hav hr0
@@ -5996,41 +5996,41 @@ lemma zac5 {m t k : Nat} {U : Finset Sig} {a b : Sig} {τ : Sig → Tag} {v : Li
       apply zacw hnsa hnsb
       by_cases haU: a∈ U <;> by_cases hbU: b∈ U
       · simp [h,haU,hbU] at hh1
-      · have htopA : Nat.lor (Nat.lor (sep1 (bin true a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b))) (sep1 a) = top := by
-          simpa [h,wa,haU,hbU,zam2,zajq] using hcv1
-        have hrA: r (g :: wa :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopA : Nat.lor (Nat.lor (sep1 (bin true a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b))) (sep1 a) = top := by
+          simpa [h,wa,haU,hbU,zamq,zajq] using hcv1
+        have hrA: r (g :: wa :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         have ⟨v1,v2⟩:= huB1 hbU
         exact zae8 (hka haU) (zaks (Nat.beq_eq.mpr v1) (Nat.beq_eq.mpr v2)) htopA hav hrA
-      · have htopB : Nat.lor (Nat.lor (sep1 (bin true a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b))) (sep1 b) = top := by
-          simpa [h,wb,haU,hbU,zam2,zajq] using hcv1
-        have hrB: r (g :: wb :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopB : Nat.lor (Nat.lor (sep1 (bin true a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b))) (sep1 b) = top := by
+          simpa [h,wb,haU,hbU,zamq,zajq] using hcv1
+        have hrB: r (g :: wb :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         have ⟨u1,u2⟩:= huA1 haU
         exact zaeq (hkb hbU) (zaks (Nat.beq_eq.mpr u1) (Nat.beq_eq.mpr u2)) htopB hav hrB
-      · have htop : Nat.lor (sep1 (bin true a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b)) = top := by
-          simpa [h,haU,hbU,zam2] using hcv1
-        have hr0: r (g :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htop : Nat.lor (sep1 (bin true a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b)) = top := by
+          simpa [h,haU,hbU,zamq] using hcv1
+        have hr0: r (g :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         have ⟨u1,u2⟩:= huA1 haU; have ⟨v1,v2⟩:= huB1 hbU
         exact zae0 (zaks (Nat.beq_eq.mpr u1) (Nat.beq_eq.mpr u2)) (zaks (Nat.beq_eq.mpr v1) (Nat.beq_eq.mpr v2)) htop hav hr0
     · rw [zaec]
       by_cases haU: a∈ U <;> by_cases hbU: b∈ U
-      · have htopAB : Nat.lor (Nat.lor (Nat.lor (sep1 (bin true a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b))) (sep1 a)) (sep1 b) = top := by
-          have: zam2 true h= sep1 a||| sep1 b:= by simp [h,wa,wb,haU,hbU,zam2,zajq]
+      · have htopAB : Nat.lor (Nat.lor (Nat.lor (sep1 (bin true a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b))) (sep1 a)) (sep1 b) = top := by
+          have: zamq true h= sep1 a||| sep1 b:= by simp [h,wa,wb,haU,hbU,zamq,zajq]
           rw [this] at hcv1; exact (Nat.or_assoc _ _ _).trans hcv1
-        have hrAB: r (g :: wa :: wb :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+        have hrAB: r (g :: wa :: wb :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         exact zacn hnsa hnsb (zakv (hka haU)) (zakv (hkb hbU)) (zad0 (hka haU) (hkb hbU) htopAB hav hrAB)
-      · have htopA : Nat.lor (Nat.lor (sep1 (bin true a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b))) (sep1 a) = top := by
-          simpa [h,wa,haU,hbU,zam2,zajq] using hcv1
-        have hrA: r (g :: wa :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopA : Nat.lor (Nat.lor (sep1 (bin true a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b))) (sep1 a) = top := by
+          simpa [h,wa,haU,hbU,zamq,zajq] using hcv1
+        have hrA: r (g :: wa :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         have ⟨v1,v2⟩:= huB1 hbU
         exact zacn hnsa hnsb (zakv (hka haU)) (zakr (zaks (Nat.beq_eq.mpr v1) (Nat.beq_eq.mpr v2))) (zaex (hka haU) htopA hav hrA)
-      · have htopB : Nat.lor (Nat.lor (sep1 (bin true a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b))) (sep1 b) = top := by
-          simpa [h,wb,haU,hbU,zam2,zajq] using hcv1
-        have hrB: r (g :: wb :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htopB : Nat.lor (Nat.lor (sep1 (bin true a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b))) (sep1 b) = top := by
+          simpa [h,wb,haU,hbU,zamq,zajq] using hcv1
+        have hrB: r (g :: wb :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         have ⟨u1,u2⟩:= huA1 haU
         exact zacn hnsa hnsb (zakr (zaks (Nat.beq_eq.mpr u1) (Nat.beq_eq.mpr u2))) (zakv (hkb hbU)) (zaeo (hkb hbU) htopB hav hrB)
-      · have htop : Nat.lor (sep1 (bin true a b)) (zao9 (zann true (zapz v)) (sep1 a) (sep1 b)) = top := by
-          simpa [h,haU,hbU,zam2] using hcv1
-        have hr0: r (g :: zape a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
+      · have htop : Nat.lor (sep1 (bin true a b)) (zaoc (zano true (zaos v)) (sep1 a) (sep1 b)) = top := by
+          simpa [h,haU,hbU,zamq] using hcv1
+        have hr0: r (g :: zaob a b v)= true:= by rw [hdrop]; simpa [h,haU,hbU] using hr
         have ⟨u1,u2⟩:= huA1 haU; have ⟨v1,v2⟩:= huB1 hbU
         exact zacn hnsa hnsb (zakr (zaks (Nat.beq_eq.mpr u1) (Nat.beq_eq.mpr u2))) (zakr (zaks (Nat.beq_eq.mpr v1) (Nat.beq_eq.mpr v2))) (zae5 htop hav hr0)
 lemma zaau {k t S τ₁ τ₂} (h : TRestricted k t S τ₁)
@@ -6049,7 +6049,7 @@ lemma zaau {k t S τ₁ τ₂} (h : TRestricted k t S τ₁)
     have hae:= he a (Finset.mem_insert_self _ _)
     have hbe:= he b (Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
     refine TRestricted.binaryAnd ha hb hab hf (hae▸ hra) (hbe▸ hrb) (ih ?_)
-    intro x hx; unfold zamt
+    intro x hx; unfold zam9
     rcases Finset.mem_insert.mp hx with rfl | hxU
     · simp [hae,hbe]
     · have hne : x ≠ bin false a b := fun e => hf (e ▸ Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hxU))
@@ -6058,37 +6058,37 @@ lemma zaau {k t S τ₁ τ₂} (h : TRestricted k t S τ₁)
     have hae:= he a (Finset.mem_insert_self _ _)
     have hbe:= he b (Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
     refine TRestricted.binaryOr ha hb hab hf (hae▸ hra) (hbe▸ hrb) (ih ?_)
-    intro x hx; unfold zanj
+    intro x hx; unfold zang
     rcases Finset.mem_insert.mp hx with rfl | hxU
     · simp
     · have hne : x ≠ bin true a b := fun e => hf (e ▸ Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hxU))
       simp [hne,hae,hbe,he x (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hxU))]
 lemma zabq {k t : Nat} {a b : Wire} {v : List Wire} {r : List Wire → Bool}
     (ha: a∈ v) (hb: b∈ v) (hne: a≠ b)
-    (h1 : let lim := k - t + 1; let c0 := zamy false v; let c1 := zamy true v
+    (h1 : let lim := k - t + 1; let c0 := zam4 false v; let c1 := zam4 true v
       (t = 0 →
-        (v.length= lim+ 1→ zam0 r v c0 (zapx c0.2.1 a) (zapx c0.2.1 b)= true) ∧
-        (v.length= lim→ zamo r v c0 (zapx c0.2.1 a) (zapx c0.2.1 b)= true) ∧
-        zaly r v c0 (zapx c0.2.1 a) (zapx c0.2.1 b)= true) ∧
+        (v.length= lim+ 1→ zam5 r v c0 (zaot c0.2.1 a) (zaot c0.2.1 b)= true) ∧
+        (v.length= lim→ zamb r v c0 (zaot c0.2.1 a) (zaot c0.2.1 b)= true) ∧
+        zamj r v c0 (zaot c0.2.1 a) (zaot c0.2.1 b)= true) ∧
       (t ≠ 0 →
-        (v.length= lim+ 1→ zam6 r v c1 (zapt c1.2.1 a) (zapt c1.2.1 b)= true) ∧
-        (v.length= lim→ zalx r v c1 (zapt c1.2.1 a) (zapt c1.2.1 b)= true) ∧
-        zama r v c1 (zapt c1.2.1 a) (zapt c1.2.1 b)= true))
-    (h2 : let lim := k - t + 1; let c0 := zamy false v; let c1 := zamy true v
+        (v.length= lim+ 1→ zamw r v c1 (zaoh c1.2.1 a) (zaoh c1.2.1 b)= true) ∧
+        (v.length= lim→ zalz r v c1 (zaoh c1.2.1 a) (zaoh c1.2.1 b)= true) ∧
+        zalx r v c1 (zaoh c1.2.1 a) (zaoh c1.2.1 b)= true))
+    (h2 : let lim := k - t + 1; let c0 := zam4 false v; let c1 := zam4 true v
       (t = 0 →
-        (v.length= lim+ 1→ zam0 r v c0 (zapx c0.2.1 b) (zapx c0.2.1 a)= true) ∧
-        (v.length= lim→ zamo r v c0 (zapx c0.2.1 b) (zapx c0.2.1 a)= true) ∧
-        zaly r v c0 (zapx c0.2.1 b) (zapx c0.2.1 a)= true) ∧
+        (v.length= lim+ 1→ zam5 r v c0 (zaot c0.2.1 b) (zaot c0.2.1 a)= true) ∧
+        (v.length= lim→ zamb r v c0 (zaot c0.2.1 b) (zaot c0.2.1 a)= true) ∧
+        zamj r v c0 (zaot c0.2.1 b) (zaot c0.2.1 a)= true) ∧
       (t ≠ 0 →
-        (v.length= lim+ 1→ zam6 r v c1 (zapt c1.2.1 b) (zapt c1.2.1 a)= true) ∧
-        (v.length= lim→ zalx r v c1 (zapt c1.2.1 b) (zapt c1.2.1 a)= true) ∧
-        zama r v c1 (zapt c1.2.1 b) (zapt c1.2.1 a)= true)) :
-    zalj k t v.length r v= true:= by
-  unfold zalj; dsimp only
+        (v.length= lim+ 1→ zamw r v c1 (zaoh c1.2.1 b) (zaoh c1.2.1 a)= true) ∧
+        (v.length= lim→ zalz r v c1 (zaoh c1.2.1 b) (zaoh c1.2.1 a)= true) ∧
+        zalx r v c1 (zaoh c1.2.1 b) (zaoh c1.2.1 a)= true)) :
+    zalo k t v.length r v= true:= by
+  unfold zalo; dsimp only
   by_cases ht0: t= 0
   · subst ht0
     simp only [Nat.beq_refl,ite_true,zac8,zab1]
-    have hne0 : zapx (zamy false v).2.1 a ≠ zapx (zamy false v).2.1 b :=
+    have hne0 : zaot (zam4 false v).2.1 a ≠ zaot (zam4 false v).2.1 b :=
       fun e=> hne (congrArg WAct0.w e)
     have ⟨hf1,hs11,hs21⟩:= h1.1 rfl
     have ⟨hf2,hs12,hs22⟩:= h2.1 rfl
@@ -6105,7 +6105,7 @@ lemma zabq {k t : Nat} {a b : Wire} {v : List Wire} {r : List Wire → Bool}
         exact zaap _ (List.mem_map_of_mem ha) (List.mem_map_of_mem hb) hne0 hs21 hs22
   · have hbf : Nat.beq t 0 = false := zadh ht0
     simp only [hbf,Bool.false_eq_true,ite_false,zacv,zacc]
-    have hne1 : zapt (zamy true v).2.1 a ≠ zapt (zamy true v).2.1 b :=
+    have hne1 : zaoh (zam4 true v).2.1 a ≠ zaoh (zam4 true v).2.1 b :=
       fun e=> hne (congrArg WAct1.w e)
     have ⟨hf1,hs11,hs21⟩:= h1.2 ht0
     have ⟨hf2,hs12,hs22⟩:= h2.2 ht0
@@ -6122,81 +6122,81 @@ lemma zabq {k t : Nat} {a b : Wire} {v : List Wire} {r : List Wire → Bool}
         exact zaap _ (List.mem_map_of_mem ha) (List.mem_map_of_mem hb) hne1 hs21 hs22
 lemma zaa8 {m t k : Nat} {U : Finset Sig} {a b : Sig} {τ : Sig → Tag} {v : List Wire}
     {r: List Wire→ Bool}
-    (ha: zapj a) (hb: zapj b) (hab: a≠ b)
-    (hrep: zamk v (insert a (insert b U)) τ) (hle: m≤ k)
+    (ha: zaoi a) (hb: zaoi b) (hab: a≠ b)
+    (hrep: zal9 v (insert a (insert b U)) τ) (hle: m≤ k)
     (fresh: bin false a b∉ insert a (insert b U))
     (hra: τ a≠ .tSpec0∧ (τ a≠ .tNone→ a∉ U))
     (hrb: τ b≠ .tSpec0∧ (τ b≠ .tNone→ b∉ U))
-    (l: TRestricted m t (insert (bin false a b) U) (zamt τ a b))
-    (ih: ∀ w: List Wire,zamk w (insert (bin false a b) U) (zamt τ a b)→ r w= true) :
-    zalj k t v.length r v= true:= by
-  have ahS: a∈ zapz v:= List.mem_toFinset.mp (hrep.2.1.symm▸ Finset.mem_insert_self _ _)
-  have bhS: b∈ zapz v:= List.mem_toFinset.mp (hrep.2.1.symm▸ Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
+    (l: TRestricted m t (insert (bin false a b) U) (zam9 τ a b))
+    (ih: ∀ w: List Wire,zal9 w (insert (bin false a b) U) (zam9 τ a b)→ r w= true) :
+    zalo k t v.length r v= true:= by
+  have ahS: a∈ zaos v:= List.mem_toFinset.mp (hrep.2.1.symm▸ Finset.mem_insert_self _ _)
+  have bhS: b∈ zaos v:= List.mem_toFinset.mp (hrep.2.1.symm▸ Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
   have ah: (a,τ a)∈ v:= (zab2 hrep.2.2).mpr ahS
   have bh: (b,τ b)∈ v:= (zab2 hrep.2.2).mpr bhS
   have h1:= zacb ha hb hab hrep hle fresh hra hrb l ih
-  have hrep' : zamk v (insert b (insert a U)) τ :=
+  have hrep' : zal9 v (insert b (insert a U)) τ :=
     ⟨hrep.1, by rw [Finset.insert_comm b a]; exact hrep.2.1,hrep.2.2⟩
   have hf': bin false b a∉ insert b (insert a U):= by rwa [zaiu false b a,Finset.insert_comm b a]
-  have htagEq : ∀ x, zamt τ b a x = zamt τ a b x := by
-    intro x; unfold zamt; rw [zaiu false b a]; simp only [or_comm]
-  have l' : TRestricted m t (insert (bin false b a) U) (zamt τ b a) := by
+  have htagEq : ∀ x, zam9 τ b a x = zam9 τ a b x := by
+    intro x; unfold zam9; rw [zaiu false b a]; simp only [or_comm]
+  have l' : TRestricted m t (insert (bin false b a) U) (zam9 τ b a) := by
     rw [zaiu false b a]; exact zaau l (fun x _=> (htagEq x).symm)
-  have ih' : ∀ w : List Wire, zamk w (insert (bin false b a) U) (zamt τ b a) → r w = true := by
+  have ih' : ∀ w : List Wire, zal9 w (insert (bin false b a) U) (zam9 τ b a) → r w = true := by
     intro w hw; apply ih w; rw [zaiu false b a] at hw
     exact ⟨hw.1,hw.2.1,fun x hx=> (hw.2.2 x hx).trans (htagEq x.1)⟩
   have h2:= zacb hb ha hab.symm hrep' hle hf' hrb hra l' ih'
   exact zabq ah bh (fun e=> hab (congrArg Prod.fst e)) h1 h2
 lemma zabi {m t k : Nat} {U : Finset Sig} {a b : Sig} {τ : Sig → Tag} {v : List Wire}
     {r: List Wire→ Bool}
-    (ha: zapj a) (hb: zapj b) (hab: a≠ b)
-    (hrep: zamk v (insert a (insert b U)) τ) (hle: m≤ k)
+    (ha: zaoi a) (hb: zaoi b) (hab: a≠ b)
+    (hrep: zal9 v (insert a (insert b U)) τ) (hle: m≤ k)
     (fresh: bin true a b∉ insert a (insert b U))
     (hra: τ a≠ .tSpec1∧ (τ a= .tSpec0→ a∉ U))
     (hrb: τ b≠ .tSpec1∧ (τ b= .tSpec0→ b∉ U))
-    (l: TRestricted m t (insert (bin true a b) U) (zanj τ a b))
-    (ih: ∀ w: List Wire,zamk w (insert (bin true a b) U) (zanj τ a b)→ r w= true) :
-    zalj k t v.length r v= true:= by
-  have ahS: a∈ zapz v:= List.mem_toFinset.mp (hrep.2.1.symm▸ Finset.mem_insert_self _ _)
-  have bhS: b∈ zapz v:= List.mem_toFinset.mp (hrep.2.1.symm▸ Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
+    (l: TRestricted m t (insert (bin true a b) U) (zang τ a b))
+    (ih: ∀ w: List Wire,zal9 w (insert (bin true a b) U) (zang τ a b)→ r w= true) :
+    zalo k t v.length r v= true:= by
+  have ahS: a∈ zaos v:= List.mem_toFinset.mp (hrep.2.1.symm▸ Finset.mem_insert_self _ _)
+  have bhS: b∈ zaos v:= List.mem_toFinset.mp (hrep.2.1.symm▸ Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
   have ah: (a,τ a)∈ v:= (zab2 hrep.2.2).mpr ahS
   have bh: (b,τ b)∈ v:= (zab2 hrep.2.2).mpr bhS
   have h1:= zac5 ha hb hab hrep hle fresh hra hrb l ih
-  have hrep' : zamk v (insert b (insert a U)) τ :=
+  have hrep' : zal9 v (insert b (insert a U)) τ :=
     ⟨hrep.1, by rw [Finset.insert_comm b a]; exact hrep.2.1,hrep.2.2⟩
   have hf': bin true b a∉ insert b (insert a U):= by rwa [zaiu true b a,Finset.insert_comm b a]
-  have htagEq : ∀ x, zanj τ b a x = zanj τ a b x := by
-    intro x; unfold zanj; rw [zaiu true b a]
+  have htagEq : ∀ x, zang τ b a x = zang τ a b x := by
+    intro x; unfold zang; rw [zaiu true b a]
     by_cases hg: x= bin true a b
     · simp [hg]
     · by_cases hxa: x= a <;> by_cases hxb: x= b <;> simp_all
-  have l' : TRestricted m t (insert (bin true b a) U) (zanj τ b a) := by
+  have l' : TRestricted m t (insert (bin true b a) U) (zang τ b a) := by
     rw [zaiu true b a]; exact zaau l (fun x _=> (htagEq x).symm)
-  have ih' : ∀ w : List Wire, zamk w (insert (bin true b a) U) (zanj τ b a) → r w = true := by
+  have ih' : ∀ w : List Wire, zal9 w (insert (bin true b a) U) (zang τ b a) → r w = true := by
     intro w hw; apply ih w; rw [zaiu true b a] at hw
     exact ⟨hw.1,hw.2.1,fun x hx=> (hw.2.2 x hx).trans (htagEq x.1)⟩
   have h2:= zac5 hb ha hab.symm hrep' hle hf' hrb hra l' ih'
   exact zabq ah bh (fun e=> hab (congrArg Prod.fst e)) h1 h2
 lemma zadu {m t S : Nat} {s : Finset Sig} {τ : Sig → Tag} {v : List Wire}
     {u b: List Wire→ Bool}
-    (h: TRestricted m t s τ) (hb: m≤ S+ 1) (hrep: zamk v s τ)
-    (hu: ∀ w,∀ s' τ',zamk w s' τ'→ ∀ l≤ S,TRestricted l (t- 1) s' τ'→ u w= true)
-    (hb': ∀ w,∀ s' τ',zamk w s' τ'→ ∀ l≤ S,TRestricted l t s' τ'→ b w= true) :
-    zanm S t v u b= true:= by
+    (h: TRestricted m t s τ) (hb: m≤ S+ 1) (hrep: zal9 v s τ)
+    (hu: ∀ w,∀ s' τ',zal9 w s' τ'→ ∀ l≤ S,TRestricted l (t- 1) s' τ'→ u w= true)
+    (hb': ∀ w,∀ s' τ',zal9 w s' τ'→ ∀ l≤ S,TRestricted l t s' τ'→ b w= true) :
+    zane S t v u b= true:= by
   have size:= zah4 h.live
   rw [← hrep.2.1,List.toFinset_card_of_nodup hrep.1,zadj] at size
   have h1: Nat.blt (S+ 1) t= false:= Bool.eq_false_iff.mpr fun e=> by rw [Nat.blt_eq] at e; omega
   have h2: Nat.blt (S+ 1- t+ 1) v.length= false:= Bool.eq_false_iff.mpr fun e=> by rw [Nat.blt_eq] at e; omega
-  simp only [zanm,h1,h2,Bool.or_self,Bool.false_eq_true,ite_false]
+  simp only [zane,h1,h2,Bool.or_self,Bool.false_eq_true,ite_false]
   cases h with
   | stop =>
-    have p : (zapz v).Perm [zapi] :=
+    have p : (zaos v).Perm [zaox] :=
       List.perm_of_nodup_nodup_toFinset_eq hrep.1 (by simp) (by simp [hrep.2.1])
     have eq:= List.perm_singleton.mp p
     cases v with
-    | nil=> simp [zapz] at eq
+    | nil=> simp [zaos] at eq
     | cons w rest =>
-      simp only [zapz,List.map_cons,List.cons.injEq,List.map_eq_nil_iff] at eq
+      simp only [zaos,List.map_cons,List.cons.injEq,List.map_eq_nil_iff] at eq
       obtain ⟨hw,rfl⟩:= eq
       simp [hw,zahe]
   | @unary m t U a τ ha hf hr1 hr2 tail =>
@@ -6211,64 +6211,64 @@ lemma zadu {m t S : Nat} {s : Finset Sig} {τ : Sig → Tag} {v : List Wire}
     apply Bool.or_eq_true_iff.mpr; right
     exact zabi ha hb'p hab hrep (by omega) hf hra hrb tail (fun w hw=> hb' w _ _ hw m (by omega) tail)
 lemma zabp {m t : Nat} {S : Finset Sig} {τ : Sig → Tag} (h : TRestricted m t S τ)
-    (k: Nat) (hk: m≤ k) (v: List Wire) (hrep: zamk v S τ): zapo k t v= true:= by
+    (k: Nat) (hk: m≤ k) (v: List Wire) (hrep: zal9 v S τ): zaou k t v= true:= by
   induction k generalizing m t S τ v with
   | zero =>
     have hm: m= 0:= by omega
     subst m
     cases h
-    have p : (zapz v).Perm [zapi] :=
+    have p : (zaos v).Perm [zaox] :=
       List.perm_of_nodup_nodup_toFinset_eq hrep.1 (by simp) (by simp [hrep.2.1])
     have eq:= List.perm_singleton.mp p
     cases v with
-    | nil=> simp [zapz] at eq
+    | nil=> simp [zaos] at eq
     | cons w rest =>
-      simp only [zapz,List.map_cons,List.cons.injEq,List.map_eq_nil_iff] at eq
+      simp only [zaos,List.map_cons,List.cons.injEq,List.map_eq_nil_iff] at eq
       obtain ⟨hw,rfl⟩:= eq
-      simp [zapo,hw,zahe]
+      simp [zaou,hw,zahe]
   | succ k ih =>
-    rw [zapo]
+    rw [zaou]
     apply zadu h hk hrep <;>
       exact fun w s' τ' hw l hl hh=> ih hh hl w hw
-def zaml (k t : Nat) (v : List Wire) : Prop :=
-  ∀ m≤ k,∀ S τ,zamk v S τ→ ¬ TRestricted m t S τ
-lemma zab5 {k t : Nat} {v : List Wire} (hc : zapo k t v = false) :
-    zaml k t v:= by
+def zal1 (k t : Nat) (v : List Wire) : Prop :=
+  ∀ m≤ k,∀ S τ,zal9 v S τ→ ¬ TRestricted m t S τ
+lemma zab5 {k t : Nat} {v : List Wire} (hc : zaou k t v = false) :
+    zal1 k t v:= by
   intro m hm S τ hrep h
   exact Bool.false_ne_true (hc.symm.trans (zabp h k hm v hrep))
 lemma zadz {k t : Nat} {v : List Wire} {u b : List Wire → Bool}
-    (hu: ∀ w,u w= false→ zaml k (t- 1) w)
-    (hb: ∀ w,b w= false→ zaml k t w)
-    (hc: zanm k t v u b= false): zaml (k+ 1) t v:= by
+    (hu: ∀ w,u w= false→ zal1 k (t- 1) w)
+    (hb: ∀ w,b w= false→ zal1 k t w)
+    (hc: zane k t v u b= false): zal1 (k+ 1) t v:= by
   intro m hm S τ hrep h
-  have hu' : ∀ w s' τ', zamk w s' τ' → ∀ j ≤ k, TRestricted j (t - 1) s' τ' → u w = true := by
+  have hu' : ∀ w s' τ', zal9 w s' τ' → ∀ j ≤ k, TRestricted j (t - 1) s' τ' → u w = true := by
     intro w s' τ' hw j hj r
     cases e: u w
     · exact (hu _ e j hj s' τ' hw r).elim
     · rfl
-  have hb' : ∀ w s' τ', zamk w s' τ' → ∀ j ≤ k, TRestricted j t s' τ' → b w = true := by
+  have hb' : ∀ w s' τ', zal9 w s' τ' → ∀ j ≤ k, TRestricted j t s' τ' → b w = true := by
     intro w s' τ' hw j hj r
     cases e: b w
     · exact (hb _ e j hj s' τ' hw r).elim
     · rfl
   exact Bool.false_ne_true (hc.symm.trans (zadu h hm hrep hu' hb'))
 lemma zaao {k t S τ} (h : TRestricted k t S τ) (g : Fin 12) :
-    TRestricted k t (S.image (zapm g)) (fun x=> τ (zapm (invG g) x)):= by
+    TRestricted k t (S.image (zaoq g)) (fun x=> τ (zaoq (invG g) x)):= by
   induction h with
   | stop=> simpa [zadm] using TRestricted.stop
   | @unary k t U a τ ha hf hr1 hr2 tail ih =>
     simp only [Finset.image_insert,zafk g ha.1] at ih ⊢
-    have hinvA: zapm (invG g) (zapm g a)= a:= zaf2 g ha.1
-    have hvalU: ∀ y∈ U,zap6 y:= fun y hy=> (zaet tail.live y (Finset.mem_insert_of_mem hy)).1
-    have hne : neg (zapm g a) ∉ insert (zapm g a) (U.image (zapm g)) := by
+    have hinvA: zaoq (invG g) (zaoq g a)= a:= zaf2 g ha.1
+    have hvalU: ∀ y∈ U,zaoy y:= fun y hy=> (zaet tail.live y (Finset.mem_insert_of_mem hy)).1
+    have hne : neg (zaoq g a) ∉ insert (zaoq g a) (U.image (zaoq g)) := by
       rw [← zafk g ha.1,← Finset.image_insert]
       intro hx; obtain ⟨y,hy,he⟩:= Finset.mem_image.mp hx
-      have hvy : zap6 y := by
+      have hvy : zaoy y := by
         rcases Finset.mem_insert.mp hy with rfl | hyU
         · exact ha.1
         · exact hvalU y hyU
       exact hf ((zaft hvy (zagd ha.1) he)▸ hy)
-    have hnaU : a ∉ U → zapm g a ∉ U.image (zapm g) := by
+    have hnaU : a ∉ U → zaoq g a ∉ U.image (zaoq g) := by
       intro hna hx; obtain ⟨y,hy,he⟩:= Finset.mem_image.mp hx
       exact hna ((zaft (hvalU y hy) ha.1 he)▸ hy)
     refine TRestricted.unary (zacy g ha) hne (by simpa [hinvA] using hr1)
@@ -6282,7 +6282,7 @@ lemma zaao {k t S τ} (h : TRestricted k t S τ) (g : Fin 12) :
       simp only [ite_true,hinvA]
     · obtain ⟨y, hy, rfl⟩ := Finset.mem_image.mp hxU
       have hneY: y≠ neg a:= fun e=> hf (e▸ Finset.mem_insert_of_mem hy)
-      have hneGY : zapm g y ≠ neg (zapm g a) := by
+      have hneGY : zaoq g y ≠ neg (zaoq g a) := by
         rw [← zafk g ha.1]; intro e; exact hneY (zaft (hvalU y hy) (zagd ha.1) e)
       unfold zaln
       simp only [hneGY,ite_false,zaf2 g (hvalU y hy),hneY]
@@ -6290,19 +6290,19 @@ lemma zaao {k t S τ} (h : TRestricted k t S τ) (g : Fin 12) :
     simp only [Finset.image_insert,zafw g false a b] at ih ⊢
     have hinvA:= zaf2 g ha.1
     have hinvB:= zaf2 g hb.1
-    have hvalU: ∀ y∈ U,zap6 y:= fun y hy=> (zaet tail.live y (Finset.mem_insert_of_mem hy)).1
-    have hne : bin false (zapm g a) (zapm g b) ∉
-        insert (zapm g a) (insert (zapm g b) (U.image (zapm g))):= by
+    have hvalU: ∀ y∈ U,zaoy y:= fun y hy=> (zaet tail.live y (Finset.mem_insert_of_mem hy)).1
+    have hne : bin false (zaoq g a) (zaoq g b) ∉
+        insert (zaoq g a) (insert (zaoq g b) (U.image (zaoq g))):= by
       rw [← zafw g false a b,← Finset.image_insert,← Finset.image_insert]
       intro hx; obtain ⟨y,hy,he⟩:= Finset.mem_image.mp hx
-      have hvy : zap6 y := by
+      have hvy : zaoy y := by
         rcases Finset.mem_insert.mp hy with rfl | hy1
         · exact ha.1
         rcases Finset.mem_insert.mp hy1 with rfl | hyU
         · exact hb.1
         · exact hvalU y hyU
       exact hf ((zaft hvy (zagq ha.1 hb.1) he)▸ hy)
-    have hnotU (z : Sig) (hvz : zap6 z) (hnz : z ∉ U) : zapm g z ∉ U.image (zapm g) := by
+    have hnotU (z : Sig) (hvz : zaoy z) (hnz : z ∉ U) : zaoq g z ∉ U.image (zaoq g) := by
       intro hx; obtain ⟨y,hy,he⟩:= Finset.mem_image.mp hx
       exact hnz ((zaft (hvalU y hy) hvz he)▸ hy)
     refine TRestricted.binaryAnd (zacy g ha) (zacy g hb)
@@ -6312,33 +6312,33 @@ lemma zaao {k t S τ} (h : TRestricted k t S τ) (g : Fin 12) :
     refine zaau ih ?_
     intro x hx
     rcases Finset.mem_insert.mp hx with rfl | hxU
-    · unfold zamt
+    · unfold zam9
       simp only [ite_true]
       rw [← zafw g false a b,zaf2 g (zagq ha.1 hb.1)]
       simp only [ite_true,hinvA,hinvB]
     · obtain ⟨y, hy, rfl⟩ := Finset.mem_image.mp hxU
       have hneY: y≠ bin false a b:= fun e=> hf (e▸ Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hy))
-      have hneGY : zapm g y ≠ bin false (zapm g a) (zapm g b) := by
+      have hneGY : zaoq g y ≠ bin false (zaoq g a) (zaoq g b) := by
         rw [← zafw g false a b]; intro e; exact hneY (zaft (hvalU y hy) (zagq ha.1 hb.1) e)
-      unfold zamt
+      unfold zam9
       simp only [hneGY,ite_false,zaf2 g (hvalU y hy),hneY]
   | @binaryOr k t U a b τ ha hb hab hf hra hrb tail ih =>
     simp only [Finset.image_insert,zafw g true a b] at ih ⊢
     have hinvA:= zaf2 g ha.1
     have hinvB:= zaf2 g hb.1
-    have hvalU: ∀ y∈ U,zap6 y:= fun y hy=> (zaet tail.live y (Finset.mem_insert_of_mem hy)).1
-    have hne : bin true (zapm g a) (zapm g b) ∉
-        insert (zapm g a) (insert (zapm g b) (U.image (zapm g))):= by
+    have hvalU: ∀ y∈ U,zaoy y:= fun y hy=> (zaet tail.live y (Finset.mem_insert_of_mem hy)).1
+    have hne : bin true (zaoq g a) (zaoq g b) ∉
+        insert (zaoq g a) (insert (zaoq g b) (U.image (zaoq g))):= by
       rw [← zafw g true a b,← Finset.image_insert,← Finset.image_insert]
       intro hx; obtain ⟨y,hy,he⟩:= Finset.mem_image.mp hx
-      have hvy : zap6 y := by
+      have hvy : zaoy y := by
         rcases Finset.mem_insert.mp hy with rfl | hy1
         · exact ha.1
         rcases Finset.mem_insert.mp hy1 with rfl | hyU
         · exact hb.1
         · exact hvalU y hyU
       exact hf ((zaft hvy (zagq ha.1 hb.1) he)▸ hy)
-    have hnotU (z : Sig) (hvz : zap6 z) (hnz : z ∉ U) : zapm g z ∉ U.image (zapm g) := by
+    have hnotU (z : Sig) (hvz : zaoy z) (hnz : z ∉ U) : zaoq g z ∉ U.image (zaoq g) := by
       intro hx; obtain ⟨y,hy,he⟩:= Finset.mem_image.mp hx
       exact hnz ((zaft (hvalU y hy) hvz he)▸ hy)
     refine TRestricted.binaryOr (zacy g ha) (zacy g hb)
@@ -6348,39 +6348,39 @@ lemma zaao {k t S τ} (h : TRestricted k t S τ) (g : Fin 12) :
     refine zaau ih ?_
     intro x hx
     rcases Finset.mem_insert.mp hx with rfl | hxU
-    · unfold zanj
+    · unfold zang
       simp only [ite_true]
       rw [← zafw g true a b,zaf2 g (zagq ha.1 hb.1)]
       simp only [ite_true]
     · obtain ⟨y, hy, rfl⟩ := Finset.mem_image.mp hxU
       have hvy:= hvalU y hy
       have hneY: y≠ bin true a b:= fun e=> hf (e▸ Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hy))
-      have hneGY : zapm g y ≠ bin true (zapm g a) (zapm g b) := by
+      have hneGY : zaoq g y ≠ bin true (zaoq g a) (zaoq g b) := by
         rw [← zafw g true a b]; intro e; exact hneY (zaft hvy (zagq ha.1 hb.1) e)
-      have eqA: (zapm g y= zapm g a)↔ (y= a):= ⟨zaft hvy ha.1,congrArg (zapm g)⟩
-      have eqB: (zapm g y= zapm g b)↔ (y= b):= ⟨zaft hvy hb.1,congrArg (zapm g)⟩
-      unfold zanj
+      have eqA: (zaoq g y= zaoq g a)↔ (y= a):= ⟨zaft hvy ha.1,congrArg (zaoq g)⟩
+      have eqB: (zaoq g y= zaoq g b)↔ (y= b):= ⟨zaft hvy hb.1,congrArg (zaoq g)⟩
+      unfold zang
       simp only [hneGY,ite_false,zaf2 g hvy,hneY,eqA,eqB,hinvA,hinvB]
 lemma zabl {k t : Nat} {w z : List Wire} (hp : w.Perm z)
-    (hz: zaml k t z): zaml k t w:= by
+    (hz: zal1 k t z): zal1 k t w:= by
   intro m hm S τ hrep h
   apply hz m hm S τ _ h
-  have hpS: (zapz w).Perm (zapz z):= hp.map Prod.fst
+  have hpS: (zaos w).Perm (zaos z):= hp.map Prod.fst
   refine ⟨hpS.nodup_iff.mp hrep.1,?_,fun x hx=> hrep.2.2 x (hp.mem_iff.mpr hx)⟩
   rw [← hrep.2.1]; ext a
   simp only [List.mem_toFinset,hpS.mem_iff]
 lemma zaa1 {k t : Nat} {w z : List Wire} (g : Fin 12)
-    (hp: (w.map (fun x=> (zapm g x.1,x.2))).Perm z)
-    (hn: zaml k t z): zaml k t w:= by
+    (hp: (w.map (fun x=> (zaoq g x.1,x.2))).Perm z)
+    (hn: zal1 k t z): zal1 k t w:= by
   intro m hm S τ hrep h
-  apply hn m hm (S.image (zapm g)) (fun x=> τ (zapm (invG g) x)) _ (zaao h g)
-  have hval : ∀ x ∈ zapz w, zap6 x := fun x hx =>
+  apply hn m hm (S.image (zaoq g)) (fun x=> τ (zaoq (invG g) x)) _ (zaao h g)
+  have hval : ∀ x ∈ zaos w, zaoy x := fun x hx =>
     (zaet h.live x (hrep.2.1▸ List.mem_toFinset.mpr hx)).1
-  have hmapS : zapz (w.map (fun x => (zapm g x.1, x.2))) = (zapz w).map (zapm g) := by
-    simp [zapz,List.map_map,Function.comp_def]
-  have hpS : ((zapz w).map (zapm g)).Perm (zapz z) := by
+  have hmapS : zaos (w.map (fun x => (zaoq g x.1, x.2))) = (zaos w).map (zaoq g) := by
+    simp [zaos,List.map_map,Function.comp_def]
+  have hpS : ((zaos w).map (zaoq g)).Perm (zaos z) := by
     rw [← hmapS]; exact hp.map Prod.fst
-  have hndMap : ((zapz w).map (zapm g)).Nodup := by
+  have hndMap : ((zaos w).map (zaoq g)).Nodup := by
     apply List.Nodup.map_on _ hrep.1
     intro a ha b hb heq
     exact zaft (hval a ha) (hval b hb) heq
@@ -6390,16 +6390,16 @@ lemma zaa1 {k t : Nat} {w z : List Wire} (g : Fin 12)
   · intro x hx
     have hx':= hp.mem_iff.mpr hx
     obtain ⟨y,hy,rfl⟩:= List.mem_map.mp hx'
-    have hvy: zap6 y.1:= hval y.1 (List.mem_map_of_mem hy)
+    have hvy: zaoy y.1:= hval y.1 (List.mem_map_of_mem hy)
     simp [zaf2 g hvy,hrep.2.2 y hy]
-def zamh (a : Sig) : Nat :=
+def zamd (a : Sig) : Nat :=
   let p:= a.1 % 4294967291
   let q:= a.2 % 4294967291
-  let b:= (p* 31+ q) % zak3
-  let h:= Nat.land ((p* 1299710+ q* 1786) % 4294967291) zal0
-  let d:= Nat.land (Nat.shiftRight zalv (zalk* b)) zal0
-  Nat.land (Nat.shiftRight zal9 (zakx* Nat.land (h+ d) zal0)) zaky
-def zalz (rho : Fin 9 → Sig) (op : Nat) (w : List Sig) : List Sig :=
+  let b:= (p* 31+ q) % zak9
+  let h:= Nat.land ((p* 1299710+ q* 1786) % 4294967291) zamm
+  let d:= Nat.land (Nat.shiftRight zalm (zalr* b)) zamm
+  Nat.land (Nat.shiftRight zal5 (zak0* Nat.land (h+ d) zamm)) zaky
+def zal0 (rho : Fin 9 → Sig) (op : Nat) (w : List Sig) : List Sig :=
   if Nat.ble op 9 then rho (Fin.ofNat 9 (op- 1)) :: w
   else match w with
   | []=> []
@@ -6408,14 +6408,14 @@ def zalz (rho : Fin 9 → Sig) (op : Nat) (w : List Sig) : List Sig :=
     else match t with
     | []=> []
     | b :: r=> bin (Nat.beq op 12) a b :: r
-def zamv (rho : Fin 9 → Sig) : Nat → Nat → List Sig → List Sig
+def zam6 (rho : Fin 9 → Sig) : Nat → Nat → List Sig → List Sig
   | 0,_,w=> w
   | n + 1, code, w =>
     if Nat.beq code 0 then w else
-      zamv rho n (Nat.shiftRight code 4) (zalz rho (Nat.land code 15) w)
-lemma zaa9 (rho : Fin 9 → Sig) (hr : ∀ i, zap6 (rho i)) (op : Nat)
-    (w: List Sig) (hw: ∀ x∈ w,zap6 x): ∀ x∈ zalz rho op w,zap6 x:= by
-  unfold zalz
+      zam6 rho n (Nat.shiftRight code 4) (zal0 rho (Nat.land code 15) w)
+lemma zaa9 (rho : Fin 9 → Sig) (hr : ∀ i, zaoy (rho i)) (op : Nat)
+    (w: List Sig) (hw: ∀ x∈ w,zaoy x): ∀ x∈ zal0 rho op w,zaoy x:= by
+  unfold zal0
   cases h: Nat.ble op 9
   · simp only [Bool.false_eq_true, ite_false]
     cases w with
@@ -6439,10 +6439,10 @@ lemma zaa9 (rho : Fin 9 → Sig) (hr : ∀ i, zap6 (rho i)) (op : Nat)
     · exact hr _
     · exact hw x hx
 lemma zacg (g : Fin 12) (rho : Fin 9 → Sig) (op : Nat) (w : List Sig)
-    (hw: ∀ x∈ w,zap6 x) :
-    (zalz rho op w).map (zapm g) =
-      zalz (zapm g∘ rho) op (w.map (zapm g)):= by
-  unfold zalz
+    (hw: ∀ x∈ w,zaoy x) :
+    (zal0 rho op w).map (zaoq g) =
+      zal0 (zaoq g∘ rho) op (w.map (zaoq g)):= by
+  unfold zal0
   cases h: Nat.ble op 9
   · simp only [Bool.false_eq_true, ite_false]
     cases w with
@@ -6453,41 +6453,41 @@ lemma zacg (g : Fin 12) (rho : Fin 9 → Sig) (op : Nat) (w : List Sig)
         cases t <;> simp [zafw]
       · simp [zafk g (hw a (by simp))]
   · simp
-lemma zacz (g : Fin 12) (rho : Fin 9 → Sig) (hr : ∀ i, zap6 (rho i))
-    (n code: Nat) (w: List Sig) (hw: ∀ x∈ w,zap6 x) :
-    (zamv rho n code w).map (zapm g) =
-      zamv (zapm g∘ rho) n code (w.map (zapm g)):= by
+lemma zacz (g : Fin 12) (rho : Fin 9 → Sig) (hr : ∀ i, zaoy (rho i))
+    (n code: Nat) (w: List Sig) (hw: ∀ x∈ w,zaoy x) :
+    (zam6 rho n code w).map (zaoq g) =
+      zam6 (zaoq g∘ rho) n code (w.map (zaoq g)):= by
   induction n generalizing code w with
   | zero=> rfl
   | succ n ih =>
-    unfold zamv
+    unfold zam6
     cases h: Nat.beq code 0
     · simp only [Bool.false_eq_true, ite_false]
       rw [ih _ _ (zaa9 rho hr _ w hw),zacg g rho _ w hw]
     · simp
-def zals (rho : Fin 9 → Sig) (code : Nat) : Sig :=
-  (zamv rho zamj code []).headD zero
-lemma zaaq (g : Fin 12) (rho : Fin 9 → Sig) (hr : ∀ i, zap6 (rho i)) (code : Nat) :
-    zals (zapm g∘ rho) code= zapm g (zals rho code):= by
-  have h:= zacz g rho hr zamj code [] (by simp)
+def zalv (rho : Fin 9 → Sig) (code : Nat) : Sig :=
+  (zam6 rho zal3 code []).headD zero
+lemma zaaq (g : Fin 12) (rho : Fin 9 → Sig) (hr : ∀ i, zaoy (rho i)) (code : Nat) :
+    zalv (zaoq g∘ rho) code= zaoq g (zalv rho code):= by
+  have h:= zacz g rho hr zal3 code [] (by simp)
   simp only [List.map_nil] at h
-  unfold zals
+  unfold zalv
   rw [← h]
-  cases zamv rho zamj code [] <;> simp [zae2]
-def zak9 (i: Fin 9): Sig:= raw.getD i.val zero
-lemma zaah (i: Fin 9): zap6 (zak9 i):= zafs zaf8 i.val
-lemma zaai (g : Fin 12) : zanf g = zapm g ∘ zak9 := by
+  cases zam6 rho zal3 code [] <;> simp [zae2]
+def zalb (i: Fin 9): Sig:= raw.getD i.val zero
+lemma zaah (i: Fin 9): zaoy (zalb i):= zafs zaf8 i.val
+lemma zaai (g : Fin 12) : zand g = zaoq g ∘ zalb := by
   funext i; exact zae1 g i
-def zali (g : Fin 12) (a : Sig) : Sig :=
-  let code:= zamh a
+def zalf (g : Fin 12) (a : Sig) : Sig :=
+  let code:= zamd a
   if Nat.ble code 9 then
     let idx:= Fin.ofNat 9 (code- 1)
-    if zaqe (zak9 idx) a then zanf g idx else zapm g a
-  else if zaqe (zals zak9 code) a then zals (zanf g) code
-  else zapm g a
-lemma zabv (g : Fin 12) : zali g = zapm g := by
+    if zao4 (zalb idx) a then zand g idx else zaoq g a
+  else if zao4 (zalv zalb code) a then zalv (zand g) code
+  else zaoq g a
+lemma zabv (g : Fin 12) : zalf g = zaoq g := by
   funext a
-  simp only [zali]
+  simp only [zalf]
   split
   · split
     · rename_i _ h
@@ -6495,110 +6495,110 @@ lemma zabv (g : Fin 12) : zali g = zapm g := by
     · rfl
   · split
     · rename_i _ h
-      rw [zaai,zaaq g zak9 zaah,zahe.mp h]
+      rw [zaai,zaaq g zalb zaah,zahe.mp h]
     · rfl
-def zapv (id : Nat) : Sig :=
-  (Nat.land (Nat.shiftRight zal1 (414 * id)) top,
-   Nat.land (Nat.shiftRight zame (414* id)) top)
-def zalp (bits : Nat) : Nat → List Wire
+def zaow (id : Nat) : Sig :=
+  (Nat.land (Nat.shiftRight zami (414 * id)) top,
+   Nat.land (Nat.shiftRight zamc (414* id)) top)
+def zall (bits : Nat) : Nat → List Wire
   | 0=> []
   | n + 1 =>
     let entry:= Nat.land bits zak7
-    (zapv (Nat.shiftRight entry 2), zanp (Nat.land entry 3)) ::
-      zalp (Nat.shiftRight bits zak8) n
-def zak1 (k t i : Nat) : List Wire :=
-  let slot:= zaju k t
-  let rawBits:= Nat.shiftRight (zalh k t) (slot* i)
+    (zaow (Nat.shiftRight entry 2), zanp (Nat.land entry 3)) ::
+      zall (Nat.shiftRight bits zak5) n
+def zala (k t i : Nat) : List Wire :=
+  let slot:= zaj6 k t
+  let rawBits:= Nat.shiftRight (zale k t) (slot* i)
   let len:= Nat.land rawBits 15
-  zalp (Nat.shiftRight rawBits 4) len
-def zano (salt : Nat) (w : Wire) : Nat :=
+  zall (Nat.shiftRight rawBits 4) len
+def zani (salt : Nat) (w : Wire) : Nat :=
   let h:= ((w.1.1 % 1048573)* (65537+ salt)+ (w.1.2 % 1048573)* 131+ w.2.toNat* 997+ 317) % 1048573
   (h* h % 1048573)* h % 1048573
-def zalf (salt : Nat) (v : List Wire) : Nat :=
-  (v.foldl (fun s w=> s+ zano salt w) 0) % 1048573
-def zaqq (k t : Nat) (w : List Wire) : Nat :=
-  let h:= zalf (zams k t) w
-  let (width,codeWidth):= zam3 k t
-  let lane:= h % zalg k t
+def zalh (salt : Nat) (v : List Wire) : Nat :=
+  (v.foldl (fun s w=> s+ zani salt w) 0) % 1048573
+def zao2 (k t : Nat) (w : List Wire) : Nat :=
+  let h:= zalh (zamt k t) w
+  let (width,codeWidth):= zanb k t
+  let lane:= h % zalj k t
   let mask:= Nat.shiftLeft 1 width- 1
-  let d:= Nat.land (Nat.shiftRight (zaes k t) (width* lane)) mask
+  let d:= Nat.land (Nat.shiftRight (zaju k t) (width* lane)) mask
   let slot:= Nat.land (h* zakz k t % 1048573+ d) mask
-  Nat.land (Nat.shiftRight (zam4 k t) (codeWidth* slot)) (Nat.shiftLeft 1 codeWidth- 1)
-def zam1 (a : Wire) : List Wire → Option (List Wire)
+  Nat.land (Nat.shiftRight (zamv k t) (codeWidth* slot)) (Nat.shiftLeft 1 codeWidth- 1)
+def zam2 (a : Wire) : List Wire → Option (List Wire)
   | []=> none
   | b :: l =>
-    if zaqg a.2 b.2&& zaqe a.1 b.1 then some l
-    else match zam1 a l with
+    if zaoz a.2 b.2&& zao4 a.1 b.1 then some l
+    else match zam2 a l with
       | none=> none
       | some l'=> some (b :: l')
-lemma zach {a : Wire} {ys ys' : List Wire} (h : zam1 a ys = some ys') :
+lemma zach {a : Wire} {ys ys' : List Wire} (h : zam2 a ys = some ys') :
     ys.Perm (a :: ys'):= by
   induction ys generalizing ys' with
-  | nil=> simp [zam1] at h
+  | nil=> simp [zam2] at h
   | cons b l ih =>
-    unfold zam1 at h
+    unfold zam2 at h
     split at h
     · rename_i heq
       simp only [Bool.and_eq_true,zahx,zahe] at heq
       have hab: a= b:= Prod.ext heq.2 heq.1
       injection h with h'; subst h'; subst hab; exact List.Perm.refl _
-    · cases he : zam1 a l with
+    · cases he : zam2 a l with
       | none=> simp [he] at h
       | some l' =>
         simp only [he] at h; injection h with h'; subst h'
         exact (List.Perm.cons b (ih he)).trans (List.Perm.swap a b l')
-def zalw : List Wire → List Wire → Bool
+def zaml : List Wire → List Wire → Bool
   | [],[]=> true
   | a :: l, ys =>
-    match zam1 a ys with
+    match zam2 a ys with
     | none=> false
-    | some ys'=> zalw l ys'
+    | some ys'=> zaml l ys'
   | _,_=> false
-lemma zabo {xs ys : List Wire} (h : zalw xs ys = true) : xs.Perm ys := by
+lemma zabo {xs ys : List Wire} (h : zaml xs ys = true) : xs.Perm ys := by
   induction xs generalizing ys with
-  | nil=> cases ys <;> simp [zalw] at h ⊢
+  | nil=> cases ys <;> simp [zaml] at h ⊢
   | cons a l ih =>
-    unfold zalw at h
-    cases he: zam1 a ys with
+    unfold zaml at h
+    cases he: zam2 a ys with
     | none=> simp [he] at h
     | some ys' =>
       simp only [he] at h
       exact (List.Perm.cons a (ih h)).trans (zach he).symm
-def zalt (g : Fin 12) : List Wire → List Wire → Bool
+def zalq (g : Fin 12) : List Wire → List Wire → Bool
   | [],[]=> true
   | a :: l, ys =>
-    match zam1 (zali g a.1,a.2) ys with
+    match zam2 (zalf g a.1,a.2) ys with
     | none=> false
-    | some ys'=> zalt g l ys'
+    | some ys'=> zalq g l ys'
   | _,_=> false
-lemma zabg {g : Fin 12} {xs ys : List Wire} (h : zalt g xs ys = true) :
-    (xs.map fun x=> (zapm g x.1,x.2)).Perm ys:= by
+lemma zabg {g : Fin 12} {xs ys : List Wire} (h : zalq g xs ys = true) :
+    (xs.map fun x=> (zaoq g x.1,x.2)).Perm ys:= by
   induction xs generalizing ys with
-  | nil=> cases ys <;> simp [zalt] at h ⊢
+  | nil=> cases ys <;> simp [zalq] at h ⊢
   | cons a l ih =>
-    unfold zalt at h
-    cases he: zam1 (zali g a.1,a.2) ys with
+    unfold zalq at h
+    cases he: zam2 (zalf g a.1,a.2) ys with
     | none=> simp [he] at h
     | some ys' =>
       simp only [he] at h
-      have ha': zapm g a.1= zali g a.1:= congrFun (zabv g).symm a.1
+      have ha': zaoq g a.1= zalf g a.1:= congrFun (zabv g).symm a.1
       rw [List.map_cons,ha']
       exact (List.Perm.cons _ (ih h)).trans (zach he).symm
-def zaj6 (k t : Nat) (w : List Wire) : Bool :=
-  match zaqq k t w with
+def zakx (k t : Nat) (w : List Wire) : Bool :=
+  match zao2 k t w with
   | 0=> false
   | n + 1 =>
     let i:= n / 12
     let gv:= n % 12
-    Nat.blt i (zak6 k t) &&
-      let tgt:= zak1 k t i
-      if Nat.beq gv 0 then zalw w tgt
-      else zalt (Fin.ofNat 12 gv) w tgt
-lemma zaag {k t : Nat} (h : ∀ i < zak6 k t,
-    zaml k t (zak1 k t i)) {w: List Wire}
-    (hw: zaj6 k t w= true): zaml k t w:= by
-  unfold zaj6 at hw
-  cases hs: zaqq k t w with
+    Nat.blt i (zak2 k t) &&
+      let tgt:= zala k t i
+      if Nat.beq gv 0 then zaml w tgt
+      else zalq (Fin.ofNat 12 gv) w tgt
+lemma zaag {k t : Nat} (h : ∀ i < zak2 k t,
+    zal1 k t (zala k t i)) {w: List Wire}
+    (hw: zakx k t w= true): zal1 k t w:= by
+  unfold zakx at hw
+  cases hs: zao2 k t w with
   | zero=> simp [hs] at hw
   | succ n =>
     simp only [hs,Bool.and_eq_true,Nat.blt_eq] at hw
@@ -6606,34 +6606,34 @@ lemma zaag {k t : Nat} (h : ∀ i < zak6 k t,
     split at hp
     · exact zabl (zabo hp) (h _ hi)
     · exact zaa1 (Fin.ofNat 12 (n % 12)) (zabg hp) (h _ hi)
-def zapy (k t i : Nat) : Bool :=
-  !zapo k t (zak1 k t i)
-def zank (k t i : Nat) : Bool :=
-  !zanm k t (zak1 (k + 1) t i)
-    (fun w=> !zaj6 k (t- 1) w) (fun w=> !zaj6 k t w)
-def zan1 (k t i : Nat) : Bool :=
-  if i< zam5 k t then zapy k t i else zank (k- 1) t i
-def zapg (t : Nat) : Bool :=
-  !zanm 13 t zamu
-    (fun w=> !zaj6 13 (t- 1) w) (fun w=> !zaj6 13 t w)
-lemma zabn {k t i : Nat} (h : zapy k t i = true) :
-    zaml k t (zak1 k t i):= by
-  simp only [zapy,Bool.not_eq_true'] at h
+def zaof (k t i : Nat) : Bool :=
+  !zaou k t (zala k t i)
+def zanm (k t i : Nat) : Bool :=
+  !zane k t (zala (k + 1) t i)
+    (fun w=> !zakx k (t- 1) w) (fun w=> !zakx k t w)
+def zanu (k t i : Nat) : Bool :=
+  if i< zamx k t then zaof k t i else zanm (k- 1) t i
+def zaok (t : Nat) : Bool :=
+  !zane 13 t zam0
+    (fun w=> !zakx 13 (t- 1) w) (fun w=> !zakx 13 t w)
+lemma zabn {k t i : Nat} (h : zaof k t i = true) :
+    zal1 k t (zala k t i):= by
+  simp only [zaof,Bool.not_eq_true'] at h
   exact zab5 h
 lemma zaaz {k t i : Nat} (ht : t ≤ 6)
-    (hp: ∀ t≤ 6,∀ i< zak6 k t,zaml k t (zak1 k t i))
-    (h: zank k t i= true): zaml (k+ 1) t (zak1 (k+ 1) t i):= by
-  simp only [zank,Bool.not_eq_true'] at h
+    (hp: ∀ t≤ 6,∀ i< zak2 k t,zal1 k t (zala k t i))
+    (h: zanm k t i= true): zal1 (k+ 1) t (zala (k+ 1) t i):= by
+  simp only [zanm,Bool.not_eq_true'] at h
   apply zadz _ _ h
   · intro w hw; exact zaag (hp (t- 1) (by omega)) (by simpa using hw)
   · intro w hw; exact zaag (hp t ht) (by simpa using hw)
 lemma zaba {k : Nat}
-    (hp: ∀ t≤ 6,∀ i< zak6 k t,zaml k t (zak1 k t i))
-    (hc: ∀ t≤ 6,∀ i< zak6 (k+ 1) t,zan1 (k+ 1) t i= true)
-    (t: Nat) (ht: t≤ 6) (i: Nat) (hi: i< zak6 (k+ 1) t) :
-    zaml (k+ 1) t (zak1 (k+ 1) t i):= by
+    (hp: ∀ t≤ 6,∀ i< zak2 k t,zal1 k t (zala k t i))
+    (hc: ∀ t≤ 6,∀ i< zak2 (k+ 1) t,zanu (k+ 1) t i= true)
+    (t: Nat) (ht: t≤ 6) (i: Nat) (hi: i< zak2 (k+ 1) t) :
+    zal1 (k+ 1) t (zala (k+ 1) t i):= by
   have h:= hc t ht i hi
-  unfold zan1 at h
+  unfold zanu at h
   split at h
   · exact zabn h
   · exact zaaz ht hp (by simpa using h)
@@ -6661,15 +6661,15 @@ lemma zajk {p : Nat → Bool} {n i : Nat} (h : span p n i = true) :
     · exact ih h.2 j (by omega) (by omega)
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zakf: span (zan1 9 0) 15 0= true:= by decide +kernel
-theorem zais: span (zan1 9 0) 15 0= true:= zakf
-theorem zah8: span (zan1 9 1) 0 0= true:= rfl
-theorem zaix: span (zan1 9 2) 0 0= true:= rfl
-theorem zaig: span (zan1 9 3) 0 0= true:= rfl
-theorem zah6: span (zan1 9 4) 0 0= true:= rfl
-theorem zah7: span (zan1 9 5) 0 0= true:= rfl
-theorem zaiw: span (zan1 9 6) 0 0= true:= rfl
-lemma zaf9 (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 9 t) : zan1 9 t i = true := by
+theorem zakf: span (zanu 9 0) 15 0= true:= by decide +kernel
+theorem zais: span (zanu 9 0) 15 0= true:= zakf
+theorem zah8: span (zanu 9 1) 0 0= true:= rfl
+theorem zaix: span (zanu 9 2) 0 0= true:= rfl
+theorem zaig: span (zanu 9 3) 0 0= true:= rfl
+theorem zah6: span (zanu 9 4) 0 0= true:= rfl
+theorem zah7: span (zanu 9 5) 0 0= true:= rfl
+theorem zaiw: span (zanu 9 6) 0 0= true:= rfl
+lemma zaf9 (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak2 9 t) : zanu 9 t i = true := by
   interval_cases t
   · exact zajk zais i (Nat.zero_le i) hi
   · exact zajk zah8 i (Nat.zero_le i) hi
@@ -6678,67 +6678,67 @@ lemma zaf9 (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 9 t) : zan1 9 t i =
   · exact zajk zah6 i (Nat.zero_le i) hi
   · exact zajk zah7 i (Nat.zero_le i) hi
   · exact zajk zaiw i (Nat.zero_le i) hi
-lemma zadv (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 9 t) :
-    zaml 9 t (zak1 9 t i):= by
+lemma zadv (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak2 9 t) :
+    zal1 9 t (zala 9 t i):= by
   have h:= zaf9 t ht i hi
-  have hlt : i < zam5 9 t := by
+  have hlt : i < zamx 9 t := by
     interval_cases t
     · exact hi
-    all_goals simp [zak6] at hi
-  simpa [zan1,hlt] using zabn (by simpa [zan1,hlt] using h)
+    all_goals simp [zak2] at hi
+  simpa [zanu,hlt] using zabn (by simpa [zanu,hlt] using h)
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zajs: span (zan1 10 0) 25 0= true:= by decide +kernel
+theorem zajs: span (zanu 10 0) 25 0= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaio: span (zan1 10 0) 25 25= true:= by decide +kernel
+theorem zaio: span (zanu 10 0) 25 25= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaiz: span (zan1 10 0) 25 50= true:= by decide +kernel
+theorem zaiz: span (zanu 10 0) 25 50= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaim: span (zan1 10 0) 25 75= true:= by decide +kernel
+theorem zaim: span (zanu 10 0) 25 75= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zag7: span (zan1 10 0) 25 100= true:= by decide +kernel
+theorem zag7: span (zanu 10 0) 25 100= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zagx: span (zan1 10 0) 25 125= true:= by decide +kernel
+theorem zagx: span (zanu 10 0) 25 125= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zah0: span (zan1 10 0) 25 150= true:= by decide +kernel
+theorem zah0: span (zanu 10 0) 25 150= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zag3: span (zan1 10 0) 25 175= true:= by decide +kernel
+theorem zag3: span (zanu 10 0) 25 175= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zahv: span (zan1 10 0) 25 200= true:= by decide +kernel
+theorem zahv: span (zanu 10 0) 25 200= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zagg: span (zan1 10 0) 25 225= true:= by decide +kernel
+theorem zagg: span (zanu 10 0) 25 225= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zagm: span (zan1 10 0) 25 250= true:= by decide +kernel
+theorem zagm: span (zanu 10 0) 25 250= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zag1: span (zan1 10 0) 25 275= true:= by decide +kernel
+theorem zag1: span (zanu 10 0) 25 275= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zahq: span (zan1 10 0) 25 300= true:= by decide +kernel
+theorem zahq: span (zanu 10 0) 25 300= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zahn: span (zan1 10 0) 16 325= true:= by decide +kernel
-theorem zahr: span (zan1 10 0) 341 0= true:= (@zaf6 (zan1 10 0) 175 0 166 (@zaf6 (zan1 10 0) 75 0 100 (@zaf6 (zan1 10 0) 25 0 50 zajs (@zaf6 (zan1 10 0) 25 25 25 zaio zaiz)) (@zaf6 (zan1 10 0) 50 75 50 (@zaf6 (zan1 10 0) 25 75 25 zaim zag7) (@zaf6 (zan1 10 0) 25 125 25 zagx zah0))) (@zaf6 (zan1 10 0) 75 175 91 (@zaf6 (zan1 10 0) 25 175 50 zag3 (@zaf6 (zan1 10 0) 25 200 25 zahv zagg)) (@zaf6 (zan1 10 0) 50 250 41 (@zaf6 (zan1 10 0) 25 250 25 zagm zag1) (@zaf6 (zan1 10 0) 25 300 16 zahq zahn))))
+theorem zahn: span (zanu 10 0) 16 325= true:= by decide +kernel
+theorem zahr: span (zanu 10 0) 341 0= true:= (@zaf6 (zanu 10 0) 175 0 166 (@zaf6 (zanu 10 0) 75 0 100 (@zaf6 (zanu 10 0) 25 0 50 zajs (@zaf6 (zanu 10 0) 25 25 25 zaio zaiz)) (@zaf6 (zanu 10 0) 50 75 50 (@zaf6 (zanu 10 0) 25 75 25 zaim zag7) (@zaf6 (zanu 10 0) 25 125 25 zagx zah0))) (@zaf6 (zanu 10 0) 75 175 91 (@zaf6 (zanu 10 0) 25 175 50 zag3 (@zaf6 (zanu 10 0) 25 200 25 zahv zagg)) (@zaf6 (zanu 10 0) 50 250 41 (@zaf6 (zanu 10 0) 25 250 25 zagm zag1) (@zaf6 (zanu 10 0) 25 300 16 zahq zahn))))
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zai9: span (zan1 10 1) 12 0= true:= by decide +kernel
-theorem zaht: span (zan1 10 1) 12 0= true:= zai9
-theorem zagn: span (zan1 10 2) 0 0= true:= rfl
-theorem zagk: span (zan1 10 3) 0 0= true:= rfl
-theorem zagp: span (zan1 10 4) 0 0= true:= rfl
-theorem zahp: span (zan1 10 5) 0 0= true:= rfl
-theorem zahh: span (zan1 10 6) 0 0= true:= rfl
-lemma zafx (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 10 t) : zan1 10 t i = true := by
+theorem zai9: span (zanu 10 1) 12 0= true:= by decide +kernel
+theorem zaht: span (zanu 10 1) 12 0= true:= zai9
+theorem zagn: span (zanu 10 2) 0 0= true:= rfl
+theorem zagk: span (zanu 10 3) 0 0= true:= rfl
+theorem zagp: span (zanu 10 4) 0 0= true:= rfl
+theorem zahp: span (zanu 10 5) 0 0= true:= rfl
+theorem zahh: span (zanu 10 6) 0 0= true:= rfl
+lemma zafx (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak2 10 t) : zanu 10 t i = true := by
   interval_cases t
   · exact zajk zahr i (Nat.zero_le i) hi
   · exact zajk zaht i (Nat.zero_le i) hi
@@ -6747,95 +6747,95 @@ lemma zafx (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 10 t) : zan1 10 t i
   · exact zajk zagp i (Nat.zero_le i) hi
   · exact zajk zahp i (Nat.zero_le i) hi
   · exact zajk zahh i (Nat.zero_le i) hi
-lemma zac2 (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 10 t) :
-    zaml 10 t (zak1 10 t i) :=
+lemma zac2 (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak2 10 t) :
+    zal1 10 t (zala 10 t i) :=
   zaba zadv (zafx) t ht i hi
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zajr: span (zan1 11 0) 25 0= true:= by decide +kernel
+theorem zajr: span (zanu 11 0) 25 0= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaia: span (zan1 11 0) 25 25= true:= by decide +kernel
+theorem zaia: span (zanu 11 0) 25 25= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zait: span (zan1 11 0) 25 50= true:= by decide +kernel
+theorem zait: span (zanu 11 0) 25 50= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaih: span (zan1 11 0) 25 75= true:= by decide +kernel
+theorem zaih: span (zanu 11 0) 25 75= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zahw: span (zan1 11 0) 25 100= true:= by decide +kernel
+theorem zahw: span (zanu 11 0) 25 100= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zagf: span (zan1 11 0) 25 125= true:= by decide +kernel
+theorem zagf: span (zanu 11 0) 25 125= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zagj: span (zan1 11 0) 25 150= true:= by decide +kernel
+theorem zagj: span (zanu 11 0) 25 150= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zahg: span (zan1 11 0) 25 175= true:= by decide +kernel
+theorem zahg: span (zanu 11 0) 25 175= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaf5: span (zan1 11 0) 25 200= true:= by decide +kernel
+theorem zaf5: span (zanu 11 0) 25 200= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zag6: span (zan1 11 0) 25 225= true:= by decide +kernel
+theorem zag6: span (zanu 11 0) 25 225= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zahj: span (zan1 11 0) 3 250= true:= by decide +kernel
-theorem zah5: span (zan1 11 0) 253 0= true:= (@zaf6 (zan1 11 0) 125 0 128 (@zaf6 (zan1 11 0) 50 0 75 (@zaf6 (zan1 11 0) 25 0 25 zajr zaia) (@zaf6 (zan1 11 0) 25 50 50 zait (@zaf6 (zan1 11 0) 25 75 25 zaih zahw))) (@zaf6 (zan1 11 0) 75 125 53 (@zaf6 (zan1 11 0) 25 125 50 zagf (@zaf6 (zan1 11 0) 25 150 25 zagj zahg)) (@zaf6 (zan1 11 0) 25 200 28 zaf5 (@zaf6 (zan1 11 0) 25 225 3 zag6 zahj))))
+theorem zahj: span (zanu 11 0) 3 250= true:= by decide +kernel
+theorem zah5: span (zanu 11 0) 253 0= true:= (@zaf6 (zanu 11 0) 125 0 128 (@zaf6 (zanu 11 0) 50 0 75 (@zaf6 (zanu 11 0) 25 0 25 zajr zaia) (@zaf6 (zanu 11 0) 25 50 50 zait (@zaf6 (zanu 11 0) 25 75 25 zaih zahw))) (@zaf6 (zanu 11 0) 75 125 53 (@zaf6 (zanu 11 0) 25 125 50 zagf (@zaf6 (zanu 11 0) 25 150 25 zagj zahg)) (@zaf6 (zanu 11 0) 25 200 28 zaf5 (@zaf6 (zanu 11 0) 25 225 3 zag6 zahj))))
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zajw: span (zan1 11 1) 25 0= true:= by decide +kernel
+theorem zajw: span (zanu 11 1) 25 0= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zai2: span (zan1 11 1) 25 25= true:= by decide +kernel
+theorem zai2: span (zanu 11 1) 25 25= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zai7: span (zan1 11 1) 25 50= true:= by decide +kernel
+theorem zai7: span (zanu 11 1) 25 50= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zai1: span (zan1 11 1) 25 75= true:= by decide +kernel
+theorem zai1: span (zanu 11 1) 25 75= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zahd: span (zan1 11 1) 25 100= true:= by decide +kernel
+theorem zahd: span (zanu 11 1) 25 100= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zahc: span (zan1 11 1) 25 125= true:= by decide +kernel
+theorem zahc: span (zanu 11 1) 25 125= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zagb: span (zan1 11 1) 25 150= true:= by decide +kernel
+theorem zagb: span (zanu 11 1) 25 150= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaho: span (zan1 11 1) 25 175= true:= by decide +kernel
+theorem zaho: span (zanu 11 1) 25 175= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zag2: span (zan1 11 1) 25 200= true:= by decide +kernel
+theorem zag2: span (zanu 11 1) 25 200= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zahy: span (zan1 11 1) 5 225= true:= by decide +kernel
-theorem zagy: span (zan1 11 1) 230 0= true:= (@zaf6 (zan1 11 1) 125 0 105 (@zaf6 (zan1 11 1) 50 0 75 (@zaf6 (zan1 11 1) 25 0 25 zajw zai2) (@zaf6 (zan1 11 1) 25 50 50 zai7 (@zaf6 (zan1 11 1) 25 75 25 zai1 zahd))) (@zaf6 (zan1 11 1) 50 125 55 (@zaf6 (zan1 11 1) 25 125 25 zahc zagb) (@zaf6 (zan1 11 1) 25 175 30 zaho (@zaf6 (zan1 11 1) 25 200 5 zag2 zahy))))
+theorem zahy: span (zanu 11 1) 5 225= true:= by decide +kernel
+theorem zagy: span (zanu 11 1) 230 0= true:= (@zaf6 (zanu 11 1) 125 0 105 (@zaf6 (zanu 11 1) 50 0 75 (@zaf6 (zanu 11 1) 25 0 25 zajw zai2) (@zaf6 (zanu 11 1) 25 50 50 zai7 (@zaf6 (zanu 11 1) 25 75 25 zai1 zahd))) (@zaf6 (zanu 11 1) 50 125 55 (@zaf6 (zanu 11 1) 25 125 25 zahc zagb) (@zaf6 (zanu 11 1) 25 175 30 zaho (@zaf6 (zanu 11 1) 25 200 5 zag2 zahy))))
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaj8: span (zan1 11 2) 25 0= true:= by decide +kernel
+theorem zaj8: span (zanu 11 2) 25 0= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zain: span (zan1 11 2) 25 25= true:= by decide +kernel
+theorem zain: span (zanu 11 2) 25 25= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zai4: span (zan1 11 2) 25 50= true:= by decide +kernel
+theorem zai4: span (zanu 11 2) 25 50= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zai3: span (zan1 11 2) 6 75= true:= by decide +kernel
-theorem zago: span (zan1 11 2) 81 0= true:= (@zaf6 (zan1 11 2) 50 0 31 (@zaf6 (zan1 11 2) 25 0 25 zaj8 zain) (@zaf6 (zan1 11 2) 25 50 6 zai4 zai3))
+theorem zai3: span (zanu 11 2) 6 75= true:= by decide +kernel
+theorem zago: span (zanu 11 2) 81 0= true:= (@zaf6 (zanu 11 2) 50 0 31 (@zaf6 (zanu 11 2) 25 0 25 zaj8 zain) (@zaf6 (zanu 11 2) 25 50 6 zai4 zai3))
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaj9: span (zan1 11 3) 6 0= true:= by decide +kernel
-theorem zaf7: span (zan1 11 3) 6 0= true:= zaj9
-theorem zahs: span (zan1 11 4) 0 0= true:= rfl
-theorem zagi: span (zan1 11 5) 0 0= true:= rfl
-theorem zahm: span (zan1 11 6) 0 0= true:= rfl
-lemma zafl (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 11 t) : zan1 11 t i = true := by
+theorem zaj9: span (zanu 11 3) 6 0= true:= by decide +kernel
+theorem zaf7: span (zanu 11 3) 6 0= true:= zaj9
+theorem zahs: span (zanu 11 4) 0 0= true:= rfl
+theorem zagi: span (zanu 11 5) 0 0= true:= rfl
+theorem zahm: span (zanu 11 6) 0 0= true:= rfl
+lemma zafl (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak2 11 t) : zanu 11 t i = true := by
   interval_cases t
   · exact zajk zah5 i (Nat.zero_le i) hi
   · exact zajk zagy i (Nat.zero_le i) hi
@@ -6844,38 +6844,38 @@ lemma zafl (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 11 t) : zan1 11 t i
   · exact zajk zahs i (Nat.zero_le i) hi
   · exact zajk zagi i (Nat.zero_le i) hi
   · exact zajk zahm i (Nat.zero_le i) hi
-lemma zadl (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 11 t) :
-    zaml 11 t (zak1 11 t i) :=
+lemma zadl (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak2 11 t) :
+    zal1 11 t (zala 11 t i) :=
   zaba zac2 (zafl) t ht i hi
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaj5: span (zan1 12 0) 25 0= true:= by decide +kernel
-theorem zahl: span (zan1 12 0) 25 0= true:= zaj5
+theorem zaj5: span (zanu 12 0) 25 0= true:= by decide +kernel
+theorem zahl: span (zanu 12 0) 25 0= true:= zaj5
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zajc: span (zan1 12 1) 25 0= true:= by decide +kernel
+theorem zajc: span (zanu 12 1) 25 0= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaiq: span (zan1 12 1) 9 25= true:= by decide +kernel
-theorem zag4: span (zan1 12 1) 34 0= true:= (@zaf6 (zan1 12 1) 25 0 9 zajc zaiq)
+theorem zaiq: span (zanu 12 1) 9 25= true:= by decide +kernel
+theorem zag4: span (zanu 12 1) 34 0= true:= (@zaf6 (zanu 12 1) 25 0 9 zajc zaiq)
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaj4: span (zan1 12 2) 25 0= true:= by decide +kernel
+theorem zaj4: span (zanu 12 2) 25 0= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaiv: span (zan1 12 2) 9 25= true:= by decide +kernel
-theorem zagc: span (zan1 12 2) 34 0= true:= (@zaf6 (zan1 12 2) 25 0 9 zaj4 zaiv)
+theorem zaiv: span (zanu 12 2) 9 25= true:= by decide +kernel
+theorem zagc: span (zanu 12 2) 34 0= true:= (@zaf6 (zanu 12 2) 25 0 9 zaj4 zaiv)
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zajm: span (zan1 12 3) 17 0= true:= by decide +kernel
-theorem zagt: span (zan1 12 3) 17 0= true:= zajm
+theorem zajm: span (zanu 12 3) 17 0= true:= by decide +kernel
+theorem zagt: span (zanu 12 3) 17 0= true:= zajm
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zajy: span (zan1 12 4) 3 0= true:= by decide +kernel
-theorem zagu: span (zan1 12 4) 3 0= true:= zajy
-theorem zage: span (zan1 12 5) 0 0= true:= rfl
-theorem zah1: span (zan1 12 6) 0 0= true:= rfl
-lemma zafe (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 12 t) : zan1 12 t i = true := by
+theorem zajy: span (zanu 12 4) 3 0= true:= by decide +kernel
+theorem zagu: span (zanu 12 4) 3 0= true:= zajy
+theorem zage: span (zanu 12 5) 0 0= true:= rfl
+theorem zah1: span (zanu 12 6) 0 0= true:= rfl
+lemma zafe (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak2 12 t) : zanu 12 t i = true := by
   interval_cases t
   · exact zajk zahl i (Nat.zero_le i) hi
   · exact zajk zag4 i (Nat.zero_le i) hi
@@ -6884,35 +6884,35 @@ lemma zafe (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 12 t) : zan1 12 t i
   · exact zajk zagu i (Nat.zero_le i) hi
   · exact zajk zage i (Nat.zero_le i) hi
   · exact zajk zah1 i (Nat.zero_le i) hi
-lemma zaco (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 12 t) :
-    zaml 12 t (zak1 12 t i) :=
+lemma zaco (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak2 12 t) :
+    zal1 12 t (zala 12 t i) :=
   zaba zadl (zafe) t ht i hi
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaje: span (zan1 13 0) 3 0= true:= by decide +kernel
-theorem zah3: span (zan1 13 0) 3 0= true:= zaje
+theorem zaje: span (zanu 13 0) 3 0= true:= by decide +kernel
+theorem zah3: span (zanu 13 0) 3 0= true:= zaje
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zajf: span (zan1 13 1) 4 0= true:= by decide +kernel
-theorem zaga: span (zan1 13 1) 4 0= true:= zajf
+theorem zajf: span (zanu 13 1) 4 0= true:= by decide +kernel
+theorem zaga: span (zanu 13 1) 4 0= true:= zajf
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zajb: span (zan1 13 2) 4 0= true:= by decide +kernel
-theorem zahi: span (zan1 13 2) 4 0= true:= zajb
+theorem zajb: span (zanu 13 2) 4 0= true:= by decide +kernel
+theorem zahi: span (zanu 13 2) 4 0= true:= zajb
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zajx: span (zan1 13 3) 4 0= true:= by decide +kernel
-theorem zahz: span (zan1 13 3) 4 0= true:= zajx
+theorem zajx: span (zanu 13 3) 4 0= true:= by decide +kernel
+theorem zahz: span (zanu 13 3) 4 0= true:= zajx
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zajz: span (zan1 13 4) 4 0= true:= by decide +kernel
-theorem zag9: span (zan1 13 4) 4 0= true:= zajz
+theorem zajz: span (zanu 13 4) 4 0= true:= by decide +kernel
+theorem zag9: span (zanu 13 4) 4 0= true:= zajz
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zajg: span (zan1 13 5) 1 0= true:= by decide +kernel
-theorem zagw: span (zan1 13 5) 1 0= true:= zajg
-theorem zag8: span (zan1 13 6) 0 0= true:= rfl
-lemma zafj (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 13 t) : zan1 13 t i = true := by
+theorem zajg: span (zanu 13 5) 1 0= true:= by decide +kernel
+theorem zagw: span (zanu 13 5) 1 0= true:= zajg
+theorem zag8: span (zanu 13 6) 0 0= true:= rfl
+lemma zafj (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak2 13 t) : zanu 13 t i = true := by
   interval_cases t
   · exact zajk zah3 i (Nat.zero_le i) hi
   · exact zajk zaga i (Nat.zero_le i) hi
@@ -6921,31 +6921,31 @@ lemma zafj (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 13 t) : zan1 13 t i
   · exact zajk zag9 i (Nat.zero_le i) hi
   · exact zajk zagw i (Nat.zero_le i) hi
   · exact zajk zag8 i (Nat.zero_le i) hi
-lemma zadq (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak6 13 t) :
-    zaml 13 t (zak1 13 t i) :=
+lemma zadq (t : Nat) (ht : t ≤ 6) (i : Nat) (hi : i < zak2 13 t) :
+    zal1 13 t (zala 13 t i) :=
   zaba zaco (zafj) t ht i hi
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zaka: zapg 0= true:= by decide +kernel
+theorem zaka: zaok 0= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zakg: zapg 1= true:= by decide +kernel
+theorem zakg: zaok 1= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zako: zapg 2= true:= by decide +kernel
+theorem zako: zaok 2= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zakd: zapg 3= true:= by decide +kernel
+theorem zakd: zaok 3= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zakk: zapg 4= true:= by decide +kernel
+theorem zakk: zaok 4= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zakp: zapg 5= true:= by decide +kernel
+theorem zakp: zaok 5= true:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-theorem zakn: zapg 6= true:= by decide +kernel
-lemma zael (t : Nat) (ht : t ≤ 6) : zapg t = true := by
+theorem zakn: zaok 6= true:= by decide +kernel
+lemma zael (t : Nat) (ht : t ≤ 6) : zaok t = true := by
   interval_cases t
   · exact zaka
   · exact zakg
@@ -6954,24 +6954,24 @@ lemma zael (t : Nat) (ht : t ≤ 6) : zapg t = true := by
   · exact zakk
   · exact zakp
   · exact zakn
-lemma zaby (t : Nat) (ht : t ≤ 6) : zaml 14 t zamu := by
+lemma zaby (t : Nat) (ht : t ≤ 6) : zal1 14 t zam0 := by
   have h:= zael t ht
-  simp only [zapg,Bool.not_eq_true'] at h
+  simp only [zaok,Bool.not_eq_true'] at h
   apply zadz _ _ h
   · intro w hw; exact zaag (zadq (t- 1) (by omega)) (by simpa using hw)
   · intro w hw; exact zaag (zadq t ht) (by simpa using hw)
-lemma zacr : zamk zamu raw.toFinset zanr := by
+lemma zacr : zal9 zam0 raw.toFinset zan9 := by
   refine ⟨zakl,rfl,?_⟩
   intro w hw
-  simp only [zamu,List.mem_cons,List.not_mem_nil,or_false] at hw
+  simp only [zam0,List.mem_cons,List.not_mem_nil,or_false] at hw
   rcases hw with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide +kernel
 open PEqualNP.CircuitLowerBounds in
 lemma glue (D : Circuit) (pins : List (Fin 11)) (hD : PEqualNP.MetaComplexity.FanInTwo D)
     (hp: pins.length≤ 2)
     (he : ∀ x : Fin 9 → Bool,
-      D.eval ((List.ofFn x++ [x 0&& x 3])++ [GateOp.not.eval (pins.map fun i=> (List.ofFn x++ [x 0&& x 3]).getD i.val false)])= zap5 x) :
+      D.eval ((List.ofFn x++ [x 0&& x 3])++ [GateOp.not.eval (pins.map fun i=> (List.ofFn x++ [x 0&& x 3]).getD i.val false)])= zao8 x) :
     ∃ k t S, k ≤ D.size ∧ Live k t S ∧
-      ∀ a∈ S,a∈ zaox [⟨GateOp.and,[0,3]⟩,⟨GateOp.not,pins.map Fin.val⟩] raw:= by
+      ∀ a∈ S,a∈ zan7 [⟨GateOp.and,[0,3]⟩,⟨GateOp.not,pins.map Fin.val⟩] raw:= by
   let C': Circuit:= ⟨⟨GateOp.and,[0,3]⟩ :: ⟨GateOp.not,pins.map Fin.val⟩ :: D.gates,D.output⟩
   have hC : PEqualNP.MetaComplexity.FanInTwo C' := by
     intro g hg
@@ -6980,7 +6980,7 @@ lemma glue (D : Circuit) (pins : List (Fin 11)) (hD : PEqualNP.MetaComplexity.Fa
     · exact ⟨by simp,by simp⟩
     · exact ⟨by simp,by simpa using hp⟩
     · exact hD g hg
-  have hCe : ∀ x : Fin 9 → Bool, C'.eval (List.ofFn x) = zap5 x := by
+  have hCe : ∀ x : Fin 9 → Bool, C'.eval (List.ofFn x) = zao8 x := by
     intro x
     rw [← he x]
     have h9 : GateOp.and.eval ([0, 3].map fun i => (List.ofFn x).getD i false) = (x 0 && x 3) := by
@@ -6989,16 +6989,16 @@ lemma glue (D : Circuit) (pins : List (Fin 11)) (hD : PEqualNP.MetaComplexity.Fa
     simp only [h9,List.map_map,Function.comp_def]
     rfl
   have ht:= zace C' hC hCe
-  have hv : ∀ a ∈ zaox [⟨GateOp.and, [0, 3]⟩, ⟨GateOp.not, pins.map Fin.val⟩] raw, zap6 a :=
+  have hv : ∀ a ∈ zan7 [⟨GateOp.and, [0, 3]⟩, ⟨GateOp.not, pins.map Fin.val⟩] raw, zaoy a :=
     zacl _ _ zaf8
   obtain ⟨k,t,S,hk,hl,hs⟩:= zaj7 D.gates _ hv (fun g hg=> hD g hg) ht
   exact ⟨k,t,S,hk,hl,hs⟩
-lemma zaew {a : Sig} (ha : zap6 a) : neg a ≠ a := by
+lemma zaew {a : Sig} (ha : zaoy a) : neg a ≠ a := by
   intro h
   have h1:= zajt true 0 ha
   rw [h] at h1
   cases hb: bit true 0 a <;> simp [hb] at h1
-lemma zah9 {k t : Nat} {S : Finset Sig} (hl : Live k t S) {a : Sig} (ha : zapj a)
+lemma zah9 {k t : Nat} {S : Finset Sig} (hl : Live k t S) {a : Sig} (ha : zaoi a)
     (hna: neg a∈ S): Live (k+ 1) (t+ 1) (insert a (S.erase (neg a))):= by
   have hf : neg a ∉ insert a (S.erase (neg a)) := by
     simp only [Finset.mem_insert,Finset.mem_erase,ne_eq,not_true_eq_false,false_and,or_false]
@@ -7011,14 +7011,14 @@ lemma zakw (m t : Nat) (S : Finset Sig) (hl : Live m t S) (hm : m ≤ 14)
   have sz:= zah4 hl
   rw [List.toFinset_card_of_nodup zakl] at sz
   have hlenRaw: raw.length= 9:= rfl
-  exact zaby t (by omega) m hm raw.toFinset zanr zacr (zacs hl (zafr hm))
+  exact zaby t (by omega) m hm raw.toFinset zan9 zacr (zacs hl (zafr hm))
 lemma gvA : gv raw ⟨GateOp.and, [0, 3]⟩ = bin false raw0 raw3 := by
   decide
 lemma zai5 {k t : Nat} {S : Finset Sig} (hl : Live k t S)
     (hA: bin false raw0 raw3∈ S) :
     Live (k+ 1) t (insert raw0 (insert raw3 (S.erase (bin false raw0 raw3)))):= by
-  have p0: zapj raw0:= ⟨zaf8 _ (by simp [raw]),by decide,by decide⟩
-  have p3: zapj raw3:= ⟨zaf8 _ (by simp [raw]),by decide,by decide⟩
+  have p0: zaoi raw0:= ⟨zaf8 _ (by simp [raw]),by decide,by decide⟩
+  have p3: zaoi raw3:= ⟨zaf8 _ (by simp [raw]),by decide,by decide⟩
   have h03: raw0≠ raw3:= by decide
   have hf : bin false raw0 raw3 ∉ insert raw0 (insert raw3 (S.erase (bin false raw0 raw3))) := by
     have a0: bin false raw0 raw3≠ raw0:= by decide
@@ -7049,9 +7049,9 @@ lemma zaki (k t : Nat) (S : Finset Sig) (hl : Live k t S) (hk : k ≤ 13)
     rcases List.mem_append.mp (hs a ha) with h | h
     · exact h
     · rw [List.mem_singleton.mp h] at ha; exact absurd ha hA
-lemma zag5 (n : Nat) (W : List Sig) (hval : ∀ a ∈ W, zap6 a) (x : Sig)
-    (hW : ∀ sub ∈ W.dedup.sublists, x ∈ sub → ∀ t ≤ n, zani (decide (0 < t)) sub = top →
-      zapo n t (sub.map fun a=> (a,Tag.tNone))= false)
+lemma zag5 (n : Nat) (W : List Sig) (hval : ∀ a ∈ W, zaoy a) (x : Sig)
+    (hW : ∀ sub ∈ W.dedup.sublists, x ∈ sub → ∀ t ≤ n, zanj (decide (0 < t)) sub = top →
+      zaou n t (sub.map fun a=> (a,Tag.tNone))= false)
     (k: Nat) (hk: k≤ n) (t: Nat) (S: Finset Sig) (hl: Live k t S)
     (hs: ∀ a∈ S,a∈ W) (hx: x∈ S): False:= by
   classical
@@ -7064,7 +7064,7 @@ lemma zag5 (n : Nat) (W : List Sig) (hval : ∀ a ∈ W, zap6 a) (x : Sig)
     exact ⟨fun h=> h.2,fun h=> ⟨hs a h,h⟩⟩
   have hfs : sub.toFinset = S := by
     ext a; rw [List.mem_toFinset]; exact hmem a
-  have hcov : zani (decide (0 < t)) sub = top := by
+  have hcov : zanj (decide (0 < t)) sub = top := by
     apply Nat.eq_of_testBit_eq; intro i
     rw [zaek]
     by_cases hi: i< 414
@@ -7074,43 +7074,55 @@ lemma zag5 (n : Nat) (W : List Sig) (hval : ∀ a ∈ W, zap6 a) (x : Sig)
     · simp only [hi, decide_false]
       exact zacd (fun x hx=> hval x (hs x ((hmem x).1 hx))) i (by omega)
   have ht: t≤ n:= (zah4 hl).1.trans hk
-  have hrep : zamk (sub.map fun a => (a, Tag.tNone)) S (fun _ => Tag.tNone) := by
+  have hrep : zal9 (sub.map fun a => (a, Tag.tNone)) S (fun _ => Tag.tNone) := by
     refine ⟨?_,?_,?_⟩
-    · simpa [zapz,List.map_map,Function.comp_def] using hnd
-    · simpa [zapz,List.map_map,Function.comp_def] using hfs
+    · simpa [zaos,List.map_map,Function.comp_def] using hnd
+    · simpa [zaos,List.map_map,Function.comp_def] using hfs
     · intro w hw
       obtain ⟨a,_,rfl⟩:= List.mem_map.mp hw
       rfl
   exact zab5 (hW sub hsub ((hmem x).2 hx) t ht hcov) k hk S _ hrep
     (zacs hl (fun _ _=> trivial))
+lemma zaes (n : Nat) (W : List Sig) (x : Sig)
+    (h : (W.dedup.sublists.all fun sub => !(sub.contains x) || (List.range (n + 1)).all fun t =>
+      zanj (decide (0< t)) sub != top|| !zaou n t (sub.map fun a=> (a,Tag.tNone)))= true) :
+    ∀ sub ∈ W.dedup.sublists, x ∈ sub → ∀ t ≤ n, zanj (decide (0 < t)) sub = top →
+      zaou n t (sub.map fun a=> (a,Tag.tNone))= false:= by
+  intro sub hs hx t ht hc
+  have h1:= List.all_eq_true.mp h sub hs
+  have hx': sub.contains x= true:= List.contains_iff_mem.mpr hx
+  simp only [hx',Bool.not_true,Bool.false_or,List.all_eq_true,List.mem_range] at h1
+  have h2:= h1 t (by omega)
+  simp only [hc,bne_self_eq_false,Bool.false_or,Bool.not_eq_true'] at h2
+  exact h2
 lemma zaa0 (x y z : Nat) : (x ^^^ z) ^^^ (y ^^^ z) = x ^^^ y := by
   rw [Nat.xor_assoc,← Nat.xor_assoc z,Nat.xor_comm z y,Nat.xor_assoc y,Nat.xor_self,Nat.xor_zero]
 lemma zaef (a : Sig) : sep true (neg a) = sep true a := by
   show (bnot a.1)^^^ (bnot a.2)= a.1^^^ a.2
   exact zaa0 _ _ _
-def lP (a: Sig): Sig:= zak0.fn (zall.fn a)
-def zap7 (L: List Sig) (c: Sig): List Sig:= L.map lP++ [neg (lP c)]
-lemma zae6 (L : List Sig) (c : Sig) : ∀ a ∈ zap7 L c, zap6 a := by
+def lP (a: Sig): Sig:= zak1.fn (zalt.fn a)
+def zao1 (L: List Sig) (c: Sig): List Sig:= L.map lP++ [neg (lP c)]
+lemma zae6 (L : List Sig) (c : Sig) : ∀ a ∈ zao1 L c, zaoy a := by
   intro a ha
   rcases List.mem_append.mp ha with h | h
   · obtain ⟨b, _, rfl⟩ := List.mem_map.mp h
-    exact zak0.valid _
+    exact zak1.valid _
   · rw [List.mem_singleton.mp h]
-    exact zagd (zak0.valid _)
-lemma zag0 {d : Sig} (h : d ∈ raw) (h0 : d ≠ raw0) (h4 : d ≠ raw4) : d ∈ zal4 := by
-  simp only [raw,zal4,List.mem_cons,List.not_mem_nil,or_false] at h ⊢
+    exact zagd (zak1.valid _)
+lemma zag0 {d : Sig} (h : d ∈ raw) (h0 : d ≠ raw0) (h4 : d ≠ raw4) : d ∈ zamo := by
+  simp only [raw,zamo,List.mem_cons,List.not_mem_nil,or_false] at h ⊢
   rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp_all
 lemma zajo (c : Sig) (hc : c ∈ raw) (B : Finset Sig) (hB : ∀ d ∈ B, d ∈ raw) (L : List Sig)
-    (hL: ∀ d∈ B,d∈ zal4→ d∈ L) (hL': ∀ d∈ L,d∈ zal4)
-    (hleaf : ∀ m ≤ 10, ∀ t (T : Finset Sig), Live m t T → (∀ a ∈ T, a ∈ zap7 L c) →
+    (hL: ∀ d∈ B,d∈ zamo→ d∈ L) (hL': ∀ d∈ L,d∈ zamo)
+    (hleaf : ∀ m ≤ 10, ∀ t (T : Finset Sig), Live m t T → (∀ a ∈ T, a ∈ zao1 L c) →
       neg (lP c)∈ T→ False) :
-    ¬ zand zall 11 (insert (neg c) B):= by
+    ¬ zanc zalt 11 (insert (neg c) B):= by
   rintro ⟨m,hm,t,T,hl,hsub⟩
-  have hvc: zap6 c:= zaf8 c hc
+  have hvc: zaoy c:= zaf8 c hc
   have hnegc : lP (neg c) = neg (lP c) := by
-    show zak0.fn (zall.fn (neg c))= neg (zak0.fn (zall.fn c))
-    rw [zall.hneg hvc,zak0.hneg (zall.valid c)]
-  have h4 : ∃ y ∈ T, ¬ zapj (zak0.fn y) := by
+    show zak1.fn (zalt.fn (neg c))= neg (zak1.fn (zalt.fn c))
+    rw [zalt.hneg hvc,zak1.hneg (zalt.valid c)]
+  have h4 : ∃ y ∈ T, ¬ zaoi (zak1.fn y) := by
     obtain ⟨x,hxT,hsep⟩:= zai6 hl 232 (by omega)
     obtain ⟨a,haS,rfl⟩:= Finset.mem_image.mp (hsub hxT)
     have hsw:= zafz t (zaet hl _ hxT).1 232 (by omega) hsep
@@ -7121,11 +7133,11 @@ lemma zajo (c : Sig) (hc : c ∈ raw) (B : Finset Sig) (hB : ∀ d ∈ B, d ∈ 
       · refine ⟨_, hxT, fun hp => hp.2.2 ?_⟩
         show lP (neg raw4)= one
         rw [hnegc]
-        show neg (zalr (zanc raw4))= one
+        show neg (zalw (zank raw4))= one
         rw [zaaa,zaik.1]
-      · have e : sep true (zanc (neg c)) = sep true (zanc c) := by
-          show sep true (zall.fn (neg c))= sep true (zall.fn c)
-          rw [zall.hneg hvc,zaef]
+      · have e : sep true (zank (neg c)) = sep true (zank c) := by
+          show sep true (zalt.fn (neg c))= sep true (zalt.fn c)
+          rw [zalt.hneg hvc,zaef]
         rw [e] at hsw
         exact False.elim (by rw [hsw] at hf; contradiction)
     · have hall := List.all_eq_true.mp zada a (hB a haB)
@@ -7134,7 +7146,7 @@ lemma zajo (c : Sig) (hc : c ∈ raw) (B : Finset Sig) (hB : ∀ d ∈ B, d ∈ 
       · exact ⟨_,hxT,fun hp=> hp.2.1 zaaa⟩
       · exact False.elim (by rw [hsw] at hf; contradiction)
   obtain ⟨y,hyT,hy⟩:= h4
-  obtain ⟨q,hq,m',hm',t',T',hl',hT'⟩:= zaci hl zak0 y hyT hy
+  obtain ⟨q,hq,m',hm',t',T',hl',hT'⟩:= zaci hl zak1 y hyT hy
   have key : ∀ a ∈ T', a = neg (lP c) ∨ ∃ d ∈ L, a = lP d := by
     intro a ha
     obtain ⟨b,hbT,rfl⟩:= Finset.mem_image.mp (hT' ha)
@@ -7144,7 +7156,7 @@ lemma zajo (c : Sig) (hc : c ∈ raw) (B : Finset Sig) (hB : ∀ d ∈ B, d ∈ 
     have hp:= zaet hl' _ ha
     have hd0 : d ≠ raw0 := by
       rintro rfl
-      exact hp.2.1 (by show zalr (zanc raw0)= zero; rw [zact]; exact zak0.hzero)
+      exact hp.2.1 (by show zalw (zank raw0)= zero; rw [zact]; exact zak1.hzero)
     have hd4 : d ≠ raw4 := by
       rintro rfl
       exact hp.2.1 zaaa
@@ -7155,497 +7167,506 @@ lemma zajo (c : Sig) (hc : c ∈ raw) (B : Finset Sig) (hB : ∀ d ∈ B, d ∈ 
     rcases key a ha with rfl | ⟨d,hd,rfl⟩
     · exact List.mem_append_right _ (List.mem_singleton_self _)
     · exact List.mem_append_left _ (List.mem_map_of_mem hd)
-  have hsubTheta : ∀ a ∈ T', a ∈ zalm := by
+  have hsubTheta : ∀ a ∈ T', a ∈ zalu := by
     intro a ha
     rcases key a ha with rfl | ⟨d,hd,rfl⟩
     · exact absurd ha hN
     · exact List.mem_map_of_mem (hL' d hd)
-  let v:= zalm.filter (fun a=> decide (a∈ T'))
+  let v:= zalu.filter (fun a=> decide (a∈ T'))
   have he : v.toFinset = T' := by
     ext a; simp only [v,List.mem_toFinset,List.mem_filter,decide_eq_true_eq]
     exact ⟨And.right,fun ha=> ⟨hsubTheta _ ha,ha⟩⟩
   have hrun:= zac3 hl' v (zab7.filter _) he
   apply Base1007.Theta.zaku (show m'≤ 10 by omega) _ hrun
-  have sub:= List.Sublist.map zamx (List.filter_sublist (l:= zalm) (p:= fun a=> decide (a∈ T')))
+  have sub:= List.Sublist.map zana (List.filter_sublist (l:= zalu) (p:= fun a=> decide (a∈ T')))
   rwa [zabf] at sub
-lemma zaic : ¬ zand zall 11 (insert (neg raw4) raw.toFinset) :=
-  zajo raw4 (by simp [raw]) _ (fun d hd => List.mem_toFinset.mp hd) zal4 (fun _ _ h => h) (fun _ h => h)
+lemma zaic : ¬ zanc zalt 11 (insert (neg raw4) raw.toFinset) :=
+  zajo raw4 (by simp [raw]) _ (fun d hd => List.mem_toFinset.mp hd) zamo (fun _ _ h => h) (fun _ h => h)
     (fun m _ t T hl _ hN => (zaet hl _ hN).2.2 (by
-      show neg (zalr (zanc raw4))= one
+      show neg (zalw (zank raw4))= one
       rw [zaaa,zaik.1]))
 def bsw (g p : Nat) : Nat :=
   if g= 0 then p else if g= 1 then (if (p / 58) % 2= 0 then p+ 58 else p- 58)
   else if g= 2 then (if p< 116 then p+ 116 else p- 116)
   else (let q:= if p< 116 then p+ 116 else p- 116; if (q / 58) % 2= 0 then q+ 58 else q- 58)
 def sgm (g: Nat) (j: Fin 414): Fin 414:= Fin.ofNat 414 (bsw g (if j.val< 232 then j.val else 0))
-def homT (g: Nat): SigHom:= zaoa (sgm g) (sgm g)
+def homT (g: Nat): SigHom:= zany (sgm g) (sgm g)
 def N1: Sig:= (0x90df3f4c68f85dfef62abef656dc7f7af5fa2dd65dfff56386f3b92c1c,0x3fffffffffffffffffffffffffffffffffffffffffffffffbffd4569fa5dfffe3bbe567ebe7fff242badf65ffffd7dccfbb93d1f)
 def W1: List Sig:= [(0x3fffffffffffffffffffffffffffffffffffffffffffff6f20c0b39707a20109d54109a92380850a05d229a2000a9c790c46d3e3,0x4002ba9605a20001c441a981418000dbd45209a0000282330446c2e0),(0x3ffffffffffffffffffffffffffffffffffffffffffffff4d849641ddb12bd3612590776c4aa3c0228ae44945e8f008a2b912517,0x3fffffffffffffffffffffffffffffffffffffffffffff24386c0009da09c90e1b0002768270350420a044145c0d410828110517),(0x911898c4c8749724462631321d25c911898c4c8749724462631321d25c,0x808390c5d024922020e4317409248808390c5d024922020e4317409248),(0x2a71e4311b4f8c214281748a68800427550426a48e1bc8302ce5c1e88,0xa08cc111b0b800036f51482680000071106a60506001000aea581688),(0x850a05d229a2000a9c790c46d3e36f20c0b39707a20109d54109a9238,0xdbd45209a0000282330446c2e0004002ba9605a20001c441a981418),(0x427550426a48e1bc8302ce5c1e8802a71e4311b4f8c214281748a6880,0x71106a60506001000aea58168800a08cc111b0b800036f514826800),(0xa3c0228ae44945e8f008a2b912517f4d849641ddb12bd3612590776c4a,0x3fffffffffffffffffffffffffffffffffffffffffffff0350420a044145c0d41082811051724386c0009da09c90e1b000276827),N1]
+def chkW (W : List Sig) (x : Sig) : Bool :=
+  W.dedup.sublists.all fun sub => !(sub.contains x) || (List.range (10 + 1)).all fun t =>
+    zanj (decide (0< t)) sub != top|| !zaou 10 t (sub.map fun a=> (a,Tag.tNone))
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zakb: ∀ a∈ W1,a∈ zap7 zal4 raw1:= by decide +kernel
+lemma zakb: ∀ a∈ W1,a∈ zao1 zamo raw1:= by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zakq: ∀ a∈ W1,a= N1∨ a∈ zalm:= by decide +kernel
-def vF: List Wire:= W1.map fun a=> (a,Tag.tNone)
-def vM: List Wire:= (W1.drop 1).map fun a=> (a,Tag.tNone)
-def zaql (k t : Nat) (v : List Wire) (i j : Nat) : Bool :=
-  let len:= v.length
-  let lim:= k- t+ 1
-  let r:= zapo k t
+lemma zakq: ∀ a∈ W1,a= N1∨ a∈ zalu:= by decide +kernel
+def zbQ (x : Nat) : Nat := ((List.range 232).find? fun p => !x.testBit p).getD 0
+def zbM (x : Nat) (j : Fin 414) : Fin 414 := if x.testBit j.val then Fin.ofNat 414 (zbQ x) else j
+def zbP (a : Sig) : SigHom := zany (zbM a.1) (zbM a.2)
+def zbL (a : Sig) : List Sig :=
+  ((W1.map (zbP a).fn).filter fun b => !(decide (b = zero)) && !(decide (b = one))).dedup
+def chkN (W : List Sig) (n : Nat) : Bool :=
+  W.dedup.sublists.all fun sub => (List.range (n + 1)).all fun t =>
+    zanj (decide (0< t)) sub != top|| !zaou n t (sub.map fun a=> (a,Tag.tNone))
+lemma zbE (n : Nat) (W : List Sig) (h : chkN W n = true) :
+    ∀ sub ∈ W.dedup.sublists, ∀ t ≤ n, zanj (decide (0 < t)) sub = top →
+      zaou n t (sub.map fun a=> (a,Tag.tNone))= false := by
+  intro sub hs t ht hc
+  have h1 := List.all_eq_true.mp h sub hs
+  have h2 := List.all_eq_true.mp h1 t (List.mem_range.mpr (by omega))
+  simp only [hc, bne_self_eq_false, Bool.false_or, Bool.not_eq_true'] at h2
+  exact h2
+lemma zbN (n : Nat) (W : List Sig) (hval : ∀ a ∈ W, zaoy a)
+    (hW : ∀ sub ∈ W.dedup.sublists, ∀ t ≤ n, zanj (decide (0 < t)) sub = top →
+      zaou n t (sub.map fun a=> (a,Tag.tNone))= false)
+    (k: Nat) (hk: k≤ n) (t: Nat) (S: Finset Sig) (hl: Live k t S)
+    (hs: ∀ a∈ S,a∈ W): False:= by
+  classical
+  let sub:= W.dedup.filter (fun a=> decide (a∈ S))
+  have hsub: sub∈ W.dedup.sublists:= List.mem_sublists.mpr List.filter_sublist
+  have hnd: sub.Nodup:= (List.nodup_dedup W).filter _
+  have hmem : ∀ a, a ∈ sub ↔ a ∈ S := by
+    intro a
+    simp only [sub,List.mem_filter,List.mem_dedup,decide_eq_true_eq]
+    exact ⟨fun h=> h.2,fun h=> ⟨hs a h,h⟩⟩
+  have hfs : sub.toFinset = S := by
+    ext a; rw [List.mem_toFinset]; exact hmem a
+  have hcov : zanj (decide (0 < t)) sub = top := by
+    apply Nat.eq_of_testBit_eq; intro i
+    rw [zaek]
+    by_cases hi: i< 414
+    · simp only [hi, decide_true]
+      obtain ⟨b,hb,h⟩:= zai6 hl i hi
+      exact (zads _ _ _).2 ⟨b,(hmem b).2 hb,h⟩
+    · simp only [hi, decide_false]
+      exact zacd (fun x hx=> hval x (hs x ((hmem x).1 hx))) i (by omega)
+  have ht: t≤ n:= (zah4 hl).1.trans hk
+  have hrep : zal9 (sub.map fun a => (a, Tag.tNone)) S (fun _ => Tag.tNone) := by
+    refine ⟨?_,?_,?_⟩
+    · simpa [zaos,List.map_map,Function.comp_def] using hnd
+    · simpa [zaos,List.map_map,Function.comp_def] using hfs
+    · intro w hw
+      obtain ⟨a,_,rfl⟩:= List.mem_map.mp hw
+      rfl
+  exact zab5 (hW sub hsub t ht hcov) k hk S _ hrep
+    (zacs hl (fun _ _=> trivial))
+lemma zbS (a : Sig) (h : chkN (zbL a) 7 = true) : ¬ zanc (zbP a) 7 W1.toFinset := by
+  rintro ⟨m,hm,t,T,hl,hsub⟩
+  refine zbN 7 (zbL a) ?_ (zbE 7 _ h) m hm t T hl ?_
+  · intro b hb
+    have hb' := List.mem_of_mem_filter (List.mem_dedup.mp hb)
+    obtain ⟨c,_,rfl⟩ := List.mem_map.mp hb'
+    exact (zbP a).valid c
+  · intro b hb
+    have hp := zaet hl b hb
+    obtain ⟨c,hc,rfl⟩ := Finset.mem_image.mp (hsub hb)
+    unfold zbL
+    rw [List.mem_dedup, List.mem_filter]
+    refine ⟨List.mem_map_of_mem (List.mem_toFinset.mp hc), ?_⟩
+    simp [hp.2.1, hp.2.2]
+lemma zbT (n : Nat) (W : List Sig) (hval : ∀ a ∈ W, zaoy a) (x : Sig) (τ : Sig → Tag)
+    (hW : ∀ sub ∈ W.dedup.sublists, x ∈ sub → ∀ t ≤ n, zanj (decide (0 < t)) sub = top →
+      zaou n t (sub.map fun a=> (a,τ a))= false)
+    (k: Nat) (hk: k≤ n) (t: Nat) (S: Finset Sig) (hl: Live k t S)
+    (hs: ∀ a∈ S,a∈ W) (hx: x∈ S) (hτ : zao0 k S τ): False:= by
+  classical
+  let sub:= W.dedup.filter (fun a=> decide (a∈ S))
+  have hsub: sub∈ W.dedup.sublists:= List.mem_sublists.mpr List.filter_sublist
+  have hnd: sub.Nodup:= (List.nodup_dedup W).filter _
+  have hmem : ∀ a, a ∈ sub ↔ a ∈ S := by
+    intro a
+    simp only [sub,List.mem_filter,List.mem_dedup,decide_eq_true_eq]
+    exact ⟨fun h=> h.2,fun h=> ⟨hs a h,h⟩⟩
+  have hfs : sub.toFinset = S := by
+    ext a; rw [List.mem_toFinset]; exact hmem a
+  have hcov : zanj (decide (0 < t)) sub = top := by
+    apply Nat.eq_of_testBit_eq; intro i
+    rw [zaek]
+    by_cases hi: i< 414
+    · simp only [hi, decide_true]
+      obtain ⟨b,hb,h⟩:= zai6 hl i hi
+      exact (zads _ _ _).2 ⟨b,(hmem b).2 hb,h⟩
+    · simp only [hi, decide_false]
+      exact zacd (fun x hx=> hval x (hs x ((hmem x).1 hx))) i (by omega)
+  have ht: t≤ n:= (zah4 hl).1.trans hk
+  have hrep : zal9 (sub.map fun a => (a, τ a)) S τ := by
+    refine ⟨?_,?_,?_⟩
+    · simpa [zaos,List.map_map,Function.comp_def] using hnd
+    · simpa [zaos,List.map_map,Function.comp_def] using hfs
+    · intro w hw
+      obtain ⟨a,_,rfl⟩:= List.mem_map.mp hw
+      rfl
+  exact zab5 (hW sub hsub ((hmem x).2 hx) t ht hcov) k hk S _ hrep (zacs hl hτ)
+def zbG : List Sig := [W1.getD 0 zero, W1.getD 2 zero, W1.getD 3 zero, W1.getD 4 zero, W1.getD 5 zero]
+def zbτ (a : Sig) : Tag := if a ∈ zbG then .tDeg3 else .tNone
+lemma zbK (hs7 : ∀ a ∈ zbG, chkN (zbL a) 7 = true) (hz : ∀ a ∈ zbG, (zbP a).fn a = zero)
+    (k : Nat) (hk : k ≤ 10) (S : Finset Sig) (hS : ∀ a ∈ S, a ∈ W1) : zao0 k S zbτ := by
+  intro a _
+  unfold zbτ
+  split
+  · rename_i hg
+    refine ⟨zbP a, hz a hg, fun q hq hf => zbS a (hs7 a hg) (zacu (zabw hf ?_) (by omega))⟩
+    intro b hb
+    obtain ⟨c,hc,rfl⟩ := Finset.mem_image.mp hb
+    exact Finset.mem_image_of_mem _ (List.mem_toFinset.mpr (hS c hc))
+  · trivial
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+lemma hz7: ∀ a ∈ zbG, (zbP a).fn a = zero := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+lemma hs7e: chkN (zbL (W1.getD 0 zero)) 7 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+lemma hs7a: chkN (zbL (W1.getD 2 zero)) 7 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+lemma hs7b: chkN (zbL (W1.getD 3 zero)) 7 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+lemma hs7c: chkN (zbL (W1.getD 4 zero)) 7 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+lemma hs7d: chkN (zbL (W1.getD 5 zero)) 7 = true := by decide +kernel
+lemma hs7: ∀ a ∈ zbG, chkN (zbL a) 7 = true := by
+  intro a ha
+  simp only [zbG, List.mem_cons, List.not_mem_nil, or_false] at ha
+  rcases ha with rfl | rfl | rfl | rfl | rfl
+  · exact hs7e
+  · exact hs7a
+  · exact hs7b
+  · exact hs7c
+  · exact hs7d
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+lemma hm1: ∀ a∈ zao1 zamo raw1,(homT 0).fn a∈ W1:= by decide +kernel
+def vF : List Wire := W1.map fun a => (a, zbτ a)
+def vM : List Wire := (W1.drop 1).map fun a => (a, zbτ a)
+def bcell (k t : Nat) (v : List Wire) (i j : Nat) : Bool :=
+  let len := v.length
+  let lim := k - t + 1
+  let r := zaou k t
   if Nat.beq t 0 then
-    let sc:= zamc v
-    let acts:= zal7 sc.2.2.1 sc.1
-    match acts[i]?,acts[j]? with
+    let sc := zamp v
+    let acts := zama sc.2.2.1 sc.1
+    match acts[i]?, acts[j]? with
     | some a, some b =>
-      if Nat.beq len (lim+ 1) then zam0 r v sc.2 a b
-      else if Nat.beq len lim then zamo r v sc.2 a b else zaly r v sc.2 a b
-    | _,_=> false
+      if Nat.beq len (lim + 1) then zam5 r v sc.2 a b
+      else if Nat.beq len lim then zamb r v sc.2 a b else zamj r v sc.2 a b
+    | _, _ => false
   else
-    let sc:= zamp v
-    let acts:= zami sc.2.2.1 sc.1
-    match acts[i]?,acts[j]? with
+    let sc := zamn v
+    let acts := zal7 sc.2.2.1 sc.1
+    match acts[i]?, acts[j]? with
     | some a, some b =>
-      if Nat.beq len (lim+ 1) then zam6 r v sc.2 a b
-      else if Nat.beq len lim then zalx r v sc.2 a b else zama r v sc.2 a b
-    | _,_=> false
-def zaqm (k t : Nat) (v : List Wire) (i : Nat) : Bool :=
-  let len:= v.length
-  let t':= t- 1
-  let r:= zapo k t'
+      if Nat.beq len (lim + 1) then zamw r v sc.2 a b
+      else if Nat.beq len lim then zalz r v sc.2 a b else zalx r v sc.2 a b
+    | _, _ => false
+def ucell (k t : Nat) (v : List Wire) (i : Nat) : Bool :=
+  let len := v.length
+  let t' := t - 1
+  let r := zaou k t'
   if Nat.beq t' 0 then
-    let sc:= zamc v
+    let sc := zamp v
     match sc.1[i]? with
-    | some a=> zamg (k- t'+ 1) (len- 1) r v sc.2 [a]
-    | none=> false
+    | some a => zaly (k - t' + 1) (len - 1) r v sc.2 [a]
+    | none => false
   else
-    let sc:= zamp v
+    let sc := zamn v
     match sc.1[i]? with
-    | some a=> zal5 (k- t'+ 1) (len- 1) r v sc.2 [a]
-    | none=> false
-lemma zaqh (v : List Wire) : (zamc v).1.length = v.length := by
-  induction v with
-  | nil=> rfl
-  | cons w l ih =>
-    simp only [zamc]
-    generalize zamc l= x at ih ⊢
-    obtain ⟨ls,c⟩:= x
-    simp_all
-lemma zaqj (v : List Wire) : (zamp v).1.length = v.length := by
-  induction v with
-  | nil=> rfl
-  | cons w l ih =>
-    simp only [zamp]
-    generalize zamp l= x at ih ⊢
-    obtain ⟨ls,c⟩:= x
-    simp_all
-lemma zap4 (u : Nat) (l : List WSep) : (zal7 u l).length = l.length := by
-  induction l with | nil=> rfl | cons a l ih=> simp [zal7,ih]
-lemma zap9 (u : Nat) (l : List WSep) : (zami u l).length = l.length := by
-  induction l with | nil=> rfl | cons a l ih=> simp [zami,ih]
-lemma zap3 {α : Type} (l : List α) (j : Nat) (b : α) (h : l[j]? = some b) : j < l.length := by
-  by_contra hc; rw [List.getElem?_eq_none (by omega)] at h; cases h
-def zamn {α : Type} (p : α → α → Bool) : List α → Bool
-  | []=> false
-  | a :: t=> t.any (p a)|| zamn p t
-lemma zaoc {α : Type} (p : α → α → Bool) (l : List α)
-    (h: ∀ (i j: Nat) (a b: α),i< j→ l[i]?= some a→ l[j]?= some b→ p a b= false) :
-    zamn p l= false:= by
+    | some a => zamg (k - t' + 1) (len - 1) r v sc.2 [a]
+    | none => false
+def scanPairsK {α : Type} (p : α → α → Bool) : List α → Bool
+  | [] => false
+  | a :: t => t.any (p a) || scanPairsK p t
+lemma skPairs {α : Type} (p : α → α → Bool) (l : List α)
+    (h : ∀ (i j : Nat) (a b : α), i < j → l[i]? = some a → l[j]? = some b → p a b = false) :
+    scanPairsK p l = false := by
   induction l with
-  | nil=> rfl
+  | nil => rfl
   | cons x t ih =>
-    simp only [zamn,Bool.or_eq_false_iff]
-    refine ⟨?_,ih ?_⟩
+    simp only [scanPairsK, Bool.or_eq_false_iff]
+    refine ⟨?_, ih ?_⟩
     · rw [List.any_eq_false]
       intro y hy hp
-      obtain ⟨j,hj,rfl⟩:= List.getElem_of_mem hy
-      have:= h 0 (j+1) x t[j] (by omega) rfl (by simp [hj])
+      obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hy
+      have := h 0 (j+1) x t[j] (by omega) rfl (by simp [hj])
       rw [this] at hp; exact Bool.false_ne_true hp
     · intro i j a b hij ha hb
       exact h (i+1) (j+1) a b (by omega) (by simpa using ha) (by simpa using hb)
 lemma skU0 (lim n : Nat) (r : List Wire → Bool) (v : List Wire) (c : Cov) (l : List WSep)
-    (h: ∀ (i: Nat) (a: WSep),l[i]?= some a→ zamg lim n r v c [a]= false) :
-    zamg lim n r v c l= false:= by
+    (h : ∀ (i : Nat) (a : WSep), l[i]? = some a → zaly lim n r v c [a] = false) :
+    zaly lim n r v c l = false := by
   induction l with
-  | nil=> rfl
+  | nil => rfl
   | cons x t ih =>
-    have h0:= h 0 x rfl
-    simp only [zamg,Bool.or_false] at h0
-    simp only [zamg,h0,Bool.false_or]
-    exact ih (fun i a ha=> h (i+1) a (by simpa using ha))
+    have h0 := h 0 x rfl
+    simp only [zaly, Bool.or_false] at h0
+    simp only [zaly, h0, Bool.false_or]
+    exact ih (fun i a ha => h (i+1) a (by simpa using ha))
 lemma skU1 (lim n : Nat) (r : List Wire → Bool) (v : List Wire) (c : Cov) (l : List WSep)
-    (h: ∀ (i: Nat) (a: WSep),l[i]?= some a→ zal5 lim n r v c [a]= false) :
-    zal5 lim n r v c l= false:= by
+    (h : ∀ (i : Nat) (a : WSep), l[i]? = some a → zamg lim n r v c [a] = false) :
+    zamg lim n r v c l = false := by
   induction l with
-  | nil=> rfl
+  | nil => rfl
   | cons x t ih =>
-    have h0:= h 0 x rfl
-    simp only [zal5,Bool.or_false] at h0
-    simp only [zal5,h0,Bool.false_or]
-    exact ih (fun i a ha=> h (i+1) a (by simpa using ha))
-lemma zap2 (r v c l) : zamd r v c l = zamn (zaly r v c) l := by
-  have e : ∀ a l, zak4 r v c a l = l.any (zaly r v c a) := by
-    intro a l; induction l with | nil=> rfl | cons b l ih=> simp [zak4,ih]
-  induction l with | nil=> rfl | cons a l ih=> simp [zamd,zamn,e,ih]
-lemma zap1 (r v c l) : zamf r v c l = zamn (zama r v c) l := by
-  have e : ∀ a l, zak5 r v c a l = l.any (zama r v c a) := by
-    intro a l; induction l with | nil=> rfl | cons b l ih=> simp [zak5,ih]
-  induction l with | nil=> rfl | cons a l ih=> simp [zamf,zamn,e,ih]
-lemma zap8 (r v c l) : zamm r v c l = zamn (zamo r v c) l := by
-  have e : ∀ a l, zala r v c a l = l.any (zamo r v c a) := by
-    intro a l; induction l with | nil=> rfl | cons b l ih=> simp [zala,ih]
-  induction l with | nil=> rfl | cons a l ih=> simp [zamm,zamn,e,ih]
-lemma zaqd (r v c l) : zal8 r v c l = zamn (zalx r v c) l := by
-  have e : ∀ a l, zak2 r v c a l = l.any (zalx r v c a) := by
-    intro a l; induction l with | nil=> rfl | cons b l ih=> simp [zak2,ih]
-  induction l with | nil=> rfl | cons a l ih=> simp [zal8,zamn,e,ih]
-lemma skF0 (r v c l) : zam9 r v c l = zamn (zam0 r v c) l := by
-  have e : ∀ a l, zalb r v c a l = l.any (zam0 r v c a) := by
-    intro a l; induction l with | nil=> rfl | cons b l ih=> simp [zalb,ih]
-  induction l with | nil=> rfl | cons a l ih=> simp [zam9,zamn,e,ih]
-lemma skF1 (r v c l) : zam8 r v c l = zamn (zam6 r v c) l := by
-  have e : ∀ a l, zalc r v c a l = l.any (zam6 r v c a) := by
-    intro a l; induction l with | nil=> rfl | cons b l ih=> simp [zalc,ih]
-  induction l with | nil=> rfl | cons a l ih=> simp [zam8,zamn,e,ih]
-lemma zao3 (k t : Nat) (v : List Wire) (h2 : 2 ≤ v.length)
-    (hu: ∀ i,0< t→ zaqm k t v i= false)
-    (hb: ∀ i j,i< j→ j< v.length→ zaql k t v i j= false): zapo (k+1) t v= false:= by
-  have hB : zalj k t v.length (zapo k t) v = false := by
-    unfold zalj
-    by_cases ht: Nat.beq t 0= true
+    have h0 := h 0 x rfl
+    simp only [zamg, Bool.or_false] at h0
+    simp only [zamg, h0, Bool.false_or]
+    exact ih (fun i a ha => h (i+1) a (by simpa using ha))
+lemma skS20 (r v c l) : zamf r v c l = scanPairsK (zamj r v c) l := by
+  have e : ∀ a l, zak8 r v c a l = l.any (zamj r v c a) := by
+    intro a l; induction l with | nil => rfl | cons b l ih => simp [zak8, ih]
+  induction l with | nil => rfl | cons a l ih => simp [zamf, scanPairsK, e, ih]
+lemma skS21 (r v c l) : zal4 r v c l = scanPairsK (zalx r v c) l := by
+  have e : ∀ a l, zak4 r v c a l = l.any (zalx r v c a) := by
+    intro a l; induction l with | nil => rfl | cons b l ih => simp [zak4, ih]
+  induction l with | nil => rfl | cons a l ih => simp [zal4, scanPairsK, e, ih]
+lemma skS10 (r v c l) : zal2 r v c l = scanPairsK (zamb r v c) l := by
+  have e : ∀ a l, zak6 r v c a l = l.any (zamb r v c a) := by
+    intro a l; induction l with | nil => rfl | cons b l ih => simp [zak6, ih]
+  induction l with | nil => rfl | cons a l ih => simp [zal2, scanPairsK, e, ih]
+lemma skS11 (r v c l) : zal6 r v c l = scanPairsK (zalz r v c) l := by
+  have e : ∀ a l, zak3 r v c a l = l.any (zalz r v c a) := by
+    intro a l; induction l with | nil => rfl | cons b l ih => simp [zak3, ih]
+  induction l with | nil => rfl | cons a l ih => simp [zal6, scanPairsK, e, ih]
+lemma skF0 (r v c l) : zamu r v c l = scanPairsK (zam5 r v c) l := by
+  have e : ∀ a l, zali r v c a l = l.any (zam5 r v c a) := by
+    intro a l; induction l with | nil => rfl | cons b l ih => simp [zali, ih]
+  induction l with | nil => rfl | cons a l ih => simp [zamu, scanPairsK, e, ih]
+lemma skF1 (r v c l) : zam3 r v c l = scanPairsK (zamw r v c) l := by
+  have e : ∀ a l, zalg r v c a l = l.any (zamw r v c a) := by
+    intro a l; induction l with | nil => rfl | cons b l ih => simp [zalg, ih]
+  induction l with | nil => rfl | cons a l ih => simp [zam3, scanPairsK, e, ih]
+lemma skSplit (k t : Nat) (v : List Wire) (h2 : 2 ≤ v.length)
+    (hu : ∀ i, 0 < t → ucell k t v i = false)
+    (hb : ∀ i j, i < j → bcell k t v i j = false) : zaou (k+1) t v = false := by
+  have hB : zalo k t v.length (zaou k t) v = false := by
+    unfold zalo
+    by_cases ht : Nat.beq t 0 = true
     · simp only [ht, ite_true]
-      have hb' : ∀ i j, i < j → j < v.length → _ := fun i j hij hjl => by
-        have:= hb i j hij hjl
-        simp only [zaql,ht,ite_true] at this
+      have hb' : ∀ i j, i < j → _ := fun i j hij => by
+        have := hb i j hij
+        simp only [bcell, ht, ite_true] at this
         exact this
-      by_cases h1: Nat.beq v.length (k- t+ 1+ 1)= true
+      by_cases h1 : Nat.beq v.length (k - t + 1 + 1) = true
       · simp only [h1, ite_true]
-        rw [skF0]; apply zaoc; intro i j a b hij ha hbb
-        have:= hb' i j hij (by have:= zap3 _ _ _ hbb; simpa [zap4,zap9,zaqh,zaqj] using this); simp only [ha,hbb,h1,ite_true] at this; exact this
+        rw [skF0]; apply skPairs; intro i j a b hij ha hbb
+        have := hb' i j hij; simp only [ha, hbb, h1, ite_true] at this; exact this
       · simp only [h1, ite_false, Bool.false_eq_true]
-        by_cases h3: Nat.beq v.length (k- t+ 1)= true
+        by_cases h3 : Nat.beq v.length (k - t + 1) = true
         · simp only [h3, ite_true]
-          rw [zap8]; apply zaoc; intro i j a b hij ha hbb
-          have:= hb' i j hij (by have:= zap3 _ _ _ hbb; simpa [zap4,zap9,zaqh,zaqj] using this); simp only [ha,hbb,h1,h3,ite_true,ite_false,Bool.false_eq_true] at this; exact this
+          rw [skS10]; apply skPairs; intro i j a b hij ha hbb
+          have := hb' i j hij; simp only [ha, hbb, h1, h3, ite_true, ite_false, Bool.false_eq_true] at this; exact this
         · simp only [h3, ite_false, Bool.false_eq_true]
-          rw [zap2]; apply zaoc; intro i j a b hij ha hbb
-          have:= hb' i j hij (by have:= zap3 _ _ _ hbb; simpa [zap4,zap9,zaqh,zaqj] using this); simp only [ha,hbb,h1,h3,ite_false,Bool.false_eq_true] at this; exact this
+          rw [skS20]; apply skPairs; intro i j a b hij ha hbb
+          have := hb' i j hij; simp only [ha, hbb, h1, h3, ite_false, Bool.false_eq_true] at this; exact this
     · simp only [ht, ite_false, Bool.false_eq_true]
-      have hb' : ∀ i j, i < j → j < v.length → _ := fun i j hij hjl => by
-        have:= hb i j hij hjl
-        simp only [zaql,ht,ite_false,Bool.false_eq_true] at this
+      have hb' : ∀ i j, i < j → _ := fun i j hij => by
+        have := hb i j hij
+        simp only [bcell, ht, ite_false, Bool.false_eq_true] at this
         exact this
-      by_cases h1: Nat.beq v.length (k- t+ 1+ 1)= true
+      by_cases h1 : Nat.beq v.length (k - t + 1 + 1) = true
       · simp only [h1, ite_true]
-        rw [skF1]; apply zaoc; intro i j a b hij ha hbb
-        have:= hb' i j hij (by have:= zap3 _ _ _ hbb; simpa [zap4,zap9,zaqh,zaqj] using this); simp only [ha,hbb,h1,ite_true] at this; exact this
+        rw [skF1]; apply skPairs; intro i j a b hij ha hbb
+        have := hb' i j hij; simp only [ha, hbb, h1, ite_true] at this; exact this
       · simp only [h1, ite_false, Bool.false_eq_true]
-        by_cases h3: Nat.beq v.length (k- t+ 1)= true
+        by_cases h3 : Nat.beq v.length (k - t + 1) = true
         · simp only [h3, ite_true]
-          rw [zaqd]; apply zaoc; intro i j a b hij ha hbb
-          have:= hb' i j hij (by have:= zap3 _ _ _ hbb; simpa [zap4,zap9,zaqh,zaqj] using this); simp only [ha,hbb,h1,h3,ite_true,ite_false,Bool.false_eq_true] at this; exact this
+          rw [skS11]; apply skPairs; intro i j a b hij ha hbb
+          have := hb' i j hij; simp only [ha, hbb, h1, h3, ite_true, ite_false, Bool.false_eq_true] at this; exact this
         · simp only [h3, ite_false, Bool.false_eq_true]
-          rw [zap1]; apply zaoc; intro i j a b hij ha hbb
-          have:= hb' i j hij (by have:= zap3 _ _ _ hbb; simpa [zap4,zap9,zaqh,zaqj] using this); simp only [ha,hbb,h1,h3,ite_false,Bool.false_eq_true] at this; exact this
-  have hU : 0 < t → zal6 k (t - 1) v.length (zapo k (t - 1)) v = false := by
+          rw [skS21]; apply skPairs; intro i j a b hij ha hbb
+          have := hb' i j hij; simp only [ha, hbb, h1, h3, ite_false, Bool.false_eq_true] at this; exact this
+  have hU : 0 < t → zamh k (t - 1) v.length (zaou k (t - 1)) v = false := by
     intro htp
-    unfold zal6
-    by_cases ht: Nat.beq (t- 1) 0= true
+    unfold zamh
+    by_cases ht : Nat.beq (t - 1) 0 = true
     · simp only [ht, ite_true]
       apply skU0; intro i a ha
-      have:= hu i htp; simp only [zaqm,ht,ite_true,ha] at this; exact this
+      have := hu i htp; simp only [ucell, ht, ite_true, ha] at this; exact this
     · simp only [ht, ite_false, Bool.false_eq_true]
       apply skU1; intro i a ha
-      have:= hu i htp; simp only [zaqm,ht,ite_false,Bool.false_eq_true,ha] at this; exact this
-  show zanm k t v (zapo k (t- 1)) (zapo k t)= false
-  unfold zanm
-  match v,h2 with
+      have := hu i htp; simp only [ucell, ht, ite_false, Bool.false_eq_true, ha] at this; exact this
+  show zane k t v (zaou k (t - 1)) (zaou k t) = false
+  unfold zane
+  match v, h2 with
   | a :: b :: l, _ =>
-    simp only [hB,Bool.or_false]
+    simp only [hB, Bool.or_false]
     split
     · rfl
     · by_cases htp : 0 < t
-      · have h':= hU htp; simp only [List.length_cons] at h'; simp [h']
+      · have h' := hU htp; simp only [List.length_cons] at h'; simp [h']
       · simp [Nat.not_lt.mp htp]
-def bOK (k t : Nat) (v : List Wire) (i : Nat) : Nat → Nat → Bool
-  | _,0=> true
-  | j,n+1=> !zaql k t v i j&& bOK k t v i (j+1) n
-def uOK (k t : Nat) (v : List Wire) : Nat → Nat → Bool
-  | _,0=> true
-  | j,n+1=> !zaqm k t v j&& uOK k t v (j+1) n
-lemma zaqb (k t : Nat) (v : List Wire) (i n : Nat) : ∀ j, bOK k t v i j n = true →
-    ∀ m,j≤ m→ m< j+ n→ zaql k t v i m= false:= by
-  induction n with
-  | zero=> intro j _ m h1 h2; omega
-  | succ n ih =>
-    intro j h m h1 h2
-    simp only [bOK,Bool.and_eq_true,Bool.not_eq_true'] at h
-    rcases Nat.eq_or_lt_of_le h1 with e | e
-    · subst e; exact h.1
-    · exact ih (j+1) h.2 m (by omega) (by omega)
-lemma zaqc (k t : Nat) (v : List Wire) (n : Nat) : ∀ j, uOK k t v j n = true →
-    ∀ m,j≤ m→ m< j+ n→ zaqm k t v m= false:= by
-  induction n with
-  | zero=> intro j _ m h1 h2; omega
-  | succ n ih =>
-    intro j h m h1 h2
-    simp only [uOK,Bool.and_eq_true,Bool.not_eq_true'] at h
-    rcases Nat.eq_or_lt_of_le h1 with e | e
-    · subst e; exact h.1
-    · exact ih (j+1) h.2 m (by omega) (by omega)
-lemma skJ {k t : Nat} {v : List Wire} {i : Nat} (a b : Nat) : ∀ j, bOK k t v i j a = true →
-    bOK k t v i (j+a) b= true→ bOK k t v i j (a+b)= true:= by
-  induction a with
-  | zero=> intro j _ h; simpa using h
-  | succ a ih =>
-    intro j h1 h2
-    simp only [bOK,Bool.and_eq_true] at h1
-    rw [show a+ 1+ b= (a+ b)+ 1 by omega]
-    simp only [bOK,Bool.and_eq_true]
-    exact ⟨h1.1,ih (j+1) h1.2 (by rw [show j+ 1+ a= j+ (a+ 1) by omega]; exact h2)⟩
-lemma zapq (k t : Nat) (v : List Wire) (h2 : 2 ≤ v.length)
-    (hu: 0< t→ uOK k t v 0 v.length= true)
-    (hr: ∀ i< v.length,bOK k t v i (i+1) (v.length-(i+1))= true): zapo (k+1) t v= false:= by
-  apply zao3 k t v h2
-  · intro i htp
-    by_cases hi: i< v.length
-    · exact zaqc k t v _ 0 (hu htp) i (by omega) (by omega)
-    · have e0 : (zamc v).1[i]? = none := List.getElem?_eq_none (by rw [zaqh]; omega)
-      have e1: (zamp v).1[i]?= none:= List.getElem?_eq_none (by rw [zaqj]; omega)
-      simp [zaqm,e0,e1]
-  · intro i j hij hj
-    exact zaqb k t v i _ (i+1) (hr i (by omega)) j (by omega) (by omega)
+lemma lenS0 (v : List Wire) : (zamp v).1.length = v.length := by
+  induction v with
+  | nil => rfl
+  | cons w l ih => simp only [zamp, List.length_cons, ih]
+lemma lenS1 (v : List Wire) : (zamn v).1.length = v.length := by
+  induction v with
+  | nil => rfl
+  | cons w l ih => simp only [zamn, List.length_cons, ih]
+lemma lenA0 (u : Nat) (l : List WSep) : (zama u l).length = l.length := by
+  induction l with
+  | nil => rfl
+  | cons w l ih => simp only [zama, List.length_cons, ih]
+lemma lenA1 (u : Nat) (l : List WSep) : (zal7 u l).length = l.length := by
+  induction l with
+  | nil => rfl
+  | cons w l ih => simp only [zal7, List.length_cons, ih]
+lemma bcellOut (k t : Nat) (v : List Wire) (i j : Nat) (hj : v.length ≤ j) : bcell k t v i j = false := by
+  unfold bcell
+  dsimp only
+  split
+  · have e : (zama (zamp v).2.2.1 (zamp v).1)[j]? = none :=
+      List.getElem?_eq_none (by rw [lenA0, lenS0]; exact hj)
+    rw [e]
+    cases (zama (zamp v).2.2.1 (zamp v).1)[i]? <;> rfl
+  · have e : (zal7 (zamn v).2.2.1 (zamn v).1)[j]? = none :=
+      List.getElem?_eq_none (by rw [lenA1, lenS1]; exact hj)
+    rw [e]
+    cases (zal7 (zamn v).2.2.1 (zamn v).1)[i]? <;> rfl
+lemma ucellOut (k t : Nat) (v : List Wire) (i : Nat) (hi : v.length ≤ i) : ucell k t v i = false := by
+  unfold ucell
+  dsimp only
+  split
+  · rw [List.getElem?_eq_none (by rw [lenS0]; exact hi)]
+  · rw [List.getElem?_eq_none (by rw [lenS1]; exact hi)]
+def cb (k t : Nat) (v : List Wire) (n m : Nat) : Bool :=
+  !(decide (m / n < m % n)) || !bcell k t v (m / n) (m % n)
+def cu (k t : Nat) (v : List Wire) (i : Nat) : Bool := !ucell k t v i
+lemma hbOf (k t : Nat) (v : List Wire) (n : Nat) (hn : v.length = n)
+    (hs : span (cb k t v n) (n * n) 0 = true) : ∀ i j, i < j → bcell k t v i j = false := by
+  intro i j hij
+  by_cases hj : j < n
+  · have hm : i * n + j < 0 + n * n := by
+      have : i * n + j < (i + 1) * n := by rw [Nat.succ_mul]; omega
+      have h2 : (i + 1) * n ≤ n * n := Nat.mul_le_mul_right n (by omega)
+      omega
+    have h := zajk hs (i * n + j) (Nat.zero_le _) hm
+    have hn0 : 0 < n := by omega
+    have e1 : (i * n + j) / n = i := by
+      rw [Nat.add_comm, Nat.add_mul_div_right _ _ hn0, Nat.div_eq_of_lt hj, Nat.zero_add]
+    have e2 : (i * n + j) % n = j := by
+      rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt hj]
+    simp only [cb, e1, e2, hij, decide_true, Bool.not_true, Bool.false_or, Bool.not_eq_true'] at h
+    exact h
+  · exact bcellOut k t v i j (by omega)
+lemma huOf (k t : Nat) (v : List Wire) (n : Nat) (hn : v.length = n)
+    (hs : span (cu k t v) n 0 = true) : ∀ i, 0 < t → ucell k t v i = false := by
+  intro i _
+  by_cases hi : i < n
+  · have h := zajk hs i (Nat.zero_le _) (by omega)
+    simp only [cu, Bool.not_eq_true'] at h
+    exact h
+  · exact ucellOut k t v i (by omega)
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zan5: bOK 9 0 vF 0 1 3= true:= by decide +kernel
+lemma qF0b0 : span (cb 9 0 vF 8) 15 0 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zany: bOK 9 0 vF 0 4 4= true:= by decide +kernel
+lemma qF0b1 : span (cb 9 0 vF 8) 16 15 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zaoz: bOK 9 0 vF 1 2 3= true:= by decide +kernel
+lemma qF0b2 : span (cb 9 0 vF 8) 24 31 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zaog: bOK 9 0 vF 1 5 2= true:= by decide +kernel
+lemma qF0b3 : span (cb 9 0 vF 8) 9 55 = true := by decide +kernel
+lemma sF0 : zaou 10 0 vF = false :=
+  skSplit 9 0 vF (by decide) (fun _ h => absurd h (Nat.lt_irrefl 0))
+    (hbOf 9 0 vF 8 rfl (@zaf6 (cb 9 0 vF 8) 55 0 9 (@zaf6 (cb 9 0 vF 8) 31 0 24 (@zaf6 (cb 9 0 vF 8) 15 0 16 qF0b0 qF0b1) qF0b2) qF0b3))
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zanz: bOK 9 0 vF 1 7 1= true:= by decide +kernel
+lemma qF1b0 : span (cb 9 1 vF 8) 55 0 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zans: bOK 9 0 vF 2 3 4= true:= by decide +kernel
+lemma qF1b1 : span (cb 9 1 vF 8) 9 55 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zao6: bOK 9 0 vF 2 7 1= true:= by decide +kernel
+lemma qF1u0 : span (cu 9 1 vF) 8 0 = true := by decide +kernel
+lemma sF1 : zaou 10 1 vF = false :=
+  skSplit 9 1 vF (by decide) (huOf 9 1 vF 8 rfl qF1u0)
+    (hbOf 9 1 vF 8 rfl (@zaf6 (cb 9 1 vF 8) 55 0 9 qF1b0 qF1b1))
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zaoq: bOK 9 0 vF 3 4 2= true:= by decide +kernel
+lemma qM1b0 : span (cb 9 1 vM 7) 49 0 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zaoe: bOK 9 0 vF 3 6 1= true:= by decide +kernel
+lemma qM1u0 : span (cu 9 1 vM) 7 0 = true := by decide +kernel
+lemma sM1 : zaou 10 1 vM = false :=
+  skSplit 9 1 vM (by decide) (huOf 9 1 vM 7 rfl qM1u0)
+    (hbOf 9 1 vM 7 rfl qM1b0)
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zapb: bOK 9 0 vF 3 7 1= true:= by decide +kernel
+lemma qM2b0 : span (cb 9 2 vM 7) 49 0 = true := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zaof: bOK 9 0 vF 4 5 2= true:= by decide +kernel
+lemma qM2u0 : span (cu 9 2 vM) 7 0 = true := by decide +kernel
+lemma sM2 : zaou 10 2 vM = false :=
+  skSplit 9 2 vM (by decide) (huOf 9 2 vM 7 rfl qM2u0)
+    (hbOf 9 2 vM 7 rfl qM2b0)
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zaot: bOK 9 0 vF 4 7 1= true:= by decide +kernel
+lemma sF2 : zaou 10 2 vF = false := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zapd: bOK 9 0 vF 5 6 1= true:= by decide +kernel
+lemma sF3 : ∀ t ≤ 10, 3 ≤ t → zaou 10 t vF = false := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zaoh: bOK 9 0 vF 5 7 1= true:= by decide +kernel
+lemma sM3 : ∀ t ≤ 10, 3 ≤ t → zaou 10 t vM = false := by decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zan7: bOK 9 0 vF 6 7 1= true:= by decide +kernel
-lemma kF0 : zapo 10 0 vF = false := by
-  have hl: vF.length= 8:= rfl
-  apply zapq 9 0 vF (by rw [hl]; decide) (by rw [hl]; exact (fun h=> absurd h (by decide)))
-  rw [hl]; intro i hi
-  interval_cases i
-  · exact (skJ 3 4 1 zan5 zany)
-  · exact (skJ 3 3 2 zaoz (skJ 2 1 5 zaog zanz))
-  · exact (skJ 4 1 3 zans zao6)
-  · exact (skJ 2 2 4 zaoq (skJ 1 1 6 zaoe zapb))
-  · exact (skJ 2 1 5 zaof zaot)
-  · exact (skJ 1 1 6 zapd zaoh)
-  · exact zan7
-  · rfl
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zapa: bOK 9 1 vF 0 1 7= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zaor: bOK 9 1 vF 1 2 6= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zao5: bOK 9 1 vF 2 3 5= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zaon: bOK 9 1 vF 3 4 4= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zaol: bOK 9 1 vF 4 5 3= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zan3: bOK 9 1 vF 5 6 2= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zanv: bOK 9 1 vF 6 7 1= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma kF1u: uOK 9 1 vF 0 8= true:= by decide +kernel
-lemma kF1 : zapo 10 1 vF = false := by
-  have hl: vF.length= 8:= rfl
-  apply zapq 9 1 vF (by rw [hl]; decide) (by rw [hl]; exact (fun _=> kF1u))
-  rw [hl]; intro i hi
-  interval_cases i
-  · exact zapa
-  · exact zaor
-  · exact zao5
-  · exact zaon
-  · exact zaol
-  · exact zan3
-  · exact zanv
-  · rfl
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zan0: bOK 9 1 vM 0 1 6= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zanw: bOK 9 1 vM 1 2 5= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zaoy: bOK 9 1 vM 2 3 4= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zaoi: bOK 9 1 vM 3 4 3= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zao1: bOK 9 1 vM 4 5 2= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zan2: bOK 9 1 vM 5 6 1= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma kM1u: uOK 9 1 vM 0 7= true:= by decide +kernel
-lemma kM1 : zapo 10 1 vM = false := by
-  have hl: vM.length= 7:= rfl
-  apply zapq 9 1 vM (by rw [hl]; decide) (by rw [hl]; exact (fun _=> kM1u))
-  rw [hl]; intro i hi
-  interval_cases i
-  · exact zan0
-  · exact zanw
-  · exact zaoy
-  · exact zaoi
-  · exact zao1
-  · exact zan2
-  · rfl
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zapc: bOK 9 2 vM 0 1 6= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zaou: bOK 9 2 vM 1 2 5= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zapf: bOK 9 2 vM 2 3 4= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zan9: bOK 9 2 vM 3 4 3= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zan4: bOK 9 2 vM 4 5 2= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zaow: bOK 9 2 vM 5 6 1= true:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma kM2u: uOK 9 2 vM 0 7= true:= by decide +kernel
-lemma kM2 : zapo 10 2 vM = false := by
-  have hl: vM.length= 7:= rfl
-  apply zapq 9 2 vM (by rw [hl]; decide) (by rw [hl]; exact (fun _=> kM2u))
-  rw [hl]; intro i hi
-  interval_cases i
-  · exact zapc
-  · exact zaou
-  · exact zapf
-  · exact zan9
-  · exact zan4
-  · exact zaow
-  · rfl
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma kF2: zapo 10 2 vF= false:= by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma kP : (W1.dedup.sublists.all fun sub => !(sub.contains N1) || (List.range (10 + 1)).all fun t =>
-    zani (decide (0< t)) sub != top|| (sub == W1|| (sub == W1.tail&& decide (0< t))))= true:= by
-  decide +kernel
-lemma zaov (hF : ∀ t ≤ 10, zapo 10 t (W1.map fun a => (a, Tag.tNone)) = false)
-    (hM: ∀ t≤ 10,0< t→ zapo 10 t (W1.tail.map fun a=> (a,Tag.tNone))= false) :
-    ∀ sub ∈ W1.dedup.sublists, N1 ∈ sub → ∀ t ≤ 10, zani (decide (0 < t)) sub = top →
-      zapo 10 t (sub.map fun a=> (a,Tag.tNone))= false:= by
+lemma cov1 : ∀ sub ∈ W1.dedup.sublists, N1 ∈ sub → ∀ t ≤ 10, zanj (decide (0 < t)) sub = top →
+    sub = W1 ∨ (sub = W1.drop 1 ∧ 0 < t) := by
+  have h : (W1.dedup.sublists.all fun sub => !(sub.contains N1) || (List.range 11).all fun t =>
+      zanj (decide (0 < t)) sub != top || sub == W1 || (sub == W1.drop 1 && decide (0 < t))) = true := by
+    decide +kernel
   intro sub hs hx t ht hc
-  have h1:= List.all_eq_true.mp kP sub hs
-  have hx': sub.contains N1= true:= List.contains_iff_mem.mpr hx
-  simp only [hx',Bool.not_true,Bool.false_or,List.all_eq_true,List.mem_range] at h1
-  have h2:= h1 t (by omega)
+  have h1 := List.all_eq_true.mp h sub hs
+  have hx' : sub.contains N1 = true := List.contains_iff_mem.mpr hx
+  simp only [hx', Bool.not_true, Bool.false_or, List.all_eq_true, List.mem_range] at h1
+  have h2 := h1 t (by omega)
   simp only [hc, bne_self_eq_false, Bool.false_or, Bool.or_eq_true, beq_iff_eq, Bool.and_eq_true,
     decide_eq_true_eq] at h2
-  rcases h2 with rfl | ⟨rfl,h0⟩
-  · exact hF t ht
-  · exact hM t ht h0
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma zapl : ∀ t ∈ [3, 4, 5, 6, 7, 8, 9, 10], zapo 10 t (W1.map fun a => (a, Tag.tNone)) = false ∧
-    zapo 10 t (W1.tail.map fun a=> (a,Tag.tNone))= false:= by
-  decide +kernel
-lemma hWof (f0 : zapo 10 0 (W1.map fun a => (a, Tag.tNone)) = false)
-    (f1: zapo 10 1 (W1.map fun a=> (a,Tag.tNone))= false)
-    (f2: zapo 10 2 (W1.map fun a=> (a,Tag.tNone))= false)
-    (m1: zapo 10 1 (W1.tail.map fun a=> (a,Tag.tNone))= false)
-    (m2: zapo 10 2 (W1.tail.map fun a=> (a,Tag.tNone))= false) :
-    ∀ sub ∈ W1.dedup.sublists, N1 ∈ sub → ∀ t ≤ 10, zani (decide (0 < t)) sub = top →
-      zapo 10 t (sub.map fun a=> (a,Tag.tNone))= false:= by
-  apply zaov
-  · intro t ht
-    rcases (show t= 0∨ t= 1∨ t= 2∨ t∈ [3,4,5,6,7,8,9,10] by simp; omega) with rfl | rfl | rfl | h
-    · exact f0
-    · exact f1
-    · exact f2
-    · exact (zapl t h).1
-  · intro t ht h0
-    rcases (show t= 1∨ t= 2∨ t∈ [3,4,5,6,7,8,9,10] by simp; omega) with rfl | rfl | h
-    · exact m1
-    · exact m2
-    · exact (zapl t h).2
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-lemma hm1: ∀ a∈ zap7 zal4 raw1,(homT 0).fn a∈ W1:= by decide +kernel
+  exact h2
+lemma hW1T : ∀ sub ∈ W1.dedup.sublists, N1 ∈ sub → ∀ t ≤ 10, zanj (decide (0 < t)) sub = top →
+    zaou 10 t (sub.map fun a => (a, zbτ a)) = false := by
+  intro sub hs hx t ht hc
+  rcases cov1 sub hs hx t ht hc with rfl | ⟨rfl, htp⟩
+  · show zaou 10 t vF = false
+    interval_cases t
+    · exact sF0
+    · exact sF1
+    · exact sF2
+    all_goals exact sF3 _ (by norm_num) (by norm_num)
+  · show zaou 10 t vM = false
+    interval_cases t
+    · exact sM1
+    · exact sM2
+    all_goals exact sM3 _ (by norm_num) (by norm_num)
 lemma zakt : ∀ m ≤ 10, ∀ t (T : Finset Sig), Live m t T → (∀ a ∈ T, a ∈ W1) → False := by
   intro m hm t T hl hs
   by_cases hN: N1∈ T
-  · exact zag5 10 W1 (fun a ha => zae6 _ _ a (zakb a ha)) N1
-      (hWof kF0 kF1 kF2 kM1 kM2) m hm t T hl hs hN
-  have hsubTheta : ∀ a ∈ T, a ∈ zalm := by
+  · exact zbT 10 W1 (fun a ha => zae6 _ _ a (zakb a ha)) N1 zbτ
+      hW1T m hm t T hl hs hN (zbK hs7 hz7 m hm T hs)
+  have hsubTheta : ∀ a ∈ T, a ∈ zalu := by
     intro a ha
     rcases zakq a (hs a ha) with rfl | h
     · exact absurd ha hN
     · exact h
-  let v:= zalm.filter (fun a=> decide (a∈ T))
+  let v:= zalu.filter (fun a=> decide (a∈ T))
   have he : v.toFinset = T := by
     ext a; simp only [v,List.mem_toFinset,List.mem_filter,decide_eq_true_eq]
     exact ⟨And.right,fun ha=> ⟨hsubTheta _ ha,ha⟩⟩
   have hrun:= zac3 hl v (zab7.filter _) he
   apply Base1007.Theta.zaku (show m≤ 10 by omega) _ hrun
-  have sub:= List.Sublist.map zamx (List.filter_sublist (l:= zalm) (p:= fun a=> decide (a∈ T)))
+  have sub:= List.Sublist.map zana (List.filter_sublist (l:= zalu) (p:= fun a=> decide (a∈ T)))
   rwa [zabf] at sub
-lemma zakh (c : Sig) (hc : c ∈ raw) (φ : SigHom) (hmap : ∀ a ∈ zap7 zal4 c, φ.fn a ∈ W1) :
-    ¬ zand zall 11 (insert (neg c) raw.toFinset) :=
-  zajo c hc _ (fun d hd => List.mem_toFinset.mp hd) zal4 (fun _ _ h => h) (fun _ h => h)
+lemma zakh (c : Sig) (hc : c ∈ raw) (φ : SigHom) (hmap : ∀ a ∈ zao1 zamo c, φ.fn a ∈ W1) :
+    ¬ zanc zalt 11 (insert (neg c) raw.toFinset) :=
+  zajo c hc _ (fun d hd => List.mem_toFinset.mp hd) zamo (fun _ _ h => h) (fun _ h => h)
     (fun m hm t T hl hs _ => by
       obtain ⟨m',hm',t',T',hl',hT'⟩:= zadi hl φ
       refine zakt m' (by omega) t' T' hl' ?_
@@ -7653,14 +7674,14 @@ lemma zakh (c : Sig) (hc : c ∈ raw) (φ : SigHom) (hmap : ∀ a ∈ zap7 zal4 
       obtain ⟨b,hb,rfl⟩:= Finset.mem_image.mp (hT' ha)
       exact hmap b (hs b hb))
 lemma Q0 (c : Sig) (hc : c = raw1 ∨ c = raw4) :
-    ¬ zand zall 11 (insert (neg c) raw.toFinset):= by
+    ¬ zanc zalt 11 (insert (neg c) raw.toFinset):= by
   rcases hc with rfl | rfl
   · exact zakh raw1 (by simp [raw]) (homT 0) hm1
   · exact zaic
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
-lemma zahu : zall.fn (bin false raw0 raw3) = zero ∧ zall.fn (neg raw0) = one ∧
-    zall.fn raw0= zero:= by
+lemma zahu : zalt.fn (bin false raw0 raw3) = zero ∧ zalt.fn (neg raw0) = one ∧
+    zalt.fn raw0= zero:= by
   decide +kernel
 set_option maxRecDepth 20000 in
 set_option maxHeartbeats 0 in
@@ -7677,10 +7698,10 @@ lemma zai8 {k t : Nat} {S : Finset Sig} {c : Sig} (hl : Live k t S)
   rw [hsw] at this
   exact Bool.noConfusion this
 lemma zajd {H : SigHom} {k t : Nat} {S : Finset Sig} {a b c : Sig} (hl : Live k t S) (hk : k ≤ 13)
-    (ha: a∈ S) (hb: b∈ S) (hab: a≠ b) (hna: ¬ zapj (H.fn a)) (hnb: ¬ zapj (H.fn b))
+    (ha: a∈ S) (hb: b∈ S) (hab: a≠ b) (hna: ¬ zaoi (H.fn a)) (hnb: ¬ zaoi (H.fn b))
     (hs: ∀ x∈ S,x∈ raw++ [bin false raw0 raw3]++ [neg c])
-    (h1: ¬ zapj (H.fn (bin false raw0 raw3))) (h2: ¬ zapj (H.fn (neg c))) :
-    zand H 11 raw.toFinset:= by
+    (h1: ¬ zaoi (H.fn (bin false raw0 raw3))) (h2: ¬ zaoi (H.fn (neg c))) :
+    zanc H 11 raw.toFinset:= by
   obtain ⟨q,hq,m,hm,t',T,hl',hT⟩:= zaal hl H a b ha hb hab hna hnb
   refine ⟨m,by omega,t',T,hl',fun x hx=> ?_⟩
   obtain ⟨y,hy,rfl⟩:= Finset.mem_image.mp (hT hx)
@@ -7695,14 +7716,14 @@ lemma zaib (k t : Nat) (S : Finset Sig) (c : Sig) (hl : Live k t S) (hk : k ≤ 
     (hs: ∀ a∈ S,a∈ raw++ [bin false raw0 raw3]++ [neg c]): False:= by
   classical
   obtain ⟨fA,fn0,f0⟩:= zahu
-  have z: ¬ zapj zero:= fun h=> h.2.1 rfl
-  have o: ¬ zapj one:= fun h=> h.2.2 rfl
+  have z: ¬ zaoi zero:= fun h=> h.2.1 rfl
+  have o: ¬ zaoi one:= fun h=> h.2.2 rfl
   have hA0: bin false raw0 raw3≠ raw0:= by decide
   rcases hc014 with rfl | hc14
   · exact zaab (zajd hl hk hAS hn (by decide)
       (by rw [fA]; exact z) (by rw [fn0]; exact o) hs (by rw [fA]; exact z) (by rw [fn0]; exact o))
   have hc0: c≠ raw0:= by rcases hc14 with rfl | rfl <;> decide
-  obtain ⟨q, hq', hf⟩ := zaal hl zall _ _ hAS (zai8 hl hc hc0 hs) hA0
+  obtain ⟨q, hq', hf⟩ := zaal hl zalt _ _ hAS (zai8 hl hc hc0 hs) hA0
     (by rw [fA]; exact z) (by rw [f0]; exact z)
   apply Q0 c hc14
   apply zabw (zacu hf (by omega))
@@ -7718,7 +7739,7 @@ lemma zakc (c : Sig) (hc014 : c = raw0 ∨ c = raw1 ∨ c = raw4) (k : Nat) (hk 
     (S: Finset Sig) (hl: Live k t S)
     (hs: ∀ a∈ S,a∈ raw++ [gv raw ⟨GateOp.and,[0,3]⟩]++ [neg c]): False:= by
   classical
-  have hW0v : ∀ a ∈ raw ++ [gv raw ⟨GateOp.and, [0, 3]⟩], zap6 a :=
+  have hW0v : ∀ a ∈ raw ++ [gv raw ⟨GateOp.and, [0, 3]⟩], zaoy a :=
     zacl [⟨GateOp.and,[0,3]⟩] _ zaf8
   have hcW : c ∈ raw ++ [gv raw ⟨GateOp.and, [0, 3]⟩] := by
     rcases hc014 with rfl | rfl | rfl <;> simp [raw]
@@ -7726,7 +7747,7 @@ lemma zakc (c : Sig) (hc014 : c = raw0 ∨ c = raw1 ∨ c = raw4) (k : Nat) (hk 
     rw [gvA]; rcases hc014 with rfl | rfl | rfl <;> decide
   by_cases hn: neg c∈ S
   · have hp' := zaet hl _ hn
-    have hcp : zapj c := by
+    have hcp : zaoi c := by
       refine ⟨hW0v c hcW,?_,?_⟩
       · intro h; rw [h,zaik.1] at hp'; exact hp'.2.2 rfl
       · intro h; rw [h,zaik.2] at hp'; exact hp'.2.1 rfl
@@ -7753,7 +7774,7 @@ lemma zakc (c : Sig) (hc014 : c = raw0 ∨ c = raw1 ∨ c = raw4) (k : Nat) (hk 
     · exact h
     · rw [List.mem_singleton.mp h] at ha; exact absurd ha hn
 end Main1672
-theorem zang : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit) (x2 : List (Fin 11)), (x2 = [0] ∨ x2 = [1] ∨ x2 = [4]) → PEqualNP.MetaComplexity.FanInTwo x1 → (∀ (x5 : Fin 9 → Bool), have x6 : List Bool := List.ofFn x5 ++ [x5 0 && x5 3]; x1.eval (x6 ++ [PEqualNP.CircuitLowerBounds.GateOp.not.eval (List.map (fun (x7 : Fin 11) => x6.getD (↑x7) Bool.false) x2)]) = (x5 0 && x5 1 || x5 1 && x5 2 || x5 2 && x5 3 || x5 3 && x5 4 || x5 4 && x5 0 || x5 0 && x5 5 || x5 1 && x5 6 || x5 2 && x5 7 || x5 3 && x5 8 || x5 5 && x5 7 || x5 6 && x5 8 || x5 8 && x5 5)) → 14 ≤ x1.size := by
+theorem zanf : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit) (x2 : List (Fin 11)), (x2 = [0] ∨ x2 = [1] ∨ x2 = [4]) → PEqualNP.MetaComplexity.FanInTwo x1 → (∀ (x5 : Fin 9 → Bool), have x6 : List Bool := List.ofFn x5 ++ [x5 0 && x5 3]; x1.eval (x6 ++ [PEqualNP.CircuitLowerBounds.GateOp.not.eval (List.map (fun (x7 : Fin 11) => x6.getD (↑x7) Bool.false) x2)]) = (x5 0 && x5 1 || x5 1 && x5 2 || x5 2 && x5 3 || x5 3 && x5 4 || x5 4 && x5 0 || x5 0 && x5 5 || x5 1 && x5 6 || x5 2 && x5 7 || x5 3 && x5 8 || x5 5 && x5 7 || x5 6 && x5 8 || x5 8 && x5 5)) → 14 ≤ x1.size := by
   intro D pins hpins hD he
   by_contra hlt
   have hp: pins.length≤ 2:= by rcases hpins with rfl | rfl | rfl <;> decide
@@ -7769,6 +7790,6 @@ theorem PEqualNP.Outside.L_meta_3118 : ∀ x1 ∈ [(0 : Fin (9 : ℕ)), (1 : Fin
   intro p hp D hD he
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
   rcases hp with rfl | rfl | rfl
-  · exact PEqualNP.Outside.L_meta_3118.zang D [0] (Or.inl rfl) hD (fun x => he x)
-  · exact PEqualNP.Outside.L_meta_3118.zang D [1] (Or.inr (Or.inl rfl)) hD (fun x => he x)
-  · exact PEqualNP.Outside.L_meta_3118.zang D [4] (Or.inr (Or.inr rfl)) hD (fun x => he x)
+  · exact PEqualNP.Outside.L_meta_3118.zanf D [0] (Or.inl rfl) hD (fun x => he x)
+  · exact PEqualNP.Outside.L_meta_3118.zanf D [1] (Or.inr (Or.inl rfl)) hD (fun x => he x)
+  · exact PEqualNP.Outside.L_meta_3118.zanf D [4] (Or.inr (Or.inr rfl)) hD (fun x => he x)
