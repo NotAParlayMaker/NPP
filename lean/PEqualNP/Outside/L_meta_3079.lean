@@ -670,12 +670,12 @@ theorem seedRows : ∀ row : Row, (inputs ++ [orSeed]).map (bit row) =
   rw [seedAt]
 
 def edgeWord (pairs : List Nat) : Sig := pairs.foldr (fun code rest =>
-  bin true (bin false (inputs.getD ((Fin.ofNat 9 (code/10)).val) zero)
-    (inputs.getD ((Fin.ofNat 9 (code%10)).val) zero)) rest) zero
+  bin true (bin false (inputs.getD ((Fin.ofNat 9 (code / 10)).val) zero)
+    (inputs.getD ((Fin.ofNat 9 (code % 10)).val) zero)) rest) zero
 
 theorem edgeWord_bit (row : Row) (pairs : List Nat) : bit row (edgeWord pairs) =
-    pairs.any (fun code => row.val.testBit ((Fin.ofNat 9 (code/10)).val) &&
-      row.val.testBit ((Fin.ofNat 9 (code%10)).val)) := by
+    pairs.any (fun code => row.val.testBit ((Fin.ofNat 9 (code / 10)).val) &&
+      row.val.testBit ((Fin.ofNat 9 (code % 10)).val)) := by
   induction pairs with
   | nil => exact bit_zero row
   | cons code tail ih =>
@@ -2730,6 +2730,40 @@ def pairIndices : List Nat → List (Nat × Nat)
   | [] => []
   | i::tail => tail.map (i,·) ++ pairIndices tail
 
+theorem lanes_append {α} (field : α → Bits) (left right : List α) :
+    combineLanes field (left ++ right) = combineLanes field left +
+      2^(769 * left.length) * combineLanes field right := by
+  induction left with
+  | nil => simp [combineLanes]
+  | cons first tail ih =>
+    simp only [List.cons_append,List.length_cons,combineLanes,lanePlace,ih]
+    rw [Nat.mul_succ 769 tail.length,Nat.pow_add,Nat.mul_add]
+    exact (show ∀ a b c d e : Nat, a*b + a*(c*d) + e = (a*b + e) + (c*a)*d
+      from fun a b c d e => by ac_rfl) _ _ _ _ _
+
+theorem lanes_map {α β} (field : β → Bits) (select : α → β) (items : List α) :
+    combineLanes field (items.map select) = combineLanes (fun item => field (select item)) items := by
+  induction items with
+  | nil => rfl
+  | cons first tail ih => simp only [List.map_cons,combineLanes,ih]
+
+def pairColumn (left : Bool) (field : Nat → Bits) : List Nat → Nat
+  | [] => 0
+  | index :: tail =>
+    let row := if left then units tail.length * (field index).toNat else combineLanes field tail
+    row + (pairColumn left field tail <<< (769 * tail.length))
+
+theorem pairColumn_eq (left : Bool) (field : Nat → Bits) (indices : List Nat) :
+    pairColumn left field indices = combineLanes
+      (fun pair => field (if left then pair.1 else pair.2)) (pairIndices indices) := by
+  induction indices with
+  | nil => rfl
+  | cons index tail ih =>
+    rw [pairColumn,pairIndices,lanes_append,lanes_map,List.length_map,ih,Nat.shiftLeft_eq]
+    cases left <;> simp only [ite_false,ite_true,Bool.false_eq_true]
+    · rw [Nat.mul_comm (combineLanes _ _)]
+    · rw [broadcast (field index) tail,Nat.mul_comm (combineLanes _ (pairIndices tail))]
+
 def uniformCov (r : Nat) (v : Cov) : PackedCov :=
   (r*v.1.toNat,r*v.2.1.toNat,r*v.2.2.toNat)
 
@@ -2744,10 +2778,13 @@ def pairPass (c : NodeContext) (pairs : List (Nat × Nat)) (r : Nat)
     let marks := fullMarks r (rest ||| packedColumn d z)
     onMarks (fun ij => fallbackAt c ij.1 ij.2 op ka kb) marks pairs
 
-def pairPasses (c : NodeContext) (pairs : List (Nat × Nat)) :=
+def pairPasses (c : NodeContext) (indices : List Nat) :=
+  let pairs := pairIndices indices
   let r := units pairs.length
-  let a := packedSig (fun ij => (contextWire c ij.1).2) pairs
-  let b := packedSig (fun ij => (contextWire c ij.2).2) pairs
+  let side := fun left => (pairColumn left (fun i => (contextWire c i).2.1) indices,
+    pairColumn left (fun i => (contextWire c i).2.2) indices)
+  let a := side true
+  let b := side false
   let pass := pairPass c pairs r a b
   let four := fun op => pass op false false && pass op true false &&
     pass op false true && pass op true true
@@ -2756,7 +2793,7 @@ def pairPasses (c : NodeContext) (pairs : List (Nat × Nat)) :=
 def verifyPairs (c : NodeContext) :=
   let indices := List.range c.2.2.1.length
   indices.all (fun i => checkAt c i i 2 false false && checkAt c i i 2 true true) &&
-    pairPasses c (pairIndices indices)
+    pairPasses c indices
 
 def cert (g : Forest) (k i : Nat) :=
   let c := contextOf g k i
@@ -2796,13 +2833,13 @@ theorem pairPassAt (c : NodeContext) (pairs : List (Nat × Nat)) (op : Nat) (hop
       rw [ite_eq_right over,no]
       rfl
 
-theorem pairPassesAt (c : NodeContext) (pairs : List (Nat × Nat)) (pass : pairPasses c pairs=true)
-    (i j : Nat) (mem : (i,j) ∈ pairs) (d : Bool) :
+theorem pairPassesAt (c : NodeContext) (indices : List Nat) (pass : pairPasses c indices=true)
+    (i j : Nat) (mem : (i,j) ∈ pairIndices indices) (d : Bool) :
     testPair c (contextWire c i) (contextWire c j) d = true := by
-  simp only [pairPasses,Bool.and_eq_true] at pass
+  simp only [pairPasses,pairColumn_eq,ite_true,Bool.false_eq_true,ite_false,Bool.and_eq_true] at pass
   cases d <;> simp only [testPair,Bool.false_eq_true,ite_false,ite_true,Bool.and_eq_true] <;>
     repeat' apply And.intro
-  all_goals apply pairPassAt c pairs _ (by decide) _ _ (i,j) mem <;> tauto
+  all_goals apply pairPassAt c (pairIndices indices) _ (by decide) _ _ (i,j) mem <;> tauto
 
 theorem verifyPairs_ok (c : NodeContext) (pass : verifyPairs c=true) :
     testAll c c.2.2.1 = true := by
