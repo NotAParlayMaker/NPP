@@ -86,22 +86,23 @@ private lemma getD_pair (y : Fin 9 → Bool) (b : Bool) (j : ℕ) :
   simp only [List.getD_eq_getElem?_getD]
   by_cases h9 : j < 9
   · rw [dif_pos h9, List.getElem?_append_left (by simp [h9])]
-    simp [h9]
+    simp [List.getElem?_ofFn, h9]
   · rw [dif_neg h9]
     by_cases heq9 : j = 9
     · subst heq9
       rw [if_pos rfl, List.getElem?_append_right (by simp)]
       simp
     · rw [if_neg heq9, List.getElem?_append_right (by simp; omega)]
-      simp [List.getElem?_eq_none (by omega : 1 ≤ j - 9)]
+      rw [List.getElem?_eq_none (by simp; omega)]
+      rfl
 
 private lemma getD_triple (y : Fin 9 → Bool) (b c : Bool) (j : ℕ) :
     (List.ofFn y ++ [b] ++ [c]).getD j Bool.false =
       if h : j < 9 then y ⟨j, h⟩ else if j = 9 then b else if j = 10 then c else Bool.false := by
   simp only [List.getD_eq_getElem?_getD]
   by_cases h9 : j < 9
-  · rw [dif_pos h9, List.getElem?_append_left (by simp [h9]), List.getElem?_append_left (by simp [h9])]
-    simp [h9]
+  · rw [dif_pos h9, List.getElem?_append_left (by simp; omega), List.getElem?_append_left (by simp; omega)]
+    simp
   · rw [dif_neg h9]
     by_cases heq9 : j = 9
     · subst heq9
@@ -113,7 +114,8 @@ private lemma getD_triple (y : Fin 9 → Bool) (b c : Bool) (j : ℕ) :
         rw [if_pos rfl, List.getElem?_append_right (by simp)]
         simp
       · rw [if_neg heq10, List.getElem?_append_right (by simp; omega)]
-        simp [List.getElem?_eq_none (by omega : 1 ≤ j - 10)]
+        rw [List.getElem?_eq_none (by simp; omega)]
+        rfl
 
 private lemma getD_agree (x1 : List ℕ) (S : Finset (Fin 9))
     (y0 y1 : Fin 9 → Bool) (hy : ∀ v ∈ S, y0 v = y1 v)
@@ -135,6 +137,7 @@ private lemma getD_agree (x1 : List ℕ) (S : Finset (Fin 9))
         simp only [ite_true]
         rw [hy 0 (hj (by simp))]
       · simp [heq9]
+  dsimp only
   rw [getD_triple, getD_triple]
   by_cases hi9 : i < 9
   · simp only [dif_pos hi9]
