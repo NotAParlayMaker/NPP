@@ -6681,96 +6681,204 @@ theorem combine_masked (D : Dag N) (hw : D.WF) (K : Finset ℕ)
 
 end PEqualNP.Outside.L_meta_1382_aux.Restrict
 
+
 namespace PEqualNP.Outside.L_meta_1382_aux
 
-open PEqualNP.CircuitLowerBounds Deg2
+open PEqualNP.Outside.L_meta_1382_aux.Deg2
+open PEqualNP.Outside.L_meta_1382_aux.Deg2.Api
+open PEqualNP.Outside.L_meta_1382_aux.Deg2.Bridge
+open PEqualNP.Outside.L_meta_1382_aux.Restrict
+open PEqualNP.Outside.L_meta_1382_aux.LineDegTest
+open PEqualNP.CircuitLowerBounds
 
-lemma pair_eq_ep {N : ℕ} (p l : Fin N) :
-    (fun v : Fin (N+N) => if v = Fin.castAdd N p then true
-      else if v = Fin.natAdd N l then true else false) = ep p l := by
-  funext v
-  refine Fin.addCases (fun q => ?_) (fun k => ?_) v
-  · have hneq : Fin.castAdd N q ≠ Fin.natAdd N l := by
-      intro h
-      have he := congrArg Fin.val h
-      simp only [Fin.val_castAdd, Fin.val_natAdd] at he
-      have := q.isLt
-      omega
-    simp only [ep, inp, Fin.addCases_left, Finset.mem_singleton,
-      Fin.castAdd_inj, hneq, ite_false]
-    by_cases h : q = p <;> simp [h]
-  · have hneq : Fin.natAdd N k ≠ Fin.castAdd N p := by
-      intro h
-      have he := congrArg Fin.val h
-      simp only [Fin.val_castAdd, Fin.val_natAdd] at he
-      have := p.isLt
-      omega
-    simp only [ep, inp, Fin.addCases_right, Finset.mem_singleton,
-      Fin.natAdd_inj, hneq, ite_false]
-    by_cases h : k = l <;> simp [h]
+def edgeInput {N : ℕ} (e : Fin N × Fin N) : Fin (N + N) → Bool :=
+  fun vq => decide (vq = Fin.castAdd N e.1) || decide (vq = Fin.natAdd N e.2)
 
-lemma kill_empty {N : ℕ} (x : Fin (N+N) → Bool) :
-    Restrict.killInput (∅ : Finset ℕ) x = x := by
-  funext v
-  simp [Restrict.killInput]
+lemma wires_length (N : ℕ) (C : Circuit) (x : Fin (N + N) → Bool) :
+    (C.wires (List.ofFn x)).length = N + N + C.size := by
+  have h := LineDegTest.W_length C.gates (List.ofFn x)
+  simpa [Circuit.wires, LineDegTest.W, Circuit.size, List.length_ofFn] using h
 
-theorem wires_bound (N J : ℕ) (I : Fin N → Fin N → Prop) [DecidableRel I]
+lemma ite_eq_edgeInput {N : ℕ} (e : Fin N × Fin N) (vq : Fin (N + N)) :
+    (if vq = Fin.castAdd N e.1 then true
+     else if vq = Fin.natAdd N e.2 then true else false) =
+    edgeInput e vq := by
+  simp only [edgeInput]
+  by_cases h1 : vq = Fin.castAdd N e.1 <;> by_cases h2 : vq = Fin.natAdd N e.2 <;>
+    simp [h1, h2]
+
+lemma castAdd_ne_natAdd {N : ℕ} (p l : Fin N) :
+    Fin.castAdd N p ≠ Fin.natAdd N l := by
+  intro h
+  have hv := congrArg Fin.val h
+  simp only [Fin.val_castAdd, Fin.val_natAdd] at hv
+  have : p.val < N := p.isLt
+  omega
+
+lemma edgeInput_eq_ep {N : ℕ} (e : Fin N × Fin N) : edgeInput e = ep e.1 e.2 := by
+  funext vq
+  refine Fin.addCases
+    (motive := fun v => edgeInput e v = ep e.1 e.2 v) ?L ?R vq
+  · intro p'
+    dsimp only [edgeInput, ep, inp]
+    rw [Fin.addCases_left]
+    simp only [Finset.mem_singleton]
+    by_cases hp : p' = e.1
+    · subst hp
+      have hne := castAdd_ne_natAdd (N := N) e.1 e.2
+      simp only [hne, decide_false, Bool.or_false, decide_true]
+    · have h1 : Fin.castAdd N p' ≠ Fin.castAdd N e.1 :=
+        fun h => hp (Fin.ext (by simpa using congrArg Fin.val h))
+      have h2 := castAdd_ne_natAdd (N := N) p' e.2
+      simp only [hp, h1, h2, decide_false, Bool.false_or]
+  · intro l'
+    dsimp only [edgeInput, ep, inp]
+    rw [Fin.addCases_right]
+    simp only [Finset.mem_singleton]
+    by_cases hl : l' = e.2
+    · subst hl
+      have hne := (castAdd_ne_natAdd (N := N) e.1 e.2).symm
+      simp only [hne, decide_false, Bool.false_or, decide_true]
+    · have h1 := (castAdd_ne_natAdd (N := N) e.1 l').symm
+      have h2 : Fin.natAdd N l' ≠ Fin.natAdd N e.2 :=
+        fun h => hl (Fin.ext (by simpa using congrArg Fin.val h))
+      simp only [hl, h1, h2, decide_false, Bool.false_or]
+
+theorem early_wire_bound (N J : ℕ) (I : Fin N → Fin N → Prop) [DecidableRel I]
     (C : Circuit) (fg : Fin J → ℕ)
     (hI : NoRect I) (hm : PEqualNP.MetaComplexity.Monotone2 C)
-    (hd : ∀ j : Fin J,
-      (C.lineDegrees (N+N) (Finset.Ico N (N+N))).getD (fg j) 0 ≤ 2)
-    (hs : ∀ (j : Fin J) (z : Fin (N+N) → Bool),
+    (hd : ∀ j : Fin J, (C.lineDegrees (N + N) (Finset.Ico N (N + N))).getD (fg j) 0 ≤ 2)
+    (hs : ∀ (j : Fin J) (z : Fin (N + N) → Bool),
       (C.wires (List.ofFn z)).getD (fg j) false = true →
-      ∃ p l : Fin N, I p l ∧ z (Fin.castAdd N p) = true ∧ z (Fin.natAdd N l) = true) :
-    (Finset.univ.filter (fun e : Fin N × Fin N => I e.1 e.2 ∧
-      ∃ j : Fin J, (C.wires (List.ofFn (ep e.1 e.2))).getD (fg j) false = true)).card ≤
-      48 * (C.size + J) + 2*N := by
+        ∃ p l : Fin N, I p l ∧ z (Fin.castAdd N p) = true ∧ z (Fin.natAdd N l) = true) :
+    (Finset.univ.filter (fun e : Fin N × Fin N =>
+      I e.1 e.2 ∧ ∃ j : Fin J,
+        (C.wires (List.ofFn (fun vq : Fin (N + N) =>
+          if vq = Fin.castAdd N e.1 then true
+          else if vq = Fin.natAdd N e.2 then true else false))).getD
+          (fg j) false = true)).card ≤
+      48 * (C.size + J) + 2 * N := by
   classical
-  have hK : ∀ i ∈ (∅ : Finset ℕ), i < N := by
-    intro i hi
-    exact absurd hi (Finset.notMem_empty i)
-  let js : Finset (Fin J) := Finset.univ
-  let os := js.toList.map fg
-  have hos : ∀ o ∈ os, ∃ j : Fin J, fg j = o := by
-    intro o ho
-    obtain ⟨j, _, heq⟩ := List.mem_map.mp ho
-    exact ⟨j, heq⟩
-  have hjo : ∀ j : Fin J, fg j ∈ os := by
+  have hrewrite :
+      Finset.univ.filter (fun e : Fin N × Fin N =>
+        I e.1 e.2 ∧ ∃ j : Fin J,
+          (C.wires (List.ofFn (fun vq : Fin (N + N) =>
+            if vq = Fin.castAdd N e.1 then true
+            else if vq = Fin.natAdd N e.2 then true else false))).getD
+            (fg j) false = true) =
+      Finset.univ.filter (fun e : Fin N × Fin N =>
+        I e.1 e.2 ∧ ∃ j : Fin J,
+          (C.wires (List.ofFn (ep e.1 e.2))).getD (fg j) false = true) := by
+    apply Finset.filter_congr
+    intro e _
+    apply and_congr_right'
+    apply exists_congr
     intro j
-    exact List.mem_map.mpr ⟨j, Finset.mem_toList.mpr (Finset.mem_univ _), rfl⟩
-  have hlen : os.length ≤ J := by
-    simpa [os] using Finset.card_le_univ js
+    have hw :
+        (fun vq : Fin (N + N) =>
+          if vq = Fin.castAdd N e.1 then true
+          else if vq = Fin.natAdd N e.2 then true else false) =
+        ep e.1 e.2 := by
+      calc
+        _ = edgeInput e := funext (ite_eq_edgeInput e)
+        _ = ep e.1 e.2 := edgeInput_eq_ep e
+    rw [hw]
+  rw [hrewrite]
   let D : Dag N := ofCircuit N C
-  have hD : D.WF := Api.card03b_wf C
+  have hwf : D.WF := card03b_wf C
   have hsize : D.size = C.size := by simp [D, Dag.size, ofCircuit, Circuit.size]
-  have hdeg : ∀ o ∈ os, D.deg o ≤ 2 := by
+  let B : Dag N := ⟨D.gates, N + N + D.size⟩
+  have hsB : B.size = D.size := by simp [B, Dag.size]
+  have hwfB : B.WF := fun i g hg a ha => hwf i g hg a ha
+  have hbval (o : ℕ) (ho : o < N + N + D.size) (x : Fin (N + N) → Bool) :
+      B.val x o = D.val x o ∧ B.deg o = D.deg o :=
+    api_prefix D B List.prefix_rfl o (by simpa [hsB] using ho) x
+  have hBfalse (x : Fin (N + N) → Bool) : B.fn x = false ∧ B.deg B.out = 0 :=
+    val_deg_ge B (i := B.out) (by simp [B, hsB]) x
+  let js : Finset (Fin J) := Finset.univ.filter (fun j => decide (fg j < N + N + C.size))
+  let os : List ℕ := js.toList.map fg
+  have hos : ∀ o ∈ os, ∃ j : Fin J, j ∈ js ∧ fg j = o := by
     intro o ho
-    obtain ⟨j, rfl⟩ := hos o ho
-    exact le_trans (Bridge.card03d_deg C hm (fg j)) (hd j)
-  obtain ⟨E, hE, hEs, hEd, hEv⟩ := Restrict.combine_masked D hD ∅ hK os hdeg
+    obtain ⟨j, hj, rfl⟩ := List.mem_map.mp ho
+    exact ⟨j, Finset.mem_toList.mp hj, rfl⟩
+  have hos_lt : ∀ o ∈ os, o < N + N + D.size := by
+    intro o ho
+    obtain ⟨j, hj, rfl⟩ := hos o ho
+    have h := (Finset.mem_filter.mp hj).2
+    simp only [decide_eq_true_eq] at h
+    simpa [hsize] using h
+  have hos_deg : ∀ o ∈ os, D.deg o ≤ 2 := by
+    intro o ho
+    obtain ⟨j, _, rfl⟩ := hos o ho
+    exact le_trans (card03d_deg C hm (fg j)) (hd j)
+  have hos_degB : ∀ o ∈ os, B.deg o ≤ 2 := by
+    intro o ho
+    rw [(hbval o (hos_lt o ho) (fun _ => false)).2]
+    exact hos_deg o ho
+  obtain ⟨_, hEsize, hwfE, hEdeg, hEval⟩ :=
+    collect_spec B os hwfB (by intro o ho; simpa [hsB] using hos_lt o ho)
+      (by rw [(hBfalse (fun _ => false)).2]; omega) hos_degB
+  let E : Dag N := collect B os
+  have hEs : E.size ≤ C.size + J := by
+    change (collect B os).size ≤ C.size + J
+    rw [hEsize, hsB, hsize]
+    have : os.length ≤ J := by
+      simpa [os, Finset.length_toList] using Finset.card_le_univ js
+    omega
   have hsound : Computes I E.fn := by
     intro x hx
-    obtain ⟨o, ho, hv⟩ := (hEv x).mp hx
-    obtain ⟨j, rfl⟩ := hos o ho
-    rw [kill_empty x, Bridge.card03c_val C hm] at hv
-    exact hs j x hv
-  have hcount := sound_count_dag I hI E hE hsound hEd
-  have hsub : Finset.univ.filter (fun e : Fin N × Fin N => I e.1 e.2 ∧
-      ∃ j : Fin J, (C.wires (List.ofFn (ep e.1 e.2))).getD (fg j) false = true) ⊆
-      Finset.univ.filter (fun e : Fin N × Fin N => I e.1 e.2 ∧ E.fn (ep e.1 e.2) = true) := by
+    have hx' : E.fn x = (B.fn x || os.any (B.val x)) := hEval x
+    rw [hx', (hBfalse x).1, Bool.false_or, List.any_eq_true] at hx
+    obtain ⟨o, ho, hv⟩ := hx
+    obtain ⟨j, _, rfl⟩ := hos o ho
+    have hvD : D.val x (fg j) = true := by
+      rwa [← (hbval (fg j) (hos_lt (fg j) ho) x).1]
+    have hvC : (C.wires (List.ofFn x)).getD (fg j) false = true := by
+      rwa [← card03c_val C hm x (fg j)]
+    exact hs j x hvC
+  have hcount := sound_count_dag I hI E hwfE hsound hEdeg
+  have hsub :
+      Finset.univ.filter (fun e : Fin N × Fin N =>
+        I e.1 e.2 ∧ ∃ j : Fin J,
+          (C.wires (List.ofFn (ep e.1 e.2))).getD (fg j) false = true) ⊆
+      Finset.univ.filter (fun e : Fin N × Fin N =>
+        I e.1 e.2 ∧ E.fn (ep e.1 e.2) = true) := by
     intro e he
-    obtain ⟨hIe, j, hv⟩ := (Finset.mem_filter.mp he).2
+    obtain ⟨hIe, ⟨j, hv⟩⟩ := (Finset.mem_filter.mp he).2
     refine Finset.mem_filter.mpr ⟨Finset.mem_univ _, hIe, ?_⟩
-    apply (hEv _).mpr
-    refine ⟨fg j, hjo j, ?_⟩
-    rw [kill_empty (ep e.1 e.2), Bridge.card03c_val C hm]
-    exact hv
-  have hcard := Finset.card_le_card hsub
-  omega
+    have hj : fg j < N + N + C.size := by
+      by_contra hge
+      have hlen := wires_length N C (ep e.1 e.2)
+      have hfalse := getD_ge_false (l := C.wires (List.ofFn (ep e.1 e.2))) (k := fg j)
+        (by omega)
+      rw [hfalse] at hv
+      exact Bool.false_ne_true hv
+    have hjmem : j ∈ js := Finset.mem_filter.mpr ⟨Finset.mem_univ _, by simpa using hj⟩
+    have ho : fg j ∈ os := List.mem_map.mpr ⟨j, Finset.mem_toList.mpr hjmem, rfl⟩
+    have hx : E.fn (ep e.1 e.2) = (B.fn (ep e.1 e.2) || os.any (B.val (ep e.1 e.2))) :=
+      hEval _
+    rw [hx, (hBfalse _).1, Bool.false_or, List.any_eq_true]
+    refine ⟨fg j, ho, ?_⟩
+    have hvD : D.val (ep e.1 e.2) (fg j) = true := by
+      rwa [card03c_val C hm]
+    exact (hbval (fg j) (by simpa [hsize] using hj) (ep e.1 e.2)).1 ▸ hvD
+  exact (Finset.card_le_card hsub).trans (hcount.trans (by have := hEs; omega))
 
 end PEqualNP.Outside.L_meta_1382_aux
 
-theorem PEqualNP.Outside.L_meta_1382 : ∀ (N Jn : ℕ) (I : Fin N → Fin N → Prop) [DecidableRel I] (Ckt : PEqualNP.CircuitLowerBounds.Circuit) (fg : Fin Jn → ℕ), (∀ p p' l l' : Fin N, p ≠ p' → l ≠ l' → ¬ (I p l ∧ I p l' ∧ I p' l ∧ I p' l')) → PEqualNP.MetaComplexity.Monotone2 Ckt → (∀ jd : Fin Jn, (Ckt.lineDegrees (N + N) (Finset.Ico N (N + N))).getD (fg jd) 0 ≤ 2) → (∀ (jb : Fin Jn) (zz : Fin (N + N) → Bool), (Ckt.wires (List.ofFn zz)).getD (fg jb) false = true → ∃ (pa lb : Fin N), I pa lb ∧ zz (Fin.castAdd N pa) = true ∧ zz (Fin.natAdd N lb) = true) → (Finset.univ.filter (fun e2 : Fin N × Fin N => I e2.1 e2.2 ∧ ∃ jc : Fin Jn, (Ckt.wires (List.ofFn (fun vq : Fin (N + N) => if vq = Fin.castAdd N e2.1 then true else if vq = Fin.natAdd N e2.2 then true else false))).getD (fg jc) false = true)).card ≤ 48 * (Ckt.size + Jn) + 2 * N := by
-  intro N J I inst C fg hI hm hd hs
-  simpa only [PEqualNP.Outside.L_meta_1382_aux.pair_eq_ep] using
-    PEqualNP.Outside.L_meta_1382_aux.wires_bound N J I C fg hI hm hd hs
+theorem PEqualNP.Outside.L_meta_1382 : ∀ (N Jn : ℕ) (I : Fin N → Fin N → Prop) [DecidableRel I]
+    (Ckt : PEqualNP.CircuitLowerBounds.Circuit) (fg : Fin Jn → ℕ),
+    (∀ p p' l l' : Fin N, p ≠ p' → l ≠ l' → ¬ (I p l ∧ I p l' ∧ I p' l ∧ I p' l')) →
+    PEqualNP.MetaComplexity.Monotone2 Ckt →
+    (∀ jd : Fin Jn, (Ckt.lineDegrees (N + N) (Finset.Ico N (N + N))).getD (fg jd) 0 ≤ 2) →
+    (∀ (jb : Fin Jn) (zz : Fin (N + N) → Bool),
+      (Ckt.wires (List.ofFn zz)).getD (fg jb) false = true →
+        ∃ (pa lb : Fin N), I pa lb ∧ zz (Fin.castAdd N pa) = true ∧ zz (Fin.natAdd N lb) = true) →
+    (Finset.univ.filter (fun e2 : Fin N × Fin N =>
+      I e2.1 e2.2 ∧ ∃ jc : Fin Jn,
+        (Ckt.wires (List.ofFn (fun vq : Fin (N + N) =>
+          if vq = Fin.castAdd N e2.1 then true
+          else if vq = Fin.natAdd N e2.2 then true else false))).getD
+          (fg jc) false = true)).card ≤ 48 * (Ckt.size + Jn) + 2 * N := by
+  intro N Jn I inst Ckt fg hI hm hd hs
+  exact PEqualNP.Outside.L_meta_1382_aux.early_wire_bound N Jn I Ckt fg hI hm hd hs
