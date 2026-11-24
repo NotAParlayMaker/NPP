@@ -9,7 +9,9 @@ Proof: port of the clean C4-free bound (L-meta-1407), plus gate-elimination
 circuits, instantiated on this concrete graph.
 -/
 
-namespace PEqualNP.Outside.L_meta_1343_aux
+namespace PEqualNP.Outside.L_meta_1343
+
+namespace Aux
 
 open PEqualNP.CircuitLowerBounds
 
@@ -844,11 +846,11 @@ theorem total_from_model (n k N r L : ℕ) (G : SimpleGraph (Fin n)) [DecidableR
     horS horH hside handH (fun f R B step => dag_union_bound f R B step)
   exact ⟨T,hT,by omega⟩
 
-end PEqualNP.Outside.L_meta_1343_aux
+end Aux
 
 open PEqualNP.Outside.L_meta_1343_aux
 
-namespace PEqualNP.Outside.L_meta_1343_aux
+namespace Aux
 
 open PEqualNP.CircuitLowerBounds
 
@@ -888,9 +890,9 @@ theorem general_clean_bound : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [Decidable
   · exact cross_support G gs ops clean
   · exact gate_partition_count n gs.length (andPos n gs) (supports gs)
 
-end PEqualNP.Outside.L_meta_1343_aux
+end Aux
 
-namespace PEqualNP.Outside.L_meta_1343_graph
+namespace Graph
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 open PEqualNP.MetaComplexity.CoverPromise
@@ -979,9 +981,9 @@ theorem clean_size_ge (C : Circuit) (hmono : Monotone2 C)
   have hs : C.size = C.gates.length := rfl
   omega
 
-end PEqualNP.Outside.L_meta_1343_graph
+end Graph
 
-namespace PEqualNP.Outside.L_meta_1343.Elim
+namespace Elim
 
 open PEqualNP.CircuitLowerBounds
 
@@ -1661,7 +1663,7 @@ lemma elim_absorb_false {n : ℕ} (G : SimpleGraph (Fin n))
   exact ⟨C', hm', by simpa [C1, Circuit.size, List.length_set] using hsz',
     fun x => (heq' x).trans (heqC x)⟩
 
-end PEqualNP.Outside.L_meta_1343.Elim
+end Elim
 
 namespace PEqualNP.Outside.L_meta_1343_proof
 
@@ -1878,3 +1880,5 @@ theorem PEqualNP.Outside.L_meta_1343 :
     · intro h; exact (eval_iff x).mp ((hfun x).mp h)
     · intro h; exact (hfun x).mpr ((eval_iff x).mpr h)
   exact size_ge_22 C hmono hfun'
+
+end PEqualNP.Outside.L_meta_1343
