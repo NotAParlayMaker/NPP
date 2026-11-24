@@ -3870,7 +3870,7 @@ theorem completedRoots (plain : Impossible graph 14 inputs.toFinset) (seeded : I
   · exact seeded k t hk hlive
 
 -- The certificate stores circuit starts, restrictions and links to smaller live sets.
--- Transition checks recover each state from its start and compare the full truth tables.
+-- Transition checks recover each state from its start, and compare the full truth tables.
 def seedReversedBytes (i : Nat) : Nat := 0xff7fbf3fdf5f9f1fef6faf2fcf4f8f0ff777b737d7579717e767a727c7478707fb7bbb3bdb5b9b1beb6bab2bcb4b8b0bf373b333d3539313e363a323c3438303fd7dbd3ddd5d9d1ded6dad2dcd4d8d0df575b535d5559515e565a525c5458505f979b939d9599919e969a929c9498909f171b131d1519111e161a121c1418101fe7ebe3ede5e9e1eee6eae2ece4e8e0ef676b636d6569616e666a626c6468606fa7aba3ada5a9a1aea6aaa2aca4a8a0af272b232d2529212e262a222c2428202fc7cbc3cdc5c9c1cec6cac2ccc4c8c0cf474b434d4549414e464a424c4448404f878b838d8589818e868a828c8488808f070b030d0509010e060a020c0408000
 
 def seedGatePairs (i : Nat) : Nat := 0xfefdfcfbfaf9f8f7f6f5f4f3f2f1f0edecebeae9e8e7e6e5e4e3e2e1e0dcdbdad9d8d7d6d5d4d3d2d1d0cbcac9c8c7c6c5c4c3c2c1c0bab9b8b7b6b5b4b3b2b1b0a9a8a7a6a5a4a3a2a1a0989796959493929190878685848382818076757473727170656463626160545352515043424140323130212010
