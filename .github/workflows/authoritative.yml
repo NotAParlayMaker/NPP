@@ -263,6 +263,22 @@ jobs:
             mkdir -p "$W/base/lean/.lake/build/$d/PEqualNP/Outside"
             sudo chown outsider:outsider "$W/base/lean/.lake/build/$d/PEqualNP/Outside"
           done
+          # THE LOCKED BUILD'S NAMESPACE (red team, 2026-11-24): on a stock runner the build account can
+          # write hundreds of thousands of existing paths by their file modes. Inside its own mount
+          # namespace every mount is read-only but its own places (locked-ns.sh). Two things first:
+          # world-writable device nodes beyond the seven standard ones are closed (a read-only mount
+          # does not stop a write to a device), and the namespace is made once with a command that
+          # does nothing: a runner where it cannot be made ready stops HERE, before any outside code.
+          odd=$(sudo find /dev -xdev \( -type c -o -type b \) -perm -0002 ! -regex '/dev/\(null\|zero\|full\|random\|urandom\|tty\|ptmx\)' -print 2>/dev/null)
+          if [ -n "$odd" ]; then
+            printf '%s\n' "$odd" | while IFS= read -r x; do sudo chmod 0600 "$x"; done
+            echo "device nodes closed to other accounts (mode 0600): $(printf '%s' "$odd" | tr '\n' ' ' | tr -cd 'A-Za-z0-9_./ -' | cut -c1-400)"
+          fi
+          echo "PNP_RW_DIRS=$W/base/lean/.lake/build/lib/lean/PEqualNP/Outside:$W/base/lean/.lake/build/ir/PEqualNP/Outside" >> "$GITHUB_ENV"
+          mkdir -m 700 -p "$RUNNER_TEMP/builds"
+          PNP_TC_BIN="$TC_BIN" PNP_GITCONFIG="$W/in/gitconfig" PNP_BUILD_LOGS="$RUNNER_TEMP/builds" \
+            PNP_RW_DIRS="$W/base/lean/.lake/build/lib/lean/PEqualNP/Outside:$W/base/lean/.lake/build/ir/PEqualNP/Outside" \
+            sh "$W/base/.github/scripts/lake-locked.sh" probe || { echo "FAULT: the namespace of the locked build could not be made ready on this runner"; exit 1; }
           # What the verdict will be about, hashed before the hostile step runs. With it, the
           # source of every listed outside module (in/outside-sources.txt: paths the guard wrote,
           # each matching base/lean/PEqualNP/Outside/L_<gap>.lean, so word splitting is safe).
@@ -300,7 +316,7 @@ jobs:
           cd "$W/base"
           # Full build output, kept by lake-locked.sh. Created and owned by this account, closed
           # to every other one: the locked account can neither list, read nor create files in it.
-          mkdir -m 700 "$RUNNER_TEMP/builds"
+          mkdir -m 700 -p "$RUNNER_TEMP/builds"
           # The same command the project's own records are made with:
           #   node tools/check-lean.mjs <lean file> <statement file> <check|refute|reduce>
           # (the kind is in/gap.kind, written by the guard from the desk's row and the run's input).
@@ -438,7 +454,7 @@ jobs:
               --uid="$(id -u)" --gid="$(id -g)" \
           taskset -c "0-$((ncpu - 1))" env -i HOME="$HOME" LANG=C.UTF-8 PATH="$TC_BIN:$node_bin:/usr/bin:/bin" \
               PEQUALNP_REAL_LAKE="$W/base/.github/scripts/lake-locked.sh" PEQUALNP_HOME="$W/queue" \
-              PNP_TC_BIN="$TC_BIN" PNP_GITCONFIG="$W/in/gitconfig" PNP_BUILD_LOGS="$RUNNER_TEMP/builds" \
+              PNP_TC_BIN="$TC_BIN" PNP_GITCONFIG="$W/in/gitconfig" PNP_BUILD_LOGS="$RUNNER_TEMP/builds" PNP_RW_DIRS="$PNP_RW_DIRS" \
               PNP_LEAN_THREADS="$nthr" \
             timeout -k 30 "$((limit + 60))" node "$W/base/tools/check-lean.mjs" "$W/base/$file" "$W/in/statement.txt" "$(cat "$W/in/gap.kind")" \
             > "$RUNNER_TEMP/checker.out" 2> "$RUNNER_TEMP/checker.err"
@@ -484,6 +500,12 @@ jobs:
           # Nothing the compile started may outlive it, and neither may the verifier.
           sudo pkill -KILL -u outsider || true
           pkill -KILL -f "$W/base/lean/.lake/build/bin/checklemma" || true
+          # A namespace that was not made ready (lake-locked.sh leaves nsfail): the build never ran as
+          # it must. Our fault, never the proof's: a FAULT, whatever the checker said.
+          if ls "$RUNNER_TEMP"/builds/*/nsfail >/dev/null 2>&1; then
+            echo "the namespace of the locked build was not ready for a build; this says nothing about the proof" >> "$RUNNER_TEMP/checker.err"
+            code=3
+          fi
           # THE LOCKED BUILD, read from its side effect (red team, 2026-11-24): a compile that ran as
           # this run's account instead of `outsider` would leave files of ours in the build tree.
           # Any file written under lean/.lake/build during the check that the locked account does not

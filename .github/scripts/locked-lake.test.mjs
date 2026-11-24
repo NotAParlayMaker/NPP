@@ -27,3 +27,18 @@ test('all-cores is gated: empty keeps the two-core pin, a reduction keeps it, ot
   assert.match(wf, /taskset -c "0-\$\(\(ncpu - 1\)\)"/);
   assert.match(wf, /PNP_LEAN_THREADS="\$nthr"/);
 });
+const locked = readFileSync(new URL('.github/scripts/lake-locked.sh', root), 'utf8');
+const ns = readFileSync(new URL('.github/scripts/locked-ns.sh', root), 'utf8');
+test('the locked build always runs inside locked-ns.sh, never setpriv directly (red team, 2026-11-24)', () => {
+  assert.doesNotMatch(locked, /setpriv/, 'lake-locked.sh starts the build account itself');
+  assert.match(locked, /unshare --net --ipc --mount --pid --fork -- \/bin\/sh "\$here\/locked-ns\.sh"/);
+  assert.doesNotMatch(locked, /--mount-proc/, "a proc mounted on top of the inherited one leaves the covered one writable");
+  assert.match(locked, /grep -qx 'namespace ready'/, 'lake-locked.sh does not read the ready file');
+});
+test('locked-ns.sh: every mount read-only, then the writable places, then the check, then the account', () => {
+  const at = (re) => { const m = ns.search(re); assert.ok(m >= 0, `missing ${re}`); return m; };
+  const ro = at(/mount -o remount,bind,ro,nosuid,nodev/), tmp = at(/mount -t tmpfs/), bind = at(/remount,bind,rw/);
+  const judge = at(/^bad=\$\(judge\)/m), ready = at(/echo "namespace ready" >&4/), drop = at(/^exec setpriv/m);
+  assert.ok(ro < tmp && tmp < bind && bind < judge && judge < ready && ready < drop, 'the order of the steps changed');
+  assert.match(ns, /exec 4>&-\n/, 'the ready file stays open for the build account');
+});
