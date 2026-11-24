@@ -2,3 +2,4 @@ C4_control	4		SAT	0.2
 C5	6		UNSAT	0.8
 C5_blowup1_control	8		SAT	3.6
 C5_pend1	7		UNSAT	12.7
+C5_pend_adj	8		UNSAT	325.7

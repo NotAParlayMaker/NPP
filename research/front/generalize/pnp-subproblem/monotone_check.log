@@ -1,0 +1,16 @@
+n=2 E=[(0, 1)] girth=inf pred=1 general_min=pred monotone_at_pred=True monotone_below=False
+n=3 E=[(0, 1), (0, 2)] girth=inf pred=2 general_min=pred monotone_at_pred=True monotone_below=False
+n=4 E=[(0, 3), (1, 3), (2, 3)] girth=inf pred=3 general_min=pred monotone_at_pred=True monotone_below=False
+n=4 E=[(0, 1), (0, 3), (1, 2)] girth=inf pred=4 general_min=pred monotone_at_pred=True monotone_below=False
+n=5 E=[(0, 4), (1, 4), (2, 4), (3, 4)] girth=inf pred=4 general_min=pred monotone_at_pred=True monotone_below=False
+n=5 E=[(0, 4), (1, 3), (2, 3), (3, 4)] girth=inf pred=5 general_min=pred monotone_at_pred=True monotone_below=False
+n=5 E=[(0, 1), (0, 4), (1, 2), (2, 3)] girth=inf pred=5 general_min=pred monotone_at_pred=True monotone_below=False
+n=5 E=[(0, 1), (0, 4), (1, 2), (2, 3), (3, 4)] girth=5 pred=7 general_min=pred monotone_at_pred=True monotone_below=False
+n=6 E=[(0, 5), (1, 5), (2, 5), (3, 5), (4, 5)] girth=inf pred=5 general_min=pred monotone_at_pred=True monotone_below=False
+n=6 E=[(0, 1), (1, 2), (1, 4), (1, 5), (2, 3)] girth=inf pred=6 general_min=pred monotone_at_pred=True monotone_below=False
+n=6 E=[(0, 1), (0, 2), (0, 3), (3, 4), (3, 5)] girth=inf pred=6 general_min=pred monotone_at_pred=True monotone_below=False
+n=6 E=[(0, 1), (1, 2), (1, 3), (2, 4), (3, 5)] girth=inf pred=7 general_min=pred monotone_at_pred=True monotone_below=False
+n=6 E=[(0, 4), (0, 5), (1, 3), (2, 3), (3, 4)] girth=inf pred=6 general_min=pred monotone_at_pred=True monotone_below=False
+n=6 E=[(0, 1), (0, 5), (2, 3), (3, 4), (4, 5)] girth=inf pred=7 general_min=pred monotone_at_pred=True monotone_below=False
+n=6 E=[(0, 1), (0, 4), (1, 2), (1, 5), (2, 3), (3, 4)] girth=5 pred=8 general_min=pred monotone_at_pred=True monotone_below=False
+n=6 E=[(0, 1), (0, 5), (1, 2), (2, 3), (3, 4), (4, 5)] girth=6 pred=8 general_min=pred monotone_at_pred=True monotone_below=False
