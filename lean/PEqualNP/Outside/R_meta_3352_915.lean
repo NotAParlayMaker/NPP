@@ -3,14 +3,14 @@ import PEqualNP.Defs
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity in
 theorem PEqualNP.Outside.R_meta_3352_915
-    (h0 : let F := fun (x : Fin 9 → Bool) => [1,12,23,34,40,5,16,27,38,57,68,85].any (fun e : Nat => x (Fin.ofNat 9 (e/10)) && x (Fin.ofNat 9 (e%10))); ¬∃ d : Circuit, FanInTwo d ∧ d.size ≤ 14 ∧ circuitFun 9 d = F)
+    (h0 : let F := fun (x : Fin 9 → Bool) => [1,12,23,34,40,5,16,27,38,57,68,85].any (fun e : Nat => x (Fin.ofNat 9 (e/10)) && x (Fin.ofNat 9 (e % 10))); ¬∃ d : Circuit, FanInTwo d ∧ d.size ≤ 14 ∧ circuitFun 9 d = F)
     (h1 : let norm := fun (x : Fin 9 → Bool) (p : List (Bool × Nat × Nat)) (t : List (Nat × Nat)) =>
         let w := p.foldl (fun (xs : List Bool) g =>
           let a := xs.getD g.2.1 false
           let b := xs.getD g.2.2 false
           xs ++ [if g.1 then a && b else a || b]) (List.ofFn x ++ [x 0 || x 2])
         t.any (fun b => w.getD b.1 false && w.getD b.2 false)
-      let F := fun (x : Fin 9 → Bool) => [1,12,23,34,40,5,16,27,38,57,68,85].any (fun e : Nat => x (Fin.ofNat 9 (e/10)) && x (Fin.ofNat 9 (e%10))); ∀ (p : List (Bool × Nat × Nat)) (t : List (Nat × Nat)), p.countP Prod.fst ≤ 1 ∧ p.length + 2*t.length ≤ 15 → ∃ x, norm x p t ≠ F x)
+      let F := fun (x : Fin 9 → Bool) => [1,12,23,34,40,5,16,27,38,57,68,85].any (fun e : Nat => x (Fin.ofNat 9 (e/10)) && x (Fin.ofNat 9 (e % 10))); ∀ (p : List (Bool × Nat × Nat)) (t : List (Nat × Nat)), p.countP Prod.fst ≤ 1 ∧ p.length + 2*t.length ≤ 15 → ∃ x, norm x p t ≠ F x)
     (h2 : let norm := fun (x : Fin 9 → Bool) (p : List (Bool × Nat × Nat)) (t : List (Nat × Nat)) =>
         let w := p.foldl (fun (xs : List Bool) g =>
           let a := xs.getD g.2.1 false
@@ -21,7 +21,7 @@ theorem PEqualNP.Outside.R_meta_3352_915
       (∀ d : Circuit, FanInTwo d → d.size < c.size → circuitFun 9 d ≠ circuitFun 9 c) →
       (∀ x : Fin 9 → Bool, (c.wires (List.ofFn x)).getD 9 false = (x 0 || x 2)) → (∀ i : Fin 9, circuitFun 9 c (fun j => decide (j=i)) = false) →
       let bad := fun j : Nat => (c.gates[j]?.map (fun g => g.op.eval [true,false])) = some false ∧ ∃ x : Fin 9 → Bool, circuitFun 9 c x = false ∧ (c.wires (List.ofFn x)).getD (9+j) false = true; ¬(∃ j k, j ≠ k ∧ bad j ∧ bad k) → ∃ p t, (p.countP Prod.fst ≤ 1 ∧ p.length + 2*t.length ≤ 15) ∧ ∀ x, norm x p t = circuitFun 9 c x)
-    (h3 : let F := fun (x : Fin 9 → Bool) => [1,12,23,34,40,5,16,27,38,57,68,85].any (fun e : Nat => x (Fin.ofNat 9 (e/10)) && x (Fin.ofNat 9 (e%10))); ∀ (c : Circuit), Monotone2 c → c.size ≤ 15 → (∀ x : Fin 9 → Bool, (c.wires (List.ofFn x)).getD 9 false = (x 0 || x 2)) → (∀ i : Fin 3, c.gates.countP (fun g => g.inputs.contains (![4,6,7] i)) ≤ 2) → circuitFun 9 c = F →
+    (h3 : let F := fun (x : Fin 9 → Bool) => [1,12,23,34,40,5,16,27,38,57,68,85].any (fun e : Nat => x (Fin.ofNat 9 (e/10)) && x (Fin.ofNat 9 (e % 10))); ∀ (c : Circuit), Monotone2 c → c.size ≤ 15 → (∀ x : Fin 9 → Bool, (c.wires (List.ofFn x)).getD 9 false = (x 0 || x 2)) → (∀ i : Fin 3, c.gates.countP (fun g => g.inputs.contains (![4,6,7] i)) ≤ 2) → circuitFun 9 c = F →
       let bad := fun j : Nat => (c.gates[j]?.map (fun g => g.op.eval [true,false])) = some false ∧ ∃ x : Fin 9 → Bool, circuitFun 9 c x = false ∧ (c.wires (List.ofFn x)).getD (9+j) false = true; (∃ j k, j ≠ k ∧ bad j ∧ bad k) → (∀ (v : Fin 9) (x y : Fin 9 → Bool), (∀ j, j ≠ v → x j = true → y j = true) →
           c.output ≠ v.val → F x = true → F y = false →
           ∃ p g q, c.gates = p ++ g :: q ∧ v.val ∈ g.inputs ∧
