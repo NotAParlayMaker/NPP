@@ -1,18 +1,12 @@
 import Mathlib
 import PEqualNP.Defs
 
-namespace PEqualNP.TopForm
-
-/-- No 4-cycle: there are no distinct vertices `a,c` and distinct `b,d` forming a cycle
-`a—b—c—d—a`. -/
-def NoFourCycle {n : ℕ} (G : SimpleGraph (Fin n)) : Prop :=
+def PEqualNP.TopForm.NoFourCycle {n : ℕ} (G : SimpleGraph (Fin n)) : Prop :=
   ∀ a b c d : Fin n, a ≠ c → b ≠ d → ¬ (G.Adj a b ∧ G.Adj b c ∧ G.Adj c d ∧ G.Adj d a)
-
-end PEqualNP.TopForm
 
 namespace PEqualNP.Outside.L_meta_1529
 
-open PEqualNP.TopForm
+open SimpleGraph
 
 variable {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
 
@@ -22,9 +16,9 @@ theorem w_not_in_Q (P Q W : Finset (Fin n))
   intro hwQ
   have h := (hW w).1 hwW w hwP w hwQ
   rcases h with h | h | h
-  · exact (SimpleGraph.irrefl G h).elim
-  · exact (SimpleGraph.irrefl G h).elim
-  · exact (SimpleGraph.irrefl G h).elim
+  · exact absurd h (SimpleGraph.irrefl G)
+  · exact absurd h (SimpleGraph.irrefl G)
+  · exact absurd h (SimpleGraph.irrefl G)
 
 theorem w_adj_all_Q (P Q W : Finset (Fin n))
     (hW : ∀ w, w ∈ W ↔ ∀ p ∈ P, ∀ q ∈ Q, G.Adj p q ∨ G.Adj p w ∨ G.Adj q w)
@@ -33,7 +27,7 @@ theorem w_adj_all_Q (P Q W : Finset (Fin n))
   have h := (hW w).1 hwW w hwP q hq
   rcases h with h | h | h
   · exact h
-  · exact (SimpleGraph.irrefl G h).elim
+  · exact absurd h (SimpleGraph.irrefl G)
   · exact G.adj_symm h
 
 theorem w_not_in_P (P Q W : Finset (Fin n))
@@ -42,9 +36,9 @@ theorem w_not_in_P (P Q W : Finset (Fin n))
   intro hwP
   have h := (hW w).1 hwW w hwP w hwQ
   rcases h with h | h | h
-  · exact (SimpleGraph.irrefl G h).elim
-  · exact (SimpleGraph.irrefl G h).elim
-  · exact (SimpleGraph.irrefl G h).elim
+  · exact absurd h (SimpleGraph.irrefl G)
+  · exact absurd h (SimpleGraph.irrefl G)
+  · exact absurd h (SimpleGraph.irrefl G)
 
 theorem w_adj_all_P (P Q W : Finset (Fin n))
     (hW : ∀ w, w ∈ W ↔ ∀ p ∈ P, ∀ q ∈ Q, G.Adj p q ∨ G.Adj p w ∨ G.Adj q w)
@@ -54,7 +48,7 @@ theorem w_adj_all_P (P Q W : Finset (Fin n))
   rcases h with h | h | h
   · exact G.adj_symm h
   · exact G.adj_symm h
-  · exact (SimpleGraph.irrefl G h).elim
+  · exact absurd h (SimpleGraph.irrefl G)
 
 theorem PQ_adj_W (P Q W : Finset (Fin n))
     (hW : ∀ w, w ∈ W ↔ ∀ p ∈ P, ∀ q ∈ Q, G.Adj p q ∨ G.Adj p w ∨ G.Adj q w)
@@ -63,7 +57,7 @@ theorem PQ_adj_W (P Q W : Finset (Fin n))
   have hsQ : s ∈ Q := Finset.mem_of_mem_inter_right hs
   have h := (hW w).1 hw s hsP s hsQ
   rcases h with h | h | h
-  · exact (SimpleGraph.irrefl G h).elim
+  · exact absurd h (SimpleGraph.irrefl G)
   · exact h
   · exact h
 
@@ -74,7 +68,7 @@ theorem PQ_not_W (P Q W : Finset (Fin n))
   have hsP : s ∈ P := Finset.mem_of_mem_inter_left hs
   exact w_not_in_Q G P Q W hW hsW hsP (Finset.mem_of_mem_inter_right hs)
 
-theorem W_card_le_one (hC4 : NoFourCycle G) (P Q W : Finset (Fin n))
+theorem W_card_le_one (hC4 : PEqualNP.TopForm.NoFourCycle G) (P Q W : Finset (Fin n))
     (hW : ∀ w, w ∈ W ↔ ∀ p ∈ P, ∀ q ∈ Q, G.Adj p q ∨ G.Adj p w ∨ G.Adj q w)
     (h2 : 2 ≤ (P ∩ Q).card) : W.card ≤ 1 := by
   by_contra h
@@ -85,14 +79,7 @@ theorem W_card_le_one (hC4 : NoFourCycle G) (P Q W : Finset (Fin n))
   have a12 := PQ_adj_W G P Q W hW hs1 hw2
   have a21 := PQ_adj_W G P Q W hW hs2 hw1
   have a22 := PQ_adj_W G P Q W hW hs2 hw2
-  have hs1n : s1 ∉ W := PQ_not_W G P Q W hW hs1
-  have hs2n : s2 ∉ W := PQ_not_W G P Q W hW hs2
-  have hsw1 : s1 ≠ w1 := fun e => hs1n (e ▸ hw1)
-  have hsw2 : s1 ≠ w2 := fun e => hs1n (e ▸ hw2)
-  -- C4: s1 — w1 — s2 — w2 — s1
-  have : G.Adj s1 w1 ∧ G.Adj w1 s2 ∧ G.Adj s2 w2 ∧ G.Adj w2 s1 :=
-    ⟨a11, G.adj_symm a21, a22, G.adj_symm a12⟩
-  exact hC4 s1 w1 s2 w2 hneS hneW this
+  exact hC4 s1 w1 s2 w2 hneS hneW ⟨a11, G.adj_symm a21, a22, G.adj_symm a12⟩
 
 end PEqualNP.Outside.L_meta_1529
 
