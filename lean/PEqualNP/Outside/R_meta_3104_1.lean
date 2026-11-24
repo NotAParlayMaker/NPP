@@ -26,9 +26,9 @@ theorem PEqualNP.Outside.R_meta_3104_1
       omega
   have wires_len (x : Fin 8 → Bool) :
       (C.wires (List.ofFn x ++ [x 1 || false])).length = 9 + C.size := by
-    change (run C.gates (List.ofFn x ++ [x 1 || false])).length = 9+C.size
+    change (run C.gates (List.ofFn x ++ [x 1 || false])).length = 9 + C.gates.length
     rw [run_len]
-    simp [PEqualNP.CircuitLowerBounds.Circuit.size]
+    simp only [List.length_append, List.length_ofFn, List.length_singleton]
   intro hp
   by_cases hk : k < 9 + C.size
   · exact hValid C D k hC hD hsize hk hp
