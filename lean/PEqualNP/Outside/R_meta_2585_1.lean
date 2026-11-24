@@ -1,0 +1,13 @@
+import Mathlib
+import PEqualNP.Defs
+
+open Classical
+
+theorem PEqualNP.Outside.R_meta_2585_1
+    (h1 : ∀ (P L : ℕ) (I : Fin P → Fin L → Prop) [DecidableRel I] (C : PEqualNP.CircuitLowerBounds.Circuit), (∀ p p' : Fin P, ∀ l l' : Fin L, p ≠ p' → l ≠ l' → ¬ (I p l ∧ I p l' ∧ I p' l ∧ I p' l')) → PEqualNP.TopForm.IsAO2 (P + L) C → (∀ z : Fin (P + L) → Bool, PEqualNP.MetaComplexity.circuitFun (P + L) C z = decide (∃ p : Fin P, ∃ l : Fin L, I p l ∧ z (Fin.castAdd L p) = true ∧ z (Fin.natAdd P l) = true)) → ∃ N : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.TopForm.IsAO2 (P + L) N ∧ (∀ z : Fin (P + L) → Bool, PEqualNP.MetaComplexity.circuitFun (P + L) N z = decide (∃ p : Fin P, ∃ l : Fin L, I p l ∧ z (Fin.castAdd L p) = true ∧ z (Fin.natAdd P l) = true)) ∧ N.size ≤ C.size ∧ PEqualNP.Core.IsLiftFixedPoint (SimpleGraph.fromRel (fun u v : Fin (P + L) => ∃ p : Fin P, ∃ l : Fin L, I p l ∧ u = Fin.castAdd L p ∧ v = Fin.natAdd P l)) N)
+    (h2 : ∀ (P L : ℕ) (I : Fin P → Fin L → Prop) [DecidableRel I] (N : PEqualNP.CircuitLowerBounds.Circuit), (∀ p p' : Fin P, ∀ l l' : Fin L, p ≠ p' → l ≠ l' → ¬ (I p l ∧ I p l' ∧ I p' l ∧ I p' l')) → PEqualNP.TopForm.IsAO2 (P + L) N → (∀ z : Fin (P + L) → Bool, PEqualNP.MetaComplexity.circuitFun (P + L) N z = decide (∃ p : Fin P, ∃ l : Fin L, I p l ∧ z (Fin.castAdd L p) = true ∧ z (Fin.natAdd P l) = true)) → PEqualNP.Core.IsLiftFixedPoint (SimpleGraph.fromRel (fun u v : Fin (P + L) => ∃ p : Fin P, ∃ l : Fin L, I p l ∧ u = Fin.castAdd L p ∧ v = Fin.natAdd P l)) N → ∃ D : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.TopForm.IsAO2 (P + L) D ∧ (∀ z : Fin (P + L) → Bool, PEqualNP.MetaComplexity.circuitFun (P + L) D z = decide (∃ p : Fin P, ∃ l : Fin L, I p l ∧ z (Fin.castAdd L p) = true ∧ z (Fin.natAdd P l) = true)) ∧ D.size ≤ N.size ∧ PEqualNP.ReadK.IsReadK (P + L) D 1) :
+    ∀ (P L : ℕ) (I : Fin P → Fin L → Prop) [DecidableRel I] (C : PEqualNP.CircuitLowerBounds.Circuit), (∀ p p' : Fin P, ∀ l l' : Fin L, p ≠ p' → l ≠ l' → ¬ (I p l ∧ I p l' ∧ I p' l ∧ I p' l')) → PEqualNP.TopForm.IsAO2 (P + L) C → (∀ z : Fin (P + L) → Bool, PEqualNP.MetaComplexity.circuitFun (P + L) C z = decide (∃ p : Fin P, ∃ l : Fin L, I p l ∧ z (Fin.castAdd L p) = true ∧ z (Fin.natAdd P l) = true)) → ∃ D : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.TopForm.IsAO2 (P + L) D ∧ (∀ y : Fin (P + L) → Bool, PEqualNP.MetaComplexity.circuitFun (P + L) D y = decide (∃ p : Fin P, ∃ l : Fin L, I p l ∧ y (Fin.castAdd L p) = true ∧ y (Fin.natAdd P l) = true)) ∧ D.size ≤ C.size ∧ PEqualNP.ReadK.IsReadK (P + L) D 1 := by
+  intro P L I _ C hno hao hfun
+  obtain ⟨N, hNao, hNfun, hNle, hNfix⟩ := h1 P L I C hno hao hfun
+  obtain ⟨D, hDao, hDfun, hDle, hDread⟩ := h2 P L I N hno hNao hNfun hNfix
+  exact ⟨D, hDao, hDfun, hDle.trans hNle, hDread⟩
