@@ -102,7 +102,7 @@ lemma conesOf_bound (n : ℕ) (gs : List Gate) (j i : ℕ)
       · have := ih (w - n) i (by omega) h
         omega
 
-/-- The cone relation is transitive inside the prefix. -/
+/-- The cone relation is transitive below `j`. -/
 lemma conesOf_trans (n : ℕ) (gs : List Gate) (j i i' : ℕ)
     (hi : i ∈ (conesOf n gs).getD j []) (hi' : i' ∈ (conesOf n gs).getD i []) :
     i' ∈ (conesOf n gs).getD j [] := by
@@ -151,7 +151,7 @@ lemma conesOf_sublist (n : ℕ) (l l' : List Gate) :
     refine ⟨t ++ [coneNew n (conesOf n (l ++ as)) a], ?_⟩
     rw [← List.append_assoc, conesOf_append, ht, List.append_assoc]
 
-lemma conesOf_getD_prefix (n : ℕ) (l l' : List Gate) (j : ℕ)
+lemma conesOf_getD_split (n : ℕ) (l l' : List Gate) (j : ℕ)
     (hj : j < (conesOf n l).length) :
     (conesOf n (l ++ l')).getD j [] = (conesOf n l).getD j [] := by
   obtain ⟨t, ht⟩ := conesOf_sublist n l l'
@@ -168,7 +168,7 @@ lemma conesOf_getD_take (n : ℕ) (gs : List Gate) (j : ℕ) (hj : j < gs.length
     rw [hd]
     simp
   conv_lhs => rw [hsplit]
-  rw [conesOf_getD_prefix n (gs.take j ++ [gs.getD j ⟨GateOp.or, []⟩]) (gs.drop (j + 1)) j
+  rw [conesOf_getD_split n (gs.take j ++ [gs.getD j ⟨GateOp.or, []⟩]) (gs.drop (j + 1)) j
     (by rw [conesOf_length, List.length_append, List.length_singleton, List.length_take,
           Nat.min_eq_left (by omega)]; omega)]
   rw [conesOf_append]
