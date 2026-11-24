@@ -119,12 +119,13 @@ theorem PEqualNP.Outside.R_meta_1870_7
       obtain ⟨g0, hg0, rfl⟩ := hg
       refine ⟨(hfan g0 hg0).1, ?_⟩
       simpa using (hfan g0 hg0).2
-    · simp [PEqualNP.CircuitLowerBounds.Circuit.size]
+    · delta PEqualNP.CircuitLowerBounds.Circuit.size
+      simp
     · intro y
       have e := hk (fun i => y (![3, 2, 1, 0, 4, 8, 7, 6, 5] i))
       have hfy := hF0 (y 0) (y 1) (y 2) (y 3) (y 4) (y 5) (y 6) (y 7) (y 8)
       refine Eq.trans ?_ (e.trans hfy)
-      simp only [PEqualNP.CircuitLowerBounds.Circuit.eval, PEqualNP.CircuitLowerBounds.Circuit.wires]
+      delta PEqualNP.CircuitLowerBounds.Circuit.eval PEqualNP.CircuitLowerBounds.Circuit.wires
       apply hpre
       · simp
       · simp
@@ -141,20 +142,16 @@ theorem PEqualNP.Outside.R_meta_1870_7
           rw [hj9]
           simp only [List.getD_eq_getElem?_getD]
           rw [List.getElem?_eq_none (by simp; omega), List.getElem?_eq_none (by simp; omega)]
-  match L, hlen with
-  | [], _ =>
-    apply h1 C hfan
+  rcases L with _ | ⟨k, rest⟩
+  · apply h1 C hfan
     intro x
-    have := hE x
-    simpa [PEqualNP.CircuitLowerBounds.GateOp.eval] using this
-  | k :: rest, _ =>
-    have hk : ∀ x : Fin 9 → Bool, C.eval (List.ofFn x ++ [x 0 && x 3] ++
+    exact hE x
+  · have hk : ∀ x : Fin 9 → Bool, C.eval (List.ofFn x ++ [x 0 && x 3] ++
         [!((List.ofFn x ++ [x 0 && x 3]).getD (↑k) false)]) =
         (x 0 && x 1 || x 1 && x 2 || x 2 && x 3 || x 3 && x 4 || x 4 && x 0 || x 0 && x 5 ||
           x 1 && x 6 || x 2 && x 7 || x 3 && x 8 || x 5 && x 7 || x 6 && x 8 || x 8 && x 5) := by
       intro x
-      have := hE x
-      simpa only [List.map_cons, PEqualNP.CircuitLowerBounds.GateOp.eval, List.headD_cons] using this
+      exact hE x
     fin_cases k
     · exact h3 0 (by decide) C hfan (fun x => hk x)
     · exact h3 1 (by decide) C hfan (fun x => hk x)
