@@ -25,7 +25,8 @@ theorem PEqualNP.Outside.R_meta_5090_1
     omega
   cases hgs : C.gates with
   | nil =>
-    have : C.size = 0 := by simp [Circuit.size, hgs]
+    have : C.gates.length = 0 := (congrArg List.length hgs).trans List.length_nil
+    have : C.gates.length = 14 := heq
     omega
   | cons g M =>
     have hop : g.op = GateOp.and ∨ g.op = GateOp.or ∨ g.op = GateOp.not := by
