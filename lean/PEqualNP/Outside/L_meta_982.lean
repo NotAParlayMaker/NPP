@@ -2,7 +2,66 @@ import Mathlib
 import PEqualNP.Defs
 
 -- Based in part on sanchan's L-meta-927 circuit proofs, Apache-2.0.
+-- Row numbers follow the order of the 31 conjuncts, starting at zero.
+-- A row projection commutes with each Boolean gate. Several search branches
+-- can therefore use the same six-input lower bound. A lookup proposes a
+-- target board, and the checker compares the projected wires up to permutation
+-- before it uses the lower bound for that board.
 namespace PEqualNP.Outside.L_meta_982_aux
+
+abbrev restrictMap0 := (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 3) | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | 3 => (0 : Fin 3) | 4 => (0 : Fin 3) | 5 => (0 : Fin 3) | _ => (0 : Fin 3))
+abbrev restrictMap1 := (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 4 => (4 : Fin 6) | 5 => (5 : Fin 6) | _ => (0 : Fin 6))
+abbrev restrictMap2 := (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 4 => (4 : Fin 6) | 6 => (5 : Fin 6) | _ => (0 : Fin 6))
+abbrev restrictMap3 := (fun i : Fin 5 => match i.val with | 0 => (0 : Fin 3) | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | 3 => (0 : Fin 3) | 4 => (0 : Fin 3) | _ => (0 : Fin 3))
+abbrev restrictMap4 := (fun i : Fin 5 => match i.val with | 0 => (0 : Fin 5) | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 3 => (3 : Fin 5) | 4 => (4 : Fin 5) | _ => (0 : Fin 5))
+abbrev restrictMap5 := (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 6) | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 4 => (4 : Fin 6) | 5 => (5 : Fin 6) | _ => (0 : Fin 6))
+abbrev restrictMap6 := (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 5) | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 3 => (3 : Fin 5) | 4 => (4 : Fin 5) | 5 => (0 : Fin 5) | _ => (0 : Fin 5))
+abbrev restrictMap7 := (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 3 => (3 : Fin 5) | 4 => (4 : Fin 5) | _ => (0 : Fin 5))
+abbrev eS0 {n : Nat} [NeZero n] : List (Fin n × Fin n) := [(0, 1), (0, 2), (1, 2)]
+abbrev eS1 {n : Nat} [NeZero n] : List (Fin n × Fin n) := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]
+abbrev eS2 {n : Nat} [NeZero n] : List (Fin n × Fin n) := [(0, 1), (0, 2), (0, 3), (1, 2)]
+abbrev eS3 {n : Nat} [NeZero n] : List (Fin n × Fin n) := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5)]
+abbrev eS4 {n : Nat} [NeZero n] : List (Fin n × Fin n) := [(0, 1), (0, 2), (1, 4), (2, 5), (4, 5)]
+abbrev eS5 {n : Nat} [NeZero n] : List (Fin n × Fin n) := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)]
+abbrev eS6 {n : Nat} [NeZero n] : List (Fin n × Fin n) := [(0, 1), (0, 2), (0, 4), (1, 2), (4, 6)]
+abbrev eS7 {n : Nat} [NeZero n] : List (Fin n × Fin n) := [(0, 1), (0, 2), (1, 2), (1, 4), (4, 6)]
+abbrev eS8 {n : Nat} [NeZero n] : List (Fin n × Fin n) := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 6), (3, 4)]
+abbrev eS9 {n : Nat} [NeZero n] : List (Fin n × Fin n) := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5), (3, 6), (5, 6)]
+abbrev eS10 {n : Nat} [NeZero n] : List (Fin n × Fin n) := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4)]
+abbrev eS11 {n : Nat} [NeZero n] : List (Fin n × Fin n) := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)]
+abbrev eS12 {n : Nat} [NeZero n] : List (Fin n × Fin n) := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5)]
+abbrev gF0 := (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5) || (x 4 && x 5))
+abbrev gF1 := (fun x : Fin 3 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 1 && x 2))
+abbrev gF2 := (fun x : Fin 5 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4))
+abbrev gF3 := (fun x : Fin 5 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 1 && x 3) || (x 2 && x 4) || (x 3 && x 4))
+abbrev gF4 := (fun x : Fin 5 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 4))
+abbrev gF5 := (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 5))
+abbrev gF6 := (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5))
+abbrev gF7 := (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5))
+abbrev gF8 := (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 4 && x 5))
+abbrev gF9 := (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 4) || (x 2 && x 5) || (x 4 && x 5))
+abbrev gF10 := (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5) || (x 4 && x 5))
+abbrev gF11 := (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 1 && x 2) || (x 3 && x 4))
+abbrev gF12 := (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 3 && x 4))
+abbrev gF13 := (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 4 && x 5))
+abbrev gF14 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 4) || (x 5 && x 6))
+abbrev gF15 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 5) || (x 4 && x 6))
+abbrev gF16 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 4 && x 6))
+abbrev gF17 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5) || (x 4 && x 6))
+abbrev gF18 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 4 && x 5) || (x 5 && x 6))
+abbrev gF19 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 4 && x 5) || (x 4 && x 6) || (x 5 && x 6))
+abbrev gF20 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 4) || (x 2 && x 5) || (x 3 && x 6) || (x 4 && x 5))
+abbrev gF21 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 0 && x 6) || (x 1 && x 2) || (x 3 && x 4))
+abbrev gF22 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 1 && x 2) || (x 1 && x 6) || (x 3 && x 4))
+abbrev gF23 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 1 && x 2) || (x 3 && x 4) || (x 5 && x 6))
+abbrev gF24 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 1 && x 6) || (x 3 && x 4))
+abbrev gF25 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 3 && x 4) || (x 3 && x 6))
+abbrev gF26 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 3 && x 4) || (x 5 && x 6))
+abbrev gF27 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 3 && x 6) || (x 5 && x 6))
+abbrev gF28 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 4 && x 5) || (x 5 && x 6))
+abbrev gF29 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 5) || (x 3 && x 6) || (x 5 && x 6))
+abbrev gF30 := (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 3 && x 6) || (x 5 && x 6))
+
 
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
@@ -111,87 +170,6 @@ theorem agree_inputs {n : ℕ} (x y : Fin n → Bool) :
   · have hx : x ⟨j, hjn⟩ = y ⟨j, hjn⟩ := hj _ (by simp [inputSupps, hjn])
     simp [hjn, hx]
   · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega)]
-
-def Cnt {n : ℕ} (t : ℕ) (L : List (Finset (Fin n))) : Prop :=
-  ∀ W : Finset ℕ, (W.biUnion fun j => L.getD j ∅).card ≤ t + W.card
-
-theorem cnt_inputs {n : ℕ} : Cnt 0 (inputSupps n) := by
-  intro W
-  refine le_trans Finset.card_biUnion_le ?_
-  rw [zero_add, Finset.card_eq_sum_ones]
-  apply Finset.sum_le_sum
-  intro j _
-  by_cases hjn : j < n
-  · simp [inputSupps, hjn]
-  · rw [List.getD_eq_default _ _ (by simp [inputSupps]; omega)]; simp
-
-theorem cnt_step {n : ℕ} (t : ℕ) (L : List (Finset (Fin n))) (g : Gate) (hg : g.inputs.length ≤ 2)
-    (h : Cnt t L) : Cnt (t + 1) (L ++ [gateSupp L g]) := by
-  intro W
-  by_cases hW : L.length ∈ W
-  · have hsub : (W.biUnion fun j => (L ++ [gateSupp L g]).getD j ∅)
-        ⊆ ((W.erase L.length ∪ g.inputs.toFinset).biUnion fun j => L.getD j ∅) := by
-      intro i hi
-      rw [Finset.mem_biUnion] at hi ⊢
-      obtain ⟨j, hjW, hij⟩ := hi
-      by_cases hjl : j = L.length
-      · subst hjl
-        rw [getD_snoc_eq] at hij
-        obtain ⟨a, ha, hia⟩ := (mem_gateSupp L g i).1 hij
-        exact ⟨a, Finset.mem_union_right _ (List.mem_toFinset.2 ha), hia⟩
-      · rw [getD_snoc_ne _ _ _ _ hjl] at hij
-        exact ⟨j, Finset.mem_union_left _ (Finset.mem_erase.2 ⟨hjl, hjW⟩), hij⟩
-    have hc1 : (W.erase L.length ∪ g.inputs.toFinset).card ≤ (W.card - 1) + 2 := by
-      refine le_trans (Finset.card_union_le _ _) ?_
-      rw [Finset.card_erase_of_mem hW]
-      exact Nat.add_le_add_left (le_trans (List.toFinset_card_le _) hg) _
-    have hWpos : 1 ≤ W.card := Finset.card_pos.2 ⟨_, hW⟩
-    have := h (W.erase L.length ∪ g.inputs.toFinset)
-    have := Finset.card_le_card hsub
-    omega
-  · have heq : (W.biUnion fun j => (L ++ [gateSupp L g]).getD j ∅)
-        = (W.biUnion fun j => L.getD j ∅) := by
-      apply Finset.biUnion_congr rfl
-      intro j hj
-      exact getD_snoc_ne _ _ _ _ (fun e => hW (e ▸ hj))
-    rw [heq]
-    have := h W
-    omega
-
-theorem cnt_suppsFrom {n : ℕ} (gs : List Gate) : ∀ (t : ℕ) (L : List (Finset (Fin n))),
-    (∀ g ∈ gs, Ok g) → Cnt t L → Cnt (t + gs.length) (suppsFrom gs L) := by
-  induction gs with
-  | nil => intro t L _ h; exact h
-  | cons g gs ih =>
-    intro t L hok h
-    have := ih (t + 1) (L ++ [gateSupp L g]) (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg'))
-      (cnt_step t L g (hok g List.mem_cons_self).2 h)
-    rw [List.length_cons, show t + (gs.length + 1) = t + 1 + gs.length by omega]
-    exact this
-
-theorem dep_lower_set (n : ℕ) (f : (Fin n → Bool) → Bool) (T : Finset (Fin n))
-    (hdep : ∀ i ∈ T, ∃ x : Fin n → Bool, f (Function.update x i (!x i)) ≠ f x)
-    (s : ℕ) (h : HasCircuitSize n f s) : T.card ≤ s + 1 := by
-  obtain ⟨C, ok, hsz, hev⟩ := h
-  have hsz' : C.gates.length ≤ s := hsz
-  set S := (suppsFrom C.gates (inputSupps n)).getD C.output ∅ with hS
-  have hall : T ⊆ S := by
-    intro i hiT
-    by_contra hi
-    obtain ⟨x, hx⟩ := hdep i hiT
-    apply hx
-    have hag := (agree_wiresFrom (Function.update x i (!x i)) x C.gates _ _ _
-      (agree_inputs _ _)).2.2 C.output (by
-        intro k hk
-        have : k ≠ i := fun e => hi (e ▸ hk)
-        simp [Function.update_of_ne this])
-    rw [← hev, ← hev]
-    exact hag
-  have hc := cnt_suppsFrom C.gates 0 (inputSupps n) ok cnt_inputs {C.output}
-  simp only [Finset.singleton_biUnion, Finset.card_singleton, zero_add] at hc
-  rw [← hS] at hc
-  have := Finset.card_le_card hall
-  omega
 
 def normGate (g : Gate) : Gate :=
   match g.op with
@@ -2417,25 +2395,6 @@ def isoCheck {n k : ℕ} (E : List (Fin n × Fin n)) (Eb : List (Fin k × Fin k)
   E.all (fun e => Eb.any (fun e' => (π e.1 == e'.1 && π e.2 == e'.2) || (π e.1 == e'.2 && π e.2 == e'.1))) &&
   Eb.all (fun e' => E.any (fun e => (π e.1 == e'.1 && π e.2 == e'.2) || (π e.1 == e'.2 && π e.2 == e'.1)))
 
-theorem gfn_le {n val1 val2 : ℕ} {f : BFn n} (hle : val1 ≤ val2)
-    (h : ∀ s, HasCircuitSize n f s → val2 ≤ s) : ∀ s, HasCircuitSize n f s → val1 ≤ s :=
-  fun s hs => le_trans hle (h s hs)
-
-theorem gfn_empty {n : ℕ} (A : List (Fin n)) (hnd : A.Nodup) :
-    ∀ s : ℕ, HasCircuitSize n (gfn A []) s → A.length - 1 ≤ s := by
-  intro s h
-  have hd := dep_lower_set n (gfn A []) A.toFinset (by
-    intro i hi
-    have hiA : i ∈ A := List.mem_toFinset.1 hi
-    refine ⟨fun _ => false, ?_⟩
-    have h0 : gfn A [] (fun _ => false) = false := by simp [gfn]
-    have h1 : gfn A [] (Function.update (fun _ => false) i true) = true := by
-      simp only [gfn, List.any_nil, Bool.or_false, List.any_eq_true]
-      exact ⟨i, hiA, by simp⟩
-    simpa [h0, h1]) s h
-  rw [List.toFinset_card_of_nodup hnd] at hd
-  omega
-
 theorem gfn_nc {n : ℕ} (A : List (Fin n)) (E : List (Fin n × Fin n))
     (h : (!A.isEmpty || !E.isEmpty) = true) :
     ∃ x y : Fin n → Bool, gfn A E x ≠ gfn A E y := by
@@ -2664,83 +2623,83 @@ theorem gfn_base {n k val : ℕ} (E : List (Fin n × Fin n)) (Eb : List (Fin k �
   rw [gfn_iso E Eb π hiso] at h'
   exact hb s h'
 
-theorem conj_2 : ∀ t : ℕ, HasCircuitSize 3 (fun x : Fin 3 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 1 && x 2)) t → 4 ≤ t := by
-  have heq : (fun x : Fin 3 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 1 && x 2)) = gfn (n := 3) [] [(0, 1), (0, 2), (1, 2)] := by
-    funext x; simp [gfn, Bool.or_assoc]
+theorem conj_2 : ∀ t : ℕ, HasCircuitSize 3 gF1 t → 4 ≤ t := by
+  have heq : gF1 = gfn (n := 3) [] [(0, 1), (0, 2), (1, 2)] := by
+    funext x; simp [gF1, gfn, Bool.or_assoc]
   rw [heq]
-  exact gfn_base (E := [(0, 1), (0, 2), (1, 2)]) (Eb := Eb_K3) (fun i : Fin 3 => match i.val with | 0 => (0 : Fin 3) | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | _ => (0 : Fin 3)) (by decide) base_K3_gfn
+  exact gfn_base (E := eS0) (Eb := Eb_K3) (fun i : Fin 3 => match i.val with | 0 => (0 : Fin 3) | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | _ => (0 : Fin 3)) (by decide) base_K3_gfn
 
-theorem conj_14 : ∀ t : ℕ, HasCircuitSize 5 (fun x : Fin 5 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4)) t → 7 ≤ t := by
-  have heq : (fun x : Fin 5 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4)) = gfn (n := 5) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)] := by
-    funext x; simp [gfn, Bool.or_assoc]
+theorem conj_14 : ∀ t : ℕ, HasCircuitSize 5 gF2 t → 7 ≤ t := by
+  have heq : gF2 = gfn (n := 5) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)] := by
+    funext x; simp [gF2, gfn, Bool.or_assoc]
   rw [heq]
-  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)]) (p := (4 : Fin 5)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (1, 2)]) (A1 := [3]) (E1 := [(0, 1), (0, 2), (1, 2)]) (k := 5) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2)]) (p := (3 : Fin 5)) (A' := []) (E' := [(0, 1), (0, 2), (1, 2)]) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 2)]) (Eb := Eb_K3) (fun i : Fin 5 => match i.val with | 0 => (0 : Fin 3) | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | 3 => (0 : Fin 3) | 4 => (0 : Fin 3) | _ => (0 : Fin 3)) (by decide) base_K3_gfn)) (gfn_fix0 (A := [3]) (E := [(0, 1), (0, 2), (1, 2)]) (p := (3 : Fin 5)) (A' := []) (E' := [(0, 1), (0, 2), (1, 2)]) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 2)]) (Eb := Eb_K3) (fun i : Fin 5 => match i.val with | 0 => (0 : Fin 3) | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | 3 => (0 : Fin 3) | 4 => (0 : Fin 3) | _ => (0 : Fin 3)) (by decide) base_K3_gfn))
+  exact gfn_branch2 (A := []) (E := eS5) (p := (4 : Fin 5)) (A0 := []) (E0 := eS2) (A1 := [3]) (E1 := eS0) (k := 5) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_fix0 (A := []) (E := eS2) (p := (3 : Fin 5)) (A' := []) (E' := eS0) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS0) (Eb := Eb_K3) restrictMap3 (by decide) base_K3_gfn)) (gfn_fix0 (A := [3]) (E := eS0) (p := (3 : Fin 5)) (A' := []) (E' := eS0) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS0) (Eb := Eb_K3) restrictMap3 (by decide) base_K3_gfn))
 
-theorem conj_15 : ∀ t : ℕ, HasCircuitSize 5 (fun x : Fin 5 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 1 && x 3) || (x 2 && x 4) || (x 3 && x 4)) t → 7 ≤ t := by
-  have heq : (fun x : Fin 5 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 1 && x 3) || (x 2 && x 4) || (x 3 && x 4)) = gfn (n := 5) [] [(0, 1), (0, 2), (1, 3), (2, 4), (3, 4)] := by
-    funext x; simp [gfn, Bool.or_assoc]
+theorem conj_15 : ∀ t : ℕ, HasCircuitSize 5 gF3 t → 7 ≤ t := by
+  have heq : gF3 = gfn (n := 5) [] [(0, 1), (0, 2), (1, 3), (2, 4), (3, 4)] := by
+    funext x; simp [gF3, gfn, Bool.or_assoc]
   rw [heq]
-  exact gfn_base (E := [(0, 1), (0, 2), (1, 3), (2, 4), (3, 4)]) (Eb := Eb_C5) (fun i : Fin 5 => match i.val with | 0 => (0 : Fin 5) | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 3 => (3 : Fin 5) | 4 => (4 : Fin 5) | _ => (0 : Fin 5)) (by decide) base_C5_gfn
+  exact gfn_base (E := [(0, 1), (0, 2), (1, 3), (2, 4), (3, 4)]) (Eb := Eb_C5) restrictMap4 (by decide) base_C5_gfn
 
-theorem conj_16 : ∀ t : ℕ, HasCircuitSize 5 (fun x : Fin 5 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 4)) t → 8 ≤ t := by
-  have heq : (fun x : Fin 5 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 4)) = gfn (n := 5) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)] := by
-    funext x; simp [gfn, Bool.or_assoc]
+theorem conj_16 : ∀ t : ℕ, HasCircuitSize 5 gF4 t → 8 ≤ t := by
+  have heq : gF4 = gfn (n := 5) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)] := by
+    funext x; simp [gF4, gfn, Bool.or_assoc]
   rw [heq]
-  exact gfn_base (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (Eb := Eb_BOWTIE) (fun i : Fin 5 => match i.val with | 0 => (0 : Fin 5) | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 3 => (3 : Fin 5) | 4 => (4 : Fin 5) | _ => (0 : Fin 5)) (by decide) base_BOWTIE_gfn
+  exact gfn_base (E := eS1) (Eb := Eb_BOWTIE) restrictMap4 (by decide) base_BOWTIE_gfn
 
-theorem conj_31 : ∀ t : ℕ, HasCircuitSize 6 (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 5)) t → 8 ≤ t := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 5)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5)] := by
-    funext x; simp [gfn, Bool.or_assoc]
+theorem conj_31 : ∀ t : ℕ, HasCircuitSize 6 gF5 t → 8 ≤ t := by
+  have heq : gF5 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5)] := by
+    funext x; simp [gF5, gfn, Bool.or_assoc]
   rw [heq]
-  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5)]) (p := (4 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5)]) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5)]) (p := (5 : Fin 6)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (1, 2)]) (A1 := [3]) (E1 := [(0, 1), (0, 2), (1, 2)]) (k := 5) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2)]) (p := (3 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (1, 2)]) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 2)]) (Eb := Eb_K3) (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 3) | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | 3 => (0 : Fin 3) | 4 => (0 : Fin 3) | 5 => (0 : Fin 3) | _ => (0 : Fin 3)) (by decide) base_K3_gfn)) (gfn_fix0 (A := [3]) (E := [(0, 1), (0, 2), (1, 2)]) (p := (3 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (1, 2)]) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 2)]) (Eb := Eb_K3) (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 3) | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | 3 => (0 : Fin 3) | 4 => (0 : Fin 3) | 5 => (0 : Fin 3) | _ => (0 : Fin 3)) (by decide) base_K3_gfn)))
+  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5)]) (p := (4 : Fin 6)) (A' := []) (E' := eS3) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_branch2 (A := []) (E := eS3) (p := (5 : Fin 6)) (A0 := []) (E0 := eS2) (A1 := [3]) (E1 := eS0) (k := 5) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_fix0 (A := []) (E := eS2) (p := (3 : Fin 6)) (A' := []) (E' := eS0) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS0) (Eb := Eb_K3) restrictMap0 (by decide) base_K3_gfn)) (gfn_fix0 (A := [3]) (E := eS0) (p := (3 : Fin 6)) (A' := []) (E' := eS0) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS0) (Eb := Eb_K3) restrictMap0 (by decide) base_K3_gfn)))
 
-theorem conj_33 : ∀ t : ℕ, HasCircuitSize 6 (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5)) t → 8 ≤ t := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5)] := by
-    funext x; simp [gfn, Bool.or_assoc]
+theorem conj_33 : ∀ t : ℕ, HasCircuitSize 6 gF6 t → 8 ≤ t := by
+  have heq : gF6 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5)] := by
+    funext x; simp [gF6, gfn, Bool.or_assoc]
   rw [heq]
-  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5)]) (p := (4 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5)]) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5)]) (p := (5 : Fin 6)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (1, 2)]) (A1 := [3]) (E1 := [(0, 1), (0, 2), (1, 2)]) (k := 5) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2)]) (p := (3 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (1, 2)]) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 2)]) (Eb := Eb_K3) (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 3) | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | 3 => (0 : Fin 3) | 4 => (0 : Fin 3) | 5 => (0 : Fin 3) | _ => (0 : Fin 3)) (by decide) base_K3_gfn)) (gfn_fix0 (A := [3]) (E := [(0, 1), (0, 2), (1, 2)]) (p := (3 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (1, 2)]) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 2)]) (Eb := Eb_K3) (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 3) | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | 3 => (0 : Fin 3) | 4 => (0 : Fin 3) | 5 => (0 : Fin 3) | _ => (0 : Fin 3)) (by decide) base_K3_gfn)))
+  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5)]) (p := (4 : Fin 6)) (A' := []) (E' := eS3) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_branch2 (A := []) (E := eS3) (p := (5 : Fin 6)) (A0 := []) (E0 := eS2) (A1 := [3]) (E1 := eS0) (k := 5) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_fix0 (A := []) (E := eS2) (p := (3 : Fin 6)) (A' := []) (E' := eS0) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS0) (Eb := Eb_K3) restrictMap0 (by decide) base_K3_gfn)) (gfn_fix0 (A := [3]) (E := eS0) (p := (3 : Fin 6)) (A' := []) (E' := eS0) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS0) (Eb := Eb_K3) restrictMap0 (by decide) base_K3_gfn)))
 
-theorem conj_34 : ∀ t : ℕ, HasCircuitSize 6 (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5)) t → 8 ≤ t := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5)] := by
-    funext x; simp [gfn, Bool.or_assoc]
+theorem conj_34 : ∀ t : ℕ, HasCircuitSize 6 gF7 t → 8 ≤ t := by
+  have heq : gF7 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5)] := by
+    funext x; simp [gF7, gfn, Bool.or_assoc]
   rw [heq]
-  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5)]) (p := (4 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5)]) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5)]) (p := (5 : Fin 6)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (1, 2)]) (A1 := [3]) (E1 := [(0, 1), (0, 2), (1, 2)]) (k := 5) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2)]) (p := (3 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (1, 2)]) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 2)]) (Eb := Eb_K3) (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 3) | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | 3 => (0 : Fin 3) | 4 => (0 : Fin 3) | 5 => (0 : Fin 3) | _ => (0 : Fin 3)) (by decide) base_K3_gfn)) (gfn_fix0 (A := [3]) (E := [(0, 1), (0, 2), (1, 2)]) (p := (3 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (1, 2)]) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 2)]) (Eb := Eb_K3) (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 3) | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | 3 => (0 : Fin 3) | 4 => (0 : Fin 3) | 5 => (0 : Fin 3) | _ => (0 : Fin 3)) (by decide) base_K3_gfn)))
+  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5)]) (p := (4 : Fin 6)) (A' := []) (E' := eS3) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_branch2 (A := []) (E := eS3) (p := (5 : Fin 6)) (A0 := []) (E0 := eS2) (A1 := [3]) (E1 := eS0) (k := 5) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_fix0 (A := []) (E := eS2) (p := (3 : Fin 6)) (A' := []) (E' := eS0) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS0) (Eb := Eb_K3) restrictMap0 (by decide) base_K3_gfn)) (gfn_fix0 (A := [3]) (E := eS0) (p := (3 : Fin 6)) (A' := []) (E' := eS0) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS0) (Eb := Eb_K3) restrictMap0 (by decide) base_K3_gfn)))
 
-theorem conj_35 : ∀ t : ℕ, HasCircuitSize 6 (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 4 && x 5)) t → 8 ≤ t := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 4 && x 5)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5)] := by
-    funext x; simp [gfn, Bool.or_assoc]
+theorem conj_35 : ∀ t : ℕ, HasCircuitSize 6 gF8 t → 8 ≤ t := by
+  have heq : gF8 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5)] := by
+    funext x; simp [gF8, gfn, Bool.or_assoc]
   rw [heq]
-  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5)]) (p := (5 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)]) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)]) (p := (4 : Fin 6)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (1, 2)]) (A1 := [3]) (E1 := [(0, 1), (0, 2), (1, 2)]) (k := 5) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2)]) (p := (3 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (1, 2)]) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 2)]) (Eb := Eb_K3) (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 3) | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | 3 => (0 : Fin 3) | 4 => (0 : Fin 3) | 5 => (0 : Fin 3) | _ => (0 : Fin 3)) (by decide) base_K3_gfn)) (gfn_fix0 (A := [3]) (E := [(0, 1), (0, 2), (1, 2)]) (p := (3 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (1, 2)]) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 2)]) (Eb := Eb_K3) (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 3) | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | 3 => (0 : Fin 3) | 4 => (0 : Fin 3) | 5 => (0 : Fin 3) | _ => (0 : Fin 3)) (by decide) base_K3_gfn)))
+  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5)]) (p := (5 : Fin 6)) (A' := []) (E' := eS5) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_branch2 (A := []) (E := eS5) (p := (4 : Fin 6)) (A0 := []) (E0 := eS2) (A1 := [3]) (E1 := eS0) (k := 5) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_fix0 (A := []) (E := eS2) (p := (3 : Fin 6)) (A' := []) (E' := eS0) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS0) (Eb := Eb_K3) restrictMap0 (by decide) base_K3_gfn)) (gfn_fix0 (A := [3]) (E := eS0) (p := (3 : Fin 6)) (A' := []) (E' := eS0) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS0) (Eb := Eb_K3) restrictMap0 (by decide) base_K3_gfn)))
 
-theorem conj_36 : ∀ t : ℕ, HasCircuitSize 6 (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 4) || (x 2 && x 5) || (x 4 && x 5)) t → 8 ≤ t := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 4) || (x 2 && x 5) || (x 4 && x 5)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (4, 5)] := by
-    funext x; simp [gfn, Bool.or_assoc]
+theorem conj_36 : ∀ t : ℕ, HasCircuitSize 6 gF9 t → 8 ≤ t := by
+  have heq : gF9 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (4, 5)] := by
+    funext x; simp [gF9, gfn, Bool.or_assoc]
   rw [heq]
-  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (4, 5)]) (p := (3 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (1, 4), (2, 5), (4, 5)]) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 4), (2, 5), (4, 5)]) (Eb := Eb_C5) (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 5) | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 3 => (0 : Fin 5) | 4 => (3 : Fin 5) | 5 => (4 : Fin 5) | _ => (0 : Fin 5)) (by decide) base_C5_gfn)
+  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (4, 5)]) (p := (3 : Fin 6)) (A' := []) (E' := eS4) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS4) (Eb := Eb_C5) (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 5) | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 3 => (0 : Fin 5) | 4 => (3 : Fin 5) | 5 => (4 : Fin 5) | _ => (0 : Fin 5)) (by decide) base_C5_gfn)
 
-theorem conj_37 : ∀ t : ℕ, HasCircuitSize 6 (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5) || (x 4 && x 5)) t → 9 ≤ t := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5) || (x 4 && x 5)) = gfn (n := 6) [] [(0, 1), (0, 2), (1, 2), (3, 4), (3, 5), (4, 5)] := by
-    funext x; simp [gfn, Bool.or_assoc]
+theorem conj_37 : ∀ t : ℕ, HasCircuitSize 6 gF10 t → 9 ≤ t := by
+  have heq : gF10 = gfn (n := 6) [] [(0, 1), (0, 2), (1, 2), (3, 4), (3, 5), (4, 5)] := by
+    funext x; simp [gF10, gfn, Bool.or_assoc]
   rw [heq]
-  exact gfn_base (E := [(0, 1), (0, 2), (1, 2), (3, 4), (3, 5), (4, 5)]) (Eb := Eb_TwoK3) (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 6) | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 4 => (4 : Fin 6) | 5 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base_TwoK3_gfn
+  exact gfn_base (E := [(0, 1), (0, 2), (1, 2), (3, 4), (3, 5), (4, 5)]) (Eb := Eb_TwoK3) restrictMap5 (by decide) base_TwoK3_gfn
 
-theorem conj_39 : ∀ t : ℕ, HasCircuitSize 6 (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 1 && x 2) || (x 3 && x 4)) t → 9 ≤ t := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 1 && x 2) || (x 3 && x 4)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4)] := by
-    funext x; simp [gfn, Bool.or_assoc]
+theorem conj_39 : ∀ t : ℕ, HasCircuitSize 6 gF11 t → 9 ≤ t := by
+  have heq : gF11 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4)] := by
+    funext x; simp [gF11, gfn, Bool.or_assoc]
   rw [heq]
-  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4)]) (p := (5 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (k := 8) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (Eb := Eb_BOWTIE) (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 5) | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 3 => (3 : Fin 5) | 4 => (4 : Fin 5) | 5 => (0 : Fin 5) | _ => (0 : Fin 5)) (by decide) base_BOWTIE_gfn)
+  exact gfn_fix0 (A := []) (E := eS10) (p := (5 : Fin 6)) (A' := []) (E' := eS1) (k := 8) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS1) (Eb := Eb_BOWTIE) restrictMap6 (by decide) base_BOWTIE_gfn)
 
-theorem conj_40 : ∀ t : ℕ, HasCircuitSize 6 (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 3 && x 4)) t → 9 ≤ t := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 3 && x 4)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)] := by
-    funext x; simp [gfn, Bool.or_assoc]
+theorem conj_40 : ∀ t : ℕ, HasCircuitSize 6 gF12 t → 9 ≤ t := by
+  have heq : gF12 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)] := by
+    funext x; simp [gF12, gfn, Bool.or_assoc]
   rw [heq]
-  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)]) (p := (5 : Fin 6)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (k := 8) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (Eb := Eb_BOWTIE) (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 5) | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 3 => (3 : Fin 5) | 4 => (4 : Fin 5) | 5 => (0 : Fin 5) | _ => (0 : Fin 5)) (by decide) base_BOWTIE_gfn)
+  exact gfn_fix0 (A := []) (E := eS11) (p := (5 : Fin 6)) (A' := []) (E' := eS1) (k := 8) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS1) (Eb := Eb_BOWTIE) restrictMap6 (by decide) base_BOWTIE_gfn)
 
-theorem conj_41 : ∀ t : ℕ, HasCircuitSize 6 (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 4 && x 5)) t → 9 ≤ t := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 4 && x 5)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5)] := by
-    funext x; simp [gfn, Bool.or_assoc]
+theorem conj_41 : ∀ t : ℕ, HasCircuitSize 6 gF13 t → 9 ≤ t := by
+  have heq : gF13 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5)] := by
+    funext x; simp [gF13, gfn, Bool.or_assoc]
   rw [heq]
-  exact gfn_base (E := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5)]) (Eb := Eb_K3C5) (fun i : Fin 6 => match i.val with | 0 => (0 : Fin 6) | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 4 => (4 : Fin 6) | 5 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base_K3C5_gfn
+  exact gfn_base (E := eS12) (Eb := Eb_K3C5) restrictMap5 (by decide) base_K3C5_gfn
 
 
 
@@ -2748,273 +2707,273 @@ namespace Reduction
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
 theorem base2 : ∀ s, HasCircuitSize 3 (gfn [] [(0, 1), (0, 2), (1, 2)]) s → 4 ≤ s := by
-  have heq : (fun x : Fin 3 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 1 && x 2)) = gfn (n := 3) [] [(0, 1), (0, 2), (1, 2)] := by
+  have heq : gF1 = gfn (n := 3) [] [(0, 1), (0, 2), (1, 2)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF1, gfn, Bool.or_assoc]
   rw [← heq]
   exact conj_2
 
 theorem base14 : ∀ s, HasCircuitSize 5 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)]) s → 7 ≤ s := by
-  have heq : (fun x : Fin 5 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4)) = gfn (n := 5) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)] := by
+  have heq : gF2 = gfn (n := 5) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF2, gfn, Bool.or_assoc]
   rw [← heq]
   exact conj_14
 
 theorem base15 : ∀ s, HasCircuitSize 5 (gfn [] [(0, 1), (0, 2), (1, 3), (2, 4), (3, 4)]) s → 7 ≤ s := by
-  have heq : (fun x : Fin 5 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 1 && x 3) || (x 2 && x 4) || (x 3 && x 4)) = gfn (n := 5) [] [(0, 1), (0, 2), (1, 3), (2, 4), (3, 4)] := by
+  have heq : gF3 = gfn (n := 5) [] [(0, 1), (0, 2), (1, 3), (2, 4), (3, 4)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF3, gfn, Bool.or_assoc]
   rw [← heq]
   exact conj_15
 
 theorem base16 : ∀ s, HasCircuitSize 5 (gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) s → 8 ≤ s := by
-  have heq : (fun x : Fin 5 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 4)) = gfn (n := 5) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)] := by
+  have heq : gF4 = gfn (n := 5) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF4, gfn, Bool.or_assoc]
   rw [← heq]
   exact conj_16
 
 theorem base31 : ∀ s, HasCircuitSize 6 (gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5)]) s → 8 ≤ s := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 5)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5)] := by
+  have heq : gF5 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF5, gfn, Bool.or_assoc]
   rw [← heq]
   exact conj_31
 
 theorem base33 : ∀ s, HasCircuitSize 6 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5)]) s → 8 ≤ s := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5)] := by
+  have heq : gF6 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF6, gfn, Bool.or_assoc]
   rw [← heq]
   exact conj_33
 
 theorem base34 : ∀ s, HasCircuitSize 6 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5)]) s → 8 ≤ s := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5)] := by
+  have heq : gF7 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF7, gfn, Bool.or_assoc]
   rw [← heq]
   exact conj_34
 
 theorem base35 : ∀ s, HasCircuitSize 6 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5)]) s → 8 ≤ s := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 4 && x 5)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5)] := by
+  have heq : gF8 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF8, gfn, Bool.or_assoc]
   rw [← heq]
   exact conj_35
 
 theorem base36 : ∀ s, HasCircuitSize 6 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (4, 5)]) s → 8 ≤ s := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 4) || (x 2 && x 5) || (x 4 && x 5)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (4, 5)] := by
+  have heq : gF9 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (4, 5)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF9, gfn, Bool.or_assoc]
   rw [← heq]
   exact conj_36
 
 theorem base37 : ∀ s, HasCircuitSize 6 (gfn [] [(0, 1), (0, 2), (1, 2), (3, 4), (3, 5), (4, 5)]) s → 9 ≤ s := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5) || (x 4 && x 5)) = gfn (n := 6) [] [(0, 1), (0, 2), (1, 2), (3, 4), (3, 5), (4, 5)] := by
+  have heq : gF10 = gfn (n := 6) [] [(0, 1), (0, 2), (1, 2), (3, 4), (3, 5), (4, 5)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF10, gfn, Bool.or_assoc]
   rw [← heq]
   exact conj_37
 
 theorem base39 : ∀ s, HasCircuitSize 6 (gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4)]) s → 9 ≤ s := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 1 && x 2) || (x 3 && x 4)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4)] := by
+  have heq : gF11 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF11, gfn, Bool.or_assoc]
   rw [← heq]
   exact conj_39
 
 theorem base40 : ∀ s, HasCircuitSize 6 (gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)]) s → 9 ≤ s := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 3 && x 4)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)] := by
+  have heq : gF12 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF12, gfn, Bool.or_assoc]
   rw [← heq]
   exact conj_40
 
 theorem base41 : ∀ s, HasCircuitSize 6 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5)]) s → 9 ≤ s := by
-  have heq : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 4 && x 5)) = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5)] := by
+  have heq : gF13 = gfn (n := 6) [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF13, gfn, Bool.or_assoc]
   rw [← heq]
   exact conj_41
 
 theorem node1 : ∀ s, HasCircuitSize 7 (gfn [6] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) s → 9 ≤ s := by
-  exact gfn_fix0 (A := [6]) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (p := (6 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (k := 8) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 3 => (3 : Fin 5) | 4 => (4 : Fin 5) | _ => (0 : Fin 5)) (by decide) base16)
+  exact gfn_fix0 (A := [6]) (E := eS1) (p := (6 : Fin 7)) (A' := []) (E' := eS1) (k := 8) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS1) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) restrictMap7 (by decide) base16)
 
 theorem node2 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4), (5, 6)]) s → 10 ≤ s := by
-  exact gfn_fix1 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4), (5, 6)]) (p := (5 : Fin 7)) (A' := [6]) (E' := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (k := 9) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) node1
+  exact gfn_fix1 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4), (5, 6)]) (p := (5 : Fin 7)) (A' := [6]) (E' := eS1) (k := 9) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) node1
 
 theorem node3 : ∀ s, HasCircuitSize 7 (gfn [3] [(0, 1), (0, 2), (0, 4), (1, 2), (4, 6)]) s → 8 ≤ s := by
-  exact gfn_fix0 (A := [3]) (E := [(0, 1), (0, 2), (0, 4), (1, 2), (4, 6)]) (p := (3 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (0, 4), (1, 2), (4, 6)]) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 4), (1, 2), (4, 6)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 4 => (3 : Fin 5) | 6 => (4 : Fin 5) | _ => (0 : Fin 5)) (by decide) base14)
+  exact gfn_fix0 (A := [3]) (E := eS6) (p := (3 : Fin 7)) (A' := []) (E' := eS6) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS6) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 4 => (3 : Fin 5) | 6 => (4 : Fin 5) | _ => (0 : Fin 5)) (by decide) base14)
 
 theorem node4 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5), (4, 6)]) s → 10 ≤ s := by
-  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5), (4, 6)]) (p := (5 : Fin 7)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (4, 6)]) (A1 := [3]) (E1 := [(0, 1), (0, 2), (0, 4), (1, 2), (4, 6)]) (k := 8) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (4, 6)]) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (4 : Fin 6) | 4 => (3 : Fin 6) | 6 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base31) node3
+  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5), (4, 6)]) (p := (5 : Fin 7)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (4, 6)]) (A1 := [3]) (E1 := eS6) (k := 8) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (4, 6)]) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (4 : Fin 6) | 4 => (3 : Fin 6) | 6 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base31) node3
 
 theorem node5 : ∀ s, HasCircuitSize 7 (gfn [3] [(0, 1), (0, 2), (1, 2), (1, 4), (4, 6)]) s → 8 ≤ s := by
-  exact gfn_fix0 (A := [3]) (E := [(0, 1), (0, 2), (1, 2), (1, 4), (4, 6)]) (p := (3 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (1, 2), (1, 4), (4, 6)]) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 2), (1, 4), (4, 6)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)]) (fun i : Fin 7 => match i.val with | 0 => (1 : Fin 5) | 2 => (2 : Fin 5) | 4 => (3 : Fin 5) | 6 => (4 : Fin 5) | _ => (0 : Fin 5)) (by decide) base14)
+  exact gfn_fix0 (A := [3]) (E := eS7) (p := (3 : Fin 7)) (A' := []) (E' := eS7) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS7) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)]) (fun i : Fin 7 => match i.val with | 0 => (1 : Fin 5) | 2 => (2 : Fin 5) | 4 => (3 : Fin 5) | 6 => (4 : Fin 5) | _ => (0 : Fin 5)) (by decide) base14)
 
 theorem node6 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 6)]) s → 10 ≤ s := by
-  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 6)]) (p := (5 : Fin 7)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (4, 6)]) (A1 := [3]) (E1 := [(0, 1), (0, 2), (1, 2), (1, 4), (4, 6)]) (k := 8) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (4, 6)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5)]) (fun i : Fin 7 => match i.val with | 0 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (4 : Fin 6) | 4 => (3 : Fin 6) | 6 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base33) node5
+  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 6)]) (p := (5 : Fin 7)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (4, 6)]) (A1 := [3]) (E1 := eS7) (k := 8) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (4, 6)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5)]) (fun i : Fin 7 => match i.val with | 0 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (4 : Fin 6) | 4 => (3 : Fin 6) | 6 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base33) node5
 
 theorem node7 : ∀ s, HasCircuitSize 7 (gfn [4] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5)]) s → 8 ≤ s := by
-  exact gfn_fix0 (A := [4]) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5)]) (p := (4 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5)]) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 3 => (3 : Fin 5) | 5 => (4 : Fin 5) | _ => (0 : Fin 5)) (by decide) base14)
+  exact gfn_fix0 (A := [4]) (E := eS3) (p := (4 : Fin 7)) (A' := []) (E' := eS3) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS3) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 3 => (3 : Fin 5) | 5 => (4 : Fin 5) | _ => (0 : Fin 5)) (by decide) base14)
 
 theorem node8 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 6)]) s → 10 ≤ s := by
-  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 6)]) (p := (6 : Fin 7)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5)]) (A1 := [4]) (E1 := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5)]) (k := 8) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 4 => (4 : Fin 6) | 5 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base34) node7
+  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 6)]) (p := (6 : Fin 7)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5)]) (A1 := [4]) (E1 := eS3) (k := 8) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5)]) restrictMap1 (by decide) base34) node7
 
 theorem node9 : ∀ s, HasCircuitSize 7 (gfn [5] [(0, 1), (0, 2), (1, 2)]) s → 5 ≤ s := by
-  exact gfn_fix0 (A := [5]) (E := [(0, 1), (0, 2), (1, 2)]) (p := (5 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (1, 2)]) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 2)]) (Eb := [(0, 1), (0, 2), (1, 2)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | _ => (0 : Fin 3)) (by decide) base2)
+  exact gfn_fix0 (A := [5]) (E := eS0) (p := (5 : Fin 7)) (A' := []) (E' := eS0) (k := 4) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS0) (Eb := [(0, 1), (0, 2), (1, 2)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 3) | 2 => (2 : Fin 3) | _ => (0 : Fin 3)) (by decide) base2)
 
 theorem node10 : ∀ s, HasCircuitSize 7 (gfn [5] [(0, 1), (0, 2), (0, 3), (1, 2)]) s → 6 ≤ s := by
-  exact gfn_fix0 (A := [5]) (E := [(0, 1), (0, 2), (0, 3), (1, 2)]) (p := (3 : Fin 7)) (A' := [5]) (E' := [(0, 1), (0, 2), (1, 2)]) (k := 5) (by decide) (by decide) (by decide) (by decide) node9
+  exact gfn_fix0 (A := [5]) (E := eS2) (p := (3 : Fin 7)) (A' := [5]) (E' := eS0) (k := 5) (by decide) (by decide) (by decide) (by decide) node9
 
 theorem node11 : ∀ s, HasCircuitSize 7 (gfn [5, 3] [(0, 1), (0, 2), (1, 2)]) s → 6 ≤ s := by
-  exact gfn_fix0 (A := [5, 3]) (E := [(0, 1), (0, 2), (1, 2)]) (p := (3 : Fin 7)) (A' := [5]) (E' := [(0, 1), (0, 2), (1, 2)]) (k := 5) (by decide) (by decide) (by decide) (by decide) node9
+  exact gfn_fix0 (A := [5, 3]) (E := eS0) (p := (3 : Fin 7)) (A' := [5]) (E' := eS0) (k := 5) (by decide) (by decide) (by decide) (by decide) node9
 
 theorem node12 : ∀ s, HasCircuitSize 7 (gfn [5] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)]) s → 8 ≤ s := by
-  exact gfn_branch2 (A := [5]) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)]) (p := (4 : Fin 7)) (A0 := [5]) (E0 := [(0, 1), (0, 2), (0, 3), (1, 2)]) (A1 := [5, 3]) (E1 := [(0, 1), (0, 2), (1, 2)]) (k := 6) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) node10 node11
+  exact gfn_branch2 (A := [5]) (E := eS5) (p := (4 : Fin 7)) (A0 := [5]) (E0 := eS2) (A1 := [5, 3]) (E1 := eS0) (k := 6) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) node10 node11
 
 theorem node13 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5), (5, 6)]) s → 10 ≤ s := by
-  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5), (5, 6)]) (p := (6 : Fin 7)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5)]) (A1 := [5]) (E1 := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4)]) (k := 8) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 4 => (4 : Fin 6) | 5 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base35) node12
+  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5), (5, 6)]) (p := (6 : Fin 7)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5)]) (A1 := [5]) (E1 := eS5) (k := 8) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5)]) restrictMap1 (by decide) base35) node12
 
 theorem node14 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (4, 5), (4, 6), (5, 6)]) s → 10 ≤ s := by
   exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (4, 5), (4, 6), (5, 6)]) (p := (3 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (1, 2), (4, 5), (4, 6), (5, 6)]) (k := 9) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 2), (4, 5), (4, 6), (5, 6)]) (Eb := [(0, 1), (0, 2), (1, 2), (3, 4), (3, 5), (4, 5)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 4 => (3 : Fin 6) | 5 => (4 : Fin 6) | 6 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base37)
 
 theorem node15 : ∀ s, HasCircuitSize 7 (gfn [3] [(0, 1), (0, 2), (1, 4), (2, 5), (4, 5)]) s → 8 ≤ s := by
-  exact gfn_fix0 (A := [3]) (E := [(0, 1), (0, 2), (1, 4), (2, 5), (4, 5)]) (p := (3 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (1, 4), (2, 5), (4, 5)]) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (1, 4), (2, 5), (4, 5)]) (Eb := [(0, 1), (0, 2), (1, 3), (2, 4), (3, 4)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 4 => (3 : Fin 5) | 5 => (4 : Fin 5) | _ => (0 : Fin 5)) (by decide) base15)
+  exact gfn_fix0 (A := [3]) (E := eS4) (p := (3 : Fin 7)) (A' := []) (E' := eS4) (k := 7) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS4) (Eb := [(0, 1), (0, 2), (1, 3), (2, 4), (3, 4)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 4 => (3 : Fin 5) | 5 => (4 : Fin 5) | _ => (0 : Fin 5)) (by decide) base15)
 
 theorem node16 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (3, 6), (4, 5)]) s → 10 ≤ s := by
-  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (3, 6), (4, 5)]) (p := (6 : Fin 7)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (4, 5)]) (A1 := [3]) (E1 := [(0, 1), (0, 2), (1, 4), (2, 5), (4, 5)]) (k := 8) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (4, 5)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (4, 5)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 4 => (4 : Fin 6) | 5 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base36) node15
+  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (3, 6), (4, 5)]) (p := (6 : Fin 7)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (4, 5)]) (A1 := [3]) (E1 := eS4) (k := 8) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (4, 5)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (4, 5)]) restrictMap1 (by decide) base36) node15
 
 theorem node18 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (1, 2), (3, 4)]) s → 10 ≤ s := by
-  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (1, 2), (3, 4)]) (p := (5 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 6), (1, 2), (3, 4)]) (k := 9) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 6), (1, 2), (3, 4)]) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 4 => (4 : Fin 6) | 6 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base39)
+  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (1, 2), (3, 4)]) (p := (5 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 6), (1, 2), (3, 4)]) (k := 9) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 6), (1, 2), (3, 4)]) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4)]) restrictMap2 (by decide) base39)
 
 theorem node19 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (1, 6), (3, 4)]) s → 10 ≤ s := by
-  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (1, 6), (3, 4)]) (p := (5 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 6), (3, 4)]) (k := 9) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 6), (3, 4)]) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 4 => (4 : Fin 6) | 6 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base40)
+  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (1, 6), (3, 4)]) (p := (5 : Fin 7)) (A' := []) (E' := eS8) (k := 9) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS8) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)]) restrictMap2 (by decide) base40)
 
 theorem node20 : ∀ s, HasCircuitSize 7 (gfn [5] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) s → 9 ≤ s := by
-  exact gfn_fix0 (A := [5]) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (p := (5 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (k := 8) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 5) | 2 => (2 : Fin 5) | 3 => (3 : Fin 5) | 4 => (4 : Fin 5) | _ => (0 : Fin 5)) (by decide) base16)
+  exact gfn_fix0 (A := [5]) (E := eS1) (p := (5 : Fin 7)) (A' := []) (E' := eS1) (k := 8) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS1) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) restrictMap7 (by decide) base16)
 
 theorem node21 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4), (5, 6)]) s → 11 ≤ s := by
-  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4), (5, 6)]) (p := (6 : Fin 7)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4)]) (A1 := [5]) (E1 := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (k := 9) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4)]) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 4 => (4 : Fin 6) | 5 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base39) node20
+  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4), (5, 6)]) (p := (6 : Fin 7)) (A0 := []) (E0 := eS10) (A1 := [5]) (E1 := eS1) (k := 9) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS10) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4)]) restrictMap1 (by decide) base39) node20
 
 theorem node22 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (1, 6), (3, 4)]) s → 10 ≤ s := by
-  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (1, 6), (3, 4)]) (p := (5 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 6), (3, 4)]) (k := 9) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 6), (3, 4)]) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 4 => (4 : Fin 6) | 6 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base40)
+  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (1, 6), (3, 4)]) (p := (5 : Fin 7)) (A' := []) (E' := eS8) (k := 9) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS8) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)]) restrictMap2 (by decide) base40)
 
 theorem node24 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4), (3, 6)]) s → 10 ≤ s := by
   exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4), (3, 6)]) (p := (5 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4), (3, 6)]) (k := 9) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4), (3, 6)]) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)]) (fun i : Fin 7 => match i.val with | 1 => (3 : Fin 6) | 2 => (4 : Fin 6) | 3 => (1 : Fin 6) | 4 => (2 : Fin 6) | 6 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base40)
 
 theorem node25 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4), (5, 6)]) s → 11 ≤ s := by
-  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4), (5, 6)]) (p := (6 : Fin 7)) (A0 := []) (E0 := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)]) (A1 := [5]) (E1 := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4)]) (k := 9) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)]) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 4 => (4 : Fin 6) | 5 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base40) node20
+  exact gfn_branch2 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4), (5, 6)]) (p := (6 : Fin 7)) (A0 := []) (E0 := eS11) (A1 := [5]) (E1 := eS1) (k := 9) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS11) (Eb := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4)]) restrictMap1 (by decide) base40) node20
 
 theorem node26 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 6), (5, 6)]) s → 10 ≤ s := by
   exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 6), (5, 6)]) (p := (4 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 5), (3, 6), (5, 6)]) (k := 9) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 5), (3, 6), (5, 6)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 5 => (4 : Fin 6) | 6 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base41)
 
 theorem node34 : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5), (5, 6)]) s → 10 ≤ s := by
-  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5), (5, 6)]) (p := (6 : Fin 7)) (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5)]) (k := 9) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5)]) (fun i : Fin 7 => match i.val with | 1 => (1 : Fin 6) | 2 => (2 : Fin 6) | 3 => (3 : Fin 6) | 4 => (4 : Fin 6) | 5 => (5 : Fin 6) | _ => (0 : Fin 6)) (by decide) base41)
+  exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5), (5, 6)]) (p := (6 : Fin 7)) (A' := []) (E' := eS12) (k := 9) (by decide) (by decide) (by decide) (by decide) (gfn_base (E := eS12) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5)]) restrictMap1 (by decide) base41)
 
-theorem shard01 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 4) || (x 5 && x 6)) t → 10 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 4) || (x 5 && x 6)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4), (5, 6)] := by
+theorem shard01 : ∀ t : ℕ, HasCircuitSize 7 gF14 t → 10 ≤ t := by
+  have heq : gF14 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 4), (5, 6)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF14, gfn, Bool.or_assoc]
   rw [heq]
   exact node2
 
-theorem shard02 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 5) || (x 4 && x 6)) t → 10 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 5) || (x 4 && x 6)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5), (4, 6)] := by
+theorem shard02 : ∀ t : ℕ, HasCircuitSize 7 gF15 t → 10 ≤ t := by
+  have heq : gF15 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5), (4, 6)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF15, gfn, Bool.or_assoc]
   rw [heq]
   exact node4
 
-theorem shard03 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 4 && x 6)) t → 10 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 4 && x 6)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 6)] := by
+theorem shard03 : ∀ t : ℕ, HasCircuitSize 7 gF16 t → 10 ≤ t := by
+  have heq : gF16 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 6)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF16, gfn, Bool.or_assoc]
   rw [heq]
   exact node6
 
-theorem shard04 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5) || (x 4 && x 6)) t → 10 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5) || (x 4 && x 6)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 6)] := by
+theorem shard04 : ∀ t : ℕ, HasCircuitSize 7 gF17 t → 10 ≤ t := by
+  have heq : gF17 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 6)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF17, gfn, Bool.or_assoc]
   rw [heq]
   exact node8
 
-theorem shard05 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 4 && x 5) || (x 5 && x 6)) t → 10 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 4 && x 5) || (x 5 && x 6)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5), (5, 6)] := by
+theorem shard05 : ∀ t : ℕ, HasCircuitSize 7 gF18 t → 10 ≤ t := by
+  have heq : gF18 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (4, 5), (5, 6)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF18, gfn, Bool.or_assoc]
   rw [heq]
   exact node13
 
-theorem shard06 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 4 && x 5) || (x 4 && x 6) || (x 5 && x 6)) t → 10 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 4 && x 5) || (x 4 && x 6) || (x 5 && x 6)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (1, 2), (4, 5), (4, 6), (5, 6)] := by
+theorem shard06 : ∀ t : ℕ, HasCircuitSize 7 gF19 t → 10 ≤ t := by
+  have heq : gF19 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (1, 2), (4, 5), (4, 6), (5, 6)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF19, gfn, Bool.or_assoc]
   rw [heq]
   exact node14
 
-theorem shard07 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 4) || (x 2 && x 5) || (x 3 && x 6) || (x 4 && x 5)) t → 10 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 4) || (x 2 && x 5) || (x 3 && x 6) || (x 4 && x 5)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (3, 6), (4, 5)] := by
+theorem shard07 : ∀ t : ℕ, HasCircuitSize 7 gF20 t → 10 ≤ t := by
+  have heq : gF20 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (1, 4), (2, 5), (3, 6), (4, 5)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF20, gfn, Bool.or_assoc]
   rw [heq]
   exact node16
 
-theorem shard09 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 0 && x 6) || (x 1 && x 2) || (x 3 && x 4)) t → 10 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 0 && x 6) || (x 1 && x 2) || (x 3 && x 4)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (1, 2), (3, 4)] := by
+theorem shard09 : ∀ t : ℕ, HasCircuitSize 7 gF21 t → 10 ≤ t := by
+  have heq : gF21 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (1, 2), (3, 4)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF21, gfn, Bool.or_assoc]
   rw [heq]
   exact node18
 
-theorem shard10 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 1 && x 2) || (x 1 && x 6) || (x 3 && x 4)) t → 10 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 1 && x 2) || (x 1 && x 6) || (x 3 && x 4)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (1, 6), (3, 4)] := by
+theorem shard10 : ∀ t : ℕ, HasCircuitSize 7 gF22 t → 10 ≤ t := by
+  have heq : gF22 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (1, 6), (3, 4)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF22, gfn, Bool.or_assoc]
   rw [heq]
   exact node19
 
-theorem shard11 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 1 && x 2) || (x 3 && x 4) || (x 5 && x 6)) t → 11 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 1 && x 2) || (x 3 && x 4) || (x 5 && x 6)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4), (5, 6)] := by
+theorem shard11 : ∀ t : ℕ, HasCircuitSize 7 gF23 t → 11 ≤ t := by
+  have heq : gF23 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (0, 5), (1, 2), (3, 4), (5, 6)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF23, gfn, Bool.or_assoc]
   rw [heq]
   exact node21
 
-theorem shard12 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 1 && x 6) || (x 3 && x 4)) t → 10 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 1 && x 6) || (x 3 && x 4)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (1, 6), (3, 4)] := by
+theorem shard12 : ∀ t : ℕ, HasCircuitSize 7 gF24 t → 10 ≤ t := by
+  have heq : gF24 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (1, 6), (3, 4)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF24, gfn, Bool.or_assoc]
   rw [heq]
   exact node22
 
-theorem shard14 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 3 && x 4) || (x 3 && x 6)) t → 10 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 3 && x 4) || (x 3 && x 6)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4), (3, 6)] := by
+theorem shard14 : ∀ t : ℕ, HasCircuitSize 7 gF25 t → 10 ≤ t := by
+  have heq : gF25 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4), (3, 6)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF25, gfn, Bool.or_assoc]
   rw [heq]
   exact node24
 
-theorem shard15 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 3 && x 4) || (x 5 && x 6)) t → 11 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 3 && x 4) || (x 5 && x 6)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4), (5, 6)] := by
+theorem shard15 : ∀ t : ℕ, HasCircuitSize 7 gF26 t → 11 ≤ t := by
+  have heq : gF26 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 4), (5, 6)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF26, gfn, Bool.or_assoc]
   rw [heq]
   exact node25
 
-theorem shard16 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 3 && x 6) || (x 5 && x 6)) t → 10 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 3 && x 6) || (x 5 && x 6)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 6), (5, 6)] := by
+theorem shard16 : ∀ t : ℕ, HasCircuitSize 7 gF27 t → 10 ≤ t := by
+  have heq : gF27 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (1, 5), (3, 6), (5, 6)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF27, gfn, Bool.or_assoc]
   rw [heq]
   exact node26
 
-theorem shard22 : ∀ t : ℕ, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 4 && x 5) || (x 5 && x 6)) t → 10 ≤ t := by
-  have heq : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 4 && x 5) || (x 5 && x 6)) = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5), (5, 6)] := by
+theorem shard22 : ∀ t : ℕ, HasCircuitSize 7 gF28 t → 10 ≤ t := by
+  have heq : gF28 = gfn (n := 7) [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (4, 5), (5, 6)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF28, gfn, Bool.or_assoc]
   rw [heq]
   exact node34
 
@@ -3023,44 +2982,44 @@ end Reduction
 namespace Reduction
 open PEqualNP.MetaComplexity 
 
-theorem row17_of_row0 (base : ∀ s, HasCircuitSize 6 (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5) || (x 4 && x 5)) s → 10 ≤ s) :
-    ∀ s, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 5) || (x 3 && x 6) || (x 5 && x 6)) s → 11 ≤ s := by
+theorem row17_of_row0 (base : ∀ s, HasCircuitSize 6 gF0 s → 10 ≤ s) :
+    ∀ s, HasCircuitSize 7 gF29 s → 11 ≤ s := by
   have base' : ∀ s, HasCircuitSize 6 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 5)]) s → 10 ≤ s := by
-    have he : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5) || (x 4 && x 5)) = gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 5)] := by
+    have he : gF0 = gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 5)] := by
       funext x
-      simp [gfn, Bool.or_assoc]
+      simp [gF0, gfn, Bool.or_assoc]
     rw [← he]
     exact base
   have child : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5), (3, 6), (5, 6)]) s → 10 ≤ s :=
-    gfn_base (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5), (3, 6), (5, 6)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 5)])
+    gfn_base (E := eS9) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 5)])
       (fun i : Fin 7 => match i.val with
         | 1 => (1 : Fin 6) | 2 => 2 | 3 => 3 | 5 => 4 | 6 => 5 | _ => 0) (by decide) base'
-  have he : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 5) || (x 3 && x 6) || (x 5 && x 6)) = gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5), (3, 6), (5, 6)] := by
+  have he : gF29 = gfn [] [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5), (3, 6), (5, 6)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF29, gfn, Bool.or_assoc]
   rw [he]
   exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (0, 4), (1, 2), (3, 5), (3, 6), (5, 6)]) (p := (4 : Fin 7))
-    (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5), (3, 6), (5, 6)]) (k := 10) (by decide) (by decide)
+    (A' := []) (E' := eS9) (k := 10) (by decide) (by decide)
     (by decide) (by decide) child
 
-theorem row21_of_row0 (base : ∀ s, HasCircuitSize 6 (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5) || (x 4 && x 5)) s → 10 ≤ s) :
-    ∀ s, HasCircuitSize 7 (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 3 && x 6) || (x 5 && x 6)) s → 11 ≤ s := by
+theorem row21_of_row0 (base : ∀ s, HasCircuitSize 6 gF0 s → 10 ≤ s) :
+    ∀ s, HasCircuitSize 7 gF30 s → 11 ≤ s := by
   have base' : ∀ s, HasCircuitSize 6 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 5)]) s → 10 ≤ s := by
-    have he : (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5) || (x 4 && x 5)) = gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 5)] := by
+    have he : gF0 = gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 5)] := by
       funext x
-      simp [gfn, Bool.or_assoc]
+      simp [gF0, gfn, Bool.or_assoc]
     rw [← he]
     exact base
   have child : ∀ s, HasCircuitSize 7 (gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5), (3, 6), (5, 6)]) s → 10 ≤ s :=
-    gfn_base (E := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5), (3, 6), (5, 6)]) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 5)])
+    gfn_base (E := eS9) (Eb := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 4), (3, 5), (4, 5)])
       (fun i : Fin 7 => match i.val with
         | 1 => (1 : Fin 6) | 2 => 2 | 3 => 3 | 5 => 4 | 6 => 5 | _ => 0) (by decide) base'
-  have he : (fun x : Fin 7 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 3 && x 6) || (x 5 && x 6)) = gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (3, 6), (5, 6)] := by
+  have he : gF30 = gfn [] [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (3, 6), (5, 6)] := by
     funext x
-    simp [gfn, Bool.or_assoc]
+    simp [gF30, gfn, Bool.or_assoc]
   rw [he]
   exact gfn_fix0 (A := []) (E := [(0, 1), (0, 2), (0, 3), (1, 2), (1, 4), (3, 5), (3, 6), (5, 6)]) (p := (4 : Fin 7))
-    (A' := []) (E' := [(0, 1), (0, 2), (0, 3), (1, 2), (3, 5), (3, 6), (5, 6)]) (k := 10) (by decide) (by decide)
+    (A' := []) (E' := eS9) (k := 10) (by decide) (by decide)
     (by decide) (by decide) child
 
 end Reduction
@@ -3336,8 +3295,6 @@ theorem nextTallied_eq (k s : Nat) (ws : List Nat) (f : Nat → List Nat → Boo
 
 def keepRunTag (t : Nat) : Bool := t == 0 || decide (48 ≤ t) || t % 4 != 0
 
-theorem keepRunTag_zero : keepRunTag 0 = true := by decide
-
 theorem keepRunTag_neg (ws : List Nat) (a : Nat) (save : Bool) :
     keepRunTag (tagU ws a true save) = true := by
   cases save <;> simp [keepRunTag,tagU,Bool.toNat,Nat.add_mod,Nat.mul_mod]
@@ -3575,46 +3532,6 @@ def checkpointHit (count : Nat → Nat) (board : Nat → Nat → List Nat)
   | none => false
   | some i => decide (i < count s) && ws.isPerm (board s i)
 
-def checkpointCheck (k : Nat) (scs : List Nat) (count : Nat → Nat)
-    (board : Nat → Nat → List Nat) (lookup : Nat → List Nat → Option Nat) : Nat → List Nat → Bool
-  | 0, ws => !(ws == [goal k])
-  | s+1, ws => !(nextDirect k s ws (fun _ zs =>
-      !(scr k s scs zs) && !(checkpointHit count board lookup s zs) &&
-        !(checkpointCheck k scs count board lookup s zs)))
-
-theorem checkpointCheck_sound {k scs count board lookup}
-    (closed : ∀ s i, i < count s → checkpointCheck k scs count board lookup s (board s i) = true)
-    {s ws} (ok : checkpointCheck k scs count board lookup s ws = true) :
-    ¬NatRun (mask k) (goal k) s ws := by
-  intro h
-  induction s generalizing ws with
-  | zero => simp [checkpointCheck, zero_done h rfl] at ok
-  | succ s ih =>
-    let F (_ : Nat) (zs : List Nat) : Bool := !(scr k s scs zs) && !(checkpointHit count board lookup s zs) && !(checkpointCheck k scs count board lookup s zs)
-    have all : ∀ t ys, NatRun (mask k) (goal k) s ys → F t ys = true := by
-      intro t ys hy
-      have nohit : checkpointHit count board lookup s ys = false := by
-        cases e : lookup s ys with
-        | none => simp [checkpointHit,e]
-        | some i =>
-          cases he : checkpointHit count board lookup s ys with
-          | false => rfl
-          | true =>
-            have hx : (decide (i < count s) && ys.isPerm (board s i)) = true := by
-              simpa only [checkpointHit,e] using he
-            simp only [Bool.and_eq_true] at hx
-            obtain ⟨hi,hp⟩ := hx
-            exact False.elim (ih (closed s i (of_decide_eq_true hi)) (Run.perm (List.isPerm_iff.1 hp) hy))
-      have bad : checkpointCheck k scs count board lookup s ys = false := by
-        cases he : checkpointCheck k scs count board lookup s ys
-        · rfl
-        · exact False.elim (ih he hy)
-      simp [F,covers_ok hy,scr_no scs hy,nohit,bad]
-    have hit := nextKept_complete h F all
-    rw [checkpointCheck,nextDirect_eq] at ok
-    rw [hit] at ok
-    contradiction
-
 def pickRows (r : List Nat) (w : Nat) : Nat :=
   match r with
   | [] => 0
@@ -3697,19 +3614,6 @@ def cutN (s n u : Nat) := if u = s then n else 0
 def cutB (s : Nat) (xs : List Nat) (board : Nat → List Nat) (u i : Nat) :=
   if u = s then board i else xs
 
-theorem cut_root {k s n : Nat} {xs pool : List Nat}
-    {board : Nat → List Nat} {idx : List Nat → Nat}
-    (cover : bar k (cutB s xs board) (cutN s n) (fun _ => idx) id pool (s+1) 0 = true)
-    (dead : ∀ i, i < n → ¬NatRun (mask k) (goal k) s (board i)) :
-    ¬NatRun (mask k) (goal k) (s+1) xs := by
-  intro h
-  have hr : NatRun (mask k) (goal k) (s+1) (cutB s xs board (s+1) 0) := by
-    simpa [cutB] using h
-  obtain ⟨q, _, j, hj, hq⟩ := bar_sound cover (fun h => h) hr
-  by_cases e : q = s
-  · subst q
-    exact dead j (by simpa [cutN] using hj) (by simpa [cutB] using hq)
-  · simp [cutN, e] at hj
 theorem symCutRoot {k s n : Nat} {xs pool : List Nat}
     {board : Nat → List Nat} {idx : List Nat → Nat}
     {ori : List Nat → List Nat}
@@ -3726,21 +3630,106 @@ theorem symCutRoot {k s n : Nat} {xs pool : List Nat}
     exact dead j (by simpa [cutN] using hj) (by simpa [cutB] using hq)
   · simp [cutN, e] at hj
 
+def exprA (m : Nat) (x : Fin 8 → Nat) (c : Nat) : Nat :=
+  let a := x ⟨c % 8,by omega⟩
+  let b := x ⟨c/8 % 8,by omega⟩
+  let op := c/64 % 4
+  if op=0 then a else if op=1 then a ^^^ m else if op=2 then a ||| b else a &&& b
+
+def exprB (m : Nat) (x : Fin 8 → Nat) (c : Nat) : Nat :=
+  let a := exprA m x (c % 256)
+  let q := c/256
+  if q=0 then a else if q=1 then a ^^^ m else
+    let b := x ⟨(q-2)%8,by omega⟩
+    if q<10 then a ||| b else a &&& b
+
+def quickWord (m : Nat) (x y : Fin 8 → Nat) (rows : List Nat) (book : Nat → Nat) (w : Nat) :=
+  let c := book w
+  if exprB m x c = w then exprB m y c else pickRows rows w
+
+def quickOri (k bound : Nat) (xs : List Nat) (choose : List Nat → Nat)
+    (row : Nat → List Nat) (word : Nat → Fin 8 → Nat) (book : Nat → Nat) (ws : List Nat) :=
+  let a := choose ws
+  if a=0 ∨ bound≤a then ws else
+    ws.map (quickWord (mask k) (fun i => xs.getD i 0) (word a) (row a) book)
+
+theorem exprA_map (r : List Nat) (m : Nat) (x : Fin 8 → Nat) (c : Nat) :
+    pickRows r (exprA m x c) = exprA (pickRows r m) (fun i => pickRows r (x i)) c := by
+  unfold exprA
+  dsimp only
+  by_cases a : c/64 % 4 = 0 <;> by_cases b : c/64 % 4 = 1 <;> by_cases d : c/64 % 4 = 2 <;>
+    simp [a,b,d,pickRows_xor,pickRows_and,pickRows_or]
+
+theorem exprB_map (r : List Nat) (m : Nat) (x : Fin 8 → Nat) (c : Nat) :
+    pickRows r (exprB m x c) = exprB (pickRows r m) (fun i => pickRows r (x i)) c := by
+  unfold exprB
+  dsimp only
+  by_cases a : c/256 = 0 <;> by_cases b : c/256 = 1 <;> by_cases d : c/256 < 10 <;>
+    simp [a,b,d,pickRows_xor,pickRows_and,pickRows_or,exprA_map]
+
+abbrev validQuick (k : Nat) (xs r : List Nat) (y : Fin 8 → Nat) :=
+  pickRows r (mask k) = mask k ∧ pickRows r (goal k) = goal k ∧ ∀ i : Fin 8, pickRows r (xs.getD i 0) = y i
+
+theorem quick_safe {k bound xs choose row word book u ws}
+    (ok : ∀ i : Fin bound, i.val = 0 ∨ validQuick k xs (row i) (word i))
+    (h : NatRun (mask k) (goal k) u ws) :
+    NatRun (mask k) (goal k) u (quickOri k bound xs choose row word book ws) := by
+  unfold quickOri
+  dsimp only
+  split
+  · exact h
+  next he =>
+    let a := choose ws
+    obtain ⟨hm,hy,hx⟩ := (ok ⟨a,by dsimp [a];omega⟩).resolve_left (by dsimp [a];omega)
+    have e : quickWord (mask k) (fun i => xs.getD i 0) (word a) (row a) book = pickRows (row a) := by
+      funext w
+      unfold quickWord
+      dsimp only
+      split
+      next hh =>
+        calc
+          exprB (mask k) (word a) (book w) = exprB (pickRows (row a) (mask k)) (fun i => pickRows (row a) (xs.getD i 0)) (book w) := by rw [hm,funext hx]
+          _ = pickRows (row a) (exprB (mask k) (fun i => xs.getD i 0) (book w)) := (exprB_map _ _ _ _).symm
+          _ = pickRows (row a) w := congrArg _ hh
+      next => rfl
+    rw [e]
+    have tr := transport h (row a)
+    rwa [hm,hy] at tr
+
+def sampleColumn (xs : List Nat) (i : Nat) : Nat :=
+  xs.foldr (fun w acc => (acc <<< 1) ||| ((w >>> i) &&& 1)) 0
+
+def sampleTable (xs : List Nat) (size : Nat) : List Nat :=
+  (List.range size).map (sampleColumn xs)
+
 namespace Row0
-def vals : List ℕ := [1,1,1,2,2,4,4,8,8,8,10,10,10,10,10,10,10,10,10,10,10,12,12,12,12,12,12,12,12,12,12,12,16,16,17,17,17,17,17,17,17,17,17,17,17,18,18,18,18,18,18,18,18,18,18,18,20,20,20,20,20,20,20,20,20,20,20,32,32,33,33,33,33,33,33,33,33,33,33,33,34,34,34,34,34,34,34,34,34,34,34,36,36,36,36,36,36,36,36,36,36,36,3,5,9,3,6,5,6,9,24,40,3,5,6,9,11,14,24,26,40,42,48,3,5,6,9,13,14,24,28,40,44,48,24,48,3,5,6,9,19,21,24,25,40,48,49,3,5,6,9,19,22,24,26,40,48,50,3,5,6,9,21,22,24,28,40,48,52,40,48,3,5,6,9,24,35,37,40,41,48,49,3,5,6,9,24,35,38,40,42,48,50,3,5,6,9,24,37,38,40,44,48,52]
 def inputs : List ℕ := [0x560aeb5806c0dcbb00d81b2bc00000ffe000001ffc00000007,0x8b5941280965a815012ab5164007ff000000ffe000001ffc18,0xacc1182312d81302615b0261cbff8000007ff000000ffe00060,0x330660cc2720e41c85fc3f8e1000000000000000000ffffff80,0xc21843085bc3786f0e604c0400000000007ffffffff00000000,0xfc1f83f07c0380700b80700803ffffffff80000000000000000]
+def vals := sampleTable inputs 204
 def scs : List ℕ := [0x1141516c6f19c68,0xe02d088671986a,0x1402d0286f1b87a,0x88151147a1a06e,0xe0220b46a19867,0x1404516c6a19c66,0x1140a1406f19868,0x880a0e06e19c68,0x1140a0887a1b86f,0x1140a054681a866,0x880a0b46e19868]
 def target : BFn 6 := fun x => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 3 && x 5) || (x 4 && x 5)
-def rho (ys : List Nat) : List Nat :=
-  let a := fld 0xc2442484a9320293200f4a0006d822688000 3 (bsr 0xf7831134f4fedb03ef42530ceeb6ca99dd448942d75a4f37d12435e6ceeaee09cdfdf8d5c84b49c4c0a8f783b5e46551b359a4deb279c2a1b0edf685b0147856aee40560ae8440cba181a3399de14f0f9b4f693095865b2993b4971e9375f304880f16b08715b59f73aa60ef6f5f01b26e5e2e6b6decb162639a36156375fee9527a8cb85157812a493de4eb4577ef263b056ff32e79e25f2c0f0be325862c5321a9d46920ee1b271e6cd2651774472c1683bb1211c516140dd37f0e0aa5544e073f6720 32 (hk ys) 6 0 49)
-  if a=0 || 6<a then [] else
-    let c := fld 0x6444af142c791163d2b28695a2358ca000000 21 a
-    vals.map (fun v => fld 0xa8009d927a000000840079b36f00bcb15bb05045430000008200778f6e00988d388c2d222000757f15740a6807006a670566030000 8 (orbitLabel c v))
+def qBook (w : Nat) : Nat :=
+  let d := fld 0x4a648404137690 3 (w % 21)
+  fld 0x438d8c0002a545d583cc8b010000849ddc81c2d49cc34185e5c442820095ca058a034494c1cb00004093cd04ddd3c5 8 (((w >>> 17) + d) % 47)
+
+def qPerm (i : Nat) : Nat := fld 0x6444af142c791163d2b28695a2358ca000000 21 i
+
+def qRow (i : Nat) : List Nat :=
+  vals.map (fun v => fld 0xa8009d927a000000840079b36f00bcb15bb05045430000008200778f6e00988d388c2d222000757f15740a6807006a670566030000 8 (orbitLabel (qPerm i) v))
+
+def qWord (i : Nat) (t : Fin 8) : Nat :=
+  inputs.getD (if t.val=7 then 7 else fld (qPerm i) 3 t.val) 0
+def qPick0 (ys : List Nat) : Nat :=
+  fld 0x1ac688 3 (fld 0xc2442484a9320293200f4a0006d822688000 3 (bsr 0xf7831134f4fedb03ef42530ceeb6ca99dd448942d75a4f37d12435e6ceeaee09cdfdf8d5c84b49c4c0a8f783b5e46551b359a4deb279c2a1b0edf685b0147856aee40560ae8440cba181a3399de14f0f9b4f693095865b2993b4971e9375f304880f16b08715b59f73aa60ef6f5f01b26e5e2e6b6decb162639a36156375fee9527a8cb85157812a493de4eb4577ef263b056ff32e79e25f2c0f0be325862c5321a9d46920ee1b271e6cd2651774472c1683bb1211c516140dd37f0e0aa5544e073f6720 32 (hk ys) 6 0 49))
+def qOri0 := quickOri 102 7 inputs qPick0 qRow qWord qBook
+
+set_option maxHeartbeats 50000000 in
+set_option maxRecDepth 10000 in
+theorem qCert : ∀ i : Fin 7, i.val = 0 ∨ validQuick 102 inputs (qRow i) (qWord i) := by decide +kernel
 def B (i : Nat) := mv (mask 102) (fld 0xe21e30e41105505f41503f31f30000f10400e40401f21103e10 12 i) inputs
 def I (ys : List Nat) := bsr 0xf7831134ef42530cd12435e6ae8440cba181a339880f16b08715b59f639a36156375fee9527a8cb85157812a2c0f0be31683bb1211c516140dd37f0e0aa5544e073f6720 32 (hk ys) 5 0 17
 def test (i : Nat) := checkD 102 scs 8 (B i)
 set_option maxRecDepth 10000 in
-lemma roof : bar 102 (cutB 8 inputs B) (cutN 8 17) (fun _ => I) (rowOrient 102 rho) scs 9 0 = true := by decide +kernel
+lemma roof : bar 102 (cutB 8 inputs B) (cutN 8 17) (fun _ => I) qOri0 scs 9 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
 lemma z0 : span test 4 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
@@ -3753,7 +3742,7 @@ set_option maxHeartbeats 50000000 in
 lemma z14 : span test 3 14 = true := by decide +kernel
 lemma regionOK : span test 17 0 = true := by with_reducible exact (sj (sj z0 z4) (sj z8 (sj z12 z14)))
 theorem finChk : ¬NatRun (mask 102) (goal 102) 9 inputs :=
-  symCutRoot (ori_ok rho) roof (fun i hi => checkD_sound (spOK regionOK i (Nat.zero_le _) hi))
+  symCutRoot (quick_safe (k:=102) (bound:=7) (xs:=inputs) (choose:=qPick0) (row:=qRow) (word:=qWord) (book:=qBook) qCert) roof (fun i hi => checkD_sound (spOK regionOK i (Nat.zero_le _) hi))
 
 set_option maxRecDepth 10000 in
 theorem shard : ∀ t, HasCircuitSize 6 target t → 10 ≤ t := by
@@ -3765,20 +3754,33 @@ theorem shard : ∀ t, HasCircuitSize 6 target t → 10 ≤ t := by
 end Row0
 
 namespace Row8
-def vals : List ℕ := [1,1,2,2,4,4,6,6,6,8,8,9,9,9,12,12,12,12,16,16,17,17,17,18,18,18,18,24,24,24,24,25,25,25,25,25,25,25,25,25,25,25,32,32,33,33,33,33,34,34,34,36,36,36,36,38,38,38,38,38,38,38,38,38,38,38,48,48,48,49,49,49,49,49,49,49,49,49,49,49,50,50,50,50,50,50,50,50,50,50,50,64,64,65,65,65,65,66,66,66,66,68,68,68,70,70,70,70,70,70,70,70,70,70,70,72,72,72,73,73,73,73,73,73,73,73,73,73,73,76,76,76,76,76,76,76,76,76,76,76,3,5,3,10,5,20,7,14,22,10,40,11,13,41,13,14,28,44,20,80,19,21,81,19,22,26,82,26,28,56,88,3,5,10,20,27,29,40,57,80,89,96,40,96,35,37,41,97,35,42,98,37,44,52,100,3,5,10,20,39,40,46,54,80,96,102,52,56,112,3,5,10,20,40,51,53,57,80,96,113,3,5,10,20,40,51,54,58,80,96,114,80,96,67,69,81,97,67,74,82,98,69,84,100,3,5,10,20,40,71,78,80,86,96,102,74,88,104,3,5,10,20,40,75,77,80,89,96,105,3,5,10,20,40,77,78,80,92,96,108]
 def inputs : List ℕ := [0x4758c02323e0239c600989f15980f07857001ffc00001e000ffe00000f3ff80703803,0x8a094d651e24e504a26a87100a8f908bcd0000007ff1e07ff0003ff870000078001cc,0xad412856ae0404a09466d7820151127d1f2ffe0007ffe000000003fff800000003c1f0,0xae95d385404009412883212457a7a03fe88ffffff8000000000000000003fff803fe00,0x310621188488de8bd1cc42001dc7ffd01200000000000007fffffc000003fffffc0000,0xc218426109116f0de1f787ffe60200224000000000000007fffffffffffc0000000000,0xfc1f83fe0ffff00e01380448b8044480000ffffffffffff80000000000000000000000]
+def vals := sampleTable inputs 280
 def scs : List ℕ := [0x1d8682048f2348c,0x1d84507c9f258b5,0x1a0500dcb52449f,0xdc1f114962308f,0xdc1f140912308d,0x1d8371a0b523c96,0x1a01f1d89f23491]
 def target : BFn 7 := fun x => (x 0 && x 1) || (x 0 && x 2) || (x 1 && x 3) || (x 2 && x 4) || (x 3 && x 5) || (x 4 && x 6) || (x 5 && x 6)
-def rho (ys : List Nat) : List Nat :=
-  let a := fld 0x390316102385a747615795325321322065498800498870526050420542332101 4 (bsr 0xffb93cdefabd6fedf7423f9ff582b9f1f3eea8d9f1d7b75be9e8d5bae5792811e114fcb2df5d4d4adc65c784da702df4d622589bcfb96cf1cec4936bca9679c0c7c1e596c27abfbebd935c50b84dff99b6afeed9b5124aadb06b5123abf9511da91b880da8bfc72fa3016442a219af959d6d03769cd84ac39b5f3f3a969bfb69910afed88cf5763a8579a19a804750dd7e6767d87d7567f679c1958678a4f16178a3812770f9676d6a3fff10689e704a676cd73d647d8899587d0c395843e1385545aa6351ec39f451744c1d4a197648498a981d3dcd5e1a391e942f367f10d32e65260a29ce9e4826bdf0a919042b95183e48a70fd8f69e0644477e063cd20e 32 (hk ys) 7 0 64)
-  if a=0 || 10<a then [] else
-    let c := fld 0x463d66543243566d2a60c5852ee70a058ab4421cea831aebc60400000 21 a
-    vals.map (fun v => fld 0x399b6d00000001170000219010033400c2002f976b50000001150000168aa003f000f200299449f003ea108183bb8ec737c9a1d46574984ba5b0000000000038d64a900329aec16b1408a4200324009d002f53296638dd72335c0c0582a00001609c57a943e1b0025142915005c28120024d300e4ba3c1609490191a04460080000 9 (orbitLabel c v))
+def qBook (w : Nat) : Nat :=
+  let d := fld 0x3830c9540986602340000289021 6 (w % 19)
+  fld 0xc10144d3d5008e00c5cb8a81cddec49ce6c64285049302c3824103a58c8ddcd6dd960043469dee8b94c2a60584e58340ce00ae869e45d495ca06cc 8 (((w >>> 5) + d) % 59)
+
+def qPerm (i : Nat) : Nat := fld 0x463d66543243566d2a60c5852ee70a058ab4421cea831aebc60400000 21 i
+
+def qRow (i : Nat) : List Nat :=
+  vals.map (fun v => fld 0x399b6d00000001170000219010033400c2002f976b50000001150000168aa003f000f200299449f003ea108183bb8ec737c9a1d46574984ba5b0000000000038d64a900329aec16b1408a4200324009d002f53296638dd72335c0c0582a00001609c57a943e1b0025142915005c28120024d300e4ba3c1609490191a04460080000 9 (orbitLabel (qPerm i) v))
+
+def qWord (i : Nat) (t : Fin 8) : Nat :=
+  inputs.getD (if t.val=7 then 7 else fld (qPerm i) 3 t.val) 0
+def qPick0 (ys : List Nat) : Nat :=
+  fld 0xa9876543210 4 (fld 0x390316102385a747615795325321322065498800498870526050420542332101 4 (bsr 0xffb93cdefabd6fedf7423f9ff582b9f1f3eea8d9f1d7b75be9e8d5bae5792811e114fcb2df5d4d4adc65c784da702df4d622589bcfb96cf1cec4936bca9679c0c7c1e596c27abfbebd935c50b84dff99b6afeed9b5124aadb06b5123abf9511da91b880da8bfc72fa3016442a219af959d6d03769cd84ac39b5f3f3a969bfb69910afed88cf5763a8579a19a804750dd7e6767d87d7567f679c1958678a4f16178a3812770f9676d6a3fff10689e704a676cd73d647d8899587d0c395843e1385545aa6351ec39f451744c1d4a197648498a981d3dcd5e1a391e942f367f10d32e65260a29ce9e4826bdf0a919042b95183e48a70fd8f69e0644477e063cd20e 32 (hk ys) 7 0 64))
+def qOri0 := quickOri 140 11 inputs qPick0 qRow qWord qBook
+
+set_option maxHeartbeats 50000000 in
+set_option maxRecDepth 10000 in
+theorem qCert : ∀ i : Fin 11, i.val = 0 ∨ validQuick 140 inputs (qRow i) (qWord i) := by decide +kernel
 def B (i : Nat) := mv (mask 140) (fld 0xe10f41506e54000400f40f10106e41 12 i) inputs
 def I (ys : List Nat) := bsr 0xf7423f9fe5792811969bfb6979c1958678a4f161647d889951ec39f44a197648391e942f0644477e 32 (hk ys) 4 0 10
 def test (i : Nat) := checkD 140 scs 8 (B i)
 set_option maxRecDepth 10000 in
-lemma roof : bar 140 (cutB 8 inputs B) (cutN 8 10) (fun _ => I) (rowOrient 140 rho) scs 9 0 = true := by decide +kernel
+lemma roof : bar 140 (cutB 8 inputs B) (cutN 8 10) (fun _ => I) qOri0 scs 9 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
 lemma z0 : span test 2 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
@@ -3789,7 +3791,7 @@ set_option maxHeartbeats 50000000 in
 lemma z7 : span test 3 7 = true := by decide +kernel
 lemma regionOK : span test 10 0 = true := by with_reducible exact (sj (sj z0 z2) (sj z5 z7))
 theorem finChk : ¬NatRun (mask 140) (goal 140) 9 inputs :=
-  symCutRoot (ori_ok rho) roof (fun i hi => checkD_sound (spOK regionOK i (Nat.zero_le _) hi))
+  symCutRoot (quick_safe (k:=140) (bound:=11) (xs:=inputs) (choose:=qPick0) (row:=qRow) (word:=qWord) (book:=qBook) qCert) roof (fun i hi => checkD_sound (spOK regionOK i (Nat.zero_le _) hi))
 
 set_option maxRecDepth 10000 in
 theorem shard : ∀ t, HasCircuitSize 7 target t → 10 ≤ t := by
@@ -3800,46 +3802,143 @@ theorem shard : ∀ t, HasCircuitSize 7 target t → 10 ≤ t := by
 
 end Row8
 
-namespace Fixed40
+def seedRaw : Nat → List Nat → List Nat
+  | _, [] => []
+  | b, x :: xs => if b % 2 = 1 then x :: seedRaw (b / 2) xs else seedRaw (b / 2) xs
 
-def raw : List Nat := [0x9b24d97cd883b485b53e0000001ffc000000000f, 0x1454a2a862d76517352e200000000003ff83ff870, 0x3861c30c8338463826345ff8ffc6001c001c00180, 0x2289d471142188bdb8c08000fff80000001fffe00, 0x3b0f1842183df0e1c0811fff0000001fffe000000, 0x3c0fe07fe046000600081fffffffffe0000000000]
+def seedWords (word : Nat → Nat) (width : Nat) : Nat → Nat → List Nat
+  | 0, _ => []
+  | n+1, c => if c = 0 then [] else word (c % (2^width)) :: seedWords word width n (c / (2^width))
 
-def pool : List Nat := [0x11c2a0e85b14c54, 0xe80b0a85214456, 0xa80b06c5b14453, 0xa81b11c5715051, 0x11c2a06c5415852, 0x11c0b0a85414c5b, 0xe82a02c5315852, 0xa80b0e85315851, 0xe82a06c5b14853]
+def seedW (raw : List Nat) (word : Nat → Nat) (width c : Nat) : List Nat :=
+  seedWords word width 9 (c / 64) ++ seedRaw (c % 64) raw
+def mixCheck (k cut : Nat) (S : Nat → Nat → List Nat) (N : Nat → Nat)
+    (idx : Nat → List Nat → Nat) (pool : List Nat) (s i : Nat) : Bool :=
+  if s ≤ cut then checkD k pool s (S s i) else bar k S N idx id pool s i
+
+theorem mixAll {k cut S N idx pool cap}
+    (hc : ∀ s ≤ cap, ∀ i < N s, mixCheck k cut S N idx pool s i = true) :
+    ∀ s ≤ cap, ∀ i < N s, ¬ NatRun (mask k) (goal k) s (S s i) := by
+  intro s
+  induction s using Nat.strong_induction_on with
+  | ind s ih =>
+    intro hs i hi run
+    have yes := hc s hs i hi
+    by_cases small : s ≤ cut
+    · exact checkD_sound (by simpa [mixCheck,small] using yes) run
+    · have b : bar k S N idx id pool s i = true := by simpa [mixCheck,small] using yes
+      obtain ⟨q,hq,j,hj,h⟩ := bar_sound b (fun hr => hr) run
+      exact ih q hq (by omega) j hj h
+def seedAtom (xs : List Nat) (m a : Nat) :=
+  if a=0 then 0 else if a=7 then m else xs.getD (a-1) 0
+
+def seedGate (m op x y : Nat) :=
+  if op=0 then x else if op=1 then x ^^^ m else if op=2 then x &&& y else x ||| y
+
+def seedExpr (xs : List Nat) (m c : Nat) :=
+  let x := seedGate m (fld c 2 3) (seedAtom xs m (c &&& 7)) (seedAtom xs m ((c >>> 3) &&& 7))
+  seedGate m ((c >>> 11) &&& 3) x (seedAtom xs m ((c >>> 8) &&& 7))
+
+
+
+namespace Fixed39
+
+def raw : List Nat := [0x36cdb4db36d59292adb000000000000000007f,0x41785105e14b2e2e585003ff000ffc30e0e180,0xe1906386418e7474706ffc003ff000c7070600,0x8a228ba8ea30497f828000003fffff0007f800,0xec3b0e308c207fc9030fffffc0000007f80000,0xf03c0fc0f03f8000040ffffffffffff8000000]
+
+def pool : List Nat := [0xb000108511404f,0x88000b04e1344c,0x108000e0521384d,0xe0220005013c51,0xe0000885214450,0xb0220004d1304e,0xe000108521384c,0x108000b05214450,0x108000884f1384d,0x88000b04f1384c,0xe0000885113050]
+
+def word (i : Nat) := seedExpr raw (mask 76) (fld 0x1c1d20f5d7a03d01e3af307983c800c0ea00283680060e202083840080d102269180052d904d02c80020b102181151d80460488288000000 13 i)
+
+def unpack (c : Nat) : List Nat := seedW raw word 6 c
+
+def first (i : Nat) := fld 0x228bf0008bf02267f02237f02227f89307e8a207f02207f89d07f89a07f89907f65907f01907f00007f89607f89407f89307f89007f88d07f64d07f00d07f54d07f44d07f34d07f88907f64907f00907f34907f24907f88606f88607f88405f88407f88207f4c107e68105f88107f74107f68107f64107f00107f58107f50107f4c107f40107f34107f2c107f28107f24107f20107f18106f18107f10107f10105f0c107f08107f04107f 24 i
+
+def S9 (i : Nat) := unpack (first i)
+
+def second (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x22241fc000907f014241fc04c907f000201fc000805f8892017c024805f0082017e24c606e022181bc064606f000181bc000607f017181fc044606f88f1819c034606f009181be21c606b006181bc088507f89310178088405f022101fc064407f000101fc000405f00d101fc034405f009101fc024405f8861013c010407f0041017c000307f000081fda4c105e013041fa180104f858041bc07c105f01c0417c068105f000041fc038105f00c041f562c10796cb0416da28105d74804179320105e0080417d318106e6860413c018106f3c60419c718106b4c404178010107f0040417c610104f403041f14081075
+    | 1 => 0x2289a7c00228bf000022fc002277f00089afc002267f000019fc000003f000896fc002253f000893fc002243f00088dfc001537f00088bfc00222bf000889fc001927f000009fc088d27f000349fc002223f0222487c08a21af000886bc08991af000886fc08911af022346bc08891af022186bc08a211f0008847c002213f0223447c088911f0221047c00220ff000882fc089307e0194c1f8001307e0134c1f804cd07e0226817c001a05f000881fc001d07f000681fc001907f000001fc001607f000501fc001307f022401fc001007f01e3417c06cd05f01a3417c000d07f012341fc000b07f000281fc068905f
+    | 2 => 0x8a24fe000893f808994fe0224d3f8089337e
+    | _ => 0
+  fld w 30 (i % 64)
+
+def D (i : Nat) := unpack (second i)
 
 def N : Nat → Nat
-  | 4 => 1
-  | 5 => 39
-  | 6 => 215
-  | 7 => 396
-  | 8 => 212
-  | 9 => 10
+  | 6 => 347
+  | 7 => 572
+  | 8 => 412
+  | 9 => 57
   | _ => 0
 
-def S9 : Nat → List Nat
-  | 0 => 0x0 :: raw
-  | 1 => 0x0 :: 0x0 :: raw
-  | 2 => 0x0 :: 0x3ffffffffffffffffffffffffffffffffffffffff :: raw
-  | 3 => 0x3ffffffffffffffffffffffffffffffffffffffff :: raw
-  | 4 => 0x0 :: 0x9b24d97cd883b485b53e0000001ffc000000000f :: raw
-  | 5 => 0x0 :: 0x1454a2a862d76517352e200000000003ff83ff870 :: raw
-  | 6 => 0x0 :: 0x3861c30c8338463826345ff8ffc6001c001c00180 :: raw
-  | 7 => 0x0 :: 0x2289d471142188bdb8c08000fff80000001fffe00 :: raw
-  | 8 => 0x0 :: 0x3b0f1842183df0e1c0811fff0000001fffe000000 :: raw
-  | _ => 0x0 :: 0x3c0fe07fe046000600081fffffffffe0000000000 :: raw
+def c8 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0xdf94d0210a0e0747750edc99107d6982b765c0c429b301840c721004d92b50361e1c410012cc107756c4037f53cc414c2526edc3310301b3e7b70cddc6bf54c440d5b40789c64b605ac82a25412e01ef4542d4161006ed01868318418235264c4183106ecc2be637a9856b60d28c15b7066d44527019dd74f63d4dc16b70d5dd43b70208431774a8e067281d3d92a310
+    | 1 => 0xc040501046441831076ed8156231ca0341047bd91910555c9c02af544015b300ecc1221075e18c210d9815d310d59c90b406cc404210d6d81b7767a9071b6076d8023726d9c4018f12d804786afcd19b1018411eb60b2d80d210ad4133310184173774d690023430ed03877532dd0a323d2d03510461e156775d9c16b763d2d82f2845ad43377666d42b10284c435a70
+    | 2 => 0x34e09db720ed4a23103c840a354df8d03b42ac410236241dd84683e19c9010330a09e1006440ebe54404173b30a4e058784d29c2bb50584103a326ec403b607a9475774088406b4034a0dc3103ce0b510056d82be65a4c40138212ccb7764d441467745cc435776cddcf7e5412d41bb5066d876104ced816210644116b4014a0a410092dc0a3627ad44310031e1ce763
+    | 3 => 0x2484331003acc19b70008416105d09c36604c4400a21011e158b30d9c19b10468e1e331059dc8cb70e040c734275e1d3210e1dd34f4508e0b410511e1deb505441432100d409b673d7d4b02839cc40610024e116103e1dd83b5028e115b50dc40c5210d8416bf53d298167767ad07410390c41b10588e09eb70d19c381047ad846b3041dd0d230b2c418b409ce104b20
+    | 4 => 0xed88b3826c40c736278c43377554410b2101ad83477319ddabe6478412cb400c41803cfd5dc37763dc40b3b50dd4124a615441873720047d9b71dc4133b7054840621000ffc31057ad037765d1dd1810062dc1d281afd906b70e04177503cec406672a0c427251b04031b50dfd519b40d1ddabb60b2d42be536c419a28156c83177562e003b20d9c10039f6ddd64104
+    | 5 => 0xaf8d15502aecc0735266d07660659dd1b77462d427b7428dc8667368c40c38479dd8e2100127d5f6362cc731041ac82410576dc297630484272439de1c6b5066cc2028138e096b3011e124b618ce095102dfcd33b40acc40037fbcc41c281c44104b700c413877300c7eb76490405e77591dd83103ac40173644c40abb40d840ec10442d8187860c0031b40005fd8b60
+    | 6 => 0xafd8d9a311ce0d010014e1d8b10b040f4a4028e09db615440f1776ac40f110566d817381afd96c10542dc34a50a0a0f4b5028e15e1057840c4b4079dd19100
+    | _ => 0
+  fld w 18 (i % 64)
 
-def S8 (i : Nat) := let c := fld 0x5065b50010311030e52010611056b708b7001017f3241070b3055073e513f6576734b704b4091049103910556715772350277723e54710335059b104104210795017b100e423504510600002b403f320e643f210500610265070e4151027102150721045b6057740e633f5436620b60867371062b703f64777487723f424b3035010f650e543f530e51277431017b60076181024f64050211073e625107376351053f5205040f3005055b4026730503010245073105877411040f21467304003e639102277281030f543f418b103f513e210b40477106620b200f604f53810531020f642b500f534b500f4231043f6105012b303f343f310f108f4221023e3407634f6375074b6061064774410601050f523e533e310e610f4121063e650b103e6167722b60177235033f6241050f51667385070b5041030e213e3235060f3116733f6371070104110621030f2021055b706b50510401000e620f400f340f6131063e5211020f3261077104677131034b105b100e346b100e310e5381077b704f4561050e6517742b206b6091060f500f6237610310210061030e323e423e4125070f633e648104 16 i; mv (mask 81) (c % 4096) (S9 (c / 4096))
+def S8 (x : Nat) := let c := c8 x; if c % 16 = 15 then D (c/16) else mv (mask 76) (c % 4096) (S9 (c/4096))
 
-def S7 (i : Nat) := let c := fld 0x493700ab31231030630416370623035d76249372631041c105d1b31d3b02441043b23235b500a500373401c663c7100ceb218d1040b10095714493218a3013b304bd30343100c537023b407a313cab610e21023106ceb3186102907749c702aa270c63304c10315221073721c66033350c7b608b1002022158b62ca103c770295270c710612221063608d66035b709d105c770490371002219c1030635068760531019136049360363709137049350b930468b0304310cb302333049db404f372913057b7625eb43c33045b3710d3017b7604b774113608bb31ca76309f304c6637a2325b27082207c76046b350273603c2061c104583704c7628d105ceb20ca10230b01203721c1067c2708d1064a370bd35027303c72105c3028460409503863706b3606810120207ab36091321d11017a230543709d740cea300e2528f370d3b6053b02537159d340c5360b93058f340791054cb5191303a6303c33509d3038b60389381d1b4127350c770317321d1103a6350863046b370ca662c77605e714845002a37253100c53509c500cb202a6340cab41ca301ceb01d1762123729c1052a252ad370043606a103c1210c7103ca104c77620a603d11058bb02173709c1009d7508d1037b104307626e2608b5006a762ce10328102ce1060e7739c70342b73043706376376270d1663c736039602bb370ca6603910348100c41004c10549340ceb40b73219d100b93210e3720910106370ca10109750aa24036304a73301735068b529db033b3020e7235e27039762d1b013e1009d703ac372cab0109e1068105603712710297b423970232102862204c301c76036b3404b2073a330ca105173729130439703b9370563427f3029b3021410063762a1773ce30135b407bb21173607a30268b02683025c1029c605a63106af323b330ceb513635044760ac22137350841054230309e317d350d110436360637600a10056380d1106c1370b9360c7104762407e370091039d10178b4228104d1660c75068d7639b3507976409f107d3049327079103c1b601937037360ce105453609910068b32ce101687409c1046c206d130139705cf303933714cb2179762095019d7600e202683037e2100030167762507048d102ac2075b302273043f2708f3504cb31cab2123b20535009b3040e3021734001360827742737039105536044f30130b3135a3037370153017966368750803701c762cb10035b60cb272a6360c534043321483038f360a63700722123a30cab31472601c10368b1204350841014cb01687034223284715483218d662c630286350681001330304340ca106c760213382883709210084100d1b214f221c7a607bb01753508a2212310502102863605e30368340 20 i; mv (mask 81) (c % 4096) (S8 (c / 4096))
+def i8 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x103437285001092d000a002d002710160f1b0007071b01152002001e14142e00020b023f02013500000a0201010829001212000c19480f090304010540020001
+    | 1 => 0xa0010272a0030600631817060003b72e4e6837201d04040d0c251678181d0324080141250e0f00160b171c00001319000200070573430a003f64061937180f02
+    | 2 => 0x3813c252f6a137e006027
+    | _ => 0
+  fld w 8 (i % 64)
 
-def S6 (i : Nat) := let c := fld 0x554c0c8a6c3673032718a00cc0c4a606123724b9a8d00c06346089d1024c9814c8c0d10680263212a881a7cc813868073302b59b0c08c85124406d751265a1474d4110606b87516718111040a04608f93315f1b12ccc85d2208ff105633018004026c60600b12981a04a48113a20858361a3981bfc40c982010a100265892d6c86286071d3607e982484c09b4200892328798a108c0c606a0693027a181c08c0c1e6807b203229303f8c0a98628822421e98143cd4696604ae320748809d081512624e910357181c04c401a604ac350c3981ac0d4a946065a34297982e20c857a604b81031d9b121c4110e202323031b1823f8c0cd86829d753c21b0c20401fc6804c302aa1a013040c1e660fa2064688221ccc0016044a251468813748c94e404ff104271b0858d02646a02f314260829a0c82e866297361bb181805c4dfe202fb1020d181a368820a606583145d189ab4c95106a11d3409c930c04d82102092b30374882955d4602660153202c1a8a20d825c6c0012607e9819908c1d20011d30374ba903cc863a2043c364c4181b70d01e8680db3024d182b0cd010e200d930357121610d453aea22030386181ba5942842009c36046d883e8d8a986c27036164181b7cd84fa606d731485981988d0246404cd3244a903178c0e026a014102809a0370c0899604b87506f910c58d04002091331326082130406f6606f6102019901544092aec63126163981b34c101e6c4ef302489a0374c0aba6040f35038110be8885d22050f3617f880098402b06a109303 21 i; mv (mask 81) (c % 4096) (S7 (c / 4096))
+def c7 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x96880cb4408702085130207989aa1814fa60296a6192118614cd25aec90710084980d204116f6824d3711e382ab8d825a420a876096bb18648c06e200f9b40541b00988c1e8604ae304c7b300e88c1666c118302c41a050084012c25256601b9392a040c90c06a23326a13895cdc728680487053b9c02498d0626057c271c39a8259881a444221750549a8160dc6916817f370509b0da0e0ce56c0f837104b0a8e4dc04c70b22662
+    | 1 => 0xa4381828902926033b26024080e6cc0a5acc04e3438eb1b959d8d96ec70f2218fdb03e4cc078e0c653704f9a852198a146e0a850623180d41402e86c00f2201f9b8018c0cf46c17c3016090160c9c8d66e0a82101b908514843106270d202299b042c9c950c0426305109a020c982442085022076083e3dd9470c064830265980ae4dc150ec8b7b010f98114cdc06a602023017a1403e4d40ae4e0a230255b018e0401be646b7660
+    | 2 => 0x490842c84070202c7207511091d8c070e680b7763ab1a012040c226e0832134e1082a8c0822626f32717cd98344d81526818d2309708047cdc1064e038b3224383450dc150ecb1a3506d1808ccc0412c04f63128f28020cdc4a4602ae371ca1a8410c08ac4209c2704c929a58401502052d6107c9b007cdc2c46c009103649b013484e5a2080a38024389a5cc09266e14810510ba053880c43680f42309e083d14dc106e2805271
+    | 3 => 0x9518a304948122046624004880e3dd8c7a602f9730ab1b00b08856e2091d2027c8804eec8078460b71034c1809048402c6021e30154530121c11c06a1943602c139084d82a020065302549b0668c089c6e6a8105c41b01acd812446139301be8803e584d6e6039b3031c5a9344d02cc680953217c882c10841444618230292bb2a348c0a66a0a8763701b82ccd403c608c7206689a8114840acec993301240834b8415a060562370
+    | 4 => 0x8f08048c405206c1227632b309ca8dc28e643563705bb3110c8c180605472208eb1b5cc9c10e6c0b6301543824d0c8412e0aaf230395b9194d01d668656612c51109cad8a504e23a301c39b8050840064a8a8703a43b28c89c16f6422110096881c8ad002a4212d614219814488809a4084d22096b09b2880ae86a021b6004b832e4c86c2c0696705571b84acdc576620f97507cb085dce01a26e061302be083c7c9c81e6c065350
+    | 5 => 0xb59814a0c04784044276459910060dc150208096142b3b0628c052a44048104a11103e8c06804600222060108044d02ac6a1943702011066c408e4e6c09613599a01c0c4070c2c9650004d21a8cdc0426612210522981355d95d44e58f30196b3147ddda906c0f91042699018ce0182c6e0f370bd9182a4dc22c6e3853050c1a8618981f36a140380329b028cd03106a072340401c266c88490a0056104545b0130c84916a47a370
+    | 6 => 0x109a8490841c06c03c312c69082ccdc08c460312402f181060e02564e0ae3218fb82e34c0992681013027c1104148c0c26e0a3350a73835ac9c1dc60aa80001c58115840df26818fb21b910198cc0c42ec04d207a3110cb5849ec6c2a87050c9081808dd9644247371359a83e5d8322602113604b082c7ddd70c4e0d131348182a0cc0a90c058f103239032f4c0a914818f7647b18827cdc2346e148760179401f48c25a20af9740
+    | 7 => 0x4b08198c099e40f853017cdb019c8528c60260210089a8086cc0120004c22010da862c884ca6267a350240803b0c04027014f27057182aa04196eeca0f340928821c88c0eaea96235004882e1cc05502009e2702b3b2922c4950cc58f662543812a180f0e6c015b60a40802a181012209273744f1085dc8c0ea60489230649a81249c48e40e2c37029981b9cc06784e2f9106879b8122c08e4e6f3430321330488c425a20d72253
+    | 8 => 0x1c383024402c646108360bd9810244184c700cf20404b994b94023cc2c9233253980b24dc176486df382bf990b7c9013e6c1743708918083cd43106e19a2309e180b30c06346c0d62052c18852180efaec89f34094083958419ec6a32d7658b13816cc06e66ed22b20c7d80885cc0a468609500c11c0114dc070a00a33603b118240c1196604c1707859905ac840306c048105481b8355981be70656105
+    | _ => 0
+  fld w 21 (i % 64)
 
-def S5 (i : Nat) := let c := fld 0xcf303643037f30332330603037a3303b3034a313c23126d21074103741027b321c93134a351af302d2320ca340c9341cd3218e3039b3307410174100473036e10325302883037a302ba3033f321c935198302423215c303633037b3037d331b2302 20 i; mv (mask 81) (c % 4096) (S6 (c / 4096))
+def S7 (x : Nat) := let c := c7 x; mv (mask 76) (c % 4096) (S8 (c/4096))
 
-def S4 (i : Nat) := let c := fld 0x2321 14 i; mv (mask 81) (c % 4096) (S5 (c / 4096))
+def i7 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x184400020380052081200000070e030060200820700f0003c060400000020e0101802050981c220200060121a0b07806210988c0a0d0480c060a000a8102802838260b038000601
+    | 1 => 0x3c06892335b000809b02070000d0005822041c0049e1a1304c08001681c48364b8940e1a00020540c0281818200289800000d8e8d2590081000032c02808020e8300e5e000d81405
+    | 2 => 0x6b7a1bb4b1f2a9ed641c06c504c748b490bc02aa0001b726b2d1119e0500084fa01c4839061079014ac00163fc1468040e001330984430150680d3600650002228048140c0d
+    | _ => 0
+  fld w 9 (i % 64)
+
+def c6 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x640d45313015d8985ff1005f4d417e3012b488169202444c085050033488050101218d4046613118840466125c8c0593230114d801d7257a08800c3418cd8da0234035cc81da321010881cc6347e498633240571d50d03705844018e71309c40439220090c85c33404c8d401d33039ac84f0302090d88af2201ac88072105744c08501004248c978204768d81dc340454881ac302114c08a1360638981a130208cc097f2105b4c047d301774d40c9362
+    | 1 => 0x414880c43016dcc08501047a0c4d2422011840d5030156cd80b43507f88c1c2103400c0987350398c054e361140415ea3101c88401f2203d88820323012084205302274cc9ec3401b4c0cd9103774c81c43217e0c422522039ad44e2220260d01953015e890115361144d001d7265b488629301420d048e2203e0d84571036008818b22015cc05f33021848c2272101e4d00d9650774d807210024c41449301628c09b5360600c05373401c8411c0302
+    | 2 => 0x7ccc046e3405f48815f210788d81bf103709d48982107c4cc47210336594471240814901c122011840a26220090c0c9a210365d50e31011d4c0c742206a0841f52101bcc0633726184cc8f4360830c09cd220098c11642306b48c19022024c410863405fc9805d3511418094f24086888044214394c08276028c4c11b1220571d4a3b221228c098e3617084123a210709945a1341284d415b3407f4c097e1061d0d85082204d48404737014040994302
+    | 3 => 0x398400403602109c04f23114040e173406f4c08e6b015b8c08e6b41788d00363027e08982f203600d45a1351798d8078302144d815c651214c08123404dcd40b92308ecc0c5135072cc4ce610331c88086360284d00e13023d0d0046610410d80ef30122c810e433017c984507041c8404571004e480594313365d48a33011e48818630185c881d174372c880003505f89851e340170d00ad10187cd81cb363238cc0a2301270c0c193603e0880e3321
+    | 4 => 0x600d85a8360158d85f030214184c46105784981012202e8880e130424c40027500074881803417748c94e2203d0d418c30213cc043d303370c0554220684d857d3400bcc8d0e2208c48c18b3615f4d80507034fc880643010448c1dc3501184109c314390d81dd34012cd801db502e4c04d8102064d01eb303070d80e435034cd443a35015ec04466148dc881b2220170d405c3601d4c90193506944011c30121cd44e61041388c1672200d48c09d301
+    | 5 => 0x4610008cd01e635038c882163011b8d4072610420d848b3036789818e2121c984d97230304c083830472cd862f30187c984d8302398415bf1008a0c088734157cd810a2202c088074303
+    | _ => 0
+  fld w 22 (i % 64)
+
+def S6 (x : Nat) := let c := c6 x; mv (mask 76) (c % 4096) (S7 (c/4096))
+
+def i6 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x140024000004421180085e03018144047020c8ec05090a804121413000070d8003a02060381c3b09058200400000683d0100c00080002400000081c160b0000426080181c0c00
+    | 1 => 0x23cae0266a78000000accc200044c06ad56b18a6a00a62e620063b8000600148002e09249583ceb6301d180f0028c040c010891445089004001
+    | _ => 0
+  fld w 9 (i % 64)
 
 def S : Nat → Nat → List Nat
-  | 4 => S4
-  | 5 => S5
   | 6 => S6
   | 7 => S7
   | 8 => S8
@@ -3847,116 +3946,12 @@ def S : Nat → Nat → List Nat
   | _ => fun _ => []
 
 def I : Nat → List Nat → Nat
-  | 5, z => let h := hk z; (h / 23 + fld 0x1d67b01e11cce00800028c2108046 5 (h % 23)) % 39
-  | 6, z => let h := hk z; (h / 74 + fld 0x181f04286d0a00a0840307086a00232700155d06000c0201000d2300005f10131e00010003181a060c27120628055c002b22120116002b1d08020200060e00000901170e760909120000 8 (h % 74)) % 215
-  | 7, z => let h := hk z; (h / 144 + fld 0x17ce000145281e440141c51db2d00338540402a0c007a2b008a24d70818027b0f8ae640000898008600075462b2b88c0000058081e160e95422210281ca26500830467407950000202024000d0100858031aac46418121000806010146c030000800020f8000013058cc000a0181c2a5108800140c040441c030200c000b000240a17030000203020580804010343625020700e1d000000000010100400018241c01 9 (h % 144)) % 396
-  | 8, z => let h := hk z; (h / 85 + fld 0x23173870003ece3802028b254242880a23f0f1a545927c012093d2800668181030004103201810f4808100001484d0018584244c18206940860604505040058008142040000000100c686 7 (h % 85)) % 212
-  | 9, z => let h := hk z; (h / 1 + fld 0x0 1 (h % 1)) % 10
+  | 6, z => let h := hk z; (h/115 + i6 (h % 115)) % 347
+  | 7, z => let h := hk z; (h/190 + i7 (h % 190)) % 572
+  | 8, z => let h := hk z; (h/140 + i8 (h % 140)) % 412
   | _, _ => 0
 
-def chk := bar 81 S N I id pool
-
-theorem h0 : span (chk 0) 0 0 = true := rfl
-
-theorem h1 : span (chk 1) 0 0 = true := rfl
-
-theorem h2 : span (chk 2) 0 0 = true := rfl
-
-theorem h3 : span (chk 3) 0 0 = true := rfl
-
-set_option maxRecDepth 10000 in
-set_option maxHeartbeats 40000000 in
-theorem h4 : span (chk 4) 1 0 = true := by decide +kernel
-
-set_option maxRecDepth 10000 in
-set_option maxHeartbeats 40000000 in
-theorem h5 : span (chk 5) 39 0 = true := by decide +kernel
-
-set_option maxRecDepth 10000 in
-set_option maxHeartbeats 40000000 in
-theorem h6 : span (chk 6) 215 0 = true := by decide +kernel
-
-set_option maxRecDepth 10000 in
-set_option maxHeartbeats 40000000 in
-theorem h7 : span (chk 7) 396 0 = true := by decide +kernel
-
-set_option maxRecDepth 10000 in
-set_option maxHeartbeats 40000000 in
-theorem h8 : span (chk 8) 212 0 = true := by decide +kernel
-
-set_option maxRecDepth 10000 in
-set_option maxHeartbeats 40000000 in
-theorem h9 : span (chk 9) 10 0 = true := by decide +kernel
-
-theorem allChecks : ∀ s ≤ 9, ∀ i < N s, bar 81 S N I id pool s i = true := by
-  intro s hs
-  interval_cases s
-  · exact fun i hi => spOK h0 i (Nat.zero_le i) hi
-  · exact fun i hi => spOK h1 i (Nat.zero_le i) hi
-  · exact fun i hi => spOK h2 i (Nat.zero_le i) hi
-  · exact fun i hi => spOK h3 i (Nat.zero_le i) hi
-  · exact fun i hi => spOK h4 i (Nat.zero_le i) hi
-  · exact fun i hi => spOK h5 i (Nat.zero_le i) hi
-  · exact fun i hi => spOK h6 i (Nat.zero_le i) hi
-  · exact fun i hi => spOK h7 i (Nat.zero_le i) hi
-  · exact fun i hi => spOK h8 i (Nat.zero_le i) hi
-  · exact fun i hi => spOK h9 i (Nat.zero_le i) hi
-
-theorem dead (i : Nat) (hi : i < 10) : ¬NatRun (mask 81) (goal 81) 9 (S9 i) :=
-  bar_all (fun h => h) allChecks 9 le_rfl i hi
-end Fixed40
-
-namespace Fixed41
-
-def raw : List Nat := [0x560aeb5815933ac206d4f000003ff80001ffc000007, 0xab5d41a82aa40d54bd4b9001ffc00000000001ffc38, 0xacc118231330e118e098d2ffe000001ff8e000e000c0, 0x310620c437470620eee304000000001fff0000ffff00, 0xc21843085b87fbc3130020000000001fffffff000000, 0xfc1f83f07c049c029c0200ffffffffe0000000000000]
-
-def pool : List Nat := [0x108371345c16458, 0xdc0a0686c16861, 0x1082b028611746c, 0x134420685d1645c, 0xac1a0285c16059]
-
-def N : Nat → Nat
-  | 5 => 2
-  | 6 => 69
-  | 7 => 218
-  | 8 => 180
-  | 9 => 10
-  | _ => 0
-
-def S9 : Nat → List Nat
-  | 0 => 0x0 :: raw
-  | 1 => 0x0 :: 0x0 :: raw
-  | 2 => 0x0 :: 0xffffffffffffffffffffffffffffffffffffffffffff :: raw
-  | 3 => 0xffffffffffffffffffffffffffffffffffffffffffff :: raw
-  | 4 => 0x0 :: 0x560aeb5815933ac206d4f000003ff80001ffc000007 :: raw
-  | 5 => 0x0 :: 0xab5d41a82aa40d54bd4b9001ffc00000000001ffc38 :: raw
-  | 6 => 0x0 :: 0xacc118231330e118e098d2ffe000001ff8e000e000c0 :: raw
-  | 7 => 0x0 :: 0x310620c437470620eee304000000001fff0000ffff00 :: raw
-  | 8 => 0x0 :: 0xc21843085b87fbc3130020000000001fffffff000000 :: raw
-  | _ => 0x0 :: 0xfc1f83f07c049c029c0200ffffffffe0000000000000 :: raw
-
-def S8 (i : Nat) := let c := fld 0x502050151063501010321023e547b70710621073e533e323e612b303f5301020f214b4061033105010511076b604107210451053e410e310e3281073f3201002b40710711020e610e533f2135063e313f6561050f204f740e4171026b70610681024b300e653f410f5305060f303f3181035f725b6005035b500f520f320f6591020f414f733f610b10000035053e6435024b106b500f610b503e620b403e523f515b703f520e5241063f540e640f512100210331023f4241040e620f31610281040f5411040b60510771030f424103310621057104110321063e6331018b103e340f503e213f62350451045102610791045f743e51050401063f635b109e432b202b60410505009103110501048b70010181050e340e517b60110605050f630b2031035b402b506b1004003f340f103e422b7035030e639b109f430f624b600e2191054b500f400b300f3491069f320e423f6403107b109e423e654b700f6431040e549f420f60 16 i; mv (mask 88) (c % 4096) (S9 (c / 4096))
-
-def S7 (i : Nat) := let c := fld 0x37b019fb0168206b122198340493010910209f54b1301091047020624b436035013350413509935009f53a83706435009f2009f4385624582304510521b70873408c360833016f102a92302db414510309e549737041360133607e3026037006305a4b6109e5021202603605d304a83506f1049fb414137009501a410171208a410237b610630409500a41046436029360643407e212603405910609e310910509502451022130279242073506c36009e105d3705d3052d1027e20298350090006c3704b10545610a410509f5198303451049735009e51793029936021242a830455b736f105a4103af105792025910509f422d1018f306383028130609e53873500e30309f40afb018c37045614031055910309e5216303a4b0198360031042d1048e637af1022d10506306343705e2701123245000afb316f1036d32137b41133705430109f52873708c34011202023600c250402071520743230413400940519321a3240813044e2217522145616a4b5181307a41061130222105ab3018736034305993704b1065d36099340123010630709f10a836064370091018e2404336037101073602db313710298321371056f10698b732db517063409f5054221091034510609e40091004561209e4312221591044e3018c3219736098370ad3609230181305212106c30597304a9310133403b3010d3016c30411210a83214b104406348c35037b315227037106a9306a4b316e1039f10237104afb51095042db01 20 i; mv (mask 88) (c % 4096) (S8 (c / 4096))
-
-def S6 (i : Nat) := let c := fld 0xb83033e230351033c30319251342305930313303cf2300430291303c72306c220351057a2203f3034830310230672201d331d31019a104d5b63622309a1019335087330b32305163415303a1230422208731039230873603d2201c30387321b43031cb6387350c030387340093033a2610d220483029f230a03030e313543505123058231346361e241d532173303ad2306d2208eb6321350d12313510177303261018c2304a303cb2308d102 20 i; mv (mask 88) (c % 4096) (S7 (c / 4096))
-
-def S5 (i : Nat) := let c := fld 0x58c0aa321 18 i; mv (mask 88) (c % 4096) (S6 (c / 4096))
-
-def S : Nat → Nat → List Nat
-  | 5 => S5
-  | 6 => S6
-  | 7 => S7
-  | 8 => S8
-  | 9 => S9
-  | _ => fun _ => []
-
-def I : Nat → List Nat → Nat
-  | 5, z => let h := hk z; (h / 1 + fld 0x0 1 (h % 1)) % 2
-  | 6, z => let h := hk z; (h / 36 + fld 0x1271880b008164a0c040524f0531050cc0110030c00800010000c3 6 (h % 36)) % 69
-  | 7, z => let h := hk z; (h / 82 + fld 0x50033781507000700070149000035c100941100030300140069881b0006002e44022e13621f02074a560115020d041c01000335160310110b011a12040b110b011b281c00050e000c110c030a0003002000 8 (h % 82)) % 218
-  | 8, z => let h := hk z; (h / 68 + fld 0x2304041f19030f008e3828032501820f3d0737020f0100010402140014500009335f060a0a05030101081b000000070631021200000002000d370a25001409030437080b 8 (h % 68)) % 180
-  | 9, z => let h := hk z; (h / 1 + fld 0x0 1 (h % 1)) % 10
-  | _, _ => 0
-
-def chk := bar 88 S N I id pool
+def chk := mixCheck 76 6 S N I pool
 
 theorem h0 : span (chk 0) 0 0 = true := rfl
 
@@ -3968,27 +3963,49 @@ theorem h3 : span (chk 3) 0 0 = true := rfl
 
 theorem h4 : span (chk 4) 0 0 = true := rfl
 
-set_option maxRecDepth 10000 in
-set_option maxHeartbeats 40000000 in
-theorem h5 : span (chk 5) 2 0 = true := by decide +kernel
+theorem h5 : span (chk 5) 0 0 = true := rfl
 
 set_option maxRecDepth 10000 in
-set_option maxHeartbeats 40000000 in
-theorem h6 : span (chk 6) 69 0 = true := by decide +kernel
+set_option maxHeartbeats 60000000 in
+theorem h6_0 : span (chk 6) 256 0 = true := by decide +kernel
 
 set_option maxRecDepth 10000 in
-set_option maxHeartbeats 40000000 in
-theorem h7 : span (chk 7) 218 0 = true := by decide +kernel
+set_option maxHeartbeats 60000000 in
+theorem h6_256 : span (chk 6) 91 256 = true := by decide +kernel
+
+theorem h6 : span (chk 6) 347 0 = true := by with_reducible exact (sj h6_0 h6_256)
 
 set_option maxRecDepth 10000 in
-set_option maxHeartbeats 40000000 in
-theorem h8 : span (chk 8) 180 0 = true := by decide +kernel
+set_option maxHeartbeats 60000000 in
+theorem h7_0 : span (chk 7) 256 0 = true := by decide +kernel
 
 set_option maxRecDepth 10000 in
-set_option maxHeartbeats 40000000 in
-theorem h9 : span (chk 9) 10 0 = true := by decide +kernel
+set_option maxHeartbeats 60000000 in
+theorem h7_256 : span (chk 7) 256 256 = true := by decide +kernel
 
-theorem allChecks : ∀ s ≤ 9, ∀ i < N s, bar 88 S N I id pool s i = true := by
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_512 : span (chk 7) 60 512 = true := by decide +kernel
+
+theorem h7 : span (chk 7) 572 0 = true := by with_reducible exact (sj h7_0 (sj h7_256 h7_512))
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_0 : span (chk 8) 256 0 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_256 : span (chk 8) 156 256 = true := by decide +kernel
+
+theorem h8 : span (chk 8) 412 0 = true := by with_reducible exact (sj h8_0 h8_256)
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h9_0 : span (chk 9) 57 0 = true := by decide +kernel
+
+theorem h9 : span (chk 9) 57 0 = true := by with_reducible exact h9_0
+
+theorem allChecks : ∀ s ≤ 9, ∀ i < N s, mixCheck 76 6 S N I pool s i = true := by
   intro s hs
   interval_cases s
   · exact fun i hi => spOK h0 i (Nat.zero_le i) hi
@@ -4002,9 +4019,729 @@ theorem allChecks : ∀ s ≤ 9, ∀ i < N s, bar 88 S N I id pool s i = true :=
   · exact fun i hi => spOK h8 i (Nat.zero_le i) hi
   · exact fun i hi => spOK h9 i (Nat.zero_le i) hi
 
-theorem dead (i : Nat) (hi : i < 10) : ¬NatRun (mask 88) (goal 88) 9 (S9 i) :=
-  bar_all (fun h => h) allChecks 9 le_rfl i hi
+theorem dead8 (i : Nat) (hi : i < 412) : ¬NatRun (mask 76) (goal 76) 8 (S8 i) :=
+  mixAll allChecks 8 (by decide) i hi
+
+theorem dead9 (i : Nat) (hi : i < 57) : ¬NatRun (mask 76) (goal 76) 9 (S9 i) :=
+  mixAll allChecks 9 (by decide) i hi
+
+def index9 (i : Nat) := fld 0x97e9c00369d084000d0382403f100a62fbc0a5661e2d22ea4c388e8c080e28f500947a9202d0300390343ea01a2485b599a89a0b3ae7 6 i
+def index (s : Nat) (zs : List Nat) := if s = 9 then orbitLookup index9 5 24 (hk zs) else I s zs
+theorem atDepth (s i : Nat) (hs : s=8 ∨ s=9) (hi : i < N s) : ¬NatRun (mask 76) (goal 76) s (S s i) := by
+  rcases hs with rfl | rfl
+  · exact dead8 i hi
+  · exact dead9 i hi
+
+end Fixed39
+
+
+namespace Fixed40
+
+def raw : List Nat := [0x9b24d97cd883b485b53e0000001ffc000000000f,0x1454a2a862d76517352e200000000003ff83ff870,0x3861c30c8338463826345ff8ffc6001c001c00180,0x2289d471142188bdb8c08000fff80000001fffe00,0x3b0f1842183df0e1c0811fff0000001fffe000000,0x3c0fe07fe046000600081fffffffffe0000000000]
+
+def pool : List Nat := [0x11c2a0e85b14c54,0xe80b0a85214456,0xa80b06c5b14453,0xa81b11c5715051,0x11c2a06c5415852,0x11c0b0a85414c5b,0xe82a02c5315852,0xa80b0e85315851,0xe82a06c5b14853]
+
+def word (i : Nat) := seedExpr raw (mask 81) (fld 0x3f9081d40f4078fa841b40f30797a4400c0e90767687b2200506e0367743b9100183880820e102100129d20ac05a02701a20449e8ea840040b204d00041320b1021a36408a8ec02323c81432460488288000000 13 i)
+
+def unpack (c : Nat) : List Nat := seedW raw word 6 c
+
+def first (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0xcd507fcd107fa5107f7d107f69107f45107fcce07fa4e07f7ce07f68e07f44e07f38e07fccb07bcc906fcc907fcc705fcc707fcc507fcc307fcc207f74107e6c107dcc107fc0107fbc107fb4107fb0107fac107fa4107f9c107f8c107f88107f7c107f78107f74107f70107f6c107f68107f60107f5c107f54107f44107f40107f38107f30107f2c107b24106f24107f1c107f1c105f14107f0c107f08107f04107f02907f02407f01a07f01f07f01107f00e07f000cff03307f00107f00007f
+    | 1 => 0x33cff033a7f0337ff0336bf03347f0333bfcdd07ecdb07dcf307fcf007fcef07fced07fcec07fceb07fce907fa6907fce707fce307fce207fcdf07fa5f07fcde07fcdd07fcdc07fcdb07fcda07fa5a07f91a07f7da07f69a07f
+    | _ => 0
+  fld w 24 (i % 64)
+
+def S9 (i : Nat) := unpack (first i)
+
+def second (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x291c1fc000707f0001c17c07c707f01a1c1fc068705f0111c1fc044705f00e1c1fc038705fccb1c16f324704f0071c1fc01c705f033181fc000507f0000c1fc000207f75b041f2f74105e01d041faf54105ec9b04176f6c105db1b0417406c107d795041f4048107db230416e388107b021041ec080107bc68041bc098106f025041bc0c8105f02f0417c0b8105f02c0417c0a8105f000041fef8c105fbde0417ec70105f019041dc04c107b0100417dd2c107a6cb041e6f2c105b00b041edd24106e6c9041b4024106f5090419cb24106b74704179b1c105d007041fc01c105f2c70416c91c104f0040417de081075
+    | 1 => 0xa41fc000007f0009c1fc002307f000881fc001f07f033781fc001e07f000741fc0cdc07f000701fc001b07f02c6817c001a07f000601fc001707f000581fc0cd507f000541fc069507f02f4417c001107f01c441fc001007f0004017c045005f0104017c000f07f01b381f40bce05f02c3817c000e07f023381fc078e07f000341fc000c07fcdd2c1eb36cb0790332c1ec0a4b07b0002c1ec068b07b0112c1ec044b07f00e2c1ec0cca07fcdd241bb36c906d033241bc0a4906f000241bc000907f024241fc068906fcd42419c044906f00e241bf32c906b009241bc0cc807fcdd1c17b36c705d0331c17c0cc707f
+    | 2 => 0xccffc0cdb3bd000ccefc001a3bf00044efc003337f000cccfc0cf32fb033a4bec0cda2fb03344bec0cce2fb033cc9bc003326f033a49bc003327f0337c9bc0cda26f033449bc0cce26f033249bc0cf31df000cc77c00331ff0337c77c0cda1df0334477c0cce1df0331c77c003317f000cc3fc00330bfcdd6c1f00cdd07e029741f8001d07e01f741f8075d07e01d681fb3bd507e01d441f80cdb07d0296c1f4001b07d01f6c1f406db07d01b681f40cd207d033841ec0ce007b033981bc0ce506f000bc17c0cee05f000b017f3beb05f033a817c003307f000c01fc0cef07f000bc1fc002d07f000b01fc002b07f
+    | 3 => 0x33cddf8003377e033a5df80cdf77e03375df80cdd6be033751f80cf36fd000cdbf40ce96fd0337dbf40cdb6fd0336daf40cf3bdf033cec7c0033cff000033fc0033c3f000ceffc0033b7f000cecfc0033aff000000fc00339ff000ce3fc00338bf000cdefc003377f000cdcfc00336ff000cdafc00006bf000cd8fc00335ff000cd6fc003357f000cd1fc002947f000011fc001147f000cd0fc0cd141f
+    | _ => 0
+  fld w 30 (i % 64)
+
+def D (i : Nat) := unpack (second i)
+
+def N : Nat → Nat
+  | 6 => 218
+  | 7 => 443
+  | 8 => 453
+  | 9 => 94
+  | _ => 0
+
+def c8 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x576404c4088b3a0eb2056ce40f991f928b0a411a6840c40428820366266ce208416693b00e515a6a203cc18083d967007ea2ac41585a803f640ece603d5185b00877204206cecc17db856773306a424408208283e544c4a948e1499c183e4201e4003d4c33b8801035c702084001f10d9772656c01040eebb956774042041d41e910c473830000082dd6c7b200e315f6c021dd19b3a00b60
+    | 1 => 0x64ee603cc42da0081040620801dbc108300b2012a035ed80079a00f426b6c0b8dc41590035021f6841c40e59c0b2775542063e8c8c9a9015075ef0a13d159db82f783384e569dc8208305b1007c641041c75a900b30016a00f9859882d7b308e5021c40ae082b3100186c52c94c69b956771003fe0c409988200f5001ec169dd2db3984b502420619dc969c0b2674116e0a841400afd6b70
+    | 2 => 0x6420611dc407880110260206499d0073203e630620cbed0153ba04f630109ebec400732a13850420e01418073107b1011e856441407b2b01052220c5ed917db8835031d6640c416d88287b606420abed855bba2fb5191660384180790847740b6e022c42b5a00167301c84cadc1b5a82ab200c2055ad8061b90d35207c68014119da83f3830aee478a082283953231c2080fd057b4205b60
+    | 3 => 0x10ce648410c9c150101186a42440e29c08014f0420914a103083837611d4841ddd061c100f6424ce45c948008084b70056e00441553b999376656a00f9481fb083e410ace20fd5007a883505616e15d9cc05883f2810027e104101fa9037630ca0e0395013b901103b0ce6cac40e9c1af1001a704cec4038838050010a0e1c4193114006627f6c8c2d007d9006b6007e6464c8c1f2983f63
+    | 4 => 0x56817441407a08016f2e70613d4ec0828054f1ed095c416d33983e31056a02040ab08001107096615edc08bb98044fa44a80140808832e341ac2060acc013ba5b7701ef0612d0101c156b302420a0c40c25b0077720097e74a0ab8800010401e812edd40719117751220a1440807308f7854c70a3841d0129dd6737f6c165dd000800350154ee4cad0000810910407ec4199cc4d8803f53
+    | 5 => 0x800004181f98d6b500a20ec2cc17da0b3103616620003c12839110300d3e54d88708280e6301e64c2d45959807b700aa0eb4d840729911040c20a46c82659857b5061620ced80c99237b7002ee8444147db10fb725f6602041402818098f0020acddcc7da90031000ddebed4003cfd3283af62158414288286b700045e2040ebb3882b601220c1840dadb833b4007ca2038d005a007104
+    | 6 => 0x642080f9941f314bb7000a0361dd2bbba03f42baee963d8c13399535208ce60fd9520811b3829870a6ca1025880577402208c041807108076101ec4184183f993210606a0813d903588321005a6e36ddc971a885b5001ec20394840838350600a0aad9cc1f9080f632a6e520a05808200f52ad62001d8c07209728202ee5189c4959006b505f4620fcd17dc00065f602000223c70818052f
+    | 7 => 0x3678524ee61441ac3b857b40
+    | _ => 0
+  fld w 19 (i % 64)
+
+def S8 (x : Nat) := let c := c8 x; if c % 16 = 15 then D (c/16) else mv (mask 81) (c % 4096) (S9 (c/4096))
+
+def i8 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x6418020815408000e014440e0f8100019070e02804000d800070200c3400010bc000d078000603078905a00030f4000e0405c0c19000000e030085c0c03158400a02028ac1405
+    | 1 => 0x2006010835d063c0f4280609138a808010193c0c2704b58f269102800846000a03c3d0605410110283c00000582c3e000000006100c1c8001f01808600400808080600028fe00
+    | 2 => 0x43a200482020c048073e01800240602020181601835b00f5f39c26070030dca01
+    | _ => 0
+  fld w 9 (i % 64)
+
+def c7 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x3e908454dc1b86074637276882ad8c09c66068d301841b8b90d01baec05c603c7080634c40386e18e50054880214c4dfe6052b3040a0823d8c1000a015b380909021f0886c0606c8b5216181ed041d2a6e19f301a39808ac81b086a25ca60a0f99408cc2ce44318b31409b0010d006c20afb301bf5a8ef8d82a9c21b21000831b96c40c92641343402e3015a8c0468e818e60472188430c12fc60214301d3180b58c120446434303
+    | 1 => 0x621290b4c06ba604f03033e18089cc1204604de302b71810c0d831a681907741b08100cc094420743340768812c0c06fd6025c2102e9812dec82aeec4a530282d90ae8c14b620ac8b32181a0648d407a6c0d8100de9a8698886fd4617eb20c6181daccc222201545035bd185fac875166210b72d7980a89d89bc6a154103c7581040c840260a1b304cc98097040ddb6c3b871464181910d80b42005c703589b06ccd40be6e0d8500
+    | 2 => 0xcb1a81d0c0cae6a0f6350c412959cdc9884207d3701a08067adca226078e10191108171d886c2085b70576883170410b820c3d3022e3826f4dc21c60236106623b9b70c0488604ed660b49b80d1c0dba2099020717980ea0403086c2a13712e302658c09db602ad3509f9b8360406cc60518b017f9824d4c1068ea19e3022e1b0468d41b240e14b31de8816ecdc6ae206c13707a0800d998068ec143360291a0001c0ab860446303
+    | 3 => 0x9a1908d840d0820e00105b29c2d5cc06c070788372721a82148cabc6025f304768822dc40f086276f2218a9a855c415fa6021a205019084c8885567005c1004f980b90dc10260a30370171b8634d80b6e060638431980ab4409f2603bc3820a5808d2c0dc86c000703021a85bc81dde604ed301d71a86f4d8314602c81005213830c887704e0a21053b10811adcc0020716383273b10ccc095a60734350569b810c80990e070f205
+    | 4 => 0x621013b440ea8ea000104d428000c8c0586a1b130133989c88dc1e8a00673023dbb116dc08606a0093059a1b8058dc4086e44327282bb030c81cda408c83400a5a0b20404926086930142918310dc8a660354f3081182110c14cc6070c3502f9a858884029642edb21331c10d0d02686e58d35082bb15f840dce42143370c6180810c846820315304c21b8971c095a6c04e760abd988f4c14386c15b20282d80dacc09f860359270
+    | 5 => 0x9a9a83b5d8c92665545011d9a837c8400260443302641811188c8b8ec152302b79b91384106820a95210aa788454d818a6045a3210a081cc8c07766041f3013a5a1b9cdc06cec7051046218147840d50602b7105a49a8070c85db682d6305021b822cdc1866e58431000080550404be6c111321de982358c872e605b4271229808e8d8220628e33500a3b1214c083860a4310056982461d8b1a6e11e762abda8c40c08e84e010332
+    | 6 => 0x34cd42822065b60278980a84c8420461a2381a11b8218d431a606ab3428f082361810e8e28913802dbb1320415d06681c304021b036c841db663bb270a3110df841400c0ba86036b998434d03516057eb317f9a8322c4988e4741762029c0ec0c06866a1bc306d718255ec84b8a0d34360139a84209c132480ba302aa718972d8062608102028eb82668c0ee2603a6372ca920400dc732442d6303
+    | _ => 0
+  fld w 21 (i % 64)
+
+def S7 (x : Nat) := let c := c7 x; mv (mask 81) (c % 4096) (S8 (c/4096))
+
+def i7 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x141e020a00034002f80c1c1d0002c5204008540c3c0300096010000412000082c0803009240220008ac0807470147a040000c00000c02800000c8800202010100c33118a42410
+    | 1 => 0xa68c0620122c6d067c050c13a3c059bc024a000141600300d4105e5f09c00311780492120700080002b0140000090140600078280008088406a2b00098001517804624c0b82c1c00
+    | 2 => 0x3204c0c03168041c14010042808bfbda1c238c0081ae8d6830c400
+    | _ => 0
+  fld w 9 (i % 64)
+
+def c6 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x6a0813b4c064c682471034998102cc858a6072d3615a990814410f248400103a9189b14d821a68315361811904a2c495c6c2a4340af189bf4c0ab06a04436221981b7cc05a8ea50c303d0181234c16dc6079630157110da4d8552602c5102431a06c4d014e608b43022210328cc0f0a60377100bb880874c8d80602e5302059a0011d442c6c4343400e9b111ed09f4ea33db2123880824c53106020c3624e9918e0c054060abe713
+    | 1 => 0x629a86c4d410a6289a302cc99291c413186050b32394db08689088e60568301251b0d59d41586059132019981000412c66c94a2322511093c403626c00d30402081ad4402626066330387980b90c0daa605281007d082478c0b406069e302121a9600c8564604c03046a081941d45c240d28b020e9a9454d462c20106302ac1a05a4980126a30e33176182385d8dea603b430347b01b04c0e706039d1004d9b06c4cc1a8208ff331
+    | 2 => 0x94980d60d82166c5161045e98089cc0764602623010418256cc0c166c47930323d89350407686088536102081016c42686249a3408e9b9314d034c6214a3127d0812c88c828602a73246a32812c9848e200ac35086190e00c100b4406b302bb882484c06846059730323d81294d40f0681781007a190af8980c86847d302059982e4d875c60879320c41a0088c085a680051020b9816c4c40686c076303409814b4d46acea227b61
+    | 3 => 0x126c3a03404898a490c0400202ec3016a082edcc06ac206fa75347180ca0413006067b25137180b50002de4601f261a5110400c0ab06040b350a1189910886ee66000100
+    | _ => 0
+  fld w 21 (i % 64)
+
+def S6 (x : Nat) := let c := c6 x; mv (mask 81) (c % 4096) (S7 (c/4096))
+
+def i6 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x2e140019191b19211d08002606340405020508170b0a0402010d01321b0501212a160008070c01110c00010e051b011c050b06030004070b0804110402000000
+    | 1 => 0x1a1091206035a0d992b0000006b1e003108282c
+    | _ => 0
+  fld w 8 (i % 64)
+
+def S : Nat → Nat → List Nat
+  | 6 => S6
+  | 7 => S7
+  | 8 => S8
+  | 9 => S9
+  | _ => fun _ => []
+
+def I : Nat → List Nat → Nat
+  | 6, z => let h := hk z; (h/84 + i6 (h % 84)) % 218
+  | 7, z => let h := hk z; (h/152 + i7 (h % 152)) % 443
+  | 8, z => let h := hk z; (h/157 + i8 (h % 157)) % 453
+  | _, _ => 0
+
+def chk := mixCheck 81 6 S N I pool
+
+theorem h0 : span (chk 0) 0 0 = true := rfl
+
+theorem h1 : span (chk 1) 0 0 = true := rfl
+
+theorem h2 : span (chk 2) 0 0 = true := rfl
+
+theorem h3 : span (chk 3) 0 0 = true := rfl
+
+theorem h4 : span (chk 4) 0 0 = true := rfl
+
+theorem h5 : span (chk 5) 0 0 = true := rfl
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h6_0 : span (chk 6) 218 0 = true := by decide +kernel
+
+theorem h6 : span (chk 6) 218 0 = true := by with_reducible exact h6_0
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_0 : span (chk 7) 256 0 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_256 : span (chk 7) 187 256 = true := by decide +kernel
+
+theorem h7 : span (chk 7) 443 0 = true := by with_reducible exact (sj h7_0 h7_256)
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_0 : span (chk 8) 256 0 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_256 : span (chk 8) 197 256 = true := by decide +kernel
+
+theorem h8 : span (chk 8) 453 0 = true := by with_reducible exact (sj h8_0 h8_256)
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h9_0 : span (chk 9) 94 0 = true := by decide +kernel
+
+theorem h9 : span (chk 9) 94 0 = true := by with_reducible exact h9_0
+
+theorem allChecks : ∀ s ≤ 9, ∀ i < N s, mixCheck 81 6 S N I pool s i = true := by
+  intro s hs
+  interval_cases s
+  · exact fun i hi => spOK h0 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h1 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h2 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h3 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h4 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h5 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h6 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h7 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h8 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h9 i (Nat.zero_le i) hi
+
+theorem dead8 (i : Nat) (hi : i < 453) : ¬NatRun (mask 81) (goal 81) 8 (S8 i) :=
+  mixAll allChecks 8 (by decide) i hi
+
+theorem dead9 (i : Nat) (hi : i < 94) : ¬NatRun (mask 81) (goal 81) 9 (S9 i) :=
+  mixAll allChecks 9 (by decide) i hi
+
+theorem dead (i : Nat) (hi : i < 10) : ¬NatRun (mask 81) (goal 81) 9 (S9 i) := dead9 i (by omega)
+
+def index9 (i : Nat) := fld 0x5c02600d17e7009200000fa8c07cce1af1a08a413d01a00512a01b21005401876008f680fc7bc32923098cb40597b92380a20003f4fe0c92dccb3804a28001441018040d030058efa41cbc8b47d200d8435ecaa7ce03eeb20fceefefd4066043400a1a298ddb9a0073 7 i
+def index (s : Nat) (zs : List Nat) := if s = 9 then orbitLookup index9 0 40 (hk zs) else I s zs
+theorem atDepth (s i : Nat) (hs : s=8 ∨ s=9) (hi : i < N s) : ¬NatRun (mask 81) (goal 81) s (S s i) := by
+  rcases hs with rfl | rfl
+  · exact dead8 i hi
+  · exact dead9 i hi
+
+end Fixed40
+
+
+namespace Fixed41
+
+def raw : List Nat := [0x560aeb5815933ac206d4f000003ff80001ffc000007,0xab5d41a82aa40d54bd4b9001ffc00000000001ffc38,0xacc118231330e118e098d2ffe000001ff8e000e000c0,0x310620c437470620eee304000000001fff0000ffff00,0xc21843085b87fbc3130020000000001fffffff000000,0xfc1f83f07c049c029c0200ffffffffe0000000000000]
+
+def pool : List Nat := [0x108371345c16458,0xdc0a0686c16861,0x1082b028611746c,0x134420685d1645c,0xac1a0285c16059]
+
+def word (i : Nat) := seedExpr raw (mask 88) (fld 0x707903c41e9ea1079fa67d2200602081081d9db4b7603afb38044d5af6681d3d99ed0f64400a0dcdda0367743b9100182cd166043022838b5680e100253c416809c068ea667a3aa100100041320b102323d414209105482b0000000 13 i)
+
+def unpack (c : Nat) : List Nat := seedW raw word 6 c
+
+def first (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0xc1307f85307f6d307f4d307fe1107fe1007fe0f07fe0a07fc0a07f84a07f6ca07f4ca07f2ca07f28a07fe0907fe0807fe0705fe0707fe0507fe0407fe0307fe0207fb8107de0107fd8107fd4107fcc107fc0107fb8107fb4107f80107f78107f6c107f68107f60107b60107f5c106f5c107f58107f50107f4c107f44107f40107f3c107f28107f24107f20107f1c107f1c105f14107f10107f0c107f08107f04107f03007f02107f01307f01b07f00b07f00a07f000e3f03807f00107f00007f
+    | 1 => 0x38e3f038c3f0386ff0384ff0382bfe2e07de3807fe3607fe3507fe3307fe3007fc3007fe2e07fe2d07fe2007fe1e07fe1b07fc1b07f6db07fe1a07fe1807be1807fe1706fe1707fe1607fe1407fe1307f
+    | _ => 0
+  fld w 24 (i % 64)
+
+def S9 (i : Nat) := unpack (first i)
+
+def second (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x38241fc000907f000201ff8b8705d0381c17c0e0707f0301c1fc000707f0001c17c06c705fe181c16f85c704f0131c1fc04c705f00a1c1fc028705f0071c1fc01c705f038181fc000507fe0f101f00e0407f000101fc000307f000081fefb8107cba8041d40b8107d027041f6e601079b97041b4054107d00e041f4030107da170419c07c107b01d041ec070107b02c041bc0a4106f026041bea94106f024041bc08c106f022041bc0d0105f0320417c0c4105f000041fc0ac105f018041ec05c106f617041ac0481077d510415c034107b789041eae1c105d007041fc01c105f6070416d71c104f3c4041f250c106e
+    | 1 => 0x38381f40e0c07de285c19c0e1f07b038741ec0e1c07b038b01bc0e2606f038901bc0e2306f038881bc0e3405f038c817c0e3105f000e01fc003607f000d41fc003307f000c01fc000007f000b81fc002d07f038801fc002007f000781fc001b07f000681fc0e1907f038601ec0c1807b000601ec001807f01b601fc061807b0385c1bc0c1706f0005c1bc001707f01b5c1bc06d707fe185c1ac05d706f000581fc001407f0004c1fc0a1307f0184c1ec05d306f000441fc001007f0383c1fc000f07f02e281f40a0a077038281fc0dca07f033281fc000a07f02f281fc0a0a07f018281ec060a07f017281bf878907a
+    | 2 => 0xe1bfc00306ff00001bfc00386bf038e18ec003863b038c18ec003863f038618ec0e385ef000e17bc0e305ef000e17fc0e1b5ef0385d7bc00385bf000e14fc00384ff000c13fc00004ff038613ec0e174ef000e11fc003843f000e0ffc0e2e2bd038a0adc00382bf000c0afc00002bf00084afc001b2bf03860aec0e172af0004cafc0c0b2bf0002cafc000a2bf000e09fc003823f038e077c00381df000e07fc0e1b1df0384c77c0e0a1df0381c77c003817f000e04fc00380ff000e02ff8bee07ce2ea01d40e2e07d030b81f4002e07d02eb81f40e2707d02e841f40b9b07de2e601e78b9706d038541f40b9307d
+    | 3 => 0x38e2ef40038bbd038c2ef40e2ebbd038ba1f40e2e6fd038b93f40038e3f000038fc0038dbf000e35fc0038cff000e30fc0030c3f000030fc000003f000e2efc0038b7f000e20fc00387bf
+    | _ => 0
+  fld w 30 (i % 64)
+
+def D (i : Nat) := unpack (second i)
+
+def N : Nat → Nat
+  | 6 => 69
+  | 7 => 226
+  | 8 => 332
+  | 9 => 91
+  | _ => 0
+
+def c8 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x8be0d408079805b4007ec80fcc8b19200e3407cc824408288203e532c6e401402c0812c3611c7040fd4c208184104056600394c0000005010a20c0441818830f1050085e03d9471a903f3110206b0e04072885b601e2071ad0000bf891042c6460441589c0c4b70002035440030818050301ea203994e88280e31042080027c072900f500f6e06c410072103506042074ed024da002100
+    | 1 => 0x8820020415788200e6476629604157880461030089eb0dc407a900e63010de48d8aa8829635207e42c4d04ed902f1075a6e2bedc189b8a2282ae2055bdce35a805b508c20826c4220830050406a0a0f946cfa183e320b62012dc2ada800f205a68234d88024f87b60724a200e7c69a90016f07ec400ffd69c083e54376400f88407aa5a1020220e0f984028100f1007ea40017e5dc000b60
+    | 2 => 0x820c12d804f9906b5089660c4d4d8dc0061020820e00afc000fafb1001e8512d4169a888b10b3c8600c401fa100f4013c8613dd2adb8001053a2063c41c011f83e318d6e01ad801f290210500d3f5440cd881afb400e20d68414008200e3200a0a0ad40788302b603620c7441007b18078f01e6946d0005a804b50737000c4097da803e6501ec40193c69c10810713e840c40ca12903e41
+    | 3 => 0xab6c016dc1d9a887b10896c0c4d8407990110206a08004197db046b608d6214c85a694084b30746e356cc071b944b400e20e02c804f210610601ca800c7c2882d910204204014bd51a886107586a212c4091c103f41122060fd51391304b40522060adc03588003af0820a13dcc0080002ff005be0841c15a002b200162048d4c3082891050bee403c84408100b30022060003c028301104
+    | 4 => 0x1e2080c416b0829b1051f640039854882d5b401a6e402d022081bb37101c8203d8407a09234200b1e039881880805ff766261c40a359809f43246e40d40c10830310410208bc40c07a980f6007e680fd441fb1af1068c20110412ad880e34207c68cee0035b803e42166a454dc80157804000e2062441807b235b8001c4222dc03882051020a20f1841625882f10507ec203cc41f3183e62
+    | 5 => 0x536400d404026f801020067e0040ec882afb3007ecb46cc02fba44105
+    | _ => 0
+  fld w 19 (i % 64)
+
+def S8 (x : Nat) := let c := c8 x; if c % 16 = 15 then D (c/16) else mv (mask 88) (c % 4096) (S9 (c/4096))
+
+def i8 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x16034460e2780814002c008661f020000420018ec00000e0683e0f30008581d029189056020000801008b018260b04c06280301c0004040080c00000080c000381408030280c5c04
+    | 1 => 0x606c041319bec064a169102008040f0580008c40007f0b09c08020000c6874000f41c003b0fc00791300c0620091708a040103804020002c04002b2103001019280245010680000
+    | _ => 0
+  fld w 9 (i % 64)
+
+def c7 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0xa4081200d81ed662683012e1a82bbd445460c5c304461813c4c065ac2c9b30129980b20c055ca00273011a183024d815c2032923087910928d809a4412d102579b85184095a460eb3010c180abbd425ac240c36007183c0adcde84603cb704508313d8d1486c02910394181c60c04f46423022030918038c195dc80f6105461082bbd0878604aee4394908024d4170442aef530e121384c055c2065730110980ab941280460bb230
+    | 1 => 0x36981266c04a6c4f3b30244182266d454868098350521b82bb9455660aaee1079180c188c11846509301968832e0c060860219b704cd98830d01184045130169104030d41426e01c20231918030c0d5de86a435096b0a180c095c2010b360a408251acc574684aee5431980c688c190442aee5057729b2c408e64412d10457718a84d0130609333601e1081b0c0574602991027f91845c8c1142088b23081b1a39cd81de440ef301
+    | 2 => 0x9c108468c05726e52d103609810944155c20891b434418332c419824252d0001e101522c0596208aef10821183e48861e6026130135118274c066860288307572811c0c05e4440b22302e1b84b4415124604f2071b9b04c0d0c126e0aef2039988500c055e60aae40545931078c050a60298370449082e4d48126806c2302e190abbd495c20aa135006190870c08a64400e304259812b9406916c230301577a0030dc0684612b301
+    | 3 => 0x182404af24087180ac4c066844072b7196b082b84087260234310439038f09086e60aa13600c908032dce9020d3823026980cc2dc60c6025c360331044ac8804e442aee5247981b14c055dea8df301570001e8881ec204bb210
+    | _ => 0
+  fld w 21 (i % 64)
+
+def S7 (x : Nat) := let c := c7 x; mv (mask 88) (c % 4096) (S8 (c/4096))
+
+def i7 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x2130400433213351005030a0a0013000c007f2b3a0d2b0626145c3f3f0700000667341102010d070110013301080804001701000106230700060b02000400
+    | 1 => 0x129d8607051d026701050700490004104b090f001600004e1b3d5429
+    | _ => 0
+  fld w 8 (i % 64)
+
+def c6 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x33210953016830173210aa301d93018c230572202d105be22075303ae30380210cd22049331da1018d1046ab63b72308d10174350623309b210a06344d303d42309a22062310a8230623604a220d3310623219d303d3b606235016301623403c301322616d220ae3024e230413018f31369350a02306e23133616ad2416a321033013b230ac22066b630c350302312d1013930305101a92108830384210c3102
+    | 1 => 0x94303cf2102d103a630124251
+    | _ => 0
+  fld w 20 (i % 64)
+
+def S6 (x : Nat) := let c := c6 x; mv (mask 88) (c % 4096) (S7 (c/4096))
+
+def i6 (i : Nat) := fld 0x1271880b008164a0c040524f0531050cc0110030c00800010000c3 6 i
+
+def S : Nat → Nat → List Nat
+  | 6 => S6
+  | 7 => S7
+  | 8 => S8
+  | 9 => S9
+  | _ => fun _ => []
+
+def I : Nat → List Nat → Nat
+  | 6, z => let h := hk z; (h/36 + i6 (h % 36)) % 69
+  | 7, z => let h := hk z; (h/92 + i7 (h % 92)) % 226
+  | 8, z => let h := hk z; (h/128 + i8 (h % 128)) % 332
+  | _, _ => 0
+
+def chk := mixCheck 88 6 S N I pool
+
+theorem h0 : span (chk 0) 0 0 = true := rfl
+
+theorem h1 : span (chk 1) 0 0 = true := rfl
+
+theorem h2 : span (chk 2) 0 0 = true := rfl
+
+theorem h3 : span (chk 3) 0 0 = true := rfl
+
+theorem h4 : span (chk 4) 0 0 = true := rfl
+
+theorem h5 : span (chk 5) 0 0 = true := rfl
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h6_0 : span (chk 6) 69 0 = true := by decide +kernel
+
+theorem h6 : span (chk 6) 69 0 = true := by with_reducible exact h6_0
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_0 : span (chk 7) 226 0 = true := by decide +kernel
+
+theorem h7 : span (chk 7) 226 0 = true := by with_reducible exact h7_0
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_0 : span (chk 8) 256 0 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_256 : span (chk 8) 76 256 = true := by decide +kernel
+
+theorem h8 : span (chk 8) 332 0 = true := by with_reducible exact (sj h8_0 h8_256)
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h9_0 : span (chk 9) 91 0 = true := by decide +kernel
+
+theorem h9 : span (chk 9) 91 0 = true := by with_reducible exact h9_0
+
+theorem allChecks : ∀ s ≤ 9, ∀ i < N s, mixCheck 88 6 S N I pool s i = true := by
+  intro s hs
+  interval_cases s
+  · exact fun i hi => spOK h0 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h1 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h2 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h3 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h4 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h5 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h6 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h7 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h8 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h9 i (Nat.zero_le i) hi
+
+theorem dead8 (i : Nat) (hi : i < 332) : ¬NatRun (mask 88) (goal 88) 8 (S8 i) :=
+  mixAll allChecks 8 (by decide) i hi
+
+theorem dead9 (i : Nat) (hi : i < 91) : ¬NatRun (mask 88) (goal 88) 9 (S9 i) :=
+  mixAll allChecks 9 (by decide) i hi
+
+theorem dead (i : Nat) (hi : i < 10) : ¬NatRun (mask 88) (goal 88) 9 (S9 i) := dead9 i (by omega)
+
+def index9 (i : Nat) := fld 0x7086f58024014800a032008a0c6807c0110048033b2457638727638afec03d0045fc646dc3a44925bdd80c798add0000eae5af402fcc0b700038d651a20000d9ba704e5e6d713258ec28f08f744c56401288032b0ba5756803f09a76b2691b0002800 7 i
+def index (s : Nat) (zs : List Nat) := if s = 9 then orbitLookup index9 0 38 (hk zs) else I s zs
+theorem atDepth (s i : Nat) (hs : s=8 ∨ s=9) (hi : i < N s) : ¬NatRun (mask 88) (goal 88) s (S s i) := by
+  rcases hs with rfl | rfl
+  · exact dead8 i hi
+  · exact dead9 i hi
+
 end Fixed41
+
+
+namespace Fixed0
+
+def raw : List Nat := [0x560aeb5806c0dcbb00d81b2bc00000ffe000001ffc00000007,0x8b5941280965a815012ab5164007ff000000ffe000001ffc18,0xacc1182312d81302615b0261cbff8000007ff000000ffe00060,0x330660cc2720e41c85fc3f8e1000000000000000000ffffff80,0xc21843085bc3786f0e604c0400000000007ffffffff00000000,0xfc1f83f07c0380700b80700803ffffffff80000000000000000]
+
+def pool : List Nat := [0x1402d0286f1b87a,0x16c50114671986a,0x16c150e07a1b86f]
+
+def word (i : Nat) := seedExpr raw (mask 102) (fld 0x7cfa83d11420f5f5603c7d420f30797a6bd33e910036bb008204207672d75d60ebddaa2733d48b4ea265134880440756ad51c20e9ea30016a880b5d6e03737599da06cee841b5b91001eaaf4868b3021e78916a04507172681c3c99e237244009a9c068e66b533a46d566a875520029224b664832eb96e026a5eb946cd666ab3440018a2476a3ea046479a3c51eb1468a1c78a3d80a147a491a4872e9970c7a81235d105502a65571aa94e4688000000 13 i)
+
+def unpack (c : Nat) : List Nat := seedW raw word 7 c
+
+def first (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x50700fe88e01fce1c03fec3005fd8600ff7cc01fc01803fca3007f94600be00c017d89803fb13005f50600fea0c017ce1803f9c3005f30600fe60c017f61003f802007f50400fe70801fc81003fec1207f00240ff28481fdf8903fb11207f50240fe70481fc48903fec0e07f001c0fefc381fd40703f9c0e07f0e1c0ffb0301fef8603f800c07f94180fec4301fd40603f9c0c07f0c180ff40081df60103f800207fa0040ff3c081fe08103fb70207f6a040febc081fd40103fa20207f38040fe60081fcc0102f900207f12040fe1c081fc30103f810207f
+    | 1 => 0x1400ef42801de84a03becd807f01b00fe00001ff65003f80a007fa1400ffb2781fc04f03fcf9e07fd9040fe02081fe0c103fec6e07f00dc0feddb81ff63503f806a07f6ad40ffb1781fc02f03faf5e07fa0a00efb1401ff42803f805007fbaa00ff6d401fec2803fd05007f9ea00ff31401fe52803fc65007f86a00ff05401fdfa803fb75007f6aa00febd401fd42803fec4407f00880ff29101fd42203fa24407fa0700efb0e01ff41c03f803807fba700ff6ce01fe81c03fcf3807f98700ff28e01fe41c03fc13807f6e700fed4e01fd89c03faf3807f
+    | 2 => 0x1b286e0366cfc000d9f80d943f01b27fe03641fc06c6ff80d8d7f01b17fe03628fc04a51f807ea3f01b117e0361cfc04a39f806273f00a0e7e036187c06c31f80d843f01b04fe03607fc06c0dfeca0077
+    | _ => 0
+  fld w 27 (i % 64)
+
+def S9 (i : Nat) := unpack (first i)
+
+def second (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x981fc03b2607b0000901fc0002207f0140801dc0352007701948017c0002007f00608017c0001e07f0000701fc0181c05f0000681fc03b1a07b0000601fc0001607f0000501fc05d1207e00bc481f805c1207d00bc481f40501207700c8481dc0401207b01804817c0001207f00ec481ec0221207d00604817c0001007f0140381dc04f0e06f0000381fc0380e06f00603817c05d0c07e0130301f80500c0770130301bc0000c07f00ec301ec0380c06f00603017c0000a07f0000201fc0000607f0000101feed0020760168081dc0500207700d8081dc03202077019c0817c0650205f01880817c0600205f0000081fc0260207d8288081e6e980205ea0600815c0180205f76600816dc180204f
+    | 1 => 0x174c017aeca3005ebac4c017aea83005ed940c015c05030077a140c015c05030057a128c015c06c3005f01a8c017c0683005f0198c017c0633005f0198c01fc05f3007f0000c01fc05d3005f016cc017c0503005f013cc017c04c3005f012cc017c04a3005f0000c017c0483005f0104c017f63b3005b00ecc016c03b3005fd8e0c013c0383005f00e0c013c0373005f00d4c017c0333005f00c4c017dc313004f00bcc017c02c3005fa0a0c015c0283005f76a0c016dc283004f0088c017c0203005fa070c015c01c3005f7670c016dc1c3004fba60c017a818300570060c017dd983005b7060c013c0642e07f0000b81fc0662c07f0000b01fc0682a07f0000a81fc04a2a07f0000a01fc0182805f
+    | 2 => 0x1501fc0005207f0169401dc0505007700d9401dc0345007700c9401dec465007b0115401ec0425007b0101401ec0675005fd5994017c0655005f01854017c0605005f01ad401fc0005007f0141381dc0004e07f0001301f40434c07d00fd301f40004c07f0099301f40004a07f0001201fc0004607f0105101e60c1440790141101dc036440770119101ee5464407b0105101ec0624405f0001101fc0004207f0001001fc0003e07f0000f01fc0003a07f0140e01dc0363807700c8e01dc0573807bb118e01ec0453807b0108e01ec0403807b019ce017c0653805f0180e017c0003807f0178e01fc0263807d8288e01e4050360770000d81fc0003407f0000c81ff65d3005e0174c01faedd3005e
+    | 3 => 0x119b81de5466e07701b1b01dc0006c0770129b01dc0506a07700dda81de5376a07701b1901dc000640770129901dc0326407701ab4017c06cce05f019f3817c000ce05fd9ab3017c06acc05f01b32817c065ca05f00032817c066c605f01931817c000c405f01b30017c060c005f00030017c000d807f0003481fc0000007f0002c81fc000ac07f0002a81fc000a807f0002981fc000a407f0002881fc000a007f0002781fc0009c07f0002681fc0008e07f0002201fc0008207f0001f01fc0007a07f0001e01fc0007407f0001c81fc0006e07f0161b81fc04c6e07f0001b01fc0006a07f0001981fc0006007f0141781dc0685e07f0001781fc05b5e07f0001701fc0005a07f0001601fc0005607f
+    | 4 => 0x360afc06cba27e01b1789f806cb827d01b1789f406ca027701b1909dc06c8027b01b30097c000d827f0000009fc0009427f01b1d89ec0006227f0001409fc0003827f01b0c097c0001227f0003608fc06ca01f701b2787bc000d81ff0000007fc06c701ef0001407fc06c301df0000387fc06cba1be01b2606f806ca01b701b2606bc000d81bf0000006fc06c761bb01b1c06bc06c3019f0000306fc000d813f0003602ff65da00760176801daed0a0076bb41401d806ab607701b2d01dc000b407701b2801dc068a00770002801dc05da0077016e801dc053a0077014a801dc051a00770142801dc0509e0770142601dc05a940770142501dc05092077016a401dc050900770142081dc0506e077
+    | 5 => 0x1b9cfc0006a73f000189cfc05050737000141cfc05d5073f012141cfc0003873f01b281bdc000d86ff000361afc000d867f01b2e987806cba63e01b28185c06ca063701b35187c06cd061f01b33187c06cc661f0003618fc06cba61f01b2d987c06ca061f01b27987c06c9861f01b25987c0009463f01b20987c06c7661b01b1d987c06c7060f01b1c187c06c6e61f01b1a987c06c6661f01b17987c06c5861f00fd4187c0315061f01b10187c000d85ff0003616fc000d857f0003614fc06c3051f0003613fc06c764fb0003612fc000d847f01b2810dc06c6a43701b32907c000d843f0000010fc0005043f0000e10fc06c3041f0000810fc000d83ff000360efc06c3039f000360cfc000d82ff
+    | 6 => 0x3654fc000d94ff0003652fc000d947f0003650fc000d93ff000364dfc000d91ff0003644fc000d907f000363efc000d8f7f000363cfc000d8ebf0003637fc000d8dbf0003635fc00000d7f0003633fc000d8c3f01b282fdc000d8bff000362dfc000d8b3f000362bfc000d8abf0003629fc06ca0a370141fa8dc000d8a3f0000028fc000baa3f0002da8fc000b0a3f0002628fc00094a3f0002328fc04a8ca3f00021a8fc0007ea3f0001428fc06ca09f70003627fc06c869bd0003626fc000d897f0003624fc000d88ff01b20a2e4000d88bf0000022fc000948bf0001422fc000448bf0003621fc000d883f000361ffc000d87bf000361dfc000d873f000341cfc0000073f000281cfc0009e73f
+    | 7 => 0x6cbb43601b355bdc000d96b701b3650dc000d943701b3450dc06cbb43701b2dd0dc06ca743701b2950dc06ca343701b2850dc06ca13f701b284cdc06ca127701b2d48dc06ca123701b2841dc06ca0df701b2337dc000d8db701b2835dc06c6ed770003632dc06cd5a1f00036677c06cd599f00036657c06ccd8df01b32637c000d989f00036607c000d9b3f000006cfc000d9a7f0000000fc000d967f0003656fc000d957f
+    | _ => 0
+  fld w 34 (i % 64)
+
+def D (i : Nat) := unpack (second i)
+
+def N : Nat → Nat
+  | 7 => 2353
+  | 8 => 1535
+  | 9 => 152
+  | _ => 0
+
+def c8 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x8c102391021f3108c10124a729274294a6595f3487a51092108da7191e7086e438e10245b405310021b808410252b6193f658de15243515c2107f104223810150f85f6569b50293714ca4195f652a36262b1062a827ae536ca41253218b74386f4287b701fb7185a2091f7436b608b1061f10282a4044b801f104492210500030a522cb61841049165312b204a2108e1045bb8030b204fb2085675751017d615
+    | 1 => 0x9310295f543aa417e1000033f051008510400cff8810630b60252247eb107a310341024db5171101008df8fb5061b8115321931007b1068ba705310397e0292b70443516cb7174a8100bdf32b5067b5157b707d71553a7130100821045da826578683e6589a7062b802710464a516cb4124b7109b807f10232a626c1006fa41293816f1009310464e7597f0552b807a103915036531053b408ef7258b705ea87
+    | 2 => 0x8ee762a3103f310513100036f24381051046410630b402538143221101038d104012104d2101437288a403610078a45000bf83b404fb6157310786166fe750045f10b5060b80583108510219b517861469a4197104871064a2215c3106ff758475205b505038152b821810595e5390b4000def05b6010b4086e426f1014fb7153f752b3810d210821028aa408ff7622b829460290a4018b7182b708a10641310
+    | 3 => 0x483108310283f724c10378a718650567b7181b70403106cb6272a71961068b1036cb604ab513c100003ff87a40911002ea4119b5083a4305b40162218df727da719250097f6281b3045371271022cb529710261371042105e6265b31352310623108bf7686e532c10792105313822c1060080f8d10297e5473b8072b7136f64017af8ea503e382831048f1044da518477091a4053b506cb72523213c1077f310
+    | 4 => 0x621090b728410600d3f022100091f78b401f1066fe652c3710042f8e10615b80453210144f52b647b1037bb50682511f1070155f781035ab8018100817627a50500a9f0a2102135105b707db208810331310273416267615221391060e2108fa4091e7535b718ca508a10362b867510697e053410091f756cb706fb709460601bff365062338153b70014ef8bf7500e0f89101833506fb605272630b7091b73
+    | 5 => 0x69b7153351223108df706fa713610481a304fb2186f6288b7012105361054c31092a7097f5297f6300fef75a718f10594a7000b4f941062cb4090b628b7708710135b706ca610151f612217bb40593104db4097e6581a5000c2f86e30841074f1055eb83901002c10089a407f10538b6100f2f811053cb5072e753828284b527af632e106572211c3108577286f648fb42937641d37271310312828c1067eb70
+    | 6 => 0x751008de710191f821061fb509550518a715138191e6590a602737189103293101331064f753210001b5f65a87102100112f85672906039410334b708bf65009ef32b2075b5096103821075e22126a828374037100833408bb60916026410100e6f5eb80271071010487f7569241691004c10401e4f6568785106396748f6406910195103271067210172a618da502c10383e764f101843702cb5067a711fb63
+    | 7 => 0x5631078310841039210032b705f31050b80383219750297e635d3108b3507f10092a608fb7091a703aa3101c9f18b7000e9f68b806cf6467a213910374b8069e7561b61861053332138b8275f7572e6583b7069f751fa511e221453244cb402eb411210301a9f353211732392e753ab318d1017871664b5088a702234272b7064a71856762c101353109710539b401e3107e7154822195f6339b414f3101f100
+    | 8 => 0x75b609470643b8097f0478b7588b712ea718ce75841002a38185b501db8193a70391007f504801038337022361801058cf758f1007b10493762271012cb70831063eb805d72669a71243108310700b8f6332143b718cb71827632531097f02857737e1038ef7585b400141f35a828ea702cb418e10087a702736152381333108f240271007fb40651004ab405e77657a825531035b82856741d31082b632cb60
+    | 9 => 0x9610401ccf53105033522138185f7581b6293e7569e659410400d2f67103626828377000d1f2eb31243218373285b606fe76341056532126b8200abf7210492e65433618ca71253611b3106431028361181018ff759110224b8291f640cb8082a507af6493f752935143b7075b7008b802b351223512a3512fb8037b207db717f10369b70043822710339a4163b806710578102673100cb70781044532688a71
+    | 10 => 0x51068df756ca7152b605db823e3627d103233617ab5054b8094b7570b701810494b7045a51831001fb516210086e607fb601fb7050361301063822112b30383102ca413d3104a28244b8123310941028d10097f650044f97e0365b707ae648fa70971034fb105ea827d10591f62893107d31085b3078b4590f6485e75603617261500c8f91f7288f6453b4357b82721027a1008336094a454f1068d504000ff
+    | 11 => 0x19af30b621f10170b80756158bb438577685a5065b8026361002102b37186e500a25219b417ae5493b702d3812bb8186f3034a72283518fe6586f2001b3f34b5257b8384b40907534cb4191e76847406c1065337161a8295f641fb606f10639b7071254402529010288a617ab602c33183f7585a406b31027b709210401b4f4fa510046f083628110085a600721000d8f6e31078b6518102233233410360321
+    | 12 => 0x4c10000ecf83b329470325b812335183f766fb73433418b750616268110290a7034b7240b81656267810689614901054f1004fb507e1076022165b1057b734832182b50831035cb80273108650480106493612e105633132422132b628ab4000aaf2c34193e6501acf8b37053a510338260a8251b805eb827e1066026192f729210245b508610388b400db8094b4512106811042ea611f10391105926050113f
+    | 13 => 0x283815331240b804fb400088f0006f86f458210369b6084a402e31053e758210086f5293605946048fe7557a7286f5383f6521361263813631095e545b31024b72975042735195e64365046ea7186e652e1036fb716a2517da21101004f10448b818b1059010658b8097e0400eef53b5183b5093602911062237175e753fb800f21012b5062b7094b651210084330213106fb6357b8097e424931036e6454361
+    | 14 => 0x4fb6014310083827d1013010493f72181066f103562525136162b2100eff75e767ea715eb6092e7665b618010048b808fb5312b4032b520103f00f3f6710631b8084b602c1054d32189b400eb8083a502cb710089f0194f30b502c3616228258a8223b818ce657a10134107897145336131b82361026cb508f10212104321066fb406fb5044310533438ba5062b87721062635194653843400106f8cf728fb60
+    | 15 => 0x12b705db6097f54531016c1034cb708ce7650b8139105463217e104243714fa7118a418375034a524cb7130b722537167b6159b801f1054fb707ae3481a405a1028476088a413710680104483714434185f727eb5012b60463105c22106b8000eaf66b8078b508b3028bf7038a826c1018be758bb50473104fb4163a822b310453817b10045b41781005fa8271b80332214a3210ab8080b5091b6386e648d615
+    | 16 => 0x21b8185a302e10727b7130b42333822837187b7193e7610b6000baf5438155b803ab519750569a6143b81452102337172b4061b808ca61263108ff7210b70911038fe7695f538ab707731000b3f03b8086f43691067210067b206ab8067b5091e606121076b8001cef91f768b3434531027a71843604ca710048f9510118b417ff645262692106671000047f1810786102523613c10686f6522b802a34165b20
+    | 17 => 0x756148fb430156f2632197f648210567b105fb801e3218b1005a3106131097e623977486e4580b7088b60032105310472f7590b60533107ae638be6578b603ab41163101eb80503133410484b706410072b506031081106613217210351b8100f4f7fe6485e7660b827d10001d7f8ab6064b7193e703c10469a5145387931052eb3035b803ab5062b6165b513a1003ab6134b20033724db5032b7234b500190f
+    | 18 => 0x83a706c1026e101033628eb707e310051055035483f703210253b5386f636f1021531053102083235e31030310321076c10400f8f33b8024b808fa608650661b6001c1f28b8095e6556b8025b808b3602d3418f1065db804aa515037195e343e3217a105931067bb70632216f1046cb40361061810392b600098f1db8087e7518b408aa7075b736c31032b603ab71851050434278b706f3107db2158a7281b40
+    | 19 => 0x7bb603ab208ee7581103911042ca7193b7353b710510387e6593604371045374524b70083721c321857747510362b5123b802eb5100a7f2eb602eb5065b714db41921038b1042eb6192f7569b408bb027e10595e6382b4038b803e37201caf2e10033282811078c61572b6067b6026b611632191f652a37137b50442216522175b400043f67b708fa504b21089b708cb7097e6092f76831057d104841053e354
+    | 20 => 0x2eb400090f6528726b803e25186f40861048650224a829470265b508c10000b1f0189f82b201fa713c10586f3291b700193f72310293410192f52a828bb532b3212eb7100c0f0114f975038bf726fa6178a758650387a719510544321787147db708b7022e10445b515d6268a104301025c3214932189b10173108b1020437278b71901041eb81861063aa51213714ab506cb458b7606910364b705c3617db10
+    | 21 => 0x5131385f76931032eb708fb4090b457a10205b208710491b45271058bb703610381a703122184a7084b305ca828f1038473001e5f93f76623212ea5191b4000f1f1831092f65671012ea314d2218b7458db707eb71543139010397f6086f5038382743107a5030154f6eb80122104d31035221881006fa5375e650096f7ab3054354313210835462b200032f683108a1004fb5134310926028567336b4081b50
+    | 22 => 0x8be7691b60531060f260632304231032103543714331032a528ca7088b4101a7f5137183e7597f4235b7200f0f82a700187f01cdf6410478a65052105135245325101022c1047b10230b52946035b221622212bb8062b7163310353828de7591a602f31035a7258261003ef86f603c103915002eb106ff7483b60837602c31094a758ee657ab403eb81323104ab4132105352823010597e642d37167b2194704
+    | 23 => 0x5107857758ff6585e655235437103951026910497f03751020174f87f70391044fa214a3103e310891003931005b3072e764a37100b7f4332150310101060b2107db5057b7290b706ea81851038da7086e409610262b508b6425231386e207510462b6091a530c210371056eb70301074b3106931089104881044c1063fb81753102c1020435215b817e6155810108210955030185f85b202d35165b60
+    | _ => 0
+  fld w 20 (i % 64)
+
+def S8 (x : Nat) := let c := c8 x; if c % 16 = 15 then D (c/16) else mv (mask 102) (c % 4096) (S9 (c/4096))
+
+def i8 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x180341500000a0b80000e0040b80080900a0000280a0160480580700c000160020000d40880100a0100000301001c1e00d01202c040000ec0000000300e0a8020041040100081000204c0c0030060701080000601c2780a
+    | 1 => 0x300c03802200c0302405a06c08015030000000000580700080700000c008480060281500f0f200000003000004028030000003301f0080680003e0040901d80b08400c000390080000a81900002c0e80200409c04809
+    | 2 => 0x2a23c0001601c0340000b00219008000032008008100120081b803000088070010001480301100005c0080301400c0080902e028008220780b80303c0140006000a00a00800028054060000000340480881301000005819
+    | 3 => 0xcc0000003100c00c0081b0ca0040110b006000018642e40040102900c09c02032014044360231460003a80402625c0b00003a08805805000024070460000180182603609c1b0010000380781c0ee3d00081606e0002b805
+    | 4 => 0x4e11c008150105e807000026004418d71f61a8020260020580801202c0100180a03c0040085b0a81480a80a00002c108192500c4a480702a000528160180041085014c07404806012110628000040000280a0080300b004
+    | 5 => 0x74a18032210e00601381e2b800c0a80000201423024000cf01780b064000002d8062008060000080680d00101e0080300703c0012084327c0701d816020000090150060300006600200002022046034449810e000c1a807
+    | 6 => 0x6c1a4028050001340300000008869c210d449c0080752c770b389b0180344781e80c0a40506b0e20f0000051d81c80e0011400017d842000000e601a00a169760080102740203200c0003800500003c0601b0205b061027
+    | 7 => 0x6446527000002040018900180140801d0b65a00041201405c060c9084f140302e014070080102a600c3f8790022040013b2501a00098316e2300200d084010008d200402c0a801008001d50002b80006f80025a66c6d930
+    | 8 => 0x1d20947a010
+    | _ => 0
+  fld w 11 (i % 64)
+
+def c7 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x56ec0a6bc842e9118ad46051b36a0d93d8182189c59b70b3460726cd89915a8541a60932464e80dc1801bb330370b56eca9a2d81a491852b72132820cd8cdc293b1b83b340a5a40e734809917b23442322cec4134488526082b393138f0406c269c9060833221022184044d84158e1b83a222034e626e8c814607a8997372072680c55d16909b9d65a30727ecb150dda9f18811837085c6254e08c0b3198d743010b064750ccc29ed833d2383b696e4b78409c1ba11c9271
+    | 1 => 0x5324409b6dc59f1084a0e602aa64060c4124d91091c3506386810f989d72313b9b104329ec0e20dc2755b8ab7b606cc5014adcc59b5b8b151004a2684a1381439882599220666c4ab1adc00899839ab726c94875c8d82d588020c6103686422508c16598821d6066d86e6adc402a8909194102338c2cc88d4284882b223403206109d0c04ac10c1d724098cc0e5c8402601994e0b717456e48e881e579085b637080c20872cc10c188322c20854c4214a0d96421010a3250
+    | 2 => 0x628660868886859104061050ee4631bcc0a49db1b15102645ccaa8cdc8c9110a72351a82c0abacd0170990d2a342b6040a724dc65a9a821c230338c4cc26dc8607a91941009c068630380aaa0812d41020626042fcc84b49a1569270645ec15ccc0647d2123c205bd36e0a7cc4e507b2be1b7367d6a0d80dc07c11018b1052626c1548c06c3180bf430140842f5589d8539c034f30185e4076fcc16a23085ad35008c20d5d88c02e9b8052302190402360c4cb5da8904100
+    | 3 => 0x7a6602ca6dc4c5b0a42db71a56e09039841b25b0bdc31031e64e324d84d21820e7224209ec13f4e028c118c3962754064a831d029e1b92e93503936c0c2ce1c2e9b05731054aa6a4b7840e7011029810533ae64590cc02c1a80b6b015986c05cc414e3188406620207608bccc85e03a844a20205e6c4a10400119b90e2301816680554d411d119336354940c2a434881109b8a2f6144084108dc81a84b1348fb4276a502e20d80c1b0ab7d2523db6843cc880e3938241372
+    | 4 => 0x31620c303d4c9b0813e0240b0a6a1260409551b930925239ac47184c065c5b8818a02a086029e8820871814616244806a0e80d401e100aa3a520306057f0a00df189c112103504e67bcdc11d529062b102e7460876d899159800b302240443668c16aa081869370be6462554dc0dc9a801860666c440af4c0c711b85b7330058500830408518801cd3024d0206384d89803120333702046cb051c4cb5d880e7343848c6eee8e05a519931c360b126cb3788c2a0b81ab5207
+    | 5 => 0xb59484b94dcc1e5380af370ad86830e080a0b11054410429a460e20cc2d7082994b02b59684e6c415c9f82994103a0b6e941cd8a6318926c3085626a0736952d01b04023724d8642d80d42699189fe102aacc2e408a029b9b98b53408c66e45aed86f99989916144c3460830400c818995c24346e40e30140a5c5b95b23014106049f4c8c60728a9f301238680c8ad81ee11036c280734e476bbd15a93139a4b60324602833d82f5990b82b50b7c4e018ac80b190828a203
+    | 6 => 0xa684034049506cd88451230a12206e80d82b35a80373205484204c0c08ca7328a92106866c1504840607825ba2508b36c07c088262990a68b501564296fcdd9041015bf24041fcc0a11018d99b037bb7008c204790412341a8364f65b5e5001bed41a3b083d66163ca460c5440c731832d410344a4c46758584910a0023608fa42030390a99d905f027173a44065cc098ab09b30302322ec4fc8d005a9b056e3023ba6e0e16dc43b121b223100ec4209fc8426818097ef60
+    | 7 => 0x846c4af28e1e49081c3732121840866cd82d49a824936234e6ec6f8c0e3f10917f2050226a0d508599b1b8884220b406e0fd2dca451019d333108842146189e8e08144a302828626e6ad44c8b0b1e6380340606e50d8ab9883251b71b10c21468810751a9173a409d46c2d90412ed5b88eeb7029e7014d29c291198b9ab0134e5010d6dc1161218c05036666067d18589f31a835b032d6200d92c06909b2cdf30180b6e2906d46418804dc2034d06203f8d84c8a018c0402
+    | 8 => 0x12c668d4a986f7180d4a334ae0440a28dc58111054160234e481270d40189994aa332af220b680d429eb839f1205b62626adc409ac189d8e36182220b283c14c18813a3b41a836c118181d10980d7ab745c26101e0dda939182bab7126c206ce8c8de8b138562030d06c55d88541a9815abf450ae640832c08b49815b9231bd26205e4d010608180c3036f6621053d84ee9985b930118e6e166c81cc6b13de921084a642651d82751b8c0b3346e868a5f8400ee1b829d310
+    | 9 => 0x230700cb4c8588103d2c6177ce680174c0dba18a5bd3624fc40d594401131b0c3a3012d6eed234c0e1f1101cb30538e404833994af183b22721a72c4011840e961b8507b72118410680e0eaf9015ee31260e4608a08157611839a6764e4c407d3d8016918ce037118e6c16afd4d9c9c1d65b208fac2c62c4081294047423030c604c89d808b1905343014b6406a139801a981ba63038dee2a398c5ed3991ad22083296874b0d82a20813f93215af6e4413982de991c9b323
+    | 10 => 0xa04e0e831d82b9db08c0f031484071a0cd4cd9a033030462cc2e7d0400c2981a33625348440748c04b5b0987e63666cc4ecf8c41c138a5746255302061cf88e7c9013243614b266073cc82e15b8de32800186e03039053c1c0268734316c211b8d86941c1b3722385a602d90000de110509104b004095cc412b11b81d43802e6200d90418649a8b227303ae486ca4c044b1b9b332209d46a29a0408e4db0b64b51ae46a0788861c1b0b37e1034c3ca8c5584281303194f54
+    | 11 => 0x266272e0dcaab1083b0321748684ea089e631012dc207a08626360cd6a619200c3603d06034258911c1c02b7103b56a00f01c82961a8315b5320e410f48c4d065a1d1f3709d56e14e4411581028223608bc4a0820cc9911b01e82714974a4c8ad01c48805ad2209706023ccd8505081983103bfa40ecbc88534732268e5433ac211bcc8c2d9100c0f01a56c0296081c089105f81052824a56d8c0d4c3102deb532d6e26906d0a369a91836139e4664a13d943b9909acf43
+    | 12 => 0x827480833d52ec9b854170263020163adc551da920cf628ae642e6c418a69b95b636098e64643ed49b41b0256372b12706df9cd1f91a81ca20436a20af469850e9013c0330ae76a341480e9092050cb42ae76622bcd80099b0b891040726a09a0404f6da908f3035986606ac8c1c2980b64105b406874f6c1eed1808113706886652d4d8cd608202b3403fa602189dcc701b991e1002606869a0414af190a61103b6c6082bed800d921a7e62567a68528cc12b611052ba32
+    | 13 => 0xa086c2360e0c34981c3a20109260b6ac84039880040314a66420408dcd347b052b7013224215ac8806c9388af32038e605044412999884e43519a04436ac41090118c0b330578648303c86759098c0f32bf56e2647d4e7d9101a2220b57e867d0840a718288f37080050e828415a51418c0f42704620d9040a9588041161031620704ed0153138be5371b7e6263a0dc1347b2d65b406c96430d4c4039880b64f61644661014c050a1c04ce3707ac4216b84110819029a360
+    | 14 => 0x328ea0fe4c2104141a513017ac207596d460a3b0dab6167996a2b54c8230100c116154426c26d989693db14c72027a244126edc92c9b812025220c420ae8c05d610208f36056f4c122c88191528152625076606c01896b9881a68f642f26a10b8c50b5da81cd254aca20b49cd427b1981bb302b186e0647d0c19981ad724282820141189df6db888836082c42e3b8848c79908c43234c220d3b0dc8c69103a9715340630d1d85871192876303b1420546088060701991f32
+    | 15 => 0x104440690892839b9293a6070620014c81158998393e0526c2003e1890db1984a437284244ebecd00d6283411106af4404574dc149b01cc13417ace680ccd81d4989ad3100b2e7015e440ab89b03e0343abac4e7a8c9517882ca123582820950cd811b902069360a427068d0c0975313c133142ab6a0d0ccc0e43135df3204d020d18589520980d2736233a200a38e01cd581d2c3430de620f9cd42605b8a0d31039a000478412671b046f2020b2604ff0815759a809f350
+    | 16 => 0x4dc4802bed881ad812d53406c8207598c429d110d66217746602e158969418c11ee6413cc4cfc8dc1d41bb0152030f048273581860700d2be547f4604e6c408325a14b135236a20c69cc8e961081a4a609366a9678e0ade9aa35136062ac29595d44d4181cfd305940c211a0cc1db5b8888370aff6e272cc1882900d4f380752628e50c0a8b1c38fe3516ac40634cd0966b0b8a9230bf4c6b048dc1cd110cba105a546e50aadc2d5b0a5a0230aca2071bcc488f9b8dabf32
+    | 17 => 0x4fa604478415a71c00c04034c220359441a95d28194b0368e2003a0d00d99a018a30235942ae16dc9a03139b5104418ea13a8c40f2310a3a20297c4435e98dd5f102318104b5620a168c106e1c0504b718c06034e0cc4df1820d9230645642504c84dd9014762050b0607151894e431019140480c20631ca1e549b11853132266036ad011c19082cc35082200141cd4ac810242e3766136c528cc1ad21813162103a440223cc40ce88207e270b486849bedd62a382985321
+    | 18 => 0x1808001b480dc9880502b6206acec6e2c05b2732a372106c66c0550416d70830e63047e9405638dc4dc9a017c20327a682e52d49b89a048632719044035c900d608302d30215262064541ac29b85b3617ae8440f59019849020932042504023014162a181889220b57ec6f3c9423f18a4ba10639ae0f7ece0025110255332a8220a058d81b273053036033a80d7c0842b9d809f93024d860a6c48200c902d65b308266ed7428c29b9c011c370780ee0464d41b01b04be301
+    | 19 => 0x69c60b7b8806a8900dbf3217a466a90690a51990b243515626e06b3c4d0630b424636204606028d067ab13ca0e05b5740d5b0dc4cef325e9b506c966247bd91bf7b24111026de701408c09a11880bf30503c631654c8df0980dae103a1c6a28bc419bb90153db020d0647410d5130d2029a3703b86a14f6c122a1821acb6568ec2b6c4e01c1b084d6b7032a410a048c1859991361063062005d04158498138910299c4872fcdc0fa203530330181e054ac40efc08152c230
+    | 20 => 0x181ca0478419f698098234282c6ec832c0c0d1920a9b6210c7077e8c04e39b80ee360b184608bc411bc1101036064806e0677d94b6312d88101a5620cd60c052018251f3050b24114108821a9288e83308dc6e2e6c400ce882a2f610358202d70c58c888210e6067f840d63989c341a95d0a405ba604dd0e00d6082d2b23232340a0d6c5eccb12235627474624e6c40da9db8be737033bca853cc16c71a8b94b7245ec2c358d09a95b8b6bb7244c602d0cd40e6db9347210
+    | 21 => 0xafe603050406d69981853832b4682644416a1921a41a528d6c4aa94dc2d018146335234e606d98c4e41882cc03016dc68142588517b0ad623139366e55c8d01c188233a22143a4850648c0bc109d027061886a898440114103c6720663020a31589ea08801cd2102cc40359440481db8183614256c2e5e4dc2a0883043362042c6cd93d89b1b1b0c050487e6c67a088550190dad360700c4f70989dcd3b99ea2046fa4c7004c062030bbd661037ac2eb84c15b431b241362
+    | 22 => 0x54a6c067189cb5988035b0550460264440088120056307181ca4b53d151214050cb5259a4214e58843c1099f4610822c26ed8c06ec918322104180206f86dc4b590850122022d6e15bd89deb7b2002370359c8637d89ad5f1906fa51644200d9040694b0bca010004c6274d1814c79104542206136c05ae946fd92029530133bec843084039a8122f61281e621016c04701b1991b6572620ace0c09f8db8a81302b5620c36599520da95283736cc6e6f48e00ae9a806fb51
+    | 23 => 0x7356c35e88c024110c762064ec44037d882815b92986247e9605044400ce88322f00070b6a31d2dc1f3180991752bb66a00d4c16d5b0a9cd6540f2441284dca701a8c673209d4626cc0c4cda88158c3051ac6047b4809e519a1373504aa6052d4cd21e5a11c8105a04c0e574d01c488191ea038c2440303d41bd920a9d287181e835cc405b27a8191e32181c09270dc130d28411103482442cbcc065d0810563081ce682eccc14ea182de824036c440f46dc4d6330b08265
+    | 24 => 0x23a6a16fce0cc8fa14a0105706c2b594409b6189d433703c820a300415f1980a56362181e62534d88aa081b1521075a464478409bb1b858b3507f84e076cdca9618115023010a440b80dc460718991e422aa68150cd02f39b83743769b76e34ac4041599803330503c60827cdc2821b8b83105b57c8462d8583f91049c36021e6066d4402c0902ab02076e0c4e675852a0b82dbd3021e66a36b18508318809a2212b2603288cc853982a6d627b94664ce8c046e181166301
+    | 25 => 0x99c6a12484161b982b54227645ca8b784160a203284f050b2702a6189828082062b706fdec0db0c8d91732544710b56001234d0dbb9293a9714508c20a94d02f51033802201800016b840860719377606240642f02dc12a921502703a3e6092818584b1b2a61b40323c875d88096c1825096203494e076484c32103b8237115e440dacdc8cc101c402100e7e46f00c81d49bb5abe434d1ccb2b9c4236104105301428608820dc8c8b301911066b2407511c4e95b025abf42
+    | 26 => 0x16a6e0e27d91a11281361043c4707448809c138a9183056886e5544c05c98825303505d8442ab8a0860082376360706c24c8c98a41a800e2b4141fec00d4c5ee8082a472033586cb059896091b0383614410485471842091a8377b700dc4a0dacd4a0a90423d23245e204d91ccaf5982dc2220181ea93d4880fa73029b30233b406f5a80ad77b24141039f246165cc4cee9a80af34076060a440884b5d138f862521cc04ceadc5061081b735037c642de0c84d60810d9671
+    | 27 => 0x4a8eeb4ac408d25b802034272220b4f6c041719888635480ac4075d85d913a8268f5406270f7a6d463a1881316174976a6364842951b11193701cc60a414d85bddb8b221033902069ecd4857d3115a30173560ee0c404c88003831065262016d080a3a10812b210a5242150440de91bb5e2207b186083f4dcd47992a0d27145e200b604087b920b221050f0424c604198a1b00fd3831a66057d8815c9fb0064b52b3444954c840da881c05720b7cc4ea3c80dd3119241376
+    | 28 => 0x7e26e3264909f8b13a3b207134411564c06bb31bc54704bf66466b8c21427b031510567d6809f885e59980d2a2214dc6a5474c0a8491059a3401be208c60408600808c73025784610198859c101db63155cec2f6ac40a95a805802204ee6a0644d96fc30839ab217adec0f48901569185d0b311b06ecae4c048f081cb835272840442cc09fc982b09a62475685678d88e6b1299176507e4632e840ec29824762701c46e631488281101543350a7b6e2735c19dd101a54202
+    | 29 => 0x9da5068bc40cd6081a1720864e6e6f50c12e9180d7035045040c8bd84eeb118414f645bc20c301405bb1a01a82036454c02dcc0e95b1954f35094020933adc9c9ba2b302879404215969006c120548310026603520c900a381201230842620504886ea180c4a210b526c0dfacc8fd9819e0350114486647d50ccda0026220ade4414dcc10c1b0b1911023cc60a028c0492db8141241bb2643283d81321815abf647e26a2964d41e29383442038e96a0df8400ce8814a2263
+    | 30 => 0x1fa6a35ced058b9a80afa72ad86c2653991d39809ca20346c602c8bd94d678a5392203164207d39410608248d38051c60a8d48803b910d5410539ae86af0d95b61819fea3436e6e0e0c0004c9a1322000896406578c1a341bb5672033366e01ac841b81102a0220329ca92fcd81b25a0b5d627181c8672881d369101a42106c9ca14a0cd27d1a859962518080ae169cac090a0c73500266a860c840c5b0ac145000806104f4c06ba9b13221064982092fcd40511101cd607
+    | 31 => 0x6e860a38ad45b7982cc2301a304831249c591519191613348640cb8c08479202dc6363ad6c120c4089819ad5410400460af584002f18141b262764627610c04ff9884fa370b0a6075b0c04799899cd7533c460487880c49109835b0607848291ccc94230b3ee3023e0608e0c408c8f818333217ad664653d94fa7a858f6272fdcc0060808b5db81af6175626c0f30c966390936630373560c650415331a84db3012bc60a6ccdc0ce1104573051fe42067440d8490109f360
+    | 32 => 0x47060ae6ac08b5d98509106181ca6a50dc6fc30998c30470568047c840221881de27492420d6dc8412a9b910c2037e96e37d8885a7db8b743043a56e0c54419cb9a82de1043222065d880a8f9b02d8b71b52681430c0a503a2c74615612624db8c0ab21405416040866477388869b9819a0304180204c6040edc3138a73704a36e4735c0cb580042c102b562076c4c154c08248430656040c068c056010209e620322c215cec86da99047621088c66371ccc5d498ab9ab05
+    | 33 => 0x5884e1624cd1a2182374384526206309994cef32b151044f060a60c4158c3a143cb522074e0c544054390416bb203a54e061cc80ef104092212419cc928d8d9201815973400726c0c884056f3a2c31331aea604c98812941819e12085986e0b5041ad95b8d0262320466974040695faa0357066b4602e15c96d75b28e72041526a010cd488272839ab6262ac2d3e8d02c49b9dbf335419ca8d7881e9b9c1a41b410a44268ac8425b9b0a3931313648112cc0e35938543b71
+    | 34 => 0x678408fea948f831296bb60209ea08d6dc58ab0a87bb706e64215504198ab09237203942664538c1270313ae721065a440e44410a49881102085006ec8d6d811e11085e201b5ceca4ca90a4e198393e60706c26918c062a182d1633447a6a56448407119220cf65323e08970820011823143707e9602464d8173b0b20c10521d6e91d0d814a101998232180808735c9951da88c0e543ae420408c4d99101d2b60371a6035ad89667198464332822c284c4841349c1b93102
+    | 35 => 0x328e8100c80ed89c1aeb360a054a56aed9631db9322a406c82015c0dc14f90085a318780e603010069e983a6c3071b86e328040ad7080a2b3043162081184152f139c5e31084a60a614c144b1c1ade1003b8641418dc9941439c72103726c0f48c0d555b9521331b186c0538c0d56990db5220498206c89d00ff920df93010c544cfead4a619b0bd230576e44328101a1091c0553621fa6c7190c0a08b0b0f5100b6260749cc911ab13528304a88202e0c40c321810e7304
+    | 36 => 0x2e13077104415984063eb0bb9d6274bc410e24c8df21811ca206b3862104cc4efb9015746249c4411018881a4938076203b7e6068318500c18920f10097064904cc412b9045703406866e07148141f9109a7335bf66a0030d41701b0dfa3247ae42130cc043c1882a9301108c4e9e8886689401cd2249964ecb60c045d9b088f350a8a40a9a2cc00c5b1380205
+    | _ => 0
+  fld w 23 (i % 64)
+
+def S7 (x : Nat) := let c := c7 x; mv (mask 102) (c % 4096) (S8 (c/4096))
+
+def i7 (i : Nat) :=
+  let w := match i/64 with
+    | 0 => 0x801602604101100200200000000200100100000000002400a00000c00004803800e00604500102200201100000700e01400f00700000f00200000400003e00200304700100000001505803404b00100a01900100600201700001c001017001
+    | 1 => 0x3600001a03902f00202100301800201801801c02601600409902600600000400100000200000001f00700c00300d00900000102800c08008806d00100000000a04602d00001900003600d00f00402600200600300200100000000100a003012
+    | 2 => 0x4800100705400001f0090fe00900400601b00100501000900000800300200400303b06b00200a03100004e00300d00002200600400000100000300e00600f06600000d0090b300600600a0b302d000036000003002008003005000004022026
+    | 3 => 0x30400230150af01700001202000200200500101d00003800709200000c02a00000004f00002200000000002000b00503c00004800e07a00600400d00802100600200200f01301000600000600a00706400900e00700000005600d020000
+    | 4 => 0x8e04300b06200000300000a00001f0010bc00f00601900200a00008300d01517302a00a04b00400000a00100000100100600205a00002e00f0041b000500000802101d00101100500000102c00204d00702f01813b03c00200a00b002017
+    | 5 => 0x30000d300100000000105e00001700000900000207101902600300000100e00405600900000502400107600001907900100200000905700200700300701f00309400100000605118104300102200106100302400001b004005000002000007
+    | 6 => 0xe00000401000300a03a06a00002c00004729100401d00608202702a00401001503400700802700301c00000300f0020c601700800400001906e00100000802200900000901100f02f00000000d01e00e00400d06900102b08400e011019038
+    | 7 => 0xa50720150060e700500702407f02c00508800a05c00d12c0032b72740ef00000203202f0040a900702e01804d01402c06105000204101a04f02000004c03100200301d05801c0700d901303a04601500000002200202001e02f02c0130520cb
+    | 8 => 0x1601100102a1af0091940ef01001e02002f19629202605a01a00d00100517e00201028e00300200702900f01b02214a02a08700e0000e31290130020230000140020330e802000f03502300000103400401900e0001f308401d00b016000
+    | 9 => 0x1911c00000500900600000f00000c01a0940b200201516b04501203e02900000200100200000a00000000200007902a00304200600907602900f0030560290072b501500f0110740a602c00005c03407200110c12206e02300f01500201f040
+    | 10 => 0x4000303b02f00000200200f0474b200e01408903403904b00600003102201400000585c00100412a00900800b02800000001408c0af00e0020590000730580142350ed00101300105c02b01800015200a11401700200000505d08414e01c
+    | 11 => 0x8a000f00529010c00700300508503c6cb04304521e06e00701000305509e1102360410030e06f70b102b0aa00e03705d0000d13ad00210500001154e0dc87c6270c801701516e02a7f500800107900500001f01870a08f502200051017002138
+    | 12 => 0x404006f58c32f03606b00004b0ae05000300009b30a03815e
+    | _ => 0
+  fld w 12 (i % 64)
+
+def S : Nat → Nat → List Nat
+  | 7 => S7
+  | 8 => S8
+  | 9 => S9
+  | _ => fun _ => []
+
+def I : Nat → List Nat → Nat
+  | 7, z => let h := hk z; (h/785 + i7 (h % 785)) % 2353
+  | 8, z => let h := hk z; (h/516 + i8 (h % 516)) % 1535
+  | _, _ => 0
+
+def chk := mixCheck 102 7 S N I pool
+
+theorem h0 : span (chk 0) 0 0 = true := rfl
+
+theorem h1 : span (chk 1) 0 0 = true := rfl
+
+theorem h2 : span (chk 2) 0 0 = true := rfl
+
+theorem h3 : span (chk 3) 0 0 = true := rfl
+
+theorem h4 : span (chk 4) 0 0 = true := rfl
+
+theorem h5 : span (chk 5) 0 0 = true := rfl
+
+theorem h6 : span (chk 6) 0 0 = true := rfl
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_0 : span (chk 7) 128 0 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_128 : span (chk 7) 128 128 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_256 : span (chk 7) 128 256 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_384 : span (chk 7) 128 384 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_512 : span (chk 7) 128 512 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_640 : span (chk 7) 128 640 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_768 : span (chk 7) 128 768 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_896 : span (chk 7) 128 896 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_1024 : span (chk 7) 128 1024 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_1152 : span (chk 7) 128 1152 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_1280 : span (chk 7) 128 1280 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_1408 : span (chk 7) 128 1408 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_1536 : span (chk 7) 128 1536 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_1664 : span (chk 7) 128 1664 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_1792 : span (chk 7) 128 1792 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_1920 : span (chk 7) 128 1920 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_2048 : span (chk 7) 128 2048 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_2176 : span (chk 7) 128 2176 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h7_2304 : span (chk 7) 49 2304 = true := by decide +kernel
+
+theorem h7 : span (chk 7) 2353 0 = true := by with_reducible exact (sj (sj (sj (sj h7_0 h7_128) (sj h7_256 h7_384)) (sj (sj h7_512 h7_640) (sj h7_768 (sj h7_896 h7_1024)))) (sj (sj (sj h7_1152 h7_1280) (sj h7_1408 (sj h7_1536 h7_1664))) (sj (sj h7_1792 h7_1920) (sj h7_2048 (sj h7_2176 h7_2304)))))
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_0 : span (chk 8) 128 0 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_128 : span (chk 8) 128 128 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_256 : span (chk 8) 128 256 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_384 : span (chk 8) 128 384 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_512 : span (chk 8) 128 512 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_640 : span (chk 8) 128 640 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_768 : span (chk 8) 128 768 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_896 : span (chk 8) 128 896 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_1024 : span (chk 8) 128 1024 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_1152 : span (chk 8) 128 1152 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_1280 : span (chk 8) 128 1280 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h8_1408 : span (chk 8) 127 1408 = true := by decide +kernel
+
+theorem h8 : span (chk 8) 1535 0 = true := by with_reducible exact (sj (sj (sj h8_0 (sj h8_128 h8_256)) (sj h8_384 (sj h8_512 h8_640))) (sj (sj h8_768 (sj h8_896 h8_1024)) (sj h8_1152 (sj h8_1280 h8_1408))))
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h9_0 : span (chk 9) 128 0 = true := by decide +kernel
+
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem h9_128 : span (chk 9) 24 128 = true := by decide +kernel
+
+theorem h9 : span (chk 9) 152 0 = true := by with_reducible exact (sj h9_0 h9_128)
+
+theorem allChecks : ∀ s ≤ 9, ∀ i < N s, mixCheck 102 7 S N I pool s i = true := by
+  intro s hs
+  interval_cases s
+  · exact fun i hi => spOK h0 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h1 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h2 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h3 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h4 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h5 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h6 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h7 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h8 i (Nat.zero_le i) hi
+  · exact fun i hi => spOK h9 i (Nat.zero_le i) hi
+
+theorem dead8 (i : Nat) (hi : i < 1535) : ¬NatRun (mask 102) (goal 102) 8 (S8 i) :=
+  mixAll allChecks 8 (by decide) i hi
+
+theorem dead9 (i : Nat) (hi : i < 152) : ¬NatRun (mask 102) (goal 102) 9 (S9 i) :=
+  mixAll allChecks 9 (by decide) i hi
+
+def index9 (i : Nat) := fld 0x741989a71600200d005300e225d5dfec0032000009570c0024e7b2311fcb184a0000c15f00c92fcf7a746d00231024c440163e0000003c0c07a82b520f966300f200d65caa4afa68db91000072007fe5f4f5f64b00190066e9f862a499f4b7e62aa5062c008419bfeef70067f16222f7870000000e1350ae74d23000bed86f008d8104c81deb3d84bc003effc171183124399d9d312fca477b65a54e2200456f540500c084007e89006e00948a5ed2ca00732e0084150055abc77e00007ca100 8 i
+def index (s : Nat) (zs : List Nat) := if s = 9 then orbitLookup index9 0 64 (hk zs) else I s zs
+theorem atDepth (s i : Nat) (hs : s=8 ∨ s=9) (hi : i < N s) : ¬NatRun (mask 102) (goal 102) s (S s i) := by
+  rcases hs with rfl | rfl
+  · exact dead8 i hi
+  · exact dead9 i hi
+
+end Fixed0
+
+
 
 def projOk (k l : Nat) (r ws zs : List Nat) : Bool :=
   ((pickRows r (mask k) == mask l) && (pickRows r (goal k) == goal l)) && (ws.map (pickRows r)).isPerm zs
@@ -4017,16 +4754,161 @@ theorem projOk_dead {k l s : Nat} {r ws zs : List Nat}
   rw [ok.1.1, ok.1.2] at q
   exact dead (Run.perm (List.isPerm_iff.mp ok.2) q)
 
+def mkProjection (table col : Nat) (width : Nat) (v : Nat) :=
+  let a := (List.range 7).foldl (fun r j => r ||| (((if fld col 3 j = 7 then 1 else (v >>> fld col 3 j) &&& 1)) <<< j)) 0
+  fld table width a
+
+def projHit (I : List Nat → Nat) (N : Nat) (S : Nat → List Nat) (r ws : List Nat) : Bool :=
+  let zs := ws.map (pickRows r)
+  let i := I zs
+  decide (i<N) && zs.isPerm (S i)
+
+theorem projHitDead {s k l : Nat} {r ws : List Nat} {I N S}
+    (hm : pickRows r (mask k) = mask l) (hy : pickRows r (goal k) = goal l)
+    (ok : projHit I N S r ws = true) (dead : ∀ i, i<N → ¬NatRun (mask l) (goal l) s (S i)) :
+    ¬NatRun (mask k) (goal k) s ws := by
+  intro h
+  have q := transport h r
+  rw [hm,hy] at q
+  simp only [projHit,Bool.and_eq_true,decide_eq_true_eq] at ok
+  exact dead _ ok.1 (Run.perm (List.isPerm_iff.mp ok.2) q)
+abbrev validCross (k l : Nat) (xs r : List Nat) (y : Fin 8 → Nat) :=
+  pickRows r (mask k) = mask l ∧ pickRows r (goal k) = goal l ∧ ∀ i : Fin 8, pickRows r (xs.getD i 0) = y i
+
+def crossWord (m n : Nat) (x y : Fin 8 → Nat) (r : List Nat) (book : Nat → Nat) (w : Nat) :=
+  let c := book w
+  if exprB m x c = w then exprB n y c else pickRows r w
+
+def crossHit (k l : Nat) (xs r : List Nat) (y : Fin 8 → Nat) (book : Nat → Nat)
+    (I : List Nat → Nat) (N : Nat) (S : Nat → List Nat) (ws : List Nat) : Bool :=
+  let zs := ws.map (crossWord (mask k) (mask l) (fun i => xs.getD i 0) y r book)
+  let i := I zs
+  decide (i<N) && zs.isPerm (S i)
+
+theorem crossHitDead {k l s xs r y book ws I N S} (hv : validCross k l xs r y)
+    (ok : crossHit k l xs r y book I N S ws = true) (dead : ∀ i, i < N → ¬NatRun (mask l) (goal l) s (S i)) :
+    ¬NatRun (mask k) (goal k) s ws := by
+  obtain ⟨hm,hy,hx⟩ := hv
+  have e : crossWord (mask k) (mask l) (fun i => xs.getD i 0) y r book = pickRows r := by
+    funext w
+    unfold crossWord
+    dsimp only
+    split
+    next hh =>
+      calc
+        exprB (mask l) y (book w) = exprB (pickRows r (mask k)) (fun i => pickRows r (xs.getD i 0)) (book w) := by rw [hm,funext hx]
+        _ = pickRows r (exprB (mask k) (fun i => xs.getD i 0) (book w)) := (exprB_map _ _ _ _).symm
+        _ = pickRows r w := congrArg _ hh
+    next => rfl
+  unfold crossHit at ok
+  rw [e] at ok
+  exact projHitDead hm hy ok dead
+
+def projColumn (l : Nat) (raw : List Nat) (c : Nat) (i : Fin 8) : Nat :=
+  if i.val=7 then 0 else
+    let v := fld c 3 i.val
+    if v=7 then mask l else raw.getD v 0
+
+def cpWith (stop : Nat → List Nat → Bool) (k : Nat) (scs : List Nat) (count : Nat → Nat)
+    (board : Nat → Nat → List Nat) (lookup : Nat → List Nat → Option Nat) : Nat → List Nat → Bool
+  | 0, ws => !(ws == [goal k])
+  | s+1, ws => stop (s+1) ws || !(nextDirect k s ws (fun _ zs =>
+      !(scr k s scs zs) && !(checkpointHit count board lookup s zs) &&
+        !(cpWith stop k scs count board lookup s zs)))
+
+theorem cpWith_sound {k scs count board lookup stop}
+    (nos : ∀ {s ws}, stop s ws = true → ¬NatRun (mask k) (goal k) s ws)
+    (closed : ∀ s i, i < count s → cpWith stop k scs count board lookup s (board s i) = true)
+    {s ws} (ok : cpWith stop k scs count board lookup s ws = true) :
+    ¬NatRun (mask k) (goal k) s ws := by
+  intro h
+  induction s generalizing ws with
+  | zero => simp [cpWith, zero_done h rfl] at ok
+  | succ s ih =>
+    have clean : stop (s+1) ws = false := by
+      cases hy : stop (s+1) ws with
+      | false => rfl
+      | true => exact False.elim (nos hy h)
+    let F (_ : Nat) (zs : List Nat) : Bool := !(scr k s scs zs) && !(checkpointHit count board lookup s zs) && !(cpWith stop k scs count board lookup s zs)
+    have all : ∀ t ys, NatRun (mask k) (goal k) s ys → F t ys = true := by
+      intro t ys hy
+      have nohit : checkpointHit count board lookup s ys = false := by
+        cases e : lookup s ys with
+        | none => simp [checkpointHit,e]
+        | some i =>
+          cases he : checkpointHit count board lookup s ys with
+          | false => rfl
+          | true =>
+            have hx : (decide (i < count s) && ys.isPerm (board s i)) = true := by
+              simpa only [checkpointHit,e] using he
+            simp only [Bool.and_eq_true] at hx
+            obtain ⟨hi,hp⟩ := hx
+            exact False.elim (ih (closed s i (of_decide_eq_true hi)) (Run.perm (List.isPerm_iff.1 hp) hy))
+      have bad : cpWith stop k scs count board lookup s ys = false := by
+        cases he : cpWith stop k scs count board lookup s ys
+        · rfl
+        · exact False.elim (ih he hy)
+      simp [F,covers_ok hy,scr_no scs hy,nohit,bad]
+    have hit := nextKept_complete h F all
+    rw [cpWith,clean] at ok
+    simp only [Bool.false_or] at ok
+    rw [nextDirect_eq] at ok
+    rw [hit] at ok
+    contradiction
+
+
+def medStop (n : Nat) (hint : List Nat → Nat) (r : Nat → List Nat)
+    (idx : List Nat → Nat) (size : Nat) (S : Nat → List Nat) (s : Nat) (ws : List Nat) :=
+  if s = 8 then
+    let t := hint ws
+    decide (t < n) && projHit idx size S (r t) ws
+  else false
+
+theorem medStopNo {k l n hint r idx size S s ws}
+    (rows : ∀ i : Fin n, pickRows (r i.val) (mask k) = mask l ∧ pickRows (r i.val) (goal k) = goal l)
+    (dead : ∀ i, i < size → ¬NatRun (mask l) (goal l) 8 (S i))
+    (ok : medStop n hint r idx size S s ws = true) : ¬NatRun (mask k) (goal k) s ws := by
+  by_cases eqv : s=8
+  · subst s
+    change (decide (hint ws < n) && projHit idx size S (r (hint ws)) ws) = true at ok
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at ok
+    have q := rows ⟨_,ok.1⟩
+    exact projHitDead q.1 q.2 ok.2 dead
+  · simp [medStop,eqv] at ok
+
+def medC (stop : Nat → List Nat → Bool) (k : Nat) (scs : List Nat) :=
+  cpWith stop k scs (fun _ => 0) (fun _ _ => []) (fun _ _ => none)
+
+theorem medC_sound {stop k scs s ws}
+    (h : ∀ {d ys}, stop d ys = true → ¬NatRun (mask k) (goal k) d ys)
+    (w : medC stop k scs s ws = true) : ¬NatRun (mask k) (goal k) s ws := by
+  apply cpWith_sound h _ w
+  intro d i hi
+  exact False.elim (Nat.not_lt_zero i hi)
+
 namespace Row13
-def vals : List ℕ := [1,1,1,1,2,2,2,4,4,4,8,8,10,10,10,10,12,12,12,12,16,16,18,18,18,18,20,20,20,20,32,33,33,33,33,36,36,36,40,40,40,44,44,44,44,44,44,44,44,44,44,44,44,48,48,48,52,52,52,52,52,52,52,52,52,52,52,52,64,65,65,65,65,66,66,66,72,72,72,74,74,74,74,74,74,74,74,74,74,74,74,80,80,80,82,82,82,82,82,82,82,82,82,82,82,82,96,96,97,97,97,97,97,97,97,97,97,97,97,97,104,104,104,104,104,104,104,104,104,104,104,104,112,112,112,112,112,112,112,112,112,112,112,112,3,5,9,17,3,6,34,5,6,68,9,24,11,14,26,42,13,14,28,76,17,24,19,22,26,50,21,22,28,84,34,35,37,41,49,37,38,100,41,42,56,3,5,6,9,17,24,34,45,46,60,68,108,49,50,56,3,5,6,9,17,24,34,53,54,60,68,116,68,67,69,73,81,67,70,98,73,76,88,3,5,6,9,17,24,34,68,75,78,90,106,81,84,88,3,5,6,9,17,24,34,68,83,86,90,114,98,100,3,5,6,9,17,24,34,68,99,101,105,113,3,5,6,9,17,24,34,68,105,106,108,120,3,5,6,9,17,24,34,68,113,114,116,120]
 def inputs : List ℕ := [0x11b11bf1b046c88d93e09b21364f8451149f000000fff000000001e0000000078000000f,0x2452451457d147a28e2145428a90cbc2f1710000000003ffc7ff8e000000000003c0f070,0x4864862868a19143245f861f0c393c8f23a20000000000000000000fff1ffe383c0f0380,0x828f2842810a27947082289751c2112ffc04000fff00000007fff000001fffc0000ffc00,0xf308308303cc3a18410bb0e461043ff44808fff0000003fff800000fffe000003ff00000,0xf40f40f40e100420080bc0f781ffc2008040fffffffffc000000000fffffffffc0000000,0xf80f80f80fe03fc07ffc0018002020080200fffffffffffffffffff00000000000000000]
+def vals := sampleTable inputs 288
 def scs : List ℕ := [0x210781b0932489b,0x13c291e09925895,0x1b0290e09b24c92,0x1b05e13c9b24093,0x1b0291e09924891,0x1b04f1e09624890,0x1b0381789325491,0x1b04f1789b24c92,0x1b04f0a49524490,0x13c382109925895,0x1b0290e09b24492,0x1b0380a49b24893,0x13c291b09924095,0x1b05e0e09624c90,0x1b04f0e09325496,0x1b05e0e09524490,0x1b02913c9924091,0x1b0292109924c91,0x13c291b09124099]
 def target : BFn 7 := fun x => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 2 && x 6) || (x 3 && x 4)
-def rho (ys : List Nat) : List Nat :=
-  let a := fld 0x410491615c4c61879001472004085200024 2 (bsr 0xfec2e0a6fb828f20f957e4b6f6775b50edc75f20e7e8002fe55b79a3e248fac0df9b3e41df6c305dddc57c74dd7e3b8edaf1b502da6af460da0097e5d6c6b9f9d5c5105dd4b15d83ca77149ac7fabf8bc0994494c0922f4db8ca5e19b6c3adebaaa547aca9085f8fa2f2d5f2a2ab883a9e7733ac93cc3e9d8eb19e27872f76d9864f32ce8336ba717daa46ee7d3c8db47c7b514477b25c0b6f26116f6ec645866c998ae35d1ff5f951f0f60450c3b84d4a810e8a4a0dd619457e3ffc37bc66913786270730541d362cd540902ca29bed2a16156129bdc33d28c110b624a8a85720c1af3b205f4dd61f43052f17fff0a9171e26bd140972810e591ac00e13c6420dabd1680b1f4adc08bd97d908ab4b81083f91b402a08c45 32 (hk ys) 7 0 70)
-  if a=0 || 3<a then [] else
-    let c := fld 0xb9c286ae222e8ca000000 21 a
-    vals.map (fun v => fld 0x1130000000d3003e60e840000000c4003aa0c78000020ab58236cd86a000000000003a400de003dc00ad7b179b05b003a000a37393dae4c00369ac996a9248a440000000c20000000b8003419e38002a564350030580290027d6226002d1602357a583e1e0000000a200278009b0029d541a5305926140027540104e031240a002552207480100000 9 (orbitLabel c v))
+def qBook (w : Nat) : Nat :=
+  let d := fld 0x554c8c3142a8e0c0001180012082 6 (w % 19)
+  fld 0x94849543ccd585444106c383cbcad48d424693a6c2819e96040201e6c6ae00dee540ee829d860300ddd3008e8c0500c5dca59cd68ac4ce45cdc18b 8 (((w >>> 0) + d) % 59)
+
+def qPerm (i : Nat) : Nat := fld 0xb9c286ae222e8ca000000 21 i
+
+def qRow (i : Nat) : List Nat :=
+  vals.map (fun v => fld 0x1130000000d3003e60e840000000c4003aa0c78000020ab58236cd86a000000000003a400de003dc00ad7b179b05b003a000a37393dae4c00369ac996a9248a440000000c20000000b8003419e38002a564350030580290027d6226002d1602357a583e1e0000000a200278009b0029d541a5305926140027540104e031240a002552207480100000 9 (orbitLabel (qPerm i) v))
+
+def qWord (i : Nat) (t : Fin 8) : Nat :=
+  inputs.getD (if t.val=7 then 7 else fld (qPerm i) 3 t.val) 0
+def qPick0 (ys : List Nat) : Nat :=
+  fld 0x688 3 (fld 0x410491615c4c61879001472004085200024 2 (bsr 0xfec2e0a6fb828f20f957e4b6f6775b50edc75f20e7e8002fe55b79a3e248fac0df9b3e41df6c305dddc57c74dd7e3b8edaf1b502da6af460da0097e5d6c6b9f9d5c5105dd4b15d83ca77149ac7fabf8bc0994494c0922f4db8ca5e19b6c3adebaaa547aca9085f8fa2f2d5f2a2ab883a9e7733ac93cc3e9d8eb19e27872f76d9864f32ce8336ba717daa46ee7d3c8db47c7b514477b25c0b6f26116f6ec645866c998ae35d1ff5f951f0f60450c3b84d4a810e8a4a0dd619457e3ffc37bc66913786270730541d362cd540902ca29bed2a16156129bdc33d28c110b624a8a85720c1af3b205f4dd61f43052f17fff0a9171e26bd140972810e591ac00e13c6420dabd1680b1f4adc08bd97d908ab4b81083f91b402a08c45 32 (hk ys) 7 0 70))
+def qOri0 := quickOri 144 4 inputs qPick0 qRow qWord qBook
+
+set_option maxHeartbeats 50000000 in
+set_option maxRecDepth 10000 in
+theorem qCert : ∀ i : Fin 4, i.val = 0 ∨ validQuick 144 inputs (qRow i) (qWord i) := by decide +kernel
 def B (i : Nat) := mv (mask 144) (fld 0xf65e53f43000102f10e43e21e31f53100403e30f30400e10760f50504e51e61500e65106506104405f51f21401f31e50761f61651502 12 i) inputs
 def I (ys : List Nat) := bsr 0xfb828f20f957e4b6edc75f20e7e8002fe248fac0ddc57c74da0097e5c7fabf8bc0922f4db6c3adeba2f2d5f293cc3e9d7daa46ee7d3c8db47c7b514477b25c0b6f26116f5d1ff5f94a810e8a457e3ffc37bc66913786270730541d362ca29bed2a16156129bdc33d24a8a8571f43052f171e26bd140972810e591ac00e13c6420dabd1680b1f4adc08bd97d902a08c45 32 (hk ys) 6 0 36
 def cls (i : Nat) := fld 0xa300b0000004812001e003c0c10184181910440c01960 5 i
@@ -4037,15 +4919,25 @@ def dst (i : Nat) := (cls i - 1) % 10
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 60000000 in
 theorem projOK : ∀ i : Fin 36, cls i = 0 ∨ projOk 144 81 (sel (cls i)) (B i) (Fixed40.S9 (dst i)) = true := by decide +kernel
-def test (i : Nat) := if cls i = 0 then checkD 144 scs 9 (B i) else true
+def medIx (ws : List Nat) := (orbitLookup (fld 0x14065cd72071970828403120d02054481d2002c0125a3bc24444213d037027cca01c24060241126b89e83c06d89a844c227fc10639ba4b010802a897134037d096d4a4fa4d6ccfea87c0516f645305b344133920d838d01aeca03a08cb105701fa24ed071c7 2) 0 135 (hk ws) + 2) % 3
+def medRows (i : Nat) : List Nat :=
+  let a := if i = 0 then 0x1d2f77b26536934925520916f2b5b0e97439d329b49a492a9048b7946d76d355b0d76ab59329b49a492a9048a653ca7532b532a24da9d54934925520914da4d3c9d4e28d32a24da4d3aa04925520914da492a904ca55229349241225e2f178bc5e2f178bc5e2f16cb65b2793c9e4f2793c9e4f2793c984c261249245229148a45229148a452291488160b058341a0d068341a0d068341a0d050280c0603020100804020100804020100802814040201c0e07000000000 else 0x184d067a5936934925522905c2a564c260b012c9b49a492a91482e13eb15a2c164b1582bd2c9b49a492a914825944a7552a52c9e4da9d4c934925522904da4d449d5027d2c9e4da4d3a9c4925522904da492a914b25520934924520381c0e070381c0e070381c0d46a35148a45229148a45229148a44c261308c461f0f87c3e1f0f87c3e1f0f87c3c1a0d0682c160b0582c160b0582c160b050281008040180c06030180c06030180c060281407038100804000000000
+  (List.range 162).map (fld a 9)
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem medRowsOK : ∀ i : Fin 2, pickRows (medRows i.val) (mask 144) = mask 81 ∧ pickRows (medRows i.val) (goal 144) = goal 81 := by decide +kernel
+def halt := medStop 2 medIx medRows (Fixed40.index 8) (Fixed40.N 8) (Fixed40.S 8)
+theorem haltNo {s ws} (ok : halt s ws = true) : ¬NatRun (mask 144) (goal 144) s ws :=
+  medStopNo medRowsOK (fun i hi => Fixed40.atDepth 8 i (Or.inl rfl) hi) ok
+def test (i : Nat) := if cls i = 0 then medC halt 144 scs 9 (B i) else true
 
 theorem test_sound (i : Nat) (hbound : i < 36) (hi : test i = true) : ¬NatRun (mask 144) (goal 144) 9 (B i) := by
   by_cases hc : cls i = 0
-  · exact checkD_sound (by simpa [test, hc] using hi)
+  · exact medC_sound haltNo (by simpa [test, hc] using hi)
   · exact projOk_dead ((projOK ⟨i, hbound⟩).resolve_left hc) (Fixed40.dead _ (Nat.mod_lt _ (by decide)))
 
 set_option maxRecDepth 10000 in
-lemma roof : bar 144 (cutB 9 inputs B) (cutN 9 36) (fun _ => I) (rowOrient 144 rho) scs 10 0 = true := by decide +kernel
+lemma roof : bar 144 (cutB 9 inputs B) (cutN 9 36) (fun _ => I) qOri0 scs 10 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
 lemma z0 : span test 4 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
@@ -4072,7 +4964,7 @@ set_option maxHeartbeats 50000000 in
 lemma z33 : span test 3 33 = true := by decide +kernel
 lemma regionOK : span test 36 0 = true := by with_reducible exact (sj (sj (sj z0 (sj z4 z6)) (sj z9 (sj z13 z15))) (sj (sj z18 (sj z22 z24)) (sj z27 (sj z31 z33))))
 theorem finChk : ¬NatRun (mask 144) (goal 144) 10 inputs :=
-  symCutRoot (ori_ok rho) roof (fun i hi => test_sound i hi (spOK regionOK i (Nat.zero_le _) hi))
+  symCutRoot (quick_safe (k:=144) (bound:=4) (xs:=inputs) (choose:=qPick0) (row:=qRow) (word:=qWord) (book:=qBook) qCert) roof (fun i hi => test_sound i hi (spOK regionOK i (Nat.zero_le _) hi))
 
 set_option maxRecDepth 10000 in
 theorem shard : ∀ t, HasCircuitSize 7 target t → 11 ≤ t := by
@@ -4084,20 +4976,33 @@ theorem shard : ∀ t, HasCircuitSize 7 target t → 11 ≤ t := by
 end Row13
 
 namespace Row18
-def vals : List ℕ := [1,1,1,1,2,2,4,4,8,8,10,10,10,12,12,12,16,16,18,18,18,20,20,20,24,24,24,26,26,26,26,26,26,26,26,26,26,26,26,28,28,28,28,28,28,28,28,28,28,28,28,32,32,33,33,33,33,33,33,33,33,33,33,33,33,33,34,34,34,34,36,36,36,36,48,48,48,50,50,50,50,50,50,50,50,50,50,50,50,52,52,52,52,52,52,52,52,52,52,52,52,64,64,65,65,65,65,65,65,65,65,65,65,65,65,65,66,66,66,66,68,68,68,68,72,72,72,74,74,74,74,74,74,74,74,74,74,74,74,76,76,76,76,76,76,76,76,76,76,76,76,3,5,9,17,3,6,5,6,9,40,11,14,42,13,14,44,17,80,19,22,82,21,22,84,25,56,88,3,5,6,9,17,27,30,40,58,80,90,96,3,5,6,9,17,29,30,40,60,80,92,96,40,96,3,5,6,9,17,35,37,40,41,49,80,96,97,35,38,42,98,37,38,44,100,49,56,112,3,5,6,9,17,40,51,54,58,80,96,114,3,5,6,9,17,40,53,54,60,80,96,116,80,96,3,5,6,9,17,40,67,69,73,80,81,96,97,67,70,82,98,69,70,84,100,73,88,104,3,5,6,9,17,40,75,78,80,90,96,106,3,5,6,9,17,40,77,78,80,92,96,108]
 def inputs : List ℕ := [0x16c16c88d76c05b05b22337b00ec0ec9292af800000000fff8000000003ffe000000000000f,0x216b141781140859c505e02501155942e2e588007ff80f0000001ffe03c0000007ff81c1c30,0x2b182187902189c60861e404615981187474717ff8000f00001ffe0003c00007ff8000e0e0c0,0x2ba2ba38004a012812848818857a17a3807f827ffffff0000000000000000007ffffff00ff00,0xc40c41221841bd0bd0e006101dc1dc3ff80040000000000001ffffffc000007ffffffff0000,0x3083082446082de0de0fffbe0e6026010049000000000000001ffffffffffff8000000000000,0x3f03f03ffff03e00e00911c00b8038024900007fffffffffffe0000000000000000000000000]
+def vals := sampleTable inputs 302
 def scs : List ℕ := [0x1fc4d06ca8280bd,0x134351649c26097,0x22c671fc9927098,0x19c590d4bd268a8,0x22c7f19c9825c9c,0xd41b134a026899,0xd41b22ca82609a,0xd41b1fca82649a,0xd41b134a025c99,0x1342719cbd264a0,0xd4271349c25c98]
 def target : BFn 7 := fun x => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 3 && x 5) || (x 4 && x 6) || (x 5 && x 6)
-def rho (ys : List Nat) : List Nat :=
-  let a := fld 0x18822492803840868420032830708899 2 (bsr 0xf9795bfaf7ca5b71f5bf7ce0f163380ced9c28c1e94ccfbde058865fdaf380a7d840bc00d79982c3ce89ad8ece82c438c6ce523bc0fd0ac4bd0fed01bcfab1a9b69b83adb23ed016b0fb3666b0c1e62daba738b6aaca9698a9ebec5fa9dd629ca52443c2a48ba7fa9fdf667098e2a61e8d02265289ba790489afb26b8568c2c484c9e6908295090c81d5c9697a18dad2737193a4695708f968cc8bed60e0a5a660ab18a1608a3ff95f41c7865eb654ca5a25f2da5910af6d54d59f9047ca584e451e2fcb421dd2bf40e1f9033e3a2c25384bcb65321a3b972dbc0bf7272886371db835851c6fbd121be8f6051aa9a0ae18a9b674148b0d770b63a955055a7878 32 (hk ys) 7 0 64)
-  if a=0 || 3<a then [] else
-    let c := fld 0xb9c285ce22358ca000000 21 a
-    vals.map (fun v => fld 0xfb003bc00e300000012d0048401150000000e000371b0bd0000000c8002f000b10000000ae002ae10a800476508b8e1fe0c7c004320a78821d0ce650000000c6002e800b0003adec5975135aa4a0000000a60028da8a000369a446689086a33002e186275b86d5e18002a9581554849341000289480d5082932080027130064b8100000 9 (orbitLabel c v))
+def qBook (w : Nat) : Nat :=
+  let d := fld 0xcbc722d00644400554450c 6 (w % 15)
+  fld 0x8adcdda541a682d406839cc105c38d428103d5ee40ceaee6c5854602de8e01c6c29d45cb00869ed644cc04848c96e5008b9394ca4300c4d300cd95 8 (((w >>> 17) + d) % 59)
+
+def qPerm (i : Nat) : Nat := fld 0xb9c285ce22358ca000000 21 i
+
+def qRow (i : Nat) : List Nat :=
+  vals.map (fun v => fld 0xfb003bc00e300000012d0048401150000000e000371b0bd0000000c8002f000b10000000ae002ae10a800476508b8e1fe0c7c004320a78821d0ce650000000c6002e800b0003adec5975135aa4a0000000a60028da8a000369a446689086a33002e186275b86d5e18002a9581554849341000289480d5082932080027130064b8100000 9 (orbitLabel (qPerm i) v))
+
+def qWord (i : Nat) (t : Fin 8) : Nat :=
+  inputs.getD (if t.val=7 then 7 else fld (qPerm i) 3 t.val) 0
+def qPick0 (ys : List Nat) : Nat :=
+  fld 0x688 3 (fld 0x18822492803840868420032830708899 2 (bsr 0xf9795bfaf7ca5b71f5bf7ce0f163380ced9c28c1e94ccfbde058865fdaf380a7d840bc00d79982c3ce89ad8ece82c438c6ce523bc0fd0ac4bd0fed01bcfab1a9b69b83adb23ed016b0fb3666b0c1e62daba738b6aaca9698a9ebec5fa9dd629ca52443c2a48ba7fa9fdf667098e2a61e8d02265289ba790489afb26b8568c2c484c9e6908295090c81d5c9697a18dad2737193a4695708f968cc8bed60e0a5a660ab18a1608a3ff95f41c7865eb654ca5a25f2da5910af6d54d59f9047ca584e451e2fcb421dd2bf40e1f9033e3a2c25384bcb65321a3b972dbc0bf7272886371db835851c6fbd121be8f6051aa9a0ae18a9b674148b0d770b63a955055a7878 32 (hk ys) 7 0 64))
+def qOri0 := quickOri 151 4 inputs qPick0 qRow qWord qBook
+
+set_option maxHeartbeats 50000000 in
+set_option maxRecDepth 10000 in
+theorem qCert : ∀ i : Fin 4, i.val = 0 ∨ validQuick 151 inputs (qRow i) (qWord i) := by decide +kernel
 def B (i : Nat) := mv (mask 151) (fld 0xf10f40106f21506102f50e64404f41e40502f53e65e51401e54500f51100e41e21503103405e50f54e34e10400f34000f65 12 i) inputs
 def I (ys : List Nat) := bsr 0xf9795bfaf163380ce94ccfbde058865fd840bc00ce82c438bd0fed01b23ed016b0fb3666b0c1e62daba738b6a9dd629ca48ba7fa9fdf667098e2a61e89ba79048295090c7a18dad2737193a468cc8bed60e0a5a660ab18a1608a3ff95f41c7865a25f2da47ca584e451e2fcb40e1f9033e3a2c252dbc0bf7272886371c6fbd121aa9a0ae 32 (hk ys) 6 0 33
 def test (i : Nat) := checkD 151 scs 9 (B i)
 set_option maxRecDepth 10000 in
-lemma roof : bar 151 (cutB 9 inputs B) (cutN 9 33) (fun _ => I) (rowOrient 151 rho) scs 10 0 = true := by decide +kernel
+lemma roof : bar 151 (cutB 9 inputs B) (cutN 9 33) (fun _ => I) qOri0 scs 10 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
 lemma z0 : span test 4 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
@@ -4118,7 +5023,7 @@ set_option maxHeartbeats 50000000 in
 lemma z30 : span test 3 30 = true := by decide +kernel
 lemma regionOK : span test 33 0 = true := by with_reducible exact (sj (sj (sj z0 z4) (sj z8 z12)) (sj (sj z16 z20) (sj z24 (sj z28 z30))))
 theorem finChk : ¬NatRun (mask 151) (goal 151) 10 inputs :=
-  symCutRoot (ori_ok rho) roof (fun i hi => checkD_sound (spOK regionOK i (Nat.zero_le _) hi))
+  symCutRoot (quick_safe (k:=151) (bound:=4) (xs:=inputs) (choose:=qPick0) (row:=qRow) (word:=qWord) (book:=qBook) qCert) roof (fun i hi => checkD_sound (spOK regionOK i (Nat.zero_le _) hi))
 
 set_option maxRecDepth 10000 in
 theorem shard : ∀ t, HasCircuitSize 7 target t → 11 ≤ t := by
@@ -4130,14 +5035,28 @@ theorem shard : ∀ t, HasCircuitSize 7 target t → 11 ≤ t := by
 end Row18
 
 namespace Row19
-def vals : List ℕ := [1,1,1,2,2,2,4,4,4,8,8,10,10,10,10,12,12,12,12,16,16,17,17,17,17,20,20,20,20,24,24,24,28,28,28,28,28,28,28,28,28,28,28,28,32,33,33,33,34,34,34,40,40,40,42,42,42,42,42,42,42,42,42,42,42,42,48,48,48,49,49,49,49,49,49,49,49,49,49,49,49,56,56,56,56,56,56,56,56,56,56,56,56,64,64,65,65,65,65,66,66,66,66,68,68,68,68,68,68,68,68,68,68,68,68,68,96,96,96,97,97,97,97,97,97,97,97,97,97,97,97,98,98,98,98,98,98,98,98,98,98,98,98,3,5,9,3,6,18,5,6,36,9,72,11,14,26,74,13,14,44,76,18,80,19,21,25,81,21,22,52,84,25,26,88,3,5,6,9,18,29,30,36,60,72,80,92,36,35,37,41,35,38,50,41,44,104,3,5,6,9,18,36,43,46,58,72,80,106,50,52,112,3,5,6,9,18,36,51,53,57,72,80,113,3,5,6,9,18,36,57,58,60,72,80,120,72,80,67,69,73,81,67,70,74,82,3,5,6,9,18,36,69,70,72,76,80,84,100,100,104,112,3,5,6,9,18,36,72,80,99,101,105,113,3,5,6,9,18,36,72,80,99,102,106,114]
 def inputs : List ℕ := [0x42fc2c012c7c04b9cb00964f01591f045278007ff8000078001ffe00000e00001e00007,0x3c544540257c409505533aa3902aa214bc5cfff80000007800000003ffc7000000007838,0x898898eb98881260a6414c92cf30f23c8e90000000fff800000000000000fff1e0781c0,0x11211210c2111bc83081791c45b47043ff020000000000001ffe0003fff80fffe007fe00,0x2242242304222dd0dd0ea20206b87ffc10100000000000001ffffffc00000ffffff80000,0x3c83c83c080009e09e0f3c1ff8c0040100807ffffff000001ffffffffffff00000000000,0x3f03f03ff03ffe00e009c0100700488a22007fffffffffffe00000000000000000000000]
+def vals := sampleTable inputs 286
 def scs : List ℕ := [0x114201449724490,0x20c451dca323c94,0x19c51114a324499,0x1dc6720c9723c90,0xd8201449725093,0x1142019c9924091,0x19c200d899250a3,0x1142020c9323c90,0x20c770809124c8f,0x19c4520c9323c90,0x20c45144942448f,0xd8201dc9023c93,0x1dc5120c9923c91]
 def target : BFn 7 := fun x => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 2 && x 5) || (x 3 && x 6) || (x 4 && x 6)
-def rho (ys : List Nat) : List Nat :=
-  match fld 0x1858e48be88228500 1 (bsr 0xfdbf7bcafd7239e7f853cf8ff3a47eecf2c4f171edab805febd25c57e58a7b05e35ef914e00aade0ddc13479d7cb6f94d53813b8c9252652c2cc5fa4be370bdcbdb2c8f6b93c43e1b7eabc0db6563989b15059b2a9b60f5da23bcf419ac580ca93dd0d12904f2e208adf4a6384253f6e800f32447d71db547cc8d5d77bf9a0a5773ee0a57043f3476cf6ceca6c82649a6b3bcedc698c41da60635b1960205ccd5950015f589d670856a171b94dee9f4b4ddc56254c70b91b4671850b464185543ff014f93a510d9537f90bb23700a0a2330c54be3019fac72b5f3ac726b4de2c2131f5dd1bec420c174d6aa716b4fe39157bf054115fec560c01d95d0342b8480316ee6001b5a6cf00d1b3c6 32 (hk ys) 7 0 67) with
-  | 1 => vals.map (fun r => fld 0xeb00000000000441a0c40000000000037e3ad30043e3702871dd06740000000ba0000000ae0000000a1003c13a990000000ab0029deaa3003bde6677717cc65d0000000b7003719a510000198a065af86c330036c00aa6d1158242002f580975e0b4602c002d16a2000299381d00279360f4d2441609002955219520552813002412606478000600 9 r)
-  | _ => []
+def qBook (w : Nat) : Nat :=
+  let d := fld 0x3b898033028162e03001102e30001 4 (w % 29)
+  fld 0xcbd59ee6ddd684ca850500a583c101438193008ec294cd0682cec544424640dce5d30204c3d403958a9d9ccc0041aec4458bc68d96ee00a6de868c 8 (((w >>> 23) + d) % 59)
+
+def qPerm (i : Nat) : Nat := fld 0x35710200000 21 i
+
+def qRow (i : Nat) : List Nat :=
+  vals.map (fun v => fld 0xeb00000000000475bed30000000000034220c40046e1f028720cee740000000ba0000000ae0000000ab003d54ea30000000a100275e099003cdde677718cbe5d0000000b700335b85100001b6aa6d3048a420033000a0658d97c33003017a975e0c05a2c002d56820002714c1d002a54a19522502a130026d3c0f4d02d22090024d20064780c0000 9 (orbitLabel (qPerm i) v))
+
+def qWord (i : Nat) (t : Fin 8) : Nat :=
+  inputs.getD (if t.val=7 then 7 else fld (qPerm i) 3 t.val) 0
+def qPick0 (ys : List Nat) : Nat :=
+  fld 0x4 2 (fld 0x1858e48be88228500 1 (bsr 0xfdbf7bcafd7239e7f853cf8ff3a47eecf2c4f171edab805febd25c57e58a7b05e35ef914e00aade0ddc13479d7cb6f94d53813b8c9252652c2cc5fa4be370bdcbdb2c8f6b93c43e1b7eabc0db6563989b15059b2a9b60f5da23bcf419ac580ca93dd0d12904f2e208adf4a6384253f6e800f32447d71db547cc8d5d77bf9a0a5773ee0a57043f3476cf6ceca6c82649a6b3bcedc698c41da60635b1960205ccd5950015f589d670856a171b94dee9f4b4ddc56254c70b91b4671850b464185543ff014f93a510d9537f90bb23700a0a2330c54be3019fac72b5f3ac726b4de2c2131f5dd1bec420c174d6aa716b4fe39157bf054115fec560c01d95d0342b8480316ee6001b5a6cf00d1b3c6 32 (hk ys) 7 0 67))
+def qOri0 := quickOri 143 2 inputs qPick0 qRow qWord qBook
+
+set_option maxHeartbeats 50000000 in
+set_option maxRecDepth 10000 in
+theorem qCert : ∀ i : Fin 2, i.val = 0 ∨ validQuick 143 inputs (qRow i) (qWord i) := by decide +kernel
 def B (i : Nat) := mv (mask 143) (fld 0x406f40e30104505106e43e40e60f20506f43e10403101f30f52e65e20e50e32f53e62f62f10502750504102f65f50402400000501f32652405e63f60e53f63105e52 12 i) inputs
 def I (ys : List Nat) := bsr 0xfdbf7bcafd7239e7f2c4f171edab805febd25c57e58a7b05e00aade0d53813b8c9252652c2cc5fa4b7eabc0db6563989a9b60f5da23bcf4193dd0d12904f2e208adf4a63800f32446cf6ceca6b3bcedc698c41da60635b195950015f589d670856a171b94dee9f4b4ddc56254671850b464185543ff014f937f90bb2330c54be3019fac72b5f3ac726b4de2c1bec420c16b4fe39157bf054115fec560c01d95d0342b8480316ee6001b5a6cf00d1b3c6 32 (hk ys) 6 0 44
 def cls (i : Nat) := fld 0xa0003000000008007202080000000a57510012002042 4 i
@@ -4156,7 +5075,7 @@ theorem test_sound (i : Nat) (hbound : i < 44) (hi : test i = true) : ¬NatRun (
   · exact projOk_dead ((projOK ⟨i, hbound⟩).resolve_left hc) (Fixed41.dead _ (Nat.mod_lt _ (by decide)))
 
 set_option maxRecDepth 10000 in
-lemma roof : bar 143 (cutB 9 inputs B) (cutN 9 44) (fun _ => I) (rowOrient 143 rho) scs 10 0 = true := by decide +kernel
+lemma roof : bar 143 (cutB 9 inputs B) (cutN 9 44) (fun _ => I) qOri0 scs 10 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
 lemma z0 : span test 2 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
@@ -4191,7 +5110,7 @@ set_option maxHeartbeats 50000000 in
 lemma z41 : span test 3 41 = true := by decide +kernel
 lemma regionOK : span test 44 0 = true := by with_reducible exact (sj (sj (sj (sj z0 z2) (sj z5 z8)) (sj (sj z11 z13) (sj z16 z19))) (sj (sj (sj z22 z24) (sj z27 z30)) (sj (sj z33 z35) (sj z38 z41))))
 theorem finChk : ¬NatRun (mask 143) (goal 143) 10 inputs :=
-  symCutRoot (ori_ok rho) roof (fun i hi => test_sound i hi (spOK regionOK i (Nat.zero_le _) hi))
+  symCutRoot (quick_safe (k:=143) (bound:=2) (xs:=inputs) (choose:=qPick0) (row:=qRow) (word:=qWord) (book:=qBook) qCert) roof (fun i hi => test_sound i hi (spOK regionOK i (Nat.zero_le _) hi))
 
 set_option maxRecDepth 10000 in
 theorem shard : ∀ t, HasCircuitSize 7 target t → 11 ≤ t := by
@@ -4203,13 +5122,11 @@ theorem shard : ∀ t, HasCircuitSize 7 target t → 11 ≤ t := by
 end Row19
 
 namespace Row20
-def vals : List ℕ := [1,1,1,2,2,2,4,4,8,8,8,10,10,10,10,10,10,10,10,10,10,10,10,10,12,12,12,12,16,16,17,17,17,17,20,20,20,24,24,24,24,28,28,28,28,28,28,28,28,28,28,28,28,32,32,33,33,33,33,34,34,34,34,36,36,36,36,64,65,65,65,66,66,66,66,68,68,68,80,80,80,81,81,81,81,81,81,81,81,81,81,81,81,84,84,84,84,84,84,84,84,84,84,84,84,96,96,97,97,97,97,97,97,97,97,97,97,97,97,98,98,98,98,98,98,98,98,98,98,98,98,100,100,100,100,100,100,100,100,100,100,100,100,3,5,9,3,6,18,5,6,9,40,72,3,5,6,9,11,14,18,26,40,42,48,72,74,13,14,44,76,18,48,19,21,25,49,21,22,52,25,26,56,88,3,5,6,9,18,29,30,40,48,60,72,92,40,48,35,37,41,49,35,38,42,50,37,38,44,52,72,67,69,73,67,70,74,82,69,70,76,82,88,112,3,5,6,9,18,40,48,72,83,85,89,113,3,5,6,9,18,40,48,72,85,86,92,116,104,112,3,5,6,9,18,40,48,72,99,101,105,113,3,5,6,9,18,40,48,72,99,102,106,114,3,5,6,9,18,40,48,72,101,102,108,116]
 def inputs : List ℕ := [0x42c42fc2c10bf0b047847c02b13e0806ca78000007ff8001ffe007007800003c0000007,0x857c544542151152bc8bc405524294bd45c8007ff800000000007807800000000fff838,0x3c18818818f062061c93c88a660e478098697ff8000001ffe0003807801ffe1c0f0000c0,0x12a12a12a14a84a85125111ee8f087eee38200000000000000000000001fffe00fffff00,0x2142142142f50f50e202222b70fff81300100000000001ffffffc000001ffffff0000000,0x3d83d83d838608608003fff38049121c01007ffffffffe0000000007ffe0000000000000,0x3e03e03e03f80f80fffc000c0080046002007ffffffffffffffffff80000000000000000]
+def vals := sampleTable inputs 286
 def scs : List ℕ := [0x20c771ac9023c93,0x20c291749929098,0x1dc5102c98250a4,0x1ac0b1dc9923c91,0x1442902c9323c90,0x1ac2920c9824091,0x1dc51174942408f,0x1442902c9124c90,0xa40b20ca424c94,0x1440b0a4942448f,0x1ac0b144a424498,0x1dc6b20c9924c8f,0x144291749925091,0x1440b0a49124c8f,0x1ac0b1749924091,0x1dc5d1aca423c94]
 def target : BFn 7 := fun x => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 3 && x 6) || (x 4 && x 5)
-def rho (ys : List Nat) : List Nat :=
-  match fld 0x0 1 (bsr 0xfbbb207cf846ca6cf61c44aef1b63f6af06788f3f031bf29ea55c7ace5f9f36fe3a88167de74b108dd3a27eddaffd105ca576bb2c7982f8ac6d913dec5966451bcfa0acbbab7b327b8baf593b418853ab15943afb131d659afe29894ab31c543a11482539fd1d2c69f49cf7d97512cf58f527ac58e3190de8d86beca8d5482e48ca23b4f8b6d44ce89a6f67187ca36b980bc0f9a78c2eb90788cce96776f78a472a0de69722a42c06ac9398c65216b4b61e17a56612940e660131ae153f09545530585d250c39e5b470a563941568e913dd4164a3b6dbc71359a118e2aff0cd01f724bbd1d0730f518edb4be17f81bf2170a89d51628de5813a908c611d1e6300c8d7ce50bbe84ff033eea7e 32 (hk ys) 7 0 67) with
-  | _ => []
+def rho (_ : List Nat) : List Nat := []
 def B (i : Nat) := mv (mask 143) (fld 0xf43404f53e21e40102401106e30f50105e31f24402e63406100403101104e62f60e60e61663000505e52500f54503f61f63760e51e24e50e10e41f64103400f51e20405f31f62f52e65f65f20e53e64f41e43765f40f23e23502f10f21f30e54504506501 12 i) inputs
 def I (ys : List Nat) := bsr 0xfbbb207cf846ca6cf61c44aef1b63f6af06788f3f031bf29ea55c7ace5f9f36fe3a88167de74b108dd3a27eddaffd105ca576bb2c7982f8ac6d913dec5966451bcfa0acbbab7b327b8baf593b418853ab15943afb131d659afe29894ab31c543a11482539fd1d2c69f49cf7d97512cf58f527ac58e3190de8d86beca8d5482e48ca23b4f8b6d44ce89a6f67187ca36b980bc0f9a78c2eb90788cce96776f78a472a0de69722a42c06ac9398c65216b4b61e17a56612940e660131ae153f09545530585d250c39e5b470a563941568e913dd4164a3b6dbc71359a118e2aff0cd01f724bbd1d0730f518edb4be17f81bf2170a89d51628de5813a908c611d1e6300c8d7ce50bbe84ff033eea7e 32 (hk ys) 7 0 67
 def cls (i : Nat) := fld 0x9000064000007220800252c11000006800000090500a0702a00200000000000030 4 i
@@ -4220,11 +5137,21 @@ def dst (i : Nat) := (cls i - 1) % 10
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 60000000 in
 theorem projOK : ∀ i : Fin 67, cls i = 0 ∨ projOk 143 88 (sel (cls i)) (B i) (Fixed41.S9 (dst i)) = true := by decide +kernel
-def test (i : Nat) := if cls i = 0 then checkD 143 scs 9 (B i) else true
+def medIx (ws : List Nat) := (orbitLookup (fld 0x201035124854d4085a159760930810102c75944521300c304118198810653001c400004a22033090c0000005c1e10595f3e840502c557940c55011f28c5140c89814ce06cc33750000510591c3301f1c206051411903bc874c80413d39081d60124850431873a76d1d4c7401429ce00c00103128cd8022c2428f34349160b2e440154d8637 2) 1 177 (hk ws) + 2) % 3
+def medRows (i : Nat) : List Nat :=
+  let a := if i = 0 then 0x59a91529865b1d289149a411ecd5228d30cb6325122934823d60a4642618ec64a245269047a9130c1522617cbd4a245269047ad942af59ac95cb0522615eae56a5122934823d489454a7d4ea451a6142944fa7922934823d309149a41289347a45208f1f8fc7e3f1f8fc7e3f1f8fc7e3b1d8ec763b1d8ec763b1d8ec6e371b8dc6e371b8dc6e371b8d46a29148a45229148a45229148944a2511088441e0f0783c1e0f0783c1e0f078381c0c060300b0582c160b0582c160b0582c1008030180603018000000 else 0x6ca51bea4742dd1e9869a6522ad4a2c148e857a3d30d34ca4542945b2916eaf47a61a69948a5149114a292051047a61a69948b358ca36cb4d4ca14a29146a64f23d30d34ca45288f6fc09f094582918c8f8132130d34ca45489869a651ed348a613291271389c4e271389c4e271389c1e0f0783c1e0f0783c1e0f0784a25128944a25128944a251287038773b9dcee773b9dcee773b8ec763b2391c8e0b0582c160b0582c160b0582c0603349a4d2371b8dc6e371b8dc6e371b8dc6a352190c0000000201008
+  (List.range 176).map (fld a 9)
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem medRowsOK : ∀ i : Fin 2, pickRows (medRows i.val) (mask 143) = mask 88 ∧ pickRows (medRows i.val) (goal 143) = goal 88 := by decide +kernel
+def halt := medStop 2 medIx medRows (Fixed41.index 8) (Fixed41.N 8) (Fixed41.S 8)
+theorem haltNo {s ws} (ok : halt s ws = true) : ¬NatRun (mask 143) (goal 143) s ws :=
+  medStopNo medRowsOK (fun i hi => Fixed41.atDepth 8 i (Or.inl rfl) hi) ok
+def test (i : Nat) := if cls i = 0 then medC halt 143 scs 9 (B i) else true
 
 theorem test_sound (i : Nat) (hbound : i < 67) (hi : test i = true) : ¬NatRun (mask 143) (goal 143) 9 (B i) := by
   by_cases hc : cls i = 0
-  · exact checkD_sound (by simpa [test, hc] using hi)
+  · exact medC_sound haltNo (by simpa [test, hc] using hi)
   · exact projOk_dead ((projOK ⟨i, hbound⟩).resolve_left hc) (Fixed41.dead _ (Nat.mod_lt _ (by decide)))
 
 set_option maxRecDepth 10000 in
@@ -4281,19 +5208,33 @@ theorem shard : ∀ t, HasCircuitSize 7 target t → 11 ≤ t := by
 end Row20
 
 namespace Row23
-def vals : List ℕ := [1,1,1,2,2,2,4,4,8,8,10,10,10,10,12,12,12,16,16,17,17,17,17,20,20,20,24,24,24,24,28,28,28,28,28,28,28,28,28,28,28,28,32,32,33,33,33,33,34,34,34,34,34,34,34,34,34,34,34,34,34,36,36,36,36,48,48,48,49,49,49,49,49,49,49,49,49,49,49,49,52,52,52,52,52,52,52,52,52,52,52,52,64,64,65,65,65,65,65,65,65,65,65,65,65,65,65,66,66,66,66,68,68,68,68,72,72,72,74,74,74,74,74,74,74,74,74,74,74,74,76,76,76,76,76,76,76,76,76,76,76,76,3,5,9,3,6,18,5,6,9,40,11,14,26,42,13,14,44,18,80,19,21,25,81,21,22,84,25,26,56,88,3,5,6,9,18,29,30,40,60,80,92,96,40,96,35,37,41,97,3,5,6,9,18,35,38,40,42,50,80,96,98,37,38,44,100,50,56,112,3,5,6,9,18,40,51,53,57,80,96,113,3,5,6,9,18,40,53,54,60,80,96,116,80,96,3,5,6,9,18,40,67,69,73,80,81,96,97,67,70,82,98,69,70,84,100,73,88,104,3,5,6,9,18,40,75,78,80,90,96,106,3,5,6,9,18,40,77,78,80,92,96,108]
 def inputs : List ℕ := [0x4b04b2235cb012e72c080afc02b13e1153c000000007ffc000fff00000f00000780007,0x95ad505e055025415494dd44055242af2e4003ffc07800000000001fff000000003c38,0xac60861e408627182187811885660e47234bffc000780000fff0001e00003ffc381c0c0,0xae8ae8e0012804a04a12062115e8f087fc13ffffff8000000000000000003fffc01ff00,0x3103104886106f42f43818400770fff84080000000000000ffffffe000003fffffe0000,0xc20c20911820b783783fef83f98040048800000000000000ffffffffffffc0000000000,0xfc0fc0ffffc0f803802470022e0089100003ffffffffffff00000000000000000000000]
+def vals := sampleTable inputs 284
 def scs : List ℕ := [0x1101e1409723c90,0x1d81e208a024893,0x1d844178b724097,0x140440c0922388f,0x1d85e2089223c8e,0x17830078a025cb7,0x11030078932408e,0x1d8501788f23892,0x1d850178a023893]
 def target : BFn 7 := fun x => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 4 && x 6) || (x 5 && x 6)
-def rho (ys : List Nat) : List Nat :=
-  match fld 0xc07d61251b0941ae 1 (bsr 0xfad57cb8f9047f6df75acffbed7be9d0ebdd4332e951c2f7e84a982be66bcd2cda83b6a2d9681db1d39d99dccd0b5820cd09d6d8ca5d2c92c3b0b69ec223ee35bf567c23bd81d0b9bb13f5dcb6d82285adc7586cada8c338ac8cb5c4ac7e0d38a2be6553a0b125729d83592a98f245569756d55b95268ac49377e3d79164dcb68d3232e286f93574830329a581d920eb7a1f058178c8f10a7482b68d6968e6a668f7a89367b8c7d6675a0ee560fd95995accbdfd5a3906515885c981534d0c244f485e064ebbd8de4ce777da486b43f04010b6873d5df0733d31516f3699612b2f5a17b02cee13cf22802718116347de1041c9290b589ae80b0d049403c2b6a1 32 (hk ys) 7 0 64) with
-  | 1 => vals.map (fun r => fld 0x11b000021f030000000e90037400d10000000ce002f594b70000000b40036800aa00000009e002f1369700365ca506c1118e41002ed883d5d0b0602a0000000b6000021aab0045a1682853d0ec730000000a700291f6a0003cdf46f79178d65c002c5641e0028d341a00271320e4c2401408002894c175084d26110023d2406470000600 9 r)
-  | _ => []
+def qBook (w : Nat) : Nat :=
+  let d := fld 0x7002d40033d100a7d3 5 (w % 15)
+  fld 0x95aec6469dc305008c85ce439e00a5c400d48e41d5968dc20283ccee039ccd00018400d60686dd008b82420094cb00c1e6404445e5dc000093d3048ac5caa681de 8 (((w >>> 23) + d) % 65)
+
+def qPerm (i : Nat) : Nat := fld 0x2e710200000 21 i
+
+def qRow (i : Nat) : List Nat :=
+  vals.map (fun v => fld 0xe900001bad100000011b0043c01030000000ce003297ab70000000b60043400ab0000000a7003ed48a00042e2c82851d9e873003e9e66f791acbc5c0000000b400001b4aa00395b2506c31c884100000009e0026d789700311763d5d0c0582a002c9621e00269461a00299441750a4c261100265380e4c0292008002491e064700c0000 9 (orbitLabel (qPerm i) v))
+
+def qWord (i : Nat) (t : Fin 8) : Nat :=
+  inputs.getD (if t.val=7 then 7 else fld (qPerm i) 3 t.val) 0
+def qPick0 (ys : List Nat) : Nat :=
+  fld 0x4 2 (fld 0xc07d61251b0941ae 1 (bsr 0xfad57cb8f9047f6df75acffbed7be9d0ebdd4332e951c2f7e84a982be66bcd2cda83b6a2d9681db1d39d99dccd0b5820cd09d6d8ca5d2c92c3b0b69ec223ee35bf567c23bd81d0b9bb13f5dcb6d82285adc7586cada8c338ac8cb5c4ac7e0d38a2be6553a0b125729d83592a98f245569756d55b95268ac49377e3d79164dcb68d3232e286f93574830329a581d920eb7a1f058178c8f10a7482b68d6968e6a668f7a89367b8c7d6675a0ee560fd95995accbdfd5a3906515885c981534d0c244f485e064ebbd8de4ce777da486b43f04010b6873d5df0733d31516f3699612b2f5a17b02cee13cf22802718116347de1041c9290b589ae80b0d049403c2b6a1 32 (hk ys) 7 0 64))
+def qOri0 := quickOri 142 2 inputs qPick0 qRow qWord qBook
+
+set_option maxHeartbeats 50000000 in
+set_option maxRecDepth 10000 in
+theorem qCert : ∀ i : Fin 2, i.val = 0 ∨ validQuick 142 inputs (qRow i) (qWord i) := by decide +kernel
 def B (i : Nat) := mv (mask 142) (fld 0xe64e51e52f34e54e40e20404f65f40f20402503e50e65506f41102f52f53106e34e41f10f32101501103f50405f54f51000e10e24400502 12 i) inputs
 def I (ys : List Nat) := bsr 0xf75acffbed7be9d0ebdd4332e951c2f7e84a982be66bcd2cda83b6a2c3b0b69ebf567c23b6d82285adc7586cada8c338ac8cb5c4a2be6553a0b1257298f245569756d55b9377e3d78d3232e286f93574830329a578c8f10a68f7a89367b8c7d6675a0ee560fd95995a3906515885c9814f485e064ce777da486b43f04010b6873d5df0733d31516f2cee13cf116347de03c2b6a1 32 (hk ys) 6 0 37
 def test (i : Nat) := checkD 142 scs 9 (B i)
 set_option maxRecDepth 10000 in
-lemma roof : bar 142 (cutB 9 inputs B) (cutN 9 37) (fun _ => I) (rowOrient 142 rho) scs 10 0 = true := by decide +kernel
+lemma roof : bar 142 (cutB 9 inputs B) (cutN 9 37) (fun _ => I) qOri0 scs 10 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
 lemma z0 : span test 4 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
@@ -4322,7 +5263,7 @@ set_option maxHeartbeats 50000000 in
 lemma z34 : span test 3 34 = true := by decide +kernel
 lemma regionOK : span test 37 0 = true := by with_reducible exact (sj (sj (sj z0 (sj z4 z6)) (sj z9 (sj z13 z15))) (sj (sj z18 (sj z22 z24)) (sj (sj z27 z29) (sj z32 z34))))
 theorem finChk : ¬NatRun (mask 142) (goal 142) 10 inputs :=
-  symCutRoot (ori_ok rho) roof (fun i hi => checkD_sound (spOK regionOK i (Nat.zero_le _) hi))
+  symCutRoot (quick_safe (k:=142) (bound:=2) (xs:=inputs) (choose:=qPick0) (row:=qRow) (word:=qWord) (book:=qBook) qCert) roof (fun i hi => checkD_sound (spOK regionOK i (Nat.zero_le _) hi))
 
 set_option maxRecDepth 10000 in
 theorem shard : ∀ t, HasCircuitSize 7 target t → 11 ≤ t := by
@@ -4334,20 +5275,33 @@ theorem shard : ∀ t, HasCircuitSize 7 target t → 11 ≤ t := by
 end Row23
 
 namespace Row24
-def vals : List ℕ := [1,1,1,2,2,4,4,8,8,10,10,10,12,12,12,16,16,16,17,17,17,17,17,17,17,17,17,17,17,17,17,18,18,18,18,18,18,18,18,18,18,18,18,18,20,20,20,20,20,20,20,20,20,20,20,20,20,32,32,33,33,33,33,33,33,33,33,33,33,33,33,33,34,34,34,34,36,36,36,36,40,40,40,42,42,42,42,42,42,42,42,42,42,42,42,44,44,44,44,44,44,44,44,44,44,44,44,64,64,65,65,65,65,65,65,65,65,65,65,65,65,65,66,66,66,66,68,68,68,68,72,72,72,74,74,74,74,74,74,74,74,74,74,74,74,76,76,76,76,76,76,76,76,76,76,76,76,3,5,9,3,6,5,6,9,24,11,14,26,13,14,28,24,48,80,3,5,6,9,19,21,24,25,48,49,80,81,96,3,5,6,9,19,22,24,26,48,50,80,82,96,3,5,6,9,21,22,24,28,48,52,80,84,96,48,96,3,5,6,9,24,35,37,41,48,49,80,96,97,35,38,50,98,37,38,52,100,41,56,104,3,5,6,9,24,43,46,48,58,80,96,106,3,5,6,9,24,45,46,48,60,80,96,108,80,96,3,5,6,9,24,48,67,69,73,80,81,96,97,67,70,82,98,69,70,84,100,73,88,104,3,5,6,9,24,48,75,78,80,90,96,106,3,5,6,9,24,48,77,78,80,92,96,108]
 def inputs : List ℕ := [0x12c12c88d72c02b02b2232eb003601b55d8255e000000003ffe000000000fff80000007ffc0007,0x216b1417811404596505e025004aab500a85cb2001ffe03c0000007ff80f0000000fff80000e18,0x2b182187902189660461e4046156c0260130e8e5ffe0003c00007ff8000f00001fff00000007060,0x2b62b63800460978978e0009801900c80641ff09ffffffc000007ffffff00000000000000007f80,0xcc0cc12218c13903904887105fe0ff07f8792000000000000000000000000001ffffffffff8000,0x3083082446082de0de0fffbe0e601300980200000000000000007fffffffffffe00000000000000,0x3f03f03ffff03e00e00911c00b801c00e0040001ffffffffffff800000000000000000000000000]
+def vals := sampleTable inputs 314
 def scs : List ℕ := [0x2141f14cbb2b4ae,0xb01f0489e274a1,0x244120b0a52789f,0x2146d2449f2849d,0xec121b4bb2b8ad,0x2143b07cae2b4bb,0x14c1207ca52749f,0xb01214c9f2849e]
 def target : BFn 7 := fun x => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 3 && x 4) || (x 4 && x 5) || (x 4 && x 6) || (x 5 && x 6)
-def rho (ys : List Nat) : List Nat :=
-  let a := fld 0xe465b8084d80806c001965881811001861a653052400291 3 (bsr 0xfd73216afd2ae6a0f4b4ebf0eebc10b5ee8dd76ee615bbb3e2771267dcc8cd84db1f5491d9204e97d82f7fc1d3bc4e42d26d8defcf757ea1c77a1116c3428d89bce7a9e1ba26b6e3b8ed470bb1f21bebb0f1248fa9f68c8ea820a7a09e1133ea9d7fb3f59821dd2d94b96e8c92b118818f112e658a3c63418944838f7e976dac7e6e118f7d3edc677c2f6c1276c035e76b7510e56625fa5465e342a66579cdbd600390ec5b81fc0d5b728fb5522d3c26518f9a784cc737e84a3af73d41b01e383b19fbcd39e2c65133c0b0563136606d2d6bcfc22d5bc1062870c4e623ac96e32281415921d63bcd20a119321663282a1523e67c14e5b5370c33c12b07c33d73 32 (hk ys) 7 0 64)
-  if a=0 || 4<a then [] else
-    let c := fld 0x174650283d6221dd358ca000000 21 a
-    vals.map (fun v => fld 0x107003ec00ef0000000ec003a1c8bb000000137004ac01200000000d40031d74ae004a6689194216248200462227e881e8da6b000000104003e000ee0000000d20031570ad003da025f7a94dbe5000399bc4c6e92076390000000ab002a16ca500305682c5987c240f0029d520c530253e07002853c054e80c0000 9 (orbitLabel c v))
+def qBook (w : Nat) : Nat :=
+  let d := fld 0x301f3d0e19058c0040138122 5 (w % 19)
+  fld 0x8c93c5d50000058e00459c00d6cddd0143d3e5cc8a448bdc8d40c18306c39e85c642d496e6caa6c4038602c241ee9584cea58200decb460481ae9d94 8 (((w >>> 0) + d) % 61)
+
+def qPerm (i : Nat) : Nat := fld 0x174650283d6221dd358ca000000 21 i
+
+def qRow (i : Nat) : List Nat :=
+  vals.map (fun v => fld 0x107003ec00ef0000000ec003a1c8bb000000137004ac01200000000d40031d74ae004a6689194216248200462227e881e8da6b000000104003e000ee0000000d20031570ad003da025f7a94dbe5000399bc4c6e92076390000000ab002a16ca500305682c5987c240f0029d520c530253e07002853c054e80c0000 9 (orbitLabel (qPerm i) v))
+
+def qWord (i : Nat) (t : Fin 8) : Nat :=
+  inputs.getD (if t.val=7 then 7 else fld (qPerm i) 3 t.val) 0
+def qPick0 (ys : List Nat) : Nat :=
+  fld 0x4688 3 (fld 0xe465b8084d80806c001965881811001861a653052400291 3 (bsr 0xfd73216afd2ae6a0f4b4ebf0eebc10b5ee8dd76ee615bbb3e2771267dcc8cd84db1f5491d9204e97d82f7fc1d3bc4e42d26d8defcf757ea1c77a1116c3428d89bce7a9e1ba26b6e3b8ed470bb1f21bebb0f1248fa9f68c8ea820a7a09e1133ea9d7fb3f59821dd2d94b96e8c92b118818f112e658a3c63418944838f7e976dac7e6e118f7d3edc677c2f6c1276c035e76b7510e56625fa5465e342a66579cdbd600390ec5b81fc0d5b728fb5522d3c26518f9a784cc737e84a3af73d41b01e383b19fbcd39e2c65133c0b0563136606d2d6bcfc22d5bc1062870c4e623ac96e32281415921d63bcd20a119321663282a1523e67c14e5b5370c33c12b07c33d73 32 (hk ys) 7 0 64))
+def qOri0 := quickOri 157 5 inputs qPick0 qRow qWord qBook
+
+set_option maxHeartbeats 50000000 in
+set_option maxRecDepth 10000 in
+theorem qCert : ∀ i : Fin 5, i.val = 0 ∨ validQuick 157 inputs (qRow i) (qWord i) := by decide +kernel
 def B (i : Nat) := mv (mask 157) (fld 0xe40f51000106f30e51400503f31e50e31506f21e21e30403f40504f41104401f10e10103 12 i) inputs
 def I (ys : List Nat) := bsr 0xfd73216ad9204e97d3bc4e42c3428d89bce7a9e1b8ed470bb1f21beba820a7a09e1133ea9d7fb3f59821dd2d7e976dac7d3edc6776c035e76b7510e56579cdbd600390ec5b81fc0d522d3c264cc737e82d6bcfc221d63bcd20a119321663282a 32 (hk ys) 5 0 24
 def test (i : Nat) := checkD 157 scs 9 (B i)
 set_option maxRecDepth 10000 in
-lemma roof : bar 157 (cutB 9 inputs B) (cutN 9 24) (fun _ => I) (rowOrient 157 rho) scs 10 0 = true := by decide +kernel
+lemma roof : bar 157 (cutB 9 inputs B) (cutN 9 24) (fun _ => I) qOri0 scs 10 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
 lemma z0 : span test 3 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
@@ -4366,7 +5320,7 @@ set_option maxHeartbeats 50000000 in
 lemma z21 : span test 3 21 = true := by decide +kernel
 lemma regionOK : span test 24 0 = true := by with_reducible exact (sj (sj (sj z0 z3) (sj z6 z9)) (sj (sj z12 z15) (sj z18 z21)))
 theorem finChk : ¬NatRun (mask 157) (goal 157) 10 inputs :=
-  symCutRoot (ori_ok rho) roof (fun i hi => checkD_sound (spOK regionOK i (Nat.zero_le _) hi))
+  symCutRoot (quick_safe (k:=157) (bound:=5) (xs:=inputs) (choose:=qPick0) (row:=qRow) (word:=qWord) (book:=qBook) qCert) roof (fun i hi => checkD_sound (spOK regionOK i (Nat.zero_le _) hi))
 
 set_option maxRecDepth 10000 in
 theorem shard : ∀ t, HasCircuitSize 7 target t → 11 ≤ t := by
@@ -4378,20 +5332,33 @@ theorem shard : ∀ t, HasCircuitSize 7 target t → 11 ≤ t := by
 end Row24
 
 namespace Row25
-def vals : List ℕ := [1,1,1,2,2,4,4,6,6,6,8,8,10,10,10,12,12,12,14,14,14,14,14,14,14,14,14,14,14,14,16,16,16,17,17,17,17,17,17,17,17,17,17,17,17,17,20,20,20,20,24,24,24,24,28,28,28,28,28,28,28,28,28,28,28,28,32,32,33,33,33,33,34,34,34,40,40,40,40,42,42,42,42,42,42,42,42,42,42,42,42,64,64,65,65,65,65,66,66,66,68,68,68,68,70,70,70,70,70,70,70,70,70,70,70,70,96,96,96,97,97,97,97,97,97,97,97,97,97,97,97,98,98,98,98,98,98,98,98,98,98,98,98,3,5,9,3,18,5,36,7,22,38,9,72,11,26,74,13,44,76,3,5,9,15,18,30,36,46,48,72,78,80,18,48,80,3,5,9,18,19,21,25,36,48,49,72,80,81,21,22,52,84,25,26,56,88,3,5,9,18,29,30,36,48,60,72,80,92,36,48,35,37,41,49,35,38,50,41,44,56,104,3,5,9,18,36,43,46,48,58,72,80,106,72,80,67,69,73,81,67,74,82,69,76,84,100,3,5,9,18,36,48,71,72,78,80,86,102,100,104,112,3,5,9,18,36,48,72,80,99,101,105,113,3,5,9,18,36,48,72,80,99,102,106,114]
 def inputs : List ℕ := [0x41fc1c02389f009c4f802e23277001e4a578007ff800001e00000f000003ffe00000007,0x3c244246a487125a438805244019297239ccfff8000fff0e07ff8700000000003ffc7398,0x848848ea978201489132e41e0a209d5c1f10000000ffff000000003ffc3c0003fff83e0,0x11111110c21246d93c21669e04440d59fe0200000000000007fff803fffc00003ffffc00,0x22a22a23142489621245b71ffb78f260108800000000000000000003ffffffffc0000000,0x3cc3cc3c1840027c3ffe38088380438081207ffffff0000007fffffc0000000000000000,0x3f03f03fe07fff802001c0111c009c0124007ffffffffffff80000000000000000000000]
+def vals := sampleTable inputs 286
 def scs : List ℕ := [0x13c360489524ca9,0x1dc4f20c9a23c91,0x1dc36084a924095,0x1a0210489a24cac,0x1a0211dcac23c93,0x1dc36084ac2449a,0x841213c9523c90,0x84120d8932408f,0x13c211a0ac254a9,0x84121a09a24091,0x1a0360489a24cac,0x1a02120c9524c90,0x1dc680d8932448f]
 def target : BFn 7 := fun x => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 4) || (x 2 && x 5) || (x 3 && x 6) || (x 4 && x 5) || (x 4 && x 6)
-def rho (ys : List Nat) : List Nat :=
-  let a := fld 0x4ca5c03880c243322ed706239220fea4 2 (bsr 0xffc6f9c4ff41e8e2fbd0a54cf606c261f4a30a53f2969921e92c093ee7041e37e63d7411dd2668d5c6cca5b0c5f20b3dc424d732c0987827bea7d536bb5677f8bada98a2b9008580b21ff34eaa85e630a31945aa9f9ee1e99c41684c9ad428319876483e95deaa86951f47a69483de0593dbbcc29172253d8dac909b8a1809cf89cba2718924bbb385d02f51856e310484ff0c0179f3338c79431fc0766724c1743f5c48724dcc286b654a0c68d3a29c65efabe465ccde23622f2961561473d54fd401c84c7e3d33494994ac4328b7fa424e10483052afba2624c49e25a41b5a1f1ec26f180438f81538f044106645730dc8155e0ba567900812b114000423c2 32 (hk ys) 7 0 64)
-  if a=0 || 3<a then [] else
-    let c := fld 0xba2643435313171800000 21 a
-    vals.map (fun v => fld 0x4762305000000000003a620dd0040a1ef68720cee740000000d00000000c40040400c0003c978ac002ac00a000275dc9a7e9a1da6476184ba5b0000000cd0039800c30000000bf0036572a9002a0009f7193daa4b00261a895699208842002999236002716c320025d6a2e5a24c421e520493c0f4d831220a4b01d20054780c0000 9 (orbitLabel c v))
+def qBook (w : Nat) : Nat :=
+  let d := fld 0xb2a90805ef52b700c701001303182 4 (w % 29)
+  fld 0xced6c5ca8a018600ee84d593dc8de5cbcd40434504c1d385ae9d81c6448ba5e6959cc3940503009ecca68c41d4dd83de460282c242c406968e 8 (((w >>> 5) + d) % 57)
+
+def qPerm (i : Nat) : Nat := fld 0xba2643435313171800000 21 i
+
+def qRow (i : Nat) : List Nat :=
+  vals.map (fun v => fld 0x4762305000000000003a620dd0040a1ef68720cee740000000d00000000c40040400c0003c978ac002ac00a000275dc9a7e9a1da6476184ba5b0000000cd0039800c30000000bf0036572a9002a0009f7193daa4b00261a895699208842002999236002716c320025d6a2e5a24c421e520493c0f4d831220a4b01d20054780c0000 9 (orbitLabel (qPerm i) v))
+
+def qWord (i : Nat) (t : Fin 8) : Nat :=
+  inputs.getD (if t.val=7 then 7 else fld (qPerm i) 3 t.val) 0
+def qPick0 (ys : List Nat) : Nat :=
+  fld 0x688 3 (fld 0x4ca5c03880c243322ed706239220fea4 2 (bsr 0xffc6f9c4ff41e8e2fbd0a54cf606c261f4a30a53f2969921e92c093ee7041e37e63d7411dd2668d5c6cca5b0c5f20b3dc424d732c0987827bea7d536bb5677f8bada98a2b9008580b21ff34eaa85e630a31945aa9f9ee1e99c41684c9ad428319876483e95deaa86951f47a69483de0593dbbcc29172253d8dac909b8a1809cf89cba2718924bbb385d02f51856e310484ff0c0179f3338c79431fc0766724c1743f5c48724dcc286b654a0c68d3a29c65efabe465ccde23622f2961561473d54fd401c84c7e3d33494994ac4328b7fa424e10483052afba2624c49e25a41b5a1f1ec26f180438f81538f044106645730dc8155e0ba567900812b114000423c2 32 (hk ys) 7 0 64))
+def qOri0 := quickOri 143 4 inputs qPick0 qRow qWord qBook
+
+set_option maxHeartbeats 50000000 in
+set_option maxRecDepth 10000 in
+theorem qCert : ∀ i : Fin 4, i.val = 0 ∨ validQuick 143 inputs (qRow i) (qWord i) := by decide +kernel
 def B (i : Nat) := mv (mask 143) (fld 0x504000e40e20e10e52f10f53104f20506400106e32101f32e62f40e43402401f12e12f42f52501 12 i) inputs
 def I (ys : List Nat) := bsr 0xff41e8e2f606c261dd2668d5c6cca5b0c5f20b3dc424d732bb5677f8b9008580b21ff34eaa85e6309f9ee1e99c41684c95deaa86951f47a693dbbcc28dac909b89cba271743f5c48724dcc2865efabe4622f2961494994ac424e10482624c49e25a41b5a000423c2 32 (hk ys) 5 0 26
 def test (i : Nat) := checkD 143 scs 9 (B i)
 set_option maxRecDepth 10000 in
-lemma roof : bar 143 (cutB 9 inputs B) (cutN 9 26) (fun _ => I) (rowOrient 143 rho) scs 10 0 = true := by decide +kernel
+lemma roof : bar 143 (cutB 9 inputs B) (cutN 9 26) (fun _ => I) qOri0 scs 10 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
 lemma z0 : span test 3 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
@@ -4410,7 +5377,7 @@ set_option maxHeartbeats 50000000 in
 lemma z22 : span test 4 22 = true := by decide +kernel
 lemma regionOK : span test 26 0 = true := by with_reducible exact (sj (sj (sj z0 z3) (sj z6 z9)) (sj (sj z13 z16) (sj z19 z22)))
 theorem finChk : ¬NatRun (mask 143) (goal 143) 10 inputs :=
-  symCutRoot (ori_ok rho) roof (fun i hi => checkD_sound (spOK regionOK i (Nat.zero_le _) hi))
+  symCutRoot (quick_safe (k:=143) (bound:=4) (xs:=inputs) (choose:=qPick0) (row:=qRow) (word:=qWord) (book:=qBook) qCert) roof (fun i hi => checkD_sound (spOK regionOK i (Nat.zero_le _) hi))
 
 set_option maxRecDepth 10000 in
 theorem shard : ∀ t, HasCircuitSize 7 target t → 11 ≤ t := by
@@ -4423,171 +5390,134 @@ end Row25
 
 def prefixGates (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x100f50100f40100f31100f20100f10100e62100e61100e54100e52100e50100e40100e31100e30100e21100e20100501100500100401100103100102100101100100006f54006f53006f52006f51006f50006f43006f42006f41006f40006f32006f31006f30006f21006f20006f10006e54006e53006e52006e51006e50006e43006e42006e41006e40006e32006e31006e30006e21006e20006e10006505006504006503006502006501006500006405006404006403006402006401006400006105006104006103006102006101006100000f65000f63000f62000f61000f60000f54000f53000f52000f51000f50000f43000f42000f41000f40000f32000f31000f30000f21000f20000f10000e65000e64000e63000e62000e61000e60000e54000e53000e52000e51000e50000e43000e42000e41000e40000e32000e31000e30000e21000e20000e10000505000504000503000502000501000500000403000402000401000400000105000104000103000102000101000100000000
-    | 1 => 0x106505106504106502106501106106106105106104106103106102106101106100106006105f64105f61105f50105f40105f32105f21105f10105e64105e63105e62105e60105e54105e51105e43105e42105e41105e40105e30105e21105e20105e10105502105500105402105105105103105102105101104f64104f62104f60104f54104f53104f52104f50104f43104f40104f32104f20104e64104e63104e62104e54104e53104e51104e43104e42104e41104e40104e32104e30104e20104e10104400104104104103104102104101104100103f52103f42103f21103f20103e52103e51103e42103e32103e30103e20103e10103401103102103101102f61102f60102f41102f30102f20102f10102e65102e60102e54102e53102e52102e51102e50102e42102e41102e31102e21102e20102e10102504102400102103102101102100101f50101f40101f21101f20101f10101e54101e52101e51101e50101e43101e41101e32101e20101e10101500101103101100100f61100f60
-    | 2 => 0x505f10505e72505e51505e30505e20505e10505b74505a74505764505762505760505662505661505503505501505500505106505105504f21504f20504f10504e72504e10504b74504b64504a73504a64504a63504752504750504651504642504504504500504102503f10503e52503b64503a54503742503642503640503632503630503101502f71502f51502f21502f10502e51502e41502e31502e30502e10502b32502a76502a42502721502720502665502621502620502501502500502400501f20501e30501e10501b31501a31501710501610501500500e32500b30500b20500b10500a50500a30500a20500a10500761500661406775406773406772406770406675406673406672406671406670405e75405101403e41403102402e30401f20401100400f54400f43400e70400e50106f63106f62106f61106f53106f43106f42106f41106f32106f21106f10106e65106e62106e60106e53106e51106e43106e42106e41106e40106e31106e30106e21106e20106e10106506
-    | 3 => 0xe21b40e21b10e21a70e21a50e21a40e21a10e21501e21360e21102e21101e20f70e20f60e20f50e20f40e20f21e20f20e20e50e20e40e20e21e20e20e20b70e20b60e20b50e20b40e20b20e20a70e20770e20760e20750e20740e20731e20720e20501e20500e20401e20370e20360e20350e20340e20331e20320e20101e20100e10f70e10f60e10f50e10f40e10f30e10e70e10e64e10e60e10e50e10e40e10e30e10b70e10b60e10b50e10b40e10b30e10a70e10a60e10a50e10a30e10770e10760e10750e10740e10730e10501e10500e10401e10370e10360e10350e10340e10330e10321e10103e10101e10100506f72506f64506f62506f61506f53506f43506f42506f32506f31506f21506e76506e65506e64506e63506e61506e60506e53506e51506e43506e42506e41506e31506e21506e20506b20506b10506a10506776506773506772506771506676506673506671506506506504506502506501506106506105506104506101506007505f75505f74505f72505f41505f21
-    | 4 => 0xe41331e41310e41102e41101e40e41e40e31e40e21e40e20e40b20e40a70e40a60e40501e40370e40351e40101e32f71e32f61e32f51e32f50e32f21e32f10e32e70e32e60e32e52e32e51e32e50e32e43e32e31e32e21e32e10e32b70e32b62e32b50e32b10e32a52e32a10e32621e32620e32102e32101e32100e31f70e31f61e31f60e31f51e31f50e31f32e31f31e31f30e31f20e31f10e31e71e31e70e31e61e31e60e31e51e31e42e31e40e31e31e31e30e31e20e31e10e31b74e31b61e31b31e31b10e31a71e31a61e31771e31761e31751e31743e31742e31731e31710e31640e31620e31501e31500e31402e31400e31371e31361e31351e31331e31310e31102e31101e31100e30f60e30f31e30f30e30f21e30f20e30e70e30e60e30e50e30e41e30e31e30e30e30e21e30e20e30b70e30b60e30b50e30b30e30b20e30a70e30a60e30a50e30770e30760e30750e30730e30720e30501e30500e30370e30360e30350e30341e30330e30320e30101e30100e21e41e21e10e21b60
-    | 5 => 0xe51e42e51e40e51e21e51e10e51b70e51b50e51b30e51a70e51a10e51770e51750e51740e51730e51710e51502e51500e51370e51350e51340e51330e51310e51102e51101e50f70e50f31e50e70e50e65e50e51e50b70e50b40e50b30e50b20e50501e50361e50101e50100e43f51e43e41e43e40e43e31e43e30e43e10e43b63e43a73e43a63e43754e43632e43631e43630e43503e43332e43103e43102e43100e42f62e42f61e42f60e42f43e42f41e42f40e42f31e42f30e42f21e42f20e42f10e42e62e42e61e42e60e42e43e42e42e42e41e42e40e42e30e42e21e42e20e42e10e42b62e42b53e42b21e42b20e42a62e42772e42751e42742e42721e42720e42630e42621e42620e42502e42501e42500e42403e42402e42372e42342e42321e42320e42102e42101e41f61e41f60e41f42e41f32e41f30e41e71e41e42e41e41e41e40e41e30e41e10e41b61e41b41e41b31e41b10e41a71e41771e41761e41741e41731e41610e41502e41501e41402e41401e41371e41361e41341
-    | 6 => 0xe65104e65102e65101e65100e64e62e64e51e64631e64630e63e30e63632e63631e63630e63503e63400e63102e62f71e62f43e62f40e62f31e62f21e62f20e62f10e62e61e62e42e62e40e62e31e62e30e62e21e62e20e62e10e62b42e62b20e62762e62752e62731e62720e62630e62620e62503e62502e62500e62400e62362e62352e62320e62103e62102e61f50e61e61e61e51e61610e61401e60f31e60f21e60e41e60e40e60e31e60e30e60e21e60e20e60b60e60b40e60b30e60b20e60750e60501e60500e60350e60101e60100e54f54e54e61e54b73e54651e54632e54631e54630e54403e54102e53f70e53e40e53a30e53a10e53632e53631e53630e52f53e52f52e52f51e52f50e52f43e52f42e52f31e52f21e52f10e52e62e52e53e52e52e52e51e52e50e52e43e52e32e52e31e52e21e52e20e52e10e52b50e52b20e52b10e52a20e52a10e52740e52501e52500e52402e52401e52363e52340e52102e52101e52100e51f71e51f70e51f32e51f21e51f10e51e70e51e51
-    | 7 => 0xf31504f31500f31400f31231f31104f31102f31101f30f61f30f20f30f10f30e73f30b10f30a64f30a54f30a30f30731f30642f30641f30630f30500f30230f30104f30102f30100f21f70f21f60f21f50f21f43f21f40f21f20f21f10f21e70f21e63f21e60f21e53f21e43f21e40f21a73f21a63f21a53f21a52f21a43f21a41f21a21f21730f21720f21710f21630f21621f21500f21221f21103f21101f21100f20f60f20f31f20f10f20e20f20b72f20b63f20b62f20b53f20b43f20a53f20a43f20a20f20631f20620f20502f20500f20253f20103f20102f20101f10f50f10e60f10e52f10e32f10e20f10e10f10b72f10b51f10b50f10b32f10b31f10a72f10a62f10a52f10a42f10a32f10a10f10642f10610f10500f10242f10210f10102f10101f10100e65f64e65f62e65f51e65f50e65f43e65f31e65f30e65f10e65e61e65e53e65e42e65e32e65e31e65e30e65e10e65b54e65b52e65b50e65774e65770e65661e65653e65650e65505e65500e65400e65376e65350e65105
-    | 8 => 0xf50b70f50b10f50a50f50662f50661f50104f50103f50100f43f62f43f61f43f60f43f32f43f21f43e61f43e60f43e20f43e10f43b75f43a65f43752f43751f43750f43742f43741f43740f43732f43731f43651f43650f43642f43631f43630f43500f43400f43243f43102f43100f42f31f42f20f42e60f42e30f42e10f42b65f42b62f42a65f42751f42750f42740f42721f42651f42650f42642f42641f42500f42242f42102f42101f41f21f41e31f41e20f41b65f41b21f41a65f41750f41740f41710f41650f41641f41400f41104f41100f40f72f40f30f40f20f40f10f40b75f40b20f40b10f40743f40741f40651f40500f40105f40103f32f70f32f30f32f21f32f10f32e71f32b54f32b52f32a74f32a54f32a52f32751f32741f32740f32730f32721f32720f32640f32632f32631f32620f32501f32500f32232f32104f32102f32101f31f21f31f10f31e50f31e42f31e41f31e40f31e10f31b54f31a54f31a31f31750f31740f31730f31710f31650f31642f31640f31631
-    | 9 => 0xf65e10f65770f65265f64f53f64f50f64f30f64e51f64b54f64743f64741f64104f63e41f63e21f63771f63770f63732f62f60f62f21f62e62f62e30f62e10f62b52f62a62f62770f62760f62662f62400f62104f61f60f61e71f61b21f61770f61760f61400f60f71f60f50f60f42f60f32f60f20f60f10f60e73f60e42f60e10f60b50f60b20f60a72f60673f60672f60671f60660f60272f60107f54f21f54b74f54760f54751f54750f54401f54102f53f41f53f21f53e71f53e40f53e21f53e20f53b43f53a53f53762f53761f53760f53752f53751f53750f53732f53731f53661f53630f53500f53400f53102f53101f52f41f52f32f52f31f52f30f52f21f52f20f52e75f52e41f52e31f52e30f52a76f52761f52760f52750f52721f52661f52652f52651f52501f52401f52276f52252f52102f52100f51f31f51f30f51f21f51e75f51e40f51e31f51e30f51e20f51b71f51760f51753f51750f51664f51400f51264f51104f51101f50f43f50f41f50f20f50f10f50e42f50e30
-    | 10 => 0xf65e31
+    | 0 => 0x505f20505f10505661505501504750502f31502e51502e20502721502720502620502501501f65501f20501e10501762501710501660501610501500500f61500e61406773406770406670106f63106f61106f53106f52106f41106f32106f31106f21106e32106e31106e21106e10106501106106106105106104106103106102106101106100106006105f65105f62105f60105f41105f40105f31105f21105f20105f10105e30105e20105e10105105105102104f62104f52104f50104f10104e40104e10104104104102103f10103e10103102102f51102f20102f10102e51102e50102e42102e10102101101f51101f50101f40101f10101e50101e43101500101100100f61100e40100e30100e21100101006f53006f52006f50006f43006f42006f41006f32006f31006f30006f21006f20006f10006e42006e31006e30006e21006e20006e10006504006502006500006105006104006102006100000f62000e60000e40000504000503000502000105000104000102000101000000
+    | 1 => 0xf42e10f42751f42750f42740f42650f42505f42500f42242f42105f41f20f41750f41740f41710f41650f41400f40f20f40f10f40e10f40b20f32f70f32f10f32a74f32a52f32741f32730f32721f32650f32640f31f70f31f10f31e40f31e20f31e10f31730f31650f31640f31504f31500f31231f31104f31100f30f10f30e10f30b10f30731f30641f21f70f21f60f21f40f21f10f21e30f21a53f21730f21720f21710f21630f21503f21500f21400f21221f21103f21101f21100f20f31f20f10f20e31f20e10f20653f20631f20620f20103f10e32f10a52f10a42f10a10f10642f10610f10502f10500f10210f10102f10100e60101e51f41e51a10e42f60e41a71e40e21e31100e21f41e21e21e21e10e21a10e21401e21101e20f21e20e21e20770e20760e20500e20370e10f50e10f30e10e21e10b50e10a30e10770e10760e10750e10740e10730e10501e10500e10370e10360e10350e10340e10330e10101e10100506e21506671506505506007505f71505f70505f42505f40
+    | 2 => 0xf65f42f65f31f65f21f65e10f65101f64f50f64e10f63f50f63f21f63f20f63770f62f10f62104f60b50f54f21f54e10f54752f54500f53f21f53f20f53f10f53e21f53e20f53760f53731f53661f53102f52f41f52f31f52f30f52f10f52e10f52761f52750f52721f52661f52660f52501f52106f51e20f51e10f51750f51101f50f20f50b10f50662f50661f50100f43f62f43f21f43f10f43751f43740f43650f43102f42f10f42e51f42e50
     | _ => 0
   fld packed 24 (i % 128)
 def thirdGate (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x731730721720710676675674673672671670665664663662661660654653652651650643642641640632631630621620610507506505504503502501500406405404403402401400387386384383382381380376375374373372371370365364363362361360354353352351350343342341340332331330321320310287286284283282281280276275274273272271270265264263262261260254253252251250243242241240232231230221220210108107106105104103102101100000
-    | 1 => 0xf65f64f63f62f61f60f54f53f52f51f50f43f42f41f40f32f31f30f21f20f10e76e65e64e63e62e61e60e54e53e52e51e50e43e42e41e40e32e31e30e21e20e10b86b85b84b81b76b75b74b73b72b71b70b65b64b63b62b61b60b54b53b52b51b50b43b42b41b40b32b31b30b21b20b10a86a82a76a75a74a73a72a71a70a65a64a63a62a61a60a54a53a52a51a50a43a42a41a40a32a31a30a21a20a10776775774773772771770765764763762761760754753752751750743742741740732
-    | 2 => 0xf75f74f72f71f70
+    | 0 => 0xb61b60b53b52b51b50b43b42b41b40b32b31b30b21b20b10a75a74a72a71a70a64a61a60a52a43a42a41a40a31a30a20a10771770765764763762761760754753751750743742741740732731730721720710674670663661653650641640630620502501386385384383382381380376375374373372371370365364363362361360354352351350343342341340332331330321320310281280272271270263261260253252251250242241240231230210107106105104103102101100000
+    | 1 => 0xf70f64f62f61f60f52f51f50f41f31f20f10e76e65e64e63e61e54e53e52e51e50e41e40e31e21e20e10b80b76b75b74b73b72b71b70b64b63b62
     | _ => 0
   fld packed 12 (i % 128)
 def fourthGate (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0xa60a54a53a52a51a50a43a42a41a40a32a31a30a21a20a10775765764763762761760754753752751750743742741740732731730721720710665664662660654652651650642640632631630621620505504503500405404403402401400387376375374373372371370365364363362361360354353352351350343342341340332331330321320310276275274273272271270265264263262261260254253252251250243242241240232231230221220210106105104103102101100000
-    | 1 => 0xf62f54f53f52f51f50f43f42f41f32f31f30f21f20f10e54e53e52e51e43e42e41e32e31e30e21e20e10b76b74b73b72b65b64b63b62b61b60b54b53b52b51b50b43b42b41b40b32b31b30b21b20b10a75a73a65a64a63a62a61
+    | 0 => 0xf50f41f32f21b73b64b62b53b50b43b40b32b30b21b10a63a32a20760752751750743742741740731730720710660405400387375374373372371370365364363362361360354353352351350343342341340332331330321320310276275274273272271270264263262261260253252251250242241240231230221220210106105104103102101100000
     | _ => 0
   fld packed 12 (i % 128)
 
+
 namespace Row26
-def vals : List ℕ := [1,1,1,1,1,1,1,1,1,2,2,4,4,8,8,10,10,10,12,12,12,16,16,18,18,18,20,20,20,32,32,34,34,34,36,36,36,40,40,40,42,42,42,42,42,42,42,42,42,42,42,42,42,44,44,44,44,44,44,44,44,44,44,44,44,44,48,48,48,50,50,50,50,50,50,50,50,50,50,50,50,50,52,52,52,52,52,52,52,52,52,52,52,52,52,64,64,66,66,66,68,68,68,72,72,72,74,74,74,74,74,74,74,74,74,74,74,74,74,76,76,76,76,76,76,76,76,76,76,76,76,76,80,80,80,82,82,82,82,82,82,82,82,82,82,82,82,82,84,84,84,84,84,84,84,84,84,84,84,84,84,3,5,6,9,17,24,33,65,96,3,6,5,6,9,24,11,14,26,13,14,28,17,24,19,22,26,21,22,28,33,96,35,38,98,37,38,100,41,56,104,3,5,6,9,17,24,33,43,46,58,65,96,106,3,5,6,9,17,24,33,45,46,60,65,96,108,49,56,112,3,5,6,9,17,24,33,51,54,58,65,96,114,3,5,6,9,17,24,33,53,54,60,65,96,116,65,96,67,70,98,69,70,100,73,88,104,3,5,6,9,17,24,33,65,75,78,90,96,106,3,5,6,9,17,24,33,65,77,78,92,96,108,81,88,112,3,5,6,9,17,24,33,65,83,86,90,96,114,3,5,6,9,17,24,33,65,85,86,92,96,116]
 def inputs : List ℕ := [0x3b61db21db0ed92526d936c936c9b649494955b600000000000000000000000000000000000001ff,0x40b7050205b8285c082ce14041670a1717172c0a000fff80007ffc0e0003ffe0001fff0383838600,0x2e0c20617061030e89c304184e1820c3a3a3a380dfff0000fff8000707ffc0003ffe0001c1c1c1800,0x8504285728b9470011408a14ea2751c024bfc0500000000fffffff8000000003ffffffe0001fe000,0x2e61730e4302182009d84ec388c0460803fe48061fffffff0000000007ffffffc000000001fe00000,0x30818409840c20492de06f03ef03781ffc000028000000000000000007fffffffffffffffe0000000,0x3f01f80ff80fc07ffe00700270038012480000301ffffffffffffffff800000000000000000000000]
+def vals := sampleTable inputs 322
 def scs : List ℕ := [0x1a8000a0a929ca8,0x1dc00250a6294a4,0xd428000a2284a3,0x114000a0a6290a5,0x11400250a9288a7,0x1a828000a829ca9,0x21c6a000a5290a6,0x1dc00148a6288a4,0x1a8001dca828ca1,0xd40021ca528ca2,0x25000148a9294a8,0xa00021ca9284a7,0xd4000a0a728ca2,0x250000a0a9298a5,0x1dc0021ca8298a4,0xa000250a728ca1]
 def target : BFn 7 := fun x => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 0 && x 6) || (x 1 && x 2) || (x 3 && x 4) || (x 5 && x 6)
 def recipe7 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x6169030916a5127311c6871e2335a1e1c02c763a15a1e81b151d24f101e21b286b03a075da2a5f1c05006020fa266a8fba6169b52c2224a9e16a4fa71822a5f1cba72f6d83a092eba15f168502803029303c9869318a27393f4013b39a417f3d9b53f74bfc41169b5246c9b5021984c0b3d9c617028353a720f48a5a9b5035b3a126379c9051731133313fc030905b07053ca5f089c6051f85809183f4901e23e2c5fa2a5c5da2a3d73ba03616b1d5e603a1311aab9070905b915b3a1285b3f42a32850741984c32182b92a06bd22f3c83637711b525083fe2e3f0ae89093a3073ebfc62093a33a3f850184599001199b1244dca3702123ea31822a02183f4054022a10073e1065cba107171b102168502b5623e781e012310ba4ea0169b5375500e471822a01169c696168503e744994e42ba0061f858052104c115d05b0e2ebfc5a4d9b5290428c911685007218503a6c806001c825a8169b59907420306e3fc701823e335b190357003a264f84c2b50a3e241984c101abb22c16a4f07313fc380201f0517108076122a041e1c026763a1296b8f53000858741e04c9a1d3d73665a3536541c5901aa3b4e2123e041fb13243e01764181b10518a280640ba0
-    | 1 => 0x3670a2a0f79002101ca4d255f8120418850061840113083f65663bd2044ba2a04093a30103a0715760f49b60235021e04c42169b5071885030402331e020812840a27074ba2a071990327524198b08235815c22a5c5cba10d420160f5e85d0c181d1351e2b49818a282a16a515c00a2a266e8f50d292de282d1b8a61822a4e1b81430763a1263f1bd941a850071cb082e313fc231aa320b5c3f4346f83a50183f4246c9b8022104c2b562353a7203a334c1852c6022e071b9b1244d046a3169b50701ba0431822a393282b020a3f4244f3d2931822a9b603a10e02829105b00b012182090071c6075b3a19e422350741ba14e1dc226b0905b0c5e05b0f249d18a3d9b58a183a39818a27240404c06073f424199bb2b6e0f407183f4741b84c050739d04433fc070741d10213b0713d9b5093d9c506020f412789da27313fc2801050264284c041cba7961ba3e4b183f4041685003010f5911ba3e92218500d013d36a4d9b8071c050334d04c3945401245d84c2c4585007168500c043b608488201f0084c3b4f85b126005b2f5ba3336708f525212b4276523e024ba2a836122a0e42235362631f611e2332716850240307510759b8061b84c1c43030344f3a3
-    | 2 => 0xe5c046296b9b50f1e1d1bb1a2352e6c1b83670a2e27622357a5a9b531212b4333f23314631c510759b53d2c85b272123e26451bd101a21b8c5da2a07093a32b31bf404169b0643e3a0151ca4f063d9b52a4b8583950a272355a28392121b24621bd5f4d9b8071823e5f1c23b02074200406c050c80420061784c421822a2a3f04c0217a334b5bba1367083a3416a4a031e0200c5d85b74181c0271823e026222a6507420316e9b894413fc36253190d01bd36c0b827393285f07018f5263f1c08a1e3a30f5e91094023fc06023fc8a5b3a1241e1bb2c1ea502407420273e4010317a334a1822a02169b52a3f1b12b21a4d103f3a308010273f74ba1980122a66313fc357022a9d40405387183a294d3ca2a313fc125d85b07028f40b3e05d611a3a7273dbff6a5b3a12a5b3a7144f3d206181c02656872360185b164102c2c5fbd2286b0f404182332716a31871ba331e7da722f5cba707071c624249bb244f05d04218502b4d235275304c031984c2700a3e1b00a3e3e1e9a5021ba2707179bd0702003266a8f41c7fb8271183a32d4f9c5393105d2348985b81822a0a3e05d30483072b4523e33429c02a16a4f3a5ba3339429b133370338a1685003179c0
-    | 3 => 0x763d9b5101ea1b060ac05354f85b266a8f5071e1c05e1ea3b2300a3e83603a10b16a4f256b03aac1822a985b22a24211bd044d405b3169b56562ba1334084c333f04c030605d266eba09018850353d1857a3f22a241b9bb317b22a3653b13251e31f041a8500c183a304463a1323c98624039c1020741d90433fc6b093a304212274c169c6061a235334eba6313c98605021b8891d019063d9b80b5a9c607020f502181bd070222e06313fc3a3a9858c1822a2c6c8f5393f04c2e62235333285f011822a051784c30182b9941aa3b026022e2a3105d126301c0900b9d5e0739d240741d8c18a27361aa31943f22a261c1cb06169b50c2c3a003433fc0717a33971283024652338803bfc335a8502851050070605d284d3ca05023fc941ea3b021822a1c1aa32103e9c0995cba1870605d28700f4065a9b51803c3a5c6222a345bba76531ba00e5e235b8169b5240084c39531bd2a6b03a2408be4040741d143e05d4b169b5041804c197806a881ba3e021b84c021784c071984c0b3f05f1060c19282523207193a68f2122790168505d313fc042123e071ba272852419264f9bd2f182b98e5b3a123010505f1e233ac169b5941a235032104c24181bdb11822a
-    | 4 => 0xa01822a051740c2d3880d266ebfc902123e065b3a12c5185d07613fc2b3d8502a488200c1e3a39a1dc220c179bb050905b1042ba32f6cba0a91822a1f211ba4d1a85006183f4134202d9416850031e8502c6c8f4050ac053018ab9051e3a30c3d9c6245b3a4326f3a0105bb9d326ea2a156401e394504c1c01050901823e0f18c28041a23e365a858333105d30588343616a3105022de05074200c3d9b80a18a4f061685005010f504179bd890905b355b233036022e935da2a267286b38748052c43050056122e991e850871984c070222a053d9b802211bd03169c6835fa2a365423f2b5a850041f85819448322618ab966403a105313fc04179015562ba107169c6286b1b52b1ea503a4585018199bb244d9b5912101b2e5385006021b5071f858041e04c2418233061822a070283a105fba6071e1033b7283a256c0f54e1784c2f18ab9275084c071e04c0c1e1d1062132b2b5323e26509bd2c19a4a061aa3b1124332241e1bd26561bd063f22a245b3a126429bd396b03a2470a2a255185d2c24a4a701e23e991a8509a5f22a882123e5a1984c0121014042104cb51822a060905b3565a275a1804c2d603d6265182b43169b5ae1822a9007420901a3a7
-    | 5 => 0x617bd0100d3f607033a0991aa3b244dbcc87074202f6c8f55642ca383613fc741e3a339199cd031a8501f7b802304f85b316eba0481822a246c8f5961e23e3a4f3a52c76a2a963d9b5611dc22411822a2b5b3a15b21012071e8509421850055b3a1944d9b5393e22754011b52e311080e1ca4d9d4f3d2993ebfc9018a3b345ba3306071c60406bd22b4e8762b6c1b804183f413770f5743d9b807033fc2502130041984c8d168501c00a3e0706bd20d5e85d0621850056c3fc06179bd063e3a002169b007008f50219a27071b84c7a3d9b50b40405316ebfc905cba11d7d8f435700f42c488500e3d85025520125f0905b991a23544169b502013a02a3e3a0266a83a5d16850281eb19955e3a13342a33046122e3b801c5711b9b10a6041d244d9c6654d9b8106005d19788f4064ba2a274e80b3a6e0f410758f5394523e336d8f510311c6735a9b57a053ca4e3d9b82c3f8508e082353c801c5244d9b8133f05f0003a075a1e04c32192b9103e9bd8d3f22a24211d1274b8462e3105d2e4084c2e3f04c085b39d3e1618d2453850265b0190817322741b9c09e1ca4f284f3a32d4f05d0c6005b2c403a1316323b241e1c0071e81b9062235991a23e556222a
-    | 6 => 0x7030f5055fa2a106182b3c730f531519c56a07420070d9170c5d84c741804cad169b501211b10617a33001d0196b1d019071a850715b3a10106c05071e401264084c00020032e5a8503a6c8f52b2524d220084c263f04c031a23e01168502f5b3a7944d9b8241ba33002101445169b54d1aa3b4f5e3a1366605022460355c07420ab169b5237a8f5071e23e942123e2765235aa1822a2c6cba025508582f16b1d2f5b233286c8f5105b1850319a2766093a3061984c07030f42b1a24d271e23e1901050701685033008765d5da2a0c3d9b500210121a5f22829524195f313fc275323eb61822a5a1b84c106c1b5383d1852842a27241e1d1393f1bd0a66bfa052185007013a005179bd5a07420306e03a8e188502b4823e033d9b546169b55e5b3a15c013a106093a3361f31d441822a245685005199b12e4b84626531bd951d019031784c101ea4e3a1e24a2a70bfc061823e255701959674312f4f3a3620905bb7169b50c1bba3880905b0c0105b99071c67208235901a850106041924199ba2b3f23e9e4f3d2275d85b3551a3f870ac05235f9912c4f05d8f5b22a784022a334d850244f1c51763bd2041c419394b8462d603a7394284c023e3a007181bd
-    | 7 => 0x264504c040122a903f22a17063cea41822a256e9b5071fb136a0741d47169b5072104c06018f4991685097082351b1aa32945cba1963f22a2a6a8f5266ea2a07413fc0702a2e326ebfc87071c62003ce4742104c33652353a43050316ea2a230084c071a23e051822a395a8500221850361eb1c5f093a3264804c3670bfc3b463a42c6041d21011b00c6285b041cb072f62bcc985da2a2633a3e102121b20011b09b6122a451822a3665a3e103e84c9407420064022a295b3f42a4b8460731ba0266a8f63a5b2330c18bc7286e0f4281ea3b701ba3e275a85002188500f3d9c6901a2355d1b81424041e6062104c254eba6775b22a3e7403a3f58ca3155d05b051984c051804c095bba43b518162f331c6106c1b803074200663bfc2c6c9b82d4f1c5073d9b5041784c01169b5064d9b5285b2334e5da2a0f5f1c5240202005179c08d1823e0b5c85b2806a4f071784c033d9b8347d3a15a5b22a326f3a1076122e741bba3001b814246e0f4256c1b52e6c1b505093a3367da2a3543ba19417a3307063cc90413fc951a9080621213615b3a18f1822a0e5e05bb71822a015b3a107023fc056222a901a23e3162233074d9b8881d019610741d763f22a965a9b5
+    | 0 => 0xe0c530a38e1528c055e80ca1860b10c3cdc0000007d02ca0000000e0c590c14de8214ca727c18b03ebf0652dc0c0a540214de3408284614c60c3cd40000008850e9380f2d449ec86aaec86a98dc2d0a5f0a3cdc7e5edc12e6ae9414de7e42c8400e960000005810b6a0e08b1c3eeb50f6e60814ca5e801aa23cd4083cd42af65f0a0459123cd40e0853734ce80000002cb2650e14caac3cd40604594ae2d40e06536932030b3a8b0e0253183ebf4c14ca0000004c801a4218da7e4adc3346528614ca0a0a544e10dc0c06590614de8214de189cd41c10de043cd4060a547e3cdcb09cde063adc44a6dc1c4ceb6a80ca0e3cd416941a66d40644bac84a10dc0000000000000c5edc44d8251f365340080954821c0000004a10a954c2ca6306d40606545e9ec80000000000004cf4ca963cd4083c121ef2ca6aaedc4102d34042120e421216981c0e80d9000000244d0846ec184c10c8063ea76a801a1aee180a06588e14ca0c1c1818f6187e3c1270eeb2400c270000005414c6a616e8000000
     | _ => 0
-  let q := fld packed 28 (i % 128)
-  (prefixGates (q &&& 2047) <<< 24) ||| (thirdGate ((q >>> 11) &&& 511) <<< 12) ||| fourthGate (q >>> 20)
+  let q := fld packed 24 (i % 128)
+  (prefixGates (q &&& 511) <<< 24) ||| (thirdGate ((q >>> 9) &&& 255) <<< 12) ||| fourthGate (q >>> 17)
 def finger7 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0xe248d9d5c8881d67e080e70d4ba09e4009769207f9ea1c6e62626c032ca75c95c2c2f027b3afbf977acdbd4ab824cde99d2fec875346804331c393bf74b48145b6ed9704e936ea542255b345a29eea716c6a5ada964223acc11a3191663e315b803f64db826ff6c6305f92ac33e1d170ed2f229e0b2d6bb49fad843eabd4b306
-    | 1 => 0x87c0f34f2e2c8d4b81607ace95f2241225474d651ae720e13eca52cb8cc685cb52ba9920820437bf0e0e7ac3a1275790837b6274404c5d89a71c61440440e3e22d5afb60a544158a2c13d0727949986527bbce8e0726f6b5e0ac5ed427aa0fcd043dfad612680ba7129d0ee6215997fe61fbdd999b1d5af8fef612b9c47e1102
-    | 2 => 0x59da1e22172e7f14a42a50d73561d3533065af6e942110a9d0d27b9695ba5c5c47edd8a4afae892c6cda6ac6e40794448c89f466880332703ec97812f5df98bdf3165744a698649daa0d3f407f089268013fda0abd347889da209f96197318654da39695fba97665777e393f94026ec38873a7af8e97d58ab674eb7fb17a1ffa
-    | 3 => 0x56945944fb43417ecf9eaeac37cbf1e8394f0e61485987928522838f9bf0d8f652f7522796ae8e3868fce50d4322903ff5df561baa35fd906685109b52a0d24335c4fb4f0c5a0bd3f881fb2f147166a306bed519d4a2877306bd0eb2df1ef50586a70d135eb757bdc682f27adc25255f322ff05399dd6cb45ed4f72e57748f74
-    | 4 => 0xeafa75977e11fa89b13390b703f3c64dedd01a3ba0262f4be57bf93e97e949f2054a7303174357938c110b0c2ec8fa3571f882ba27a1dee4a87629ca97cc8364bcc3c177ee2f83880f67bf99b7bbc4a125c8a7f585d88146465ae312ac01d9f748f351be479b2dfa8482632b25dc0f8f0b224a314693c86782f00495db6754ce
-    | 5 => 0x5409a25abe4b4008f29b9ede56c590761f364a70dd785b626832cb9d8efdb437c289dda624aa2546b1c7f239bec0e9201d0925a12f18d5c8a46c697155aeb7851768425460a18bb97c04a761625636f19326d1bd510879c9428a619117a43843eb43ebc17c429019e9a83a1ae9dd9cfdde79fb52f4e624a18b90272a829cb3a2
-    | 6 => 0x1c0f9df378ee5acd8c80f60e0a29e1b121c539a5e8c4fec4f888fe6fcfb3dffa674e1df673730bda755f5e52d9e4bd47078b69908583067d9c04c9411f9e3beac28f207b8f74c8e8ce2fbca439454812f6cb0a4379b60b7ee477f569c0557208ce949863da0220346de7bf5f374195595c3426e73c4c16ef17a9e115acd8ef77
-    | 7 => 0x9608ebcfce3b218b9fa7fb2b6634a0c9b1bbacc32277a8c8538fb2c68bee6ca529723482d644a79b73af2c3351395e7ac59a60c6e207d87f4170adab67ef2a4ef551998b4327ec60e21edbfc74d4ed66d35238f9df8a0dc4e1ad3a9ff075bec3f1be811f612bdd5c21bf076fbf36292a216984b7e7801763200933c19009da4b
+    | 0 => 0xdfdbabe8b75c00560060ccd9a5611a6a0936bbd700c44a926e0f29c5477d7f8490009133b524289d0b42803ec30ee6001b4673431e13f94d2886990090a3112eada7b7461059f7290bac6cfd6cb56fc834f5cd8f95000038d756d21d00eb3af6708200002b66b8788a1d91d2e80f008fe3d60a7d4683e73b5e8ba2cc00c9a100
     | _ => 0
   fld packed 8 (i % 128)
 def recipe8 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x5d8170405d301c538834043fb4b846040585f8580282018a270300e280f54123e2a03a4000f6107c0405b279ad3a1863a9855d84c4022a3e1c51b31a6d8f52d9b3633ca0ba4e01baf3e01668034011b54b0252e8032190c6d0f4402272104c4b9037b8f54a100400240b4107d0f4609343482e5601352419440194f1c51ca1b0302903ba13e9c50302f0280d6c0f47f83a541c54700d179d06d0f54d8501d40e6723754bd678005759b56c8f544825311c63a1961899801a331ca4d568700c9ac0081c779b55b84c720f403022020f57d8016f80266bfa6281b019c05c8503582c748f4533a637046038f5290036510f009b11c8255e827608151a9ed663c33385f109bb17a3353850169b5042f81bb246007167238222310380843b083180f519111cb076a11c030164d9b1023072523123316328502331f728f54185025232
-    | 1 => 0x4eb122906c712072c827019c248185298f4179ba0411d5c85b5d23f5f8136b1b85ca272e005011b13f8231618d032763f80f59046799b5609c52d8f5053183d850018402331c3a99768455011c6261a61b8201e81b031165e05b280f4233223482f01817400230b91e3900b043d91e8766c1b503133011b822b244e3ca5b1900407f6991b7ba2a790026105d043a7291b55c04c242e5790f43e01b470ff6442061c19040461da515e934769b8259ad0205d778057a0066c8f42c86b29805042284305044829030353f0200f9a5288f54d80c1b91a5f1492d0f52e9b5758f41b8125f1c518a2864c2632c00013a55a8580530f2a0f47d06a581597fb8218bc75c23e0bbb137833169c617a4203a2a4d04c218207f0f5771b5059a6402281f858279ac199bb7da72044055323e2980664c3a1822a028586b1b5458467c3a156011
-    | 2 => 0x599c6e03a1b136630221b9a90084c5d85b51828041e61f31d3b0392e0f6674226791b6eba07b0f45a8466787e2698d4d00b67bc24e00d7603a0112d2d883680106481f4685867819029c06a83a710053e9bd4f84c2b00576ba00306e1d24f031c328a2a03b11269a8073f45f9867d0f5271ac0287a2b1b865870028374a023560580739d1e31f4d4016323c4fc1d18b177ba2e0bc113a8396ebfc030314cb9d3f3f40223c041085c0201d25142812360175ebd263bd3291b84187e50986380332d8f6202b9630163c83806bd24000e6f8f53f80e2e0f57a00348850008f56323f040ae1d243189026123f2a0f5044201ab19798010402e043d01b3b2028353d8213100e748027d8f425a4225250043b66301c5ebc9191cd50813013f41e3274d3ca0340d763a13f85022b23103fe61bd5044010280925a4a7e8021a3f6771b8
-    | 3 => 0x620462883a6385d029fd1784c23cdb038307d8027c1b37aa094b858789da6e8f5028160383163bf009c11173223e0173f1b1401c6040ff5480e7d8f503075028155e9c5379c9023fc040161b9b92e83a7b0f55d05b2c3a03f902040505b06f01c1d37116018811a24f6a8f53a0fc2524d083e14dbf45ba333e9c06187d2e8321a8506402a7b9b53e9013a185029b36d8f427ca8631c564ab2740f55282b22bce16b1a2a83a42016421fb0432b292de0330700a271fa83420500108064aaf53017028217c804520128005d63827021c20440a028316401e60822319c6039087f8f4259a6643d62903a31bf404400169b0252300441d5b9bd661102d8026f83a5480f1c428020074b985013a0039b506c05043a30381e0281c390ff183fe5304c3d185630194d3d25880f22b297f9b34dca373805561c17583a7e00002b14730f4
-    | 4 => 0x2330c67c26000f529ba05cba37f002570891518d1a2350300b2737b7c0f5038124c18557ad35f86f5601c65017313fc6219156872041c56380e1aa314f05d5502a6ea2a6c80220c841aa3242235173b40185b043cc028415cba50380a038271fb137020700858781b86000c2a0fa3a19004041249b9492335bb9e4a986249d11ca4f0180c01001028f575ba017a430184c5a9b57e9d8029c15e3a53085d028336482f1a23e024997f0045181607bc714b0e2f9161b9d0038587b9b8301107b8f4489865d1c5029c4710000340b0b1d12a0fb1eb1c2d3fc5005d4223e0412e17b1617ba731ba0023154c05806bce58834041b118322243325ebbb021c62081f1ca4e6c9b86101918c2815ae80404077bfc211ac2118d041c66100e510155b9c03d9b54f3d2083fe3ea335781f700f439031251cb7f8f55b0190325d438300699c
-    | 5 => 0x45850298f5760f5610254e86f6c0054ebd067bb5770f479ba037846403f43385b63819131a26b3a11685003ce43780d199ba1c40c02829202a209410680306f004613ab3f05f500275f024039176b03a1d81a768f53d9c50281b0285f61815708f5028797a8f440010089c6508580200c5f81b728f4091d1783fc0303053046720f5202b4758f54c192661350383a1e1ad0300a778f52c8f425a4351a3f780030bbb21aa3b2330d6b8f550a27788f405199032d446810038093f22a6c3fc6847a44a5d5f07c2332162185532127286b2c85b1dbdc6600d31931293fc028710905b6cba04001a4223b249d05e3a36e80221ba222b286141d7f4995e91003a076382903985179bb4e05b2c1b5181b1028f63813544832684874dba3030142e0f47a030451385318548820074203c035042356d83a1d25022b263e05d6091003829
-    | 6 => 0x38f4043d31dc223105d6402b0404c760fb798f5370331ca505a9946b0fb1d0191d24203bfc29a2a16a4f01027179bd020036791321850644306d3fc04024021303285f233df01bca57087210144481a519c5030346681f3200e044196782c290f5043c12803a73002450465a9925c902021340223d188505b80c02c26561fc3d8fc293a116b0f773fc6180e4084c2798a6c0065440221012173193f04c4f9c00407620bf84102c353f46a8f45ebb72b0fa7703a034112e8f55c80c5485d03b141cb085182646b134e92f023080382c7a83a019e1021b03241d043ca648290b3c73980b5f3d2043084f85b4400f313d2039b0770f52d85f7806a66827658312b8f55b3a11049b2619c7c03a0439d5182b1fb1e6b0f501836183f40105066908728010741d578270449e45876018312798d61825211b1042335a9850302c02405
-    | 7 => 0x3880d5e85d7b80216b27720fa5e85b4d9c66500b783a002138039c102020020813e84c610900382d1984c7780201a14748f50413879a2a1804c4d9b867b15038b423318020135c10f08c292123e700f55500e6b0fa179c060bc5041740428c4504c63858639c55b0585a9b02cba33c83674499038076e9b82031f093a34822704110788f528802043d62b83a6281870a2e01ba5038171d22f0431260be96d1b37a0040340c03c6e03c3a628fc0392e4f3a5019bd2524e6401503032319c5748054804c77a2e683c458c8e2634c171af18a51023a058cca4b1852ea2a7bbfc3cc8e02b1109c290281967bea191cb03ba0481860b411044a3798035b39d043111b814038153d9b039a4164c2c5b3a7474812d0013a100513f4020313c037491854680c16a311d2472331e4303001ba30315a0284c7e0f45f8206182b5c39d5f05d
+    | 0 => 0x103ac00000000086c0000000000000000013bac00009cd400000000218be00000000000000000000026708000000000000000011336018200000360800000000106100000430c18ca0000000040b5c0dcc000000000000089c20000000000000000000000000000000000105f072c83984000000000000509640000366b000027b6c000104e8000003384000000007f2d000000000f0ca81658397c0000000000000000000014258000005328e66e000000000000008b210c11c630000005d0f2ca0173269852a3280ca305884399f5cc10c8782f8fafc0000885f00000fbacc23610ae0a6f00000000000001e6a013500000000000000636821bc08b4795a0000141b8085f1e630000089ac08de
     | _ => 0
-  let q := fld packed 20 (i % 128)
-  (prefixGates (q &&& 2047) <<< 12) ||| thirdGate (q >>> 11)
+  let q := fld packed 17 (i % 128)
+  (prefixGates (q &&& 511) <<< 12) ||| thirdGate (q >>> 9)
 def finger8 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x70b1d7c555844c03cb80d0155945e41953891fafbfea4eaa3a62263c52ce3895ef3ff01d5aafefccfd137b6712d9ae209b2122b053e416380fa47fb88b92f61da1b04fc727c1e24e55f2637f72ae499136be5a4b2cc02538da89123fee3e48068c3f96282b3a9227305992bdf89fc853e8d645cb0b27fd9e92cb074c9c2eaf31
-    | 1 => 0x7eb24ca81620d0ab3c68ae15138d2865edb76ccbbc16d3daeebdf6a26152a0556dba188a42f28f1df722c368a148ce9074544568c176af3a6046057dbdb88b52134437ad220bac363ea20845aaf24ca0fd9f0d0ac13267b6dfac28d41cae74fc044b2e53a1b1842c269d98e660590d33f9acdd84b80747039a4e12681839e1de
-    | 2 => 0xa1e8d226e2256a15df5b55ea4e0fbaeaf129480e73577176096d0671d03bb9bad9391cea4d3c44677aeb6a07c15d1824124f2437f1c62f6a21901db230d8f9b2f21ecc20d212fdbc52412ed2d40bbaacd13f8e55f7bbf176daa0cac1192b6f5b8feea060aa2e31357bab3d2bfa09055f6063336b22d4f9ba1414d2eca8eefc2e
-    | 3 => 0xbc6e2194fbebf6c50fe79d5a3476102475906fc08981a82f3b0d4a659b5c53de1e640b1def54f13a318e1df60e0d77e1d49f081bb00ac7b6663483c96557b3bd22e25ec2214c8a4810f15bf7e812120636a9f819876e84655af477f2e77f79055af6cf669e7b4f12dafbf27adc6544da23e3d9dac9b2c241163db5134fe4f5c0
-    | 4 => 0x7e847508d6717f08b15ac589b67bd49ff40c1ab03fcb5d2104d9dc17e78589ed8374ef6e5f2f57faad86fd0f67d34e8647bff6f4b1a1de12c5fe299c449033f27bc3c1f1c4964b93416007c1d45e02c267349a62cc30eb9b0184e312e78afc614c8d6feda39b306004ada5ddae977b87acc2ca314d70cf9c04802790ba31d095
-    | 5 => 0x1b8050d33f8e97f5195f14369ff8fdba1f191861bf5fc721bb70b77eb85dc38d65e684398a3681249d71f23ad0ed1d7536c154e4b08af769a4dceb0ab66c085762687452bf9026d734e4a7ad26e7b5659e307298fba9b2abf88a1d8d423e7a4ab6753d763042fb56034d2a1a0fb91b2d6112a201886df6a145875ec56c3152d1
-    | 6 => 0x1c2e9d956fe389d7bb7ff5220a93e12af83339a57ac495371f2609e0124fdf70310c4499b96b07a371275796ae9b1447c9d5cf47ac6270765905305e1fc01a7043a1be34c30d1172fd79eb9ded4540e999ccfe9d0509981763657fd9b097c0deebf4217573407b34d31363b97953d9f25ce102b93c613936e13763150118e8fc
-    | 7 => 0xd42d9d0a9ecad829d2e23ca9b59a50e8b1b82b11c68172c8864484174bce6cf54bae34852809b6478b1098a8e0bef16d169adc3123e8b5549cd08918b854c01990204d531348ac3cd92daa8b7c56597378ca08badf5e5823716781b7181775c38672e94ece65dd05a29358414c40129e027cf5ba25caa722934a01e4666cf090
+    | 0 => 0x500000a500000000c300b000003300000000000200000000302b008f00007000a3ba000097920000009a00000000000000008a2fd90000008200f3009f008e00020000980000e58ff30000000000eb00f5480000000db7c300c3d3a6d752fbb8bae801808c0040006f0bd1e8000000e3190000008336c6cb00ee5d5e00e9ed
     | _ => 0
   fld packed 8 (i % 128)
-def count (s : Nat) : Nat := if s = 7 ∨ s = 8 then 1024 else 0
+def count (s : Nat) : Nat := if s = 7 ∨ s = 8 then 128 else 0
 
 def board : Nat → Nat → List Nat
-  | 7, i => cpBoard (mask 161) inputs 4 (recipe7 i)
-  | 8, i => cpBoard (mask 161) inputs 3 (recipe8 i)
+  | 7, i => if finger7 i = 0 then [] else cpBoard (mask 161) inputs 4 (recipe7 i)
+  | 8, i => if finger8 i = 0 then [] else cpBoard (mask 161) inputs 3 (recipe8 i)
   | _, _ => []
 def atFinger (table : Nat → Nat) (ws : List Nat) : Option Nat :=
   let h := hk ws
-  let i := h % 1024
-  if table i == h / 1024 % 254 + 1 then some i else none
+  let i := h % 128
+  if table i == h / 128 % 254 + 1 then some i else none
 
 def lookup : Nat → List Nat → Option Nat
   | 7, ws => atFinger finger7 ws
   | 8, ws => atFinger finger8 ws
   | _, _ => none
-def ck := checkpointCheck 161 scs count board lookup
+def x8 (i : Nat) :=
+  let t := match i/256 with
+    | 0 => 0x4de1cf000000f800006173d04dd50b41110d0aaf4d0003c098584000069530c01c3fac8c007940480780000cc04c8040e1ce9000074893c02300c2d563513e0003803c538c24303d0007934c9105005000aa102a3ca6c500705bf0e6471ef44904948c00024c24b587a445d513139fb8080f7d101bbb9675795bc044f041039d17001d6b05a71100968039b00ea231d41817801d754020171d4530ef31e25e45e01e2d044403228215c00f71501d1c00000f405475a0011405d42807f9665015
+    | 1 => 0xd84fca1ff5528070318027b5cb0665bc65298d8d21c101f25300900403203c6c0012bb32c007404b03ee1b32d980b151800c21c04f910000e5080370012d85952d1b5778701d08320335a034c402ba6b70566000c50006000973c6ec02d15e29405713cf12105c1ccf3b7868803d538d4f0240287141000009bf80036d86500971db55041c02e18362707b38430d8ce7ca00005503b8057900251477403c0222d8d15000044001470314a64004b03100a2c001c53271c0009d827a00b04ef40
+    | 2 => 0x27b00a189543cd97c0bfb10004000a2190130406010730250f3e800097403a6fc12eea042c571de8f6ce3c00ef0a1e0f141c40648940794368e4b0ca24003900b1801da60014d00e22c00415b68101b4d079100679353faa104cc000080920b17500150e30250407008c013df10f9028d02724b03214d01e00059b3c22454c0e846c03c003d600cc001cc0a031300200035016f126f900146575f00aac25c170ed8427100301604159f2c08600180e2089f5664468a0403ef02ec825d8000987
+    | 3 => 0x3a02c992a086150003081481cf70169c008000d30038738229d1e31a11c8000c1205c00602c08b545dc0c630f9004056049c8520039f25f71b0144411402570120001c169b0800095c07735e3000003ecb028bb20003c157306fdd960c08000001aa1302474561007000914b001040000a5230a404303000004000016581e8801761f01403d44535015c6806d1e4082e444011340019ef66c064677d6452684986c010020090a0001257410083bf6302400041400033e72c0025040c55b0d000
+    | 4 => 0x19114101138b30418ef1b10025605f700040789002d40616106500054896302c88dc018510001c20130c7807b610b5c002e4002b5708000739000a40cc883f19bd4200047cecd01d00bdc542b4071dc1069545c72402ee35001400000034800635f78b78401386d6740536007c000001d1142150004801d73b66d820c4c229f1510d751d59b198315002b422806489d401db622543a77370186a0f10758018008697415d871c01011114160003742131630192c1c470809931d2053ec00052ca
+    | 5 => 0x59a0000c0cf301afa5b4c2c447d6c02412025d80c0540732440c96312dcb0040db0056503c019d6005c443c45c0283d6651dc0540180e166804c003548001741f0043004cc3120051c0016fb80000043404b8f870390b670002f10000a85586c00018608a0003cf59e309055ac82d1be614f12f1012420da400019ab86088590db3516810ce5c3196141b840c00d798f4961c503c4802ea380015008740b430c001600041111500048551c0002c11a114401e500a860bc448001e56c4b20a7d6
+    | 6 => 0x1fb02c1a54cc3653805207d102c01fbb900033b3f20004f802278310b02545f7876c6000cf0e40507130261018000700980e8000940f03f008685ec029e188701207009803f1480508c30300500002d1980983c0044000131000d0730e02f00079f3d939220901a0000c03815c4702000dce440ee377d84d24b17b5604850a7000f5970008e00d00aa9bbc27d90038027db4e7ac0780584031004000702140014000004018ba6015f5129655a0770c86d5
+    | _ => 0
+  fld t 6 (i % 256)
+def hint8 (h : Nat) := orbitLookup x8 0 592 h
+def x9 (i : Nat) :=
+  let t := match i/256 with
+    | 0 => 0x1cb00470f07e01c410a548906ea310200ee1e005c61710659302f582b0da0b50b207608b520b0f00fa64a32002d400c5604a3e32a33f47301410c2b000d009090a03949f53910608e90e6940de0f03897481020a85e3662af58008f2d0113944d10bde100b7425bd38e873009a002cc8d05850c33328c05070684e0f4414b060
+    | 1 => 0xd2044cd107040b3a810c0b0023705
+    | _ => 0
+  fld t 4 (i % 256)
+def hint9 (h : Nat) := orbitLookup x9 2 95 h
+def hint (s : Nat) (ws : List Nat) := if s = 8 then hint8 (hk ws) else hint9 (hk ws)
+def labels := 0xff003c800e50000000e20035400c80000000c50030800a9000000122004540109004c67a949821e4a84004524077899aa10670040e0a6481185505f0000000df0034800c7003b9f45276915c64200345ba35680a18c250030586226007d4e1d0000000b5002c800a6002e5761a5c05d4a15002c566125803d480d0028d440b508240000
+def cols (t : Nat) := fld 0xd5c285c5460a72e08eae070ab839714117350e15a8711d4477141cd51056b184758c5ce2211b9c1723182a3d4231ea0a8ee08b9708cad44655c358ca1746508f528231dc1c46e11ea88d63445d1a20aba308dd188d1d43972223b9111a370 21 t
+def rowIx (t v : Nat) : Nat :=
+  mkProjection labels (cols t) 9 v
+def rr39 (t : Nat) := (List.range 152).map (fun i => rowIx t (fld 0xf36d61611246143eb6ce1611246143e31f2eb61611246143eaeae1611246143e299a59a385c5956964d845c38d68e2d82461460e1611246143d34d34d34d34d34cb2cb2cb2cb2cb2c30b2cb2cb2cb2cb2caaaaaaaaaaaaaaaa289248a281451449249040c30c28a288204102081041041041 6 i))
+def graphId (t : Nat) := fld 0x0 2 t
+def qBook (w : Nat) : Nat :=
+  let d := fld 0x1225a7000008009b8a800513100074b270408c061f2198c0400b0e085400402105892e68388a208d02 7 (w % 47)
+  fld 0x18a00182340000ae063190013a0ee6f28a3038239e0011d19f020c2042291a11409c3e0a1007264dd56eb91814a54004a83951ba000041811808039c021825068cd407c50228b94246460823808400074580181ac0cc74503040004c106abe2d59c395065aa280880c30208a29902acc5eb31197a63965eab605d020cd0463374dba3400533629a8cb46002860410c000062811c1cc0d35a0027a10228e4651b0431628b3e52f5073a0c40e50114594c4006a0374b8264622003281bc7405668e50000f407a337b83ba00404b02080000930428f757ba0dc2232a2d9166ca045c22c51a08116eab2ca8c001720001e0800ce 13 (((w >>> 3) + d) % 149)
+
+def im39 (t : Nat) (i : Fin 8) : Nat :=
+  projColumn 76 Fixed39.raw (cols t) i
+
+def okTable (t : Nat) :=
+    (decide (validCross 161 76 inputs (rr39 t) (im39 t)))
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem rowsOK : ∀ t : Fin 36, okTable t.val = true := by decide +kernel
+def passed (s t : Nat) (ws : List Nat) :=
+  crossHit 161 76 inputs (rr39 t) (im39 t) qBook (Fixed39.index s) (Fixed39.N s) (Fixed39.S s) ws
+def stop (s : Nat) (ws : List Nat) :=
+  if s=8 ∨ s=9 then
+    let a := hint s ws
+    if a=0 ∨ 36<a then false else passed s (a-1) ws
+  else false
+
+theorem stopNo {s ws} (ok : stop s ws = true) : ¬NatRun (mask 161) (goal 161) s ws := by
+  by_cases lev : s=8 ∨ s=9
+  · by_cases outside : hint s ws=0 ∨ 36<hint s ws
+    · simp [stop,lev,outside] at ok
+    · have good : hint s ws - 1 < 36 := by omega
+      have sel := rowsOK ⟨hint s ws-1,good⟩
+      have hit : passed s (hint s ws-1) ws = true := by simpa only [stop,if_pos lev,if_neg outside] using ok
+      exact crossHitDead (of_decide_eq_true sel) hit (fun i hi => Fixed39.atDepth s i lev hi)
+  · simp [stop,lev] at ok
+
+def ck := cpWith stop 161 scs count board lookup
 def pan (s i : Nat) := ck s (board s i)
 set_option maxHeartbeats 50000000 in
-lemma block7_0 : span (pan 7) 64 0 = true := by decide +kernel
+lemma p7_0 : span (pan 7) 64 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
-lemma block7_64 : span (pan 7) 64 64 = true := by decide +kernel
+lemma p7_64 : span (pan 7) 64 64 = true := by decide +kernel
+lemma good7 : span (pan 7) 128 0 = true := by with_reducible exact (sj p7_0 p7_64)
 set_option maxHeartbeats 50000000 in
-lemma block7_128 : span (pan 7) 64 128 = true := by decide +kernel
+lemma p8_0 : span (pan 8) 64 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
-lemma block7_192 : span (pan 7) 64 192 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_256 : span (pan 7) 64 256 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_320 : span (pan 7) 64 320 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_384 : span (pan 7) 64 384 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_448 : span (pan 7) 64 448 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_512 : span (pan 7) 64 512 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_576 : span (pan 7) 64 576 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_640 : span (pan 7) 64 640 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_704 : span (pan 7) 64 704 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_768 : span (pan 7) 64 768 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_832 : span (pan 7) 64 832 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_896 : span (pan 7) 64 896 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_960 : span (pan 7) 64 960 = true := by decide +kernel
-lemma good7 : span (pan 7) 1024 0 = true := by with_reducible exact (sj (sj (sj (sj block7_0 block7_64) (sj block7_128 block7_192)) (sj (sj block7_256 block7_320) (sj block7_384 block7_448))) (sj (sj (sj block7_512 block7_576) (sj block7_640 block7_704)) (sj (sj block7_768 block7_832) (sj block7_896 block7_960))))
-set_option maxHeartbeats 50000000 in
-lemma block8_0 : span (pan 8) 64 0 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_64 : span (pan 8) 64 64 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_128 : span (pan 8) 64 128 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_192 : span (pan 8) 64 192 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_256 : span (pan 8) 64 256 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_320 : span (pan 8) 64 320 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_384 : span (pan 8) 64 384 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_448 : span (pan 8) 64 448 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_512 : span (pan 8) 64 512 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_576 : span (pan 8) 64 576 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_640 : span (pan 8) 64 640 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_704 : span (pan 8) 64 704 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_768 : span (pan 8) 64 768 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_832 : span (pan 8) 64 832 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_896 : span (pan 8) 64 896 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_960 : span (pan 8) 64 960 = true := by decide +kernel
-lemma good8 : span (pan 8) 1024 0 = true := by with_reducible exact (sj (sj (sj (sj block8_0 block8_64) (sj block8_128 block8_192)) (sj (sj block8_256 block8_320) (sj block8_384 block8_448))) (sj (sj (sj block8_512 block8_576) (sj block8_640 block8_704)) (sj (sj block8_768 block8_832) (sj block8_896 block8_960))))
+lemma p8_64 : span (pan 8) 64 64 = true := by decide +kernel
+lemma good8 : span (pan 8) 128 0 = true := by with_reducible exact (sj p8_0 p8_64)
 theorem closed : ∀ s i, i < count s → ck s (board s i) = true := by
   intro s i hi
   by_cases h7 : s=7
@@ -4597,15 +5527,24 @@ theorem closed : ∀ s i, i < count s → ck s (board s i) = true := by
   · subst s
     exact spOK good8 i (Nat.zero_le _) hi
   simp [count,h7,h8] at hi
-def rho (ys : List Nat) : List Nat :=
-  let a := fld 0x241e8700452bd4d5b9ac0800b194030a0023292721100198a01150119c0510843008c02906010001 5 (bsr 0xfd356f1ef6e89598f389cc02eaec9a74e968fdc8e90a70ade6a94e04ddfbeb78daa3d3cbcbc8cd82c8b110a9c6f26311c33ddce8bfca6579bf2fb6e0b9aafae4b6d3eddfb24e7b36ac56727da3255ffe9836ca2f96b10df38a5599d588a3c458878fa7a584ef97717cee56ca798bb9e87940e06777fadc0165e3f9c265b85c2d641ccac75cf1d879583f712c580c731957b07efd558e792a558b6be055809c225499bbec4f0e61214d99dc424ca69a8549936523398838913613983b346e7c9331cf2ecc2c7b9ebc298b49532544fb592448e2d92085ee49187beddf17882ede12009c670f4f26fe0cdf66f30a1bc6c4092451960379507400e99527007e3081 32 (hk ys) 7 0 64)
-  if a=0 || 16<a then [] else
-    let c := fld 0x1ab850711d4237462e45c08dce0735284656a2e71108eae070ad45d1a2352a31ac6508d1b815ac623b91000000 21 a
-    vals.map (fun v => fld 0xff003c800e50000000e20035400c80000000c50030800a9000000122004540109004c67a949821e4a84004524077899aa10670040e0a6481185505f0000000df0034800c7003b9f45276915c64200345ba35680a18c250030586226007d4e1d0000000b5002c800a6002e5761a5c05d4a15002c566125803d480d0028d440b508240000 9 (orbitLabel c v))
+def qPerm (i : Nat) : Nat := fld 0x29cb822e5c0a8ee08c77070ab84655c1c46e0539a845cd4151ea118f511a3a82ae7015ab82e29c1a94e0d51701574611d63171518b918c6a8c61cb8a11dc508f5285ce142e8ca0e5c887354447aa2357111ab850711d4237462e45c08dce0735284656a2e71108eae070ad45d1a2352a31ac6508d1b815ac623b91000000 21 i
+
+def qRow (i : Nat) : List Nat :=
+  vals.map (fun v => fld 0xff003c800e50000000e20035400c80000000c50030800a9000000122004540109004c67a949821e4a84004524077899aa10670040e0a6481185505f0000000df0034800c7003b9f45276915c64200345ba35680a18c250030586226007d4e1d0000000b5002c800a6002e5761a5c05d4a15002c566125803d480d0028d440b508240000 9 (orbitLabel (qPerm i) v))
+
+def qWord (i : Nat) (t : Fin 8) : Nat :=
+  inputs.getD (if t.val=7 then 7 else fld (qPerm i) 3 t.val) 0
+def qPick0 (ys : List Nat) : Nat :=
+  fld 0x103ce34c2ca2481c61440c2040 6 (fld 0x241e8700452bd4d5b9ac0800b194030a0023292721100198a01150119c0510843008c02906010001 5 (bsr 0xfd356f1ef6e89598f389cc02eaec9a74e968fdc8e90a70ade6a94e04ddfbeb78daa3d3cbcbc8cd82c8b110a9c6f26311c33ddce8bfca6579bf2fb6e0b9aafae4b6d3eddfb24e7b36ac56727da3255ffe9836ca2f96b10df38a5599d588a3c458878fa7a584ef97717cee56ca798bb9e87940e06777fadc0165e3f9c265b85c2d641ccac75cf1d879583f712c580c731957b07efd558e792a558b6be055809c225499bbec4f0e61214d99dc424ca69a8549936523398838913613983b346e7c9331cf2ecc2c7b9ebc298b49532544fb592448e2d92085ee49187beddf17882ede12009c670f4f26fe0cdf66f30a1bc6c4092451960379507400e99527007e3081 32 (hk ys) 7 0 64))
+def qOri0 := quickOri 161 48 inputs qPick0 qRow qWord qBook
+
+set_option maxHeartbeats 50000000 in
+set_option maxRecDepth 10000 in
+theorem qCert : ∀ i : Fin 48, i.val = 0 ∨ validQuick 161 inputs (qRow i) (qWord i) := by decide +kernel
 def B (i : Nat) := mv (mask 161) (fld 0x401506000e10f10500106e21e53f31f21400100 12 i) inputs
 def I (ys : List Nat) := bsr 0xe90a70adb24e7b36ac56727d8a5599d57cee56ca580c731955809c223613983b2448e2d917882ede0a1bc6c40379507400e99527 32 (hk ys) 4 0 13
 set_option maxRecDepth 10000 in
-lemma roof : bar 161 (cutB 10 inputs B) (cutN 10 13) (fun _ => I) (rowOrient 161 rho) scs 11 0 = true := by decide +kernel
+lemma roof : bar 161 (cutB 10 inputs B) (cutN 10 13) (fun _ => I) qOri0 scs 11 0 = true := by decide +kernel
 def nextRecipe (i : Nat) : Nat :=
   let v : Nat := match i/96 with
     | 0 => 0x8a408e40ba30be306e2082217a218a21910286219730977095001a207e2195029f649f319f549f342e139f309403910395033e139f419f4094049e548e219f2056135e131e209e3195076e219e4194003a603e600e534321472145004f7640004f2645034f214f634f614f644f6044062e644e7641054505410245023e624f134f104e614e714f434f4044044e544e644f301e644e63450741074e134e434e1444004a404e404e605a605e609e604a304e307a0156037e015e03be10b6109e30
@@ -4635,80 +5574,79 @@ def nextCodes (i : Nat) : Nat :=
     | _ => 0
   fld v 14 (i % 96)
 def action2 (ys : List Nat) := orbitLookup nextCodes 0 426 (hk ys)
-def rho2 (ys : List Nat) : List Nat :=
-  let a := action2 ys/284
-  if a=0 then [] else
-    let c := fld 0x29cb822e5c0a8ee08c77070ab84655c1c46e11a37029cd422e6a0a8f508c7a870ad44656a1c47511a3a82ae70237380ad5c08eae0b8a706a5382e45c1aa2e02ae8c237460ad6308eb18b8a8c6a5462e4631aa31872e28477141cd4a11ea50b9c286ae142e8ca1ac65072e44477221cd5111ea88b9c446ae222e8d11ac688 21 a
-    vals.map (fun v => fld 0x141004d001270000001240045c010a00000010700410014000000013f004c80126004fa7aa09824e4a86004864083899da10690041a0a668118e78600000000fc003bc00e4003edf45e76945c64400379ba41680d18c2700311862460086761e0000000bd002e8013a002f1761c5c0667216002d1661458046700e004de6c0c9a8281000 9 (orbitLabel c v))
+def qPick1 (ys : List Nat) : Nat :=
+  fld 0xbeeb6caeaa43a279a51ca3e48cc88886035f78e09d7056da6582d75905445014d2251180 6 (action2 ys/284)
+def qOri1 := quickOri 161 48 inputs qPick1 qRow qWord qBook
+
 def J (ys : List Nat) := action2 ys % 284
-def r2 (i : Nat) := bar 161 (cutB 9 (B i) C) (cutN 9 284) (fun _ => J) (rowOrient 161 rho2) [] 10 0
+def r2 (i : Nat) := bar 161 (cutB 9 (B i) C) (cutN 9 284) (fun _ => J) qOri1 [] 10 0
 set_option maxRecDepth 10000 in
-lemma roofPart0 : span r2 1 0 = true := by decide +kernel
+lemma rp0 : span r2 1 0 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart1 : span r2 1 1 = true := by decide +kernel
+lemma rp1 : span r2 1 1 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart2 : span r2 1 2 = true := by decide +kernel
+lemma rp2 : span r2 1 2 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart3 : span r2 1 3 = true := by decide +kernel
+lemma rp3 : span r2 1 3 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart4 : span r2 1 4 = true := by decide +kernel
+lemma rp4 : span r2 1 4 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart5 : span r2 1 5 = true := by decide +kernel
+lemma rp5 : span r2 1 5 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart6 : span r2 1 6 = true := by decide +kernel
+lemma rp6 : span r2 1 6 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart7 : span r2 1 7 = true := by decide +kernel
+lemma rp7 : span r2 1 7 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart8 : span r2 1 8 = true := by decide +kernel
+lemma rp8 : span r2 1 8 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart9 : span r2 1 9 = true := by decide +kernel
+lemma rp9 : span r2 1 9 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart10 : span r2 1 10 = true := by decide +kernel
+lemma rp10 : span r2 1 10 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart11 : span r2 1 11 = true := by decide +kernel
+lemma rp11 : span r2 1 11 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart12 : span r2 1 12 = true := by decide +kernel
-lemma secondRoofOK : span r2 13 0 = true := by with_reducible exact (sj (sj (sj roofPart0 (sj roofPart1 roofPart2)) (sj roofPart3 (sj roofPart4 roofPart5))) (sj (sj roofPart6 (sj roofPart7 roofPart8)) (sj (sj roofPart9 roofPart10) (sj roofPart11 roofPart12))))
+lemma rp12 : span r2 1 12 = true := by decide +kernel
+lemma secondRoofOK : span r2 13 0 = true := by with_reducible exact (sj (sj (sj rp0 (sj rp1 rp2)) (sj rp3 (sj rp4 rp5))) (sj (sj rp6 (sj rp7 rp8)) (sj (sj rp9 rp10) (sj rp11 rp12))))
 def t2 (i : Nat) := ck 9 (C i)
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart0 : span t2 63 0 = true := by decide +kernel
+lemma lp0 : span t2 63 0 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart63 : span t2 26 63 = true := by decide +kernel
+lemma lp63 : span t2 26 63 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart89 : span t2 26 89 = true := by decide +kernel
+lemma lp89 : span t2 26 89 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart115 : span t2 36 115 = true := by decide +kernel
+lemma lp115 : span t2 36 115 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart151 : span t2 31 151 = true := by decide +kernel
+lemma lp151 : span t2 31 151 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart182 : span t2 22 182 = true := by decide +kernel
+lemma lp182 : span t2 22 182 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart204 : span t2 19 204 = true := by decide +kernel
+lemma lp204 : span t2 19 204 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart223 : span t2 42 223 = true := by decide +kernel
+lemma lp223 : span t2 42 223 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart265 : span t2 7 265 = true := by decide +kernel
+lemma lp265 : span t2 7 265 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart272 : span t2 7 272 = true := by decide +kernel
+lemma lp272 : span t2 7 272 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart279 : span t2 5 279 = true := by decide +kernel
-lemma secondTestOK : span t2 284 0 = true := by with_reducible exact (sj (sj (sj leafPart0 leafPart63) (sj leafPart89 (sj leafPart115 leafPart151))) (sj (sj leafPart182 (sj leafPart204 leafPart223)) (sj leafPart265 (sj leafPart272 leafPart279))))
+lemma lp279 : span t2 5 279 = true := by decide +kernel
+lemma secondTestOK : span t2 284 0 = true := by with_reducible exact (sj (sj (sj lp0 lp63) (sj lp89 (sj lp115 lp151))) (sj (sj lp182 (sj lp204 lp223)) (sj lp265 (sj lp272 lp279))))
 lemma upperDead (i : Nat) (hi : i < 13) : ¬NatRun (mask 161) (goal 161) 10 (B i) :=
-  symCutRoot (ori_ok rho2) (spOK secondRoofOK i (Nat.zero_le _) hi)
-    (fun j hj => checkpointCheck_sound closed (spOK secondTestOK j (Nat.zero_le _) hj))
+  symCutRoot (quick_safe (k:=161) (bound:=48) (xs:=inputs) (choose:=qPick1) (row:=qRow) (word:=qWord) (book:=qBook) qCert) (spOK secondRoofOK i (Nat.zero_le _) hi)
+    (fun j hj => cpWith_sound stopNo closed (spOK secondTestOK j (Nat.zero_le _) hj))
 theorem finChk : ¬NatRun (mask 161) (goal 161) 11 inputs :=
-  symCutRoot (ori_ok rho) roof upperDead
+  symCutRoot (quick_safe (k:=161) (bound:=48) (xs:=inputs) (choose:=qPick0) (row:=qRow) (word:=qWord) (book:=qBook) qCert) roof upperDead
 
 set_option maxRecDepth 10000 in
 theorem shard : ∀ t, HasCircuitSize 7 target t → 12 ≤ t := by
@@ -4720,143 +5658,129 @@ theorem shard : ∀ t, HasCircuitSize 7 target t → 12 ≤ t := by
 end Row26
 
 namespace Row27
-def vals : List ℕ := [1,1,1,1,2,2,2,2,4,4,8,8,10,10,10,10,10,10,10,10,10,10,10,10,10,10,12,12,12,16,16,18,18,18,18,18,18,18,18,18,18,18,18,18,18,20,20,20,32,32,33,33,33,33,33,33,33,33,33,33,33,33,33,33,36,36,36,40,40,40,40,44,44,44,44,44,44,44,44,44,44,44,44,44,48,48,48,48,52,52,52,52,52,52,52,52,52,52,52,52,52,64,64,65,65,65,65,65,65,65,65,65,65,65,65,65,65,68,68,68,72,72,72,72,76,76,76,76,76,76,76,76,76,76,76,76,76,80,80,80,80,84,84,84,84,84,84,84,84,84,84,84,84,84,3,5,9,17,3,6,34,66,5,6,9,24,3,5,6,9,11,14,17,24,26,34,42,66,74,96,13,14,28,17,24,3,5,6,9,17,19,22,24,26,34,50,66,82,96,21,22,28,34,96,3,5,6,9,17,24,34,35,37,41,49,66,96,97,37,38,100,41,42,56,104,3,5,6,9,17,24,34,45,46,60,66,96,108,49,50,56,112,3,5,6,9,17,24,34,53,54,60,66,96,116,66,96,3,5,6,9,17,24,34,66,67,69,73,81,96,97,69,70,100,73,74,88,104,3,5,6,9,17,24,34,66,77,78,92,96,108,81,82,88,112,3,5,6,9,17,24,34,66,85,86,92,96,116]
 def inputs : List ℕ := [0x8d8846c4de36026c41362679b080769016d47c000000001fff8000000000fffc00000000000f,0x16290b149038a95148a8a488c553eca27cd4bc4000000000000000000000000001fff83fff0f0,0xb8305c183840c4e18270c1c1063808c70098c8bffe1fff0e0001fff0fff870000e0001c000300,0x21425ca3c085008a12751e022820311756e30100001ffff000000000ffff8000000001ffffc00,0xb98790c1010604ec3c460804303abe1c0702023fffe000000001ffff000000000ffffe0000000,0xc2046102260816f03f781ff7c0c4c00098001000000000000001fffffffffffff000000000000,0xfc07fe03fff01f002380113800870000e000203ffffffffffffe0000000000000000000000000]
+def vals := sampleTable inputs 308
 def scs : List ℕ := [0x1f067234a52749c,0x19c1f0c8b3280a1,0x1603207c9f2689b,0x7c0c19c9d270a5,0x19c0c1f09f26c9a,0x2345807ca1280b3,0xc80c11ca02709a,0x11c0c19c9b2689f,0x23432030a52689d,0x19c0c1f0a12709a,0xc81f234b327ca0,0xc81f11ca526c9d,0x19c0c11cb327ca1]
 def target : BFn 7 := fun x => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 1 && x 6) || (x 3 && x 4) || (x 5 && x 6)
 def recipe7 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x619858061a04f4e18211a21a29e0308a152a1e225256ea08062088d2b5b054153f9e5281e1ed06074057b199d6513e1d7396d8f414758f4b1182052b652aa2b172c5106005d2c6e9dc240a44a03211e31a62a152d4fcb68e17054346f8fa0622054285204d2f31a0836443b926518602c0b4460732c49045b1da29362b0072104f041820d4e1820d041a433264d847180c937031ba0d7016a9c5b1704d5b4f9d725730f4041a29e04211d6373d1859f63c1e5d16a9c123e054071815625518604b19a041f61049071704d2b17a442551c1e2c6c83b8361208b3182052b5b3a42a24a22254fc522873882781984d2b3f20d266ea05394084d745c3b91e3d9b02e7029e265c2a92c25aba271704f625cbb904010f505211d6041f23404019d7935c20507022088921ab14d5d3b931172be884f9d7991b84f011984c2d390670b1698a14603d12b42a0d2b1a21c24308512b5320d72170543b6e9b8286c8f52c4f3cb03010f51a012033a720f4100185c0f6005d05021d7061a29e266e8f405010f50918404b908c423a3e2b03a3305e316e8f5306aa9e051b84d6b0905b2a3f04c631f2ae071a37d2b6c0f4625c3b90308c4239348632c6c8f5346c83b2a4d04c
-    | 1 => 0x3a412b0153f9e05d1704f244ec1e836120a991abe3071b84c2771205040183b1b5fae3051cab0245b054022104f991b3e30518205334b9853533a11250b47307000f52a540542e3105d39429d6075d3b903013eb100285b177b0f6660905b3b430547c5c205240841e304f85b2419a465b1b9e2071caaa283304901008f525093fd2454054350b4462b1a2b15f0946c066dc4904018f52e748f57a3f205275fa0d8b21ab02c48a9c0e1cc36041d054326f3a1021e04d061d054103e1d7143e85c1c0084f0e1caaa070bbd31b172c7021804c1461c1c9a0b4732b1a2b0100085c7819bd0ba0b3d2396c0f505020f50221a9c6121ab12e6b0f5040905b356e8f4050905b253f01c06028f53332860041a04f2b17a491e0084d8c0bbbc3b0b2222b012b0324f2ab074f9da165ebd25a00aa0153e1c52b0eac20409452346f83b763f2056a08c42071aaad01000f52d5cc33031a04f051985806020f5051b84f2a5c20d3149054156085b250946c060905b336b0f52e3f04c0731a08136005d2b172a42e4d04c326c29e3f74a082b5b8543f74aa0481a29e35518513074a9e276a8f52c1093e3b072c32a3f1d62f5c3c0411820589094668b0bbbc29773b92f19a34
-    | 2 => 0x41b84d042104f30412b1395aab0983e85c31462ac3a45ab0270084f061b84d062104f10791d95e5b3a12551c142c6c29e39509d6031e04d3f749d7051e04d3a4f3cb121fac0af1a29eac1820532519e82a6b0f503008f53b40a342e34c4c3e1eb91021e04f5b0946c2e328602b6c1da2b4804f2c403a12e0995b306c29e150dc36345a4850501b0a3f21383230084d491caaa2e4d3d2890946c07184042b1eab1995f2ad781704daf182052f7629e393e04d061a2b15106bd2041804c0119858491cab1061804c115cc422b172c829523d65b1e1e5942120f14788f50e1abf71518a7a2a16ab0330184d334084c3e1f383054ec5039429bd880946c392121c2b1eab02a5304c350b2222a6d8f5394084c331e1372c4f1e72c5cc423a00854336c0f50b3e85c4c5c20506022a12f74a0807010f52e5304d070b45006094422b18a1b6366c20357003b0618aa9031820530213839d5f3d2075a9b515172253a412b13942a0d054f9d93f1718b2d6d03d05211e20c5d9d6043e1d7276c1d739409d63e1eb9204182052a7403b2d5205c0218205070b85c501d2ac3f74a9f031aa9c345b85407021d763184042e730f43c46aa9761caaa256c0f5051aa9c2c3f815
-    | 3 => 0xb5c40428521e330748f5256b1b5256e8f5631a2b12e4b905370205c021e04c396d8f527521e7396b0f50f3d8fc2c5cbb9330cbfd021804f346f8f4041e04f2808c42421a29e2a3105d3f589ea070183b022104c053e1da317aa0a0708c422a56056072104c31212b6070283b2b179080f40a152f5aab03e1f38f071d0543045ab0051704f156d9da6b4f9d7031704f25171df2a0285815182253533a0f021b84f316e8f42c018542b4504f2b62ab02f213832b5baad5b1e1e007028f53b5c2a9254fc2007018f51e199ba2c5c3b93533bed041704f2a0284d0f5c88e3151a1674181d62d6d29e890905b336a8f5061704f276c0f5394284c9c51bd15a1b9bd0f603d25d1804f07094520118203306e4492532860250b4743a3321507020f5396a8f5461820507030f53117ac6200084d106085c316ea0a804129e153f84d2b3e04f6b5c3b906222ad3b6e8f433051a60c00c1d021984d020083b2e6c0f5227d8f52c6e8f5041a854061d1085d1b84f071b37d052104f356e9b5031b84d031b885501caaa0719858071a04f294f85b19649e90602449145e85c3151860286b0f62c3b185941ba0d141abf707074053b5c3c0501cab12b17a46071a0b0670bbbc
-    | 4 => 0x31748f53018ab7041e04c8d3e1d9041804f10411e9021a20f02011d9256b0f5031b84f1019a23031a854042104c051a8542b1821c07008f588091e9061f88c15313d2070303d062104c0701b0a750a2aa3543ba12f08c42050bbbc071e04d32172c610249f3061a20d65199d632518602f172c62b2121b041b84f2b3f04f3251c1e271e21c3930854071804cb418205050220a061b84f491d0542408c426032c49a81a29e254fcb69d5f3d15f0905b2b5f85c3e7403b1b00a042f6c83b3b212b42c028548b0b85c890b1e92b17054246c8f50208a15031984d011b84d051984db41a29e2b4284f271e20d051a211781e1e5245b3a1031a2112b7403b266a8f4246c83b075e29e880b4502d558630718aa9334284d3f74bb92c6e9d93118490245b2ad05794490f5b04f022104d060230a285205c3b418543541ba42c3dc33031b886ab18205367083b8a1704f050083d0419a042e500b2250945243182059d4fc208a0b85c011e04d051d054266e8f53f748f55b211e2356e8f53f58cb3ba1a29e044f9d7317b208303e2c804211e013182bf011804c074f9d9316bba18719a342f17ac08e5b1da7f19a15315f2d14218205031e085061820533301c5070203b
-    | 5 => 0x311d2ba31460543334863894f9d72c5d2a905199d6365205c286b1b8286b0f4071bb11295dbd1025c3b98708c422419a340217854191b9df0517854275304c3151bd1051f054011984d305b0542b21ab16b0946c25348632c1f2ae3018abc26518514e1804f035c2052a34863387183b2c5caa93034ab1451a29e781b84d334084d6508a15021984c041785425348546609452041f0542431a082c430542b21ab03f74ba1256e8f43b3384f2a329e93c0ba23071704f07220544d1aa9c032104d210084c394504f6c0b85c4e1b84f942104f07010ab8809452281e9ed367d05d396a8f4b81a29e15761b504170541a1720c870740406170543f74beb394d04c3050aaa042104d1531c1c2c0ea7a317b205271ba0d2258c8e2f5e2b09d172c5062104d2c38047070083b2e4084c611a2b1630b1e93125aba041d1082a5b04f05020f42a6a8f5334e9850f5a9852a5084c3a5b854331b9ca0702449393e04f2a083e1055bba12c19a461243aaa045bba12d4f4125b1b84d5b4f9da070b3d2237b0f5041a20d24728f5501d0541c012b0611a2b0156d9d9070283d052104c31418543a5b054032104c89091e9011704f2a5485d07030f424700f5441a29e2716a9c
-    | 6 => 0x11840463178549619a15ac1a29e2e3e04f7b4129e6531a08100105c012104d1b66a182262192070bbbc071a20d2301854022120f355d2a96932c49781caaa285bba70701082071b84f2349185271820f34412b063170542633a11304f2b00e4005e1d7e0f431172c40419bd90421ab1316e8f6513e1d9041f2ae061984c9b612050119a0402000f539213831440863275604f353384f051704d871984c021704f031704d0532c493b4f85b33308513543054240404c190084f0b5da150421ab0216682a0718203324fc2040753d25b1984d1f0084c3408a150621ab0345bba125540542b4820d15760f52551be62a700f51507bc76017054041704d103e1da394284f061704d395abee9119a15105b939070083d105b8fc394e84d255304d98184041f009d60c1744a2e6a8f55e08a15333105d333f04c071e0af283305e5b211e0165f05c2d71c492c5185d2b5aa9c011b84f323c0372800854154004906022088c0b85c0c1813d670b85c2724a0b02199d657633d13f58ab3072104d74011da31492ac1a7b0f4303e054031a43378211e2333e04f031c29c900b3d2941704f055cbb928211ed031a29e0408a15880905b051a29e285dbd1305b854276d8f5
-    | 7 => 0x276c1d9050b85c160b3c7276e03b3d5880f011704d0a5cbcb1a7a0032a6b1b8271ba0b3f74a05021a20d2e313d1151093e3b1eabf3954054333e04d3a31bf1286b0ab360185b2a5304d996141d395304d913f2050702c49115d05b315185d10603d30c00c6c305cbb93a6c83b0319a0404000f510758f5167803d320381a2a17225b90945205443b905193c0151fac0256dc49357d05d286b0fa3017aba346c8f51418bc7041caaa3d73882890b3d2061caaa363d1850f603e607170542e083e21a7b03b25094662a708f52b6c0f5333f04f0d5e85d275304f941804f6a0740430182bf2e4e84d244f3cb28521e08a2120d63172d128728f52c5c2a9265c3b90c3f85e286b0fb0c2da9e335604d2b6c03d1c018543074c492704054021a29e360ba2305222343d3c0372a6fa050702a0583612051b25aa5334284f306e082051e211941b84f021e1e5880b3d26b01bb90431a08b71a29e5f16a9c881b84d156d9d72532c492a32c49334e84d236385d5a1804c78199e00c5e05b1a65091105f84d256c1b8355cbb9394284d3048ab12f6d8f415329e9071e04c07032051131c6c254f9d7255185d14789d90700882275d85b393105d271e20b231d2c824709da
+    | 0 => 0x4542c0802535e861f2cb26572de070238138614ca6608190452126a9e5c0a3c950e542c5480c90e52c80842120e02530e4a9546d0120e005364061854801a0c14ca0c42b3045e1242861f0a3c120e5213040c540e5e129c5e924c861f4c10b30a44ed0e82f89c5e12020253409eed060a550400530e3c123e428f2a266c2440be0a38139c42123e0212243ebf6a9ec81a4ef03064724ef4190452136aae120e0a537e52923a02120e06530e38137734ca043c1236021204048e5e106d65441a0252920c0a552738535f16530606597e5e924896c8549ec8549612488a64025e9254106d0404536a9e12080453568a645714d04c348f6b16531696190e0c535516530c42c80e0453080e240242125092ed0c4ac84d16535804af0200536a26ff0c42fb5c900a0ee08b0e44ed50c8c246ae6d5515026a98120a3c6d7e3c12804a134626ff064a950a04539414ca00000058941746106d3062aa0e24190e52120a5e124716530244ed065e12040e580e02292f002d040a5508542c3edc88085e92
     | _ => 0
-  let q := fld packed 28 (i % 128)
-  (prefixGates (q &&& 2047) <<< 24) ||| (thirdGate ((q >>> 11) &&& 511) <<< 12) ||| fourthGate (q >>> 20)
+  let q := fld packed 24 (i % 128)
+  (prefixGates (q &&& 511) <<< 24) ||| (thirdGate ((q >>> 9) &&& 255) <<< 12) ||| fourthGate (q >>> 17)
 def finger7 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x25698f89bcf4070d3d36c7596fb28e0c7437c12f475d8979ea77f90aa56350eb27065aad0495ff64fa38f29f3ca20318167db1495309004066dc5f8539d862e9248c56ae4144ca2248116e0264ae9476446c7f93b283e97a73a06b13fadd5b64c98fbc0f295ba378b02c93c3aaf1fa3bf01c26bdeb0f52cd11683a75a97fda5
-    | 1 => 0x457d18adf1f432ec8270ecfc5634d746a8ce97372cbdacf2a078d4edca21de0dfc2e5bf5112426e9a00870243c8402c15a5d732775d54c8193d719b029da6d70d5efc5f3826f9834ee0d550fc56335547924b644e3329b2b66fc05d970076857b73cb91697327790d196bc3348fd7cc8ad5142d27b442360fc47af7b01b2df8b
-    | 2 => 0x3160a66e39efb7384b7a7ccd4e6344acb88543503e6e242001deb087ad82c1ccfba7ca2c97f21891a9c437c9bd5db08a5c876c04dfbc480dd44d81e474e98d8c8296e84de96a864fbae1dc917ae9a56d9cd61ed7b22994269dc5c591442b5de62b36d0b8bfd157475b39db8e40bdb613b16e3c9fa16beac308aa28df36ae06ea
-    | 3 => 0x66d5191477ce1b1708c6eb96dbaaa2f98cb7a00e8b30bfa690342c71f966d949ac55b9ec9e9d1efac6eea27416c4c1ab541fdd611e84fda7ad7ce32c49a61e5d654a6179636ab2cd1fe0d28dc528a911753219f94ab7bda41eada7e4d1a001abbbaf9035bec82e3e9db3b410aebe8579cd7bca108d7a1115d2f5ecc9ccddbdb3
-    | 4 => 0x3cb5147e059ff8c5424b1ddeb0b7e292ea89abe3ca8fb76d1442c0050d97e8429dafcea0aa910e4d914fe8844d634bebc72cd6737ccbe780465f110f8d36910fb26bd7e80d0913a6a806d1a553d4c1ecbef710258127383e38417748e7746db41165b0d5cb7f91e1f1e2fc3c665225c27307281e94b1de88f96ee69781504c15
-    | 5 => 0x8d9336868146787d61c7cb950cc3099ae08ca82b1bccfbb2794627603d088a5e076e4db84bebcd8c4f34d58eda7f951edea577dab1d2ae4778c60822d56dc15870ca48122c192a1acbc43160c76eecc9b4554bad21d95c0ed9d9379a3efbb57663b1870af04e960677d14a217847a617452be0871f061fe52f68a9c639f3b29e
-    | 6 => 0x7e72c459784e7003910425d110121ef534b9beba5fe8a8a4f4de3ad97c5eb3fce7da47f1b2bdf9349a8b4d2fa3c758defc2e4e11b14080536286e1d085619af8e440749ef98987db168ff3a1953b2d436690bdb89f07d4ab2f5bb62058a8a15d306cc3eb8181cc8090a9e53660498fb70371956166a40bdfddaa97bec28b4a77
-    | 7 => 0x1f0f25db593d2982cafe27fd714c327d6b9d211557e84a750d9b62423db26bc9071d861f4b071b66d3ceb74eb5d4919c6e1fb44351a15fcac54ca01d98f0c50a6893dd7fc777e8eaecc1143b35922054991e99cbda28c71771e66f65905058dc1e2985c9a92d3c619d663f76c1df5af8c1b88faca38d15d74e423792d5e99c73
+    | 0 => 0xd3a7b0f6cceab6b43cceda778ec6a795a466baa85c54b736cc7b09abd280569b997ff3b09d58d569db1baf79215090abcecab9342b24893a6e6715842fe8a2c2423aa5ca8483e15459242cfd89514facd1d4c4bf5037f02db1cbbb02f02b4055ea65871197d9aa730836521d4a7b100017ea9efb222e142c78a3ba4d808a1609
     | _ => 0
   fld packed 8 (i % 128)
 def recipe8 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x28566f3a14f908038564b98564c6611cad112a51a2b07a8f7521e24f25805199633be609e700add2e0f5623d1039b5022a1603bc042b0314127b1d94e9851bb1f6ebeb5129c18aa95d9d63186009bf7042a862847330604c19034c4c040fe2ab0a2abeb51bd101c47748f5533a6708f53e85c6b83b6d83d024511a3f65495353c4e490540184c1e9ec172a450856039d70405d2c2081aa9c1aaa5202b75e3a35f05c518510420d4f9d97d0f417ac5211e22a29f4918533a0f280f401c12182051bb1d0204d02a150304d540545325a5e20f019e86088e3b036044861fac61720b0241e0244245847523bf2d8f72e44c1f4cb0425a759b563bd3020630183b4f2150284d779dc6d0f5423ee6a8f5429141b9e01c2222c1d9311c62c9d91d05412adf53309674731eabf7908244ab01a10429a9f6e8f4018511aaa62e9da17ac4
-    | 1 => 0x53847202b43f20543054040671793c044533706774beb40858409e016ab0528604284d728f54e00d290f55320d038f5758f4043a36f1d95b04d760ab03b355d87b6b8f542049042d37f0f40390870aa12ea086b0f7040910083b02bd00104d0432a531e261060343a70284c043b80105b2b03b50b100408e42442024491ea1c0e459034430184f0b3d2020806f03b2d29f01bed4e84c2a0fa04108199e0789da640601bb1b2104f03adc3e1e94b1851b84d641e95f05d1ca1b024a2758f66ca08023eb432c767029332165429c7703d2e0f9039172d29e028400bbb14820f008581e88a040ff6c0f47d8f4008f55e85b7483b4c185024127b208030561d2ae1c1ee758f52b0f51e04d0405c042aa0185b051a2718f540a046c0f56e03b50a045d84c7403b809851804c5f2ac02260042b1452e0028545ebbe621e061c225304c
-    | 2 => 0x21da202b829bb902bed633d23f04c3204918203629e70cc560e1f32293e1fac15c40451c427b0f635c426c9b52fab033bed2b8f5789d901bbc1984d64c6c4a18503063770f4041bd5b185024071bb271a2115205c6ea0a040850408c5084f0285b3385b60ae1131a117b160239f172c30a42a740ab0284f0ba2328a05211e020ac55f8115185d181a6541532903b778f502aab638602ea9e0105e3f85e1e4892a0f504215044124b98740863689a679a05251ca1c2a518a1d7f9d94e8af3f84d211bd1ca1e0e3c844854519c5019e306bd2222c8329e96204d0383b524660404d2883b5f9e2632ac1f08b02275041e85d2a95e2e0044af262b84c8473d4da53091202be1b0b15d05b613415e85c02bd25ec1203858011d66e082613d21b9de770f5021385613224a225caa9040600cc5724b831a95c204901704f7d0f90241f
-    | 3 => 0x29aa0040c00441b3110b1705458c8e0285e37047608b51fac46d2052104d0913d4818560a167c29e021ea0cc581e222531e05880f66ae13305e011b83344247847040513341d5f412041155c2a945ac7041050404c5882c03c49042d27003b440545fadc02bd348116252e64fc1c25ac5012081d1081aa9d4dbd1540512d0f54f85b4c85d030f41f2c70429c093f62c0f53e2c82c8f50220519c160129c6204f17ac221ae75bba15d85b041221804f349073384f0404008416360635d8584eba6029d6202c3028421e9ed5e04f2104c0bbb2038f46308e7a9dc61860031b25d9850bbbc1a20d700f56ea052f9075205d38047011d9740f44084d021d61a8544f88e0449e3f208560582aa055aab0019da04054293eb288f503beb4f1e704056219a00b41c09466492ad5320f202bf0185434049521e05c85b781d95c84741957
-    | 4 => 0x730f5789d7790f5172234004952c1d031e26c1d91704d768f51d2a6023be021b80084262185010f44c1923e04f6b0f4038f95208f0390b1eb1c678910405b2e8f55e2b05f0516141d1a2267c03b0946c58a180404f6c03d35897748f41d2a4600470430929b0a430925c04c4e84d3c1855e3bc2883d5b1d556103222c71a43323b7d0410b468474286711a0c0084f4f9d51a29e173a71020b42051199d6212046d03d1a20f4b9036fa082a2084185438a185f9e0179016d8f46c8f574a050240570a052b83d44908621904804f2aaa07a9d708a15011dc412114804d222ac030b7770f93d18531c05040585c205083de139ba7b0f5044047c83b5d90f5c3b90413802c49178547783d172c61f054348540104f6c0820cbfd1fa682d41e042d151860033bc32c1c0441f2c83b68113024662a03d7a1d75f85c4d9392a83b028f7
-    | 5 => 0xe4a92449c3c0372a0fb301177f83b04462041ea189021ca1c6bba16f8fb182bb0bc83423ae4608002a11499860085618ab47f8f51cab01a20b6d9d75c0560c3db3605c773b90441c1b9f1779da45856460476800b1618d31bf104043799b5388670229f6b1b50405e3b8364d1857a8f551958531854310670aa03f9e323c3803a05760f544bc001b1107bc7492ac0343431a085506063c202a8ab041e33b18564c1f48117039090229e039035a1ac0404249aa95b854189df1d2a5460546141c4fa165b8473e04d5a858308514504c64c527a0f52aa9f4d04c18a1a630540446619a15040ae1984c041390699d5b05421ab10410902c4d2120d6404f749d94504f211ae7a4493184930854040863a1851d2bb781d76cbeb32c492983d02ba71f26d1d2b401a5a1d2ac21ab0293a1613d37b83b41091038fa3a0fd022186a8f7
-    | 6 => 0x5f8584229f043f15d9921ba0d62bed0bc590908e6d9da0ebc6788f40915b7683b0084d029e031a035b04f3e88f1c22518ab803a0840a1503aa01b9b94229e051ac1fac30841e6005d7903b02ab06c1dc5ebd30381a350634187447884798f5010f57183b6b0f55d84d631e702b1125ac225ac0019d764863672e27983b028f603b11043f90386b74a9f58c7d7029f58ab301b2a3e1d96e9b51ea1a40c337303d49822701da0b85c7803d31a0458cb3172ad780f50285d2120f3f01c02a0d571086105d020f67029e4ec50030f6043c07b8f53f04f558630225a301082e83d7f03b0084c709dc012dc53ab1113ba63c1c22abe000f57c8f53e84c4f2b001c86549117c0f5041071e2237b03b1d2bf68260033be48985608511caaa7883b4284f383f91d2b85304f61205192b444bd816bce0205c4f1561b9e2043bc1cab13da9c
-    | 7 => 0x249f43e2ad0fcb179beb013eb042a96c83b018f57a0033da045baad6385c02452672c5171f16a8f61e9ee022a97e0f42a03b2e0f40a19b01185280f50332a03a9f09452172c417aa30eac20420419b25020f50905b381ea030f5549147fc495b2ad51bcb4d1d63b9866c9da6ca0a709b50519b6682a5c9e301891710f52f8fc5ebd102b2a03a9e4685803b2a172a3198581a04f5f3d16e8f51d2c72e0f6523a633c426f8f532c50813ab54cb653a9c5d856043ee029e92a8f51fac21fac0039121a0b01ca2039486203f8749d75809151c1c22054199a70408b0444c3c98644aac321580fca5612080221418ab57383d6220d5f81b5485d0b222043a7251ef4d1930432c44aa91d2c95c1854084c2d0f4091e918abf7783b6d8f56105c0184d7083b45138021e05485c5e854560565c04f7720818404021fa27b8f53191468b8
+    | 0 => 0x2b809ac5258ab046180650e9c4a6367a59083326b200cb4025c0000039812d79405458163f3241d16ee2d08598b4682190048e493818b1c000148550849041900cb8f25f027d8144c205c00005c15349b478da0000035daa0bc0d9010b908303f981dd86102d0000014a489da3e72255e81a4809fa0461088aa9bdc79fe0e5f87303b2e49a5658d01d7b10be505f80000072e15408000000002f5900000759a5e8f862fc0184797a2ac0637e03152199c14ca2159be0b4066a110f4b6400000a858f6c90780041bd38c004bc1a4780000099102cb3b9cab46020da0230035980001622a00004f7f01bec95f2e26d7a653eb2874e496b95736aa19098e600004b873eb2e04c03ecd1f7b29be80000946e
     | _ => 0
-  let q := fld packed 20 (i % 128)
-  (prefixGates (q &&& 2047) <<< 12) ||| thirdGate (q >>> 11)
+  let q := fld packed 17 (i % 128)
+  (prefixGates (q &&& 511) <<< 12) ||| thirdGate (q >>> 9)
 def finger8 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x1edb3b36faf1f002d3631027d2357bf85e5b6b767161f390cc0c60d5aa29cc2b75d25111b92d8bdf4738b5e2aa6a88bb6285b8a29a674365066de2d6536b6ad9a1969b6ad4604c8938c797232604295d02469eb380ef9896500623e7452cabf8ea8e9697a995c9ac05f9f7d6916ef8c101aac2aa712a8037b4163bb2bf6f98a3
-    | 1 => 0x742f183cf7ccd12aeb8c9cfc753eb511ded4970d484e5420f949c6de343c9f1a37c776f5b20ebd4bc6aa71af53cf284ccb5d2ceb40ba4cf413d424e50b65f43646d9c529ded8981c120ef93f50638c49b19191b5ba5af810505405cf3ae768d7129c46a5703217c44296bd94b0df82ef2d398e8846a023a0c4db23c35faad8e8
-    | 2 => 0x31821455398e2c38b2ed35ca5cda9b043e84552b5abe5420be522fe6d4197214fb0c84cc499d5f759166734bc223ddc6dc076c169d035be143d7a05477ab41ee04ecb495180753c4c9566188c3e963a7a7decbd7b84dd426dd3d6fe1d62b1c94e368c99b57a1489d5b9d97ab05555d9d1a61911c02371e67257b137bbaae6d3c
-    | 3 => 0x6f2c9033776adc595b733e968d6f0f1c6dd98a6b1df7b2a6738a252a1fed4cadf00422ec4447375c3841d3f647c4c1ab8dbb4f6501848ce3cd0fd9f6499ca05c19c86181646a6ffe895f6394f6fbd67903ea19a44a5be690a14fa7e4df6d0513b8af3dc6a7c899f89d20ecbbae54167ecd5dad0e8d7aaa5b1b138032fbac669d
-    | 4 => 0xade1407564eb31942b76838b0d9a7926770c6e344434fe9ee6c1c139d9217426857dcaeaeaf6b6576029661d982199914dcd67309ace0a9c0af110f113f91c0c36bfe4b9387a503a8f687f801edf1f61c8508928127ed3e38c881dfd5d46d3bd2dc491b5c7f91e1f130053c4728347456d2c044b218cddc6b829b573ef49c15
-    | 5 => 0xb4cfd23b2610d3fe619738a905c4d7ea204bfce2adccf6f563409a71d577049464c794bbdee17e8ce448230fbcdb0f9107eebeda908926a5f59408bd6b3768df14ef1412efc80ccab0be64f978f646e63a10e4e7813119287af0379b3e7d013463d82c0a866ade87e5c148e61156cee645e8fedf35f01fe5181c3b6f3966f5b5
-    | 6 => 0xb72161878f01703bc1a799987658193c1efc6375f2bf232f4590ed94d5dcd58b74d43322f0ff91f12679f3002d758b8209e7f4a92a83dec328621d0fbad4ea3e70c74eff99287f8528fc90918ae2db44a4536cc2aa6790e073c9ed58dcce206176cee1da0062d0f0c8cf3210c33cac2034bf3e688920b5e92f684aa4bed4af6
-    | 7 => 0xfd7b0c453186b8820669c05f49ef99c18c4508391b44675e7f1d6228663152d8071d911f6e0446515cd4b0df7dd84a71e41221172da1cd45ea4ca0552913833e5e8299afefe82cdc1ca8e7be3592c6ec0b8a5724da5a7161da06700d907cef419f9dc2418f10eae7d9cfbba922df4a9e21c6a11e73fc90113bdde4922fa46ba5
+    | 0 => 0xa082a0dec5663aba4850974e00558f1bb1d557873e9f183656eb00faa772f5526773b000790b7200b50d337c81469d5e0010b96d23d2acf0a2b926e3547fcdc2f996d00084ab00000c00ae5806c1453d532bf3bf247fbcb1e300220b9deca54999009cb9f2e68d804700eb00bd0f1728a809c0ee9e136600d3de5d1c97cc00fb
     | _ => 0
   fld packed 8 (i % 128)
-def count (s : Nat) : Nat := if s = 7 ∨ s = 8 then 1024 else 0
+def count (s : Nat) : Nat := if s = 7 ∨ s = 8 then 128 else 0
 
 def board : Nat → Nat → List Nat
-  | 7, i => cpBoard (mask 154) inputs 4 (recipe7 i)
-  | 8, i => cpBoard (mask 154) inputs 3 (recipe8 i)
+  | 7, i => if finger7 i = 0 then [] else cpBoard (mask 154) inputs 4 (recipe7 i)
+  | 8, i => if finger8 i = 0 then [] else cpBoard (mask 154) inputs 3 (recipe8 i)
   | _, _ => []
 def atFinger (table : Nat → Nat) (ws : List Nat) : Option Nat :=
   let h := hk ws
-  let i := h % 1024
-  if table i == h / 1024 % 254 + 1 then some i else none
+  let i := h % 128
+  if table i == h / 128 % 254 + 1 then some i else none
 
 def lookup : Nat → List Nat → Option Nat
   | 7, ws => atFinger finger7 ws
   | 8, ws => atFinger finger8 ws
   | _, _ => none
-def ck := checkpointCheck 154 scs count board lookup
+def x8 (i : Nat) :=
+  let t := match i/256 with
+    | 0 => 0x67c40e7c0ee000fcb113f72300228b1286af680bc250640a5004a770b7a00d900583be200003098a600ab1057272708b0006300900a96025c3179216c5b07837926d00ec09ed0580d38a859a0563006715b0b40f00100d1c02340401e85030d44444f0f03b3f295708002020c10705cbcf2d07080ad00e0107503995dbd37d38
+    | 1 => 0x1604110f360f069fe0091d0000f12cf98e2d10100064c21b5074cc06d7a40e673bb6e481ee629e350d0e0605a07371bde23bd15ae307b30ce0f01bc0110c1416420de263f00ad03f7b0020d000cd54c006a850a06350c40060e1b3800697507102e7c2c0285071319043055082180125ace8a217ec2e4f3ae726061f46003
+    | 2 => 0x3cbbccf0be60d99d0a7c6d0c00a0d117708aee66460b0a0c9c0a00fe0d0ae309d1a40030d95a40903690e0686024fc28050960e6a25a70911050d879055503230c1cb20807f94013043200b26841ce00400cac389ce04f3e0d73010d182b5cd375307103b0712cb03fd8a48296075031172dc0c2449d064a20c005b573001669
+    | 3 => 0xd6eb46001212f55bab03680000b0b1571d1a0b0f040b580052a4b0fc1046a69286ac0c00b19efc4973667cf093d54aa905b02b36203e0263070cc980208f519d00600886cee6df6d11106096ca00cbf02d900f150804d004d20a44c27a2410413aaac04a003571b6308ebd1700922a3c790e04900920d293652c207d34de5fec
+    | 4 => 0x497180b0ec72ca4000f0411310006ca4d84e0769b80be1957d902197c0000af47c75260000483f000b9f682e90131c05fd2dc0a32e640e0312677084670d064c0462f070480f49005d76001e6d31802f800deb126b91c933104703c5d025cd2dc03001a308b017c029211071d008cb6cfc0600b0c3004700891959f1056bc1e0
+    | 5 => 0xf9035007e0049cdfc7a2033343f0100048b005510a2a86416c00a3d180130e66c0a7100f048e0c6963002aef0c642a8ef071460084e0011c13e03119c50de424ef0d082185a9910723d32164730b8500171a19030707be37fa06045587d803c97007001a008da0cdc0bf0045f0010019264588bfcb3140093019e007f004b4e
+    | 6 => 0xe4380204b3f708410104a7249310a07f76e254350ac09eebb58a8c1a69e1320004bb063a3c0e9269902dc2190f95d00170f1f180ce60c7fa21008410f071b660ea6ee0dff2457a0271b940d90610041572f06d55201460ad00000704d931f8e000b05f391c100e003521a8f4c12130b00fa0000b7026b603801ef29060444762
+    | 7 => 0x9b00a1afa1fea500315b585220204d420072000e5395f0ef201d9dc0237d31907a018060f627c70020e043e590b5d032bc006ccd0a00c0006a1a7e500400000ec894100780d1c03e26300000b0501fd0007f59073020001165f0c080ab63200b09b00b0d2a9f080005839748083f08a00200e0640cda17001cd650eb012f0ce
+    | 8 => 0x24927607138b0909007a61083b8f05b82b5300bbd76dd0ac0a0826c30768c4400820180003014030e6d0010ee03408915a000f40e0d6260a50a0e0f71a0cb3fa756c2d909560125f0f7fdc916e5030cd41edf6df217107b4a0f5000c0710550e7084d000dfbb3e0b905f7104807ac01c41000078b5200cce001ee7f81a580d72
+    | 9 => 0x80303902fe00ab217b30043c05600e73604a22227094e300003ae441d0209c0035c2002a41a5d5b0b067d70e9a8087c009
+    | _ => 0
+  fld t 4 (i % 256)
+def hint8 (h : Nat) := orbitLookup x8 0 801 h
+def x9 (i : Nat) :=
+  let t := match i/256 with
+    | 0 => 0x21f8d903001da3051e3640318a000010e0401b031052b3053ed08413f11027e40f3e287301430090300d0e0c013416268dd23102275d7301061b07001096232500423010201e00d9901344b0545fb303f166180132703e0957512f700011a6443852701032fb010107074405067aed01024450505a910058400a9f53262c0605
+    | 1 => 0xc000e45000520a0001022107070013300018b5575b360453d6603731121339813140005005070210a0509b20d31b2033b740b2f61031010c20a30a0531a07bc0007436d0600b550070038c61d030b0204057536f024204d366600790d0b03102014738e57eee00663d250e522301892663c101460b233171306232007a33200
+    | 2 => 0xb4202306570410d0200226004d003b02b313f07a7204140749012381327cff2520750c460678eab34004d19760d80210fdf2b7121640410206111c17c070e700a4a040026702102152619100d0e0004ca0e175019250000416030060f10e01de0315750060b6100108f57d6820dfb17f4a707833001203024064132010709700
+    | 3 => 0x7e2172400d304602520618651f04e0043f50500040520723a0097004250140700000619bc07010ef723d02507c12d0468200759f052d2027480c7044262d0a378
+    | _ => 0
+  fld t 4 (i % 256)
+def hint9 (h : Nat) := orbitLookup x9 0 299 h
+def hint (s : Nat) (ws : List Nat) := if s = 8 then hint8 (hk ws) else hint9 (hk ws)
+def labels := 0xfe0000000f10000000ed0000000e00000000dc00001b2b3000000120000000114004c25e8d0031618890047e3c7c002ca167800442147584a84ce650000000ea0000000df003e9f2580030dac54003a5d047002c1aa430036da84069a8064300000000b6002b800a5002fd8e2d5f07d3a1d002ad681a55031380a0027d36084d0100000
+def cols (t : Nat) := fld 0x152e0cab307ab888b9c444a5662547308cb83b0acc23660f58d10e5c818f540dd1a223b90362398 21 t
+def rowIx (t v : Nat) : Nat :=
+  mkProjection labels (cols t) 9 v
+def rr0 (t : Nat) := (List.range 204).map (fun i => rowIx t (fld 0xd30b289a56091850f2c2aa268d8246143c70a689636091850f0a34c28718595246143cb0a1a6164c91850f1c28658553246143c18c2ca1c60e3491850f0aa869838b246143a182461460c91439249249249249249228a28a28a28a28a286186186186186186081451451451451451449249249249249249145145145145145141030c30c30c30c30c30a28a28a28a28a28a208204102081041 6 i))
+def rr40 (t : Nat) := (List.range 162).map (fun i => rowIx t (fld 0xf36d62611246143e32c7cbad8984491850f8aa99a5c699638984491850e271657289a6164d124614361170e36a89a61138b2461436091858860d12450f4d34d34d34d34d30c30b2cb2cb2cb2cb2ca28a2492186186186186186181451449249249249249249040c30c28a28a28a28a28a288204102082041041 6 i))
+def graphId (t : Nat) := fld 0x1400554 2 t
+def qBook (w : Nat) : Nat :=
+  let d := fld 0x65901449b063a03001e531202200100031106be603e000402161015010505b23d090204c90b34041302030c660018360007015e671f05 8 (w % 55)
+  fld 0x4460ce062d59cf8316eab781866c504099189b828a64082b8f86d460728a4c3065ae023bd0452cacc0010004000b461ce420493c5c53e9801418a000069b119f16a9306f023453c44172080006847c1460ae4ca82f9364e06095ca00046283521161dc0000a381dc0ce46e874c52a000723000c13cf9c3613a0c1aade50631304000ad31460232084000041931433a84146183715382425ee824c13a5a60032e0d5dccdc0e11704194f46641825011404616e3909d165a58498101b043dd0212a7438a0001e99f09184a42740bd095ac08e84e2e097b80cb2e11d0408709d741030812c6c166f420a10639d0c983101cc29c0001271f04acb2a332741041c15a11d09882641369ae700820000663a4c0881dd1cf1b0d0840956a1029810a0dd6a0821078428d000322c0004c300000017a67dc0668a2c93b04174ea371f0218166ea91868c09c060870c11664200000015bade61e1ab505283931ee37b8dba4dd0000f14a84d81002011559aa4106b000014a0001232b545a68d3545ae7400e241043000053a746 13 (((w >>> 11) + d) % 241)
+
+def im0 (t : Nat) (i : Fin 8) : Nat :=
+  projColumn 102 Fixed0.raw (cols t) i
+def im40 (t : Nat) (i : Fin 8) : Nat :=
+  projColumn 81 Fixed40.raw (cols t) i
+
+def okTable (t : Nat) :=
+  if graphId t = 0 then (decide (validCross 154 102 inputs (rr0 t) (im0 t))) else
+    (decide (validCross 154 81 inputs (rr40 t) (im40 t)))
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem rowsOK : ∀ t : Fin 15, okTable t.val = true := by decide +kernel
+def passed (s t : Nat) (ws : List Nat) :=
+  if graphId t = 0 then crossHit 154 102 inputs (rr0 t) (im0 t) qBook (Fixed0.index s) (Fixed0.N s) (Fixed0.S s) ws else
+  crossHit 154 81 inputs (rr40 t) (im40 t) qBook (Fixed40.index s) (Fixed40.N s) (Fixed40.S s) ws
+def stop (s : Nat) (ws : List Nat) :=
+  if s=8 ∨ s=9 then
+    let a := hint s ws
+    if a=0 ∨ 15<a then false else passed s (a-1) ws
+  else false
+
+theorem stopNo {s ws} (ok : stop s ws = true) : ¬NatRun (mask 154) (goal 154) s ws := by
+  by_cases lev : s=8 ∨ s=9
+  · by_cases outside : hint s ws=0 ∨ 15<hint s ws
+    · simp [stop,lev,outside] at ok
+    · have good : hint s ws - 1 < 15 := by omega
+      have sel := rowsOK ⟨hint s ws-1,good⟩
+      have hit : passed s (hint s ws-1) ws = true := by simpa only [stop,if_pos lev,if_neg outside] using ok
+      by_cases h0 : graphId (hint s ws-1) = 0
+      · simp only [okTable, passed, h0, if_true, if_false] at sel hit
+        exact crossHitDead (of_decide_eq_true sel) hit (fun i hi => Fixed0.atDepth s i lev hi)
+      simp only [okTable, passed, h0, if_true, if_false] at sel hit
+      exact crossHitDead (of_decide_eq_true sel) hit (fun i hi => Fixed40.atDepth s i lev hi)
+  · simp [stop,lev] at ok
+
+def ck := cpWith stop 154 scs count board lookup
 def pan (s i : Nat) := ck s (board s i)
 set_option maxHeartbeats 50000000 in
-lemma block7_0 : span (pan 7) 64 0 = true := by decide +kernel
+lemma p7_0 : span (pan 7) 64 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
-lemma block7_64 : span (pan 7) 64 64 = true := by decide +kernel
+lemma p7_64 : span (pan 7) 64 64 = true := by decide +kernel
+lemma good7 : span (pan 7) 128 0 = true := by with_reducible exact (sj p7_0 p7_64)
 set_option maxHeartbeats 50000000 in
-lemma block7_128 : span (pan 7) 64 128 = true := by decide +kernel
+lemma p8_0 : span (pan 8) 64 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
-lemma block7_192 : span (pan 7) 64 192 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_256 : span (pan 7) 64 256 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_320 : span (pan 7) 64 320 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_384 : span (pan 7) 64 384 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_448 : span (pan 7) 64 448 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_512 : span (pan 7) 64 512 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_576 : span (pan 7) 64 576 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_640 : span (pan 7) 64 640 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_704 : span (pan 7) 64 704 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_768 : span (pan 7) 64 768 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_832 : span (pan 7) 64 832 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_896 : span (pan 7) 64 896 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_960 : span (pan 7) 64 960 = true := by decide +kernel
-lemma good7 : span (pan 7) 1024 0 = true := by with_reducible exact (sj (sj (sj (sj block7_0 block7_64) (sj block7_128 block7_192)) (sj (sj block7_256 block7_320) (sj block7_384 block7_448))) (sj (sj (sj block7_512 block7_576) (sj block7_640 block7_704)) (sj (sj block7_768 block7_832) (sj block7_896 block7_960))))
-set_option maxHeartbeats 50000000 in
-lemma block8_0 : span (pan 8) 64 0 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_64 : span (pan 8) 64 64 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_128 : span (pan 8) 64 128 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_192 : span (pan 8) 64 192 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_256 : span (pan 8) 64 256 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_320 : span (pan 8) 64 320 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_384 : span (pan 8) 64 384 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_448 : span (pan 8) 64 448 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_512 : span (pan 8) 64 512 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_576 : span (pan 8) 64 576 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_640 : span (pan 8) 64 640 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_704 : span (pan 8) 64 704 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_768 : span (pan 8) 64 768 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_832 : span (pan 8) 64 832 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_896 : span (pan 8) 64 896 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_960 : span (pan 8) 64 960 = true := by decide +kernel
-lemma good8 : span (pan 8) 1024 0 = true := by with_reducible exact (sj (sj (sj (sj block8_0 block8_64) (sj block8_128 block8_192)) (sj (sj block8_256 block8_320) (sj block8_384 block8_448))) (sj (sj (sj block8_512 block8_576) (sj block8_640 block8_704)) (sj (sj block8_768 block8_832) (sj block8_896 block8_960))))
+lemma p8_64 : span (pan 8) 64 64 = true := by decide +kernel
+lemma good8 : span (pan 8) 128 0 = true := by with_reducible exact (sj p8_0 p8_64)
 theorem closed : ∀ s i, i < count s → ck s (board s i) = true := by
   intro s i hi
   by_cases h7 : s=7
@@ -4866,15 +5790,24 @@ theorem closed : ∀ s i, i < count s → ck s (board s i) = true := by
   · subst s
     exact spOK good8 i (Nat.zero_le _) hi
   simp [count,h7,h8] at hi
-def rho (ys : List Nat) : List Nat :=
-  let a := fld 0xa1c3269301086009430000c2b222cc10001411c7140c2088 3 (bsr 0xfc4b4dc4f92dd3dff61fed3ff211aca1e747446fe5011aebe0c65e1ee0bec9a5dd5f2d6bd98f9235d6b3f50ed4374c98d2d8af1ecfd00ed3cd66fd69c8b4a9cdc5c11f1dbe262fe8bd9611c6ba26cfbeb6dee1a3ab7077f8a746b738a4ed92aba25f850ca21c1a76a06890169d0dc8ed9bfe408f9a3d9b8f93f46c539100bc9787315ce181ddfa1c7a807146735658f171e68e7f6606a67d62f503dc626c705560bc372c5e96bbfb5d5c0b5a5c2e1b595bf34bc35b35d66658b7e884572aefb653f30f574f30a7ce4e426725445164e537c9eea53440a5903382a54727ac431823b384ef1e3d14911c63350c17d8839c13487c1407fc126d07c8c95c072bcecb 32 (hk ys) 7 0 64)
-  if a=0 || 6<a then [] else
-    let c := fld 0x5ce2223b9031ea81d5c4439aa06e8d1000000 21 a
-    vals.map (fun v => fld 0xfe0000000f10000000ed0000000e00000000dc00001b2b3000000120000000114004c25e8d0031618890047e3c7c002ca167800442147584a84ce650000000ea0000000df003e9f2580030dac54003a5d047002c1aa430036da84069a8064300000000b6002b800a5002fd8e2d5f07d3a1d002ad681a55031380a0027d36084d0100000 9 (orbitLabel c v))
+def qPerm (i : Nat) : Nat := fld 0x72e40dce2223b9031ea81d5c4439aa06e8d1000000 21 i
+
+def qRow (i : Nat) : List Nat :=
+  vals.map (fun v => fld 0xfe0000000f10000000ed0000000e00000000dc00001b2b3000000120000000114004c25e8d0031618890047e3c7c002ca167800442147584a84ce650000000ea0000000df003e9f2580030dac54003a5d047002c1aa430036da84069a8064300000000b6002b800a5002fd8e2d5f07d3a1d002ad681a55031380a0027d36084d0100000 9 (orbitLabel (qPerm i) v))
+
+def qWord (i : Nat) (t : Fin 8) : Nat :=
+  inputs.getD (if t.val=7 then 7 else fld (qPerm i) 3 t.val) 0
+def qPick0 (ys : List Nat) : Nat :=
+  fld 0x6543210 4 (fld 0xa1c3269301086009430000c2b222cc10001411c7140c2088 3 (bsr 0xfc4b4dc4f92dd3dff61fed3ff211aca1e747446fe5011aebe0c65e1ee0bec9a5dd5f2d6bd98f9235d6b3f50ed4374c98d2d8af1ecfd00ed3cd66fd69c8b4a9cdc5c11f1dbe262fe8bd9611c6ba26cfbeb6dee1a3ab7077f8a746b738a4ed92aba25f850ca21c1a76a06890169d0dc8ed9bfe408f9a3d9b8f93f46c539100bc9787315ce181ddfa1c7a807146735658f171e68e7f6606a67d62f503dc626c705560bc372c5e96bbfb5d5c0b5a5c2e1b595bf34bc35b35d66658b7e884572aefb653f30f574f30a7ce4e426725445164e537c9eea53440a5903382a54727ac431823b384ef1e3d14911c63350c17d8839c13487c1407fc126d07c8c95c072bcecb 32 (hk ys) 7 0 64))
+def qOri0 := quickOri 154 8 inputs qPick0 qRow qWord qBook
+
+set_option maxHeartbeats 50000000 in
+set_option maxRecDepth 10000 in
+theorem qCert : ∀ i : Fin 8, i.val = 0 ∨ validQuick 154 inputs (qRow i) (qWord i) := by decide +kernel
 def B (i : Nat) := mv (mask 154) (fld 0x102f10000502400501e50f23402f31e23106e20e53f53f43101e43506e30403f20e10f30 12 i) inputs
 def I (ys : List Nat) := bsr 0xf92dd3dfd4374c98d2d8af1ec8b4a9cdbe262fe8bd9611c6ba26cfbea746b738a25f850ca21c1a76a06890169d0dc8ed9bfe408f93f46c5360bc372c5d5c0b5a5c2e1b595bf34bc35b35d66653f30f5723b384ef1c63350c13487c14072bcecb 32 (hk ys) 5 0 24
 set_option maxRecDepth 10000 in
-lemma roof : bar 154 (cutB 10 inputs B) (cutN 10 24) (fun _ => I) (rowOrient 154 rho) scs 11 0 = true := by decide +kernel
+lemma roof : bar 154 (cutB 10 inputs B) (cutN 10 24) (fun _ => I) qOri0 scs 11 0 = true := by decide +kernel
 def nextRecipe (i : Nat) : Nat :=
   let v : Nat := match i/96 with
     | 0 => 0xf322900154a0de605728378109480de035f201390222031b213f28c5c862a011f738fb947dd63ee31f748fb84501e20011f248a80c540d3c471f238f90c7c823ce51f434731c398c5cc31f407f31479d23c4911048a824441a2a0d11028a813b98c1cc31f501f311b98e3ceade638f98c7cc228071e738f21c7c417cc31e712f39339863c464e610f30ab88e3ca714008f381a980dcc0ae605d302f9823c804a6027302b8c23ca11e3033021b81034804e300f204a80434612e01a30853840dc06be302f08158409ca01e30
@@ -4919,135 +5852,134 @@ def nextCodes (i : Nat) : Nat :=
     | _ => 0
   fld v 13 (i % 96)
 def action2 (ys : List Nat) := orbitLookup nextCodes 0 736 (hk ys)
-def rho2 (ys : List Nat) : List Nat :=
-  let a := action2 ys/833
-  if a=0 then [] else
-    let c := fld 0x72e40c77205cd5031ea81b9c446ae222e8d11ac688 21 a
-    vals.map (fun v => fld 0x133000000126000000122000000115000000111000021d32000000131000000125004c25e9900492468c0047e3c880044e247b004421e7784cb8e8660000000fb0000000f0003e9f264003bddc57003a5d05300379ba460036db44269cb47e310000000c900304012c003218e2f5f0b2561e002d5681c55066540b004a650099381c0600 9 (orbitLabel c v))
+def qPick1 (ys : List Nat) : Nat :=
+  fld 0x75246310 4 (action2 ys/833)
+def qOri1 := quickOri 154 8 inputs qPick1 qRow qWord qBook
+
 def J (ys : List Nat) := action2 ys % 833
-def r2 (i : Nat) := bar 154 (cutB 9 (B i) C) (cutN 9 833) (fun _ => J) (rowOrient 154 rho2) [] 10 0
+def r2 (i : Nat) := bar 154 (cutB 9 (B i) C) (cutN 9 833) (fun _ => J) qOri1 [] 10 0
 set_option maxRecDepth 10000 in
-lemma roofPart0 : span r2 1 0 = true := by decide +kernel
+lemma rp0 : span r2 1 0 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart1 : span r2 1 1 = true := by decide +kernel
+lemma rp1 : span r2 1 1 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart2 : span r2 1 2 = true := by decide +kernel
+lemma rp2 : span r2 1 2 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart3 : span r2 1 3 = true := by decide +kernel
+lemma rp3 : span r2 1 3 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart4 : span r2 1 4 = true := by decide +kernel
+lemma rp4 : span r2 1 4 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart5 : span r2 1 5 = true := by decide +kernel
+lemma rp5 : span r2 1 5 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart6 : span r2 1 6 = true := by decide +kernel
+lemma rp6 : span r2 1 6 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart7 : span r2 1 7 = true := by decide +kernel
+lemma rp7 : span r2 1 7 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart8 : span r2 1 8 = true := by decide +kernel
+lemma rp8 : span r2 1 8 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart9 : span r2 1 9 = true := by decide +kernel
+lemma rp9 : span r2 1 9 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart10 : span r2 1 10 = true := by decide +kernel
+lemma rp10 : span r2 1 10 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart11 : span r2 1 11 = true := by decide +kernel
+lemma rp11 : span r2 1 11 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart12 : span r2 1 12 = true := by decide +kernel
+lemma rp12 : span r2 1 12 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart13 : span r2 1 13 = true := by decide +kernel
+lemma rp13 : span r2 1 13 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart14 : span r2 1 14 = true := by decide +kernel
+lemma rp14 : span r2 1 14 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart15 : span r2 1 15 = true := by decide +kernel
+lemma rp15 : span r2 1 15 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart16 : span r2 1 16 = true := by decide +kernel
+lemma rp16 : span r2 1 16 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart17 : span r2 1 17 = true := by decide +kernel
+lemma rp17 : span r2 1 17 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart18 : span r2 1 18 = true := by decide +kernel
+lemma rp18 : span r2 1 18 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart19 : span r2 1 19 = true := by decide +kernel
+lemma rp19 : span r2 1 19 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart20 : span r2 1 20 = true := by decide +kernel
+lemma rp20 : span r2 1 20 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart21 : span r2 1 21 = true := by decide +kernel
+lemma rp21 : span r2 1 21 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart22 : span r2 1 22 = true := by decide +kernel
+lemma rp22 : span r2 1 22 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart23 : span r2 1 23 = true := by decide +kernel
-lemma secondRoofOK : span r2 24 0 = true := by with_reducible exact (sj (sj (sj (sj roofPart0 (sj roofPart1 roofPart2)) (sj roofPart3 (sj roofPart4 roofPart5))) (sj (sj roofPart6 (sj roofPart7 roofPart8)) (sj roofPart9 (sj roofPart10 roofPart11)))) (sj (sj (sj roofPart12 (sj roofPart13 roofPart14)) (sj roofPart15 (sj roofPart16 roofPart17))) (sj (sj roofPart18 (sj roofPart19 roofPart20)) (sj roofPart21 (sj roofPart22 roofPart23)))))
+lemma rp23 : span r2 1 23 = true := by decide +kernel
+lemma secondRoofOK : span r2 24 0 = true := by with_reducible exact (sj (sj (sj (sj rp0 (sj rp1 rp2)) (sj rp3 (sj rp4 rp5))) (sj (sj rp6 (sj rp7 rp8)) (sj rp9 (sj rp10 rp11)))) (sj (sj (sj rp12 (sj rp13 rp14)) (sj rp15 (sj rp16 rp17))) (sj (sj rp18 (sj rp19 rp20)) (sj rp21 (sj rp22 rp23)))))
 def t2 (i : Nat) := ck 9 (C i)
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart0 : span t2 83 0 = true := by decide +kernel
+lemma lp0 : span t2 83 0 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart83 : span t2 77 83 = true := by decide +kernel
+lemma lp83 : span t2 77 83 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart160 : span t2 28 160 = true := by decide +kernel
+lemma lp160 : span t2 28 160 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart188 : span t2 38 188 = true := by decide +kernel
+lemma lp188 : span t2 38 188 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart226 : span t2 37 226 = true := by decide +kernel
+lemma lp226 : span t2 37 226 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart263 : span t2 44 263 = true := by decide +kernel
+lemma lp263 : span t2 44 263 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart307 : span t2 40 307 = true := by decide +kernel
+lemma lp307 : span t2 40 307 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart347 : span t2 31 347 = true := by decide +kernel
+lemma lp347 : span t2 31 347 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart378 : span t2 10 378 = true := by decide +kernel
+lemma lp378 : span t2 10 378 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart388 : span t2 45 388 = true := by decide +kernel
+lemma lp388 : span t2 45 388 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart433 : span t2 25 433 = true := by decide +kernel
+lemma lp433 : span t2 25 433 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart458 : span t2 65 458 = true := by decide +kernel
+lemma lp458 : span t2 65 458 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart523 : span t2 34 523 = true := by decide +kernel
+lemma lp523 : span t2 34 523 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart557 : span t2 15 557 = true := by decide +kernel
+lemma lp557 : span t2 15 557 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart572 : span t2 72 572 = true := by decide +kernel
+lemma lp572 : span t2 72 572 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart644 : span t2 65 644 = true := by decide +kernel
+lemma lp644 : span t2 65 644 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart709 : span t2 50 709 = true := by decide +kernel
+lemma lp709 : span t2 50 709 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart759 : span t2 17 759 = true := by decide +kernel
+lemma lp759 : span t2 17 759 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart776 : span t2 10 776 = true := by decide +kernel
+lemma lp776 : span t2 10 776 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart786 : span t2 13 786 = true := by decide +kernel
+lemma lp786 : span t2 13 786 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart799 : span t2 25 799 = true := by decide +kernel
+lemma lp799 : span t2 25 799 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart824 : span t2 9 824 = true := by decide +kernel
-lemma secondTestOK : span t2 833 0 = true := by with_reducible exact (sj (sj (sj (sj leafPart0 leafPart83) (sj leafPart160 (sj leafPart188 leafPart226))) (sj (sj leafPart263 (sj leafPart307 leafPart347)) (sj leafPart378 (sj leafPart388 leafPart433)))) (sj (sj (sj leafPart458 leafPart523) (sj leafPart557 (sj leafPart572 leafPart644))) (sj (sj leafPart709 (sj leafPart759 leafPart776)) (sj leafPart786 (sj leafPart799 leafPart824)))))
+lemma lp824 : span t2 9 824 = true := by decide +kernel
+lemma secondTestOK : span t2 833 0 = true := by with_reducible exact (sj (sj (sj (sj lp0 lp83) (sj lp160 (sj lp188 lp226))) (sj (sj lp263 (sj lp307 lp347)) (sj lp378 (sj lp388 lp433)))) (sj (sj (sj lp458 lp523) (sj lp557 (sj lp572 lp644))) (sj (sj lp709 (sj lp759 lp776)) (sj lp786 (sj lp799 lp824)))))
 lemma upperDead (i : Nat) (hi : i < 24) : ¬NatRun (mask 154) (goal 154) 10 (B i) :=
-  symCutRoot (ori_ok rho2) (spOK secondRoofOK i (Nat.zero_le _) hi)
-    (fun j hj => checkpointCheck_sound closed (spOK secondTestOK j (Nat.zero_le _) hj))
+  symCutRoot (quick_safe (k:=154) (bound:=8) (xs:=inputs) (choose:=qPick1) (row:=qRow) (word:=qWord) (book:=qBook) qCert) (spOK secondRoofOK i (Nat.zero_le _) hi)
+    (fun j hj => cpWith_sound stopNo closed (spOK secondTestOK j (Nat.zero_le _) hj))
 theorem finChk : ¬NatRun (mask 154) (goal 154) 11 inputs :=
-  symCutRoot (ori_ok rho) roof upperDead
+  symCutRoot (quick_safe (k:=154) (bound:=8) (xs:=inputs) (choose:=qPick0) (row:=qRow) (word:=qWord) (book:=qBook) qCert) roof upperDead
 
 set_option maxRecDepth 10000 in
 theorem shard : ∀ t, HasCircuitSize 7 target t → 12 ≤ t := by
@@ -5059,143 +5991,150 @@ theorem shard : ∀ t, HasCircuitSize 7 target t → 12 ≤ t := by
 end Row27
 
 namespace Row28
-def vals : List ℕ := [1,1,1,1,2,2,2,4,4,8,8,8,10,10,10,10,10,10,10,10,10,10,10,10,10,10,12,12,12,12,16,16,18,18,18,18,20,20,20,32,32,33,33,33,33,33,33,33,33,33,33,33,33,33,33,36,36,36,40,40,40,40,44,44,44,44,44,44,44,44,44,44,44,44,44,48,48,48,48,52,52,52,52,52,52,52,52,52,52,52,52,52,64,64,65,65,65,65,65,65,65,65,65,65,65,65,65,65,66,66,66,66,68,68,68,68,80,80,80,82,82,82,82,82,82,82,82,82,82,82,82,82,84,84,84,84,84,84,84,84,84,84,84,84,84,3,5,9,17,3,6,34,5,6,9,24,72,3,5,6,9,11,14,17,24,26,34,42,72,74,96,13,14,28,76,17,24,19,22,26,50,21,22,28,34,96,3,5,6,9,17,24,34,35,37,41,49,72,96,97,37,38,100,41,42,56,104,3,5,6,9,17,24,34,45,46,60,72,96,108,49,50,56,112,3,5,6,9,17,24,34,53,54,60,72,96,116,72,96,3,5,6,9,17,24,34,67,69,72,73,81,96,97,67,70,74,98,69,70,76,100,81,88,112,3,5,6,9,17,24,34,72,83,86,90,96,114,3,5,6,9,17,24,34,72,85,86,92,96,116]
 def inputs : List ℕ := [0x23611b2236cd809b104d899e6c22880b653e000000000fffc0000000007ffe000000000f,0x48b74505e062814520a29203155e12e6a2e2000fff80f000000000000000000f03fff070,0x2e0c2061e4083138609c3070418e47804c345fff0000f00000fff87ffc38000703c000180,0x9504a848831426284bd47828a0897bb71c08000000000000000007fffc0000003ffffe00,0x2e61730e0041813b0f1182010c0ffa0380811fffffff000000ffff8000000007fc0000000,0x30818409118205bc0fde07fdf031004c000800000000000000fffffffffffff8000000000,0x3f01f80ffffc07c008e0044e0020047001001fffffffffffff00000000000000000000000]
+def vals := sampleTable inputs 290
 def scs : List ℕ := [0x13c290f89b24c94,0x210771789224496,0x1dc290309c25caa,0x1780c1dc9b25093,0x1780c0a4aa24c9c,0x1dc5e2109624891,0x1783e0309624492,0x13c0c1789c2509b,0xa40c178aa24497,0x1dc0c0a49424c9b,0xf80c0a49724896,0x1783e1dc9b24493,0x1783e13caa26c93,0xa40c13c9b25093,0x1dc29210aa25897,0x1783e13caa26c9c]
 def target : BFn 7 := fun x => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 1 && x 2) || (x 1 && x 5) || (x 3 && x 4) || (x 3 && x 6) || (x 5 && x 6)
 def recipe7 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x2802bfc2a5b04f393786584198572f124fc2b5f9282b3d85007074050701aeb2c43050335604e275d85b256e8f52281cba2f58865a61822a612185336590573533a0f0321850995f22b3e611287a3f2052456850061a04f8c1c2293a3305e910f4fe2f728f52b6037f07008b935592f62a708f5061d928395304e2b60389271e20d234606511424781d040675c0739d395085621674c71a62a1502010f5061b84f2d39067296b8f5271ba0e2f543cf8419af22f08a151343065051804c2b17a463e0238d32523d6022104c27508563b338622b6b205240404f03198572916a0226320552f1a300901e850245b3a12c6e8f52343865273e04f070203a304f85b84168572f5ba343c56be103008f5071c050255604f040145d03000f5b11820590168508a1ba0e0a5c85b1863c1d3e60b7f071804c2d5f928021a04f061c050240404c3f749b42b700f426543cf2a5304c346f8f4186385f396a8f5865f4ba061804c361b38c1a63864316e8f7071984c3235bf2395084c2b4804f031e20d991a38b256b0f5045bba13e1f3946b0905b051e1fa395304c2831bf1387183a070283a0c2c206051d85522664a084210572e6b03ab31822a393f05707031b62f3a92c
-    | 1 => 0x2e700f52801050051985800000f503168500e1da523b6e9b8256d8f5836120a02168570719a151a7b208041b84f2a53853030103c3942a0e031a2292b3f04f326f205050220507183f4031a850051904e2d7403a9912c9d021e04c333e04f2a3d857237c03e1c65065190d141061e850301890b2d60928890905b3942a0407198582b7403c2e3f04f2c6c9b82431a083151af925560582b5323e295785a051820d271823e2e3d857070103c061985824700f5071904e395084f256d83a296f03a04018f53f74bcd041c0502e4d04635320552716850040103c2241c9865198572d5fb89141bb03336a8f5041804c2347067061904e041f2342a6da2a31710f4052104c071820d2c6c83e395385031388482a104828731a06227e2eb935c205051a2113a7003c0418a2715760f53d2c85b061e04c4e2121007018f5135a9850701aee236084807028b93e7403c3334864041e20e3d5f38b2a5085634430508a16850040740505018f50216a043058aea051a04f070d4b5295e41d030a405b2182051542062361ab8b30124fb254d04f2a172252e5a850314812825508562c432360219858062104c07208780401bcd2f39cf70702c5d396d83a2b18a1b285b3f4
-    | 2 => 0x2e53850334b98506198578a1e23e263384f9812c98395385307000f52a5485d071b857237b8f528700f43f748f5031a20d5a1bbd00b3f3f4254d056a91822a135e85d2d01aca266c806244d046061b85704172e90602b0a0701bfc123f85e0c5e05b020103c02218502e6249a31519c53d5f37c110205a943f208031822a941704f2716a542c5f928031ba0d2c45a39051e04c1b614f72d16a5227560568819a15441822a071ba0e15424405f1c05002602ef3a3f8502f6b83a411822a071685722444a32b42a3e155d05b2e5304e071b2ca1c43aef2a4b8462c1f248115d05b0321853051aa395d1ba3e0219857282523203018f53a6c8f5021885061013a12c2524f0f5b04f2e4d04c230e4aa050203c2e124fc2a70a2a690a43f071f877051822a33590673f7483c236385d2f74a2a042104c255325a395325b02000f50317204156085b3734c7719758f42f19b00461822a3063388062132b072104f04212e9316ea09031a20e3055aeb126105e930f4fe387183c871984c2a700f52b5fb892a40857031e850286c8f5660905b04183f41a014d40301aeb2c4f0ad2f124dc3162a1523478463612b062b4820e15031280431a08021ba0e2e749b5272123e
-    | 3 => 0xa3e05dac1822a4c5c2051c01050941b84f396a8f42c48850231f94e210a18c0116850326f3cd2d7403c171720b276c0f53039cf7343f8500723b7c0c5d85b4b183f40218205275db7c326f03e2f5b47e245304e256c1b52e378657a19a152a6fa2a2f5bba107030f53b6e8f5275a85023030671b65065346c8f5070a4052e6c03c07010946c1cb89270084f05218502e300484e1b84f2d6d03c254b8466619858620905b296f03c2700a3e0508a15246c8f543182052e3f04c2c3f850025c2053f58ad5254ea2727560579619a151c650572a50858274b846326f3eb3a37868316ea0504010f53f1c39c2c6c8f5031a23e255605607199b12d611283512cf92f74bcd1831118302caed0e5dbca2a02858052104fa01822a300913d2343c7e11031282f748f524104c42c1e2451f0084c0518850306249a05182ea9612867271e23e2b03050041985807010f594104c3260913d220106731738f53e01128b41822a05000f53541a343a720fa0318a284a1822a1c652f205010f52244067301f398253484a2a7403c07198572f1a10a3459067181fcac353384f285b3a103210576c1a38b35024480718850334284f031e0980301bfc062104f4e1e20e2d24b84
-    | 4 => 0x367083a2a709b62c380693533a0e051e850010083a5d1704f2d01acb266a83a06020f53334862316ebeb062120e275304f2757859377103c377403a0b03128661b8572633a0e05168503f030a42b17a422d0ecd41931c7e07230cb32521c68c1ba273039cf52e748f52451050275fa0e3262c9a3616b041c02afb255304f39700f5116105e071e85006073f4071823e371815e041a8503c020cb9355aeb304e04802008f52a3f04c07171b10321ad012408629912867071b2cb2d1aad80716850377403c1c444a2071aa362f7483e2b3e04f0317a29072104c2d7403e6616857394b846661baf262602ef06168502732c6702218530e1d437071a8501544065916249a03010f5051cb8a3f74bfc1644865871e04c5f0905b305889caf1822aba1822a393d85727212102e3e04f310ba4e071c1280c3e9ff061a8500519857051f2343e601280401aef36614ab1a6305b92210579208a151b460657419a15021804f3a45850373c1859612c9d2b6c1b62a0304c3274bcd0517a34266a8f76a31a0807028f52c609282a5084c2302867031820504000f506018f4395a850393f04f3062c9a2c48a3697128671864c6a06028f5394d04f2e3105d011820339429b1
-    | 5 => 0x3258c7e3f58865041804f24378682e7483e9712c9d06204a43524b043f031282f31a06013a12c05210572243aea07028f49a12867073f205030103a2753853041e850901b38b394523e2d01128031c05018181bb901ba3e2431a0602211bd2b4284f12412350702a2a2346af4220084c255084f071b9280416850334284c2404057985c85b3e5f928317b20a0f21222231bb9b272120d1540864a11822a35592f25f21850050bcb764181b1031984c393f04c0218057290105a2346857334d04f2346af5356e8f532748f54118205070a43f357303e2f1a2e4051aa3b040103a281c236271704f93183f425348642b0ecd42a3f0572f3305e2e3485f2f31bf16531a08394504f326f22b935c22a3162c9a9a1c928315dc7e61182ea335a850336d8f504018f42c45a360521853227daee27700f52b6c03c326f0f505020f5361bb04313f0552d718f5300f2fb2450858354110a336c0f52c45850367083c8a1704f6e124b931578598d3d9b42d5586210758f5451822a1b612195e1e850041aa3b394d0562b4520e1a2ca2a8d0ecd42b5a8507619a15051804f5a1b84c05602ef07124f23b5185b66198570501206051a85007020f5377120a0516b122e58868
-    | 6 => 0x25532cf2d7422a271ba3e01168573258c7d360185b2f6d8f5316e8f52d6d03e276223e5f1e8501c43aeb100285b330204f2d6012803013eb6c37c7e2b4523e333f04c226605b042105790188502a3105d2a56056880905b22664005f168508301aeb361b38b7841b81020103a396b03a377103e2c6ca092c730f5334084c9812c9d393e04f32481282b50a3e04182057e1c1283b1636902013eb2f74aec2d1d15f0712c9d3d73a0603211b105212103533bed01008f5032104c3202055633fa2d5a211bf04211be333484a0321a7d186405e256c0f525040530518057325584a24538532a6b0f5071d928326f0936c10482276d83a316e9b73e619283058868256b03a0618205050905b8301aef5117463030905b051d9283559441237c83a8d19a153e613ec031a04f2a4d04c2a030570518205942132a336d83a2753850356d0f501000f523491852a6d83a3a51050275304c071b05a071d85507218502e6a8f5071e04f30748f53f74c5d256d9b6230084c8f1eb965d1b84f3151a16070905b031b84f2b6c03e060283e2f104e2011b9b103211bf051832a5a1984c071a23e0e408640702a063074bcd060905b3d800621a7b20622674b53559057361a38c
-    | 7 => 0x333105d365005d2b6c0f50c3f85e0316857394284fac182053a4305061212ea23010501024b0337710f431748f526763a1021822a35700f4133ea003765ca02a17223353f90a031e04c7a3f22a3018ab80d03128031904e275604c2a5304e4e1804f2e6c0f58a5a9b5051704f2c7083c2c604fd394504c2a5604e151e225393485f2302c9d2269475103e0482e6b03e065b3a1021804c286b0f42a7403a350b2223202128b81822a2337cb96621057a51820571183f4181fc96763f2052f3f8500724128690ac8b92212f324538502b6012803183f41901050071dacc0421210071704f2b6c1b7295785904008f52f6c8f5346f83c377103a2e56057317b206361a38b1c43aed224592c0418057061704f304812802212e9271820d2a0304f2b4d20d276a8f5276d8f5295a84e041e04f053d9b5190084f36018772a5fb89343305e900ecd402183f49a12c9d2a6a8f507008f5335084f3759066227903a394e84e3e7403a3512b063d5eb7e071b84cb5182050501beb333f04f2e01bcd05008f52b7283c3e609283018abd2d7422d9812867136005d2b1bb00063d9b435732ef1b5fae3840d4b5073d9b5061b84c3d5db8b051c9288f16a042f37868286b0f6
+    | 0 => 0x14941a6c8a106a8a210000530636166406188aa5210e005345160b0c08533f42535ec212420a6d4029215e04941698d49237206709175e9812467e10451c04505f320a4014060e3c064014045212209a1b54870a6a861e0e0c532c28743c02126a0a6d5f0b186a0a895ea6126a861cace81808023c0608542a42900a5212043c128c29210404534e95040402534b1a530a0e3c064212209e1e02025322a8210a3c12460612080653085e93045e124883032b041b63240c46be0f0a530c6c8a2360e50b0804535f16530802530240140606530e521254861c6aa6120a5e1206045354c2120602534639049c52125aed0d0600530c0c564a8a2247165314e8184cc2123602120e3c127e4add0e065304005360841b020053043cd40e04534d16530e02532b021c6b16533d3c0b5516530a00530a0653a4928a0e4a121f36530e29219c4212061ede0a02530e0a53040ac4445b1e581104083cd40800539e0e8b7e4212b429211a9e200c5e120e928b62eb200c0a530e085354801a568a2348e2d4
     | _ => 0
-  let q := fld packed 28 (i % 128)
-  (prefixGates (q &&& 2047) <<< 24) ||| (thirdGate ((q >>> 11) &&& 511) <<< 12) ||| fourthGate (q >>> 20)
+  let q := fld packed 24 (i % 128)
+  (prefixGates (q &&& 511) <<< 24) ||| (thirdGate ((q >>> 9) &&& 255) <<< 12) ||| fourthGate (q >>> 17)
 def finger7 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0xa7cc478a1cedac575879fc3567e2cf3ff6958951170f5fc235fc1be4cd92ea0a5e56f8bc846bee96e20b2ce226309a80dfb6a676c3a525e5fee9fd720c1ed85a8cc85780e5ae3745f54d6f2c89f05d3b7d6761e105a7228aaf010ee8b91c9c11689a4409a6dd78add8fe16b0850c2a25636a2ec4feb1462894e64806ca0c845a
-    | 1 => 0x3d6d3609dff3bf87b9ca8b1732f4fcc0b56fc6d7f2c35ac4d08f0f7eec282a119472afef1bdb6a8ab54289fe1111eb59e137253d794756576c10994547fd9c47b15de8a8d35baf3aa21ef242e84b8be16dd08a1760744bc4ad3cf572ba206b80e39b87894b7258403c3459f542437f219a87f39325e21d051f6e0b235119a642
-    | 2 => 0x9463da143ee59c40afa4444f3eade0ebd8d4170e0c8181f1180ca760182378fb0c03521590ab2e7cfc2249ec8ad5e29578ced7f3b0ee070d93aa5112c92a21c66e5a809415adb523043860f9a324fbea1ec2296498e0721f11eae9e7019b2d8f7f1c333f1349f202ba97d8d62ef98d3ab890f0776c0d13e1697c5543111ac1b
-    | 3 => 0xcfc6f9118c0321f396102693da1c1903ab0b200e6060f7c4350d29c2149f6c0d1f8f5f890dbebd54b365b92373878227cd606972b1f110bae1eedd9acbc1ec0a6388364d257551397111f60345f037a8e0228465bc3d5f851ae2d19d72456b5aeae9219a1ddfddfc47b6b687263761101ff45ac53910e8b11e6a42359d386cc6
-    | 4 => 0x7542184e37caf93f26bd229b4d094b78a6c668584138bf26b09057fb0a9813f1e6fa744672c21ce4ca7327d59f0c25de30149378e0a2268ed5ae3f742fefbf4eea845942a1956a0a7e24890b39495c3d1619bb8ebf71592294281d1351c20c4d77cd92c3c133dc1940b8961d3b8d9e75c21efbe2463d72dcc5953bba5c3ef9cb
-    | 5 => 0xf954f7d7720cc064a370d44c247a42b8fb9b3a1a93c4a8188c7afca7b3fed6c3895544cc99f2847971d5ec20b2ba345806900947567dddb3611de65221fd8dfcb49639bd64f960c385114a5180a4788b32bf954849c8129eb6abbc399aaf6fba53f2a32898d5525be0949ebc72f9225a17ebadbdf48d5272cc8b9cb9a1de9e7a
-    | 6 => 0xe2087227ea7340485bf4b60887357b672505ad284da4cd3af422c0c21bf1fe81a438b9fbce7921d6703a3276fce5dee4c5247b54b9c752c6056f72cf2321788795eada23e008290b3d51556cbd7ce4f677bab01ecff729713d6f1e94ad99e39c206c6a49ebaf5b996b233a308651cc629763359ae1bc6a90b1c36d95da099e26
-    | 7 => 0xc4cf59999aac1706424cfd0522e4bcfdfdce6d7d5fd7b452324f7b7e566ef9c0e9245779b558ade9c4cd73c10b53f8cb9f9b6c247ef5d60604108bb999c88627de3a998732ca0c1d365947a07bfa5d8eab1c1acc5cbecf944caff89fa5aab11a6afc2ce88199a084a86caa077a86444767fc989e9b47b0c8c179c6e236fd3387
+    | 0 => 0x80fb3542fe9da6272fef1f9b5dae946b117c7113095ccedd927a5776a0fc4c221e231a6ab29cbbf234179ed02b14270183869da31d2b04b6274f0b830c10434cb644484024cf2d224fea4d73499fe15ee772266c21c5f8512bdc7502715a5ad056d11d4e6502beda4aa6c66b0e38f5fd114a731b60e96287f2cec7d710ef9a0e
     | _ => 0
   fld packed 8 (i % 128)
 def recipe8 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x491856d03a4523e55aed7f83c432eb1a2355f04a7b83c1aa394d05603beb033f113d00712056204f4785a1fb8803cfe42236290f53184a6ea2d030ae43c9716a510ba4e20ad64b98550a3e0209c444a26385d7403a1c2245004a40864019c76ea2a424b56d20a37cb0179bb6785f022055a846018571904e40aea028994123e6e83a0ac8b5c8537a2827c83c36062040ae0323a2983e6d3fc460657b8f56d0f540857033876405959068024b512ca11820d5b84c6406255aeb67064788f52715227b856aa057e8f5018f50305d5f22a0409954a04590c712b06700f54d04c4285724aff244b20423a0404a0438701a276f83a0d4b52104c27b93031b464c213806550858039b52b2ef02c001a21102a3b7faec40858040480243d7f0f5043887103c22141770f547048204a52903c543a7590651c2227d8f5212f36192826330
-    | 1 => 0x1b8570404f3104a000f501a2a52c5b5e05b0ac3e62b8816aea2a03a1aa52022086b03a620465d85732a171a20e4a1281ca1c66c0801bfc02bcd54400509b14b8461e20d03b112803a298f4348624eaf41b3394284c5bba11fb8e3f04a6a8f4298f502af40185802cbd788f43cb3710941549090519e1baf26e0f5508461685703bcd5e20e32c5c530461b2ca6da2c0186522b04104a61822a01a11030570209925a467203c1e04c588623f85e5bba7044a26c0f4280f5740f53d06763bd35f4ba5304e7a8f47b0f4043a5708f57fa05470670184f020f64120e16a976784a0383c59048040570305e7883a7d83e4ea0427b94448655649f1ea395c22a030644804f6ea826485f02beb7003c5647c668d3038570bc6820b90043350cc71560576605b2b03c680d120b8e5a857031b80405e4a9853105d74a056c0f5664a134c78
-    | 2 => 0x29b15d85b732eb0699f17a341ca1f31be8038f55e21003aee128677703e241280304344c057e85b6504f6806965c7e45856790f57403c718f568068378487183c0a405074044084c03334530994b903204801a20b2b0f55c04f7803a6d03e0205b6e83c6f9b464b88040435884a17a460221057bf3030405f2294022c6804821a36648645c23e720f42522003058632f6430655796437867202b9590661a37c038bb500a6390651f2796c03c0183c2185074beb4d1950105308a152983a02857610595304f5295d4822743a34414785f84c6204e78a0604312378680408661850040582b0bb3f20625a9602b8b0304f181a67d03c5a8585d85634c05478482b1b77983a3f84a01227208a25a9b52104f538507a03e030f818850041736a83a0409f3305e7f9b538069261a67a03c18a1b2a83a2903e5b04f2e83c588653e227
-    | 3 => 0x14d43e048390a9031bd612085084c1aa3b6304861a3e2b03e57c415f84f2224a1804f23b2f7d0f558cb9073f40204c25301041bc008572d0f51eb8f04062630a50405a488535323e038f47e0f54804c1718b0ecd41e8505abee1ca210285317300182030084c5ea3b540482e8f5020ac15b0559067193313f0571db3816850600507803e1aa36081696109931bf1034b42524d0f2fb1f09f48a390448b2c03a02c61732ed02b121a85016af03f85a0285858ae966af9440657b03c300484e9016b0f4038ac7783e040b30186646af4730f50332b513ee63b880432a022cf4eadd204ae4e9853fa2702a34018f43f2f25d0482a8b94005e348645e85d028f55e8507a8f54206246857449c83f059124b90284f02a7d720f54fc001eb94038d00247b1f234778f50432b3d850480572b20a430501cb9a0340546cd45e3a3761b4
-    | 4 => 0x5f05a448551da515784a038fa7e03e5084f012e9179f66743f740ac3384f4f85b212f444ca00409a53a155b05665853780f502a2a6105e040987903a7803c7f8f5388691014d4e9431b9283f2e9770f4800626848d0084f03098210575886837865742096f0f542a3e023fc3f0556405e0305f0084e280f46d83a4c1b10a43f20b8f042f374a2b03a2a470595405b1e9ca388671a20d6686812cf956ad0468674eb080e49479aeb748f52983c028f74123503bfc211be0223b034630349d0f94b760f40286539cea19b023e84c191f9212f2758f556056713fc0285f20ad95484a710f54504f3b985358627e83e7349a7983c682906384a0ba236d8f421a3a5f38c044635685001938014040204e2c03c5c057218535285e04065128d26d8f52437f53ad02123e2120e010502521c0405f2049511a0c58cb35584a2a03c7183a
-    | 5 => 0x1f27b0f4fe6c8f40599c020553910a3ccd456a3a243806c03a042cf0185002ba4038f97c0f55f858530980410a0222d468d1042345005d558620184c601286b8f52c0f51a20f5623e0392c1a21c4820d5604f2b8f50222a1e1be1eb957b83a23b8b558641a1ca2521b7483e684c92a8f51d24c65065760f548128019b503893172ea6c8f5450463e04f350642a83c1d928032ef0305b0305948b8616a565304c6a8f51820503210288f55489a478462521a2214f650577c03e21210562e90412829205492341639b18a971e23e5505e03cb306bce5585f4d046180576f8f5122fb0283e134ff370693704604059042101fb8f1e04f1aa3a4c2dd5c2056404f03b8667c630225b0905b2cbeb273993fa2d7303c5485d2521f6204c1419c1a23e6c9b733a113d9b67d03e03403458486b0f535200700f43f22a41a346f83c7b0f5
-    | 6 => 0x5085660853429bd418501b2015c0562038f5d84c028461f3904022d573ef554975885f474a1609456084802b08398d52a83e6305d5f22b4e84e4404a5b3a11d4fa4022a738f566c5c7703c6218521227200c87e03c0304c1e1bd3d166030410285e50a043385e0205746234022f5509853f8597aa2a7a20a28a05332166f206023eb39cf604045212f044ca2778f4481854b1285b3a71704f040506746b56058164a6380662e0f57c03c0404c212047a0f50404102a0927b8e5084e038674b90d6c1b47d83c603ed5f37e0384c438530205d01beb03af71fbe64e8c3022f25949d04204703eb008f50fcc0038bd589443f05a3a18503c5d6d0b91b84c03a091c9280222850408758f47383e3f2086c80603ba166c9d5f8574205a043712a0f56205b773eb7983e63c050846767498438654384a7f83e0205902bed1f3882903a
-    | 7 => 0x710f41f2f11a04f074057a03a2120f3d85721a390233404333241512010b1d1287283e680655e85b0289c01c05340cc5e211019b71e2225f85661a3563057458460204031a061b84f20b9762388163697aa051014c41c78518480085861c48398467d0f4638550285046057040bf7483c0286425284378690284c43aef29bfc028416e3eb390681c23603cfd02211204ab680665e0530a45f674680f94a5ca275604c4043943ae90203a1c0504f22941a3b632f2028567a83c1a21b628504104f1cb7f7603a0204f4185e482e9038aa1804c2d8f5191fe02209592f41f397462f2578592b20550b2c6385f4e8581984c0383a3ccf85f9281249709c1123b7c2c8f51e921039b651a3f768f51e20e104a77703a5105023b8c6285334c616349a738931bb20028682a8f46e8f55b05833afa031b61dc451ca1e2b282029384820f
+    | 0 => 0x29625040107416de537914c6d747c2e6a1d50c3bd1f0be36de2b928395d59bcf876214c40100102462d00346c190420640c3a45082f83c3dbc085c4f09019722470ba120233298494614529287308fc6c10308a63010922c7c1146103e041cb803c04184014032b302243de85f25108820c0c8464970b4b1f16c709650426d2b1a8f2261e0c36a2169517424a42414b8049090a4c947ce41251314f832801902cb79912d994a56a3aa42a83a5848822c3c120a6311358b1a0530c6109128e820b8333624938b4901c7a421291058a484bc24f4402509144d15c7c11040745819b6481804322452bd9008a4a591d047902255f912090b041f24a3205bc1905580800c641918801a2162ad4b244185e98
     | _ => 0
-  let q := fld packed 20 (i % 128)
-  (prefixGates (q &&& 2047) <<< 12) ||| thirdGate (q >>> 11)
+  let q := fld packed 17 (i % 128)
+  (prefixGates (q &&& 511) <<< 12) ||| thirdGate (q >>> 9)
 def finger8 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0xd6d268ade0aac843e79271936ecc34c01959a6d55902fccbc7ef9bd33f9eb90382fbbf842763936c0345fb5fd853f807535e351c39cead798b19ecc1fae8a6af197e04e30ae3789e34d7559e62572cc7df6611ab89ac29878ced90583b17a8a2f9a44a9a6c2c56ed88e5db01f15548a318c7dfec0e35a48812789aa500c9dea
-    | 1 => 0x3da24109dfaac08751ca079d3214f264b66f5bdc14c35adc64bd0ffee314b9bba9fbaf6ba0f00bcba4ba0b45a1cf24592e76253d712e285492408a7047e27238b9e2e825f8b16dce6cd7c712dfb5e41648fd98e08c48d266663ce655bdea286c8447bd894be93dc0933401893a737f842d6d20722fb72d881fa04b9ca1e5e5bc
-    | 2 => 0x975769b043187ac449fa447af3e3d8611188ce3b23fc829b8940ca762a3c5a7c8632b76aa9ba562095d6c6af47488a460e8c687fa15b7edfd70aad0bf1af35021653dd50dc5adbd90e8a86c0753d89d2e6759afe356c74bc4967bc09f4b6c8bd4633381731619ae503bb7d8d5fbe5e17ab3093beba8fae2f5333b72f59ecf0b8
-    | 3 => 0x8fd902048c0221c3c7910969161c66bbd60b8e899949e476de9d3f15209f4853f08f5f1cd70b8454a523f576346df42731406945bbf13f92c094a09a026d6a7141a8924d6549da6686aa79f0c92419db32b91e4d984b16483d2c10bf29bf6b4dd8913eb62bdf4fc80ac3befd26c0ad6c72291b8b39207dcc036799ef66ec3129
-    | 4 => 0xb1af54517922c5e32624d94996cbcfa2b2f9a06441da4b30787d6f16d4989992d511df67726817c2c6f927b5e78c32333e1e93f9ec2c268a365c9874059449171499f3869145e10a2ab7909be208a2b821b88b8ede02c6f68b3eaad00c0d548ab653d7727e33f1732b356c645beceedb871e66cd3a3d728fdfdbca13445cd430
-    | 5 => 0x1e543983e2e25b81a3d28214e17a40343dfe3adb08fa7abde4ece3a78d3a9e57841244cc3c5484033d6e60a05e7119638a90e0476d4d0163421d4db882041dbd1896aa3e91ead72724b14ac4456f1dc3aabf7a5742028b9ecfdcbc946981678d39f2a3cb981cd92a52941fe77236b41d41e8ad4e9f8d952f037a6c257ced6443
-    | 6 => 0x85121082eefefe1eeacbb6d7597b4b25017d623852a4da25f44ec0beeace7181a443eefb2016492fd10f9f450c29a35871ccd9be621db22c220a4cf6232c702faad239cdd30502f9cc045e4710aac5ab14ef35cecf989f8c2b2f48eaade379e53b3e6a78ebaf5b6a0c3c2b309f51b44f2af11b3c353cfa901ef3b15525259eaf
-    | 7 => 0x9523599983acb306d744100522e9dc43e76d7bb35fa6d7c39e57e17e56a65d55e2995074b2578930d54a7cad5dda2530f19b5f198092d606b2129ed95ce2c5f393ae6987323f56baaa0f2bb4be35c45c95a782ccf1becf1a7298bcd14755ec1a6af119e81199ca34a87c1d07bac79847861a98a4ec1ad6d65a0ec66e3787978a
+    | 0 => 0x7cd04cd0fe3f67442f1fe9a37bd4c729e73c74b5fc9559654bec57d54dd1eb9874e084e5a09cafc12e9b75729e29270110ed9dcc1d6c1bbe969064970c108567e25a489c7b049f49ad78ca8afe3be1c606c7266c12d10174bf4d7aa63825cdd073d11d7765ce939bc5a702a37dd4b50b834feb5c346edd8716ea3ce2596a24c4
     | _ => 0
   fld packed 8 (i % 128)
-def count (s : Nat) : Nat := if s = 7 ∨ s = 8 then 1024 else 0
+def count (s : Nat) : Nat := if s = 7 ∨ s = 8 then 128 else 0
 
 def board : Nat → Nat → List Nat
-  | 7, i => cpBoard (mask 145) inputs 4 (recipe7 i)
-  | 8, i => cpBoard (mask 145) inputs 3 (recipe8 i)
+  | 7, i => if finger7 i = 0 then [] else cpBoard (mask 145) inputs 4 (recipe7 i)
+  | 8, i => if finger8 i = 0 then [] else cpBoard (mask 145) inputs 3 (recipe8 i)
   | _, _ => []
 def atFinger (table : Nat → Nat) (ws : List Nat) : Option Nat :=
   let h := hk ws
-  let i := h % 1024
-  if table i == h / 1024 % 254 + 1 then some i else none
+  let i := h % 128
+  if table i == h / 128 % 254 + 1 then some i else none
 
 def lookup : Nat → List Nat → Option Nat
   | 7, ws => atFinger finger7 ws
   | 8, ws => atFinger finger8 ws
   | _, _ => none
-def ck := checkpointCheck 145 scs count board lookup
+def x8 (i : Nat) :=
+  let t := match i/256 with
+    | 0 => 0x36978060867003ca0d06f8070ffc004009f15a61093c05536601f40f43ff56d94c60f00010103349165202f0073d17a255000cd6450a0525375e600a591b0203f050bb26b562000100b336fcf923b1b6b6c186da650427049b44867206a07a50e0c1540950e0d053600f0e20938182b31ee0001774887950204432007d770869
+    | 1 => 0x90d00a7106d32553c00ec50023d24064d16df03600a30bd260a70070a54e5d83029c3510f305861d40da03440018e04a00f7add7ffaf46860450ca0c84cd0f23cf006c5f016600e51b16c10700ccb02b80b5d64066263467a51b0eb2267200de50700572669302f05350a36c5761f03807ae3554737b71a230a1924471190da4
+    | 2 => 0x959405b40894d74602074321dba6a0000000548a1500c34d0e61060dd732e11422b12f257768b107890d423caf901c070740c1b1deea74807538930da3c5690c20bd16e145609d35b49d323713b800351040b6af90ff045157aa54500b50005e3f41d870d3a5619a0a2d312c60ac07d697123573e6644eb84db0005fc809c300
+    | 3 => 0xe8b05ec300c937fe09e7071f72c0b826040600c9f9576b5866a453f0eb86001000c03013b3177000646052343f45042017792032e39004001420109c005014e3bd6a710001a0b0172216c26000b010e04750808bc60010b2907002564006f0009f2803e7100899107071664440cbb0100296122306ca0813d03514a109400121
+    | 4 => 0x183ac3b8c7f00a32284a591013500d0601ca09e0d6200a662848081c7700d7496620a540f7e0d02df4b78c6c10e044c205b704e0b7974e40c0b460b106553f2f42c56ca610d20010dd6b317d3f702055b09edad1b0d8c5e00f1f52a402fdfa707401ce60414002002ce7913f4270f673920c4b34413e0d00150084040752530
+    | 5 => 0x966301300e00120d9c3403e286b534932301e2407d7e56c0fbd9150d04081700d2071043090f071e006327047750100308ccb600902f71032043bf203c104f7017b4000db95e7ded6f034b0b9b533560031620524ee6020081c00d110d30ba600b510480525e7b0030a030a018e14b392e607059490604207d96164e80120c3a
+    | 6 => 0x66dc92347520a003af1ea150615da4a307f0f0001a33011466f0a310114737618500d75c0d0f00b08a000dbc1180f00b014f485771743c60e209f0c22006101085000ab133a61c82bd0224c06050260737b257e1ad742c65370c527c2208440c079c3c009629077d255c6805810900365303ec00e8f1f902ba5110c460005f
+    | 7 => 0x723506a2001646d200640054610510605444a94a60091000090ee01c05500ed2e2030036a0682a314b00802503040f6000702ea042bad4d43071214413150100e0678e16db67443f7df069b33308150a670e0b67d3f80b770d7f08f17e2070bdda0a053506b35f8101b3c13a008a6fb0b84d00d306418f8400179173000c26ff
+    | 8 => 0x58a4600ae5960365b24f41a06002d479c52864e26f56f03c230f9384640726406858086591fe79007724868021b03e14a01d0000c83e5000517df8e9c0720002901760902200d00155a7c8a452008fe6050a10d15a600d030612309d2393086d94d313721092712b00d007b000104b6304b0a380997d06730af0e0b073780300
+    | 9 => 0x35007f0010ad06060010fc220828070559902e1803a070f04700e080046230eefa08565bf80100e06ae0b0c22016004239300d42f403d0570da40010360c40003e4f80047049a069701890507e0f0254472020960ce0c038708210e02042109e0bc75337dd004f20142321a0d76510056260070060090ac07043060b80db233c
+    | 10 => 0xa4771f73e05da24289047c0730a9c800056d0a131974060398c60753308d00003b78708092b2b57c39a01908508010a0a305a000e1e4544705e333204b772170b41020074007700243020e08e0f00e141000331100e400300202970928440664805f00174000044010902404aa8453b0610e0e78a301d0acc9420004801b8c5
+    | 11 => 0x3ed07fbee0073b40d710405c030075376f17ce0167b024600307f09b0801b50dc4416ea0a3608450ed9f4760005ac047c0b030450bc9002fa0440a400503f1e119226bd5e0fbed3a023000a553d5f606065576f0b00c0403d4305085d6b00bb2df412a4141c470209238076c4af2c7b5000f628794a02df0a2e8cf206110264
+    | 12 => 0x76a40051b18cfa07ff50397e064401a7d0810f040bd0d70017502057047530dc0adee84f4ed24000c0cf241056fe009f9079100c753e20048a0f500c40000d100807c0f0b04ebcd000c400309f04070f0001c6f10e3040600ac6c4000604e20009203421b04504831e26067f8190571000b100308829490600f009e64e661616
+    | 13 => 0xc000e22c3efa634050270302ecf0542427e21f02d8d95009574270403f920bc2a10f000d454d1d0d0004e0b388089d070056710007100303350b5011300e1e39a907d03c44e12fec126177111f0550610c6103ba08601781b200003074000001e111acbbe82f0501f0790f3209e4760e136e0605770080004450680cb0ed106
+    | 14 => 0x3750b4510400c00c48019d3300506049084001a50ab0306060578109e60409690a120008203cbaf3100b700d9b600640333c5c06b054c550a6140c2240006d20eaa800404bc90010c43066dc1f0e40d762c042b606fe0a7189925df30f40150170f728976eda045460770e583e6a2f00a1f00106f3070050147704300837908b
+    | 15 => 0x5434d32e600300427149d20c02540106e03b103e30034001900e4007a3060947e02083b3550099060426b13003263030c6c0705936f008a00f3480b625bf010010c36079508d40450035a4c431c15d06d0055210b05ed1d0c5300045061261e00500d06c00a470411243e0b0b4f0200450530b979dc874011320035c908cbc0
+    | 16 => 0x600010f56740478077771532048f0302125e02
+    | _ => 0
+  fld t 4 (i % 256)
+def hint8 (h : Nat) := orbitLookup x8 0 1378 h
+def x9 (i : Nat) :=
+  let t := match i/256 with
+    | 0 => 0x1c1c35453a0e501f138c0206f677f0e0b0237000c5828d7a410e5c57d647d8a2c0006a17701170d070537c7d793684c42001871042facb90f5f505013f9cd2a4007080d6232cc200cf125047221340013a0e642126010500f80f009da4b3d9c506911936f8cc5a1e70250103a10a74087300111b64b02c8f11e1e0d3e6d02503
+    | 1 => 0xe07a5066571f307000116089d0302e352b7f200bad0f387348768722a600200cffab4d00898bc30503b54a04067d0706c3ea780870616362781760b0040023220cdf7ab05374907b8070e3001663feeaeb805852330429936140460800530c017350a2660d573b3efa671b0b030240104b550d000000409db444300cb213f319
+    | 2 => 0x7a9831c606944c2383c760a5e0107f90ab0b0304074f120400030013910912227c2e00670702c02d105b8051640030500e00002af930000124598cd0cf1037d0fc44517030504f1f096b00085eb3014070052c206936c71000707310084700078a040396b07ccd350ba0db0458125af3b95d5366a60ec016d060307ae0e7c737
+    | 3 => 0x1780080a70030000cc406759430600102d8f8e2bd10400052590e8166063c00270fa41d806036e907269e3104412b60000a033080d0e03416207cc02009d39081b303e92607110f660409e06c7010370304270090a00c56f220708e0100229070005c979420005b010006d0e264e204f63340234cfb08550e0e761240010ae
+    | 4 => 0x9465cf710b9782a9334030020a9f22340ad4600704720030e2100f66500772150e9cae0f2324dca0b90061090d7a3cb1617c00030035120bc00a320f4058d00060a00075c004f01f1cd73663da1078e11260006641ad0600e16847000100886d5001021904d73e22b61f50e66c60084d00fe22906de2570ab30a7ef00b36b5e
+    | 5 => 0x28e884309060ae0320e05880b0061000b2007265365000c0d00a953f031aaf4402569736b4104009c50a407066c506db07d80fa76307000a150d0d4a0900a10e0d408a9045f07010063e2c071e2320470aa007b871300980104000208b00b5202500d3611bc44a0530073830623f749003c79113dc4a7a200050006
+    | _ => 0
+  fld t 4 (i % 256)
+def hint9 (h : Nat) := orbitLookup x9 1 509 h
+def hint (s : Nat) (ws : List Nat) := if s = 8 then hint8 (hk ws) else hint9 (hk ws)
+def labels := 0xec0045000df0000000db0000000ce0000000ca004018eaa00000011f004480106004463a84881ddf4740000000ae002a5f29c003f9ee707b1b0bc5c0000000d80000000cd003a1ce4f002d1884b0035dac3e0029d863a00325843760a5c52270000000ad00294009b002c96a2458881281e00289561a508312609002592407488100000
+def cols (t : Nat) := fld 0xd5c4457a20758d11722e0b33445c8c61d43432a398 21 t
+def u8 := 0xec0000000df004762284003ea0c740039db04f00311684b002d55a2458a50401e0000000ca0031c00aa003dd5c707b179385c003099237608a52e27002492c07488000800
+def u9 := 0x1140000001000000000df003398eaa0000000b40029d829700335884b618e852270044a2077002a5ec6c00419f47457270bc5c0029562205083122040026d281e498240000
+def u10 := 0xec0000000ca0000000df003398eaa0000000b40029d829700335884b618e852270044a2077002a5ec6c00419f4747ca70bc5c0029562205083122040026d281e498240000
+def u11 := 0xdb0000000ce0000000ca004018eaa0000000ae002a5f29c003f9ee707b1b0bc5c0035dac3e0029d863a002d1843760a5c522700289561a508312609002592407488100000
+def rowIx (t v : Nat) : Nat :=
+  if t = 8 then fld u8 9 v else
+  if t = 9 then fld u9 9 v else
+  if t = 10 then fld u10 9 v else
+  if t = 11 then fld u11 9 v else
+  mkProjection labels (cols t) 9 v
+def rr40 (t : Nat) := (List.range 162).map (fun i => rowIx t (fld 0xf36d62611246143e32c7cbad8984491850f8aa99a5c699638984491850e271657289a6164d124614361170e36a89a61138b2461436091858860d12450f4d34d34d34d34d30c30b2cb2cb2cb2cb2ca28a2492186186186186186181451449249249249249249040c30c28a28a28a28a28a288204102082041041 6 i))
+def rr41 (t : Nat) := (List.range 176).map (fun i => rowIx t (fld 0xd30b289a54891850f2c2aa268d2246143c70a689634891850f0a3cc2879d4891850f8699d16571c286554d2246143c12b0e370aa869238b246143a091854860c91439249249249249249228a28a28a28a28a286186186186186186081c71c71c71c71c71861851451145145145145145141030c30a28a28a28a28a28a208104082081041 6 i))
+def graphId (t : Nat) := fld 0x541045 2 t
+def qBook (w : Nat) : Nat :=
+  let d := fld 0x416451db603e5710c1d281d10e3005a7fdd1330c911006941020402582f004908a104010d693e021a253a1000130a0003570400201200250c040201000555250a060127080001000101000a07173601002400000304030d1113010a0102030f050800160037 8 (w % 103)
+  fld 0x3a0800d0440f2b5100044cb36542159181ca3e61f2810cd857a20f94d9ab441ee800048c18b04997041a6f9464e833052619d7a18a740060443203204d5c0d6066b628a80a462d28351686d827772f4c00108d7218b345142ee2ea8315d5c4cd3a30370886bd45c12e151823440c09110328ce604a000098a0431661275c8108a5468a38118185852820411c2e56428a351cb09d62007145a8343002091168cdae0e5abb948808b0ea0379080bde32307315142d502107357dc7c28200e5808e09d06502708805c20c106559160c484612b8c86cdc5f33d01c8c0ee46a8e796800000230e7468c394041aa941ca0a55ce8eb81865ee56a3a74a8c5ca6f72a3155c6c106e8b7419674442193b814cbdd1a0232995cba5361062972ad8d27286ba128ace54a3e057b86c524e00155a6000000133088c18d1f70105b4a1c166e9511d2aacd2e6800175c0c60d2a3095985e53e0b50008a8cc3659716086de552192981842a546a4255f1408414581019ca5ae56eab597ca0016529731b023c57459d0df041c25eb12949821ee6c63a1588c8cd5459b7411a28c3ea33b81043a63e58305d14a9d003890d1960d50ee8a55b28395621ba041cc5d46cac209728e8d462b111f1808a1ea8279f164dd6468b28e80f466a30e94ddc09654a82b8784085165a3743aa09514a42055ca18c1c98f507388445ea9b555aaacb14b422c55c0ce 13 (((w >>> 3) + d) % 315)
+
+def im40 (t : Nat) (i : Fin 8) : Nat :=
+  if t=8 then (Fixed40.raw ++ [0, mask 81] ++ [0x8b0059145802b081b52e0000001ffc000000000f,0x1024806880810404001000000000000000000000]).getD (fld 0x64359281 4 i.val) 0 else
+  projColumn 81 Fixed40.raw (cols t) i
+def im41 (t : Nat) (i : Fin 8) : Nat :=
+  if t=9 then (Fixed41.raw ++ [0, mask 88] ++ [0x560aeb58159332c206d4f000003ff80001ffc000007,0x800000000000000000000000000000,0x310620c427430620eee304000000001fff0000ffff00,0x100400000000000000000000000000000000,0xacc118231330a118e098d2ffe000001ff8e000e000c0,0x40000000000000000000000000000000]).getD (fld 0x64521938 4 i.val) 0 else
+  if t=10 then (Fixed41.raw ++ [0, mask 88] ++ [0x560aeb58159332c206d4f000003ff80001ffc000007,0x800000000000000000000000000000,0x310620c427430620eee304000000001fff0000ffff00,0x100400000000000000000000000000000000,0xacc118231330a118e098d2ffe000001ff8e000e000c0,0x40000000000000000000000000000000]).getD (fld 0x64521ba0 4 i.val) 0 else
+  if t=11 then (Fixed41.raw ++ [0, mask 88] ++ [0x560aeb58159332c206d4f000003ff80001ffc000007,0x800000000000000000000000000000,0x310620c427430620eee304000000001fff0000ffff00,0x100400000000000000000000000000000000,0xacc118231330a118e098d2ffe000001ff8e000e000c0,0x40000000000000000000000000000000]).getD (fld 0x654d3c10 4 i.val) 0 else
+  projColumn 88 Fixed41.raw (cols t) i
+
+def okTable (t : Nat) :=
+  if graphId t = 0 then (decide (validCross 145 81 inputs (rr40 t) (im40 t))) else
+    (decide (validCross 145 88 inputs (rr41 t) (im41 t)))
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem rowsOK : ∀ t : Fin 12, okTable t.val = true := by decide +kernel
+def passed (s t : Nat) (ws : List Nat) :=
+  if graphId t = 0 then crossHit 145 81 inputs (rr40 t) (im40 t) qBook (Fixed40.index s) (Fixed40.N s) (Fixed40.S s) ws else
+  crossHit 145 88 inputs (rr41 t) (im41 t) qBook (Fixed41.index s) (Fixed41.N s) (Fixed41.S s) ws
+def stop (s : Nat) (ws : List Nat) :=
+  if s=8 ∨ s=9 then
+    let a := hint s ws
+    if a=0 ∨ 12<a then false else passed s (a-1) ws
+  else false
+
+theorem stopNo {s ws} (ok : stop s ws = true) : ¬NatRun (mask 145) (goal 145) s ws := by
+  by_cases lev : s=8 ∨ s=9
+  · by_cases outside : hint s ws=0 ∨ 12<hint s ws
+    · simp [stop,lev,outside] at ok
+    · have good : hint s ws - 1 < 12 := by omega
+      have sel := rowsOK ⟨hint s ws-1,good⟩
+      have hit : passed s (hint s ws-1) ws = true := by simpa only [stop,if_pos lev,if_neg outside] using ok
+      by_cases h0 : graphId (hint s ws-1) = 0
+      · simp only [okTable, passed, h0, if_true, if_false] at sel hit
+        exact crossHitDead (of_decide_eq_true sel) hit (fun i hi => Fixed40.atDepth s i lev hi)
+      simp only [okTable, passed, h0, if_true, if_false] at sel hit
+      exact crossHitDead (of_decide_eq_true sel) hit (fun i hi => Fixed41.atDepth s i lev hi)
+  · simp [stop,lev] at ok
+
+def ck := cpWith stop 145 scs count board lookup
 def pan (s i : Nat) := ck s (board s i)
 set_option maxHeartbeats 50000000 in
-lemma block7_0 : span (pan 7) 64 0 = true := by decide +kernel
+lemma p7_0 : span (pan 7) 64 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
-lemma block7_64 : span (pan 7) 64 64 = true := by decide +kernel
+lemma p7_64 : span (pan 7) 64 64 = true := by decide +kernel
+lemma good7 : span (pan 7) 128 0 = true := by with_reducible exact (sj p7_0 p7_64)
 set_option maxHeartbeats 50000000 in
-lemma block7_128 : span (pan 7) 64 128 = true := by decide +kernel
+lemma p8_0 : span (pan 8) 64 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
-lemma block7_192 : span (pan 7) 64 192 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_256 : span (pan 7) 64 256 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_320 : span (pan 7) 64 320 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_384 : span (pan 7) 64 384 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_448 : span (pan 7) 64 448 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_512 : span (pan 7) 64 512 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_576 : span (pan 7) 64 576 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_640 : span (pan 7) 64 640 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_704 : span (pan 7) 64 704 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_768 : span (pan 7) 64 768 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_832 : span (pan 7) 64 832 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_896 : span (pan 7) 64 896 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_960 : span (pan 7) 64 960 = true := by decide +kernel
-lemma good7 : span (pan 7) 1024 0 = true := by with_reducible exact (sj (sj (sj (sj block7_0 block7_64) (sj block7_128 block7_192)) (sj (sj block7_256 block7_320) (sj block7_384 block7_448))) (sj (sj (sj block7_512 block7_576) (sj block7_640 block7_704)) (sj (sj block7_768 block7_832) (sj block7_896 block7_960))))
-set_option maxHeartbeats 50000000 in
-lemma block8_0 : span (pan 8) 64 0 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_64 : span (pan 8) 64 64 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_128 : span (pan 8) 64 128 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_192 : span (pan 8) 64 192 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_256 : span (pan 8) 64 256 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_320 : span (pan 8) 64 320 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_384 : span (pan 8) 64 384 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_448 : span (pan 8) 64 448 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_512 : span (pan 8) 64 512 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_576 : span (pan 8) 64 576 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_640 : span (pan 8) 64 640 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_704 : span (pan 8) 64 704 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_768 : span (pan 8) 64 768 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_832 : span (pan 8) 64 832 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_896 : span (pan 8) 64 896 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_960 : span (pan 8) 64 960 = true := by decide +kernel
-lemma good8 : span (pan 8) 1024 0 = true := by with_reducible exact (sj (sj (sj (sj block8_0 block8_64) (sj block8_128 block8_192)) (sj (sj block8_256 block8_320) (sj block8_384 block8_448))) (sj (sj (sj block8_512 block8_576) (sj block8_640 block8_704)) (sj (sj block8_768 block8_832) (sj block8_896 block8_960))))
+lemma p8_64 : span (pan 8) 64 64 = true := by decide +kernel
+lemma good8 : span (pan 8) 128 0 = true := by with_reducible exact (sj p8_0 p8_64)
 theorem closed : ∀ s i, i < count s → ck s (board s i) = true := by
   intro s i hi
   by_cases h7 : s=7
@@ -5205,14 +6144,24 @@ theorem closed : ∀ s i, i < count s → ck s (board s i) = true := by
   · subst s
     exact spOK good8 i (Nat.zero_le _) hi
   simp [count,h7,h8] at hi
-def rho (ys : List Nat) : List Nat :=
-  match fld 0x66751402adaa695 1 (bsr 0xfc42f9d4f983b625f65fdd8aef12a16bec0068fceb7ae66ce7927403e2dfa6bce2db16bfe26ffb0ddcca50b6dbb0c082d44e0266cc4ddd90c85b11f0c1dfed25bf892aa7be90fde1b9bc5323b8bf2ae5b840280ab5d8ee2bb3adf8d9ab918a6c97bbd4b794566034940775d48b1dbc4189fbe569857f9ccf8332a657802623957e18e57872440c2866b42c306577bede64e28e865fb708ae5f5ac764582d6f9955b81b3d559524404b5745984233e06b3e995e0c3ca6bef13b7161ac39b75ee63691856b3404dacb3142e40e3053a2802852bf39263f2b591ea98f881e2ab19a1d566ad01839463c149a43ab0b8e4e0d0b26fed30646ede901f9f82f01eef95d 32 (hk ys) 7 0 64) with
-  | 1 => vals.map (fun r => fld 0xec0036c00ca0000001140000001000000000df003398eaa0000000e80035c00c900361ce4f6b0f984370000000b40029d829700335884b618e852270000001110000000fe0047e3a84002b9ee700044a2077002a5ec6c00419f4747ca70bc5c0000000b2002880096002b56a245586924070029562205083122040026d281e498240000 9 r)
-  | _ => []
+def qPerm (i : Nat) : Nat := fld 0x2e463000000 21 i
+
+def qRow (i : Nat) : List Nat :=
+  vals.map (fun v => fld 0xec0045000df0000000db0000000ce0000000ca004018eaa00000011f004480106004463a84881ddf4740000000ae002a5f29c003f9ee707b1b0bc5c0000000d80000000cd003a1ce4f002d1884b0035dac3e0029d863a00325843760a5c52270000000ad00294009b002c96a2458881281e00289561a508312609002592407488100000 9 (orbitLabel (qPerm i) v))
+
+def qWord (i : Nat) (t : Fin 8) : Nat :=
+  inputs.getD (if t.val=7 then 7 else fld (qPerm i) 3 t.val) 0
+def qPick0 (ys : List Nat) : Nat :=
+  fld 0x4 2 (fld 0x66751402adaa695 1 (bsr 0xfc42f9d4f983b625f65fdd8aef12a16bec0068fceb7ae66ce7927403e2dfa6bce2db16bfe26ffb0ddcca50b6dbb0c082d44e0266cc4ddd90c85b11f0c1dfed25bf892aa7be90fde1b9bc5323b8bf2ae5b840280ab5d8ee2bb3adf8d9ab918a6c97bbd4b794566034940775d48b1dbc4189fbe569857f9ccf8332a657802623957e18e57872440c2866b42c306577bede64e28e865fb708ae5f5ac764582d6f9955b81b3d559524404b5745984233e06b3e995e0c3ca6bef13b7161ac39b75ee63691856b3404dacb3142e40e3053a2802852bf39263f2b591ea98f881e2ab19a1d566ad01839463c149a43ab0b8e4e0d0b26fed30646ede901f9f82f01eef95d 32 (hk ys) 7 0 64))
+def qOri0 := quickOri 145 2 inputs qPick0 qRow qWord qBook
+
+set_option maxHeartbeats 50000000 in
+set_option maxRecDepth 10000 in
+theorem qCert : ∀ i : Fin 2, i.val = 0 ∨ validQuick 145 inputs (qRow i) (qWord i) := by decide +kernel
 def B (i : Nat) := mv (mask 145) (fld 0xf54e52f21f41000401e10e20f65e50100f20f10402400506f53e54e41e42f31106e51500e53503f50f52e31e21f51f42104e65504405103 12 i) inputs
 def I (ys : List Nat) := bsr 0xfc42f9d4f983b625f65fdd8aef12a16bec0068fce2dfa6bce2db16bfdbb0c082d44e0266bf892aa7b9bc5323b840280ab5d8ee2bb3adf8d997bbd4b7940775d48b1dbc4189fbe569857f9ccf8332a657802623957e18e57872440c286577bede5fb708ae582d6f994b5745983ca6bef139b75ee63404dacb3053a2802852bf391e2ab19a1839463c149a43ab0b26fed301f9f82f 32 (hk ys) 6 0 37
 set_option maxRecDepth 10000 in
-lemma roof : bar 145 (cutB 10 inputs B) (cutN 10 37) (fun _ => I) (rowOrient 145 rho) scs 11 0 = true := by decide +kernel
+lemma roof : bar 145 (cutB 10 inputs B) (cutN 10 37) (fun _ => I) qOri0 scs 11 0 = true := by decide +kernel
 def nextRecipe (i : Nat) : Nat :=
   let v : Nat := match i/96 with
     | 0 => 0x33d90cf5433d8c5e6533d80c40633d4ccf5031014ce76339d4ce6533898ce2530414c505139502e6530408c50233c50cf1333c40ce7133984ce5133d0ccf40310107e64339d0ce6433cc0c4033398cce53339ccc5073041cce243384cce4323988ce2331000ca604f818ce60329423e05339407a608f8107e603b90136034f80dbe606e9023e0377981be400d8183e06339c08a603b9408e60339007a401f9008e40328c1be50338c1da4077900ea303b8c1ee606f8c08a307b9008e3036804ba010a840de012f80426100b8407e03778c15e1055841ee30
@@ -5277,233 +6226,232 @@ def nextCodes (i : Nat) : Nat :=
     | _ => 0
   fld v 12 (i % 96)
 def action2 (ys : List Nat) := orbitLookup nextCodes 0 1033 (hk ys)
-def rho2 (ys : List Nat) : List Nat :=
-  let a := action2 ys/1742
-  if a=0 then [] else
-    let c := fld 0x2e4631ac688 21 a
-    vals.map (fun v => fld 0x1210045001070000000db0000000ce00000010400401f92000000011f0044801060047a3a908820e0a76000000103003fdf31c0040a02737e9bcd65d0000000e90000000de003a1ce5b00375b84e0035dac4a00331963d00325903960c6c6c280000000b7002cc011a002d96a265888e321f002b1561d50866300b0045e2c088a8180600 9 (orbitLabel c v))
+def qPick1 (ys : List Nat) : Nat :=
+  fld 0x4 2 (action2 ys/1742)
+def qOri1 := quickOri 145 2 inputs qPick1 qRow qWord qBook
+
 def J (ys : List Nat) := action2 ys % 1742
-def r2 (i : Nat) := bar 145 (cutB 9 (B i) C) (cutN 9 1742) (fun _ => J) (rowOrient 145 rho2) [] 10 0
+def r2 (i : Nat) := bar 145 (cutB 9 (B i) C) (cutN 9 1742) (fun _ => J) qOri1 [] 10 0
 set_option maxRecDepth 10000 in
-lemma roofPart0 : span r2 1 0 = true := by decide +kernel
+lemma rp0 : span r2 1 0 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart1 : span r2 1 1 = true := by decide +kernel
+lemma rp1 : span r2 1 1 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart2 : span r2 1 2 = true := by decide +kernel
+lemma rp2 : span r2 1 2 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart3 : span r2 1 3 = true := by decide +kernel
+lemma rp3 : span r2 1 3 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart4 : span r2 1 4 = true := by decide +kernel
+lemma rp4 : span r2 1 4 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart5 : span r2 1 5 = true := by decide +kernel
+lemma rp5 : span r2 1 5 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart6 : span r2 1 6 = true := by decide +kernel
+lemma rp6 : span r2 1 6 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart7 : span r2 1 7 = true := by decide +kernel
+lemma rp7 : span r2 1 7 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart8 : span r2 1 8 = true := by decide +kernel
+lemma rp8 : span r2 1 8 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart9 : span r2 1 9 = true := by decide +kernel
+lemma rp9 : span r2 1 9 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart10 : span r2 1 10 = true := by decide +kernel
+lemma rp10 : span r2 1 10 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart11 : span r2 1 11 = true := by decide +kernel
+lemma rp11 : span r2 1 11 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart12 : span r2 1 12 = true := by decide +kernel
+lemma rp12 : span r2 1 12 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart13 : span r2 1 13 = true := by decide +kernel
+lemma rp13 : span r2 1 13 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart14 : span r2 1 14 = true := by decide +kernel
+lemma rp14 : span r2 1 14 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart15 : span r2 1 15 = true := by decide +kernel
+lemma rp15 : span r2 1 15 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart16 : span r2 1 16 = true := by decide +kernel
+lemma rp16 : span r2 1 16 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart17 : span r2 1 17 = true := by decide +kernel
+lemma rp17 : span r2 1 17 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart18 : span r2 1 18 = true := by decide +kernel
+lemma rp18 : span r2 1 18 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart19 : span r2 1 19 = true := by decide +kernel
+lemma rp19 : span r2 1 19 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart20 : span r2 1 20 = true := by decide +kernel
+lemma rp20 : span r2 1 20 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart21 : span r2 1 21 = true := by decide +kernel
+lemma rp21 : span r2 1 21 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart22 : span r2 1 22 = true := by decide +kernel
+lemma rp22 : span r2 1 22 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart23 : span r2 1 23 = true := by decide +kernel
+lemma rp23 : span r2 1 23 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart24 : span r2 1 24 = true := by decide +kernel
+lemma rp24 : span r2 1 24 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart25 : span r2 1 25 = true := by decide +kernel
+lemma rp25 : span r2 1 25 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart26 : span r2 1 26 = true := by decide +kernel
+lemma rp26 : span r2 1 26 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart27 : span r2 1 27 = true := by decide +kernel
+lemma rp27 : span r2 1 27 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart28 : span r2 1 28 = true := by decide +kernel
+lemma rp28 : span r2 1 28 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart29 : span r2 1 29 = true := by decide +kernel
+lemma rp29 : span r2 1 29 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart30 : span r2 1 30 = true := by decide +kernel
+lemma rp30 : span r2 1 30 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart31 : span r2 1 31 = true := by decide +kernel
+lemma rp31 : span r2 1 31 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart32 : span r2 1 32 = true := by decide +kernel
+lemma rp32 : span r2 1 32 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart33 : span r2 1 33 = true := by decide +kernel
+lemma rp33 : span r2 1 33 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart34 : span r2 1 34 = true := by decide +kernel
+lemma rp34 : span r2 1 34 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart35 : span r2 1 35 = true := by decide +kernel
+lemma rp35 : span r2 1 35 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart36 : span r2 1 36 = true := by decide +kernel
-lemma secondRoofOK : span r2 37 0 = true := by with_reducible exact (sj (sj (sj (sj (sj roofPart0 roofPart1) (sj roofPart2 roofPart3)) (sj (sj roofPart4 roofPart5) (sj roofPart6 (sj roofPart7 roofPart8)))) (sj (sj (sj roofPart9 roofPart10) (sj roofPart11 roofPart12)) (sj (sj roofPart13 roofPart14) (sj roofPart15 (sj roofPart16 roofPart17))))) (sj (sj (sj (sj roofPart18 roofPart19) (sj roofPart20 roofPart21)) (sj (sj roofPart22 roofPart23) (sj roofPart24 (sj roofPart25 roofPart26)))) (sj (sj (sj roofPart27 roofPart28) (sj roofPart29 (sj roofPart30 roofPart31))) (sj (sj roofPart32 roofPart33) (sj roofPart34 (sj roofPart35 roofPart36))))))
+lemma rp36 : span r2 1 36 = true := by decide +kernel
+lemma secondRoofOK : span r2 37 0 = true := by with_reducible exact (sj (sj (sj (sj (sj rp0 rp1) (sj rp2 rp3)) (sj (sj rp4 rp5) (sj rp6 (sj rp7 rp8)))) (sj (sj (sj rp9 rp10) (sj rp11 rp12)) (sj (sj rp13 rp14) (sj rp15 (sj rp16 rp17))))) (sj (sj (sj (sj rp18 rp19) (sj rp20 rp21)) (sj (sj rp22 rp23) (sj rp24 (sj rp25 rp26)))) (sj (sj (sj rp27 rp28) (sj rp29 (sj rp30 rp31))) (sj (sj rp32 rp33) (sj rp34 (sj rp35 rp36))))))
 def t2 (i : Nat) := ck 9 (C i)
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart0 : span t2 37 0 = true := by decide +kernel
+lemma lp0 : span t2 37 0 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart37 : span t2 82 37 = true := by decide +kernel
+lemma lp37 : span t2 82 37 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart119 : span t2 84 119 = true := by decide +kernel
+lemma lp119 : span t2 84 119 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart203 : span t2 55 203 = true := by decide +kernel
+lemma lp203 : span t2 55 203 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart258 : span t2 55 258 = true := by decide +kernel
+lemma lp258 : span t2 55 258 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart313 : span t2 22 313 = true := by decide +kernel
+lemma lp313 : span t2 22 313 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart335 : span t2 36 335 = true := by decide +kernel
+lemma lp335 : span t2 36 335 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart371 : span t2 44 371 = true := by decide +kernel
+lemma lp371 : span t2 44 371 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart415 : span t2 14 415 = true := by decide +kernel
+lemma lp415 : span t2 14 415 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart429 : span t2 31 429 = true := by decide +kernel
+lemma lp429 : span t2 31 429 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart460 : span t2 29 460 = true := by decide +kernel
+lemma lp460 : span t2 29 460 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart489 : span t2 43 489 = true := by decide +kernel
+lemma lp489 : span t2 43 489 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart532 : span t2 37 532 = true := by decide +kernel
+lemma lp532 : span t2 37 532 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart569 : span t2 38 569 = true := by decide +kernel
+lemma lp569 : span t2 38 569 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart607 : span t2 26 607 = true := by decide +kernel
+lemma lp607 : span t2 26 607 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart633 : span t2 10 633 = true := by decide +kernel
+lemma lp633 : span t2 10 633 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart643 : span t2 43 643 = true := by decide +kernel
+lemma lp643 : span t2 43 643 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart686 : span t2 71 686 = true := by decide +kernel
+lemma lp686 : span t2 71 686 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart757 : span t2 41 757 = true := by decide +kernel
+lemma lp757 : span t2 41 757 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart798 : span t2 12 798 = true := by decide +kernel
+lemma lp798 : span t2 12 798 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart810 : span t2 60 810 = true := by decide +kernel
+lemma lp810 : span t2 60 810 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart870 : span t2 15 870 = true := by decide +kernel
+lemma lp870 : span t2 15 870 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart885 : span t2 57 885 = true := by decide +kernel
+lemma lp885 : span t2 57 885 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart942 : span t2 45 942 = true := by decide +kernel
+lemma lp942 : span t2 45 942 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart987 : span t2 63 987 = true := by decide +kernel
+lemma lp987 : span t2 63 987 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1050 : span t2 28 1050 = true := by decide +kernel
+lemma lp1050 : span t2 28 1050 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1078 : span t2 100 1078 = true := by decide +kernel
+lemma lp1078 : span t2 100 1078 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1178 : span t2 53 1178 = true := by decide +kernel
+lemma lp1178 : span t2 53 1178 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1231 : span t2 78 1231 = true := by decide +kernel
+lemma lp1231 : span t2 78 1231 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1309 : span t2 79 1309 = true := by decide +kernel
+lemma lp1309 : span t2 79 1309 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1388 : span t2 20 1388 = true := by decide +kernel
+lemma lp1388 : span t2 20 1388 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1408 : span t2 70 1408 = true := by decide +kernel
+lemma lp1408 : span t2 70 1408 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1478 : span t2 29 1478 = true := by decide +kernel
+lemma lp1478 : span t2 29 1478 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1507 : span t2 36 1507 = true := by decide +kernel
+lemma lp1507 : span t2 36 1507 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1543 : span t2 46 1543 = true := by decide +kernel
+lemma lp1543 : span t2 46 1543 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1589 : span t2 16 1589 = true := by decide +kernel
+lemma lp1589 : span t2 16 1589 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1605 : span t2 11 1605 = true := by decide +kernel
+lemma lp1605 : span t2 11 1605 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1616 : span t2 12 1616 = true := by decide +kernel
+lemma lp1616 : span t2 12 1616 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1628 : span t2 8 1628 = true := by decide +kernel
+lemma lp1628 : span t2 8 1628 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1636 : span t2 12 1636 = true := by decide +kernel
+lemma lp1636 : span t2 12 1636 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1648 : span t2 22 1648 = true := by decide +kernel
+lemma lp1648 : span t2 22 1648 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1670 : span t2 24 1670 = true := by decide +kernel
+lemma lp1670 : span t2 24 1670 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1694 : span t2 8 1694 = true := by decide +kernel
+lemma lp1694 : span t2 8 1694 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1702 : span t2 18 1702 = true := by decide +kernel
+lemma lp1702 : span t2 18 1702 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1720 : span t2 15 1720 = true := by decide +kernel
+lemma lp1720 : span t2 15 1720 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1735 : span t2 7 1735 = true := by decide +kernel
-lemma secondTestOK : span t2 1742 0 = true := by with_reducible exact (sj (sj (sj (sj (sj leafPart0 leafPart37) (sj leafPart119 (sj leafPart203 leafPart258))) (sj (sj leafPart313 (sj leafPart335 leafPart371)) (sj leafPart415 (sj leafPart429 leafPart460)))) (sj (sj (sj leafPart489 (sj leafPart532 leafPart569)) (sj leafPart607 (sj leafPart633 leafPart643))) (sj (sj leafPart686 (sj leafPart757 leafPart798)) (sj leafPart810 (sj leafPart870 leafPart885))))) (sj (sj (sj (sj leafPart942 leafPart987) (sj leafPart1050 (sj leafPart1078 leafPart1178))) (sj (sj leafPart1231 (sj leafPart1309 leafPart1388)) (sj leafPart1408 (sj leafPart1478 leafPart1507)))) (sj (sj (sj leafPart1543 (sj leafPart1589 leafPart1605)) (sj leafPart1616 (sj leafPart1628 leafPart1636))) (sj (sj leafPart1648 (sj leafPart1670 leafPart1694)) (sj leafPart1702 (sj leafPart1720 leafPart1735))))))
+lemma lp1735 : span t2 7 1735 = true := by decide +kernel
+lemma secondTestOK : span t2 1742 0 = true := by with_reducible exact (sj (sj (sj (sj (sj lp0 lp37) (sj lp119 (sj lp203 lp258))) (sj (sj lp313 (sj lp335 lp371)) (sj lp415 (sj lp429 lp460)))) (sj (sj (sj lp489 (sj lp532 lp569)) (sj lp607 (sj lp633 lp643))) (sj (sj lp686 (sj lp757 lp798)) (sj lp810 (sj lp870 lp885))))) (sj (sj (sj (sj lp942 lp987) (sj lp1050 (sj lp1078 lp1178))) (sj (sj lp1231 (sj lp1309 lp1388)) (sj lp1408 (sj lp1478 lp1507)))) (sj (sj (sj lp1543 (sj lp1589 lp1605)) (sj lp1616 (sj lp1628 lp1636))) (sj (sj lp1648 (sj lp1670 lp1694)) (sj lp1702 (sj lp1720 lp1735))))))
 lemma upperDead (i : Nat) (hi : i < 37) : ¬NatRun (mask 145) (goal 145) 10 (B i) :=
-  symCutRoot (ori_ok rho2) (spOK secondRoofOK i (Nat.zero_le _) hi)
-    (fun j hj => checkpointCheck_sound closed (spOK secondTestOK j (Nat.zero_le _) hj))
+  symCutRoot (quick_safe (k:=145) (bound:=2) (xs:=inputs) (choose:=qPick1) (row:=qRow) (word:=qWord) (book:=qBook) qCert) (spOK secondRoofOK i (Nat.zero_le _) hi)
+    (fun j hj => cpWith_sound stopNo closed (spOK secondTestOK j (Nat.zero_le _) hj))
 theorem finChk : ¬NatRun (mask 145) (goal 145) 11 inputs :=
-  symCutRoot (ori_ok rho) roof upperDead
+  symCutRoot (quick_safe (k:=145) (bound:=2) (xs:=inputs) (choose:=qPick0) (row:=qRow) (word:=qWord) (book:=qBook) qCert) roof upperDead
 
 set_option maxRecDepth 10000 in
 theorem shard : ∀ t, HasCircuitSize 7 target t → 12 ≤ t := by
@@ -5515,143 +6463,121 @@ theorem shard : ∀ t, HasCircuitSize 7 target t → 12 ≤ t := by
 end Row28
 
 namespace Row29
-def vals : List ℕ := [1,1,1,2,2,2,4,4,4,8,8,10,10,10,10,12,12,12,12,16,16,17,17,17,17,20,20,20,20,24,24,24,28,28,28,28,28,28,28,28,28,28,28,28,28,32,32,33,33,33,33,34,34,34,34,40,40,40,42,42,42,42,42,42,42,42,42,42,42,42,42,48,48,48,49,49,49,49,49,49,49,49,49,49,49,49,49,56,56,56,56,56,56,56,56,56,56,56,56,56,64,64,64,65,65,65,65,65,65,65,65,65,65,65,65,65,65,66,66,66,66,66,66,66,66,66,66,66,66,66,66,68,68,68,68,68,68,68,68,68,68,68,68,68,68,3,5,9,3,6,18,5,6,36,9,72,11,14,26,74,13,14,44,76,18,80,19,21,25,81,21,22,52,84,25,26,88,3,5,6,9,18,29,30,36,60,72,80,92,96,36,96,35,37,41,97,35,38,50,98,41,44,104,3,5,6,9,18,36,43,46,58,72,80,96,106,50,52,112,3,5,6,9,18,36,51,53,57,72,80,96,113,3,5,6,9,18,36,57,58,60,72,80,96,120,72,80,96,3,5,6,9,18,36,67,69,72,73,80,81,96,97,3,5,6,9,18,36,67,70,72,74,80,82,96,98,3,5,6,9,18,36,69,70,72,76,80,84,96,100]
 def inputs : List ℕ := [0x4b012eacb004b8e5802591f005647c1149e0000001fff80007ffc000007800001e00007,0x95ab54055009502a98ea8f100aa8852f1720007ffe000000000007ffc78000000007838,0x2ae602980a60126053205322253cc3c8f23a5fff8000000000000000000001fff1e0781c0,0x3080c2030833c818409e470416d1c10ffc0800000000000fff80007fff801fffe007fe00,0xc103040c1055d0ae872880401ae1fff0404000000000000fffffff8000001ffffff80000,0x3020c08302099e0cf07cf07ffe3001004020000000000000fffffffffffffe00000000000,0x3fc0ff03fc0fe00f004f00488bc0122288801fffffffffff0000000000000000000000000]
+def vals := sampleTable inputs 290
 def scs : List ℕ := [0x1d46720c9524891,0x1d4570e8bd258a5,0x1282015c9924c92,0x19c20128a524c9b,0x20c3a1d4bd25499,0x1d44a19ca524496,0x20c3a1289925895,0x19c20128bd24c9b,0x19c4a080a5264bd,0x1283a15c9624c91,0x128200e89524492,0x20c3a19c9224495,0x15c3a20ca525496]
 def target : BFn 7 := fun x => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 2 && x 5) || (x 3 && x 6) || (x 4 && x 6) || (x 5 && x 6)
 def recipe7 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x3640b5b051784c36579e41f6605b2d24a623557163253484a36709b604173a81b7b3a027700f5330284c19651e31e199de41169b66210ce73660c24021b9d624199ba2e5604d35700f4295185b2c6c86a2b6c0f423571b00516b602e0384da6169b6365784d0a0113b0e5d826121bc3b075d1dc5e00ccd2f6d83f335604d245f9bd2e6f83f07180bf061b051061b9bd1e0084d0602ba031399c939329c72a00b7f24181c002179c01d211de2d4f9e7340092624621be073f20907183a333329c70b5c85b26731dc011e04d050a452334084c0443ccd031b84c2d1ea66051704d03018f5263f04c1000c66220084f2a6b1b6266c8022519a7924560513e5584a12613d16006bd1394504d351e36307011b52d719b52857c1a02169b0381a1713003126395084d306e03e334e84c0d1abe3871984c2873c1504173760619257364435b270412980211d62706bce2a029d62c5705d326f0bc02169c7205c4e037334d12e6a8f505019b6071b0512d5000e030183f334b9853657b4226451be06170c005010f504179bf2a744152a53124301735b2c730f504011dc3b5185b931704d37549e8240084c031e04c3301ba3021b84d39451e32a5f85b2f01126230084c
-    | 1 => 0x1b0e172733d9b62e039e52a5093036111f5071e1be2e7483e07609da07180df2b5b4d0316e83e03019b8263f1c0327483e981f35d713d9b623008172e5ab6007173bc5a03ba012799b5022104c3019cd7276c1da0702a092a5604c62541da0d2906a33181ef295fb5b033f20906029da2532a17061704d811e1e3071784c30223952e560510843017274601c28700f40717b5e3e3984b8f5d1dc07011db022104d2e3e04d335916e394284ca2169b63754a8f042104c8f1f35d88171e3261e1ca1f4a1292b6c0ba191925719199f5011b84c241b9d0051804c2a02132396ca09035b4cd0718374293604a275604c03211bf33181ee5d1e04f5a1804c0517926335604f2f18a67042104d07033a02a249ca8910ce7333185c306e1f88f1735d391e1cf20009d6346f83f24249d29817418031b9bd051e2a706211be19634f0263f1bd070a45229144ef2c718f5021984c8700ccd071704d255607313613d105009b69717b5e06180bf030083f0b18bc728013a82a06bd1031bb5a394504c041c8ea15174bf2d1826a06183a329008515a1e1be220084c22618ce3d1dc93051fbd9011e04c07018ba05021dc8c171e5031e35a5b211e40445b532d6d0f52e4084c
-    | 2 => 0x6f5841e26730f50401a0901211d680011da44169b6072104d0517126240404d2d21a692b3c1858c173bc335084d2f5bb52395304d24040bf0f6005b393e1e3031784c39199cf1f6744f30541da20574e1254e89604179bd931b84d061804c06404cd334284c2d6d4cd394c05107028f52c404cd300b17e04541da601bb7f297103f2c143e7245d9c02e301c534530965b1704d051e04f226725f2d4f1e71f171f50f60340146305d3e7403f356e83e5f541da2c71c1532749b68c1b84d24040e0071bba8871b84c8f1f126266a8f50501ba00f601e707179bd021e04d256d8f52f5b92624211d229212705e5b4cd8b5bccd1f660ce396c8f52600a57070303e2e6a8f439429bd021704d2e6c8f5256c1b82938a1904169b6031704d05179c01461060191ab582901051316e83f8e1712605181bd275604f891735b071804c07404cd0d5e85d27561bd24181be02179bea5169b6041e04d03013a0061784c2d718f42d71a0924651bdb6169b62b580602a561d607179262f4dba32c731db271e1ca35733a032399c90702b53051b84d19171df126105d345bb5e03173bc334f85b30571d6256b0f530733a022171de0701ba0396c9da207f03e0708c3e065e353
-    | 3 => 0x5169b60410ce0051925924651bf286e0f5264804c3d008ec2a6b0f404183d9270289d29574e72a3f04c071f126334d04c0319257b3169b689199d63074ba0071c92604193a8395084f051984d041b051276d8f502011b63a1736f061b35b2524a1a31738f53a4dba307008db8d3d9b62b6c0da27738f52d579e3061c3600717126913d9b602169d61f660ef0f00c662e249ca220c184af169b62a4d04c05179be06179c02873a09314235b05000f507031da34433602a6f8f50406bd1206704a050183e05179bf1b6305b2e748f503019b62e4e84d04170c006198c0050241506169b624211bd291735b03010f587211bf276f83f051103604199d6981f126933e1da277383f071f35e071e04f051735b0f5f85b04181bd2c16b682550924871b9bd2e313d1264084c6906bd13302af73670ba0246d3a03258060071b35b156102a226782f393dccc1f3dcd306028f5126005b3657ba69960c1e041b84c391b9cf061ba5c35573d188171e50e5a9c705011b6051f126061fb5b2d718f55f109292c731b69e6085d366f03e276a8f56617142241b9ba07181bd37580602f6d9b846169b6263f1bf5e104d3231b9ba162a2cd021e04c06179bd25573d10702415
-    | 4 => 0x1e6585d811704d2c018e5246e209353b1292a56259200084c04008f5255604d27739dc2e749b8355705d275304c071092924044ce2a5604d02211be07181bf931e1e306000f507104d3071d37f305705d061c81807029db052104d2e74ba02e6b0f533309262453ce135730f5266a8f42e5304c07023a0071ba04051c0c3363404a055b1dc1f5d1d50119c3e255705d30730f502169b607018f5244f36030541dc04211be2d1a2673174ba05f10ce72066bd32b5fbd1721c3601f6704a2b5802a061e04d1361c1f03009b6072104c25730f505173521f49ce0201cb70061cb5d621735b393f04c06029dc23640602a5806004183a382169c7011804c5c00ccd061b84d2e6c9db932104d37028c9266a8fb21011b02a309262a561bf245d9be241b84c07000f5070183f227f0f52773ccd24009261a53b51290185107179bf30213642e038c13543926075b4cd051810526239ce345b35d255084f336c0f50617126264e9be2a6d8f58c2104d3a7003f221b9ba04211bf051092924040df07199e307104e18e199d60e19c3e2d5784d2c51926195c219345b126070083e071cb7f1a01926256c1b6985d1da2f5b12694169c707030f5393484a1f6606004023a0
-    | 5 => 0x1f66860061c0c3065b1dc394284d2a6a8f5285dbd106194e9275312403179be2c5185b246e0f526451bd127ab0b07181d60408c3e2d57bd02e0384f42169b62857b42015a9b63950b2e06181be8217418300736d391726a330cc5e041e1be6a08c3e3d60be7070203e244c0511f7d0f522471c96b1f35e24211be25731dcaa169b649169b6031984d317483e333f04c07008f5363e35b1e6505c06211e3295f851261e9ca051e04d264284c0824919071a0732c3584a2010ce3256d9b6045a9b62a008c3041784c011e04f2d1f267336d8f50a17c17194026166109292a722093a6e3a00400ccd2d710032c733a021019d58560c1e071c0c329571d6041984c03179bf363b92918019265b1b84d06109292a6b0f50518142031bbd004011da261e1cf05541dc2d111f51f7d1da07029b7070083f355c35b04019b81f664662556051031f4d0125f85b06179be104084b031735a05023a02a54126387183e04194e92a5084d8c1725c245b4cd50169c7a8169b618008173003147241b9bd071984c001c818871e1be394e84d264504c1b01926031b84d0219b4d8810929031f126061984d2e3105d255604f063e1dab8169b6126135d05199e5395325c207d8f5
-    | 6 => 0x26481be33330606610ce724249d3ac169b6041b9d62d6c9dc812104d2a3105d2e0304d071e04c81192573356051032104c241e1be36738f52957c1a04010f507541da805b1dc2a5304d2c7083f9341ccd021ba5c981a926334284d05212a7031e25c615b4cd1f199ba67633552b718f5881e1e32e4e84c251b9df055a9b5011984d032104d66541dc9a5ebd127040d52b5b3a88d3f209243d8151f4a929071a3600702c1504020f506541dc394084d061b8c0355d35b8810ce7396a8f52d149f50e5d90f2c5205d305d35b051a9265a1b84c26481bf206605b71183a304169b0245607378031dc7a3d9b6334e84d2a5092436739da30748f50401ccd1e1b9ba2d6d3a026429bd6d20424071e04d396b0f5351ab7005213d0265cb5b8c06bd13754b6105019dc254301731710f4306e1dc3a173592f6d83e882104d07208e83332860031984c051b84c24561d606199e5286e3a00419261297383e062104c063d9b629541da235333a39409e3051e04c05008f51c019261f7d2732e3f04c02212f735381c9041804c391e1cd2e749b712791dc051ab5f300392607018bc011b84d45169b62a0a17a2f00926070103e062104d21014f526531be885a9b66a17126
-    | 7 => 0x310929201b9ba172cccd230084d2b01126030083e811bbd02e5604c3e7403e061ab5d89109293771415393f1d6945d1dc061b84c051834d2e0384c05020f58c1704d336b83e041cb5d296505129738f504021dc3258a18217f83f6d19c2423579b0041f12629771da041baf703199e40706bd1336a8f50117138255084d811b84d305584a0619c3e3541926012104d3d57c66073e3a02f74ba0261e9cc2f19a793516b642e4bb3b061bb4d2b5b35d30419263204089071935207211be2a71c15393f1be05211bf0417126334e05b031e04d02013a02b5bccd26561beb0169b6075a9b5351f35730144d953173522b5b126051b0516402209334084d8c171e3071ab5d5b1e1e36210929254e84d2d2526a071b84c394084c03169b607020f506541da24181d42000c7f5a1b9bd3950a5c2f7483e396a8f439409d6011984c875b4cd071a92666541da336c1b60f0144f161d123041e04f0e3d9c7336b0f5021784c035d1dc0719c3e2c6e8f5051fb5b020103e6641ccd81199e5387183f061f1261f499291f7d1b8b2169b603192592010cdd051c9260641ccd061725c031735d07031b6393f1bf5c1bba81e00929071741802181d6241c818031804c2d3c185
+    | 0 => 0xa368c0a3a120a52926b188e4d165344ba127e5e9308025375300d460a33403a9a4c9812449895040cb078368cb6368c1cf618080453063a120c00534262ec045e12045292469695420a6d4cd6120c3c12820ab05ea612543a994a10930e0a530e14c95f1653405e930e3a124d08b3a8928c10a808aef0c95e98120e025304368cb2368c8436970c4212440a9308085344a6120a0053463a715c102b4c98466b165308e08c16e8189c4a127e088c4516537e4a1244ba940a3c1244d693431e5340d62644981253280246d6124cdc1d451c019a36977e3c12344a8f20fac944a692000a8b4206120e04b01cf4186a9e1206368c0e0853404a120e0053449e127e4a920e0a8d9c4212571e0d5ed6120e3c1244989246106820f4180c3a930c0a5320f6180a08b01a9297084a12043a125516530e42f3b8368c52cc060a02532a02080a30686aae120e42120a0453083c121a42f34716537e5293404a8f0e3c926ece18571e8e7a368c4002124cf4b70e040daa36970e0c534cf4180e1af3549e12
     | _ => 0
-  let q := fld packed 28 (i % 128)
-  (prefixGates (q &&& 2047) <<< 24) ||| (thirdGate ((q >>> 11) &&& 511) <<< 12) ||| fourthGate (q >>> 20)
+  let q := fld packed 24 (i % 128)
+  (prefixGates (q &&& 511) <<< 24) ||| (thirdGate ((q >>> 9) &&& 255) <<< 12) ||| fourthGate (q >>> 17)
 def finger7 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0xee4839a3a423b5f81b1229d27f2576af6d2e3ad7f4163d3216cd7747152eca635f5d2ee0cbf269aab84a610ac6cd3917c2aa99b36a1e259f30c5163f80ef55b23627f59961c594cb11c94e05d03e608f8ae6a6b8faf43c48d72215823b99eaa4cffa1d8de6880aefcd4f3185d6cdde1d1dc79e4df3ac5ee7238fac5e9a6cbed2
-    | 1 => 0xaf6494f23207e0ba7136e15a4bae2cb42b2b61bd7deb26be7974aaa4e5f77181c0ba43954bfa9434048b192d06e23af9ac7c4cf13febcce5bdd1c167280bac893822b954b3210abccf9fcfe8ae73da3945464591afd85d0816c5573e63f7d2dc880130e280ec24c5012fd0404c8038e4d5b56ddd6fa40b07fc05394965fc919f
-    | 2 => 0xc0be80c12235e41931763a17031ee7a1f4559e7a779a670d6d5a11e7a75a57791bf928ebc1ba2a8f480319188937c5f8a417a82c65184c7ab01037b7eaaca4a42dd3cfcc100689949229c33690e7f06c0a6e54a170201722c2d5562e936b9472cfacb7500884ecb77ab61ecc2c8d2e327766c80524f411f4a1a4d8fc224f5630
-    | 3 => 0xbd6968f46d5b83f8ed80c00f5fec955bf739d3da0ff26f58adb07ba9345271b0f2daf78c64a7e70e33d9c419e87e746ccf19186c50653e9b67e1cdb58b780d880460e98b7673c045c058f3cc66781c2e115dc77b4eda8aa5a93ec06c6cfd0a342ca0af4e98a44971385f12e884cccc4aa7f6d0a26d5cba30468153a8e4674ecd
-    | 4 => 0xb3651f5423ba2df657f7f38191fc446a6c753921af56f7e05836419d0fd5fd53185b458294e9982788750bcd5944726914fd0bae0bb46cd8232d1d0686e01e12d21e4fee4e82d7d5adb871debb6e9bcb9383a266e692709dee4fb47c0c6cfac59d8128081f82f59c105c12afa7d81539f7629345fd587b954259734c7f59f30e
-    | 5 => 0xba17efba1f1f6df81d6e546d7820bacaf79ef76e079024af8daa6d99133f459cb69dc823aaac4af41745ad51d34ed3f8b446082845237660fbe51ea3533cb993d88e6f7ba6985e413ebd7861fdb7e1631c264dcc7d35986095a6a45b8a14cf11be16333520e1ba168be50888b97dc7cf1b56aa06329c66fab3b81aadc711b9af
-    | 6 => 0xda79ea57a6d70db90cc485cef393c3f746d7c16ea630f5490d7ec8d87b61f8a1316bdc5ac08ad6e44dba6c2657a801ddd2fcddcacb2c4daca7405d4d7acb8e33e5717171bb900cc7a0bdcb944523da54d119fba5a075e49efcd6433c864f3619421a284766e5259538feaedc77f325bc3eec8356bba67e91cbde373e63a62237
-    | 7 => 0xb6ac3cd233bc79209de7a8f2ddbda06639e51b94bd0715fa0b1e86f6c31bdc29fc27930761e28443043d84771c832b9e39ccb926139c4d9b5eca234e59f5a443a54847514aa18cc0b22ede7d4190e543682c7cc40c640eed9099fca6aa5a872be3ccdce5f062c91527409a94e1d2f2c2e92d6114965a53fe3d297d7929818273
+    | 0 => 0xee3d7b0cf6d88ebbf004a2745657afd8a9c3f307fd60e21941a083f63d84adc9ee3a4aaac43ea22db62a55c47ec0d7f3a8c42c323e61b4f9859ab56bd5522a2535337c9e712dc1e4094d637fa983dc1c466217337026c63ded03afecd39e829e5eaeec708e4154bd6dfd3e7f5eecf5e9c3ba68166a63d67e13d5b961fb5faffa
     | _ => 0
   fld packed 8 (i % 128)
 def recipe8 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x470d102ba0788015b1260341a1d123043a87a2090412a4d18546ce1030d78205d033cc034240405b03051041382a8bc7fba00441e0519d2d05c71ba0028be0a16b03b5e041266184a2a0f5249b97183e4b9911f36c1c0e32e9792b8f55785d5c219034156102a67c403d81573209041be481bd301c5040ae134eb749b55632e252212d9b8739db249dd06bd167a5f66c1e5f3411e1bd45b60761dc5a81d54c2301b2d5f04d6441f2eba05084c4704b2a83f19bfd5785c040ea7dba0211e46c9dc4e8962297b2113c288ba5604c6085b328600435f651be01a1766926021c95b04d540ca028b6040c01f3575f0512d8ba67ba8769b8388314935c640601b84c0335d03c15020f5033a803c18681751da623904b0dc350293857ba61e26e5f1e31a926761b5573d1790f56c0f4169b0031267083e461294104f19bad5f84f0b16d
-    | 1 => 0x179d0039650404f471785a851211b9039e30192662ba30337602126531be7d83e4504f7a0f57f83e0404d761b75205d783a00285d011b8013d12883e62051451bd03aa72217f043be5185b5093a5705d2121d758f5012190184c5f1e503a573f0604bb3b33a5f798db53012040e2038f3040517a80167454211be0f93f730f5708f55a9d6199a8448d21cb6e6e03f659243eb5203bd86184b034e6041242e83e1f358249f0760f44284c5802a6d9b80284c219cd0335a41b520243e67c2503138769b7043bd0385b028dc64c3a1fbb34635d1a21c1a19a179ba6d0bc0136001ce1042a703926740bc7f03e43b5d7883e650515b33b3e926731da0205d7c83f46126520ca179d27e0025ebb6561bd211bf7d0f40304d030ae0435143926020863a92938a191033d679621836a7903f02b74033be043d800896219ca1b0514504c
-    | 2 => 0x3298f1792660bd15705b7a83e6482d01bbe3a92a670603f9e3030604384a509851ba6e4444f508e908c3e029c0749b64f3606c0f56704b6704a6837f4084a034d1381eb0b96a1e1be1fa937e3a00383e7983e61860703a0034e00325c03b5a438886b0f502124743a002a09043761936a030d15c84d6782c238ec6d9b7561e348341039635d1da02a046bba0038ce290f41784c1fb6300851420517f03f0ac3e36a18043bc0384f541d56d0f502bd267c5258060038db022a7481bf1b270731b5029b0589c81c223720f5261aa661e75504a758fa5632d2b03e033d34284d2f4d20409922b651da63429bd7cba001b523185c280f410c82033a0029c7022101fb655c35b04142114ee0435a01af7043aa038514eba6791db03c245084d6305b4dccf1ac736f8f45f1c5241831704d7a03e023be550604e8d14225e0392403968
-    | 3 => 0x299da573d81f36f01b3b0b44f179c00084c65ba3758f4039da2b0f51bc3b03b553ea161e9ee430175d05b191ca03b54400726685d6716702415041e85f84c611110292a2c3a06f03f559797c83e1bb725c04f029c90200b02bda03b537a03f031d65005d6a8fa021327c35301124040607c0f450851031b003ce7028f54200f0084f4184b6d0f459950043402b03f03bd36105d508c01f16c668ee619e84e8bf7d8f56b1b5560517f8f5528606ba090425c718f5633552b35467c8c288f5561be7c209518ca02b4d03bd65f35b6e8f503147179bd040ef189ed01bed3f84d728ba6484a1da45149f57983f413740303e418f003203579e7021b6778f55a98e041d6031e466060339e802b5503b760204f0b97b7b83e039b03984b6804b74002019c06e2096617649926028ca2e8f52883f6605b7403e5604d2dc154284a0204d
-    | 4 => 0x6141f5cb5b33976029292e03e5c189019e80b16a6f0f52534b02cd31f35d721b76d83e7c8f50304c7d9b85f0ee719b8030f56305d03bd11cb5d02b9f2d3a00435b0289d1b84d759b63e9c53e84c5a9854504d021382900363a162b1b55cba3588d47b8f51735d1c926010ed788db6085d731b65d84d203dd5c04c2133e788f50cc5e5804a0286d0381a5b051639e82dba01d180171266685c7a8f54d3d2798f5043a9029be03374780f52b4cd3105d57bbc530e35a9895b124298f5029b56b8f53b929018c03f04c4604b083e2169b6038f54184a7e83e451e316a6c4e84d7c0f5019bf6d8f4458181f35e1a34619362191cd719b5644181e04f03353034e84504b5d1dc01bac731b70104f02ccd038604a0d6770fb509881c34921a1a6b1b803bd01eb606b83f1793c4f1e72983f19c281c3606e0f50383f0104d779b54ace0
-    | 5 => 0x249d0040e566860211e31984c61418029d51fb626204f2e353168187d04b5916e73b537e8f5309260408931114040424ebbd2d03e2242b508e000a591da6b18b620304006bce4b9894ac2426bf510929039290305c6b1b60a17c03b74028125d92402c1463c66031bd034d0104d36784a1925f2a095029db2a03e0404c0b4354d1d622cc31da6c32c1e573be023a0083e042479040dc7c1dc7283e239ce043d9031542121b018f522b643b92a513a357c1a040c52c83e7ab0b5804b721b63e1da034cd7e0f50416f04ced1e16b5405b2906a07be1034f52a83e5c185580c9740f56504c0a3fd6a8f40305d6b1b76e8db5304f579e33c036208c946b5b481d6183ce4e05b5f05d78002000f5031555c85b039b51c818134ec03042179bf6504d019da009245b4cd563a90312a4e84c5b1eb2ecd26d1b7028e9489247003e684bc
-    | 6 => 0x679c72c8f5733a00385c021b01f267571d6541dc03418680d1039b73684a03cd01fb567f83f2a8f55304c0103e0384a17a620409604031768f50113b6e83f1e1e36c9da579e87ec150334d508c23e1260204c03a5f544df02ce9681c8019dc0205c211f2039d5290f52c83f2c0f5490216c8022a2cd0203e02cbc02203588e80287b5b4d02104c1da647d0f52e0f54b905028ba3d9b6040401e1ba6505c0385d008f53484a551c70405c4496565bd14d04c6504f6a8f55b0ae2236d041bd6005b2104d34a18418cf0185b4818803842023742c03f1f36d5485d560731da656e83e2b1dc73c154cbd2028bc1f36b031c0031292a03f1c96b7483e7883f7383f543d81736d029b7028012d0f4530c3034d3459293e9c04d0df73b550384c7b9b84b9850184f03c3e199d660bd22b0f4042f7038ba5604f4eaf766361719b70405d
-    | 7 => 0x34e92b80145cd31c2255d103481855000e7d1b8238cc641c7169c75c1242491f028ae031b62126f66b5f0203f3384a4804c6d3a0192611ac24748f5563d63e9be249192a354788f41e20c19a1d389eb7183f1e04c144d86f83f5084f03bed02040038ca211d6579e45841e251ed7b0f53a1854818971003769b5544d30335f4533b03b413e04d5bb5d65bd201a5c571c50084d019db5f05c7b3a0012090434d5904b039c00081702bd0144d602c1518b453e85c2d0f55b926720f45005c3343e03a12280f5211bd0519a56204044bc5e9264601c6f8f502a5c1c3486f415764cd760f5028600b180181a63b1290402d7f0f5022094084c4484a013a057bf15241a040ca649c72d8f53acd3651e4208e86e3a00cc3b3384b1b9de571292e4cd011c726b6541210728f5038405f8517a0ba038da041605c33b14cd57d27301c4f
+    | 0 => 0x1d4c82ac075dcda1821090ea54042508b39b29449046d2efaea0428828e94d2a0c120d7982a54950eba12087383b261c220aaf204c2ba48250e0ab72949b38612c243a5b07341484a7960405c57283a2cc8204bead6b72443d5b9ce38d18808aea487a34103a1d498404845de5e3a6e0897849588414c904584219c7424928c08720391820ce20f3213683a555c86a6127223423241d6e96460722b899c11e60a8b063682a20a4b85e92030c358486d1826851d4925a50751e0ccb261f8333020b84b338b2952834109e0c95885b9c4b93c240cb0025812848798c10861d4d032ddd0760a402f4a482c04de20c3a29540ea507634be84238403bce20f659081b4410bae1431300d2536af19d4c22ae12
     | _ => 0
-  let q := fld packed 20 (i % 128)
-  (prefixGates (q &&& 2047) <<< 12) ||| thirdGate (q >>> 11)
+  let q := fld packed 17 (i % 128)
+  (prefixGates (q &&& 511) <<< 12) ||| thirdGate (q >>> 9)
 def finger8 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x1f48e0c59ed3275f5e5951e44b6b973af1396e50dff2b4fa89664f274d18d62c29392e3f8fd591aa8b725ec7f8560a3fb9229abe4feecd9fc14c0d3fbe80826ca8939421816631fc8a424a055ba8eef6d409a691203a9b887fad285e8b8859e07cabc5df9d885cefcddaac0a719afcea68f62a4d7c1153b923d8bc8dca6c3465
-    | 1 => 0x233428fea9cfca523a2e308a74c65f34788450ac4deb0827f25140512dc7214b1ad82fd7ae647fe6bc08ed41cc3e303aac50c7ab8ec5fe75ce4133699f0bf5054bca9d9a4a67df2af39dddf6f0a67bf3e2685742097d35b8509f85e0e0c9b89357feca5e52b8beb8c6ce2a204c622bf8b0364da0eb457ad851a8deaef659913a
-    | 2 => 0x7dbe5b8b1e5534ec2f118e261a9aae2df4058a1bc653b84782afe4a5a789f279272c3434f9f9331afc6a197b6037cb69a46279e63f18b8d2a974374f068d6ca4cbd8e18edeadec86928e5ee4de172af2959c3019a2aba5dcaff18f11a3b1ddb91b524d50aa2f875ddf0842c7e9f792329f273887907881f9a136be3aaa58b018
-    | 3 => 0x67a6eadd6d5b068a8ffd924f5fa57f3fcb66d36c2fd66f09975fd6c2b766361223c9559b64e912e2d079f176db731e1f251925b9da2aae9aade442268648def561311d21bfca48cbc0018f1488f13bcdfb2a38b84ef4b3887a98c102aef3e3343dd4714efa34570a3eec12362f4dd064e43cc7fd9a99f89ef22f1b9ae0b32781
-    | 4 => 0x9dafd6e2382122a14132181b64eae2b8744ef214365f7a6c33ce19d5976de31f79d37b0a99149bf8875b1829548a97af20b141489132fe3cc5974064a0db9136560f27d2a829f414a3ace30ca9ce90ad837a266142290d1e6f3f642de6cfcd039e2b2081f63269c34e6a5af96ade0ae53e43e9dfde301d8e9a7739a7ff71334
-    | 5 => 0x1aaebcba1f23dc87f50e5415360e114be9336202a707d0c23318c26178be8d9cb97599d3fade5b6e2d42ab51dd4e6ff83b78c3c77362928ffbf78a7b10f3af8aa71a6f42426f51537c31d216fdb7c3891e4f05b527f60867413bb870bd973961e7733835d316aaa32b1d08bd4c7dc71e1556af06c49c1cdce462dbfd765e536a
-    | 6 => 0xf06bf57dca6dbbb9a3018591b31ee5f50ad743e178608621507ed4e7b71b2aad81b6be9a6d8a57882b0484d2b1f4b7ddaf7f2876982ca05b10b1f04d11250e9fe5534cc2af8d39701ad87d8f1823d37e95bd1d4aebf32cd268f1cc10edf81c517429b41d7129228438fec950292a06520733e35f86317eeb556837e1bcd5eae4
-    | 7 => 0xa0b13f7ca0aad8819d2fb3201fefa0ba80e5e03e0e07150a3b5feff1d08e382b6427935bf2e218f204bb873502dec3819d35d0ee39b20233a6b6c94e7864c4682359f548b9a140e6947ecb29c70daf4353c0fc144dd3ac6e4945645bb91e98b0cacc315df028c039352a4d8ee1f50f3762f1a6550fc9e2c89df245403aae9962
+    | 0 => 0x143d165bf6d82c547c07a2b06486f557a92354f2fd2bc5374886b26d3d3ef999d03aaaaa328dd6383b8f4087f2ad7df3a8c422904d61f8f9e406b56b7e31b02530ccefd2dd6f08c393cfee7f88b3361caf41175470f6a4e7ed078e5ff04ed48bdfef8a7f8e41587a36d5918e5eb678c808b269fb8389d065133fd4d42af236cc
     | _ => 0
   fld packed 8 (i % 128)
-def count (s : Nat) : Nat := if s = 7 ∨ s = 8 then 1024 else 0
+def count (s : Nat) : Nat := if s = 7 ∨ s = 8 then 128 else 0
 
 def board : Nat → Nat → List Nat
-  | 7, i => cpBoard (mask 145) inputs 4 (recipe7 i)
-  | 8, i => cpBoard (mask 145) inputs 3 (recipe8 i)
+  | 7, i => if finger7 i = 0 then [] else cpBoard (mask 145) inputs 4 (recipe7 i)
+  | 8, i => if finger8 i = 0 then [] else cpBoard (mask 145) inputs 3 (recipe8 i)
   | _, _ => []
 def atFinger (table : Nat → Nat) (ws : List Nat) : Option Nat :=
   let h := hk ws
-  let i := h % 1024
-  if table i == h / 1024 % 254 + 1 then some i else none
+  let i := h % 128
+  if table i == h / 128 % 254 + 1 then some i else none
 
 def lookup : Nat → List Nat → Option Nat
   | 7, ws => atFinger finger7 ws
   | 8, ws => atFinger finger8 ws
   | _, _ => none
-def ck := checkpointCheck 145 scs count board lookup
+def x8 (i : Nat) :=
+  let t := match i/256 with
+    | 0 => 0x84804aa015b00d754062d41006a5c9a980317041940296150070e9c3e72756e1870bf86b8d8d00020c93c92b8f7ba64055d5b8082fa0a62e9000280401a20393025f7be1b8276c8018e0c9c45dcb0df1625dbc4023069ee34d837720c6067b86
+    | 1 => 0xa06dd70624464c611817840c146006fb1eebfad36b02a314d57c081823ee0a046948091d29842d025c1888b452e0136d45f201002c404192335e000709fcc8afe0912c074a003e389c715d5c0203e18f307996110c27608c069861ca09a08f04
+    | 2 => 0x86a901000cc519256e5800884c01a03bbaba060a2ff341808000904311f8db7182a989cae070148ec1eb580fc21e981263a5483080b56324781c13f3c1f0048a9631583004540460371543c3a7f0a2da1e5e2007ac6824b037e74d0197647a0b
+    | 3 => 0x70803668620021900ba21b0290800016dc79018e1202b44580aa151841c1200fda94921866db430ca300ea96622cc34b09800e29807800d120a7d32e4624fe2e0319e6005910300b1b398d298140cd17f8898e43081a584e8eedd18d2e099a08
+    | 4 => 0x7c69584bba089974001d8029040b184cf646640834625a38812942a80501e684042676832c03544c34350d643058d289622d1e0a8454513000cc15c6621f928450332222280010ba0015f02b81780f5d00cd334bd8be02209b0438881855d650
+    | 5 => 0xab2230bd81600c2e387404a5f9ae14012e7d1181a8e47802aa202ece0130c060070048c6d5566d002e000852f1143c2017233c005ab9128228e12409a70e08c00c207c64ec1400029c203f228044b5a0c0070a4641c32898e040220182121bc6
+    | 6 => 0xa797000035074480cd763028fbf6c7001830b512386d84c3d01432428745c60e403c30002b388641e603e380a8dc0ef51427ce18e040a3004040180ef1a0107c07642401988223d2cce2e8601120158478007209f43428a03dcac5b3c3503758
+    | 7 => 0xb820f83df3d6e898a442157381c021b64c13b28c8878a38d71221808078618445500c200002a08f217c1c055a980e1f20429ba68e7920c810c4a6bb20d407af4e7fc1c18118541d9aaa900428805cf178041403ab37040390d9009c4c015d41
+    | 8 => 0x9200900854ac8fcc8e6058e1c61e800fe7e0f660b15bfd1a80829000541eafe410d90a002cc041c4f0100d
+    | _ => 0
+  fld t 3 (i % 256)
+def hint8 (h : Nat) := orbitLookup x8 0 721 h
+def x9 (i : Nat) :=
+  let t := match i/256 with
+    | 0 => 0x3b0816a32404411c94c04961d72fe29b6676c11acd9e0a2820230c0539f08158ec430b86c102110d005020c46498344c11078085e60884376207bf548dcc30900410134789c115019e24716ac0014034b00460360502f23f023218249b60403
+    | 1 => 0x8407c70c3490e6084401180004803408424877842514894808a8680422480faaf3245c2541c1a71414380d66561e76f20148068cc0876c840836860017dc72f5f1132eda01204654034c19c137803904a109817f10321d72d1a90007408155cd
+    | 2 => 0x1d754967841015fe0a040be0758a097a8
+    | _ => 0
+  fld t 3 (i % 256)
+def hint9 (h : Nat) := orbitLookup x9 0 185 h
+def hint (s : Nat) (ws : List Nat) := if s = 8 then hint8 (hk ws) else hint9 (hk ws)
+def labels := 0xf400000000000001ceda0000000000035c00ca0000001210031d86bd0000000bc0000000b00000000ad0044552a50000000a30027e029b00435fe837f1d4ce640000000b90034dc65700001c4ac70b1894470034800a2688e98437003158299600cc5e2d002dd6c2000279501d002ad4e19532582a1300275400f4e02d26090025524064880c0000
+def cols (t : Nat) := fld 0x2e71035e811ae6055d1a22ccca163c42 21 t
+def u6 := 0xd70000000ca0000000c70048586bd00000009f0028d529b00435fc757fa0cce6400349a23a00289843700315803360a645e2d00275380b5003d2609002552203490180000
+def rowIx (t v : Nat) : Nat :=
+  if t = 6 then fld u6 9 v else
+  mkProjection labels (cols t) 9 v
+def rr41 (t : Nat) := (List.range 176).map (fun i => rowIx t (fld 0xd30b289a54891850f2c2aa268d2246143c70a689634891850f0a3cc2879d4891850f8699d16571c286554d2246143c12b0e370aa869238b246143a091854860c91439249249249249249228a28a28a28a28a286186186186186186081c71c71c71c71c71861851451145145145145145141030c30a28a28a28a28a28a208104082081041 6 i))
+def graphId (t : Nat) := fld 0x0 2 t
+def qBook (w : Nat) : Nat :=
+  let d := fld 0x152235008201010d6c910c09002821022d2d003a1d0c0977c91500023d0315070b06b90b1001042c0204150f07090105190f2700000013010b000400242100040101090a00 8 (w % 69)
+  fld 0xdee7c0be7188cc9c1cf3a78108cde06b350838c09d64f0a70f8ccdc56b3a2c18c0cc04a830c1dcc8b06ebd1918619e000823430ca9c640ba0c13c00006e1b18938393020ab7410239c0411d08b4c0941231f0d7b80d47c3391478c28a223411418428b3ee2b983bcae50011718106e810022b3051d042566811548a08e6f3024d7061c46f28d1590c1dc6a313715b83dc2631d1868464515342041880d55ce150800a3de36f0a3408849e622b514d820e53e083985180de122969553c0a60212d18c8c8dc5673e2c53caee14995180000cb1574270338f837cf391818a2965659378f880c15a10605906ad45ef010211708300317041186424228218386ade7430f105b829d421000014a5455cf2304306ad30652310988f4202196b878639d0c5890812cb866c0833815ca8b521011db0c445069b90948c0853ef0270d860cd261930468c0030e08b7968a08a0231710116007 13 (((w >>> 0) + d) % 209)
+
+def im41 (t : Nat) (i : Fin 8) : Nat :=
+  if t=6 then (Fixed41.raw ++ [0, mask 88] ++ [0x3106204437470620eee304000000001fff0000ffff00,0x80000000000000000000000000000000000000]).getD (fld 0x65498120 4 i.val) 0 else
+  projColumn 88 Fixed41.raw (cols t) i
+
+def okTable (t : Nat) :=
+    (decide (validCross 145 88 inputs (rr41 t) (im41 t)))
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem rowsOK : ∀ t : Fin 7, okTable t.val = true := by decide +kernel
+def passed (s t : Nat) (ws : List Nat) :=
+  crossHit 145 88 inputs (rr41 t) (im41 t) qBook (Fixed41.index s) (Fixed41.N s) (Fixed41.S s) ws
+def stop (s : Nat) (ws : List Nat) :=
+  if s=8 ∨ s=9 then
+    let a := hint s ws
+    if a=0 ∨ 7<a then false else passed s (a-1) ws
+  else false
+
+theorem stopNo {s ws} (ok : stop s ws = true) : ¬NatRun (mask 145) (goal 145) s ws := by
+  by_cases lev : s=8 ∨ s=9
+  · by_cases outside : hint s ws=0 ∨ 7<hint s ws
+    · simp [stop,lev,outside] at ok
+    · have good : hint s ws - 1 < 7 := by omega
+      have sel := rowsOK ⟨hint s ws-1,good⟩
+      have hit : passed s (hint s ws-1) ws = true := by simpa only [stop,if_pos lev,if_neg outside] using ok
+      exact crossHitDead (of_decide_eq_true sel) hit (fun i hi => Fixed41.atDepth s i lev hi)
+  · simp [stop,lev] at ok
+
+def ck := cpWith stop 145 scs count board lookup
 def pan (s i : Nat) := ck s (board s i)
 set_option maxHeartbeats 50000000 in
-lemma block7_0 : span (pan 7) 64 0 = true := by decide +kernel
+lemma p7_0 : span (pan 7) 64 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
-lemma block7_64 : span (pan 7) 64 64 = true := by decide +kernel
+lemma p7_64 : span (pan 7) 64 64 = true := by decide +kernel
+lemma good7 : span (pan 7) 128 0 = true := by with_reducible exact (sj p7_0 p7_64)
 set_option maxHeartbeats 50000000 in
-lemma block7_128 : span (pan 7) 64 128 = true := by decide +kernel
+lemma p8_0 : span (pan 8) 64 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
-lemma block7_192 : span (pan 7) 64 192 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_256 : span (pan 7) 64 256 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_320 : span (pan 7) 64 320 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_384 : span (pan 7) 64 384 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_448 : span (pan 7) 64 448 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_512 : span (pan 7) 64 512 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_576 : span (pan 7) 64 576 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_640 : span (pan 7) 64 640 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_704 : span (pan 7) 64 704 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_768 : span (pan 7) 64 768 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_832 : span (pan 7) 64 832 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_896 : span (pan 7) 64 896 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_960 : span (pan 7) 64 960 = true := by decide +kernel
-lemma good7 : span (pan 7) 1024 0 = true := by with_reducible exact (sj (sj (sj (sj block7_0 block7_64) (sj block7_128 block7_192)) (sj (sj block7_256 block7_320) (sj block7_384 block7_448))) (sj (sj (sj block7_512 block7_576) (sj block7_640 block7_704)) (sj (sj block7_768 block7_832) (sj block7_896 block7_960))))
-set_option maxHeartbeats 50000000 in
-lemma block8_0 : span (pan 8) 64 0 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_64 : span (pan 8) 64 64 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_128 : span (pan 8) 64 128 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_192 : span (pan 8) 64 192 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_256 : span (pan 8) 64 256 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_320 : span (pan 8) 64 320 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_384 : span (pan 8) 64 384 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_448 : span (pan 8) 64 448 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_512 : span (pan 8) 64 512 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_576 : span (pan 8) 64 576 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_640 : span (pan 8) 64 640 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_704 : span (pan 8) 64 704 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_768 : span (pan 8) 64 768 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_832 : span (pan 8) 64 832 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_896 : span (pan 8) 64 896 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_960 : span (pan 8) 64 960 = true := by decide +kernel
-lemma good8 : span (pan 8) 1024 0 = true := by with_reducible exact (sj (sj (sj (sj block8_0 block8_64) (sj block8_128 block8_192)) (sj (sj block8_256 block8_320) (sj block8_384 block8_448))) (sj (sj (sj block8_512 block8_576) (sj block8_640 block8_704)) (sj (sj block8_768 block8_832) (sj block8_896 block8_960))))
+lemma p8_64 : span (pan 8) 64 64 = true := by decide +kernel
+lemma good8 : span (pan 8) 128 0 = true := by with_reducible exact (sj p8_0 p8_64)
 theorem closed : ∀ s i, i < count s → ck s (board s i) = true := by
   intro s i hi
   by_cases h7 : s=7
@@ -5661,15 +6587,24 @@ theorem closed : ∀ s i, i < count s → ck s (board s i) = true := by
   · subst s
     exact spOK good8 i (Nat.zero_le _) hi
   simp [count,h7,h8] at hi
-def rho (ys : List Nat) : List Nat :=
-  let a := fld 0xa642008424c080416a3045606004d40410d260b00b68b011 3 (bsr 0xfb1e0242e5fbb754e4578a26dedbcf48db58da58d6f67d87d01a17a5cdcb4769cc699b04ca2bb017c75a8d58c7065f89c36964cdc06437d3bf7ea796bedd3a3cba2a6b7eb9d5cf37b9c19f56b87ddabdb8150e95b297db70afe0a9b8ad3abd9bab3198cca40fb604a33e10cda11498099ff1daf193c305ad9196233f82cdc3487bce97e879c9fd3b70d90a6c6b5bd747656919bf65250aa663039633607708f15e4112b15b37383a589afe2c5230a7b74ec3fbb14c26dc6242d98db4401a06353937667136708df531b323aa2e2779bc2b6cd9ce2a222d6b29b832402845105b238b879f1e7ebf48129b800a0eda5e770ccd94de0b2fc92f07ad7b9b06fa3e4d 32 (hk ys) 7 0 64)
-  if a=0 || 5<a then [] else
-    let c := fld 0x33b023a3a42ce5056ae2074aca000000 21 a
-    vals.map (fun v => fld 0xf400000000000001ceda0000000000035c00ca0000001210031d86bd0000000bc0000000b00000000ad0044552a50000000a30027e029b00435fe837f1d4ce640000000b90034dc65700001c4ac70b1894470034800a2688e98437003158299600cc5e2d002dd6c2000279501d002ad4e19532582a1300275400f4e02d26090025524064880c0000 9 (orbitLabel c v))
+def qPerm (i : Nat) : Nat := fld 0x33b023a3a42ce5056ae2074aca000000 21 i
+
+def qRow (i : Nat) : List Nat :=
+  vals.map (fun v => fld 0xf400000000000001ceda0000000000035c00ca0000001210031d86bd0000000bc0000000b00000000ad0044552a50000000a30027e029b00435fe837f1d4ce640000000b90034dc65700001c4ac70b1894470034800a2688e98437003158299600cc5e2d002dd6c2000279501d002ad4e19532582a1300275400f4e02d26090025524064880c0000 9 (orbitLabel (qPerm i) v))
+
+def qWord (i : Nat) (t : Fin 8) : Nat :=
+  inputs.getD (if t.val=7 then 7 else fld (qPerm i) 3 t.val) 0
+def qPick0 (ys : List Nat) : Nat :=
+  fld 0x2c688 3 (fld 0xa642008424c080416a3045606004d40410d260b00b68b011 3 (bsr 0xfb1e0242e5fbb754e4578a26dedbcf48db58da58d6f67d87d01a17a5cdcb4769cc699b04ca2bb017c75a8d58c7065f89c36964cdc06437d3bf7ea796bedd3a3cba2a6b7eb9d5cf37b9c19f56b87ddabdb8150e95b297db70afe0a9b8ad3abd9bab3198cca40fb604a33e10cda11498099ff1daf193c305ad9196233f82cdc3487bce97e879c9fd3b70d90a6c6b5bd747656919bf65250aa663039633607708f15e4112b15b37383a589afe2c5230a7b74ec3fbb14c26dc6242d98db4401a06353937667136708df531b323aa2e2779bc2b6cd9ce2a222d6b29b832402845105b238b879f1e7ebf48129b800a0eda5e770ccd94de0b2fc92f07ad7b9b06fa3e4d 32 (hk ys) 7 0 64))
+def qOri0 := quickOri 145 6 inputs qPick0 qRow qWord qBook
+
+set_option maxHeartbeats 50000000 in
+set_option maxRecDepth 10000 in
+theorem qCert : ∀ i : Fin 6, i.val = 0 ∨ validQuick 145 inputs (qRow i) (qWord i) := by decide +kernel
 def B (i : Nat) := mv (mask 145) (fld 0x506f30f31e30502f43e10403000e63f60e43105505f63106400406102e40f10e60 12 i) inputs
 def I (ys : List Nat) := bsr 0xd6f67d87d01a17a5cdcb4769c75a8d58bf7ea796bedd3a3cb9d5cf37b9c19f56b8150e95a33e10cd82cdc34879c9fd3b70d90a6c6b5bd7475e4112b1589afe2c4ec3fbb136708df52b6cd9ce2a222d6b0ccd94de0b2fc92f 32 (hk ys) 5 0 22
 set_option maxRecDepth 10000 in
-lemma roof : bar 145 (cutB 10 inputs B) (cutN 10 22) (fun _ => I) (rowOrient 145 rho) scs 11 0 = true := by decide +kernel
+lemma roof : bar 145 (cutB 10 inputs B) (cutN 10 22) (fun _ => I) qOri0 scs 11 0 = true := by decide +kernel
 def nextRecipe (i : Nat) : Nat :=
   let v : Nat := match i/96 with
     | 0 => 0x1720839844a0e210717118b9445c622e6317298b98448000a6007300b9c014a0ce0307284b9c214c10e60508228c854204a72152802bdd55eecaf733f30abdc09ccaa00052822bd954a04af6157b1abd81480cae7657a8abd4d5ea0a405573aab9947c86a5054f2a239955e42af145789abc415ce2ae510f2a2bcc0bca8ae530732a941cdca8ae135721ab98c5c4aae6152002a9815cc0aa7067302b9c15ca02a6017300a9425ca02e5057180b901f4c0fe6017183f90254812e404508458423c208610470857842ac20fe30
@@ -5712,113 +6647,112 @@ def nextCodes (i : Nat) : Nat :=
     | _ => 0
   fld v 13 (i % 96)
 def action2 (ys : List Nat) := orbitLookup nextCodes 0 678 (hk ys)
-def rho2 (ys : List Nat) : List Nat :=
-  let a := action2 ys/759
-  if a=0 then [] else
-    let c := fld 0x339415a3a42cec08eae2074aca1ac688 21 a
-    vals.map (fun v => fld 0xf400000000000001ceda0000000000035c00ca0000001210044e0b200000000bc0000000b000000011f00446071e00000011d0043e031c0046e349086208e8660000000f0003bddc6300001c4d970b60ac490034800c9689199039003158319620d8642e002dd6c2c002bd5c1f002ad541c5346030140028540124e03a2e0a0045a2a088a0140400 9 (orbitLabel c v))
+def qPick1 (ys : List Nat) : Nat :=
+  fld 0x1ca88 3 (action2 ys/759)
+def qOri1 := quickOri 145 6 inputs qPick1 qRow qWord qBook
+
 def J (ys : List Nat) := action2 ys % 759
-def r2 (i : Nat) := bar 145 (cutB 9 (B i) C) (cutN 9 759) (fun _ => J) (rowOrient 145 rho2) [] 10 0
+def r2 (i : Nat) := bar 145 (cutB 9 (B i) C) (cutN 9 759) (fun _ => J) qOri1 [] 10 0
 set_option maxRecDepth 10000 in
-lemma roofPart0 : span r2 1 0 = true := by decide +kernel
+lemma rp0 : span r2 1 0 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart1 : span r2 1 1 = true := by decide +kernel
+lemma rp1 : span r2 1 1 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart2 : span r2 1 2 = true := by decide +kernel
+lemma rp2 : span r2 1 2 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart3 : span r2 1 3 = true := by decide +kernel
+lemma rp3 : span r2 1 3 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart4 : span r2 1 4 = true := by decide +kernel
+lemma rp4 : span r2 1 4 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart5 : span r2 1 5 = true := by decide +kernel
+lemma rp5 : span r2 1 5 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart6 : span r2 1 6 = true := by decide +kernel
+lemma rp6 : span r2 1 6 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart7 : span r2 1 7 = true := by decide +kernel
+lemma rp7 : span r2 1 7 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart8 : span r2 1 8 = true := by decide +kernel
+lemma rp8 : span r2 1 8 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart9 : span r2 1 9 = true := by decide +kernel
+lemma rp9 : span r2 1 9 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart10 : span r2 1 10 = true := by decide +kernel
+lemma rp10 : span r2 1 10 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart11 : span r2 1 11 = true := by decide +kernel
+lemma rp11 : span r2 1 11 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart12 : span r2 1 12 = true := by decide +kernel
+lemma rp12 : span r2 1 12 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart13 : span r2 1 13 = true := by decide +kernel
+lemma rp13 : span r2 1 13 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart14 : span r2 1 14 = true := by decide +kernel
+lemma rp14 : span r2 1 14 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart15 : span r2 1 15 = true := by decide +kernel
+lemma rp15 : span r2 1 15 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart16 : span r2 1 16 = true := by decide +kernel
+lemma rp16 : span r2 1 16 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart17 : span r2 1 17 = true := by decide +kernel
+lemma rp17 : span r2 1 17 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart18 : span r2 1 18 = true := by decide +kernel
+lemma rp18 : span r2 1 18 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart19 : span r2 1 19 = true := by decide +kernel
+lemma rp19 : span r2 1 19 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart20 : span r2 1 20 = true := by decide +kernel
+lemma rp20 : span r2 1 20 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart21 : span r2 1 21 = true := by decide +kernel
-lemma secondRoofOK : span r2 22 0 = true := by with_reducible exact (sj (sj (sj (sj roofPart0 roofPart1) (sj roofPart2 (sj roofPart3 roofPart4))) (sj (sj roofPart5 (sj roofPart6 roofPart7)) (sj roofPart8 (sj roofPart9 roofPart10)))) (sj (sj (sj roofPart11 roofPart12) (sj roofPart13 (sj roofPart14 roofPart15))) (sj (sj roofPart16 (sj roofPart17 roofPart18)) (sj roofPart19 (sj roofPart20 roofPart21)))))
+lemma rp21 : span r2 1 21 = true := by decide +kernel
+lemma secondRoofOK : span r2 22 0 = true := by with_reducible exact (sj (sj (sj (sj rp0 rp1) (sj rp2 (sj rp3 rp4))) (sj (sj rp5 (sj rp6 rp7)) (sj rp8 (sj rp9 rp10)))) (sj (sj (sj rp11 rp12) (sj rp13 (sj rp14 rp15))) (sj (sj rp16 (sj rp17 rp18)) (sj rp19 (sj rp20 rp21)))))
 def t2 (i : Nat) := ck 9 (C i)
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart0 : span t2 81 0 = true := by decide +kernel
+lemma lp0 : span t2 81 0 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart81 : span t2 88 81 = true := by decide +kernel
+lemma lp81 : span t2 88 81 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart169 : span t2 42 169 = true := by decide +kernel
+lemma lp169 : span t2 42 169 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart211 : span t2 44 211 = true := by decide +kernel
+lemma lp211 : span t2 44 211 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart255 : span t2 25 255 = true := by decide +kernel
+lemma lp255 : span t2 25 255 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart280 : span t2 64 280 = true := by decide +kernel
+lemma lp280 : span t2 64 280 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart344 : span t2 90 344 = true := by decide +kernel
+lemma lp344 : span t2 90 344 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart434 : span t2 41 434 = true := by decide +kernel
+lemma lp434 : span t2 41 434 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart475 : span t2 66 475 = true := by decide +kernel
+lemma lp475 : span t2 66 475 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart541 : span t2 66 541 = true := by decide +kernel
+lemma lp541 : span t2 66 541 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart607 : span t2 56 607 = true := by decide +kernel
+lemma lp607 : span t2 56 607 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart663 : span t2 32 663 = true := by decide +kernel
+lemma lp663 : span t2 32 663 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart695 : span t2 39 695 = true := by decide +kernel
+lemma lp695 : span t2 39 695 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart734 : span t2 9 734 = true := by decide +kernel
+lemma lp734 : span t2 9 734 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart743 : span t2 14 743 = true := by decide +kernel
+lemma lp743 : span t2 14 743 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart757 : span t2 2 757 = true := by decide +kernel
-lemma secondTestOK : span t2 759 0 = true := by with_reducible exact (sj (sj (sj (sj leafPart0 leafPart81) (sj leafPart169 leafPart211)) (sj (sj leafPart255 leafPart280) (sj leafPart344 leafPart434))) (sj (sj (sj leafPart475 leafPart541) (sj leafPart607 leafPart663)) (sj (sj leafPart695 leafPart734) (sj leafPart743 leafPart757))))
+lemma lp757 : span t2 2 757 = true := by decide +kernel
+lemma secondTestOK : span t2 759 0 = true := by with_reducible exact (sj (sj (sj (sj lp0 lp81) (sj lp169 lp211)) (sj (sj lp255 lp280) (sj lp344 lp434))) (sj (sj (sj lp475 lp541) (sj lp607 lp663)) (sj (sj lp695 lp734) (sj lp743 lp757))))
 lemma upperDead (i : Nat) (hi : i < 22) : ¬NatRun (mask 145) (goal 145) 10 (B i) :=
-  symCutRoot (ori_ok rho2) (spOK secondRoofOK i (Nat.zero_le _) hi)
-    (fun j hj => checkpointCheck_sound closed (spOK secondTestOK j (Nat.zero_le _) hj))
+  symCutRoot (quick_safe (k:=145) (bound:=6) (xs:=inputs) (choose:=qPick1) (row:=qRow) (word:=qWord) (book:=qBook) qCert) (spOK secondRoofOK i (Nat.zero_le _) hi)
+    (fun j hj => cpWith_sound stopNo closed (spOK secondTestOK j (Nat.zero_le _) hj))
 theorem finChk : ¬NatRun (mask 145) (goal 145) 11 inputs :=
-  symCutRoot (ori_ok rho) roof upperDead
+  symCutRoot (quick_safe (k:=145) (bound:=6) (xs:=inputs) (choose:=qPick0) (row:=qRow) (word:=qWord) (book:=qBook) qCert) roof upperDead
 
 set_option maxRecDepth 10000 in
 theorem shard : ∀ t, HasCircuitSize 7 target t → 12 ≤ t := by
@@ -5830,143 +6764,143 @@ theorem shard : ∀ t, HasCircuitSize 7 target t → 12 ≤ t := by
 end Row29
 
 namespace Row30
-def vals : List ℕ := [1,1,1,2,2,2,4,4,8,8,8,10,10,10,10,10,10,10,10,10,10,10,10,10,10,12,12,12,12,16,16,17,17,17,17,20,20,20,24,24,24,24,28,28,28,28,28,28,28,28,28,28,28,28,28,32,32,32,33,33,33,33,33,33,33,33,33,33,33,33,33,33,34,34,34,34,34,34,34,34,34,34,34,34,34,34,36,36,36,36,36,36,36,36,36,36,36,36,36,36,64,64,65,65,65,65,66,66,66,66,66,66,66,66,66,66,66,66,66,66,68,68,68,68,80,80,80,81,81,81,81,81,81,81,81,81,81,81,81,81,84,84,84,84,84,84,84,84,84,84,84,84,84,3,5,9,3,6,18,5,6,9,40,72,3,5,6,9,11,14,18,26,40,42,48,72,74,96,13,14,44,76,18,48,19,21,25,49,21,22,52,25,26,56,88,3,5,6,9,18,29,30,40,48,60,72,92,96,40,48,96,3,5,6,9,18,35,37,40,41,48,49,72,96,97,3,5,6,9,18,35,38,40,42,48,50,72,96,98,3,5,6,9,18,37,38,40,44,48,52,72,96,100,72,96,67,69,73,97,3,5,6,9,18,40,48,67,70,72,74,82,96,98,69,70,76,100,82,88,112,3,5,6,9,18,40,48,72,83,85,89,96,113,3,5,6,9,18,40,48,72,85,86,92,96,116]
 def inputs : List ℕ := [0x21770b02045f801580572b5801589f0401b29e000fff800003c0000000fffc00000780000007,0x42a115256ca8802acaea01a802a921492f517200000000fffc00003fff000000000001fff838,0x2e0c2061e083112b3008c02305330723c0261a5fff0000f00000fffc00000007ffc381e0000c0,0x9504a848314224c413104c417747843dbb8e080000000000000000000000007fffc01fffff00,0x2ea1750e0428003080c2030825b87ffc04c0041fffffff000000000000000007fffffe0000000,0x30c18609183045bf06fc1bf079c0248927004000000000000000fffffffffff80000000000000,0x3f01f80fffc07fc007001c004e0040023800801fffffffffffff0000000000000000000000000]
+def vals := sampleTable inputs 306
 def scs : List ℕ := [0x1fc2a230a32689b,0x1fc480e8ae2649e,0x1a84802ca3288b1,0x158480e89a2649d,0xe82a02ca2278ae,0x1580b1fcae26ca2,0x1580b230b128ca2,0x2302a158b1288a3,0x1fc2a02c9b2749a,0xe80b0a89e26c99,0xa80b158ae2749e,0x1203a1589e26899]
 def target : BFn 7 := fun x => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 3 && x 5) || (x 3 && x 6) || (x 4 && x 5) || (x 5 && x 6)
 def recipe7 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x276f2054e1804f2c358615d1704f985c2052700a3e5d2123e334084c44182052a24a22031b9bd041a8501a7b03c2a069709341a802b7403c0321a3a7916a7d3c733eb07020f5354f85b07210523d1229b07028f52166c1e286c8f5344dba3105b3f40518205273285f5b1704d115d05b06199bc051a2353224b832b4504f620905b070103c266f03c0c3f85e3f748f52f6d8f4360f9a52e40a0405210529a21a8a266a8f92d6021506101d52b17a469901a7e2c2ca80963f22a294f85b394504f271720b032104c2a5604c335084e0701a2a286e0f5051a20f394e84d030083c3a6c8f5276220f044022e2633a0e05010f52c488500319a15032104d346f8f615008669a41280346c8f5461822a3d7383f051a04f2e6c1b82c45850346f8f42b17a43715a9b5271e20e0607404075a9b61431c32075cc88220084d2e5604e263384f071c050042104f21684bb06168502456057052104f305c42d0516ad02e538504e21210281ea395864280686427e3c731b73a3f850901804f2e3104b07020d8021a20f1b0084f1a0286606212a82c5cc88031e04f012104d343f8501361a15021e8531b1a29a1a014b6271685007033eb5c5c22a011704d0564280060905b
-    | 1 => 0x51a2110e3f85e0516853041685362168532a5c20d28252552b6e0f5061804c71183f42a6b0f5431822a4e1ba0e071ba042b4d20d071d8e601000f5072104f2633a1107021b72c6e83e070e866113f04a3e7403c333804b02012062b5623e3c718f507032052c730f52721210011b84c2c6e8f52855061335084c2e3f1b12c748f4032121006020f527712050319b4d3c5485506028f5066427e8a2120e5c074052b4520f882104d3942a3e0741a800401a82601685301168505d168502e3486038028a2070083e25083fe25008503f589c824538532d57c6d39311c6031e8503f74a80070089330748f5266d094395084d8707404394284d0f5f4212d55853071704d6c0e8660701a2c011820304212710501a2a0417a343456853621828d9a2128d061a20d0b5c85b151aa520521a89276c0f5963d9b50c0105b621e853062128d0518a7d2500853393285f2e7083e625c488240404c05073f4390594035731b7333105d1b24a74021e04d2753853021822a2a5084e303384f2e008502b6c1b8065a9b600000f5316e8d8071e04f271e20f7d5e2812c6c8f5071804c2b18a1a2b6c1dca818205031e20f2553124031984c0602a7f246c9db2e6a8f50702a06
-    | 2 => 0x3010f50b5da152a5304e3a6e0f504010f5286b0f407188505f218503350a0e393f04f2d55a88011e04c0741ba1050bc4035403a124568502e5304f3c390665f1e8502b6c0f52a0304f0507404041685041182052a530522c7403c051685002168536219a8d2854927234604b051a23e335084f396c0f5394d04c2451050033f22a24350642c6ca0a2753052060e86607188533f58a18011984d075bba107212043c73205286e1da393104b070103f2e5304c28568532b5320d136185e0616b792821a3a071e8507319a155d2120d33348605f1ea36071aa3a056427e8e1e8537e21a881100c662b21a4d0306bd1333e04f5e1c0502854855070322a0717a34062104c275084c050083e3f74beb051e04d3d0f29b31738f53a3f8530417a7d0619a15062104d3157c080418a287e1e853051820d3652a812c1f2482b482102a6a893061704d2e3f04f03000f52e5a850286e3eb5c0ac652706bd1031a8503a31bf12d031278f5c205061822a124005e2456a8a336a8f535730f507033a10319a873c7303f051704f26730f59a1e28d031b84c0f21222071984c2e6c0f5050120a7e1a053011804f2c17292051b9241a6305b295e336145b185334284c101ea4e
-    | 3 => 0x3f74a7e2b42a0e031a04f315005c2b17a4b34020533e7328034412883f74b3c041a20f313b98506023fc2e3a12b01210520401a2a3942a0e344f2150f40a1504073f4051a20d275a853032104f052128d070303e2b568532b4284f0609bd33a4105307230eb5f5e281022104c0641ba12633a0d326f03e346e0f5021a23e2a708f52a5c23e041c0500c5d85b05181b1050133c3c5723f901820d271e20d022104d6507405395304f18181bb217fa8002211be031e20d640a41e071b33627023eb210084c9a188532771a09230084c355d4880618853246ca808c0e866065bba106218502534860012104f901704f071804f7901a813b5185b0741a812b1a2863016a983342a0d3818170256c1b5923fa2c2e5604c630e86607183345b1984d2821a53045f209275604c2a4d04c125f05d8a1704f32748f5021e04f3818971330204f07000f5021804c031e04c1662a883a4dba32b3d8502e6b0f5237ba05245b3a12753124441822a8819a153a41288031b84f2e4d04c071b84c396d8f53543ba10731a06343f8532c009273953853266a8f42c2ca7e03183f43e1fb8e2b3f04f395084f07023fc0321287051822a031a053367083ca31822a041a04f02008f5
-    | 4 => 0x71a04f040127301181b19a1a053052104c042104c8a2123e136105f031a20f275a850061984d6352a80031804c246bbeb1244c21304f85b05008f5031e853336b0f5052104d200084d28010500218853273e04f6b0905b155f2d56418142377103f206605b393105d02211bf2851050307083f2550a5a3c730d8396aa05660905b021e8502a0384f051e20e2b5323e240a41e1662a891644866075e2812b4820e3c57216256c0f5395a850071e20d763f2052756057a61822a260913d334e84e7e1685306028f62a512291b00924335a850071d127255084f2e00853041804c5e21a36051e2a70f5f41d051804c27549272b4804f0f19a22246e0f53940a048f5c22a360185b07018f5306d0f5061b0cc115ca150606bd12753850031b84d392121f3c3b9852e720f5070a41e246e1b6061804f293b9856b403a12b1a21d34020500702a058a1ba0d0f5b04f021e20f0321052021984c071b84f053d9b51901050333f23e05020f5050e4be2b4520d07084051a760f4061ca34326f0945d023eb031885006000f507031b4272120e0321853030103c071a0533c52a7d343305e071984d02183f4a3182052d718f52e134e5885c48807008f5061b84c3456850
-    | 5 => 0x1b6405f031e04d04019dc0621853050103e2b6c0db2b6c03e0318205155f218062120e071e853051e850377103e346f8f9061d8c607073f42b038502e738f40b3f3f4061a04f3173a05815c22a2716a562b4dba3901e04f2f3f8500602a2a2c6c83e271704f357003c5c5c205032123e2a3f04c062104f06211fa031704f27718f50521a36162529b3c22b666864280070327f031e23e5d1804f021804f334084d011e04d256c1b71e0084d3a4585329550613a35061031a2118a168500316853b418205253da048a0e8662e3e04f2c4e04864011b523008520719bbc3f7483c3a430502b6aa05040e866031b92402000f5383d18507019b7051984c271bb471a01053071b84d34430502a5304c1b6305b071a235061d127011704f2d5205d156085b0219a87346e20a0c5e05b25709b82a53853021b84c244ea04061ba3e60210520521a3a913f20605018f5246c8f56b5d48805021b7393f04c0501bfc0f1e22213614042b5620d1019a232856850071f8a0210084d07023eb070083c04018f402188500602a05011b9242e5604f270084f0521ad007031b5335604c395084e871984c236385d072104d271ba3e12423ee7e0ac65021a210345105010758f5
-    | 6 => 0x28350612e3105d0501beb2f3305e336c0f50519aa72b252503565cb8276a8f53f1718b3274b3c02182053024b837619a15041804f0506bd12a00850621a288051804fba18205061828d254e84d4e1e20e2e3f04c2e708f59a1e8532c403a133409bc071704f24040ae901e20f0317a34286e1dc051d8c6271ba0d5a1984c900a41e276223e060222c3934864880b8a82c0112739624de04000f50702a092a3105d286ca0905000f534350612b1a21c07403a1056427f07168535d1ba3e1024a23275304c02010f5366f0f4041b84c2b3f20d071b9242b6c0f4051ab71935c22a611a2883f749b4145b432041a20d021e04c106085daf1822a271820c10083e128350643c7322d315005d316e89327548550316850021b84f04188507918a7d065c2052b3e04f05188502e5320d9619a151c01053ac1822a051aa36913d9b5395a85307030f5061b84d39348623759068275304f394084c346f83c051a2103c3904801008f5393e04f283b98504181b12d55061061b9fa8b0e86606210522a0384c871b84c2f6c8f5245604e05212103103866040905b2b18a1b39429bd061a20e245304e04188532e748f524319e82b1ea1f0518853a01822a255604f271820d
-    | 7 => 0x363b9852a7222a3e1fb902c6c83f051e20d2b4820d3c732802a6a8f5240404d0618205334284f041d1272431a066221a882e6c1b423011b0310ba232b748f433429bc2f31bf12e722050518a28041ba3e387183c07200a1070120603018f52f748f53a45850330204c04018f5731a2353d558532c48a3a326f03f2504053271823e011e04f5f16850335604e1b7b0f5011804c051e04c43182053a720f473183f4ab1822a061704f062123e07010f52b18a1d2c5c43207029b52862a39245685328718f53a510504e1e20f2a19a222c5c4880508405255304f9a1685325040508f183f48a173bc031a20d2301050621a053061a21102210520616853390a45f396a8f5051984d04008f50716850210a18c245084e061b924021a20e411822a335604f396b0f5196628e032120d333285f2a5b04f394284c010083c306d0f6315805e256b0f55d2120e031c050890b8a8303584a4c5c22a051e287031aa39075a9b5327483e060283e333f04f021a04f24708f5285b3a10664280070905ba7182053c730f50401a2e8b52a7e071823e0501a82611a053070ac65335a853915a9b639708f55203a7f3041ba1071e04d022104f25708f5275604f0717a7d3038068
+    | 0 => 0x5ea6131a9a1b4cd014511c0e400ede085e128e42894d1653471653963cd44d1853025212548e69541091060454044a3a020053552e525f18530e08531ea2624861314896c8692a0c3b0ce7085e91060653549e120e381563240c8038130a42894c98120c5e156ac2127e42124696124853260c0853189a1b460412023c12422d120800530a0e8a4c801a9016de4e9ae53402130e045354d0127e4a914c30904aca18325e9c46d0120404537e3cdc084a125e861d1c10c93273310e42ba083c1242ba1342861d060c9b485f300a045310a0486aa6130602539c4a956b16536406180e06534cd012983cd40636160c14c90e06d98042130a04546b185316e8184cc21220f21a0e52126aa6123c0213683e7c0642890e0053043c120600535410326cc4b36a9e125518538e18de0ee08b5e801a0e5293045213209c1b0e18de5f16530e4a12060c544c0e129c4a120000532852780e3cd4064a123602120e42120e3c1260841b9c4212043cd44cba890e52130642124326530e0253551653040253
     | _ => 0
-  let q := fld packed 28 (i % 128)
-  (prefixGates (q &&& 2047) <<< 24) ||| (thirdGate ((q >>> 11) &&& 511) <<< 12) ||| fourthGate (q >>> 20)
+  let q := fld packed 24 (i % 128)
+  (prefixGates (q &&& 511) <<< 24) ||| (thirdGate ((q >>> 9) &&& 255) <<< 12) ||| fourthGate (q >>> 17)
 def finger7 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x54ed84ad4aa1220f4ca25fc394e9a8e0ccc9b6cb6cf96bd407f5ec988310bcf9fecef76e8383524561e439b77427749f457199ea235a9f6cfafbd9c8eb224376b6828db50fd59c3357ce0f87875428f5a63f5e961fe982a1f2d3a54839505256095993c0f89538ac0e352111c650ce8bd9f699993bf02745c68ab35c678292c0
-    | 1 => 0x47845c5502601181ecdbcd21053f4717af37693c13495d7a444a86b7edddcf557e2b2530d5b872a716ee7b1cd12784b94b6fa52e50f6f9acf7311a30ccb0bfa256a4a07fd12ccda7edfb41522a976f632f61d041bc497ff939bc55480410edf618a6e154bd1a7a129ccc61d0aad12b8ca41ec469ab47b80825adfbb9dc573243
-    | 2 => 0x6ebaf0de77c593e1d01a891e1f0d44bc6822b27cfb53b304ac54bc69f5fdcddb63abdd1411faca96ee89f7f09a5847a2c4ab4494c8dc1d532556ce731d44c14c18a11fd501805cf0e426509e517e796d3fd6c45b8cc824288f468fc3a20fa521dba1f6c4a6feda51f753f9185e980bb975f74df53ca02e5a1ed73589c358a18b
-    | 3 => 0x85fd9586b2bdb25b77937b0873e9d72e0a9b38a911c6ae19d6903cd3e6da20c4c94207f24ccf3d370627599031571579b3cec61ade8b0c40ba93f6c830ef5f41f9fdce23973d2df13c8715a72118de19382e444107cf19c6a2bd492f2ae6163f3322430d0bf6bf7a34bb56cec6568b669045cf1b0d1de78361e3f69c45e07dc8
-    | 4 => 0x1ab102508c8565cca97b12d3e4822590f220d2c38c1c2c7aefe44666cdcb8f31c1b691705cc61298662fd369e80a140d3c9d778d8d8745893c37fe0d0bdd284b06fe9b544a9b70b0e2519d430f9a95fdc15c82b2a495563e11bb174b57da03d1e1dd3e2b4976da19ef20f415fdc828cf884af7901f3f5c6b255826ed544d755a
-    | 5 => 0x60ebdc23ba5973406e5da1340ce1ded151e8f6bfeec1dbe8950501923f92f155baee22289fca329fdccc269a3815f37c01579810b43bc9fc9da92328e9f4ca38c4050fbdc940b04b1d54dd957d82beb0307e61bc26a5c83e71fe62ba5e6be812f349fd0917ad53e9e9e1031b660c34fcc5d4e86e7f37b453501dc1e7a7ad297c
-    | 6 => 0xf61cd8107f48741ba80d5f58f4949b67bd31a49f542ee04efed2d529a94aa90c7685537dac6b802ac2ac2330c785e8398f32e6fb4e069db9e4abd46a4063c9485d7d76fe3abaf7bbcc60c042267b2bdf979909fba0e9ad32b5bf50046d84743adaf24a1b6dec2e4b6e1a99550b34e59a2f4a2897e89a2cc38f105358984497aa
-    | 7 => 0xa15fec7bac1cba9d11db9311f68ebc35c73dbb8a255fc1bf9fd449c4b029527801cf784b1da23d1baacba66735ab6e507f672972e7f3d738c289edea2f497da0bd74166ed0de07f34de07a5aaefdece528a61d17a34783828609cecb5eb9b3702b2ed0d2efe41feab94d57ea1a1bc57c63173cfc6a297df4c0e76eea739cc680
+    | 0 => 0x3f2289de6a2d42f049de6eeb9ac4789b7c4c995d1111d30431054c2c5196e3c5d87cefed46fe90250d647d81452fa4c0063e1f7057cde6d12d76ab99c0115a594cf2a23b71636e8cdf0eed19ece459f3136e78b8e480c4bd389d48c64e3a2d53969d18cf86cae78ac1fdd17853a13562b838678bdd36e19a275376cc9e698c48
     | _ => 0
   fld packed 8 (i % 128)
 def recipe8 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0x3486031a065f3d23f20535861043797703e1e1bd652100dc6f5805f023fc0333433bed0bb4a6405e021c06218565850028f43285f041e45204b0404325a431aa3621a1d51c1d16a7d03b2b700f503bd0420504d20d0427d740f50405c03894358627e8f4448600133c5098502378573a7701b65c124554600184046234648620412b083e0670644022c040616b0f45604f6184f0305f7403c6445c2a8f5590482185004050481b132c005bba11aa3b3d8506c9da589c8104c2448551e850390686605b02beb033751aa3a04048010f64e84e560e1028996d0f504215731b61a2d7040a36d03c03a2c033d3429245f05c560575f84e5f04a3e84c4084c5304c4528d5586025a955d85b030415f2065ac2f04086603ed031b0378680398f040e00404e0432a3d925028982b83f31bf17303c1822a319ff3e85c16a540084d7d03c
-    | 1 => 0x5e21108405038bf783eb41a7e7f2814d04c1a053041613604a03927038bb033bc5aa7d3f04f1b14c008f57da0602057720f46105f03c88030407383c798f54f2157a03f2d8f55e05b55a884533c199b14a127040686b1b5760f40cc445529064864640a73290e7d8f5038436c0f55785d2a03c7483c6e83c1214d1729556c2f40a7e16a293f22a01a5a0385c020946204c3d18538cb001ce033a0e6185f4120d61a0f460480225b034be4a9850c3db758f56a8f5032cf219ef038611ca4e58860041bc2234f732085c1855e1250897d01924038503384f4284c1804f7d05d7a3eb5d852600505127702a8117a9127b8f0212752cb81fa980817a0304851c4f333d12e0626b20666125172fd1ca342c8f46504e4804d000f55a84e780f502866578551a850039b47f3eb04127489850205203bed0434d60946608531b84c41a34
-    | 2 => 0x778f50440118a8521853183f40385203a2b031b5428685c04c6b0f5040575e84874a055084e530527c83c5285f4022d1a04f390666f03e19a046f8f47d83c6b1b602a2a0396161acf03c4b028bb5509b1a3772104f5d05b360614328d48a39043744c1b1034880437e288f52b0f40414856ad00185041850630484284f040c05e85c4d1852b03c5e85d03b7803a2d031244f85b018621eb5016bfe5105002ba120373674694504c6f0f45a8503fa2c311e80104f48924031b80cc724428a03c3c5904b0328a1d127558534442f49125031dc03c051242e52a817f83f3ea296f83e104c60184e219501ca21018f5388486e0f5470481d24f01bfc719b41d251038c3038550104c0ba4e1e04c7f8f5350645205c3f23e728f5252211b9de040521eb44430521b84f31a0452a80172046005201050638606f03f321ff1e1be1aa32
-    | 3 => 0x13cf40fc8f5604d023756e3eb7c0f40fcc1418615084f562870084f614053204b2127172beb1b3e31ea1d01bd37a8f50404f0305001a0a7103f460571a29902041042885e85b21a2001a2903857028480220f562cf1e8537483f7183c4084d03271073f467c4b7333c5ea393904836a40022d02e8f50185b0d435410e257402350600404c01053410617b0f5770f403b740d4273a12b79beb74a2a2e0f50599c0817b040e40284e6085b7303f038c03f04a033ee408fe252791ca1e4ebf4040de4684803a5b020537c03c538533b1867083c43050658531ca945c2050332b562a77f03c6e1b7038f54804f02125039bd3345c1a2351b84d6012558b4303af76e2081dadb55a890285e1c2231ca1b210521a21d01a281ea880323a7fa0856a7d6105d7c205021fa1a20e0a40f41053028645295d418641f8a05489a770f50083c
-    | 4 => 0x3beb5784b18a7863bd367864021b8172230ac656c83e5304e01c067703f481e41249145853034055b12401a811e04d01b743506118a283f927040417b83f6f8f57103c0384a6c0f42e83c6486020c76271523c12b773eb040986c9b564c400384f03055081697d83f2b20a0c4c86d8f42d83c1ca1d1704f2123e0423e3706671a06042040294328a2a52a7e01b3f2737a1ea891e23e6705e400554d23e4592b023344684b5c853151a32922b1a2110385b0384c022394e84c368600383c3f84d040530334d01185718f5019da4f0e74b1851b92462124039be5705b033795f9854004b280f57e8f56e27308a150185201a73011b503a084820f55a8b030430084e04228533783f84a03408252507e0f50185e039e5030f56b093038600305c041fa488530305d31162040ec590ff0204d0ecbe0420e7c03e010f4031b621222
-    | 5 => 0x385f040c471a0a03282028d81c2fe6b8f518a980242f033f10384d02a2d3305e27b900325b03b7557bd803c095ebd4033eb03c8a1e9cc17a460bace5f2091c23603099280f418205538506d9b43105d51215680680427c01a053d9b41f34e0404b399c955a8d033f4038415084d1ca1f588641a20b56a15710f421a8a47cc5311752017d45850333f417a43540486585d1ba0d0ba230409b709b67a0f56f03c611277c8f53385e01b3c010f55ba347cbfc032040519a6c1db020407e03c1cbe5530993f20d2983c03b360fcbf2ebeb1aa915604e074043385b678535c04f029205004a66048388de79a050283c1a23e038534e84d211bc0386863855042895f84f5a8dd031b15389a039253e04f03c640405f17a290084c290f5028f7182032a2806705f032081aada2b8f54284d01a0303228042a8022cf77a73720f50905b
-    | 6 => 0x1e1e30305b560e00284c1e04f1ca1c428660304c1804c548a7738f57d0f56d03f4504b5604c0343c019386685d5d8574f229038c403234038f21b9bc51ba7642815f04b17a0103a05568531499d440f0134f30120456bed3d9b50223a644064c0dd4e9b14504d58a40298f5020f5028607803c2e83f028f57a03c674325b84c4c19203a7e018533a185760f5748f42983f768f563c6503b3c3f127124927b8f54e8e01baff35465040405005d0944f7a8f44c271040441e1dd788f54c185458480cc705f84d293a16da2a03b345285e1a20d5ea3643a347fa2a5f3d116a996c8f5040a6019fa0383f571c503057040cd6d093211bd1e89e1ea852c8f5749b52120d211de6c9b63a9c95b04f2b83c03273021245a9b61c0501a3f642a0d50177023a1109bb042cf03c691dc5703a89033744104f6185537848031083f8503385f
-    | 7 => 0x450487383f4e05b1e1bc0323e5f0607d1b71984c17afc041386d8f56ca0a023796385d1c2226c1dc71a052418238866042a750a5b271ab738f4208a21e1ab2903c628500305321a3a440530203c021b1024134804c0423a4520e25a4526b67531856405f0e8660185d03125040646c83f290d9608486104b67c6a018f401a113d8537c0f54b9053606856052468f1018616185e5f05d034f1151a46427e6c1b47b03c031fa5e053043d141a805d84d26b626c03e020503884b1720b038d943853748f5788f402c654004e1d45a74bfc2a83c3f85e7803f038407f0f521a7d718f61dbdc038441704d298f401a2c0184d3f04c731b545143760fa2c0f47cbeb0304f1e20e4e9f756a291da51041246f0f5030a66204e018867003c1ca951d18141280319e81e28d2aa2d74a2b5c052031420204e0232a4404a030f636a902c0f5
+    | 0 => 0x77286379e59502cb1e6a022381d4652926819041b4d100f0490769021f4119048cf0336c312c813e56eb076e0427485aa4a91216f9aa055ceaf8490323158d4bcdaaa4d1e492e919d492928b4945038c4a47446d21e448e224f1066e9f7d264923018ba467a217581964a62238a0082e02124108c2c79041881a48a93efa4b0697c9a30cdc642e2632387ab0154606de294a91120953c5e75042f03238a4ba0e444d23c292410901ea64e2e0b48cea70a4d21d6401971ecbef2c92136c317c206e06a325700e1b4ca4efa4a7c1b0122ca868c646364f83aac14ba5e9c2272bd124bd122d24313f030ddc118064e226b191fc208e10a388270228ca53c42b557238db3cbcba3c327c3b83150a5267882
     | _ => 0
-  let q := fld packed 20 (i % 128)
-  (prefixGates (q &&& 2047) <<< 12) ||| thirdGate (q >>> 11)
+  let q := fld packed 17 (i % 128)
+  (prefixGates (q &&& 511) <<< 12) ||| thirdGate (q >>> 9)
 def finger8 (i : Nat) : Nat :=
   let packed : Nat := match i / 128 with
-    | 0 => 0xc7ed32ad38c4d70f7392cfc362da7e4da56f8acb525b0cb161146aa9ee83a18f3615bd483d8304b332e2d005a7478e3b3b3b0ce10bf6c62b82a060a4a8524af9b6a5af48fed580befcace787aa79280da6f78b72b01108ed6a594572394fa483821d7d174b477fda5b687d1148287d5be10e58b0b30cfc62f7b4b3a7265342d0
-    | 1 => 0x2484267302df2a812bb2deef8345b74faf69bc7f1049a763e88a7846d81bf955d1be8a2323e0882435fa584c37631450f62f162e50f6d1e22ab72dc392ad7a6d74d98b7906d2af37be4dd0ce2af022d876641fcb4c40dbf90958cba7e5b12c1f9f5eb8c09e4997d53671d2d0ab3c048cbd4015a8ab47563953df2fd4bd2832a9
-    | 2 => 0xf8eeb0de0a0993e1a65c783f0510af8f3988b27cb792c36e151ebcd02876961185aba3a183413e4dee46cfe6972f48eef260c09d037bc52d253905311bfb952a80e4a4a48d808d6de22659aaa2d2086dba73e05bdd4c24abb1bacf517c90a512e1a293c48ebb3b9a5af9f9ee2ce7f648c1f76250b8a0635a1e577a4d58a6a199
-    | 3 => 0xb0c6927ad1868fdc123db84d4de936728cbccee6b4c64fc0ede8def50a61e4067965078bb6b92c375dda40ad6eaefc64031db4ccd3510a6912e34cc8d8158d66d8e8b62d07672b4e3b733a3b3afbb3fabbb6832d17b28ac6e93b09502a6b618c4722434cb88af5e8afb59f27c6e39566af046785a143e7c0d6d4387a4521b4c8
-    | 4 => 0x1a210bc6948530cc79b3106548275a455520d2df231c276d2d0ec6899d17ada71102a4ecb4698d042d3fa0696fa6680d3c2b97de0bd80689e396fa0d6666f432cf1ea0dd139bf27a32061643d57fe321735c628aa473205ed3db8bfb981d0305e1dd3e7f0ebeee18d5a2ddd217cd47cf1f834ac63572467cbb912655754d7544
-    | 5 => 0x3d529223baa413273eaebb34a2db1da272cb09bffaabce2a9505a89a3f3fe04b6226ed2888db29e3de15140802fda8c7665714c7f90535bb1ff1233c980e2a8c7b0886bdc9c427b0e29016b1632f38b3fd67ec666ca59faeacd9e6307e6be82f2693fd32b374ae179d5d89cb6f9634173f15e88df0e3971e2dd1bd4d2d348d7c
-    | 6 => 0x875ad5d97f83ebe2a8ba9ab4901137938f2079d2f7ebdb4e9cd234e9a929f8afd6ac7d7d1e20dc2abc891430e9434139210fe87f4e20a29e0fcec69140dee2181d6f11979aba792936b08ce384aa4ff567f97bfb9a4e72b01e0a6b676dde4ee6aff24ac85aa02ecdaea450390ba6e59a79dfea9743aebbaf1b4de96c90497104
-    | 7 => 0xb664fe173a55239de112c52942a340d5f2e6baa265b204bf682d448cb03252fa068ba1aa9b83e07baadff1c681e931b0c167a82121800ee714a569d0a9627d669fd30944d05570fd234939865e8e95b99a5fad7399cc3e671d325adb5edbb3b553d558cebaf6f5eaee9ec62b581264a2abfd0ffc4b293ff7b8d42e318490ea0e
+    | 0 => 0x5c228b394b2d6b719d90742a37f325927f208fb9acd536735a7e84d1c396fc81d87f3ced4619f0250d64980cae35bd679b5db910bf669ea14c456aab526e3769e7ee6c9b7d636e93732df238d0e601a29d3ca975e4bb2b898ccf5d3d803a2d38bef153256e547973c15e29ce049035b4cd97bd39ab18f09a87f976ccec880da3
     | _ => 0
   fld packed 8 (i % 128)
-def count (s : Nat) : Nat := if s = 7 ∨ s = 8 then 1024 else 0
+def count (s : Nat) : Nat := if s = 7 ∨ s = 8 then 128 else 0
 
 def board : Nat → Nat → List Nat
-  | 7, i => cpBoard (mask 153) inputs 4 (recipe7 i)
-  | 8, i => cpBoard (mask 153) inputs 3 (recipe8 i)
+  | 7, i => if finger7 i = 0 then [] else cpBoard (mask 153) inputs 4 (recipe7 i)
+  | 8, i => if finger8 i = 0 then [] else cpBoard (mask 153) inputs 3 (recipe8 i)
   | _, _ => []
 def atFinger (table : Nat → Nat) (ws : List Nat) : Option Nat :=
   let h := hk ws
-  let i := h % 1024
-  if table i == h / 1024 % 254 + 1 then some i else none
+  let i := h % 128
+  if table i == h / 128 % 254 + 1 then some i else none
 
 def lookup : Nat → List Nat → Option Nat
   | 7, ws => atFinger finger7 ws
   | 8, ws => atFinger finger8 ws
   | _, _ => none
-def ck := checkpointCheck 153 scs count board lookup
+def x8 (i : Nat) :=
+  let t := match i/256 with
+    | 0 => 0x145704452e04365d1dc14f1bfe406a6bb16bb7100400730d06933d072a100f63b0bb58000705dd3100140f600e9f06d60810700654d7e0d043218d97f345e4b02002439d8107a1702dbdc83c00400ec0f8d7bdf5f85adc0056104b0a89c09d80e68b002ad2f9e73000b9772a36a172f804b2ed0021216026034f47b9dfe80f3a
+    | 1 => 0xba00db865782c750240f300094415af63686ed4a12e3e70fd98cd302367064020607433000db4226fa1e6746e6e6c0c6169051c440051e51b0080255a20968dc4f2030c67a50c0a002e80080c0815080fdc700072000d4045d985d8b40096db01acc9d703c69271f60c4f010df0ec0c200840ca673b0980770343f246d051fd
+    | 2 => 0x465e4ec92b48709102edb4115f000162089ff81f0628defa004a1ecbc3947601e56ae59fcb70b13606647e01a1ea672a000a0d8fbe26800b955492020c328822930081d507801f14d00048a409e2c0040d6820310d9873e9611da2b63fc103b66ad14da003a6ea0f8b8124fddec080624570e0001f5010bba904d6610008b500
+    | 3 => 0x1f870d8550fd06000f200599a0d16c6940062010898df95607e84801087a292592d7b1d07bbc976dceed5577e0cf294007063000c2091c0514003c0751768f80f3c44b30800dfd1047a002d050b53e8138c78b01d1130c01e9844070819c350758c00b0681000128019a510127b4120b02650c450542400004f024b0c052001a
+    | 4 => 0xf308b10320819bf57f6000334eade441b03e5c2311fb002e46ca87459fc721349324a223c01241f2702aeb18ee40a5c6335002110f4091e03a0c34d70107ae2f13ad068db4f8003cf6e0ce700323ade0d210070150000103c04c0c28a52c2080ac1680eb603c40d80e04ae64455a084a0f07fa98539e409008087e5b6f0d8af0
+    | 5 => 0x22705490f05a2ad8244686b00304b7990261700c0f9708f79007e67900606b9d408d2ab056af6ddd53d17406b4a404e620a558702e4059010000d5410bd0d549bf8b679f530002b470692402071d1e010f51090eea39b99ea0fe3b200773a200d6cd72a2c1862d968674190100480d0d5f263ed99f617ab8c0504f60c04b0c69
+    | 6 => 0x7b8e8df099a00100055ca8b83b9af7afb00c290efa206c447260caf33dd36e1640007008060b01347c05ffc50380e95e51d10301d457893545c50891a49aea9b05f5ae60a360004700005c01a406a04a40681260980f06e3fc040c20d0c86bb604058fde5f03005038c7a040203ffc510a01601a900ce006b42f80014731c008
+    | 7 => 0xc6c816e340d034aa61908000509bb0305b850b59ba0a015422d0f00008c04c0463c0509c600144040ee0704342034961530ac16950908c525210380304afc0293abff4b290009690337dbbe4bc0de4f004b6820b4d14be0dc0a7c050cf24b91e50fc00d3040c814ad42060df3d7012d10e5433000091700932cc90302007c1
+    | 8 => 0xa05fbd406b46661000ebcf007f0d680180a4d3e508008b6330cd0a60a86dea50f60420a0c210a8e705900f015a9a0505a00c7e0a5773170fb00414440781a07c421a278700a045c60400b1ee0020c11e4003602c528ced400094d89093d06e05a0177b0c010a50a44ce4f00801c0053d20097d0e82800681535fc21253004304
+    | 9 => 0x7b0704c0014c071000f201bc8001d5148d0400d0a8a5002fa0d657fb00060b30c0c83280750c000d4e5024300b0c000b2c0e00d8ad0253000a5f25a7900d680e909c671c01d9010fab00e080f301745c2609d6fd8900f3f505b503124aea024317ba6b720603407301861008404a2e030033c440dd28dc030595e004b01ea007
+    | 10 => 0xb73f20012000609fb400cd080ad960be5f200ce5610480e0d000aad14167868056016d000272067ed587002b4001d3500b5a7a80070027e4006a90c202f92309ae6b5061aa7650072d9b7cb1ec6e00800bf4004dbc30593ac09088209e5de1c6f07e20a3a620005f6600606e070098084cb2108aecce4b63003095f20c303eeb
+    | 11 => 0x80da3e11e80a0c0be7149c0000a1cdb699ea03074b0c045000008a70f5307e25ed84200041640340b3031c103572c080b060500e662080ef30b82ca0502c7366b5900de073003c10005050008a89700771080b7b300047170390b2eaa0704000540cba8ff3707045f5003b78c3a3180700f781c075a45505303e01ea00e410de
+    | 12 => 0x6894311f50009006dbdd034a408e71bd57051a23c9102b2007237061037fda26d7c405f361700010b86039a09059ea029028f40d07a17b0ab0d32d1561704b002c100d97111e70f0100003100454d1e69007810203f1090acf46d46000c02728d99bd21b01058066d0018ad04600000d60070da05057996000a00334d7007090
+    | 13 => 0xe5007d080994ab0008864dbe93e195003cee710452b38001f00110d9032b20a0a6e0201e50503050f320b1160e04b84403af20370500415c051b0a1700e309637c0ee00500a000b80c269a8706d4b795004b004b7f084456eca0078605d091f988908fd14a0a110d2dfe062000bdbfba88b5d051002179221aa0a1c8fe50bdc0
+    | 14 => 0x8e038206c0c52b27081b59bbc000609ac58e0a06c55baf8e00fcc1cab5ca00218e71a00b08c6981a34d35e1348c08b990de074170100a61ec4426b60c06126f478f08135000a076132644205e08013804a2610cbc81003a00722904d35c0a5914
+    | _ => 0
+  fld t 4 (i % 256)
+def hint8 (h : Nat) := orbitLookup x8 0 1259 h
+def x9 (i : Nat) :=
+  let t := match i/256 with
+    | 0 => 0x6e8056d35f680e030b090277f106191062c55a511948ade06278c2a385f40a07fbb4723c6aa0ac93500e64cfb3000a9560baf28e670f04d08bb400a5c6f569710000620b0704106c335630a60031040173f3f83e0044d86bb0ec002065014f730006a67861da0c60d6f0054520270410eb775f02034bb6063d61a4810d2e0d01
+    | 1 => 0xf10a000024936064e6300f4ab07006be0552044683150cb1800c8a00fb70b72df30cd0f59df05cc40950cae9a00562d0472243217c870f82e0b6e090730e02e72fa0b06c0270a40e6350381c020e1b410808b235403c0a5b90028cab020902bbd9215c006f400f0080060751a9088a50fa9b30d8965c604000f0759e47028b23
+    | 2 => 0x16102c416084cb8494022048109060a0c070a48b960ef06b35886fef00d0556e204ff200109000350ba805ae05c50e2503920f00a098e9400850d1e3f04830104a570c04e55b47fbdc41db009711ec00a5e0256c6e300109078de502f6c8b90e0a0d048aa681000e121dc99a84687ae09b9006b728de08b2c007fe000d0cad4d
+    | 3 => 0x4908050978c71003f031064b58fd0a912c08003cbb46f0c063915e058e40b203e5160a9ad8f600b129d3cb07c5100b793f0c091f040701c90be4c952db0c060a10e86d00814e920513e2f807d0dde95bdb00691c0c175d0ea0e0f1290607d002601e06841bb252046e8409721a0ac5a6061d18581fe6671e040c00c703309024
+    | 4 => 0x557a4c03001005c40320041f49306700031854b0d805d0bcba5100050d97fbc21fbe0344fc46040d71f0056d4060ef20c1004860f210884475f9f5c61d006060f570d0500ed8706f0066f409322341af73b4851bf79577630a9452008ac4a0c90610001356af161fd050a00bec0990a0080cf049056961f1dd500ad259064b07
+    | 5 => 0x630e009b4a356e0b150ae0404201393200004801d1f80a00bc82fa21f765ee251e5ee4b8ab20b00c518b13fb71120600c00053ff09f207510251723085d0f900013d065a499a36050080b1a900070e06b5f0680d00503b004f6ac07c0640743de5cdc03216100c050b00876036a60080b806f8bd30f040a0e133e040116000f
+    | 6 => 0xee880009620502409510f100711a460f408a6d45860f0642a90085121280fd82102b040f2cc3faca00ccc40
+    | _ => 0
+  fld t 4 (i % 256)
+def hint9 (h : Nat) := orbitLookup x9 0 541 h
+def hint (s : Nat) (ws : List Nat) := if s = 8 then hint8 (hk ws) else hint9 (hk ws)
+def labels := 0x1310000249170000000000000000000000000fc003b9c0b10000000ce0000244c2004ba428c90438fe7c0000000b5002c202a30042e00787f9a8cc640000000cc0000000c10000000be003ad76ae0000000b4002b5b6a20039db2566c120743700325902a002ad7426002f572235c2783e1d002a564195402d36080027534064c80c0000
+def cols (t : Nat) := fld 0x2b095cb99411c257666509734415858f58d11ab881b334423858d067588c1ab 21 t
+def u12 := 0x1200000000b800000010e003ad569e0000000ff003615099003b9606a569201603004919c7f002ed741f0045d847c60ab84c1d003816a665a0e93600002c54664510dc1000
+def u13 := 0x1200000000b800000010e002f9569e0000000ff003615099003b9606a56920160300492447f002ed741f0045d847c60ab84c1d0038202666d8e93600002c54664510dc1000
+def rowIx (t v : Nat) : Nat :=
+  if t = 12 then fld u12 9 v else
+  if t = 13 then fld u13 9 v else
+  mkProjection labels (cols t) 9 v
+def rr0 (t : Nat) := (List.range 204).map (fun i => rowIx t (fld 0xd30b289a56091850f2c2aa268d8246143c70a689636091850f0a34c28718595246143cb0a1a6164c91850f1c28658553246143c18c2ca1c60e3491850f0aa869838b246143a182461460c91439249249249249249228a28a28a28a28a286186186186186186081451451451451451449249249249249249145145145145145141030c30c30c30c30c30a28a28a28a28a28a208204102081041 6 i))
+def rr41 (t : Nat) := (List.range 176).map (fun i => rowIx t (fld 0xd30b289a54891850f2c2aa268d2246143c70a689634891850f0a3cc2879d4891850f8699d16571c286554d2246143c12b0e370aa869238b246143a091854860c91439249249249249249228a28a28a28a28a286186186186186186081c71c71c71c71c71861851451145145145145145141030c30a28a28a28a28a28a208104082081041 6 i))
+def graphId (t : Nat) := fld 0x5000505 2 t
+def qBook (w : Nat) : Nat :=
+  let d := fld 0x3806128a0904021706030000b316006700896104bcf8020b150a06030200011c0f076c002c0040024d621b062a523f48010e0018020207400009000c2b033a051c9e520315241307001c0f2904 8 (w % 77)
+  fld 0x1298b940415c11b09e8c0a500000017ac64614b190d7a60c2266ba4c1020c10caa914dac08406f0a38386d843e215100008ca2e32b4df046ce0ca3e5811c0933e18314000d8a1e1420e12649d00003540001826419d0c13a8c42e732101a84c65eea3300003a60003e5008c3c68413e2d5b8ae5165862c14ca8d1458219918a8a822be0d7a80008468b38086000153000068609e1ca022838c4c46c080015dcb933e5820db180cc2e0a30591a1962661f3875ccee0eb31108863c4545a30812c545265800152ac8b54a03101860425f2a11212a09c0028731d2a0ee2a3191439a74400000120860ce8462f71b2af8a0652b7a116b843e6072839cb450222a318860cd1ce02145943c30228f5874ab9466f1f19688b46166000810429d7a206105acf93466bd0db04e450e20359a8c6c17231f0493ca466729b344860005f7032ce8c5cc0c19304000ad43eb0915b28e4324e2a4d486f810633a2e0884455670019b2d081001834cd9408b22232040008cb84200005288c36730e5873cae60571f080002cd6c68001a882952528d180802d414603700001d45a19758118acb149864df08e8104a2b74b841c214f0f51a8aa96072ba58726be652217115ac6c37452e0c6886c68453e311a818c14e0001d1a4460c08e5508624414686283828450000254fa83455cb037408ecdc152ba081ccbd5000ab315aa08d1ceba0c95cbde123072e1285cd145175099c7ca6232b3572a007365863588a4c3 13 (((w >>> 3) + d) % 331)
+
+def im0 (t : Nat) (i : Fin 8) : Nat :=
+  projColumn 102 Fixed0.raw (cols t) i
+def im41 (t : Nat) (i : Fin 8) : Nat :=
+  if t=12 then (Fixed41.raw ++ [0, mask 88] ++ [0x310620c436470620cea304000000001fff0000ffff00,0x10000002040000000000000000000000000,0xfc0f83f07c049c029c0200ffffffffe0000000000000,0x100000000000000000000000000000000000000000]).getD (fld 0x62140958 4 i.val) 0 else
+  if t=13 then (Fixed41.raw ++ [0, mask 88] ++ [0x310620c436470620cea304000000001fff0000ffff00,0x10000002040000000000000000000000000,0xfc0f83f07c049c029c0200ffffffffe0000000000000,0x100000000000000000000000000000000000000000]).getD (fld 0x62140ba3 4 i.val) 0 else
+  projColumn 88 Fixed41.raw (cols t) i
+
+def okTable (t : Nat) :=
+  if graphId t = 0 then (decide (validCross 153 102 inputs (rr0 t) (im0 t))) else
+    (decide (validCross 153 88 inputs (rr41 t) (im41 t)))
+set_option maxRecDepth 10000 in
+set_option maxHeartbeats 60000000 in
+theorem rowsOK : ∀ t : Fin 14, okTable t.val = true := by decide +kernel
+def passed (s t : Nat) (ws : List Nat) :=
+  if graphId t = 0 then crossHit 153 102 inputs (rr0 t) (im0 t) qBook (Fixed0.index s) (Fixed0.N s) (Fixed0.S s) ws else
+  crossHit 153 88 inputs (rr41 t) (im41 t) qBook (Fixed41.index s) (Fixed41.N s) (Fixed41.S s) ws
+def stop (s : Nat) (ws : List Nat) :=
+  if s=8 ∨ s=9 then
+    let a := hint s ws
+    if a=0 ∨ 14<a then false else passed s (a-1) ws
+  else false
+
+theorem stopNo {s ws} (ok : stop s ws = true) : ¬NatRun (mask 153) (goal 153) s ws := by
+  by_cases lev : s=8 ∨ s=9
+  · by_cases outside : hint s ws=0 ∨ 14<hint s ws
+    · simp [stop,lev,outside] at ok
+    · have good : hint s ws - 1 < 14 := by omega
+      have sel := rowsOK ⟨hint s ws-1,good⟩
+      have hit : passed s (hint s ws-1) ws = true := by simpa only [stop,if_pos lev,if_neg outside] using ok
+      by_cases h0 : graphId (hint s ws-1) = 0
+      · simp only [okTable, passed, h0, if_true, if_false] at sel hit
+        exact crossHitDead (of_decide_eq_true sel) hit (fun i hi => Fixed0.atDepth s i lev hi)
+      simp only [okTable, passed, h0, if_true, if_false] at sel hit
+      exact crossHitDead (of_decide_eq_true sel) hit (fun i hi => Fixed41.atDepth s i lev hi)
+  · simp [stop,lev] at ok
+
+def ck := cpWith stop 153 scs count board lookup
 def pan (s i : Nat) := ck s (board s i)
 set_option maxHeartbeats 50000000 in
-lemma block7_0 : span (pan 7) 64 0 = true := by decide +kernel
+lemma p7_0 : span (pan 7) 64 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
-lemma block7_64 : span (pan 7) 64 64 = true := by decide +kernel
+lemma p7_64 : span (pan 7) 64 64 = true := by decide +kernel
+lemma good7 : span (pan 7) 128 0 = true := by with_reducible exact (sj p7_0 p7_64)
 set_option maxHeartbeats 50000000 in
-lemma block7_128 : span (pan 7) 64 128 = true := by decide +kernel
+lemma p8_0 : span (pan 8) 64 0 = true := by decide +kernel
 set_option maxHeartbeats 50000000 in
-lemma block7_192 : span (pan 7) 64 192 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_256 : span (pan 7) 64 256 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_320 : span (pan 7) 64 320 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_384 : span (pan 7) 64 384 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_448 : span (pan 7) 64 448 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_512 : span (pan 7) 64 512 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_576 : span (pan 7) 64 576 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_640 : span (pan 7) 64 640 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_704 : span (pan 7) 64 704 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_768 : span (pan 7) 64 768 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_832 : span (pan 7) 64 832 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_896 : span (pan 7) 64 896 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block7_960 : span (pan 7) 64 960 = true := by decide +kernel
-lemma good7 : span (pan 7) 1024 0 = true := by with_reducible exact (sj (sj (sj (sj block7_0 block7_64) (sj block7_128 block7_192)) (sj (sj block7_256 block7_320) (sj block7_384 block7_448))) (sj (sj (sj block7_512 block7_576) (sj block7_640 block7_704)) (sj (sj block7_768 block7_832) (sj block7_896 block7_960))))
-set_option maxHeartbeats 50000000 in
-lemma block8_0 : span (pan 8) 64 0 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_64 : span (pan 8) 64 64 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_128 : span (pan 8) 64 128 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_192 : span (pan 8) 64 192 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_256 : span (pan 8) 64 256 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_320 : span (pan 8) 64 320 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_384 : span (pan 8) 64 384 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_448 : span (pan 8) 64 448 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_512 : span (pan 8) 64 512 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_576 : span (pan 8) 64 576 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_640 : span (pan 8) 64 640 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_704 : span (pan 8) 64 704 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_768 : span (pan 8) 64 768 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_832 : span (pan 8) 64 832 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_896 : span (pan 8) 64 896 = true := by decide +kernel
-set_option maxHeartbeats 50000000 in
-lemma block8_960 : span (pan 8) 64 960 = true := by decide +kernel
-lemma good8 : span (pan 8) 1024 0 = true := by with_reducible exact (sj (sj (sj (sj block8_0 block8_64) (sj block8_128 block8_192)) (sj (sj block8_256 block8_320) (sj block8_384 block8_448))) (sj (sj (sj block8_512 block8_576) (sj block8_640 block8_704)) (sj (sj block8_768 block8_832) (sj block8_896 block8_960))))
+lemma p8_64 : span (pan 8) 64 64 = true := by decide +kernel
+lemma good8 : span (pan 8) 128 0 = true := by with_reducible exact (sj p8_0 p8_64)
 theorem closed : ∀ s i, i < count s → ck s (board s i) = true := by
   intro s i hi
   by_cases h7 : s=7
@@ -5976,14 +6910,24 @@ theorem closed : ∀ s i, i < count s → ck s (board s i) = true := by
   · subst s
     exact spOK good8 i (Nat.zero_le _) hi
   simp [count,h7,h8] at hi
-def rho (ys : List Nat) : List Nat :=
-  match fld 0x601f980029169dbd 1 (bsr 0xf850a4d4f75c4219f66a85edf192b1c8f10b3d10f02621c1ea560623e90f1b50e55cc3f5e54b2f93ddd4ff26d8f36f54d4d49ed1d2f67d14d231283fd0ccea2fd0880740ccdb0224bc1e371bbbb2cc41bb977ba8b495dd75b24eca81adbe6ec1abc6d4e4aad227489fc673cb9b9d6f459b57dc8e99b8f581999c8f3592bbc11f91e295a38fd552108fd0d8ef8c393d7f873364d67a3860b979cacf55763be7b2742847757231c5d16d7e8955698f92135b61fc905a0e96be59374dbc55a040b854f78f74543a82f94f7260614b9bce66449564e73bb12cbe2e4efcb826dacc5c1f1987801e19b624116dda8f10f4dc3b0cfcfabb07417c29061259210149de88 32 (hk ys) 7 0 64) with
-  | 1 => vals.map (fun r => fld 0x12e0000192bd00000000000000000000000010b0039d529d0000001210000190b9004c59c8c662f8542300000010000365649a003f16a785a15832060000001200000000b800000010e003ad569e0000000ff003615099003b9606a56920160300492447f002ed741f0045d847c60ab84c1d0038202666d8e93600002c54664510dc1000 9 r)
-  | _ => []
+def qPerm (i : Nat) : Nat := fld 0x11835600000 21 i
+
+def qRow (i : Nat) : List Nat :=
+  vals.map (fun v => fld 0x1310000249170000000000000000000000000fc003b9c0b10000000ce0000244c2004ba428c90438fe7c0000000b5002c202a30042e00787f9a8cc640000000cc0000000c10000000be003ad76ae0000000b4002b5b6a20039db2566c120743700325902a002ad7426002f572235c2783e1d002a564195402d36080027534064c80c0000 9 (orbitLabel (qPerm i) v))
+
+def qWord (i : Nat) (t : Fin 8) : Nat :=
+  inputs.getD (if t.val=7 then 7 else fld (qPerm i) 3 t.val) 0
+def qPick0 (ys : List Nat) : Nat :=
+  fld 0x4 2 (fld 0x601f980029169dbd 1 (bsr 0xf850a4d4f75c4219f66a85edf192b1c8f10b3d10f02621c1ea560623e90f1b50e55cc3f5e54b2f93ddd4ff26d8f36f54d4d49ed1d2f67d14d231283fd0ccea2fd0880740ccdb0224bc1e371bbbb2cc41bb977ba8b495dd75b24eca81adbe6ec1abc6d4e4aad227489fc673cb9b9d6f459b57dc8e99b8f581999c8f3592bbc11f91e295a38fd552108fd0d8ef8c393d7f873364d67a3860b979cacf55763be7b2742847757231c5d16d7e8955698f92135b61fc905a0e96be59374dbc55a040b854f78f74543a82f94f7260614b9bce66449564e73bb12cbe2e4efcb826dacc5c1f1987801e19b624116dda8f10f4dc3b0cfcfabb07417c29061259210149de88 32 (hk ys) 7 0 64))
+def qOri0 := quickOri 153 2 inputs qPick0 qRow qWord qBook
+
+set_option maxHeartbeats 50000000 in
+set_option maxRecDepth 10000 in
+theorem qCert : ∀ i : Fin 2, i.val = 0 ∨ validQuick 153 inputs (qRow i) (qWord i) := by decide +kernel
 def B (i : Nat) := mv (mask 153) (fld 0xe20f51e61505f62104e40e42e21400503e30e60f42504f30f52f31f23f20f40e41106105f21f10402e62506401000e10e31e51f41404103 12 i) inputs
 def I (ys : List Nat) := bsr 0xf850a4d4f192b1c8f10b3d10f02621c1ea560623e90f1b50e55cc3f5e54b2f93ddd4ff26ccdb0224bc1e371bb495dd75b24eca81adbe6ec1abc6d4e4aad227489fc673cb9b9d6f459b57dc8e99b8f581999c8f3592bbc11f91e295a38fd552108c393d7f7a3860b979cacf55742847757231c5d16d7e89555b61fc9055a040b8543a82f94f7260612e4efcb81e19b62406125921 32 (hk ys) 6 0 37
 set_option maxRecDepth 10000 in
-lemma roof : bar 153 (cutB 10 inputs B) (cutN 10 37) (fun _ => I) (rowOrient 153 rho) scs 11 0 = true := by decide +kernel
+lemma roof : bar 153 (cutB 10 inputs B) (cutN 10 37) (fun _ => I) qOri0 scs 11 0 = true := by decide +kernel
 def nextRecipe (i : Nat) : Nat :=
   let v : Nat := match i/96 with
     | 0 => 0x13d944f641140c450113d88450213d844f6313d804406139d84f5213d084f5313d502e5113d401e5313d044f4313d004404139d44e74139504e65139904104114104105114144106114184f2113c8c4f20139c84e52139084f1313c404e51139044e7113cc044031390c4e731394c45071041c4e621388c4e131398c3e51110022e50139c03a40739803e40929824e600e980fe600f9804e600e8c05e600f8c04a503f9404e5012901ce40139019a40939019e40128c19e30179004e306a8045a306b80566105b842161087841ce03938c08e10218405e30
@@ -6048,212 +6992,211 @@ def nextCodes (i : Nat) : Nat :=
     | _ => 0
   fld v 12 (i % 96)
 def action2 (ys : List Nat) := orbitLookup nextCodes 0 1031 (hk ys)
-def rho2 (ys : List Nat) : List Nat :=
-  let a := action2 ys/1737
-  if a=0 then [] else
-    let c := fld 0x118357ac688 21 a
-    vals.map (fun v => fld 0x13100002491700000000000000000000000011400442053000000012f000024516004ba5a9890455167e00000011300436032c0044a227b851dcd2650000000cc0000000c10000000f9003adbb2b0000000f7003a5b72a003d5e863731548e39003259036003017e29002f578255c4a4441e002cd641c54062500a0049e4c07928140400 9 (orbitLabel c v))
+def qPick1 (ys : List Nat) : Nat :=
+  fld 0x4 2 (action2 ys/1737)
+def qOri1 := quickOri 153 2 inputs qPick1 qRow qWord qBook
+
 def J (ys : List Nat) := action2 ys % 1737
-def r2 (i : Nat) := bar 153 (cutB 9 (B i) C) (cutN 9 1737) (fun _ => J) (rowOrient 153 rho2) [] 10 0
+def r2 (i : Nat) := bar 153 (cutB 9 (B i) C) (cutN 9 1737) (fun _ => J) qOri1 [] 10 0
 set_option maxRecDepth 10000 in
-lemma roofPart0 : span r2 1 0 = true := by decide +kernel
+lemma rp0 : span r2 1 0 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart1 : span r2 1 1 = true := by decide +kernel
+lemma rp1 : span r2 1 1 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart2 : span r2 1 2 = true := by decide +kernel
+lemma rp2 : span r2 1 2 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart3 : span r2 1 3 = true := by decide +kernel
+lemma rp3 : span r2 1 3 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart4 : span r2 1 4 = true := by decide +kernel
+lemma rp4 : span r2 1 4 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart5 : span r2 1 5 = true := by decide +kernel
+lemma rp5 : span r2 1 5 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart6 : span r2 1 6 = true := by decide +kernel
+lemma rp6 : span r2 1 6 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart7 : span r2 1 7 = true := by decide +kernel
+lemma rp7 : span r2 1 7 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart8 : span r2 1 8 = true := by decide +kernel
+lemma rp8 : span r2 1 8 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart9 : span r2 1 9 = true := by decide +kernel
+lemma rp9 : span r2 1 9 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart10 : span r2 1 10 = true := by decide +kernel
+lemma rp10 : span r2 1 10 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart11 : span r2 1 11 = true := by decide +kernel
+lemma rp11 : span r2 1 11 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart12 : span r2 1 12 = true := by decide +kernel
+lemma rp12 : span r2 1 12 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart13 : span r2 1 13 = true := by decide +kernel
+lemma rp13 : span r2 1 13 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart14 : span r2 1 14 = true := by decide +kernel
+lemma rp14 : span r2 1 14 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart15 : span r2 1 15 = true := by decide +kernel
+lemma rp15 : span r2 1 15 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart16 : span r2 1 16 = true := by decide +kernel
+lemma rp16 : span r2 1 16 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart17 : span r2 1 17 = true := by decide +kernel
+lemma rp17 : span r2 1 17 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart18 : span r2 1 18 = true := by decide +kernel
+lemma rp18 : span r2 1 18 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart19 : span r2 1 19 = true := by decide +kernel
+lemma rp19 : span r2 1 19 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart20 : span r2 1 20 = true := by decide +kernel
+lemma rp20 : span r2 1 20 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart21 : span r2 1 21 = true := by decide +kernel
+lemma rp21 : span r2 1 21 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart22 : span r2 1 22 = true := by decide +kernel
+lemma rp22 : span r2 1 22 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart23 : span r2 1 23 = true := by decide +kernel
+lemma rp23 : span r2 1 23 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart24 : span r2 1 24 = true := by decide +kernel
+lemma rp24 : span r2 1 24 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart25 : span r2 1 25 = true := by decide +kernel
+lemma rp25 : span r2 1 25 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart26 : span r2 1 26 = true := by decide +kernel
+lemma rp26 : span r2 1 26 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart27 : span r2 1 27 = true := by decide +kernel
+lemma rp27 : span r2 1 27 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart28 : span r2 1 28 = true := by decide +kernel
+lemma rp28 : span r2 1 28 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart29 : span r2 1 29 = true := by decide +kernel
+lemma rp29 : span r2 1 29 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart30 : span r2 1 30 = true := by decide +kernel
+lemma rp30 : span r2 1 30 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart31 : span r2 1 31 = true := by decide +kernel
+lemma rp31 : span r2 1 31 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart32 : span r2 1 32 = true := by decide +kernel
+lemma rp32 : span r2 1 32 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart33 : span r2 1 33 = true := by decide +kernel
+lemma rp33 : span r2 1 33 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart34 : span r2 1 34 = true := by decide +kernel
+lemma rp34 : span r2 1 34 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart35 : span r2 1 35 = true := by decide +kernel
+lemma rp35 : span r2 1 35 = true := by decide +kernel
 set_option maxRecDepth 10000 in
-lemma roofPart36 : span r2 1 36 = true := by decide +kernel
-lemma secondRoofOK : span r2 37 0 = true := by with_reducible exact (sj (sj (sj (sj (sj roofPart0 roofPart1) (sj roofPart2 roofPart3)) (sj (sj roofPart4 roofPart5) (sj roofPart6 (sj roofPart7 roofPart8)))) (sj (sj (sj roofPart9 roofPart10) (sj roofPart11 roofPart12)) (sj (sj roofPart13 roofPart14) (sj roofPart15 (sj roofPart16 roofPart17))))) (sj (sj (sj (sj roofPart18 roofPart19) (sj roofPart20 roofPart21)) (sj (sj roofPart22 roofPart23) (sj roofPart24 (sj roofPart25 roofPart26)))) (sj (sj (sj roofPart27 roofPart28) (sj roofPart29 (sj roofPart30 roofPart31))) (sj (sj roofPart32 roofPart33) (sj roofPart34 (sj roofPart35 roofPart36))))))
+lemma rp36 : span r2 1 36 = true := by decide +kernel
+lemma secondRoofOK : span r2 37 0 = true := by with_reducible exact (sj (sj (sj (sj (sj rp0 rp1) (sj rp2 rp3)) (sj (sj rp4 rp5) (sj rp6 (sj rp7 rp8)))) (sj (sj (sj rp9 rp10) (sj rp11 rp12)) (sj (sj rp13 rp14) (sj rp15 (sj rp16 rp17))))) (sj (sj (sj (sj rp18 rp19) (sj rp20 rp21)) (sj (sj rp22 rp23) (sj rp24 (sj rp25 rp26)))) (sj (sj (sj rp27 rp28) (sj rp29 (sj rp30 rp31))) (sj (sj rp32 rp33) (sj rp34 (sj rp35 rp36))))))
 def t2 (i : Nat) := ck 9 (C i)
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart0 : span t2 53 0 = true := by decide +kernel
+lemma lp0 : span t2 53 0 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart53 : span t2 100 53 = true := by decide +kernel
+lemma lp53 : span t2 100 53 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart153 : span t2 42 153 = true := by decide +kernel
+lemma lp153 : span t2 42 153 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart195 : span t2 45 195 = true := by decide +kernel
+lemma lp195 : span t2 45 195 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart240 : span t2 40 240 = true := by decide +kernel
+lemma lp240 : span t2 40 240 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart280 : span t2 33 280 = true := by decide +kernel
+lemma lp280 : span t2 33 280 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart313 : span t2 43 313 = true := by decide +kernel
+lemma lp313 : span t2 43 313 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart356 : span t2 37 356 = true := by decide +kernel
+lemma lp356 : span t2 37 356 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart393 : span t2 51 393 = true := by decide +kernel
+lemma lp393 : span t2 51 393 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart444 : span t2 73 444 = true := by decide +kernel
+lemma lp444 : span t2 73 444 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart517 : span t2 81 517 = true := by decide +kernel
+lemma lp517 : span t2 81 517 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart598 : span t2 45 598 = true := by decide +kernel
+lemma lp598 : span t2 45 598 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart643 : span t2 11 643 = true := by decide +kernel
+lemma lp643 : span t2 11 643 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart654 : span t2 48 654 = true := by decide +kernel
+lemma lp654 : span t2 48 654 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart702 : span t2 89 702 = true := by decide +kernel
+lemma lp702 : span t2 89 702 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart791 : span t2 42 791 = true := by decide +kernel
+lemma lp791 : span t2 42 791 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart833 : span t2 8 833 = true := by decide +kernel
+lemma lp833 : span t2 8 833 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart841 : span t2 21 841 = true := by decide +kernel
+lemma lp841 : span t2 21 841 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart862 : span t2 39 862 = true := by decide +kernel
+lemma lp862 : span t2 39 862 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart901 : span t2 53 901 = true := by decide +kernel
+lemma lp901 : span t2 53 901 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart954 : span t2 14 954 = true := by decide +kernel
+lemma lp954 : span t2 14 954 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart968 : span t2 68 968 = true := by decide +kernel
+lemma lp968 : span t2 68 968 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1036 : span t2 79 1036 = true := by decide +kernel
+lemma lp1036 : span t2 79 1036 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1115 : span t2 54 1115 = true := by decide +kernel
+lemma lp1115 : span t2 54 1115 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1169 : span t2 42 1169 = true := by decide +kernel
+lemma lp1169 : span t2 42 1169 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1211 : span t2 49 1211 = true := by decide +kernel
+lemma lp1211 : span t2 49 1211 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1260 : span t2 22 1260 = true := by decide +kernel
+lemma lp1260 : span t2 22 1260 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1282 : span t2 100 1282 = true := by decide +kernel
+lemma lp1282 : span t2 100 1282 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1382 : span t2 96 1382 = true := by decide +kernel
+lemma lp1382 : span t2 96 1382 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1478 : span t2 71 1478 = true := by decide +kernel
+lemma lp1478 : span t2 71 1478 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1549 : span t2 40 1549 = true := by decide +kernel
+lemma lp1549 : span t2 40 1549 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1589 : span t2 41 1589 = true := by decide +kernel
+lemma lp1589 : span t2 41 1589 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1630 : span t2 10 1630 = true := by decide +kernel
+lemma lp1630 : span t2 10 1630 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1640 : span t2 11 1640 = true := by decide +kernel
+lemma lp1640 : span t2 11 1640 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1651 : span t2 14 1651 = true := by decide +kernel
+lemma lp1651 : span t2 14 1651 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1665 : span t2 16 1665 = true := by decide +kernel
+lemma lp1665 : span t2 16 1665 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1681 : span t2 27 1681 = true := by decide +kernel
+lemma lp1681 : span t2 27 1681 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1708 : span t2 22 1708 = true := by decide +kernel
+lemma lp1708 : span t2 22 1708 = true := by decide +kernel
 set_option maxRecDepth 10000 in
 set_option maxHeartbeats 50000000 in
-lemma leafPart1730 : span t2 7 1730 = true := by decide +kernel
-lemma secondTestOK : span t2 1737 0 = true := by with_reducible exact (sj (sj (sj (sj (sj leafPart0 leafPart53) (sj leafPart153 leafPart195)) (sj (sj leafPart240 leafPart280) (sj leafPart313 (sj leafPart356 leafPart393)))) (sj (sj (sj leafPart444 leafPart517) (sj leafPart598 (sj leafPart643 leafPart654))) (sj (sj leafPart702 leafPart791) (sj leafPart833 (sj leafPart841 leafPart862))))) (sj (sj (sj (sj leafPart901 leafPart954) (sj leafPart968 (sj leafPart1036 leafPart1115))) (sj (sj leafPart1169 leafPart1211) (sj leafPart1260 (sj leafPart1282 leafPart1382)))) (sj (sj (sj leafPart1478 leafPart1549) (sj leafPart1589 (sj leafPart1630 leafPart1640))) (sj (sj leafPart1651 leafPart1665) (sj leafPart1681 (sj leafPart1708 leafPart1730))))))
+lemma lp1730 : span t2 7 1730 = true := by decide +kernel
+lemma secondTestOK : span t2 1737 0 = true := by with_reducible exact (sj (sj (sj (sj (sj lp0 lp53) (sj lp153 lp195)) (sj (sj lp240 lp280) (sj lp313 (sj lp356 lp393)))) (sj (sj (sj lp444 lp517) (sj lp598 (sj lp643 lp654))) (sj (sj lp702 lp791) (sj lp833 (sj lp841 lp862))))) (sj (sj (sj (sj lp901 lp954) (sj lp968 (sj lp1036 lp1115))) (sj (sj lp1169 lp1211) (sj lp1260 (sj lp1282 lp1382)))) (sj (sj (sj lp1478 lp1549) (sj lp1589 (sj lp1630 lp1640))) (sj (sj lp1651 lp1665) (sj lp1681 (sj lp1708 lp1730))))))
 lemma upperDead (i : Nat) (hi : i < 37) : ¬NatRun (mask 153) (goal 153) 10 (B i) :=
-  symCutRoot (ori_ok rho2) (spOK secondRoofOK i (Nat.zero_le _) hi)
-    (fun j hj => checkpointCheck_sound closed (spOK secondTestOK j (Nat.zero_le _) hj))
+  symCutRoot (quick_safe (k:=153) (bound:=2) (xs:=inputs) (choose:=qPick1) (row:=qRow) (word:=qWord) (book:=qBook) qCert) (spOK secondRoofOK i (Nat.zero_le _) hi)
+    (fun j hj => cpWith_sound stopNo closed (spOK secondTestOK j (Nat.zero_le _) hj))
 theorem finChk : ¬NatRun (mask 153) (goal 153) 11 inputs :=
-  symCutRoot (ori_ok rho) roof upperDead
+  symCutRoot (quick_safe (k:=153) (bound:=2) (xs:=inputs) (choose:=qPick0) (row:=qRow) (word:=qWord) (book:=qBook) qCert) roof upperDead
 
 set_option maxRecDepth 10000 in
 theorem shard : ∀ t, HasCircuitSize 7 target t → 12 ≤ t := by
