@@ -12,3 +12,4 @@ n=7 E=[(0, 1), (0, 6), (1, 2), (2, 3), (3, 4), (4, 5)] girth=inf pred=8 holds, s
 n=7 E=[(0, 1), (0, 2), (0, 4), (0, 5), (2, 3), (3, 6), (5, 6)] girth=5 pred=9 holds, size pred achievable [102.3s]
 n=7 E=[(0, 1), (0, 4), (1, 2), (2, 3), (2, 5), (4, 5), (5, 6)] girth=5 pred=9 holds, size pred achievable [230.4s]
 n=7 E=[(0, 2), (0, 5), (1, 2), (2, 3), (3, 6), (4, 5), (5, 6)] girth=5 pred=9 holds, size pred achievable [169.3s]
+n=7 E=[(0, 3), (0, 4), (1, 2), (2, 5), (2, 6), (3, 6), (4, 5)] girth=6 pred=9 holds, size pred achievable [469.1s]

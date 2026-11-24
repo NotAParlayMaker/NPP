@@ -175,3 +175,139 @@ if __name__ == '__main__':
         print(f"SAT {dt:.2f} clauses={ncl} verified={good} circuit={circ}")
     else:
         print(f"UNSAT {dt:.2f} clauses={ncl}")
+
+
+# ---------------------------------------------------------------------------------------------
+# Mode 2: row-CEGAR.  Encodes only a subset of truth-table rows (a RELAXATION: any circuit for
+# f_G satisfies the row constraints of every subset).  The symmetry-breaking constraints used
+# here are purely structural (valid for every minimum circuit, independent of rows):
+# all non-output gates used, all relevant inputs used, key ordering, no two gates with the same
+# (op, inputs), no NOT of a NOT, no AND/OR of a node and its own negation.
+# UNSAT on a subset  =>  UNSAT on the full table.  SAT => the circuit is checked on all 2^n rows;
+# failing rows are added and the solver continues incrementally.
+# ---------------------------------------------------------------------------------------------
+class Cegar:
+    def __init__(self, n, T, k, solver='cadical153', relevant=None):
+        self.n, self.T, self.k = n, T, k
+        m = self.m = n + k
+        self.top = 0
+        cl = []
+        nv = self.nv
+        s1, s2, isnot, isand = {}, {}, {}, {}
+        for g in range(n, m):
+            isnot[g] = nv(); isand[g] = nv()
+            cl.append([-isnot[g], -isand[g]])
+            for i in range(g): s1[g, i] = nv()
+            for j in range(1, g): s2[g, j] = nv()
+            lits1 = [s1[g, i] for i in range(g)]
+            lits2 = [s2[g, j] for j in range(1, g)]
+            enc = CardEnc.equals(lits=lits1, bound=1, top_id=self.top, encoding=EncType.seqcounter)
+            self.top = max(self.top, enc.nv); cl += enc.clauses
+            enc = CardEnc.atmost(lits=lits2, bound=1, top_id=self.top, encoding=EncType.seqcounter)
+            self.top = max(self.top, enc.nv); cl += enc.clauses
+            cl.append([isnot[g]] + lits2)
+            for l in lits2: cl.append([-isnot[g], -l])
+            for i in range(g):
+                for j in range(1, i + 1): cl.append([-s1[g, i], -s2[g, j]])
+        self.s1, self.s2, self.isnot, self.isand = s1, s2, isnot, isand
+        for i in range(n, m - 1):
+            cl.append([s1[g, i] for g in range(i + 1, m)] + [s2[g, i] for g in range(i + 1, m)])
+        if relevant is None: relevant = range(n)
+        for i in relevant:
+            cl.append([s1[g, i] for g in range(n, m)] + [s2[g, i] for g in range(n, m) if (g, i) in s2])
+        # structural: no NOT of NOT
+        for g in range(n, m):
+            for h in range(n, g):
+                cl.append([-isnot[g], -s1[g, h], -isnot[h]])
+        # no AND/OR(x, NOT x): gate g binary with inputs (i, h) where h = NOT i
+        for g in range(n, m):
+            for h in range(n, g):
+                for i in range(h):
+                    cl.append([isnot[g], -s1[g, i], -s2[g, h], -isnot[h], -s1[h, i]])
+        # no two gates with the same (op, inputs): pairs g < h
+        for g, h in itertools.combinations(range(n, m), 2):
+            # NOT case
+            for i in range(g):
+                cl.append([-isnot[g], -isnot[h], -s1[g, i], -s1[h, i]])
+            for i in range(g):
+                for j in range(i + 1, g):
+                    for op in (True, False):
+                        a = isand[g] if op else -isand[g]; b = isand[h] if op else -isand[h]
+                        cl.append([isnot[g], isnot[h], -s1[g, i], -s1[h, i], -s2[g, j], -s2[h, j], -a, -b])
+        # key ordering (same as encode())
+        J = {}
+        for g in range(n, m):
+            for j in range(g):
+                J[g, j] = nv()
+                t = [s2[g, j]] if (g, j) in s2 else []
+                cl.append([-J[g, j], s1[g, j]] + t)
+                cl.append([-J[g, j], isnot[g]] + t)
+                cl.append([J[g, j], -isnot[g], -s1[g, j]])
+                if t: cl.append([J[g, j], -t[0]])
+        for g in range(n, m - 1):
+            h = g + 1
+            for j in range(g):
+                for j2 in range(j): cl.append([-J[g, j], -J[h, j2]])
+                cl.append([-J[g, j], -J[h, j], isnot[g], -isnot[h]])
+                for i in range(j):
+                    for i2 in range(i):
+                        cl.append([-J[g, j], -J[h, j], isnot[g], isnot[h], -s1[g, i], -s1[h, i2]])
+                    cl.append([-J[g, j], -J[h, j], isnot[g], isnot[h], -s1[g, i], -s1[h, i], -isand[g], isand[h]])
+        self.S = Solver(name=solver, bootstrap_with=cl)
+        self.rows = []
+        self.ncl = len(cl)
+
+    def nv(self):
+        self.top += 1; return self.top
+
+    def add_row(self, r):
+        n, m, T = self.n, self.m, self.T
+        s1, s2, isnot, isand = self.s1, self.s2, self.isnot, self.isand
+        X = {g: self.nv() for g in range(n, m)}
+        cl = []
+        def val(i):
+            return bool((r >> i) & 1) if i < n else X[i]
+        for g in range(n, m):
+            a = self.nv(); b = self.nv(); o = X[g]
+            for i in range(g):
+                v = val(i)
+                if isinstance(v, bool): cl.append([-s1[g, i], a if v else -a])
+                else: cl += [[-s1[g, i], -v, a], [-s1[g, i], v, -a]]
+            for j in range(1, g):
+                v = val(j)
+                if isinstance(v, bool): cl.append([-s2[g, j], b if v else -b])
+                else: cl += [[-s2[g, j], -v, b], [-s2[g, j], v, -b]]
+            cl += [[-isnot[g], a, o], [-isnot[g], -a, -o]]
+            cl += [[isnot[g], -isand[g], -a, -b, o], [isnot[g], -isand[g], a, -o], [isnot[g], -isand[g], b, -o]]
+            cl += [[isnot[g], isand[g], a, b, -o], [isnot[g], isand[g], -a, o], [isnot[g], isand[g], -b, o]]
+        cl.append([X[m - 1] if T[r] else -X[m - 1]])
+        for c in cl: self.S.add_clause(c)
+        self.rows.append(r); self.ncl += len(cl)
+
+    def run(self, init_rows, max_add=8):
+        for r in init_rows: self.add_row(r)
+        info = dict(s1=self.s1, s2=self.s2, isnot=self.isnot, isand=self.isand, n=self.n, m=self.m)
+        it = 0
+        while True:
+            it += 1
+            if not self.S.solve():
+                return False, None, it
+            circ = decode(self.S.get_model(), info)
+            bad = [r for r in range(1 << self.n) if evaluate(circ, self.n, r) != self.T[r]]
+            if not bad:
+                return True, circ, it
+            # add a few failing rows (lowest weight first)
+            bad.sort(key=lambda r: bin(r).count('1'))
+            for r in bad[:max_add]: self.add_row(r)
+
+
+def init_rows(n, maxw=2):
+    return [r for r in range(1 << n) if bin(r).count('1') <= maxw or bin(r).count('1') == n]
+
+
+def solve_cegar(n, T, k, solver='cadical153', maxw=2):
+    C = Cegar(n, T, k, solver)
+    ok, circ, it = C.run(init_rows(n, maxw))
+    nrows = len(C.rows)
+    C.S.delete()
+    return ok, circ, it, nrows
