@@ -408,8 +408,6 @@ def remF (ka kb : Bool) (u v x : ℕ) : Bool := (ka || !(Nat.beq x u)) && (kb ||
 def PruneOK (m : Bool) (P : List ℕ → ℕ → Bool) : Prop :=
   ∀ (l : List ℕ) (k : ℕ), l.Nodup → Reach m l.toFinset k → P l k = true
 
-theorem PruneOK.triv (m : Bool) : PruneOK m (fun _ _ => true) := fun _ _ _ _ => rfl
-
 theorem PruneOK.and {m : Bool} {P Q : List ℕ → ℕ → Bool} (hP : PruneOK m P) (hQ : PruneOK m Q) :
     PruneOK m (fun l k => P l k && Q l k) := by
   intro l k hnd hR
@@ -953,12 +951,6 @@ theorem level_fast {m : Bool} {P : List ℕ → ℕ → Bool} {prev T : Tree} {k
   intro x hx
   exact expOK_sound hP hinv (thas_all _ T x h hx)
 
-theorem level_sound {m : Bool} {P : List ℕ → ℕ → Bool} {prev T : Tree} {k : ℕ}
-    (hP : PruneOK m P) (hinv : Inv m prev k)
-    (h : tall (expOK m P prev k) T = true) : Inv m T (k + 1) := by
-  intro x hx
-  exact expOK_sound hP hinv (thas_all _ T x h hx)
-
 theorem tall_node (p : List ℕ → Bool) (l r : Tree) (key : List ℕ) (h1 : tall p l = true)
     (h2 : p key = true) (h3 : tall p r = true) : tall p (BinaryTree.node key l r) = true := by
   simp only [tall, h1, h2, h3]; rfl
@@ -1218,86 +1210,6 @@ theorem no_trace {m : Bool} {n : ℕ} (h : NoStartH m n) {s : List ℕ}
 
 -- bridge to `BitVec 24`
 
-theorem dom_bridge (a d : BitVec 24) :
-    ((a &&& 4095) &&& ~~~d = 0 ∧ (d &&& ~~~a) &&& 16773120 = 0) ↔ domN a.toNat d.toNat = true := by
-  have e1 : Nat.land (Nat.land a.toNat 4095) (Nat.sub 16777215 d.toNat) =
-      ((a &&& 4095) &&& ~~~d).toNat := by
-    simp only [BitVec.toNat_and, BitVec.toNat_not]; rfl
-  have e2 : Nat.land (Nat.land d.toNat (Nat.sub 16777215 a.toNat)) 16773120 =
-      ((d &&& ~~~a) &&& 16773120).toNat := by
-    simp only [BitVec.toNat_and, BitVec.toNat_not]; rfl
-  unfold domN
-  rw [e1, e2, Bool.and_eq_true]
-  constructor
-  · rintro ⟨h1, h2⟩
-    rw [h1, h2]; exact ⟨rfl, rfl⟩
-  · rintro ⟨h1, h2⟩
-    exact ⟨BitVec.eq_of_toNat_eq (Nat.eq_of_beq_eq_true h1),
-      BitVec.eq_of_toNat_eq (Nat.eq_of_beq_eq_true h2)⟩
-
-def baseBV : List (BitVec 24) :=
-  0 :: 16777215 :: [5521457, 8532035, 3227782, 430348, 11083800, 113184, 902208, 13501056,
-    15731968, 5689661]
-
-theorem baseBV_mem {x : BitVec 24} (h : x ∈ baseBV) : x.toNat ∈ base12 := by
-  simp only [baseBV, List.mem_cons, List.not_mem_nil, or_false] at h
-  rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide
-
-theorem base12_mem {y : ℕ} (h : y ∈ base12) :
-    BitVec.ofNat 24 y ∈ baseBV ∧ (BitVec.ofNat 24 y).toNat = y := by
-  simp only [base12, base10, List.mem_cons, List.not_mem_nil, or_false] at h
-  rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-    exact ⟨by simp [baseBV], rfl⟩
-
-theorem search_soundH (n : ℕ) (hc : NoStartH true n) :
-    ¬ ∃ t : List (BitVec 24), let B : List (BitVec 24) := 0 :: 16777215 :: [5521457, 8532035, 3227782, 430348, 11083800, 113184, 902208, 13501056, 15731968, 5689661];
-      t.length ≤ n ∧ (4095 : BitVec 24) ∈ t ∧ ∀ (j : ℕ) (hj : j < t.length),
-        (∀ d ∈ B ++ t.take j, ¬ ((t[j] &&& 4095) &&& ~~~d = 0 ∧ (d &&& ~~~t[j]) &&& 16773120 = 0)) ∧
-        ∃ u ∈ B ++ t.take j, ∃ v ∈ B ++ t.take j, t[j] = u &&& v ∨ t[j] = u ||| v := by
-  rintro ⟨t, hlen, hmem, H⟩
-  have hmap : ∀ (j : ℕ) (x : BitVec 24), x ∈ baseBV ++ t.take j →
-      x.toNat ∈ base12 ++ (t.take j).map BitVec.toNat := by
-    intro j x hx
-    rcases List.mem_append.mp hx with hx | hx
-    · exact List.mem_append_left _ (baseBV_mem hx)
-    · exact List.mem_append_right _ (List.mem_map_of_mem hx)
-  have hmap' : ∀ (j : ℕ) (y : ℕ), y ∈ base12 ++ (t.take j).map BitVec.toNat →
-      ∃ x ∈ baseBV ++ t.take j, x.toNat = y := by
-    intro j y hy
-    rcases List.mem_append.mp hy with hy | hy
-    · exact ⟨_, List.mem_append_left _ (base12_mem hy).1, (base12_mem hy).2⟩
-    · obtain ⟨x, hx, rfl⟩ := List.mem_map.mp hy
-      exact ⟨x, List.mem_append_right _ hx, rfl⟩
-  have htr : ∀ j : ℕ, j ≤ t.length → Tr true ((t.take j).map BitVec.toNat) := by
-    intro j
-    induction j with
-    | zero => intro _; exact Tr.nil
-    | succ j ih =>
-      intro hj
-      have hj' : j < t.length := hj
-      rw [List.take_succ_eq_append_getElem hj', List.map_append]
-      obtain ⟨hd, u, hu, v, hv, huv⟩ := H j hj'
-      refine Tr.snoc _ _ (ih (Nat.le_of_lt hj')) (t[j]).isLt ?_ ?_
-      · intro y hy
-        obtain ⟨x, hx, rfl⟩ := hmap' j y hy
-        have := hd x hx
-        rw [dom_bridge] at this
-        simpa [blk] using this
-      · refine ⟨u.toNat, hmap j u hu, v.toNat, hmap j v hv, ?_⟩
-        rcases huv with h | h
-        · left; rw [h, BitVec.toNat_and]
-        · right; rw [h, BitVec.toNat_or]
-  have hT := htr t.length le_rfl
-  rw [List.take_length] at hT
-  refine no_trace hc hT (by simpa using hlen) ?_
-  exact List.mem_map.mpr ⟨4095, hmem, rfl⟩
-
--- fuel DFS: the kernel runs the search itself, no state tables
-
-/-- `rec k l = true` certifies that `l` cannot reach the target in `k` steps. -/
-def Good (m : Bool) (rec : ℕ → List ℕ → Bool) : Prop :=
-  ∀ (k : ℕ) (l : List ℕ), l.Nodup → rec k l = true → ¬ Reach m l.toFinset k
-
 def sD (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) (u v w : ℕ) (sz : Bool) (c : ℕ)
     (ka kb : Bool) : Bool :=
   sz || !(covR c) || rec k (w :: l.filter (remF ka kb u v))
@@ -1318,528 +1230,6 @@ def pairD (m : Bool) (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) 
 /-- one node: pruned, or (not final and every move is blocked or leads to a closed child). -/
 def node (m : Bool) (P : List ℕ → ℕ → Bool) (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) : Bool :=
   !(P l k) || (!(allFinal l) && (Nat.beq k 0 || pairsAll (pairD m rec (Nat.pred k) l) l))
-
-/-- the DFS with `fuel` levels; below them `leaf` decides. -/
-def dfsG (m : Bool) (P : List ℕ → ℕ → Bool) (leaf : ℕ → List ℕ → Bool) : ℕ → ℕ → List ℕ → Bool
-  | 0 => leaf
-  | f + 1 => node m P (dfsG m P leaf f)
-
-theorem child_toFinset (l : List ℕ) (w : ℕ) (ka kb : Bool) (u v : ℕ) :
-    (w :: l.filter (remF ka kb u v)).toFinset =
-      insert w (l.toFinset.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v))) := by
-  ext x
-  simp [remF, List.mem_filter, beq_false_iff]
-
-theorem child_nodup {l : List ℕ} {w : ℕ} (hnd : l.Nodup) (hwl : w ∉ l) (ka kb : Bool) (u v : ℕ) :
-    (w :: l.filter (remF ka kb u v)).Nodup :=
-  List.nodup_cons.mpr ⟨fun hm => hwl (List.mem_filter.mp hm).1, hnd.filter _⟩
-
-/-- if the child can reach the target, neither the size test nor the cover test fired, so the
-recursive call was made and returned `true`. -/
-theorem op_core {m : Bool} {rec : ℕ → List ℕ → Bool} {k : ℕ} {l : List ℕ} {u v w : ℕ}
-    (hnd : l.Nodup) (hwl : w ∉ l) (ka kb : Bool)
-    (hop : opD2 rec k l u (rectW u) v (rectW v) w (Nat.lor (rectW w) (orEx u v l)) = true)
-    (hR : Reach m (insert w (l.toFinset.filter
-      (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))) k) :
-    rec k (w :: l.filter (remF ka kb u v)) = true := by
-  simp only [opD2, Bool.and_eq_true] at hop
-  have hsz : l.length ≤ k + (cond ka 0 1 + cond kb 0 1) := by
-    have h1 := hR.card
-    have hwF : w ∉ l.toFinset.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)) :=
-      fun hm => hwl (List.mem_toFinset.mp (Finset.mem_of_mem_filter _ hm))
-    rw [Finset.card_insert_of_notMem hwF] at h1
-    have h2 := size_lb l.toFinset u v ka kb
-    rw [List.toFinset_card_of_nodup hnd] at h2
-    omega
-  have hbit : ∀ p, p < 144 → ((rectW w).testBit p = true ∨ (orEx u v l).testBit p = true) ∨
-      (ka = true ∧ (rectW u).testBit p = true) ∨ (kb = true ∧ (rectW v).testBit p = true) := by
-    intro p hp
-    obtain ⟨x, hx, hxb⟩ := sep_bit hR p hp
-    rcases Finset.mem_insert.mp hx with rfl | hx
-    · exact Or.inl (Or.inl hxb)
-    · obtain ⟨hxl, h1, h2⟩ := Finset.mem_filter.mp hx
-      by_cases hxu : x = u
-      · exact Or.inr (Or.inl ⟨h1.resolve_right (fun h => h hxu), hxu ▸ hxb⟩)
-      · by_cases hxv : x = v
-        · exact Or.inr (Or.inr ⟨h2.resolve_right (fun h => h hxv), hxv ▸ hxb⟩)
-        · exact Or.inl (Or.inr (orEx_tb u v p _ x (List.mem_toFinset.mp hxl) hxu hxv hxb))
-  have key : ∀ (sz : Bool) (c : ℕ), sD rec k l u v w sz c ka kb = true →
-      (sz = true → False) → (∀ p, p < 144 → c.testBit p = true) →
-      rec k (w :: l.filter (remF ka kb u v)) = true := by
-    intro sz c h h1 h2
-    simp only [sD, Bool.or_eq_true, Bool.not_eq_true'] at h
-    rcases h with (h | h) | h
-    · exact absurd h (fun h' => h1 h')
-    · rw [covR_of c h2] at h; exact Bool.noConfusion h
-    · exact h
-  cases ka <;> cases kb
-  · refine key _ _ hop.1.1.1 (fun h => ?_) (fun p hp => ?_)
-    · have : k + 2 < l.length := by simpa [Nat.blt_eq] using h
-      simp at hsz; omega
-    · have := hbit p hp
-      show (rectW w ||| orEx u v l).testBit p = true
-      rw [Nat.testBit_or]; simp at this; simpa using this
-  · refine key _ _ hop.1.1.2 (fun h => ?_) (fun p hp => ?_)
-    · have : k + 1 < l.length := by simpa [Nat.blt_eq] using h
-      simp at hsz; omega
-    · have := hbit p hp
-      show ((rectW w ||| orEx u v l) ||| rectW v).testBit p = true
-      rw [Nat.testBit_or, Nat.testBit_or]; simp at this; simpa using this
-  · refine key _ _ hop.1.2 (fun h => ?_) (fun p hp => ?_)
-    · have : k + 1 < l.length := by simpa [Nat.blt_eq] using h
-      simp at hsz; omega
-    · have := hbit p hp
-      show ((rectW w ||| orEx u v l) ||| rectW u).testBit p = true
-      rw [Nat.testBit_or, Nat.testBit_or]; simp at this; simpa using this
-  · refine key _ _ hop.2 (fun h => ?_) (fun p hp => ?_)
-    · have : k < l.length := by simpa [Nat.blt_eq] using h
-      simp at hsz; omega
-    · have := hbit p hp
-      show ((rectW w ||| orEx u v l) ||| (rectW u ||| rectW v)).testBit p = true
-      rw [Nat.testBit_or, Nat.testBit_or, Nat.testBit_or]; simp at this; simpa using this
-
-theorem pairD_sound {m : Bool} {rec : ℕ → List ℕ → Bool} {k : ℕ} {l : List ℕ} {u v : ℕ}
-    (hrec : Good m rec) (hnd : l.Nodup) (hp : pairD m rec k l u v = true)
-    (ka kb : Bool) (w : ℕ) (hw : w = u &&& v ∨ w = u ||| v)
-    (hd : ∀ d ∈ l, blk m w d = false) (hb : ∀ d ∈ base12, blk m w d = false) :
-    ¬ Reach m (insert w (l.toFinset.filter
-      (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))) k := by
-  intro hR
-  simp only [pairD, Bool.and_eq_true] at hp
-  have hop : opD m rec k l u (rectW u) v (rectW v) (orEx u v l) w = true := by
-    rcases hw with rfl | rfl
-    · exact hp.1
-    · exact hp.2
-  simp only [opD, blkAny_false m w base12 hb, blkAny_false m w l hd, Bool.false_or] at hop
-  have hwl : w ∉ l := fun hm => by
-    have := hd w hm
-    rw [blk_refl] at this
-    exact Bool.noConfusion this
-  have h1 := op_core hnd hwl ka kb hop hR
-  have h2 := hrec k _ (child_nodup hnd hwl ka kb u v) h1
-  rw [child_toFinset] at h2
-  exact h2 hR
-
-theorem node_sound {m : Bool} {P : List ℕ → ℕ → Bool} {rec : ℕ → List ℕ → Bool}
-    (hP : PruneOK m P) (hrec : Good m rec) : Good m (node m P rec) := by
-  intro k l hnd h hR
-  simp only [node, Bool.or_eq_true, Bool.and_eq_true, Bool.not_eq_true'] at h
-  rcases h with h | ⟨hf, h⟩
-  · rw [hP l k hnd hR] at h; exact Bool.noConfusion h
-  · rcases h with h | hp
-    · have hk : k = 0 := Nat.eq_of_beq_eq_true h
-      subst hk
-      exact notFinal hf hR.zero
-    · cases k with
-      | zero => exact notFinal hf hR.zero
-      | succ k =>
-        rcases hR.inv with he | ⟨u, v, w, ka, kb, hu, hv, hw, hd, hb, hR'⟩
-        · exact notFinal hf he
-        · have hd' : ∀ d ∈ l, blk m w d = false := fun d hdm => hd d (List.mem_toFinset.mpr hdm)
-          have hu' := List.mem_toFinset.mp hu
-          have hv' := List.mem_toFinset.mp hv
-          have huv : u ≠ v := by
-            rintro rfl
-            have hwu : w = u := by
-              rcases hw with hw | hw
-              · rw [hw, Nat.and_self]
-              · rw [hw, Nat.or_self]
-            have := hd u hu
-            rw [hwu, blk_refl] at this
-            exact Bool.noConfusion this
-          rcases pairsAll_mem _ _ hp u hu' v hv' huv with h1 | h1
-          · exact pairD_sound hrec hnd h1 ka kb w hw hd' hb hR'
-          · have hw2 : w = v &&& u ∨ w = v ||| u := by
-              rw [Nat.and_comm v u, Nat.or_comm v u]; exact hw
-            have hfe : (l.toFinset.filter (fun x => (kb = true ∨ x ≠ v) ∧ (ka = true ∨ x ≠ u))) =
-                (l.toFinset.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v))) := by
-              ext x
-              simp only [Finset.mem_filter]
-              tauto
-            have := pairD_sound hrec hnd h1 kb ka w hw2 hd' hb
-            rw [hfe] at this
-            exact this hR'
-
-/-- the ONE generic soundness theorem of the DFS. -/
-theorem dfsG_sound {m : Bool} {P : List ℕ → ℕ → Bool} {leaf : ℕ → List ℕ → Bool}
-    (hP : PruneOK m P) (hleaf : Good m leaf) : ∀ f : ℕ, Good m (dfsG m P leaf f) := by
-  intro f
-  induction f with
-  | zero => exact hleaf
-  | succ f ih => exact node_sound hP ih
-
-theorem good_false (m : Bool) : Good m (fun _ _ => false) := by
-  intro k l _ h
-  exact Bool.noConfusion h
-
-/-- cut states (cubes): `(steps left, live list)`, each proved by its own chunk theorem. -/
-def hasCube : List (ℕ × List ℕ) → ℕ → List ℕ → Bool
-  | [], _, _ => false
-  | c :: cs, k, l => (Nat.beq k c.1 && (lcmp l c.2 == Ordering.eq)) || hasCube cs k l
-
-def CubeGood (m : Bool) (c : ℕ × List ℕ) : Prop := c.2.Nodup → ¬ Reach m c.2.toFinset c.1
-
-theorem hasCube_good {m : Bool} : ∀ cs : List (ℕ × List ℕ), (∀ c ∈ cs, CubeGood m c) →
-    Good m (hasCube cs) := by
-  intro cs
-  induction cs with
-  | nil => intro _ k l _ h; exact Bool.noConfusion h
-  | cons c cs ih =>
-    intro hc k l hnd h
-    simp only [hasCube, Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq] at h
-    rcases h with ⟨h1, h2⟩ | h
-    · have hk : k = c.1 := Nat.eq_of_beq_eq_true h1
-      have hl : l = c.2 := lcmp_eq _ _ h2
-      rw [hk, hl]
-      exact hc c List.mem_cons_self (hl ▸ hnd)
-    · exact ih (fun c' hc' => hc c' (List.mem_cons_of_mem _ hc')) k l hnd h
-
-def startD (rec : ℕ → List ℕ → Bool) (n : ℕ) (s : List ℕ) : Bool :=
-  Nat.blt (Nat.succ n) s.length || !(covR (orR s)) || rec n s
-
-theorem startD_sound {m : Bool} {rec : ℕ → List ℕ → Bool} {n : ℕ} (hrec : Good m rec)
-    (h : subsAll base10 (startD rec n) = true) : NoStart m n := by
-  intro L hL
-  have hs : (base10.filter (fun x => decide (x ∈ L))).Sublist base10 := List.filter_sublist
-  have he : (base10.filter (fun x => decide (x ∈ L))).toFinset = L := by
-    ext x
-    simp only [List.mem_toFinset, List.mem_filter, decide_eq_true_eq]
-    exact ⟨fun h => h.2, fun h => ⟨hL x h, h⟩⟩
-  have hnd : (base10.filter (fun x => decide (x ∈ L))).Nodup := List.Nodup.sublist hs (by decide)
-  have h1 := subsAll_sub base10 _ h _ hs
-  rw [← he]
-  intro hR
-  simp only [startD, Bool.or_eq_true, Bool.not_eq_true'] at h1
-  rcases h1 with (h1 | h1) | h1
-  · have h2 : n + 1 < (base10.filter (fun x => decide (x ∈ L))).length := by
-      simpa [Nat.blt_eq] using h1
-    have h3 := hR.card
-    rw [List.toFinset_card_of_nodup hnd] at h3
-    omega
-  · exact cover_sound h1 hR
-  · exact hrec n _ hnd h1 hR
-
--- raw-recursor twins of the DFS
-
-def sD' (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) (u v w : ℕ) (sz : Bool) (c : ℕ)
-    (ka kb : Bool) : Bool :=
-  bor (bor sz (bnot (covR' c))) (forceL (w :: filt' ka kb u v l) (rec k))
-
-theorem sD'_eq (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) (u v w : ℕ) (sz : Bool) (c : ℕ)
-    (ka kb : Bool) : sD' rec k l u v w sz c ka kb = sD rec k l u v w sz c ka kb := by
-  unfold sD' sD
-  rw [bor_eq, bor_eq, bnot_eq, filt'_eq, forceL_eq]
-  rfl
-
-def opD2' (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) (u ru v rv w c : ℕ) : Bool :=
-  band (band (band
-    (sD' rec k l u v w (Nat.blt (Nat.add k 2) (len' l)) c false false)
-    (sD' rec k l u v w (Nat.blt (Nat.succ k) (len' l)) (Nat.lor c rv) false true))
-    (sD' rec k l u v w (Nat.blt (Nat.succ k) (len' l)) (Nat.lor c ru) true false))
-    (sD' rec k l u v w (Nat.blt k (len' l)) (Nat.lor c (Nat.lor ru rv)) true true)
-
-theorem opD2'_eq (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) (u ru v rv w c : ℕ) :
-    opD2' rec k l u ru v rv w c = opD2 rec k l u ru v rv w c := by
-  unfold opD2' opD2
-  simp only [band_eq, sD'_eq, len'_eq]
-
-def opD' (m : Bool) (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) (u ru v rv ro w : ℕ) : Bool :=
-  bor (bor (blkAny' m w base12) (blkAny' m w l))
-    (opD2' rec k l u ru v rv w (Nat.lor (rectW' w) ro))
-
-theorem opD'_eq (m : Bool) (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) (u ru v rv ro w : ℕ) :
-    opD' m rec k l u ru v rv ro w = opD m rec k l u ru v rv ro w := by
-  unfold opD' opD
-  simp only [bor_eq, blkAny'_eq, opD2'_eq, rectW'_eq]
-
-def pairD' (m : Bool) (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) (u v : ℕ) : Bool :=
-  band (opD' m rec k l u (rectW' u) v (rectW' v) (orEx' u v l) (Nat.land u v))
-    (opD' m rec k l u (rectW' u) v (rectW' v) (orEx' u v l) (Nat.lor u v))
-
-theorem pairD'_eq (m : Bool) (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) (u v : ℕ) :
-    pairD' m rec k l u v = pairD m rec k l u v := by
-  unfold pairD' pairD
-  simp only [band_eq, opD'_eq, rectW'_eq, orEx'_eq]
-
-def node' (m : Bool) (P : List ℕ → ℕ → Bool) (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) : Bool :=
-  bor (bnot (P l k)) (band (bnot (allFinal' l))
-    (@Nat.rec (fun _ => Bool) true (fun k' _ => pairsAll' (pairD' m rec k' l) l) k))
-
-theorem node'_eq (m : Bool) (P : List ℕ → ℕ → Bool) (rec : ℕ → List ℕ → Bool) :
-    node' m P rec = node m P rec := by
-  funext k l
-  unfold node' node
-  have h1 : ∀ k', pairD' m rec k' l = pairD m rec k' l := by
-    intro k'; funext u v; exact pairD'_eq m rec _ l u v
-  rw [bor_eq, bnot_eq, band_eq, bnot_eq, allFinal'_eq]
-  cases k with
-  | zero => rfl
-  | succ k =>
-    show (!P l (k + 1) || (!allFinal l && pairsAll' (pairD' m rec k l) l)) = _
-    rw [pairsAll'_eq, h1]
-    rfl
-
-def dfs' (m : Bool) (P : List ℕ → ℕ → Bool) (leaf : ℕ → List ℕ → Bool) (f : ℕ) :
-    ℕ → List ℕ → Bool :=
-  @Nat.rec (fun _ => ℕ → List ℕ → Bool) leaf (fun _ ih => node' m P ih) f
-
-theorem dfs'_eq (m : Bool) (P : List ℕ → ℕ → Bool) (leaf : ℕ → List ℕ → Bool) (f : ℕ) :
-    dfs' m P leaf f = dfsG m P leaf f := by
-  induction f with
-  | zero => rfl
-  | succ f ih =>
-    show node' m P (dfs' m P leaf f) = node m P (dfsG m P leaf f)
-    rw [ih, node'_eq]
-
-theorem dfs'_good {m : Bool} {P : List ℕ → ℕ → Bool} {leaf : ℕ → List ℕ → Bool}
-    (hP : PruneOK m P) (hleaf : Good m leaf) (f : ℕ) : Good m (dfs' m P leaf f) := by
-  rw [dfs'_eq]
-  exact dfsG_sound hP hleaf f
-
-/-- a chunk theorem `dfs' m P (fun _ _ => false) f k l = true` closes the cube `(k, l)`. -/
-theorem cube_good {m : Bool} {P : List ℕ → ℕ → Bool} (hP : PruneOK m P) (f k : ℕ) (l : List ℕ)
-    (h : dfs' m P (fun _ _ => false) f k l = true) : CubeGood m (k, l) :=
-  fun hnd => dfs'_good hP (good_false m) f k l hnd h
-
-/-- cut states are stored in a `Tree` with key `k :: l`; a chunk theorem is
-`tall (cubeRun m P) T = true` for a subtree `T`. -/
-noncomputable def cubeRun (m : Bool) (P : List ℕ → ℕ → Bool) (key : List ℕ) : Bool :=
-  @List.rec ℕ (fun _ => Bool) false
-    (fun k l _ => dfs' m P (fun _ _ => false) (Nat.succ k) k l) key
-
-noncomputable def cubeLeaf (T : Tree) (k : ℕ) (l : List ℕ) : Bool := has' T (k :: l)
-
-theorem cubeLeaf_good {m : Bool} {P : List ℕ → ℕ → Bool} (hP : PruneOK m P) {T : Tree}
-    (h : tall (cubeRun m P) T = true) : Good m (cubeLeaf T) := by
-  intro k l hnd hh
-  have h1 : thas T (k :: l) = true := by rw [← has'_eq]; exact hh
-  have h2 : cubeRun m P (k :: l) = true := thas_all _ T _ h h1
-  exact cube_good hP (Nat.succ k) k l h2 hnd
-
-/-- final assembly: cubes in `T` (all closed by chunk theorems), top of the search by `d` levels. -/
-theorem dfs_top {m : Bool} {P : List ℕ → ℕ → Bool} (hP : PruneOK m P) {T : Tree}
-    (hT : tall (cubeRun m P) T = true) (d n : ℕ)
-    (h : subsAll base10 (startD (dfs' m P (cubeLeaf T) d) n) = true) : NoStart m n :=
-  startD_sound (dfs'_good hP (cubeLeaf_good hP hT) d) h
-
-theorem search_sound (n : ℕ) (hc : NoStart true n) :
-    ¬ ∃ t : List (BitVec 24), let B : List (BitVec 24) := 0 :: 16777215 :: [5521457, 8532035, 3227782, 430348, 11083800, 113184, 902208, 13501056, 15731968, 5689661];
-      t.length ≤ n ∧ (4095 : BitVec 24) ∈ t ∧ ∀ (j : ℕ) (hj : j < t.length),
-        (∀ d ∈ B ++ t.take j, ¬ ((t[j] &&& 4095) &&& ~~~d = 0 ∧ (d &&& ~~~t[j]) &&& 16773120 = 0)) ∧
-        ∃ u ∈ B ++ t.take j, ∃ v ∈ B ++ t.take j, t[j] = u &&& v ∨ t[j] = u ||| v :=
-  search_soundH n hc.toH
-
--- fuel DFS with history dominance (the history `h` lists every word produced on the path)
-
-def GoodH (m : Bool) (rec : ℕ → List ℕ → List ℕ → Bool) : Prop :=
-  ∀ (k : ℕ) (h l : List ℕ), l.Nodup → (∀ x ∈ l, x ∈ base12 ∨ x ∈ h) → rec k h l = true →
-    ¬ ReachH m h.toFinset l.toFinset k
-
-def opH (m : Bool) (rec : ℕ → List ℕ → List ℕ → Bool) (k : ℕ) (h l : List ℕ)
-    (u ru v rv ro w : ℕ) : Bool :=
-  blkAny m w base12 || blkAny m w h ||
-    opD2 (fun k' l' => rec k' (w :: h) l') k l u ru v rv w (Nat.lor (rectW w) ro)
-
-def pairH (m : Bool) (rec : ℕ → List ℕ → List ℕ → Bool) (k : ℕ) (h l : List ℕ) (u v : ℕ) : Bool :=
-  opH m rec k h l u (rectW u) v (rectW v) (orEx u v l) (Nat.land u v) &&
-  opH m rec k h l u (rectW u) v (rectW v) (orEx u v l) (Nat.lor u v)
-
-def nodeH (m : Bool) (P : List ℕ → ℕ → Bool) (rec : ℕ → List ℕ → List ℕ → Bool) (k : ℕ)
-    (h l : List ℕ) : Bool :=
-  !(P l k) || (!(allFinal l) && (Nat.beq k 0 || pairsAll (pairH m rec (Nat.pred k) h l) l))
-
-def dfsH (m : Bool) (P : List ℕ → ℕ → Bool) (leaf : ℕ → List ℕ → List ℕ → Bool) :
-    ℕ → ℕ → List ℕ → List ℕ → Bool
-  | 0 => leaf
-  | f + 1 => nodeH m P (dfsH m P leaf f)
-
-theorem pairH_sound {m : Bool} {rec : ℕ → List ℕ → List ℕ → Bool} {k : ℕ} {h l : List ℕ} {u v : ℕ}
-    (hrec : GoodH m rec) (hnd : l.Nodup) (hsub : ∀ x ∈ l, x ∈ base12 ∨ x ∈ h)
-    (hp : pairH m rec k h l u v = true)
-    (ka kb : Bool) (w : ℕ) (hw : w = u &&& v ∨ w = u ||| v)
-    (hH : ∀ d ∈ h, blk m w d = false) (hb : ∀ d ∈ base12, blk m w d = false) :
-    ¬ ReachH m (insert w h.toFinset) (insert w (l.toFinset.filter
-      (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))) k := by
-  intro hR
-  simp only [pairH, Bool.and_eq_true] at hp
-  have hop : opH m rec k h l u (rectW u) v (rectW v) (orEx u v l) w = true := by
-    rcases hw with rfl | rfl
-    · exact hp.1
-    · exact hp.2
-  simp only [opH, blkAny_false m w base12 hb, blkAny_false m w h hH, Bool.false_or] at hop
-  have hwl : w ∉ l := fun hm => by
-    have : blk m w w = false := by
-      rcases hsub w hm with h1 | h1
-      · exact hb w h1
-      · exact hH w h1
-    rw [blk_refl] at this
-    exact Bool.noConfusion this
-  have h1 := op_core (m := m) hnd hwl ka kb hop hR.toReach
-  have hsub' : ∀ x ∈ w :: l.filter (remF ka kb u v), x ∈ base12 ∨ x ∈ w :: h := by
-    intro x hx
-    rcases List.mem_cons.mp hx with rfl | hx
-    · exact Or.inr List.mem_cons_self
-    · rcases hsub x (List.mem_filter.mp hx).1 with h2 | h2
-      · exact Or.inl h2
-      · exact Or.inr (List.mem_cons_of_mem _ h2)
-  have h2 := hrec k (w :: h) _ (child_nodup hnd hwl ka kb u v) hsub' h1
-  rw [child_toFinset, List.toFinset_cons] at h2
-  exact h2 hR
-
-theorem nodeH_sound {m : Bool} {P : List ℕ → ℕ → Bool} {rec : ℕ → List ℕ → List ℕ → Bool}
-    (hP : PruneOK m P) (hrec : GoodH m rec) : GoodH m (nodeH m P rec) := by
-  intro k h l hnd hsub hh hR
-  simp only [nodeH, Bool.or_eq_true, Bool.and_eq_true, Bool.not_eq_true'] at hh
-  rcases hh with hh | ⟨hf, hh⟩
-  · rw [hP l k hnd hR.toReach] at hh; exact Bool.noConfusion hh
-  · rcases hh with hh | hp
-    · have hk : k = 0 := Nat.eq_of_beq_eq_true hh
-      subst hk
-      exact notFinal hf hR.toReach.zero
-    · cases k with
-      | zero => exact notFinal hf hR.toReach.zero
-      | succ k =>
-        rcases hR.inv' k rfl with he | ⟨u, v, w, ka, kb, hu, hv, hw, hH, hd, hb, hR'⟩
-        · exact notFinal hf he
-        · have hH' : ∀ d ∈ h, blk m w d = false := fun d hdm => hH d (List.mem_toFinset.mpr hdm)
-          have hu' := List.mem_toFinset.mp hu
-          have hv' := List.mem_toFinset.mp hv
-          have huv : u ≠ v := by
-            rintro rfl
-            have hwu : w = u := by
-              rcases hw with hw | hw
-              · rw [hw, Nat.and_self]
-              · rw [hw, Nat.or_self]
-            have := hd u hu
-            rw [hwu, blk_refl] at this
-            exact Bool.noConfusion this
-          rcases pairsAll_mem _ _ hp u hu' v hv' huv with h1 | h1
-          · exact pairH_sound hrec hnd hsub h1 ka kb w hw hH' hb hR'
-          · have hw2 : w = v &&& u ∨ w = v ||| u := by
-              rw [Nat.and_comm v u, Nat.or_comm v u]; exact hw
-            have hfe : (l.toFinset.filter (fun x => (kb = true ∨ x ≠ v) ∧ (ka = true ∨ x ≠ u))) =
-                (l.toFinset.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v))) := by
-              ext x
-              simp only [Finset.mem_filter]
-              tauto
-            have := pairH_sound hrec hnd hsub h1 kb ka w hw2 hH' hb
-            rw [hfe] at this
-            exact this hR'
-
-/-- generic soundness of the DFS with history. -/
-theorem dfsH_sound {m : Bool} {P : List ℕ → ℕ → Bool} {leaf : ℕ → List ℕ → List ℕ → Bool}
-    (hP : PruneOK m P) (hleaf : GoodH m leaf) : ∀ f : ℕ, GoodH m (dfsH m P leaf f) := by
-  intro f
-  induction f with
-  | zero => exact hleaf
-  | succ f ih => exact nodeH_sound hP ih
-
-def opH' (m : Bool) (rec : ℕ → List ℕ → List ℕ → Bool) (k : ℕ) (h l : List ℕ)
-    (u ru v rv ro w : ℕ) : Bool :=
-  bor (bor (blkAny' m w base12) (blkAny' m w h))
-    (opD2' (fun k' l' => rec k' (w :: h) l') k l u ru v rv w (Nat.lor (rectW' w) ro))
-
-theorem opH'_eq (m : Bool) (rec : ℕ → List ℕ → List ℕ → Bool) (k : ℕ) (h l : List ℕ)
-    (u ru v rv ro w : ℕ) : opH' m rec k h l u ru v rv ro w = opH m rec k h l u ru v rv ro w := by
-  unfold opH' opH
-  simp only [bor_eq, blkAny'_eq, opD2'_eq, rectW'_eq]
-
-def pairH' (m : Bool) (rec : ℕ → List ℕ → List ℕ → Bool) (k : ℕ) (h l : List ℕ) (u v : ℕ) : Bool :=
-  band (opH' m rec k h l u (rectW' u) v (rectW' v) (orEx' u v l) (Nat.land u v))
-    (opH' m rec k h l u (rectW' u) v (rectW' v) (orEx' u v l) (Nat.lor u v))
-
-theorem pairH'_eq (m : Bool) (rec : ℕ → List ℕ → List ℕ → Bool) (k : ℕ) (h l : List ℕ) (u v : ℕ) :
-    pairH' m rec k h l u v = pairH m rec k h l u v := by
-  unfold pairH' pairH
-  simp only [band_eq, opH'_eq, rectW'_eq, orEx'_eq]
-
-def nodeH' (m : Bool) (P : List ℕ → ℕ → Bool) (rec : ℕ → List ℕ → List ℕ → Bool) (k : ℕ)
-    (h l : List ℕ) : Bool :=
-  bor (bnot (P l k)) (band (bnot (allFinal' l))
-    (@Nat.rec (fun _ => Bool) true (fun k' _ => pairsAll' (pairH' m rec k' h l) l) k))
-
-theorem nodeH'_eq (m : Bool) (P : List ℕ → ℕ → Bool) (rec : ℕ → List ℕ → List ℕ → Bool) :
-    nodeH' m P rec = nodeH m P rec := by
-  funext k h l
-  unfold nodeH' nodeH
-  have h1 : ∀ k', pairH' m rec k' h l = pairH m rec k' h l := by
-    intro k'; funext u v; exact pairH'_eq m rec _ h l u v
-  rw [bor_eq, bnot_eq, band_eq, bnot_eq, allFinal'_eq]
-  cases k with
-  | zero => rfl
-  | succ k =>
-    show (!P l (k + 1) || (!allFinal l && pairsAll' (pairH' m rec k h l) l)) = _
-    rw [pairsAll'_eq, h1]
-    rfl
-
-def dfsH' (m : Bool) (P : List ℕ → ℕ → Bool) (leaf : ℕ → List ℕ → List ℕ → Bool) (f : ℕ) :
-    ℕ → List ℕ → List ℕ → Bool :=
-  @Nat.rec (fun _ => ℕ → List ℕ → List ℕ → Bool) leaf (fun _ ih => nodeH' m P ih) f
-
-theorem dfsH'_good {m : Bool} {P : List ℕ → ℕ → Bool} {leaf : ℕ → List ℕ → List ℕ → Bool}
-    (hP : PruneOK m P) (hleaf : GoodH m leaf) (f : ℕ) : GoodH m (dfsH' m P leaf f) := by
-  have : dfsH' m P leaf f = dfsH m P leaf f := by
-    induction f with
-    | zero => rfl
-    | succ f ih =>
-      show nodeH' m P (dfsH' m P leaf f) = nodeH m P (dfsH m P leaf f)
-      rw [ih, nodeH'_eq]
-  rw [this]
-  exact dfsH_sound hP hleaf f
-
-/-- cubes with history: key `k :: |h| :: h ++ l`. -/
-noncomputable def cubeRunH (m : Bool) (P : List ℕ → ℕ → Bool) (key : List ℕ) : Bool :=
-  @List.rec ℕ (fun _ => Bool) false (fun k t _ =>
-    @List.rec ℕ (fun _ => Bool) false (fun nh rest _ =>
-      forceL (rest.take nh) (fun h => forceL (rest.drop nh) (fun l =>
-        dfsH' m P (fun _ _ _ => false) (Nat.succ k) k h l))) t) key
-
-noncomputable def cubeLeafH (T : Tree) (k : ℕ) (h l : List ℕ) : Bool :=
-  has' T (k :: len' h :: h ++ l)
-
-theorem cubeLeafH_good {m : Bool} {P : List ℕ → ℕ → Bool} (hP : PruneOK m P) {T : Tree}
-    (hT : tall (cubeRunH m P) T = true) : GoodH m (cubeLeafH T) := by
-  intro k h l hnd hsub hh
-  have h1 : thas T (k :: len' h :: h ++ l) = true := by rw [← has'_eq]; exact hh
-  have h2 : cubeRunH m P (k :: len' h :: h ++ l) = true := thas_all _ T _ hT h1
-  have h3 : dfsH' m P (fun _ _ _ => false) (Nat.succ k) k h l = true := by
-    have e : cubeRunH m P (k :: len' h :: h ++ l) =
-        forceL ((h ++ l).take (len' h)) (fun h' => forceL ((h ++ l).drop (len' h)) (fun l' =>
-          dfsH' m P (fun _ _ _ => false) (Nat.succ k) k h' l')) := rfl
-    rw [e, forceL_eq, forceL_eq, len'_eq, List.take_left, List.drop_left] at h2
-    exact h2
-  exact dfsH'_good hP (fun _ _ _ _ _ hf => Bool.noConfusion hf) (Nat.succ k) k h l hnd hsub h3
-
-def startH (rec : ℕ → List ℕ → List ℕ → Bool) (n : ℕ) (s : List ℕ) : Bool :=
-  Nat.blt (Nat.succ n) s.length || !(covR (orR s)) || rec n [] s
-
-/-- final assembly of the DFS with history. -/
-theorem dfsH_top {m : Bool} {P : List ℕ → ℕ → Bool} (hP : PruneOK m P) {T : Tree}
-    (hT : tall (cubeRunH m P) T = true) (d n : ℕ)
-    (h : subsAll base10 (startH (dfsH' m P (cubeLeafH T) d) n) = true) : NoStartH m n := by
-  intro L hL
-  have hs : (base10.filter (fun x => decide (x ∈ L))).Sublist base10 := List.filter_sublist
-  have he : (base10.filter (fun x => decide (x ∈ L))).toFinset = L := by
-    ext x
-    simp only [List.mem_toFinset, List.mem_filter, decide_eq_true_eq]
-    exact ⟨fun h => h.2, fun h => ⟨hL x h, h⟩⟩
-  have hnd : (base10.filter (fun x => decide (x ∈ L))).Nodup := List.Nodup.sublist hs (by decide)
-  have h1 := subsAll_sub base10 _ h _ hs
-  rw [← he]
-  intro hR
-  simp only [startH, Bool.or_eq_true, Bool.not_eq_true'] at h1
-  rcases h1 with (h1 | h1) | h1
-  · have h2 : n + 1 < (base10.filter (fun x => decide (x ∈ L))).length := by
-      simpa [Nat.blt_eq] using h1
-    have h3 := hR.toReach.card
-    rw [List.toFinset_card_of_nodup hnd] at h3
-    omega
-  · exact cover_sound h1 hR.toReach
-  · refine dfsH'_good hP (cubeLeafH_good hP hT) d n [] _ hnd ?_ h1 (by simpa using hR)
-    intro x hx
-    exact Or.inl (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (hs.subset hx)))
-
--- ===== rectangle test for tight states (Karchmer-Wigderson partition of a read-once formula) =====
 
 theorem ite_p {c : Prop} [Decidable c] (a b : ℕ) (h : c) : (if c then a else b) = a := by
   split
@@ -2258,22 +1648,8 @@ def orL : List ℕ → ℕ
   | [] => 0
   | a :: l => Nat.lor a (orL l)
 
-/-- remove the other words' private hulls (`nO`: complement of the union of all hulls). -/
-def upd (t nO a : ℕ) : ℕ := Nat.lor (Nat.land a nO) (priv t a)
-
-def nextAv (as : List ℕ) : List ℕ :=
-  as.map (upd (tw as 0 0) (Nat.xor (orL (as.map (priv (tw as 0 0)))) full))
-
-/-- `n` propagation rounds, with a cover test after every removal. -/
-def avOK : ℕ → List ℕ → Bool
-  | 0, _ => true
-  | n + 1, as => avOK1 as && (covR (orL (nextAv as)) && avOK n (nextAv as))
-
 /-- one-round rectangle test of a state. -/
 def rectOK1 (l : List ℕ) : Bool := avOK1 (l.map rectW)
-
-/-- `n`-round rectangle test of a state. -/
-def rectOK (n : ℕ) (l : List ℕ) : Bool := avOK n (l.map rectW)
 
 def IsRect (R : ℕ → Prop) : Prop :=
   ∀ e i e' i' : ℕ, e < 12 → i < 12 → e' < 12 → i' < 12 →
@@ -2365,20 +1741,6 @@ theorem avOK1_sound {zs : List ((ℕ → Prop) × ℕ)} (hP : Part zs) :
     avOK1 (zs.map Prod.snd) = true :=
   hullsOK_sound _ zs 0 (priv_in hP) hP.sub hP.disj (fun q hq => by simp at hq)
 
-theorem orL_tb (q : ℕ) : ∀ as : List ℕ, (orL as).testBit q = true →
-    ∃ a ∈ as, a.testBit q = true := by
-  intro as
-  induction as with
-  | nil => intro h; simp [orL] at h
-  | cons a l ih =>
-    intro h
-    have h' : (Nat.lor a (orL l)).testBit q = true := h
-    rw [tb_lor, Bool.or_eq_true] at h'
-    rcases h' with h' | h'
-    · exact ⟨a, List.mem_cons_self, h'⟩
-    · obtain ⟨b, hb, hbq⟩ := ih h'
-      exact ⟨b, List.mem_cons_of_mem _ hb, hbq⟩
-
 theorem orL_tb' (q : ℕ) : ∀ as : List ℕ, ∀ a ∈ as, a.testBit q = true →
     (orL as).testBit q = true := by
   intro as
@@ -2392,68 +1754,12 @@ theorem orL_tb' (q : ℕ) : ∀ as : List ℕ, ∀ a ∈ as, a.testBit q = true 
     · rw [h]; rfl
     · rw [ih a ha h]; simp
 
-/-- the partition survives a propagation round. -/
-theorem Part.next {zs : List ((ℕ → Prop) × ℕ)} (hP : Part zs) :
-    ∃ zs' : List ((ℕ → Prop) × ℕ), zs'.map Prod.snd = nextAv (zs.map Prod.snd) ∧ Part zs' := by
-  refine ⟨zs.map (fun z => (z.1, upd (tw (zs.map Prod.snd) 0 0)
-    (Nat.xor (orL ((zs.map Prod.snd).map (priv (tw (zs.map Prod.snd) 0 0)))) full) z.2)), ?_, ?_⟩
-  · unfold nextAv
-    simp only [List.map_map]
-    rfl
-  · constructor
-    · intro z hz
-      obtain ⟨z0, hz0, rfl⟩ := List.mem_map.mp hz
-      exact hP.rect z0 hz0
-    · intro z hz
-      obtain ⟨z0, hz0, rfl⟩ := List.mem_map.mp hz
-      exact hP.bnd z0 hz0
-    · rw [List.pairwise_map]
-      exact hP.disj
-    · intro q hq
-      obtain ⟨z, hz, hzq⟩ := hP.cov q hq
-      exact ⟨_, List.mem_map.mpr ⟨z, hz, rfl⟩, hzq⟩
-    · intro z hz q hzq
-      obtain ⟨z0, hz0, rfl⟩ := List.mem_map.mp hz
-      have hzq0 : z0.1 q := hzq
-      show (upd (tw (zs.map Prod.snd) 0 0)
-        (Nat.xor (orL ((zs.map Prod.snd).map (priv (tw (zs.map Prod.snd) 0 0)))) full)
-        z0.2).testBit q = true
-      unfold upd
-      rw [tb_lor, tb_land, tb_xor, full_tb, hP.sub z0 hz0 q hzq0]
-      have hq := hP.bnd z0 hz0 q hzq0
-      cases hO : (orL ((zs.map Prod.snd).map (priv (tw (zs.map Prod.snd) 0 0)))).testBit q
-      · simp [hq]
-      · obtain ⟨a, ha, haq⟩ := orL_tb q _ hO
-        rw [List.map_map] at ha
-        obtain ⟨z1, hz1, rfl⟩ := List.mem_map.mp ha
-        have h1 : z1.1 q := priv_in hP z1 hz1 q haq
-        have hzz : z1 = z0 := by
-          by_contra hne
-          exact pw_forall (fun a b h q h1 h2 => h q h2 h1) zs hP.disj z1 hz1 z0 hz0 hne q h1 hzq0
-        rw [hzz] at haq
-        have haq' : (priv (tw (zs.map Prod.snd) 0 0) z0.2).testBit q = true := haq
-        rw [haq']
-        simp
-
 theorem Part.covR {zs : List ((ℕ → Prop) × ℕ)} (hP : Part zs) :
     covR (orL (zs.map Prod.snd)) = true := by
   apply covR_of
   intro q hq
   obtain ⟨z, hz, hzq⟩ := hP.cov q hq
   exact orL_tb' q _ z.2 (List.mem_map.mpr ⟨z, hz, rfl⟩) (hP.sub z hz q hzq)
-
-theorem avOK_sound : ∀ (n : ℕ) (zs : List ((ℕ → Prop) × ℕ)), Part zs →
-    avOK n (zs.map Prod.snd) = true := by
-  intro n
-  induction n with
-  | zero => intros; rfl
-  | succ n ih =>
-    intro zs hP
-    obtain ⟨zs', he, hP'⟩ := hP.next
-    show (avOK1 (zs.map Prod.snd) && (covR (orL (nextAv (zs.map Prod.snd))) &&
-      avOK n (nextAv (zs.map Prod.snd)))) = true
-    rw [avOK1_sound hP, ← he, ih zs' hP', hP'.covR]
-    rfl
 
 /-- a tight reachable state has a rectangle partition inside the rectangles of its words. -/
 theorem part_of_reach {m : Bool} {l : List ℕ} {k : ℕ} (hnd : l.Nodup) (hlen : l.length = k + 1)
@@ -2506,18 +1812,8 @@ theorem rectOK1_sound {m : Bool} {l : List ℕ} {k : ℕ} (hnd : l.Nodup) (hlen 
   rw [← he]
   exact avOK1_sound hP
 
-theorem rectOK_sound {m : Bool} {l : List ℕ} {k : ℕ} (n : ℕ) (hnd : l.Nodup)
-    (hlen : l.length = k + 1) (hR : Reach m l.toFinset k) : rectOK n l = true := by
-  obtain ⟨zs, he, hP⟩ := part_of_reach hnd hlen hR
-  unfold rectOK
-  rw [← he]
-  exact avOK_sound n zs hP
-
 /-- prune test: a tight state must pass the one-round rectangle test. -/
 def rectP1 (l : List ℕ) (k : ℕ) : Bool := !(Nat.beq l.length (Nat.succ k)) || rectOK1 l
-
-/-- prune test: a tight state must pass the `n`-round rectangle test. -/
-def rectP (n : ℕ) (l : List ℕ) (k : ℕ) : Bool := !(Nat.beq l.length (Nat.succ k)) || rectOK n l
 
 theorem rectP1_ok (m : Bool) : PruneOK m rectP1 := by
   intro l k hnd hR
@@ -2526,16 +1822,6 @@ theorem rectP1_ok (m : Bool) : PruneOK m rectP1 := by
   · rfl
   · rw [rectOK1_sound hnd (Nat.eq_of_beq_eq_true h) hR]
     rfl
-
-theorem rectP_ok (m : Bool) (n : ℕ) : PruneOK m (rectP n) := by
-  intro l k hnd hR
-  unfold rectP
-  cases h : Nat.beq l.length (Nat.succ k)
-  · rfl
-  · rw [rectOK_sound n hnd (Nat.eq_of_beq_eq_true h) hR]
-    rfl
-
--- kernel-friendly form of the one-round test (raw recursors, as the primed functions above)
 
 def tw' (l : List ℕ) : ℕ → ℕ → ℕ :=
   @List.rec ℕ (fun _ => ℕ → ℕ → ℕ) (fun _ t => t)
@@ -3012,23 +2298,6 @@ theorem MS.priv_env {l : List ℕ} {j : ℕ} {Env : ℕ → ℕ → Prop} {c : �
     h1 h2
   rwa [Nat.div_add_mod] at h3
 
-/-- **(K+1)-colourability.**  With `K = k + 1 - |l|` spare reads the conflict graph of the private
-hulls (two words are adjacent when their private hulls meet) has a proper colouring with the
-colours `0, ..., K`. -/
-theorem reach_colour {m : Bool} {l : List ℕ} {k : ℕ} (hnd : l.Nodup) (hR : Reach m l.toFinset k) :
-    ∃ c : ℕ → ℕ, (∀ x ∈ l, c x + l.length ≤ k + 1) ∧
-      ∀ x ∈ l, ∀ y ∈ l, x ≠ y → c x = c y →
-        Nat.land (priv (tw (l.map rectW) 0 0) (rectW x)) (priv (tw (l.map rectW) 0 0) (rectW y)) = 0 := by
-  obtain ⟨j, f, env, c, Pi, hK, hj⟩ := hR.ks
-  rw [List.toFinset_card_of_nodup hnd] at hj
-  have hM := hK.toMS
-  refine ⟨c, fun x hx => ?_, ?_⟩
-  · have := hM.lab x hx
-    omega
-  · intro x hx y hy hxy hc
-    exact land_disj _ _ (fun q h1 h2 =>
-      hM.s1 x hx y hy hxy hc q (hM.priv_env x hx q h1) (hM.priv_env y hy q h2))
-
 /-- a valid labelling of the words of `l` with `K` spare reads (`T` = cells in at least two
 rectangles, `priv T (rectW x)` = hull of the private cells of `x`):
 labels at most `K`; words with the same label have disjoint private hulls; for every label `i ≥ 1`
@@ -3077,7 +2346,6 @@ theorem reach_validLab {m : Bool} {l : List ℕ} {k : ℕ} (hnd : l.Nodup) (hR :
   exact ⟨c, hK.toMS.validLab _ (by
     show j ≤ (k + 1) - l.length
     omega)⟩
-
 
 -- CLASS RULE as a Bool function (specification: cert/spec.py `class_rule`, NOTES-search.md 3.4).
 -- Uses `rectW`, `full`, `band`, `bor`, `bnot`, `len'` (Core) and `tw`, `priv`, `hull` (RectPart).
@@ -3336,16 +2604,6 @@ theorem classP'_eq (l : List ℕ) (k : ℕ) : classP' l k = classP l k := by
   rw [mapW'_eq, len'_eq, tw'_eq, mapP'_eq, tw'_eq, go'_eq, fcov'_eq, vs'_eq, sortD'_eq]
   unfold classP classP2 classP3
   cases Nat.blt 1 (Nat.sub (Nat.succ k) l.length) <;> rfl
-
-theorem classP'_ok {m : Bool} (h : PruneOK m classP) : PruneOK m classP' := by
-  intro l k hnd hR
-  rw [classP'_eq]
-  exact h l k hnd hR
-
--- COMPLETENESS OF THE CLASS-RULE SEARCH: a valid labelling makes `classP` (and `classP'`) true.
--- Uses `fld`, `put`, `subM`, `chkA`, `tryL`, `orA`, `go`, `vs`, `fcov`, `sortD_perm`, `classP`
--- (ClassPart), `hull_spec`, `tw`, `priv`, `tb_land`, `tb_lor`, `full_tb`, `land_sub`, `land_disj`
--- (RectPart), `rectW`, `full` (Core).
 
 /-- private hull of the word `x` in the live list `l`. -/
 def privH (l : List ℕ) (x : ℕ) : ℕ := priv (tw (l.map rectW) 0 0) (rectW x)
@@ -3745,11 +3003,6 @@ theorem beq0_false {n : ℕ} (h : Nat.beq n 0 = false) : n ≠ 0 := by
   rw [e] at h
   exact Bool.noConfusion h
 
-theorem beq0_of_ne {n : ℕ} (h : n ≠ 0) : Nat.beq n 0 = false := by
-  cases n with
-  | zero => exact (h rfl).elim
-  | succ n => rfl
-
 theorem classP3_of_lab (K t t2 : ℕ) (l : List ℕ) (c : ℕ → ℕ)
     (hle : ∀ x ∈ l, Nat.land (priv t (rectW x)) t2 ≠ 0 → c x ≤ K)
     (hne : l.Pairwise (fun x y => Nat.land (priv t (rectW x)) t2 ≠ 0 →
@@ -3851,7 +3104,6 @@ theorem classP_of_validLab (l : List ℕ) (k : ℕ) (c : ℕ → ℕ) (hnd : l.N
     (h : ValidLab l (Nat.sub (Nat.succ k) l.length) c) : classP l k = true :=
   classP_of_classLab l k c (h.classLab hnd)
 
-
 theorem classP'_of_validLab (l : List ℕ) (k : ℕ) (c : ℕ → ℕ) (hnd : l.Nodup)
     (h : ValidLab l (Nat.sub (Nat.succ k) l.length) c) : classP' l k = true := by
   rw [classP'_eq]
@@ -3863,442 +3115,2017 @@ theorem classP'_sound (m : Bool) : PruneOK m classP' := by
   obtain ⟨c, hc⟩ := reach_validLab hnd hR
   exact classP'_of_validLab l k c hnd hc
 
-theorem classP_sound (m : Bool) : PruneOK m classP := by
+-- SYMMETRY: the 4 row permutations induced by the automorphisms of the graph that fix {0,3}
+-- (search/aut.json).  They permute bits 0..11 among themselves and bits 12..23 among themselves,
+-- map `base12` onto itself (single base words are NOT fixed) and fix 4095.
+-- Each one is an involution, written as a product of delta swaps (sym/mkperm.py).
+
+/-- delta swap: exchanges bit `j` with bit `j + d` for every `j` in the mask `mk`. -/
+def dsw (mk d x : ℕ) : ℕ :=
+  Nat.xor (Nat.xor x (Nat.land (Nat.xor (Nat.shiftRight x d) x) mk))
+    (Nat.shiftLeft (Nat.land (Nat.xor (Nat.shiftRight x d) x) mk) d)
+
+/-- hand `f` the evaluated numeral of `x` (kernel: arguments are substituted unevaluated). -/
+def letN (x : ℕ) (f : ℕ → ℕ) : ℕ := @Nat.rec (fun _ => ℕ) (f 0) (fun p _ => f (Nat.succ p)) x
+
+theorem letN_eq (x : ℕ) (f : ℕ → ℕ) : letN x f = f x := by
+  cases x <;> rfl
+
+def sig1 (x : ℕ) : ℕ :=
+  letN (dsw 32768 2 x) fun x => letN (dsw 192 3 x) fun x => letN (dsw 1 5 x) fun x =>
+  letN (dsw 4 6 x) fun x => letN (dsw 65536 7 x) fun x => letN (dsw 16384 8 x) fun x => dsw 2 10 x
+
+def sig2 (x : ℕ) : ℕ :=
+  letN (dsw 584 1 x) fun x => letN (dsw 1 2 x) fun x => letN (dsw 16416 3 x) fun x =>
+  letN (dsw 98304 7 x) fun x => dsw 12288 8 x
+
+def sig3 (x : ℕ) : ℕ :=
+  letN (dsw 16392 1 x) fun x => letN (dsw 128 2 x) fun x => letN (dsw 4 3 x) fun x =>
+  letN (dsw 64 4 x) fun x => letN (dsw 131072 5 x) fun x => letN (dsw 12289 8 x) fun x => dsw 2 10 x
+
+/-- `f` permutes the bits of a word, inside the blocks 0..11, 12..23 and 24.. -/
+def BitPerm (f : ℕ → ℕ) : Prop :=
+  ∃ p : ℕ → ℕ, (∀ j, ∃ i, p i = j) ∧ (∀ i, p i < 12 ↔ i < 12) ∧ (∀ i, p i < 24 ↔ i < 24) ∧
+    ∀ x i, (f x).testBit i = x.testBit (p i)
+
+theorem BitPerm.comp {f g : ℕ → ℕ} (hf : BitPerm f) (hg : BitPerm g) :
+    BitPerm (fun x => f (g x)) := by
+  obtain ⟨p, ps, p12, p24, pe⟩ := hf
+  obtain ⟨q, qs, q12, q24, qe⟩ := hg
+  refine ⟨fun i => q (p i), ?_, fun i => (q12 (p i)).trans (p12 i),
+    fun i => (q24 (p i)).trans (p24 i), fun x i => by rw [pe, qe]⟩
+  intro j
+  obtain ⟨i, hi⟩ := qs j
+  obtain ⟨i', hi'⟩ := ps i
+  exact ⟨i', by show q (p i') = j; rw [hi', hi]⟩
+
+/-- the bit permutation of `dsw mk d`. -/
+def dpi (mk d i : ℕ) : ℕ :=
+  if mk.testBit i = true then i + d else if d ≤ i ∧ mk.testBit (i - d) = true then i - d else i
+
+theorem dpi_a (mk d i : ℕ) (h : mk.testBit i = true) : dpi mk d i = i + d := by
+  simp only [dpi, h, ite_true]
+
+theorem dpi_b (mk d i : ℕ) (h : mk.testBit i = false) (h2 : d ≤ i) (h3 : mk.testBit (i - d) = true) :
+    dpi mk d i = i - d := by
+  simp only [dpi, h, h2, h3, Bool.false_eq_true, ite_false, and_self, ite_true]
+
+theorem dpi_c (mk d i : ℕ) (h : mk.testBit i = false) (h2 : ¬ (d ≤ i ∧ mk.testBit (i - d) = true)) :
+    dpi mk d i = i := by
+  simp only [dpi, h, h2, Bool.false_eq_true, ite_false]
+
+theorem dsw_perm (mk d : ℕ) (h1 : mk < 16777216)
+    (h2 : ∀ i, i < 24 → mk.testBit i = true →
+      (i + d < 12 ∨ (12 ≤ i ∧ i + d < 24)) ∧ mk.testBit (i + d) = false) : BitPerm (dsw mk d) := by
+  have hm : ∀ i, mk.testBit i = true → i < 24 := by
+    intro i hi
+    by_contra hc
+    have h3 : mk < 2 ^ i :=
+      lt_of_lt_of_le h1 (le_trans (by norm_num) (Nat.pow_le_pow_right (by norm_num) (not_lt.mp hc)))
+    rw [Nat.testBit_lt_two_pow h3] at hi
+    exact Bool.noConfusion hi
+  have key : ∀ i, mk.testBit i = true →
+      (i + d < 12 ∨ (12 ≤ i ∧ i + d < 24)) ∧ mk.testBit (i + d) = false :=
+    fun i hi => h2 i (hm i hi) hi
+  have key2 : ∀ i, mk.testBit i = true → d ≤ i → mk.testBit (i - d) = false := by
+    intro i hi hd
+    cases hc : mk.testBit (i - d)
+    · rfl
+    · have h3 := (key (i - d) hc).2
+      rw [Nat.sub_add_cancel hd, hi] at h3
+      exact Bool.noConfusion h3
+  -- the three cases of a position
+  have cases3 : ∀ i, (mk.testBit i = true ∧ (d ≤ i → mk.testBit (i - d) = false)) ∨
+      (mk.testBit i = false ∧ d ≤ i ∧ mk.testBit (i - d) = true) ∨
+      (mk.testBit i = false ∧ ¬ (d ≤ i ∧ mk.testBit (i - d) = true)) := by
+    intro i
+    cases hi : mk.testBit i
+    · by_cases hi2 : d ≤ i ∧ mk.testBit (i - d) = true
+      · exact Or.inr (Or.inl ⟨rfl, hi2⟩)
+      · exact Or.inr (Or.inr ⟨rfl, hi2⟩)
+    · exact Or.inl ⟨rfl, key2 i hi⟩
+  refine ⟨dpi mk d, ?_, ?_, ?_, ?_⟩
+  · intro j
+    rcases cases3 j with ⟨hj, _⟩ | ⟨hj, hd, hj2⟩ | ⟨hj, hj2⟩
+    · refine ⟨j + d, ?_⟩
+      rw [dpi_b mk d (j + d) (key j hj).2 (Nat.le_add_left d j) (by rw [Nat.add_sub_cancel]; exact hj),
+        Nat.add_sub_cancel]
+    · refine ⟨j - d, ?_⟩
+      rw [dpi_a mk d (j - d) hj2, Nat.sub_add_cancel hd]
+    · exact ⟨j, dpi_c mk d j hj hj2⟩
+  · intro i
+    rcases cases3 i with ⟨hi, _⟩ | ⟨hi, hd, hi2⟩ | ⟨hi, hi2⟩
+    · rw [dpi_a mk d i hi]
+      have h3 := (key i hi).1
+      omega
+    · rw [dpi_b mk d i hi hd hi2]
+      have h3 := (key (i - d) hi2).1
+      omega
+    · rw [dpi_c mk d i hi hi2]
+  · intro i
+    rcases cases3 i with ⟨hi, _⟩ | ⟨hi, hd, hi2⟩ | ⟨hi, hi2⟩
+    · rw [dpi_a mk d i hi]
+      have h3 := (key i hi).1
+      omega
+    · rw [dpi_b mk d i hi hd hi2]
+      have h3 := (key (i - d) hi2).1
+      omega
+    · rw [dpi_c mk d i hi hi2]
+  · intro x i
+    show ((x ^^^ ((x >>> d ^^^ x) &&& mk)) ^^^ (((x >>> d ^^^ x) &&& mk) <<< d)).testBit i =
+      x.testBit (dpi mk d i)
+    rw [Nat.testBit_xor, Nat.testBit_xor, Nat.testBit_and, Nat.testBit_xor, Nat.testBit_shiftRight,
+      Nat.testBit_shiftLeft, Nat.testBit_and, Nat.testBit_xor, Nat.testBit_shiftRight]
+    rcases cases3 i with ⟨hi, hi2⟩ | ⟨hi, hd, hi2⟩ | ⟨hi, hi2⟩
+    · rw [dpi_a mk d i hi, hi, Nat.add_comm d i]
+      by_cases hd : d ≤ i
+      · rw [hi2 hd]
+        cases x.testBit i <;> cases x.testBit (i + d) <;> simp
+      · have e : decide (i ≥ d) = false := by simpa using hd
+        rw [e]
+        cases x.testBit i <;> cases x.testBit (i + d) <;> simp
+    · have e : decide (i ≥ d) = true := by simpa using hd
+      rw [dpi_b mk d i hi hd hi2, hi, hi2, e, Nat.add_sub_cancel' hd]
+      cases x.testBit i <;> cases x.testBit (i - d) <;> simp
+    · rw [dpi_c mk d i hi hi2, hi]
+      by_cases hd : d ≤ i
+      · have h3 : mk.testBit (i - d) = false := by
+          cases hc : mk.testBit (i - d)
+          · rfl
+          · exact absurd ⟨hd, hc⟩ hi2
+        rw [h3]; simp
+      · have e : decide (i ≥ d) = false := by simpa using hd
+        rw [e]; simp
+
+theorem BitPerm.and {f : ℕ → ℕ} (hf : BitPerm f) (a b : ℕ) : f (a &&& b) = f a &&& f b := by
+  obtain ⟨p, _, _, _, pe⟩ := hf
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [pe, Nat.testBit_and, Nat.testBit_and, pe, pe]
+
+theorem BitPerm.or {f : ℕ → ℕ} (hf : BitPerm f) (a b : ℕ) : f (a ||| b) = f a ||| f b := by
+  obtain ⟨p, _, _, _, pe⟩ := hf
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [pe, Nat.testBit_or, Nat.testBit_or, pe, pe]
+
+theorem BitPerm.xor {f : ℕ → ℕ} (hf : BitPerm f) (a b : ℕ) : f (a ^^^ b) = f a ^^^ f b := by
+  obtain ⟨p, _, _, _, pe⟩ := hf
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [pe, Nat.testBit_xor, Nat.testBit_xor, pe, pe]
+
+theorem BitPerm.inj {f : ℕ → ℕ} (hf : BitPerm f) {a b : ℕ} (h : f a = f b) : a = b := by
+  obtain ⟨p, ps, _, _, pe⟩ := hf
+  apply Nat.eq_of_testBit_eq
+  intro j
+  obtain ⟨i, rfl⟩ := ps j
+  rw [← pe, ← pe, h]
+
+theorem BitPerm.zero {f : ℕ → ℕ} (hf : BitPerm f) : f 0 = 0 := by
+  obtain ⟨p, _, _, _, pe⟩ := hf
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [pe, Nat.zero_testBit, Nat.zero_testBit]
+
+theorem BitPerm.target {f : ℕ → ℕ} (hf : BitPerm f) : f 4095 = 4095 := by
+  obtain ⟨p, _, p12, _, pe⟩ := hf
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [pe, tb4095, tb4095, decide_eq_decide]
+  exact p12 i
+
+theorem tbOnes (i : ℕ) : (16777215 : ℕ).testBit i = decide (i < 24) := by
+  have e : (16777215 : ℕ) = 2 ^ 24 - 1 := by norm_num
+  rw [e, Nat.testBit_two_pow_sub_one]
+
+theorem BitPerm.ones {f : ℕ → ℕ} (hf : BitPerm f) : f 16777215 = 16777215 := by
+  obtain ⟨p, _, _, p24, pe⟩ := hf
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [pe, tbOnes, tbOnes, decide_eq_decide]
+  exact p24 i
+
+theorem BitPerm.hi {f : ℕ → ℕ} (hf : BitPerm f) : f 16773120 = 16773120 := by
+  have e : (16773120 : ℕ) = 16777215 ^^^ 4095 := by decide
+  rw [e, hf.xor, hf.ones, hf.target]
+
+theorem lt24_iff (x : ℕ) : x < 16777216 ↔ ∀ i, 24 ≤ i → x.testBit i = false := by
+  have e : (16777216 : ℕ) = 2 ^ 24 := by norm_num
+  rw [e]
+  constructor
+  · intro h i hi
+    exact Nat.testBit_lt_two_pow (lt_of_lt_of_le h (Nat.pow_le_pow_right (by norm_num) hi))
+  · intro h
+    exact Nat.lt_pow_two_of_testBit x h
+
+theorem BitPerm.lt {f : ℕ → ℕ} (hf : BitPerm f) (x : ℕ) : f x < 16777216 ↔ x < 16777216 := by
+  obtain ⟨p, ps, _, p24, pe⟩ := hf
+  rw [lt24_iff, lt24_iff]
+  constructor
+  · intro h j hj
+    obtain ⟨i, rfl⟩ := ps j
+    rw [← pe]
+    refine h i ?_
+    by_contra hc
+    have := (p24 i).mpr (not_le.mp hc)
+    omega
+  · intro h i hi
+    rw [pe]
+    refine h (p i) ?_
+    by_contra hc
+    have := (p24 i).mp (not_le.mp hc)
+    omega
+
+theorem sub_xor (d : ℕ) (h : d < 16777216) : 16777215 - d = 16777215 ^^^ d := by
+  have e : 16777215 - d = 2 ^ 24 - (d + 1) := by omega
+  have h' : d < 2 ^ 24 := by omega
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [e, Nat.testBit_two_pow_sub_succ h', Nat.testBit_xor, tbOnes]
+  by_cases hi : i < 24
+  · simp [hi]
+  · have h3 : d.testBit i = false :=
+      Nat.testBit_lt_two_pow (lt_of_lt_of_le h' (Nat.pow_le_pow_right (by norm_num) (not_lt.mp hi)))
+    simp [hi, h3]
+
+theorem BitPerm.sub {f : ℕ → ℕ} (hf : BitPerm f) (d : ℕ) : f (16777215 - d) = 16777215 - f d := by
+  by_cases h : d < 16777216
+  · rw [sub_xor d h, sub_xor (f d) ((hf.lt d).mpr h), hf.xor, hf.ones]
+  · have h2 : ¬ f d < 16777216 := fun hc => h ((hf.lt d).mp hc)
+    have e1 : 16777215 - d = 0 := by omega
+    have e2 : 16777215 - f d = 0 := by omega
+    rw [e1, e2, hf.zero]
+
+theorem BitPerm.beq {f : ℕ → ℕ} (hf : BitPerm f) (a b : ℕ) : Nat.beq (f a) (f b) = Nat.beq a b := by
+  by_cases h : a = b
+  · rw [h, Nat.beq_refl, Nat.beq_refl]
+  · rw [(beq_false_iff a b).mpr h, (beq_false_iff (f a) (f b)).mpr (fun e => h (hf.inj e))]
+
+theorem BitPerm.beq0 {f : ℕ → ℕ} (hf : BitPerm f) (a : ℕ) : Nat.beq (f a) 0 = Nat.beq a 0 := by
+  have := hf.beq a 0
+  rwa [hf.zero] at this
+
+theorem BitPerm.domN {f : ℕ → ℕ} (hf : BitPerm f) (w d : ℕ) : domN (f w) (f d) = domN w d := by
+  have e1 : Nat.land (Nat.land (f w) 4095) (Nat.sub 16777215 (f d)) =
+      f (Nat.land (Nat.land w 4095) (Nat.sub 16777215 d)) := by
+    show (f w &&& 4095) &&& (16777215 - f d) = f ((w &&& 4095) &&& (16777215 - d))
+    rw [hf.and, hf.and, hf.target, hf.sub]
+  have e2 : Nat.land (Nat.land (f d) (Nat.sub 16777215 (f w))) 16773120 =
+      f (Nat.land (Nat.land d (Nat.sub 16777215 w)) 16773120) := by
+    show (f d &&& (16777215 - f w)) &&& 16773120 = f ((d &&& (16777215 - w)) &&& 16773120)
+    rw [hf.and, hf.and, hf.hi, hf.sub]
+  unfold _root_.PEqualNP.Outside.L_meta_3420.domN
+  rw [e1, e2, hf.beq0, hf.beq0]
+
+theorem BitPerm.blk {f : ℕ → ℕ} (hf : BitPerm f) (m : Bool) (w d : ℕ) :
+    blk m (f w) (f d) = blk m w d := by
+  cases m
+  · exact hf.beq w d
+  · exact hf.domN w d
+
+/-- `f` maps `base12` onto itself. -/
+def BaseOK (f : ℕ → ℕ) : Prop := ∀ d ∈ base12, ∃ d' ∈ base12, f d' = d
+
+/-- INVARIANCE of reachability under a block-preserving bit permutation that maps `base12`
+onto itself (both side conditions: dominance `m = true` and equality `m = false`). -/
+theorem Reach.image {f : ℕ → ℕ} (hf : BitPerm f) (hb : BaseOK f) {m : Bool} {D : Finset ℕ} {k : ℕ}
+    (h : Reach m D k) : Reach m (D.image f) k := by
+  induction h with
+  | done k =>
+    rw [Finset.image_singleton, hf.target]
+    exact Reach.done k
+  | step D k u v w ka kb hu hv hw hd hbase _ ih =>
+    have hfil : (insert w (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))).image f =
+        insert (f w) ((D.image f).filter (fun x => (ka = true ∨ x ≠ f u) ∧ (kb = true ∨ x ≠ f v))) := by
+      ext y
+      simp only [Finset.mem_image, Finset.mem_insert, Finset.mem_filter]
+      constructor
+      · rintro ⟨x, hx | ⟨hxD, h1, h2⟩, rfl⟩
+        · exact Or.inl (by rw [hx])
+        · exact Or.inr ⟨⟨x, hxD, rfl⟩, h1.imp_right (fun h e => h (hf.inj e)),
+            h2.imp_right (fun h e => h (hf.inj e))⟩
+      · rintro (rfl | ⟨⟨x, hxD, rfl⟩, h1, h2⟩)
+        · exact ⟨w, Or.inl rfl, rfl⟩
+        · exact ⟨x, Or.inr ⟨hxD, h1.imp_right (fun h e => h (by rw [e])),
+            h2.imp_right (fun h e => h (by rw [e]))⟩, rfl⟩
+    rw [hfil] at ih
+    refine Reach.step (D.image f) k (f u) (f v) (f w) ka kb (Finset.mem_image_of_mem f hu)
+      (Finset.mem_image_of_mem f hv) ?_ ?_ ?_ ih
+    · rcases hw with hw | hw
+      · exact Or.inl (by rw [hw, hf.and])
+      · exact Or.inr (by rw [hw, hf.or])
+    · intro d hdm
+      obtain ⟨d', hd', rfl⟩ := Finset.mem_image.mp hdm
+      rw [hf.blk]
+      exact hd d' hd'
+    · intro d hdm
+      obtain ⟨d', hd', rfl⟩ := hb d hdm
+      rw [hf.blk]
+      exact hbase d' hd'
+
+theorem sig1_perm : BitPerm sig1 := by
+  have e : sig1 = fun x => dsw 2 10 (dsw 16384 8 (dsw 65536 7 (dsw 4 6 (dsw 1 5 (dsw 192 3 (dsw 32768 2 x)))))) := by
+    funext x; simp only [sig1, letN_eq]
+  rw [e]
+  exact (dsw_perm 2 10 (by decide) (by decide)).comp ((dsw_perm 16384 8 (by decide) (by decide)).comp
+    ((dsw_perm 65536 7 (by decide) (by decide)).comp ((dsw_perm 4 6 (by decide) (by decide)).comp
+    ((dsw_perm 1 5 (by decide) (by decide)).comp ((dsw_perm 192 3 (by decide) (by decide)).comp
+    (dsw_perm 32768 2 (by decide) (by decide)))))))
+
+theorem sig2_perm : BitPerm sig2 := by
+  have e : sig2 = fun x => dsw 12288 8 (dsw 98304 7 (dsw 16416 3 (dsw 1 2 (dsw 584 1 x)))) := by
+    funext x; simp only [sig2, letN_eq]
+  rw [e]
+  exact (dsw_perm 12288 8 (by decide) (by decide)).comp ((dsw_perm 98304 7 (by decide) (by decide)).comp
+    ((dsw_perm 16416 3 (by decide) (by decide)).comp ((dsw_perm 1 2 (by decide) (by decide)).comp
+    (dsw_perm 584 1 (by decide) (by decide)))))
+
+theorem sig3_perm : BitPerm sig3 := by
+  have e : sig3 = fun x => dsw 2 10 (dsw 12289 8 (dsw 131072 5 (dsw 64 4 (dsw 4 3 (dsw 128 2 (dsw 16392 1 x)))))) := by
+    funext x; simp only [sig3, letN_eq]
+  rw [e]
+  exact (dsw_perm 2 10 (by decide) (by decide)).comp ((dsw_perm 12289 8 (by decide) (by decide)).comp
+    ((dsw_perm 131072 5 (by decide) (by decide)).comp ((dsw_perm 64 4 (by decide) (by decide)).comp
+    ((dsw_perm 4 3 (by decide) (by decide)).comp ((dsw_perm 128 2 (by decide) (by decide)).comp
+    (dsw_perm 16392 1 (by decide) (by decide)))))))
+
+theorem sig1_base : BaseOK sig1 := by unfold BaseOK; decide +kernel
+theorem sig2_base : BaseOK sig2 := by unfold BaseOK; decide +kernel
+theorem sig3_base : BaseOK sig3 := by unfold BaseOK; decide +kernel
+
+-- the checker with symmetric lookup: a child is closed when one of its 3 non-trivial images
+-- (as a sorted list) is in the next table.  It enters through the pruning hook, AFTER the
+-- plain lookup and the rule `P`, so the images are only computed for children that pass `P`.
+
+def map' (f : ℕ → ℕ) (l : List ℕ) : List ℕ :=
+  @List.rec ℕ (fun _ => List ℕ) [] (fun a _ ih => f a :: ih) l
+
+theorem map'_eq (f : ℕ → ℕ) (l : List ℕ) : map' f l = l.map f := by
+  induction l with
+  | nil => rfl
+  | cons a l ih => show f a :: map' f l = _; rw [ih]; rfl
+
+def sort' (l : List ℕ) : List ℕ :=
+  @List.rec ℕ (fun _ => List ℕ) [] (fun a _ ih => ins' a ih) l
+
+theorem sort'_perm (l : List ℕ) : (sort' l).Perm l := by
+  induction l with
+  | nil => exact List.Perm.refl _
+  | cons a l ih =>
+    show (ins' a (sort' l)).Perm (a :: l)
+    rw [ins'_eq]
+    exact (ins_perm a _).trans (List.Perm.cons a ih)
+
+/-- the sorted image of `l` under `f` is in the table. -/
+noncomputable def symHas1 (f : ℕ → ℕ) (prev : Tree) (l : List ℕ) : Bool :=
+  forceL (map' f l) (fun l1 => forceL (sort' l1) (has' prev))
+
+theorem symHas1_sound {m : Bool} {f : ℕ → ℕ} {prev : Tree} {k : ℕ} {l : List ℕ} (hf : BitPerm f)
+    (hb : BaseOK f) (hinv : Inv m prev k) (h : symHas1 f prev l = true) : ¬ Reach m l.toFinset k := by
+  intro hR
+  unfold symHas1 at h
+  rw [forceL_eq, forceL_eq, has'_eq, map'_eq] at h
+  have h2 := hinv _ h
+  have e : (sort' (l.map f)).toFinset = l.toFinset.image f := by
+    rw [List.toFinset_eq_of_perm _ _ (sort'_perm _)]
+    ext y
+    simp only [List.mem_toFinset, List.mem_map, Finset.mem_image]
+  rw [e] at h2
+  exact h2 (hR.image hf hb)
+
+noncomputable def symHas (prev : Tree) (l : List ℕ) : Bool :=
+  bor (symHas1 sig1 prev l) (bor (symHas1 sig2 prev l) (symHas1 sig3 prev l))
+
+theorem symHas_sound {m : Bool} {prev : Tree} {k : ℕ} {l : List ℕ}
+    (hinv : Inv m prev k) (h : symHas prev l = true) : ¬ Reach m l.toFinset k := by
+  unfold symHas at h
+  rw [bor_eq, bor_eq] at h
+  simp only [Bool.or_eq_true] at h
+  rcases h with h | h | h
+  · exact symHas1_sound sig1_perm sig1_base hinv h
+  · exact symHas1_sound sig2_perm sig2_base hinv h
+  · exact symHas1_sound sig3_perm sig3_base hinv h
+
+/-- pruning rule `P` extended by the symmetric lookup in the table `prev` of level `k0`. -/
+noncomputable def symP (P : List ℕ → ℕ → Bool) (prev : Tree) (k0 : ℕ) (l : List ℕ) (k : ℕ) : Bool :=
+  band (P l k) (bnot (band (Nat.beq k k0) (symHas prev l)))
+
+theorem symP_ok {m : Bool} {P : List ℕ → ℕ → Bool} {prev : Tree} {k0 : ℕ}
+    (hP : PruneOK m P) (hinv : Inv m prev k0) : PruneOK m (symP P prev k0) := by
   intro l k hnd hR
-  obtain ⟨c, hc⟩ := reach_validLab hnd hR
-  exact classP_of_validLab l k c hnd hc
+  unfold symP
+  rw [band_eq, bnot_eq, band_eq, hP l k hnd hR]
+  cases hk : Nat.beq k k0
+  · rfl
+  · have e : k = k0 := Nat.eq_of_beq_eq_true hk
+    subst e
+    cases hs : symHas prev l
+    · rfl
+    · exact absurd hR (symHas_sound hinv hs)
+
+/-- one level of the symmetry-reduced table. -/
+theorem level_sym {m : Bool} {P : List ℕ → ℕ → Bool} {prev T : Tree} {k : ℕ}
+    (hP : PruneOK m P) (hinv : Inv m prev k)
+    (h : tall (expFast m (symP P prev k) prev k) T = true) : Inv m T (k + 1) :=
+  level_fast (symP_ok hP hinv) hinv h
+
+/-- start states: closed directly or through a symmetric image. -/
+noncomputable def closedS (prev : Tree) (k : ℕ) (l : List ℕ) : Bool :=
+  bor (closed prev k l) (symHas prev l)
+
+theorem start_sym {m : Bool} {prev : Tree} {n : ℕ} (hinv : Inv m prev n)
+    (h : subsAll base10 (closedS prev n) = true) : NoStart m n := by
+  intro L hL
+  have hs : (base10.filter (fun x => decide (x ∈ L))).Sublist base10 := List.filter_sublist
+  have he : (base10.filter (fun x => decide (x ∈ L))).toFinset = L := by
+    ext x
+    simp only [List.mem_toFinset, List.mem_filter, decide_eq_true_eq]
+    exact ⟨fun h => h.2, fun h => ⟨hL x h, h⟩⟩
+  have hnd : (base10.filter (fun x => decide (x ∈ L))).Nodup := List.Nodup.sublist hs (by decide)
+  have h2 := subsAll_sub base10 _ h _ hs
+  unfold closedS at h2
+  rw [bor_eq, Bool.or_eq_true] at h2
+  rw [← he]
+  rcases h2 with h2 | h2
+  · exact closed_sound hnd hinv h2
+  · exact symHas_sound hinv h2
+
+
+-- CANONICAL LOOKUP AND REFUTED STATES: a child with K = k + 1 - |l| at least 2 is replaced by
+-- the smallest of its 4 images (all images can reach the target together or not at all).  It
+-- is closed when that image is in the table of the next level, or in a list `R` of images
+-- refuted once by the rule (checked by its own theorems), else the rule must refute it.
+
+/-- the smaller of two sorted lists (lexicographic). -/
+noncomputable def minL (a b : List ℕ) : List ℕ := @Ordering.rec (fun _ => List ℕ) a a b (lcmp' a b)
+
+theorem minL_cases (a b : List ℕ) : minL a b = a ∨ minL a b = b := by
+  unfold minL
+  cases lcmp' a b
+  · exact Or.inl rfl
+  · exact Or.inl rfl
+  · exact Or.inr rfl
+
+/-- sorted image of a list. -/
+noncomputable def img (f : ℕ → ℕ) (l : List ℕ) : List ℕ := sort' (map' f l)
+
+/-- the smallest of the 4 images. -/
+noncomputable def canon (l : List ℕ) : List ℕ := minL (minL (minL l (img sig1 l)) (img sig2 l)) (img sig3 l)
+
+theorem img_reach {m : Bool} {f : ℕ → ℕ} (hf : BitPerm f) (hb : BaseOK f) {l : List ℕ} {k : ℕ}
+    (hnd : l.Nodup) (hR : Reach m l.toFinset k) :
+    (img f l).Nodup ∧ Reach m (img f l).toFinset k := by
+  unfold img
+  rw [map'_eq]
+  have hp := sort'_perm (l.map f)
+  refine ⟨hp.nodup_iff.mpr (List.Nodup.map (fun a b h => hf.inj h) hnd), ?_⟩
+  have e : (sort' (l.map f)).toFinset = l.toFinset.image f := by
+    rw [List.toFinset_eq_of_perm _ _ hp]
+    ext y
+    simp only [List.mem_toFinset, List.mem_map, Finset.mem_image]
+  rw [e]
+  exact hR.image hf hb
+
+theorem canon_reach {m : Bool} {l : List ℕ} {k : ℕ} (hnd : l.Nodup) (hR : Reach m l.toFinset k) :
+    (canon l).Nodup ∧ Reach m (canon l).toFinset k := by
+  have h1 := img_reach sig1_perm sig1_base hnd hR
+  have h2 := img_reach sig2_perm sig2_base hnd hR
+  have h3 := img_reach sig3_perm sig3_base hnd hR
+  unfold canon
+  rcases minL_cases (minL (minL l (img sig1 l)) (img sig2 l)) (img sig3 l) with e | e <;> rw [e]
+  · rcases minL_cases (minL l (img sig1 l)) (img sig2 l) with e | e <;> rw [e]
+    · rcases minL_cases l (img sig1 l) with e | e <;> rw [e]
+      · exact ⟨hnd, hR⟩
+      · exact h1
+    · exact h2
+  · exact h3
+
+/-- the rule with canonical lookup in `T` and `R` for `K ≥ 2` at level `k0`, else `symP`. -/
+noncomputable def RP (P : List ℕ → ℕ → Bool) (T R : Tree) (k0 : ℕ) (l : List ℕ) (k : ℕ) : Bool :=
+  @Bool.rec (fun _ => Bool) (symP P T k0 l k)
+    (forceL (canon l) (fun c => band (bnot (bor (has' T c) (has' R c))) (P c k)))
+    (band (Nat.beq k k0) (Nat.ble 2 (Nat.sub (Nat.succ k) (len' l))))
+
+theorem RP_ok {m : Bool} {P : List ℕ → ℕ → Bool} {T R : Tree} {k0 : ℕ}
+    (hP : PruneOK m P) (hT : Inv m T k0) (hRi : Inv m R k0) : PruneOK m (RP P T R k0) := by
+  intro l k hnd hR
+  unfold RP
+  cases hb : band (Nat.beq k k0) (Nat.ble 2 (Nat.sub (Nat.succ k) (len' l)))
+  · exact symP_ok hP hT l k hnd hR
+  · show forceL (canon l) (fun c => band (bnot (bor (has' T c) (has' R c))) (P c k)) = true
+    rw [forceL_eq]
+    rw [band_eq, Bool.and_eq_true] at hb
+    have e : k = k0 := Nat.eq_of_beq_eq_true hb.1
+    subst e
+    obtain ⟨hnd', hR'⟩ := canon_reach hnd hR
+    have hTf : has' T (canon l) = false := by
+      cases h : has' T (canon l)
+      · rfl
+      · rw [has'_eq] at h; exact absurd hR' (hT _ h)
+    have hRf : has' R (canon l) = false := by
+      cases h : has' R (canon l)
+      · rfl
+      · rw [has'_eq] at h; exact absurd hR' (hRi _ h)
+    rw [hTf, hRf, hP _ k hnd' hR']
+    rfl
+
+/-- one level with the canonical lookup. -/
+theorem level_R {m : Bool} {P : List ℕ → ℕ → Bool} {prev R T : Tree} {k : ℕ}
+    (hP : PruneOK m P) (hinv : Inv m prev k) (hRi : Inv m R k)
+    (h : tall (expFast m (RP P prev R k) prev k) T = true) : Inv m T (k + 1) :=
+  level_fast (RP_ok hP hinv hRi) hinv h
+
+/-- a list of refuted states: every entry is sorted and refuted by the rule. -/
+def refOK (P : List ℕ → ℕ → Bool) (k : ℕ) (x : List ℕ) : Bool := band (sortedB x) (bnot (P x k))
+
+theorem refuted {m : Bool} {P : List ℕ → ℕ → Bool} {R : Tree} {k : ℕ} (hP : PruneOK m P)
+    (h : tall (refOK P k) R = true) : Inv m R k := by
+  intro x hx hR
+  have h1 := thas_all _ R x h hx
+  unfold refOK at h1
+  rw [band_eq, bnot_eq, Bool.and_eq_true] at h1
+  have h2 := hP x k (sortedB_nodup h1.1) hR
+  rw [h2] at h1
+  exact Bool.noConfusion h1.2
+
+theorem inv_nil (m : Bool) (k : ℕ) : Inv m BinaryTree.nil k := by
+  intro x hx
+  simp [thas] at hx
+
+/-- the class rule with all its auxiliary definitions unfolded (one closed term for the kernel). -/
+noncomputable def cpSub : {f : List ℕ → ℕ → Bool // f = classP'} := by
+  refine ⟨?f, ?h⟩
+  case h =>
+    delta classP' classQ go' tryL' chkA' fld put subM hull hullC rowsOf colsOf orS orSL rowM full
+      band bor bnot vs' fcov' priv tw' mapP' mapW' rectW' rect' tb' len' orA' sortD' insD' degI'
+    beta_reduce
+    exact rfl
+
+noncomputable def cpF : List ℕ → ℕ → Bool := cpSub.1
+
+theorem cpF_sound (m : Bool) : PruneOK m cpF := by
+  have e : cpF = classP' := cpSub.2
+  rw [e]
+  exact classP'_sound m
+
+/-- the pruning rule of the table: one-round rectangle test, then the class rule. -/
+noncomputable def PR (l : List ℕ) (k : ℕ) : Bool := rectP1' l k && cpF l k
+
+theorem PR_sound : PruneOK false PR := PruneOK.and (rectP1'_ok false) (cpF_sound false)
 
 def T1 : Tree := .nil
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T1_ok : tall (expFast false (classP') BinaryTree.nil 0) T1 = true := by decide +kernel
+theorem T1_ok : tall (expFast false (RP PR BinaryTree.nil BinaryTree.nil 0) BinaryTree.nil 0) T1 = true := by decide +kernel
 def T2 : Tree := .nil
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T2_ok : tall (expFast false (classP') T1 1) T2 = true := by decide +kernel
+theorem T2_ok : tall (expFast false (RP PR T1 BinaryTree.nil 1) T1 1) T2 = true := by decide +kernel
 def T3 : Tree := .nil
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T3_ok : tall (expFast false (classP') T2 2) T3 = true := by decide +kernel
+theorem T3_ok : tall (expFast false (RP PR T2 BinaryTree.nil 2) T2 2) T3 = true := by decide +kernel
 def T4 : Tree := .nil
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T4_ok : tall (expFast false (classP') T3 3) T4 = true := by decide +kernel
+theorem T4_ok : tall (expFast false (RP PR T3 BinaryTree.nil 3) T3 3) T4 = true := by decide +kernel
 def T5 : Tree := .nil
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T5_ok : tall (expFast false (classP') T4 4) T5 = true := by decide +kernel
-def T6 : Tree := (.node [3395,506668,3275430,5689661,7684279,11083800,13501056] (.node [2726,902208,5689661,8827215,11083800,15875395,16010545] .nil .nil) .nil)
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T6_ok : tall (expFast false (classP') T5 5) T6 = true := by decide +kernel
-def T7 : Tree := (.node [2726,902208,5689661,8532035,8827215,11083800,15731968,16010545] (.node [134,2592,902208,5689661,8827215,11083800,15875395,16010545] (.node [67,3328,506668,3275430,5689661,7684279,11083800,13501056] .nil .nil) .nil) (.node [3395,113184,506668,3227782,5689661,7684279,11083800,13501056] .nil .nil))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T7_ok : tall (expFast false (classP') T6 6) T7 = true := by decide +kernel
-def T8 : Tree := (.node [134,113184,902208,5689661,8827215,11083800,15875395,16010545,16666545] (.node [67,506668,1048428,3275430,5689661,7684279,11083800,13501056,15731968] (.node [67,3328,113184,506668,3227782,5689661,7684279,11083800,13501056] .nil .nil) (.node [134,2592,902208,5689661,8532035,8827215,11083800,15731968,16010545] .nil .nil)) (.node [3328,506668,3275430,5689661,7684279,8242423,8532035,11083800,13501056] (.node [2592,902208,3227782,5689661,8827215,11083800,13546447,15875395,16010545] .nil .nil) .nil))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T8_ok : tall (expFast false (classP') T7 7) T8 = true := by decide +kernel
-def T9aa : Tree := (.node [1728,113184,430348,3227782,5521457,5689661,8532035,11083800,15731968,15875395] (.node [284,113184,902208,3227782,5521457,8532035,8632931,13501056,15731968,15814022] (.node [67,506668,902208,3275430,5689661,7684279,11083800,13501056,15731968] (.node [67,113184,506668,1037644,3227782,5689661,7684279,11083800,13501056,15731968] (.node [57,113184,430348,902208,3227782,8532035,8632931,13501056,15731968,15814022] (.node [24,430348,902208,3275430,5521457,8632931,13501056,15814022,15875395] .nil .nil) .nil) (.node [67,113184,506668,1048428,3227782,5689661,7684279,11083800,13501056,15731968] .nil .nil)) (.node [134,113184,902208,5689661,8532035,8827215,11083800,15731968,16010545,16666545] (.node [134,113184,902208,5689661,8532035,8827215,11083800,14566065,15731968,16010545] .nil .nil) (.node [134,113184,902208,5689661,8827215,11083800,13501056,15875395,16010545] .nil .nil))) (.node [1088,506668,3275430,5689661,7684279,8532035,11083800,13501056,15731968] (.node [664,113184,430348,902208,3227782,3275430,5521457,8532035,15731968,15875395] (.node [640,113184,902208,3227782,5689661,8827215,11083800,15875395,16010545] .nil .nil) (.node [664,113184,430348,902208,3227782,5521457,5689661,8532035,15731968,15875395] .nil .nil)) (.node [1112,113184,430348,3227782,3275430,5521457,8532035,13501056,15731968,15875395] (.node [1112,113184,430348,3227782,3275430,5521457,5689661,8532035,13501056,15731968] .nil .nil) (.node [1728,113184,430348,3227782,3275430,5521457,5689661,8532035,11083800,15731968] .nil .nil)))) (.node [113184,430348,902208,3227782,3275430,5521457,8532059,13501056,15731992,15875419] (.node [3328,113184,506668,3227782,5689661,6145137,7684279,8532035,11083800,13501056] (.node [2592,902208,3227782,5689661,8532035,8827215,11083800,13546447,15731968,16010545] (.node [2592,902208,3227782,5689661,8532035,8827215,11083800,13538188,15731968,16010545] .nil .nil) (.node [2592,902208,3227782,5689661,8827215,11083800,13501056,15875395,16010545] .nil .nil)) (.node [3328,506668,902208,3275430,5689661,7684279,8532035,11083800,13501056] (.node [3328,113184,506668,3227782,5689661,7684279,8242423,8532035,11083800,13501056] .nil .nil) (.node [113184,430348,902208,3227782,3275430,5521457,8532059,13501056,15731992,15875395] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15732480,15875395] (.node [113184,430348,902208,3227782,3275430,5521465,8532059,13501056,15731968,15875419] (.node [113184,430348,902208,3227782,3275430,5521465,8532059,13501056,15731968,15875395] .nil .nil) (.node [113184,430348,902208,3227782,3275454,5521457,8532035,13501080,15731968,15875395] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15732480,15875907] (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15732480,15875523] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15732480,15876035] .nil .nil)))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T9aa_ok : tall (expFast false (classP') T8 8) T9aa = true := by decide +kernel
-def T9ab : Tree := (.node [113184,430348,902208,3227806,5521457,8532035,8632931,13501080,15731968,15814022] (.node [113184,430348,902208,3227782,5521969,5689661,8532163,11083800,15731968,15875523] (.node [113184,430348,902208,3227782,5521457,8532059,8632955,13501056,15731968,15814046] (.node [113184,430348,902208,3227782,5521457,8532035,8632955,13501056,15731968,15814046] (.node [113184,430348,902208,3227782,5521457,5690301,8532035,11084440,15731968,15875395] (.node [113184,430348,902208,3227782,5521457,5689661,8532675,11083800,15732608,15876035] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632955,13501056,15731992,15814046] .nil .nil)) (.node [113184,430348,902208,3227782,5521465,8532035,8632955,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521457,8532059,8632955,13501056,15731992,15814046] .nil .nil) (.node [113184,430348,902208,3227782,5521465,8532059,8632955,13501056,15731968,15814022] .nil .nil))) (.node [113184,430348,902208,3227806,3275430,5521457,8532059,13501056,15731968,15875419] (.node [113184,430348,902208,3227782,5522097,5689661,8532675,11083800,15731968,15876035] (.node [113184,430348,902208,3227782,5522097,5689661,8532675,11083800,15731968,15875395] .nil .nil) (.node [113184,430348,902208,3227806,3275430,5521457,8532059,13501056,15731968,15875395] .nil .nil)) (.node [113184,430348,902208,3227806,3275454,5521457,8532059,13501056,15731968,15875395] (.node [113184,430348,902208,3227806,3275454,5521457,8532035,13501080,15731968,15875395] .nil .nil) (.node [113184,430348,902208,3227806,3275454,5521457,8532059,13501056,15731968,15875419] .nil .nil)))) (.node [113184,430348,902232,3227782,3275430,5521457,8532059,13501056,15731968,15875419] (.node [113184,430348,902208,3228294,5521457,5689661,8532675,11083800,15731968,15875395] (.node [113184,430348,902208,3227806,5521457,8532035,8632955,13501056,15731968,15814046] (.node [113184,430348,902208,3227806,5521457,8532035,8632931,13501080,15731968,15814046] .nil .nil) (.node [113184,430348,902208,3227806,5521457,8532059,8632955,13501056,15731968,15814046] .nil .nil)) (.node [113184,430348,902232,3227782,3275430,5521457,8532035,13501056,15731968,15875419] (.node [113184,430348,902208,3228294,5521457,5689661,8532675,11083800,15731968,15876035] .nil .nil) (.node [113184,430348,902232,3227782,3275430,5521457,8532035,13501056,15731992,15875419] .nil .nil))) (.node [113184,430348,902232,3227782,5521457,8532059,8632955,13501056,15731968,15814022] (.node [113184,430348,902232,3227782,5521457,8532035,8632931,13501056,15731992,15814046] (.node [113184,430348,902232,3227782,5521457,8532035,8632931,13501056,15731992,15814022] .nil .nil) (.node [113184,430348,902232,3227782,5521457,8532059,8632931,13501056,15731968,15814022] .nil .nil)) (.node [113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15732608,15876035] (.node [113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15731968,15876035] .nil .nil) (.node [113184,430348,902848,3227782,5521457,5689661,8532675,11083800,15731968,15876035] .nil .nil)))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T9ab_ok : tall (expFast false (classP') T8 8) T9ab = true := by decide +kernel
-def T9a : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532675,11083800,15732608,15875395] T9aa T9ab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T9a_ok : tall (expFast false (classP') T8 8) T9a = true :=
+theorem T5_ok : tall (expFast false (RP PR T4 BinaryTree.nil 4) T4 4) T5 = true := by decide +kernel
+def T6 : Tree := (.node [2726,902208,5689661,8827215,11083800,15875395,16010545] .nil .nil)
+theorem T6_ok : tall (expFast false (RP PR T5 BinaryTree.nil 5) T5 5) T6 = true := by decide +kernel
+def T7 : Tree := (.node [2726,902208,5689661,8532035,8827215,11083800,15731968,16010545] (.node [67,3328,506668,3275430,5689661,7684279,11083800,13501056] .nil .nil) .nil)
+theorem T7_ok : tall (expFast false (RP PR T6 BinaryTree.nil 6) T6 6) T7 = true := by decide +kernel
+def T8 : Tree := (.node [67,506668,1048428,3275430,5689661,7684279,11083800,13501056,15731968] (.node [67,3328,113184,506668,3227782,5689661,7684279,11083800,13501056] .nil .nil) .nil)
+theorem T8_ok : tall (expFast false (RP PR T7 BinaryTree.nil 7) T7 7) T8 = true := by decide +kernel
+def T9aa : Tree := (.node [640,113184,902208,3227782,5689661,8827215,11083800,15875395,16010545] (.node [67,113184,506668,1037644,3227782,5689661,7684279,11083800,13501056,15731968] (.node [57,113184,430348,902208,3227782,8532035,8632931,13501056,15731968,15814022] (.node [24,430348,902208,3275430,5521457,8632931,13501056,15814022,15875395] .nil .nil) .nil) (.node [67,506668,902208,3275430,5689661,7684279,11083800,13501056,15731968] (.node [67,113184,506668,1048428,3227782,5689661,7684279,11083800,13501056,15731968] .nil .nil) .nil)) (.node [1728,113184,430348,3227782,3275430,5521457,5689661,8532035,11083800,15731968] (.node [664,113184,430348,902208,3227782,5521457,5689661,8532035,15731968,15875395] (.node [664,113184,430348,902208,3227782,3275430,5521457,8532035,15731968,15875395] .nil .nil) .nil) (.node [113184,430348,902208,3227782,3275430,5521457,8532059,13501056,15731992,15875419] (.node [113184,430348,902208,3227782,3275430,5521457,8532059,13501056,15731992,15875395] .nil .nil) .nil)))
+theorem T9aa_ok : tall (expFast false (RP PR T8 BinaryTree.nil 8) T8 8) T9aa = true := by decide +kernel
+def T9ab : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532675,11083800,15732608,15875395] (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15732480,15875395] (.node [113184,430348,902208,3227782,3275454,5521457,8532035,13501080,15731968,15875395] (.node [113184,430348,902208,3227782,3275430,5521465,8532059,13501056,15731968,15875419] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15732480,15876035] (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15732480,15875523] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8632955,13501056,15731968,15814046] (.node [113184,430348,902208,3227782,5521457,5690301,8532035,11084440,15731968,15875395] (.node [113184,430348,902208,3227782,5521457,5689661,8532675,11083800,15732608,15876035] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,8532059,8632955,13501056,15731992,15814046] (.node [113184,430348,902208,3227782,5521457,8532035,8632955,13501056,15731992,15814046] .nil .nil) .nil)))
+theorem T9ab_ok : tall (expFast false (RP PR T8 BinaryTree.nil 8) T8 8) T9ab = true := by decide +kernel
+def T9a : Tree := .node [113184,430348,902208,3227782,3275430,5521465,8532059,13501056,15731968,15875395] T9aa T9ab
+theorem T9a_ok : tall (expFast false (RP PR T8 BinaryTree.nil 8) T8 8) T9a = true :=
   tall_node _ _ _ _ T9aa_ok (by decide +kernel) T9ab_ok
-def T9ba : Tree := (.node [113184,430988,902208,3227782,5522097,5689661,8532035,11083800,15731968,15875395] (.node [113184,430364,902208,3227782,5521457,8532035,8632931,13501056,15731992,15814046] (.node [113184,430348,3228870,3276518,5521457,5689661,8533059,11083800,13501056,15731968] (.node [113184,430348,3228870,3275430,5521457,5689661,8533059,11083800,13501056,15731968] (.node [113184,430348,3227782,3276518,5521457,5689661,8532035,11083800,13502144,15731968] (.node [113184,430348,3227782,3275430,5522545,5689661,8533059,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,3228870,3276518,5521457,5689661,8532035,11083800,13502144,15731968] .nil .nil)) (.node [113184,430364,902208,3227782,3275430,5521457,8532035,13501056,15731992,15875419] (.node [113184,430364,902208,3227782,3275430,5521457,8532035,13501056,15731992,15875395] .nil .nil) (.node [113184,430364,902208,3227782,5521457,8532035,8632931,13501056,15731968,15814046] .nil .nil))) (.node [113184,430476,902208,3227782,5521457,5689661,8532035,11083800,15732480,15875907] (.node [113184,430364,902208,3227806,3275454,5521457,8532035,13501056,15731968,15875395] (.node [113184,430364,902208,3227806,3275430,5521457,8532035,13501056,15731968,15875395] .nil .nil) (.node [113184,430364,902208,3227806,5521457,8532035,8632931,13501056,15731968,15814046] .nil .nil)) (.node [113184,430988,902208,3227782,5521457,5689661,8532035,11083800,15732608,15875395] (.node [113184,430476,902208,3227782,5521969,5689661,8532035,11083800,15731968,15875395] .nil .nil) (.node [113184,430988,902208,3227782,5521457,5689661,8532035,11083800,15732608,15876035] .nil .nil)))) (.node [113184,902208,3227782,5689661,8532035,8632931,11084060,13501056,15731968,16076215] (.node [113184,431436,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15732032] (.node [113184,431372,3227782,3275430,5521521,5689661,8532035,11083800,13501056,15731968] (.node [113184,430988,902208,3228294,5521457,5689661,8532035,11083800,15731968,15875395] .nil .nil) (.node [113184,431372,3227846,3275494,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,431436,3228870,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,431436,3227782,3275430,5522545,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,431436,3228870,3276518,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,902208,3227782,5689661,8532035,8895343,11083833,13501056,15731968,15814022] (.node [113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15731968,15814055] (.node [113184,902208,3227782,5689661,8532035,8633191,11083800,13501056,15731968,16076215] .nil .nil) (.node [113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15732001,15814055] .nil .nil)) (.node [113184,902208,3227782,5689661,8827215,11083800,13546447,15875395,16010545,16666545] (.node [113184,902208,3227782,5689661,8532295,8633191,11083800,13501056,15731968,16076215] .nil .nil) (.node [113184,902208,3227815,5689661,8532035,8895343,11083800,13501056,15731968,15814055] .nil .nil)))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T9ba_ok : tall (expFast false (classP') T8 8) T9ba = true := by decide +kernel
-def T9bb : Tree := (.node [113312,430348,902208,3227782,5521457,5689661,8532035,11083800,15732608,15876035] (.node [113208,430348,902208,3227782,5521457,8532035,8632955,13501056,15731968,15814046] (.node [113208,430348,902208,3227782,3275454,5521457,8532035,13501056,15731992,15875419] (.node [113208,430348,902208,3227782,3275430,5521465,8532035,13501056,15731968,15875395] (.node [113208,430348,902208,3227782,3275430,5521457,8532035,13501056,15731992,15875419] .nil .nil) (.node [113208,430348,902208,3227782,3275454,5521457,8532035,13501056,15731992,15875395] .nil .nil)) (.node [113208,430348,902208,3227782,3275454,5521465,8532035,13501056,15731968,15875395] (.node [113208,430348,902208,3227782,3275454,5521457,8532035,13501080,15731968,15875395] .nil .nil) (.node [113208,430348,902208,3227782,5521457,8532035,8632931,13501080,15731968,15814022] .nil .nil))) (.node [113208,430348,902208,3227806,3275430,5521457,8532035,13501056,15731968,15875395] (.node [113208,430348,902208,3227782,5521457,8532035,8632955,13501080,15731968,15814022] (.node [113208,430348,902208,3227782,5521457,8532035,8632955,13501056,15731992,15814046] .nil .nil) (.node [113208,430348,902208,3227782,5521465,8532035,8632955,13501056,15731968,15814022] .nil .nil)) (.node [113208,430348,902208,3227806,5521457,8532035,8632955,13501056,15731968,15814046] (.node [113208,430348,902208,3227806,3275454,5521457,8532035,13501056,15731968,15875395] .nil .nil) (.node [113312,430348,902208,3227782,5521457,5689661,8532035,11083800,15732608,15875395] .nil .nil)))) (.node [114272,430348,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15732032] (.node [114208,430348,3227846,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113444,902208,3227782,5689661,8532035,8633191,11083800,13501056,15731968,16076215] (.node [113312,430348,902208,3227782,5522097,5689661,8532035,11083800,15731968,15875395] .nil .nil) (.node [114208,430348,3227782,3276454,5521521,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [114208,430348,3227846,3276454,5521457,5689661,8532035,11083800,13501056,15731968] (.node [114208,430348,3227846,3275494,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [114208,430348,3227846,3276518,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil))) (.node [114272,430348,3227782,3276518,5522545,5689661,8532035,11083800,13501056,15731968] (.node [114272,430348,3227782,3276518,5521457,5689661,8532035,11083800,13501056,15732032] (.node [114272,430348,3227782,3275430,5522545,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [114272,430348,3227782,3276518,5521457,5689661,8532035,11083800,13502144,15731968] .nil .nil)) (.node [114272,430348,3228870,3276518,5521457,5689661,8532035,11083800,13501056,15731968] (.node [114272,430348,3228870,3275430,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [506668,1048428,3275430,5689661,7684279,8242423,8532035,11083800,13501056,15731968] .nil .nil)))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T9bb_ok : tall (expFast false (classP') T8 8) T9bb = true := by decide +kernel
-def T9b : Tree := .node [113208,430348,902208,3227782,3275430,5521457,8532035,13501056,15731992,15875395] T9ba T9bb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T9b_ok : tall (expFast false (classP') T8 8) T9b = true :=
+def T9ba : Tree := (.node [113184,430348,902208,3227806,3275430,5521457,8532059,13501056,15731968,15875419] (.node [113184,430348,902208,3227782,5522097,5689661,8532675,11083800,15731968,15875395] (.node [113184,430348,902208,3227782,5521969,5689661,8532163,11083800,15731968,15875523] (.node [113184,430348,902208,3227782,5521465,8532059,8632955,13501056,15731968,15814022] .nil .nil) .nil) (.node [113184,430348,902208,3227806,3275430,5521457,8532059,13501056,15731968,15875395] (.node [113184,430348,902208,3227782,5522097,5689661,8532675,11083800,15731968,15876035] .nil .nil) .nil)) (.node [113184,430348,902208,3227806,5521457,8532035,8632931,13501080,15731968,15814022] (.node [113184,430348,902208,3227806,3275454,5521457,8532059,13501056,15731968,15875419] (.node [113184,430348,902208,3227806,3275454,5521457,8532035,13501080,15731968,15875395] .nil .nil) .nil) (.node [113184,430348,902208,3227806,5521457,8532059,8632955,13501056,15731968,15814046] (.node [113184,430348,902208,3227806,5521457,8532035,8632931,13501080,15731968,15814046] .nil .nil) .nil)))
+theorem T9ba_ok : tall (expFast false (RP PR T8 BinaryTree.nil 8) T8 8) T9ba = true := by decide +kernel
+def T9bb : Tree := (.node [113184,430988,902208,3227782,5522097,5689661,8532035,11083800,15731968,15875395] (.node [113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15732608,15876035] (.node [113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15731968,15876035] (.node [113184,430348,902208,3228294,5521457,5689661,8532675,11083800,15731968,15876035] .nil .nil) .nil) (.node [113184,430476,902208,3227782,5521969,5689661,8532035,11083800,15731968,15875395] (.node [113184,430348,3227782,3275430,5522545,5689661,8533059,11083800,13501056,15731968] .nil .nil) .nil)) (.node [113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15732001,15814055] (.node [113184,902208,3227782,5689661,8532035,8633191,11083800,13501056,15731968,16076215] (.node [113184,902208,3227782,5689661,8532035,8632931,11084060,13501056,15731968,16076215] .nil .nil) .nil) (.node [113184,902208,3227782,5689661,8827215,11083800,13546447,15875395,16010545,16666545] .nil .nil)))
+theorem T9bb_ok : tall (expFast false (RP PR T8 BinaryTree.nil 8) T8 8) T9bb = true := by decide +kernel
+def T9b : Tree := .node [113184,430348,902208,3228294,5521457,5689661,8532675,11083800,15731968,15875395] T9ba T9bb
+theorem T9b_ok : tall (expFast false (RP PR T8 BinaryTree.nil 8) T8 8) T9b = true :=
   tall_node _ _ _ _ T9ba_ok (by decide +kernel) T9bb_ok
-def T9 : Tree := .node [113184,430348,3227782,3275430,5521457,5690749,8532035,11084888,13501056,15731968] T9a T9b
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T9_ok : tall (expFast false (classP') T8 8) T9 = true :=
+def T9 : Tree := .node [113184,430348,902208,3227782,5521465,8532035,8632955,13501056,15731968,15814022] T9a T9b
+theorem T9_ok : tall (expFast false (RP PR T8 BinaryTree.nil 8) T8 8) T9 = true :=
   tall_node _ _ _ _ T9a_ok (by decide +kernel) T9b_ok
-def T10aaaa : Tree := (.node [24,113184,430348,902208,3227782,3275430,5521465,8532035,13501056,15731968,15875395] (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731968,15875419] (.node [24,640,113184,430348,902208,3227782,5521457,5689661,8532035,15731968,15875395] (.node [24,260,113184,902208,3227782,5521457,8532035,8632931,13501056,15731968,15814022] (.node [24,33,113184,430348,902208,3227782,8532035,8632931,13501056,15731968,15814022] .nil .nil) (.node [24,640,113184,430348,902208,3227782,3275430,5521457,8532035,15731968,15875395] .nil .nil)) (.node [24,1088,113184,430348,3227782,3275430,5521457,8532035,13501056,15731968,15875395] (.node [24,1088,113184,430348,3227782,3275430,5521457,5689661,8532035,13501056,15731968] .nil .nil) .nil)) (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501080,15731968,15875395] (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731992,15875419] (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731992,15875395] .nil .nil) .nil) (.node [24,113184,430348,902208,3227782,3275430,5521457,8532059,13501056,15731968,15875419] (.node [24,113184,430348,902208,3227782,3275430,5521457,8532059,13501056,15731968,15875395] .nil .nil) .nil))) (.node [24,113184,430348,902208,3227782,5521457,8532059,8632931,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731992,15814046] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731968,15814046] (.node [24,113184,430348,902208,3227782,3275454,5521457,8532035,13501056,15731968,15875395] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731992,15814022] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,8632955,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501080,15731968,15814022] .nil .nil) .nil)) (.node [24,113184,430348,902208,3227782,5521465,8532035,8632931,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,8632931,13501056,15814022,15875395] (.node [24,113184,430348,902208,3227782,5521457,8532059,8632955,13501056,15731968,15814022] .nil .nil) .nil) (.node [24,113184,430348,902208,3227806,3275454,5521457,8532035,13501056,15731968,15875395] (.node [24,113184,430348,902208,3227806,3275430,5521457,8532035,13501056,15731968,15875395] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10aaaa_ok : tall (expFast false (classP') T9 9) T10aaaa = true := by decide +kernel
-def T10aaab : Tree := (.node [33,113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15731968,15814022] (.node [24,113208,430348,902208,3227782,3275430,5521457,8532035,13501056,15731968,15875395] (.node [24,113184,430348,902232,3227782,5521457,8532035,8632931,13501056,15731968,15814022] (.node [24,113184,430348,902208,3275430,5521457,8532035,13501056,15814022,15875395] (.node [24,113184,430348,902208,3227806,5521457,8532035,8632931,13501056,15731968,15814046] .nil .nil) (.node [24,113184,430348,902232,3227782,3275430,5521457,8532035,13501056,15731968,15875395] .nil .nil)) (.node [24,113184,430364,902208,3227782,5521457,8532035,8632931,13501056,15731968,15814022] (.node [24,113184,430364,902208,3227782,3275430,5521457,8532035,13501056,15731968,15875395] .nil .nil) .nil)) (.node [24,113208,430348,902208,3227782,5521457,8532035,8632955,13501056,15731968,15814022] (.node [24,113208,430348,902208,3227782,5521457,8532035,8632931,13501056,15731968,15814022] (.node [24,113208,430348,902208,3227782,3275454,5521457,8532035,13501056,15731968,15875395] .nil .nil) .nil) (.node [24,430348,902208,3275430,5521457,8532035,8632931,13501056,15731968,15814022] (.node [24,430348,902208,3227782,3275430,5521457,8632931,13501056,15731968,15875395] .nil .nil) .nil))) (.node [67,113184,430348,506668,902208,3227782,5521457,7684279,11083800,13501056,15731968] (.node [64,113184,431372,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [57,113184,430348,902208,3227782,8532035,8632931,13501056,15731968] (.node [49,113184,430348,902208,3227782,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil) .nil) (.node [64,114208,430348,3227782,3276454,5521457,5689661,8532035,11083800,13501056,15731968] (.node [64,114208,430348,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil)) (.node [67,113184,430348,1037644,3227782,5689661,7684279,11083800,13501056,15731968] (.node [67,113184,430348,902208,3275430,5689661,7684279,11083800,13501056,15731968] (.node [67,113184,430348,506668,902208,3227782,5689661,7684279,11083800,13501056,15731968] .nil .nil) .nil) (.node [128,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15732480,15875395] (.node [67,113184,506668,902208,3227782,5689661,7684279,11083800,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10aaab_ok : tall (expFast false (classP') T9 9) T10aaab = true := by decide +kernel
-def T10aaa : Tree := .node [24,113184,430348,902208,3227806,5521457,8532035,8632931,13501056,15731968,15814022] T10aaaa T10aaab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10aaa_ok : tall (expFast false (classP') T9 9) T10aaa = true :=
+def R9 : Tree := (.node [49,113184,430348,902208,3227782,8532059,13501056,15731992] (.node [24,113184,430348,3227782,5522545,8533059,13501056,15731968] (.node [24,113184,430348,902208,3227782,5522097,8532675,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532675,15732608] (.node [24,113184,430348,902208,3227782,5521457,8532163,15732480] .nil .nil) (.node [24,113184,430348,902208,3227782,5521969,8532163,15731968] .nil .nil)) (.node [24,113184,430348,902848,3227782,5521457,8532035,15732608] (.node [24,113184,430348,902208,3228294,5521457,8532675,15731968] .nil .nil) .nil)) (.node [33,113184,430348,902232,3227782,8532059,13501056,15731968] (.node [24,113184,430988,902208,3227782,5522097,8532035,15731968] (.node [24,113184,430476,902208,3227782,5521969,8532035,15731968] .nil .nil) (.node [33,113184,430348,902208,3227806,8532035,13501080,15731968] .nil .nil)) (.node [49,113184,430348,902208,3227782,8532035,13501056,15731992] (.node [33,113184,430364,902208,3227782,8532035,13501056,15731992] .nil .nil) .nil))) (.node [640,113184,430348,902208,3227806,5521457,8532059,15731968] (.node [57,113184,430348,902208,3227782,8532059,13501056,15731968] (.node [49,113184,430348,902232,3227782,8532059,13501056,15731968] (.node [49,113184,430348,902208,3227806,8532059,13501056,15731968] .nil .nil) (.node [57,113184,430348,902208,3227782,8532035,13501056,15731968] .nil .nil)) (.node [640,113184,430348,902208,3227782,5521465,8532059,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532059,15731992] .nil .nil) .nil)) (.node [640,113208,430348,902208,3227806,5521457,8532035,15731968] (.node [640,113184,430364,902208,3227806,5521457,8532035,15731968] (.node [640,113184,430348,902232,3227782,5521457,8532035,15731992] .nil .nil) .nil) (.node [664,113184,430348,902208,3227806,5521457,8532035,15731968] (.node [664,113184,430348,902208,3227782,5521457,8532035,15731968] .nil .nil) .nil))))
+theorem R9_ok : tall (refOK cpF 9) R9 = true := by decide +kernel
+def T10aaaa : Tree := (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731968,15875419] (.node [24,640,113184,430348,902208,3227782,3275430,5521457,8532035,15731968,15875395] (.node [24,33,113184,430348,902208,3227782,8532035,8632931,13501056,15731968,15814022] .nil .nil) (.node [24,640,113184,430348,902208,3227782,5521457,5689661,8532035,15731968,15875395] .nil .nil)) (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731992,15875419] (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731992,15875395] .nil .nil) (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501080,15731968,15875395] .nil .nil)))
+theorem T10aaaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aaaa = true := by decide +kernel
+def T10aaab : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501080,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731992,15814022] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731968,15814046] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731992,15814046] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521465,8532035,8632931,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,8632931,13501056,15814022,15875395] .nil .nil) (.node [24,113184,430348,902208,3275430,5521457,8532035,13501056,15814022,15875395] .nil .nil)))
+theorem T10aaab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aaab = true := by decide +kernel
+def T10aaa : Tree := .node [24,113184,430348,902208,3227782,3275430,5521465,8532035,13501056,15731968,15875395] T10aaaa T10aaab
+theorem T10aaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aaa = true :=
   tall_node _ _ _ _ T10aaaa_ok (by decide +kernel) T10aaab_ok
-def T10aaba : Tree := (.node [640,1088,113184,430348,3227782,3275430,5521457,5689661,8532035,11083800,15731968] (.node [260,113184,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,16076215] (.node [134,113184,902208,5521457,5689661,8532035,8827215,11083800,14566065,15731968] (.node [134,113184,430348,902208,5521457,8532035,8827215,11083800,13501056,15731968,16010545] (.node [128,113184,430348,902208,3227782,5521969,5689661,8532035,11083800,15731968,15875395] .nil .nil) (.node [134,113184,902208,5521457,5689661,8532035,8827215,11083800,13501056,15731968,16010545] .nil .nil)) (.node [134,113184,902208,5689661,8532035,8827215,11083800,13501056,15731968,16010545] (.node [134,113184,902208,5521457,5689661,8827215,11083800,13501056,15731968,15875395] .nil .nil) .nil)) (.node [512,113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15731968,15875395] (.node [284,113184,902208,3227782,5521457,8532035,13501056,15731968,15814022] (.node [268,113184,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil) .nil) (.node [512,113184,430476,902208,3227782,5521457,5689661,8532035,11083800,15731968,15875395] (.node [512,113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15731968,15875523] .nil .nil) .nil))) (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11084440,15731968,15875395] (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968,15876035] (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968,15875395] (.node [640,1088,113184,430348,3227782,5521457,5689661,8532035,11083800,15731968,15875395] .nil .nil) .nil) (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15732608,15876035] (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15732608,15875395] .nil .nil) .nil)) (.node [640,113184,430348,902208,3227782,5521457,5690301,8532035,11083800,15731968,15875395] (.node [640,113184,430348,902208,3227782,5521457,5689661,8532675,11083800,15731968,15876035] (.node [640,113184,430348,902208,3227782,5521457,5689661,8532675,11083800,15731968,15875395] .nil .nil) .nil) (.node [640,113184,430348,902208,3227782,5522097,5689661,8532035,11083800,15731968,15875395] (.node [640,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,15731968,16010545] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10aaba_ok : tall (expFast false (classP') T9 9) T10aaba = true := by decide +kernel
-def T10aabb : Tree := (.node [1088,113184,430348,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [664,113184,430348,902208,3227782,3275430,5521457,8532035,15731968] (.node [640,113184,902208,3227782,5521457,5689661,8827215,11083800,15731968,15875395] (.node [640,113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15731968,15875395] (.node [640,113184,430348,902208,3228294,5521457,5689661,8532035,11083800,15731968,15875395] .nil .nil) (.node [640,113184,430988,902208,3227782,5521457,5689661,8532035,11083800,15731968,15875395] .nil .nil)) (.node [640,113312,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968,15875395] (.node [640,113184,902208,3227782,5689661,8532035,8827215,11083800,15731968,16010545] .nil .nil) .nil)) (.node [1024,113184,430348,3227846,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [1024,113184,430348,3227782,3275430,5521521,5689661,8532035,11083800,13501056,15731968] (.node [664,113184,430348,902208,3227782,5521457,5689661,8532035,15731968] .nil .nil) .nil) (.node [1088,113184,430348,506668,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [1024,113184,430348,3227846,3275494,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil))) (.node [1088,113184,430348,3227782,3275430,5522545,5689661,8532035,11083800,13501056,15731968] (.node [1088,113184,430348,3227782,3275430,5521457,5689661,8532035,11084888,13501056,15731968] (.node [1088,113184,430348,3227782,3275430,5521457,5689661,8532035,11083800,13502144,15731968] (.node [1088,113184,430348,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15732032] .nil .nil) .nil) (.node [1088,113184,430348,3227782,3275430,5521457,5690749,8532035,11083800,13501056,15731968] (.node [1088,113184,430348,3227782,3275430,5521457,5689661,8533059,11083800,13501056,15731968] .nil .nil) .nil)) (.node [1088,113184,430348,3228870,3276518,5521457,5689661,8532035,11083800,13501056,15731968] (.node [1088,113184,430348,3228870,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [1088,113184,430348,3227782,3276518,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [1088,113184,431436,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [1088,113184,430348,3275430,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10aabb_ok : tall (expFast false (classP') T9 9) T10aabb = true := by decide +kernel
-def T10aab : Tree := .node [640,113184,430348,902208,3227782,5689661,8532035,11083800,15875395,16010545] T10aaba T10aabb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10aab_ok : tall (expFast false (classP') T9 9) T10aab = true :=
+def T10aaba : Tree := (.node [64,114208,430348,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [57,113184,430348,902208,3227782,8532035,8632931,13501056,15731968] (.node [49,113184,430348,902208,3227782,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil) (.node [64,113184,431372,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [67,113184,430348,506668,902208,3227782,5521457,7684279,11083800,13501056,15731968] (.node [64,114208,430348,3227782,3276454,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [67,113184,430348,506668,902208,3227782,5689661,7684279,11083800,13501056,15731968] .nil .nil)))
+theorem T10aaba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aaba = true := by decide +kernel
+def T10aabb : Tree := (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968,15875395] (.node [67,113184,506668,902208,3227782,5689661,7684279,11083800,13501056,15731968] (.node [67,113184,430348,1037644,3227782,5689661,7684279,11083800,13501056,15731968] .nil .nil) (.node [640,1088,113184,430348,3227782,3275430,5521457,5689661,8532035,11083800,15731968] .nil .nil)) (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15732608,15875395] (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968,15876035] .nil .nil) (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15732608,15876035] .nil .nil)))
+theorem T10aabb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aabb = true := by decide +kernel
+def T10aab : Tree := .node [67,113184,430348,902208,3275430,5689661,7684279,11083800,13501056,15731968] T10aaba T10aabb
+theorem T10aab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aab = true :=
   tall_node _ _ _ _ T10aaba_ok (by decide +kernel) T10aabb_ok
-def T10aa : Tree := .node [128,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15732480,15875907] T10aaa T10aab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10aa_ok : tall (expFast false (classP') T9 9) T10aa = true :=
+def T10aa : Tree := .node [33,113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15731968,15814022] T10aaa T10aab
+theorem T10aa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aa = true :=
   tall_node _ _ _ _ T10aaa_ok (by decide +kernel) T10aab_ok
-def T10abaa : Tree := (.node [3328,113184,506668,902208,3227782,5689661,7684279,8532035,11083800,13501056] (.node [2592,430348,902208,3227782,5689661,8532035,8827215,11083800,13501056,15731968,16010545] (.node [1112,113184,430348,3227782,5521457,5689661,8532035,13501056,15731968] (.node [1088,114272,430348,3227782,3276518,5521457,5689661,8532035,11083800,13501056,15731968] (.node [1088,114272,430348,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [1088,506668,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [2592,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968,16010545] (.node [1112,113184,430348,3227782,5521457,8532035,13501056,15731968,15875395] .nil .nil) .nil)) (.node [2592,902208,3227782,5689661,8532035,8827215,11083800,13501056,15731968,16010545] (.node [2592,430348,902208,3227782,5689661,8532035,11083800,13538188,15731968,16010545] (.node [2592,430348,902208,3227782,5689661,8532035,11083800,13501056,15875395,16010545] .nil .nil) .nil) (.node [3328,113184,506668,902208,3227782,5521457,5689661,7684279,8532035,11083800,13501056] (.node [3328,113184,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056] .nil .nil) .nil))) (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731992,15875395] (.node [113184,113208,430348,902208,3227782,3227806,5521457,8532035,13501056,15731968,15875395] (.node [3328,506668,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056] (.node [3328,113184,506668,3227782,5521457,5689661,6145137,8532035,11083800,13501056] .nil .nil) .nil) (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731992,15814046] (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15814046] .nil .nil) .nil)) (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501080,15731968,15875395] (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501080,15731968,15814022] (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731992,15875419] .nil .nil) .nil) (.node [113184,113208,430348,902208,3227782,5521465,8532035,13501056,15731968,15875395] (.node [113184,113208,430348,902208,3227782,5521465,8532035,13501056,15731968,15814022] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10abaa_ok : tall (expFast false (classP') T9 9) T10abaa = true := by decide +kernel
-def T10abab : Tree := (.node [113184,430348,506668,902208,3227782,5521457,7684343,8532035,11083800,13501056,15731968] (.node [113184,114272,430348,3227782,5521457,5689661,8532035,11083800,13501056,15732032] (.node [113184,114208,430348,3227782,5521521,5689661,8532035,11083800,13501056,15731968] (.node [113184,113444,902208,3227782,5689661,8532035,11083800,13501056,15731968,16076215] (.node [113184,113208,430348,902208,3227806,5521457,8532035,13501056,15731968,15875395] .nil .nil) (.node [113184,114208,430348,3227782,3227846,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,114272,430348,3227782,3228870,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,114208,430348,3227846,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil)) (.node [113184,114272,430348,3228870,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,114272,430348,3227782,5522545,5689661,8532035,11083800,13501056,15731968] (.node [113184,114272,430348,3227782,5521457,5689661,8532035,11083800,13502144,15731968] .nil .nil) .nil) (.node [113184,430348,506668,902208,3227782,5521457,7684279,8533059,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15732032] .nil .nil) .nil))) (.node [113184,430348,902208,3227782,3227806,5521457,8532035,8632931,13501080,15731968] (.node [113184,430348,506668,902208,3227846,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521521,7684343,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521521,7684279,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,507692,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227846,5521457,7684343,8532035,11083800,13501056,15731968] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,3227806,5521457,8532059,8632955,13501056,15731968] (.node [113184,430348,902208,3227782,3227806,5521457,8532035,13501080,15731968,15875395] (.node [113184,430348,902208,3227782,3227806,5521457,8532035,8632955,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,902208,3227782,3227806,5521457,8532059,13501056,15731968,15875419] (.node [113184,430348,902208,3227782,3227806,5521457,8532059,13501056,15731968,15875395] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10abab_ok : tall (expFast false (classP') T9 9) T10abab = true := by decide +kernel
-def T10aba : Tree := .node [113184,113208,430348,902208,3227806,5521457,8532035,13501056,15731968,15814046] T10abaa T10abab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10aba_ok : tall (expFast false (classP') T9 9) T10aba = true :=
+def T10abaa : Tree := (.node [640,113184,430348,902208,3227782,5689661,8532035,11083800,15875395,16010545] (.node [640,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,15731968,16010545] (.node [640,113184,430348,902208,3227782,5521457,5690301,8532035,11083800,15731968,15875395] .nil .nil) (.node [640,113184,430348,902208,3227782,5522097,5689661,8532035,11083800,15731968,15875395] .nil .nil)) (.node [640,113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15731968,15875395] (.node [640,113184,430348,902208,3228294,5521457,5689661,8532035,11083800,15731968,15875395] .nil .nil) (.node [640,113184,902208,3227782,5689661,8532035,8827215,11083800,15731968,16010545] .nil .nil)))
+theorem T10abaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abaa = true := by decide +kernel
+def T10ababa : Tree := (.node [113184,113208,430348,902208,3227782,3227806,5521457,8532035,13501056,15731968,15875395] (.node [664,113184,430348,902208,3227782,5521457,5689661,8532035,15731968] .nil .nil) (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15814046] .nil .nil))
+theorem T10ababa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10ababa = true := by decide +kernel
+def T10ababb : Tree := (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731992,15875419] (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731992,15875395] .nil .nil) (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501080,15731968,15814022] .nil .nil))
+theorem T10ababb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10ababb = true := by decide +kernel
+def T10abab : Tree := .node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731992,15814046] T10ababa T10ababb
+theorem T10abab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abab = true :=
+  tall_node _ _ _ _ T10ababa_ok (by decide +kernel) T10ababb_ok
+def T10aba : Tree := .node [664,113184,430348,902208,3227782,3275430,5521457,8532035,15731968] T10abaa T10abab
+theorem T10aba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aba = true :=
   tall_node _ _ _ _ T10abaa_ok (by decide +kernel) T10abab_ok
-def T10abba : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532675,11083800,15731968,15732608] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8532163,11083800,15731968,15732480] (.node [113184,430348,902208,3227782,3275430,5521465,8532035,8532059,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532059,13501056,15731968,15731992] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,8532059,13501056,15731992] .nil .nil) (.node [113184,430348,902208,3227782,3275430,5521457,8532059,13501056,15731992] .nil .nil)) (.node [113184,430348,902208,3227782,3275454,5521457,8532035,13501080,15731968] (.node [113184,430348,902208,3227782,3275430,5521465,8532059,13501056,15731968] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8532675,11083800,15732608] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8532675,11083800,15731968,15732608] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8532163,11083800,15732480] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15732480] (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15731968,15732480] .nil .nil) .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814046] (.node [113184,430348,902208,3227782,5521457,8532035,8532059,13501056,15731968,15814046] (.node [113184,430348,902208,3227782,5521457,5690301,8532035,11084440,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532675,11083800,15732608] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814030] (.node [113184,430348,902208,3227782,5521457,8532035,8532059,13501056,15731992,15814046] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731992,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731976,15814030] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731976,15814022] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632947,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731992,15814046] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10abba_ok : tall (expFast false (classP') T9 9) T10abba = true := by decide +kernel
-def T10abbb : Tree := (.node [113184,430348,902208,3227782,5521457,8532059,13501056,15731968,15814046] (.node [113184,430348,902208,3227782,5521457,8532051,8632931,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15732480,16010545] (.node [113184,430348,902208,3227782,5521457,8532035,8632955,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,8632955,13501056,15731968,15731992] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968,16011057] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8827343,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15732480,16011057] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5521457,8532059,8632955,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521457,8532059,8632931,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521457,8532051,8632947,11083800,13501056,15731968,15814022] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,8532059,8632955,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532059,8632955,13501056,15731968,15731992] .nil .nil) .nil))) (.node [113184,430348,902208,3227782,5521465,8532035,8532059,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521457,8532059,13501056,15731992,15875419] (.node [113184,430348,902208,3227782,5521457,8532059,13501056,15731992,15875395] (.node [113184,430348,902208,3227782,5521457,8532059,13501056,15731992,15814046] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,8532163,8827343,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5521457,8532163,8827215,11083800,13501056,15731968,16010545] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5521465,8532059,8632955,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,8532035,8632955,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,15875395] (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,15814022] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10abbb_ok : tall (expFast false (classP') T9 9) T10abbb = true := by decide +kernel
-def T10abb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632955,11083800,13501056,15731968,15814022] T10abba T10abbb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10abb_ok : tall (expFast false (classP') T9 9) T10abb = true :=
+def T10abbaa : Tree := (.node [113184,113208,430348,902208,3227782,5521465,8532035,13501056,15731968,15875395] (.node [113184,113208,430348,902208,3227782,5521465,8532035,13501056,15731968,15814022] .nil .nil) (.node [113184,113208,430348,902208,3227806,5521457,8532035,13501056,15731968,15814046] .nil .nil))
+theorem T10abbaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abbaa = true := by decide +kernel
+def T10abbab : Tree := (.node [113184,114208,430348,3227782,3227846,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,113444,902208,3227782,5689661,8532035,11083800,13501056,15731968,16076215] .nil .nil) (.node [113184,114208,430348,3227782,5521521,5689661,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T10abbab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abbab = true := by decide +kernel
+def T10abba : Tree := .node [113184,113208,430348,902208,3227806,5521457,8532035,13501056,15731968,15875395] T10abbaa T10abbab
+theorem T10abba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abba = true :=
+  tall_node _ _ _ _ T10abbaa_ok (by decide +kernel) T10abbab_ok
+def T10abbba : Tree := (.node [113184,114272,430348,3227782,5521457,5689661,8532035,11083800,13501056,15732032] (.node [113184,114272,430348,3227782,3228870,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,114272,430348,3227782,5521457,5689661,8532035,11083800,13502144,15731968] .nil .nil))
+theorem T10abbba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abbba = true := by decide +kernel
+def T10abbbb : Tree := (.node [113184,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15732032] (.node [113184,114272,430348,3228870,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,7684343,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T10abbbb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abbbb = true := by decide +kernel
+def T10abbb : Tree := .node [113184,114272,430348,3227782,5522545,5689661,8532035,11083800,13501056,15731968] T10abbba T10abbbb
+theorem T10abbb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abbb = true :=
+  tall_node _ _ _ _ T10abbba_ok (by decide +kernel) T10abbbb_ok
+def T10abb : Tree := .node [113184,114208,430348,3227846,5521457,5689661,8532035,11083800,13501056,15731968] T10abba T10abbb
+theorem T10abb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abb = true :=
   tall_node _ _ _ _ T10abba_ok (by decide +kernel) T10abbb_ok
-def T10ab : Tree := .node [113184,430348,902208,3227782,3275430,5521457,8532035,8532059,13501056,15731968,15731992] T10aba T10abb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10ab_ok : tall (expFast false (classP') T9 9) T10ab = true :=
+def T10ab : Tree := .node [113184,113208,430348,902208,3227782,5521457,8532035,13501080,15731968,15875395] T10aba T10abb
+theorem T10ab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10ab = true :=
   tall_node _ _ _ _ T10aba_ok (by decide +kernel) T10abb_ok
-def T10a : Tree := .node [1088,113184,506668,3227782,5689661,7684279,8532035,11083800,13501056,15731968] T10aa T10ab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10a_ok : tall (expFast false (classP') T9 9) T10a = true :=
+def T10a : Tree := .node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11084440,15731968,15875395] T10aa T10ab
+theorem T10a_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10a = true :=
   tall_node _ _ _ _ T10aa_ok (by decide +kernel) T10ab_ok
-def T10baaa : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13538188,15731968,16011057] (.node [113184,430348,902208,3227782,5689661,8456227,8532035,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521969,8532035,8827215,11083800,13501056,15731968,16011057] (.node [113184,430348,902208,3227782,5521969,5689661,8532163,11083800,15731968] (.node [113184,430348,902208,3227782,5521969,5689661,8532035,8532163,11083800,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521969,8532035,8827215,11083800,13501056,15731968,16010545] .nil .nil)) (.node [113184,430348,902208,3227782,5522097,5689661,8532675,11083800,15731968] (.node [113184,430348,902208,3227782,5522097,5689661,8532035,8532675,11083800,15731968] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083833,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15732001,15814055] (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,15814055] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875907,16011057] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875395,16011057] .nil .nil) .nil))) (.node [113184,430348,902208,3227806,3275454,5521457,8532035,13501080,15731968] (.node [113184,430348,902208,3227806,3275430,5521457,8532035,8532059,13501056,15731968] (.node [113184,430348,902208,3227790,5521457,8532035,8632931,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13538188,15732480,16011057] .nil .nil) (.node [113184,430348,902208,3227790,5521457,8532035,8632931,11083800,13501056,15731968,15814030] .nil .nil)) (.node [113184,430348,902208,3227806,3275454,5521457,8532035,8532059,13501056,15731968] (.node [113184,430348,902208,3227806,3275430,5521457,8532059,13501056,15731968] .nil .nil) .nil)) (.node [113184,430348,902208,3227806,5521457,8532035,8632931,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227806,5521457,8532035,8532059,13501056,15731968,15814046] (.node [113184,430348,902208,3227806,3275454,5521457,8532059,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,902208,3227806,5521457,8532035,8632931,13501080,15731968] (.node [113184,430348,902208,3227806,5521457,8532035,8632931,11083800,13501056,15731968,15814046] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10baaa_ok : tall (expFast false (classP') T9 9) T10baaa = true := by decide +kernel
-def T10baab : Tree := (.node [113184,430348,902208,3228294,5689661,8532035,11083800,13538188,15731968,16010545] (.node [113184,430348,902208,3227806,5521457,8532059,13501056,15731968,15875419] (.node [113184,430348,902208,3227806,5521457,8532059,8632955,13501056,15731968] (.node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,15814046] (.node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,15814022] .nil .nil) (.node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,15875395] .nil .nil)) (.node [113184,430348,902208,3227806,5521457,8532059,13501056,15731968,15875395] (.node [113184,430348,902208,3227806,5521457,8532059,13501056,15731968,15814046] .nil .nil) .nil)) (.node [113184,430348,902208,3228294,5521457,5689661,8532675,11083800,15731968] (.node [113184,430348,902208,3228294,5521457,5689661,8532035,8532675,11083800,15731968] (.node [113184,430348,902208,3227815,5689661,8532035,8632931,11083800,13501056,15731968,15814055] .nil .nil) .nil) (.node [113184,430348,902208,3228294,5689661,8532035,11083800,13501056,15875395,16010545] (.node [113184,430348,902208,3228294,5521457,8532035,8827215,11083800,13501056,15731968,16010545] .nil .nil) .nil))) (.node [113184,430348,902232,3227782,3275430,5521457,8532035,13501056,15731968,15731992] (.node [113184,430348,902208,3275430,5689661,8532035,11083800,13501056,15875395,16076215] (.node [113184,430348,902208,3275430,5689661,7684343,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3275430,5689661,7684279,8532035,11083800,13501056,15732032] .nil .nil) .nil) (.node [113184,430348,902232,3227782,3275430,5521457,8532035,8532059,13501056,15731968] (.node [113184,430348,902208,3275494,5689661,7684343,8532035,11083800,13501056,15731968] .nil .nil) .nil)) (.node [113184,430348,902232,3227782,5521457,8532035,8532059,13501056,15731968,15814022] (.node [113184,430348,902232,3227782,3275430,5521457,8532059,13501056,15731968] (.node [113184,430348,902232,3227782,3275430,5521457,8532035,13501056,15731992] .nil .nil) .nil) (.node [113184,430348,902232,3227782,5521457,8532035,8632931,13501056,15731992] (.node [113184,430348,902232,3227782,5521457,8532035,8632931,13501056,15731968,15731992] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10baab_ok : tall (expFast false (classP') T9 9) T10baab = true := by decide +kernel
-def T10baa : Tree := .node [113184,430348,902208,3227806,5521457,8532035,8632955,13501056,15731968] T10baaa T10baab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10baa_ok : tall (expFast false (classP') T9 9) T10baa = true :=
+def T10baaaa : Tree := (.node [113184,430348,506668,902208,3227846,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521521,7684343,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227846,5521457,7684343,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T10baaaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baaaa = true := by decide +kernel
+def T10baaaba : Tree := (.node [113184,430348,902208,3227782,3275430,5521465,8532059,13501056,15731968] .nil .nil)
+theorem T10baaaba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baaaba = true := by decide +kernel
+def T10baaabb : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15732480] .nil .nil)
+theorem T10baaabb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baaabb = true := by decide +kernel
+def T10baaab : Tree := .node [113184,430348,902208,3227782,3275454,5521457,8532035,13501080,15731968] T10baaaba T10baaabb
+theorem T10baaab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baaab = true :=
+  tall_node _ _ _ _ T10baaaba_ok (by decide +kernel) T10baaabb_ok
+def T10baaa : Tree := .node [113184,430348,902208,3227782,3275430,5521457,8532059,13501056,15731992] T10baaaa T10baaab
+theorem T10baaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baaa = true :=
+  tall_node _ _ _ _ T10baaaa_ok (by decide +kernel) T10baaab_ok
+def T10baab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731976,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814030] (.node [113184,430348,902208,3227782,5521457,5690301,8532035,11084440,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814046] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731992,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731976,15814030] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731992,15814046] .nil .nil)))
+theorem T10baab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baab = true := by decide +kernel
+def T10baa : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532675,11083800,15732608] T10baaa T10baab
+theorem T10baa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baa = true :=
   tall_node _ _ _ _ T10baaa_ok (by decide +kernel) T10baab_ok
-def T10baba : Tree := (.node [113184,430348,1037644,3227782,5689661,7684343,8532035,11083800,13501056,15731968] (.node [113184,430348,902232,3227782,5521457,8532059,13501056,15731968,15875419] (.node [113184,430348,902232,3227782,5521457,8532059,8632931,13501056,15731968] (.node [113184,430348,902232,3227782,5521457,8532035,13501056,15731992,15814046] (.node [113184,430348,902232,3227782,5521457,8532035,13501056,15731992,15814022] .nil .nil) (.node [113184,430348,902232,3227782,5521457,8532035,13501056,15731992,15875419] .nil .nil)) (.node [113184,430348,902232,3227782,5521457,8532059,13501056,15731968,15814022] (.node [113184,430348,902232,3227782,5521457,8532059,8632955,13501056,15731968] .nil .nil) .nil)) (.node [113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15732608] (.node [113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15731968,15732608] (.node [113184,430348,902848,3227782,5521457,5689661,8532035,8532675,11083800,15731968] .nil .nil) .nil) (.node [113184,430348,1037644,3227782,5689661,7684279,8532035,11083800,13501056,15732032] (.node [113184,430348,902848,3227782,5521457,5689661,8532675,11083800,15731968] .nil .nil) .nil))) (.node [113184,430348,3228870,5521457,5689661,8532035,11083800,13502144,15731968] (.node [113184,430348,3227782,3228870,5521457,5689661,8533059,11083800,13501056,15731968] (.node [113184,430348,3227782,3228870,5521457,5689661,8532035,11083800,13502144,15731968] (.node [113184,430348,1037644,3227846,5689661,7684343,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,3227782,5522545,5689661,8533059,11083800,13501056,15731968] (.node [113184,430348,3227782,5521457,5690749,8532035,11084888,13501056,15731968] .nil .nil) .nil)) (.node [113184,430364,902208,3227782,3227806,5521457,8532035,13501056,15731968,15875395] (.node [113184,430364,902208,3227782,3227806,5521457,8532035,8632931,13501056,15731968] (.node [113184,430348,3228870,5521457,5689661,8533059,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430364,902208,3227782,3275430,5521457,8532035,13501056,15731992] (.node [113184,430364,902208,3227782,3275430,5521457,8532035,13501056,15731968,15731992] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10baba_ok : tall (expFast false (classP') T9 9) T10baba = true := by decide +kernel
-def T10babb : Tree := (.node [113184,430476,902208,3227782,5521457,5689661,8532035,11083800,15732480] (.node [113184,430364,902208,3227806,3275430,5521457,8532035,13501056,15731968] (.node [113184,430364,902208,3227782,5521457,8532035,13501056,15731992,15814046] (.node [113184,430364,902208,3227782,5521457,8532035,8632931,13501056,15731992] (.node [113184,430364,902208,3227782,5521457,8532035,8632931,13501056,15731968,15731992] .nil .nil) (.node [113184,430364,902208,3227782,5521457,8532035,13501056,15731968,15814046] .nil .nil)) (.node [113184,430364,902208,3227782,5521457,8532035,13501056,15731992,15875419] (.node [113184,430364,902208,3227782,5521457,8532035,13501056,15731992,15875395] .nil .nil) .nil)) (.node [113184,430364,902208,3227806,5521457,8532035,13501056,15731968,15814046] (.node [113184,430364,902208,3227806,5521457,8532035,8632931,13501056,15731968] (.node [113184,430364,902208,3227806,3275454,5521457,8532035,13501056,15731968] .nil .nil) .nil) (.node [113184,430476,902208,3227782,5521457,5689661,8532035,11083800,15731968,15732480] (.node [113184,430364,902208,3227806,5521457,8532035,13501056,15731968,15875395] .nil .nil) .nil))) (.node [113184,430988,902208,3227782,5522097,5689661,8532035,11083800,15731968] (.node [113184,430476,902208,3227782,5521969,5689661,8532035,11083800,15731968] (.node [113184,430476,902208,3227782,5521457,8532035,8827343,11083800,13501056,15731968,16010545] (.node [113184,430476,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968,16010545] .nil .nil) .nil) (.node [113184,430988,902208,3227782,5521457,5689661,8532035,11083800,15732608] (.node [113184,430988,902208,3227782,5521457,5689661,8532035,11083800,15731968,15732608] .nil .nil) .nil)) (.node [113184,431372,507692,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,431372,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,430988,902208,3228294,5521457,5689661,8532035,11083800,15731968] .nil .nil) .nil) (.node [113184,431372,3227782,5521521,5689661,8532035,11083800,13501056,15731968] (.node [113184,431372,3227782,3227846,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10babb_ok : tall (expFast false (classP') T9 9) T10babb = true := by decide +kernel
-def T10bab : Tree := .node [113184,430364,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022] T10baba T10babb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10bab_ok : tall (expFast false (classP') T9 9) T10bab = true :=
+def T10babaaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532059,8632955,13501056,15731992] .nil .nil)
+theorem T10babaaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babaaa = true := by decide +kernel
+def T10babaab : Tree := (.node [113184,430348,902208,3227782,5521457,8532059,13501056,15731992,15875419] .nil .nil)
+theorem T10babaab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babaab = true := by decide +kernel
+def T10babaa : Tree := .node [113184,430348,902208,3227782,5521457,8532059,13501056,15731992,15875395] T10babaaa T10babaab
+theorem T10babaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babaa = true :=
+  tall_node _ _ _ _ T10babaaa_ok (by decide +kernel) T10babaab_ok
+def T10bababa : Tree := (.node [113184,430348,902208,3227782,5521465,8532035,8632955,13501056,15731968] .nil .nil)
+theorem T10bababa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bababa = true := by decide +kernel
+def T10bababb : Tree := (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,15814022] .nil .nil)
+theorem T10bababb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bababb = true := by decide +kernel
+def T10babab : Tree := .node [113184,430348,902208,3227782,5521465,8532059,8632955,13501056,15731968] T10bababa T10bababb
+theorem T10babab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babab = true :=
+  tall_node _ _ _ _ T10bababa_ok (by decide +kernel) T10bababb_ok
+def T10baba : Tree := .node [113184,430348,902208,3227782,5521465,8532035,8632931,11083800,13501056,15731968,15814022] T10babaa T10babab
+theorem T10baba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baba = true :=
+  tall_node _ _ _ _ T10babaa_ok (by decide +kernel) T10babab_ok
+def T10babbaa : Tree := (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,15875419] .nil .nil)
+theorem T10babbaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babbaa = true := by decide +kernel
+def T10babbab : Tree := (.node [113184,430348,902208,3227782,5522097,5689661,8532675,11083800,15731968] .nil .nil)
+theorem T10babbab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babbab = true := by decide +kernel
+def T10babba : Tree := .node [113184,430348,902208,3227782,5521969,5689661,8532163,11083800,15731968] T10babbaa T10babbab
+theorem T10babba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babba = true :=
+  tall_node _ _ _ _ T10babbaa_ok (by decide +kernel) T10babbab_ok
+def T10babbb : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15732001,15814055] (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,15814055] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083833,13501056,15731968,15814022] .nil .nil))
+theorem T10babbb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babbb = true := by decide +kernel
+def T10babb : Tree := .node [113184,430348,902208,3227782,5689661,8456227,8532035,11083800,13501056,15731968,15814022] T10babba T10babbb
+theorem T10babb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babb = true :=
+  tall_node _ _ _ _ T10babba_ok (by decide +kernel) T10babbb_ok
+def T10bab : Tree := .node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,15875395] T10baba T10babb
+theorem T10bab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bab = true :=
   tall_node _ _ _ _ T10baba_ok (by decide +kernel) T10babb_ok
-def T10ba : Tree := .node [113184,430348,902232,3227782,5521457,8532035,13501056,15731968,15875419] T10baa T10bab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10ba_ok : tall (expFast false (classP') T9 9) T10ba = true :=
+def T10ba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632955,13501056,15731992] T10baa T10bab
+theorem T10ba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10ba = true :=
   tall_node _ _ _ _ T10baa_ok (by decide +kernel) T10bab_ok
-def T10bbaa : Tree := (.node [113184,902208,3227782,5521457,5689661,8456454,8532035,8632931,11083800,13501056,15731968] (.node [113184,506668,1048428,3227782,5689661,6145137,7684279,8532035,11083800,13501056,15731968] (.node [113184,431436,3228870,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,431436,3227782,5521457,5689661,8532035,11083800,13501056,15732032] (.node [113184,431436,3227782,3228870,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,431436,3227782,5522545,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,506668,1037644,3227782,5689661,7684279,8242423,8532035,11083800,13501056,15731968] (.node [113184,506668,1037644,3227782,5689661,6145137,7684279,8532035,11083800,13501056,15731968] .nil .nil) .nil)) (.node [113184,507692,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] (.node [113184,506668,3227782,5521457,5689661,6145137,8533059,11083800,13501056,15731968] (.node [113184,506668,1048428,3227782,5689661,7684279,8242423,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,902208,3227782,3275430,5689661,8827215,11083800,13501056,15875395,16010545] (.node [113184,902208,3227782,3227815,5689661,8532035,8895343,11083800,13501056,15731968] .nil .nil) .nil))) (.node [113184,902208,3227782,5521457,5689661,8827343,11083800,13501056,15731968,15875395] (.node [113184,902208,3227782,5521457,5689661,8532035,8827343,11083800,14566065,15731968] (.node [113184,902208,3227782,5521457,5689661,8532035,8633191,11083800,13501056,15731968,15814022] (.node [113184,902208,3227782,5521457,5689661,8532035,8632931,11084060,13501056,15731968,15814022] .nil .nil) .nil) (.node [113184,902208,3227782,5521457,5689661,8532295,8633191,11083800,13501056,15731968,15814022] (.node [113184,902208,3227782,5521457,5689661,8532163,8827343,11083800,14566065,15731968] .nil .nil) .nil)) (.node [113184,902208,3227782,5689661,8532035,8827215,11083800,13538188,14566065,15731968,16010545] (.node [113184,902208,3227782,5689661,8532035,8532295,11083800,13501056,15731968,16076215] (.node [113184,902208,3227782,5521457,5689661,8827343,11083800,13501056,15731968,15875523] .nil .nil) .nil) (.node [113184,902208,3227782,5689661,8532035,8827215,11083800,13546447,14566065,15731968,16010545] (.node [113184,902208,3227782,5689661,8532035,8827215,11083800,13538188,15731968,16010545,16666545] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10bbaa_ok : tall (expFast false (classP') T9 9) T10bbaa = true := by decide +kernel
-def T10bbab : Tree := (.node [113200,430348,902208,3227782,5521457,8532035,8632947,11083800,13501056,15731968,15814022] (.node [113184,902208,3227782,5689661,8827215,11083800,13501056,13546447,15875395,16010545] (.node [113184,902208,3227782,5689661,8532035,11084060,13501056,15731968,16076215] (.node [113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15732001] (.node [113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15731968,15732001] .nil .nil) (.node [113184,902208,3227782,5689661,8532035,8895343,11083833,13501056,15731968] .nil .nil)) (.node [113184,902208,3227782,5689661,8651009,8827215,11083800,13501056,15875395,16010545] (.node [113184,902208,3227782,5689661,8532295,11083800,13501056,15731968,16076215] .nil .nil) .nil)) (.node [113184,902208,3275430,5521457,5689661,8827215,11083800,13501056,15814022,15875395] (.node [113184,902208,3227815,5689661,8532035,8895343,11083800,13501056,15731968] (.node [113184,902208,3227782,5689661,8827215,11083800,13501056,15875395,16010545,16666545] .nil .nil) .nil) (.node [113200,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022] (.node [113184,902208,3275430,5689661,7684279,8827215,11083800,13501056,15731968,15875395] .nil .nil) .nil))) (.node [113208,430348,902208,3227782,3275454,5521457,8532035,13501056,15731968,15731992] (.node [113208,430348,902208,3227782,3275430,5521457,8532035,13501056,15731968,15731992] (.node [113208,430348,902208,3227782,3227806,5521457,8532035,13501056,15731968,15875395] (.node [113208,430348,902208,3227782,3227806,5521457,8532035,8632955,13501056,15731968] .nil .nil) .nil) (.node [113208,430348,902208,3227782,3275430,5521465,8532035,13501056,15731968] (.node [113208,430348,902208,3227782,3275430,5521457,8532035,13501056,15731992] .nil .nil) .nil)) (.node [113208,430348,902208,3227782,3275454,5521465,8532035,13501056,15731968] (.node [113208,430348,902208,3227782,3275454,5521457,8532035,13501080,15731968] (.node [113208,430348,902208,3227782,3275454,5521457,8532035,13501056,15731992] .nil .nil) .nil) (.node [113208,430348,902208,3227782,5521457,8532035,8632931,13501080,15731968] (.node [113208,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10bbab_ok : tall (expFast false (classP') T9 9) T10bbab = true := by decide +kernel
-def T10bba : Tree := .node [113184,902208,3227782,5689661,8532035,8827215,11083800,13546447,15731968,16010545,16666545] T10bbaa T10bbab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10bba_ok : tall (expFast false (classP') T9 9) T10bba = true :=
+def T10bbaaa : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13538188,15731968,16011057] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875907,16011057] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13538188,15732480,16011057] .nil .nil))
+theorem T10bbaaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbaaa = true := by decide +kernel
+def T10bbaaba : Tree := (.node [113184,430348,902208,3227806,3275454,5521457,8532035,13501080,15731968] .nil .nil)
+theorem T10bbaaba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbaaba = true := by decide +kernel
+def T10bbaabb : Tree := (.node [113184,430348,902208,3227806,5521457,8532035,8632931,13501080,15731968] .nil .nil)
+theorem T10bbaabb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbaabb = true := by decide +kernel
+def T10bbaab : Tree := .node [113184,430348,902208,3227806,3275454,5521457,8532059,13501056,15731968] T10bbaaba T10bbaabb
+theorem T10bbaab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbaab = true :=
+  tall_node _ _ _ _ T10bbaaba_ok (by decide +kernel) T10bbaabb_ok
+def T10bbaa : Tree := .node [113184,430348,902208,3227806,3275430,5521457,8532059,13501056,15731968] T10bbaaa T10bbaab
+theorem T10bbaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbaa = true :=
+  tall_node _ _ _ _ T10bbaaa_ok (by decide +kernel) T10bbaab_ok
+def T10bbabaa : Tree := (.node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,15814046] .nil .nil)
+theorem T10bbabaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbabaa = true := by decide +kernel
+def T10bbabab : Tree := (.node [113184,430348,902208,3227806,5521457,8532059,8632955,13501056,15731968] .nil .nil)
+theorem T10bbabab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbabab = true := by decide +kernel
+def T10bbaba : Tree := .node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,15875395] T10bbabaa T10bbabab
+theorem T10bbaba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbaba = true :=
+  tall_node _ _ _ _ T10bbabaa_ok (by decide +kernel) T10bbabab_ok
+def T10bbabb : Tree := (.node [113184,430348,902208,3228294,5689661,8532035,11083800,13538188,15731968,16010545] (.node [113184,430348,902208,3228294,5689661,8532035,11083800,13501056,15875395,16010545] .nil .nil) (.node [113184,430348,902208,3275430,5689661,8532035,11083800,13501056,15875395,16076215] .nil .nil))
+theorem T10bbabb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbabb = true := by decide +kernel
+def T10bbab : Tree := .node [113184,430348,902208,3228294,5521457,5689661,8532675,11083800,15731968] T10bbaba T10bbabb
+theorem T10bbab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbab = true :=
+  tall_node _ _ _ _ T10bbaba_ok (by decide +kernel) T10bbabb_ok
+def T10bba : Tree := .node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,15814022] T10bbaa T10bbab
+theorem T10bba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bba = true :=
   tall_node _ _ _ _ T10bbaa_ok (by decide +kernel) T10bbab_ok
-def T10bbba : Tree := (.node [113208,430348,902208,3227806,3275430,5521457,8532035,13501056,15731968] (.node [113208,430348,902208,3227782,5521457,8532035,13501056,15731992,15875419] (.node [113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15814046] (.node [113208,430348,902208,3227782,5521457,8532035,8632955,13501056,15731992] (.node [113208,430348,902208,3227782,5521457,8532035,8632955,13501056,15731968,15731992] .nil .nil) (.node [113208,430348,902208,3227782,5521457,8532035,8632955,13501080,15731968] .nil .nil)) (.node [113208,430348,902208,3227782,5521457,8532035,13501056,15731992,15875395] (.node [113208,430348,902208,3227782,5521457,8532035,13501056,15731992,15814046] .nil .nil) .nil)) (.node [113208,430348,902208,3227782,5521465,8532035,8632955,13501056,15731968] (.node [113208,430348,902208,3227782,5521457,8532035,13501080,15731968,15875395] (.node [113208,430348,902208,3227782,5521457,8532035,13501080,15731968,15814022] .nil .nil) .nil) (.node [113208,430348,902208,3227782,5521465,8532035,13501056,15731968,15875395] (.node [113208,430348,902208,3227782,5521465,8532035,13501056,15731968,15814022] .nil .nil) .nil))) (.node [113312,430348,902208,3227782,5521457,5689661,8532035,11083800,15732608] (.node [113208,430348,902208,3227806,5521457,8532035,13501056,15731968,15814046] (.node [113208,430348,902208,3227806,5521457,8532035,8632955,13501056,15731968] (.node [113208,430348,902208,3227806,3275454,5521457,8532035,13501056,15731968] .nil .nil) .nil) (.node [113312,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968,15732608] (.node [113208,430348,902208,3227806,5521457,8532035,13501056,15731968,15875395] .nil .nil) .nil)) (.node [113312,902208,3227782,5521457,5689661,8532035,8827215,11083800,14566065,15731968] (.node [113312,430348,902208,3227782,5522097,5689661,8532035,11083800,15731968] (.node [113312,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968,16010545] .nil .nil) .nil) (.node [113444,902208,3227782,5521457,5689661,8532035,8633191,11083800,13501056,15731968,15814022] (.node [113312,902208,3227782,5521457,5689661,8827215,11083800,13501056,15731968,15875395] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10bbba_ok : tall (expFast false (classP') T9 9) T10bbba = true := by decide +kernel
-def T10bbbb : Tree := (.node [430348,902208,3227782,3275430,5689661,8632931,11083800,13501056,15875395,16010545] (.node [114272,430348,3227782,3228870,5521457,5689661,8532035,11083800,13501056,15731968] (.node [114208,430348,3227782,5521521,5689661,8532035,11083800,13501056,15731968] (.node [114208,430348,507692,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [114208,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [114208,430348,3227782,3227846,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [114208,507692,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] (.node [114208,430348,3227846,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil)) (.node [114272,430348,3227782,5522545,5689661,8532035,11083800,13501056,15731968] (.node [114272,430348,3227782,5521457,5689661,8532035,11083800,13502144,15731968] (.node [114272,430348,3227782,5521457,5689661,8532035,11083800,13501056,15732032] .nil .nil) .nil) (.node [327716,506668,902208,3275430,5689661,7684279,8532035,11083800,13501056,15731968] (.node [114272,430348,3228870,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil))) (.node [506668,902208,3275430,5521457,5689661,8532035,11083800,13501056,15814022,15875395] (.node [506668,902208,1048428,3275430,5689661,7684279,8532035,11083800,13501056,15731968] (.node [430348,902208,3275430,5689661,7684279,8632931,11083800,13501056,15731968,15875395] (.node [430348,902208,3275430,5521457,5689661,8632931,11083800,13501056,15814022,15875395] .nil .nil) .nil) (.node [506668,902208,3227782,3275430,5689661,8532035,11083800,13501056,15875395,16010545] (.node [506668,902208,3227782,3275430,5521457,5689661,8533059,11083800,13501056,15731968] .nil .nil) .nil)) (.node [507692,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [506668,902208,3275430,5689661,7684279,8532035,11083800,13501056,15731968,15875395] (.node [506668,902208,3275430,5689661,7684279,8242423,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [902208,3227782,3275430,5521457,5689661,8895343,11083800,13501056,15731968,15875395] (.node [507692,902208,3227782,3276454,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10bbbb_ok : tall (expFast false (classP') T9 9) T10bbbb = true := by decide +kernel
-def T10bbb : Tree := .node [113444,902208,3227782,5689661,8532035,11083800,13501056,15731968,16076215] T10bbba T10bbbb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10bbb_ok : tall (expFast false (classP') T9 9) T10bbb = true :=
+def T10bbbaaa : Tree := (.node [113184,430348,3227782,5522545,5689661,8533059,11083800,13501056,15731968] .nil .nil)
+theorem T10bbbaaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbbaaa = true := by decide +kernel
+def T10bbbaab : Tree := (.node [113184,430988,902208,3227782,5522097,5689661,8532035,11083800,15731968] .nil .nil)
+theorem T10bbbaab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbbaab = true := by decide +kernel
+def T10bbbaa : Tree := .node [113184,430476,902208,3227782,5521969,5689661,8532035,11083800,15731968] T10bbbaaa T10bbbaab
+theorem T10bbbaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbbaa = true :=
+  tall_node _ _ _ _ T10bbbaaa_ok (by decide +kernel) T10bbbaab_ok
+def T10bbbab : Tree := (.node [113184,506668,1048428,3227782,5689661,7684279,8242423,8532035,11083800,13501056,15731968] (.node [113184,506668,1037644,3227782,5689661,7684279,8242423,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,902208,3227782,3275430,5689661,8827215,11083800,13501056,15875395,16010545] .nil .nil))
+theorem T10bbbab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbbab = true := by decide +kernel
+def T10bbba : Tree := .node [113184,506668,1037644,3227782,5689661,6145137,7684279,8532035,11083800,13501056,15731968] T10bbbaa T10bbbab
+theorem T10bbba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbba = true :=
+  tall_node _ _ _ _ T10bbbaa_ok (by decide +kernel) T10bbbab_ok
+def T10bbbba : Tree := (.node [113184,902208,3227782,5689661,8651009,8827215,11083800,13501056,15875395,16010545] (.node [113184,902208,3227782,5689661,8532035,8895343,11083833,13501056,15731968] .nil .nil) (.node [113184,902208,3227782,5689661,8827215,11083800,13501056,13546447,15875395,16010545] .nil .nil))
+theorem T10bbbba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbbba = true := by decide +kernel
+def T10bbbbb : Tree := (.node [430348,902208,3275430,5521457,5689661,8632931,11083800,13501056,15814022,15875395] (.node [113184,902208,3275430,5689661,7684279,8827215,11083800,13501056,15731968,15875395] .nil .nil) .nil)
+theorem T10bbbbb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbbbb = true := by decide +kernel
+def T10bbbb : Tree := .node [113184,902208,3275430,5521457,5689661,8827215,11083800,13501056,15814022,15875395] T10bbbba T10bbbbb
+theorem T10bbbb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbbb = true :=
+  tall_node _ _ _ _ T10bbbba_ok (by decide +kernel) T10bbbbb_ok
+def T10bbb : Tree := .node [113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15732001] T10bbba T10bbbb
+theorem T10bbb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbb = true :=
   tall_node _ _ _ _ T10bbba_ok (by decide +kernel) T10bbbb_ok
-def T10bb : Tree := .node [113208,430348,902208,3227782,5521457,8532035,8632955,11083800,13501056,15731968,15814022] T10bba T10bbb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10bb_ok : tall (expFast false (classP') T9 9) T10bb = true :=
+def T10bb : Tree := .node [113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15732608] T10bba T10bbb
+theorem T10bb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bb = true :=
   tall_node _ _ _ _ T10bba_ok (by decide +kernel) T10bbb_ok
-def T10b : Tree := .node [113184,431372,3227846,5521457,5689661,8532035,11083800,13501056,15731968] T10ba T10bb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10b_ok : tall (expFast false (classP') T9 9) T10b = true :=
+def T10b : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875395,16011057] T10ba T10bb
+theorem T10b_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10b = true :=
   tall_node _ _ _ _ T10ba_ok (by decide +kernel) T10bb_ok
-def T10 : Tree := .node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,15875419] T10a T10b
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T10_ok : tall (expFast false (classP') T9 9) T10 = true :=
+def T10 : Tree := .node [113184,430348,506668,902208,3227782,5521521,7684279,8532035,11083800,13501056,15731968] T10a T10b
+theorem T10_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10 = true :=
   tall_node _ _ _ _ T10a_ok (by decide +kernel) T10b_ok
-def T11aaaa : Tree := (.node [24,113184,430348,902208,1037644,3227782,5521457,7684279,8532035,13501056,15731968] (.node [24,1088,113184,430348,3227782,5521457,8532035,13501056,15731968,15875395] (.node [24,260,113184,902208,3227782,5521457,8532035,13501056,15731968,15814022] (.node [16,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022] (.node [8,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil) (.node [24,33,113184,430348,902208,3227782,8532035,8632931,13501056,15731968] .nil .nil)) (.node [24,640,113184,430348,902208,3227782,5521457,5689661,8532035,15731968] (.node [24,640,113184,430348,902208,3227782,3275430,5521457,8532035,15731968] .nil .nil) (.node [24,1088,113184,430348,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil))) (.node [24,113184,430348,506668,902208,3227782,5521457,7684279,8532035,13501056,15731968] (.node [24,113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15875395] (.node [24,113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15814022] .nil .nil) (.node [24,113184,430348,506668,902208,3227782,5521457,6145137,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,917088,3227782,5521457,8532035,13501056,13538188,15731968] (.node [24,113184,430348,902208,917088,3227782,5521457,8532035,13501056,13513411,15731968] .nil .nil) .nil))) (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731968,15731992] (.node [24,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,13501056,15731968,15875395] (.node [24,113184,430348,902208,3227782,3227806,5521457,8532035,8632931,13501056,15731968] (.node [24,113184,430348,902208,1037644,3227782,5521457,8532035,13501056,13513411,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,3227806,5521457,8532035,13501056,15731968,15875395] .nil .nil)) (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968,15875395] (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,8532059,13501056,15731968] .nil .nil) .nil)) (.node [24,113184,430348,902208,3227782,3275430,5521457,8532059,13501056,15731968] (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731992] (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731968,15875395] .nil .nil) (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501080,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,3275454,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,3275430,5521465,8532035,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11aaaa_ok : tall (expFast false (classP') T10 10) T11aaaa = true := by decide +kernel
-def T11aaab : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968,15814046] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,8532035,8532059,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,8632931,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227782,4048070,5521457,8532035,13501056,15731968,16650112] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,6145137,8532035,13501056,15731968,16650112] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731968,15731992] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil) .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,8827215,13501056,14566065,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501080,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731992] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,8632955,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,13538188,15731968,16010545] (.node [24,113184,430348,902208,3227782,5521457,8532035,8827215,13501056,15731968,16010545] .nil .nil) .nil))) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,15875395] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,15814022] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968,15875419] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,15814046] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15814022,15875395] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,15875419] .nil .nil) .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532059,8632955,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13538188,14566065,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,15731968,15875395] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532059,8632931,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532059,13501056,15731968,15875395] (.node [24,113184,430348,902208,3227782,5521457,8532059,13501056,15731968,15814022] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11aaab_ok : tall (expFast false (classP') T10 10) T11aaab = true := by decide +kernel
-def T11aaa : Tree := .node [24,113184,430348,902208,3227782,4048070,5521457,8532035,13501056,14566065,15731968] T11aaaa T11aaab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11aaa_ok : tall (expFast false (classP') T10 10) T11aaa = true :=
+def R10aaa : Tree := (.node [2,113184,430348,902232,3227782,5521457,8532035,13501056,15731992] (.node [1,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] (.node [1,113184,430348,902232,3227782,5521457,8532035,13501056,15731992] (.node [1,113184,430348,902208,3227806,5521457,8532035,13501080,15731968] (.node [1,113184,430348,902208,3227782,5521465,8532059,13501056,15731968] (.node [1,113184,430348,902208,3227782,5521457,8532059,13501056,15731992] .nil .nil) .nil) (.node [1,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil)) (.node [1,113184,430364,902208,3227782,5521457,8532035,13501056,15731992] (.node [1,113184,430348,902232,3227782,5521457,8532059,13501056,15731968] .nil .nil) (.node [1,113184,430364,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil))) (.node [2,113184,430348,902208,3227782,5521457,8532059,13501056,15731992] (.node [1,113208,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [1,113208,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil) (.node [1,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil)) (.node [2,113184,430348,902208,3227806,5521457,8532035,13501080,15731968] (.node [2,113184,430348,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil) (.node [2,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil)))) (.node [12,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [3,113184,430348,902208,3227782,5521457,11083800,13501056,15732032] (.node [2,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] (.node [2,113184,430364,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [3,1088,113184,430348,3227782,5521457,11083800,13501056,15731968] .nil .nil)) (.node [12,113184,430348,902208,3227806,5521457,8532035,13501080,15731968] (.node [12,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] .nil .nil) (.node [12,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil))) (.node [24,33,113184,430348,902208,3227782,8532035,13501080,15731968] (.node [24,33,113184,430348,902208,3227782,8532035,13501056,15731968] (.node [12,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,33,113184,430348,902208,3227782,8532035,13501056,15731992] .nil .nil)) (.node [24,33,113184,430364,902208,3227782,8532035,13501056,15731968] (.node [24,33,113184,430348,902208,3227782,8532059,13501056,15731968] .nil .nil) (.node [24,49,113184,430348,902208,3227782,8532035,13501056,15731968] .nil .nil)))))
+theorem R10aaa_ok : tall (refOK cpF 10) R10aaa = true := by decide +kernel
+def R10aab : Tree := (.node [24,113184,430348,902208,3228294,5521457,8532035,13538188,15731968] (.node [24,640,113184,430348,902208,3227806,5521457,8532035,15731968] (.node [24,640,113184,430348,902208,3227782,5521457,8532035,15731992] (.node [24,64,114208,430348,3227782,5521457,8532035,13501056,15731968] (.node [24,64,113184,431372,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,640,113184,430348,902208,3227782,5521457,8532035,15731968] .nil .nil)) (.node [24,640,113184,430348,902208,3227782,5521465,8532035,15731968] (.node [24,640,113184,430348,902208,3227782,5521457,8532035,15732608] .nil .nil) (.node [24,640,113184,430348,902208,3227782,5522097,8532035,15731968] .nil .nil))) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731970] (.node [24,640,113184,430348,902232,3227782,5521457,8532035,15731968] (.node [24,640,113184,430348,902208,3228294,5521457,8532035,15731968] .nil .nil) (.node [24,640,113184,430348,902848,3227782,5521457,8532035,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521969,8532035,13538188,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13538188,15732480] .nil .nil) (.node [24,113184,430348,902208,3227782,6045745,8532035,13501056,15731968] .nil .nil)))) (.node [49,113184,430348,902208,3227782,8532035,11083800,13501056,15731968] (.node [26,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [25,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,113184,902208,3227782,5689661,8827215,13501056,15875395,16010545] .nil .nil) (.node [25,113184,430348,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil)) (.node [26,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] (.node [26,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] .nil .nil) (.node [33,113184,430364,902208,3227782,8532035,11083800,13501056,15731968] .nil .nil))) (.node [64,113184,430348,902208,3227782,5521465,8532059,13501056,15731968] (.node [49,113184,430348,902208,3227782,8532059,11083800,13501056,15731968] (.node [49,113184,430348,902208,3227782,8532051,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,8532059,13501056,15731992] .nil .nil)) (.node [64,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] (.node [64,113184,430348,902208,3227806,5521457,8532035,13501080,15731968] .nil .nil) (.node [64,113184,430348,902232,3227782,5521457,8532035,13501056,15731992] .nil .nil)))))
+theorem R10aab_ok : tall (refOK cpF 10) R10aab = true := by decide +kernel
+def R10aa : Tree := .node [24,49,113184,430348,902208,3227782,8532059,13501056,15731968] R10aaa R10aab
+theorem R10aa_ok : tall (refOK cpF 10) R10aa = true :=
+  tall_node _ _ _ _ R10aaa_ok (by decide +kernel) R10aab_ok
+def R10aba : Tree := (.node [12288,113184,430348,902208,3227782,5521457,8532059,13501056,15731992] (.node [67,113184,430348,902208,3227782,5521461,11083800,13501056,15731968] (.node [64,113208,430348,902208,3227782,5521457,8532035,13501080,15731968] (.node [64,113184,430364,902208,3227806,5521457,8532035,13501056,15731968] (.node [64,113184,430364,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [64,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil)) (.node [64,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [64,113208,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil) (.node [67,113184,430348,902208,3227782,5521457,11083800,13501056,15731968] .nil .nil))) (.node [88,113184,430348,902232,3227782,5521457,8532059,13501056,15731968] (.node [67,113184,430348,902208,3227846,5521457,11083800,13501056,15731968] (.node [67,113184,430348,902208,3227782,5521521,11083800,13501056,15731968] .nil .nil) (.node [88,113184,430348,902232,3227782,5521457,8532035,13501056,15731968] .nil .nil)) (.node [640,113184,430348,902208,3227782,5521713,8532035,11083800,15731968] (.node [640,1088,113184,430348,3227782,5521457,8532035,11083800,15731968] .nil .nil) (.node [640,506668,902208,3275430,5689661,7684279,8532035,11083800,15731968] .nil .nil)))) (.node [36864,113184,430348,902208,3227806,5521457,8532035,13501080,15731968] (.node [12288,113184,430348,902232,3227782,5521457,8532059,13501056,15731968] (.node [12288,113184,430348,902208,3227806,5521457,8532035,13501080,15731968] (.node [12288,113184,430348,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil) (.node [12288,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil)) (.node [36864,113184,430348,902208,3227782,5521457,8532059,13501056,15731992] (.node [12288,113184,430364,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [36864,113184,430348,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil))) (.node [36864,113184,430364,902208,3227782,5521457,8532035,13501056,15731992] (.node [36864,113184,430348,902232,3227782,5521457,8532035,13501056,15731992] (.node [36864,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil) (.node [36864,113184,430348,902232,3227782,5521457,8532059,13501056,15731968] .nil .nil)) (.node [36864,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] (.node [36864,113184,430364,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [36864,113208,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil)))))
+theorem R10aba_ok : tall (refOK cpF 10) R10aba = true := by decide +kernel
+def R10abb : Tree := (.node [81920,113184,430348,902208,3227782,5521457,8532059,13501056,15731992] (.node [65536,113184,430348,902208,3227806,5521457,8532035,13501080,15731968] (.node [36872,113208,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [36872,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] (.node [36864,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [36872,113208,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil)) (.node [65536,113184,430348,902208,3227782,5521457,8532059,13501056,15731992] (.node [36872,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [65536,113184,430348,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil))) (.node [65536,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [65536,113184,430348,902232,3227782,5521457,8532035,13501056,15731992] (.node [65536,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil) (.node [65536,113184,430364,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil)) (.node [65560,113184,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [65560,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [65560,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil)))) (.node [81920,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] (.node [81920,113184,430348,902232,3227782,5521457,8532035,13501056,15731992] (.node [81920,113184,430348,902208,3227806,5521457,8532035,13501080,15731968] (.node [81920,113184,430348,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil) (.node [81920,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil)) (.node [81920,113184,430364,902208,3227782,5521457,8532035,13501056,15731992] (.node [81920,113184,430348,902232,3227782,5521457,8532059,13501056,15731968] .nil .nil) (.node [81920,113184,430364,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil))) (.node [113184,262144,430348,902208,3227782,5521457,8532059,13501056,15731992] (.node [81920,113208,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [81920,113208,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil) (.node [81920,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil)) (.node [113184,262144,430348,902208,3227806,5521457,8532059,13501056,15731968] (.node [113184,262144,430348,902208,3227806,5521457,8532035,13501080,15731968] .nil .nil) (.node [113184,262152,430348,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil)))))
+theorem R10abb_ok : tall (refOK cpF 10) R10abb = true := by decide +kernel
+def R10ab : Tree := .node [36864,113208,430348,902208,3227782,5521465,8532035,13501056,15731968] R10aba R10abb
+theorem R10ab_ok : tall (refOK cpF 10) R10ab = true :=
+  tall_node _ _ _ _ R10aba_ok (by decide +kernel) R10abb_ok
+def R10a : Tree := .node [64,113184,430348,902232,3227782,5521457,8532059,13501056,15731968] R10aa R10ab
+theorem R10a_ok : tall (refOK cpF 10) R10a = true :=
+  tall_node _ _ _ _ R10aa_ok (by decide +kernel) R10ab_ok
+def R10baa : Tree := (.node [113184,430348,506668,902232,3227782,5521457,8532035,13501056,15731992] (.node [113184,294912,430348,902208,3227806,5521457,8532035,13501080,15731968] (.node [113184,278528,430364,902208,3227782,5521457,8532035,13501056,15731992] (.node [113184,278528,430348,902208,3227806,5521457,8532035,13501080,15731968] (.node [113184,278528,430348,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil) (.node [113184,278528,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil)) (.node [113184,278544,430348,902232,3227782,5521457,8532035,13501056,15731992] (.node [113184,278528,430364,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [113184,278544,430348,902232,3227782,5521457,8532059,13501056,15731968] .nil .nil))) (.node [113184,430348,506668,902208,3227782,5521457,8532059,13501056,15731992] (.node [113184,294912,430364,902208,3227806,5521457,8532035,13501056,15731968] (.node [113184,294912,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil) (.node [113184,393216,430348,902208,3227782,5521457,8532059,13501056,15731992] .nil .nil)) (.node [113184,430348,506668,902208,3227806,5521457,8532035,13501080,15731968] (.node [113184,430348,506668,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil)))) (.node [113184,430348,902208,917088,3227782,5521457,8532059,13501056,15731992] (.node [113184,430348,786432,902208,3227782,5521457,8532059,13501056,15731992] (.node [113184,430348,506684,902208,3227782,5521457,8532035,13501056,15731992] (.node [113184,430348,506668,902232,3227782,5521457,8532059,13501056,15731968] .nil .nil) (.node [113184,430348,506684,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil)) (.node [113184,430348,786432,902208,3227806,5521457,8532035,13501080,15731968] (.node [113184,430348,786432,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil) (.node [113184,430348,786432,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,917112,3227782,5521457,8532035,13501056,15731992] (.node [113184,430348,902208,917088,3227806,5521457,8532035,13501080,15731968] (.node [113184,430348,902208,917088,3227782,5521465,8532059,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227806,5521457,8532059,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,1037644,3227782,5521465,8532059,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,8532059,13501056,15731992] .nil .nil) (.node [113184,430348,902208,1037644,3227806,5521457,8532035,13501080,15731968] .nil .nil)))))
+theorem R10baa_ok : tall (refOK cpF 10) R10baa = true := by decide +kernel
+def R10bab : Tree := (.node [113184,430348,902208,3227782,5521457,8532059,11759839,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,11254395,13501056,15731976] (.node [113184,430348,902208,3227782,5521457,8462360,8532035,13501056,15731968] (.node [113184,430348,902208,3227782,3658126,5521465,8532059,13501056,15731968] (.node [113184,430348,902208,3227782,3658126,5521457,8532059,13501056,15731992] .nil .nil) (.node [113184,430348,902208,3227782,4048070,5521465,8532059,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,9434203,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8462360,8532059,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13546447,15732480] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532059,8827231,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532059,8632931,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,11254395,13501056,15731992] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532059,8827215,13501056,15731992] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532059,9434203,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532059,9434179,13501056,15731992] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532059,11759815,13501056,15731992] .nil .nil)))) (.node [113184,430348,902208,3227782,5521461,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532059,13501056,13613728,15731992] (.node [113184,430348,902208,3227782,5521457,8532059,13501056,13513435,15731992] (.node [113184,430348,902208,3227782,5521457,8532059,13501056,13513411,15731992] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532059,13501056,13538188,15731992] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532059,13501056,14053491,15731992] (.node [113184,430348,902208,3227782,5521457,8532059,13501056,13616832,15731992] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532059,13501056,14053499,15731992] .nil .nil))) (.node [113184,430348,902208,3227782,5521465,7684287,8532059,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,5634617,8532059,13501056,15731968] (.node [113184,430348,902208,3227782,5521461,8532035,11083800,13501056,15732032] .nil .nil) (.node [113184,430348,902208,3227782,5521465,6145145,8532059,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521465,8532059,8632931,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,8532035,11254395,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521465,8532059,8827215,13501056,15731968] .nil .nil)))))
+theorem R10bab_ok : tall (refOK cpF 10) R10bab = true := by decide +kernel
+def R10ba : Tree := .node [113184,430348,902208,1037644,3227806,5521457,8532059,13501056,15731968] R10baa R10bab
+theorem R10ba_ok : tall (refOK cpF 10) R10ba = true :=
+  tall_node _ _ _ _ R10baa_ok (by decide +kernel) R10bab_ok
+def R10bba : Tree := (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,16650112] (.node [113184,430348,902208,3227782,5521465,8532059,13501056,13613728,15731968] (.node [113184,430348,902208,3227782,5521465,8532059,11759839,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,8532059,9434203,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,8532059,9434179,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521465,8532059,11759815,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521465,8532059,13501056,13513435,15731968] (.node [113184,430348,902208,3227782,5521465,8532059,13501056,13513411,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521465,8532059,13501056,13538188,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,15843104] (.node [113184,430348,902208,3227782,5521465,8532059,13501056,14053499,15731968] (.node [113184,430348,902208,3227782,5521465,8532059,13501056,13616832,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521465,8532059,13501056,14566073,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,16162060] (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,16010553] .nil .nil) (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,16633152] .nil .nil)))) (.node [113184,430348,902208,3227806,3658142,5521457,8532035,13501080,15731968] (.node [113184,430348,902208,3227782,5522097,5689661,8532035,11084440,15731968] (.node [113184,430348,902208,3227782,5521713,8532035,11083800,13501056,15732480] (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,16728710] .nil .nil) (.node [113184,430348,902208,3227782,5521969,8532035,11083800,13546447,15731968] .nil .nil)) (.node [113184,430348,902208,3227806,3658126,5521457,8532035,13501080,15731968] (.node [113184,430348,902208,3227806,3275430,5521457,8532035,13501080,15731968] .nil .nil) (.node [113184,430348,902208,3227806,3658126,5521457,8532059,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227806,4048094,5521457,8532035,13501080,15731968] (.node [113184,430348,902208,3227806,4048070,5521457,8532035,13501080,15731968] (.node [113184,430348,902208,3227806,3658142,5521457,8532059,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227806,4048070,5521457,8532059,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227806,5521457,5634609,8532035,13501080,15731968] (.node [113184,430348,902208,3227806,4048094,5521457,8532059,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227806,5521457,5634609,8532059,13501056,15731968] .nil .nil)))))
+theorem R10bba_ok : tall (refOK cpF 10) R10bba = true := by decide +kernel
+def R10bbb : Tree := (.node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,16162060] (.node [113184,430348,902208,3227806,5521457,8532035,11759839,13501080,15731968] (.node [113184,430348,902208,3227806,5521457,7684287,8532035,13501080,15731968] (.node [113184,430348,902208,3227806,5521457,7684279,8532035,13501080,15731968] (.node [113184,430348,902208,3227806,5521457,6145137,8532059,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227806,5521457,7684279,8532059,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227806,5521457,8532035,9434179,13501080,15731968] (.node [113184,430348,902208,3227806,5521457,7684287,8532059,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227806,5521457,8532035,11759815,13501080,15731968] .nil .nil))) (.node [113184,430348,902208,3227806,5521457,8532035,13501080,13616856,15731968] (.node [113184,430348,902208,3227806,5521457,8532035,13501080,13538204,15731968] (.node [113184,430348,902208,3227806,5521457,8532035,13501080,13513435,15731968] .nil .nil) (.node [113184,430348,902208,3227806,5521457,8532035,13501080,13613752,15731968] .nil .nil)) (.node [113184,430348,902208,3227806,5521457,8532035,13501080,14566073,15731968] (.node [113184,430348,902208,3227806,5521457,8532035,13501080,14053491,15731968] .nil .nil) (.node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,15843104] .nil .nil)))) (.node [113184,430348,902208,3227806,5521457,8532059,11759839,13501056,15731968] (.node [113184,430348,902208,3227806,5521457,8532059,8632931,13501056,15731968] (.node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,16650136] (.node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,16633152] .nil .nil) (.node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,16728734] .nil .nil)) (.node [113184,430348,902208,3227806,5521457,8532059,9434203,13501056,15731968] (.node [113184,430348,902208,3227806,5521457,8532059,9434179,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227806,5521457,8532059,11759815,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3228294,5521457,8532035,11083800,13546447,15731968] (.node [113184,430348,902208,3227806,5521457,8532059,13501056,13616832,15731968] (.node [113184,430348,902208,3227806,5521457,8532059,13501056,13613728,15731968] .nil .nil) (.node [113184,430348,902208,3227806,5521457,8532059,13501056,15731968,15843104] .nil .nil)) (.node [113184,902208,3227782,5689661,8827215,11083800,13501056,16010545,16465243] (.node [113184,902208,3227782,5689661,8827215,11083800,13501056,15875395,16076215] .nil .nil) (.node [113184,902208,3227782,6280573,8827215,11083800,13501056,15875395,16010545] .nil .nil)))))
+theorem R10bbb_ok : tall (refOK cpF 10) R10bbb = true := by decide +kernel
+def R10bb : Tree := .node [113184,430348,902208,3227806,5521457,6145137,8532035,13501080,15731968] R10bba R10bbb
+theorem R10bb_ok : tall (refOK cpF 10) R10bb = true :=
+  tall_node _ _ _ _ R10bba_ok (by decide +kernel) R10bbb_ok
+def R10b : Tree := .node [113184,430348,902208,3227782,5521465,8532059,8827231,13501056,15731968] R10ba R10bb
+theorem R10b_ok : tall (refOK cpF 10) R10b = true :=
+  tall_node _ _ _ _ R10ba_ok (by decide +kernel) R10bb_ok
+def R10 : Tree := .node [113184,278528,430348,902208,3227782,5521457,8532059,13501056,15731992] R10a R10b
+theorem R10_ok : tall (refOK cpF 10) R10 = true :=
+  tall_node _ _ _ _ R10a_ok (by decide +kernel) R10b_ok
+def T11aaaaaa : Tree := (.node [24,33,113184,430348,902208,3227782,8532035,8632931,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil) .nil)
+theorem T11aaaaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaaaaa = true := by decide +kernel
+def T11aaaaab : Tree := (.node [24,640,113184,430348,902208,3227782,5521457,5689661,8532035,15731968] .nil .nil)
+theorem T11aaaaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaaaab = true := by decide +kernel
+def T11aaaaa : Tree := .node [24,640,113184,430348,902208,3227782,3275430,5521457,8532035,15731968] T11aaaaaa T11aaaaab
+theorem T11aaaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaaaa = true :=
+  tall_node _ _ _ _ T11aaaaaa_ok (by decide +kernel) T11aaaaab_ok
+def T11aaaaba : Tree := (.node [24,113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15875395] .nil .nil)
+theorem T11aaaaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaaaba = true := by decide +kernel
+def T11aaaabb : Tree := (.node [24,113184,430348,506668,902208,3227782,5521457,7684279,8532035,13501056,15731968] .nil .nil)
+theorem T11aaaabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaaabb = true := by decide +kernel
+def T11aaaab : Tree := .node [24,113184,430348,506668,902208,3227782,5521457,6145137,8532035,13501056,15731968] T11aaaaba T11aaaabb
+theorem T11aaaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaaab = true :=
+  tall_node _ _ _ _ T11aaaaba_ok (by decide +kernel) T11aaaabb_ok
+def T11aaaa : Tree := .node [24,113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15814022] T11aaaaa T11aaaab
+theorem T11aaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaaa = true :=
+  tall_node _ _ _ _ T11aaaaa_ok (by decide +kernel) T11aaaab_ok
+def T11aaaba : Tree := (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968,15875395] (.node [24,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,13501056,15731968,15875395] (.node [24,113184,430348,902208,917088,3227782,5521457,8532035,13501056,13538188,15731968] .nil .nil) .nil) (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731968,15875395] .nil .nil))
+theorem T11aaaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaaba = true := by decide +kernel
+def T11aaabba : Tree := (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501080,15731968] .nil .nil)
+theorem T11aaabba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaabba = true := by decide +kernel
+def T11aaabbb : Tree := (.node [24,113184,430348,902208,3227782,3275454,5521457,8532035,13501056,15731968] .nil .nil)
+theorem T11aaabbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaabbb = true := by decide +kernel
+def T11aaabb : Tree := .node [24,113184,430348,902208,3227782,3275430,5521465,8532035,13501056,15731968] T11aaabba T11aaabbb
+theorem T11aaabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaabb = true :=
+  tall_node _ _ _ _ T11aaabba_ok (by decide +kernel) T11aaabbb_ok
+def T11aaab : Tree := .node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731992] T11aaaba T11aaabb
+theorem T11aaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaab = true :=
+  tall_node _ _ _ _ T11aaaba_ok (by decide +kernel) T11aaabb_ok
+def T11aaa : Tree := .node [24,113184,430348,902208,917088,3227782,5521457,8532035,13501056,13513411,15731968] T11aaaa T11aaab
+theorem T11aaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaa = true :=
   tall_node _ _ _ _ T11aaaa_ok (by decide +kernel) T11aaab_ok
-def T11aaba : Tree := (.node [24,113184,430348,902232,3227782,5521457,8532035,8632931,13501056,15731968] (.node [24,113184,430348,902208,3227806,3275454,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968,15875395] (.node [24,113184,430348,902208,3227782,5521465,8532035,8632931,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8632931,13501056,15731968,15875395] .nil .nil) (.node [24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968,15814022] .nil .nil)) (.node [24,113184,430348,902208,3227806,3275430,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,6145137,8532035,13501056,14566065,15731968] .nil .nil) .nil)) (.node [24,113184,430348,902208,3227806,5521457,8532035,13501056,15731968,15875395] (.node [24,113184,430348,902208,3227806,5521457,8532035,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227806,5521457,8532035,8632931,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227806,5521457,8532035,13501056,15731968,15814046] .nil .nil)) (.node [24,113184,430348,902232,3227782,3275430,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,3275430,5521457,8532035,13501056,15731968,15814022] .nil .nil) .nil))) (.node [24,113184,430364,902208,3227782,5521457,8532035,13501056,15731968,15875395] (.node [24,113184,430364,902208,3227782,3275430,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902232,3227782,5521457,8532035,13501056,15731968,15875395] (.node [24,113184,430348,902232,3227782,5521457,8532035,13501056,15731968,15814022] .nil .nil) (.node [24,113184,430348,1037644,3227782,5521457,6145137,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430364,902208,3227782,5521457,8532035,13501056,15731968,15814022] (.node [24,113184,430364,902208,3227782,5521457,8532035,8632931,13501056,15731968] .nil .nil) .nil)) (.node [24,113208,430348,902208,3227782,5521457,8532035,8632931,13501056,15731968] (.node [24,113208,430348,902208,3227782,3275430,5521457,8532035,13501056,15731968] (.node [24,113184,902208,1037644,3227782,5521457,8532035,13501056,13538188,15731968] .nil .nil) (.node [24,113208,430348,902208,3227782,3275454,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15814022] (.node [24,113208,430348,902208,3227782,5521457,8532035,8632955,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11aaba_ok : tall (expFast false (classP') T10 10) T11aaba = true := by decide +kernel
-def T11aabb : Tree := (.node [128,512,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968,15875395] (.node [64,113184,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [49,113184,430348,902208,3227782,8532035,8632931,11083800,13501056,15731968] (.node [33,113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,15814022] (.node [24,430348,902208,3227782,3275430,5521457,8532035,8632931,13501056,15731968] .nil .nil) (.node [33,113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15731968] .nil .nil)) (.node [64,113184,114208,430348,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [64,1024,113184,430348,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil)) (.node [64,114208,430348,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [64,113184,430348,1037644,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3275430,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,431372,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [67,113184,430348,902208,3227782,5689661,7684279,11083800,13501056,15731968] (.node [67,113184,430348,902208,3227782,5521457,7684279,11083800,13501056,15731968] .nil .nil) .nil))) (.node [134,113184,430348,902208,5521457,8532035,8827215,11083800,13501056,15731968] (.node [128,113184,430348,902208,3227782,5521969,5689661,8532035,11083800,15731968] (.node [128,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15732480] (.node [128,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968,15732480] .nil .nil) (.node [128,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968,16010545] .nil .nil)) (.node [128,113184,902208,3227782,5521457,5689661,8827215,11083800,13501056,15731968,15875395] (.node [128,113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,14566065,15731968] .nil .nil) .nil)) (.node [268,113184,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [260,113184,902208,3227782,5521457,5689661,8532035,8632931,11083800,13501056,15731968,15814022] (.node [134,113184,902208,5521457,5689661,8532035,8827215,11083800,13501056,15731968] .nil .nil) (.node [260,113184,902208,3227782,5689661,8532035,11083800,13501056,15731968,16076215] .nil .nil)) (.node [512,113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15731968] (.node [512,113184,430348,902208,3227782,5521457,5689661,8532035,8532163,11083800,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11aabb_ok : tall (expFast false (classP') T10 10) T11aabb = true := by decide +kernel
-def T11aab : Tree := .node [24,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15875395] T11aaba T11aabb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11aab_ok : tall (expFast false (classP') T10 10) T11aab = true :=
+def T11aabaaa : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil) .nil)
+theorem T11aabaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabaaa = true := by decide +kernel
+def T11aabaab : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501080,15731968] .nil .nil)
+theorem T11aabaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabaab = true := by decide +kernel
+def T11aabaa : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731992] T11aabaaa T11aabaab
+theorem T11aabaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabaa = true :=
+  tall_node _ _ _ _ T11aabaaa_ok (by decide +kernel) T11aabaab_ok
+def T11aababa : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,15814022] .nil .nil)
+theorem T11aababa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aababa = true := by decide +kernel
+def T11aababb : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,15875395] .nil .nil)
+theorem T11aababb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aababb = true := by decide +kernel
+def T11aabab : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,15814046] T11aababa T11aababb
+theorem T11aabab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabab = true :=
+  tall_node _ _ _ _ T11aababa_ok (by decide +kernel) T11aababb_ok
+def T11aaba : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,8632955,13501056,15731968] T11aabaa T11aabab
+theorem T11aaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaba = true :=
+  tall_node _ _ _ _ T11aabaa_ok (by decide +kernel) T11aabab_ok
+def T11aabbaa : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,15731968,15875395] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15814022,15875395] .nil .nil) .nil)
+theorem T11aabbaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabbaa = true := by decide +kernel
+def T11aabbab : Tree := (.node [24,113184,430348,902208,3227782,5521465,8532035,8632931,13501056,15731968] .nil .nil)
+theorem T11aabbab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabbab = true := by decide +kernel
+def T11aabba : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,13538188,14566065,15731968] T11aabbaa T11aabbab
+theorem T11aabba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabba = true :=
+  tall_node _ _ _ _ T11aabbaa_ok (by decide +kernel) T11aabbab_ok
+def T11aabbba : Tree := (.node [24,113184,430348,902208,3227782,6145137,8532035,13501056,14566065,15731968] .nil .nil)
+theorem T11aabbba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabbba = true := by decide +kernel
+def T11aabbbb : Tree := (.node [33,113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15731968] .nil .nil)
+theorem T11aabbbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabbbb = true := by decide +kernel
+def T11aabbb : Tree := .node [33,113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,15814022] T11aabbba T11aabbbb
+theorem T11aabbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabbb = true :=
+  tall_node _ _ _ _ T11aabbba_ok (by decide +kernel) T11aabbbb_ok
+def T11aabb : Tree := .node [24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968,15814022] T11aabba T11aabbb
+theorem T11aabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabb = true :=
+  tall_node _ _ _ _ T11aabba_ok (by decide +kernel) T11aabbb_ok
+def T11aab : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,15875419] T11aaba T11aabb
+theorem T11aab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aab = true :=
   tall_node _ _ _ _ T11aaba_ok (by decide +kernel) T11aabb_ok
-def T11aa : Tree := .node [24,113184,430348,902208,3227782,5521457,8532059,13501056,15731968,15875419] T11aaa T11aab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11aa_ok : tall (expFast false (classP') T10 10) T11aa = true :=
+def T11aa : Tree := .node [24,113184,430348,902208,3227782,5521457,5689661,8532035,8632931,13501056,15731968,15814022] T11aaa T11aab
+theorem T11aa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aa = true :=
   tall_node _ _ _ _ T11aaa_ok (by decide +kernel) T11aab_ok
-def T11abaa : Tree := (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968,15875395] (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968,15732608] (.node [640,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,15731968,15875395] (.node [512,113184,430348,902208,3227782,5689661,8532035,11083800,13538188,15731968,16010545] (.node [512,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875395,16010545] .nil .nil) (.node [512,113184,430476,902208,3227782,5521457,5689661,8532035,11083800,15731968] .nil .nil)) (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15875395] (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,8532675,11083800,15731968] .nil .nil) (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968] .nil .nil))) (.node [640,113184,430348,902208,3227782,5521457,5689661,8532675,11083800,15731968] (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15732608] (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968,15875395] .nil .nil) (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11084440,15731968] .nil .nil)) (.node [640,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,15731968] (.node [640,113184,430348,902208,3227782,5521457,5690301,8532035,11083800,15731968] .nil .nil) .nil))) (.node [640,113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,15731968] (.node [640,113184,430348,902208,3228294,5521457,5689661,8532035,11083800,15731968] (.node [640,113184,430348,902208,3227782,5522097,5689661,8532035,11083800,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968,16010545] .nil .nil) (.node [640,113184,430348,902208,3227782,5689661,8532035,11083800,15731968,16010545] .nil .nil)) (.node [640,113184,430988,902208,3227782,5521457,5689661,8532035,11083800,15731968] (.node [640,113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15731968] .nil .nil) .nil)) (.node [1024,113184,430348,3227782,5521521,5689661,8532035,11083800,13501056,15731968] (.node [1024,113184,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [640,113312,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968] .nil .nil) (.node [1024,113184,430348,3227782,3227846,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [1024,113184,506668,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] (.node [1024,113184,430348,3227846,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11abaa_ok : tall (expFast false (classP') T10 10) T11abaa = true := by decide +kernel
-def T11abab : Tree := (.node [1088,113184,430348,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [1088,113184,430348,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [1088,113184,430348,3227782,3228870,5521457,5689661,8532035,11083800,13501056,15731968] (.node [1088,113184,430348,506668,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1088,113184,114272,430348,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [1088,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [1088,113184,430348,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968,15875395] (.node [1088,113184,430348,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil)) (.node [1088,113184,430348,3227782,5521457,5689661,8532035,11084888,13501056,15731968] (.node [1088,113184,430348,3227782,5521457,5689661,8532035,11083800,13501056,15732032] (.node [1088,113184,430348,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [1088,113184,430348,3227782,5521457,5689661,8532035,11083800,13502144,15731968] .nil .nil)) (.node [1088,113184,430348,3227782,5521457,5690749,8532035,11083800,13501056,15731968] (.node [1088,113184,430348,3227782,5521457,5689661,8533059,11083800,13501056,15731968] .nil .nil) .nil))) (.node [2592,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] (.node [1088,113184,431436,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [1088,113184,430348,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [1088,113184,430348,3227782,5522545,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [1088,113184,430348,3228870,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [1088,114272,430348,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [1088,113184,506668,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil)) (.node [113184,113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [3328,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056] (.node [2592,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [3328,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056] .nil .nil)) (.node [113184,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [113184,113208,430348,902208,3227782,3227806,5521457,8532035,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11abab_ok : tall (expFast false (classP') T10 10) T11abab = true := by decide +kernel
-def T11aba : Tree := .node [1024,506668,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] T11abaa T11abab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11aba_ok : tall (expFast false (classP') T10 10) T11aba = true :=
+def T11abaaa : Tree := (.node [64,113184,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [64,113184,114208,430348,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [64,1024,113184,430348,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [64,113184,430348,902208,3275430,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T11abaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abaaa = true := by decide +kernel
+def T11abaaba : Tree := (.node [64,113184,431372,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T11abaaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abaaba = true := by decide +kernel
+def T11abaabb : Tree := (.node [67,113184,430348,902208,3227782,5521457,7684279,11083800,13501056,15731968] .nil .nil)
+theorem T11abaabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abaabb = true := by decide +kernel
+def T11abaab : Tree := .node [64,114208,430348,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T11abaaba T11abaabb
+theorem T11abaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abaab = true :=
+  tall_node _ _ _ _ T11abaaba_ok (by decide +kernel) T11abaabb_ok
+def T11abaa : Tree := .node [64,113184,430348,1037644,3227782,5689661,7684279,8532035,11083800,13501056,15731968] T11abaaa T11abaab
+theorem T11abaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abaa = true :=
+  tall_node _ _ _ _ T11abaaa_ok (by decide +kernel) T11abaab_ok
+def T11ababaa : Tree := (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,8532675,11083800,15731968] (.node [640,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,15731968,15875395] .nil .nil) .nil)
+theorem T11ababaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ababaa = true := by decide +kernel
+def T11ababab : Tree := (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968] .nil .nil)
+theorem T11ababab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ababab = true := by decide +kernel
+def T11ababa : Tree := .node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15875395] T11ababaa T11ababab
+theorem T11ababa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ababa = true :=
+  tall_node _ _ _ _ T11ababaa_ok (by decide +kernel) T11ababab_ok
+def T11ababba : Tree := (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15732608] .nil .nil)
+theorem T11ababba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ababba = true := by decide +kernel
+def T11ababbb : Tree := (.node [640,113184,430348,902208,3227782,5521457,5690301,8532035,11083800,15731968] .nil .nil)
+theorem T11ababbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ababbb = true := by decide +kernel
+def T11ababb : Tree := .node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11084440,15731968] T11ababba T11ababbb
+theorem T11ababb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ababb = true :=
+  tall_node _ _ _ _ T11ababba_ok (by decide +kernel) T11ababbb_ok
+def T11abab : Tree := .node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968,15875395] T11ababa T11ababb
+theorem T11abab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abab = true :=
+  tall_node _ _ _ _ T11ababa_ok (by decide +kernel) T11ababb_ok
+def T11aba : Tree := .node [67,113184,430348,902208,3227782,5689661,7684279,11083800,13501056,15731968] T11abaa T11abab
+theorem T11aba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aba = true :=
   tall_node _ _ _ _ T11abaa_ok (by decide +kernel) T11abab_ok
-def T11abba : Tree := (.node [113184,430348,506668,902208,1048428,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,114208,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501080,15731968] (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [113184,113208,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil)) (.node [113184,113444,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15814022] (.node [113184,113312,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15875395] .nil .nil) .nil)) (.node [113184,430348,431372,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,327716,506668,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,114208,430348,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil)) (.node [113184,430348,506668,902208,1037644,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,917088,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil) .nil))) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16076215] (.node [113184,430348,506668,902208,3227782,5521457,6145137,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,4048070,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,3227846,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,5521521,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968,15875395] (.node [113184,430348,506668,902208,3227782,5521457,7684279,8242423,8532035,11083800,13501056,15731968] .nil .nil) .nil)) (.node [113184,430348,506668,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8533059,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15732032] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521461,7684279,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,506668,902208,3227782,5689661,7684279,8242423,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5689661,6145137,7684279,8532035,11083800,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11abba_ok : tall (expFast false (classP') T10 10) T11abba = true := by decide +kernel
-def T11abbb : Tree := (.node [113184,430348,902208,3227782,3275430,5521521,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3227815,5689661,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3227806,5521457,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3227790,5521457,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,507692,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3227806,5521457,8532035,8532059,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,3227806,5521457,8532059,13501056,15731968] (.node [113184,430348,902208,3227782,3227806,5521457,8532035,13501080,15731968] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15732032] (.node [113184,430348,902208,3227782,3275430,5521457,5689661,8532035,8533059,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3228294,5521457,5689661,8532035,11083800,13501056,15731968,15875395] .nil .nil) (.node [113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968,15732032] .nil .nil)) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,8827215,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,3275430,5521457,5689661,8533059,11083800,13501056,15731968] .nil .nil) .nil))) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13538188,15732480] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732480,15875395] (.node [113184,430348,902208,3227782,5521457,5521969,8532035,8827215,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5689661,8532035,11083800,13501056,15875395,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8532163,11083800,14566065,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13538188,15731968,15732480] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732480,15875907] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8632931,11083800,13501056,15814022,15875395] (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,13501056,15731968,15875523] (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,13501056,15731968,15875395] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,14566065,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15732032] (.node [113184,430348,902208,3227782,5521457,7684279,8532035,8895343,11083800,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11abbb_ok : tall (expFast false (classP') T10 10) T11abbb = true := by decide +kernel
-def T11abb : Tree := .node [113184,430348,506668,902208,3227846,5521457,8532035,11083800,13501056,15731968] T11abba T11abbb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11abb_ok : tall (expFast false (classP') T10 10) T11abb = true :=
+def T11abbaaaa : Tree := (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968,15875395] .nil .nil)
+theorem T11abbaaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbaaaa = true := by decide +kernel
+def T11abbaaab : Tree := .nil
+theorem T11abbaaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbaaab = true := by decide +kernel
+def T11abbaaa : Tree := .node [640,113184,430348,902208,3227782,5522097,5689661,8532035,11083800,15731968] T11abbaaaa T11abbaaab
+theorem T11abbaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbaaa = true :=
+  tall_node _ _ _ _ T11abbaaaa_ok (by decide +kernel) T11abbaaab_ok
+def T11abbaab : Tree := (.node [640,113184,430348,902208,3228294,5521457,5689661,8532035,11083800,15731968] .nil .nil)
+theorem T11abbaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbaab = true := by decide +kernel
+def T11abbaa : Tree := .node [640,113184,430348,902208,3227782,5689661,8532035,11083800,15731968,16010545] T11abbaaa T11abbaab
+theorem T11abbaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbaa = true :=
+  tall_node _ _ _ _ T11abbaaa_ok (by decide +kernel) T11abbaab_ok
+def T11abbaba : Tree := (.node [113184,113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil)
+theorem T11abbaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbaba = true := by decide +kernel
+def T11abbabb : Tree := (.node [113184,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil)
+theorem T11abbabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbabb = true := by decide +kernel
+def T11abbab : Tree := .node [113184,113208,430348,902208,3227782,3227806,5521457,8532035,13501056,15731968] T11abbaba T11abbabb
+theorem T11abbab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbab = true :=
+  tall_node _ _ _ _ T11abbaba_ok (by decide +kernel) T11abbabb_ok
+def T11abba : Tree := .node [640,113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15731968] T11abbaa T11abbab
+theorem T11abba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abba = true :=
+  tall_node _ _ _ _ T11abbaa_ok (by decide +kernel) T11abbab_ok
+def T11abbbaa : Tree := (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil)
+theorem T11abbbaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbbaa = true := by decide +kernel
+def T11abbbab : Tree := (.node [113184,113208,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil)
+theorem T11abbbab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbbab = true := by decide +kernel
+def T11abbba : Tree := .node [113184,113208,430348,902208,3227782,5521457,8532035,13501080,15731968] T11abbbaa T11abbbab
+theorem T11abbba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbba = true :=
+  tall_node _ _ _ _ T11abbbaa_ok (by decide +kernel) T11abbbab_ok
+def T11abbbb : Tree := (.node [113184,113444,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15814022] (.node [113184,113312,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15875395] .nil .nil) (.node [113184,114208,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T11abbbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbbb = true := by decide +kernel
+def T11abbb : Tree := .node [113184,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] T11abbba T11abbbb
+theorem T11abbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbb = true :=
+  tall_node _ _ _ _ T11abbba_ok (by decide +kernel) T11abbbb_ok
+def T11abb : Tree := .node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15731992] T11abba T11abbb
+theorem T11abb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abb = true :=
   tall_node _ _ _ _ T11abba_ok (by decide +kernel) T11abbb_ok
-def T11ab : Tree := .node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15731992] T11aba T11abb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11ab_ok : tall (expFast false (classP') T10 10) T11ab = true :=
+def T11ab : Tree := .node [640,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,15731968] T11aba T11abb
+theorem T11ab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ab = true :=
   tall_node _ _ _ _ T11aba_ok (by decide +kernel) T11abb_ok
-def T11a : Tree := .node [512,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968,16010545] T11aa T11ab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11a_ok : tall (expFast false (classP') T10 10) T11a = true :=
+def T11a : Tree := .node [49,113184,430348,902208,3227782,8532035,8632931,11083800,13501056,15731968] T11aa T11ab
+theorem T11a_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11a = true :=
   tall_node _ _ _ _ T11aa_ok (by decide +kernel) T11ab_ok
-def T11baaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,16076215] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11219035,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,8532059,13501056,15731968,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,8532051,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521457,7684343,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8532059,11083800,13501056,15731968,15814022] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8532163,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5521457,8532035,8532059,13501056,15731992] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11123256,13501056,15731968,15814022] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,12148894,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11254395,13501056,15731968,15814022] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15731976] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022,16346526] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022,16330008] .nil .nil) .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,13546447,15731968,16010545] (.node [113184,430348,902208,3227782,5521457,8532035,8632955,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731976] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632947,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,13538188,15731968,16010545] (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,13513411,15731968,16010545] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968,16010545,16666545] (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968,15732480] (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,14566065,15731968,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968,16010545,16650112] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15732480] (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968,16076215] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11baaa_ok : tall (expFast false (classP') T10 10) T11baaa = true := by decide +kernel
-def T11baab : Tree := (.node [113184,430348,902208,3227782,5521457,8532051,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,15814030] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814046] (.node [113184,430348,902208,3227782,5521457,8532035,8895343,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5521457,8532035,8895343,11083800,13501056,15731968,15814022] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814030] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16011057] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16011057] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,15814046] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,15814022] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16010545] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532051,8632947,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532051,8632931,11083800,13501056,15731968] .nil .nil) .nil))) (.node [113184,430348,902208,3227782,5521457,8532163,8827343,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532059,13501056,15731968,15731992] (.node [113184,430348,902208,3227782,5521457,8532059,8632955,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532059,8632931,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532059,11083800,13501056,15731968,15814022] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532163,8827215,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532059,13501056,15731992] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521465,8532035,8532059,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5521465,8532035,8632931,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521521,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11baab_ok : tall (expFast false (classP') T10 10) T11baab = true := by decide +kernel
-def T11baa : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8827343,11083800,13501056,15731968] T11baaa T11baab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11baa_ok : tall (expFast false (classP') T10 10) T11baa = true :=
+def T11baaaa : Tree := (.node [113184,430348,506668,902208,917088,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] (.node [113184,327716,506668,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,506668,902208,1037644,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T11baaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baaaa = true := by decide +kernel
+def T11baaab : Tree := (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16076215] (.node [113184,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968,15875395] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15732032] .nil .nil))
+theorem T11baaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baaab = true := by decide +kernel
+def T11baaa : Tree := .node [113184,430348,506668,902208,1048428,3227782,5521457,7684279,8532035,11083800,13501056,15731968] T11baaaa T11baaab
+theorem T11baaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baaa = true :=
+  tall_node _ _ _ _ T11baaaa_ok (by decide +kernel) T11baaab_ok
+def T11baabaa : Tree := (.node [113184,430348,506668,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521461,7684279,8532035,11083800,13501056,15731968] .nil .nil) .nil)
+theorem T11baabaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baabaa = true := by decide +kernel
+def T11baabab : Tree := (.node [113184,430348,506668,902208,3227782,5689661,7684279,8242423,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T11baabab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baabab = true := by decide +kernel
+def T11baaba : Tree := .node [113184,430348,506668,902208,3227782,5689661,6145137,7684279,8532035,11083800,13501056,15731968] T11baabaa T11baabab
+theorem T11baaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baaba = true :=
+  tall_node _ _ _ _ T11baabaa_ok (by decide +kernel) T11baabab_ok
+def T11baabba : Tree := (.node [113184,430348,507692,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T11baabba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baabba = true := by decide +kernel
+def T11baabbb : Tree := (.node [113184,430348,902208,3227782,3275430,5521521,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T11baabbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baabbb = true := by decide +kernel
+def T11baabb : Tree := .node [113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15732032] T11baabba T11baabbb
+theorem T11baabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baabb = true :=
+  tall_node _ _ _ _ T11baabba_ok (by decide +kernel) T11baabbb_ok
+def T11baab : Tree := .node [113184,430348,506668,902208,3227846,5521457,8532035,11083800,13501056,15731968] T11baaba T11baabb
+theorem T11baab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baab = true :=
+  tall_node _ _ _ _ T11baaba_ok (by decide +kernel) T11baabb_ok
+def T11baa : Tree := .node [113184,430348,506668,902208,3227782,5521457,8533059,11083800,13501056,15731968] T11baaa T11baab
+theorem T11baa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baa = true :=
   tall_node _ _ _ _ T11baaa_ok (by decide +kernel) T11baab_ok
-def T11baba : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,15814022,16076215] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,8632931,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521969,8532035,8827215,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521969,5689661,8532035,11083800,13501056,15731968,15875395] (.node [113184,430348,902208,3227782,5521713,8532035,8827215,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5521969,5689661,8532035,11083800,13538188,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968,16011057] (.node [113184,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968,16010545] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5689661,7684343,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15814022,15875395] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15732032] .nil .nil) (.node [113184,430348,902208,3227782,5689661,7684279,8632931,11083800,13501056,15731968,15875395] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,15814022,16010545] (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,15732001] .nil .nil) .nil))) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16011057] (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083833,13501056,15731968] (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,16076215] (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,15814022,16605241] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15732001] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,8532035,8827215,11083800,13501056,15731968,16010545,16666545] (.node [113184,430348,902208,3227782,5689661,8532035,8827215,11083800,13501056,14566065,15731968,16010545] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875395,16076215] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15732480,16011057] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15732480,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875395,16010545,16666545] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13538188,15731968,16010545,16666545] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13538188,14566065,15731968,16010545] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11baba_ok : tall (expFast false (classP') T10 10) T11baba = true := by decide +kernel
-def T11babb : Tree := (.node [113184,430348,902208,3227846,5521457,7684343,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227806,5521457,8532035,11083800,13501056,15731968,15814046] (.node [113184,430348,902208,3227806,5521457,8532035,8532059,13501056,15731968] (.node [113184,430348,902208,3227790,5521457,8532035,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227790,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227790,5521457,8532035,11083800,13501056,15731968,15814030] .nil .nil)) (.node [113184,430348,902208,3227806,5521457,8532035,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227806,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) .nil)) (.node [113184,430348,902208,3227846,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227806,5521457,8532059,13501056,15731968] (.node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968] .nil .nil) (.node [113184,430348,902208,3227815,5689661,8532035,8632931,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227846,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227846,3275494,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil))) (.node [113184,430348,902208,3228294,5689661,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3228294,5521457,5689661,8532035,11083800,13538188,15731968] (.node [113184,430348,902208,3227846,5689661,7684343,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227846,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3228294,5521457,5689661,8532035,11083800,13501056,15731968,15875395] .nil .nil)) (.node [113184,430348,902208,3228294,5521457,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3228294,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil) .nil)) (.node [113184,430348,902208,3275430,5689661,8532035,11083800,13501056,15731968,15814022,16010545] (.node [113184,430348,902208,3275430,5689661,7684279,8242423,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3275430,5521457,5689661,8532035,11083800,13501056,15814022,15875395] .nil .nil) (.node [113184,430348,902208,3275430,5689661,7684279,8532035,11083800,13501056,15731968,15875395] .nil .nil)) (.node [113184,430348,902232,3227782,5521457,8532035,8532059,13501056,15731968] (.node [113184,430348,902208,3275430,5689661,8532035,11083800,13501056,15731968,16076215] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11babb_ok : tall (expFast false (classP') T10 10) T11babb = true := by decide +kernel
-def T11bab : Tree := .node [113184,430348,902208,3227782,5689661,8632931,11083800,13501056,15875395,16010545] T11baba T11babb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11bab_ok : tall (expFast false (classP') T10 10) T11bab = true :=
+def T11babaaa : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732480,15875907] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732480,15875395] .nil .nil) .nil)
+theorem T11babaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babaaa = true := by decide +kernel
+def T11babaab : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8632931,11083800,13501056,15814022,15875395] .nil .nil)
+theorem T11babaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babaab = true := by decide +kernel
+def T11babaa : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13538188,15732480] T11babaaa T11babaab
+theorem T11babaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babaa = true :=
+  tall_node _ _ _ _ T11babaaa_ok (by decide +kernel) T11babaab_ok
+def T11babab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,16076215] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11254395,13501056,15731968,15814022] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731976] .nil .nil))
+theorem T11babab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babab = true := by decide +kernel
+def T11baba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11123256,13501056,15731968,15814022] T11babaa T11babab
+theorem T11baba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baba = true :=
+  tall_node _ _ _ _ T11babaa_ok (by decide +kernel) T11babab_ok
+def T11babbaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,8632947,11083800,13501056,15731968] .nil .nil)
+theorem T11babbaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babbaa = true := by decide +kernel
+def T11babbab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,15814022] .nil .nil)
+theorem T11babbab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babbab = true := by decide +kernel
+def T11babba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632955,11083800,13501056,15731968] T11babbaa T11babbab
+theorem T11babba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babba = true :=
+  tall_node _ _ _ _ T11babbaa_ok (by decide +kernel) T11babbab_ok
+def T11babbba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,15814022] .nil .nil)
+theorem T11babbba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babbba = true := by decide +kernel
+def T11babbbb : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16010545] .nil .nil)
+theorem T11babbbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babbbb = true := by decide +kernel
+def T11babbb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,15814046] T11babbba T11babbbb
+theorem T11babbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babbb = true :=
+  tall_node _ _ _ _ T11babbba_ok (by decide +kernel) T11babbbb_ok
+def T11babb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,15814030] T11babba T11babbb
+theorem T11babb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babb = true :=
+  tall_node _ _ _ _ T11babba_ok (by decide +kernel) T11babbb_ok
+def T11bab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731992] T11baba T11babb
+theorem T11bab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bab = true :=
   tall_node _ _ _ _ T11baba_ok (by decide +kernel) T11babb_ok
-def T11ba : Tree := .node [113184,430348,902208,3227782,5521521,7684343,8532035,11083800,13501056,15731968] T11baa T11bab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11ba_ok : tall (expFast false (classP') T10 10) T11ba = true :=
+def T11ba : Tree := .node [113184,430348,902208,3227782,3275430,5689661,8532035,11083800,13501056,15875395,16010545] T11baa T11bab
+theorem T11ba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ba = true :=
   tall_node _ _ _ _ T11baa_ok (by decide +kernel) T11bab_ok
-def T11bbaa : Tree := (.node [113184,430364,902208,3227782,5521457,8532035,13501056,15731968,15731992] (.node [113184,430348,1037644,3227782,5689661,7684279,8242423,8532035,11083800,13501056,15731968] (.node [113184,430348,1037644,3227782,5521457,5689661,8532035,11083800,13501056,15732032] (.node [113184,430348,902232,3227782,5521457,8532059,13501056,15731968] (.node [113184,430348,902232,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [113184,430348,1037644,3227782,3227846,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,1037644,3227782,5689661,6145137,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,1037644,3227782,5521521,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil)) (.node [113184,430364,902208,3227782,3227806,5521457,8532035,13501056,15731968] (.node [113184,430348,3227782,5521457,5689661,6145137,8533059,11083800,13501056,15731968] (.node [113184,430348,1037644,3227846,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430349,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968,16010545] .nil .nil)) (.node [113184,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [113184,430364,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) .nil))) (.node [113184,430476,902208,3227782,5521457,8532035,8827343,11083800,13501056,15731968] (.node [113184,430476,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15875395] (.node [113184,430364,902208,3227806,5521457,8532035,13501056,15731968] (.node [113184,430364,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [113184,430380,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430476,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [113184,430476,902208,3227782,5521457,5689661,8532035,11083800,14566065,15731968] .nil .nil) .nil)) (.node [113184,431372,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,431372,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,431372,507692,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,431372,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] (.node [113184,431372,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11bbaa_ok : tall (expFast false (classP') T10 10) T11bbaa = true := by decide +kernel
-def T11bbab : Tree := (.node [113184,506668,1048428,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] (.node [113184,506668,902208,3227782,5521457,5689661,8632931,11083800,13501056,15731968,15875395] (.node [113184,506668,902208,3227782,5521457,5689661,8532035,8632931,11083800,13501056,15731968,15814022] (.node [113184,506668,902208,1048428,3227782,5521457,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,506668,902208,1037644,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,506668,902208,1048428,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,506668,902208,3227782,5521457,5689661,8533059,11083800,13501056,15731968] (.node [113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15814022,15875395] .nil .nil) .nil)) (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16076215] (.node [113184,506668,902208,3227782,5689661,7684279,8242423,8532035,11083800,13501056,15731968] (.node [113184,506668,902208,3227782,5689661,6145137,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,506668,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,15875395] .nil .nil)) (.node [113184,506668,1037644,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15875395,16010545] .nil .nil) .nil))) (.node [113184,902208,3227782,5521457,5689661,8532035,8632931,11083800,11514140,13501056,15731968,15814022] (.node [113184,902208,3227782,5521457,5689661,8532035,8532295,11083800,13501056,15731968,15814022] (.node [113184,902208,3227782,3275430,5521457,5689661,8827215,11083800,13501056,15731968,15875395] (.node [113184,507692,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,902208,3227782,3275430,5689661,8532035,8827215,11083800,13501056,15731968,16010545] .nil .nil)) (.node [113184,902208,3227782,5521457,5689661,8532035,8632931,8895343,11083800,13501056,15731968,15814022] (.node [113184,902208,3227782,5521457,5689661,8532035,8632931,8827215,11083800,13501056,15731968,15814022] .nil .nil) .nil)) (.node [113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13546447,14566065,15731968] (.node [113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,13546447,15731968,16010545] (.node [113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,13538188,15731968,16010545] .nil .nil) (.node [113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13538188,14566065,15731968] .nil .nil)) (.node [113184,902208,3227782,5521457,5689661,8532035,8895343,11083800,13501056,15731968,15814022] (.node [113184,902208,3227782,5521457,5689661,8532035,8827343,11083800,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11bbab_ok : tall (expFast false (classP') T10 10) T11bbab = true := by decide +kernel
-def T11bba : Tree := .node [113184,506668,902208,1037644,3227782,5521457,5689661,7684279,8532035,11083800,13501056,15731968] T11bbaa T11bbab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11bba_ok : tall (expFast false (classP') T10 10) T11bba = true :=
+def T11bbaaaa : Tree := (.node [113184,430348,902208,3227782,5521465,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532059,13501056,15731992] .nil .nil) .nil)
+theorem T11bbaaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaaaa = true := by decide +kernel
+def T11bbaaab : Tree := (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil)
+theorem T11bbaaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaaab = true := by decide +kernel
+def T11bbaaa : Tree := .node [113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968,15814022] T11bbaaaa T11bbaaab
+theorem T11bbaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaaa = true :=
+  tall_node _ _ _ _ T11bbaaaa_ok (by decide +kernel) T11bbaaab_ok
+def T11bbaaba : Tree := (.node [113184,430348,902208,3227782,5521521,7684343,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T11bbaaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaaba = true := by decide +kernel
+def T11bbaabb : Tree := (.node [113184,430348,902208,3227782,5689661,7684279,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil)
+theorem T11bbaabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaabb = true := by decide +kernel
+def T11bbaab : Tree := .node [113184,430348,902208,3227782,5521969,5689661,8532035,11083800,13538188,15731968] T11bbaaba T11bbaabb
+theorem T11bbaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaab = true :=
+  tall_node _ _ _ _ T11bbaaba_ok (by decide +kernel) T11bbaabb_ok
+def T11bbaa : Tree := .node [113184,430348,902208,3227782,5521521,7684279,8532035,11083800,13501056,15731968] T11bbaaa T11bbaab
+theorem T11bbaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaa = true :=
+  tall_node _ _ _ _ T11bbaaa_ok (by decide +kernel) T11bbaab_ok
+def T11bbabaa : Tree := (.node [113184,430348,902208,3227782,5689661,7684279,8632931,11083800,13501056,15731968,15875395] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15814022,15875395] .nil .nil) .nil)
+theorem T11bbabaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbabaa = true := by decide +kernel
+def T11bbabab : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,15814022,16076215] .nil .nil)
+theorem T11bbabab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbabab = true := by decide +kernel
+def T11bbaba : Tree := .node [113184,430348,902208,3227782,5689661,7684343,8532035,11083800,13501056,15731968] T11bbabaa T11bbabab
+theorem T11bbaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaba = true :=
+  tall_node _ _ _ _ T11bbabaa_ok (by decide +kernel) T11bbabab_ok
+def T11bbabba : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,16076215] .nil .nil)
+theorem T11bbabba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbabba = true := by decide +kernel
+def T11bbabbb : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083833,13501056,15731968] .nil .nil)
+theorem T11bbabbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbabbb = true := by decide +kernel
+def T11bbabb : Tree := .node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15732001] T11bbabba T11bbabbb
+theorem T11bbabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbabb = true :=
+  tall_node _ _ _ _ T11bbabba_ok (by decide +kernel) T11bbabbb_ok
+def T11bbab : Tree := .node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,15814022,16605241] T11bbaba T11bbabb
+theorem T11bbab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbab = true :=
+  tall_node _ _ _ _ T11bbaba_ok (by decide +kernel) T11bbabb_ok
+def T11bba : Tree := .node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15732032] T11bbaa T11bbab
+theorem T11bba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bba = true :=
   tall_node _ _ _ _ T11bbaa_ok (by decide +kernel) T11bbab_ok
-def T11bbba : Tree := (.node [113184,902208,3227782,5689661,8532035,8827215,11083800,13501056,15731968,16076215] (.node [113184,902208,3227782,5689661,7684279,8532035,8895343,11083800,13501056,15731968] (.node [113184,902208,3227782,5521457,5689661,8827215,11083800,13501056,13546447,15731968,15875395] (.node [113184,902208,3227782,5521457,5689661,8532163,8827343,11083800,13501056,15731968] (.node [113184,902208,3227782,5521457,5689661,8532163,8827215,11083800,13501056,15731968] .nil .nil) (.node [113184,902208,3227782,5521457,5689661,8532295,11083800,13501056,15731968,15814022] .nil .nil)) (.node [113184,902208,3227782,5521457,5689661,8895343,11083800,13501056,15731968,15875395] (.node [113184,902208,3227782,5521457,5689661,8827215,11083800,13501056,15814022,15875395] .nil .nil) .nil)) (.node [113184,902208,3227782,5689661,8532035,8827215,11083800,13501056,13546447,15731968,16010545] (.node [113184,902208,3227782,5689661,8532035,8651009,8827215,11083800,13501056,15731968,16010545] (.node [113184,902208,3227782,5689661,7684279,8827215,11083800,13501056,15731968,15875395] .nil .nil) (.node [113184,902208,3227782,5689661,8532035,8827215,11083800,13501056,13538188,15731968,16010545] .nil .nil)) (.node [113184,902208,3227782,5689661,8532035,8827215,11083800,13501056,15731968,16010545,16666545] (.node [113184,902208,3227782,5689661,8532035,8827215,11083800,13501056,14566065,15731968,16010545] .nil .nil) .nil))) (.node [113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [113184,902208,3275430,5689661,7684279,8532035,8827215,11083800,13501056,15731968] (.node [113184,902208,3227782,5689661,8827215,11083800,13501056,15875395,16010545] (.node [113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,902208,3275430,5521457,5689661,8532035,8827215,11083800,13501056,15731968,15814022] .nil .nil)) (.node [113200,430348,902208,3227782,5521457,8532035,8632947,11083800,13501056,15731968] (.node [113200,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) .nil)) (.node [113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [113208,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [113208,430348,902208,3227782,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [113208,430348,902208,3227782,5521457,8532035,8632955,11083800,13501056,15731968] .nil .nil)) (.node [113208,430348,902208,3227782,5521457,8532035,13501056,15731992] (.node [113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15731992] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11bbba_ok : tall (expFast false (classP') T10 10) T11bbba = true := by decide +kernel
-def T11bbbb : Tree := (.node [114208,430348,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] (.node [113312,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968] (.node [113312,430348,902208,3227782,5521457,5689661,8532035,11083800,14566065,15731968] (.node [113208,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [113208,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil) (.node [113312,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15875395] .nil .nil)) (.node [113312,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] (.node [113312,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil) .nil)) (.node [114208,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [114208,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113444,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15814022] .nil .nil) (.node [114208,430348,507692,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [114208,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [114208,430348,902208,3227782,3276454,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil))) (.node [506668,902208,1048428,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [430348,902208,3227782,3275430,5689661,8532035,8632931,11083800,13501056,15731968,16010545] (.node [114208,507692,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [114208,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [430348,902208,3227782,3275430,5521457,5689661,8632931,11083800,13501056,15731968,15875395] .nil .nil)) (.node [430348,902208,3275430,5689661,7684279,8532035,8632931,11083800,13501056,15731968] (.node [430348,902208,3275430,5521457,5689661,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil) .nil)) (.node [506668,902208,3275430,5689661,7684279,8532035,11083800,13501056,15731968] (.node [506668,902208,3227782,3275430,5689661,8532035,11083800,13501056,15731968,16010545] (.node [506668,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968,15875395] .nil .nil) (.node [506668,902208,3275430,5521457,5689661,8532035,11083800,13501056,15731968,15814022] .nil .nil)) (.node [902208,3227782,3275430,5521457,5689661,8532035,8895343,11083800,13501056,15731968] (.node [902208,3227782,3275430,5521457,5689661,8532035,8632931,8827215,11083800,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11bbbb_ok : tall (expFast false (classP') T10 10) T11bbbb = true := by decide +kernel
-def T11bbb : Tree := .node [113208,430348,902208,3227782,5521457,8532035,13501080,15731968] T11bbba T11bbbb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11bbb_ok : tall (expFast false (classP') T10 10) T11bbb = true :=
+def T11bbbaaa : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875395,16010545,16666545] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15732480,16011057] .nil .nil) .nil)
+theorem T11bbbaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbaaa = true := by decide +kernel
+def T11bbbaab : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13538188,14566065,15731968,16010545] .nil .nil)
+theorem T11bbbaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbaab = true := by decide +kernel
+def T11bbbaa : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875395,16076215] T11bbbaaa T11bbbaab
+theorem T11bbbaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbaa = true :=
+  tall_node _ _ _ _ T11bbbaaa_ok (by decide +kernel) T11bbbaab_ok
+def T11bbbab : Tree := (.node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968] (.node [113184,430348,902208,3227782,5689661,8632931,11083800,13501056,15875395,16010545] .nil .nil) (.node [113184,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil))
+theorem T11bbbab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbab = true := by decide +kernel
+def T11bbba : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13538188,15731968,16010545,16666545] T11bbbaa T11bbbab
+theorem T11bbba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbba = true :=
+  tall_node _ _ _ _ T11bbbaa_ok (by decide +kernel) T11bbbab_ok
+def T11bbbba : Tree := (.node [113184,506668,902208,1037644,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3275430,5521457,5689661,8532035,11083800,13501056,15814022,15875395] .nil .nil) (.node [113184,506668,902208,1048428,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T11bbbba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbba = true := by decide +kernel
+def T11bbbbba : Tree := (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16076215] .nil .nil)
+theorem T11bbbbba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbbba = true := by decide +kernel
+def T11bbbbbb : Tree := (.node [113184,902208,3227782,5689661,8827215,11083800,13501056,15875395,16010545] .nil .nil)
+theorem T11bbbbbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbbbb = true := by decide +kernel
+def T11bbbbb : Tree := .node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15875395,16010545] T11bbbbba T11bbbbbb
+theorem T11bbbbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbbb = true :=
+  tall_node _ _ _ _ T11bbbbba_ok (by decide +kernel) T11bbbbbb_ok
+def T11bbbb : Tree := .node [113184,506668,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,15875395] T11bbbba T11bbbbb
+theorem T11bbbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbb = true :=
+  tall_node _ _ _ _ T11bbbba_ok (by decide +kernel) T11bbbbb_ok
+def T11bbb : Tree := .node [113184,430348,902208,3228294,5521457,5689661,8532035,11083800,13538188,15731968] T11bbba T11bbbb
+theorem T11bbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbb = true :=
   tall_node _ _ _ _ T11bbba_ok (by decide +kernel) T11bbbb_ok
-def T11bb : Tree := .node [113184,902208,3227782,5521457,5689661,8532035,11084060,13501056,15731968,15814022] T11bba T11bbb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11bb_ok : tall (expFast false (classP') T10 10) T11bb = true :=
+def T11bb : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15732480,16010545] T11bba T11bbb
+theorem T11bb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bb = true :=
   tall_node _ _ _ _ T11bba_ok (by decide +kernel) T11bbb_ok
-def T11b : Tree := .node [113184,430348,902232,3227782,5521457,8532035,13501056,15731968,15731992] T11ba T11bb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11b_ok : tall (expFast false (classP') T10 10) T11b = true :=
+def T11b : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16011057] T11ba T11bb
+theorem T11b_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11b = true :=
   tall_node _ _ _ _ T11ba_ok (by decide +kernel) T11bb_ok
-def T11 : Tree := .node [113184,430348,902208,3227782,5521457,7684279,8533059,11083800,13501056,15731968] T11a T11b
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T11_ok : tall (expFast false (classP') T10 10) T11 = true :=
+def T11 : Tree := .node [113184,114208,430348,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] T11a T11b
+theorem T11_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11 = true :=
   tall_node _ _ _ _ T11a_ok (by decide +kernel) T11b_ok
-def T12aaa : Tree := (.node [24,113184,430348,902208,3227782,5521457,6145137,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,3227806,5521457,8532035,13501056,15731968] (.node [24,113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [16,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [8,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) .nil) (.node [16,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil)) (.node [24,113184,430348,902208,917088,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,430348,506668,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,1037644,3227782,5521457,8532035,13501056,15731968] .nil .nil))) (.node [24,113184,430348,902208,3227782,4048070,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [24,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,8632931,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968,15875395] .nil .nil)))) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,13513411,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,8532059,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,7684279,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,8532035,8827215,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] .nil .nil))) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,14566065,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,13538188,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968,15731992] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968,16010545] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968,15875395] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968,16650112] .nil .nil)))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12aaa_ok : tall (expFast false (classP') T11 11) T12aaa = true := by decide +kernel
-def T12aab : Tree := (.node [128,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15875395] (.node [33,113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968] (.node [24,113184,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430364,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902232,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil))) (.node [64,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [64,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,1024,113184,430348,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [64,113184,430348,1037644,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [128,512,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968] .nil .nil)))) (.node [512,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [128,113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968] (.node [128,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [128,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,14566065,15731968] .nil .nil) (.node [128,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil)) (.node [512,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15875395] (.node [260,113184,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15814022] .nil .nil) (.node [512,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13538188,15731968] .nil .nil))) (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [512,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [512,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [640,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,15731968] .nil .nil)) (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968] .nil .nil) (.node [1024,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12aab_ok : tall (expFast false (classP') T11 11) T12aab = true := by decide +kernel
-def T12aa : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992] T12aaa T12aab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12aa_ok : tall (expFast false (classP') T11 11) T12aa = true :=
+def R11aaaaa : Tree := (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] (.node [1,24,113184,430364,902208,3227782,5521457,8532035,13501056,15731968] (.node [1,24,113184,430348,902208,3227782,8532035,13501056,14566065,15731968] (.node [1,24,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] (.node [1,24,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] (.node [1,24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) .nil) (.node [1,24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil)) (.node [1,24,113184,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [1,24,113184,430348,902208,3227782,8532035,13501056,15731968,16010545] .nil .nil) (.node [1,24,113184,430348,902232,3227782,5521457,8532035,13501056,15731968] .nil .nil))) (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1,640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [1,24,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [1,1088,113184,430348,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] .nil .nil) (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] .nil .nil)))) (.node [1,113184,430348,902208,3227790,5521457,8532035,11083800,13501056,15731968] (.node [1,113184,430348,902208,3227782,5521457,8533059,11083800,13501056,15731968] (.node [1,113184,430348,902208,3227782,5521457,8532059,11083800,13501056,15731968] (.node [1,113184,430348,902208,3227782,5521457,8532051,11083800,13501056,15731968] .nil .nil) (.node [1,113184,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968] .nil .nil)) (.node [1,113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [1,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil) (.node [1,113184,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968] .nil .nil))) (.node [1,113184,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1,113184,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] (.node [1,113184,430348,902208,3227806,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [1,113184,430348,902208,3228294,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [1,113184,431372,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1,113184,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [1,113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))))
+theorem R11aaaaa_ok : tall (refOK cpF 11) R11aaaaa = true := by decide +kernel
+def R11aaaab : Tree := (.node [2,113184,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968] (.node [2,640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [2,24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992] (.node [1,114208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1,113312,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [2,24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)) (.node [2,24,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] (.node [2,24,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil) (.node [2,24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil))) (.node [2,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] (.node [2,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] (.node [2,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [2,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] .nil .nil)) (.node [2,113184,430348,902208,3227782,5521457,8532051,11083800,13501056,15731968] (.node [2,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] .nil .nil) (.node [2,113184,430348,902208,3227782,5521457,8532059,11083800,13501056,15731968] .nil .nil)))) (.node [3,113184,430348,902208,3227782,5521461,8532035,11083800,13501056,15731968] (.node [2,113184,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968] (.node [2,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] (.node [2,113184,430348,902208,3227782,5521457,8533059,11083800,13501056,15731968] .nil .nil) (.node [2,113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] .nil .nil)) (.node [3,64,113184,430348,902208,3227782,5521457,11083800,13501056,15731968] (.node [3,24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [3,113184,430348,902208,3227782,5521457,11083800,13501056,15731968,15875395] .nil .nil))) (.node [8,24,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] (.node [8,24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992] (.node [8,24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [8,24,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil)) (.node [8,260,113184,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil) (.node [8,640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil)))))
+theorem R11aaaab_ok : tall (refOK cpF 11) R11aaaab = true := by decide +kernel
+def R11aaaa : Tree := .node [1,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R11aaaaa R11aaaab
+theorem R11aaaa_ok : tall (refOK cpF 11) R11aaaa = true :=
+  tall_node _ _ _ _ R11aaaaa_ok (by decide +kernel) R11aaaab_ok
+def R11aaaba : Tree := (.node [8,113184,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532051,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] .nil .nil)) (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] .nil .nil) (.node [8,113184,430348,902208,3227782,5521457,8532035,11254395,13501056,15731968] .nil .nil))) (.node [8,113184,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532059,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532051,13501056,15731968] .nil .nil) (.node [8,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] .nil .nil)) (.node [8,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8533059,11083800,13501056,15731968] .nil .nil) (.node [8,113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [24,33,113184,430348,902208,3227782,5689661,8532035,13501056,15731968] (.node [12,113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968] (.node [12,24,113184,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [12,24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [12,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [12,113184,430348,902208,3227806,5521457,8532035,11083800,13501056,15731968] (.node [12,113184,430348,902208,3227790,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [24,33,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil))) (.node [24,64,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,33,113184,430348,902208,3227782,8532035,13501056,15731968] (.node [24,33,113184,430348,902208,3227782,8532035,11083800,13501056,15731968] .nil .nil) (.node [24,64,1024,113184,430348,3227782,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,64,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] (.node [24,64,113184,430348,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [24,64,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] .nil .nil)))))
+theorem R11aaaba_ok : tall (refOK cpF 11) R11aaaba = true := by decide +kernel
+def R11aaabb : Tree := (.node [24,12288,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,66,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,64,113184,430348,1037644,3227782,5521457,8532035,13501056,15731968] (.node [24,64,113184,430348,902232,3227782,5521457,8532035,13501056,15731968] (.node [24,64,113184,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,64,113184,430348,917088,3227782,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,64,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,64,113184,430364,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,65,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil))) (.node [24,12288,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,640,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil) (.node [24,640,113184,430348,902208,3227782,5521457,8532035,15731968] .nil .nil)) (.node [24,12288,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] (.node [24,12288,113184,430348,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [24,12288,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] .nil .nil)))) (.node [24,36864,113184,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [24,36864,113184,430348,902208,3227782,5521457,8532035,13501056,15731992] (.node [24,12290,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,12288,113184,430364,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,12352,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,36864,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] (.node [24,36864,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil) (.node [24,36864,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil))) (.node [24,36868,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,36864,113184,430364,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,36864,113184,430348,902232,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,36864,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,36872,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,36872,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,37376,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)))))
+theorem R11aaabb_ok : tall (refOK cpF 11) R11aaabb = true := by decide +kernel
+def R11aaab : Tree := .node [24,64,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] R11aaaba R11aaabb
+theorem R11aaab_ok : tall (refOK cpF 11) R11aaab = true :=
+  tall_node _ _ _ _ R11aaaba_ok (by decide +kernel) R11aaabb_ok
+def R11aaa : Tree := .node [8,113184,113200,430348,902208,3227782,5521457,8532035,13501056,15731968] R11aaaa R11aaab
+theorem R11aaa_ok : tall (refOK cpF 11) R11aaa = true :=
+  tall_node _ _ _ _ R11aaaa_ok (by decide +kernel) R11aaab_ok
+def R11aabaa : Tree := (.node [24,81920,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,81920,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,65536,113184,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [24,65536,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] (.node [24,65536,113184,430348,902208,3227782,5521457,8532035,13501056,15731992] (.node [24,65536,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) .nil) (.node [24,65536,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil)) (.node [24,65538,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,65536,113184,430348,902232,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,65540,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil))) (.node [24,81920,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,81920,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] (.node [24,81920,113184,430348,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [24,81920,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] .nil .nil)) (.node [24,81920,113184,430348,902232,3227782,5521457,8532035,13501056,15731968] (.node [24,81920,113184,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,81920,113184,430364,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)))) (.node [24,113184,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [24,113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] (.node [24,82944,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,81924,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,102400,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,113208,430348,902208,3227782,5521457,8532059,13501056,15731968] (.node [24,113184,113208,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil) (.node [24,113184,113208,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil))) (.node [24,113184,114208,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,113208,430364,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,113208,430348,902232,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,113184,113312,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,167936,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,114688,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,113184,167969,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)))))
+theorem R11aabaa_ok : tall (refOK cpF 11) R11aabaa = true := by decide +kernel
+def R11aabab : Tree := (.node [24,113184,344064,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,278528,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,113184,278528,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,262145,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,262144,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil) (.node [24,113184,262152,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,278528,430348,902208,3227782,5521457,8532035,13501080,15731968] (.node [24,113184,278528,430348,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [24,113184,278528,430348,902208,3227782,5521457,8532059,13501056,15731968] .nil .nil))) (.node [24,113184,278560,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,278528,430364,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,278528,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,113184,278544,430348,902232,3227782,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,294912,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [24,113184,279552,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,113184,299008,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)))) (.node [24,113184,430348,506668,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,113184,430348,430364,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,113184,430348,430364,902208,3227782,5521457,8532035,13501080,15731968] (.node [24,113184,430348,430364,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [24,113184,430348,430364,902208,3227782,5521457,8532059,13501056,15731968] .nil .nil)) (.node [24,113184,430348,506668,902208,3227782,5521457,8532035,13501080,15731968] (.node [24,113184,430348,506668,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [24,113184,430348,506668,902208,3227782,5521457,8532059,13501056,15731968] .nil .nil))) (.node [24,113184,430348,786432,902208,3227782,5521457,8532035,13501056,15731992] (.node [24,113184,430348,506668,902232,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,430348,506668,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,506684,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430348,786432,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,113184,430348,786432,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil) (.node [24,113184,430348,786496,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)))))
+theorem R11aabab_ok : tall (refOK cpF 11) R11aabab = true := by decide +kernel
+def R11aaba : Tree := .node [24,113184,262144,430348,902208,3227782,5521457,8532035,13501056,15731992] R11aabaa R11aabab
+theorem R11aaba_ok : tall (refOK cpF 11) R11aaba = true :=
+  tall_node _ _ _ _ R11aabaa_ok (by decide +kernel) R11aabab_ok
+def R11aabba : Tree := (.node [24,113184,430348,902208,1037660,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,917088,3227782,5521465,8532035,13501056,15731968] (.node [24,113184,430348,902208,902232,3227806,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,902232,3227782,5521457,8532035,13501080,15731968] (.node [24,113184,430348,902208,902232,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [24,113184,430348,902208,902232,3227782,5521465,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,917088,3227782,5521457,8532035,13501080,15731968] (.node [24,113184,430348,902208,917088,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [24,113184,430348,902208,917088,3227782,5521457,8532059,13501056,15731968] .nil .nil))) (.node [24,113184,430348,902208,1037644,3227782,5521457,8532035,13501080,15731968] (.node [24,113184,430348,902208,917112,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,917088,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,1037644,3227782,5521457,8532035,13501056,15731992] .nil .nil)) (.node [24,113184,430348,902208,1037644,3227782,5521465,8532035,13501056,15731968] (.node [24,113184,430348,902208,1037644,3227782,5521457,8532059,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,1037644,3227806,5521457,8532035,13501056,15731968] .nil .nil)))) (.node [24,113184,430348,902208,3227782,3658142,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,3658126,5521457,8532035,13501056,15731992] (.node [24,113184,430348,902208,1101860,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,1048428,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,2170880,3227782,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,3658126,5521457,8532059,13501056,15731968] (.node [24,113184,430348,902208,3227782,3658126,5521457,8532035,13501080,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,3658126,5521465,8532035,13501056,15731968] .nil .nil))) (.node [24,113184,430348,902208,3227782,4183502,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,4048070,5521465,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,3668910,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,4062950,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15732480] (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15732032] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,5765949,8532035,13501056,15731968] .nil .nil)))))
+theorem R11aabba_ok : tall (refOK cpF 11) R11aabba = true := by decide +kernel
+def R11aabbb : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,12054991,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,9436771,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,9434179,13501056,15731992] (.node [24,113184,430348,902208,3227782,5521457,8462336,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,7863231,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,8895343,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,9434203,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,9434179,13501080,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,9434447,13501056,15731968] .nil .nil))) (.node [24,113184,430348,902208,3227782,5521457,8532035,11759815,13501056,15731992] (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,11254395,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,11759839,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,11759815,13501080,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,11795175,13501056,15731968] .nil .nil)))) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,14154355,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,13616832,15731992] (.node [24,113184,430348,902208,3227782,5521457,8532035,12580039,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,12188350,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,13613728,15731992] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,13629123,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,13621196,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,14053491,15731992] .nil .nil))) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968,16775846] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,14566065,15731992] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,14154623,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,14677107,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,15843128] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,15843104] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,16010545] .nil .nil)))))
+theorem R11aabbb_ok : tall (refOK cpF 11) R11aabbb = true := by decide +kernel
+def R11aabb : Tree := .node [24,113184,430348,902208,3227782,5521457,6280573,8532035,13501056,15731968] R11aabba R11aabbb
+theorem R11aabb_ok : tall (refOK cpF 11) R11aabb = true :=
+  tall_node _ _ _ _ R11aabba_ok (by decide +kernel) R11aabbb_ok
+def R11aab : Tree := .node [24,113184,430348,802816,902208,3227782,5521457,8532035,13501056,15731968] R11aaba R11aabb
+theorem R11aab_ok : tall (refOK cpF 11) R11aab = true :=
+  tall_node _ _ _ _ R11aaba_ok (by decide +kernel) R11aabb_ok
+def R11aa : Tree := .node [24,45056,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] R11aaa R11aab
+theorem R11aa_ok : tall (refOK cpF 11) R11aa = true :=
+  tall_node _ _ _ _ R11aaa_ok (by decide +kernel) R11aab_ok
+def R11abaaaa : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15732480] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,16650112] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,16633152] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,16162076] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,16162060] .nil .nil) .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,16633176] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,16728710] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,16650136] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15732032] .nil .nil))) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15843104,16650112] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15814022,16650112] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15814022,16162060] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15843104,16010545] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15875395,16633152] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15875395,16010545] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,13513411,15731968] .nil .nil))))
+theorem R11abaaaa_ok : tall (refOK cpF 11) R11abaaaa = true := by decide +kernel
+def R11abaaab : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,13513411,14566065,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,13616856,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,13538204,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,13538188,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,13613752,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,15731992] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,14053491,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13513411,13616832,15731968] .nil .nil))) (.node [24,113184,430348,902208,3227782,5521457,8532059,13501056,15731992] (.node [24,113184,430348,902208,3227782,5521457,8532035,13513411,15731968,16728710] (.node [24,113184,430348,902208,3227782,5521457,8532035,13513411,15731968,16650112] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13538188,15731968,16728710] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521465,6145137,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521465,5634617,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521465,6145145,8532035,13501056,15731968] .nil .nil))))
+theorem R11abaaab_ok : tall (refOK cpF 11) R11abaaab = true := by decide +kernel
+def R11abaaa : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,13501080,13513435,15731968] R11abaaaa R11abaaab
+theorem R11abaaa_ok : tall (refOK cpF 11) R11abaaa = true :=
+  tall_node _ _ _ _ R11abaaaa_ok (by decide +kernel) R11abaaab_ok
+def R11abaaba : Tree := (.node [24,113184,430348,902208,3227782,5521465,8532035,13501056,15731992] (.node [24,113184,430348,902208,3227782,5521465,8532035,11759815,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521465,8532035,9434179,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521465,7684287,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521465,8532035,13501056,13616832,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968,16633152] .nil .nil))) (.node [24,113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521465,8532059,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521465,8532035,13501080,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521521,5689661,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5634609,8532035,13501056,14566065,15731968] (.node [24,113184,430348,902208,3227782,5521521,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5634609,8532035,13501056,15731968,16010545] .nil .nil))))
+theorem R11abaaba_ok : tall (refOK cpF 11) R11abaaba = true := by decide +kernel
+def R11abaabb : Tree := (.node [24,113184,430364,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227806,5521457,8532035,13501056,15731992] (.node [24,113184,430348,902208,3227782,6145137,8532035,13501056,15731968,16010545] (.node [24,113184,430348,902208,3227782,5689661,8532035,13501056,15875395,16010545] .nil .nil) (.node [24,113184,430348,902208,3227782,7684279,8532035,13501056,15731968,16010545] .nil .nil)) (.node [24,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] (.node [24,113184,430348,902208,3227806,5521457,8532035,13501080,15731968] .nil .nil) (.node [24,113184,430348,902232,3227782,5521457,8532035,13501080,15731968] .nil .nil))) (.node [33,113184,902208,3227782,5689661,8532035,11083800,11514140,13501056,15731968] (.node [24,113184,506668,902208,3227782,5689661,8532035,13501056,15731968,16010545] (.node [24,113184,506668,902208,3227782,5689661,7684279,8532035,13501056,15731968] .nil .nil) (.node [33,113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [64,1088,113184,430348,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil) (.node [64,113184,114208,430348,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R11abaabb_ok : tall (refOK cpF 11) R11abaabb = true := by decide +kernel
+def R11abaab : Tree := .node [24,113184,430348,902208,3227782,5689661,8532035,13501056,15731968,16076215] R11abaaba R11abaabb
+theorem R11abaab_ok : tall (refOK cpF 11) R11abaab = true :=
+  tall_node _ _ _ _ R11abaaba_ok (by decide +kernel) R11abaabb_ok
+def R11abaa : Tree := .node [24,113184,430348,902208,3227782,5521465,7684279,8532035,13501056,15731968] R11abaaa R11abaab
+theorem R11abaa_ok : tall (refOK cpF 11) R11abaa = true :=
+  tall_node _ _ _ _ R11abaaa_ok (by decide +kernel) R11abaab_ok
+def R11ababa : Tree := (.node [64,113184,430348,902208,3228294,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] .nil .nil)) (.node [64,113184,430348,902208,3227782,5521457,8532051,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,8532059,11083800,13501056,15731968] .nil .nil))) (.node [64,113184,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521461,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] .nil .nil)) (.node [64,113184,430348,902208,3227806,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227790,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [64,113312,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,431372,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,1048428,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [64,113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,431372,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [65,113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [64,114208,430348,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,114208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [65,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [66,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [65,113184,430348,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [66,113184,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] .nil .nil)))))
+theorem R11ababa_ok : tall (refOK cpF 11) R11ababa = true := by decide +kernel
+def R11ababb : Tree := (.node [640,113184,430348,902208,902848,3227782,5521457,8532035,11083800,15731968] (.node [640,113184,135168,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [640,65536,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [640,36864,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [640,12288,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil) (.node [640,36896,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil)) (.node [640,81920,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [640,73728,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil) (.node [640,113184,113312,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil))) (.node [640,113184,311296,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [640,113184,262144,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [640,113184,135169,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil) (.node [640,113184,278528,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil)) (.node [640,113184,430348,506668,902208,3227782,5521457,8532035,11083800,15731968] (.node [640,113184,430348,430988,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil) (.node [640,113184,430348,589824,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil)))) (.node [640,113184,430348,902208,3227782,5521457,6280573,8532035,11083800,15731968] (.node [640,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,15731968] (.node [640,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,15731968] (.node [640,113184,430348,902208,917088,3227782,5521457,8532035,11083800,15731968] .nil .nil) (.node [640,113184,430348,902208,1101860,3227782,5521457,8532035,11083800,15731968] .nil .nil)) (.node [640,113184,430348,902208,3227782,4587520,5521457,8532035,11083800,15731968] (.node [640,113184,430348,902208,3227782,3658126,5521457,8532035,11083800,15731968] .nil .nil) (.node [640,113184,430348,902208,3227782,5521457,5765949,8532035,11083800,15731968] .nil .nil))) (.node [640,113184,430348,902208,3227782,5521457,8532035,8532675,11083800,15731968] (.node [640,113184,430348,902208,3227782,5521457,8388608,8532035,11083800,15731968] (.node [640,113184,430348,902208,3227782,5521457,7863231,8532035,11083800,15731968] .nil .nil) (.node [640,113184,430348,902208,3227782,5521457,8396800,8532035,11083800,15731968] .nil .nil)) (.node [640,113184,430348,902208,3227782,5521457,8532035,9434179,11083800,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,15731968] .nil .nil) (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,11084440,15731968] .nil .nil)))))
+theorem R11ababb_ok : tall (refOK cpF 11) R11ababb = true := by decide +kernel
+def R11abab : Tree := .node [66,113184,430348,917088,3227782,5521457,8532035,11083800,13501056,15731968] R11ababa R11ababb
+theorem R11abab_ok : tall (refOK cpF 11) R11abab = true :=
+  tall_node _ _ _ _ R11ababa_ok (by decide +kernel) R11ababb_ok
+def R11aba : Tree := .node [64,113184,430348,431372,3227782,5521457,8532035,11083800,13501056,15731968] R11abaa R11abab
+theorem R11aba_ok : tall (refOK cpF 11) R11aba = true :=
+  tall_node _ _ _ _ R11abaa_ok (by decide +kernel) R11abab_ok
+def R11abbaaa : Tree := (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,15732608] (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,14053491,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,11514140,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,11396184,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,11219035,15731968] .nil .nil) .nil) (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,11759815,15731968] .nil .nil)) (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,14603197,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,14086527,15731968] .nil .nil) (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968,16773437] .nil .nil))) (.node [640,113184,430348,902208,3227782,5689661,8532035,11083800,15731968,16605241] (.node [640,113184,430348,902208,3227782,5522097,8532035,11083800,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532035,11084440,15731968] .nil .nil) (.node [640,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,15731968] .nil .nil)) (.node [640,113184,430348,902208,3228294,5521457,8532035,11083800,15731968] (.node [640,113184,430348,902208,3228294,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [640,113184,430348,902208,3275430,5689661,7684279,8532035,11083800,15731968] .nil .nil))))
+theorem R11abbaaa_ok : tall (refOK cpF 11) R11abbaaa = true := by decide +kernel
+def R11abbaab : Tree := (.node [12288,113184,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968] (.node [12288,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] (.node [12288,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] (.node [12288,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [12288,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] .nil .nil)) (.node [12288,113184,430348,902208,3227782,5521457,8532051,11083800,13501056,15731968] (.node [12288,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] .nil .nil) (.node [12288,113184,430348,902208,3227782,5521457,8532059,11083800,13501056,15731968] .nil .nil))) (.node [12288,113184,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [12288,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] (.node [12288,113184,430348,902208,3227782,5521457,8533059,11083800,13501056,15731968] .nil .nil) (.node [12288,113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] .nil .nil)) (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [12288,113184,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] .nil .nil))))
+theorem R11abbaab_ok : tall (refOK cpF 11) R11abbaab = true := by decide +kernel
+def R11abbaa : Tree := .node [640,113184,430348,902848,3227782,5521457,8532035,11083800,15731968] R11abbaaa R11abbaab
+theorem R11abbaa_ok : tall (refOK cpF 11) R11abbaa = true :=
+  tall_node _ _ _ _ R11abbaaa_ok (by decide +kernel) R11abbaab_ok
+def R11abbab : Tree := (.node [36864,113184,431372,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5521457,8532059,11083800,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] .nil .nil) (.node [36864,113184,430348,902208,3227782,5521457,8532051,11083800,13501056,15731968] .nil .nil)) (.node [36864,113184,430348,902208,3227782,5521457,8533059,11083800,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968] .nil .nil) (.node [36864,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil))) (.node [36864,113184,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] (.node [36864,113184,430348,902208,3227790,5521457,8532035,11083800,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968] .nil .nil) (.node [36864,113184,430348,902208,3227806,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [36864,113184,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36864,113184,430348,902208,3228294,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [36864,113184,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] (.node [36864,114208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36864,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36864,113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [36864,113312,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [36872,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36872,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [36896,113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [36896,113184,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968] (.node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] .nil .nil) (.node [36896,113184,430348,902208,3227782,5521457,8533059,11083800,13501056,15731968] .nil .nil)) (.node [36896,113184,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] (.node [36896,113184,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968] .nil .nil) (.node [36896,113184,430348,902208,3228294,5521457,8532035,11083800,13501056,15731968] .nil .nil)))))
+theorem R11abbab_ok : tall (refOK cpF 11) R11abbab = true := by decide +kernel
+def R11abba : Tree := .node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] R11abbaa R11abbab
+theorem R11abba_ok : tall (refOK cpF 11) R11abba = true :=
+  tall_node _ _ _ _ R11abbaa_ok (by decide +kernel) R11abbab_ok
+def R11abbba : Tree := (.node [65536,113184,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] (.node [65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] (.node [45056,113184,430349,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36896,113312,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36896,113184,431372,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [36896,114208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [45062,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] .nil .nil))) (.node [65536,113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] (.node [65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] .nil .nil) (.node [65536,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil)) (.node [65536,113184,430348,902208,3227790,5521457,8532035,11083800,13501056,15731968] (.node [65536,113184,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968] .nil .nil) (.node [65536,113184,430348,902208,3227806,5521457,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] (.node [65571,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968] (.node [65542,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [65540,113184,430380,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [65571,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [65664,113312,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] .nil .nil))) (.node [73728,113184,430348,902208,3227782,5521457,8532059,11083800,13501056,15731968] (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] .nil .nil) (.node [73728,113184,430348,902208,3227782,5521457,8532051,11083800,13501056,15731968] .nil .nil)) (.node [73728,113184,430348,902208,3227782,5521457,8533059,11083800,13501056,15731968] (.node [73728,113184,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968] .nil .nil) (.node [73728,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil)))))
+theorem R11abbba_ok : tall (refOK cpF 11) R11abbba = true := by decide +kernel
+def R11abbbb : Tree := (.node [73752,113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [73728,113184,431372,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [73728,113184,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] (.node [73728,113184,430348,902208,3227790,5521457,8532035,11083800,13501056,15731968] (.node [73728,113184,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968] .nil .nil) (.node [73728,113184,430348,902208,3227806,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [73728,113184,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [73728,113184,430348,902208,3228294,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [73728,113184,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [73728,114208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [73728,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [73728,113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [73728,113312,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [73744,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [73736,113184,430380,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [73744,113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] (.node [73752,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [73752,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [73752,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [73752,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] .nil .nil))) (.node [81920,113184,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968] (.node [81920,113184,430348,902208,3227782,5521457,8532051,11083800,13501056,15731968] (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] .nil .nil) (.node [81920,113184,430348,902208,3227782,5521457,8532059,11083800,13501056,15731968] .nil .nil)) (.node [81920,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] (.node [81920,113184,430348,902208,3227782,5521457,8533059,11083800,13501056,15731968] .nil .nil) (.node [81920,113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] .nil .nil)))))
+theorem R11abbbb_ok : tall (refOK cpF 11) R11abbbb = true := by decide +kernel
+def R11abbb : Tree := .node [73728,113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] R11abbba R11abbbb
+theorem R11abbb_ok : tall (refOK cpF 11) R11abbb = true :=
+  tall_node _ _ _ _ R11abbba_ok (by decide +kernel) R11abbbb_ok
+def R11abb : Tree := .node [36896,113184,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] R11abba R11abbb
+theorem R11abb_ok : tall (refOK cpF 11) R11abb = true :=
+  tall_node _ _ _ _ R11abba_ok (by decide +kernel) R11abbb_ok
+def R11ab : Tree := .node [640,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,15731968] R11aba R11abb
+theorem R11ab_ok : tall (refOK cpF 11) R11ab = true :=
+  tall_node _ _ _ _ R11aba_ok (by decide +kernel) R11abb_ok
+def R11a : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,16010553] R11aa R11ab
+theorem R11a_ok : tall (refOK cpF 11) R11a = true :=
+  tall_node _ _ _ _ R11aa_ok (by decide +kernel) R11ab_ok
+def R11baaaa : Tree := (.node [113184,113208,430348,902208,3227782,5521457,8532035,12148894,13501056,15731968] (.node [81920,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [81920,113184,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [81920,113184,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] (.node [81920,113184,430348,902208,3227806,5521457,8532035,11083800,13501056,15731968] (.node [81920,113184,430348,902208,3227790,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [81920,113184,430348,902208,3228294,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [81920,113184,431372,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [81920,113184,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [81920,113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [81984,113184,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] (.node [81920,114208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [81920,113312,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [81984,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,113200,430348,902208,3227782,5521457,8532035,13501056,15731968,16330008] (.node [113184,113200,430348,902208,3227782,5521457,8532035,12148894,13501056,15731968] .nil .nil) (.node [113184,113208,430348,902208,3227782,5521457,5521465,8532035,13501056,15731968] .nil .nil)))) (.node [113184,262144,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,16605241] (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15671960,15731968] (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,13501080,15731968] .nil .nil) (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,16330008] .nil .nil)) (.node [113184,114208,430348,3227782,5521457,6145137,8532035,11083800,13501056,15731968] (.node [113184,114208,430348,3227782,4048070,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,262144,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,262144,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [113184,262144,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] (.node [113184,262144,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] .nil .nil) (.node [113184,262144,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] .nil .nil)) (.node [113184,262151,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,262145,430349,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,262152,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil)))))
+theorem R11baaaa_ok : tall (refOK cpF 11) R11baaaa = true := by decide +kernel
+def R11baaab : Tree := (.node [113184,278528,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5521457,8532059,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,262177,902208,3227782,5689661,8532035,8895343,11083800,13501056,15731968] .nil .nil) (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] .nil .nil)) (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] .nil .nil) (.node [113184,278528,430348,902208,3227782,5521457,8532051,11083800,13501056,15731968] .nil .nil))) (.node [113184,278528,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5521457,8533059,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968] .nil .nil) (.node [113184,278528,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,278528,430348,902208,3227790,5521457,8532035,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,278528,430348,902208,3227806,5521457,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [113184,294912,430348,902208,3227790,5521457,8532035,11083800,13501056,15731968] (.node [113184,278528,431372,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,278528,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3228294,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,278528,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,278592,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [113184,278592,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,279552,430348,902208,3227782,5521713,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,311296,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] (.node [113184,294912,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] (.node [113184,294912,430348,902208,3227806,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,294912,430348,902208,3228294,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,311296,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [113184,311296,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] .nil .nil) (.node [113184,311296,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968] .nil .nil)))))
+theorem R11baaab_ok : tall (refOK cpF 11) R11baaab = true := by decide +kernel
+def R11baaa : Tree := .node [113184,262177,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R11baaaa R11baaab
+theorem R11baaa_ok : tall (refOK cpF 11) R11baaa = true :=
+  tall_node _ _ _ _ R11baaaa_ok (by decide +kernel) R11baaab_ok
+def R11baaba : Tree := (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13502080,15731968] (.node [113184,430348,430364,902208,3227782,5521457,8532035,13501056,15731992] (.node [113184,344068,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,327716,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,311296,430348,902208,3228294,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,344064,430348,902208,3227782,5521461,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,345088,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,344096,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,375328,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731976] (.node [113184,430348,430476,902208,3227782,5521457,8532035,11083800,15731968,16650112] (.node [113184,430348,430476,902208,3227782,5521457,8532035,11083800,14566065,15731968] .nil .nil) (.node [113184,430348,495884,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15732480] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731992] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501120,15731968] .nil .nil)))) (.node [113184,430348,506668,902208,3227782,5521969,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532059,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11084824,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083864,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532051,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,506668,902208,3227782,5521461,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532163,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,506668,902208,3228294,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227790,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5522481,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227806,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,506684,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3228806,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506732,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))))
+theorem R11baaba_ok : tall (refOK cpF 11) R11baaba = true := by decide +kernel
+def R11baabb : Tree := (.node [113184,430348,786432,902208,3227782,5521457,8532035,11083800,13501056,15731992] (.node [113184,430348,589824,902208,3227790,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,589824,902208,3227782,5521457,8532035,11083800,13501056,15732480] (.node [113184,430348,589824,902208,3227782,5521457,8532035,11083800,13501056,15731992] (.node [113184,430348,589824,902208,3227782,5521457,8532035,11083800,13501056,15731976] .nil .nil) (.node [113184,430348,589824,902208,3227782,5521457,8532035,11083800,13501056,15732032] .nil .nil)) (.node [113184,430348,589824,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [113184,430348,589824,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,589824,902208,3227782,5521969,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,589832,902208,3227782,5521457,8532035,11219035,13501056,15731968] (.node [113184,430348,589824,902208,3227846,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,589824,902208,3227806,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,589824,902208,3228294,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,725064,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,589888,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,786432,902208,3227782,5521457,8532035,11083800,13501056,15731976] .nil .nil)))) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,786432,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [113184,430348,786432,902208,3227782,5521457,8532035,11083800,13501056,15732480] (.node [113184,430348,786432,902208,3227782,5521457,8532035,11083800,13501056,15732032] .nil .nil) (.node [113184,430348,786432,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,799296,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,786496,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,902232,3227782,5521457,8532035,13501056,15731992] .nil .nil))) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15732480] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731992] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731976] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15732032] .nil .nil)) (.node [113184,430348,902208,917088,3227782,5521457,8532059,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532051,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532163,11083800,13501056,15731968] .nil .nil)))))
+theorem R11baabb_ok : tall (refOK cpF 11) R11baabb = true := by decide +kernel
+def R11baab : Tree := .node [113184,430348,506796,902208,3227782,5521457,8532035,11083800,13501056,15731968] R11baaba R11baabb
+theorem R11baab_ok : tall (refOK cpF 11) R11baab = true :=
+  tall_node _ _ _ _ R11baaba_ok (by decide +kernel) R11baabb_ok
+def R11baa : Tree := .node [113184,311296,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] R11baaa R11baab
+theorem R11baa_ok : tall (refOK cpF 11) R11baa = true :=
+  tall_node _ _ _ _ R11baaa_ok (by decide +kernel) R11baab_ok
+def R11babaa : Tree := (.node [113184,430348,902208,1037644,3227782,5521457,8532163,11083800,13501056,15731968] (.node [113184,430348,902208,917112,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227806,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521969,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521521,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,902208,917088,3227790,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,917088,3228294,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227846,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917104,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15732032] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731976] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731992] .nil .nil)) (.node [113184,430348,902208,1037644,3227782,5521457,8532051,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15732480] .nil .nil) (.node [113184,430348,902208,1037644,3227782,5521457,8532059,11083800,13501056,15731968] .nil .nil)))) (.node [113184,430348,902208,1037644,3227846,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521521,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521461,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,8533059,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,1037644,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,1037644,3227790,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521969,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,1037644,3227806,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3160066,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037772,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3228294,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,1048428,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731992] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731976] .nil .nil) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15732032] .nil .nil)))))
+theorem R11babaa_ok : tall (refOK cpF 11) R11babaa = true := by decide +kernel
+def R11babab : Tree := (.node [113184,430348,902208,3227782,3658126,5521457,8532163,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275494,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521713,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521465,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501080,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3275430,5521521,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,3275438,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521969,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3275454,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15732032] (.node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731976] (.node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731992] .nil .nil)) (.node [113184,430348,902208,3227782,3658126,5521457,8532051,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15732480] .nil .nil) (.node [113184,430348,902208,3227782,3658126,5521457,8532059,11083800,13501056,15731968] .nil .nil)))) (.node [113184,430348,902208,3227782,4048070,5521465,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3658126,5521969,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3658126,5521465,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3658126,5521457,8533059,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3658126,5521521,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,3658190,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3658142,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3659150,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731970] (.node [113184,430348,902208,3227782,4048070,5521969,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,4048070,5521521,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,4194286,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732608] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732032] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13502144,15731968] .nil .nil)))))
+theorem R11babab_ok : tall (refOK cpF 11) R11babab = true := by decide +kernel
+def R11baba : Tree := .node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15732480] R11babaa R11babab
+theorem R11baba_ok : tall (refOK cpF 11) R11baba = true :=
+  tall_node _ _ _ _ R11babaa_ok (by decide +kernel) R11babab_ok
+def R11babba : Tree := (.node [113184,430348,902208,3227782,5521457,8462338,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5765949,8533059,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5690301,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11084440,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083928,14566065,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689725,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5765949,8532035,11083800,13501056,15732480] (.node [113184,430348,902208,3227782,5521457,5765949,8532035,11083800,13501056,15732032] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5765949,8532163,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,6280573,8532035,11083800,13501056,15732480] (.node [113184,430348,902208,3227782,5521457,5766973,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5766077,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,6280573,8532035,11083800,13501056,15732032] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,7863231,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,6291325,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8456194,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501080,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15732032] (.node [113184,430348,902208,3227782,5521457,8501792,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8462344,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731984] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501064,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15732480] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501072,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,9434179,11083800,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,8633059,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632939,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,9434179,11083800,13501056,15731976] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,9434179,11083800,13501056,15732480] (.node [113184,430348,902208,3227782,5521457,8532035,9434179,11083800,13501056,15732032] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,9434195,11083800,13501056,15731968] .nil .nil)))))
+theorem R11babba_ok : tall (refOK cpF 11) R11babba = true := by decide +kernel
+def R11babbb : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11396184,13501056,15732032] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11124280,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731976] (.node [113184,430348,902208,3227782,5521457,8532035,9437039,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,9434307,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15732032] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731992] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15732480] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15732480] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731976] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15732032] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11396184,13501056,15731976] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11254395,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11396184,13501056,15731992] .nil .nil)))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11531615,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11514140,13501056,15732032] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11514140,13501056,15731976] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11396184,13501056,15732480] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11514140,13501056,15731992] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11514268,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11514140,13501056,15732480] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11516799,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11759815,13501056,15732032] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11759815,13501056,15731976] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11759815,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11759815,13501056,15731992] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11759823,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11759815,13501056,15732480] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11759839,13501056,15731968] .nil .nil)))))
+theorem R11babbb_ok : tall (refOK cpF 11) R11babbb = true := by decide +kernel
+def R11babb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,9434203,11083800,13501056,15731968] R11babba R11babbb
+theorem R11babb_ok : tall (refOK cpF 11) R11babb = true :=
+  tall_node _ _ _ _ R11babba_ok (by decide +kernel) R11babbb_ok
+def R11bab : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13513411,15732480] R11baba R11babb
+theorem R11bab_ok : tall (refOK cpF 11) R11bab = true :=
+  tall_node _ _ _ _ R11baba_ok (by decide +kernel) R11babb_ok
+def R11ba : Tree := .node [113184,430348,902208,917088,3227782,5521457,8533059,11083800,13501056,15731968] R11baa R11bab
+theorem R11ba_ok : tall (refOK cpF 11) R11ba = true :=
+  tall_node _ _ _ _ R11baa_ok (by decide +kernel) R11bab_ok
+def R11bbaaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14053491,15732032] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13613728,15732480] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12319487,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15732032] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731976] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15732480] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13613728,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13613728,15731976] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13613728,15732032] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13616832,15732480] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13616832,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13616832,15731976] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13616832,15732032] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14053491,15731976] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13631203,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14053491,15731992] .nil .nil)))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14566065,15732480] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14154623,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14086527,15732032] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14053491,15732480] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14086527,15732480] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731976] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14566065,15732032] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15671960,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14603197,15732480] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14603197,15732032] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15671960,15731976] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15671960,15732480] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15671960,15732032] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15990759] .nil .nil)))))
+theorem R11bbaaa_ok : tall (refOK cpF 11) R11bbaaa = true := by decide +kernel
+def R11bbaab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731984,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,16162060] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,15875395] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,15843104] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16251639] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,15843112] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,16010545] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,15875403] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,16010553] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,16633160] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,16605241] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,16330008] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,16633152] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,16650120] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,16650112] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,16728710] .nil .nil)))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,16162076] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,15875419] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,15843128] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,15843104] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,15875395] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,16010553] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,16162060] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,16633176] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,16605241] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,16330008] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,16633152] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,16650136] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,16650112] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,16728710] .nil .nil)))))
+theorem R11bbaab_ok : tall (refOK cpF 11) R11bbaab = true := by decide +kernel
+def R11bbaa : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16249343] R11bbaaa R11bbaab
+theorem R11bbaa_ok : tall (refOK cpF 11) R11bbaa = true :=
+  tall_node _ _ _ _ R11bbaaa_ok (by decide +kernel) R11bbaab_ok
+def R11bbaba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,15843104] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032,16605241] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032,16162124] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032,15875395] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032,15843168] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032,16010609] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032,16178557] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032,16178493] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032,16330072] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032,16773437] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032,16650176] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032,16633152] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032,16728710] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732096,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,15814534] .nil .nil)))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16330520] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16162572] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,15875907] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,15875395] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16162060] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16179005] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16178493] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16330008] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16650112] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16633152] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16605241] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16633664] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16773437] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16728710] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15814022,16170319] .nil .nil)))))
+theorem R11bbaba_ok : tall (refOK cpF 11) R11bbaba = true := by decide +kernel
+def R11bbabba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15843104,16650112] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15731968,16732038] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501080,15731968,15875395] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15974243,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15731968,16666545] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15732480] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15731968,16764864] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15814022,16650112] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13538188,15732480] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13538188,15731968,16728759] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13538188,15731968,16666545] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13538188,15731968,16736953] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968,16605375] (.node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968,16346526] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968,16736926] .nil .nil))))
+theorem R11bbabba_ok : tall (refOK cpF 11) R11bbabba = true := by decide +kernel
+def R11bbabbb : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11514140,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,11219035,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,11123256,13538188,15671960,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731992] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11219035,13501056,15731976] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11219035,13501056,16162060,16330008] (.node [113184,430348,902208,3227782,5521457,8532035,11219035,13501056,16010545,16330008] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11396184,13501056,15731992] .nil .nil))) (.node [113184,430348,902208,3227782,5521461,6145137,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8632931,11083800,13501056,15875395,16010545] (.node [113184,430348,902208,3227782,5521457,8632931,11083800,13501056,15814022,15875395] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8827215,11083800,13501056,15875395,16010545] .nil .nil)) (.node [113184,430348,902208,3227782,5521461,7852479,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521461,7731895,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521461,8242423,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R11bbabbb_ok : tall (refOK cpF 11) R11bbabbb = true := by decide +kernel
+def R11bbabb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731976] R11bbabba R11bbabbb
+theorem R11bbabb_ok : tall (refOK cpF 11) R11bbabb = true :=
+  tall_node _ _ _ _ R11bbabba_ok (by decide +kernel) R11bbabbb_ok
+def R11bbab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15875395,16076215] R11bbaba R11bbabb
+theorem R11bbab_ok : tall (refOK cpF 11) R11bbab = true :=
+  tall_node _ _ _ _ R11bbaba_ok (by decide +kernel) R11bbabb_ok
+def R11bba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032,15814086] R11bbaa R11bbab
+theorem R11bba_ok : tall (refOK cpF 11) R11bba = true :=
+  tall_node _ _ _ _ R11bbaa_ok (by decide +kernel) R11bbab_ok
+def R11bbbaa : Tree := (.node [113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968,16633152] (.node [113184,430348,902208,3227782,5521465,8532035,9434179,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521461,8532035,11083800,13501056,15731968,16728759] (.node [113184,430348,902208,3227782,5521461,8532035,11083800,13501056,15731968,16216311] (.node [113184,430348,902208,3227782,5521461,8532035,11083800,13501056,15731968,16076215] (.node [113184,430348,902208,3227782,5521461,8532035,11083800,13501056,15731968,15814022] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521461,8532035,11083800,13501056,15731968,16605375] .nil .nil)) (.node [113184,430348,902208,3227782,5521465,6145145,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,5634617,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521465,7684287,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521465,8532035,11083800,11759815,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,8532035,11083800,11396184,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,8532035,11083800,11123256,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521465,8532035,11083800,11514140,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521465,8532035,11083800,13501056,13616832,15731968] (.node [113184,430348,902208,3227782,5521465,8532035,11083800,12148894,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968,16605241] .nil .nil)))) (.node [113184,430348,902208,3227782,5521521,7852479,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521521,5689725,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521521,5634609,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,8532035,11123256,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521521,5634673,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521521,6145137,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521521,5765949,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521521,6280573,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521521,8532035,11083800,11219035,13501056,15731968] (.node [113184,430348,902208,3227782,5521521,8532035,9434179,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521521,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521521,8532035,11083800,11123256,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521521,8532035,11083800,11514140,13501056,15731968] (.node [113184,430348,902208,3227782,5521521,8532035,11083800,11396184,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521521,8532035,11083800,11759815,13501056,15731968] .nil .nil)))))
+theorem R11bbbaa_ok : tall (refOK cpF 11) R11bbbaa = true := by decide +kernel
+def R11bbbab : Tree := (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968,16605305] (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15671960,15731968] (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,14086527,15731968] (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,13616832,15731968] (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,13613728,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,14053491,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,14566129,15731968] (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,14566065,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,14603197,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968,16010609] (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968,15843104] (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968,15814022] .nil .nil) (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968,16010545] .nil .nil)) (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968,16330008] (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968,16178493] .nil .nil) (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968,16605241] .nil .nil)))) (.node [113184,430348,902208,3227782,5521717,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521585,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968,16728710] (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968,16633152] .nil .nil) (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968,16773437] .nil .nil)) (.node [113184,430348,902208,3227782,5521713,8532035,11083800,13501056,15875395,16010545] (.node [113184,430348,902208,3227782,5521713,8532035,11083800,13501056,15843104,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5521713,8532035,11083800,13501056,16010545,16330008] .nil .nil))) (.node [113184,430348,902208,3227782,5521969,5689661,8532035,11083800,13513411,15731968] (.node [113184,430348,902208,3227782,5521717,8532035,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521717,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521717,8532035,11083800,13501056,15731968,16076215] .nil .nil)) (.node [113184,430348,902208,3227782,5521969,8532035,11083800,13538188,15731968] (.node [113184,430348,902208,3227782,5521969,8532035,11083800,13513411,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5522097,5689661,8532035,11083800,13501056,15731968] .nil .nil)))))
+theorem R11bbbab_ok : tall (refOK cpF 11) R11bbbab = true := by decide +kernel
+def R11bbba : Tree := .node [113184,430348,902208,3227782,5521521,8532035,11083800,12148894,13501056,15731968] R11bbbaa R11bbbab
+theorem R11bbba_ok : tall (refOK cpF 11) R11bbba = true :=
+  tall_node _ _ _ _ R11bbbaa_ok (by decide +kernel) R11bbbab_ok
+def R11bbbba : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16608703] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501120,15731968] (.node [113184,430348,902208,3227782,5634609,8532035,11083800,13538188,14566065,15731968] (.node [113184,430348,902208,3227782,5554229,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5554225,8532035,11083800,13501056,14566065,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5586993,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,6045745,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5634865,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15732480] .nil .nil))) (.node [113184,430348,902208,3227782,5689661,7684791,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5689661,7684279,8532163,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083864,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5689661,7684279,8533059,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16076215] (.node [113184,430348,902208,3227782,5689661,8462369,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605305] .nil .nil)))) (.node [113184,430348,902208,3227782,5689661,8532035,11254395,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15732032,16605241] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15732032,16010545] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731969,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15732032,16010609] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15974243,16010545] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15732480,16605241] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,16010545,16465243] .nil .nil))) (.node [113184,430348,902208,3227782,5689661,8533059,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5689661,8532163,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5689661,8532163,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532547,11083800,13501056,15731968,16010545] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,8827215,11083800,13501056,15875395,16010545] (.node [113184,430348,902208,3227782,5689661,8533059,11083800,13501056,15731968,16605241] .nil .nil) (.node [113184,430348,902208,3227782,5689661,9434179,11083800,13501056,15875395,16010545] .nil .nil)))))
+theorem R11bbbba_ok : tall (refOK cpF 11) R11bbbba = true := by decide +kernel
+def R11bbbbb : Tree := (.node [113184,430349,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3228294,5521457,5689661,8532035,11083800,13513411,15731968] (.node [113184,430348,902208,3227782,6145393,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5765949,8532035,11083800,13501056,15875395,16010545] (.node [113184,430348,902208,3227782,5765949,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,430348,902208,3227782,6145137,8532035,11083800,13501056,16010545,16330008] .nil .nil)) (.node [113184,430348,902208,3227782,7684279,8532035,11083800,13538188,14566065,15731968] (.node [113184,430348,902208,3227782,6280573,8532035,11083800,13501056,15875395,16010545] .nil .nil) (.node [113184,430348,902208,3227782,7684279,8632931,11083800,13501056,14053491,15731968] .nil .nil))) (.node [113184,430348,902208,4048070,5521457,8532035,11083800,13501056,15814022,16650112] (.node [113184,430348,902208,3228294,5521457,8532035,11083800,13538188,15731968] (.node [113184,430348,902208,3228294,5521457,8532035,11083800,13513411,15731968] .nil .nil) (.node [113184,430348,902208,3275430,5521457,8532035,11083800,13501056,15814022,15875395] .nil .nil)) (.node [113184,430348,917088,3227782,5521457,8532035,11083800,13513411,13616832,15731968] (.node [113184,430348,902208,5521457,7684279,8827215,11083800,11759815,13501056,15731968] .nil .nil) (.node [113184,430349,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,16010545,16330008] (.node [113184,430476,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [113184,430476,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,430412,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430476,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil)) (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16608569] (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605375] .nil .nil) (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15843104,16010545] .nil .nil))) (.node [113184,506668,902208,5689661,7684279,8532035,11083800,12148894,13501056,15731968] (.node [113184,506668,902208,3275430,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,506668,902208,3227782,7684279,8532035,11083800,13501056,14603197,15731968] .nil .nil) (.node [113184,506668,902208,5689661,7684279,8532035,11083800,11759815,13501056,15731968] .nil .nil)) (.node [113184,902208,3227782,5689661,8532035,11083800,11514140,13501056,15875395,16010545] (.node [113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15731968,16605241] .nil .nil) (.node [113184,902208,5689661,7684279,8827215,11083800,11759815,13501056,15731968] .nil .nil)))))
+theorem R11bbbbb_ok : tall (refOK cpF 11) R11bbbbb = true := by decide +kernel
+def R11bbbb : Tree := .node [113184,430348,902208,3227782,5689725,7684279,8532035,11083800,13501056,15731968] R11bbbba R11bbbbb
+theorem R11bbbb_ok : tall (refOK cpF 11) R11bbbb = true :=
+  tall_node _ _ _ _ R11bbbba_ok (by decide +kernel) R11bbbbb_ok
+def R11bbb : Tree := .node [113184,430348,902208,3227782,5554225,7684279,8532035,11083800,13501056,15731968] R11bbba R11bbbb
+theorem R11bbb_ok : tall (refOK cpF 11) R11bbb = true :=
+  tall_node _ _ _ _ R11bbba_ok (by decide +kernel) R11bbbb_ok
+def R11bb : Tree := .node [113184,430348,902208,3227782,5521461,8532035,8632931,11083800,13501056,15731968] R11bba R11bbb
+theorem R11bb_ok : tall (refOK cpF 11) R11bb = true :=
+  tall_node _ _ _ _ R11bba_ok (by decide +kernel) R11bbb_ok
+def R11b : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,12057583,13501056,15731968] R11ba R11bb
+theorem R11b_ok : tall (refOK cpF 11) R11b = true :=
+  tall_node _ _ _ _ R11ba_ok (by decide +kernel) R11bb_ok
+def R11 : Tree := .node [81920,113184,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968] R11a R11b
+theorem R11_ok : tall (refOK cpF 11) R11 = true :=
+  tall_node _ _ _ _ R11a_ok (by decide +kernel) R11b_ok
+def T12aaaaaa : Tree := (.node [8,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil)
+theorem T12aaaaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaaaa = true := by decide +kernel
+def T12aaaaab : Tree := .nil
+theorem T12aaaaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaaab = true := by decide +kernel
+def T12aaaaa : Tree := .node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] T12aaaaaa T12aaaaab
+theorem T12aaaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaaa = true :=
+  tall_node _ _ _ _ T12aaaaaa_ok (by decide +kernel) T12aaaaab_ok
+def T12aaaaba : Tree := (.node [24,113184,430348,506668,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)
+theorem T12aaaaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaaba = true := by decide +kernel
+def T12aaaabb : Tree := .nil
+theorem T12aaaabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaabb = true := by decide +kernel
+def T12aaaab : Tree := .node [24,113184,430348,902208,917088,3227782,5521457,8532035,13501056,15731968] T12aaaaba T12aaaabb
+theorem T12aaaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaab = true :=
+  tall_node _ _ _ _ T12aaaaba_ok (by decide +kernel) T12aaaabb_ok
+def T12aaaa : Tree := .node [24,113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] T12aaaaa T12aaaab
+theorem T12aaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaa = true :=
+  tall_node _ _ _ _ T12aaaaa_ok (by decide +kernel) T12aaaab_ok
+def T12aaabaa : Tree := (.node [24,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,13501056,15731968] .nil .nil)
+theorem T12aaabaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaabaa = true := by decide +kernel
+def T12aaabab : Tree := .nil
+theorem T12aaabab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaabab = true := by decide +kernel
+def T12aaaba : Tree := .node [24,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] T12aaabaa T12aaabab
+theorem T12aaaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaba = true :=
+  tall_node _ _ _ _ T12aaabaa_ok (by decide +kernel) T12aaabab_ok
+def T12aaabb : Tree := (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,8632931,13501056,15731968] .nil .nil)
+theorem T12aaabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaabb = true := by decide +kernel
+def T12aaab : Tree := .node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731968] T12aaaba T12aaabb
+theorem T12aaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaab = true :=
+  tall_node _ _ _ _ T12aaaba_ok (by decide +kernel) T12aaabb_ok
+def T12aaa : Tree := .node [24,113184,430348,902208,1037644,3227782,5521457,8532035,13501056,15731968] T12aaaa T12aaab
+theorem T12aaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaa = true :=
+  tall_node _ _ _ _ T12aaaa_ok (by decide +kernel) T12aaab_ok
+def T12aabaa : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731968] .nil .nil) .nil)
+theorem T12aabaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabaa = true := by decide +kernel
+def T12aabab : Tree := (.node [33,113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil) .nil)
+theorem T12aabab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabab = true := by decide +kernel
+def T12aaba : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] T12aabaa T12aabab
+theorem T12aaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaba = true :=
+  tall_node _ _ _ _ T12aabaa_ok (by decide +kernel) T12aabab_ok
+def T12aabbaa : Tree := (.node [64,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12aabbaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabbaa = true := by decide +kernel
+def T12aabbab : Tree := .nil
+theorem T12aabbab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabbab = true := by decide +kernel
+def T12aabba : Tree := .node [64,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] T12aabbaa T12aabbab
+theorem T12aabba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabba = true :=
+  tall_node _ _ _ _ T12aabbaa_ok (by decide +kernel) T12aabbab_ok
+def T12aabbb : Tree := (.node [64,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12aabbb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabbb = true := by decide +kernel
+def T12aabb : Tree := .node [64,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] T12aabba T12aabbb
+theorem T12aabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabb = true :=
+  tall_node _ _ _ _ T12aabba_ok (by decide +kernel) T12aabbb_ok
+def T12aab : Tree := .node [64,1024,113184,430348,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T12aaba T12aabb
+theorem T12aab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aab = true :=
+  tall_node _ _ _ _ T12aaba_ok (by decide +kernel) T12aabb_ok
+def T12aa : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] T12aaa T12aab
+theorem T12aa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aa = true :=
   tall_node _ _ _ _ T12aaa_ok (by decide +kernel) T12aab_ok
-def T12aba : Tree := (.node [113184,430348,506668,902208,1048428,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1088,113184,430348,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [1024,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [1024,113184,430348,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] (.node [1024,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [1088,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [1088,113184,430348,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1088,113184,430348,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15875395] .nil .nil) (.node [113184,113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,114208,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,113312,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,114208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,506668,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,431372,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,506668,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [113184,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] .nil .nil))) (.node [113184,430348,902208,917088,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,5689661,8532035,11083800,13501056,13513411,15731968] (.node [113184,430348,506668,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,5689661,8532035,11083800,13501056,13538188,15731968] .nil .nil)) (.node [113184,430348,902208,1037644,3227782,5521457,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,13513411,15731968] .nil .nil) (.node [113184,430348,902208,1037644,3227782,5521457,5689661,8532035,11083800,13501056,13513411,15731968] .nil .nil)))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12aba_ok : tall (expFast false (classP') T11 11) T12aba = true := by decide +kernel
-def T12abb : Tree := (.node [113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968,16650112] (.node [113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968,15875395] (.node [113184,430348,902208,3227782,3227806,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,11219035,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3227790,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,3227846,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3227846,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3228294,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,3275430,5689661,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968,15875395] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil)) (.node [113184,430348,902208,3227782,4048070,5521457,5689661,8532035,11083800,13501056,15731968,16650112] (.node [113184,430348,902208,3227782,4048070,5521457,5689661,8532035,11083800,13501056,14566065,15731968] .nil .nil) (.node [113184,430348,902208,3227782,4048070,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8532163,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5521969,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5521521,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968,16650112] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8632931,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8533059,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,14566065,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732032] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15732032] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,13538188,15731968,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15732480] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15814022,15875395] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732480] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13538188,14566065,15731968] .nil .nil)))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12abb_ok : tall (expFast false (classP') T11 11) T12abb = true := by decide +kernel
-def T12ab : Tree := .node [113184,430348,902208,1037644,3227782,5521457,7684279,8532035,11083800,13501056,15731968] T12aba T12abb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12ab_ok : tall (expFast false (classP') T11 11) T12ab = true :=
+def T12abaaaa : Tree := (.node [640,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,15731968] .nil .nil)
+theorem T12abaaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abaaaa = true := by decide +kernel
+def T12abaaab : Tree := .nil
+theorem T12abaaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abaaab = true := by decide +kernel
+def T12abaaa : Tree := .node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T12abaaaa T12abaaab
+theorem T12abaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abaaa = true :=
+  tall_node _ _ _ _ T12abaaaa_ok (by decide +kernel) T12abaaab_ok
+def T12abaab : Tree := (.node [113184,113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil) .nil)
+theorem T12abaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abaab = true := by decide +kernel
+def T12abaa : Tree := .node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968] T12abaaa T12abaab
+theorem T12abaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abaa = true :=
+  tall_node _ _ _ _ T12abaaa_ok (by decide +kernel) T12abaab_ok
+def T12ababaa : Tree := (.node [113184,113312,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12ababaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12ababaa = true := by decide +kernel
+def T12ababab : Tree := .nil
+theorem T12ababab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12ababab = true := by decide +kernel
+def T12ababa : Tree := .node [113184,114208,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T12ababaa T12ababab
+theorem T12ababa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12ababa = true :=
+  tall_node _ _ _ _ T12ababaa_ok (by decide +kernel) T12ababab_ok
+def T12ababb : Tree := (.node [113184,430348,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12ababb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12ababb = true := by decide +kernel
+def T12abab : Tree := .node [113184,114208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] T12ababa T12ababb
+theorem T12abab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abab = true :=
+  tall_node _ _ _ _ T12ababa_ok (by decide +kernel) T12ababb_ok
+def T12aba : Tree := .node [113184,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] T12abaa T12abab
+theorem T12aba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aba = true :=
+  tall_node _ _ _ _ T12abaa_ok (by decide +kernel) T12abab_ok
+def T12abbaaa : Tree := (.node [113184,430348,506668,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12abbaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbaaa = true := by decide +kernel
+def T12abbaab : Tree := .nil
+theorem T12abbaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbaab = true := by decide +kernel
+def T12abbaa : Tree := .node [113184,430348,506668,902208,1048428,3227782,5521457,8532035,11083800,13501056,15731968] T12abbaaa T12abbaab
+theorem T12abbaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbaa = true :=
+  tall_node _ _ _ _ T12abbaaa_ok (by decide +kernel) T12abbaab_ok
+def T12abbab : Tree := (.node [113184,430348,506668,902208,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12abbab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbab = true := by decide +kernel
+def T12abba : Tree := .node [113184,430348,506668,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] T12abbaa T12abbab
+theorem T12abba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abba = true :=
+  tall_node _ _ _ _ T12abbaa_ok (by decide +kernel) T12abbab_ok
+def T12abbbaa : Tree := (.node [113184,430348,506668,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12abbbaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbbaa = true := by decide +kernel
+def T12abbbab : Tree := .nil
+theorem T12abbbab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbbab = true := by decide +kernel
+def T12abbba : Tree := .node [113184,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] T12abbbaa T12abbbab
+theorem T12abbba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbba = true :=
+  tall_node _ _ _ _ T12abbbaa_ok (by decide +kernel) T12abbbab_ok
+def T12abbbb : Tree := (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] .nil .nil)
+theorem T12abbbb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbbb = true := by decide +kernel
+def T12abbb : Tree := .node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] T12abbba T12abbbb
+theorem T12abbb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbb = true :=
+  tall_node _ _ _ _ T12abbba_ok (by decide +kernel) T12abbbb_ok
+def T12abb : Tree := .node [113184,430348,506668,902208,3227782,5521457,5689661,7684279,8532035,11083800,13501056,15731968] T12abba T12abbb
+theorem T12abb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abb = true :=
+  tall_node _ _ _ _ T12abba_ok (by decide +kernel) T12abbb_ok
+def T12ab : Tree := .node [113184,430348,506668,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] T12aba T12abb
+theorem T12ab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12ab = true :=
   tall_node _ _ _ _ T12aba_ok (by decide +kernel) T12abb_ok
-def T12a : Tree := .node [1024,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] T12aa T12ab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12a_ok : tall (expFast false (classP') T11 11) T12a = true :=
+def T12a : Tree := .node [64,113184,430348,1037644,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T12aa T12ab
+theorem T12a_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12a = true :=
   tall_node _ _ _ _ T12aa_ok (by decide +kernel) T12ab_ok
-def T12baa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5521457,8532035,8532051,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,7684279,8242423,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,6145137,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8632931,11083800,13501056,15731968,15875395] (.node [113184,430348,902208,3227782,5521457,5689661,8533059,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968,16330008] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,7684279,8532035,8827215,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,7684279,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968,15875395] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11219035,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8532163,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8532059,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11123256,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,12148894,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11254395,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil)))) (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968,16650112] (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,13546447,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,13513411,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,16330008] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,13538188,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,14566065,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968,16010545] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,13538188,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8895343,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968,15814022] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,14566065,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968,16010545] .nil .nil)))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12baa_ok : tall (expFast false (classP') T11 11) T12baa = true := by decide +kernel
-def T12bab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11123256,12148894,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545,16666545] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15732480] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15731976] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731968,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15731992] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022,16346526] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022,16330008] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545,16650112] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16076215] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15731968,16650112] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13538188,14566065,15731968] .nil .nil)))) (.node [113184,430348,902208,3227782,5521521,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532051,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11219035,13501056,15731968,16330008] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532059,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521461,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8533059,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521713,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521969,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,6145137,8532035,11083800,13501056,14566065,15731968] (.node [113184,430348,902208,3227782,5689661,6145137,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5689661,7684279,8242423,8532035,11083800,13501056,15731968] .nil .nil)))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12bab_ok : tall (expFast false (classP') T11 11) T12bab = true := by decide +kernel
-def T12ba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968,16010545] T12baa T12bab
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12ba_ok : tall (expFast false (classP') T11 11) T12ba = true :=
+def T12baaaaa : Tree := (.node [113184,430348,506668,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12baaaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaaaa = true := by decide +kernel
+def T12baaaab : Tree := .nil
+theorem T12baaaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaaab = true := by decide +kernel
+def T12baaaa : Tree := .node [113184,430348,902208,917088,3227782,5521457,5689661,8532035,11083800,13501056,13513411,15731968] T12baaaaa T12baaaab
+theorem T12baaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaaa = true :=
+  tall_node _ _ _ _ T12baaaaa_ok (by decide +kernel) T12baaaab_ok
+def T12baaaba : Tree := (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,13513411,15731968] .nil .nil)
+theorem T12baaaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaaba = true := by decide +kernel
+def T12baaabb : Tree := .nil
+theorem T12baaabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaabb = true := by decide +kernel
+def T12baaab : Tree := .node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,11219035,13501056,15731968] T12baaaba T12baaabb
+theorem T12baaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaab = true :=
+  tall_node _ _ _ _ T12baaaba_ok (by decide +kernel) T12baaabb_ok
+def T12baaa : Tree := .node [113184,430348,902208,917088,3227782,5521457,5689661,8532035,11083800,13501056,13538188,15731968] T12baaaa T12baaab
+theorem T12baaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaa = true :=
+  tall_node _ _ _ _ T12baaaa_ok (by decide +kernel) T12baaab_ok
+def T12baabaa : Tree := (.node [113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968,15875395] .nil .nil)
+theorem T12baabaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baabaa = true := by decide +kernel
+def T12baabab : Tree := .nil
+theorem T12baabab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baabab = true := by decide +kernel
+def T12baaba : Tree := .node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968,15875395] T12baabaa T12baabab
+theorem T12baaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaba = true :=
+  tall_node _ _ _ _ T12baabaa_ok (by decide +kernel) T12baabab_ok
+def T12baabb : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil)
+theorem T12baabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baabb = true := by decide +kernel
+def T12baab : Tree := .node [113184,430348,902208,3227782,3275430,5689661,8532035,11083800,13501056,15731968,16010545] T12baaba T12baabb
+theorem T12baab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baab = true :=
+  tall_node _ _ _ _ T12baaba_ok (by decide +kernel) T12baabb_ok
+def T12baa : Tree := .node [113184,430348,902208,1037644,3227782,5689661,7684279,8532035,11083800,13501056,15731968] T12baaa T12baab
+theorem T12baa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baa = true :=
+  tall_node _ _ _ _ T12baaa_ok (by decide +kernel) T12baab_ok
+def T12babaaa : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732480] .nil .nil)
+theorem T12babaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babaaa = true := by decide +kernel
+def T12babaab : Tree := .nil
+theorem T12babaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babaab = true := by decide +kernel
+def T12babaa : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15814022,15875395] T12babaaa T12babaab
+theorem T12babaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babaa = true :=
+  tall_node _ _ _ _ T12babaaa_ok (by decide +kernel) T12babaab_ok
+def T12bababa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11123256,13501056,15731968] .nil .nil)
+theorem T12bababa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bababa = true := by decide +kernel
+def T12bababb : Tree := .nil
+theorem T12bababb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bababb = true := by decide +kernel
+def T12babab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11254395,13501056,15731968] T12bababa T12bababb
+theorem T12babab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babab = true :=
+  tall_node _ _ _ _ T12bababa_ok (by decide +kernel) T12bababb_ok
+def T12baba : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13538188,14566065,15731968] T12babaa T12babab
+theorem T12baba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baba = true :=
+  tall_node _ _ _ _ T12babaa_ok (by decide +kernel) T12babab_ok
+def T12babbaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil)
+theorem T12babbaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babbaa = true := by decide +kernel
+def T12babbab : Tree := .nil
+theorem T12babbab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babbab = true := by decide +kernel
+def T12babba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8895343,11083800,13501056,15731968] T12babbaa T12babbab
+theorem T12babba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babba = true :=
+  tall_node _ _ _ _ T12babbaa_ok (by decide +kernel) T12babbab_ok
+def T12babbb : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] .nil .nil)
+theorem T12babbb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babbb = true := by decide +kernel
+def T12babb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] T12babba T12babbb
+theorem T12babb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babb = true :=
+  tall_node _ _ _ _ T12babba_ok (by decide +kernel) T12babbb_ok
+def T12bab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,12148894,13501056,15731968] T12baba T12babb
+theorem T12bab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bab = true :=
+  tall_node _ _ _ _ T12baba_ok (by decide +kernel) T12babb_ok
+def T12ba : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732032] T12baa T12bab
+theorem T12ba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12ba = true :=
   tall_node _ _ _ _ T12baa_ok (by decide +kernel) T12bab_ok
-def T12bba : Tree := (.node [113184,430348,902208,3227846,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,15814022,16010545] (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,15875395] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,15814022] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,16010545] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,13538188,15731968,16010545] (.node [113184,430348,902208,3227782,5689661,8532035,8827215,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,14566065,15731968,16010545] .nil .nil))) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16076215] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,15814022,16605241] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,15814022,16076215] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545,16666545] .nil .nil)) (.node [113184,430348,902208,3227790,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875395,16010545] .nil .nil) (.node [113184,430348,902208,3227806,5521457,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [113184,430348,1037644,3227782,5521457,6145137,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3275430,5521457,5689661,8532035,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3228294,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3228294,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,917088,3227782,4048070,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3275430,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,1037644,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430476,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430349,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil) (.node [113184,430380,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,431372,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,431372,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12bba_ok : tall (expFast false (classP') T11 11) T12bba = true := by decide +kernel
-def T12bbb : Tree := (.node [113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,14566065,15731968] (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [113184,506668,902208,3227782,5521457,5689661,8532035,8632931,11083800,13501056,15731968] (.node [113184,506668,902208,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] (.node [113184,506668,902208,1048428,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,506668,902208,3227782,5521457,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15875395] (.node [113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15814022] .nil .nil) (.node [113184,506668,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,902208,3227782,5521457,5689661,8532035,8632931,8895343,11083800,13501056,15731968] (.node [113184,902208,3227782,3275430,5521457,5689661,8532035,8827215,11083800,13501056,15731968] (.node [113184,902208,1037644,3227782,5521457,5689661,8532035,11083800,13501056,13538188,15731968] .nil .nil) (.node [113184,902208,3227782,5521457,5689661,8532035,8632931,8827215,11083800,13501056,15731968] .nil .nil)) (.node [113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,13538188,15731968] (.node [113184,902208,3227782,5521457,5689661,8532035,8632931,11083800,11514140,13501056,15731968] .nil .nil) (.node [113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,13546447,15731968] .nil .nil)))) (.node [113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968,15814022] (.node [113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968,16010545] (.node [113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968,15814022] .nil .nil) (.node [113184,902208,3227782,5521457,5689661,8532035,8895343,11083800,13501056,15731968] .nil .nil)) (.node [113184,902208,3227782,5689661,7684279,8532035,8827215,11083800,13501056,15731968] (.node [113184,902208,3227782,5521457,5689661,8827215,11083800,13501056,15731968,15875395] .nil .nil) (.node [113184,902208,3227782,5689661,8532035,8827215,11083800,13501056,15731968,16010545] .nil .nil))) (.node [114208,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113312,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113312,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [430348,902208,3227782,3275430,5521457,5689661,8532035,8632931,11083800,13501056,15731968] (.node [114208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [506668,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12bbb_ok : tall (expFast false (classP') T11 11) T12bbb = true := by decide +kernel
-def T12bb : Tree := .node [113184,506668,902208,1037644,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T12bba T12bbb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12bb_ok : tall (expFast false (classP') T11 11) T12bb = true :=
+def T12bbaaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15731968,16650112] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] .nil .nil) .nil)
+theorem T12bbaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbaaa = true := by decide +kernel
+def T12bbaaba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11123256,12148894,13501056,15731968] .nil .nil)
+theorem T12bbaaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbaaba = true := by decide +kernel
+def T12bbaabb : Tree := .nil
+theorem T12bbaabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbaabb = true := by decide +kernel
+def T12bbaab : Tree := .node [113184,430348,902208,3227782,5521461,7684279,8532035,11083800,13501056,15731968] T12bbaaba T12bbaabb
+theorem T12bbaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbaab = true :=
+  tall_node _ _ _ _ T12bbaaba_ok (by decide +kernel) T12bbaabb_ok
+def T12bbaa : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13538188,14566065,15731968] T12bbaaa T12bbaab
+theorem T12bbaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbaa = true :=
+  tall_node _ _ _ _ T12bbaaa_ok (by decide +kernel) T12bbaab_ok
+def T12bbaba : Tree := (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521521,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil)
+theorem T12bbaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbaba = true := by decide +kernel
+def T12bbabb : Tree := (.node [113184,430348,902208,3227782,5689661,6145137,8532035,11083800,13501056,14566065,15731968] .nil .nil)
+theorem T12bbabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbabb = true := by decide +kernel
+def T12bbab : Tree := .node [113184,430348,902208,3227782,5689661,6145137,7684279,8532035,11083800,13501056,15731968] T12bbaba T12bbabb
+theorem T12bbab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbab = true :=
+  tall_node _ _ _ _ T12bbaba_ok (by decide +kernel) T12bbabb_ok
+def T12bba : Tree := .node [113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] T12bbaa T12bbab
+theorem T12bba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bba = true :=
+  tall_node _ _ _ _ T12bbaa_ok (by decide +kernel) T12bbab_ok
+def T12bbbaaa : Tree := (.node [113184,430348,902208,3227782,5689661,7684279,8532035,8632931,11083800,13501056,15731968] .nil .nil)
+theorem T12bbbaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbaaa = true := by decide +kernel
+def T12bbbaab : Tree := .nil
+theorem T12bbbaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbaab = true := by decide +kernel
+def T12bbbaa : Tree := .node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,15814022] T12bbbaaa T12bbbaab
+theorem T12bbbaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbaa = true :=
+  tall_node _ _ _ _ T12bbbaaa_ok (by decide +kernel) T12bbbaab_ok
+def T12bbbab : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,15814022,16076215] .nil .nil)
+theorem T12bbbab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbab = true := by decide +kernel
+def T12bbba : Tree := .node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,16605241] T12bbbaa T12bbbab
+theorem T12bbba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbba = true :=
+  tall_node _ _ _ _ T12bbbaa_ok (by decide +kernel) T12bbbab_ok
+def T12bbbbaa : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16076215] .nil .nil)
+theorem T12bbbbaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbbaa = true := by decide +kernel
+def T12bbbbab : Tree := .nil
+theorem T12bbbbab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbbab = true := by decide +kernel
+def T12bbbba : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875395,16010545] T12bbbbaa T12bbbbab
+theorem T12bbbba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbba = true :=
+  tall_node _ _ _ _ T12bbbbaa_ok (by decide +kernel) T12bbbbab_ok
+def T12bbbbb : Tree := (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil)
+theorem T12bbbbb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbbb = true := by decide +kernel
+def T12bbbb : Tree := .node [113184,506668,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] T12bbbba T12bbbbb
+theorem T12bbbb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbb = true :=
+  tall_node _ _ _ _ T12bbbba_ok (by decide +kernel) T12bbbbb_ok
+def T12bbb : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,15814022,16605241] T12bbba T12bbbb
+theorem T12bbb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbb = true :=
+  tall_node _ _ _ _ T12bbba_ok (by decide +kernel) T12bbbb_ok
+def T12bb : Tree := .node [113184,430348,902208,3227782,5689661,7684279,8242423,8532035,11083800,13501056,15731968] T12bba T12bbb
+theorem T12bb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bb = true :=
   tall_node _ _ _ _ T12bba_ok (by decide +kernel) T12bbb_ok
-def T12b : Tree := .node [113184,430348,902208,3227782,5689661,7684279,8532035,8632931,11083800,13501056,15731968] T12ba T12bb
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12b_ok : tall (expFast false (classP') T11 11) T12b = true :=
+def T12b : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] T12ba T12bb
+theorem T12b_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12b = true :=
   tall_node _ _ _ _ T12ba_ok (by decide +kernel) T12bb_ok
-def T12 : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,13501056,15731968] T12a T12b
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T12_ok : tall (expFast false (classP') T11 11) T12 = true :=
+def T12 : Tree := .node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] T12a T12b
+theorem T12_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12 = true :=
   tall_node _ _ _ _ T12a_ok (by decide +kernel) T12b_ok
-def T13a : Tree := (.node [113184,430348,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [16,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil)) (.node [64,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) .nil)) (.node [512,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [128,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [128,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [512,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [1024,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1024,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil))) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,4048070,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8632931,11083800,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T13a_ok : tall (expFast false (classP') T12 12) T13a = true := by decide +kernel
-def T13b : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] (.node [113184,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15875395] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,14566065,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,13538188,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15814022] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,16650112] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] .nil .nil) .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16650112] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16330008] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil) .nil)) (.node [113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil)) (.node [113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] (.node [113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968] .nil .nil) .nil))))
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T13b_ok : tall (expFast false (classP') T12 12) T13b = true := by decide +kernel
-def T13 : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,13513411,15731968] T13a T13b
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T13_ok : tall (expFast false (classP') T12 12) T13 = true :=
+def R12aaaaa : Tree := (.node [1,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [1,512,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1,24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1,16,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1,8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [1,24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil)) (.node [1,64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1,24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [1,128,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [1,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1,1024,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [1,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [1,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] (.node [1,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [1,113184,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731968] (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] (.node [1,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [1,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] .nil .nil)) (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] .nil .nil) (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] .nil .nil))) (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16330008] (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil) (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil)) (.node [1,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16650112] .nil .nil) .nil))))
+theorem R12aaaaa_ok : tall (refOK cpF 12) R12aaaaa = true := by decide +kernel
+def R12aaaab : Tree := (.node [2,113184,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] (.node [2,24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [1,113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] (.node [1,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [1,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [1,113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968] .nil .nil)) (.node [2,24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [2,8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [2,24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [2,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [2,512,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [2,64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [2,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [2,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [2,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [2,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [3,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [2,113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] (.node [2,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [2,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [2,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] .nil .nil)) (.node [2,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [2,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [2,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil))) (.node [8,16,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [3,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [3,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [3,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil)) (.node [8,24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [8,16,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) .nil))))
+theorem R12aaaab_ok : tall (refOK cpF 12) R12aaaab = true := by decide +kernel
+def R12aaaa : Tree := .node [1,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,14566065,15731968] R12aaaaa R12aaaab
+theorem R12aaaa_ok : tall (refOK cpF 12) R12aaaa = true :=
+  tall_node _ _ _ _ R12aaaaa_ok (by decide +kernel) R12aaaab_ok
+def R12aaaba : Tree := (.node [8,113184,430348,786432,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,12288,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [8,128,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [8,65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [8,73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [8,113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,113192,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,98304,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [8,113184,262144,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [8,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,294912,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [8,113184,430348,589824,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [8,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,1064960,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,902216,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [8,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [8,113184,430348,902208,3145728,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,2162688,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [8,113184,430348,902208,3227782,3227790,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [8,113184,430348,902208,3227782,5521457,5634609,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [8,113184,430348,902208,3227782,5521457,5521465,8532035,11083800,13501056,15731968] .nil .nil)) (.node [8,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil) .nil))))
+theorem R12aaaba_ok : tall (refOK cpF 12) R12aaaba = true := by decide +kernel
+def R12aaabba : Tree := (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16605241] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,11759815,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,11396184,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] .nil .nil) (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,11514140,13501056,15731968] .nil .nil)) (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13616832,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] .nil .nil) (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [8,113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16633152] .nil .nil) (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501064,15731968] .nil .nil)) (.node [8,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532043,11083800,13501056,15731968] .nil .nil) (.node [8,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R12aaabba_ok : tall (refOK cpF 12) R12aaabba = true := by decide +kernel
+def R12aaabbb : Tree := (.node [24,12288,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [24,64,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [12,113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] (.node [8,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [12,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [24,64,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [24,12288,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil))) (.node [24,36864,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,36864,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [24,12288,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [24,36896,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,36896,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil) .nil)))
+theorem R12aaabbb_ok : tall (refOK cpF 12) R12aaabbb = true := by decide +kernel
+def R12aaabb : Tree := .node [8,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] R12aaabba R12aaabbb
+theorem R12aaabb_ok : tall (refOK cpF 12) R12aaabb = true :=
+  tall_node _ _ _ _ R12aaabba_ok (by decide +kernel) R12aaabbb_ok
+def R12aaab : Tree := .node [8,113184,430348,902208,3227782,5521457,8532035,9434179,11083800,13501056,15731968] R12aaaba R12aaabb
+theorem R12aaab_ok : tall (refOK cpF 12) R12aaab = true :=
+  tall_node _ _ _ _ R12aaaba_ok (by decide +kernel) R12aaabb_ok
+def R12aaa : Tree := .node [8,24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R12aaaa R12aaab
+theorem R12aaa_ok : tall (refOK cpF 12) R12aaa = true :=
+  tall_node _ _ _ _ R12aaaa_ok (by decide +kernel) R12aaab_ok
+def R12aabaaa : Tree := (.node [24,113184,113208,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [24,73728,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,65536,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [24,73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [24,81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [24,81920,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil) (.node [24,81920,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil))) (.node [24,113184,262144,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,262144,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [24,113184,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [24,113184,262144,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [24,113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [24,113184,278528,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil) (.node [24,113184,278528,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil))))
+theorem R12aabaaa_ok : tall (refOK cpF 12) R12aabaaa = true := by decide +kernel
+def R12aabaab : Tree := (.node [24,113184,430348,589824,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,430348,430364,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,430348,430364,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [24,113184,311296,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [24,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [24,113184,430348,506668,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,589824,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [24,113184,430348,902208,902232,3227782,5521457,5689661,8532035,13501056,15731968] (.node [24,113184,430348,786432,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [24,113184,430348,786432,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,786432,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,902232,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,902232,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil)))
+theorem R12aabaab_ok : tall (refOK cpF 12) R12aabaab = true := by decide +kernel
+def R12aabaa : Tree := .node [24,113184,311296,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] R12aabaaa R12aabaab
+theorem R12aabaa_ok : tall (refOK cpF 12) R12aabaa = true :=
+  tall_node _ _ _ _ R12aabaaa_ok (by decide +kernel) R12aabaab_ok
+def R12aababa : Tree := (.node [24,113184,430348,902208,3227782,5521457,5689661,6280573,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,3658126,5521457,5689661,8532035,13501056,15731968] (.node [24,113184,430348,902208,1037644,3227782,5521457,5689661,8532035,13501056,15731968] (.node [24,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,3658126,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,5689661,5765949,8532035,13501056,15731968] .nil .nil))) (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731992] (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,11759815,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,9434179,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,13616832,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,5765949,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,13501080,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,6280573,8532035,13501056,15731968] .nil .nil))))
+theorem R12aababa_ok : tall (refOK cpF 12) R12aababa = true := by decide +kernel
+def R12aababba : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,11514140,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,9434179,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,11396184,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13616832,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,11759815,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] .nil .nil)))
+theorem R12aababba_ok : tall (refOK cpF 12) R12aababba = true := by decide +kernel
+def R12aababbb : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,11759815,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,11396184,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,11514140,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521465,5689661,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,13616832,15731968] .nil .nil) .nil))
+theorem R12aababbb_ok : tall (refOK cpF 12) R12aababbb = true := by decide +kernel
+def R12aababb : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,11083800,13501080,15731968] R12aababba R12aababbb
+theorem R12aababb_ok : tall (refOK cpF 12) R12aababb = true :=
+  tall_node _ _ _ _ R12aababba_ok (by decide +kernel) R12aababbb_ok
+def R12aabab : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,9434179,11083800,13501056,15731968] R12aababa R12aababb
+theorem R12aabab_ok : tall (refOK cpF 12) R12aabab = true :=
+  tall_node _ _ _ _ R12aababa_ok (by decide +kernel) R12aababb_ok
+def R12aaba : Tree := .node [24,113184,430348,902208,917088,3227782,5521457,5689661,8532035,13501056,15731968] R12aabaa R12aabab
+theorem R12aaba_ok : tall (refOK cpF 12) R12aaba = true :=
+  tall_node _ _ _ _ R12aabaa_ok (by decide +kernel) R12aabab_ok
+def R12aabbaa : Tree := (.node [33,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968] (.node [24,113184,430348,902208,3227782,5689661,8532035,13501056,15731968,16605241] (.node [24,113184,430348,902208,3227782,5689661,7684279,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil)) (.node [33,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [33,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [33,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [64,1024,113184,430348,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,512,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,128,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,1024,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [64,36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,12288,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R12aabbaa_ok : tall (refOK cpF 12) R12aabbaa = true := by decide +kernel
+def R12aabbab : Tree := (.node [64,113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,113248,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,98304,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [64,113184,135169,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,135168,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,262144,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [64,113184,430348,430412,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,311296,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,294912,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,393216,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [64,113184,430348,786432,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,589824,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil)))
+theorem R12aabbab_ok : tall (refOK cpF 12) R12aabbab = true := by decide +kernel
+def R12aabba : Tree := .node [64,65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R12aabbaa R12aabbab
+theorem R12aabba_ok : tall (refOK cpF 12) R12aabba = true :=
+  tall_node _ _ _ _ R12aabbaa_ok (by decide +kernel) R12aabbab_ok
+def R12aabbb : Tree := (.node [64,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732032] (.node [64,113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,2162688,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,1064960,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,1064964,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [64,113184,430348,902208,3227782,3227846,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3145728,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [64,113184,430348,902208,3227782,5242880,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,4456448,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,4587520,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [64,113184,430348,902208,3227782,5521457,5521521,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5243136,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,5634609,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [64,113184,430348,902208,3227782,5521457,8388608,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,5765949,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,5689661,8532035,11083864,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501120,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,5689725,8532035,11083800,13501056,15731968] .nil .nil)) (.node [64,113184,430348,902208,3227782,5521457,6280573,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,7852479,8532035,11083800,13501056,15731968] .nil .nil))) (.node [64,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8519680,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8396800,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil)) (.node [64,113184,430348,902208,3227782,5521457,8532035,9434179,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,8912896,11083800,13501056,15731968] .nil .nil) .nil))))
+theorem R12aabbb_ok : tall (refOK cpF 12) R12aabbb = true := by decide +kernel
+def R12aabb : Tree := .node [64,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] R12aabba R12aabbb
+theorem R12aabb_ok : tall (refOK cpF 12) R12aabb = true :=
+  tall_node _ _ _ _ R12aabba_ok (by decide +kernel) R12aabbb_ok
+def R12aab : Tree := .node [24,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] R12aaba R12aabb
+theorem R12aab_ok : tall (refOK cpF 12) R12aab = true :=
+  tall_node _ _ _ _ R12aaba_ok (by decide +kernel) R12aabb_ok
+def R12aa : Tree := .node [24,65536,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] R12aaa R12aab
+theorem R12aa_ok : tall (refOK cpF 12) R12aa = true :=
+  tall_node _ _ _ _ R12aaa_ok (by decide +kernel) R12aab_ok
+def R12abaaa : Tree := (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,12582912,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,11396184,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,11083864,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] .nil .nil)) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,11759815,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,11514140,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] .nil .nil))) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13613728,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13501120,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] .nil .nil)) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14053491,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13616832,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14086527,15731968] .nil .nil)))) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16162060] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15671960,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14603197,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15732032] .nil .nil)) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15843104] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil))) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16633152] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16330008] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16178493] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16605241] .nil .nil)) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16728710] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16650112] .nil .nil) .nil))))
+theorem R12abaaa_ok : tall (refOK cpF 12) R12abaaa = true := by decide +kernel
+def R12abaabaa : Tree := (.node [64,113184,430348,902208,3227782,5521521,5689661,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501120,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083864,13501056,15731968] .nil .nil)) (.node [64,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [64,113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil)))
+theorem R12abaabaa_ok : tall (refOK cpF 12) R12abaabaa = true := by decide +kernel
+def R12abaabab : Tree := (.node [64,113184,430348,1037644,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,917088,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [64,113184,430412,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430412,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)))
+theorem R12abaabab_ok : tall (refOK cpF 12) R12abaabab = true := by decide +kernel
+def R12abaaba : Tree := .node [64,113184,430348,902208,3227846,5521457,5689661,8532035,11083800,13501056,15731968] R12abaabaa R12abaabab
+theorem R12abaaba_ok : tall (refOK cpF 12) R12abaaba = true :=
+  tall_node _ _ _ _ R12abaabaa_ok (by decide +kernel) R12abaabab_ok
+def R12abaabb : Tree := (.node [66,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [65,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [64,113248,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [64,113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] .nil .nil) (.node [64,113248,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [65,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [65,113184,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil) (.node [66,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [640,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [66,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [640,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,15731968] .nil .nil)) (.node [12288,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [12288,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil)))
+theorem R12abaabb_ok : tall (refOK cpF 12) R12abaabb = true := by decide +kernel
+def R12abaab : Tree := .node [64,113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968] R12abaaba R12abaabb
+theorem R12abaab_ok : tall (refOK cpF 12) R12abaab = true :=
+  tall_node _ _ _ _ R12abaaba_ok (by decide +kernel) R12abaabb_ok
+def R12abaa : Tree := .node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16773437] R12abaaa R12abaab
+theorem R12abaa_ok : tall (refOK cpF 12) R12abaa = true :=
+  tall_node _ _ _ _ R12abaaa_ok (by decide +kernel) R12abaab_ok
+def R12ababa : Tree := (.node [12352,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [12288,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [12288,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [12288,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] (.node [12288,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [12288,113184,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil)) (.node [12288,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [12288,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [12288,113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] .nil .nil))) (.node [12288,113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] (.node [12288,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [12288,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [12288,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [12290,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [12290,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [12290,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [36864,113184,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] (.node [36864,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [12352,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [12352,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [36864,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [36864,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [36864,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [36864,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [36864,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil)) (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] .nil .nil) .nil))))
+theorem R12ababa_ok : tall (refOK cpF 12) R12ababa = true := by decide +kernel
+def R12ababb : Tree := (.node [36872,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731968] (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] .nil .nil) (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil)) (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16330008] (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16650112] .nil .nil))) (.node [36864,113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [36864,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [36864,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [36868,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [36868,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [36868,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [36896,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [36896,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36896,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36872,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [36896,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [36896,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] (.node [36896,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [36896,113184,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil))) (.node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] (.node [36896,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [36896,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] .nil .nil)) (.node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731968] .nil .nil) .nil))))
+theorem R12ababb_ok : tall (refOK cpF 12) R12ababb = true := by decide +kernel
+def R12abab : Tree := .node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] R12ababa R12ababb
+theorem R12abab_ok : tall (refOK cpF 12) R12abab = true :=
+  tall_node _ _ _ _ R12ababa_ok (by decide +kernel) R12ababb_ok
+def R12aba : Tree := .node [12288,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] R12abaa R12abab
+theorem R12aba_ok : tall (refOK cpF 12) R12aba = true :=
+  tall_node _ _ _ _ R12abaa_ok (by decide +kernel) R12abab_ok
+def R12abbaa : Tree := (.node [65536,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36896,113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] (.node [36896,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16650112] (.node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [36896,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil)) (.node [36896,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [36896,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil) (.node [36896,113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968] .nil .nil))) (.node [45056,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [37376,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] (.node [37376,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [37376,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [45056,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [45056,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil) (.node [45056,113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968] .nil .nil)))) (.node [65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] (.node [65536,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [65536,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] (.node [65536,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [65536,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [65536,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [65536,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil) (.node [65536,113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] .nil .nil))) (.node [65536,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] .nil .nil) (.node [65536,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil)) (.node [65538,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [65536,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil) .nil))))
+theorem R12abbaa_ok : tall (refOK cpF 12) R12abbaa = true := by decide +kernel
+def R12abbaba : Tree := (.node [73728,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] (.node [65540,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [65540,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [65538,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [65540,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [73728,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [65540,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [73728,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [73728,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [73728,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] (.node [73728,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [73728,113184,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil)) (.node [73728,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [73728,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] .nil .nil))))
+theorem R12abbaba_ok : tall (refOK cpF 12) R12abbaba = true := by decide +kernel
+def R12abbabb : Tree := (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731968] (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] .nil .nil) (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] .nil .nil)) (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] .nil .nil))) (.node [73728,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16650112] (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16330008] .nil .nil) (.node [73728,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil)) (.node [73728,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [73728,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil) .nil)))
+theorem R12abbabb_ok : tall (refOK cpF 12) R12abbabb = true := by decide +kernel
+def R12abbab : Tree := .node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] R12abbaba R12abbabb
+theorem R12abbab_ok : tall (refOK cpF 12) R12abbab = true :=
+  tall_node _ _ _ _ R12abbaba_ok (by decide +kernel) R12abbabb_ok
+def R12abba : Tree := .node [65538,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] R12abbaa R12abbab
+theorem R12abba_ok : tall (refOK cpF 12) R12abba = true :=
+  tall_node _ _ _ _ R12abbaa_ok (by decide +kernel) R12abbab_ok
+def R12abbbaa : Tree := (.node [75776,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16330008] (.node [73736,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [73736,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [73728,113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] .nil .nil) (.node [73736,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [73760,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [73736,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [75776,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [81920,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [77824,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [77824,113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] .nil .nil) (.node [81920,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [81920,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [81920,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [81920,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R12abbbaa_ok : tall (refOK cpF 12) R12abbbaa = true := by decide +kernel
+def R12abbbab : Tree := (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] (.node [81920,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [81920,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [81920,113184,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil) (.node [81920,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil)) (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] .nil .nil) (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] .nil .nil))) (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731968] (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] .nil .nil) (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] .nil .nil) .nil)))
+theorem R12abbbab_ok : tall (refOK cpF 12) R12abbbab = true := by decide +kernel
+def R12abbba : Tree := .node [81920,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R12abbbaa R12abbbab
+theorem R12abbba_ok : tall (refOK cpF 12) R12abbba = true :=
+  tall_node _ _ _ _ R12abbbaa_ok (by decide +kernel) R12abbbab_ok
+def R12abbbba : Tree := (.node [81924,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] (.node [81920,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [81920,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16650112] .nil .nil) (.node [81920,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil)) (.node [81920,113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968] (.node [81920,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [81920,113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] .nil .nil))) (.node [82944,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [81924,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [81924,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [82944,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [102400,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] (.node [82944,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil) .nil)))
+theorem R12abbbba_ok : tall (refOK cpF 12) R12abbbba = true := by decide +kernel
+def R12abbbbb : Tree := (.node [113184,114688,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,113248,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [110592,113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] (.node [102400,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,113192,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,113312,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,113248,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,114688,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,167936,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,167936,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,114688,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,167936,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil)) (.node [113184,167969,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [113184,167969,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil)))
+theorem R12abbbbb_ok : tall (refOK cpF 12) R12abbbbb = true := by decide +kernel
+def R12abbbb : Tree := .node [102400,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R12abbbba R12abbbbb
+theorem R12abbbb_ok : tall (refOK cpF 12) R12abbbb = true :=
+  tall_node _ _ _ _ R12abbbba_ok (by decide +kernel) R12abbbbb_ok
+def R12abbb : Tree := .node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16330008] R12abbba R12abbbb
+theorem R12abbb_ok : tall (refOK cpF 12) R12abbb = true :=
+  tall_node _ _ _ _ R12abbba_ok (by decide +kernel) R12abbbb_ok
+def R12abb : Tree := .node [73728,113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968] R12abba R12abbb
+theorem R12abb_ok : tall (refOK cpF 12) R12abb = true :=
+  tall_node _ _ _ _ R12abba_ok (by decide +kernel) R12abbb_ok
+def R12ab : Tree := .node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] R12aba R12abb
+theorem R12ab_ok : tall (refOK cpF 12) R12ab = true :=
+  tall_node _ _ _ _ R12aba_ok (by decide +kernel) R12abb_ok
+def R12a : Tree := .node [64,113184,430348,902208,3227782,5521457,8532035,10485760,11083800,13501056,15731968] R12aa R12ab
+theorem R12a_ok : tall (refOK cpF 12) R12a = true :=
+  tall_node _ _ _ _ R12aa_ok (by decide +kernel) R12ab_ok
+def R12baaaa : Tree := (.node [113184,278528,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [113184,262145,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,262144,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [113184,262144,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,262144,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,262144,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,262144,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [113184,262144,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [113184,262144,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,262152,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [113184,262145,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,262145,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil) (.node [113184,262145,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968] .nil .nil)) (.node [113184,278528,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,278528,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,278528,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,278528,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,278528,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] .nil .nil))) (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731968] (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] .nil .nil) (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] .nil .nil)) (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil))))
+theorem R12baaaa_ok : tall (refOK cpF 12) R12baaaa = true := by decide +kernel
+def R12baaab : Tree := (.node [113184,299008,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,278528,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16330008] (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16650112] .nil .nil)) (.node [113184,278528,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,278528,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968] .nil .nil))) (.node [113184,279552,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,278560,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,278560,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,278560,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,279552,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] (.node [113184,279552,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,279552,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil)))) (.node [113184,311296,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [113184,311296,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,299008,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,299008,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,311296,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,311296,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [113184,311296,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,311296,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil))) (.node [113184,311296,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,311296,430348,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] (.node [113184,311296,430348,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] .nil .nil) (.node [113184,311296,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] .nil .nil)) (.node [113184,311296,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [113184,311296,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil) .nil))))
+theorem R12baaab_ok : tall (refOK cpF 12) R12baaab = true := by decide +kernel
+def R12baaa : Tree := .node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] R12baaaa R12baaab
+theorem R12baaa_ok : tall (refOK cpF 12) R12baaa = true :=
+  tall_node _ _ _ _ R12baaaa_ok (by decide +kernel) R12baaab_ok
+def R12baabaa : Tree := (.node [113184,430348,430349,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [113184,344064,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,315424,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,315424,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,344064,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,344064,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,344064,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,430349,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,430412,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,430349,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,430412,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,446732,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,430476,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,446732,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R12baabaa_ok : tall (refOK cpF 12) R12baabaa = true := by decide +kernel
+def R12baabab : Tree := (.node [113184,430348,506668,902208,3227782,5521457,6280573,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,786432,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,589824,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,506668,902208,3227782,5521457,5634609,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,3668910,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,5765949,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,506668,902208,3227782,5521457,8532035,8895343,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,7852479,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,506668,902208,3227782,5521457,8532035,9434179,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,8912896,11083800,13501056,15731968] .nil .nil) .nil)))
+theorem R12baabab_ok : tall (refOK cpF 12) R12baabab = true := by decide +kernel
+def R12baaba : Tree := .node [113184,430348,446732,902208,3227782,5521457,8532035,11083800,13501056,15731968] R12baabaa R12baabab
+theorem R12baaba_ok : tall (refOK cpF 12) R12baaba = true :=
+  tall_node _ _ _ _ R12baabaa_ok (by decide +kernel) R12baabab_ok
+def R12baabb : Tree := (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15671960,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,11516732,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,11396184,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,11514140,13501056,15731968] .nil .nil)) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,11759815,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] .nil .nil))) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,14053491,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,13613996,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,13613728,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,13616832,15731968] .nil .nil)) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,14086527,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,14603197,15731968] .nil .nil)))) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16650112] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16236332] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16162060] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,15843104] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16178493] .nil .nil)) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16330008] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16633152] .nil .nil))) (.node [113184,430348,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16773437] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16728710] .nil .nil) (.node [113184,430348,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil)) (.node [113184,430348,589824,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,589824,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil))))
+theorem R12baabb_ok : tall (refOK cpF 12) R12baabb = true := by decide +kernel
+def R12baab : Tree := .node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] R12baaba R12baabb
+theorem R12baab_ok : tall (refOK cpF 12) R12baab = true :=
+  tall_node _ _ _ _ R12baaba_ok (by decide +kernel) R12baabb_ok
+def R12baa : Tree := .node [113184,315424,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] R12baaa R12baab
+theorem R12baa_ok : tall (refOK cpF 12) R12baa = true :=
+  tall_node _ _ _ _ R12baaa_ok (by decide +kernel) R12baab_ok
+def R12babaaa : Tree := (.node [113184,430348,589824,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,589824,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] (.node [113184,430348,589824,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [113184,430348,589824,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,589824,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] .nil .nil)) (.node [113184,430348,589824,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [113184,430348,589824,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] .nil .nil) (.node [113184,430348,589824,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,589832,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,589832,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,589824,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil) (.node [113184,430348,589832,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,589888,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,589888,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] .nil .nil) (.node [113184,430348,598016,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R12babaaa_ok : tall (refOK cpF 12) R12babaaa = true := by decide +kernel
+def R12babaab : Tree := (.node [113184,430348,786432,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [113184,430348,786432,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,606208,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] (.node [113184,430348,598016,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,606208,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,786432,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,786432,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,786432,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,786496,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] (.node [113184,430348,786432,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,786432,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,786496,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,802816,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,786496,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil)))
+theorem R12babaab_ok : tall (refOK cpF 12) R12babaab = true := by decide +kernel
+def R12babaa : Tree := .node [113184,430348,598016,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R12babaaa R12babaab
+theorem R12babaa_ok : tall (refOK cpF 12) R12babaa = true :=
+  tall_node _ _ _ _ R12babaaa_ok (by decide +kernel) R12babaab_ok
+def R12bababa : Tree := (.node [113184,430348,902208,917088,1048428,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,902232,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,868352,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,802816,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,902216,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,902336,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,902336,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917088,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,917088,3227782,4062950,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,3658126,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,4048070,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,917088,3227782,5521457,5765949,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,5634609,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R12bababa_ok : tall (refOK cpF 12) R12bababa = true := by decide +kernel
+def R12bababb : Tree := (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,11219035,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,6291325,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,6280573,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,7852479,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,917088,3227782,5521457,8532035,9436771,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,9434179,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,11123256,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,11759815,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,11402872,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,11396184,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,11514140,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,13538188,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,12148894,13501056,15731968] .nil .nil) .nil)))
+theorem R12bababb_ok : tall (refOK cpF 12) R12bababb = true := by decide +kernel
+def R12babab : Tree := .node [113184,430348,902208,917088,3227782,5521457,6159985,8532035,11083800,13501056,15731968] R12bababa R12bababb
+theorem R12babab_ok : tall (refOK cpF 12) R12babab = true :=
+  tall_node _ _ _ _ R12bababa_ok (by decide +kernel) R12bababb_ok
+def R12baba : Tree := .node [113184,430348,802816,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731968] R12babaa R12babab
+theorem R12baba_ok : tall (refOK cpF 12) R12baba = true :=
+  tall_node _ _ _ _ R12babaa_ok (by decide +kernel) R12babab_ok
+def R12babba : Tree := (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,16645984] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,14086527,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,13631200,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,13616832,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,14053491,15731968] .nil .nil)) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,14603197,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,14566065,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15671960,15731968] .nil .nil))) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,16178493] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,15843104] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,16162060] .nil .nil)) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,16330008] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,16633152] .nil .nil)))) (.node [113184,430348,902208,1037644,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,16728710] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,16650112] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,16773437] .nil .nil)) (.node [113184,430348,902208,917088,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,917088,3227782,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,430348,902208,1037644,1048428,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,1037644,3227782,5521457,5765949,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,4183502,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,3658126,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,1037644,3227782,5521457,5634609,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,1037644,3227782,5521457,6280573,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil) .nil))))
+theorem R12babba_ok : tall (refOK cpF 12) R12babba = true := by decide +kernel
+def R12babbb : Tree := (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,14086527,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,11759815,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,9434179,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,9434447,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,11514140,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,11396184,13501056,15731968] .nil .nil) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,11531612,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,13616832,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,13538188,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,12148894,13501056,15731968] .nil .nil) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,13613728,15731968] .nil .nil)) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,14053491,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,13621196,15731968] .nil .nil) .nil))) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968,16178493] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,14603197,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,14566065,15731968] .nil .nil) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15671960,15731968] .nil .nil)) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968,15843104] .nil .nil) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968,16162060] .nil .nil))) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968,16728710] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968,16330008] .nil .nil) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968,16633152] .nil .nil)) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968,16773437] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968,16768332] .nil .nil) .nil))))
+theorem R12babbb_ok : tall (refOK cpF 12) R12babbb = true := by decide +kernel
+def R12babb : Tree := .node [113184,430348,902208,1037644,3227782,5521457,7852479,8532035,11083800,13501056,15731968] R12babba R12babbb
+theorem R12babb_ok : tall (refOK cpF 12) R12babb = true :=
+  tall_node _ _ _ _ R12babba_ok (by decide +kernel) R12babbb_ok
+def R12bab : Tree := .node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,13613728,15731968] R12baba R12babb
+theorem R12bab_ok : tall (refOK cpF 12) R12bab = true :=
+  tall_node _ _ _ _ R12baba_ok (by decide +kernel) R12babb_ok
+def R12ba : Tree := .node [113184,430348,589824,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] R12baa R12bab
+theorem R12ba_ok : tall (refOK cpF 12) R12ba = true :=
+  tall_node _ _ _ _ R12baa_ok (by decide +kernel) R12bab_ok
+def R12bbaaa : Tree := (.node [113184,430348,902208,3227782,3275430,5521457,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,902208,2170880,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1101860,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1048428,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil) (.node [113184,430348,902208,1048428,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,1101860,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1101860,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,2170880,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,3275430,4062950,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,3658126,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,2170880,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3275430,3668910,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,3275430,5521457,6280573,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,5765949,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3275430,5521457,7863231,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,12188350,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,11396184,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,11123256,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,9434179,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,11219035,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,11759815,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,11514140,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,11795175,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,14086527,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,13616832,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,13613728,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,14053491,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15671960,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,14603197,15731968] .nil .nil) .nil))))
+theorem R12bbaaa_ok : tall (refOK cpF 12) R12bbaaa = true := by decide +kernel
+def R12bbaaba : Tree := (.node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,3658126,5521457,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968,16775846] .nil .nil) (.node [113184,430348,902208,3227782,3275430,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil)) (.node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,11219035,13501056,15731968] (.node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,11123256,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,12148894,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,3658126,5689661,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,3658126,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968,16330008] .nil .nil) (.node [113184,430348,902208,3227782,3658126,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil)) (.node [113184,430348,902208,3227782,3668910,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3668910,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,4048070,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R12bbaaba_ok : tall (refOK cpF 12) R12bbaaba = true := by decide +kernel
+def R12bbaabb : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,6280573,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,4183502,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,4062950,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,4048070,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil) (.node [113184,430348,902208,3227782,4062950,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,5689725,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,4183502,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,5765949,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8895343,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,7863231,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,6291325,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8462336,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,9436771,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,9434447,11083800,13501056,15731968] .nil .nil) .nil)))
+theorem R12bbaabb_ok : tall (refOK cpF 12) R12bbaabb = true := by decide +kernel
+def R12bbaab : Tree := .node [113184,430348,902208,3227782,4048070,5689661,8532035,11083800,13501056,15731968,16010545] R12bbaaba R12bbaabb
+theorem R12bbaab_ok : tall (refOK cpF 12) R12bbaab = true :=
+  tall_node _ _ _ _ R12bbaaba_ok (by decide +kernel) R12bbaabb_ok
+def R12bbaa : Tree := .node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968,16773437] R12bbaaa R12bbaab
+theorem R12bbaa_ok : tall (refOK cpF 12) R12bbaa = true :=
+  tall_node _ _ _ _ R12bbaaa_ok (by decide +kernel) R12bbaab_ok
+def R12bbaba : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15814022,16162060] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,12580039,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11531612,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11402872,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11254395,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11514207,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,12054991,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11795175,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,12188350,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,14154623,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,13629123,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,13621196,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,14154355,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,16775846] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,14677107,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732096] .nil .nil)))) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13513411,13616832,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15875395,16010545] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15843104,16010545] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15814022,16650112] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15843104,16650112] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,16010545,16330008] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15875395,16633152] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501120,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13538188,15671960,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13513411,15731968,16650112] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13513411,14566065,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13513411,15731968,16728710] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083864,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13538188,15731968,16728710] .nil .nil) .nil))))
+theorem R12bbaba_ok : tall (refOK cpF 12) R12bbaba = true := by decide +kernel
+def R12bbabba : Tree := (.node [113184,430348,902208,3227782,5521457,8462336,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,6280573,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5765949,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5765949,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5765949,8532035,11083800,13501056,15731968,15814022] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,6291325,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,6280573,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,7863231,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,9436771,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,8895343,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8462336,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,9434179,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11514140,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11396184,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11759815,13501056,15731968] .nil .nil))))
+theorem R12bbabba_ok : tall (refOK cpF 12) R12bbabba = true := by decide +kernel
+def R12bbabbb : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,9434179,11083800,11219035,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,14154355,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,13616832,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,14154623,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,16773437] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,16633152] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,9434179,11083800,11123256,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,9436771,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,9434179,11083800,13501056,15731968,16330008] (.node [113184,430348,902208,3227782,5521457,8532035,9434179,11083800,12148894,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,9434447,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,11219035,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11083864,13501056,15731968] .nil .nil) .nil)))
+theorem R12bbabbb_ok : tall (refOK cpF 12) R12bbabbb = true := by decide +kernel
+def R12bbabb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11795175,13501056,15731968] R12bbabba R12bbabbb
+theorem R12bbabb_ok : tall (refOK cpF 12) R12bbabb = true :=
+  tall_node _ _ _ _ R12bbabba_ok (by decide +kernel) R12bbabbb_ok
+def R12bbab : Tree := .node [113184,430348,902208,3227782,5521457,5689725,8532035,11083800,13501056,15731968] R12bbaba R12bbabb
+theorem R12bbab_ok : tall (refOK cpF 12) R12bbab = true :=
+  tall_node _ _ _ _ R12bbaba_ok (by decide +kernel) R12bbabb_ok
+def R12bba : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11083864,13501056,15731968] R12bbaa R12bbab
+theorem R12bba_ok : tall (refOK cpF 12) R12bba = true :=
+  tall_node _ _ _ _ R12bbaa_ok (by decide +kernel) R12bbab_ok
+def R12bbbaaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,13616832,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,11516732,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,11402872,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,11396184,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,11514140,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,12148894,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,11759815,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,12188350,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968,16330008] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15710904,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15671960,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968,15843104] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968,16367416] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968,16644665] .nil .nil))))
+theorem R12bbbaaa_ok : tall (refOK cpF 12) R12bbbaaa = true := by decide +kernel
+def R12bbbaaba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11531612,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11514207,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11402872,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11531355,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12054991,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11795175,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12188350,13501056,15731968] .nil .nil)))
+theorem R12bbbaaba_ok : tall (refOK cpF 12) R12bbbaaba = true := by decide +kernel
+def R12bbbaabb : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13629123,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12580039,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12579230,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13621196,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14154623,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14154355,15731968] .nil .nil) .nil))
+theorem R12bbbaabb_ok : tall (refOK cpF 12) R12bbbaabb = true := by decide +kernel
+def R12bbbaab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,12284127,13501056,15731968] R12bbbaaba R12bbbaabb
+theorem R12bbbaab_ok : tall (refOK cpF 12) R12bbbaab = true :=
+  tall_node _ _ _ _ R12bbbaaba_ok (by decide +kernel) R12bbbaabb_ok
+def R12bbbaa : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,11254395,13501056,15731968] R12bbbaaa R12bbbaab
+theorem R12bbbaa_ok : tall (refOK cpF 12) R12bbbaa = true :=
+  tall_node _ _ _ _ R12bbbaaa_ok (by decide +kernel) R12bbbaab_ok
+def R12bbbabaaaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16775846] .nil .nil)
+theorem R12bbbabaaaa_ok : tall (refOK cpF 12) R12bbbabaaaa = true := by decide +kernel
+def R12bbbabaaab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732096] .nil .nil)
+theorem R12bbbabaaab_ok : tall (refOK cpF 12) R12bbbabaaab = true := by decide +kernel
+def R12bbbabaaa : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731984] R12bbbabaaaa R12bbbabaaab
+theorem R12bbbabaaa_ok : tall (refOK cpF 12) R12bbbabaaa = true :=
+  tall_node _ _ _ _ R12bbbabaaaa_ok (by decide +kernel) R12bbbabaaab_ok
+def R12bbbabaab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15814022,16650112] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15814022,16162060] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15843104,16010545] .nil .nil))
+theorem R12bbbabaab_ok : tall (refOK cpF 12) R12bbbabaab = true := by decide +kernel
+def R12bbbabaa : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15814022,15875395] R12bbbabaaa R12bbbabaab
+theorem R12bbbabaa_ok : tall (refOK cpF 12) R12bbbabaa = true :=
+  tall_node _ _ _ _ R12bbbabaaa_ok (by decide +kernel) R12bbbabaab_ok
+def R12bbbababa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15875395,16633152] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15875395,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,16010545,16330008] .nil .nil))
+theorem R12bbbababa_ok : tall (refOK cpF 12) R12bbbababa = true := by decide +kernel
+def R12bbbababba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501064,15731968] .nil .nil)
+theorem R12bbbababba_ok : tall (refOK cpF 12) R12bbbababba = true := by decide +kernel
+def R12bbbababbb : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501120,15731968] .nil .nil)
+theorem R12bbbababbb_ok : tall (refOK cpF 12) R12bbbababbb = true := by decide +kernel
+def R12bbbababb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501080,15731968] R12bbbababba R12bbbababbb
+theorem R12bbbababb_ok : tall (refOK cpF 12) R12bbbababb = true :=
+  tall_node _ _ _ _ R12bbbababba_ok (by decide +kernel) R12bbbababbb_ok
+def R12bbbabab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,16162060,16330008] R12bbbababa R12bbbababb
+theorem R12bbbabab_ok : tall (refOK cpF 12) R12bbbabab = true :=
+  tall_node _ _ _ _ R12bbbababa_ok (by decide +kernel) R12bbbababb_ok
+def R12bbbaba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15843104,16650112] R12bbbabaa R12bbbabab
+theorem R12bbbaba_ok : tall (refOK cpF 12) R12bbbaba = true :=
+  tall_node _ _ _ _ R12bbbabaa_ok (by decide +kernel) R12bbbabab_ok
+def R12bbbabbaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15731968,16728710] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,14566065,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13538188,15671960,15731968] .nil .nil))
+theorem R12bbbabbaa_ok : tall (refOK cpF 12) R12bbbabbaa = true := by decide +kernel
+def R12bbbabbaba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083864,13501056,15731968] .nil .nil)
+theorem R12bbbabbaba_ok : tall (refOK cpF 12) R12bbbabbaba = true := by decide +kernel
+def R12bbbabbabb : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968,16330008] .nil .nil)
+theorem R12bbbabbabb_ok : tall (refOK cpF 12) R12bbbabbabb = true := by decide +kernel
+def R12bbbabbab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15671960,15731968] R12bbbabbaba R12bbbabbabb
+theorem R12bbbabbab_ok : tall (refOK cpF 12) R12bbbabbab = true :=
+  tall_node _ _ _ _ R12bbbabbaba_ok (by decide +kernel) R12bbbabbabb_ok
+def R12bbbabba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13538188,15731968,16728710] R12bbbabbaa R12bbbabbab
+theorem R12bbbabba_ok : tall (refOK cpF 12) R12bbbabba = true :=
+  tall_node _ _ _ _ R12bbbabbaa_ok (by decide +kernel) R12bbbabbab_ok
+def R12bbbabbbaa : Tree := (.node [113184,430348,902208,3227782,5521461,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R12bbbabbbaa_ok : tall (refOK cpF 12) R12bbbabbbaa = true := by decide +kernel
+def R12bbbabbbab : Tree := (.node [113184,430348,902208,3227782,5521461,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R12bbbabbbab_ok : tall (refOK cpF 12) R12bbbabbbab = true := by decide +kernel
+def R12bbbabbba : Tree := .node [113184,430348,902208,3227782,5521461,5689661,8532035,11083800,13501056,15731968] R12bbbabbbaa R12bbbabbbab
+theorem R12bbbabbba_ok : tall (refOK cpF 12) R12bbbabbba = true :=
+  tall_node _ _ _ _ R12bbbabbbaa_ok (by decide +kernel) R12bbbabbbab_ok
+def R12bbbabbbb : Tree := (.node [113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5521465,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil) .nil)
+theorem R12bbbabbbb_ok : tall (refOK cpF 12) R12bbbabbbb = true := by decide +kernel
+def R12bbbabbb : Tree := .node [113184,430348,902208,3227782,5521465,5689661,8532035,11083800,13501056,15731968] R12bbbabbba R12bbbabbbb
+theorem R12bbbabbb_ok : tall (refOK cpF 12) R12bbbabbb = true :=
+  tall_node _ _ _ _ R12bbbabbba_ok (by decide +kernel) R12bbbabbbb_ok
+def R12bbbabb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968,16605241] R12bbbabba R12bbbabbb
+theorem R12bbbabb_ok : tall (refOK cpF 12) R12bbbabb = true :=
+  tall_node _ _ _ _ R12bbbabba_ok (by decide +kernel) R12bbbabbb_ok
+def R12bbbab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,13616832,15731968] R12bbbaba R12bbbabb
+theorem R12bbbab_ok : tall (refOK cpF 12) R12bbbab = true :=
+  tall_node _ _ _ _ R12bbbaba_ok (by decide +kernel) R12bbbabb_ok
+def R12bbba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14677107,15731968] R12bbbaa R12bbbab
+theorem R12bbba_ok : tall (refOK cpF 12) R12bbba = true :=
+  tall_node _ _ _ _ R12bbbaa_ok (by decide +kernel) R12bbbab_ok
+def R12bbbbaaaaa : Tree := (.node [113184,430348,902208,3227782,5521585,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R12bbbbaaaaa_ok : tall (refOK cpF 12) R12bbbbaaaaa = true := by decide +kernel
+def R12bbbbaaaab : Tree := (.node [113184,430348,902208,3227782,5634609,5689661,8532035,11083800,13501056,14566065,15731968] .nil .nil)
+theorem R12bbbbaaaab_ok : tall (refOK cpF 12) R12bbbbaaaab = true := by decide +kernel
+def R12bbbbaaaa : Tree := .node [113184,430348,902208,3227782,5634609,5689661,7684279,8532035,11083800,13501056,15731968] R12bbbbaaaaa R12bbbbaaaab
+theorem R12bbbbaaaa_ok : tall (refOK cpF 12) R12bbbbaaaa = true :=
+  tall_node _ _ _ _ R12bbbbaaaaa_ok (by decide +kernel) R12bbbbaaaab_ok
+def R12bbbbaaab : Tree := (.node [113184,430348,902208,3227782,5634609,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5634609,8532035,11083800,13501056,14566065,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5689661,5765949,7684279,8532035,11083800,13501056,15731968] .nil .nil))
+theorem R12bbbbaaab_ok : tall (refOK cpF 12) R12bbbbaaab = true := by decide +kernel
+def R12bbbbaaa : Tree := .node [113184,430348,902208,3227782,5634609,5689661,8532035,11083800,13501056,15731968,16010545] R12bbbbaaaa R12bbbbaaab
+theorem R12bbbbaaa_ok : tall (refOK cpF 12) R12bbbbaaa = true :=
+  tall_node _ _ _ _ R12bbbbaaaa_ok (by decide +kernel) R12bbbbaaab_ok
+def R12bbbbaab : Tree := (.node [113184,430348,902208,3227782,5689661,6280573,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5689661,6145137,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5689661,5765949,8532035,11083800,13501056,15731968,16605241] .nil .nil) (.node [113184,430348,902208,3227782,5689661,6145137,8532035,11083800,13501056,15731968,16605241] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,6280573,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5689661,6280573,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5689661,7684279,7731895,8532035,11083800,13501056,15731968] .nil .nil)))
+theorem R12bbbbaab_ok : tall (refOK cpF 12) R12bbbbaab = true := by decide +kernel
+def R12bbbbaa : Tree := .node [113184,430348,902208,3227782,5689661,5765949,8532035,11083800,13501056,15731968,16010545] R12bbbbaaa R12bbbbaab
+theorem R12bbbbaa_ok : tall (refOK cpF 12) R12bbbbaa = true :=
+  tall_node _ _ _ _ R12bbbbaaa_ok (by decide +kernel) R12bbbbaab_ok
+def R12bbbbab : Tree := (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,13613728,15731968] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,11396184,13501056,15731968] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,11123256,13501056,15731968] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,9434179,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,11219035,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,11759815,13501056,15731968] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,11514140,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,12148894,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15671960,15731968] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,13616832,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,15843104] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,16178493] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,16076215] .nil .nil) .nil)))
+theorem R12bbbbab_ok : tall (refOK cpF 12) R12bbbbab = true := by decide +kernel
+def R12bbbba : Tree := .node [113184,430348,902208,3227782,5689661,7684279,7852479,8532035,11083800,13501056,15731968] R12bbbbaa R12bbbbab
+theorem R12bbbba_ok : tall (refOK cpF 12) R12bbbba = true :=
+  tall_node _ _ _ _ R12bbbbaa_ok (by decide +kernel) R12bbbbab_ok
+def R12bbbbba : Tree := (.node [113184,430348,902208,3227782,5689661,7852479,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,16633152] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,16330008] .nil .nil) (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,16605375] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,16728759] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,16728710] .nil .nil) (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,16773437] .nil .nil))) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,11514140,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,11123256,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5689661,8532035,9434179,11083800,13501056,15731968,16605241] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,11396184,13501056,15731968,16605241] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,12148894,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,11759815,13501056,15731968,16605241] .nil .nil) .nil)))
+theorem R12bbbbba_ok : tall (refOK cpF 12) R12bbbbba = true := by decide +kernel
+def R12bbbbbba : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241,16644665] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241,16633152] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241,16605375] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241,16639097] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605375] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241,16773437] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15843104,16010545] .nil .nil)))
+theorem R12bbbbbba_ok : tall (refOK cpF 12) R12bbbbbba = true := by decide +kernel
+def R12bbbbbbb : Tree := (.node [113184,430348,902208,3227782,6280573,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5765949,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5689661,8532035,11123256,13501056,15731968,16605241] .nil .nil) (.node [113184,430348,902208,3227782,6145137,8532035,11083800,13501056,15731968,16010545] .nil .nil)) (.node [113184,902208,3227782,5689661,8532035,11083800,11514140,13501056,15731968,16605241] (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil) .nil))
+theorem R12bbbbbbb_ok : tall (refOK cpF 12) R12bbbbbbb = true := by decide +kernel
+def R12bbbbbb : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,16010545,16330008] R12bbbbbba R12bbbbbbb
+theorem R12bbbbbb_ok : tall (refOK cpF 12) R12bbbbbb = true :=
+  tall_node _ _ _ _ R12bbbbbba_ok (by decide +kernel) R12bbbbbbb_ok
+def R12bbbbb : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,13616832,15731968,16605241] R12bbbbba R12bbbbbb
+theorem R12bbbbb_ok : tall (refOK cpF 12) R12bbbbb = true :=
+  tall_node _ _ _ _ R12bbbbba_ok (by decide +kernel) R12bbbbbb_ok
+def R12bbbb : Tree := .node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,16216311] R12bbbba R12bbbbb
+theorem R12bbbb_ok : tall (refOK cpF 12) R12bbbb = true :=
+  tall_node _ _ _ _ R12bbbba_ok (by decide +kernel) R12bbbbb_ok
+def R12bbb : Tree := .node [113184,430348,902208,3227782,5521585,5689661,8532035,11083800,13501056,15731968] R12bbba R12bbbb
+theorem R12bbb_ok : tall (refOK cpF 12) R12bbb = true :=
+  tall_node _ _ _ _ R12bbba_ok (by decide +kernel) R12bbbb_ok
+def R12bb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,11254395,13501056,15731968] R12bba R12bbb
+theorem R12bb_ok : tall (refOK cpF 12) R12bb = true :=
+  tall_node _ _ _ _ R12bba_ok (by decide +kernel) R12bbb_ok
+def R12b : Tree := .node [113184,430348,902208,1037644,3227782,5689661,8532035,11083800,13501056,15731968,16010545] R12ba R12bb
+theorem R12b_ok : tall (refOK cpF 12) R12b = true :=
+  tall_node _ _ _ _ R12ba_ok (by decide +kernel) R12bb_ok
+def R12 : Tree := .node [113184,167969,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R12a R12b
+theorem R12_ok : tall (refOK cpF 12) R12 = true :=
+  tall_node _ _ _ _ R12a_ok (by decide +kernel) R12b_ok
+def T13aaa : Tree := (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil)
+theorem T13aaa_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13aaa = true := by decide +kernel
+def T13aab : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)
+theorem T13aab_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13aab = true := by decide +kernel
+def T13aa : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] T13aaa T13aab
+theorem T13aa_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13aa = true :=
+  tall_node _ _ _ _ T13aaa_ok (by decide +kernel) T13aab_ok
+def T13abaa : Tree := (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T13abaa_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13abaa = true := by decide +kernel
+def T13abab : Tree := .nil
+theorem T13abab_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13abab = true := by decide +kernel
+def T13aba : Tree := .node [113184,430348,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T13abaa T13abab
+theorem T13aba_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13aba = true :=
+  tall_node _ _ _ _ T13abaa_ok (by decide +kernel) T13abab_ok
+def T13abb : Tree := (.node [113184,430348,902208,917088,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T13abb_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13abb = true := by decide +kernel
+def T13ab : Tree := .node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] T13aba T13abb
+theorem T13ab_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13ab = true :=
+  tall_node _ _ _ _ T13aba_ok (by decide +kernel) T13abb_ok
+def T13a : Tree := .node [64,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T13aa T13ab
+theorem T13a_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13a = true :=
+  tall_node _ _ _ _ T13aa_ok (by decide +kernel) T13ab_ok
+def T13baaa : Tree := (.node [113184,430348,902208,1037644,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T13baaa_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13baaa = true := by decide +kernel
+def T13baab : Tree := .nil
+theorem T13baab_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13baab = true := by decide +kernel
+def T13baa : Tree := .node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] T13baaa T13baab
+theorem T13baa_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13baa = true :=
+  tall_node _ _ _ _ T13baaa_ok (by decide +kernel) T13baab_ok
+def T13bab : Tree := (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T13bab_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13bab = true := by decide +kernel
+def T13ba : Tree := .node [113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] T13baa T13bab
+theorem T13ba_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13ba = true :=
+  tall_node _ _ _ _ T13baa_ok (by decide +kernel) T13bab_ok
+def T13bba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) .nil)
+theorem T13bba_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13bba = true := by decide +kernel
+def T13bbb : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil)
+theorem T13bbb_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13bbb = true := by decide +kernel
+def T13bb : Tree := .node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] T13bba T13bbb
+theorem T13bb_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13bb = true :=
+  tall_node _ _ _ _ T13bba_ok (by decide +kernel) T13bbb_ok
+def T13b : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,8632931,11083800,13501056,15731968] T13ba T13bb
+theorem T13b_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13b = true :=
+  tall_node _ _ _ _ T13ba_ok (by decide +kernel) T13bb_ok
+def T13 : Tree := .node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] T13a T13b
+theorem T13_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13 = true :=
   tall_node _ _ _ _ T13a_ok (by decide +kernel) T13b_ok
+def R13aaaaa : Tree := (.node [1,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13aaaaa_ok : tall (refOK cpF 13) R13aaaaa = true := by decide +kernel
+def R13aaaab : Tree := .nil
+theorem R13aaaab_ok : tall (refOK cpF 13) R13aaaab = true := by decide +kernel
+def R13aaaa : Tree := .node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R13aaaaa R13aaaab
+theorem R13aaaa_ok : tall (refOK cpF 13) R13aaaa = true :=
+  tall_node _ _ _ _ R13aaaaa_ok (by decide +kernel) R13aaaab_ok
+def R13aaaba : Tree := (.node [2,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13aaaba_ok : tall (refOK cpF 13) R13aaaba = true := by decide +kernel
+def R13aaabb : Tree := .nil
+theorem R13aaabb_ok : tall (refOK cpF 13) R13aaabb = true := by decide +kernel
+def R13aaab : Tree := .node [8,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13aaaba R13aaabb
+theorem R13aaab_ok : tall (refOK cpF 13) R13aaab = true :=
+  tall_node _ _ _ _ R13aaaba_ok (by decide +kernel) R13aaabb_ok
+def R13aaa : Tree := .node [2,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13aaaa R13aaab
+theorem R13aaa_ok : tall (refOK cpF 13) R13aaa = true :=
+  tall_node _ _ _ _ R13aaaa_ok (by decide +kernel) R13aaab_ok
+def R13aabaa : Tree := (.node [12288,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13aabaa_ok : tall (refOK cpF 13) R13aabaa = true := by decide +kernel
+def R13aabab : Tree := .nil
+theorem R13aabab_ok : tall (refOK cpF 13) R13aabab = true := by decide +kernel
+def R13aaba : Tree := .node [12288,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R13aabaa R13aabab
+theorem R13aaba_ok : tall (refOK cpF 13) R13aaba = true :=
+  tall_node _ _ _ _ R13aabaa_ok (by decide +kernel) R13aabab_ok
+def R13aabba : Tree := (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13aabba_ok : tall (refOK cpF 13) R13aabba = true := by decide +kernel
+def R13aabbb : Tree := .nil
+theorem R13aabbb_ok : tall (refOK cpF 13) R13aabbb = true := by decide +kernel
+def R13aabb : Tree := .node [36896,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13aabba R13aabbb
+theorem R13aabb_ok : tall (refOK cpF 13) R13aabb = true :=
+  tall_node _ _ _ _ R13aabba_ok (by decide +kernel) R13aabbb_ok
+def R13aab : Tree := .node [36864,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13aaba R13aabb
+theorem R13aab_ok : tall (refOK cpF 13) R13aab = true :=
+  tall_node _ _ _ _ R13aaba_ok (by decide +kernel) R13aabb_ok
+def R13aa : Tree := .node [24,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13aaa R13aab
+theorem R13aa_ok : tall (refOK cpF 13) R13aa = true :=
+  tall_node _ _ _ _ R13aaa_ok (by decide +kernel) R13aab_ok
+def R13abaaa : Tree := (.node [65536,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13abaaa_ok : tall (refOK cpF 13) R13abaaa = true := by decide +kernel
+def R13abaab : Tree := .nil
+theorem R13abaab_ok : tall (refOK cpF 13) R13abaab = true := by decide +kernel
+def R13abaa : Tree := .node [65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R13abaaa R13abaab
+theorem R13abaa_ok : tall (refOK cpF 13) R13abaa = true :=
+  tall_node _ _ _ _ R13abaaa_ok (by decide +kernel) R13abaab_ok
+def R13ababa : Tree := (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13ababa_ok : tall (refOK cpF 13) R13ababa = true := by decide +kernel
+def R13ababb : Tree := .nil
+theorem R13ababb_ok : tall (refOK cpF 13) R13ababb = true := by decide +kernel
+def R13abab : Tree := .node [81920,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13ababa R13ababb
+theorem R13abab_ok : tall (refOK cpF 13) R13abab = true :=
+  tall_node _ _ _ _ R13ababa_ok (by decide +kernel) R13ababb_ok
+def R13aba : Tree := .node [73728,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13abaa R13abab
+theorem R13aba_ok : tall (refOK cpF 13) R13aba = true :=
+  tall_node _ _ _ _ R13abaa_ok (by decide +kernel) R13abab_ok
+def R13abbaa : Tree := (.node [113184,262144,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13abbaa_ok : tall (refOK cpF 13) R13abbaa = true := by decide +kernel
+def R13abbab : Tree := .nil
+theorem R13abbab_ok : tall (refOK cpF 13) R13abbab = true := by decide +kernel
+def R13abba : Tree := .node [113184,262144,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R13abbaa R13abbab
+theorem R13abba_ok : tall (refOK cpF 13) R13abba = true :=
+  tall_node _ _ _ _ R13abbaa_ok (by decide +kernel) R13abbab_ok
+def R13abbba : Tree := (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13abbba_ok : tall (refOK cpF 13) R13abbba = true := by decide +kernel
+def R13abbbb : Tree := .nil
+theorem R13abbbb_ok : tall (refOK cpF 13) R13abbbb = true := by decide +kernel
+def R13abbb : Tree := .node [113184,311296,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13abbba R13abbbb
+theorem R13abbb_ok : tall (refOK cpF 13) R13abbb = true :=
+  tall_node _ _ _ _ R13abbba_ok (by decide +kernel) R13abbbb_ok
+def R13abb : Tree := .node [113184,278528,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13abba R13abbb
+theorem R13abb_ok : tall (refOK cpF 13) R13abb = true :=
+  tall_node _ _ _ _ R13abba_ok (by decide +kernel) R13abbb_ok
+def R13ab : Tree := .node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R13aba R13abb
+theorem R13ab_ok : tall (refOK cpF 13) R13ab = true :=
+  tall_node _ _ _ _ R13aba_ok (by decide +kernel) R13abb_ok
+def R13a : Tree := .node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R13aa R13ab
+theorem R13a_ok : tall (refOK cpF 13) R13a = true :=
+  tall_node _ _ _ _ R13aa_ok (by decide +kernel) R13ab_ok
+def R13baaaa : Tree := (.node [113184,430348,589824,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13baaaa_ok : tall (refOK cpF 13) R13baaaa = true := by decide +kernel
+def R13baaab : Tree := .nil
+theorem R13baaab_ok : tall (refOK cpF 13) R13baaab = true := by decide +kernel
+def R13baaa : Tree := .node [113184,430348,589824,902208,3227782,5521457,8532035,11083800,13501056,15731968] R13baaaa R13baaab
+theorem R13baaa_ok : tall (refOK cpF 13) R13baaa = true :=
+  tall_node _ _ _ _ R13baaaa_ok (by decide +kernel) R13baaab_ok
+def R13baaba : Tree := (.node [113184,430348,786432,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13baaba_ok : tall (refOK cpF 13) R13baaba = true := by decide +kernel
+def R13baabb : Tree := .nil
+theorem R13baabb_ok : tall (refOK cpF 13) R13baabb = true := by decide +kernel
+def R13baab : Tree := .node [113184,430348,902208,3227782,3658126,5521457,5689661,8532035,11083800,13501056,15731968] R13baaba R13baabb
+theorem R13baab_ok : tall (refOK cpF 13) R13baab = true :=
+  tall_node _ _ _ _ R13baaba_ok (by decide +kernel) R13baabb_ok
+def R13baa : Tree := .node [113184,430348,786432,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13baaa R13baab
+theorem R13baa_ok : tall (refOK cpF 13) R13baa = true :=
+  tall_node _ _ _ _ R13baaa_ok (by decide +kernel) R13baab_ok
+def R13bab : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532035,9434179,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,6280573,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,5765949,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11396184,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11123256,13501056,15731968] .nil .nil) .nil))
+theorem R13bab_ok : tall (refOK cpF 13) R13bab = true := by decide +kernel
+def R13ba : Tree := .node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968] R13baa R13bab
+theorem R13ba_ok : tall (refOK cpF 13) R13ba = true :=
+  tall_node _ _ _ _ R13baa_ok (by decide +kernel) R13bab_ok
+def R13bbaa : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,13616832,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11759815,13501056,15731968] .nil .nil) .nil)
+theorem R13bbaa_ok : tall (refOK cpF 13) R13bbaa = true := by decide +kernel
+def R13bbaba : Tree := (.node [113184,430348,902208,3227782,5521457,5765949,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13bbaba_ok : tall (refOK cpF 13) R13bbaba = true := by decide +kernel
+def R13bbabb : Tree := .nil
+theorem R13bbabb_ok : tall (refOK cpF 13) R13bbabb = true := by decide +kernel
+def R13bbab : Tree := .node [113184,430348,902208,3227782,5521457,6280573,8532035,11083800,13501056,15731968] R13bbaba R13bbabb
+theorem R13bbab_ok : tall (refOK cpF 13) R13bbab = true :=
+  tall_node _ _ _ _ R13bbaba_ok (by decide +kernel) R13bbabb_ok
+def R13bba : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,16773437] R13bbaa R13bbab
+theorem R13bba_ok : tall (refOK cpF 13) R13bba = true :=
+  tall_node _ _ _ _ R13bbaa_ok (by decide +kernel) R13bbab_ok
+def R13bbbaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11396184,13501056,15731968] .nil .nil)
+theorem R13bbbaa_ok : tall (refOK cpF 13) R13bbbaa = true := by decide +kernel
+def R13bbbab : Tree := .nil
+theorem R13bbbab_ok : tall (refOK cpF 13) R13bbbab = true := by decide +kernel
+def R13bbba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,11514140,13501056,15731968] R13bbbaa R13bbbab
+theorem R13bbba_ok : tall (refOK cpF 13) R13bbba = true :=
+  tall_node _ _ _ _ R13bbbaa_ok (by decide +kernel) R13bbbab_ok
+def R13bbbba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13616832,15731968] .nil .nil)
+theorem R13bbbba_ok : tall (refOK cpF 13) R13bbbba = true := by decide +kernel
+def R13bbbbb : Tree := .nil
+theorem R13bbbbb_ok : tall (refOK cpF 13) R13bbbbb = true := by decide +kernel
+def R13bbbb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16773437] R13bbbba R13bbbbb
+theorem R13bbbb_ok : tall (refOK cpF 13) R13bbbb = true :=
+  tall_node _ _ _ _ R13bbbba_ok (by decide +kernel) R13bbbbb_ok
+def R13bbb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,11759815,13501056,15731968] R13bbba R13bbbb
+theorem R13bbb_ok : tall (refOK cpF 13) R13bbb = true :=
+  tall_node _ _ _ _ R13bbba_ok (by decide +kernel) R13bbbb_ok
+def R13bb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,9434179,11083800,13501056,15731968] R13bba R13bbb
+theorem R13bb_ok : tall (refOK cpF 13) R13bb = true :=
+  tall_node _ _ _ _ R13bba_ok (by decide +kernel) R13bbb_ok
+def R13b : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] R13ba R13bb
+theorem R13b_ok : tall (refOK cpF 13) R13b = true :=
+  tall_node _ _ _ _ R13ba_ok (by decide +kernel) R13bb_ok
+def R13 : Tree := .node [113184,311296,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R13a R13b
+theorem R13_ok : tall (refOK cpF 13) R13 = true :=
+  tall_node _ _ _ _ R13a_ok (by decide +kernel) R13b_ok
 def T14 : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil)
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem T14_ok : tall (expFast false (classP') T13 13) T14 = true := by decide +kernel
-set_option maxRecDepth 20000 in
-set_option maxHeartbeats 0 in
-theorem start_ok : subsAll base10 (closed T14 14) = true := by decide +kernel
+theorem T14_ok : tall (expFast false (RP PR T13 R13 13) T13 13) T14 = true := by decide +kernel
+theorem start_ok : subsAll base10 (closedS T14 14) = true := by decide +kernel
 
 theorem noStart : NoStart false 14 :=
-  start_sound (level_fast (classP'_sound false) (level_fast (classP'_sound false) (level_fast (classP'_sound false) (level_fast (classP'_sound false) (level_fast (classP'_sound false) (level_fast (classP'_sound false) (level_fast (classP'_sound false) (level_fast (classP'_sound false) (level_fast (classP'_sound false) (level_fast (classP'_sound false) (level_fast (classP'_sound false) (level_fast (classP'_sound false) (level_fast (classP'_sound false) (level_fast (classP'_sound false) (inv_leaf false) T1_ok) T2_ok) T3_ok) T4_ok) T5_ok) T6_ok) T7_ok) T8_ok) T9_ok) T10_ok) T11_ok) T12_ok) T13_ok) T14_ok) start_ok
+  start_sym (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (inv_leaf false) (inv_nil false 0) T1_ok) (inv_nil false 1) T2_ok) (inv_nil false 2) T3_ok) (inv_nil false 3) T4_ok) (inv_nil false 4) T5_ok) (inv_nil false 5) T6_ok) (inv_nil false 6) T7_ok) (inv_nil false 7) T8_ok) (inv_nil false 8) T9_ok) (refuted (cpF_sound false) R9_ok) T10_ok) (refuted (cpF_sound false) R10_ok) T11_ok) (refuted (cpF_sound false) R11_ok) T12_ok) (refuted (cpF_sound false) R12_ok) T13_ok) (refuted (cpF_sound false) R13_ok) T14_ok) start_ok
 
 -- bridge to the original L-meta-3420 statement (pairwise distinct words instead of dominance)
 
