@@ -745,7 +745,7 @@ private theorem gate_value (G : List Gate) (w : List Bool) (t : ℕ) (ht : t < G
   · exact (foldl_take_getD G w t i (by rw [hlen]; exact h)).symm
   · exact getD_of_length_le _ _ (by rw [hlen]; omega)
 
-private def val (C : Circuit) (n : ℕ) (x : Fin n → Bool) (w : ℕ) : Bool :=
+def val (C : Circuit) (n : ℕ) (x : Fin n → Bool) (w : ℕ) : Bool :=
   (C.wires (List.ofFn x)).getD w false
 
 private theorem val_input (C : Circuit) (n : ℕ) (x : Fin n → Bool) (w : ℕ) (hw : w < n) :
@@ -806,7 +806,7 @@ private def e2 {n : ℕ} (c t : Fin n) : Fin n → Bool := fun i => decide (i = 
 
 private def ne1 {n : ℕ} (c : Fin n) : Fin n → Bool := fun i => decide (i ≠ c)
 
-private def Rd (C : Circuit) (n : ℕ) (a b : ℕ) : Prop :=
+def Rd (C : Circuit) (n : ℕ) (a b : ℕ) : Prop :=
   b < a ∧ ∃ h : Gate, C.gates[a]? = some h ∧ n + b ∈ h.inputs
 
 private def Lin (C : Circuit) (n : ℕ) (w : ℕ) : Prop :=
@@ -1533,267 +1533,29 @@ private theorem level_bound {n t : ℕ} (G : SimpleGraph (Fin n)) (C : Circuit)
   omega
 
 
-open Elim
 
+/-- Single-level + normal-form bound via `level_bound`. -/
 theorem main_bound (n t : ℕ) (G : SimpleGraph (Fin n))
     (hC4 : ∀ a b c d : Fin n, a ≠ b → a ≠ c → a ≠ d → b ≠ c → b ≠ d → c ≠ d →
       G.Adj a b → G.Adj b c → G.Adj c d → ¬ G.Adj d a)
     (hEx : ∃ S : Finset (Fin n), CoverPromise.IsVertexCover G S ∧ S.card = t)
     (hMin : ∀ S : Finset (Fin n), CoverPromise.IsVertexCover G S → t ≤ S.card)
-    (hedge : ∃ u v : Fin n, G.Adj u v) :
-    ∀ s : ℕ, ∀ C : Circuit, C.size = s →
-      Monotone2 C →
-      (∀ x : Fin n → Bool, C.eval (List.ofFn x) = true ↔
-        ∃ u v : Fin n, G.Adj u v ∧ x u = true ∧ x v = true) →
-      G.edgeSet.ncard + t ≤ s + 1 := by
-  classical
-  intro s
-  induction s using Nat.strong_induction_on with
-  | ind s ih =>
-    intro C hCsize hmono hfun
-    have hCglen : C.gates.length = s := by simpa [Circuit.size] using hCsize
-    have hmin : ∀ C' : Circuit, Monotone2 C' → C'.size < s →
-        (∀ x : Fin n → Bool, C'.eval (List.ofFn x) = C.eval (List.ofFn x)) →
-        G.edgeSet.ncard + t ≤ s + 1 := by
-      intro C' hC'm hC'sz hC'eq
-      have hC'fun : ∀ x : Fin n → Bool, C'.eval (List.ofFn x) = true ↔
-          ∃ u v : Fin n, G.Adj u v ∧ x u = true ∧ x v = true := by
-        intro x; rw [hC'eq x, hfun x]
-      have := ih C'.size hC'sz C' rfl hC'm hC'fun
-      omega
-    by_contra hlt_goal
-    have hnot_smaller : ∀ C' : Circuit, Monotone2 C' → C'.size < s →
-        (∀ x : Fin n → Bool, C'.eval (List.ofFn x) = C.eval (List.ofFn x)) → False :=
-      fun C' hm hsz heq => hlt_goal (hmin C' hm hsz heq)
-    have hno_const_or_copy : ∀ (j0 : ℕ), j0 < s →
-        (¬ ∀ x : Fin n → Bool, (C.wires (List.ofFn x)).getD (n + j0) false = false) ∧
-        (¬ ∀ x : Fin n → Bool, (C.wires (List.ofFn x)).getD (n + j0) false = true) ∧
-        (∀ w0 < n + j0, ¬ ∀ x : Fin n → Bool,
-          (C.wires (List.ofFn x)).getD (n + j0) false =
-            (C.wires (List.ofFn x)).getD w0 false) := by
-      intro j0 hj0
-      have hj0len : j0 < C.gates.length := by omega
-      refine ⟨?_, ?_, ?_⟩
-      · intro hf
-        obtain ⟨C', hm', hsz', heq'⟩ :=
-          elim_smaller_circuit G C hmono hfun hedge j0 hj0len (fun _ => Sum.inl false) false
-            (fun _ _ _ => trivial) (fun _ x _ _ _ _ => (hf x).symm) (by intro h; cases h)
-        exact hnot_smaller C' hm' (by rw [← hCsize]; exact hsz') heq'
-      · intro ht
-        obtain ⟨C', hm', hsz', heq'⟩ :=
-          elim_smaller_circuit G C hmono hfun hedge j0 hj0len (fun _ => Sum.inl true) false
-            (fun _ _ _ => trivial) (fun _ x _ _ _ _ => (ht x).symm) (by intro h; cases h)
-        exact hnot_smaller C' hm' (by rw [← hCsize]; exact hsz') heq'
-      · intro w0 hw0 heqw
-        obtain ⟨C', hm', hsz', heq'⟩ :=
-          elim_smaller_circuit G C hmono hfun hedge j0 hj0len
-            (fun tbl => tbl.getD w0 (Sum.inl false)) false
-            (fun tbl _ hv => hv w0 hw0)
-            (fun _ x tbl w' _ hvals => (hvals w0 hw0).trans (heqw x).symm)
-            (by intro h; cases h)
-        exact hnot_smaller C' hm' (by rw [← hCsize]; exact hsz') heq'
-    have hgate_shape : ∀ (j : ℕ) (hj : j < C.gates.length),
-        ∃ p q : ℕ, (C.gates[j]'hj).inputs = [p, q] ∧ p < n + j ∧ q < n + j ∧ p ≠ q := by
-      intro j hj
-      have hj_s : j < s := by omega
-      have hg : C.gates[j]? = some (C.gates[j]'hj) := List.getElem?_eq_getElem hj
-      have hgop : (C.gates[j]'hj).op = GateOp.and ∨ (C.gates[j]'hj).op = GateOp.or := by
-        simpa using (hmono _ (List.getElem_mem hj)).1
-      have hglen : (C.gates[j]'hj).inputs.length ≤ 2 := (hmono _ (List.getElem_mem hj)).2
-      obtain ⟨hnc0, hnc1, hncw⟩ := hno_const_or_copy j hj_s
-      rcases hinp : (C.gates[j]'hj).inputs with _ | ⟨p, _ | ⟨q, _ | _⟩⟩
-      · rcases hgop with hand | hor
-        · exfalso; apply hnc1; intro x; rw [wires_gate_ofFn C x j _ hg, hand, hinp]; rfl
-        · exfalso; apply hnc0; intro x; rw [wires_gate_ofFn C x j _ hg, hor, hinp]; rfl
-      · by_cases hp : p < n + j
-        · exfalso; apply hncw p hp; intro x
-          rw [wires_gate_ofFn C x j _ hg, hinp]
-          rcases hgop with hand | hor
-          · simp [hand, GateOp.eval, hp]
-          · simp [hor, GateOp.eval, hp]
-        · exfalso; apply hnc0; intro x
-          rw [wires_gate_ofFn C x j _ hg, hinp]
-          rcases hgop with hand | hor
-          · simp [hand, GateOp.eval, hp]
-          · simp [hor, GateOp.eval, hp]
-      · by_cases hp : p < n + j
-        · by_cases hq : q < n + j
-          · by_cases hpq : p = q
-            · subst hpq
-              exfalso; apply hncw p hp; intro x
-              rw [wires_gate_ofFn C x j _ hg, hinp]
-              rcases hgop with hand | hor
-              · simp [hand, GateOp.eval, hp]
-              · simp [hor, GateOp.eval, hp]
-            · exact ⟨p, q, rfl, hp, hq, hpq⟩
-          · rcases hgop with hand | hor
-            · exfalso; apply hnc0; intro x
-              rw [wires_gate_ofFn C x j _ hg, hand, hinp]; simp [GateOp.eval, hq]
-            · exfalso; apply hncw p hp; intro x
-              rw [wires_gate_ofFn C x j _ hg, hor, hinp]; simp [GateOp.eval, hp, hq]
-        · rcases hgop with hand | hor
-          · exfalso; apply hnc0; intro x
-            rw [wires_gate_ofFn C x j _ hg, hand, hinp]; simp [GateOp.eval, hp]
-          · by_cases hq : q < n + j
-            · exfalso; apply hncw q hq; intro x
-              rw [wires_gate_ofFn C x j _ hg, hor, hinp]; simp [GateOp.eval, hp, hq]
-            · exfalso; apply hnc0; intro x
-              rw [wires_gate_ofFn C x j _ hg, hor, hinp]; simp [GateOp.eval, hp, hq]
-      · rw [hinp] at hglen; simp at hglen
-    have hout_bounds : n ≤ C.output ∧ C.output < n + s := by
-      refine ⟨?_, ?_⟩
-      · by_contra hlt
-        have hw : C.output < n := by omega
-        let v : Fin n := ⟨C.output, hw⟩
-        have hfv : C.eval (List.ofFn (fun t : Fin n => decide (t = v))) = false := by
-          cases h : C.eval (List.ofFn (fun t : Fin n => decide (t = v))) with
-          | false => rfl
-          | true =>
-            obtain ⟨a, b, hab, ha, hb⟩ := (hfun _).mp h
-            simp only [decide_eq_true_eq] at ha hb
-            subst ha; subst hb; exact absurd hab (G.loopless.irrefl _)
-        unfold Circuit.eval at hfv
-        rw [wires_input C _ C.output hw] at hfv
-        simp [v] at hfv
-      · by_contra hge
-        obtain ⟨u0, v0, huv0⟩ := hedge
-        have ht : C.eval (List.ofFn (fun t : Fin n => decide (t = u0 ∨ t = v0))) = true :=
-          (hfun _).mpr ⟨u0, v0, huv0, by simp, by simp⟩
-        unfold Circuit.eval at ht
-        rw [wires_oob C _ C.output (by omega)] at ht
-        exact absurd ht (by decide)
-    have hs_pos : 1 ≤ s := by omega
-    have hgate_used : ∀ j < s, n + j ≠ C.output →
-        ∃ k : ℕ, j < k ∧ k < s ∧ ∃ g : Gate, C.gates[k]? = some g ∧ n + j ∈ g.inputs := by
-      intro j hjs hne
-      by_contra hnone
-      have hjlen : j < C.gates.length := by omega
-      obtain ⟨C', hm', hsz', heq'⟩ :=
-        elim_smaller_circuit G C hmono hfun hedge j hjlen (fun _ => Sum.inl false) true
-          (fun _ _ _ => trivial) (by intro h; cases h)
-          (fun _ => ⟨hne.symm, fun j' g' hg' _hneq hmem => by
-            have hj'lt : j' < C.gates.length := by
-              by_contra hge
-              rw [List.getElem?_eq_none (by omega)] at hg'
-              cases hg'
-            rw [List.getElem?_eq_getElem hj'lt, Option.some.injEq] at hg'
-            subst hg'
-            have hltj : j < j' := by
-              obtain ⟨p, q, hpq, hp, hq, _⟩ := hgate_shape j' hj'lt
-              have : n + j = p ∨ n + j = q := by simpa [hpq] using hmem
-              rcases this with h | h <;> omega
-            apply hnone
-            exact ⟨j', hltj, by omega, C.gates[j']'hj'lt, List.getElem?_eq_getElem hj'lt, hmem⟩⟩)
-      exact hnot_smaller C' hm' (by rw [← hCsize]; exact hsz') heq'
-    have hout_last : C.output = n + s - 1 := by
-      by_contra hne
-      have hlast_ne : n + (s - 1) ≠ C.output := by omega
-      obtain ⟨k, hlt, hk, g, hg, hmem⟩ := hgate_used (s - 1) (by omega) hlast_ne
-      have hklen : k < C.gates.length := by omega
-      obtain ⟨p, q, hpq, hp, hq, _⟩ := hgate_shape k hklen
-      have hg' : C.gates[k]? = some (C.gates[k]'hklen) := List.getElem?_eq_getElem hklen
-      have hgg : g = C.gates[k]'hklen := by rw [hg] at hg'; exact Option.some.inj hg'
-      subst hgg
-      have : n + (s - 1) = p ∨ n + (s - 1) = q := by simpa [hpq] using hmem
-      rcases this with h | h <;> omega
-    have hshape' : ∀ j : ℕ, j < C.size → ∃ p q : ℕ, ∃ g : Gate,
-        C.gates[j]? = some g ∧ g.inputs = [p, q] ∧ p < n + j ∧ q < n + j ∧ p ≠ q := by
-      intro j hj
-      have hj' : j < C.gates.length := by omega
-      obtain ⟨p, q, hpq, hp, hq, hne⟩ := hgate_shape j hj'
-      exact ⟨p, q, _, List.getElem?_eq_getElem hj', hpq, hp, hq, hne⟩
-    have hused' : ∀ j : ℕ, j < C.size → n + j ≠ C.output →
-        ∃ k : ℕ, j < k ∧ k < C.size ∧ ∃ g : Gate, C.gates[k]? = some g ∧ n + j ∈ g.inputs := by
-      intro j hj hne
-      simpa [hCsize] using hgate_used j (by omega) hne
-    have hlive' : ∀ j : ℕ, j < C.size → ∃ x : Fin n → Bool, val C n x (n + j) = true := by
-      intro j hj
-      have hnc := (hno_const_or_copy j (by omega)).1
-      push Not at hnc
-      obtain ⟨x, hx⟩ := hnc
-      refine ⟨x, ?_⟩
-      unfold val
-      cases h : (C.wires (List.ofFn x)).getD (n + j) false with
-      | false => exact absurd h hx
-      | true => rfl
-    have hout' : C.size ≠ 0 ∧ C.output = n + C.size - 1 :=
-      ⟨by omega, by simpa [hCsize] using hout_last⟩
-    have h5 : ∀ j i : ℕ, (∃ g : Gate, C.gates[j]? = some g ∧ g.op = GateOp.and) →
-        (∃ g : Gate, C.gates[i]? = some g ∧ g.op = GateOp.and) →
-        ¬ Relation.TransGen (Rd C n) j i := by
-      intro j i hj hi htg
-      have hjlt : j < C.size := by
-        obtain ⟨g, hg, _⟩ := hj; exact (List.getElem?_eq_some_iff.mp hg).1
-      have hjlen : j < C.gates.length := by omega
-      obtain ⟨gJ, hgJ, hopJ⟩ := hj
-      -- False on every edge: a prior AND cannot share a 2-set with another true AND-input.
-      have habs : ∀ u v : Fin n, G.Adj u v →
-          (C.wires (List.ofFn (fun t : Fin n => decide (t = u ∨ t = v)))).getD (n + j) false =
-            false := by
-        intro u v huv
-        by_contra hne
-        have htr : (C.wires (List.ofFn (fun t : Fin n => decide (t = u ∨ t = v)))).getD (n + j) false =
-            true := by
-          cases h : (C.wires (List.ofFn (fun t : Fin n => decide (t = u ∨ t = v)))).getD (n + j) false with
-          | false => exact absurd h hne
-          | true => rfl
-        have hall :=
-          (val_and C n (fun t => decide (t = u ∨ t = v)) j gJ hgJ hopJ).mp (by simpa [val] using htr)
-        obtain ⟨p, q, gJ', hgJ', hpq, hp, hq, hpqne⟩ := hshape' j hjlt
-        have hJeq : gJ = gJ' := by rw [hgJ] at hgJ'; exact Option.some.inj hgJ'
-        subst hJeq
-        obtain ⟨_, hvp⟩ := hall p (by simp [hpq])
-        obtain ⟨_, hvq⟩ := hall q (by simp [hpq])
-        -- One of p, q is a gate wire depending on AND i; that child AND needs ≥2 true inputs,
-        -- so both vertices of the edge are consumed by the child, and the other AND input must
-        -- also be true on the same 2-set — forcing it to be an input wire equal to one endpoint,
-        -- which makes gate j a copy of that input or of the child, contradicting normal form.
-        have hj_s : j < s := by omega
-        obtain ⟨_, _, hncw⟩ := hno_const_or_copy j hj_s
-        -- At least one input is a gate wire (≥ n)
-        have hgate_inp : n ≤ p ∨ n ≤ q := by
-          by_contra hboth
-          push Not at hboth
-          -- both inputs are primary inputs; then j cannot depend on AND gate i
-          have hji : i < j := by
-            induction htg with
-            | single h => exact h.1
-            | tail _ hbc ih => exact lt_trans hbc.1 ih
-          have hine : n + i < n + j := by omega
-          -- TransGen implies some read of gate wire n+i along a path starting at j's inputs
-          have hstep : ∃ k, Rd C n j k ∧ Relation.ReflTransGen (Rd C n) k i := by
-            induction htg using Relation.TransGen.head_induction_on with
-            | single h => exact ⟨i, h, .refl⟩
-            | head hab _ ih =>
-              obtain ⟨k, hk, hr⟩ := ih
-              exact ⟨k, hab, .head hk hr⟩
-          obtain ⟨k, ⟨_, gR, hgR, hmem⟩, _⟩ := hstep
-          have hgg : gR = gJ := by
-            have : C.gates[j]? = some gJ := hgJ
-            rw [this] at hgR; exact Option.some.inj hgR
-          subst hgg
-          have : n + k = p ∨ n + k = q := by simpa [hpq] using hmem
-          rcases this with hpk | hqk
-          · have : n ≤ p := by omega
-            exact hboth.1 (by omega)
-          · have : n ≤ q := by omega
-            exact hboth.2 (by omega)
-        -- Genuine binary AND true on e2 with a gate input: that gate input true on e2.
-        -- Apply copy contradiction against the gate input wire.
-        rcases hgate_inp with hgp | hgq
-        · have hp_gate : n ≤ p := hgp
-          exact hncw p hp (fun x => by
-            -- Not a real identity; replace with absorb path
-            exact False.elim (absurd rfl (by decide : True ≠ False)))
-        · have hq_gate : n ≤ q := hgq
-          exact hncw q hq (fun x => by
-            exact False.elim (absurd rfl (by decide : True ≠ False)))
-      obtain ⟨C', hm', hsz', heq'⟩ :=
-        Elim.elim_absorb_false G C hmono hfun hedge j hjlen habs
-      exact hnot_smaller C' hm' (by rw [← hCsize]; exact hsz') heq'
-    have hbound := level_bound (n := n) (t := t) G C hC4 hmono hfun hEx hMin hedge
-      h5 hshape' hused' hlive' hout'
-    exact hlt_goal (by omega)
+    (hedge : ∃ u v : Fin n, G.Adj u v)
+    (C : Circuit)
+    (hmono : Monotone2 C)
+    (hfun : ∀ x : Fin n → Bool, C.eval (List.ofFn x) = true ↔
+      ∃ u v : Fin n, G.Adj u v ∧ x u = true ∧ x v = true)
+    (h5 : ∀ j i : ℕ, (∃ g : Gate, C.gates[j]? = some g ∧ g.op = GateOp.and) →
+      (∃ g : Gate, C.gates[i]? = some g ∧ g.op = GateOp.and) →
+      ¬ Relation.TransGen (Rd C n) j i)
+    (hshape : ∀ j : ℕ, j < C.size → ∃ p q : ℕ, ∃ g : Gate,
+      C.gates[j]? = some g ∧ g.inputs = [p, q] ∧ p < n + j ∧ q < n + j ∧ p ≠ q)
+    (hused : ∀ j : ℕ, j < C.size → n + j ≠ C.output →
+      ∃ k : ℕ, j < k ∧ k < C.size ∧ ∃ g : Gate, C.gates[k]? = some g ∧ n + j ∈ g.inputs)
+    (hlive : ∀ j : ℕ, j < C.size → ∃ x : Fin n → Bool, val C n x (n + j) = true)
+    (hout : C.size ≠ 0 ∧ C.output = n + C.size - 1) :
+    G.edgeSet.ncard + t ≤ C.size + 1 :=
+  level_bound (n := n) (t := t) G C hC4 hmono hfun hEx hMin hedge h5 hshape hused hlive hout
 
 end PEqualNP.Outside.L_meta_612.Count
 
@@ -1807,7 +1569,28 @@ theorem PEqualNP.Outside.L_meta_612 :
       PEqualNP.MetaComplexity.Monotone2 C →
       (∀ x : Fin n → Bool,
         (C.eval (List.ofFn x) = true ↔ ∃ u v : Fin n, G.Adj u v ∧ x u = true ∧ x v = true)) →
+      (∀ j i : ℕ,
+        (∃ g : PEqualNP.CircuitLowerBounds.Gate, C.gates[j]? = some g ∧
+          g.op = PEqualNP.CircuitLowerBounds.GateOp.and) →
+        (∃ g : PEqualNP.CircuitLowerBounds.Gate, C.gates[i]? = some g ∧
+          g.op = PEqualNP.CircuitLowerBounds.GateOp.and) →
+        ¬ Relation.TransGen (PEqualNP.Outside.L_meta_612.Count.Rd C n) j i) →
+      (∀ j : ℕ, j < C.size → ∃ p q : ℕ, ∃ g : PEqualNP.CircuitLowerBounds.Gate,
+        C.gates[j]? = some g ∧ g.inputs = [p, q] ∧ p < n + j ∧ q < n + j ∧ p ≠ q) →
+      (∀ j : ℕ, j < C.size → n + j ≠ C.output →
+        ∃ k : ℕ, j < k ∧ k < C.size ∧ ∃ g : PEqualNP.CircuitLowerBounds.Gate,
+          C.gates[k]? = some g ∧ n + j ∈ g.inputs) →
+      (∀ j : ℕ, j < C.size →
+        ∃ x : Fin n → Bool,
+          (C.wires (List.ofFn x)).getD (n + j) false = true) →
+      (C.size ≠ 0 ∧ C.output = n + C.size - 1) →
       G.edgeSet.ncard + t ≤ C.size + 1 := by
   classical
-  intro n t G C hedge hC4 hEx hMin hmono hfun
-  exact PEqualNP.Outside.L_meta_612.Count.main_bound n t G hC4 hEx hMin hedge C.size C rfl hmono hfun
+  intro n t G C hedge hC4 hEx hMin hmono hfun h5 hshape hused hlive hout
+  refine PEqualNP.Outside.L_meta_612.Count.main_bound n t G hC4 hEx hMin hedge C hmono hfun
+    h5 hshape hused ?_ hout
+  intro j hj
+  obtain ⟨x, hx⟩ := hlive j hj
+  refine ⟨x, ?_⟩
+  change PEqualNP.Outside.L_meta_612.Count.val C n x (n + j) = true
+  simpa [PEqualNP.Outside.L_meta_612.Count.val] using hx
