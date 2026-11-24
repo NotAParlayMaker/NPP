@@ -70,11 +70,16 @@ theorem PEqualNP.Outside.R_meta_3350_509
       let j := second.inputs.headD 10
       have second_step (x : Fin 9 → Bool) :
           step (seed x) second = seed x ++ [!((seed x).getD j false)] := by
+        change seed x ++ [second.op.eval (second.inputs.map fun k => (seed x).getD k false)] =
+          seed x ++ [!((seed x).getD (second.inputs.headD 10) false)]
+        rw [hOp]
         cases hInputs : second.inputs with
         | nil =>
           have hMissing : (seed x)[10]? = none := List.getElem?_eq_none (by rw [seed_length])
-          simp [step, hOp, GateOp.eval, j, hInputs, List.getD_eq_getElem?_getD, hMissing]
-        | cons a as => simp [step, hOp, GateOp.eval, j, hInputs]
+          change seed x ++ [true] = seed x ++ [!((seed x).getD 10 false)]
+          rw [List.getD_eq_getElem?_getD, hMissing]
+          rfl
+        | cons a as => rfl
       have correct (x : Fin 9 → Bool) :
           D.eval (seed x ++ [!((seed x).getD j false)]) = edge x := by
         have h := congrFun hEdge x
@@ -105,7 +110,10 @@ theorem PEqualNP.Outside.R_meta_3350_509
             intro g hg
             obtain ⟨old, hOld, rfl⟩ := List.mem_map.mp hg
             simpa [renameGate] using hDFan old hOld
-          have hD'Size : D'.size ≤ 13 := by simpa [Circuit.size, D', D] using hDSize
+          have hD'Size : D'.size ≤ 13 := by
+            change tail.length ≤ 13 at hDSize
+            change (tail.map renameGate).length ≤ 13
+            rwa [List.length_map]
           have edge_swap (x : Fin 9 → Bool) : edge (x ∘ swap) = edge x := by
             have h : ∀ a b c d e f g h i : Bool,
                 (b && a || a && f || f && i || i && g || g && b || b && c ||
