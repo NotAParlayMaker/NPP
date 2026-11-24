@@ -75,6 +75,11 @@ K_{a,b}: a + b - 1 gates, vs ab + min(a, b) - 1. Triangle K3: C4-free, so S5 giv
 | R2 | S1-S5 above | hand argument | written, for tractability |
 | R3 | `Std.Sat.AIG` (v4.36.0): would replace DAG type, `denote`, atom relabel, Tseitin CNF; cannot do exact AND/OR/NOT size (NOT free, no OR node), restrict-to-constants, cones, deletion+reindex, minimality. Decl/Fanin/no-GC spot-checked by the board owner | reading source, nothing compiled, `aig/REPORT.md` | done, sent to tractability |
 
+| R4 | **Conjecture s(G) = bcs(G)** (cheapest biclique cover with shared OR sub-terms, cost \|S\| + 2k - 1; see `biclique/README.md`). Holds on 51/51 SAT-solved girth 3/4 graphs, n<=6; 35 of them have s < \|E\|+tau-1. Rerun by board owner (`stats.py`), and `bcs.py` spot-checked on C4, K4, D]o, Dl{, EBy? | finite computation + conjecture | open |
+| R5 | C4-free => bcs(G) = \|E\| + tau(G) - 1, sharing included. So on C4-free graphs R4 is exactly Note 1's formula (consistent with Note 2's W6 and the girth>=5 seat). Board owner read the proof step by step | hand argument, `biclique/README.md` sec 2 | written |
+| R6 | bcs circuits are monotone, so s = bcs implies s_mono = s: NOT gates help on NONE of the 51 graphs | deduction from R4 data | done |
+| R7 | next SAT targets: Q3 (n=8, bcs 13 vs P 15); K6 (bcs unknown, MaxSAT timeout); does bcs(K_n) grow like n log n? | open | open |
+
 ## log
 
 - 2026-11-24 board opened; synth2.py copied from `claude/zealous-gates-i75uba` (sibling seat's code).
