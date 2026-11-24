@@ -23,7 +23,9 @@ theorem PEqualNP.Outside.R_meta_1886_1
     obtain ⟨h1, h2⟩ := hC g0 hg0
     exact ⟨h1, by simpa using h2⟩
   have hsD : D.size ≤ 18 := by
-    simpa [D, PEqualNP.CircuitLowerBounds.Circuit.size] using hs
+    change (C.gates.map _).length ≤ 18
+    rw [List.length_map]
+    exact hs
   have snoc : ∀ (l : List Bool) (v : Bool) (i : ℕ),
       (l ++ [v]).getD i false = if i < l.length then l.getD i false
         else if i = l.length then v else false := by
