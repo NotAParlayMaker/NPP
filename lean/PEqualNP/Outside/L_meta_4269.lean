@@ -1,10 +1,16 @@
-import Mathlib
-import PEqualNP.Defs
+import Mathlib.Algebra.BigOperators.Group.List.Basic
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Data.Fintype.Fin
+import Mathlib.Tactic.IntervalCases
+import Mathlib.Data.Finset.Card
+import Mathlib.Data.List.OfFn
+import Mathlib.Tactic.FinCases
+import Mathlib.Tactic.Tauto
+import Mathlib.Tactic.Push
 
 -- The signed-circuit bound is from dsgallups, PR 7286, commit 39863e78d5.
 -- The checker and the bound certificates are adapted from PEqualNP/Outside/L_meta_1667.lean (Apache-2.0).
 namespace PEqualNP.Outside.L_meta_4269
-open PEqualNP.CircuitLowerBounds
 abbrev Sig := BitVec 512
 def zero : Sig := 0
 def one : Sig := BitVec.allOnes 512
@@ -75,24 +81,7 @@ private lemma live_size {k t S} (h : Live target k t S) : t ≤ k ∧ S.card+t �
     exact ⟨by omega,by omega⟩
 
 
-def gv (w : List Sig) (g : Gate) : Sig :=
-  let xs := g.inputs.map (fun i => w.getD i zero)
-  match g.op with
-  | .and => xs.foldr (bin false) one
-  | .or => xs.foldr (bin true) zero
-  | .not => neg (xs.headD zero)
-  | _ => zero
-
-def execute (gs : List Gate) (w : List Sig) : List Sig :=
-  gs.foldl (fun l g => l ++ [gv l g]) w
-
 def represented (w : List Sig) (v : Sig) : Prop := v ∈ w ∨ ¬proper v
-
-private lemma get_rep (w : List Sig) (i : Nat) : represented w (w.getD i zero) := by
-  simp only [List.getD_eq_getElem?_getD]
-  cases h : w[i]? with
-  | none => exact Or.inr (fun h => h.1 rfl)
-  | some a => exact Or.inl (List.mem_of_getElem? h)
 
 private lemma bin_laws (a : Sig) :
     bin false a one = a ∧ bin true a zero = a ∧
@@ -130,43 +119,6 @@ private lemma bin_rep {w a b} (d : Bool) (ha : represented w a) (hb : represente
   · subst b; cases d <;> simp_all
   exact Or.inr (Or.inr ⟨d,a,b,ham,hbm,hap,hbp,he,rfl⟩)
 
-private lemma gate_rep (w : List Sig) (g : Gate)
-    (h : g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp) ∧ g.inputs.length≤2) :
-    represented w (gv w g) ∨ witness w (gv w g) := by
-  obtain ⟨o,l⟩ := g
-  simp only [Set.mem_insert_iff,Set.mem_singleton_iff] at h
-  obtain ⟨ho,hl⟩ := h
-  have rz : represented w zero := Or.inr (fun h => h.1 rfl)
-  have ro : represented w one := Or.inr (fun h => h.2 rfl)
-  have nx (a : Sig) (ha : represented w a) : represented w (neg a) ∨ witness w (neg a) := by
-    rcases operand_cases ha with rfl | rfl | ⟨hm,hp⟩
-    · exact Or.inl (neg_laws.1 ▸ ro)
-    · exact Or.inl (neg_laws.2 ▸ rz)
-    · exact Or.inr (Or.inl ⟨a,hm,hp,rfl⟩)
-  cases l with
-  | nil =>
-    rcases ho with rfl | rfl | rfl
-    · exact Or.inl ro
-    · exact Or.inl rz
-    · exact nx _ rz
-  | cons i l =>
-    cases l with
-    | nil =>
-      rcases ho with rfl | rfl | rfl
-      · simpa only [gv,List.map_cons,List.map_nil,List.foldr_cons,List.foldr_nil,(bin_laws _).1] using Or.inl (b := witness w (w.getD i zero)) (get_rep w i)
-      · simpa only [gv,List.map_cons,List.map_nil,List.foldr_cons,List.foldr_nil,(bin_laws _).2.1] using Or.inl (b := witness w (w.getD i zero)) (get_rep w i)
-      · exact nx _ (get_rep w i)
-    | cons j l =>
-      cases l with
-      | cons a l => simp at hl
-      | nil =>
-        rcases ho with rfl | rfl | rfl
-        · simpa only [gv,List.map_cons,List.map_nil,List.foldr_cons,List.foldr_nil,(bin_laws _).1] using bin_rep false (get_rep w i) (get_rep w j)
-        · simpa only [gv,List.map_cons,List.map_nil,List.foldr_cons,List.foldr_nil,(bin_laws _).2.1] using bin_rep true (get_rep w i) (get_rep w j)
-        · exact nx _ (get_rep w i)
-
--- Remove a last computed signal from a backward derivation. A gate whose value
--- is already available, or is unused by the suffix, needs no entry in the plan.
 private lemma pull_gate {w : List Sig} {z : Sig} {k t S} (h : Live target k t S)
     (hz : represented w z ∨ witness w z) (sub : ∀ a ∈ S, a ∈ w++[z]) :
     ∃ k' t' S', k' ≤ k+1 ∧ Live target k' t' S' ∧ ∀ a ∈ S', a ∈ w := by
@@ -214,67 +166,12 @@ private lemma pull_gate {w : List Sig} {z : Sig} {k t S} (h : Live target k t S)
     have hn : a ≠ z := fun hh => hm (hh ▸ ha)
     simpa [hn] using sub a ha
 
-private lemma extract (gs : List Gate) (w : List Sig)
-    (legal : ∀ g ∈ gs, g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp) ∧ g.inputs.length≤2)
-    (hp : proper target) (hout : target ∈ execute gs w) :
-    ∃ k t S, k ≤ gs.length ∧ Live target k t S ∧ ∀ a ∈ S, a ∈ w := by
-  induction gs generalizing w with
-  | nil => exact ⟨0,0,{target},by simp,Live.stop hp,by simpa [execute] using hout⟩
-  | cons g gs ih =>
-    obtain ⟨k,t,S,hk,ht,hs⟩ := ih (w++[gv w g]) (fun a ha => legal a (by simp [ha])) hout
-    obtain ⟨l,u,T,hl,hu,hT⟩ := pull_gate ht (gate_rep w g (legal g (by simp))) hs
-    exact ⟨l,u,T,by simp; omega,hu,hT⟩
-
 def bit (i : Fin 512) (a : Sig) : Bool := a.getLsbD i.val
 private lemma bit_zero (i) : bit i zero = false := by simp [bit,zero]
 private lemma bit_one (i) : bit i one = true := by unfold bit one; rw [BitVec.getLsbD_allOnes]; simp
 private lemma bit_neg (i) (a : Sig) : bit i (neg a) = !(bit i a) := by simp [bit,neg,i.isLt]
 private lemma bit_bin (i d) (a b : Sig) : bit i (bin d a b) =
     (if d then bit i a || bit i b else bit i a && bit i b) := by cases d <;> simp [bit,bin]
-
-private lemma b_read (i) (w : List Sig) (j : Nat) :
-    (w.map (bit i)).getD j false = bit i (w.getD j zero) := by
-  simp only [List.getD_eq_getElem?_getD,List.getElem?_map]
-  cases w[j]? with
-  | none => exact (bit_zero _).symm
-  | some a => rfl
-
-private lemma run_bit (i) (g : Gate) (w : List Sig)
-    (hg : g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp)) :
-    bit i (gv w g) = g.op.eval (g.inputs.map fun j => (w.map (bit i)).getD j false) := by
-  obtain ⟨o,l⟩ := g
-  simp only [Set.mem_insert_iff,Set.mem_singleton_iff] at hg
-  simp only [b_read]
-  rcases hg with rfl | rfl | rfl
-  · induction l with
-    | nil => exact bit_one _
-    | cons a l ih =>
-      change bit i (bin false _ _) = (_ && _)
-      rw [bit_bin]; exact congrArg (fun x => bit i (w.getD a zero) && x) ih
-  · induction l with
-    | nil => exact bit_zero _
-    | cons a l ih =>
-      change bit i (bin true _ _) = (_ || _)
-      rw [bit_bin]; exact congrArg (fun x => bit i (w.getD a zero) || x) ih
-  · cases l with
-    | nil =>
-      change bit i (neg zero) = !false
-      rw [bit_neg,bit_zero]
-    | cons a l => exact bit_neg _ _
-
-private lemma execute_bits (gs : List Gate) (i) (w : List Sig)
-    (hg : ∀ g ∈ gs, g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp)) :
-    (execute gs w).map (bit i) =
-    gs.foldl (fun (l : List Bool) g => l++[g.op.eval (g.inputs.map fun j => l.getD j false)]) (w.map (bit i)) := by
-  induction gs generalizing w with
-  | nil => rfl
-  | cons g gs ih =>
-    change (execute gs (w++[gv w g])).map _ = _
-    rw [ih _ (fun a ha => hg a (by simp [ha]))]
-    simp only [List.foldl_cons,List.map_append,List.map_singleton,run_bit i g w (hg g (by simp))]
-
-
-
 
 abbrev Wire (R : Type) := R → Bool
 
@@ -698,74 +595,19 @@ def edge (x : Fin 9 → Bool) : Bool :=
   (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) ||
   (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) ||
   (x 6 && x 8) || (x 8 && x 5)
-theorem edge_table : ∀ r : Row, bit r graph = edge (sample r) := by decide +kernel
-theorem seed_table : ∀ r : Row, bit r seed = !(sample r 0) := by decide +kernel
+def edgeMask : Sig :=
+  let x := fun j => inputs.getD j zero
+  (x 0 &&& x 1) ||| (x 1 &&& x 2) ||| (x 2 &&& x 3) ||| (x 3 &&& x 4) ||| (x 4 &&& x 0) |||
+    (x 0 &&& x 5) ||| (x 1 &&& x 6) ||| (x 2 &&& x 7) ||| (x 3 &&& x 8) ||| (x 5 &&& x 7) |||
+    (x 6 &&& x 8) ||| (x 8 &&& x 5)
+theorem edge_table (r : Row) : bit r graph = edge (sample r) := by
+  rw [show graph = edgeMask by decide +kernel]
+  simp only [edgeMask,bit,edge,sample,BitVec.getLsbD_or,BitVec.getLsbD_and]
+  rfl
+theorem seed_table : ∀ r : Row, bit r seed = !(sample r 0) := fun r => bit_neg r _
 theorem graph_proper : proper graph := by unfold proper; decide +kernel
 theorem seed_nonzero : seed ≠ zero := by decide +kernel
 theorem input_list : List.ofFn (fun j : Fin 9 => inputs.getD j.val zero) = inputs := rfl
-theorem sampled (r : Row) : List.ofFn (sample r) = inputs.map (bit r) := by
-  rw [←input_list]
-  rw [List.map_ofFn]
-  rfl
-
-theorem table_eval (C : Circuit) (h : PEqualNP.MetaComplexity.FanInTwo C)
-    (i : Nat) (r : Row) : bit r ((execute C.gates inputs).getD i zero) =
-      (C.wires (List.ofFn (sample r))).getD i false := by
-  rw [←b_read,execute_bits _ _ _ (fun g hg => (h g hg).1),sampled]
-  rfl
-
-theorem exec_extends (gs : List Gate) (ws : List Sig) : ∃ l, execute gs ws = ws ++ l := by
-  induction gs generalizing ws with
-  | nil => exact ⟨[],by simp [execute]⟩
-  | cons g gs ih =>
-    obtain ⟨l,hl⟩ := ih (ws++[gv ws g])
-    exact ⟨gv ws g::l,by simpa [execute,List.append_assoc] using hl⟩
-
-def neighbor (i : Fin 9) : Nat := [4,2,1,2,3,0,1,2,3].getD i.val 0
-def absentRow (i : Fin 9) : Row := Fin.ofNat 512 (1 <<< neighbor i)
-def presentRow (i : Fin 9) : Row := Fin.ofNat 512 ((1 <<< i.val) ||| (1 <<< neighbor i))
-
-theorem initial_live (C : Circuit) (legal : PEqualNP.MetaComplexity.FanInTwo C)
-    (first : ∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = !(y 0))
-    (computes : PEqualNP.MetaComplexity.circuitFun 9 C = edge) (small : C.size ≤ 15) :
-    ∃ k t S, k ≤ 14 ∧ Live graph k t S ∧ ∀ a ∈ S, a ∈ inputs++[seed] := by
-  have headEq : (execute C.gates inputs).getD 9 zero = seed := by
-    apply BitVec.eq_of_getLsbD_eq
-    intro j hj
-    let r : Row := ⟨j,hj⟩
-    exact (table_eval C legal 9 r).trans ((first (sample r)).trans (seed_table r).symm)
-  have goalEq : (execute C.gates inputs).getD C.output zero = graph := by
-    apply BitVec.eq_of_getLsbD_eq
-    intro j hj
-    let r : Row := ⟨j,hj⟩
-    exact (table_eval C legal C.output r).trans ((congrFun computes (sample r)).trans (edge_table r).symm)
-  have out := get_rep (execute C.gates inputs) C.output
-  rw [goalEq] at out
-  have targetIn := out.resolve_right (fun hn => hn graph_proper)
-  cases hgs : C.gates with
-  | nil =>
-    rw [hgs] at headEq
-    exact False.elim (seed_nonzero headEq.symm)
-  | cons g gs =>
-    have eq0 : gv inputs g = seed := by
-      rw [hgs] at headEq
-      change (execute gs (inputs++[gv inputs g])).getD 9 zero = seed at headEq
-      obtain ⟨l,hl⟩ := exec_extends gs (inputs++[gv inputs g])
-      rw [hl] at headEq
-      exact headEq
-    rw [hgs] at targetIn
-    change graph ∈ execute gs (inputs++[gv inputs g]) at targetIn
-    rw [eq0] at targetIn
-    have tailLegal : ∀ gate ∈ gs, gate.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp) ∧ gate.inputs.length≤2 := by
-      intro gate hg
-      apply legal
-      rw [hgs]
-      exact List.mem_cons_of_mem _ hg
-    obtain ⟨k,t,S,hk,run,hs⟩ := extract gs _ tailLegal graph_proper targetIn
-    have len : gs.length+1 ≤ 15 := by simpa [Circuit.size,hgs] using small
-    exact ⟨k,t,S,by omega,run,hs⟩
-
-
 def rename (f : Row → Row) (a : Sig) := table fun r => bit (f r) a
 theorem bit_rename (f : Row → Row) (a : Sig) (r : Row) :
     bit r (rename f a) = bit (f r) a := bit_table _ _
@@ -932,21 +774,24 @@ theorem erase_fin {l : List Sig} (h : l.Nodup) (a : Sig) : (l.erase a).toFinset 
   ext x
   simp [h.mem_erase_iff]
 
-theorem enum_step {T : Sig} {cap : Nat} {ws : List Sig} (hn : ws.Nodup) (out : T ∉ ws)
+def Excluded (binaryOnly : Bool) (T : Sig) (cap : Nat) (S : Finset Sig) :=
+  ∀ k t, k ≤ cap → Live T k t S → (binaryOnly = true → t = 0) → False
+
+theorem enum_step {binaryOnly : Bool} {T : Sig} {cap : Nat} {ws : List Sig} (hn : ws.Nodup) (out : T ∉ ws)
     (oneStep : ∀ a ∈ ws, ∀ keep, neg a ∉ ws → proper (neg a) →
       (childOne ws a keep).length ≤ cap →
-      Impossible T (cap-1) (childOne ws a keep).toFinset)
+      Excluded binaryOnly T (cap-1) (childOne ws a keep).toFinset)
     (twoStep : ∀ a ∈ ws, ∀ b ∈ ws, ∀ d ka kb, a ≠ b → bin d a b ∉ ws →
       proper (bin d a b) → (childTwo ws a b d ka kb).length ≤ cap →
-      Impossible T (cap-1) (childTwo ws a b d ka kb).toFinset) :
-    Impossible T cap ws.toFinset := by
+      Excluded binaryOnly T (cap-1) (childTwo ws a b d ka kb).toFinset) :
+    Excluded binaryOnly T cap ws.toFinset := by
   classical
   intro k t hk h
   generalize he : ws.toFinset = S at h
   induction h using Live.ind with
   | stop hp =>
     have mem : T ∈ ws.toFinset := he.symm ▸ Finset.mem_singleton_self _
-    exact out (List.mem_toFinset.mp mem)
+    exact fun _ => out (List.mem_toFinset.mp mem)
   | @unary k t U a ha hf tail _ =>
     have am : a ∈ ws := List.mem_toFinset.mp (he.symm ▸ Finset.mem_insert_self _ _)
     have fresh : neg a ∉ ws := fun h => hf (he ▸ List.mem_toFinset.mpr h)
@@ -967,7 +812,8 @@ theorem enum_step {T : Sig} {cap : Nat} {ws : List Sig} (hn : ws.Nodup) (out : T
     have len : (childOne ws a keep).length ≤ cap := by
       rw [←List.toFinset_card_of_nodup nd,eq]
       omega
-    exact oneStep a am keep fresh hz len k t (by omega) (eq.symm ▸ tail)
+    exact fun only => oneStep a am keep fresh hz len k t (by omega) (eq.symm ▸ tail)
+      (fun yes => by have := only yes; omega)
   | @binary k t U a b d ha hb hab hf tail _ =>
     have am : a ∈ ws := List.mem_toFinset.mp (he.symm ▸ Finset.mem_insert_self _ _)
     have bm : b ∈ ws := List.mem_toFinset.mp (he.symm ▸ Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
@@ -1820,17 +1666,17 @@ def closeChild (pools : List BoundPool) (links : Nat → List (List Sig)) (k : N
   let ws := choiceVal op::rest
   (links (keySet ws)).any (sameWords ws) || pools.any (fun p => scalarPoolCut p k rest op)
 
-theorem closeChild_sound {raw T pools links k rest op}
+theorem closeChild_sound {binaryOnly : Bool} {raw T pools links k rest op}
     (pValid : ∀ p ∈ pools, ValidPool raw T p)
-    (lValid : ∀ tag xs, xs ∈ links tag → Impossible T k (List.toFinset xs))
+    (lValid : ∀ tag xs, xs ∈ links tag → Excluded binaryOnly T k (List.toFinset xs))
     (nd : (choiceVal op :: rest).Nodup)
     (h : closeChild pools links k rest op = true) :
-    Impossible T k (choiceVal op :: rest).toFinset := by
+    Excluded binaryOnly T k (choiceVal op :: rest).toFinset := by
   simp only [closeChild,Bool.or_eq_true,List.any_eq_true] at h
   rcases h with ⟨xs,hx,ok⟩ | ⟨p,hp,ok⟩
   · rw [sameWords_sound ok]
     exact lValid _ _ hx
-  · exact scalarPoolCut_sound (pValid _ hp) nd ok
+  · exact fun k t hk h _ => scalarPoolCut_sound (pValid _ hp) nd ok k t hk h
 
 abbrev CovPair := Cov × Cov
 def preCov (ws : List Decor) : CovPair := (coverage false ws,coverage true ws)
@@ -1899,15 +1745,15 @@ def evalMove (c : NodeContext) (op : Nat) (a b z : Decor) (ka kb : Bool) :=
 
 def moveFront (ws : List Decor) (op : Nat) (a b : Decor) (ka kb : Bool) :=
   (movedDecor op a b).1 :: (opKeep (op==2) ka kb a b ws).map Prod.fst
-theorem evalMove_sound {raw T r s ws pools links cap a b op ka kb}
+theorem evalMove_sound {binaryOnly : Bool} {raw T r s ws pools links cap a b op ka kb}
     (pairs : properPairs T r s) (faith : ∀ w ∈ ws, faithful r s w)
     (nd : (ws.map Prod.fst).Nodup) (ha : a ∈ ws) (hb : b ∈ ws)
     (ne : (op==2)=false → a≠b) (hcap : 0<cap)
     (pv : ∀ p ∈ pools, ValidPool raw T p)
-    (lv : ∀ tag xs, xs ∈ links tag → Impossible T (cap-1) (List.toFinset xs))
+    (lv : ∀ tag xs, xs ∈ links tag → Excluded binaryOnly T (cap-1) (List.toFinset xs))
     (pro : proper (movedDecor op a b).1) (fresh : (movedDecor op a b).1 ∉ ws.map Prod.fst)
     (test : evalMove (cap,ws.length,ws,preCov ws,pools,links) op a b (movedDecor op a b) ka kb = true) :
-    Impossible T (cap-1) (moveFront ws op a b ka kb).toFinset := by
+    Excluded binaryOnly T (cap-1) (moveFront ws op a b ka kb).toFinset := by
   let z := movedDecor op a b
   let rest := opKeep (op==2) ka kb a b ws
   let child := z.1 :: rest.map Prod.fst
@@ -2071,20 +1917,20 @@ theorem childTwo_swap (v : List Sig) (nd : v.Nodup) (a b : Sig) (d ka kb : Bool)
     keep_mem,(nd.erase _).mem_erase_iff,nd.mem_erase_iff,bin_comm d b a]
   tauto
 
-theorem node_sound {raw T r s ws pools links cap}
+theorem node_sound {binaryOnly : Bool} {raw T r s ws pools links cap}
     (pairs : properPairs T r s) (faith : ∀ w ∈ ws, faithful r s w)
     (nd : (ws.map Prod.fst).Nodup) (out : T ∉ ws.map Prod.fst)
     (pv : ∀ p ∈ pools, ValidPool raw T p)
-    (lv : ∀ tag xs, xs ∈ links tag → Impossible T (cap-1) (List.toFinset xs))
+    (lv : ∀ tag xs, xs ∈ links tag → Excluded binaryOnly T (cap-1) (List.toFinset xs))
     (checks : testAll (cap,ws.length,ws,preCov ws,pools,links) ws = true) :
-    Impossible T cap (ws.map Prod.fst).toFinset := by
+    Excluded binaryOnly T cap (ws.map Prod.fst).toFinset := by
   by_cases hc : cap=0
   · intro k t hk h
     have ke : k=0 := by omega
     subst k
     generalize he : (ws.map Prod.fst).toFinset = S at h
     obtain ⟨_,hS,_⟩ := h
-    exact out (List.mem_toFinset.mp (by rw [he,hS]; exact Finset.mem_singleton_self _))
+    exact fun _ => out (List.mem_toFinset.mp (by rw [he,hS]; exact Finset.mem_singleton_self _))
   have hc' : 0<cap := by omega
   apply enum_step nd out
   · intro v hv keep fresh pro len
@@ -2099,7 +1945,7 @@ theorem node_sound {raw T r s ws pools links cap}
     have one (a b : Decor) (aa : a∈ws) (bb : b∈ws) (ne' : a.1≠b.1) (ka kb : Bool)
         (pr : proper (bin d a.1 b.1)) (fr : bin d a.1 b.1 ∉ ws.map Prod.fst)
         (test : testPair (cap,ws.length,ws,preCov ws,pools,links) a b d = true) :
-        Impossible T (cap-1) (childTwo (ws.map Prod.fst) a.1 b.1 d ka kb).toFinset := by
+        Excluded binaryOnly T (cap-1) (childTwo (ws.map Prod.fst) a.1 b.1 d ka kb).toFinset := by
       rw [←binary_front nd aa bb ne']
       have eq : (movedDecor (if d then 1 else 0) a b).1 = bin d a.1 b.1 := by cases d <;> rfl
       exact evalMove_sound pairs faith nd aa bb (fun _ e => ne' (congrArg Prod.fst e)) hc' pv lv
@@ -2138,8 +1984,8 @@ theorem composed_id {p q} (h : composedOK p q = true) (r : Row) :
 
 def autoOK (T : Sig) (p : List Move) :=
   (movedWord p T == T) && composedOK p p.reverse && composedOK p.reverse p
-theorem rotate_excluded {T n} {ws : List Sig} (hi : Impossible T n ws.toFinset)
-    (p : List Move) (ok : autoOK T p = true) : Impossible T n (ws.map (movedWord p.reverse)).toFinset := by
+theorem rotate_excluded {binaryOnly : Bool} {T n} {ws : List Sig} (hi : Excluded binaryOnly T n ws.toFinset)
+    (p : List Move) (ok : autoOK T p = true) : Excluded binaryOnly T n (ws.map (movedWord p.reverse)).toFinset := by
   simp only [autoOK,Bool.and_eq_true,beq_iff_eq] at ok
   have onto : Function.Surjective (movedRow p) := fun r => ⟨movedRow p.reverse r,composed_id ok.2 r⟩
   intro k t hk h
@@ -2270,11 +2116,11 @@ def linkedSet (g : Forest) (k : Nat) (pair : Nat × Nat) : Option (List Sig) :=
   if pair.1 ≥ (g.levels k).1 then none else
     (g.autos[pair.2]?).map fun perm => (stateSet g k pair.1).map (movedWord (perm.map swapRows).reverse)
 
-theorem linkedSet_sound (g : Forest) (k : Nat)
+theorem linkedSet_sound {binaryOnly : Bool} (g : Forest) (k : Nat)
     (names : ∀ x ∈ g.autos, autoOK (targetOf g) (x.map swapRows) = true)
-    (earlier : ∀ i < (g.levels k).1, Impossible (targetOf g) k (stateSet g k i).toFinset)
+    (earlier : ∀ i < (g.levels k).1, Excluded binaryOnly (targetOf g) k (stateSet g k i).toFinset)
     {pair out} (h : linkedSet g k pair = some out) :
-    Impossible (targetOf g) k out.toFinset := by
+    Excluded binaryOnly (targetOf g) k out.toFinset := by
   unfold linkedSet at h
   split at h
   · contradiction
@@ -2301,12 +2147,12 @@ def nodeVerified (g : Forest) (k i : Nat) :=
   decide values.Nodup && !(values.contains (targetOf g)) &&
     (if k=0 then true else testAll (k,ws.length,ws,preCov ws,rules,ls) ws)
 
-theorem nodeVerified_sound (g : Forest) (k i : Nat)
+theorem checkedNode {binaryOnly : Bool} (g : Forest) (k i : Nat)
     (samples : properPairs (targetOf g) (asRow fun j => (g.samples j).1) (asRow fun j => (g.samples j).2))
     (cols : ∀ ci ∈ g.cols, Slice (varsX (rawMask g.mask ci)) (targetOf g) (subcube ci.1 ci.2.1) ci.2.2.2.2)
     (names : ∀ x ∈ g.autos, autoOK (targetOf g) (x.map swapRows) = true)
-    (prior : k>0 → ∀ j < (g.levels (k-1)).1, Impossible (targetOf g) (k-1) (stateSet g (k-1) j).toFinset)
-    (checked : nodeVerified g k i = true) : Impossible (targetOf g) k (stateSet g k i).toFinset := by
+    (prior : k>0 → ∀ j < (g.levels (k-1)).1, Excluded binaryOnly (targetOf g) (k-1) (stateSet g (k-1) j).toFinset)
+    (checked : nodeVerified g k i = true) : Excluded binaryOnly (targetOf g) k (stateSet g k i).toFinset := by
   simp only [nodeVerified,Bool.and_eq_true,decide_eq_true_eq,Bool.not_eq_true',List.contains_eq_mem] at checked
   have hN := checked.1.1
   have hT : targetOf g ∉ stateSet g k i := by simpa [stateSet] using checked.1.2
@@ -2317,7 +2163,7 @@ theorem nodeVerified_sound (g : Forest) (k i : Nat)
     subst t
     generalize he : (stateSet g 0 i).toFinset = S at h
     obtain ⟨_,hS,_⟩ := h
-    exact hT (List.mem_toFinset.mp (by rw [he,hS]; exact Finset.mem_singleton_self _))
+    exact fun _ => hT (List.mem_toFinset.mp (by rw [he,hS]; exact Finset.mem_singleton_self _))
   apply node_sound (raw:=vars g.mask) samples _ hN hT _ _ (by simpa only [h0,if_false] using checked.2)
   · intro v hv
     apply decode_faithful _ _ _ _ _ (wires_faithful g) v
@@ -2330,6 +2176,16 @@ theorem nodeVerified_sound (g : Forest) (k i : Nat)
     obtain ⟨pair,_,h⟩ := Option.bind_eq_some_iff.mp e
     exact linkedSet_sound g _ names (prior (by omega)) h
 
+
+theorem nodeVerified_sound (g : Forest) (k i : Nat)
+    (samples : properPairs (targetOf g) (asRow fun j => (g.samples j).1) (asRow fun j => (g.samples j).2))
+    (cols : ∀ ci ∈ g.cols, Slice (varsX (rawMask g.mask ci)) (targetOf g) (subcube ci.1 ci.2.1) ci.2.2.2.2)
+    (names : ∀ x ∈ g.autos, autoOK (targetOf g) (x.map swapRows) = true)
+    (prior : k>0 → ∀ j < (g.levels (k-1)).1, Impossible (targetOf g) (k-1) (stateSet g (k-1) j).toFinset)
+    (checked : nodeVerified g k i = true) : Impossible (targetOf g) k (stateSet g k i).toFinset := by
+  have all := checkedNode (binaryOnly:=false) g k i samples cols names
+    (fun hk j hj t u ht h _ => prior hk j hj t u ht h) checked
+  exact fun t u ht h => all t u ht h (by simp)
 
 def block (g : Forest) (k start : Nat) : Nat → Bool
   | 0 => true
@@ -2606,15 +2462,6 @@ theorem marked_ok {α} (f : α → Bool) (mask : Nat) (xs : List α) (i : Nat) (
       apply ih (mask:=mask >>> 769) (i:=i) (by simpa using hi) _ ok.2
       simpa only [Nat.testBit_shiftRight,Nat.mul_succ,Nat.add_comm] using bitOn
 
-abbrev Batch := Nat × Nat × Nat × List PackedSig × PackedCov × PackedCov
-def makeBatch (k n : Nat) (xs : List NodeContext) : Batch :=
-  (k,n,units xs.length,(List.range n).map (fun i => packedSig (fun c => (contextWire c i).2) xs),
-    packedCov (fun c => c.2.2.2.1.1) xs,packedCov (fun c => c.2.2.2.1.2) xs)
-def laneWire (b : Batch) (i : Nat) := b.2.2.2.1.getD i (0,0)
-theorem laneWire_at (k n) (xs) {i : Nat} (h : i<n) :
-    laneWire (makeBatch k n xs) i = packedSig (fun c => (contextWire c i).2) xs := by
-  simp [laneWire,makeBatch,List.getD_eq_getElem?_getD,List.getElem?_map,List.getElem?_range,h]
-
 def availableMasked (p : BoundPool) (m : Sig) :=
   m==zero || m==p.domain || (p.wires.map (masked p.domain)).any (fun v => v==m)
 theorem available_mask (p : BoundPool) (x : Sig) :
@@ -2728,107 +2575,6 @@ theorem fallback_sound {c i j op ka kb} (h : fallbackAt c i j op ka kb=true) :
     next yes => exact quickAt_good yes.1 yes.2 h
     next => contradiction
   · exact h
-def batchMove (b : Batch) (xs : List NodeContext) (i j op : Nat) (ka kb : Bool) :=
-  let (k,n,r,_,u,v) := b
-  let un := op==2
-  let len := 1+(n-(if ka then 0 else 1)-(if un || kb then 0 else 1))
-  if len>k then true else
-    let d := len==k
-    let a := laneWire b i
-    let b' := laneWire b j
-    let z := packedOp (r*(BitVec.allOnes 768).toNat) op a b'
-    let cov := if d then v else u
-    let mask := fullMarks r (takePacked cov (packedColumn d a) (packedColumn d b') un ka kb ||| packedColumn d z)
-    onMarks (fun c => fallbackAt c i j op ka kb) mask xs
-
-theorem batchMove_at (k n) (xs : List NodeContext) {i j op : Nat} {ka kb}
-    (hi : i<n) (hj : j<n) {q : Nat} (hq : q<xs.length)
-    (budget : xs[q].1=k) (arity : xs[q].2.1=n)
-    (pass : batchMove (makeBatch k n xs) xs i j op ka kb=true) :
-    checkAt xs[q] i j op ka kb=true := by
-  let len := 1+(n-(if ka then 0 else 1)-(if (op==2) || kb then 0 else 1))
-  let d := len==k
-  have eval : checkAt xs[q] i j op ka kb =
-      if len>k then true else if combField xs[q] d (op==2) ka kb op i j != BitVec.allOnes 768 then true
-      else if !properB (movedDecor op (contextWire xs[q] i) (contextWire xs[q] j)).1 ||
-        xs[q].2.2.1.any (fun v => v.1==(movedDecor op (contextWire xs[q] i) (contextWire xs[q] j)).1)
-      then true else closeChild xs[q].2.2.2.2.1 xs[q].2.2.2.2.2 (k-1)
-        ((opKeep (op==2) ka kb (contextWire xs[q] i) (contextWire xs[q] j) xs[q].2.2.1).map Prod.fst)
-        (movedChoice op (contextWire xs[q] i) (contextWire xs[q] j)) := by
-    simp only [checkAt,evalMove,budget,arity,len,d,combField] <;> rfl
-  by_cases small : len>k
-  · simp [eval,small]
-  · let r := units xs.length
-    let a := laneWire (makeBatch k n xs) i
-    let b := laneWire (makeBatch k n xs) j
-    let cov := if d then packedCov (fun c : NodeContext => c.2.2.2.1.2) xs
-            else packedCov (fun c : NodeContext => c.2.2.2.1.1) xs
-    change (if len>k then true else onMarks _ (fullMarks r
-       (takePacked cov (packedColumn d a) (packedColumn d b) (op==2) ka kb |||
-        packedColumn d (packedOp (r*(BitVec.allOnes 768).toNat) op a b))) xs) = true at pass
-    rw [if_neg small] at pass
-    have chosen : cov = packedCov (fun c => getCov c.2.2.2.1 d) xs := by
-      dsimp only [cov]
-      cases d <;> rfl
-    have ca : a = _ := laneWire_at k n xs hi
-    have cb : b = _ := laneWire_at k n xs hj
-    dsimp only [r] at pass
-    rw [ca,cb,packed_op,packed_column,packed_column,packed_column,chosen,takePacked_ok,lanes_or] at pass
-    by_cases hit : combField xs[q] d (op==2) ka kb op i j = BitVec.allOnes 768
-    · apply fallback_sound
-      apply marked_ok _ _ _ q hq _ pass
-      rw [mark_at _ _ _ hq]
-      exact beq_iff_eq.mpr hit
-    · rw [eval,if_neg small,if_pos (bne_iff_ne.mpr hit)]
-
-
-def batchPair (b : Batch) (xs : List NodeContext) (i j op : Nat) :=
-  let f := batchMove b xs i j op
-  f false false && f true false && f false true && f true true
-def batchRow (b : Batch) (xs : List NodeContext) (i : Nat) (js : List Nat) :=
-  batchMove b xs i i 2 false false && batchMove b xs i i 2 true true &&
-    js.all (fun j => batchPair b xs i j 0 && batchPair b xs i j 1)
-def batchRows (b : Batch) (xs : List NodeContext) : List Nat → Bool
-  | [] => true
-  | i::js => batchRow b xs i js && batchRows b xs js
-
-theorem batchRows_at (k n) (xs : List NodeContext) {q : Nat} (hq : q<xs.length)
-    (budget : xs[q].1=k) (arity : xs[q].2.1=n) (js : List Nat)
-    (bounds : ∀ j ∈ js, j<n) (allRows : batchRows (makeBatch k n xs) xs js=true) :
-    testAll xs[q] (js.map (contextWire xs[q])) = true := by
-  induction js with
-  | nil => rfl
-  | cons i js ih =>
-    simp only [batchRows,Bool.and_eq_true,batchRow,List.all_eq_true] at allRows
-    simp only [List.map_cons,testAll,testRow,Bool.and_eq_true,List.all_eq_true,List.mem_map]
-    have hi := bounds i List.mem_cons_self
-    have check := @batchMove_at k n xs
-    refine ⟨⟨⟨check hi hi hq budget arity allRows.1.1.1,check hi hi hq budget arity allRows.1.1.2⟩,?_⟩,
-      ih (fun j hj => bounds j (List.mem_cons_of_mem _ hj)) allRows.2⟩
-    rintro _ ⟨j,hj,rfl⟩
-    have hj' := bounds j (List.mem_cons_of_mem _ hj)
-    have both := allRows.1.2 j hj
-    have opCheck (d : Bool) (pass : batchPair (makeBatch k n xs) xs i j (if d then 1 else 0)=true) :
-        testPair xs[q] (contextWire xs[q] i) (contextWire xs[q] j) d=true := by
-      simp only [batchPair,Bool.and_eq_true] at pass
-      simp only [testPair,Bool.and_eq_true]
-      exact ⟨⟨⟨check hi hj' hq budget arity pass.1.1.1,check hi hj' hq budget arity pass.1.1.2⟩,
-        check hi hj' hq budget arity pass.1.2⟩,check hi hj' hq budget arity pass.2⟩
-    exact ⟨opCheck false both.1,opCheck true both.2⟩
-
-def runBatch (k n : Nat) (xs : List NodeContext) :=
-    batchRows (makeBatch k n xs) xs (List.range n)
-theorem runBatch_at {k n} {xs : List NodeContext} {q} (hq : q<xs.length)
-    (hb : xs[q].1=k) (ha : xs[q].2.1=n) (hn : xs[q].2.2.1.length=n)
-    (pass : runBatch k n xs=true) : testAll xs[q] xs[q].2.2.1=true := by
-  have all := batchRows_at k n xs hq hb ha (List.range n) (fun _ => List.mem_range.mp) pass
-  have eq : (List.range n).map (contextWire xs[q]) = xs[q].2.2.1 := by
-    apply List.ext_getElem
-    · simp [hn]
-    · intro i h1 h2
-      simp [contextWire,List.getD_eq_getElem?_getD,h2]
-  rwa [eq] at all
-
 def contextOf (g : Forest) (k i : Nat) : NodeContext :=
   let raw := wiresOf g
   let (num,depth,cw,iw,pw,offw,lw,data) := g.levels k
@@ -2858,90 +2604,171 @@ theorem makeBlock {g k start n} (h : ∀ (i : Nat), start ≤ i → i < start + 
     simp only [block,Bool.and_eq_true]
     exact ⟨h _ (by omega) (by omega),ih (fun i le lt => h i le (by omega))⟩
 
-def contexts (g : Forest) (k start n : Nat) :=
-  ((List.range n).map (start+·)).map (contextOf g k)
-def header (g : Forest) (k start n ar : Nat) :=
-  (contexts g k start n).all (fun c => c.2.1==ar && prelim (targetOf g) c)
-def rowCut (g : Forest) (k start n ar lo len : Nat) :=
-  let xs := contexts g k start n
-  let b := makeBatch k ar xs
-  (List.range len).all (fun d =>
-    let i := lo+d
-    batchRow b xs i (List.range' (i+1) (ar-(i+1))))
-theorem rowCut_at {g k start n ar lo len} (h : rowCut g k start n ar lo len=true)
-    (i : Nat) (l : lo ≤ i) (r : i < lo+len) :
-    batchRow (makeBatch k ar (contexts g k start n)) (contexts g k start n)
-      i (List.range' (i+1) (ar-(i+1)))=true := by
-  have ha := List.all_eq_true.mp h (i-lo) (List.mem_range.mpr (by omega))
-  simpa only [Nat.add_sub_of_le l] using ha
+def pairIndices : List Nat → List (Nat × Nat)
+  | [] => []
+  | i::tail => tail.map (i,·) ++ pairIndices tail
 
-theorem rowCut_merge {g k start n ar lo a b}
-    (h : rowCut g k start n ar lo a=true) (t : rowCut g k start n ar (lo+a) b=true) :
-    rowCut g k start n ar lo (a+b)=true := by
-  apply List.all_eq_true.mpr
-  intro j hj
-  have jlt := List.mem_range.mp hj
-  by_cases first : j<a
-  · exact rowCut_at h (lo+j) (by omega) (by omega)
-  · exact rowCut_at t (lo+j) (by omega) (by omega)
+theorem lanes_append {α} (field : α → Bits) (left right : List α) :
+    combineLanes field (left ++ right) = combineLanes field left +
+      2^(769 * left.length) * combineLanes field right := by
+  induction left with
+  | nil => simp [combineLanes]
+  | cons first tail ih =>
+    simp only [List.cons_append,List.length_cons,combineLanes,lanePlace,ih]
+    rw [Nat.mul_succ 769 tail.length,Nat.pow_add,Nat.mul_add]
+    exact (show ∀ a b c d e : Nat, a*b + a*(c*d) + e = (a*b + e) + (c*a)*d
+      from fun a b c d e => by ac_rfl) _ _ _ _ _
 
-theorem cutsRun {g k start n ar} (h : rowCut g k start n ar 0 ar=true) :
-    runBatch k ar (contexts g k start n)=true := by
-  let xs := contexts g k start n
-  have go (lo num : Nat) (eq : lo+num=ar) :
-      batchRows (makeBatch k ar xs) xs (List.range' lo num)=true := by
-    induction num generalizing lo with
-    | zero => rfl
-    | succ num ih =>
-      simp only [List.range'_succ,batchRows,Bool.and_eq_true]
-      refine ⟨?_,ih (lo+1) (by omega)⟩
-      have ok := rowCut_at h lo (by omega) (by omega)
-      simpa only [show ar-(lo+1)=num by omega] using ok
-  unfold runBatch
-  rw [List.range_eq_range']
-  exact go 0 ar (by omega)
+theorem lanes_map {α β} (field : β → Bits) (select : α → β) (items : List α) :
+    combineLanes field (items.map select) = combineLanes (fun item => field (select item)) items := by
+  induction items with
+  | nil => rfl
+  | cons first tail ih => simp only [List.map_cons,combineLanes,ih]
 
-theorem cutsBlock {g k start n ar} (hd : header g k start n ar=true)
-    (h : rowCut g k start n ar 0 ar=true) : block g k start n=true := by
-  apply makeBlock
-  intro i lo hi
-  let xs := contexts g k start n
-  have hm : contextOf g k i ∈ xs := by
-    apply List.mem_map.mpr
-    exact ⟨i,List.mem_map.mpr ⟨i-start,List.mem_range.mpr (by omega),by omega⟩,rfl⟩
-  obtain ⟨q,hq,e⟩ := List.getElem_of_mem hm
-  have one := List.all_eq_true.mp hd _ hm
-  simp only [Bool.and_eq_true,beq_iff_eq] at one
-  have hb : xs[q].1=k := by rw [e]; rfl
-  have ha : xs[q].2.1=ar := e ▸ one.1
-  have hn : xs[q].2.2.1.length=ar := by rw [e]; exact one.1
+def pairColumn (left : Bool) (field : Nat → Bits) : List Nat → Nat
+  | [] => 0
+  | index :: tail =>
+    let row := if left then units tail.length * (field index).toNat else combineLanes field tail
+    row + (pairColumn left field tail <<< (769 * tail.length))
+
+theorem pairColumn_eq (left : Bool) (field : Nat → Bits) (indices : List Nat) :
+    pairColumn left field indices = combineLanes
+      (fun pair => field (if left then pair.1 else pair.2)) (pairIndices indices) := by
+  induction indices with
+  | nil => rfl
+  | cons index tail ih =>
+    rw [pairColumn,pairIndices,lanes_append,lanes_map,List.length_map,ih,Nat.shiftLeft_eq]
+    cases left <;> simp only [ite_false,ite_true,Bool.false_eq_true]
+    · rw [Nat.mul_comm (combineLanes _ _)]
+    · rw [broadcast (field index) tail,Nat.mul_comm (combineLanes _ (pairIndices tail))]
+
+def uniformCov (r : Nat) (v : Cov) : PackedCov :=
+  (r*v.1.toNat,r*v.2.1.toNat,r*v.2.2.toNat)
+
+def pairPass (c : NodeContext) (pairs : List (Nat × Nat)) (r : Nat)
+    (a b : PackedSig) (op : Nat) (ka kb : Bool) : Bool :=
+  let n := 1+(c.2.1-(if ka then 0 else 1)-(if kb then 0 else 1))
+  if n>c.1 then true else
+    let d := n==c.1
+    let z := packedOp (r*(BitVec.allOnes 768).toNat) op a b
+    let rest := takePacked (uniformCov r (getCov c.2.2.2.1 d))
+      (packedColumn d a) (packedColumn d b) false ka kb
+    let marks := fullMarks r (rest ||| packedColumn d z)
+    onMarks (fun ij => fallbackAt c ij.1 ij.2 op ka kb) marks pairs
+
+def pairPasses (c : NodeContext) (indices : List Nat) :=
+  let pairs := pairIndices indices
+  let r := units pairs.length
+  let side := fun left => (pairColumn left (fun i => (contextWire c i).2.1) indices,
+    pairColumn left (fun i => (contextWire c i).2.2) indices)
+  let a := side true
+  let b := side false
+  let pass := pairPass c pairs r a b
+  let four := fun op => pass op false false && pass op true false &&
+    pass op false true && pass op true true
+  four 0 && four 1
+
+def verifyPairs (c : NodeContext) :=
+  let indices := List.range c.2.2.1.length
+  indices.all (fun i => checkAt c i i 2 false false && checkAt c i i 2 true true) &&
+    pairPasses c indices
+
+def cert (g : Forest) (k i : Nat) :=
+  let c := contextOf g k i
+  prelim (targetOf g) c && verifyPairs c
+
+theorem uniform_packed {α} (v : Cov) (xs : List α) :
+    uniformCov (units xs.length) v = packedCov (fun _ => v) xs := by
+  simp only [uniformCov,packedCov,broadcast]
+
+theorem pairPassAt (c : NodeContext) (pairs : List (Nat × Nat)) (op : Nat) (hop : op ≠ 2)
+    (ka kb : Bool) (ij : Nat × Nat) (mem : ij ∈ pairs)
+    (pass : pairPass c pairs (units pairs.length)
+      (packedSig (fun p => (contextWire c p.1).2) pairs)
+      (packedSig (fun p => (contextWire c p.2).2) pairs) op ka kb = true) :
+    checkAt c ij.1 ij.2 op ka kb = true := by
+  let n := 1+(c.2.1-(if ka then 0 else 1)-(if kb then 0 else 1))
+  let d := n==c.1
+  have un : (op==2)=false := beq_eq_false_iff_ne.mpr hop
+  let field := fun p : Nat × Nat => combField c d false ka kb op p.1 p.2
+  by_cases over : n>c.1
+  · simp only [checkAt,evalMove,un,Bool.false_or,show 1+(c.2.1-_-_)>c.1 from over,ite_true]
+  · by_cases hit : field ij = BitVec.allOnes 768
+    · unfold pairPass at pass
+      change (if n>c.1 then true else _) = true at pass
+      rw [ite_eq_right over] at pass
+      simp only [uniform_packed,packed_op,packed_column,takePacked_ok,lanes_or] at pass
+      change onMarks _ (fullMarks (units pairs.length) (combineLanes field pairs)) pairs=true at pass
+      obtain ⟨i,hi,eq⟩ := List.getElem_of_mem mem
+      have mark := mark_at field pairs i hi
+      rw [eq,hit] at mark
+      have ok := marked_ok _ _ _ i hi (mark.trans (beq_self_eq_true _)) pass
+      rw [eq] at ok
+      exact fallback_sound ok
+    · have no : (field ij != BitVec.allOnes 768) = true := bne_iff_ne.mpr hit
+      simp only [checkAt,evalMove,un,Bool.false_or]
+      change (if n>c.1 then true else if field ij != BitVec.allOnes 768 then true else _) = true
+      rw [ite_eq_right over,no]
+      rfl
+
+theorem pairPassesAt (c : NodeContext) (indices : List Nat) (pass : pairPasses c indices=true)
+    (i j : Nat) (mem : (i,j) ∈ pairIndices indices) (d : Bool) :
+    testPair c (contextWire c i) (contextWire c j) d = true := by
+  simp only [pairPasses,pairColumn_eq,ite_true,Bool.false_eq_true,ite_false,Bool.and_eq_true] at pass
+  cases d <;> simp only [testPair,Bool.false_eq_true,ite_false,ite_true,Bool.and_eq_true] <;>
+    repeat' apply And.intro
+  all_goals apply pairPassAt c (pairIndices indices) _ (by decide) _ _ (i,j) mem <;> tauto
+
+theorem verifyPairs_ok (c : NodeContext) (pass : verifyPairs c=true) :
+    testAll c c.2.2.1 = true := by
+  let ids := List.range c.2.2.1.length
+  simp only [verifyPairs,Bool.and_eq_true] at pass
+  obtain ⟨unary,binary⟩ := pass
+  have go (js : List Nat) (one : ∀ i ∈ js, i ∈ ids)
+      (two : ∀ p ∈ pairIndices js, p ∈ pairIndices ids) : testAll c (js.map (contextWire c))=true := by
+    induction js with
+    | nil => rfl
+    | cons i js ih =>
+      have hu := List.all_eq_true.mp unary i (one i List.mem_cons_self)
+      simp only [List.map_cons,testAll,testRow,Bool.and_eq_true,List.all_eq_true,List.mem_map]
+      simp only [Bool.and_eq_true] at hu
+      refine ⟨⟨hu,?_⟩,ih (fun j hj => one j (List.mem_cons_of_mem _ hj))
+        (fun p hp => two p (List.mem_append_right _ hp))⟩
+      rintro _ ⟨j,hj,rfl⟩
+      have hm := two (i,j) (List.mem_append_left _ (List.mem_map_of_mem (f:=(i,·)) hj))
+      exact ⟨pairPassesAt c _ binary i j hm false,pairPassesAt c _ binary i j hm true⟩
+  have eq : ids.map (contextWire c) = c.2.2.1 := by
+    apply List.ext_getElem
+    · simp [ids]
+    · intro i h1 h2
+      simp [ids,contextWire,List.getD_eq_getElem?_getD,h2]
+  rw [←eq]
+  exact go ids (fun _ => id) (fun _ => id)
+
+theorem cert_ok {g k i} (pass : cert g k i=true) : nodeVerified g k i=true := by
+  simp only [cert,Bool.and_eq_true] at pass
+  obtain ⟨hd,hv⟩ := pass
   rw [from_context,Bool.and_eq_true]
-  refine ⟨one.2,?_⟩
-  split
-  · rfl
-  · exact e ▸ runBatch_at hq hb ha hn (cutsRun h)
+  exact ⟨hd,by split <;> first | rfl | exact verifyPairs_ok _ hv⟩
 
-def boxes (g : Forest) (k start n ar lo num : Nat) : Nat → Prop
-  | 0 => rowCut g k start n ar lo num=true
-  | d+1 => boxes g k start n ar lo (num/2) d ∧ boxes g k start n ar (lo+num/2) (num-num/2) d
-theorem boxesCut {g k start n ar lo num d} (h : boxes g k start n ar lo num d) :
-    rowCut g k start n ar lo num=true := by
-  induction d generalizing lo num with
-  | zero => exact h
-  | succ d ih =>
-    have v := rowCut_merge (ih h.1) (ih h.2)
-    simpa only [Nat.add_sub_of_le (Nat.div_le_self num 2)] using v
+def certRange (g : Forest) (k start n : Nat) :=
+  (List.range' start n).all (cert g k)
 
-def cells (g : Forest) (k start n ar rows : Nat) : Nat → Prop
-  | 0 => header g k start n ar=true ∧ boxes g k start n ar 0 ar rows
-  | d+1 => cells g k start (n/2) ar rows d ∧ cells g k (start+n/2) (n-n/2) ar rows d
-theorem cellsBlock {g k start n ar rows d} (h : cells g k start n ar rows d) :
-    block g k start n=true := by
-  induction d generalizing start n with
-  | zero => exact cutsBlock h.1 (boxesCut h.2)
-  | succ d ih =>
-    have v := block_merge (ih h.1) (ih h.2)
-    simpa only [Nat.add_sub_of_le (Nat.div_le_self n 2)] using v
+def certPieces (g : Forest) (k start n : Nat) : Nat → Prop
+  | 0 => certRange g k start n = true
+  | depth+1 => certPieces g k start (n/2) depth ∧
+      certPieces g k (start+n/2) (n-n/2) depth
+
+theorem certBlock {g k start n depth} (h : certPieces g k start n depth) :
+    block g k start n = true := by
+  induction depth generalizing start n with
+  | zero =>
+    apply makeBlock
+    intro i lo hi
+    exact cert_ok (List.all_eq_true.mp h i (by simpa using And.intro lo hi))
+  | succ depth ih =>
+    have both := block_merge (ih h.1) (ih h.2)
+    simpa only [Nat.add_sub_of_le (Nat.div_le_self n 2)] using both
 
 def listPieces {α} (f : α → Bool) (xs : List α) : Nat → Prop
   | 0 => xs.all f=true
@@ -2955,7 +2782,7 @@ theorem listPieces_all {α f xs d} (h : @listPieces α f xs d) : xs.all f=true :
     simpa only [List.take_append_drop] using ap
 def g15d3 (i : Nat) : Nat := 0xf
 def g15l3 : Packing := (1,0,0,0,1,0,0,g15d3)
-def g15samples : Array (Bits × Bits) := #[(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbaf3ea78de4d799d,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff450cc90c3c245919),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdf7ff8fe9f9b7ed5,0x20812421801324c4),(0xefbdbf97f9f6bf6a,0x102a401415600a0a),(0xf3a9d7437375f5ba,0xfc028ab620235b0),(0,0),(0,0),(0,0),(0,0),(0,0)]
+def g15samples : Array (Bits × Bits) := [(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbaf3ea78de4d799d,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff450cc90c3c245919),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdf7ff8fe9f9b7ed5,0x20812421801324c4),(0xefbdbf97f9f6bf6a,0x102a401415600a0a),(0xf3a9d7437375f5ba,0xfc028ab620235b0),(0,0),(0,0),(0,0),(0,0),(0,0)].toArray
 def g15columns : List ColumnInfo := []
 def g15autos : List (List Nat) := [[],[33,48]]
 def g15levels : Nat → Packing
@@ -2970,7 +2797,7 @@ def g31d5 (i : Nat) : Nat := 0x84001e90fd02fd01fa00
 def g31l5 : Packing := (3,1,3,0,4,4,0,g31d5)
 def g31d6 (i : Nat) : Nat := 0x11a20bf
 def g31l6 : Packing := (1,0,3,2,4,0,0,g31d6)
-def g31samples : Array (Bits × Bits) := #[(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdafffab2d55fb9f999d9ceeefacb357b78f9ce2bb554a3bac97b2a9d65,0x250142092220460600407048c382809c2160e048740030a88143281c44),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffef5dfed46f26fea572a7ba9effd7341aff97ad1ab5bd2d547d6793334b,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff90aa211010d10141c4300836206168204010183680184d04682483210b),(0x73ef3f3c8ff8df3fe567b556c9567ffcd665219778a6bd6e36bfd946ac,0xc10d0c3000214920a0d648109801012344d60802686b04210115006a4),(0x7c7fd57b7ffa3476e74d6f3fc4bddbd44dc213c5eb8bdea95bf6ee7492,0x38022048645c06490200044a25241818912934541000824c322ae5002),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8fe76ff6451fda6ff84b6daf38f5bb6f6a5ee88a4d6be3f71c64aa3f,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8076989008882001270e063010011622500c04308a174300141c40a239),(0,0),(0,0),(0,0),(0,0)]
+def g31samples : Array (Bits × Bits) := [(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdafffab2d55fb9f999d9ceeefacb357b78f9ce2bb554a3bac97b2a9d65,0x250142092220460600407048c382809c2160e048740030a88143281c44),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffef5dfed46f26fea572a7ba9effd7341aff97ad1ab5bd2d547d6793334b,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff90aa211010d10141c4300836206168204010183680184d04682483210b),(0x73ef3f3c8ff8df3fe567b556c9567ffcd665219778a6bd6e36bfd946ac,0xc10d0c3000214920a0d648109801012344d60802686b04210115006a4),(0x7c7fd57b7ffa3476e74d6f3fc4bddbd44dc213c5eb8bdea95bf6ee7492,0x38022048645c06490200044a25241818912934541000824c322ae5002),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8fe76ff6451fda6ff84b6daf38f5bb6f6a5ee88a4d6be3f71c64aa3f,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8076989008882001270e063010011622500c04308a174300141c40a239),(0,0),(0,0),(0,0),(0,0)].toArray
 def g31columns : List ColumnInfo := [(1,0,30,0,4),(2,0,29,0,4),(4,0,27,0,4),(8,0,23,0,4),(16,0,15,0,4)]
 def g31autos : List (List Nat) := [[],[50,65],[66,16],[67,50,33,16],[67,32],[67,66,49,32],[33,48],[67,50,65,48],[67,66,65,64],[49,64]]
 def g31levels : Nat → Packing
@@ -2982,7 +2809,7 @@ def g31index : Nat → Nat → Option (Nat × Nat)
   | 6 => lookupWord 5 25 2 10 2 4 (key31l6)
   | _ => fun _ => none
 def g31 : Forest := ⟨31,6,fun j => g31samples[j]?.getD (0,0),g31columns,g31autos,g31levels,g31index⟩
-def g47samples : Array (Bits × Bits) := #[(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffddffff5cfaafae7dd35b9ce7bbffd6b6b7b7cfbb8d3b7ad85ddf257b56b575,0x2200a042011011800c00803812181c2009c1061c0107200c09440143143444),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeebefed537937fcb8ab173daa7df7f7691aff9776b2b7dcb92a3f3678b2b59,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff9149112428688034a38448020d64a21d120601022ea84882b022a624830919),(0x77db9fef67fc77f3ffe6e3dd55f86b6fffcab66472f7c57fb768dabfad4eae,0x820641080010508440806b120004c020121a4ec1002247c020840112806a4),(0x78ebe4ae9ffd0d576de696b3cff805db7d426c00d8ded437ed436ff6f66c92,0x71419416322f057a950700411b6b328381c4110e8d4580325370f22d66812),(0,0),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0bf9ebdb2287acd4afec26dbb6d98eabb3768bb508ca4b7f1fdd1c709a3f,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80f74f1424444852a26637058ca3a012d22680c12e48c8e17411561c608a3b),(0,0),(0,0),(0,0)]
+def g47samples : Array (Bits × Bits) := [(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffddffff5cfaafae7dd35b9ce7bbffd6b6b7b7cfbb8d3b7ad85ddf257b56b575,0x2200a042011011800c00803812181c2009c1061c0107200c09440143143444),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeebefed537937fcb8ab173daa7df7f7691aff9776b2b7dcb92a3f3678b2b59,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff9149112428688034a38448020d64a21d120601022ea84882b022a624830919),(0x77db9fef67fc77f3ffe6e3dd55f86b6fffcab66472f7c57fb768dabfad4eae,0x820641080010508440806b120004c020121a4ec1002247c020840112806a4),(0x78ebe4ae9ffd0d576de696b3cff805db7d426c00d8ded437ed436ff6f66c92,0x71419416322f057a950700411b6b328381c4110e8d4580325370f22d66812),(0,0),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0bf9ebdb2287acd4afec26dbb6d98eabb3768bb508ca4b7f1fdd1c709a3f,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80f74f1424444852a26637058ca3a012d22680c12e48c8e17411561c608a3b),(0,0),(0,0),(0,0)].toArray
 def g47columns : List ColumnInfo := [(8,0,39,0,4)]
 def g47autos : List (List Nat) := [[],[83,32]]
 def g47levels : Nat → Packing
@@ -2990,7 +2817,7 @@ def g47levels : Nat → Packing
 def g47index : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 def g47 : Forest := ⟨47,4,fun j => g47samples[j]?.getD (0,0),g47columns,g47autos,g47levels,g47index⟩
-def g55samples : Array (Bits × Bits) := #[(0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffffdf7defdfafbfd3fcebcfdeffcebffefe76de77fed7f1773f95eb2ebeb,0x400028000010005000000400701010180030103060043200102204010904888),(0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdb7fbfbb9ad3afd94caf0b9db5bbdf7f7d39bfcdadcf77ec9eccd2fb9cf16b5,0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2484444214284026a4e002420468a8a43140a00408d944460a4082569431231),(0xeda5e7e7b2fc29de4ffc371dba2bf0775ff12db9b18bb528fedad96afcd3c5e,0x12589919410293410206d0396285445a082c5d2bf0022b20f0895d2048c2c4e),(0,0),(0xf1cd79264efe956afa7a64bb677ab40beba463600362eda36f3357b7d763926,0xe3a8651b1a36a0acc57538a080f6ea703078a0c13c28dc34c91f3868663126),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe05fe74eda341d5872cbf684d5e2ed19e7e3bba5e964550dd792aec724f479,0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff01fb53db1204342a549861b60b6727a22d48ac0b14da4445855161ae724b471),(0,0),(0,0),(0,0)]
+def g55samples : Array (Bits × Bits) := [(0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbfffffdf7defdfafbfd3fcebcfdeffcebffefe76de77fed7f1773f95eb2ebeb,0x400028000010005000000400701010180030103060043200102204010904888),(0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdb7fbfbb9ad3afd94caf0b9db5bbdf7f7d39bfcdadcf77ec9eccd2fb9cf16b5,0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2484444214284026a4e002420468a8a43140a00408d944460a4082569431231),(0xeda5e7e7b2fc29de4ffc371dba2bf0775ff12db9b18bb528fedad96afcd3c5e,0x12589919410293410206d0396285445a082c5d2bf0022b20f0895d2048c2c4e),(0,0),(0xf1cd79264efe956afa7a64bb677ab40beba463600362eda36f3357b7d763926,0xe3a8651b1a36a0acc57538a080f6ea703078a0c13c28dc34c91f3868663126),(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe05fe74eda341d5872cbf684d5e2ed19e7e3bba5e964550dd792aec724f479,0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff01fb53db1204342a549861b60b6727a22d48ac0b14da4445855161ae724b471),(0,0),(0,0),(0,0)].toArray
 def g55columns : List ColumnInfo := [(16,0,39,0,4)]
 def g55autos : List (List Nat) := [[],[84]]
 def g55levels : Nat → Packing
@@ -2998,7 +2825,7 @@ def g55levels : Nat → Packing
 def g55index : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 def g55 : Forest := ⟨55,4,fun j => g55samples[j]?.getD (0,0),g55columns,g55autos,g55levels,g55index⟩
-def g63samples : Array (Bits × Bits) := #[(0xdabffdfdbdf61bfbfc7dcbe34f7f1b17917df75df7edd9eff77b6dbd3dcebed3cfbfaddba50fcabded46bc9b579eb7bd3d92776566ad4ad3debe36d74deb7f9faf189ad76da7dc1a6b4eaf21eb254de4ae1f7451bb34d9456fd18e934db17349,0x4400202400040800310000100084000ac0000102800a1100490002240004b2800a001b4000190000008108000574009200040400000594000190004218c0010840002890800550053044a00410008802d0060013000c004400188120c206208),(0xb6678efeffcbf5a9cad5bfd527a7a5bd74d1314b7915f5b2ffdec2fc5d978f8ab3b44b2b5add5b771711b15ce99bf2b3f5bce975ef94cd59a34e76ab937848a94ef6be6c9579db5905539ea703c87a7d4ae11fe2ae423fade4a3c3299b0724e7,0x499461811a200a55004cf88854029340027a680613c002ec00233c1096d01045025d0203d400243150030b7e4900b00499e023395882049d0206ec00041398010bbb1000b7310ad00cc0858112c8207810e917400e423d0034024309910504e5),(0xbfdd27bedf8fade4776ebf9d185bc5bd76aeffb29711f77d628e86e5fffdff6d1a52bff6da987348e3e147dcecdbcc68d1accc4e7d7d77b9734cfbbcefbc022d72eff5a31a72e32584dd5a72accb1256ede309af577ea6b3ab2be572a2769632,0x20983204990108b1910222a2810c12a8041040402e00006394000908008912a582448429aad10a21a0240190b504314209040621245140c82010e8812042049440841100c0c52080310832a5111106e902488a012c82618908a42202729212),(0x77ddb87389d95f9f7bbe7e8eb89e6e76fbf75ca7fd5bb3758b555b578affe964ae7e7fa493e06d03bebc4fb5cff51e46b2dd5bdbb1eab66f60f7d916b9c6944fd85b6f0fc30a2ae7d2afc9dc369ef80bb1b0b2dd52e9331e786f7a5d38e8c8b4,0x1482478012444200420888514440810c402202189081ecc814422aa4c048408050190921c0450c000a080254044021081134422900082c11250884167012813a48094aca870a3283708e41084282480000c012150640581c30655a55288040a4),(0xdca768aafb78ce8d2db2ec3fbdddfa4ec963339dbac7a8e05eccbf0bb99ddf5febcef6dc7762a4a79d9ad8f70324ba6e724754bded1eed86f695f276b70acbd73dc66e39a88d0cfed920a0ee10b5a4dd5893bba709bff6dc1ece388c561e1ed5,0x210938550593284a984457082a220ca002159526023c0223a02100100d271046aa46f2022bb0201ea5730921b3008e848a002106a7520082d20653c8040064810364a00030c5086c0c2084761035a077101508a009ba22e00b822088521e1c51),(0x77dad76bd4ced656e7ec247a694c9eb5b66dc4de71aac18acebb177a9bac7a62d6f3e3996dd9d62d6ecf7b18557229a30b5ebb1ef46b568a8f3400a7c2d3365caade63d0f2234a24623735bcfaee29c0664eddfc63b2a86915f817ca03dc41fa,0x88252894b2b3256598a758928465236453b27d28c68c4c28a24dcc0d24d500d4a845700845b04bd175706d345a20a0a24d641d897dd822a1d52444cad2629c8e732b305273362844202335b73c8d8150424e93e44a78286995ec17c803dc01f2),(0,0),(0,0),(0,0)]
+def g63samples : Array (Bits × Bits) := [(0xdabffdfdbdf61bfbfc7dcbe34f7f1b17917df75df7edd9eff77b6dbd3dcebed3cfbfaddba50fcabded46bc9b579eb7bd3d92776566ad4ad3debe36d74deb7f9faf189ad76da7dc1a6b4eaf21eb254de4ae1f7451bb34d9456fd18e934db17349,0x4400202400040800310000100084000ac0000102800a1100490002240004b2800a001b4000190000008108000574009200040400000594000190004218c0010840002890800550053044a00410008802d0060013000c004400188120c206208),(0xb6678efeffcbf5a9cad5bfd527a7a5bd74d1314b7915f5b2ffdec2fc5d978f8ab3b44b2b5add5b771711b15ce99bf2b3f5bce975ef94cd59a34e76ab937848a94ef6be6c9579db5905539ea703c87a7d4ae11fe2ae423fade4a3c3299b0724e7,0x499461811a200a55004cf88854029340027a680613c002ec00233c1096d01045025d0203d400243150030b7e4900b00499e023395882049d0206ec00041398010bbb1000b7310ad00cc0858112c8207810e917400e423d0034024309910504e5),(0xbfdd27bedf8fade4776ebf9d185bc5bd76aeffb29711f77d628e86e5fffdff6d1a52bff6da987348e3e147dcecdbcc68d1accc4e7d7d77b9734cfbbcefbc022d72eff5a31a72e32584dd5a72accb1256ede309af577ea6b3ab2be572a2769632,0x20983204990108b1910222a2810c12a8041040402e00006394000908008912a582448429aad10a21a0240190b504314209040621245140c82010e8812042049440841100c0c52080310832a5111106e902488a012c82618908a42202729212),(0x77ddb87389d95f9f7bbe7e8eb89e6e76fbf75ca7fd5bb3758b555b578affe964ae7e7fa493e06d03bebc4fb5cff51e46b2dd5bdbb1eab66f60f7d916b9c6944fd85b6f0fc30a2ae7d2afc9dc369ef80bb1b0b2dd52e9331e786f7a5d38e8c8b4,0x1482478012444200420888514440810c402202189081ecc814422aa4c048408050190921c0450c000a080254044021081134422900082c11250884167012813a48094aca870a3283708e41084282480000c012150640581c30655a55288040a4),(0xdca768aafb78ce8d2db2ec3fbdddfa4ec963339dbac7a8e05eccbf0bb99ddf5febcef6dc7762a4a79d9ad8f70324ba6e724754bded1eed86f695f276b70acbd73dc66e39a88d0cfed920a0ee10b5a4dd5893bba709bff6dc1ece388c561e1ed5,0x210938550593284a984457082a220ca002159526023c0223a02100100d271046aa46f2022bb0201ea5730921b3008e848a002106a7520082d20653c8040064810364a00030c5086c0c2084761035a077101508a009ba22e00b822088521e1c51),(0x77dad76bd4ced656e7ec247a694c9eb5b66dc4de71aac18acebb177a9bac7a62d6f3e3996dd9d62d6ecf7b18557229a30b5ebb1ef46b568a8f3400a7c2d3365caade63d0f2234a24623735bcfaee29c0664eddfc63b2a86915f817ca03dc41fa,0x88252894b2b3256598a758928465236453b27d28c68c4c28a24dcc0d24d500d4a845700845b04bd175706d345a20a0a24d641d897dd822a1d52444cad2629c8e732b305273362844202335b73c8d8150424e93e44a78286995ec17c803dc01f2),(0,0),(0,0),(0,0)].toArray
 def g63columns : List ColumnInfo := [(32,0,31,0,7)]
 def g63autos : List (List Nat) := [[],[50,65]]
 def g63levels : Nat → Packing
@@ -3008,7 +2835,7 @@ def g63index : Nat → Nat → Option (Nat × Nat)
 def g63 : Forest := ⟨63,7,fun j => g63samples[j]?.getD (0,0),g63columns,g63autos,g63levels,g63index⟩
 def g111d6 (i : Nat) : Nat := 0x120ff
 def g111l6 : Packing := (1,0,2,0,1,0,0,g111d6)
-def g111samples : Array (Bits × Bits) := #[(0xeafcc7b96fc59ffd26c5e2bb3d7bd378fb35ff5dcb26f92afa5f57eff59a73b7aaa379b2fc8d7a99e2ef9efcf4defd4efabc9c89733cebade5579ad5abbcd64d8557ad3d63bd1c6a75510ce3b9bf05e462ee0edf6dfb2914efc74c7d31727465,0x4d00310a2003881269402d0c00406ccc142a8012908082d00025ac006a88036948003229000032d4001bf20024ec2018680000aaf2500325400423a6f02003840040a8016ea8106822700071012c01d500600ad401ea0010f407087831504444),(0xf771ad34ff2bcf4fbd7f5f5de52efaeb7ebbabfffefbf2eab7c7cf56f8ecea565ddfabcf87cb61db9d6ef4aecff7cebd76fe679cfb9935e6adabc77cdcdb677ed3da5e4f56b4cbe39cfd7aed1f519a6b999796b48a51f4f7b8ad91a66cc6d9cb,0x1204940050200482000010001c10308054448009004424020800871400ac0690000402004e0508404004081210450414000904018220d090010808000a44280600460810104d92040818880c1010088d8400200a10a1400808810604821909),(0xf5be76df5e79b8b5d13f5f6e3ecd176fbeee538a7cfb9f7f6b7fad9b13bb7fed97560ecd71f29f3f1e3ef959a338e3a9e32bd5e7cfc7b51df73d7e9e165479b3baa9a0d59e62e11eead3ad5c624777de8699f96d3766d64d1f3fa2ca8f3d2e52,0x8e4d19200884440101e4a802e100a0c04000830eb000289800c49240c1c411082c325a6812b0485430294040c52402008322a4b0e00c0021216842103a050a9080848145264020288841a770220547500211500d95204c05521120880b352452),(0xde2ebbc73c1cf83c4cedbed77297d7f5b666582db23d5c5d7bf4a54b37a75f4992f88d683d388ea5bafb57791a5deb9b257390777cf70e9d329773c24416edd93fe3d2909bc3b81d7e62dd94d70a759eb42b6b51587d63da2e7eea6ce78912bc,0x10b22099c5638280b403142808691e02bd9d04d1097a9640ce2041351e20e64283892100494815238b12089820999d9858901b4e1903515e001721098578a5416f515492d981d895722018845902b08a5c4a2a2248dd03d08c66ca64e48812ac),(0,0),(0x4a99db5e74fdf3bbfb83b4b12e735e58f515867b75942dba656f9eeac55739b971685432ece5b39368c30fbbb9f895ca9efa5eceda2fea7be4766f052ba5def635ccf928215f7640050f6846acafb2ca6efbba0bffbfdb9043d87d111c3c3ebd,0x12d68401de50564414b80023f49c0203c0413d800068400bbb08034f0177ac0427f40400f6de0023bcc009fc1201950403ff4900082ea08a2fc908010c8a4053de0011e801464d050407f806ac13f8026d9b800bfa055d40038875010c2c3ab9),(0x107b7e8791b6519a9ebd6f37d374faa298392ebad8b5e4afe6bd267679568b3365bebaabdf6ef4e9035a918e8ca50ef74769b2b74aea726a09a6c5e9463715fb76745a9b1b6212a1b9add6dec52a9ba55b57e399ab660ca6d0f217384af881fe,0xadc48a6a24248ac9294916cc74a18dce4988890976a839d0a90054480a8f001149b409fd5690d8d50882129489ae3083c83b5253565cd02541ca4550f495b985581508b28aaa022919a1e755a00eaaa54243a315f06a0c87d4f216384a7880f6),(0,0),(0,0)]
+def g111samples : Array (Bits × Bits) := [(0xeafcc7b96fc59ffd26c5e2bb3d7bd378fb35ff5dcb26f92afa5f57eff59a73b7aaa379b2fc8d7a99e2ef9efcf4defd4efabc9c89733cebade5579ad5abbcd64d8557ad3d63bd1c6a75510ce3b9bf05e462ee0edf6dfb2914efc74c7d31727465,0x4d00310a2003881269402d0c00406ccc142a8012908082d00025ac006a88036948003229000032d4001bf20024ec2018680000aaf2500325400423a6f02003840040a8016ea8106822700071012c01d500600ad401ea0010f407087831504444),(0xf771ad34ff2bcf4fbd7f5f5de52efaeb7ebbabfffefbf2eab7c7cf56f8ecea565ddfabcf87cb61db9d6ef4aecff7cebd76fe679cfb9935e6adabc77cdcdb677ed3da5e4f56b4cbe39cfd7aed1f519a6b999796b48a51f4f7b8ad91a66cc6d9cb,0x1204940050200482000010001c10308054448009004424020800871400ac0690000402004e0508404004081210450414000904018220d090010808000a44280600460810104d92040818880c1010088d8400200a10a1400808810604821909),(0xf5be76df5e79b8b5d13f5f6e3ecd176fbeee538a7cfb9f7f6b7fad9b13bb7fed97560ecd71f29f3f1e3ef959a338e3a9e32bd5e7cfc7b51df73d7e9e165479b3baa9a0d59e62e11eead3ad5c624777de8699f96d3766d64d1f3fa2ca8f3d2e52,0x8e4d19200884440101e4a802e100a0c04000830eb000289800c49240c1c411082c325a6812b0485430294040c52402008322a4b0e00c0021216842103a050a9080848145264020288841a770220547500211500d95204c05521120880b352452),(0xde2ebbc73c1cf83c4cedbed77297d7f5b666582db23d5c5d7bf4a54b37a75f4992f88d683d388ea5bafb57791a5deb9b257390777cf70e9d329773c24416edd93fe3d2909bc3b81d7e62dd94d70a759eb42b6b51587d63da2e7eea6ce78912bc,0x10b22099c5638280b403142808691e02bd9d04d1097a9640ce2041351e20e64283892100494815238b12089820999d9858901b4e1903515e001721098578a5416f515492d981d895722018845902b08a5c4a2a2248dd03d08c66ca64e48812ac),(0,0),(0x4a99db5e74fdf3bbfb83b4b12e735e58f515867b75942dba656f9eeac55739b971685432ece5b39368c30fbbb9f895ca9efa5eceda2fea7be4766f052ba5def635ccf928215f7640050f6846acafb2ca6efbba0bffbfdb9043d87d111c3c3ebd,0x12d68401de50564414b80023f49c0203c0413d800068400bbb08034f0177ac0427f40400f6de0023bcc009fc1201950403ff4900082ea08a2fc908010c8a4053de0011e801464d050407f806ac13f8026d9b800bfa055d40038875010c2c3ab9),(0x107b7e8791b6519a9ebd6f37d374faa298392ebad8b5e4afe6bd267679568b3365bebaabdf6ef4e9035a918e8ca50ef74769b2b74aea726a09a6c5e9463715fb76745a9b1b6212a1b9add6dec52a9ba55b57e399ab660ca6d0f217384af881fe,0xadc48a6a24248ac9294916cc74a18dce4988890976a839d0a90054480a8f001149b409fd5690d8d50882129489ae3083c83b5253565cd02541ca4550f495b985581508b28aaa022919a1e755a00eaaa54243a315f06a0c87d4f216384a7880f6),(0,0),(0,0)].toArray
 def g111columns : List ColumnInfo := [(4,8,99,0,4),(1,32,78,0,4),(64,0,47,0,5)]
 def g111autos : List (List Nat) := [[],[83,32]]
 def g111levels : Nat → Packing
@@ -3018,7 +2845,7 @@ def g111index : Nat → Nat → Option (Nat × Nat)
   | 6 => fun _ => none
   | _ => fun _ => none
 def g111 : Forest := ⟨111,6,fun j => g111samples[j]?.getD (0,0),g111columns,g111autos,g111levels,g111index⟩
-def g119samples : Array (Bits × Bits) := #[(0xfab75f3dfbfa3756f92d9ff7baf5ff7dbfebb9b33bef7dcdf77fbffe7bbbf75546cedccfd6f7eb762bef3ffdd2ede7abbef7e4e4b775eb9be6ab6f4d5fde77f2b955ece57b3feb97c6d99b5cdd2fdd2ea315de5f3efbf8d44ddcaa7566eda9cd,0x20100000802449000a820000c1900042800052080010000098c000620802429000050a2000012e00000be20013404000082000047420011240000c8b8000110080002480036500158018000c4009400c9000c0062803a0400e00885042a10888),(0xaf7efcd6de9febfb57d6f5ddedde36f3db7fffeed79fdbfafcf255738c743cbbbff3e3b86b8f9fb9f5bdf54fbff79bd74f5afb3f7fba34f5bf5f9afae879ab5feefe93fa9ee6566f7bbee6bf67d426d75cfb2bace9344fabf72bd58e999b76b3,0x9300010000091004000400382060802420900110020801010208161810541520000000800198110400c004084880812115000049028020c0800220200009220a01801050108206a8408406120184808104430800802442850101410609083421),(0xd3aee9d1a16b8afb579b1b1a2ede96c634714fced4ed35afb8d86696aabedb2eada373270f48f3a9b93de8a90d87d8f6684756adef8eb40bf672fc78b9342c9c7aaa652b2aec9422dd38b32b2a5255bdcc3d35b2da5f372953f3c4ba3a70d996,0x2c07b23e74020fd2aa41748155856818d263d681015680dac92709c7448b08586eaf3a512642c64b613a9091954b38c222671d26711d023332d48951dd0691952839212f8b6888039910b9ac2a42653c283c65315b1b95185ae084b83270c996),(0,0),(0x759a506bc07865de6f37bc2fabe39a5e2705b6a3eec6bd3cca572e3ed72f0325f632aa43d8e0e833eaeab6f86ad5fa72dbaf9c83b9e70faa212acf122e177ae733d8fa39a0b0bb12b7915f7134c3b9a9ed98d75362b1d9c725676c3caf04637c,0x16e5f59c6d01a255c44806523c0cddb5529a2196d082e7c24415d298c0f10d071e6090549dc090f8ed501938009f3fb2169588d90b0b506d102e01343cb84ad135f45369a498be0a36011e712702bb816af81651c4b05c0701a6642cad046374),(0x6339c3e76f77dc41ec6c9766b8b0f93592cd6e58a17db2abb9eea5cd269eeae2dc2c1c9ec755bae6a2821f6b678c3538a75edaf56c57e97ff4e8b90d55c4e75ce36b37ac511be4c610c6f229b9ab77956345b3a117ef6f3608dd37697870ba61,0x84ef690f5888a6bc0049f9381c0ba0115db000874a075d2102333605e754184fe100105f739880fb92c019ec481f2d2102dbf2480954a0ad3f922114724920d57f80032e5018c6a22083e62199863ec06b43378157e41d3d00d937293850b261),(0xd5cc96ab2735f4eedbcfece9fd4d847149d75b8aa71ff3959066dc7566c66ecb75975abde9bb8d684d89311f3151135dd1ce4d97acd9737d0b4d97b62b1596cf57b51ab1b6b408593b67d5bb928b32dabad66fc43367241aeaae177095e247ea,0x481560b0cd924918c5323d4303992d88d1232e6a49f254a2454320824e8122936522ef3572424e688310332525616c12e023da92a435d213539c9243b254cc21b63548a8e4258841b361f1c95a017252ba1c47902bc1245a7a8e167094e243ca),(0,0),(0,0)]
+def g119samples : Array (Bits × Bits) := [(0xfab75f3dfbfa3756f92d9ff7baf5ff7dbfebb9b33bef7dcdf77fbffe7bbbf75546cedccfd6f7eb762bef3ffdd2ede7abbef7e4e4b775eb9be6ab6f4d5fde77f2b955ece57b3feb97c6d99b5cdd2fdd2ea315de5f3efbf8d44ddcaa7566eda9cd,0x20100000802449000a820000c1900042800052080010000098c000620802429000050a2000012e00000be20013404000082000047420011240000c8b8000110080002480036500158018000c4009400c9000c0062803a0400e00885042a10888),(0xaf7efcd6de9febfb57d6f5ddedde36f3db7fffeed79fdbfafcf255738c743cbbbff3e3b86b8f9fb9f5bdf54fbff79bd74f5afb3f7fba34f5bf5f9afae879ab5feefe93fa9ee6566f7bbee6bf67d426d75cfb2bace9344fabf72bd58e999b76b3,0x9300010000091004000400382060802420900110020801010208161810541520000000800198110400c004084880812115000049028020c0800220200009220a01801050108206a8408406120184808104430800802442850101410609083421),(0xd3aee9d1a16b8afb579b1b1a2ede96c634714fced4ed35afb8d86696aabedb2eada373270f48f3a9b93de8a90d87d8f6684756adef8eb40bf672fc78b9342c9c7aaa652b2aec9422dd38b32b2a5255bdcc3d35b2da5f372953f3c4ba3a70d996,0x2c07b23e74020fd2aa41748155856818d263d681015680dac92709c7448b08586eaf3a512642c64b613a9091954b38c222671d26711d023332d48951dd0691952839212f8b6888039910b9ac2a42653c283c65315b1b95185ae084b83270c996),(0,0),(0x759a506bc07865de6f37bc2fabe39a5e2705b6a3eec6bd3cca572e3ed72f0325f632aa43d8e0e833eaeab6f86ad5fa72dbaf9c83b9e70faa212acf122e177ae733d8fa39a0b0bb12b7915f7134c3b9a9ed98d75362b1d9c725676c3caf04637c,0x16e5f59c6d01a255c44806523c0cddb5529a2196d082e7c24415d298c0f10d071e6090549dc090f8ed501938009f3fb2169588d90b0b506d102e01343cb84ad135f45369a498be0a36011e712702bb816af81651c4b05c0701a6642cad046374),(0x6339c3e76f77dc41ec6c9766b8b0f93592cd6e58a17db2abb9eea5cd269eeae2dc2c1c9ec755bae6a2821f6b678c3538a75edaf56c57e97ff4e8b90d55c4e75ce36b37ac511be4c610c6f229b9ab77956345b3a117ef6f3608dd37697870ba61,0x84ef690f5888a6bc0049f9381c0ba0115db000874a075d2102333605e754184fe100105f739880fb92c019ec481f2d2102dbf2480954a0ad3f922114724920d57f80032e5018c6a22083e62199863ec06b43378157e41d3d00d937293850b261),(0xd5cc96ab2735f4eedbcfece9fd4d847149d75b8aa71ff3959066dc7566c66ecb75975abde9bb8d684d89311f3151135dd1ce4d97acd9737d0b4d97b62b1596cf57b51ab1b6b408593b67d5bb928b32dabad66fc43367241aeaae177095e247ea,0x481560b0cd924918c5323d4303992d88d1232e6a49f254a2454320824e8122936522ef3572424e688310332525616c12e023da92a435d213539c9243b254cc21b63548a8e4258841b361f1c95a017252ba1c47902bc1245a7a8e167094e243ca),(0,0),(0,0)].toArray
 def g119columns : List ColumnInfo := [(4,0,115,0,5)]
 def g119autos : List (List Nat) := [[],[84],[98],[84,98],[101,66,16],[101,100,66,16],[101,84,82,16],[100,82,16]]
 def g119levels : Nat → Packing
@@ -3031,7 +2858,7 @@ def g189d6 (i : Nat) : Nat := 0x82000f487f40bfa03fa00
 def g189l6 : Packing := (3,1,3,0,4,4,0,g189d6)
 def g189d7 (i : Nat) : Nat := 0x1f5859bf
 def g189l7 : Packing := (1,0,3,2,4,0,0,g189d7)
-def g189samples : Array (Bits × Bits) := #[(0x76b7b935ad7f6fd4d735f26d2df10ff4361bcad97bdde979efcd6e58b7554d7ea7eff73e73de92e56562d7533a4ef3de34b1f6acf1d6e216666babd43dbaabce3ad8d545ed4e53771cb4e6d84ab365f9722155b0decf672135d0ab0e8aab3265,0x8404642124899480a2a81184400c4494a40542200633c0114901482008a100b4c40690c02a500485280025a8300be5004d078022244028e4a0122910034dd0088624c002500565400b4701a401901a06a801c60d40e430038408b0c08aa0264),(0,0),(0xb725f7b34edfbeffaf8e64c99fca263eeb8ebd6e6efba6759d07fff35f0d57cf0f1af1c8e8596f2d9f9a363b65aade972ff9af593499366f72b4e55d5e6f961954d5fce693a74e66d370dbbd59357a0ab5d8c2e2b4913d9ddc0ac963246654eb,0x2019084c910042485050a84580141012107000421c10cd02a29a004c0424911090cb1414ac1a4012048a60a1130c00921224ba8854044c203120d1318881010110848d88109408245548f0845c253042044cc0e02091152804424943044214c9),(0x6b3b37beb0d3b3db67cafb77eb9e1dd789aebdb18d1db77732f653e35977f97f4dd313687fb67a399a5d29e7c5c2df2ae361e9d1a8a6a7bdf9b41bf76bf3c59c972736ba642a6ec8e10ddd388a5d8a2fef454b2f6c5cd8cb4dafd1a5458caf32,0x84c42401462a8882042c15880121e0040f09501440a3008044047580824b00c92204cb801220a2e8d004050a8c13a8082552010080e322ce0002224042220e86c96110212062d680201609100358082de8010e0a0c4e080169249024018caa32),(0xeed4ecfef66eeb7efebdd9aee7077cf1671b7b7a97dfdfd372d0ed94ede3ade9c50737565e265d36d07689d4ac4faafe5abbfdc5676e89f79f8f9a623b38502f3db98ff0fa982b81b88d0790fae9d8d74f74351d5187af7a955e769667c1914c,0x112b0124099000041080680538580102a03620812918016ca82b084951200b0011391441e40a1406003a00a460640102802906c05910d52121d05c00b8012058249003c452192901d049060038a0e052051c011422a1a0780618649266411108),(0xd9cafe65094bbf5f7264b7bbce3ffbefdc6762cbb35969c8ac2ddbae62ff5a5f3ee2cea13be5ccd265ed5a725a1921f7f9e712e69e98fb2d45e97fd5f2e0abe4f3f7676b375491bf662220c7ec1235aaa52f7b260bfdf8f023b73c589c1c3f19,0x2215018860a440b0408528403b942810a5b0009c1c080302094a000184016510830b02e2ac10b810014a60046c8c012e120b028809b84c0105208c4e88802201101131880274018a550300819c02301e012cc3000b90a8a80382305084143519),(0,0),(0xe9cbc8feffb7f8e7b8d17ff4f26deb6af5fadcfef4fa8da189aed6c66eadfbba567e7aa58acda76b57bfee9d03799233ac5e277f4fab9af55d736c18d65d30adcab7ab9d1b9dcbcc02d24b67373e9182d29baedd99bcc115aa3d04dc337a48be,0x1420360100482d00252a00a2440945244a022b202187302c44004bb2035a00002400090800450025fa000d1a80010240a950404582409154ca522280124a1c0c672a40054909a2500214036203d800a092812c0514244211e81d048c33284826),(0,0)]
+def g189samples : Array (Bits × Bits) := [(0x76b7b935ad7f6fd4d735f26d2df10ff4361bcad97bdde979efcd6e58b7554d7ea7eff73e73de92e56562d7533a4ef3de34b1f6acf1d6e216666babd43dbaabce3ad8d545ed4e53771cb4e6d84ab365f9722155b0decf672135d0ab0e8aab3265,0x8404642124899480a2a81184400c4494a40542200633c0114901482008a100b4c40690c02a500485280025a8300be5004d078022244028e4a0122910034dd0088624c002500565400b4701a401901a06a801c60d40e430038408b0c08aa0264),(0,0),(0xb725f7b34edfbeffaf8e64c99fca263eeb8ebd6e6efba6759d07fff35f0d57cf0f1af1c8e8596f2d9f9a363b65aade972ff9af593499366f72b4e55d5e6f961954d5fce693a74e66d370dbbd59357a0ab5d8c2e2b4913d9ddc0ac963246654eb,0x2019084c910042485050a84580141012107000421c10cd02a29a004c0424911090cb1414ac1a4012048a60a1130c00921224ba8854044c203120d1318881010110848d88109408245548f0845c253042044cc0e02091152804424943044214c9),(0x6b3b37beb0d3b3db67cafb77eb9e1dd789aebdb18d1db77732f653e35977f97f4dd313687fb67a399a5d29e7c5c2df2ae361e9d1a8a6a7bdf9b41bf76bf3c59c972736ba642a6ec8e10ddd388a5d8a2fef454b2f6c5cd8cb4dafd1a5458caf32,0x84c42401462a8882042c15880121e0040f09501440a3008044047580824b00c92204cb801220a2e8d004050a8c13a8082552010080e322ce0002224042220e86c96110212062d680201609100358082de8010e0a0c4e080169249024018caa32),(0xeed4ecfef66eeb7efebdd9aee7077cf1671b7b7a97dfdfd372d0ed94ede3ade9c50737565e265d36d07689d4ac4faafe5abbfdc5676e89f79f8f9a623b38502f3db98ff0fa982b81b88d0790fae9d8d74f74351d5187af7a955e769667c1914c,0x112b0124099000041080680538580102a03620812918016ca82b084951200b0011391441e40a1406003a00a460640102802906c05910d52121d05c00b8012058249003c452192901d049060038a0e052051c011422a1a0780618649266411108),(0xd9cafe65094bbf5f7264b7bbce3ffbefdc6762cbb35969c8ac2ddbae62ff5a5f3ee2cea13be5ccd265ed5a725a1921f7f9e712e69e98fb2d45e97fd5f2e0abe4f3f7676b375491bf662220c7ec1235aaa52f7b260bfdf8f023b73c589c1c3f19,0x2215018860a440b0408528403b942810a5b0009c1c080302094a000184016510830b02e2ac10b810014a60046c8c012e120b028809b84c0105208c4e88802201101131880274018a550300819c02301e012cc3000b90a8a80382305084143519),(0,0),(0xe9cbc8feffb7f8e7b8d17ff4f26deb6af5fadcfef4fa8da189aed6c66eadfbba567e7aa58acda76b57bfee9d03799233ac5e277f4fab9af55d736c18d65d30adcab7ab9d1b9dcbcc02d24b67373e9182d29baedd99bcc115aa3d04dc337a48be,0x1420360100482d00252a00a2440945244a022b202187302c44004bb2035a00002400090800450025fa000d1a80010240a950404582409154ca522280124a1c0c672a40054909a2500214036203d800a092812c0514244211e81d048c33284826),(0,0)].toArray
 def g189columns : List ColumnInfo := [(1,0,188,0,5),(12,0,177,0,4),(16,0,173,0,5),(17,0,172,0,4),(24,0,165,0,4),(33,0,156,0,4),(132,0,57,0,4),(160,0,29,0,4)]
 def g189autos : List (List Nat) := [[],[84,115],[117,67,32],[116,83,32],[82,48],[84,115,82,48],[117,116,115,114,64],[83,114,64],[116,50,80],[117,84,67,50,80],[84,115,66,112],[66,112]]
 def g189levels : Nat → Packing
@@ -3043,7 +2870,7 @@ def g189index : Nat → Nat → Option (Nat × Nat)
   | 7 => lookupWord 5 18 5 10 2 4 (key189l7)
   | _ => fun _ => none
 def g189 : Forest := ⟨189,7,fun j => g189samples[j]?.getD (0,0),g189columns,g189autos,g189levels,g189index⟩
-def g127samples : Array (Bits × Bits) := #[(0x27ec63be833e95d9cd8b1b0f8c7b949b955ab7ff06f2f46fb53d19a8b89e2cf938ea5b637a679113a99b1a558cf5d3757100e2a2d92956b1df648864a3a84cf9f5aafcc4980f547cd2d2abacb351593072ded0ca36876c216b176a15583d3069,0x215000b22a840210400a1040082a19401000220004808d00802008c02014082088420800402688520818425544410445400040805130408104600820a3600c001020e0440008143510802b10a111102142440000168440214816081150281060),(0xd1272c7d4d43f0bd72e56dab39ddfe7c6a407c139e413a8c95b2f6c7134bd9d2e6151acc0f6f6e61aecc859cb80ab9d38d1f9c08bbd08127631b9fb156aefb042a9049abe4f27cdb8815184a3fa2b5dede495570df2830da3c38c46cf1426d13,0x806000d540888802080408280406213088804000000320c048631024209804006241648090164a10080940a08001912a8109004a2408004431a0101080453200880088a80c0004a880100481a02008819080040c10830122428406420422c11),(0x3757a63bdee4ba3fd3e2275cd925bbac4327c3605b6a92ba668b6b375f5956a61c0ee4c8b6382a0c726a8d674c1d24e187c7697b46618e9a3259ec9e635cb1935494676727a9c6a3df6b34450ca72f271676b8367562d5a985429aaa9a64d626,0xe190134200c030558e6885084d0788a40161e860830e0412a109c61098d030850809a9902628890c322a09e446182064058721691005078a1841cc5c6248a09654242521162044855722240404692506023498262462c48981029a8a9a244222),(0x7c12f7ae7cb67a121957d4766ab145360dad0baa714fd5dd4ad95b9245e39e4cff88a61691dd24ee5570ea624367b54a6aea5375c626bc6f4082772e38770d5a1955fa1dcb198b20afa8d659c70c9ab5dbb42b955b55e374e0f839c3068a9694,0x100b203118264280010702e3020864421484020c18c0438c4090018044060d7096401604915660c20151c00201478d0220604290c2020821402022221025140809114a0c4919231288809339110498f1918002911b15216460582041008a9494),(0x5f0ed2cab79191489f9794fa9f865222c0c45f4f23977137ba6ec87e2fb718cbcb3281372d8190b9e5b2713c276012285f3b185c628f375c96ee95cada25845527c7ad5b31bc018c667be7de6cdf9480211b73e5e0fc0e1e03a683a80feb2399,0x4e04900c0410144f3ce0e018c1840020605099a3823d30032c4ce03413c1e08c412481b32c810028f486342022205010179b1c44008d375c030cd5d908008055e282051134c40088667900c444ea04000013f960e0680e1a03a083a80f412309),(0x64ed11ab034e6565aa5f6f0a73fb2abb553e90eaf5f2056f4f2ad1a6a7112f3107edc462d825611a42150349a39be3bcbdfa3bf68749fd950e410251758bd0aaed7e1f93ab81b400f6cd22629068e5bc2da9dbde283bbf115009f3b1a197a662,0x46299909050b25a18c71e62a5095c63ecb8f04a3c26b60b927cda532c109201915ade64b3091412042050108b390e3bab9cb9877060097580a090251508bf2aae7571e1ba185a2088a6c00621068c596ada8d9f5a83bbf101009f3a0a197a602),(0xed72aa63cb994444b8dcf183254b4e7cee24db3ad729ab4a1ba98c700af5e5480459e832e1cc5750368c89edf172492ed4565f186db3259850f427f3943aea1f7b1d745054d56ed5059c9e36e00b68fdae413f628aa9c64ad98b04d0b38dd9ac,0x4400b2628be723745844a119668f0ccc9303b92a933d014173710ec9a0c0658c41596832a4cc13563c0629c5d4a2402c44020f584d31651810e10cda143b2c95631f726414156f15141896b3a1182c75a6e53b222aa1c648d9830490938dd1ac),(0,0),(0,0)]
+def g127samples : Array (Bits × Bits) := [(0x27ec63be833e95d9cd8b1b0f8c7b949b955ab7ff06f2f46fb53d19a8b89e2cf938ea5b637a679113a99b1a558cf5d3757100e2a2d92956b1df648864a3a84cf9f5aafcc4980f547cd2d2abacb351593072ded0ca36876c216b176a15583d3069,0x215000b22a840210400a1040082a19401000220004808d00802008c02014082088420800402688520818425544410445400040805130408104600820a3600c001020e0440008143510802b10a111102142440000168440214816081150281060),(0xd1272c7d4d43f0bd72e56dab39ddfe7c6a407c139e413a8c95b2f6c7134bd9d2e6151acc0f6f6e61aecc859cb80ab9d38d1f9c08bbd08127631b9fb156aefb042a9049abe4f27cdb8815184a3fa2b5dede495570df2830da3c38c46cf1426d13,0x806000d540888802080408280406213088804000000320c048631024209804006241648090164a10080940a08001912a8109004a2408004431a0101080453200880088a80c0004a880100481a02008819080040c10830122428406420422c11),(0x3757a63bdee4ba3fd3e2275cd925bbac4327c3605b6a92ba668b6b375f5956a61c0ee4c8b6382a0c726a8d674c1d24e187c7697b46618e9a3259ec9e635cb1935494676727a9c6a3df6b34450ca72f271676b8367562d5a985429aaa9a64d626,0xe190134200c030558e6885084d0788a40161e860830e0412a109c61098d030850809a9902628890c322a09e446182064058721691005078a1841cc5c6248a09654242521162044855722240404692506023498262462c48981029a8a9a244222),(0x7c12f7ae7cb67a121957d4766ab145360dad0baa714fd5dd4ad95b9245e39e4cff88a61691dd24ee5570ea624367b54a6aea5375c626bc6f4082772e38770d5a1955fa1dcb198b20afa8d659c70c9ab5dbb42b955b55e374e0f839c3068a9694,0x100b203118264280010702e3020864421484020c18c0438c4090018044060d7096401604915660c20151c00201478d0220604290c2020821402022221025140809114a0c4919231288809339110498f1918002911b15216460582041008a9494),(0x5f0ed2cab79191489f9794fa9f865222c0c45f4f23977137ba6ec87e2fb718cbcb3281372d8190b9e5b2713c276012285f3b185c628f375c96ee95cada25845527c7ad5b31bc018c667be7de6cdf9480211b73e5e0fc0e1e03a683a80feb2399,0x4e04900c0410144f3ce0e018c1840020605099a3823d30032c4ce03413c1e08c412481b32c810028f486342022205010179b1c44008d375c030cd5d908008055e282051134c40088667900c444ea04000013f960e0680e1a03a083a80f412309),(0x64ed11ab034e6565aa5f6f0a73fb2abb553e90eaf5f2056f4f2ad1a6a7112f3107edc462d825611a42150349a39be3bcbdfa3bf68749fd950e410251758bd0aaed7e1f93ab81b400f6cd22629068e5bc2da9dbde283bbf115009f3b1a197a662,0x46299909050b25a18c71e62a5095c63ecb8f04a3c26b60b927cda532c109201915ade64b3091412042050108b390e3bab9cb9877060097580a090251508bf2aae7571e1ba185a2088a6c00621068c596ada8d9f5a83bbf101009f3a0a197a602),(0xed72aa63cb994444b8dcf183254b4e7cee24db3ad729ab4a1ba98c700af5e5480459e832e1cc5750368c89edf172492ed4565f186db3259850f427f3943aea1f7b1d745054d56ed5059c9e36e00b68fdae413f628aa9c64ad98b04d0b38dd9ac,0x4400b2628be723745844a119668f0ccc9303b92a933d014173710ec9a0c0658c41596832a4cc13563c0629c5d4a2402c44020f584d31651810e10cda143b2c95631f726414156f15141896b3a1182c75a6e53b222aa1c648d9830490938dd1ac),(0,0),(0,0)].toArray
 def g127columns : List ColumnInfo := [(32,0,95,0,8)]
 def g127autos : List (List Nat) := [[],[101,66,16]]
 def g127levels : Nat → Packing
@@ -3065,7 +2892,7 @@ def g191d9 (i : Nat) : Nat := 0x180327c7c11a70600f8f1304b1c05f0c3c541303017c38f1
 def g191l9 : Packing := (12,1,6,7,2,9,0,g191d9)
 def g191d10 (i : Nat) : Nat := 0x1f3c11ff
 def g191l10 : Packing := (1,0,6,4,2,0,0,g191d10)
-def g191samples : Array (Bits × Bits) := #[(0x6acfda3c2cb83a92b793db4cbe83faea9cb2634793e21db352fb83fe8df2bc07a86d83614e9e1d6652f73c866931a299021d0d35cea03b8bca899a3ae9b0852968ae39aed598c502d3cc66c95e3918558ba9636cd1546c95b4522b12e41c6251,0x8027018c1220821109402382a0c04040242201142810004800310a01021028020024504420900008134444101889108100844480011218a0808a088000429588a002494484002118004005c4110108908c2000154441190520210a0142200),(0x7913ceb593e8bd03514889e55f4c93639759259376fb3230720c9a865196f27cc74c193b9b758265cc3f7b6a39d891145642471fe1a3e402ed12036d66f3fc532a7d00122732be1cd6f8a0d631223ddb153772d463789a2c383ce02e7842d163,0x88036081c60419a2c82401d04754b2b302101402821d5c654204040641a4c69d42c491108805a675482c4b1a3210132646402113b58224122512010966d1b044833550122312b410427aa086012a6ec1101538c042289a0c282ca02a5842d161),(0x557693cafd0fd9424efb95e75ddf8ed5bd78c8ecb52fa208a8d45cb3574ccaab77d93b1e650b4399e9518160864e914bee471a4d6078d8cd3710b8c5462d299957d5836e24a95a7b253cdb2e6196070b78eaa32a2b4a267149c447650cd138a6,0x10c082401088400012d0c4008000004018ca8080142020182010002082500860100b028600824082a011044180428040210612040030c884904098c2002801191040822880a108c8040449084010010648220108084220210140474504110882),(0x9c642d62a2f2f7ba22bc048df67d49f5212576be5994f8cdc5e270babb8959b792802cb3e87f90d4054ae918d4ab1ce241d9cf541d5d16b72277276810cef58c9e0f2a3137066d66292bcd81a96583d025d9fd03afbb585aa2b81e898b063d44,0x8024093988519a8e002822a41919198600217873085849c0c483198871885081c08060615e498874054ab3104029780240914c50140c132321226228088464808a9608100702c12708ba84812c642a102598ac01a5195852a098180889063544),(0xd23eefb5d75806b89dcda38864b64661c9f5e2babc176a70b2d3a56f26f32e727e31fe7789e6e58a36284c9dbcb30e74d59821a10b67441120e71511dbf31ab50b42210b3baf1a3e4c47734dcff8958cfd1109f7ce27c18a062741ac46d7cd91,0x7413208444084451d48501104604c068b3980408840422121160844600658c78341c18180024668a9220480b8c940760b50821038273441010c51501633a18440140258228a50a1044455344031a81ae1001013e42228188062541a446c1c891),(0x44ee3263ec00331534507b30f50239085a477dc26fc97fafdd3677e1adedabf5a6627a917685fed951e16b05c441608531a6eebab7bf0ffa2c9d6923c000425ae070ded9cbf43ff0702d561449016826463c1cddf881bbc98109fdb0912bda0a,0x5c9601812402000310c10a308504200a188ca4d220b13a418220c4ac1700cc49329049900289169c4a408a09044020043184b638a739649c2011540242004250a0701ac901871eb02048c310010048264632184cec01aac801096da0110b580a),(0,0),(0x3ab08ab4b6d74c50e56bc9651caf5894b179e03465572acbdca5615696769c27053d6dc580568c9318a62a712d4d06df8fcf0933a8a96615b24c8891d85dee28deccf746ecda09546a23c7138dbf2215a9d969340b49504d34d905859a5a4fc,0x8020482e4971b288ed202044508b9ca5050108094844412451461041282e3192c9648008d0242841110660a6538444294c484083188002614b0e00011891a8820d8e45006648e00548a230c32acf32918089829300b41504d204901848a4a474),(0,0)]
+def g191samples : Array (Bits × Bits) := [(0x6acfda3c2cb83a92b793db4cbe83faea9cb2634793e21db352fb83fe8df2bc07a86d83614e9e1d6652f73c866931a299021d0d35cea03b8bca899a3ae9b0852968ae39aed598c502d3cc66c95e3918558ba9636cd1546c95b4522b12e41c6251,0x8027018c1220821109402382a0c04040242201142810004800310a01021028020024504420900008134444101889108100844480011218a0808a088000429588a002494484002118004005c4110108908c2000154441190520210a0142200),(0x7913ceb593e8bd03514889e55f4c93639759259376fb3230720c9a865196f27cc74c193b9b758265cc3f7b6a39d891145642471fe1a3e402ed12036d66f3fc532a7d00122732be1cd6f8a0d631223ddb153772d463789a2c383ce02e7842d163,0x88036081c60419a2c82401d04754b2b302101402821d5c654204040641a4c69d42c491108805a675482c4b1a3210132646402113b58224122512010966d1b044833550122312b410427aa086012a6ec1101538c042289a0c282ca02a5842d161),(0x557693cafd0fd9424efb95e75ddf8ed5bd78c8ecb52fa208a8d45cb3574ccaab77d93b1e650b4399e9518160864e914bee471a4d6078d8cd3710b8c5462d299957d5836e24a95a7b253cdb2e6196070b78eaa32a2b4a267149c447650cd138a6,0x10c082401088400012d0c4008000004018ca8080142020182010002082500860100b028600824082a011044180428040210612040030c884904098c2002801191040822880a108c8040449084010010648220108084220210140474504110882),(0x9c642d62a2f2f7ba22bc048df67d49f5212576be5994f8cdc5e270babb8959b792802cb3e87f90d4054ae918d4ab1ce241d9cf541d5d16b72277276810cef58c9e0f2a3137066d66292bcd81a96583d025d9fd03afbb585aa2b81e898b063d44,0x8024093988519a8e002822a41919198600217873085849c0c483198871885081c08060615e498874054ab3104029780240914c50140c132321226228088464808a9608100702c12708ba84812c642a102598ac01a5195852a098180889063544),(0xd23eefb5d75806b89dcda38864b64661c9f5e2babc176a70b2d3a56f26f32e727e31fe7789e6e58a36284c9dbcb30e74d59821a10b67441120e71511dbf31ab50b42210b3baf1a3e4c47734dcff8958cfd1109f7ce27c18a062741ac46d7cd91,0x7413208444084451d48501104604c068b3980408840422121160844600658c78341c18180024668a9220480b8c940760b50821038273441010c51501633a18440140258228a50a1044455344031a81ae1001013e42228188062541a446c1c891),(0x44ee3263ec00331534507b30f50239085a477dc26fc97fafdd3677e1adedabf5a6627a917685fed951e16b05c441608531a6eebab7bf0ffa2c9d6923c000425ae070ded9cbf43ff0702d561449016826463c1cddf881bbc98109fdb0912bda0a,0x5c9601812402000310c10a308504200a188ca4d220b13a418220c4ac1700cc49329049900289169c4a408a09044020043184b638a739649c2011540242004250a0701ac901871eb02048c310010048264632184cec01aac801096da0110b580a),(0,0),(0x3ab08ab4b6d74c50e56bc9651caf5894b179e03465572acbdca5615696769c27053d6dc580568c9318a62a712d4d06df8fcf0933a8a96615b24c8891d85dee28deccf746ecda09546a23c7138dbf2215a9d969340b49504d34d905859a5a4fc,0x8020482e4971b288ed202044508b9ca5050108094844412451461041282e3192c9648008d0242841110660a6538444294c484083188002614b0e00011891a8820d8e45006648e00548a230c32acf32918089829300b41504d204901848a4a474),(0,0)].toArray
 def g191columns : List ColumnInfo := [(1,0,190,0,7),(2,0,189,0,8),(3,0,188,0,5),(4,0,187,0,7),(6,0,185,0,5),(8,0,183,0,8),(0,8,163,20,6),(10,0,181,0,5),(12,0,179,0,5),(4,8,163,16,5),(14,0,177,0,4),(16,0,175,0,8),(0,16,166,9,6),(1,16,166,8,5),(19,0,172,0,4),(24,0,167,0,7),(16,8,163,4,5),(8,16,166,1,5),(25,0,166,0,4),(9,16,166,0,4),(20,8,163,0,4),(32,0,159,0,8),(1,32,30,128,5),(35,0,156,0,4),(40,0,151,0,5),(48,0,143,0,5),(56,0,135,0,4),(128,0,63,0,8),(130,0,61,0,5),(4,128,27,32,5),(136,0,55,0,5),(160,0,31,0,7),(128,32,30,1,5),(32,128,27,4,5),(161,0,30,0,4),(129,32,30,0,4),(164,0,27,0,4),(36,128,27,0,4)]
 def g191autos : List (List Nat) := [[],[84,115],[117,67,32],[116,83,32]]
 def g191levels : Nat → Packing
@@ -3083,7 +2910,7 @@ def g191index : Nat → Nat → Option (Nat × Nat)
   | 10 => lookupWord 9 46 4 10 4 2 (key191l10)
   | _ => fun _ => none
 def g191 : Forest := ⟨191,10,fun j => g191samples[j]?.getD (0,0),g191columns,g191autos,g191levels,g191index⟩
-def g251samples : Array (Bits × Bits) := #[(0x7c5b1073c997e37379da30f398119ee6fb6b9ec3f472bcb960b6e16b764eab308775a6f93b85666e9d3190b2b24d642ca5712b6de7ab3f7906c1699135342a691b3ae0a5aa4ef7bb316cf861cfcc30541d6a6cc4992b1a999615c8e8d911c1e1,0x2118206040004a02130d09680103a002090a061080141a8c00302460220208340600a251588102029c90b010225400202065234404234e080480294178042009180840240246b20a0024c060c50410001a48a084882a181106058840c1114140),(0xcce5a5f376b735aeaefe578ced15d32ecca61663a9af3bd1860bc21b19116b79223f9d41251db7915d2d676e62aaa4f819f9d341f91890478f7c179edecb18b88452ff03ce59b2503e9c1117dab8cd95ebc956b7a216470f30e3a2b3ec2d18bb,0x4842cb022293909020208080c0985104462050200a232050248f580a09002349282c0500277025a04229050a00aa2098018840837118b0c40a78400806c358a084123a0140090810bc8810142aa8e601010152222014470a10a222b02c2818b9),(0,0),(0x615f43b7c5899d56d0ed540d07e5651da134ed341e9bc1f74f237fc0ae8a342e74d0d54381c29b89aafb968c73300f2ad24e70d94c925aaf7c71d97b8e42ee34b1eb0d1c78f57307cdbb8ab0333b96f243ce283ea4988c525a6cf93575cb22d6,0x600508638c1a9f0381c44ce96aa5f40532886e32158a42c5402a7e6c4a89343c9410964685c08b09acb0120c353c06229a6c00c94c92de87444159522882ae0499430c1549527146cd2ac810537252985246622c84980c521a4cf835558922d2),(0x743743261165c64a5893c74b56706899b56f313d76fa70640bd59bea9f4cd6cd40c9796a92725dcea2baccf628444b5fc70e36349d152cf473b98c6d967cf8571ea4949a30a5a9a67c52f2db3fa12e66e966315b35ec80fa603e034c2e56ad7c,0x8e228200012500a04432a202145800c8c044118122412020998581138524c38140cb492802205484420a48e00002411d45001410a1402070b13084088559515204a0a28a24a10ca03050168720812c4621201151314480a8603203082a468c2c),(0xf3d9bb1a8ffcdc97c518eaf4c8cf14e122f0fafd99d5fdca7ef0f64eebb658a39d280ab679b66835384c18039df39cc970c09cab32e75b6d986af50aa1e14f67f56dcf6f41924d79e9e39f3990e7fa0a34138f4a5e417d209f607f101fc4fe09,0x9201861738918010c41062040c8818244620088911c0e1638783100880a45083c120082600262524204640020401ded90000982b30080131d06c4002816148a041658f0100904561e8880e0910f0e60220020e2216414120916065101cc4aa09),(0x8c34b489b6743f0cbbb4f14fa7d16d9fa49b993f9ba2b3789eb911d5e1cd7a6f64e2a177140a8013c504eb6dd8b5e7f7e94f5a351463882a81261e97691b96dcefd6ddbc37c1e3432aa0876640524995f6a595fd43d7d81429dbe94302afe942,0x269c30c1984c0e0408d2577d35632830a8c6a4165540daa693102041644d9ca647426045188a80110514e824d9155760ee46136c04410a2a918614976910825e2b85c52c35a0b36b4200852245520814f6b484dd43c398142959c9430287e142),(0x1bb2ab4aa0e85ba9e596de5ec3ce129b01134cce9757f2d674620576a8bd96bf3a893c9457f0a28da9ccac591d7731877093a6c205d64d4c2bcaa6363cd0b55e770f7a466dfb2a9c82572d4ce3aa90cf64d9c30549ce2fe50b809671629a567c,0xd9639e04222012901869c59f133e18908110146a61f169c201c69140019863c2e851098d7d900098988b54119762026501322c440c64c4e0e9086343c860556368a70222d632a1a145321c6e30c00cc44fdf181498e2ec50a809261621a5474),(0,0)]
+def g251samples : Array (Bits × Bits) := [(0x7c5b1073c997e37379da30f398119ee6fb6b9ec3f472bcb960b6e16b764eab308775a6f93b85666e9d3190b2b24d642ca5712b6de7ab3f7906c1699135342a691b3ae0a5aa4ef7bb316cf861cfcc30541d6a6cc4992b1a999615c8e8d911c1e1,0x2118206040004a02130d09680103a002090a061080141a8c00302460220208340600a251588102029c90b010225400202065234404234e080480294178042009180840240246b20a0024c060c50410001a48a084882a181106058840c1114140),(0xcce5a5f376b735aeaefe578ced15d32ecca61663a9af3bd1860bc21b19116b79223f9d41251db7915d2d676e62aaa4f819f9d341f91890478f7c179edecb18b88452ff03ce59b2503e9c1117dab8cd95ebc956b7a216470f30e3a2b3ec2d18bb,0x4842cb022293909020208080c0985104462050200a232050248f580a09002349282c0500277025a04229050a00aa2098018840837118b0c40a78400806c358a084123a0140090810bc8810142aa8e601010152222014470a10a222b02c2818b9),(0,0),(0x615f43b7c5899d56d0ed540d07e5651da134ed341e9bc1f74f237fc0ae8a342e74d0d54381c29b89aafb968c73300f2ad24e70d94c925aaf7c71d97b8e42ee34b1eb0d1c78f57307cdbb8ab0333b96f243ce283ea4988c525a6cf93575cb22d6,0x600508638c1a9f0381c44ce96aa5f40532886e32158a42c5402a7e6c4a89343c9410964685c08b09acb0120c353c06229a6c00c94c92de87444159522882ae0499430c1549527146cd2ac810537252985246622c84980c521a4cf835558922d2),(0x743743261165c64a5893c74b56706899b56f313d76fa70640bd59bea9f4cd6cd40c9796a92725dcea2baccf628444b5fc70e36349d152cf473b98c6d967cf8571ea4949a30a5a9a67c52f2db3fa12e66e966315b35ec80fa603e034c2e56ad7c,0x8e228200012500a04432a202145800c8c044118122412020998581138524c38140cb492802205484420a48e00002411d45001410a1402070b13084088559515204a0a28a24a10ca03050168720812c4621201151314480a8603203082a468c2c),(0xf3d9bb1a8ffcdc97c518eaf4c8cf14e122f0fafd99d5fdca7ef0f64eebb658a39d280ab679b66835384c18039df39cc970c09cab32e75b6d986af50aa1e14f67f56dcf6f41924d79e9e39f3990e7fa0a34138f4a5e417d209f607f101fc4fe09,0x9201861738918010c41062040c8818244620088911c0e1638783100880a45083c120082600262524204640020401ded90000982b30080131d06c4002816148a041658f0100904561e8880e0910f0e60220020e2216414120916065101cc4aa09),(0x8c34b489b6743f0cbbb4f14fa7d16d9fa49b993f9ba2b3789eb911d5e1cd7a6f64e2a177140a8013c504eb6dd8b5e7f7e94f5a351463882a81261e97691b96dcefd6ddbc37c1e3432aa0876640524995f6a595fd43d7d81429dbe94302afe942,0x269c30c1984c0e0408d2577d35632830a8c6a4165540daa693102041644d9ca647426045188a80110514e824d9155760ee46136c04410a2a918614976910825e2b85c52c35a0b36b4200852245520814f6b484dd43c398142959c9430287e142),(0x1bb2ab4aa0e85ba9e596de5ec3ce129b01134cce9757f2d674620576a8bd96bf3a893c9457f0a28da9ccac591d7731877093a6c205d64d4c2bcaa6363cd0b55e770f7a466dfb2a9c82572d4ce3aa90cf64d9c30549ce2fe50b809671629a567c,0xd9639e04222012901869c59f133e18908110146a61f169c201c69140019863c2e851098d7d900098988b54119762026501322c440c64c4e0e9086343c860556368a70222d632a1a145321c6e30c00cc44fdf181498e2ec50a809261621a5474),(0,0)].toArray
 def g251columns : List ColumnInfo := [(8,0,243,0,7)]
 def g251autos : List (List Nat) := [[],[84,115],[99,65],[118,84,115,65],[118,81],[118,84,99,81]]
 def g251levels : Nat → Packing
@@ -3091,7 +2918,7 @@ def g251levels : Nat → Packing
 def g251index : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 def g251 : Forest := ⟨251,7,fun j => g251samples[j]?.getD (0,0),g251columns,g251autos,g251levels,g251index⟩
-def g255samples : Array (Bits × Bits) := #[(0x9b665c544a8481c32c829a3849d25a0c2e734bceaece0410b1910c9246b692285657c973ca335d593cb00f0546b90059eb43e97a932728851785431870f031165ac8b80393ba6e576270cc58c906b870841734e15dc89803598ab05c2460a6b1,0x104454110880808228020a2041d8002c08600a02808c02009111060244ac12008614a1024802115108904700443200508241c8821224200116051018407029164080a01212302c0942400010c90428108414142154888803090a9048202086a0),(0xf315668af28fdb1ca228365b7ccc05a0011317731e21482f697635c521d4e57b4580944cacd08190116899ef79421d834fcee4e488905930903982805fb1c61927af17aaf49049a676974192f0d0160363a1bd03830701b0dc1f8281c2dc6123,0x83112a82400c43108201140b24040542001210600e014836084820c40800442b4181104024900000902098cc210099010006246088901220003082011981800902040620cc814002101041843090160043212902810201b054050081825c2101),(0x380526282fa13ac851f4c9c505254980d6e8ec3804b3594a769d93b950ebc251b0d8e2a15610b8154799066089743516386914b45de9a6e1e91c2d64aa4bec2945782990b2d68e61aa4d3cd1b24a6ab680984b4c1298da14a63264e421a50a46,0x184000082381184051a442400021c800c760240c008201086414493150c8805030586481420228050588002082640402084818905528808149002d00020c144045280184104604602a043c40824a60b20098024012185a048212646400810a02),(0x96903da21572f2b1f1c959078994a771bc47364121282ac5966e24786e0f6b8886ae49c27124b27b7242ff2e0094e0b4b1b582696d3c94568c371a6b03b30075a8d6353ad9672c0089eb12ba6325f80dd24d451b8459a7c113618d0b812f118c,0x86100cb01034a2a12848198388d4226018030240202c8a411a0a044824066a838a240842212092185a40cf0a0080e094a530c6680a1400448645526011312024a0c7343889210800016b021a61259805924545098441a1c11120810b812e1184),(0xca830c6ee5a1c1ac77b2c4bb013b84b271c7189edce77b42164b82b2ec44ccc2202552493f52e619512b4f09e2177ba801c291327039cbf4fba1fd7ca29d36ceca40c4508827295a1b45be11b7c00687be220f65622167c80c13fe90c415919,0x1282044674a181cc515204830038803270c71014e5265b22464b9241a4004482002443590d10ca0850630203a411b2a000c201185038c3861ba0d078200d6480c204804048212d4a89449e11258006869a220d60222163c80c12ea00c414819),(0xadcb89db333a54791fc5b16de6a74b1fbdaa5224c4caa060c8434905e130b3e50875189fa3aee40ebf67487ce98db2673644923b555505294552488c144494c2312ef3656d2d51ee39b1b44e04f3d3ec4d148000ab72771f011403179f478e82,0xa991884a13221d3803c5e045a0014312e78660240442614040424905201081f109410899826ca6043646807ca808b20b342020284941850001124c8410049440302c118d6904416438b533460072d3ec490080008b50771c0014031517470802),(0xccf1d170b069949f14600d7679a83ea985e068495997ad010287ff4ea745b576050c4fa9e8e0fabd2497448bd27a5aa8acea4ac0268e4d44dc2df9de452a225ad1457b3d721818b9bf9e05034d50ecb938aed67098a522a72856072e55b8d214,0xce85130b040942f1560095449a91aad8dc0e80b5196a18140955b282345b194266c47298868eeb9221d4601c27a00e8acf04a8036004c04cc8c58ecc43a23d68161791d311c0cb9abcc24434d40e8b9388ed67018a522072852072e55a0d214),(0x442aa5b9d884c622461c21eaaaf556fac8da8923687abbfb99c9c28096422e0eb83cb34c1d8918aec8c55d99f53bc2670104934ee2f27258616b2c55a56fa8970e02486406e9b92b5242282d15890d903f02672424a3e96d3ce1d022fa0aa8e8,0x460a679588446000a40a01aa08c414e80818810338389a92898982c08602320ec02091061180118a88016c815113416481048146a2821250206d8051a4632a958802cc600689381b004a400915810c003602652424a380613ce19002e808a0e8),(0,0)]
+def g255samples : Array (Bits × Bits) := [(0x9b665c544a8481c32c829a3849d25a0c2e734bceaece0410b1910c9246b692285657c973ca335d593cb00f0546b90059eb43e97a932728851785431870f031165ac8b80393ba6e576270cc58c906b870841734e15dc89803598ab05c2460a6b1,0x104454110880808228020a2041d8002c08600a02808c02009111060244ac12008614a1024802115108904700443200508241c8821224200116051018407029164080a01212302c0942400010c90428108414142154888803090a9048202086a0),(0xf315668af28fdb1ca228365b7ccc05a0011317731e21482f697635c521d4e57b4580944cacd08190116899ef79421d834fcee4e488905930903982805fb1c61927af17aaf49049a676974192f0d0160363a1bd03830701b0dc1f8281c2dc6123,0x83112a82400c43108201140b24040542001210600e014836084820c40800442b4181104024900000902098cc210099010006246088901220003082011981800902040620cc814002101041843090160043212902810201b054050081825c2101),(0x380526282fa13ac851f4c9c505254980d6e8ec3804b3594a769d93b950ebc251b0d8e2a15610b8154799066089743516386914b45de9a6e1e91c2d64aa4bec2945782990b2d68e61aa4d3cd1b24a6ab680984b4c1298da14a63264e421a50a46,0x184000082381184051a442400021c800c760240c008201086414493150c8805030586481420228050588002082640402084818905528808149002d00020c144045280184104604602a043c40824a60b20098024012185a048212646400810a02),(0x96903da21572f2b1f1c959078994a771bc47364121282ac5966e24786e0f6b8886ae49c27124b27b7242ff2e0094e0b4b1b582696d3c94568c371a6b03b30075a8d6353ad9672c0089eb12ba6325f80dd24d451b8459a7c113618d0b812f118c,0x86100cb01034a2a12848198388d4226018030240202c8a411a0a044824066a838a240842212092185a40cf0a0080e094a530c6680a1400448645526011312024a0c7343889210800016b021a61259805924545098441a1c11120810b812e1184),(0xca830c6ee5a1c1ac77b2c4bb013b84b271c7189edce77b42164b82b2ec44ccc2202552493f52e619512b4f09e2177ba801c291327039cbf4fba1fd7ca29d36ceca40c4508827295a1b45be11b7c00687be220f65622167c80c13fe90c415919,0x1282044674a181cc515204830038803270c71014e5265b22464b9241a4004482002443590d10ca0850630203a411b2a000c201185038c3861ba0d078200d6480c204804048212d4a89449e11258006869a220d60222163c80c12ea00c414819),(0xadcb89db333a54791fc5b16de6a74b1fbdaa5224c4caa060c8434905e130b3e50875189fa3aee40ebf67487ce98db2673644923b555505294552488c144494c2312ef3656d2d51ee39b1b44e04f3d3ec4d148000ab72771f011403179f478e82,0xa991884a13221d3803c5e045a0014312e78660240442614040424905201081f109410899826ca6043646807ca808b20b342020284941850001124c8410049440302c118d6904416438b533460072d3ec490080008b50771c0014031517470802),(0xccf1d170b069949f14600d7679a83ea985e068495997ad010287ff4ea745b576050c4fa9e8e0fabd2497448bd27a5aa8acea4ac0268e4d44dc2df9de452a225ad1457b3d721818b9bf9e05034d50ecb938aed67098a522a72856072e55b8d214,0xce85130b040942f1560095449a91aad8dc0e80b5196a18140955b282345b194266c47298868eeb9221d4601c27a00e8acf04a8036004c04cc8c58ecc43a23d68161791d311c0cb9abcc24434d40e8b9388ed67018a522072852072e55a0d214),(0x442aa5b9d884c622461c21eaaaf556fac8da8923687abbfb99c9c28096422e0eb83cb34c1d8918aec8c55d99f53bc2670104934ee2f27258616b2c55a56fa8970e02486406e9b92b5242282d15890d903f02672424a3e96d3ce1d022fa0aa8e8,0x460a679588446000a40a01aa08c414e80818810338389a92898982c08602320ec02091061180118a88016c815113416481048146a2821250206d8051a4632a958802cc600689381b004a400915810c003602652424a380613ce19002e808a0e8),(0,0)].toArray
 def g255columns : List ColumnInfo := [(64,0,191,0,11)]
 def g255autos : List (List Nat) := [[],[84,115],[117,67,32],[116,83,32]]
 def g255levels : Nat → Packing
@@ -3113,7 +2940,7 @@ def g383d11 (i : Nat) : Nat := 0x540b1d9a02e3804632e686a85e3b342382008507c4a8582
 def g383l11 : Packing := (6,1,6,6,3,8,0,g383d11)
 def g383d12 (i : Nat) : Nat := 0x11b280e4ff
 def g383l12 : Packing := (1,0,6,3,3,0,0,g383d12)
-def g383samples : Array (Bits × Bits) := #[(0x22c0d3a3723e453b61b292904161c19166ba4156452239cb2ce776d1285888036922ca069735ba1c39466bb49cb80c880d6801ee650cd2ea8938a452f08d3169a1612a59384753bad95626662c63076161205bac29b905015369815a61884cb1,0x22a042a308281022412222104041018102a0455c0820218028210490004898014122a802062510400900403480940c80084001804506910881200012c0203148e041211030641239500420000c630440212052a0291101014268811220880c80),(0x3e4782180591e1e8ca415c93fb0e30440ddb7b080a80044a5e58703417b0ed0da2975b6df4e0151155ba1024096257dc7280e61c3739c9924483ab0a0d0a407f268250f5cf15b48886f76ba0ccf46838068d8de07060e07838bc1a040b61c283,0x9028018810161088ac0504223081040850928000290004c425070241b00400822080144b0c0241004a20000482053184202c40808184882448102000d0800b3040a404084018c8080110220c214483800898940502040781814120409604201),(0xc3b0d0243e2c92704a6d0bb89a642e3e324709614c855ba1b03c2574c53f0c84bca3b709607618aaaaca1686a79e094292d1a5b2e1a729d1ef4c761d2455891cd68664af136132ce19aaa19e6c55a2caed1460758145348a6cc923aa16a49516,0xc22070243c088a32102908b09820ae3610c20125cc051d809026055084360c62d8a3320940364922a8484682858e00c384d420b061233141a94434152055010c599024a50348105611a2a11e2441a2c2e41460350145348264c921aa12049512),(0x4138264952b1d12493a4452d72585b389605825093cff11edb60090262cf75191c382db2876b8a708e04945dba40fc5c0117030382d504a579e551698e39d387601c521a9a75d96750089c8958b895e01b82b803f01d0be08606741604bc230c,0x1080c0b03b031008084040c42504188060180103100c00a0a40008040890111041009902b010250040410442a404c140103030210c08ca050a00048c0a8c022200c1018d83149210000148108b815200b021800b00809600202141404b82204),(0x7a0c641d50044e150338db871c0d9c6d8b49b017941b1c71c485efc79a14e6ae159b09d8c200cd085276a758cd18f3623c4db7d00870524c281de7f5fe3e2adc1756b294808a0882ea6a1f2df107bc01d0df010f4d40469e2105ef94c107b239,0xd004201450464809021899a3188eb82288483003841b1c31c500f247991664ae92090048c000c90e723223084509b040f48cd45008304046281cf3843e140e8407928284000804822b6a8b24f004a801d0dd010f4440469e21056a80c1079039),(0xcc62da0a5fa8f5e2c996caf343c42faac6de9a345ff56a94813a6425060416282f4d23c281526277465dd835f65817a533b901ad51024edaaa84a94a69219208d911c25be8aad34a7f39eda22807bafd8e8540012ec5ecf42900c6dcd341c02,0x8452d0021128d5c8c9144a91d1c007ab845a00141d69e1982122246c02041428290423d28902225305595421e41c17a5023985a908040a15a0c4800269208200d9018058b1aa90485c38f99a2803baf58c8040010ec1ece00900c4d4d341002),(0xdaef1c77688221978d1e0c4ad4cf460c43747468370c9781a044ccfb808507cfc7550e6f05834be93d3c1e4e94918217a4e0da637baa95002472c84f89f63e421033ad28de7ab208228bfb0281a229d272553696158289b300da2c9976c32464,0x92e959624882001701040c005417432c02544069252c9701a0048cc280a00e56d4150e31071309c931151f4c9213080304e00a4233c09500a002c04d90b29c403071012c5a3a310c128ab91220a221c27244349605808983008a2c9966812464),(0,0),(0x941a1aee99450a81362f36506691ad42486aa7b56b55a36c2710c35afdccd2f0604110c2892f54d343a9228b60c516b3ea6e18394813263b179331842a516d8adc29c7c000c846f164b52014130d4016a078833106127956c94690a3b81ad1d8,0x4120210904c02803268a2402080b401402a07040a01006405204110294490a020401002d0205402c22800a1400c2280a20c04a14813021a0411310009012188c000460020c0069060300020050540108030832102126010c94480229002c198)]
+def g383samples : Array (Bits × Bits) := [(0x22c0d3a3723e453b61b292904161c19166ba4156452239cb2ce776d1285888036922ca069735ba1c39466bb49cb80c880d6801ee650cd2ea8938a452f08d3169a1612a59384753bad95626662c63076161205bac29b905015369815a61884cb1,0x22a042a308281022412222104041018102a0455c0820218028210490004898014122a802062510400900403480940c80084001804506910881200012c0203148e041211030641239500420000c630440212052a0291101014268811220880c80),(0x3e4782180591e1e8ca415c93fb0e30440ddb7b080a80044a5e58703417b0ed0da2975b6df4e0151155ba1024096257dc7280e61c3739c9924483ab0a0d0a407f268250f5cf15b48886f76ba0ccf46838068d8de07060e07838bc1a040b61c283,0x9028018810161088ac0504223081040850928000290004c425070241b00400822080144b0c0241004a20000482053184202c40808184882448102000d0800b3040a404084018c8080110220c214483800898940502040781814120409604201),(0xc3b0d0243e2c92704a6d0bb89a642e3e324709614c855ba1b03c2574c53f0c84bca3b709607618aaaaca1686a79e094292d1a5b2e1a729d1ef4c761d2455891cd68664af136132ce19aaa19e6c55a2caed1460758145348a6cc923aa16a49516,0xc22070243c088a32102908b09820ae3610c20125cc051d809026055084360c62d8a3320940364922a8484682858e00c384d420b061233141a94434152055010c599024a50348105611a2a11e2441a2c2e41460350145348264c921aa12049512),(0x4138264952b1d12493a4452d72585b389605825093cff11edb60090262cf75191c382db2876b8a708e04945dba40fc5c0117030382d504a579e551698e39d387601c521a9a75d96750089c8958b895e01b82b803f01d0be08606741604bc230c,0x1080c0b03b031008084040c42504188060180103100c00a0a40008040890111041009902b010250040410442a404c140103030210c08ca050a00048c0a8c022200c1018d83149210000148108b815200b021800b00809600202141404b82204),(0x7a0c641d50044e150338db871c0d9c6d8b49b017941b1c71c485efc79a14e6ae159b09d8c200cd085276a758cd18f3623c4db7d00870524c281de7f5fe3e2adc1756b294808a0882ea6a1f2df107bc01d0df010f4d40469e2105ef94c107b239,0xd004201450464809021899a3188eb82288483003841b1c31c500f247991664ae92090048c000c90e723223084509b040f48cd45008304046281cf3843e140e8407928284000804822b6a8b24f004a801d0dd010f4440469e21056a80c1079039),(0xcc62da0a5fa8f5e2c996caf343c42faac6de9a345ff56a94813a6425060416282f4d23c281526277465dd835f65817a533b901ad51024edaaa84a94a69219208d911c25be8aad34a7f39eda22807bafd8e8540012ec5ecf42900c6dcd341c02,0x8452d0021128d5c8c9144a91d1c007ab845a00141d69e1982122246c02041428290423d28902225305595421e41c17a5023985a908040a15a0c4800269208200d9018058b1aa90485c38f99a2803baf58c8040010ec1ece00900c4d4d341002),(0xdaef1c77688221978d1e0c4ad4cf460c43747468370c9781a044ccfb808507cfc7550e6f05834be93d3c1e4e94918217a4e0da637baa95002472c84f89f63e421033ad28de7ab208228bfb0281a229d272553696158289b300da2c9976c32464,0x92e959624882001701040c005417432c02544069252c9701a0048cc280a00e56d4150e31071309c931151f4c9213080304e00a4233c09500a002c04d90b29c403071012c5a3a310c128ab91220a221c27244349605808983008a2c9966812464),(0,0),(0x941a1aee99450a81362f36506691ad42486aa7b56b55a36c2710c35afdccd2f0604110c2892f54d343a9228b60c516b3ea6e18394813263b179331842a516d8adc29c7c000c846f164b52014130d4016a078833106127956c94690a3b81ad1d8,0x4120210904c02803268a2402080b401402a07040a01006405204110294490a020401002d0205402c22800a1400c2280a20c04a14813021a0411310009012188c000460020c0069060300020050540108030832102126010c94480229002c198)].toArray
 def g383columns : List ColumnInfo := [(1,0,382,0,9),(0,1,332,50,7),(2,0,381,0,9),(0,2,312,69,7),(3,0,380,0,6),(2,1,332,48,6),(1,2,312,68,6),(4,0,379,0,11),(5,0,378,0,7),(7,0,376,0,5),(5,2,312,64,5),(8,0,375,0,9),(0,8,99,276,7),(12,0,371,0,8),(13,0,354,0,4),(14,0,369,0,5),(16,0,367,0,11),(17,0,366,0,8),(18,0,365,0,7),(19,0,364,0,5),(18,1,332,32,5),(24,0,359,0,8),(25,0,358,0,5),(28,0,355,0,7),(20,8,99,256,5),(32,0,351,0,11),(33,0,350,0,8),(32,1,332,18,6),(35,0,348,0,5),(34,1,332,16,5),(44,0,339,0,5),(49,0,334,0,7),(48,1,332,2,5),(33,16,326,8,5),(56,0,327,0,5),(64,0,319,0,11),(65,0,318,0,7),(66,0,317,0,8),(67,0,316,0,5),(65,2,312,4,5),(70,0,313,0,7),(34,64,29,256,5),(256,0,127,0,9),(0,256,23,104,7),(264,0,119,0,6),(256,8,99,20,6),(8,256,23,96,6),(268,0,115,0,5),(260,8,99,16,5),(280,0,103,0,5),(272,8,99,4,5),(288,0,95,0,8),(289,0,94,0,5),(40,256,23,64,5),(304,0,79,0,5),(320,0,63,0,8),(322,0,61,0,5),(258,64,61,0,5),(352,0,31,0,7)]
 def g383autos : List (List Nat) := [[],[84,131,98],[101,66,16],[100,131,82,16],[82,129,48],[101,100,131,98,129,48],[100,49,128],[101,84,131,66,49,128]]
 def g383levels : Nat → Packing
@@ -3159,8 +2986,8 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s15_3_0 : block g15 3 0 1=true := by
-  apply cellsBlock (ar:=4) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl15_3 : block g15 3 0 1 = true := s15_3_0
@@ -3210,15 +3037,15 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s31_5_0 : block g31 5 0 1=true := by
-  apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s31_5_1 : block g31 5 1 2=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl31_5 : block g31 5 0 3 = true := (@block_merge g31 5 0 1 2 s31_5_0 s31_5_1)
@@ -3227,8 +3054,8 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s31_6_0 : block g31 6 0 1=true := by
-  apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl31_6 : block g31 6 0 1 = true := s31_6_0
@@ -3292,8 +3119,8 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s111_6_0 : block g111 6 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl111_6 : block g111 6 0 1 = true := s111_6_0
@@ -3339,15 +3166,15 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s189_6_0 : block g189 6 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s189_6_1 : block g189 6 1 2=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl189_6 : block g189 6 0 3 = true := (@block_merge g189 6 0 1 2 s189_6_0 s189_6_1)
@@ -3356,8 +3183,8 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s189_7_0 : block g189 7 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl189_7 : block g189 7 0 1 = true := s189_7_0
@@ -3412,8 +3239,8 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_6_0 : block g191 6 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_6 : block g191 6 0 1 = true := s191_6_0
@@ -3422,15 +3249,15 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_7_0 : block g191 7 0 13=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_7_1 : block g191 7 13 15=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_7 : block g191 7 0 28 = true := (@block_merge g191 7 0 13 15 s191_7_0 s191_7_1)
@@ -3439,22 +3266,22 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_8_0 : block g191 8 0 7=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_8_1 : block g191 8 7 61=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_8_2 : block g191 8 68 32=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_8 : block g191 8 0 100 = true := (@block_merge g191 8 0 68 32 (@block_merge g191 8 0 7 61 s191_8_0 s191_8_1) s191_8_2)
@@ -3463,15 +3290,15 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_9_0 : block g191 9 0 3=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_9_1 : block g191 9 3 9=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_9 : block g191 9 0 12 = true := (@block_merge g191 9 0 3 9 s191_9_0 s191_9_1)
@@ -3480,8 +3307,8 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_10_0 : block g191 10 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_10 : block g191 10 0 1 = true := s191_10_0
@@ -3540,15 +3367,15 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_8_0 : block g383 8 0 23=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_8_1 : block g383 8 23 2=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_8 : block g383 8 0 25 = true := (@block_merge g383 8 0 23 2 s383_8_0 s383_8_1)
@@ -3557,22 +3384,22 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_9_0 : block g383 9 0 9=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_9_1 : block g383 9 9 75=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_9_2 : block g383 9 84 7=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_9 : block g383 9 0 91 = true := (@block_merge g383 9 0 84 7 (@block_merge g383 9 0 9 75 s383_9_0 s383_9_1) s383_9_2)
@@ -3581,22 +3408,22 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_10_0 : block g383 10 0 5=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_10_1 : block g383 10 5 16=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_10_2 : block g383 10 21 20=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_10 : block g383 10 0 41 = true := (@block_merge g383 10 0 21 20 (@block_merge g383 10 0 5 16 s383_10_0 s383_10_1) s383_10_2)
@@ -3605,15 +3432,15 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_11_0 : block g383 11 0 1=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_11_1 : block g383 11 1 5=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_11 : block g383 11 0 6 = true := (@block_merge g383 11 0 1 5 s383_11_0 s383_11_1)
@@ -3622,8 +3449,8 @@ set_option maxHeartbeats 0 in
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_12_0 : block g383 12 0 1=true := by
-  apply cellsBlock (ar:=8) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_12 : block g383 12 0 1 = true := s383_12_0
@@ -3674,7 +3501,7 @@ def deadd13 (i : Nat) : Nat := 0x22dfc5b6a90e86821a4efdb54c724410d1f7f16a63a18e0
 def deadl13 : Packing := (4,1,7,5,4,8,0,deadd13)
 def deadd14 (i : Nat) : Nat := 0x17e2b6526070604013ff
 def deadl14 : Packing := (1,0,7,2,4,0,0,deadd14)
-def deadsamples : Array (Bits × Bits) := #[(0xf854605d026923a5a16008862c9d18d42fd85e54d221898f1e440284a107a02910c3e03c06c40d2642ca74f54627022c11e389d9b43b30c961ca72386ce81500aa210d1ba1a121108a6c99348979d054ac200727ac054c0970110780155ad581,0x6844620d0040231585204884208800c4270824141201090814040082a10700282003e02402c4084602ca04a440240a1091218919100a2084314a220840a00480aa210819a02120100a4409048968c05484200702a805440920100380144a9480),(0x80b20c31f72bfc4e1481d27000d43c9c5bd438a9c5e0286040f054f111d001ce10920229bde170b8d339029e2bcac4cd494fb74d1052452141a61c5b9ca1e642f40c600258428f0e5c00df481e03202a204cd465e10fe01206e82c7b03150603,0x80100c30e6089040109182600012282018c41889c5e0204002b0604000c009861080028b1c2120a0d12000120908c00d005a724402504200402010501c01c208540860025840090e1400964816012008204cd0254102a00206a0247b01150201),(0x12ce100c308544478a85796a2341d206e4242e31335abb35943abb40be28c8e05c4c115123137950052a02a9ba0d31c096458c656cc338623e92230683d8962194d5145c2aa62229438824d8e06246d0cd124850733918c390189888a426380a,0x10ca0000108540870900790a0240900460282200221a991490081a0028289000cc41010021184410080a0a28a20020c0200184206c0128621092200a03d8103080d5145c02a2022143880090804206d04d100840322918c190088800a4221002),(0x8628ebbd17000228c83c0291b729e17b3643984a392a815889878936d04e41b82b8e28807cc302855ead3105d9868885c748c2b0724ae81086518e259124cd4278a18b4aa01db88524c3a3435a0814469349110c18f0c24c2a8052bd88818268,0xc2206a1d05000020401c0090e509051303449848110100480001811490070429238c000818c508010485900541c68805c240409012420000024186258024450270208b02a00da0842041a3414a08100690490104085040042a8052bc00818028),(0xbc8ccda8781e4d8151cd3cf93a4a0a01509a42078c1bc4a783ea4aec6c7bbbd02ef85be130b1750bcd872a062d01842a34826040203d5b99ac8899721d47b82106b4f88001d04ee6f42e103eb14e0a090b95e84905a08ef7a2230402e2b14bc5,0x148981a0109a5c8210c1a4690a42220050930202c418c4a7837a48680e50b9d00c601bc02020f518c9002a002c1124282402304220255b598c9019921c51b8010494708001d04e62d42a103a30060a090b94e84905a08af280230402e2304b45),(0xd3b19712becef4647857054f8773c68492608a46265cd6cd0106c449284294958830b40e8328a4102841c46a63b66493288c7290c714876750b08cb0eb0a532e014ce7e24f9c08720240400006971f885be46b00080a21145aa7f52cf42a8012,0x92218c003e8654007015040a0c73c50280c0084821449285810a8400004080918c301008002824100801c000230200c0688c40804110046300b00cb28307502a0004c5624f9c086200004000021315805bc46800000a00145205f42ce0200002),(0x3145d24845746a93b60987114c89950ee90ab5809889781e716b0d141d9e036fea797f20c896480c8b565809c5575a81eabcad03980701be24b7e8d7401960b32336416db2f0c4c050f169960250e8b311988b92828b0074bd455ad232c2112c,0x2307720c00346283a400011d4c09950fa108a4001a095004514a0014181e2261ab3d3060c0d6480a2ac41009e4571880ea848181d90321bc24d38a860208103323340169a2b084c040f169960050c8b211800b9082890074b8455a803282012c),(0x49615339cc24bb41a658244591d020101222d0f578b5376254a121290a30cd5c4e2ad1d6dabfa9e032f022500c91031b32331a7a9ace0ca4e96243014a4009cd0d2a3210b66014de852533c420acc80ff443ad9cc5d0f4808cd621151170ac54,0x4900539a4030aa408668006591882010120251355ca1242200a1212102144d6e020a42d6d2878b6832b420400cb9813312321a4a924e408ce04943054c0001c10d2a2200b040149c8425334420acc80fa003859cc5d0e4000cd201111150ac54),(0x2108654280dbc21c532263cad6a2ab60a053058994f658a43b3dd89384745a04932387065124c385d01899e2cc083e3c1e3327061d61ca921a4965c8583262f4485320b5c04953298d1f02098424a39520b6148b236021a80528c3236c545ab4,0xc0001428049001c03a04a4012802a200013019184320c200a34088304a0580410028702010083a440180cc2080827381411260a0400ca0098085048489022c408432094004053098d0e0008842422012032140b21202188052801030c545a90)]
+def deadsamples : Array (Bits × Bits) := [(0xf854605d026923a5a16008862c9d18d42fd85e54d221898f1e440284a107a02910c3e03c06c40d2642ca74f54627022c11e389d9b43b30c961ca72386ce81500aa210d1ba1a121108a6c99348979d054ac200727ac054c0970110780155ad581,0x6844620d0040231585204884208800c4270824141201090814040082a10700282003e02402c4084602ca04a440240a1091218919100a2084314a220840a00480aa210819a02120100a4409048968c05484200702a805440920100380144a9480),(0x80b20c31f72bfc4e1481d27000d43c9c5bd438a9c5e0286040f054f111d001ce10920229bde170b8d339029e2bcac4cd494fb74d1052452141a61c5b9ca1e642f40c600258428f0e5c00df481e03202a204cd465e10fe01206e82c7b03150603,0x80100c30e6089040109182600012282018c41889c5e0204002b0604000c009861080028b1c2120a0d12000120908c00d005a724402504200402010501c01c208540860025840090e1400964816012008204cd0254102a00206a0247b01150201),(0x12ce100c308544478a85796a2341d206e4242e31335abb35943abb40be28c8e05c4c115123137950052a02a9ba0d31c096458c656cc338623e92230683d8962194d5145c2aa62229438824d8e06246d0cd124850733918c390189888a426380a,0x10ca0000108540870900790a0240900460282200221a991490081a0028289000cc41010021184410080a0a28a20020c0200184206c0128621092200a03d8103080d5145c02a2022143880090804206d04d100840322918c190088800a4221002),(0x8628ebbd17000228c83c0291b729e17b3643984a392a815889878936d04e41b82b8e28807cc302855ead3105d9868885c748c2b0724ae81086518e259124cd4278a18b4aa01db88524c3a3435a0814469349110c18f0c24c2a8052bd88818268,0xc2206a1d05000020401c0090e509051303449848110100480001811490070429238c000818c508010485900541c68805c240409012420000024186258024450270208b02a00da0842041a3414a08100690490104085040042a8052bc00818028),(0xbc8ccda8781e4d8151cd3cf93a4a0a01509a42078c1bc4a783ea4aec6c7bbbd02ef85be130b1750bcd872a062d01842a34826040203d5b99ac8899721d47b82106b4f88001d04ee6f42e103eb14e0a090b95e84905a08ef7a2230402e2b14bc5,0x148981a0109a5c8210c1a4690a42220050930202c418c4a7837a48680e50b9d00c601bc02020f518c9002a002c1124282402304220255b598c9019921c51b8010494708001d04e62d42a103a30060a090b94e84905a08af280230402e2304b45),(0xd3b19712becef4647857054f8773c68492608a46265cd6cd0106c449284294958830b40e8328a4102841c46a63b66493288c7290c714876750b08cb0eb0a532e014ce7e24f9c08720240400006971f885be46b00080a21145aa7f52cf42a8012,0x92218c003e8654007015040a0c73c50280c0084821449285810a8400004080918c301008002824100801c000230200c0688c40804110046300b00cb28307502a0004c5624f9c086200004000021315805bc46800000a00145205f42ce0200002),(0x3145d24845746a93b60987114c89950ee90ab5809889781e716b0d141d9e036fea797f20c896480c8b565809c5575a81eabcad03980701be24b7e8d7401960b32336416db2f0c4c050f169960250e8b311988b92828b0074bd455ad232c2112c,0x2307720c00346283a400011d4c09950fa108a4001a095004514a0014181e2261ab3d3060c0d6480a2ac41009e4571880ea848181d90321bc24d38a860208103323340169a2b084c040f169960050c8b211800b9082890074b8455a803282012c),(0x49615339cc24bb41a658244591d020101222d0f578b5376254a121290a30cd5c4e2ad1d6dabfa9e032f022500c91031b32331a7a9ace0ca4e96243014a4009cd0d2a3210b66014de852533c420acc80ff443ad9cc5d0f4808cd621151170ac54,0x4900539a4030aa408668006591882010120251355ca1242200a1212102144d6e020a42d6d2878b6832b420400cb9813312321a4a924e408ce04943054c0001c10d2a2200b040149c8425334420acc80fa003859cc5d0e4000cd201111150ac54),(0x2108654280dbc21c532263cad6a2ab60a053058994f658a43b3dd89384745a04932387065124c385d01899e2cc083e3c1e3327061d61ca921a4965c8583262f4485320b5c04953298d1f02098424a39520b6148b236021a80528c3236c545ab4,0xc0001428049001c03a04a4012802a200013019184320c200a34088304a0580410028702010083a440180cc2080827381411260a0400ca0098085048489022c408432094004053098d0e0008842422012032140b21202188052801030c545a90)].toArray
 def deadcolumns : List ColumnInfo := [(1,0,510,0,12),(0,1,460,50,8),(2,0,509,0,12),(0,2,440,69,8),(3,0,508,0,9),(2,1,460,48,7),(4,0,507,0,12),(0,4,369,138,8),(5,0,506,0,8),(6,0,505,0,9),(4,2,440,65,7),(2,4,369,136,7),(7,0,504,0,7),(5,2,440,64,6),(8,0,503,0,12),(0,8,227,276,8),(9,0,486,0,8),(10,0,501,0,8),(12,0,499,0,9),(8,4,369,130,7),(4,8,227,272,7),(14,0,497,0,7),(10,4,369,128,6),(15,0,480,0,4),(16,0,495,0,13),(0,16,486,9,10),(17,0,494,0,11),(16,1,460,34,7),(19,0,492,0,8),(16,4,353,138,7),(21,0,490,0,7),(21,2,424,64,5),(24,0,487,0,11),(8,16,486,1,9),(25,0,486,0,8),(9,16,486,0,8),(27,0,484,0,5),(11,16,484,0,5),(24,4,353,130,6),(29,0,482,0,5),(26,4,353,128,5),(32,0,479,0,12),(0,32,94,385,8),(32,1,460,18,7),(1,32,94,384,7),(35,0,476,0,7),(34,1,460,16,6),(36,0,347,0,8),(39,0,344,0,4),(40,0,471,0,8),(49,0,462,0,8),(48,1,460,2,6),(50,1,460,0,5),(56,0,455,0,7),(64,0,447,0,13),(0,64,189,258,10),(66,0,445,0,11),(2,64,189,256,9),(67,0,444,0,8),(66,1,396,48,6),(70,0,441,0,8),(69,2,440,0,5),(74,0,437,0,7),(74,4,305,128,5),(80,0,431,0,11),(83,0,428,0,7),(96,0,415,0,9),(96,1,396,18,6),(98,1,396,16,5),(128,0,383,0,13),(128,1,332,50,7),(3,128,344,36,6),(132,0,379,0,11),(4,128,347,32,9),(133,0,378,0,7),(134,0,377,0,8),(132,2,312,65,6),(133,2,312,64,5),(136,0,375,0,9),(128,8,99,276,7),(140,0,371,0,8),(132,8,99,272,6),(138,4,369,0,5),(144,0,367,0,11),(152,4,353,2,5),(160,0,351,0,11),(160,1,332,18,6),(162,1,332,16,5),(164,0,347,0,8),(36,128,347,0,8),(172,0,339,0,5),(176,1,332,2,5),(180,0,331,0,5),(192,0,319,0,11),(198,0,313,0,7),(256,0,255,0,12),(258,0,189,0,8),(260,0,251,0,8),(264,0,247,0,9),(256,8,227,20,7),(8,256,151,96,7),(268,0,243,0,7),(260,8,227,16,6),(273,0,238,0,7),(280,0,231,0,8),(276,8,227,0,5),(288,0,223,0,9),(256,32,94,129,7),(32,256,151,72,7),(257,32,94,128,6),(296,0,215,0,7),(40,256,151,64,6),(304,0,207,0,6),(288,16,198,9,6),(273,32,78,128,5),(56,256,135,64,5),(320,0,191,0,11),(256,64,189,2,9),(322,0,189,0,8),(258,64,189,0,8),(324,0,187,0,7),(324,8,163,16,5),(321,32,30,128,5),(388,8,99,16,5),(168,256,23,64,5),(224,256,23,8,5)]
 def deadautos : List (List Nat) := [[],[118,130,81],[100,131,82,16],[118,133,100,131,50,33,16],[116,83,32],[118,116,83,130,49,32],[118,133,33,48],[82,129,48],[118,133,116,83,82,81,80],[116,50,129,80],[100,49,128],[118,100,83,130,81,128]]
 def deadlevels : Nat → Packing
@@ -3706,161 +3533,161 @@ theorem geomdead : graphValid dead (boundsBefore known383) = true := by
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead8_0 : block dead 8 0 2=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead8 : block dead 8 0 2=true := sdead8_0
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead9_0 : block dead 9 0 12=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead9_12 : block dead 9 12 13=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead9 : block dead 9 0 25=true := (@block_merge dead 9 0 12 13 sdead9_0 sdead9_12)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_0 : block dead 10 0 6=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_6 : block dead 10 6 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_42 : block dead 10 42 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_78 : block dead 10 78 35=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_113 : block dead 10 113 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_149 : block dead 10 149 7=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead10 : block dead 10 0 156=true := (@block_merge dead 10 0 149 7 (@block_merge dead 10 0 113 36 (@block_merge dead 10 0 78 35 (@block_merge dead 10 0 42 36 (@block_merge dead 10 0 6 36 sdead10_0 sdead10_6) sdead10_42) sdead10_78) sdead10_113) sdead10_149)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_0 : block dead 11 0 4=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_4 : block dead 11 4 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_40 : block dead 11 40 15=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_55 : block dead 11 55 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_91 : block dead 11 91 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_127 : block dead 11 127 29=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_156 : block dead 11 156 27=true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead11 : block dead 11 0 183=true := (@block_merge dead 11 0 156 27 (@block_merge dead 11 0 127 29 (@block_merge dead 11 0 91 36 (@block_merge dead 11 0 55 36 (@block_merge dead 11 0 40 15 (@block_merge dead 11 0 4 36 sdead11_0 sdead11_4) sdead11_40) sdead11_55) sdead11_91) sdead11_127) sdead11_156)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead12_0 : block dead 12 0 3=true := by
-  apply cellsBlock (ar:=9) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead12_3 : block dead 12 3 14=true := by
-  apply cellsBlock (ar:=10) (rows:=1) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead12_17 : block dead 12 17 15=true := by
-  apply cellsBlock (ar:=11) (rows:=1) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead12 : block dead 12 0 32=true := (@block_merge dead 12 0 17 15 (@block_merge dead 12 0 3 14 sdead12_0 sdead12_3) sdead12_17)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead13_0 : block dead 13 0 1=true := by
-  apply cellsBlock (ar:=9) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead13_1 : block dead 13 1 3=true := by
-  apply cellsBlock (ar:=10) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead13 : block dead 13 0 4=true := (@block_merge dead 13 0 1 3 sdead13_0 sdead13_1)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead14_0 : block dead 14 0 1=true := by
-  apply cellsBlock (ar:=9) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead14 : block dead 14 0 1=true := sdead14_0
@@ -4018,7 +3845,7 @@ set_option maxHeartbeats 0 in
 theorem valid511 : Known known511 := extendKnown_ok (m:=511) valid383 low511 (by decide +kernel)
 def x15d3 (i : Nat) : Nat := 0x7a00
 def x15l3 : Packing := (1,1,1,0,0,0,0,x15d3)
-def x15samples : Array (Bits × Bits) := #[(0xbf91f3ebde7f2f8899fbfe080cf3efbae3ffa5dfd3e72f7062b3b1ff3dd6abf7ff75cfbd5f3bfddfe7cf1a7fbceaea2f183996ebbcd8239f45570a56f58136c1e9fe8cffc76899f5febc557574eca139f7e2d5fb4fafcf64fb9f29bcf1e23673,0xd88462b11645aa7408888a4824409780a4c4702084051fea913216f652a26ff00a6cc08d8c2b509a295476e2810980c039a840506700241f251c25602c91288868ca507d40008011ac4af8030408a8820970200002758300326775a94bedb652),(0xf6feffffee7f6b3afeffbfffefadff97df7bb9dfaffe9fe795fb48db0fffb6fbfffddfbd974cff3bf747fffadfffdfe7c2ded3e87adfdebdebdfbdfc93cd7ff797665e5ee7687fb69eef78f096bfd15dfdb3dffd5ddbcff636976bba7b63f87f,0x243b000440ba440b105320a2112e402e112008014048a00028c56008044890017002125002000224408b001154801d1ac2443b8908408240c200d001412e81120401200003907ec8028003c86902172c26019478e588344c4480024624124829),(0xe97f9d743bbdd6f7ff84d7fffbfeb0ff7fc55ebafe3ff3ffffdfffeff77d7d6f31bfbcc7e9ffe7e5dfffedb56b15b5d9ffe7ff57c777fdeabefff7effe7ed93ffeffffa7bbb7e75f6f77afafeff37effbaff7fc7fb7cf8dbddfddedfbebdcf9c,0x80002d8200022c400a04940a4c08e110e4040802e1002231012093369910ca081018408611011da08506422803a82600521006041bc109031140466209134a0010a004460218100e0029803844100c0814020801a1108000025c0104a049514),(0xd2dfdf1518dfeefe77cdaaf35f36beeef9df7fe501160db7f9cff37fcf9c9b74d1f77faefbffaddfcbd9cef2b6d245bbfb5ff37d7bbf36355a4ff7bfdbbfebffdbbb7fbf8f7c75d67308f2fffd93ff2c75ee81beebf72dddb6cb65df5bc0fe0,0x63e67d040c5e811bb648b2af48256022e108887b11ec5490af809084906232156eac588288ee2020240308841f85648a105a231d3a4167230e6a21909908434ebc00fa98131e7c091ac1016c09bee32a30b75a6c40c655793d48364b853b6ae0),(0,0),(0,0),(0,0),(0,0),(0,0)]
+def x15samples : Array (Bits × Bits) := [(0xbf91f3ebde7f2f8899fbfe080cf3efbae3ffa5dfd3e72f7062b3b1ff3dd6abf7ff75cfbd5f3bfddfe7cf1a7fbceaea2f183996ebbcd8239f45570a56f58136c1e9fe8cffc76899f5febc557574eca139f7e2d5fb4fafcf64fb9f29bcf1e23673,0xd88462b11645aa7408888a4824409780a4c4702084051fea913216f652a26ff00a6cc08d8c2b509a295476e2810980c039a840506700241f251c25602c91288868ca507d40008011ac4af8030408a8820970200002758300326775a94bedb652),(0xf6feffffee7f6b3afeffbfffefadff97df7bb9dfaffe9fe795fb48db0fffb6fbfffddfbd974cff3bf747fffadfffdfe7c2ded3e87adfdebdebdfbdfc93cd7ff797665e5ee7687fb69eef78f096bfd15dfdb3dffd5ddbcff636976bba7b63f87f,0x243b000440ba440b105320a2112e402e112008014048a00028c56008044890017002125002000224408b001154801d1ac2443b8908408240c200d001412e81120401200003907ec8028003c86902172c26019478e588344c4480024624124829),(0xe97f9d743bbdd6f7ff84d7fffbfeb0ff7fc55ebafe3ff3ffffdfffeff77d7d6f31bfbcc7e9ffe7e5dfffedb56b15b5d9ffe7ff57c777fdeabefff7effe7ed93ffeffffa7bbb7e75f6f77afafeff37effbaff7fc7fb7cf8dbddfddedfbebdcf9c,0x80002d8200022c400a04940a4c08e110e4040802e1002231012093369910ca081018408611011da08506422803a82600521006041bc109031140466209134a0010a004460218100e0029803844100c0814020801a1108000025c0104a049514),(0xd2dfdf1518dfeefe77cdaaf35f36beeef9df7fe501160db7f9cff37fcf9c9b74d1f77faefbffaddfcbd9cef2b6d245bbfb5ff37d7bbf36355a4ff7bfdbbfebffdbbb7fbf8f7c75d67308f2fffd93ff2c75ee81beebf72dddb6cb65df5bc0fe0,0x63e67d040c5e811bb648b2af48256022e108887b11ec5490af809084906232156eac588288ee2020240308841f85648a105a231d3a4167230e6a21909908434ebc00fa98131e7c091ac1016c09bee32a30b75a6c40c655793d48364b853b6ae0),(0,0),(0,0),(0,0),(0,0),(0,0)].toArray
 def x15columns : List ColumnInfo := []
 def x15autos : List (List Nat) := [[],[48,33]]
 def x15levels : Nat → Packing
@@ -4037,8 +3864,8 @@ theorem geomx15 : graphValid x15 (boundsBefore known511) = true := by
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx15_3_0 : block x15 3 0 1=true := by
-  apply cellsBlock (ar:=4) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx15_3 : block x15 3 0 1=true := sx15_3_0
@@ -4062,7 +3889,7 @@ set_option maxHeartbeats 0 in
 theorem validx15 : Known knownx15 := extendKnown_ok (m:=527) valid511 lowx15 (by decide +kernel)
 def x23d3 (i : Nat) : Nat := 0x7a00
 def x23l3 : Packing := (1,1,1,0,0,0,0,x23d3)
-def x23samples : Array (Bits × Bits) := #[(0xbf91f3ebdfffbfcd99fbfe081cf3effae3ffe7ffd3e76f786ab7b7fffdd6ebf7ff77efff7fbbfddfefff1a7fbceaea3f3d39beffbdf823df55774a57fdb3b6c9e9ffadffdfff99fdffbcd77f7decafbbf7eef5fbefafff6dfbffbdfdf5fc73f3,0x980002b112012a64088008402440978004c4700084010b6a1032067242804de00040800d0401509a095476628008804029a040404500001c211404602491288040ca006540008010a40af803040008800940200002318200022741a04ac49252),(0xf2fe9f7eafffd377fe87b7fffbacb4d75f635abbaffedfef9dff4ecbc77f766bb3ffbcc7b1cce723df77efb0df97dff5e7cefbdc6b77dcfcbafff5ed9a7ed97f96677f06bfbf7fbe9feffafa8fb7dedfb8bf7fe5f958fdfb34f7dffb3e63fc9f,0x449d600044e4c410001b8208110a000cb02000204004b4808145708c142aa2101a2e42d08a2a02046088009141011990d20c18902200a443c408f1014826801828015018008002c1084002806008b40606308410a54c210470c0340d21292889),(0xe97f9d743a3d46b2ff84d7ffebfeb0bf7fc51c9afe3fb3f7f7dbf9ef377d3d6f31bd9c85c97fe7e5d7cfedb56b15b5c9dae7d743c657fdaaaedfb7eef64c5937fefedea7a320e7576e772da5e6f3707dbaf35fc75b7cc8d2dd9d4a9ebaa38f1c,0x282202dc201a22cf10e069e2a4e4ce330f4048812e5802233892093369d11ca1e1019408611011fa0853642294ba866a0561236949fc129033140466219935a2050a20446331fd08e282994b8d4303e8a14130e85a911c480425c2524e16d714),(0,0),(0xd2dfdf1518dfeefe77cdaaf35f36beeef9df7fe501160db7f9cff37fcf9c9b74d1f77faefbffaddfcbd9cef2b6d245bbfb5ff37d7bbf36355a4ff7bfdbbfebffdbbb7fbf8f7c75d67308f2fffd93ff2c75ee81beebf72dddb6cb65df5bc0fe0,0x63e67d040c5e811bb648b2af48256022e108887b11ec5490af809084906232156eac588288ee2020240308841f85648a105a231d3a4167230e6a21909908434ebc00fa98131e7c091ac1016c09bee32a30b75a6c40c655793d48364b853b6da0),(0,0),(0,0),(0,0),(0,0)]
+def x23samples : Array (Bits × Bits) := [(0xbf91f3ebdfffbfcd99fbfe081cf3effae3ffe7ffd3e76f786ab7b7fffdd6ebf7ff77efff7fbbfddfefff1a7fbceaea3f3d39beffbdf823df55774a57fdb3b6c9e9ffadffdfff99fdffbcd77f7decafbbf7eef5fbefafff6dfbffbdfdf5fc73f3,0x980002b112012a64088008402440978004c4700084010b6a1032067242804de00040800d0401509a095476628008804029a040404500001c211404602491288040ca006540008010a40af803040008800940200002318200022741a04ac49252),(0xf2fe9f7eafffd377fe87b7fffbacb4d75f635abbaffedfef9dff4ecbc77f766bb3ffbcc7b1cce723df77efb0df97dff5e7cefbdc6b77dcfcbafff5ed9a7ed97f96677f06bfbf7fbe9feffafa8fb7dedfb8bf7fe5f958fdfb34f7dffb3e63fc9f,0x449d600044e4c410001b8208110a000cb02000204004b4808145708c142aa2101a2e42d08a2a02046088009141011990d20c18902200a443c408f1014826801828015018008002c1084002806008b40606308410a54c210470c0340d21292889),(0xe97f9d743a3d46b2ff84d7ffebfeb0bf7fc51c9afe3fb3f7f7dbf9ef377d3d6f31bd9c85c97fe7e5d7cfedb56b15b5c9dae7d743c657fdaaaedfb7eef64c5937fefedea7a320e7576e772da5e6f3707dbaf35fc75b7cc8d2dd9d4a9ebaa38f1c,0x282202dc201a22cf10e069e2a4e4ce330f4048812e5802233892093369d11ca1e1019408611011fa0853642294ba866a0561236949fc129033140466219935a2050a20446331fd08e282994b8d4303e8a14130e85a911c480425c2524e16d714),(0,0),(0xd2dfdf1518dfeefe77cdaaf35f36beeef9df7fe501160db7f9cff37fcf9c9b74d1f77faefbffaddfcbd9cef2b6d245bbfb5ff37d7bbf36355a4ff7bfdbbfebffdbbb7fbf8f7c75d67308f2fffd93ff2c75ee81beebf72dddb6cb65df5bc0fe0,0x63e67d040c5e811bb648b2af48256022e108887b11ec5490af809084906232156eac588288ee2020240308841f85648a105a231d3a4167230e6a21909908434ebc00fa98131e7c091ac1016c09bee32a30b75a6c40c655793d48364b853b6da0),(0,0),(0,0),(0,0),(0,0)].toArray
 def x23columns : List ColumnInfo := []
 def x23autos : List (List Nat) := [[],[16,66]]
 def x23levels : Nat → Packing
@@ -4081,8 +3908,8 @@ theorem geomx23 : graphValid x23 (boundsBefore knownx15) = true := by
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx23_3_0 : block x23 3 0 1=true := by
-  apply cellsBlock (ar:=4) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx23_3 : block x23 3 0 1=true := sx23_3_0
@@ -4109,7 +3936,7 @@ def x31l6 : Packing := (2,1,3,0,0,4,0,x31d6)
 def x31h6 (i : Nat) : Nat := 0x30c0021c100000000000180
 def x31d5 (i : Nat) : Nat := 0xa3e423007a88a00
 def x31l5 : Packing := (2,2,3,0,0,3,0,x31d5)
-def x31samples : Array (Bits × Bits) := #[(0x4f2899a86b639ff137f9e6807adff6bcf6df6de144a4ea1b1e7ceebef4966b7e2fff83e3ed1e935fe7f2fdebb97ff9d9f71668ffb5a372fdd3d563fde6b77b5277bdfc63a91c5c545bdd9c16ee8664ca1572b256f9498799c6e708977a017273,0x4040c825c8a83006d0136031115960825130504906882b86080b200065a82013901a040043016040400860c02402c80c8343b800ca301c20200540812004c6018f0800838a0040900002c25409b2722c12401005a01068a040109a2f2a12412),(0xc7bee778cce7cdeff624fcfdbf766b5f7878f5dffdff6f66dd42a40767f61647ae35ce5279faf8d6ed5ffeff3e859ca48c83dee978eeebeb6f7dd953f56c9b1a5e0afbeebfaf60ddff5be28eacd0cbaeedacfbbf393d7396b3788288aa46ce7f,0x6248900d031474260064803804880042580ca8a162843106070040f6818024a0c272118ba84ee1332380515090b9c250070244481108c00871e20901c8c08008e00469018140e040412110c0226000cd04806065a162d1402170e2540c44c869),(0xb8c3dff9b7a19cbfd8e79b7df7afbde36386f21cb75d33bfe39a474b9b7cc58bd60b148cb6fdd6b5bbed937de2a7c2346bfedfab9ffcf75fcd6c2736b9dfc7b6298f2bcb06e3b7979beaffb3de78abe5e68c94efbfb2e8ea6c105209d5a78d9c,0x110609602001808010000c424a76c898a1d013400d320419b0262109327d5a0d100d02340391084888632a040600150320041200a81416b48810e6f202020220008900a860a710950000c8044d98981010319d9810000018c28a1d0943230714),(0xfef7fdf77addf8aa9ccbada65d3d3f918beff6578f7adcf1ffa9936dfcbfd9c8f70bfddf9a81beedd733c7f67fa79622f87977924f717dab3e8bfe309aa137bfef7f3b1ff6449fee2c35a37f7f3d3a13defd4db9b6bf9f6edf0df5e055f809a0,0xa468b0051c841b360c8402a4910105610c06048812418880021948a4008080600042a040000412152510108a085440280c01280402004101060a080518014d0a1a3460479440ab400cd20081b205040f850420444b3048401815c0e6b89088a0),(0xe73f631ef51c6256dddcf24bb7bb983fdd2d9aff89ba9efbbd7dfbf5184b7ff30dc769b1c6762d5957fe27888ddb657bfb8df71ff8311d35b2c2b98edb5e6ef9effeb4ff54bf0be86f8c7c69d5b7dcf6ffdb59db7fcf5fb59f8fad77015f7000,0x1111407880014040020201082c8a288252405210641075048804004960013586c0080b31384b80a81a46214140a31246238a0072a05c8a3060008122a540b28061080f30401800304024c05a0900d8c01ad912b224ce0125e2ea3619054e5240),(0,0),(0,0),(0,0),(0,0)]
+def x31samples : Array (Bits × Bits) := [(0x4f2899a86b639ff137f9e6807adff6bcf6df6de144a4ea1b1e7ceebef4966b7e2fff83e3ed1e935fe7f2fdebb97ff9d9f71668ffb5a372fdd3d563fde6b77b5277bdfc63a91c5c545bdd9c16ee8664ca1572b256f9498799c6e708977a017273,0x4040c825c8a83006d0136031115960825130504906882b86080b200065a82013901a040043016040400860c02402c80c8343b800ca301c20200540812004c6018f0800838a0040900002c25409b2722c12401005a01068a040109a2f2a12412),(0xc7bee778cce7cdeff624fcfdbf766b5f7878f5dffdff6f66dd42a40767f61647ae35ce5279faf8d6ed5ffeff3e859ca48c83dee978eeebeb6f7dd953f56c9b1a5e0afbeebfaf60ddff5be28eacd0cbaeedacfbbf393d7396b3788288aa46ce7f,0x6248900d031474260064803804880042580ca8a162843106070040f6818024a0c272118ba84ee1332380515090b9c250070244481108c00871e20901c8c08008e00469018140e040412110c0226000cd04806065a162d1402170e2540c44c869),(0xb8c3dff9b7a19cbfd8e79b7df7afbde36386f21cb75d33bfe39a474b9b7cc58bd60b148cb6fdd6b5bbed937de2a7c2346bfedfab9ffcf75fcd6c2736b9dfc7b6298f2bcb06e3b7979beaffb3de78abe5e68c94efbfb2e8ea6c105209d5a78d9c,0x110609602001808010000c424a76c898a1d013400d320419b0262109327d5a0d100d02340391084888632a040600150320041200a81416b48810e6f202020220008900a860a710950000c8044d98981010319d9810000018c28a1d0943230714),(0xfef7fdf77addf8aa9ccbada65d3d3f918beff6578f7adcf1ffa9936dfcbfd9c8f70bfddf9a81beedd733c7f67fa79622f87977924f717dab3e8bfe309aa137bfef7f3b1ff6449fee2c35a37f7f3d3a13defd4db9b6bf9f6edf0df5e055f809a0,0xa468b0051c841b360c8402a4910105610c06048812418880021948a4008080600042a040000412152510108a085440280c01280402004101060a080518014d0a1a3460479440ab400cd20081b205040f850420444b3048401815c0e6b89088a0),(0xe73f631ef51c6256dddcf24bb7bb983fdd2d9aff89ba9efbbd7dfbf5184b7ff30dc769b1c6762d5957fe27888ddb657bfb8df71ff8311d35b2c2b98edb5e6ef9effeb4ff54bf0be86f8c7c69d5b7dcf6ffdb59db7fcf5fb59f8fad77015f7000,0x1111407880014040020201082c8a288252405210641075048804004960013586c0080b31384b80a81a46214140a31246238a0072a05c8a3060008122a540b28061080f30401800304024c05a0900d8c01ad912b224ce0125e2ea3619054e5240),(0,0),(0,0),(0,0),(0,0)].toArray
 def x31columns : List ColumnInfo := [(513,0,30,0,4),(514,0,29,0,4),(16,0,527,0,4),(8,0,535,0,4),(4,0,539,0,4),(512,0,31,0,7)]
 def x31autos : List (List Nat) := [[],[65,50],[16,66],[16,32,48,64],[32,67],[32,49,64,16],[48,33],[48,65,32,33],[64,16,33,50],[64,49]]
 def x31levels : Nat → Packing
@@ -4130,23 +3957,23 @@ theorem geomx31 : graphValid x31 (boundsBefore knownx23) = true := by
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx31_6_0 : block x31 6 0 1=true := by
-  apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx31_6_1 : block x31 6 1 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx31_6 : block x31 6 0 2=true := (@block_merge x31 6 0 1 1 sx31_6_0 sx31_6_1)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx31_5_0 : block x31 5 0 2=true := by
-  apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx31_5 : block x31 5 0 2=true := sx31_5_0
@@ -4187,7 +4014,7 @@ def x187l6 : Packing := (2,1,1,0,0,3,0,x187d6)
 def x187h6 (i : Nat) : Nat := 0x58
 def x187d5 (i : Nat) : Nat := 0xbd58600
 def x187l5 : Packing := (1,2,1,0,0,0,0,x187d5)
-def x187samples : Array (Bits × Bits) := #[(0x11f7fb766ddfd7a3f1dfbbf677fafc8e77fb74bdcb8ffbffd7f5b2eb78f63ab57fdc7edd59c9777f763720d475a743ebe66eeecd767afbdfd53ee5b7681dedd3b7f77ddc0eba3b3bffd1cd7d9e3efe9f76bf8bca7feed21317fc38427f0ef27f,0x10224060004344200140025504000200409004522820a0420010030d010240170008610008940008000828081544000040702022c0a008801820aa01620541028a42a0080040024000605000c1043080020c200847440040525028402a00222a),(0xc01f0ffc9ad51faa0d91a3ba8d6bedaad31c8ddccdbda0aff482ff428db889edf945de3a73c6658892444b19e1712585bc63b2d635be99bfcf79022ef45bbfc487f0efa8524e22b2d7e887c8549089c75d70119af1a5e001081f018e4fcb4c4f,0xa355820a578cab004ebc452880d0cdb72f4c518d419449214f83a4100e08b1e0c6f0187c9721e3735f8357246a8beec3950d8e991414b520a110144800523664203c1575df371c03059a2f1308ab8b2649810732189076bfadaf518e45cb4c45),(0,0),(0x42f5bd2d7374f3b8f6b85e608b1a16748d973bf176f0bf19bd08c6b8c725fa58943385663746ced95fe1defe71bcf55d719b62f77a815405cad8efe7b5a2596878de4c7fabaf97efb2dfc8e2578783cffcf6d7bd95dfa820e8406e0d8cf38f8c,0x21af12023b4875b030149a5e430ac003b0090acac74a5282dc18801b8083496104c58f6062ab5011835e8129160d5b6203f078e05d13102559d8a1358241d6bc87d2abc462c2d94a4068ca3b50005322100584527954ec775ed46e090ca38b0c),(0x1fefd99d031ce12cbeecfec8ae8e53f3aa673ee0adfa77e7aebf5623bf1397ff85a3dbafba7faaf3fdccc77842feb6c93ff735231e71b7cb3bd493d696ee5b3d8d9e3f7fdb9dc9d5ed3d26f71fbe99ddd4e2f755cf3b7920e7c3d00df0fc0ff0,0xc108c840400020bc822640008d430340962e1240005013400e614804428b280b000100f800002e65c21440668122019800c020522000048a00314020412080010014013142124911d0621000239084c6402180180221388a12b9006d05c04d0),(0xeef8aeaff6ea19dd7ab2f34fdc153bbfd7bef1fbb3979b3c8177cbfef2dce79f171c23d3b6f37edd933f398fde5ad9777a49f9bcc196d1e134abfe4d1f63625775b99e7af67e5689d4727fabf45367b2ffddea65e04817de1823aff000fff000,0x48321a32a43b5f90117c00a1e404180b04110403010004b12838200414100888200c094022903406900617c89900320a000804014244612183504e88000824243c0480a0a7118f610420080a08492ec160022028091286218ec52000ffd000),(0,0),(0xfd5dbd83baf649df199ed64da075b1ab6c9db59e5b9c4dbbc21f4b9e0c4c55cef1f7cb66aefc7c66865a1b63ba795c7fee4011ff839f746af257db3807f6e7bcc75ccf91f3e354f14977365ee77dc9737944f82a159b25cc08438ffdff010000,0x6280c1e04d0b80000e8a0104500949c130d222e078d606d04e06c146c169a5c4345352c602890dcbc125480013466ec8d4f87421f218b810545429011185905853831b000f40064004b011e4210730c13a08e41155e28579de711adfff000000),(0,0)]
+def x187samples : Array (Bits × Bits) := [(0x11f7fb766ddfd7a3f1dfbbf677fafc8e77fb74bdcb8ffbffd7f5b2eb78f63ab57fdc7edd59c9777f763720d475a743ebe66eeecd767afbdfd53ee5b7681dedd3b7f77ddc0eba3b3bffd1cd7d9e3efe9f76bf8bca7feed21317fc38427f0ef27f,0x10224060004344200140025504000200409004522820a0420010030d010240170008610008940008000828081544000040702022c0a008801820aa01620541028a42a0080040024000605000c1043080020c200847440040525028402a00222a),(0xc01f0ffc9ad51faa0d91a3ba8d6bedaad31c8ddccdbda0aff482ff428db889edf945de3a73c6658892444b19e1712585bc63b2d635be99bfcf79022ef45bbfc487f0efa8524e22b2d7e887c8549089c75d70119af1a5e001081f018e4fcb4c4f,0xa355820a578cab004ebc452880d0cdb72f4c518d419449214f83a4100e08b1e0c6f0187c9721e3735f8357246a8beec3950d8e991414b520a110144800523664203c1575df371c03059a2f1308ab8b2649810732189076bfadaf518e45cb4c45),(0,0),(0x42f5bd2d7374f3b8f6b85e608b1a16748d973bf176f0bf19bd08c6b8c725fa58943385663746ced95fe1defe71bcf55d719b62f77a815405cad8efe7b5a2596878de4c7fabaf97efb2dfc8e2578783cffcf6d7bd95dfa820e8406e0d8cf38f8c,0x21af12023b4875b030149a5e430ac003b0090acac74a5282dc18801b8083496104c58f6062ab5011835e8129160d5b6203f078e05d13102559d8a1358241d6bc87d2abc462c2d94a4068ca3b50005322100584527954ec775ed46e090ca38b0c),(0x1fefd99d031ce12cbeecfec8ae8e53f3aa673ee0adfa77e7aebf5623bf1397ff85a3dbafba7faaf3fdccc77842feb6c93ff735231e71b7cb3bd493d696ee5b3d8d9e3f7fdb9dc9d5ed3d26f71fbe99ddd4e2f755cf3b7920e7c3d00df0fc0ff0,0xc108c840400020bc822640008d430340962e1240005013400e614804428b280b000100f800002e65c21440668122019800c020522000048a00314020412080010014013142124911d0621000239084c6402180180221388a12b9006d05c04d0),(0xeef8aeaff6ea19dd7ab2f34fdc153bbfd7bef1fbb3979b3c8177cbfef2dce79f171c23d3b6f37edd933f398fde5ad9777a49f9bcc196d1e134abfe4d1f63625775b99e7af67e5689d4727fabf45367b2ffddea65e04817de1823aff000fff000,0x48321a32a43b5f90117c00a1e404180b04110403010004b12838200414100888200c094022903406900617c89900320a000804014244612183504e88000824243c0480a0a7118f610420080a08492ec160022028091286218ec52000ffd000),(0,0),(0xfd5dbd83baf649df199ed64da075b1ab6c9db59e5b9c4dbbc21f4b9e0c4c55cef1f7cb66aefc7c66865a1b63ba795c7fee4011ff839f746af257db3807f6e7bcc75ccf91f3e354f14977365ee77dc9737944f82a159b25cc08438ffdff010000,0x6280c1e04d0b80000e8a0104500949c130d222e078d606d04e06c146c169a5c4345352c602890dcbc125480013466ec8d4f87421f218b810545429011185905853831b000f40064004b011e4210730c13a08e41155e28579de711adfff000000),(0,0)].toArray
 def x187columns : List ColumnInfo := [(160,0,539,0,4),(24,0,675,0,4)]
 def x187autos : List (List Nat) := [[],[115,84]]
 def x187levels : Nat → Packing
@@ -4208,23 +4035,23 @@ theorem geomx187 : graphValid x187 (boundsBefore knownx47) = true := by
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx187_6_0 : block x187 6 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx187_6_1 : block x187 6 1 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx187_6 : block x187 6 0 2=true := (@block_merge x187 6 0 1 1 sx187_6_0 sx187_6_1)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx187_5_0 : block x187 5 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx187_5 : block x187 5 0 1=true := sx187_5_0
@@ -4254,7 +4081,7 @@ def x189l7 : Packing := (2,1,2,0,0,4,0,x189d7)
 def x189h7 (i : Nat) : Nat := 0x2040008a00409409003
 def x189d6 (i : Nat) : Nat := 0xa50fc84600f68ce00fa88a00
 def x189l6 : Packing := (3,2,2,0,0,4,0,x189d6)
-def x189samples : Array (Bits × Bits) := #[(0xf90d27f9f9e72fe2ed8ee0ffb89953ffb73caa566d6b5fddda0b913afabea42f7f48bf75b8e3ffbbf07938876f7604d8aa5b70f2ebdfaa6f9fa6eae3eea49c6f7efe67acf77439baf7aaa965b5effc3fcf2fc42479bc26640360001bd833f4fc,0x186c21206c80864100034043a1180051d0018895000041618a200100a3104f0051221d844135163c1e115100c4036804a0157a10c48198a00060840204b63201c802e20402540089015e818508324900320889f1120286620ee911091802a4ac),(0,0),(0xb2c3ef63f5acebee4f5b7b28378f15536f71136f0ab6efff48272bdf756acb82289f174b37fedb251fbdc6daadd8f8d4f3a8ebef19da635e1c97a1761ba765dd79b2a641b394df25d5450d83a1f9a3dbd7f29b6f2ffac713803f23042f2cc8c7,0x8ea5d541830020c6446000900e00660a0030108bea081213810088a200240912100f120080c0008011690450434cd204108380e3121180ac4cc58a4820b32912820000204805226314a50401820c461794031008623402450c270b261528c8c2),(0xa12945bee63afa2f17b35e24376dfb3a94c967f692b4f4a2cdf9bdefb434525ac09b828b70aa046e2756b58ed4baee2317f7b92e546ed4c8f5e9805753c22b1b8774227cbcc2cde4faef57ea1711c382477246bce3f79e28961d9c0021cf0f07,0x140202664171e29a00a0843611a1001210861701486c4641410561013406680c0a024402b032e48ac92c8028cb00048e25806044da0500112005513960482455c276e148002108ccb0862682823192809b848b41803ec2ad2c8340860870605),(0x987686c5a9e7518d50df06dda399d9fef529cedaee0f206b0dd1cb990ef55d52e4f3cda16b2b35e9cb5fa8accb7f3fabcc1fa8d38d0e4dd6f7fe7bb7f11cc826ffe3c4f6a83faa55cbaafe5d73ead774130ae8c8f7a191093600d81fd1f00ff0,0x209300411100001417c4320010404c80063216084b10300001c5204d04a8102c005180138408400040440414314087011c2081a10208070a2c052a8c280044a20288000229284f521080181092cc0692c005320a01b411952116c83681700950),(0x751eb73b5fde14fce83aca8afcebf705fbc6f8ff3d6ad7d4f75b74edf35d6c7dbb74f3dea0fc4b7b7929b123f679c15caf4b5e92f3fdf8f7fd19f6c8dcfab673004f9bff47e97dff7e37747a6e678f45fa05751e0cbda8e569c046e001fff008,0x6083cac0820008122f3406301ac0198c0aa0640049c8b48a0000e602006e0005224c001008c281c221620046000c121210ca84e2023040102d8d1b91704008da034100500c8900602c80005a318000930d84600c40346805d0066aa241fd5000),(0,0),(0x86f6bd23eef66fbeffe1f175c363272fddf39bcdd9ac1b2879744e2ff5fbcfc7cc7df8e7bf7fa9fd9edf4ffe5f37ff644f65c6798faf1fd6b77bdf98467d5fc012c3fe6f8c3dca4dc93966d1dbc2295cb5d73fff2e7a5dbb6aa267e5ae000008,0x104000063cbc97019088000561340071f50e8b701421016436f9100c1581428084b02dac12114400c6949308a89204a00c002a1464443000821264040704d02178006189205259980048e8240c303128600088f1194815ba23d89459aa000008),(0,0)]
+def x189samples : Array (Bits × Bits) := [(0xf90d27f9f9e72fe2ed8ee0ffb89953ffb73caa566d6b5fddda0b913afabea42f7f48bf75b8e3ffbbf07938876f7604d8aa5b70f2ebdfaa6f9fa6eae3eea49c6f7efe67acf77439baf7aaa965b5effc3fcf2fc42479bc26640360001bd833f4fc,0x186c21206c80864100034043a1180051d0018895000041618a200100a3104f0051221d844135163c1e115100c4036804a0157a10c48198a00060840204b63201c802e20402540089015e818508324900320889f1120286620ee911091802a4ac),(0,0),(0xb2c3ef63f5acebee4f5b7b28378f15536f71136f0ab6efff48272bdf756acb82289f174b37fedb251fbdc6daadd8f8d4f3a8ebef19da635e1c97a1761ba765dd79b2a641b394df25d5450d83a1f9a3dbd7f29b6f2ffac713803f23042f2cc8c7,0x8ea5d541830020c6446000900e00660a0030108bea081213810088a200240912100f120080c0008011690450434cd204108380e3121180ac4cc58a4820b32912820000204805226314a50401820c461794031008623402450c270b261528c8c2),(0xa12945bee63afa2f17b35e24376dfb3a94c967f692b4f4a2cdf9bdefb434525ac09b828b70aa046e2756b58ed4baee2317f7b92e546ed4c8f5e9805753c22b1b8774227cbcc2cde4faef57ea1711c382477246bce3f79e28961d9c0021cf0f07,0x140202664171e29a00a0843611a1001210861701486c4641410561013406680c0a024402b032e48ac92c8028cb00048e25806044da0500112005513960482455c276e148002108ccb0862682823192809b848b41803ec2ad2c8340860870605),(0x987686c5a9e7518d50df06dda399d9fef529cedaee0f206b0dd1cb990ef55d52e4f3cda16b2b35e9cb5fa8accb7f3fabcc1fa8d38d0e4dd6f7fe7bb7f11cc826ffe3c4f6a83faa55cbaafe5d73ead774130ae8c8f7a191093600d81fd1f00ff0,0x209300411100001417c4320010404c80063216084b10300001c5204d04a8102c005180138408400040440414314087011c2081a10208070a2c052a8c280044a20288000229284f521080181092cc0692c005320a01b411952116c83681700950),(0x751eb73b5fde14fce83aca8afcebf705fbc6f8ff3d6ad7d4f75b74edf35d6c7dbb74f3dea0fc4b7b7929b123f679c15caf4b5e92f3fdf8f7fd19f6c8dcfab673004f9bff47e97dff7e37747a6e678f45fa05751e0cbda8e569c046e001fff008,0x6083cac0820008122f3406301ac0198c0aa0640049c8b48a0000e602006e0005224c001008c281c221620046000c121210ca84e2023040102d8d1b91704008da034100500c8900602c80005a318000930d84600c40346805d0066aa241fd5000),(0,0),(0x86f6bd23eef66fbeffe1f175c363272fddf39bcdd9ac1b2879744e2ff5fbcfc7cc7df8e7bf7fa9fd9edf4ffe5f37ff644f65c6798faf1fd6b77bdf98467d5fc012c3fe6f8c3dca4dc93966d1dbc2295cb5d73fff2e7a5dbb6aa267e5ae000008,0x104000063cbc97019088000561340071f50e8b701421016436f9100c1581428084b02dac12114400c6949308a89204a00c002a1464443000821264040704d02178006189205259980048e8240c303128600088f1194815ba23d89459aa000008),(0,0)].toArray
 def x189columns : List ColumnInfo := [(545,0,156,0,4),(132,0,569,0,4),(24,0,677,0,4),(512,0,189,0,8)]
 def x189autos : List (List Nat) := [[],[115,84],[32,67,117],[32,83,116],[48,82],[48,82,112,66],[64,114,50,48,80],[64,114,83],[80,50,116],[80,50,66,32,114],[112,66,48,82],[112,66]]
 def x189levels : Nat → Packing
@@ -4275,23 +4102,23 @@ theorem geomx189 : graphValid x189 (boundsBefore knownx187) = true := by
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx189_7_0 : block x189 7 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx189_7_1 : block x189 7 1 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx189_7 : block x189 7 0 2=true := (@block_merge x189 7 0 1 1 sx189_7_0 sx189_7_1)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx189_6_0 : block x189 6 0 3=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx189_6 : block x189 6 0 3=true := sx189_6_0
@@ -4319,7 +4146,7 @@ set_option maxHeartbeats 0 in
 theorem validx189 : Known knownx189 := extendKnown_ok (m:=701) validx187 lowx189 (by decide +kernel)
 def x215d6 (i : Nat) : Nat := 0x3fa00
 def x215l6 : Packing := (1,1,1,0,0,0,0,x215d6)
-def x215samples : Array (Bits × Bits) := #[(0x3253faed67db3fa645dfb5a672c7674c6387eec19d7b76ee6d16adeddbc7257bb8fb46f6fb913ce7950f1fbb47ed4a273ffa7ce26fdb33bc873b99f29f6d79be57b3de8bf02e6a6afefe21f9bb656ece5c76f5aab42ece00e07c6483b3674bf3,0x258eda4002a404a308000c00852c6864524140a40228461a8244802e6050d20410690130055054100b920014800010054540194012411490c408824d70fb4811000c24040080a001920843c4461844521c4c00ba0400c1168024668932454a52),(0x9dc67f7e9fe74e7dbbdf5fffb6b99dbb7bfb49ddfa95dea79ff7db9ff6dfdc65efedeb1977ffef7f8ea34e677bbfff1cf2bf3f7e5dd67c9fffa77dddff631f56ee9fddbdafdddf113b22ff8daef27b6fd4ab5f47ecbdb8531b7c9afa4399f49f,0x800100000d1002481000730008410082012010020482010014000400842000202b004200000020002009090028e348708009421020004002080240800404a04412a040a031600800012520001904320183800a00029100204b10881241102089),(0xe6ad37dbe9acbccb573e284b5bad7be69d71ffb76e119f5b92dd5c3429649a8576f4bdfee476917bf778f6cee81ecff9e38aec5fd03fed7f6d4cb2d161b59afb16deb7f777b9f1edfbd5b75efbedd73137b90ad82fd671ac06831f5c7ce18f1c,0x6480ef60e061bca407a400691202920d0e102245213008120904b00300091a11c04424603cb1081ad8122246040814801206004b531128690424814908a141226147a2168285c010a050924c80080080500831546400284e248e404828e18f14),(0,0),(0x63dd2d37d55f59b1c16a7e5044f75c54be4664b596ebe4d6eb327fb0a03275e648f75abbbad8eb391fd79d677e660573e6923c237a7079d28d4b62a1b3d7cfdb5b9030bc8722dc76dad83fbabc5beab8a56f5e4d2169e00f083e81780fe07e0,0x180004179048c81891b9606c32d18698008e874801c42925081365410102245b011084cdb80e8a4cf02c402303f8e54a88000091e0866a0608a71c30070494aea8c259a23a5c566604723418a807300582a1e14521c22ee97adb985680ba05a0),(0,0),(0xedd02338f561e695b828777faf7ce3f3672f367902ef85f5e529cf3e2e3847a76de6ddb3265a731cacb5a2aaf493f3688125a3826951fc8a3ec6c4aeeb723cf5ec7cad13a8e4df56a8264f25fdbbc4cbc090296d582942531d03a5a000fff800,0x6f5876bf3026f80143c88832568c6348860a0029fa5d70408879639178c0389e844721ee8f628c2f9536d4f51410100a66a4a8c24326a09d10003048687a0b014d4e2b1eca084210141292ddc2c00c62705625a9b56ee7dfb46f77e800efd800),(0x75ec93be333dac9b40eb6356d93b6b3cb7389b77843e973c1898ab9de3ef96cd5df8f8cd0cb436c774f2b8ffdc8023ff073ee8d5e4afb6700fedcf798eb99f23e7c6a9e292ee6cbdcefb92e6f289f0542b364d9abf61cbac1583a5b7ff000800,0x9a1700001d140208a012938261a445c0f1ac0da09c0d828d82d34b8868a6a58c05121b97824a9000268cdd91a9f0e843e4317020a8a85202230b20b0a70636001e800c80096023c8420e61827411c822abc50c009ab497b1db71b7b7d7000000),(0,0)]
+def x215samples : Array (Bits × Bits) := [(0x3253faed67db3fa645dfb5a672c7674c6387eec19d7b76ee6d16adeddbc7257bb8fb46f6fb913ce7950f1fbb47ed4a273ffa7ce26fdb33bc873b99f29f6d79be57b3de8bf02e6a6afefe21f9bb656ece5c76f5aab42ece00e07c6483b3674bf3,0x258eda4002a404a308000c00852c6864524140a40228461a8244802e6050d20410690130055054100b920014800010054540194012411490c408824d70fb4811000c24040080a001920843c4461844521c4c00ba0400c1168024668932454a52),(0x9dc67f7e9fe74e7dbbdf5fffb6b99dbb7bfb49ddfa95dea79ff7db9ff6dfdc65efedeb1977ffef7f8ea34e677bbfff1cf2bf3f7e5dd67c9fffa77dddff631f56ee9fddbdafdddf113b22ff8daef27b6fd4ab5f47ecbdb8531b7c9afa4399f49f,0x800100000d1002481000730008410082012010020482010014000400842000202b004200000020002009090028e348708009421020004002080240800404a04412a040a031600800012520001904320183800a00029100204b10881241102089),(0xe6ad37dbe9acbccb573e284b5bad7be69d71ffb76e119f5b92dd5c3429649a8576f4bdfee476917bf778f6cee81ecff9e38aec5fd03fed7f6d4cb2d161b59afb16deb7f777b9f1edfbd5b75efbedd73137b90ad82fd671ac06831f5c7ce18f1c,0x6480ef60e061bca407a400691202920d0e102245213008120904b00300091a11c04424603cb1081ad8122246040814801206004b531128690424814908a141226147a2168285c010a050924c80080080500831546400284e248e404828e18f14),(0,0),(0x63dd2d37d55f59b1c16a7e5044f75c54be4664b596ebe4d6eb327fb0a03275e648f75abbbad8eb391fd79d677e660573e6923c237a7079d28d4b62a1b3d7cfdb5b9030bc8722dc76dad83fbabc5beab8a56f5e4d2169e00f083e81780fe07e0,0x180004179048c81891b9606c32d18698008e874801c42925081365410102245b011084cdb80e8a4cf02c402303f8e54a88000091e0866a0608a71c30070494aea8c259a23a5c566604723418a807300582a1e14521c22ee97adb985680ba05a0),(0,0),(0xedd02338f561e695b828777faf7ce3f3672f367902ef85f5e529cf3e2e3847a76de6ddb3265a731cacb5a2aaf493f3688125a3826951fc8a3ec6c4aeeb723cf5ec7cad13a8e4df56a8264f25fdbbc4cbc090296d582942531d03a5a000fff800,0x6f5876bf3026f80143c88832568c6348860a0029fa5d70408879639178c0389e844721ee8f628c2f9536d4f51410100a66a4a8c24326a09d10003048687a0b014d4e2b1eca084210141292ddc2c00c62705625a9b56ee7dfb46f77e800efd800),(0x75ec93be333dac9b40eb6356d93b6b3cb7389b77843e973c1898ab9de3ef96cd5df8f8cd0cb436c774f2b8ffdc8023ff073ee8d5e4afb6700fedcf798eb99f23e7c6a9e292ee6cbdcefb92e6f289f0542b364d9abf61cbac1583a5b7ff000800,0x9a1700001d140208a012938261a445c0f1ac0da09c0d828d82d34b8868a6a58c05121b97824a9000268cdd91a9f0e843e4317020a8a85202230b20b0a70636001e800c80096023c8420e61827411c822abc50c009ab497b1db71b7b7d7000000),(0,0)].toArray
 def x215columns : List ColumnInfo := [(512,0,215,0,7)]
 def x215autos : List (List Nat) := [[],[32,116]]
 def x215levels : Nat → Packing
@@ -4338,8 +4165,8 @@ theorem geomx215 : graphValid x215 (boundsBefore knownx189) = true := by
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx215_6_0 : block x215 6 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx215_6 : block x215 6 0 1=true := sx215_6_0
@@ -4366,7 +4193,7 @@ set_option maxHeartbeats 0 in
 theorem validx215 : Known knownx215 := extendKnown_ok (m:=727) validx189 lowx215 (by decide +kernel)
 def x349d6 (i : Nat) : Nat := 0x3fa00
 def x349l6 : Packing := (1,1,1,0,0,0,0,x349d6)
-def x349samples : Array (Bits × Bits) := #[(0xc3ada743e1bd77cc4f34f91cefb66973971bf7ff2f2b25d691ec756a2b28bcb83390ecfeec6e01a8e34887d6ccddcd9aece5e79faa7dcb6e401ad2a16becdab815543677ffa39af93c7db53ee96d1710ffdd8b145bcf240097880cc3a44fc4fc,0x3718570042a988178d958c27f61a3f398ad5e5009a014425090232e509db54d0547b80630f8d4e489512b6840300b18439622948c2f026f0c0812f7c53781e99844fb006021154673010164ca2030cf43421f5aaf424605e75bc2cc2ac4ac4ac),(0,0),(0x3daa3f545f630775a2d7df74a23d9b78db7b6557e985fec41f5017f9fe9bfc74c788ce330680d6234ae34b0b58c535ac6b7c307d9ff204d5d8b77f8d0ee3df84ac844564a7d10ed089255a8fb7f2273e634bcf1b8bddf88004650b0b788cf8cf,0x6e166320f061304c0624804b49a29183de1832c3b9170a08171153888c89b8a9ef4664b6b6a3b002669ff6c784fb54f3b22e324b2330586b002e61480c2403626da5ae9488452a10234be34405104aa0fa801644d4a50ff34ef72f0b708ca8ca),(0x7efbcf756f72fee5bef53ce13d6ef7e9ede67e3bf8d0cdf16f6bb4b3fcf74beeee8f9fa2bf89fcf4eb7fe8bbe32755ee7513bb2b9de197cdfb67bb5695feb9ff5f7f6bcf4dbf03c6af0f4b9ffddfafffeb3f7e7feffef827787e300c7ff0ff0f,0x808c570008ccb0018900241210021c0002800c006020320804a043010002520000804808140a5c9820002002000108080000805007200404809c0100814088804211020298d42684101418800a00040028e1112142200c310810000a605605),(0x8639e259fdd9fd914d1ca7ee56ce7d435bf5efcf5f7fac46fe266fff0b47b75f54fb54f7dbdb8fe805fd6f925ffcaa46bce36f9477b96fa70ddcb6fb7a3c7eafb72397bafa7adcee1f7d36bba1e5eeaa9ef6f524f6169c81a393e40f80ff0ff0,0x806000090440000302260c801e5c04070080ae0018c8b8882d14d086004a10d00001d94b0429000428440138018040344101031080818002b2c0000a002802628004c2038042388426a41824c14f0030844004408009fa18a43c00d40950950),(0,0),(0xedd433baf565e69fa82a777eaf7de377672f367902ef97fce5b8cf3e2e3847a74de2fcbb067e730f3cb5b2eed491b379832da3c06957fc921ec6c4aeea733ca5ece4ad12a8e4fe57c8a6ce65f7bbd4cac09029ad582943d81401dbf000fff000,0x654e76bf2022f80163ca08b017282208760208896250f2c80aa8281910449912804538780d201c2f93b2006494001009029498e24b0eb09d33081048c8780901414e271ec20861985618d35f86d0c440581221a92d4a71ce3b86baa048fff000),(0,0),(0x75ec93be333dac9b50eb6357d93b6bbcb7389b77843e973d1899ab9de3ef96cd7dfcf9cd2cb436d7f4f2b8fffc8263ff073ee8d7e4afb6782fedcf798fb99f73e7dea9e392ee6dbdeefb93e6fa89f0552b364ddabf61cbfedc09dbffb7000000,0x9a1100001d14020880109302608445c081ac05209c0d00058053438068a2248c05120387824a8000240cdd9129f0e842e4216000a0a04202000320b0270636001e800880096002400006208070010822a3c50c0092b48631c471455fb5000000)]
+def x349samples : Array (Bits × Bits) := [(0xc3ada743e1bd77cc4f34f91cefb66973971bf7ff2f2b25d691ec756a2b28bcb83390ecfeec6e01a8e34887d6ccddcd9aece5e79faa7dcb6e401ad2a16becdab815543677ffa39af93c7db53ee96d1710ffdd8b145bcf240097880cc3a44fc4fc,0x3718570042a988178d958c27f61a3f398ad5e5009a014425090232e509db54d0547b80630f8d4e489512b6840300b18439622948c2f026f0c0812f7c53781e99844fb006021154673010164ca2030cf43421f5aaf424605e75bc2cc2ac4ac4ac),(0,0),(0x3daa3f545f630775a2d7df74a23d9b78db7b6557e985fec41f5017f9fe9bfc74c788ce330680d6234ae34b0b58c535ac6b7c307d9ff204d5d8b77f8d0ee3df84ac844564a7d10ed089255a8fb7f2273e634bcf1b8bddf88004650b0b788cf8cf,0x6e166320f061304c0624804b49a29183de1832c3b9170a08171153888c89b8a9ef4664b6b6a3b002669ff6c784fb54f3b22e324b2330586b002e61480c2403626da5ae9488452a10234be34405104aa0fa801644d4a50ff34ef72f0b708ca8ca),(0x7efbcf756f72fee5bef53ce13d6ef7e9ede67e3bf8d0cdf16f6bb4b3fcf74beeee8f9fa2bf89fcf4eb7fe8bbe32755ee7513bb2b9de197cdfb67bb5695feb9ff5f7f6bcf4dbf03c6af0f4b9ffddfafffeb3f7e7feffef827787e300c7ff0ff0f,0x808c570008ccb0018900241210021c0002800c006020320804a043010002520000804808140a5c9820002002000108080000805007200404809c0100814088804211020298d42684101418800a00040028e1112142200c310810000a605605),(0x8639e259fdd9fd914d1ca7ee56ce7d435bf5efcf5f7fac46fe266fff0b47b75f54fb54f7dbdb8fe805fd6f925ffcaa46bce36f9477b96fa70ddcb6fb7a3c7eafb72397bafa7adcee1f7d36bba1e5eeaa9ef6f524f6169c81a393e40f80ff0ff0,0x806000090440000302260c801e5c04070080ae0018c8b8882d14d086004a10d00001d94b0429000428440138018040344101031080818002b2c0000a002802628004c2038042388426a41824c14f0030844004408009fa18a43c00d40950950),(0,0),(0xedd433baf565e69fa82a777eaf7de377672f367902ef97fce5b8cf3e2e3847a74de2fcbb067e730f3cb5b2eed491b379832da3c06957fc921ec6c4aeea733ca5ece4ad12a8e4fe57c8a6ce65f7bbd4cac09029ad582943d81401dbf000fff000,0x654e76bf2022f80163ca08b017282208760208896250f2c80aa8281910449912804538780d201c2f93b2006494001009029498e24b0eb09d33081048c8780901414e271ec20861985618d35f86d0c440581221a92d4a71ce3b86baa048fff000),(0,0),(0x75ec93be333dac9b50eb6357d93b6bbcb7389b77843e973d1899ab9de3ef96cd7dfcf9cd2cb436d7f4f2b8fffc8263ff073ee8d7e4afb6782fedcf798fb99f73e7dea9e392ee6dbdeefb93e6fa89f0552b364ddabf61cbfedc09dbffb7000000,0x9a1100001d14020880109302608445c081ac05209c0d00058053438068a2248c05120387824a8000240cdd9129f0e842e4216000a0a04202000320b0270636001e800880096002400006208070010822a3c50c0092b48631c471455fb5000000)].toArray
 def x349columns : List ColumnInfo := [(512,0,349,0,7)]
 def x349autos : List (List Nat) := [[],[96,132]]
 def x349levels : Nat → Packing
@@ -4385,8 +4212,8 @@ theorem geomx349 : graphValid x349 (boundsBefore knownx215) = true := by
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx349_6_0 : block x349 6 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx349_6 : block x349 6 0 1=true := sx349_6_0
@@ -4413,7 +4240,7 @@ set_option maxHeartbeats 0 in
 theorem validx349 : Known knownx349 := extendKnown_ok (m:=861) validx215 lowx349 (by decide +kernel)
 def x455d6 (i : Nat) : Nat := 0x3fa00
 def x455l6 : Packing := (1,1,1,0,0,0,0,x455d6)
-def x455samples : Array (Bits × Bits) := #[(0x51827bc46bab6ea649f77194ffb5757d0fcbfef9dc3b5fde0b3e05abfbef04e0b199cef675898c63b002de83c7ad490d32bfffe23cdb803d812bf9f01f6119b206d7748bb8b82a787bf421eceb692e24d4325d86fc1d9c0c253c805193c8ce93,0x40c6ace82286bcaa5bc0643093654aec544140a560b8175a8a6ca43f7010ca14912c21500870583bba88005094e04045c7c491127141f40bdc0a82053c87c11441c246baf2c0e0118238f189ccdc7013cede21122088a1fefebd84f192c8ca92),(0xb797ff579bbf55795fd7cbddc6fb17bb8bedc0d9ff45fe07eaf773dbf38b2d5ef79feb5dfdef9fbbc3ae4f5f73feedbefffd776b969e4f7fe8bd7d8a7fadfd58b5bd575dfdd39d3bbd78a79cbae43bb5bdcfff7ec9d7fc04d1ff5ca21f0b0fff,0xac0142001d3002400000130008800002032810020406000014114100842030282a4042a48402a00000174905281318320009424002000000000040c8002020401a24280409200a00010702441100020011000a00061106010142580209010449),(0xeeed37b3edecb6cff7223c696badf3e6ed63b6b366819ffb87ddd4302d304aa47e94bdfee666f11ffb79f6eee01bddf9c388e44b997fddfb7a4ea284e1f798fd5cdc3f5775b5b3edf9d7ef57ffbf957b77990ad90bfa701b0e801ffc1cf1f31c,0x10c089c8c04304acc4740059200294850894274441201857012e9012100b060141100401309900316808220211e8e4c090828009b091ca6214278131078554222081808840c58040a040200120c90080829b10544088086a589402dc14a0a314),(0,0),(0,0),(0,0),(0x63dd29b7d55fd9b1c0aa7e7144f7dc55bf42f4f517ebe4d7eb32fff0a47b75f64ef75abbbbd8ed395fd79d67fe262571e6b2bd677a727992dd4a67b1b3d7effb7bb83abca7a6dc76fad93f3ab85fcab8a76f5e4f6129be0f043e05fe0fe03e0,0x40049f804ac81051e9607c125182180002824841c0396008282451110000530000844838040a6dd020002212080508088080914006a80418a41c00000080aea042512a721c54260470141988c630050032e145214a28c2328d006940fe03a0),(0xedd02378f561e695b83c777faf7ce3f3672f76790aef85f5e529cf3e2e3847a76de6ddb3265a733cacb5a2aaf497f368a125a3826951fc8e3ec6d4aeeb723cf5ec7cad13a8e4df56a8264f2dfdfbc6cbc090296d582d401f2f02f30000fffc00,0x6f1876373024f80103888822568c6348860a0029ba5d60008851638168c0389e844721ee8f628c0e9536d4f50410100a662428c24326209d00003048687a0b014d4e2b168a084210141292dcc2000c62704425a9b566e795a76bfd20005f5c00),(0x75ec93be333dac9b40eb6356d93b6b3cb7389b77843e973c1898ab9de3ef96cd5df8f8cd0cb436c774f2b8ffdc8023ff073ee8d5e4afb6700fedcf798eb99f23e7c6a9e292ee6cbdcefb92e6f289f0542b364d9abf61cbec2502b35fff040000,0x9a1700001d140208a012938261a445c0f1ac0da09c0d828d82d34b8868a6a58c05121b97824a9000268cdd91a9f0e843e4317020a8a85202230b20b0a70636001e800c80096023c8420e61827411c822abc50c009ab4973dcd72bf96bf000000)]
+def x455samples : Array (Bits × Bits) := [(0x51827bc46bab6ea649f77194ffb5757d0fcbfef9dc3b5fde0b3e05abfbef04e0b199cef675898c63b002de83c7ad490d32bfffe23cdb803d812bf9f01f6119b206d7748bb8b82a787bf421eceb692e24d4325d86fc1d9c0c253c805193c8ce93,0x40c6ace82286bcaa5bc0643093654aec544140a560b8175a8a6ca43f7010ca14912c21500870583bba88005094e04045c7c491127141f40bdc0a82053c87c11441c246baf2c0e0118238f189ccdc7013cede21122088a1fefebd84f192c8ca92),(0xb797ff579bbf55795fd7cbddc6fb17bb8bedc0d9ff45fe07eaf773dbf38b2d5ef79feb5dfdef9fbbc3ae4f5f73feedbefffd776b969e4f7fe8bd7d8a7fadfd58b5bd575dfdd39d3bbd78a79cbae43bb5bdcfff7ec9d7fc04d1ff5ca21f0b0fff,0xac0142001d3002400000130008800002032810020406000014114100842030282a4042a48402a00000174905281318320009424002000000000040c8002020401a24280409200a00010702441100020011000a00061106010142580209010449),(0xeeed37b3edecb6cff7223c696badf3e6ed63b6b366819ffb87ddd4302d304aa47e94bdfee666f11ffb79f6eee01bddf9c388e44b997fddfb7a4ea284e1f798fd5cdc3f5775b5b3edf9d7ef57ffbf957b77990ad90bfa701b0e801ffc1cf1f31c,0x10c089c8c04304acc4740059200294850894274441201857012e9012100b060141100401309900316808220211e8e4c090828009b091ca6214278131078554222081808840c58040a040200120c90080829b10544088086a589402dc14a0a314),(0,0),(0,0),(0,0),(0x63dd29b7d55fd9b1c0aa7e7144f7dc55bf42f4f517ebe4d7eb32fff0a47b75f64ef75abbbbd8ed395fd79d67fe262571e6b2bd677a727992dd4a67b1b3d7effb7bb83abca7a6dc76fad93f3ab85fcab8a76f5e4f6129be0f043e05fe0fe03e0,0x40049f804ac81051e9607c125182180002824841c0396008282451110000530000844838040a6dd020002212080508088080914006a80418a41c00000080aea042512a721c54260470141988c630050032e145214a28c2328d006940fe03a0),(0xedd02378f561e695b83c777faf7ce3f3672f76790aef85f5e529cf3e2e3847a76de6ddb3265a733cacb5a2aaf497f368a125a3826951fc8e3ec6d4aeeb723cf5ec7cad13a8e4df56a8264f2dfdfbc6cbc090296d582d401f2f02f30000fffc00,0x6f1876373024f80103888822568c6348860a0029ba5d60008851638168c0389e844721ee8f628c0e9536d4f50410100a662428c24326209d00003048687a0b014d4e2b168a084210141292dcc2000c62704425a9b566e795a76bfd20005f5c00),(0x75ec93be333dac9b40eb6356d93b6b3cb7389b77843e973c1898ab9de3ef96cd5df8f8cd0cb436c774f2b8ffdc8023ff073ee8d5e4afb6700fedcf798eb99f23e7c6a9e292ee6cbdcefb92e6f289f0542b364d9abf61cbec2502b35fff040000,0x9a1700001d140208a012938261a445c0f1ac0da09c0d828d82d34b8868a6a58c05121b97824a9000268cdd91a9f0e843e4317020a8a85202230b20b0a70636001e800c80096023c8420e61827411c822abc50c009ab4973dcd72bf96bf000000)].toArray
 def x455columns : List ColumnInfo := [(512,0,455,0,7)]
 def x455autos : List (List Nat) := [[],[98,135]]
 def x455levels : Nat → Packing
@@ -4432,8 +4259,8 @@ theorem geomx455 : graphValid x455 (boundsBefore knownx349) = true := by
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx455_6_0 : block x455 6 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx455_6 : block x455 6 0 1=true := sx455_6_0
@@ -4472,7 +4299,7 @@ def x191l7 : Packing := (47,4,5,0,0,9,0,x191d7)
 def x191h7 (i : Nat) : Nat := 0x71b0
 def x191d6 (i : Nat) : Nat := 0x2887d684985d2228021f5a125e8848600
 def x191l6 : Packing := (2,5,5,0,0,3,0,x191d6)
-def x191samples : Array (Bits × Bits) := #[(0xba07c15f4fdf6cf95faadf1fd7e5b3316b7bf9e78a5f84755da36f78f331570e4fba890137fdb6746422f21e58f4adde98651beaffd713f934f1b23fdf74bf03ffc32eeb9896bfe4764fdaac632deb90c43838203187d246940112477e23f023,0xd48c0000003c44c084a0810c17032100020d10700c0884430050000050208100284d014438a0008291a2948120011930d800004200401041118170210000021010004200002904100041416305639040190c00220482140c20640214202012),(0x73ffab4a9ef40d638bec853881a69eaea537e3ae667704cc3323eb30e4fe3f11125fd6e1ace557832b59c88ffdd4df10b7b2fd0e24edfc4cc3a5f74e3fae2b27d7dfb24f073434d13c0f2d279ade11b285600001f5328c0001e3d215d8c4482f,0x202853918452802021320e4c00081418225902070920936298c1a802a800cc60d5d010c08a055e2b3c600c4a3419c6a4c40313c4845a990f3e264408120d4609c24eacac34080672a4062cac90da1047056401c7495b1c62e1d39335a8c6c869),(0xfd7bfde6b4b4b5aefc4fecfecd732aba3ee8eef0b7faebba267a9abe3c5ba83971dde5a95eaa22a7cde32ba373d4f6c1cbf004940cc3ccaf32f7253f702e9937a79cb8b6baffe5fdcf6a97c2c92327214a5540bbcca040316beec50881040d8c,0x88830408200121d008015002481000800004002094412000213c43410621128700002c0200182040830a11104186100000080833108160604080238208022000058100020101c000523081024920e7200a01d20886a040010c08408051010514),(0xdb31df144f2733742f5f3b4e781d140e205762cd298d44dee148be6bad5204ac7567fe6d487ff389bd6cdffbe0b9d631f6b68b7d7a885cfe01dbfaf96a9c76ac95f41e894eb36b3daa9e5fd379b1ccf871a62a44008a0386a10289e01f80bf0,0x30548b0218c4160325002818848621701003570061220388d2020028c09ca05028e280b1800092083c3002a40060617a27524208e600058c10010c64202890005070441c52020c85808128c1269f188185180466610db03cc320a72e00b08ae0),(0x9294ecfb8f3dd2b61efca2afc35763f6918d20c178f41c84dadabfa7c29c55eee3e3de9f8f0dcdb81d7834bdebd1036efc8e75e968ff22d4bd5d4ef0219ffede44dc2c88dd8cd973eeffaf739c60d24e1faa0a15003f500b101028d021fd7050,0x86017009071940801832544433481c0ce89c00ac0291d03320a882400a01042a060400060ac101b300064d4868180e840821b45008a09220244252001c030f04a008090129ed1242077602189860806e3ae6d39988724043309218d1614f5000),(0xb7302f4fdb4bba79f91b57fef62d87b7e377598d555cb84dd2cc12f945af0da64d494f73067189f1430dd2cf046bdca1e6398ef2fbd9f936db116bc9dc60d5e28babc729c9c70394e5365cf9acf0ac213f80b76056d22fc48400087e8e028600,0xd70040c1415381a21e3b5958608000c4f32440680543121080842c31a021c22e6000225eb242028c280a40000a4c00200b252b190920a0211608020a0a96f5f40c896298208610910ab380a28c708c251f02f3e8dd8a1942c00289ddca010600),(0,0),(0xd41f73c9bc9ae386f65a4aca6a3d2525ded60678ddb6ffbf3afc535792a983a7614e19f8d64efd0eae8e2cd3e7de7c0ae854b5fe873db7856b426364a42481bea0a865f1698e49aa23d433aa72df101878ad8d5b0a502f89124d052000000640,0x48192406840805e1c02020930791320401a391083448845803000000c829400d7211014d05581240318e8100116d0004c2d444c65e1e0808634045e0010008e0420c240658216225007e04328f109a60ac0c17205526bc33f5362020028040),(0,0)]
+def x191samples : Array (Bits × Bits) := [(0xba07c15f4fdf6cf95faadf1fd7e5b3316b7bf9e78a5f84755da36f78f331570e4fba890137fdb6746422f21e58f4adde98651beaffd713f934f1b23fdf74bf03ffc32eeb9896bfe4764fdaac632deb90c43838203187d246940112477e23f023,0xd48c0000003c44c084a0810c17032100020d10700c0884430050000050208100284d014438a0008291a2948120011930d800004200401041118170210000021010004200002904100041416305639040190c00220482140c20640214202012),(0x73ffab4a9ef40d638bec853881a69eaea537e3ae667704cc3323eb30e4fe3f11125fd6e1ace557832b59c88ffdd4df10b7b2fd0e24edfc4cc3a5f74e3fae2b27d7dfb24f073434d13c0f2d279ade11b285600001f5328c0001e3d215d8c4482f,0x202853918452802021320e4c00081418225902070920936298c1a802a800cc60d5d010c08a055e2b3c600c4a3419c6a4c40313c4845a990f3e264408120d4609c24eacac34080672a4062cac90da1047056401c7495b1c62e1d39335a8c6c869),(0xfd7bfde6b4b4b5aefc4fecfecd732aba3ee8eef0b7faebba267a9abe3c5ba83971dde5a95eaa22a7cde32ba373d4f6c1cbf004940cc3ccaf32f7253f702e9937a79cb8b6baffe5fdcf6a97c2c92327214a5540bbcca040316beec50881040d8c,0x88830408200121d008015002481000800004002094412000213c43410621128700002c0200182040830a11104186100000080833108160604080238208022000058100020101c000523081024920e7200a01d20886a040010c08408051010514),(0xdb31df144f2733742f5f3b4e781d140e205762cd298d44dee148be6bad5204ac7567fe6d487ff389bd6cdffbe0b9d631f6b68b7d7a885cfe01dbfaf96a9c76ac95f41e894eb36b3daa9e5fd379b1ccf871a62a44008a0386a10289e01f80bf0,0x30548b0218c4160325002818848621701003570061220388d2020028c09ca05028e280b1800092083c3002a40060617a27524208e600058c10010c64202890005070441c52020c85808128c1269f188185180466610db03cc320a72e00b08ae0),(0x9294ecfb8f3dd2b61efca2afc35763f6918d20c178f41c84dadabfa7c29c55eee3e3de9f8f0dcdb81d7834bdebd1036efc8e75e968ff22d4bd5d4ef0219ffede44dc2c88dd8cd973eeffaf739c60d24e1faa0a15003f500b101028d021fd7050,0x86017009071940801832544433481c0ce89c00ac0291d03320a882400a01042a060400060ac101b300064d4868180e840821b45008a09220244252001c030f04a008090129ed1242077602189860806e3ae6d39988724043309218d1614f5000),(0xb7302f4fdb4bba79f91b57fef62d87b7e377598d555cb84dd2cc12f945af0da64d494f73067189f1430dd2cf046bdca1e6398ef2fbd9f936db116bc9dc60d5e28babc729c9c70394e5365cf9acf0ac213f80b76056d22fc48400087e8e028600,0xd70040c1415381a21e3b5958608000c4f32440680543121080842c31a021c22e6000225eb242028c280a40000a4c00200b252b190920a0211608020a0a96f5f40c896298208610910ab380a28c708c251f02f3e8dd8a1942c00289ddca010600),(0,0),(0xd41f73c9bc9ae386f65a4aca6a3d2525ded60678ddb6ffbf3afc535792a983a7614e19f8d64efd0eae8e2cd3e7de7c0ae854b5fe873db7856b426364a42481bea0a865f1698e49aa23d433aa72df101878ad8d5b0a502f89124d052000000640,0x48192406840805e1c02020930791320401a391083448845803000000c829400d7211014d05581240318e8100116d0004c2d444c65e1e0808634045e0010008e0420c240658216225007e04328f109a60ac0c17205526bc33f5362020028040),(0,0)].toArray
 def x191columns : List ColumnInfo := [(24,0,679,0,7),(160,0,543,0,7),(513,0,190,0,7),(2,0,701,0,8),(512,0,191,0,11),(4,0,699,0,7),(547,0,156,0,4),(513,32,30,128,5),(516,8,163,16,5),(26,0,677,0,4),(521,16,166,0,4),(531,0,172,0,4),(14,0,689,0,4),(641,32,30,0,4),(548,128,27,0,4),(20,8,675,0,4),(152,0,551,0,4),(134,0,569,0,4),(537,0,166,0,4),(56,0,647,0,4)]
 def x191autos : List (List Nat) := [[],[115,84],[32,67,117],[32,83,116]]
 def x191levels : Nat → Packing
@@ -4499,117 +4326,117 @@ theorem geomx191 : graphValid x191 (boundsBefore knownx455) = true := by
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_10_0 : block x191 10 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_10_1 : block x191 10 1 1=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx191_10 : block x191 10 0 2=true := (@block_merge x191 10 0 1 1 sx191_10_0 sx191_10_1)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_9_0 : block x191 9 0 4=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_9_4 : block x191 9 4 27=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_9_31 : block x191 9 31 14=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx191_9 : block x191 9 0 45=true := (@block_merge x191 9 0 31 14 (@block_merge x191 9 0 4 27 sx191_9_0 sx191_9_4) sx191_9_31)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_8_0 : block x191 8 0 9=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_8_9 : block x191 8 9 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_8_45 : block x191 8 45 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_8_81 : block x191 8 81 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_8_117 : block x191 8 117 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_8_153 : block x191 8 153 19=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_8_172 : block x191 8 172 36=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_8_208 : block x191 8 208 12=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx191_8 : block x191 8 0 220=true := (@block_merge x191 8 0 208 12 (@block_merge x191 8 0 172 36 (@block_merge x191 8 0 153 19 (@block_merge x191 8 0 117 36 (@block_merge x191 8 0 81 36 (@block_merge x191 8 0 45 36 (@block_merge x191 8 0 9 36 sx191_8_0 sx191_8_9) sx191_8_45) sx191_8_81) sx191_8_117) sx191_8_153) sx191_8_172) sx191_8_208)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_7_0 : block x191 7 0 25=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_7_25 : block x191 7 25 22=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx191_7 : block x191 7 0 47=true := (@block_merge x191 7 0 25 22 sx191_7_0 sx191_7_25)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_6_0 : block x191 6 0 2=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx191_6 : block x191 6 0 2=true := sx191_6_0
@@ -4652,7 +4479,7 @@ def x351l7 : Packing := (72,4,4,0,0,10,0,x351d7)
 def x351h7 (i : Nat) : Nat := 0x5800
 def x351d6 (i : Nat) : Nat := 0x21eda2a65831c600
 def x351l6 : Packing := (1,5,4,0,0,0,0,x351d6)
-def x351samples : Array (Bits × Bits) := #[(0xf1405419e53b37c1a894fcbc1efffeb7bd53e8398d5ed3ad216467c7af76bc05fe54e2f39df53ada7a917a78adaf781e9fa252df8b386939ff32fc9fdee774efbdbb1cdcb3bad3dff6c77536d060b50cce9c0517214644802008037b2821fc3b,0x10186c8a0003408822003510029010012a31544288021419e8722040019008e130612deb066324058262838128132044100224754422ad044d10d404e868a105a9124f65d02005b0891d349020950cce0c4096120641ace25ac94a2821263a),(0x60684bd3fdbc7429906c83de8bbf4bc1bf8c4695ffecff6a94d3fc9a851d39cce2e87757697f8a75bdfbbd77e57ddcff9ac7e9ffb86aff8df2b6bbcc7bcfab39df67afeac1c3c7e53fd1d24f6003463f032d55686431080404d7869bbe02401f,0x108c2825404000d00110000448842258880800334004501240400180080008102010840001014023020806854032c02306041920228c1008020e00022000100100004100a08d8000420424b4101403200a0b468c8910c400081220144004801),(0x2c9337c7e540d5b5c5daff3dda7a9a5e988319776abb9fe569bcb5206fd6af5971bf01f0b39deeeee6ccafab0ab8779ad4576f4a5bffde6962e6f285b5385e074eff302ccdf5ecf953b26531a455106ab5069859040d30cacc17848431038594,0xbe0000340a08b060a9cecd00133401803248231cc02490840ab8bfc1580a87044c960715444ca881851001020b44800dc4100c45695020101bc202031142600bc239400ed18704692813a430b074108db30648952766b3af5d149c9631438714),(0x6b6db5b70bffcedfdcabf7bed6f6f03ef3235dc6473b0e5dcd360f31daca66248115dd8c5fbb7797633ea20ed27bd126013f95b9e6dd1746571b0bcefb667ba0c6cfd7e0ec337fc69512a39a1d1ad542943baa105a0881fad9a86904417805c8,0x4050ca8840800a06001000540800400000000000020802339102400c82011840a300a0020900072002220a818039100220884200900292270000708004298480010007112e50008400080b820582c6320428820210884400824a4109403000c8),(0xb6d4b423cb9b4fdfda1b38b13eecff53cffb362e2a4522ff9eb0bc773829dbc37b167b69e65c0a2c55a257914f977d1b46324ee0f7201a37fd8df9795fc3476c85fa8e9eb063b6b2795c10c9e87d60c0789200475f56441001001d60c1fff800,0xb5ac24132425f0a113852780a3dc2c226655482a9131f5880614841334c243870c43048010f088c8e84514786c04e8019844b08302a10950d3b20f09a004015a9050a0001023865a47402049685520c131d21869ed708253150036b081ced800),(0,0),(0x3ddeacaf374ac7033721c1d5b791f113233e962ddce93163f3cbb6281f076792d422890e28c499b7a44f07e5eafffb6dfeba8e965580d79f135004a281d382936c70cd477afcaaea8ced7df00ac69a91206a41a284bc3a0522401164be840260,0x6c2025088998553042a883340831811003362b0c8818a01252e33280c4085832fd90260604c80310c2047b048098009183020c01510200313c0e100c050d8e10812821882000239c600d19b00cc68e81100a0106170c6306d242c5febac00260),(0,0),(0x87be8ccc0cac83e923542157b5079cfbf1e48685a772e4896e8a1af8b4ed6d364e0eb6e754b3319009a141969651876dfbabfd6771bfe695f84b04f7559cffa2a2c363a3925f312bbffebe2cf3bcb9c4e0c526d18090bb313aad700000840260,0x30f0013320620489c057009a0c20885ec48c4d155660c080c000c202894a60c000050b1b22198800d5004601644c7681004b15602f1254042600b21a050316050d39066512a98419042040cf239314c6ac56cf9a87298f92db53a0000040800)]
+def x351samples : Array (Bits × Bits) := [(0xf1405419e53b37c1a894fcbc1efffeb7bd53e8398d5ed3ad216467c7af76bc05fe54e2f39df53ada7a917a78adaf781e9fa252df8b386939ff32fc9fdee774efbdbb1cdcb3bad3dff6c77536d060b50cce9c0517214644802008037b2821fc3b,0x10186c8a0003408822003510029010012a31544288021419e8722040019008e130612deb066324058262838128132044100224754422ad044d10d404e868a105a9124f65d02005b0891d349020950cce0c4096120641ace25ac94a2821263a),(0x60684bd3fdbc7429906c83de8bbf4bc1bf8c4695ffecff6a94d3fc9a851d39cce2e87757697f8a75bdfbbd77e57ddcff9ac7e9ffb86aff8df2b6bbcc7bcfab39df67afeac1c3c7e53fd1d24f6003463f032d55686431080404d7869bbe02401f,0x108c2825404000d00110000448842258880800334004501240400180080008102010840001014023020806854032c02306041920228c1008020e00022000100100004100a08d8000420424b4101403200a0b468c8910c400081220144004801),(0x2c9337c7e540d5b5c5daff3dda7a9a5e988319776abb9fe569bcb5206fd6af5971bf01f0b39deeeee6ccafab0ab8779ad4576f4a5bffde6962e6f285b5385e074eff302ccdf5ecf953b26531a455106ab5069859040d30cacc17848431038594,0xbe0000340a08b060a9cecd00133401803248231cc02490840ab8bfc1580a87044c960715444ca881851001020b44800dc4100c45695020101bc202031142600bc239400ed18704692813a430b074108db30648952766b3af5d149c9631438714),(0x6b6db5b70bffcedfdcabf7bed6f6f03ef3235dc6473b0e5dcd360f31daca66248115dd8c5fbb7797633ea20ed27bd126013f95b9e6dd1746571b0bcefb667ba0c6cfd7e0ec337fc69512a39a1d1ad542943baa105a0881fad9a86904417805c8,0x4050ca8840800a06001000540800400000000000020802339102400c82011840a300a0020900072002220a818039100220884200900292270000708004298480010007112e50008400080b820582c6320428820210884400824a4109403000c8),(0xb6d4b423cb9b4fdfda1b38b13eecff53cffb362e2a4522ff9eb0bc773829dbc37b167b69e65c0a2c55a257914f977d1b46324ee0f7201a37fd8df9795fc3476c85fa8e9eb063b6b2795c10c9e87d60c0789200475f56441001001d60c1fff800,0xb5ac24132425f0a113852780a3dc2c226655482a9131f5880614841334c243870c43048010f088c8e84514786c04e8019844b08302a10950d3b20f09a004015a9050a0001023865a47402049685520c131d21869ed708253150036b081ced800),(0,0),(0x3ddeacaf374ac7033721c1d5b791f113233e962ddce93163f3cbb6281f076792d422890e28c499b7a44f07e5eafffb6dfeba8e965580d79f135004a281d382936c70cd477afcaaea8ced7df00ac69a91206a41a284bc3a0522401164be840260,0x6c2025088998553042a883340831811003362b0c8818a01252e33280c4085832fd90260604c80310c2047b048098009183020c01510200313c0e100c050d8e10812821882000239c600d19b00cc68e81100a0106170c6306d242c5febac00260),(0,0),(0x87be8ccc0cac83e923542157b5079cfbf1e48685a772e4896e8a1af8b4ed6d364e0eb6e754b3319009a141969651876dfbabfd6771bfe695f84b04f7559cffa2a2c363a3925f312bbffebe2cf3bcb9c4e0c526d18090bb313aad700000840260,0x30f0013320620489c057009a0c20885ec48c4d155660c080c000c202894a60c000050b1b22198800d5004601644c7681004b15602f1254042600b21a050316050d39066512a98419042040cf239314c6ac56cf9a87298f92db53a0000040800)].toArray
 def x351columns : List ColumnInfo := [(529,0,334,0,7),(320,0,543,0,7),(4,0,859,0,8),(512,0,351,0,11),(12,0,851,0,5),(2,0,861,0,7),(537,0,326,0,4),(519,0,344,0,4),(840,0,23,0,4),(258,64,541,0,4),(70,0,793,0,4),(72,256,535,0,4),(514,1,332,16,5),(530,1,332,0,4),(836,0,27,0,4),(833,0,30,0,4)]
 def x351autos : List (List Nat) := [[],[64,49,134],[96,132],[128,49,100]]
 def x351levels : Nat → Packing
@@ -4679,145 +4506,145 @@ theorem geomx351 : graphValid x351 (boundsBefore knownx191) = true := by
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_10_0 : block x351 10 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_10_1 : block x351 10 1 1=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx351_10 : block x351 10 0 2=true := (@block_merge x351 10 0 1 1 sx351_10_0 sx351_10_1)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_9_0 : block x351 9 0 6=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_9_6 : block x351 9 6 31=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_9_37 : block x351 9 37 12=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx351_9 : block x351 9 0 49=true := (@block_merge x351 9 0 37 12 (@block_merge x351 9 0 6 31 sx351_9_0 sx351_9_6) sx351_9_37)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_8_0 : block x351 8 0 12=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_8_12 : block x351 8 12 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_8_48 : block x351 8 48 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_8_84 : block x351 8 84 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_8_120 : block x351 8 120 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_8_156 : block x351 8 156 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_8_192 : block x351 8 192 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_8_228 : block x351 8 228 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_8_264 : block x351 8 264 10=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_8_274 : block x351 8 274 36=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_8_310 : block x351 8 310 1=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx351_8 : block x351 8 0 311=true := (@block_merge x351 8 0 310 1 (@block_merge x351 8 0 274 36 (@block_merge x351 8 0 264 10 (@block_merge x351 8 0 228 36 (@block_merge x351 8 0 192 36 (@block_merge x351 8 0 156 36 (@block_merge x351 8 0 120 36 (@block_merge x351 8 0 84 36 (@block_merge x351 8 0 48 36 (@block_merge x351 8 0 12 36 sx351_8_0 sx351_8_12) sx351_8_48) sx351_8_84) sx351_8_120) sx351_8_156) sx351_8_192) sx351_8_228) sx351_8_264) sx351_8_274) sx351_8_310)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_7_0 : block x351 7 0 36=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_7_36 : block x351 7 36 12=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_7_48 : block x351 7 48 24=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx351_7 : block x351 7 0 72=true := (@block_merge x351 7 0 48 24 (@block_merge x351 7 0 36 12 sx351_7_0 sx351_7_36) sx351_7_48)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx351_6_0 : block x351 6 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx351_6 : block x351 6 0 1=true := sx351_6_0
@@ -4871,7 +4698,7 @@ def x487l7 : Packing := (47,4,5,0,0,9,0,x487d7)
 def x487h7 (i : Nat) : Nat := 0x5000
 def x487d6 (i : Nat) : Nat := 0x21f9a025e884c600
 def x487l6 : Packing := (1,5,5,0,0,0,0,x487d6)
-def x487samples : Array (Bits × Bits) := #[(0x23d56768446ac8e30e3df7c1fc93be56e0fa9efe6b686a496d1af1939de97c8d1d6f6083a298a794c9956e587330d9793e3ee6363f0feea4275efd1e28ba1fb817ab5918a4f9bb47af6ce491474ac94c80504581a995d11194830c4a32c54353,0x1a684be6628b5a3a54021808981650920064526c608209545004230c1145837404839242d021d454289104d428200612dc98080d888c832df4480702224c550148299e324d180000b304c0a06642c14c0040e1a90b8716318e9edc6633574a72),(0x7e3bbb2bdcf1fe9e9ba34feb4bfb2baffdb60fc7e56bbf57bcddcfff7e39422dfe537cfa71edd95fc2d9e71d87f656db8ef7b8b9d9167e02b445b6cceef619a76f55dc056d032cf8f6f13bef20ad56c2dc70c61a2d302482001b85484399f41f,0x44019000194401042000845004400a0c03820002011140000601c000840048018800600103400009810c20081011d8440366414014002040000010c18021005c00400000100290054400300010ad1480069b0612643821821101200040802089),(0x43d4d8e33ab3340aa1f35a744eaf7cfdaf1ecdaadba4db35ebee1de9ea3025f67e8cd6944aab24ed5df1b9c3dec93f60582e58dd869fafda51ffec7fd2fd7b5f65dbb8cb7af75ab6ecb2f460a34687329d8c185b9a001008041ceb947c41871c,0x40200a001200800f9e19a009208480000163a40200021490021c6813983352114c8d02040e828028409630c42c00212008843329a61c82100500101782c8a014a900c5834c026a004f4800c740ab22996439608b400c1c0810dbb828518f14),(0,0),(0,0),(0x8b3eba746f8d6dfd8cf98751ba3ed7412ad7fdef13bae0ebfc5f68b8f39abf6f0733b76a9e753aae3fbfad7f5fa0af7c38191612e7ed3b9dcada879aafe1ac10fde26df3f59dafae157fc44efd359a858b103f64804de37493e00033804e0fc0,0x8404180c0420c02a1041c006088040289a2801080002a881f1102002023880020404000894218b024a0808550200002040805202620c82030708d5443080020400004480a062a200820c1081341a82813a18020040c8c41140019900880580),(0xd63f17fa9c68d2bdf535b38bcd758b111b39c01bd69be7f0a50ac254b1e4551cc07fdbcdedfe5eeeb387dbd53fae44c6ebdc3b6780eb5af0c1a79b91bffc324ba61dab7f27c45c8361e32fbf9dd223ace023d884d4a24ccb68001a00017df020,0x280c0c90203a206803b5498a8b3095021c48f0a156083e4a699402800127804c501e109e4800298600410326208625108400801202c10a82104a48122a18390037004ccf020c492210240b8121520a0ce020d92593464e4d42089bec004dd000),(0x99c24b80d76afbf7cef7ea7dd094ab9356b93e65a9cdffa72baed2befb5d76ef1497e07d0f969638ec5993afae29b7524ad5c1cc0308ecefeae8482712fcee6dbd4c45f9cafdf8107e690a30729a541d608c4e251699320405046a97fe220800,0x79028a21f340c9344060a413c01421161420845ac1e69c434804438164018429e013521141600870510060000a104b165a01138410190060c0083408a001345d4914eb02400215119c00128f008a445d6281c61d34bf3320860c2446d7220020),(0x9ce514163e2d31b2631774cd44055dff25d644933d575ddeb84f82db58c7eb7f669b2307f123f546793b2dd7fb279d374f30adf262f5ad3fa9a338eacbbd33f87a1e7ee2f359b9ff285f161dbee9e539378730c048c3386b6ae31020002000a0,0x4702504250011201c400920140426200c2010304a0e741100402085da8c84710a101c12111688270c5a494518030ca040bb1648dc508903c4810a00891424275c816a0101112040c8301c04a5a89e53116c520d868a93132acb7640001320820)]
+def x487samples : Array (Bits × Bits) := [(0x23d56768446ac8e30e3df7c1fc93be56e0fa9efe6b686a496d1af1939de97c8d1d6f6083a298a794c9956e587330d9793e3ee6363f0feea4275efd1e28ba1fb817ab5918a4f9bb47af6ce491474ac94c80504581a995d11194830c4a32c54353,0x1a684be6628b5a3a54021808981650920064526c608209545004230c1145837404839242d021d454289104d428200612dc98080d888c832df4480702224c550148299e324d180000b304c0a06642c14c0040e1a90b8716318e9edc6633574a72),(0x7e3bbb2bdcf1fe9e9ba34feb4bfb2baffdb60fc7e56bbf57bcddcfff7e39422dfe537cfa71edd95fc2d9e71d87f656db8ef7b8b9d9167e02b445b6cceef619a76f55dc056d032cf8f6f13bef20ad56c2dc70c61a2d302482001b85484399f41f,0x44019000194401042000845004400a0c03820002011140000601c000840048018800600103400009810c20081011d8440366414014002040000010c18021005c00400000100290054400300010ad1480069b0612643821821101200040802089),(0x43d4d8e33ab3340aa1f35a744eaf7cfdaf1ecdaadba4db35ebee1de9ea3025f67e8cd6944aab24ed5df1b9c3dec93f60582e58dd869fafda51ffec7fd2fd7b5f65dbb8cb7af75ab6ecb2f460a34687329d8c185b9a001008041ceb947c41871c,0x40200a001200800f9e19a009208480000163a40200021490021c6813983352114c8d02040e828028409630c42c00212008843329a61c82100500101782c8a014a900c5834c026a004f4800c740ab22996439608b400c1c0810dbb828518f14),(0,0),(0,0),(0x8b3eba746f8d6dfd8cf98751ba3ed7412ad7fdef13bae0ebfc5f68b8f39abf6f0733b76a9e753aae3fbfad7f5fa0af7c38191612e7ed3b9dcada879aafe1ac10fde26df3f59dafae157fc44efd359a858b103f64804de37493e00033804e0fc0,0x8404180c0420c02a1041c006088040289a2801080002a881f1102002023880020404000894218b024a0808550200002040805202620c82030708d5443080020400004480a062a200820c1081341a82813a18020040c8c41140019900880580),(0xd63f17fa9c68d2bdf535b38bcd758b111b39c01bd69be7f0a50ac254b1e4551cc07fdbcdedfe5eeeb387dbd53fae44c6ebdc3b6780eb5af0c1a79b91bffc324ba61dab7f27c45c8361e32fbf9dd223ace023d884d4a24ccb68001a00017df020,0x280c0c90203a206803b5498a8b3095021c48f0a156083e4a699402800127804c501e109e4800298600410326208625108400801202c10a82104a48122a18390037004ccf020c492210240b8121520a0ce020d92593464e4d42089bec004dd000),(0x99c24b80d76afbf7cef7ea7dd094ab9356b93e65a9cdffa72baed2befb5d76ef1497e07d0f969638ec5993afae29b7524ad5c1cc0308ecefeae8482712fcee6dbd4c45f9cafdf8107e690a30729a541d608c4e251699320405046a97fe220800,0x79028a21f340c9344060a413c01421161420845ac1e69c434804438164018429e013521141600870510060000a104b165a01138410190060c0083408a001345d4914eb02400215119c00128f008a445d6281c61d34bf3320860c2446d7220020),(0x9ce514163e2d31b2631774cd44055dff25d644933d575ddeb84f82db58c7eb7f669b2307f123f546793b2dd7fb279d374f30adf262f5ad3fa9a338eacbbd33f87a1e7ee2f359b9ff285f161dbee9e539378730c048c3386b6ae31020002000a0,0x4702504250011201c400920140426200c2010304a0e741100402085da8c84710a101c12111688270c5a494518030ca040bb1648dc508903c4810a00891424275c816a0101112040c8301c04a5a89e53116c520d868a93132acb7640001320820)].toArray
 def x487columns : List ColumnInfo := [(513,0,486,0,8),(132,0,867,0,7),(320,0,679,0,7),(512,0,487,0,11),(32,0,967,0,7),(519,0,480,0,4),(673,0,326,0,4),(801,0,198,0,4),(322,0,677,0,4),(96,256,647,0,4),(324,0,675,0,4),(258,64,677,0,4),(514,4,353,128,5),(130,4,865,0,4),(833,0,166,0,4),(134,0,865,0,4),(900,0,99,0,4)]
 def x487autos : List (List Nat) := [[],[98,135],[81,114,134],[81,130,118]]
 def x487levels : Nat → Packing
@@ -4898,96 +4725,96 @@ theorem geomx487 : graphValid x487 (boundsBefore knownx471) = true := by
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx487_10_0 : block x487 10 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx487_10_1 : block x487 10 1 1=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx487_10 : block x487 10 0 2=true := (@block_merge x487 10 0 1 1 sx487_10_0 sx487_10_1)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx487_9_0 : block x487 9 0 2=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx487_9_2 : block x487 9 2 13=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx487_9_15 : block x487 9 15 7=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx487_9 : block x487 9 0 22=true := (@block_merge x487 9 0 15 7 (@block_merge x487 9 0 2 13 sx487_9_0 sx487_9_2) sx487_9_15)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx487_8_0 : block x487 8 0 6=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx487_8_6 : block x487 8 6 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx487_8_42 : block x487 8 42 36=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx487_8_78 : block x487 8 78 20=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx487_8_98 : block x487 8 98 20=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx487_8 : block x487 8 0 118=true := (@block_merge x487 8 0 98 20 (@block_merge x487 8 0 78 20 (@block_merge x487 8 0 42 36 (@block_merge x487 8 0 6 36 sx487_8_0 sx487_8_6) sx487_8_42) sx487_8_78) sx487_8_98)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx487_7_0 : block x487 7 0 21=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx487_7_21 : block x487 7 21 26=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx487_7 : block x487 7 0 47=true := (@block_merge x487 7 0 21 26 sx487_7_0 sx487_7_21)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx487_6_0 : block x487 6 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply certBlock (depth:=2)
+  simp only [certPieces,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem allx487_6 : block x487 6 0 1=true := sx487_6_0
@@ -5047,7 +4874,7 @@ def x511l9 : Packing := (29,6,7,0,0,8,0,x511d9)
 def x511h9 (i : Nat) : Nat := 0x180
 def x511d8 (i : Nat) : Nat := 0x3d325526d181544a960a00
 def x511l8 : Packing := (1,7,7,0,0,0,0,x511d8)
-def x511samples : Array (Bits × Bits) := #[(0xb66558a96d4a7d46853ec9eea97b299666573fc3ef7c4a9a1a3367fe1e8c79a18df6f8e8ae5a8d188e4d8520c0aa200e1c061b3444a8003101018dc02000241d8101d401000818c10823061814000202382707db329501a3349400c73e21f673,0x302480001a00102410402a48d40100040471800ccc011082060c0007001520804ec91200a61a891884442020d0aa200a1006091424b800211101a111280b6d00c4a0e049c18918400819065854919200082502cb223281202094200224212652),(0x801374fc24ea52069c7e3fe3a5a0e6502b9aeafe72f67bdf843ccf29b3016d396d3dde9c71cd32661a331783c7584700023d8121dcbad91a200842080131c60e14908100085020043082102a40aadc1b30c6250431183600ccff04a4c8c6487f,0x420282a1e1a148c108012402508260a080281000ae04600851e60008400f088034841051c032621a3316000010c910030900e11106929a400e18c8c754808c105c120028422125318218272020091120c2241411091c02884205a488c44829),(0x3d58a1b6faa6b7b47fef35d56f1a968cfd270142a2ff950aa1cbfcfb07bd5d532caa6de30233e9a6ec48b031321cb7ab91d094531a4101044480e037de258030100001010000c000c11c6023c8f3fee401003867c08020410318c438f1078f9c,0x8f995814180850223487448b208d008a00000240a050489446001010933010d040023a4b0033c9850048e028020e160310309e120a2161458480c50608835c7001a0418c0581c000c00c2050889b86841104110a80e660410218801071038514),(0xf4a407ca29752e570ddd2a88977ed36fe702b7d84b6dc5b94bbf969578ba4bfe5c5ef87599041850a933281c84e029f3a1090c0824033eae81350011a48808006026002bac8c010601ccff81b05022000e01c060000000780be0bb3f01f80fe0,0x3006202a04028011c148a80007002114026d0815020c320010552580480ec02082e0048419041012af030004c0e0c1f0a108600524069a022b351a4194040204e4452043e00e006600301504306478200e0380600011103205e0122f00b00ae0),(0x36e26cdf34de800fac0e1b339a0903e2a4312e0ff390eee8f7df6584bdde9cccf7a8b2ba44f136e55094da4a2f151e456c91121ac801009e842d0dc800002031180a0008bce001d900e3801000000005c001fe0004800079f000f84001fff000,0xc0894dc080a56b4a04801133200e024af180274000108070c900c8302060020e0002c95a40e126e55090daca2f151e054ed1124aca0165dc844a04ae03f090bb191a1f941c60019901c6c803800a0507f0007d1004c44849d000c940014ed000),(0xcdd62db2d326cfe0fd50b6bc94972e7196ff16e95e7890b68c0dfe11c8fd24f63fe37a5558a133c731484004288310a06a3a608e83051014b2d0900820520050894d77d41301001efe0000041f000105cff8009801c7ef860000987ffe000000,0x4111002441a0d01010401022080101148006a021008401818106090404a123100000c0548a530433108000c08001220aa38b40a9303f21caaa614c40644925c001d110612100136a42000058a404d2485900100008466820400997dda000000),(0x7bfa44f778984e6807087c2264d2d68a5344ca7e97953e5bed42f20b183088ae052956170c86890ce18a0be60de752c8ac78151eae13c8412d9b02000100538226900901527efe20000000401f0c20d8000000000ea837f9f3ff000000000000,0x1511105d0c104016202110c1a1893101023041007e50128a25ac097082000061708118050c068904e188098e0de712e8acf0351eae016c052ff1072508211202e6a16d57d3bd94c00030c0009f5474ea0004010002b463f977bd000000000000),(0xc3ba8cb2f27c8ccd6e3777901f7d5c6b4ca824a989ccceb4ddd6e9f18c47122e97abd158f74a441847971b93b935915854c361c0654418824019322e7a1400213a02203508010000001000001f0521fdcff9fe67ff4a88040800468000000000,0x6062230981e5a2d4c86832105440a244250a059042a41362a0c885440c04650aad8c4020b748041846971b93b171895844c341c064dc0ca251592a39f1382183fe42ae71e80200c10110c8027524305b6a6beef57f1998040800668000000000),(0x4e2763370385936fbc3960e543d47ed3d21047d122c7e6e4a285ace379a697dbe84fe17a8378c2b910a4d67600282415120208a262e027e11fc2c00860da19e17a6e0ae25b6efe3efec33fec20840200000000000f2840040800478000000000,0x4a40800020012240089044201042042a340004e000a389214000120c10212d0000020222a25842a80064c67002182c0750070ac040f001e01000e01a619a6da1190282a80c406a095bcf2afa408b8200300000980d4a88040800648000000000)]
+def x511samples : Array (Bits × Bits) := [(0xb66558a96d4a7d46853ec9eea97b299666573fc3ef7c4a9a1a3367fe1e8c79a18df6f8e8ae5a8d188e4d8520c0aa200e1c061b3444a8003101018dc02000241d8101d401000818c10823061814000202382707db329501a3349400c73e21f673,0x302480001a00102410402a48d40100040471800ccc011082060c0007001520804ec91200a61a891884442020d0aa200a1006091424b800211101a111280b6d00c4a0e049c18918400819065854919200082502cb223281202094200224212652),(0x801374fc24ea52069c7e3fe3a5a0e6502b9aeafe72f67bdf843ccf29b3016d396d3dde9c71cd32661a331783c7584700023d8121dcbad91a200842080131c60e14908100085020043082102a40aadc1b30c6250431183600ccff04a4c8c6487f,0x420282a1e1a148c108012402508260a080281000ae04600851e60008400f088034841051c032621a3316000010c910030900e11106929a400e18c8c754808c105c120028422125318218272020091120c2241411091c02884205a488c44829),(0x3d58a1b6faa6b7b47fef35d56f1a968cfd270142a2ff950aa1cbfcfb07bd5d532caa6de30233e9a6ec48b031321cb7ab91d094531a4101044480e037de258030100001010000c000c11c6023c8f3fee401003867c08020410318c438f1078f9c,0x8f995814180850223487448b208d008a00000240a050489446001010933010d040023a4b0033c9850048e028020e160310309e120a2161458480c50608835c7001a0418c0581c000c00c2050889b86841104110a80e660410218801071038514),(0xf4a407ca29752e570ddd2a88977ed36fe702b7d84b6dc5b94bbf969578ba4bfe5c5ef87599041850a933281c84e029f3a1090c0824033eae81350011a48808006026002bac8c010601ccff81b05022000e01c060000000780be0bb3f01f80fe0,0x3006202a04028011c148a80007002114026d0815020c320010552580480ec02082e0048419041012af030004c0e0c1f0a108600524069a022b351a4194040204e4452043e00e006600301504306478200e0380600011103205e0122f00b00ae0),(0x36e26cdf34de800fac0e1b339a0903e2a4312e0ff390eee8f7df6584bdde9cccf7a8b2ba44f136e55094da4a2f151e456c91121ac801009e842d0dc800002031180a0008bce001d900e3801000000005c001fe0004800079f000f84001fff000,0xc0894dc080a56b4a04801133200e024af180274000108070c900c8302060020e0002c95a40e126e55090daca2f151e054ed1124aca0165dc844a04ae03f090bb191a1f941c60019901c6c803800a0507f0007d1004c44849d000c940014ed000),(0xcdd62db2d326cfe0fd50b6bc94972e7196ff16e95e7890b68c0dfe11c8fd24f63fe37a5558a133c731484004288310a06a3a608e83051014b2d0900820520050894d77d41301001efe0000041f000105cff8009801c7ef860000987ffe000000,0x4111002441a0d01010401022080101148006a021008401818106090404a123100000c0548a530433108000c08001220aa38b40a9303f21caaa614c40644925c001d110612100136a42000058a404d2485900100008466820400997dda000000),(0x7bfa44f778984e6807087c2264d2d68a5344ca7e97953e5bed42f20b183088ae052956170c86890ce18a0be60de752c8ac78151eae13c8412d9b02000100538226900901527efe20000000401f0c20d8000000000ea837f9f3ff000000000000,0x1511105d0c104016202110c1a1893101023041007e50128a25ac097082000061708118050c068904e188098e0de712e8acf0351eae016c052ff1072508211202e6a16d57d3bd94c00030c0009f5474ea0004010002b463f977bd000000000000),(0xc3ba8cb2f27c8ccd6e3777901f7d5c6b4ca824a989ccceb4ddd6e9f18c47122e97abd158f74a441847971b93b935915854c361c0654418824019322e7a1400213a02203508010000001000001f0521fdcff9fe67ff4a88040800468000000000,0x6062230981e5a2d4c86832105440a244250a059042a41362a0c885440c04650aad8c4020b748041846971b93b171895844c341c064dc0ca251592a39f1382183fe42ae71e80200c10110c8027524305b6a6beef57f1998040800668000000000),(0x4e2763370385936fbc3960e543d47ed3d21047d122c7e6e4a285ace379a697dbe84fe17a8378c2b910a4d67600282415120208a262e027e11fc2c00860da19e17a6e0ae25b6efe3efec33fec20840200000000000f2840040800478000000000,0x4a40800020012240089044201042042a340004e000a389214000120c10212d0000020222a25842a80064c67002182c0750070ac040f001e01000e01a619a6da1190282a80c406a095bcf2afa408b8200300000980d4a88040800648000000000)].toArray
 def x511columns : List ColumnInfo := [(529,0,494,0,11),(192,0,831,0,11),(320,0,703,0,11),(160,0,863,0,11),(132,0,891,0,11),(66,0,957,0,11),(8,0,1015,0,12),(24,0,999,0,11),(512,0,511,0,15),(80,0,943,0,11),(144,0,879,0,11),(322,0,701,0,8),(156,0,867,0,7),(513,16,486,8,9),(198,0,825,0,7),(0,64,701,258,10),(856,0,167,0,7),(595,0,428,0,7),(344,0,679,0,7),(547,0,476,0,7),(0,128,859,36,10),(537,0,486,0,8),(709,2,312,0,4),(10,0,1013,0,8),(268,0,755,0,7),(14,0,1009,0,7),(258,64,701,0,8),(32,128,859,4,9),(519,0,504,0,7),(844,0,179,0,5),(801,0,222,0,7),(164,0,859,0,8),(4,128,859,32,9),(838,0,185,0,5),(961,32,30,0,4),(296,0,727,0,7),(120,256,647,0,4),(480,0,543,0,7),(689,0,334,0,7),(868,128,27,0,4),(521,16,486,0,8),(597,2,424,0,4),(36,128,859,0,8),(162,0,861,0,7),(172,0,851,0,5),(98,0,925,0,7),(527,16,480,0,4),(679,0,344,0,4),(146,0,877,0,7),(852,8,163,0,4),(520,4,369,130,7),(202,4,817,0,4),(846,0,177,0,4),(546,1,460,16,6),(324,0,699,0,7),(626,1,396,0,4),(902,64,57,0,4),(690,1,332,0,4),(232,256,535,0,4),(282,64,677,0,4),(803,64,156,0,4),(785,32,78,128,5),(270,64,689,0,4),(697,0,326,0,4),(154,4,865,0,4),(896,8,99,20,6),(56,0,967,0,7),(74,0,949,0,7),(148,8,611,256,5),(705,0,318,0,7),(785,0,238,0,7),(533,0,490,0,7),(102,128,793,0,4),(787,64,172,0,4)]
 def x511autos : List (List Nat) := [[],[81,130,118],[16,82,131,100],[16,32,48,128,100,80,116],[32,83,116],[32,49,128,81,116,100],[48,33,133,118],[48,129,82],[80,16,33,50,116,131,100],[80,129,50,116],[128,49,100],[128,81,32,49,100,116]]
 def x511levels : Nat → Packing
@@ -5075,917 +4902,312 @@ theorem geomx511 : graphValid x511 (boundsBefore knownx503) = true := by
   all_goals simp only [listPieces]
   all_goals repeat' apply And.intro
   all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_14_0 : block x511 14 0 1=true := by
-  apply cellsBlock (ar:=9) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_14_1 : block x511 14 1 1=true := by
-  apply cellsBlock (ar:=10) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem allx511_14 : block x511 14 0 2=true := (@block_merge x511 14 0 1 1 sx511_14_0 sx511_14_1)
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_13_0 : block x511 13 0 5=true := by
-  apply cellsBlock (ar:=9) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_13_5 : block x511 13 5 19=true := by
-  apply cellsBlock (ar:=10) (rows:=1) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_13_24 : block x511 13 24 9=true := by
-  apply cellsBlock (ar:=11) (rows:=1) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem allx511_13 : block x511 13 0 33=true := (@block_merge x511 13 0 24 9 (@block_merge x511 13 0 5 19 sx511_13_0 sx511_13_5) sx511_13_24)
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_12_0 : block x511 12 0 8=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_12_8 : block x511 12 8 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_12_44 : block x511 12 44 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_12_80 : block x511 12 80 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_12_116 : block x511 12 116 11=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_12_127 : block x511 12 127 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_12_163 : block x511 12 163 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_12_199 : block x511 12 199 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_12_235 : block x511 12 235 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_12_271 : block x511 12 271 1=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_12_272 : block x511 12 272 33=true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem allx511_12 : block x511 12 0 305=true := (@block_merge x511 12 0 272 33 (@block_merge x511 12 0 271 1 (@block_merge x511 12 0 235 36 (@block_merge x511 12 0 199 36 (@block_merge x511 12 0 163 36 (@block_merge x511 12 0 127 36 (@block_merge x511 12 0 116 11 (@block_merge x511 12 0 80 36 (@block_merge x511 12 0 44 36 (@block_merge x511 12 0 8 36 sx511_12_0 sx511_12_8) sx511_12_44) sx511_12_80) sx511_12_116) sx511_12_127) sx511_12_163) sx511_12_199) sx511_12_235) sx511_12_271) sx511_12_272)
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_0 : block x511 11 0 12=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_12 : block x511 11 12 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_48 : block x511 11 48 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_84 : block x511 11 84 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_120 : block x511 11 120 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_156 : block x511 11 156 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_192 : block x511 11 192 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_228 : block x511 11 228 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_264 : block x511 11 264 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_300 : block x511 11 300 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_336 : block x511 11 336 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_372 : block x511 11 372 16=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_388 : block x511 11 388 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_424 : block x511 11 424 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_460 : block x511 11 460 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_496 : block x511 11 496 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_532 : block x511 11 532 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_568 : block x511 11 568 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_604 : block x511 11 604 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_640 : block x511 11 640 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_676 : block x511 11 676 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_712 : block x511 11 712 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_748 : block x511 11 748 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_784 : block x511 11 784 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_820 : block x511 11 820 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_856 : block x511 11 856 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_892 : block x511 11 892 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_928 : block x511 11 928 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_964 : block x511 11 964 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_1000 : block x511 11 1000 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_1036 : block x511 11 1036 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_1072 : block x511 11 1072 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_1108 : block x511 11 1108 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_1144 : block x511 11 1144 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_1180 : block x511 11 1180 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_1216 : block x511 11 1216 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_1252 : block x511 11 1252 9=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_1261 : block x511 11 1261 36=true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_11_1297 : block x511 11 1297 31=true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem allx511_11 : block x511 11 0 1328=true := (@block_merge x511 11 0 1297 31 (@block_merge x511 11 0 1261 36 (@block_merge x511 11 0 1252 9 (@block_merge x511 11 0 1216 36 (@block_merge x511 11 0 1180 36 (@block_merge x511 11 0 1144 36 (@block_merge x511 11 0 1108 36 (@block_merge x511 11 0 1072 36 (@block_merge x511 11 0 1036 36 (@block_merge x511 11 0 1000 36 (@block_merge x511 11 0 964 36 (@block_merge x511 11 0 928 36 (@block_merge x511 11 0 892 36 (@block_merge x511 11 0 856 36 (@block_merge x511 11 0 820 36 (@block_merge x511 11 0 784 36 (@block_merge x511 11 0 748 36 (@block_merge x511 11 0 712 36 (@block_merge x511 11 0 676 36 (@block_merge x511 11 0 640 36 (@block_merge x511 11 0 604 36 (@block_merge x511 11 0 568 36 (@block_merge x511 11 0 532 36 (@block_merge x511 11 0 496 36 (@block_merge x511 11 0 460 36 (@block_merge x511 11 0 424 36 (@block_merge x511 11 0 388 36 (@block_merge x511 11 0 372 16 (@block_merge x511 11 0 336 36 (@block_merge x511 11 0 300 36 (@block_merge x511 11 0 264 36 (@block_merge x511 11 0 228 36 (@block_merge x511 11 0 192 36 (@block_merge x511 11 0 156 36 (@block_merge x511 11 0 120 36 (@block_merge x511 11 0 84 36 (@block_merge x511 11 0 48 36 (@block_merge x511 11 0 12 36 sx511_11_0 sx511_11_12) sx511_11_48) sx511_11_84) sx511_11_120) sx511_11_156) sx511_11_192) sx511_11_228) sx511_11_264) sx511_11_300) sx511_11_336) sx511_11_372) sx511_11_388) sx511_11_424) sx511_11_460) sx511_11_496) sx511_11_532) sx511_11_568) sx511_11_604) sx511_11_640) sx511_11_676) sx511_11_712) sx511_11_748) sx511_11_784) sx511_11_820) sx511_11_856) sx511_11_892) sx511_11_928) sx511_11_964) sx511_11_1000) sx511_11_1036) sx511_11_1072) sx511_11_1108) sx511_11_1144) sx511_11_1180) sx511_11_1216) sx511_11_1252) sx511_11_1261) sx511_11_1297)
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_0 : block x511 10 0 14=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_14 : block x511 10 14 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_50 : block x511 10 50 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_86 : block x511 10 86 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
+abbrev Positive := Excluded true
+def rowWitness (g : Forest) (k i code : Nat) :=
+  let pos := Fin.ofNat 512 ((code-1)%512)
+  let negRow := Fin.ofNat 512 ((code-1)/512)
+  bit pos (targetOf g) && !bit negRow (targetOf g) &&
+    (stateSet g k i).all (fun w => !bit pos w || bit negRow w)
+
+theorem rowWitness_ok {g k i code} (ok : rowWitness g k i code = true) :
+    Positive (targetOf g) k (stateSet g k i).toFinset := by
+  simp only [rowWitness,Bool.and_eq_true,Bool.not_eq_true',List.all_eq_true] at ok
+  intro gates invs _ h none
+  obtain ⟨a,mem,yes,no⟩ := mono_row_difference h (none rfl) ok.1.1 ok.1.2
+  have z := ok.2 a (List.mem_toFinset.mp mem)
+  simp only [yes,no] at z
+  contradiction
+
+def positiveCert (g : Forest) (hint : Nat → Nat → Nat) (k i : Nat) :=
+  let code := hint k i
+  if code=0 then cert g k i else rowWitness g k i code
+
+theorem positiveForest (g : Forest) (hint : Nat → Nat → Nat) (prior : Nat → Nat)
+    (lower : ∀ q, Lower (varsX q) (graphGoal q) (prior q))
+    (geometry : graphValid g prior = true)
+    (rows : ∀ k ≤ g.cap, ∀ i < (g.levels k).1, positiveCert g hint k i = true) :
+    ∀ k ≤ g.cap, ∀ i < (g.levels k).1, Positive (targetOf g) k (stateSet g k i).toFinset := by
+  simp only [graphValid,Bool.and_eq_true,List.all_eq_true,beq_iff_eq] at geometry
+  intro k
+  induction k using Nat.strong_induction_on with
+  | ind k ih =>
+    intro hk i hi
+    have r := rows k hk i hi
+    simp only [positiveCert] at r
+    split at r
+    · apply checkedNode (binaryOnly:=true) g k i (chart_pairs geometry.1.1.1 geometry.1.1.2)
+        (fun x hx => col_sound _ prior lower (geometry.1.2 x hx)) geometry.2 _ (cert_ok r)
+      exact fun h => ih (k-1) (by omega) (by omega)
+    · exact rowWitness_ok r
+
+def witness8 : Array Nat := [0x0].toArray
+def witness9 : Array Nat := [0x1a004190132404150105404150108a04150105404150105404150105404190105404150106404450108a04c90105404450100000].toArray
+def witness10 : Array Nat := [0x150105404150132407150105404648385404150105404c90105404150132404150105404150100000150105404190105404450106404150108a04c90105404450111404150105404,0x1501054042281054044501054043a0485404450105404150105404150106404228485404150100000150105404150111407150105404000032404150105404450100000648385404,0x150105404150105404150105404150111404150108a04150105404000008a0d150108a22c9013240415010e80d1510c5404150100000c901054041901114041901054048a0345404,0x1501000003a034e812150108a041501000001501e2812c901114044501114043a04854041501054048a0348a04000011404190106404150105404c901054046804854043a0345404,0x15010e8121501054041501114041501114040000114041542454041501064041501114071901054041501ce80d3a0480000150105404000005404150132404150111404000005404,0x150108a0415010540415010000015010000015010000015010e80d15011920ec910d1404450105404000005404c901000004501064041501000000000064044510f2404150108a04,0x4501054041901c640715010e81200000640422810e812150108a044501000001501064043a0485404150100000450100000228106404190105404150100000154240000150111404,0x154245404150105404190105404190132404000006404c90132404150122812150105404c90105404648105404000032404228485404000005404150105404228108a0d000000000,0x540415011140419010540415013240415010640419010540715010540415010e81215010540715424e812000005404c9010540415010e80d150105404228105404648106404,0x190105404190105404c90108a221501054042288a28123a04854043a03514042288854046801000001901114041501064046481000003a04914042288800008a0348a22190105404,0x1501054041901054071501000001510c5404450105404c90108a2215010540415010540415011140464c286404150108a041501054044501c5404000000000150106443150132404,0x150105404150105404344246404190106404000005404000005404450108a04150105404190105404150108a0415012280d150105407150100000150132404450108a0d150105404,0x150108a2200001a01282888540700000e8121501000001501054042281054071501054041501054041501054041501054043a04854040000114041501054041501054043a0485404,0x150105404150105404150132404450108a0d190105404c081114041501c540415010e80d19010540415011a01215010540415010540415011a01215010540415010000015010e812,0x150105404c90105404c901d1404150105404228105404150106404150111404150132404c90119204000005404150105404150106404150105404150111404150100000154245404,0x1501054043a034540415010000015010540468048540415012280d1501114042281054041501114071501054041501054043a0488a221501324044510c5404228345404190105404,0x150105404c90106404228105407450105404190100000150106404154245404150108a2215010e80d190132404c9010640415010540415011a0123a0345404450105404150108a0d,0x190108a22150108a0464812280d150105404c901054040000054048283914041501000001501054041501054041501114041901064043a0345404150105404680480000150105404,0x150108a221501054046804914042281324041542464041510d1404150108a041501228121501064121501054041501c540415011a0121901114041901c000015011a012c9010e812,0x1501000003a01c54041501054040000000002281054046481054041501064041501c5404150108a04450132404648105404150108a04150132404150100000190132404150105404,0x1501c5404150108a041901054044501064041501054042281324046481114043a0485404228340000000008a22150105404c901064041501114048a0345404150105404150108a04,0x15010000000000540422811140415010540422810e80d3a0488a221510c64042281064044501054042281114041501054042288864192281000001501da012150100000150106404,0x450111404450105404000005404150108a04150105404150100000c901324041501c540715010540719010e8121501c54043a03454041901d1404150105404c90105404000006404,0x154245404150105404150105404450100000150132404190111404228111404190105404150108a0d1501192041501054041501054041501054041901054041901c6404190105404,0x1501054041501d14041501054040000064043a0485404000005404150105407150132407000005404000008a0415010550915011a012228345404150108a04150105404228105404,0x1501192041501054041501c54041501000001501d14040000054043a034540400002280d150105404150105404150105404228106404150111404190111404c90106412150105404,0x8a04000005404c08105404150132404c90105404150105404000005404150106404,0x0,0x0,0x0].toArray
+def witness11 : Array Nat := [0x150105404150108a2222888540400000540445011140415010540415010540415010540400000e812150105404150106404190100000190106404228105404450105404150105404,0x3a04800000000054041501c64041501054041901055091501054041901000001501054040000000001501054041501054041901192043a0485404150105404150105404228105404,0x5509000005404190105404150105404228105404228345404150108a0400000e80d150108a04c90105404190105404150105404150105404150105404228885404000000000,0x150105404150100000450105404150108a04190100000150105404150111404150132404450105404150111407150100000190105404190100000150105404150105404228345404,0x15011a012150105404190105404150100000000000000450111404c08105404150105404680491404c90100000150105404000032404c90105404000005404150105404c90105404,0xe80d1901054041501114041501054044501054041501054041901054071501054040000054043a0488a041501064040000228123a036280d450105404228880000150106404,0x680480000000005443190105404c901054041904854041901054041501114042281054042281054041501054040000054041501000003a03454041901c5404228106404150105404,0x1501054041501054044501c6404150106404c901064041501192041901324041501c540415010e8128a03454041501054041901c540415011140415013240445010000015010e80d,0x150105404c90108a0d1501054041501324041501054041501054041501054041901054041501000001501c5404150105404228105404c90105404450100000150105404190105404,0x2281054041901c6404000005404000005407150105404c901054041501000001501064041501054041501054040000055096481054041501054041501054041501114041510c0000,0x150108a041501064121501000001901054044501000004501054041510c540415010000000003240415010540415012280d150105404450122812228885404150111404190100000,0x6483854041501064044501054071501c5404150100000150106404450108a0415010540415010540415010540422810540415010000015010540415010e80d228105404190105404,0x8a04854041501054041501054040000054041901054041501054041501054041501054041501054041501054041901c0000150105404150111407150105404150105404190111404,0x15010540419010540415010540415011140415013240400000d1091901054041501054040000054040000000001501c54040000054043a04854043a04854041501000003a0486404,0x15010e80d150105404150100000150105404c9013240415010540415010540400000540400000000000000540415010540415010e80d15013240415010540415010e80d150105404,0x150105404150108a04150105404c90108a0415013240415013240445010540415013240400002280d6804854041501000001501054041501054042281054041501c5404228105404,0x6481000001501054043a04854041501054043a0485404150100000150105404150100000c0888540415010540400000e8120000054041501054043a048644315012281215010e812,0x150108a041501324043a0485404228100000150105404150105404c901054046804854043a4860a04c90106404150105404150105404150105404150105404150105407000005404,0x3a04854041901054041501054041501000003a035140415010540415010540400000e81215010540415011140415010540415013240415010e8121501054433a0348a0400000e812,0x8a03454040000054041501054041901054041501000003a048540415010540415010540415011140415010e81215010540400003240715010e80d15010540445010e812150132404,0xc90105404000000000150105404c901000001501054041542454044501c540415012280d00000540415010540445010e8120000054048a0485407150105404150105404150105404,0x3a048540415010540400000e81200003240415010e812c901054048a0485404450105404150105404190105404150105404150105404150105404150105404150105404000006404,0x15012281215010540415010000015011140415010640422812280d15010540415010d1091501054041501c5404150105404150105404150105404648105404150105404190108a0d,0x15010e80d1501054041501054041501054043a03454042281054041501054041501000008a04854041501000001901054041501054041901054040000054043a048540422810e812,0x190105404150120a2215010e812c90100000150108a2215010540400000540415010640715010540415010e812c90105404150106404000011404150111407c90105404228100000,0x1510c54041501054040000054041501c54043a0348a048a048540415010540415013240415010e8071501000001501054043a0485404150105407150105404150105404228105404,0x1501000001501054041901f240415010000015010540400000e80d15010e81215010e81222810540415010e8123a034641915010540415010640415010540415011a012150105404,0x54043a03454041501f24078281055093a048540415010000015010e80d15424540415010540415010540415010e8123a04914041501054042281054043a0480000680485404,0x15010e812000005404c901054041501054041501000003a0499204150122812150105404150119204150105404000005404648105404150105404190105404150105404228885404,0x1501054041501054041501324041501054043a048540415010540415011140400000e8121501054040000114043a0485404000005404150105404228100000150105404150105404,0x150108a224501054040000054041501054041501000003a03454041501054043a048000015010540415012281215010540415010e80dc901054041501054043a0345404150105404,0x15010540415010540422810e812450132443150108a0419010540415010000015010e80d1501000000000000001501054040000000000000054042281054041501ce80d150108a04,0x15010540419010540415010540400000000015010540400000540415010e812c90105404150105404150105404c9011140415010640719010540415010e812150105404150108a04,0x450105404000005407228885404150105404150100000150132404150132404c90108a04150105407150105404c90105404150120a22150105404150105404190105404150122812,0x1501054043a04914041501054041501054041501c540415010e80d1501114043a03400001901054041501000001501c54043a048000015010540415013240415010000015010e812,0x5404c08108a046481054041501324046481054040000054074510c54078a04854042281054041501054041501054040000054041901114041501114043a0480000150105404,0x150108a04190105404150105404150105404150105404150105404150105404c901054041501054043a03454041901054041501054071501000003a048540400000e812648885404,0x15010e8121501054041501000001501054071501064042281054041501000001901114041501302223a0485404150105404150105404150105404150105404c90105404150105404,0x15010e8121901000001501054043a04854040000000001501054041501054041501054041501054041501054043a0485404000005404c90105404150105404150105404c90105404,0x6404000005404150105404150105404150132404150105443150105404,0x0,0x0].toArray
+def witness12 : Array Nat := [0x1501054041501c540415010540422812280d15010e8121501d14042281054043a0491404150105404150106404150100000150105404150106404450108a04150105404190105404,0x19010540415013240415012281215011140415010e812150105404150105404150105404228120a22150108a04150105404150105404150105404150105404150105404150100000,0x1901054041501064076481054041501054040000054043a04854044501c540415010540415010540415013240415010540415010640415010540415010000000000e80d150100000,0x15010640400000540415010540415010540415010e80d1501ce812150105404680485404150106404150105404190100000150105404150105404150100000150105404150105404,0x15010e8121501054041501000001501054042281000000000000003a048e80d228105404c9010000022810e812000000000150100000150105404150105404000005404150105404,0x3a04854041501000001501054041501054041501000001501054043a0485404150108a221501054040000054043a04854072281054043a048e812000005404150100000228105404,0x15010540700000e8120000000001501c54041510c544315010540415010540415010e812150105404150105404150108a221501c00001501054041501000001501054041501c0000,0x3a048e80d1501c000000000e80d1501c540415010e80d0000054043a048e80d15010000015010e81215010000015010e80d154248a04c901054043a0485404150100000150105404,0x5404150100000000005404c901054041501054041501054041510c5404150105404,0x0].toArray
+def witness13 : Array Nat := [0x150108a041501054041510c540415010540415010e80d1501054043a04854041501ce812150105404150106404150105404150105404,0x0].toArray
+def witness14 : Array Nat := [0x5404].toArray
+def hints (k i : Nat) : Nat :=
+  let words : Array Nat := match k with
+    | 8 => witness8
+    | 9 => witness9
+    | 10 => witness10
+    | 11 => witness11
+    | 12 => witness12
+    | 13 => witness13
+    | 14 => witness14
+    | _ => [].toArray
+  ((words[i/32]?.getD 0) >>> (18*(i % 32))) &&& 262143
+theorem byPieces {f : Nat → Bool} {n depth} (p : listPieces f (List.range n) depth) :
+    ∀ i < n, f i = true := fun i hi => List.all_eq_true.mp (listPieces_all p) i (List.mem_range.mpr hi)
 set_option maxRecDepth 16384 in
-theorem sx511_10_122 : block x511 10 122 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_158 : block x511 10 158 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_194 : block x511 10 194 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_230 : block x511 10 230 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_266 : block x511 10 266 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_302 : block x511 10 302 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_338 : block x511 10 338 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_374 : block x511 10 374 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_410 : block x511 10 410 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_446 : block x511 10 446 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_482 : block x511 10 482 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_518 : block x511 10 518 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_554 : block x511 10 554 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_590 : block x511 10 590 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
 set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_626 : block x511 10 626 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+theorem rank8 : ∀ i < 1, positiveCert x511 hints 8 i = true := by
+  apply byPieces (depth:=0)
+  simp only [listPieces]
   repeat' apply And.intro
   all_goals decide +kernel
-set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_662 : block x511 10 662 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
 set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_698 : block x511 10 698 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+theorem rank9 : ∀ i < 29, positiveCert x511 hints 9 i = true := by
+  apply byPieces (depth:=2)
+  simp only [listPieces]
   repeat' apply And.intro
   all_goals decide +kernel
-set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_734 : block x511 10 734 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
 set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_770 : block x511 10 770 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+theorem rank10 : ∀ i < 932, positiveCert x511 hints 10 i = true := by
+  apply byPieces (depth:=7)
+  simp only [listPieces]
   repeat' apply And.intro
   all_goals decide +kernel
-set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_806 : block x511 10 806 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
 set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_842 : block x511 10 842 5=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+theorem rank11 : ∀ i < 1328, positiveCert x511 hints 11 i = true := by
+  apply byPieces (depth:=7)
+  simp only [listPieces]
   repeat' apply And.intro
   all_goals decide +kernel
-set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_847 : block x511 10 847 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
 set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_10_883 : block x511 10 883 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+theorem rank12 : ∀ i < 305, positiveCert x511 hints 12 i = true := by
+  apply byPieces (depth:=5)
+  simp only [listPieces]
   repeat' apply And.intro
   all_goals decide +kernel
-set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_10_919 : block x511 10 919 13=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem allx511_10 : block x511 10 0 932=true := (@block_merge x511 10 0 919 13 (@block_merge x511 10 0 883 36 (@block_merge x511 10 0 847 36 (@block_merge x511 10 0 842 5 (@block_merge x511 10 0 806 36 (@block_merge x511 10 0 770 36 (@block_merge x511 10 0 734 36 (@block_merge x511 10 0 698 36 (@block_merge x511 10 0 662 36 (@block_merge x511 10 0 626 36 (@block_merge x511 10 0 590 36 (@block_merge x511 10 0 554 36 (@block_merge x511 10 0 518 36 (@block_merge x511 10 0 482 36 (@block_merge x511 10 0 446 36 (@block_merge x511 10 0 410 36 (@block_merge x511 10 0 374 36 (@block_merge x511 10 0 338 36 (@block_merge x511 10 0 302 36 (@block_merge x511 10 0 266 36 (@block_merge x511 10 0 230 36 (@block_merge x511 10 0 194 36 (@block_merge x511 10 0 158 36 (@block_merge x511 10 0 122 36 (@block_merge x511 10 0 86 36 (@block_merge x511 10 0 50 36 (@block_merge x511 10 0 14 36 sx511_10_0 sx511_10_14) sx511_10_50) sx511_10_86) sx511_10_122) sx511_10_158) sx511_10_194) sx511_10_230) sx511_10_266) sx511_10_302) sx511_10_338) sx511_10_374) sx511_10_410) sx511_10_446) sx511_10_482) sx511_10_518) sx511_10_554) sx511_10_590) sx511_10_626) sx511_10_662) sx511_10_698) sx511_10_734) sx511_10_770) sx511_10_806) sx511_10_842) sx511_10_847) sx511_10_883) sx511_10_919)
 set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_9_0 : block x511 9 0 23=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+theorem rank13 : ∀ i < 33, positiveCert x511 hints 13 i = true := by
+  apply byPieces (depth:=2)
+  simp only [listPieces]
   repeat' apply And.intro
   all_goals decide +kernel
-set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem sx511_9_23 : block x511 9 23 6=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem allx511_9 : block x511 9 0 29=true := (@block_merge x511 9 0 23 6 sx511_9_0 sx511_9_23)
 set_option maxHeartbeats 0 in
-set_option maxRecDepth 16384 in
-theorem sx511_8_0 : block x511 8 0 1=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+theorem rank14 : ∀ i < 2, positiveCert x511 hints 14 i = true := by
+  apply byPieces (depth:=0)
+  simp only [listPieces]
   repeat' apply And.intro
   all_goals decide +kernel
-theorem allx511_8 : block x511 8 0 1=true := sx511_8_0
-theorem tablesx511 : checkedTables x511 14 := by
+theorem topRows : ∀ k ≤ x511.cap, ∀ i < (x511.levels k).1, positiveCert x511 hints k i = true := by
   intro k hk
+  change k ≤ 14 at hk
   interval_cases k
-  · exact (rfl : block x511 0 0 0 = true)
-  · exact (rfl : block x511 1 0 0 = true)
-  · exact (rfl : block x511 2 0 0 = true)
-  · exact (rfl : block x511 3 0 0 = true)
-  · exact (rfl : block x511 4 0 0 = true)
-  · exact (rfl : block x511 5 0 0 = true)
-  · exact (rfl : block x511 6 0 0 = true)
-  · exact (rfl : block x511 7 0 0 = true)
-  · exact allx511_8
-  · exact allx511_9
-  · exact allx511_10
-  · exact allx511_11
-  · exact allx511_12
-  · exact allx511_13
-  · exact allx511_14
+  · exact fun i hi => False.elim (Nat.not_lt_zero i hi)
+  · exact fun i hi => False.elim (Nat.not_lt_zero i hi)
+  · exact fun i hi => False.elim (Nat.not_lt_zero i hi)
+  · exact fun i hi => False.elim (Nat.not_lt_zero i hi)
+  · exact fun i hi => False.elim (Nat.not_lt_zero i hi)
+  · exact fun i hi => False.elim (Nat.not_lt_zero i hi)
+  · exact fun i hi => False.elim (Nat.not_lt_zero i hi)
+  · exact fun i hi => False.elim (Nat.not_lt_zero i hi)
+  · exact rank8
+  · exact rank9
+  · exact rank10
+  · exact rank11
+  · exact rank12
+  · exact rank13
+  · exact rank14
+theorem signedRoot (i : Nat) (ws : List Sig) (idx : indexedRoot x511 14 i ws = true) :
+    Positive (graphGoal 1023) 14 ws.toFinset := by
+  simp only [indexedRoot,Bool.and_eq_true,decide_eq_true_eq] at idx
+  rw [←sameWords_sound idx.2]
+  exact positiveForest x511 hints _ (before_sound knownx503 validx503) geomx511 topRows 14 (by decide) i idx.1
+
+def roots := rootB 1023
+
+private lemma posBinary {w a b} (d : Bool) (ha : represented w a) (hb : represented w b) :
+    represented w (bin d a b) ∨ (∃ e x y, x ∈ w ∧ y ∈ w ∧ proper x ∧ proper y ∧ x ≠ y ∧ bin d a b = bin e x y) := by
+  have rz : represented w zero := Or.inr (fun h => h.1 rfl)
+  have ro : represented w one := Or.inr (fun h => h.2 rfl)
+  obtain ⟨a1,a0,az,ao,aa,aa'⟩ := bin_laws a
+  obtain ⟨b1,b0,bz,bo,bb,bb'⟩ := bin_laws b
+  rcases operand_cases ha with rfl | rfl | ⟨ham,hap⟩
+  · rw [bin_comm]; cases d <;> simp_all
+  · rw [bin_comm]; cases d <;> simp_all
+  rcases operand_cases hb with rfl | rfl | ⟨hbm,hbp⟩
+  · cases d <;> simp_all
+  · cases d <;> simp_all
+  by_cases he : a=b
+  · subst b; cases d <;> simp_all
+  exact Or.inr ⟨d,a,b,ham,hbm,hap,hbp,he,rfl⟩
+
+private lemma pullPos {w : List Sig} {z : Sig} {k t S} (h : Live target k t S)
+    (hz : represented w z ∨ (∃ d a b, a ∈ w ∧ b ∈ w ∧ proper a ∧ proper b ∧ a ≠ b ∧ z = bin d a b)) (sub : ∀ a ∈ S, a ∈ w++[z]) :
+    ∃ k' S', k' ≤ k+1 ∧ Live target k' t S' ∧ ∀ a ∈ S', a ∈ w := by
+  by_cases hm : z ∈ S
+  · by_cases hw : z ∈ w
+    · refine ⟨k,S,by omega,h,?_⟩
+      intro a ha
+      have hu : a ∈ w ∨ a = z := by simpa using sub a ha
+      rcases hu with hu | rfl
+      · exact hu
+      · exact hw
+    · have hp := live_proper h z hm
+      rcases hz with hr | ⟨d,a,b,ha,hb,pa,pb,hab,eq⟩
+      · exact False.elim ((hr.resolve_left hw) hp)
+      · subst z
+        let U := S.erase (bin d a b)
+        have ht : Live target k t (insert (bin d a b) U) := by simpa [U,Finset.insert_erase hm] using h
+        have hu : ∀ v ∈ U, v ∈ w := by
+          intro v hv
+          obtain ⟨hne,hm⟩ := Finset.mem_erase.mp hv
+          simpa [hne] using sub v hm
+        have hf : bin d a b ∉ insert a (insert b U) := by
+          intro hh
+          rcases Finset.mem_insert.mp hh with eq | u
+          · exact hw (eq.symm ▸ ha)
+          rcases Finset.mem_insert.mp u with eq | u
+          · exact hw (eq.symm ▸ hb)
+          · exact hw (hu _ u)
+        exact ⟨_,_,Nat.le_refl _,Live.binary pa pb hab hf ht,by simpa using And.intro ha (And.intro hb hu)⟩
+  · refine ⟨k,S,by omega,h,?_⟩
+    intro a ha
+    have hn : a ≠ z := fun hh => hm (hh ▸ ha)
+    simpa [hn] using sub a ha
+
+def PosReach (roots : List Sig) (p : Nat) (bank : List (Wire Row)) :=
+  ∀ {k S}, Live graph k 0 S → (∀ a ∈ S, a ∈ bank.map table) →
+    ∃ l U, l ≤ p+k ∧ Live graph l 0 U ∧ ∀ a ∈ U, a ∈ roots
+
+theorem PosReach.start : PosReach roots 0 (roots.map observe) := by
+  intro k S h hs
+  refine ⟨k,S,by omega,h,?_⟩
+  simpa [List.map_map,Function.comp_def,table_observe] using hs
+
+theorem PosReach.two {roots p bank a b} (d : Bool) (reach : PosReach roots p bank)
+    (ha : Available bank a) (hb : Available bank b) : PosReach roots (p+1) (combine d a b :: bank) := by
+  intro k S h hs
+  rw [List.map_cons,table_bin] at hs
+  obtain ⟨m,U,hm,run,sub⟩ := pullPos h (posBinary d (available_rep ha) (available_rep hb))
+    (fun a ha => by simpa [List.mem_cons,or_comm] using hs a ha)
+  obtain ⟨l,V,hl,live,sv⟩ := reach run sub
+  exact ⟨l,V,by omega,live,sv⟩
+
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem caseA : Impossible (graphGoal 1023) 14 (vars 1023).toFinset := by
-  have h := root_index (g:=dead) (before_sound known383 valid383) geomdead tablesdead (k:=14) (by decide)
-    (i:=0) (ws:=vars 1023) (by decide +kernel)
-  have e : targetOf dead=graphGoal 1023 := by decide +kernel
-  exact e ▸ h
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 0 in
-theorem caseB : Impossible (graphGoal 1023) 14 (rootB 1023).toFinset :=
-  index_root (g:=x511) (i:=1) rfl (before_sound knownx503 validx503) geomx511 tablesx511 (by decide +kernel)
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 0 in
-theorem caseC : Impossible (graphGoal 1023) 14 (rootC 1023).toFinset :=
-  index_root (g:=x511) (i:=0) rfl (before_sound knownx503 validx503) geomx511 tablesx511 (by decide +kernel)
-set_option maxRecDepth 16384 in
-set_option maxHeartbeats 0 in
-theorem bound : ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C →
-      (∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = !(y 0)) →
-      PEqualNP.MetaComplexity.circuitFun 9 C = edge → 16 ≤ C.size := by
-  intro C legal first h
+theorem bound {p bank} (reach : PosReach roots p bank) (hit : Available bank (observe graph)) : 15 ≤ p := by
+  have hm := available_rep hit
+  rw [table_observe] at hm
+  obtain ⟨k,S,hk,live,sub⟩ := reach (Live.stop graph_proper) (by simpa using hm.resolve_right (fun h => h graph_proper))
+  have same : graph = graphGoal 1023 := by decide +kernel
+  rw [same] at live
   by_contra! small
-  obtain ⟨k,t,S,hk,run,sub⟩ := initial_live C legal first h (by omega)
-  have eg : graph=graphGoal 1023 := by decide +kernel
-  have er : inputs++[seed]=rootB 1023 := by decide +kernel
-  rw [eg] at run
-  rw [er] at sub
-  have ok : splitOK 1023 13438558465 1 = true := by decide +kernel
-  rcases strong_split ok run sub with e | e | e
-  · exact caseA k t hk (e ▸ run)
-  · exact caseB k t hk (e ▸ run)
-  · exact caseC k t hk (e ▸ run)
-def wr (gs : List Gate) (y : Fin 9 → Bool) : List Bool :=
-  gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) (List.ofFn y)
+  have le : k ≤ 14 := by omega
+  rcases strong_split (m:=1023) (hints:=13438558465) (nb:=1) (by decide +kernel) live sub with e|e|e
+  · exact root_index (g:=dead) (before_sound known383 valid383) geomdead tablesdead (k:=14) (by decide)
+      (i:=0) (ws:=vars 1023) (by decide +kernel) k 0 le (e ▸ live)
+  · exact signedRoot 1 (rootB 1023) (by decide +kernel) k 0 le (e ▸ live) (fun _ => rfl)
+  · exact signedRoot 0 (rootC 1023) (by decide +kernel) k 0 le (e ▸ live) (fun _ => rfl)
 
-theorem wr_snoc (gs : List Gate) (g : Gate) (y : Fin 9 → Bool) :
-    wr (gs ++ [g]) y = wr gs y ++ [g.op.eval (g.inputs.map fun i => (wr gs y).getD i false)] := by
-  simp [wr, List.foldl_append]
+theorem input_mem (j : Fin 9) : inputs.getD j.val zero ∈ roots := by
+  exact (by decide +kernel : ∀ j : Fin 9, inputs.getD j.val zero ∈ roots) j
 
-theorem wr_len (gs : List Gate) (y : Fin 9 → Bool) : (wr gs y).length = 9 + gs.length := by
-  induction gs using List.reverseRecOn with
-  | nil => simp [wr]
-  | append_singleton l a ih => rw [wr_snoc]; simp [ih]; omega
+theorem runSigned {n : Nat} (op : Fin n → Bool) (left right : Fin n → Nat × Bool)
+    (v : (Fin 9 → Bool) → Nat → Bool)
+    (back : ∀ j : Fin n, (left j).1 < 10+j.val ∧ (right j).1 < 10+j.val)
+    (sign : ∀ j : Fin n, ((left j).2 = true → (left j).1 = 0 ∨ (left j).1 = 9) ∧
+      ((right j).2 = true → (right j).1 = 0 ∨ (right j).1 = 9))
+    (inp : ∀ x (j : Fin 9), v x j.val = x j) (cst : ∀ x, v x 9 = false)
+    (gate : ∀ x (j : Fin n), v x (10+j.val) = if op j = true then
+      (v x (left j).1 ^^ (left j).2) && (v x (right j).1 ^^ (right j).2) else
+      (v x (left j).1 ^^ (left j).2) || (v x (right j).1 ^^ (right j).2)) :
+    ∀ p ≤ n, ∃ bank, PosReach roots p bank ∧
+      Available bank (observe seed) ∧ ∀ w < 10+p, Available bank (fun r => v (sample r) w) := by
+  intro p
+  induction p with
+  | zero =>
+    intro _
+    refine ⟨_,PosReach.start,Or.inl (List.mem_map_of_mem (by decide +kernel : seed ∈ roots)),?_⟩
+    intro w hw
+    by_cases h : w < 9
+    · let j : Fin 9 := ⟨w,h⟩
+      have eq : (fun r => v (sample r) w) = observe (inputs.getD j.val zero) :=
+        funext fun r => inp _ j
+      exact eq ▸ Or.inl (List.mem_map_of_mem (input_mem j))
+    · have eq : w=9 := by omega
+      subst w
+      exact Or.inr ⟨false,funext fun r => cst _⟩
+  | succ p ih =>
+    intro hp
+    let j : Fin n := ⟨p,by omega⟩
+    obtain ⟨bank,reach,seedIn,old⟩ := ih (by omega)
+    let read := fun (w : Nat × Bool) (r : Row) => v (sample r) w.1 ^^ w.2
+    have readOk (w : Nat × Bool) (hw : w.1 < 10+p) (hs : w.2=true → w.1=0 ∨ w.1=9) :
+        Available bank (read w) := by
+      obtain ⟨w,phase⟩ := w
+      cases phase with
+      | false => simpa [read] using old w hw
+      | true =>
+        rcases hs rfl with e|e
+        · change w=0 at e
+          subst w
+          have eq : read (0,true) = observe seed := by
+            funext r
+            simp only [read,Bool.xor_true,observe,seed_table]
+            exact congrArg Bool.not (inp (sample r) (0 : Fin 9))
+          exact eq ▸ seedIn
+        · change w=9 at e
+          subst w
+          exact Or.inr ⟨true,funext fun r => by simp [read,cst]⟩
+    let out := combine (!(op j)) (read (left j)) (read (right j))
+    have eq : (fun r => v (sample r) (10+p)) = out := by
+      funext r
+      have h := gate (sample r) j
+      cases e : op j <;> simpa only [out,combine,e,read,Bool.not_false,Bool.not_true,
+        Bool.false_eq_true,ite_true,ite_false] using h
+    refine ⟨out::bank,PosReach.two _ reach (readOk _ (back j).1 (sign j).1)
+      (readOk _ (back j).2 (sign j).2),available_cons _ seedIn,?_⟩
+    intro w hw
+    by_cases h : w = 10+p
+    · subst w
+      rw [eq]
+      exact Or.inl List.mem_cons_self
+    · exact available_cons _ (old _ (by omega))
 
-theorem wr_old (gs : List Gate) (g : Gate) (y : Fin 9 → Bool) (i : ℕ) (h : i < 9 + gs.length) :
-    (wr (gs ++ [g]) y).getD i false = (wr gs y).getD i false := by
-  rw [wr_snoc]
-  exact List.getD_append _ _ _ _ (by rw [wr_len]; exact h)
-
-theorem wr_new (gs : List Gate) (g : Gate) (y : Fin 9 → Bool) :
-    (wr (gs ++ [g]) y).getD (9 + gs.length) false
-      = g.op.eval (g.inputs.map fun i => (wr gs y).getD i false) := by
-  rw [wr_snoc, List.getD_append_right _ _ _ _ (by rw [wr_len]), wr_len]
-  simp
-
-def At (gs : List Gate) (f : (Fin 9 → Bool) → Bool) (i : ℕ) : Prop :=
-  i < 9 + gs.length ∧ ∀ y, (wr gs y).getD i false = f y
-
-def Ok (gs : List Gate) (f : (Fin 9 → Bool) → Bool) : Prop :=
-  (∃ b, ∀ y, f y = b) ∨ ∃ i, At gs f i
-
-theorem ok_old {gs : List Gate} {f : (Fin 9 → Bool) → Bool} (g : Gate) (h : Ok gs f) :
-    Ok (gs ++ [g]) f := by
-  rcases h with h | ⟨i, hi, h⟩
-  · exact Or.inl h
-  · refine Or.inr ⟨i, by simp; omega, fun y => ?_⟩
-    rw [wr_old gs g y i hi, h y]
-
-theorem ok_new {gs : List Gate} {f : (Fin 9 → Bool) → Bool} (g : Gate)
-    (h : ∀ y, g.op.eval (g.inputs.map fun i => (wr gs y).getD i false) = f y) :
-    Ok (gs ++ [g]) f :=
-  Or.inr ⟨9 + gs.length, by simp, fun y => by rw [wr_new, h y]⟩
-
-def Two (g : Gate) : Prop :=
-  g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) ∧ g.inputs.length ≤ 2
-
-theorem neg_step {gs : List Gate} {f : (Fin 9 → Bool) → Bool} (h : Ok gs f) :
-    ∃ g, Two g ∧ Ok (gs ++ [g]) (fun y => !(f y)) := by
-  rcases h with ⟨b, hb⟩ | ⟨i, hi, h⟩
-  · refine ⟨⟨GateOp.or, []⟩, by simp [Two], Or.inl ⟨!b, fun y => ?_⟩⟩
-    simp only [hb y]
-  · refine ⟨⟨GateOp.not, [i]⟩, by simp [Two], ok_new _ fun y => ?_⟩
-    simp only [List.map, GateOp.eval, List.headD_cons, h y]
-
-theorem bin_step {gs : List Gate} {f f' : (Fin 9 → Bool) → Bool} (op : Bool)
-    (h : Ok gs f) (h' : Ok gs f') :
-    ∃ g, Two g ∧ Ok (gs ++ [g]) (fun y => if op = true then f y && f' y else f y || f' y) := by
-  rcases h with ⟨b, hb⟩ | ⟨i, hi, h⟩ <;> rcases h' with ⟨b', hb'⟩ | ⟨i', hi', h'⟩
-  · refine ⟨⟨GateOp.or, []⟩, by simp [Two],
-      Or.inl ⟨if op = true then b && b' else b || b', fun y => ?_⟩⟩
-    simp only [hb y, hb' y]
-  · cases op <;> cases b
-    · refine ⟨⟨GateOp.or, [i']⟩, by simp [Two], ok_new _ fun y => ?_⟩
-      simp only [List.map, GateOp.eval, h' y, hb y]; simp
-    · refine ⟨⟨GateOp.and, []⟩, by simp [Two], ok_new _ fun y => ?_⟩
-      simp only [List.map, GateOp.eval, hb y]; simp
-    · refine ⟨⟨GateOp.or, []⟩, by simp [Two], ok_new _ fun y => ?_⟩
-      simp only [List.map, GateOp.eval, hb y]; simp
-    · refine ⟨⟨GateOp.or, [i']⟩, by simp [Two], ok_new _ fun y => ?_⟩
-      simp only [List.map, GateOp.eval, h' y, hb y]; simp
-  · cases op <;> cases b'
-    · refine ⟨⟨GateOp.or, [i]⟩, by simp [Two], ok_new _ fun y => ?_⟩
-      simp only [List.map, GateOp.eval, h y, hb' y]; simp
-    · refine ⟨⟨GateOp.and, []⟩, by simp [Two], ok_new _ fun y => ?_⟩
-      simp only [List.map, GateOp.eval, hb' y]; simp
-    · refine ⟨⟨GateOp.or, []⟩, by simp [Two], ok_new _ fun y => ?_⟩
-      simp only [List.map, GateOp.eval, hb' y]; simp
-    · refine ⟨⟨GateOp.or, [i]⟩, by simp [Two], ok_new _ fun y => ?_⟩
-      simp only [List.map, GateOp.eval, h y, hb' y]; simp
-  · cases op
-    · refine ⟨⟨GateOp.or, [i, i']⟩, by simp [Two], ok_new _ fun y => ?_⟩
-      simp only [List.map, GateOp.eval, h y, h' y]; simp
-    · refine ⟨⟨GateOp.and, [i, i']⟩, by simp [Two], ok_new _ fun y => ?_⟩
-      simp only [List.map, GateOp.eval, h y, h' y]; simp
-
-def Inv (S : Finset ℕ) (v : (Fin 9 → Bool) → ℕ → Bool) (W : ℕ) (gs : List Gate) : Prop :=
-  (∀ g ∈ gs, Two g) ∧ At gs (fun y => !(y 0)) 9 ∧
-  gs.length ≤ 1 + (W - 10) + (S.filter (· < W)).card ∧
-  ∀ w < W, Ok gs (fun y => v y w) ∧ (w ∈ S → Ok gs (fun y => !(v y w)))
-
-theorem at_old {gs : List Gate} {f : (Fin 9 → Bool) → Bool} {i : ℕ} (g : Gate) (h : At gs f i) :
-    At (gs ++ [g]) f i :=
-  ⟨by have := h.1; simp; omega, fun y => by rw [wr_old gs g y i h.1, h.2 y]⟩
-
-theorem two_snoc {gs : List Gate} {g : Gate} (h : ∀ g ∈ gs, Two g) (hg : Two g) :
-    ∀ g' ∈ gs ++ [g], Two g' := by
-  intro g' h'
-  rcases List.mem_append.1 h' with h' | h'
-  · exact h g' h'
-  · rw [List.mem_singleton.1 h']; exact hg
-
-theorem close (S : Finset ℕ) (v : (Fin 9 → Bool) → ℕ → Bool) (W : ℕ) (gs : List Gate)
-    (h2 : ∀ g ∈ gs, Two g) (h9 : At gs (fun y => !(y 0)) 9)
-    (hl : gs.length ≤ 1 + (W + 1 - 10) + (S.filter (· < W)).card)
-    (ho : ∀ w < W, Ok gs (fun y => v y w) ∧ (w ∈ S → Ok gs (fun y => !(v y w))))
-    (hW : Ok gs (fun y => v y W)) : ∃ gs', Inv S v (W + 1) gs' := by
-  by_cases hm : W ∈ S
-  · obtain ⟨g, hg, hn⟩ := neg_step hW
-    refine ⟨gs ++ [g], two_snoc h2 hg, at_old g h9, ?_, ?_⟩
-    · have : (S.filter (· < W)).card < (S.filter (· < W + 1)).card := by
-        apply Finset.card_lt_card
-        refine Finset.ssubset_iff_of_subset ?_ |>.2 ⟨W, by simp [hm], by simp⟩
-        intro a ha
-        simp only [Finset.mem_filter] at ha ⊢
-        exact ⟨ha.1, by omega⟩
-      simp only [List.length_append, List.length_singleton]
-      omega
-    · intro w hw
-      rcases Nat.lt_succ_iff_lt_or_eq.1 hw with h | rfl
-      · exact ⟨ok_old g (ho w h).1, fun hs => ok_old g ((ho w h).2 hs)⟩
-      · exact ⟨ok_old g hW, fun _ => hn⟩
-  · refine ⟨gs, h2, h9, ?_, ?_⟩
-    · have : (S.filter (· < W)).card ≤ (S.filter (· < W + 1)).card := by
-        apply Finset.card_le_card
-        intro a ha
-        simp only [Finset.mem_filter] at ha ⊢
-        exact ⟨ha.1, by omega⟩
-      omega
-    · intro w hw
-      rcases Nat.lt_succ_iff_lt_or_eq.1 hw with h | rfl
-      · exact ho w h
-      · exact ⟨hW, fun hs => absurd hs hm⟩
-
-theorem ref_ok {S : Finset ℕ} {v : (Fin 9 → Bool) → ℕ → Bool} {W : ℕ} {gs : List Gate}
-    (hI : Inv S v W gs) (h0 : ∀ y, v y 0 = y 0) (h9 : ∀ y, v y 9 = false) (r : ℕ × Bool)
-    (hr : r.1 < W) (ha : r.2 = true → r.1 = 0 ∨ r.1 = 9 ∨ r.1 ∈ S) :
-    Ok gs (fun y => v y r.1 ^^ r.2) := by
-  obtain ⟨w, b⟩ := r
-  cases b
-  · simpa using (hI.2.2.2 w hr).1
-  · simp only [Bool.xor_true]
-    rcases ha rfl with h | h | h
-    · simp only at h
-      subst h
-      simp only [h0]
-      exact Or.inr ⟨9, hI.2.1⟩
-    · simp only at h
-      subst h
-      exact Or.inl ⟨true, fun y => by simp [h9 y]⟩
-    · exact (hI.2.2.2 w hr).2 h
-
-theorem init (S : Finset ℕ) (v : (Fin 9 → Bool) → ℕ → Bool) :
-    Inv S v 0 [⟨GateOp.not, [0]⟩] := by
-  refine ⟨by simp [Two], ⟨by simp, fun y => ?_⟩, by simp, by simp⟩
-  have := wr_new [] ⟨GateOp.not, [0]⟩ y
-  simp only [List.nil_append, List.length_nil, Nat.add_zero] at this
-  rw [this]
-  simp [wr, GateOp.eval]
-
-theorem inp (gs : List Gate) (j : Fin 9) : At gs (fun y => y j) j := by
-  induction gs using List.reverseRecOn with
-  | nil =>
-    refine ⟨by simp, fun y => ?_⟩
-    fin_cases j <;> rfl
-  | append_singleton l a ih => exact at_old a ih
-
-theorem build (n : ℕ) (op : Fin n → Bool) (a b : Fin n → ℕ × Bool) (S : Finset ℕ)
-    (v : (Fin 9 → Bool) → ℕ → Bool)
-    (hr : ∀ k : Fin n, (a k).1 < 10 + (k : ℕ) ∧ (b k).1 < 10 + (k : ℕ))
-    (hn : ∀ k : Fin n, ((a k).2 = true → (a k).1 = 0 ∨ (a k).1 = 9 ∨ (a k).1 ∈ S) ∧
-      ((b k).2 = true → (b k).1 = 0 ∨ (b k).1 = 9 ∨ (b k).1 ∈ S))
-    (hi : ∀ (y : Fin 9 → Bool) (j : Fin 9), v y j = y j) (h9 : ∀ y, v y 9 = false)
-    (hs : ∀ (y : Fin 9 → Bool) (k : Fin n), v y (10 + (k : ℕ)) =
-      if op k = true then (v y (a k).1 ^^ (a k).2) && (v y (b k).1 ^^ (b k).2)
-      else (v y (a k).1 ^^ (a k).2) || (v y (b k).1 ^^ (b k).2)) :
-    ∀ W ≤ 10 + n, ∃ gs, Inv S v W gs := by
-  intro W
-  induction W with
-  | zero => exact fun _ => ⟨_, init S v⟩
-  | succ W ih =>
-    intro hW
-    obtain ⟨gs, hI⟩ := ih (by omega)
-    obtain ⟨h2, hw9, hl, ho⟩ := id hI
-    have h0 : ∀ y, v y 0 = y 0 := fun y => hi y 0
-    by_cases h : W < 10
-    · refine close S v W gs h2 hw9 (by omega) ho ?_
-      by_cases h' : W = 9
-      · subst h'
-        exact Or.inl ⟨false, h9⟩
-      · have := inp gs ⟨W, by omega⟩
-        refine Or.inr ⟨W, this.1, fun y => ?_⟩
-        rw [this.2 y]
-        exact (hi y ⟨W, by omega⟩).symm
-    · obtain ⟨k, rfl⟩ : ∃ k, W = 10 + k := ⟨W - 10, by omega⟩
-      have hk : k < n := by omega
-      obtain ⟨g, hg, hgo⟩ := bin_step (op ⟨k, hk⟩)
-        (ref_ok hI h0 h9 (a ⟨k, hk⟩) (hr ⟨k, hk⟩).1 (hn ⟨k, hk⟩).1)
-        (ref_ok hI h0 h9 (b ⟨k, hk⟩) (hr ⟨k, hk⟩).2 (hn ⟨k, hk⟩).2)
-      refine close S v (10 + k) (gs ++ [g]) (two_snoc h2 hg) (at_old g hw9) ?_ ?_ ?_
-      · simp only [List.length_append, List.length_singleton]
-        omega
-      · exact fun w hw => ⟨ok_old g (ho w hw).1, fun hs => ok_old g ((ho w hw).2 hs)⟩
-      · have he : (fun y => v y (10 + k)) = _ := funext fun y => hs y ⟨k, hk⟩
-        rw [he]
-        exact hgo
-
-theorem main (n : ℕ) (op : Fin n → Bool) (a b : Fin n → ℕ × Bool) (o : ℕ × Bool) (S : Finset ℕ)
-    (v : (Fin 9 → Bool) → ℕ → Bool) (hc : n + S.card ≤ 14)
-    (hr : ∀ k : Fin n, (a k).1 < 10 + (k : ℕ) ∧ (b k).1 < 10 + (k : ℕ)) (hor : o.1 < 10 + n)
-    (hon : o.2 = true → o.1 = 0 ∨ o.1 = 9 ∨ o.1 ∈ S)
-    (hn : ∀ k : Fin n, ((a k).2 = true → (a k).1 = 0 ∨ (a k).1 = 9 ∨ (a k).1 ∈ S) ∧
-      ((b k).2 = true → (b k).1 = 0 ∨ (b k).1 = 9 ∨ (b k).1 ∈ S))
-    (hi : ∀ (y : Fin 9 → Bool) (j : Fin 9), v y j = y j) (h9 : ∀ y, v y 9 = false)
-    (hs : ∀ (y : Fin 9 → Bool) (k : Fin n), v y (10 + (k : ℕ)) =
-      if op k = true then (v y (a k).1 ^^ (a k).2) && (v y (b k).1 ^^ (b k).2)
-      else (v y (a k).1 ^^ (a k).2) || (v y (b k).1 ^^ (b k).2))
-    (he : ∀ y, (v y o.1 ^^ o.2) = edge y) : False := by
-  obtain ⟨gs, hI⟩ := build n op a b S v hr hn hi h9 hs (10 + n) le_rfl
-  have hl : gs.length ≤ 15 := by
-    have h1 := hI.2.2.1
-    have h2 := Finset.card_filter_le S (· < 10 + n)
-    omega
-  rcases ref_ok hI (fun y => hi y 0) h9 o hor hon with ⟨c, hcst⟩ | ⟨i, _, hA⟩
-  · have e1 : c = false := by
-      rw [← hcst (fun _ => false)]; exact (he _).trans rfl
-    have e2 : c = true := by
-      rw [← hcst (fun _ => true)]; exact (he _).trans rfl
-    rw [e1] at e2
-    exact Bool.noConfusion e2
-  · have hb := bound ⟨gs, i⟩ hI.1 (fun y => hI.2.1.2 y) (by
-      funext y
-      exact (hA y).trans (he y))
-    have : gs.length ≥ 16 := hb
-    omega
 end PEqualNP.Outside.L_meta_4269
 
 theorem PEqualNP.Outside.L_meta_4269 : ∀ (x1 : ℕ) (x2 : Fin x1 → Bool) (x3 x4 : Fin x1 → ℕ × Bool) (x5 : Finset ℕ) (x6 : (Fin (9 : ℕ) → Bool) → ℕ → Bool),   (0 : ℕ) < x1 →     x5.card ≤ (3 : ℕ) →       x1 + x5.card ≤ (14 : ℕ) →         x5.card ≤ (1 : ℕ) →           x5.card = (0 : ℕ) →             (∀ (x12 : Fin x1), (x3 x12).1 < (10 : ℕ) + ↑x12 ∧ (x4 x12).1 < (10 : ℕ) + ↑x12) →               (∀ (x13 : Fin (9 : ℕ)), ∃ (x14 : Fin x1), (x3 x14).1 = ↑x13 ∨ (x4 x14).1 = ↑x13) →                 (∀ (x14 : ℕ), x14 ∈ x5 ↔ x14 ≠ (0 : ℕ) ∧ x14 ≠ (9 : ℕ) ∧ (Bool.false = Bool.true ∧ x14 = (9 : ℕ) + x1 ∨ ∃ (x15 : Fin x1), x3 x15 = (x14, Bool.true) ∨ x4 x15 = (x14, Bool.true))) →                   (∀ (x15 : Fin (9 : ℕ) → Bool) (x16 : Fin (9 : ℕ)), x6 x15 ↑x16 = x15 x16) →                     (∀ (x16 : Fin (9 : ℕ) → Bool), x6 x16 (9 : ℕ) = Bool.false) →                       (∀ (x17 : Fin (9 : ℕ) → Bool) (x18 : Fin x1),                           have x19 : ℕ × Bool → Bool := fun (x19 : ℕ × Bool) => x6 x17 x19.1 ^^ x19.2;                           x6 x17 ((10 : ℕ) + ↑x18) = if x2 x18 = Bool.true then x19 (x3 x18) && x19 (x4 x18) else x19 (x3 x18) || x19 (x4 x18)) →                         ∃ (x18 : Fin (9 : ℕ) → Bool), (x6 x18 ((9 : ℕ) + x1) ^^ Bool.false) ≠ [(1 : ℕ), (12 : ℕ), (23 : ℕ), (34 : ℕ), (40 : ℕ), (5 : ℕ), (16 : ℕ), (27 : ℕ), (38 : ℕ), (57 : ℕ), (68 : ℕ), (85 : ℕ)].any fun (x19 : ℕ) => x18 (Fin.ofNat (9 : ℕ) (x19 / (10 : ℕ))) && x18 (Fin.ofNat (9 : ℕ) (x19 % (10 : ℕ))) := by
-  intro n op left right paid val _ _ budget _ _ back _ membership input constant gate
+  intro n op left right paid val hn _ budget _ empty back _ membership input constant gate
   by_contra noMismatch
-  have allowed (wire : ℕ × Bool) (used : ∃ j : Fin n, left j = wire ∨ right j = wire)
-      (negative : wire.2 = true) : wire.1 = 0 ∨ wire.1 = 9 ∨ wire.1 ∈ paid := by
-    by_cases atZero : wire.1 = 0
-    · exact Or.inl atZero
-    by_cases atNine : wire.1 = 9
-    · exact Or.inr (Or.inl atNine)
-    apply Or.inr (Or.inr ((membership wire.1).mpr ⟨atZero, atNine, Or.inr ?_⟩))
-    simpa only [← negative, Prod.mk.eta] using used
-  apply PEqualNP.Outside.L_meta_4269.main n op left right (9 + n, false) paid val budget back
-    (by dsimp; omega) (by simp) (fun j => ⟨allowed _ ⟨j, Or.inl rfl⟩, allowed _ ⟨j, Or.inr rfl⟩⟩)
-    input constant gate
-  intro y
-  have encoding : ∀ x : Fin 9 → Bool, PEqualNP.Outside.L_meta_4269.edge x =
-      ([1, 12, 23, 34, 40, 5, 16, 27, 38, 57, 68, 85] : List ℕ).any
-        (fun code => x (Fin.ofNat 9 (code / 10)) && x (Fin.ofNat 9 (code % 10))) := by
-    decide +kernel
-  rw [encoding y]
-  exact Classical.byContradiction (fun mismatch => noMismatch ⟨y, mismatch⟩)
+  have sign (wire : ℕ × Bool) (used : ∃ j : Fin n, left j = wire ∨ right j = wire)
+      (negative : wire.2 = true) : wire.1 = 0 ∨ wire.1 = 9 := by
+    by_contra! bad
+    have mem := (membership wire.1).mpr ⟨bad.1,bad.2,Or.inr (by simpa only [←negative,Prod.mk.eta] using used)⟩
+    rw [Finset.card_eq_zero.mp empty] at mem
+    exact Finset.notMem_empty _ mem
+  obtain ⟨bank,reach,_,wires⟩ := PEqualNP.Outside.L_meta_4269.runSigned op left right val back
+    (fun j => ⟨sign _ ⟨j,Or.inl rfl⟩,sign _ ⟨j,Or.inr rfl⟩⟩) input constant gate n le_rfl
+  have out := wires (9+n) (by omega)
+  have eq : (fun r => val (PEqualNP.Outside.L_meta_4269.sample r) (9+n)) =
+      PEqualNP.Outside.L_meta_4269.observe PEqualNP.Outside.L_meta_4269.graph := by
+    funext r
+    let y := PEqualNP.Outside.L_meta_4269.sample r
+    have h := Classical.byContradiction fun mismatch => noMismatch ⟨y,mismatch⟩
+    rw [PEqualNP.Outside.L_meta_4269.observe,PEqualNP.Outside.L_meta_4269.edge_table]
+    change val y (9+n) = PEqualNP.Outside.L_meta_4269.edge y
+    simp only [List.any_cons,List.any_nil,Bool.xor_false,Bool.or_false] at h
+    exact h.trans (by simp only [PEqualNP.Outside.L_meta_4269.edge,Bool.or_assoc]; rfl)
+  rw [eq] at out
+  have lower := PEqualNP.Outside.L_meta_4269.bound reach out
+  omega
