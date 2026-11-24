@@ -6158,8 +6158,7 @@ theorem impossible5314 {k S} (hk : k ≤ 14) (run : Live false graph k S) (sub :
 
 
 
-def BelowRow (a b : Row) : Prop := a.val &&& b.val = a.val
-instance (a b : Row) : Decidable (BelowRow a b) := inferInstanceAs (Decidable (_ = _))
+abbrev BelowRow (a b : Row) : Prop := a.val &&& b.val = a.val
 def Increasing (t : Sig) := ∀ a b, BelowRow a b → bit a t = true → bit b t = true
 
 theorem incZero : Increasing zero := by simp [Increasing,bit_zero]
