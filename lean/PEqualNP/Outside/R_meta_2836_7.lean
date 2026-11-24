@@ -105,7 +105,9 @@ theorem PEqualNP.Outside.R_meta_2836_7
         PEqualNP.CircuitLowerBounds.Gate.mk g.op
           (g.inputs.map fun i => List.getD [0, 5, 8, 3, 4, 1, 7, 6, 2] i i))
       (List.getD [0, 5, 8, 3, 4, 1, 7, 6, 2] C.output C.output)).size ≤ 13 := by
-    simpa [PEqualNP.CircuitLowerBounds.Circuit.size] using hs
+    show (List.map _ C.gates).length ≤ 13
+    rw [List.length_map]
+    exact hs
   have hrel : ∀ Lx Ly : List Bool, Lx.length = 11 → Ly.length = 11 →
       (∀ j : ℕ, Ly.getD (List.getD [0, 5, 8, 3, 4, 1, 7, 6, 2] j j) false = Lx.getD j false) →
       (PEqualNP.CircuitLowerBounds.Circuit.mk
@@ -114,7 +116,6 @@ theorem PEqualNP.Outside.R_meta_2836_7
             (g.inputs.map fun i => List.getD [0, 5, 8, 3, 4, 1, 7, 6, 2] i i))
         (List.getD [0, 5, 8, 3, 4, 1, 7, 6, 2] C.output C.output)).eval Ly = C.eval Lx := by
     intro Lx Ly hx hy hj
-    simp only [PEqualNP.CircuitLowerBounds.Circuit.eval, PEqualNP.CircuitLowerBounds.Circuit.wires]
     exact hpre C.gates Lx Ly (by rw [hx, hy]) (by rw [hx]; omega) hj C.output
   have htail : ∀ (Lx Ly : List Bool), Lx.length = 11 → Ly.length = 11 → ∀ j : ℕ, 11 ≤ j →
       Ly.getD (List.getD [0, 5, 8, 3, 4, 1, 7, 6, 2] j j) false = Lx.getD j false := by
