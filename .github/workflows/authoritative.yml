@@ -328,14 +328,34 @@ jobs:
           # passes; it is the machine running short that loses a runner.
           unit="pnp-check-$GITHUB_RUN_ID"
           cg="/sys/fs/cgroup/system.slice/$unit.scope"
-          ( low=0; tick=0
+          # The checker's last stage, printed ONLY as one of our own fixed stage names (red team: once
+          # Lean runs on the file, stderr can carry the author's text; nothing of it is printed).
+          stage_now() {
+            last=$(grep -a '^checker stage: ' "$RUNNER_TEMP/checker.err" 2>/dev/null | tail -n 1 | sed 's/^checker stage: //; s/ t=[0-9]*s$//')
+            case "$last" in
+              'started'|'build lock taken'|'building the verifier'|'building the file and the definitions root'|'verifier reading the built file') echo "stage: $last" ;;
+              '') echo "stage: none yet" ;;
+              *) echo "stage: (unrecognised line, not printed)" ;;
+            esac
+          }
+          # THE NO-PROGRESS WATCHDOG (2026-11-24: eleven runs hung for the whole limit). The scope's
+          # CPU time (cpu.stat usage_usec) must grow by at least 2 s in every 8 minutes; a check that
+          # waits on a lock or a queue uses none. Then the scope is ended: a FAULT with that line.
+          ( low=0; tick=0; cpu0=0; still=0
             while sleep 15; do
               tick=$((tick + 1))
+              cpu=$(awk '/^usage_usec/{print $2}' "$cg/cpu.stat" 2>/dev/null || echo 0)
+              if [ "${cpu:-0}" -ge $((cpu0 + 2000000)) ]; then cpu0=${cpu:-0}; still=0; else still=$((still + 1)); fi
+              if [ "$still" -ge 32 ]; then
+                echo "no progress: the check made no progress for 8 minutes (CPU time $((cpu / 1000000)) s; last: $(stage_now)); ending the whole checker scope" | tee -a "$RUNNER_TEMP/checker.err"
+                sudo systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true
+                break
+              fi
               total=$(awk '/^MemTotal:/{print $2}' /proc/meminfo); avail=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)
               swap=$(awk '/^SwapTotal:/{t=$2} /^SwapFree:/{f=$2} END{print t-f}' /proc/meminfo)
               now=$(cat "$cg/memory.current" 2>/dev/null || echo 0); peak=$(cat "$cg/memory.peak" 2>/dev/null || echo 0)
               full=$(awk '/^full/{for(i=1;i<=NF;i++) if($i ~ /^avg60=/){sub("avg60=","",$i); print int($i)}}' /proc/pressure/memory 2>/dev/null || echo 0)
-              [ $((tick % 4)) -eq 0 ] || [ "$avail" -lt $((total / 10)) ] && echo "memory watch t=$(( $(date +%s) - t0 ))s: available $((avail / 1024)) MB of $((total / 1024)), swap used $((swap / 1024)) MB, checker now $((now / 1048576)) MB, peak $((peak / 1048576)) MB of $((cap / 1024)), pressure full $full%, processes lean $(pgrep -xc lean 2>/dev/null; true) lake $(pgrep -xc lake 2>/dev/null; true) node $(pgrep -xc node 2>/dev/null; true) sleep $(pgrep -xc sleep 2>/dev/null; true), cpu busy $(top -bn1 2>/dev/null | awk '/^%Cpu/{print int(100-$8)}')%"
+              [ $((tick % 4)) -eq 0 ] || [ "$avail" -lt $((total / 10)) ] && echo "memory watch t=$(( $(date +%s) - t0 ))s: available $((avail / 1024)) MB of $((total / 1024)), swap used $((swap / 1024)) MB, checker now $((now / 1048576)) MB, peak $((peak / 1048576)) MB of $((cap / 1024)), pressure full $full%, processes lean $(pgrep -xc lean 2>/dev/null; true) lake $(pgrep -xc lake 2>/dev/null; true) node $(pgrep -xc node 2>/dev/null; true) sleep $(pgrep -xc sleep 2>/dev/null; true), cpu busy $(top -bn1 2>/dev/null | awk '/^%Cpu/{print int(100-$8)}')%, $(stage_now)"
               if [ "$avail" -lt $((total / 20)) ]; then low=$((low + 1)); else low=0; fi
               if [ "$low" -ge 2 ] || [ "${full:-0}" -gt 40 ]; then
                 echo "memory watch: the MACHINE is running short (available $((avail / 1024)) MB, pressure full $full%): ending the checker before the runner is lost" | tee -a "$RUNNER_TEMP/checker.err"
@@ -352,6 +372,13 @@ jobs:
             echo "time limit reached: ${limit} s; ending the whole checker scope now" | tee -a "$RUNNER_TEMP/checker.err"
             sudo systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true ) &
           limiter=$!
+          # ONE JOB PER MACHINE: no other check can hold the build queue or the build lock here, so a
+          # slot or a lock left by an earlier step can only block this check until its limit
+          # (2026-11-24: eleven runs hung 45 minutes in this step). Clear them, and say what was found.
+          stale_slots=$(ls -d "$W/queue/build-slots"/*/ 2>/dev/null | wc -l | tr -d ' ')
+          stale_lock=no; [ -e "$W/base/lean/.lake/check.lock" ] && stale_lock=yes
+          echo "before the check: build-queue slots held ${stale_slots}, build lock present ${stale_lock}; both cleared"
+          rm -rf "$W/queue/build-slots" "$W/base/lean/.lake/check.lock"
           # Every file the judged build writes must be the locked account's (read below, after it).
           touch "$RUNNER_TEMP/build.marker"
           sudo systemd-run --quiet --scope --collect --unit="$unit" -p MemoryMax="${cap}K" \
@@ -365,6 +392,9 @@ jobs:
           kill "$sampler" "$watch" "$limiter" 2>/dev/null
           # Ended by the memory watch: a FAULT of the machine, never a verdict on the proof.
           if grep -q '^memory watch: the MACHINE is running short' "$RUNNER_TEMP/checker.err" 2>/dev/null; then
+            code=137
+          elif grep -q '^no progress: ' "$RUNNER_TEMP/checker.err" 2>/dev/null; then
+            # Ended by the no-progress watchdog: a FAULT of the run, never a verdict on the proof.
             code=137
           else
             # 124 or 137: the time limit ended the checker. A FAULT, never a verdict on the proof.
@@ -464,8 +494,8 @@ jobs:
           # off, so a line in it cannot pass for an instruction to the runner.
           echo "::stop-commands::$stop"
           echo "----- checker diagnostics (first lines, then tail) -----"
-          head -n 3 "$RUNNER_TEMP/checker.err" | quoted
-          tail -n 30 "$RUNNER_TEMP/checker.err" | quoted
+          grep -av '^checker stage: ' "$RUNNER_TEMP/checker.err" | head -n 3 | quoted
+          grep -av '^checker stage: ' "$RUNNER_TEMP/checker.err" | tail -n 30 | quoted
           # The checker passes on only the last lines of a failed build. The first errors of
           # each build that failed are printed here from the full output lake-locked.sh kept.
           for b in "$RUNNER_TEMP"/builds/*/; do
