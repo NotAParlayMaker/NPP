@@ -45,7 +45,9 @@ theorem PEqualNP.Outside.R_meta_3064_1
       apply bad i i
       intro x
       rw [graph]
-      simpa [v, PEqualNP.CircuitLowerBounds.GateOp.eval] using good (assignment x)
+      have h := Classical.not_not.mp (good (assignment x))
+      change ((v i x) && true) = _ at h
+      simpa only [Bool.and_true, Bool.and_self] using h
     | cons j tail =>
       have nil : tail = [] := by
         have total : tail.length + 1 + 1 ≤ 2 := argc
@@ -55,4 +57,6 @@ theorem PEqualNP.Outside.R_meta_3064_1
       apply bad i j
       intro x
       rw [graph]
-      simpa [v, PEqualNP.CircuitLowerBounds.GateOp.eval] using good (assignment x)
+      have h := Classical.not_not.mp (good (assignment x))
+      change ((v i x) && ((v j x) && true)) = _ at h
+      simpa only [Bool.and_true] using h
