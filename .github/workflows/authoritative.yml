@@ -29,6 +29,10 @@ on:
         description: Leave empty to judge a proof; refute to judge a refutation (only of a step the desk posts as one); reduce to judge a reduction R_<gap>_<n> (only of a step the desk opens to reductions)
         required: false
         type: string
+      pool:
+        description: Leave empty. The intake sends "standard" or one label of the fixed list in runs-on to choose the hosted runner for this one run.
+        required: false
+        type: string
 
 # Least privilege: read the code and read the pull request. This run cannot write anything.
 permissions:
@@ -41,7 +45,13 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-24.04
+    # The runner's label is a repository VARIABLE an admin sets (CHECK_RUNNER), so the check can move to a
+    # larger GitHub-hosted runner by a settings change. Unset, it is the standard runner as before. A pull
+    # request cannot set a variable, and this workflow is only ever started from the base repository.
+    # Only a label on the list below is taken: a mistyped or self-hosted label falls back to the standard runner.
+    # The pool input, sent only by the project's own dispatch, may name ONE label of the fixed list (or "standard");
+    # anything else falls to the repository variable if it is on the list, and otherwise to the standard runner.
+    runs-on: ${{ contains(fromJSON('["pnp-4core","pnp-8core","pnp-2core"]'), inputs.pool) && inputs.pool || (inputs.pool != 'standard' && contains(fromJSON('["pnp-4core","pnp-8core","pnp-2core"]'), vars.CHECK_RUNNER) && vars.CHECK_RUNNER || 'ubuntu-24.04') }}
     timeout-minutes: 150
     env:
       # Inputs are free text typed by whoever starts the run. They reach the scripts only as
@@ -126,7 +136,7 @@ jobs:
           set -eu
           exec > >(tee -a "$RUNNER_TEMP/steps.log") 2>&1   # kept for the verdict step
           # The statement comes from the desk's public list, never from the pull request.
-          curl -sSf --proto '=https' --max-redirs 0 --max-filesize 5000000 -o "$W/in/gaps.json" "$GAPS_URL"
+          curl -sSf --proto '=https' --max-redirs 0 --max-filesize 20000000 -o "$W/in/gaps.json" "$GAPS_URL"
           # The run's kind goes to the guard, which refuses it unless the desk's row agrees: check or
           # refute as the desk posts the step; reduce only for an R_<gap>_<n> file of a step posted to be
           # proved whose row carries reductions: true (DARK: absent, every reduction run is refused).
