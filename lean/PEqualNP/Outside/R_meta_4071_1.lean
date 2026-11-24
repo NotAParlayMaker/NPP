@@ -43,7 +43,9 @@ theorem PEqualNP.Outside.R_meta_4071_1
     exfalso
     have hw (x : Fin 26 → Bool) :
         circuitFun 26 C x = (List.ofFn x).getD C.output false := by
-      simp [circuitFun, Circuit.eval, Circuit.wires, hgs]
+      change (C.gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
+          (List.ofFn x)).getD C.output false = (List.ofFn x).getD C.output false
+      rw [hgs, List.foldl_nil]
     have b00 := hacc (0 : Fin 13) 0 (Or.inl rfl)
     have b11 := hacc (1 : Fin 13) 1 (Or.inl rfl)
     rw [hw] at b00 b11
