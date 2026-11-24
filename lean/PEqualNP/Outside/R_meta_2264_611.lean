@@ -10,7 +10,7 @@ open PEqualNP.CleanedNonEdge PEqualNP.MetaComplexity.NestedCover
 -- hCharge is the count that is left, stated for circuits already in that normal form,
 -- with one unit for each junk AND.
 -- hGraph is the cover number of the graph.
-theorem PEqualNP.Outside.R_meta_2264_1
+theorem PEqualNP.Outside.R_meta_2264_611
     (hGraph :
       let G := edgeGraph 11 [(0, 9), (0, 10), (1, 4), (1, 8), (2, 5), (2, 10), (3, 6), (3, 7), (4, 8), (4, 10), (5, 8), (5, 9), (6, 7), (6, 10), (7, 9), (8, 9)]
       ∀ (U : Finset (Sym2 (Fin 11))) (K : Finset (Fin 11)),
