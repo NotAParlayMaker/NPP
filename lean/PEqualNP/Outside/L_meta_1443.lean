@@ -1,4 +1,4 @@
-import Mathlib
+import Mathlib.Tactic.FinCases
 import PEqualNP.Defs
 -- The live-wire semantics and search are adapted from L-meta-1007, Apache-2.0.
 namespace PEqualNP.Outside.L_meta_1443_aux
@@ -836,6 +836,122 @@ lemma exclude_step {k t : Nat} {v : List Sig} {u b : List Sig → Bool} (hv : v.
     · rfl
   exact Bool.false_ne_true (hc.symm.trans (reduced_step h hm hv rfl hu' hb'))
 
+def index (key : Nat) (j : Fin 256) : Fin 256 := Fin.ofNat 256 ((key >>> (8 * j.val)) &&& 255)
+
+def reindex (f : Fin 256 → Fin 256) (x : B) : B :=
+  (BitVec.ofBoolListLE (List.ofFn fun j => x.getLsbD (f j).val)).cast List.length_ofFn
+
+lemma reindex_bit (f : Fin 256 → Fin 256) (a : B) (j : Nat) (hj : j < 256) :
+    (reindex f a).getLsbD j = a.getLsbD (f ⟨j,hj⟩).val := by
+  rw [reindex, BitVec.getLsbD_cast, BitVec.getLsbD_ofBoolListLE]
+  have h : j < (List.ofFn fun x => a.getLsbD (f x).val).length := by simpa only [List.length_ofFn] using hj
+  rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h]
+  exact List.getElem_ofFn h
+
+lemma reindex_and (f : Fin 256 → Fin 256) (a b : B) :
+    reindex f (a &&& b) = reindex f a &&& reindex f b := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro j hj
+  simp only [BitVec.getLsbD_and, reindex_bit _ _ _ hj]
+
+lemma reindex_or (f : Fin 256 → Fin 256) (a b : B) :
+    reindex f (a ||| b) = reindex f a ||| reindex f b := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro j hj
+  simp only [BitVec.getLsbD_or, reindex_bit _ _ _ hj]
+
+lemma reindex_not (f : Fin 256 → Fin 256) (a : B) :
+    reindex f (~~~a) = ~~~reindex f a := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro j hj
+  simp only [BitVec.getLsbD_not, reindex_bit _ _ _ hj, hj, (f ⟨j,hj⟩).isLt, decide_true, Bool.true_and]
+
+lemma reindex_zero (f : Fin 256 → Fin 256) : reindex f 0 = 0 := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro j hj
+  rw [reindex_bit _ _ _ hj]
+  simp
+
+lemma reindex_top (f : Fin 256 → Fin 256) : reindex f top = top := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro j hj
+  simp only [top, reindex_bit _ _ _ hj, BitVec.getLsbD_allOnes, hj, (f ⟨j,hj⟩).isLt, decide_true]
+
+lemma reindex_injective {s inv : Fin 256 → Fin 256} (h : Function.LeftInverse inv s) :
+    Function.Injective (reindex s) := by
+  have hs := Finite.surjective_of_injective h.injective
+  intro a b eq
+  apply BitVec.eq_of_getLsbD_eq
+  intro j hj
+  obtain ⟨x,hx⟩ := hs ⟨j,hj⟩
+  have c := congrArg (fun a : B => a.getLsbD x.val) eq
+  simpa only [reindex_bit _ _ _ x.isLt, Fin.eta, hx] using c
+
+def action (g : Fin 256 ≃ Fin 256) (a : Sig) : Sig :=
+  (reindex g a.1, reindex g a.2)
+
+lemma action_neg (g : Fin 256 ≃ Fin 256) (a : Sig) : action g (neg a) = neg (action g a) := by
+  simp [action, neg, reindex_not]
+
+lemma action_bin (g : Fin 256 ≃ Fin 256) (d : Bool) (a b : Sig) :
+    action g (bin d a b) = bin d (action g a) (action g b) := by
+  cases d <;> simp [action, bin, reindex_and, reindex_or]
+
+lemma action_zero (g : Fin 256 ≃ Fin 256) : action g zero = zero :=
+  Prod.ext (reindex_zero _) (reindex_zero _)
+
+lemma action_one (g : Fin 256 ≃ Fin 256) : action g one = one :=
+  Prod.ext (reindex_top _) (reindex_top _)
+
+lemma action_target (g : Fin 256 ≃ Fin 256) : action g target = target :=
+  Prod.ext (reindex_top _) (reindex_zero _)
+
+set_option maxRecDepth 10000 in
+lemma action_injective (g : Fin 256 ≃ Fin 256) : Function.Injective (action g) := by
+  intro a b eq
+  have hi := reindex_injective (inv := g.symm) g.left_inv
+  have hf : reindex g a.1 = reindex g b.1 :=
+    congrArg (fun x : Sig => x.1) eq
+  have hs : reindex g a.2 = reindex g b.2 :=
+    congrArg (fun x : Sig => x.2) eq
+  exact Prod.ext (hi hf) (hi hs)
+
+lemma action_proper (g : Fin 256 ≃ Fin 256) (a : Sig) (h : proper a) : proper (action g a) := by
+  constructor
+  · intro h0
+    exact h.1 ((action_injective g) (h0.trans (action_zero g).symm))
+  · intro h1
+    exact h.2 ((action_injective g) (h1.trans (action_one g).symm))
+
+lemma restricted_action {k t : Nat} {S : Finset Sig} (h : Live k t S) (g : Fin 256 ≃ Fin 256) :
+    Live k t (S.image (action g)) := by
+  induction h using liveInd with
+  | stop => simpa [action_target] using Live.stop
+  | @unary k t U a ha hf tail ih =>
+    simp only [Finset.image_insert, action_neg] at ih ⊢
+    have hne : neg (action g a) ∉ insert (action g a) (U.image (action g)) := by
+      rw [← Finset.image_insert, ← action_neg]
+      intro hx
+      obtain ⟨y, hy, he⟩ := Finset.mem_image.mp hx
+      exact hf ((action_injective g) he ▸ hy)
+    exact Live.unary (action_proper _ _ ha) hne ih
+  | @binary k t U a b d ha hb hab hf tail ih =>
+    simp only [Finset.image_insert, action_bin] at ih ⊢
+    have hne : bin d (action g a) (action g b) ∉ insert (action g a) (insert (action g b) (U.image (action g))) := by
+      rw [← Finset.image_insert, ← Finset.image_insert, ← action_bin]
+      intro hx
+      obtain ⟨y, hy, he⟩ := Finset.mem_image.mp hx
+      exact hf ((action_injective g) he ▸ hy)
+    exact Live.binary (action_proper _ _ ha) (action_proper _ _ hb) (fun e => hab ((action_injective g) e)) hne ih
+
+lemma rotate_impossible {k t : Nat} {w z : List Sig} (g : Fin 256 ≃ Fin 256)
+    (hp : (w.map (action g)).Perm z) (hn : Impossible k t z) : Impossible k t w := by
+  intro m hm h
+  apply hn m hm
+  suffices hi : z.toFinset = w.toFinset.image (action g) by rw [hi]; exact restricted_action h g
+  ext a
+  simp only [List.mem_toFinset, hp.mem_iff.symm, List.mem_map, Finset.mem_image]
+
 lemma notCount (gs : List Gate)
     (single : ∀ i j : Fin gs.length, (gs.get i).op = .not → (gs.get j).op = .not → i = j) :
     gs.countP (fun g => isNot g.op) ≤ 1 := by
@@ -859,30 +975,93 @@ lemma notCount (gs : List Gate)
     · have flag : isNot g.op = false := Bool.eq_false_iff.mpr (fun h => hg ((isNot_iff _).mp h))
       simpa [List.countP_cons,flag] using ih rest
 
-theorem cost (T : ℕ) (raw : List Sig) (s : ℕ)
-    (raw_id : List.ofFn (fun j : Fin 5 => raw.getD j.val zero) = raw)
-    (samples : ∀ b i, evalT T (sample raw b i) = b)
-    (nd : raw.Nodup) (len : raw.length = 5)
+def Clean (gs : List Gate) : Prop :=
+  ∀ g ∈ gs, (g.op = .and ∨ g.op = .or) ∧ g.inputs.length ≤ 2
+
+private lemma findWire {v : Sig} {w : List Sig} (h : v ∈ w) : ∃ i : Nat, w.getD i zero = v := by
+  obtain ⟨i,hi,eq⟩ := List.mem_iff_getElem.mp h
+  exact ⟨i,by simpa only [List.getD_eq_getElem?_getD,List.getElem?_eq_getElem hi,Option.getD_some] using eq⟩
+
+private lemma replay {k t S} (h : Live k t S) : t = 0 → ∀ (w : List Sig),
+    (∀ v ∈ S, v ∈ w) → ∃ gs : List Gate, Clean gs ∧ gs.length ≤ k ∧ target ∈ execute gs w := by
+  induction h using liveInd with
+  | stop =>
+    intro _ w hw
+    exact ⟨[],by simp [Clean],by simp,hw target (by simp)⟩
+  | unary _ _ _ _ => intro ht; omega
+  | @binary k t U a b d _ _ _ _ _ ih =>
+    intro ht w hw
+    obtain ⟨i,hi⟩ := findWire (hw a (by simp))
+    obtain ⟨j,hj⟩ := findWire (hw b (by simp))
+    let g : Gate := ⟨if d then .or else .and,[i,j]⟩
+    have he : gv w g = bin d a b := by
+      cases d
+      · change bin false (w.getD i zero) (bin false (w.getD j zero) one) = _
+        rw [hi,hj,(bin_laws b).1]
+      · change bin true (w.getD i zero) (bin true (w.getD j zero) zero) = _
+        rw [hi,hj,(bin_laws b).2.1]
+    have hg : (g.op = .and ∨ g.op = .or) ∧ g.inputs.length ≤ 2 := by cases d <;> simp [g]
+    obtain ⟨gs,hgs,len,out⟩ := ih ht (w++[gv w g]) (by
+      intro v hv
+      rcases Finset.mem_insert.mp hv with rfl | hv
+      · simp [he]
+      · exact List.mem_append_left _ (hw _ (by simp [hv])))
+    refine ⟨g::gs,?_,by simp; omega,out⟩
+    intro f hf
+    rcases List.mem_cons.mp hf with rfl | hh
+    · exact hg
+    · exact hgs _ hh
+
+private lemma bit_target (b i) : bit b i target = b := by
+  cases b
+  · simp [bit,target]
+  · exact bit_one true i
+
+theorem from_target (T : Nat) (raw : List Sig)
+    (rid : List.ofFn (fun i : Fin 5 => raw.getD i.val zero) = raw)
+    (rows : ∀ b i, evalT T (sample raw b i) = b)
+    (allRows : ∀ x : Fin 5 → Bool, ∃ b i, sample raw b i = x)
+    (gs : List Gate) (clean : Clean gs) (hit : target ∈ execute gs raw) :
+    ∃ o : Nat, ∀ x, Circuit.eval ⟨gs,o⟩ (List.ofFn x) = evalT T x := by
+  obtain ⟨o,ho⟩ := findWire hit
+  refine ⟨o,?_⟩
+  intro x
+  obtain ⟨b,i,rfl⟩ := allRows x
+  rw [rows,sample_list raw rid]
+  have legal (g : Gate) (hg : g ∈ gs) : g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp) := by
+    rcases (clean g hg).1 with a | a <;> simp [a]
+  change (gs.foldl _ (raw.map (bit b i))).getD o false = b
+  rw [←execute_bits gs b i raw legal,b_read,ho,bit_target]
+
+theorem solve (T : Nat) (raw : List Sig) (cap : Nat)
+    (rid : List.ofFn (fun i : Fin 5 => raw.getD i.val zero) = raw)
+    (rows : ∀ b i, evalT T (sample raw b i) = b)
+    (allRows : ∀ x : Fin 5 → Bool, ∃ b i, sample raw b i = x)
     (essential : raw.all (fun a => unionSep true (raw.erase a) != top) = true)
-    (test : ∀ t : Fin 2, Impossible s t.val raw)
-    (C : Circuit) (legal : PEqualNP.MetaComplexity.FanInTwo C)
-    (single : ∀ i j : Fin C.gates.length, (C.gates.get i).op = .not → (C.gates.get j).op = .not → i = j)
-    (correct : ∀ x, C.eval (List.ofFn x) = evalT T x) : s < C.gates.length := by
-  by_contra! small
-  obtain ⟨k,t,S,hk,count,live,sub⟩ := extract C.gates raw legal (circuit_target T raw raw_id samples C legal correct)
-  have oneNot := notCount C.gates single
-  have eq := necessary raw essential live sub
-  have size := live_size live
-  rw [←eq,List.toFinset_card_of_nodup nd,len] at size
-  exact test ⟨t,by omega⟩ k (by omega) (eq ▸ live)
-
-
+    (noOne : Impossible cap 1 raw)
+    (gs : List Gate) (o : Nat) (legal : PEqualNP.MetaComplexity.FanInTwo (⟨gs,o⟩ : Circuit))
+    (single : ∀ i j : Fin gs.length, (gs.get i).op = .not → (gs.get j).op = .not → i = j)
+    (he : ∀ x, Circuit.eval ⟨gs,o⟩ (List.ofFn x) = evalT T x)
+    (upper : ∃ ds : List Gate, ∃ p : Nat, Clean ds ∧ ds.length = cap+1 ∧
+      ∀ x, Circuit.eval ⟨ds,p⟩ (List.ofFn x) = evalT T x) :
+    ∃ ds : List Gate, ∃ p : Nat, Clean ds ∧ ds.length ≤ gs.length ∧
+      ∀ x, Circuit.eval ⟨ds,p⟩ (List.ofFn x) = evalT T x := by
+  by_cases small : gs.length ≤ cap
+  · obtain ⟨k,t,S,hk,ht,live,sub⟩ := extract gs raw legal (circuit_target T raw rid rows ⟨gs,o⟩ legal he)
+    have h1 := notCount gs single
+    by_cases z : t = 0
+    · obtain ⟨ds,hds,n,hit⟩ := replay live z raw sub
+      obtain ⟨p,hp⟩ := from_target T raw rid rows allRows ds hds hit
+      exact ⟨ds,p,hds,by omega,hp⟩
+    · have one : t = 1 := by omega
+      subst t
+      have eq := necessary raw essential live sub
+      exact (noOne k (by omega) (eq ▸ live)).elim
+  · obtain ⟨ds,p,hds,n,hp⟩ := upper
+    exact ⟨ds,p,hds,by omega,hp⟩
 open PEqualNP.CircuitLowerBounds
 def r0 : List Sig := [(0xf000fff000fff000fff000ffffff000ffffffffffff000fff000fff000fff000,0xa0aa0aa0aa0aa0aa0aa0aa0aa0aa0aa0aa0aa0aa0aa0aa0aa0aa0aa0aa0aa0aa),(0xffffffffff000000ffffff000ffffff000fff000ffffff000000ffffffffffff,0xc20c20c20c20c20c20c20c20c20c20c20c20c20c20c20c20c20c20c20c20c20c),(0xffffffffffffffff000000000fffffffff000000ffffffffffff000000ffffff,0x430430430430430430430430430430430430430430430430430430430430430),(0xfffffffffffffffffffff000000000000000ffffffffffffffffff000000,0x8c08c08c08c08c08c08c08c08c08c08c08c08c08c08c08c08c08c08c08c08c0),(0xffffffffffffffffffffffffffffffffffff000000000000000000000000,0xf00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00f00)]
 
-set_option maxRecDepth 24000 in
-set_option maxHeartbeats 0 in
-lemma negative0_0 : Impossible 5 0 r0 := exclude_search (by decide +kernel) (by decide +kernel)
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
@@ -898,21 +1077,12 @@ lemma fn0 (gs : List Gate) (o : ℕ)
       gs'.length ≤ gs.length ∧ ∀ x : Fin 5 → Bool, Circuit.eval ⟨gs',o'⟩ (List.ofFn x) = evalT 4276812992 x := by
   have legal : PEqualNP.MetaComplexity.FanInTwo (⟨gs,o⟩ : Circuit) := by
     simpa only [PEqualNP.MetaComplexity.FanInTwo,Set.mem_insert_iff,Set.mem_singleton_iff] using h
-  have bound := cost 4276812992 r0 5 (by rfl) (by decide +kernel) (by decide +kernel)
-    (by rfl) (by decide +kernel) (by
-      intro t; fin_cases t
-      · exact negative0_0
-      · exact negative0_1) ⟨gs,o⟩ legal hn he
-  refine ⟨[⟨.and,[0,4]⟩,⟨.and,[1,2]⟩,⟨.or,[5,6]⟩,⟨.or,[1,2]⟩,⟨.and,[8,3]⟩,⟨.or,[7,9]⟩],10,by simp,?_,by decide +kernel⟩
-  change 5 < gs.length at bound
-  change 6 ≤ gs.length
-  omega
+  exact solve 4276812992 r0 5 (by rfl) (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) negative0_1 gs o legal hn he
+    ⟨[⟨.and,[0,4]⟩,⟨.and,[1,2]⟩,⟨.or,[5,6]⟩,⟨.or,[1,2]⟩,⟨.and,[8,3]⟩,⟨.or,[7,9]⟩],10,by simp [Clean],rfl,by decide +kernel⟩
 
 def r1 : List Sig := [(0xfffffffff001fffff800fffffc007ffffffffff800fffffffffff001ffffffff,0x0),(0x1ffc007ffffe003fffff001fffff800ffe003fffff001ffc007ffffe003ff800,0x4248490921242484909212424849092124248490921242484909212424849092),(0xe000007fffffffc00000001ffffffff000003fffffffe000007fffffffc00000,0x949292524a4949292524a4949292524a4949292524a4949292524a4949292524),(0x7fffffffffffffffe00000000000003fffffffffffff80000000000000,0x18e31c638c718e31c638c718e31c638c718e31c638c718e31c638c718e31c638),(0x7fffffffffffffffffffffffffffffc000000000000000000000000000,0x1f03e07c0f81f03e07c0f81f03e07c0f81f03e07c0f81f03e07c0f81f03e07c0)]
 
-set_option maxRecDepth 24000 in
-set_option maxHeartbeats 0 in
-lemma negative1_0 : Impossible 3 0 r1 := exclude_search (by decide +kernel) (by decide +kernel)
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
@@ -928,21 +1098,12 @@ lemma fn1 (gs : List Gate) (o : ℕ)
       gs'.length ≤ gs.length ∧ ∀ x : Fin 5 → Bool, Circuit.eval ⟨gs',o'⟩ (List.ofFn x) = evalT 4008372970 x := by
   have legal : PEqualNP.MetaComplexity.FanInTwo (⟨gs,o⟩ : Circuit) := by
     simpa only [PEqualNP.MetaComplexity.FanInTwo,Set.mem_insert_iff,Set.mem_singleton_iff] using h
-  have bound := cost 4008372970 r1 3 (by rfl) (by decide +kernel) (by decide +kernel)
-    (by rfl) (by decide +kernel) (by
-      intro t; fin_cases t
-      · exact negative1_0
-      · exact negative1_1) ⟨gs,o⟩ legal hn he
-  refine ⟨[⟨.and,[3,4]⟩,⟨.or,[2,5]⟩,⟨.and,[1,6]⟩,⟨.or,[0,7]⟩],8,by simp,?_,by decide +kernel⟩
-  change 3 < gs.length at bound
-  change 4 ≤ gs.length
-  omega
+  exact solve 4008372970 r1 3 (by rfl) (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) negative1_1 gs o legal hn he
+    ⟨[⟨.and,[3,4]⟩,⟨.or,[2,5]⟩,⟨.and,[1,6]⟩,⟨.or,[0,7]⟩],8,by simp [Clean],rfl,by decide +kernel⟩
 
 def r2 : List Sig := [(0x1ffffffff001fffff800fffffc007ffffffffff800fffffc007ffffe003fffff,0x4008010020040080100200400801002004008010020040080100200400801002),(0xe003fffffffe003fffff001fffff800ffe003fffff001fffff800fffffc007ff,0x8210420841082104208410821042084108210420841082104208410821042084),(0xfffc007fffffffc00000001ffffffff000003fffffffe00000000ffffffff800,0x14a294528a514a294528a514a294528a514a294528a514a294528a514a294528),(0x7fffffffffffffffe00000000000003ffffffffffffffff00000000000,0x18c318630c618c318630c618c318630c618c318630c618c318630c618c318630),(0x7fffffffffffffffffffffffffffffc000000000000000000000000000,0x1f03e07c0f81f03e07c0f81f03e07c0f81f03e07c0f81f03e07c0f81f03e07c0)]
 
-set_option maxRecDepth 24000 in
-set_option maxHeartbeats 0 in
-lemma negative2_0 : Impossible 5 0 r2 := exclude_search (by decide +kernel) (by decide +kernel)
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
@@ -958,21 +1119,12 @@ lemma fn2 (gs : List Gate) (o : ℕ)
       gs'.length ≤ gs.length ∧ ∀ x : Fin 5 → Bool, Circuit.eval ⟨gs',o'⟩ (List.ofFn x) = evalT 4008373992 x := by
   have legal : PEqualNP.MetaComplexity.FanInTwo (⟨gs,o⟩ : Circuit) := by
     simpa only [PEqualNP.MetaComplexity.FanInTwo,Set.mem_insert_iff,Set.mem_singleton_iff] using h
-  have bound := cost 4008373992 r2 5 (by rfl) (by decide +kernel) (by decide +kernel)
-    (by rfl) (by decide +kernel) (by
-      intro t; fin_cases t
-      · exact negative2_0
-      · exact negative2_1) ⟨gs,o⟩ legal hn he
-  refine ⟨[⟨.or,[0,1]⟩,⟨.or,[1,4]⟩,⟨.and,[0,6]⟩,⟨.or,[7,2]⟩,⟨.or,[8,3]⟩,⟨.and,[5,9]⟩],10,by simp,?_,by decide +kernel⟩
-  change 5 < gs.length at bound
-  change 6 ≤ gs.length
-  omega
+  exact solve 4008373992 r2 5 (by rfl) (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) negative2_1 gs o legal hn he
+    ⟨[⟨.or,[0,1]⟩,⟨.or,[1,4]⟩,⟨.and,[0,6]⟩,⟨.or,[7,2]⟩,⟨.or,[8,3]⟩,⟨.and,[5,9]⟩],10,by simp [Clean],rfl,by decide +kernel⟩
 
 def r3 : List Sig := [(0xe003fffff001fffff800fffffc007ffffe003fffff001fffff800fffffc007ff,0x40280500a0140280500a0140280500a0140280500a0140280500a0140280500a),(0xfffc007ffffe003fffff001fffff800fffffc007ffffe003fffff001fffff800,0x80300600c0180300600c0180300600c0180300600c0180300600c0180300600c),(0xffffffffffffffc00000001ffffffff000000007fffffffc00000001ffffffff,0x1542a8550aa1542a8550aa1542a8550aa1542a8550aa1542a8550aa1542a8550),(0x7fffffffffffffffe00000000000000007fffffffffffffffe00000000,0x198330660cc198330660cc198330660cc198330660cc198330660cc198330660),(0x7ffffffffffffffffffffffffffffffff8000000000000000000000000,0x1e03c0780f01e03c0780f01e03c0780f01e03c0780f01e03c0780f01e03c0780)]
 
-set_option maxRecDepth 24000 in
-set_option maxHeartbeats 0 in
-lemma negative3_0 : Impossible 3 0 r3 := exclude_search (by decide +kernel) (by decide +kernel)
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
@@ -988,21 +1140,12 @@ lemma fn3 (gs : List Gate) (o : ℕ)
       gs'.length ≤ gs.length ∧ ∀ x : Fin 5 → Bool, Circuit.eval ⟨gs',o'⟩ (List.ofFn x) = evalT 4008636128 x := by
   have legal : PEqualNP.MetaComplexity.FanInTwo (⟨gs,o⟩ : Circuit) := by
     simpa only [PEqualNP.MetaComplexity.FanInTwo,Set.mem_insert_iff,Set.mem_singleton_iff] using h
-  have bound := cost 4008636128 r3 3 (by rfl) (by decide +kernel) (by decide +kernel)
-    (by rfl) (by decide +kernel) (by
-      intro t; fin_cases t
-      · exact negative3_0
-      · exact negative3_1) ⟨gs,o⟩ legal hn he
-  refine ⟨[⟨.or,[0,1]⟩,⟨.or,[2,3]⟩,⟨.or,[6,4]⟩,⟨.and,[5,7]⟩],8,by simp,?_,by decide +kernel⟩
-  change 3 < gs.length at bound
-  change 4 ≤ gs.length
-  omega
+  exact solve 4008636128 r3 3 (by rfl) (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) negative3_1 gs o legal hn he
+    ⟨[⟨.or,[0,1]⟩,⟨.or,[2,3]⟩,⟨.or,[6,4]⟩,⟨.and,[5,7]⟩],8,by simp [Clean],rfl,by decide +kernel⟩
 
 def r4 : List Sig := [(0x1ffffffff001ffc007ff001fffff800ffffffff800fffffc007ffffe003fffff,0x4208410821042084108210420841082104208410821042084108210420841082),(0xe003fffffffe000007ffffe003fffff001ffffffff001fffff800fffffc007ff,0x8410821042084108210420841082104208410821042084108210420841082104),(0xfffc007ffffffffff800000003fffffffe003fffffffe00000000ffffffff800,0x8a1142284508a1142284508a1142284508a1142284508a1142284508a114228),(0x7ffffffffffffffffffc00000000003ffffffffffffffff00000000000,0x10c2184308610c2184308610c2184308610c2184308610c2184308610c218430),(0x7fffffffffffffffffffffffffffffc000000000000000000000000000,0x1f03e07c0f81f03e07c0f81f03e07c0f81f03e07c0f81f03e07c0f81f03e07c0)]
 
-set_option maxRecDepth 24000 in
-set_option maxHeartbeats 0 in
-lemma negative4_0 : Impossible 7 0 r4 := exclude_search (by decide +kernel) (by decide +kernel)
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
@@ -1018,21 +1161,12 @@ lemma fn4 (gs : List Gate) (o : ℕ)
       gs'.length ≤ gs.length ∧ ∀ x : Fin 5 → Bool, Circuit.eval ⟨gs',o'⟩ (List.ofFn x) = evalT 4276678376 x := by
   have legal : PEqualNP.MetaComplexity.FanInTwo (⟨gs,o⟩ : Circuit) := by
     simpa only [PEqualNP.MetaComplexity.FanInTwo,Set.mem_insert_iff,Set.mem_singleton_iff] using h
-  have bound := cost 4276678376 r4 7 (by rfl) (by decide +kernel) (by decide +kernel)
-    (by rfl) (by decide +kernel) (by
-      intro t; fin_cases t
-      · exact negative4_0
-      · exact negative4_1) ⟨gs,o⟩ legal hn he
-  refine ⟨[⟨.and,[0,1]⟩,⟨.or,[5,2]⟩,⟨.or,[0,1]⟩,⟨.and,[7,6]⟩,⟨.or,[8,3]⟩,⟨.and,[6,4]⟩,⟨.or,[7,10]⟩,⟨.and,[11,9]⟩],12,by simp,?_,by decide +kernel⟩
-  change 7 < gs.length at bound
-  change 8 ≤ gs.length
-  omega
+  exact solve 4276678376 r4 7 (by rfl) (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) negative4_1 gs o legal hn he
+    ⟨[⟨.and,[0,1]⟩,⟨.or,[5,2]⟩,⟨.or,[0,1]⟩,⟨.and,[7,6]⟩,⟨.or,[8,3]⟩,⟨.and,[6,4]⟩,⟨.or,[7,10]⟩,⟨.and,[11,9]⟩],12,by simp [Clean],rfl,by decide +kernel⟩
 
 def r5 : List Sig := [(0xfffffffff001ffc007ff001fffff800fffffffffff001fffffffffffffffffff,0x0),(0x1ffc007ffffe000007ffffe003fffff001ffc007ffffe003ff800ffe003ff800,0x44a89512a2544a89512a2544a89512a2544a89512a2544a89512a2544a89512a),(0xe000007ffffffffff800000003fffffffe000007fffffffc00000fffffc00000,0x89312624c4989312624c4989312624c4989312624c4989312624c4989312624c),(0x7ffffffffffffffffffc00000000000007fffffffffffff00000000000,0x11c2384708e11c2384708e11c2384708e11c2384708e11c2384708e11c238470),(0x7ffffffffffffffffffffffffffffffff8000000000000000000000000,0x1e03c0780f01e03c0780f01e03c0780f01e03c0780f01e03c0780f01e03c0780)]
 
-set_option maxRecDepth 24000 in
-set_option maxHeartbeats 0 in
-lemma negative5_0 : Impossible 7 0 r5 := exclude_search (by decide +kernel) (by decide +kernel)
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
@@ -1048,175 +1182,86 @@ lemma fn5 (gs : List Gate) (o : ℕ)
       gs'.length ≤ gs.length ∧ ∀ x : Fin 5 → Bool, Circuit.eval ⟨gs',o'⟩ (List.ofFn x) = evalT 4276808362 x := by
   have legal : PEqualNP.MetaComplexity.FanInTwo (⟨gs,o⟩ : Circuit) := by
     simpa only [PEqualNP.MetaComplexity.FanInTwo,Set.mem_insert_iff,Set.mem_singleton_iff] using h
-  have bound := cost 4276808362 r5 7 (by rfl) (by decide +kernel) (by decide +kernel)
-    (by rfl) (by decide +kernel) (by
-      intro t; fin_cases t
-      · exact negative5_0
-      · exact negative5_1) ⟨gs,o⟩ legal hn he
-  refine ⟨[⟨.and,[1,2]⟩,⟨.and,[5,3]⟩,⟨.or,[0,6]⟩,⟨.or,[5,3]⟩,⟨.or,[1,2]⟩,⟨.and,[9,8]⟩,⟨.and,[10,4]⟩,⟨.or,[7,11]⟩],12,by simp,?_,by decide +kernel⟩
-  change 7 < gs.length at bound
-  change 8 ≤ gs.length
-  omega
-
-def r6 : List Sig := [(0x1ffffffff001ffc007ff001fffff800fffffffffff001ffffffffffe003fffff,0x4008010020040080100200400801002004008010020040080100200400801002),(0xe003fffffffe000007ffffe003fffff001ffc007ffffe003ff800fffffc007ff,0x8490921242484909212424849092124248490921242484909212424849092124),(0xfffc007ffffffffff800000003fffffffe000007fffffffc00000ffffffff800,0x921242484909212424849092124248490921242484909212424849092124248),(0x7ffffffffffffffffffc00000000000007fffffffffffff00000000000,0x11c2384708e11c2384708e11c2384708e11c2384708e11c2384708e11c238470),(0x7ffffffffffffffffffffffffffffffff8000000000000000000000000,0x1e03c0780f01e03c0780f01e03c0780f01e03c0780f01e03c0780f01e03c0780)]
-
-def s6_0u : List (List Sig) := []
-
-lemma s6_0ux (v : List Sig) (h : (!s6_0u.contains v) = false) : Impossible 7 0 v := by
-  simp [s6_0u] at h
-
-def s6_0b0 : List Sig := [bin false (r6.getD 0 zero) (r6.getD 1 zero),r6.getD 0 zero,r6.getD 1 zero,r6.getD 2 zero,r6.getD 3 zero,r6.getD 4 zero]
+  exact solve 4276808362 r5 7 (by rfl) (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) negative5_1 gs o legal hn he
+    ⟨[⟨.and,[1,2]⟩,⟨.and,[5,3]⟩,⟨.or,[0,6]⟩,⟨.or,[5,3]⟩,⟨.or,[1,2]⟩,⟨.and,[9,8]⟩,⟨.and,[10,4]⟩,⟨.or,[7,11]⟩],12,by simp [Clean],rfl,by decide +kernel⟩
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b0x : Impossible 7 0 s6_0b0 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b1 : List Sig := [bin true (r6.getD 0 zero) (r6.getD 1 zero),r6.getD 0 zero,r6.getD 1 zero,r6.getD 2 zero,r6.getD 3 zero,r6.getD 4 zero]
-
-set_option maxRecDepth 24000 in
-set_option maxHeartbeats 0 in
-lemma s6_0b1x : Impossible 7 0 s6_0b1 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b2 : List Sig := [bin false (r6.getD 0 zero) (r6.getD 2 zero),r6.getD 0 zero,r6.getD 2 zero,r6.getD 1 zero,r6.getD 3 zero,r6.getD 4 zero]
+def sym6_2 : Fin 256 ≃ Fin 256 :=
+  ⟨index 0xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e4e5e3e1e2e0dedfdddcdbd9dad8d6d7d5d3d4d2d1bab8b9b7b5b6b4b2b3b1b0afadaeacaaaba9a7a8a6a5d0cecfcdcbcccac8c9c7c6c5c3c4c2c0c1bfbdbebcbba4a2a3a19fa09e9c9d9b9a999798969495939192908f8e8c8d8b898a88868785847876777573747270716f6e838182807e7f7d7b7c7a796d6b6c6a686967656664636260615f5d5e5c5a5b5958575556545253514f504e4d413f403e3c3d3b393a38374c4a4b4947484644454342363435333132302e2f2d2c2b292a2826272523242221201e1f1d1b1c1a181917160a080907050604020301001513141210110f0d0e0c0b,index 0xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e4e5e3e1e2e0dedfdddcdbd9dad8d6d7d5d3d4d2d1bab8b9b7b5b6b4b2b3b1b0afadaeacaaaba9a7a8a6a5d0cecfcdcbcccac8c9c7c6c5c3c4c2c0c1bfbdbebcbba4a2a3a19fa09e9c9d9b9a999798969495939192908f8e8c8d8b898a88868785847876777573747270716f6e838182807e7f7d7b7c7a796d6b6c6a686967656664636260615f5d5e5c5a5b5958575556545253514f504e4d413f403e3c3d3b393a38374c4a4b4947484644454342363435333132302e2f2d2c2b292a2826272523242221201e1f1d1b1c1a181917160a080907050604020301001513141210110f0d0e0c0b,by decide +kernel,by decide +kernel⟩
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b2x : Impossible 7 0 s6_0b2 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b3 : List Sig := [bin true (r6.getD 0 zero) (r6.getD 2 zero),r6.getD 0 zero,r6.getD 2 zero,r6.getD 1 zero,r6.getD 3 zero,r6.getD 4 zero]
-
-set_option maxRecDepth 24000 in
-set_option maxHeartbeats 0 in
-lemma s6_0b3x : Impossible 7 0 s6_0b3 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b4 : List Sig := [bin false (r6.getD 0 zero) (r6.getD 3 zero),r6.getD 0 zero,r6.getD 3 zero,r6.getD 1 zero,r6.getD 2 zero,r6.getD 4 zero]
+def sym6_1 : Fin 256 ≃ Fin 256 :=
+  ⟨index 0xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e2e1e0e5e4e3dfdedddcdbd7d6d5dad9d8d4d3d2d1d0cccbcacfcecdc9c8c7c6c5c1c0bfc4c3c2bebdbcbbbab6b5b4b9b8b7b3b2b1b0afabaaa9aeadaca8a7a6a5a4a09f9ea3a2a19d9c9b9a625e5d5c61605f5b5a595857535251565554504f4e4d4c4847464b4a4945444342413d3c3b403f3e3a393837363231303534332f2e2d2c999594939897969291908f8e8a89888d8c8b87868584837f7e7d8281807c7b7a797874737277767571706f6e6d6968676c6b6a666564632b2726252a292824232221201c1b1a1f1e1d191817161511100f1413120e0d0c0b0a06050409080703020100,index 0xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e2e1e0e5e4e3dfdedddcdbd7d6d5dad9d8d4d3d2d1d0cccbcacfcecdc9c8c7c6c5c1c0bfc4c3c2bebdbcbbbab6b5b4b9b8b7b3b2b1b0afabaaa9aeadaca8a7a6a5a4a09f9ea3a2a19d9c9b9a625e5d5c61605f5b5a595857535251565554504f4e4d4c4847464b4a4945444342413d3c3b403f3e3a393837363231303534332f2e2d2c999594939897969291908f8e8a89888d8c8b87868584837f7e7d8281807c7b7a797874737277767571706f6e6d6968676c6b6a666564632b2726252a292824232221201c1b1a1f1e1d191817161511100f1413120e0d0c0b0a06050409080703020100,by decide +kernel,by decide +kernel⟩
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b4x : Impossible 7 0 s6_0b4 := exclude_search (by decide +kernel) (by decide +kernel)
+def sym6_3 : Fin 256 ≃ Fin 256 :=
+  ⟨index 0xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e1e2e0e4e5e3dedfdddcdbd6d7d5d9dad8d3d4d2d1bab5b6b4b8b9b7b2b3b1b0afaaaba9adaeaca7a8a6a5d0cbcccacecfcdc8c9c7c6c5c0c1bfc3c4c2bdbebcbba49fa09ea2a3a19c9d9b9a625d5e5c60615f5a5b5958575253515556544f504e4d413c3d3b3f403e393a38374c4748464a4b4944454342363132303435332e2f2d2c999495939798969192908f8e898a888c8d8b868785847873747276777570716f6e837e7f7d8182807b7c7a796d6869676b6c6a656664632b262725292a2823242221201b1c1a1e1f1d181917160a050604080907020301001510110f1314120d0e0c0b,index 0xfffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e1e2e0e4e5e3dedfdddcdbd6d7d5d9dad8d3d4d2d1bab5b6b4b8b9b7b2b3b1b0afaaaba9adaeaca7a8a6a5d0cbcccacecfcdc8c9c7c6c5c0c1bfc3c4c2bdbebcbba49fa09ea2a3a19c9d9b9a625d5e5c60615f5a5b5958575253515556544f504e4d413c3d3b3f403e393a38374c4748464a4b4944454342363132303435332e2f2d2c999495939798969192908f8e898a888c8d8b868785847873747276777570716f6e837e7f7d8182807b7c7a796d6869676b6c6a656664632b262725292a2823242221201b1c1a1e1f1d181917160a050604080907020301001510110f1314120d0e0c0b,by decide +kernel,by decide +kernel⟩
 
-def s6_0b5 : List Sig := [bin true (r6.getD 0 zero) (r6.getD 3 zero),r6.getD 0 zero,r6.getD 3 zero,r6.getD 1 zero,r6.getD 2 zero,r6.getD 4 zero]
-
-set_option maxRecDepth 24000 in
-set_option maxHeartbeats 0 in
-lemma s6_0b5x : Impossible 7 0 s6_0b5 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b6 : List Sig := [bin false (r6.getD 0 zero) (r6.getD 4 zero),r6.getD 0 zero,r6.getD 4 zero,r6.getD 1 zero,r6.getD 2 zero,r6.getD 3 zero]
+def r6 : List Sig := [(0xfffffffff001ffc007ff001fffff800fffffffffff001ffffffffffe003fffff,0x20040080100200400801002004008010020040080100200400801002),(0xfffffffffffe000007ffffe003fffff001ffc007ffffe003ff800fffffc007ff,0x1242484909212424849092124248490921242484909212424849092124),(0xfffffffffffffffff800000003fffffffe000007fffffffc00000ffffffff800,0x2484909212424849092124248490921242484909212424849092124248),(0xfffffffffffffffffffffffffc00000000000007fffffffffffff00000000000,0x4708e11c2384708e11c2384708e11c2384708e11c2384708e11c238470),(0xfffffffffffffffffffffffffffffffffffffff8000000000000000000000000,0x780f01e03c0780f01e03c0780f01e03c0780f01e03c0780f01e03c0780)]
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b6x : Impossible 7 0 s6_0b6 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b7 : List Sig := [bin true (r6.getD 0 zero) (r6.getD 4 zero),r6.getD 0 zero,r6.getD 4 zero,r6.getD 1 zero,r6.getD 2 zero,r6.getD 3 zero]
+lemma rot6_1_0 : action sym6_1 (r6.getD 0 zero) = r6.getD 0 zero := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b7x : Impossible 7 0 s6_0b7 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b8 : List Sig := [bin false (r6.getD 1 zero) (r6.getD 2 zero),r6.getD 1 zero,r6.getD 2 zero,r6.getD 0 zero,r6.getD 3 zero,r6.getD 4 zero]
+lemma rot6_1_1 : action sym6_1 (r6.getD 1 zero) = r6.getD 1 zero := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b8x : Impossible 7 0 s6_0b8 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b9 : List Sig := [bin true (r6.getD 1 zero) (r6.getD 2 zero),r6.getD 1 zero,r6.getD 2 zero,r6.getD 0 zero,r6.getD 3 zero,r6.getD 4 zero]
+lemma rot6_1_2 : action sym6_1 (r6.getD 2 zero) = r6.getD 2 zero := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b9x : Impossible 7 0 s6_0b9 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b10 : List Sig := [bin false (r6.getD 1 zero) (r6.getD 3 zero),r6.getD 1 zero,r6.getD 3 zero,r6.getD 0 zero,r6.getD 2 zero,r6.getD 4 zero]
+lemma rot6_1_3 : action sym6_1 (r6.getD 3 zero) = r6.getD 4 zero := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b10x : Impossible 7 0 s6_0b10 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b11 : List Sig := [bin true (r6.getD 1 zero) (r6.getD 3 zero),r6.getD 1 zero,r6.getD 3 zero,r6.getD 0 zero,r6.getD 2 zero,r6.getD 4 zero]
+lemma rot6_1_4 : action sym6_1 (r6.getD 4 zero) = r6.getD 3 zero := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b11x : Impossible 7 0 s6_0b11 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b12 : List Sig := [bin false (r6.getD 1 zero) (r6.getD 4 zero),r6.getD 1 zero,r6.getD 4 zero,r6.getD 0 zero,r6.getD 2 zero,r6.getD 3 zero]
+lemma rot6_2_0 : action sym6_2 (r6.getD 0 zero) = r6.getD 0 zero := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b12x : Impossible 7 0 s6_0b12 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b13 : List Sig := [bin true (r6.getD 1 zero) (r6.getD 4 zero),r6.getD 1 zero,r6.getD 4 zero,r6.getD 0 zero,r6.getD 2 zero,r6.getD 3 zero]
+lemma rot6_2_1 : action sym6_2 (r6.getD 1 zero) = r6.getD 2 zero := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b13x : Impossible 7 0 s6_0b13 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b14 : List Sig := [bin false (r6.getD 2 zero) (r6.getD 3 zero),r6.getD 2 zero,r6.getD 3 zero,r6.getD 0 zero,r6.getD 1 zero,r6.getD 4 zero]
+lemma rot6_2_2 : action sym6_2 (r6.getD 2 zero) = r6.getD 1 zero := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b14x : Impossible 7 0 s6_0b14 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b15 : List Sig := [bin true (r6.getD 2 zero) (r6.getD 3 zero),r6.getD 2 zero,r6.getD 3 zero,r6.getD 0 zero,r6.getD 1 zero,r6.getD 4 zero]
+lemma rot6_2_3 : action sym6_2 (r6.getD 3 zero) = r6.getD 3 zero := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b15x : Impossible 7 0 s6_0b15 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b16 : List Sig := [bin false (r6.getD 2 zero) (r6.getD 4 zero),r6.getD 2 zero,r6.getD 4 zero,r6.getD 0 zero,r6.getD 1 zero,r6.getD 3 zero]
+lemma rot6_2_4 : action sym6_2 (r6.getD 4 zero) = r6.getD 4 zero := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b16x : Impossible 7 0 s6_0b16 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b17 : List Sig := [bin true (r6.getD 2 zero) (r6.getD 4 zero),r6.getD 2 zero,r6.getD 4 zero,r6.getD 0 zero,r6.getD 1 zero,r6.getD 3 zero]
+lemma rot6_3_0 : action sym6_3 (r6.getD 0 zero) = r6.getD 0 zero := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b17x : Impossible 7 0 s6_0b17 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b18 : List Sig := [bin false (r6.getD 3 zero) (r6.getD 4 zero),r6.getD 3 zero,r6.getD 4 zero,r6.getD 0 zero,r6.getD 1 zero,r6.getD 2 zero]
+lemma rot6_3_1 : action sym6_3 (r6.getD 1 zero) = r6.getD 2 zero := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b18x : Impossible 7 0 s6_0b18 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b19 : List Sig := [bin true (r6.getD 3 zero) (r6.getD 4 zero),r6.getD 3 zero,r6.getD 4 zero,r6.getD 0 zero,r6.getD 1 zero,r6.getD 2 zero]
+lemma rot6_3_2 : action sym6_3 (r6.getD 2 zero) = r6.getD 1 zero := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_0b19x : Impossible 7 0 s6_0b19 := exclude_search (by decide +kernel) (by decide +kernel)
-
-def s6_0b : List (List Sig) := [s6_0b0,s6_0b1,s6_0b2,s6_0b3,s6_0b4,s6_0b5,s6_0b6,s6_0b7,s6_0b8,s6_0b9,s6_0b10,s6_0b11,s6_0b12,s6_0b13,s6_0b14,s6_0b15,s6_0b16,s6_0b17,s6_0b18,s6_0b19]
-
-lemma s6_0bx (v : List Sig) (h : (!s6_0b.contains v) = false) : Impossible 7 0 v := by
-  have hm : v ∈ s6_0b := by simpa using h
-  simp only [s6_0b,List.mem_cons,List.not_mem_nil,or_false] at hm
-  rcases hm with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
-  · exact s6_0b0x
-  · exact s6_0b1x
-  · exact s6_0b2x
-  · exact s6_0b3x
-  · exact s6_0b4x
-  · exact s6_0b5x
-  · exact s6_0b6x
-  · exact s6_0b7x
-  · exact s6_0b8x
-  · exact s6_0b9x
-  · exact s6_0b10x
-  · exact s6_0b11x
-  · exact s6_0b12x
-  · exact s6_0b13x
-  · exact s6_0b14x
-  · exact s6_0b15x
-  · exact s6_0b16x
-  · exact s6_0b17x
-  · exact s6_0b18x
-  · exact s6_0b19x
+lemma rot6_3_3 : action sym6_3 (r6.getD 3 zero) = r6.getD 4 zero := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma negative6_0 : Impossible 8 0 r6 :=
-  exclude_step (u := fun v => !s6_0u.contains v) (b := fun v => !s6_0b.contains v) (by decide +kernel) s6_0ux s6_0bx (by decide +kernel)
-
+lemma rot6_3_4 : action sym6_3 (r6.getD 4 zero) = r6.getD 3 zero := by decide +kernel
 
 def s6_1u0 : List Sig := [neg (r6.getD 0 zero),r6.getD 0 zero,r6.getD 1 zero,r6.getD 2 zero,r6.getD 3 zero,r6.getD 4 zero]
 
@@ -1234,7 +1279,7 @@ def s6_1u2 : List Sig := [neg (r6.getD 2 zero),r6.getD 2 zero,r6.getD 0 zero,r6.
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_1u2x : Impossible 7 0 s6_1u2 := exclude_search (by decide +kernel) (by decide +kernel)
+lemma s6_1u2x : Impossible 7 0 s6_1u2 := rotate_impossible sym6_2 (z := s6_1u1) (by simp only [s6_1u2,List.map_cons,List.map_nil,action_bin,action_neg,rot6_2_0,rot6_2_1,rot6_2_2,rot6_2_3,rot6_2_4]; decide +kernel) s6_1u1x
 
 def s6_1u3 : List Sig := [neg (r6.getD 3 zero),r6.getD 3 zero,r6.getD 0 zero,r6.getD 1 zero,r6.getD 2 zero,r6.getD 4 zero]
 
@@ -1246,7 +1291,7 @@ def s6_1u4 : List Sig := [neg (r6.getD 4 zero),r6.getD 4 zero,r6.getD 0 zero,r6.
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_1u4x : Impossible 7 0 s6_1u4 := exclude_search (by decide +kernel) (by decide +kernel)
+lemma s6_1u4x : Impossible 7 0 s6_1u4 := rotate_impossible sym6_1 (z := s6_1u3) (by simp only [s6_1u4,List.map_cons,List.map_nil,action_bin,action_neg,rot6_1_0,rot6_1_1,rot6_1_2,rot6_1_3,rot6_1_4]; decide +kernel) s6_1u3x
 
 def s6_1u : List (List Sig) := [s6_1u0,s6_1u1,s6_1u2,s6_1u3,s6_1u4]
 
@@ -1276,13 +1321,13 @@ def s6_1b2 : List Sig := [bin false (r6.getD 0 zero) (r6.getD 2 zero),r6.getD 0 
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_1b2x : Impossible 7 1 s6_1b2 := exclude_search (by decide +kernel) (by decide +kernel)
+lemma s6_1b2x : Impossible 7 1 s6_1b2 := rotate_impossible sym6_2 (z := s6_1b0) (by simp only [s6_1b2,List.map_cons,List.map_nil,action_bin,action_neg,rot6_2_0,rot6_2_1,rot6_2_2,rot6_2_3,rot6_2_4]; decide +kernel) s6_1b0x
 
 def s6_1b3 : List Sig := [bin true (r6.getD 0 zero) (r6.getD 2 zero),r6.getD 0 zero,r6.getD 2 zero,r6.getD 1 zero,r6.getD 3 zero,r6.getD 4 zero]
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_1b3x : Impossible 7 1 s6_1b3 := exclude_search (by decide +kernel) (by decide +kernel)
+lemma s6_1b3x : Impossible 7 1 s6_1b3 := rotate_impossible sym6_2 (z := s6_1b1) (by simp only [s6_1b3,List.map_cons,List.map_nil,action_bin,action_neg,rot6_2_0,rot6_2_1,rot6_2_2,rot6_2_3,rot6_2_4]; decide +kernel) s6_1b1x
 
 def s6_1b4 : List Sig := [bin false (r6.getD 0 zero) (r6.getD 3 zero),r6.getD 0 zero,r6.getD 3 zero,r6.getD 1 zero,r6.getD 2 zero,r6.getD 4 zero]
 
@@ -1300,13 +1345,13 @@ def s6_1b6 : List Sig := [bin false (r6.getD 0 zero) (r6.getD 4 zero),r6.getD 0 
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_1b6x : Impossible 7 1 s6_1b6 := exclude_search (by decide +kernel) (by decide +kernel)
+lemma s6_1b6x : Impossible 7 1 s6_1b6 := rotate_impossible sym6_1 (z := s6_1b4) (by simp only [s6_1b6,List.map_cons,List.map_nil,action_bin,action_neg,rot6_1_0,rot6_1_1,rot6_1_2,rot6_1_3,rot6_1_4]; decide +kernel) s6_1b4x
 
 def s6_1b7 : List Sig := [bin true (r6.getD 0 zero) (r6.getD 4 zero),r6.getD 0 zero,r6.getD 4 zero,r6.getD 1 zero,r6.getD 2 zero,r6.getD 3 zero]
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_1b7x : Impossible 7 1 s6_1b7 := exclude_search (by decide +kernel) (by decide +kernel)
+lemma s6_1b7x : Impossible 7 1 s6_1b7 := rotate_impossible sym6_1 (z := s6_1b5) (by simp only [s6_1b7,List.map_cons,List.map_nil,action_bin,action_neg,rot6_1_0,rot6_1_1,rot6_1_2,rot6_1_3,rot6_1_4]; decide +kernel) s6_1b5x
 
 def s6_1b8 : List Sig := [bin false (r6.getD 1 zero) (r6.getD 2 zero),r6.getD 1 zero,r6.getD 2 zero,r6.getD 0 zero,r6.getD 3 zero,r6.getD 4 zero]
 
@@ -1336,37 +1381,37 @@ def s6_1b12 : List Sig := [bin false (r6.getD 1 zero) (r6.getD 4 zero),r6.getD 1
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_1b12x : Impossible 7 1 s6_1b12 := exclude_search (by decide +kernel) (by decide +kernel)
+lemma s6_1b12x : Impossible 7 1 s6_1b12 := rotate_impossible sym6_1 (z := s6_1b10) (by simp only [s6_1b12,List.map_cons,List.map_nil,action_bin,action_neg,rot6_1_0,rot6_1_1,rot6_1_2,rot6_1_3,rot6_1_4]; decide +kernel) s6_1b10x
 
 def s6_1b13 : List Sig := [bin true (r6.getD 1 zero) (r6.getD 4 zero),r6.getD 1 zero,r6.getD 4 zero,r6.getD 0 zero,r6.getD 2 zero,r6.getD 3 zero]
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_1b13x : Impossible 7 1 s6_1b13 := exclude_search (by decide +kernel) (by decide +kernel)
+lemma s6_1b13x : Impossible 7 1 s6_1b13 := rotate_impossible sym6_1 (z := s6_1b11) (by simp only [s6_1b13,List.map_cons,List.map_nil,action_bin,action_neg,rot6_1_0,rot6_1_1,rot6_1_2,rot6_1_3,rot6_1_4]; decide +kernel) s6_1b11x
 
 def s6_1b14 : List Sig := [bin false (r6.getD 2 zero) (r6.getD 3 zero),r6.getD 2 zero,r6.getD 3 zero,r6.getD 0 zero,r6.getD 1 zero,r6.getD 4 zero]
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_1b14x : Impossible 7 1 s6_1b14 := exclude_search (by decide +kernel) (by decide +kernel)
+lemma s6_1b14x : Impossible 7 1 s6_1b14 := rotate_impossible sym6_2 (z := s6_1b10) (by simp only [s6_1b14,List.map_cons,List.map_nil,action_bin,action_neg,rot6_2_0,rot6_2_1,rot6_2_2,rot6_2_3,rot6_2_4]; decide +kernel) s6_1b10x
 
 def s6_1b15 : List Sig := [bin true (r6.getD 2 zero) (r6.getD 3 zero),r6.getD 2 zero,r6.getD 3 zero,r6.getD 0 zero,r6.getD 1 zero,r6.getD 4 zero]
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_1b15x : Impossible 7 1 s6_1b15 := exclude_search (by decide +kernel) (by decide +kernel)
+lemma s6_1b15x : Impossible 7 1 s6_1b15 := rotate_impossible sym6_2 (z := s6_1b11) (by simp only [s6_1b15,List.map_cons,List.map_nil,action_bin,action_neg,rot6_2_0,rot6_2_1,rot6_2_2,rot6_2_3,rot6_2_4]; decide +kernel) s6_1b11x
 
 def s6_1b16 : List Sig := [bin false (r6.getD 2 zero) (r6.getD 4 zero),r6.getD 2 zero,r6.getD 4 zero,r6.getD 0 zero,r6.getD 1 zero,r6.getD 3 zero]
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_1b16x : Impossible 7 1 s6_1b16 := exclude_search (by decide +kernel) (by decide +kernel)
+lemma s6_1b16x : Impossible 7 1 s6_1b16 := rotate_impossible sym6_3 (z := s6_1b10) (by simp only [s6_1b16,List.map_cons,List.map_nil,action_bin,action_neg,rot6_3_0,rot6_3_1,rot6_3_2,rot6_3_3,rot6_3_4]; decide +kernel) s6_1b10x
 
 def s6_1b17 : List Sig := [bin true (r6.getD 2 zero) (r6.getD 4 zero),r6.getD 2 zero,r6.getD 4 zero,r6.getD 0 zero,r6.getD 1 zero,r6.getD 3 zero]
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma s6_1b17x : Impossible 7 1 s6_1b17 := exclude_search (by decide +kernel) (by decide +kernel)
+lemma s6_1b17x : Impossible 7 1 s6_1b17 := rotate_impossible sym6_3 (z := s6_1b11) (by simp only [s6_1b17,List.map_cons,List.map_nil,action_bin,action_neg,rot6_3_0,rot6_3_1,rot6_3_2,rot6_3_3,rot6_3_4]; decide +kernel) s6_1b11x
 
 def s6_1b18 : List Sig := [bin false (r6.getD 3 zero) (r6.getD 4 zero),r6.getD 3 zero,r6.getD 4 zero,r6.getD 0 zero,r6.getD 1 zero,r6.getD 2 zero]
 
@@ -1423,21 +1468,12 @@ lemma fn6 (gs : List Gate) (o : ℕ)
       gs'.length ≤ gs.length ∧ ∀ x : Fin 5 → Bool, Circuit.eval ⟨gs',o'⟩ (List.ofFn x) = evalT 4276808424 x := by
   have legal : PEqualNP.MetaComplexity.FanInTwo (⟨gs,o⟩ : Circuit) := by
     simpa only [PEqualNP.MetaComplexity.FanInTwo,Set.mem_insert_iff,Set.mem_singleton_iff] using h
-  have bound := cost 4276808424 r6 8 (by rfl) (by decide +kernel) (by decide +kernel)
-    (by rfl) (by decide +kernel) (by
-      intro t; fin_cases t
-      · exact negative6_0
-      · exact negative6_1) ⟨gs,o⟩ legal hn he
-  refine ⟨[⟨.and,[1,2]⟩,⟨.or,[0,5]⟩,⟨.or,[1,2]⟩,⟨.and,[7,3]⟩,⟨.or,[6,8]⟩,⟨.or,[7,3]⟩,⟨.and,[6,10]⟩,⟨.or,[11,4]⟩,⟨.and,[9,12]⟩],13,by simp,?_,by decide +kernel⟩
-  change 8 < gs.length at bound
-  change 9 ≤ gs.length
-  omega
+  exact solve 4276808424 r6 8 (by rfl) (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) negative6_1 gs o legal hn he
+    ⟨[⟨.and,[1,2]⟩,⟨.or,[0,5]⟩,⟨.or,[1,2]⟩,⟨.and,[7,3]⟩,⟨.or,[6,8]⟩,⟨.or,[7,3]⟩,⟨.and,[6,10]⟩,⟨.or,[11,4]⟩,⟨.and,[9,12]⟩],13,by simp [Clean],rfl,by decide +kernel⟩
 
 def r7 : List Sig := [(0x1ffffffff001ffc007ff001fffff800fffffffffff001fffff800ffe003fffff,0x4088110220440881102204408811022044088110220440881102204408811022),(0xe003fffffffe000007ffffe003fffff001ffc007ffffe003ffffffffffc007ff,0x8410821042084108210420841082104208410821042084108210420841082104),(0xfffc007ffffffffff800000003fffffffe000007fffffffc00000ffffffff800,0x921242484909212424849092124248490921242484909212424849092124248),(0x7ffffffffffffffffffc00000000000007fffffffffffff00000000000,0x11c2384708e11c2384708e11c2384708e11c2384708e11c2384708e11c238470),(0x7ffffffffffffffffffffffffffffffff8000000000000000000000000,0x1e03c0780f01e03c0780f01e03c0780f01e03c0780f01e03c0780f01e03c0780)]
 
-set_option maxRecDepth 24000 in
-set_option maxHeartbeats 0 in
-lemma negative7_0 : Impossible 7 0 r7 := exclude_search (by decide +kernel) (by decide +kernel)
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
@@ -1453,21 +1489,12 @@ lemma fn7 (gs : List Gate) (o : ℕ)
       gs'.length ≤ gs.length ∧ ∀ x : Fin 5 → Bool, Circuit.eval ⟨gs',o'⟩ (List.ofFn x) = evalT 4276808936 x := by
   have legal : PEqualNP.MetaComplexity.FanInTwo (⟨gs,o⟩ : Circuit) := by
     simpa only [PEqualNP.MetaComplexity.FanInTwo,Set.mem_insert_iff,Set.mem_singleton_iff] using h
-  have bound := cost 4276808936 r7 7 (by rfl) (by decide +kernel) (by decide +kernel)
-    (by rfl) (by decide +kernel) (by
-      intro t; fin_cases t
-      · exact negative7_0
-      · exact negative7_1) ⟨gs,o⟩ legal hn he
-  refine ⟨[⟨.or,[0,1]⟩,⟨.or,[0,2]⟩,⟨.or,[0,3]⟩,⟨.and,[5,2]⟩,⟨.and,[6,4]⟩,⟨.or,[1,9]⟩,⟨.and,[10,7]⟩,⟨.or,[8,11]⟩],12,by simp,?_,by decide +kernel⟩
-  change 7 < gs.length at bound
-  change 8 ≤ gs.length
-  omega
+  exact solve 4276808936 r7 7 (by rfl) (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) negative7_1 gs o legal hn he
+    ⟨[⟨.or,[0,1]⟩,⟨.or,[0,2]⟩,⟨.or,[0,3]⟩,⟨.and,[5,2]⟩,⟨.and,[6,4]⟩,⟨.or,[1,9]⟩,⟨.and,[10,7]⟩,⟨.or,[8,11]⟩],12,by simp [Clean],rfl,by decide +kernel⟩
 
 def r8 : List Sig := [(0xe003fffff001ffc007ff001fffff800fffffffffff001fffff800fffffc007ff,0x40280500a0140280500a0140280500a0140280500a0140280500a0140280500a),(0xfffc007ffffe000007ffffe003fffff001ffc007ffffe003fffff001fffff800,0x84308610c2184308610c2184308610c2184308610c2184308610c2184308610c),(0xfffffffffffffffff800000003fffffffe000007fffffffc00000001ffffffff,0x941282504a0941282504a0941282504a0941282504a0941282504a094128250),(0x7ffffffffffffffffffc00000000000007fffffffffffffffe00000000,0x1182304608c1182304608c1182304608c1182304608c1182304608c118230460),(0x7ffffffffffffffffffffffffffffffff8000000000000000000000000,0x1e03c0780f01e03c0780f01e03c0780f01e03c0780f01e03c0780f01e03c0780)]
 
-set_option maxRecDepth 24000 in
-set_option maxHeartbeats 0 in
-lemma negative8_0 : Impossible 6 0 r8 := exclude_search (by decide +kernel) (by decide +kernel)
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
@@ -1483,21 +1510,12 @@ lemma fn8 (gs : List Gate) (o : ℕ)
       gs'.length ≤ gs.length ∧ ∀ x : Fin 5 → Bool, Circuit.eval ⟨gs',o'⟩ (List.ofFn x) = evalT 4276809440 x := by
   have legal : PEqualNP.MetaComplexity.FanInTwo (⟨gs,o⟩ : Circuit) := by
     simpa only [PEqualNP.MetaComplexity.FanInTwo,Set.mem_insert_iff,Set.mem_singleton_iff] using h
-  have bound := cost 4276809440 r8 6 (by rfl) (by decide +kernel) (by decide +kernel)
-    (by rfl) (by decide +kernel) (by
-      intro t; fin_cases t
-      · exact negative8_0
-      · exact negative8_1) ⟨gs,o⟩ legal hn he
-  refine ⟨[⟨.or,[0,1]⟩,⟨.and,[2,3]⟩,⟨.or,[0,6]⟩,⟨.or,[2,3]⟩,⟨.and,[5,8]⟩,⟨.and,[7,4]⟩,⟨.or,[9,10]⟩],11,by simp,?_,by decide +kernel⟩
-  change 6 < gs.length at bound
-  change 7 ≤ gs.length
-  omega
+  exact solve 4276809440 r8 6 (by rfl) (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) negative8_1 gs o legal hn he
+    ⟨[⟨.or,[0,1]⟩,⟨.and,[2,3]⟩,⟨.or,[0,6]⟩,⟨.or,[2,3]⟩,⟨.and,[5,8]⟩,⟨.and,[7,4]⟩,⟨.or,[9,10]⟩],11,by simp [Clean],rfl,by decide +kernel⟩
 
 def r9 : List Sig := [(0xe003fffff001ffc007ff001fffff800fffffffffff001ffc007ff001ffc007ff,0x4148290520a4148290520a4148290520a4148290520a4148290520a414829052),(0xfffffffffffe000007ffffe003fffff001ffc007ffffe000007fffffffffffff,0x8410821042084108210420841082104208410821042084108210420841082104),(0xfffc007ffffffffff800000003fffffffe000007ffffffffff800001fffff800,0x8610c2184308610c2184308610c2184308610c2184308610c2184308610c218),(0x7ffffffffffffffffffc00000000000007fffffffffffffffe00000000,0x1182304608c1182304608c1182304608c1182304608c1182304608c118230460),(0x7ffffffffffffffffffffffffffffffff8000000000000000000000000,0x1e03c0780f01e03c0780f01e03c0780f01e03c0780f01e03c0780f01e03c0780)]
 
-set_option maxRecDepth 24000 in
-set_option maxHeartbeats 0 in
-lemma negative9_0 : Impossible 6 0 r9 := exclude_search (by decide +kernel) (by decide +kernel)
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
@@ -1513,15 +1531,9 @@ lemma fn9 (gs : List Gate) (o : ℕ)
       gs'.length ≤ gs.length ∧ ∀ x : Fin 5 → Bool, Circuit.eval ⟨gs',o'⟩ (List.ofFn x) = evalT 4276813000 x := by
   have legal : PEqualNP.MetaComplexity.FanInTwo (⟨gs,o⟩ : Circuit) := by
     simpa only [PEqualNP.MetaComplexity.FanInTwo,Set.mem_insert_iff,Set.mem_singleton_iff] using h
-  have bound := cost 4276813000 r9 6 (by rfl) (by decide +kernel) (by decide +kernel)
-    (by rfl) (by decide +kernel) (by
-      intro t; fin_cases t
-      · exact negative9_0
-      · exact negative9_1) ⟨gs,o⟩ legal hn he
-  refine ⟨[⟨.or,[0,2]⟩,⟨.and,[0,4]⟩,⟨.or,[6,1]⟩,⟨.or,[7,2]⟩,⟨.and,[7,5]⟩,⟨.or,[9,3]⟩,⟨.and,[8,10]⟩],11,by simp,?_,by decide +kernel⟩
-  change 6 < gs.length at bound
-  change 7 ≤ gs.length
-  omega
+  exact solve 4276813000 r9 6 (by rfl) (by decide +kernel) (by decide +kernel)
+    (by decide +kernel) negative9_1 gs o legal hn he
+    ⟨[⟨.or,[0,2]⟩,⟨.and,[0,4]⟩,⟨.or,[6,1]⟩,⟨.or,[7,2]⟩,⟨.and,[7,5]⟩,⟨.or,[9,3]⟩,⟨.and,[8,10]⟩],11,by simp [Clean],rfl,by decide +kernel⟩
 
 end PEqualNP.Outside.L_meta_1443_aux
 
