@@ -141,7 +141,7 @@ theorem PEqualNP.Outside.R_meta_2159_1
     let k := 9+pre.length
     have kval : k = 10+j.val := by simp [k,pre,List.length_take]; omega
     -- Move wire k to position 9. Before k is computed, forward references must
-    -- remain absent, so the prefix and suffix use different address maps.
+    -- remain absent, so gates before and after k use different address maps.
     let lift (i : ℕ) := if i < 9 then i else i+1
     let perm (i : ℕ) := if i < k then lift i else if i=k then 9 else i
     let T : Circuit := ⟨head :: ((pre.map (tr lift)) ++ (post.map (tr perm))),perm D.output⟩
