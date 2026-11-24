@@ -32,7 +32,7 @@ theorem PEqualNP.Outside.R_meta_3172_1
       x 0 && x 1 || x 5 && x 7 || x 8 && x 6 || x 3 && x 2 || x 1 && x 6 ||
       x 7 && x 2 || x 2 && x 1) = edge x
     dsimp only [edge]
-    first | ac_rfl | bv_decide
+    ac_rfl
   intro pins hlen _ hpins C hC hsize
   let bad (i j : Fin 9) : Prop :=
     ∃ x : Fin 9 → Bool, C.eval (List.ofFn x ++ [!x 0, x i || x j]) ≠ edge x
