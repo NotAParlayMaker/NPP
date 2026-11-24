@@ -335,7 +335,7 @@ jobs:
               swap=$(awk '/^SwapTotal:/{t=$2} /^SwapFree:/{f=$2} END{print t-f}' /proc/meminfo)
               now=$(cat "$cg/memory.current" 2>/dev/null || echo 0); peak=$(cat "$cg/memory.peak" 2>/dev/null || echo 0)
               full=$(awk '/^full/{for(i=1;i<=NF;i++) if($i ~ /^avg60=/){sub("avg60=","",$i); print int($i)}}' /proc/pressure/memory 2>/dev/null || echo 0)
-              [ $((tick % 4)) -eq 0 ] || [ "$avail" -lt $((total / 10)) ] && echo "memory watch t=$(( $(date +%s) - t0 ))s: available $((avail / 1024)) MB of $((total / 1024)), swap used $((swap / 1024)) MB, checker now $((now / 1048576)) MB, peak $((peak / 1048576)) MB of $((cap / 1024)), pressure full $full%"
+              [ $((tick % 4)) -eq 0 ] || [ "$avail" -lt $((total / 10)) ] && echo "memory watch t=$(( $(date +%s) - t0 ))s: available $((avail / 1024)) MB of $((total / 1024)), swap used $((swap / 1024)) MB, checker now $((now / 1048576)) MB, peak $((peak / 1048576)) MB of $((cap / 1024)), pressure full $full%, processes lean $(pgrep -xc lean 2>/dev/null; true) lake $(pgrep -xc lake 2>/dev/null; true) node $(pgrep -xc node 2>/dev/null; true) sleep $(pgrep -xc sleep 2>/dev/null; true), cpu busy $(top -bn1 2>/dev/null | awk '/^%Cpu/{print int(100-$8)}')%"
               if [ "$avail" -lt $((total / 20)) ]; then low=$((low + 1)); else low=0; fi
               if [ "$low" -ge 2 ] || [ "${full:-0}" -gt 40 ]; then
                 echo "memory watch: the MACHINE is running short (available $((avail / 1024)) MB, pressure full $full%): ending the checker before the runner is lost" | tee -a "$RUNNER_TEMP/checker.err"
@@ -344,6 +344,14 @@ jobs:
               fi
             done ) &
           watch=$!
+          # THE TIME LIMIT ends the WHOLE checker scope at once (2026-11-24: eleven runs were lost at
+          # the moment the old limit fired, a TERM to node alone, each 45 minutes into the checker
+          # step). One line goes to the live log first, so even a lost machine shows that the limit
+          # was reached and when. `timeout` below stays as a backstop, 60 s later.
+          ( sleep "$limit"
+            echo "time limit reached: ${limit} s; ending the whole checker scope now" | tee -a "$RUNNER_TEMP/checker.err"
+            sudo systemctl kill --signal=KILL "$unit.scope" 2>/dev/null || true ) &
+          limiter=$!
           # Every file the judged build writes must be the locked account's (read below, after it).
           touch "$RUNNER_TEMP/build.marker"
           sudo systemd-run --quiet --scope --collect --unit="$unit" -p MemoryMax="${cap}K" \
@@ -351,15 +359,16 @@ jobs:
           taskset -c 0,1 env -i HOME="$HOME" LANG=C.UTF-8 PATH="$TC_BIN:$node_bin:/usr/bin:/bin" \
               PEQUALNP_REAL_LAKE="$W/base/.github/scripts/lake-locked.sh" PEQUALNP_HOME="$W/queue" \
               PNP_TC_BIN="$TC_BIN" PNP_GITCONFIG="$W/in/gitconfig" PNP_BUILD_LOGS="$RUNNER_TEMP/builds" \
-            timeout -k 30 "$limit" node "$W/base/tools/check-lean.mjs" "$W/base/$file" "$W/in/statement.txt" "$(cat "$W/in/gap.kind")" \
+            timeout -k 30 "$((limit + 60))" node "$W/base/tools/check-lean.mjs" "$W/base/$file" "$W/in/statement.txt" "$(cat "$W/in/gap.kind")" \
             > "$RUNNER_TEMP/checker.out" 2> "$RUNNER_TEMP/checker.err"
           code=$?
-          kill "$sampler" "$watch" 2>/dev/null
+          kill "$sampler" "$watch" "$limiter" 2>/dev/null
           # Ended by the memory watch: a FAULT of the machine, never a verdict on the proof.
           if grep -q '^memory watch: the MACHINE is running short' "$RUNNER_TEMP/checker.err" 2>/dev/null; then
             code=137
           else
             # 124 or 137: the time limit ended the checker. A FAULT, never a verdict on the proof.
+            if grep -q '^time limit reached' "$RUNNER_TEMP/checker.err" 2>/dev/null; then code=124; fi
             case "$code" in 124|137) echo "the checker was stopped after $limit seconds" >> "$RUNNER_TEMP/checker.err" ;; esac
           fi
           # Nothing the compile started may outlive it, and neither may the verifier.
