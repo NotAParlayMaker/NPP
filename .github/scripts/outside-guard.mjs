@@ -51,7 +51,11 @@ const refuse = (why) => { throw new Refused(why); };
 // before every line; Infinity for what is missing, after every line). Refused once, all of them.
 export const MAX_PROBLEMS = 40;
 export const MAX_REFUSAL = 6000;
-const MAX_LINE = 2000;
+const MAX_LINE = 400;
+// A piece of the file's own text quoted in a sentence: at most 60 characters, and only letters,
+// digits, dot, underscore and apostrophe (anything else reads `?`), so what the author chose can
+// neither steer the log nor fill it (red team, 2026-11-24).
+export const tok = (x) => String(x).slice(0, 60).replace(/[^A-Za-z0-9._']/g, '?');
 const refuseAll = (problems) => {
   if (problems.length === 0) return;
   const all = problems.map((p, k) => ({ ...p, k })).sort((a, b) => a.at - b.at || a.k - b.k)
@@ -160,7 +164,15 @@ const textOf = (bytes) => {
   let text;
   try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { return refuse('the file is not UTF-8 text'); }
   if (text.includes('\0')) refuse('the file holds a NUL byte');
+  plainChars(text);
   return text;
+};
+
+// Control, invisible and direction-changing characters stop the check first and alone, as a NUL
+// does: the workflow's quoting strips ASCII control characters only (red team, 2026-11-24).
+const plainChars = (text) => {
+  if (CONTROL.test(text.replace(/\r?\n/g, ''))) refuse('the file holds control characters');
+  if (INVISIBLE.test(text)) refuse('the file holds invisible or direction-changing characters');
 };
 
 function importProblems(bytes, allowed, problems) {
@@ -175,7 +187,7 @@ function importProblems(bytes, allowed, problems) {
     const m = /^import ([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)*)[ \t]*$/.exec(l);
     if (!m) break;
     const name = m[1];
-    if (!(name === 'Mathlib' || name.startsWith('Mathlib.') || ok.has(name))) problems.push({ at: i + 1, why: `line ${i + 1}: import ${name} is not allowed (only Mathlib and the modules the gap lists)` });
+    if (!(name === 'Mathlib' || name.startsWith('Mathlib.') || ok.has(name))) problems.push({ at: i + 1, why: `line ${i + 1}: import ${tok(name)} is not allowed (only Mathlib and the modules the gap lists)` });
     else seen.push(name);
   }
   for (; i < lines.length; i += 1) {
@@ -217,14 +229,13 @@ const INVISIBLE = /[​-‏‪-‮⁠-⁩﻿]/u;
 const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f]/u;
 
 export function checkPlain(text) {
+  plainChars(text);
   const problems = [];
   plainProblems(text, problems);
   refuseAll(problems);
 }
 
 function plainProblems(text, problems) {
-  if (CONTROL.test(text.replace(/\r?\n/g, ''))) problems.push({ at: 0, why: 'the file holds control characters' });
-  if (INVISIBLE.test(text)) problems.push({ at: 0, why: 'the file holds invisible or direction-changing characters' });
   let theorems = 0;
   text.split('\n').forEach((raw, k) => {
     const line = raw.replace(/\r$/, '');
@@ -235,7 +246,7 @@ function plainProblems(text, problems) {
     // A limit option set for the whole file (no `in`) is refused, as before; the sentence names the
     // one fix, so an honest prover passes in one push (red team, 2026-11-23: the rule stays narrow).
     if (m && /^\s*set_option (maxRecDepth|maxHeartbeats|synthInstance\.maxSize|synthInstance\.maxHeartbeats) [0-9]+\s*$/u.test(line)) hint = '; a limit option holds only for one declaration: write it as set_option <option> <value> in, directly before the declaration that needs it';
-    if (m) problems.push({ at: k + 1, why: `line ${k + 1}: "${m[0].trim()}" is not allowed in a proof file, in code or in a comment (no code that runs at build time, no new syntax, no string literals, no attributes but simp, no options but the four limits)${hint}` });
+    if (m) problems.push({ at: k + 1, why: `line ${k + 1}: "${tok(m[0].trim())}" is not allowed in a proof file, in code or in a comment (no code that runs at build time, no new syntax, no string literals, no attributes but simp, no options but the four limits)${hint}` });
     if (/^\s*(@\[(local )?simp\] )?((private|protected) )?theorem /u.test(line)) theorems += 1;
   });
   if (theorems === 0) problems.push({ at: Infinity, why: 'the file holds no theorem' });
@@ -307,8 +318,8 @@ function namespaceProblems(text, module, problems) {
       if (theorem) { note(`${at}: nothing but the proof may follow the theorem ${module}; ${fix}`); return; }
       if (m[1]) {
         // The checker refuses a reduction file that declares anything but its theorem (reduce-extra).
-        if (reduction) note(`${at}: \`namespace ${m[2]}\`; a reduction file holds its one theorem \`theorem ${module} : T1 → ... → Tk → S\` and nothing else, so it opens no namespace`);
-        else if (stack.length === 0 && !own(m[2])) note(`${at}: \`namespace ${m[2]}\` at the top level; the only namespace allowed there is the file's own; ${fix}`);
+        if (reduction) note(`${at}: \`namespace ${tok(m[2])}\`; a reduction file holds its one theorem \`theorem ${module} : T1 → ... → Tk → S\` and nothing else, so it opens no namespace`);
+        else if (stack.length === 0 && !own(m[2])) note(`${at}: \`namespace ${tok(m[2])}\` at the top level; the only namespace allowed there is the file's own; ${fix}`);
         stack.push({ kind: 'namespace', name: m[2] });
       } else if (m[3]) {
         if (stack.length === 0) note(`${at}: a section at the top level; open it inside the file's own namespace; ${fix}`);
@@ -319,13 +330,13 @@ function namespaceProblems(text, module, problems) {
       } else {
         const top = stack.pop();
         if (!top) note(`${at}: \`end\` with nothing open to close; ${fix}`);
-        else if (top.kind === 'mutual' ? m[6] !== undefined : m[6] !== top.name) note(`${at}: \`end${m[6] ? ` ${m[6]}` : ''}\` does not name what it closes (${top.kind === 'mutual' ? '`end` alone closes `mutual`' : `write \`end${top.name ? ` ${top.name}` : ''}\``})`);
+        else if (top.kind === 'mutual' ? m[6] !== undefined : m[6] !== top.name) note(`${at}: \`end${m[6] ? ` ${tok(m[6])}` : ''}\` does not name what it closes (${top.kind === 'mutual' ? '`end` alone closes `mutual`' : `write \`end${top.name ? ` ${tok(top.name)}` : ''}\``})`);
       }
       return;
     }
     if (theorem) {
       const w = AFTER_THEOREM.exec(code);
-      if (w) note(`${at}: "${w[0]}" after the theorem ${module}; nothing but its proof may follow it; ${fix}`);
+      if (w) note(`${at}: "${tok(w[0])}" after the theorem ${module}; nothing but its proof may follow it; ${fix}`);
       return;
     }
     if (stack.length > 0) return;
@@ -420,10 +431,10 @@ export function importClosure(listed, read, judged) {
   const outside = new Set(), base = new Set();
   const visit = (m, from) => {
     if (outside.has(m) || base.has(m)) return;
-    if (!BASE_ROOT_RE.test(m)) refuse(`${from ? `${from} imports` : 'the gap lists'} ${m}, which is not under the PEqualNP root`);
-    if (m === judged) refuse(`${from ? `${from} imports` : 'the gap lists'} ${m}, the file being judged`);
+    if (!BASE_ROOT_RE.test(m)) refuse(`${from ? `${from} imports` : 'the gap lists'} ${tok(m)}, which is not under the PEqualNP root`);
+    if (m === judged) refuse(`${from ? `${from} imports` : 'the gap lists'} ${tok(m)}, the file being judged`);
     const bytes = read(m);
-    if (bytes === null) refuse(`${from ? `${from} imports` : 'the gap lists'} ${m}, which is not a plain file of the base tree`);
+    if (bytes === null) refuse(`${from ? `${from} imports` : 'the gap lists'} ${tok(m)}, which is not a plain file of the base tree`);
     if (isOutside(m)) {
       if (!OUTSIDE_MODULE_RE.test(m)) refuse(`${m} is not the name of an outside proof file`);
       outside.add(m);

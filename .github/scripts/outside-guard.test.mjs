@@ -21,13 +21,13 @@ const by = (tac) => `theorem PEqualNP.Outside.L_x_1 : True := by\n  ${tac}\n`;
 refused('an initialize', `initialize pure ()\n${thm}`, 'initialize');
 refused('an indented initialize', `${thm}  initialize pure ()\n`, 'initialize');
 refused('run_cmd, indented', `${thm} run_cmd pure ()\n`, 'run_cmd');
-refused('#eval', `${thm} #eval 1\n`, '#');
+refused('#eval', `${thm} #eval 1\n`, '"?eval"');
 refused('a tactic that runs code', by('run_tac (do return ())'), 'run_tac');
 refused('an elaborator, indented', `${thm} elab x : term => pure default\n`, 'elab');
 refused('a macro, indented', `${thm} macro x : tactic => y\n`, 'macro');
 refused('notation3', `${thm} notation3 x => y\n`, 'notation');
 refused('an attribute command', `${thm} attribute [simp] Nat.add_comm\n`, 'attribute');
-refused('a generating attribute', `@[to_additive] theorem foo : True := trivial\n${thm}`, '@[');
+refused('a generating attribute', `@[to_additive] theorem foo : True := trivial\n${thm}`, '"??"');
 refused('an option that is not a limit', `set_option debug.skipKernelTC true in\n${thm}`, 'set_option');
 refused('an indented option that is not a limit', by('set_option debug.skipKernelTC true in\n  trivial'), 'set_option');
 refused('a same-line option that is not a limit', `set_option maxHeartbeats 1 in set_option debug.skipKernelTC true in\n${thm}`, 'set_option');
@@ -46,19 +46,19 @@ refused('include_str', by('exact include_str x'), 'include_str');
 refused('polyrith', by('polyrith'), 'polyrith');
 refused('a string literal', `private def s : String := "x"\n${thm}`, '"');
 refused('a character-literal trick', `${thm}  -- '"'\n`, '"');
-refused('a quoted identifier', `private def «a» : Nat := 1\n${thm}`, '«');
+refused('a quoted identifier', `private def «a» : Nat := 1\n${thm}`, '"?"');
 refused('code hidden behind a comment trick', `-- a note /- here\n  initialize pure ()\n-- done -/\n${thm}`, 'initialize');
 refused('a command after a comment on one line', `/- note -/ initialize pure ()\n${thm}`, 'initialize');
-refused('a syntax quotation', by('exact \x60(tactic| trivial)'), '(tactic|');
-refused('#check', `#check Nat\n${thm}`, '#check');
-refused('#print axioms, indented', `${thm}  #print axioms Nat.add_comm\n`, '#print');
+refused('a syntax quotation', by('exact \x60(tactic| trivial)'), '??tactic?');
+refused('#check', `#check Nat\n${thm}`, '?check');
+refused('#print axioms, indented', `${thm}  #print axioms Nat.add_comm\n`, '?print');
 refused('a direction-changing character', `-- ‮\n${thm}`, 'invisible');
 refused('no theorem at all', 'def x : Nat := 1\n', 'no theorem');
 // Commands that take an explicit target name could place a declaration outside the file's own
 // namespace; refused anywhere until tested in Lean (red team, read of the own-namespace rule).
 refused('mk_iff_of_inductive_prop', `mk_iff_of_inductive_prop Foo Bar.baz\n${thm}`, 'mk_iff_of_inductive_prop');
 refused('proof_wanted', `proof_wanted foo : True\n${thm}`, 'proof_wanted');
-refused('an attribute that takes a target name', `@[to_additive Foo.bar] theorem t : True := trivial\n${thm}`, '@[');
+refused('an attribute that takes a target name', `@[to_additive Foo.bar] theorem t : True := trivial\n${thm}`, '"??"');
 
 passes('one theorem', thm);
 passes('helpers, definitions, namespaces, a docstring', `namespace PEqualNP.Outside.L_x_1\nopen Finset\nvariable {n : ℕ}\n/-- A doc comment. -/\nprivate def f (x : ℕ) : ℕ := x\nprivate lemma l : f 1 = 1 := rfl\nend PEqualNP.Outside.L_x_1\n\n${thm}`);
@@ -344,7 +344,7 @@ test('all problems: the command line prints every problem on its own REFUSED lin
   wf(pj(d, 'one.lean'), `${head}${thm}  #eval 1\n`);
   const one = cli('imports', pj(d, 'one.lean'), pj(d, 'imports.json'), 'lean/PEqualNP/Outside/L_x_1.lean', 'check');
   assert.equal(one.status, 1);
-  assert.equal(one.stdout, 'REFUSED: line 5: "#eval" is not allowed in a proof file, in code or in a comment (no code that runs at build time, no new syntax, no string literals, no attributes but simp, no options but the four limits)\n');
+  assert.equal(one.stdout, 'REFUSED: line 5: "?eval" is not allowed in a proof file, in code or in a comment (no code that runs at build time, no new syntax, no string literals, no attributes but simp, no options but the four limits)\n');
 });
 test('all problems: the cap, 60 problems give 40 lines and "... and 20 more"', () => {
   assert.equal(MAX_PROBLEMS, 40);
@@ -372,10 +372,26 @@ test('all problems: text that cannot be read stops first, alone', () => {
   assert.throws(() => checkProofFile(bad, [], 'PEqualNP.Outside.L_x_1'), (e) => e.message === 'the file is not UTF-8 text');
   assert.throws(() => checkProofFile(new TextEncoder().encode(`${FIVE}\0`), [], 'PEqualNP.Outside.L_x_1'), (e) => e.message === 'the file holds a NUL byte');
 });
-test('all problems: control and invisible characters are named before the lines, with the rest', () => {
-  assert.throws(() => checkPlainAll(`-- ‮\n  #eval 1\n`), (e) => e.message === 'the file holds invisible or direction-changing characters\nline 2: "#eval" is not allowed in a proof file, in code or in a comment (no code that runs at build time, no new syntax, no string literals, no attributes but simp, no options but the four limits)\nthe file holds no theorem');
+test('all problems: control and invisible characters stop first and alone (red team C1)', () => {
+  assert.throws(() => checkPlainAll(`-- \u202e\n  #eval 1\n`), (e) => e.message === 'the file holds invisible or direction-changing characters');
+  assert.throws(() => checkProofFile(new TextEncoder().encode(`${head}import Evil.X\n-- \u0007\n`), ['PEqualNP.Defs'], 'PEqualNP.Outside.L_x_1'), (e) => e.message === 'the file holds control characters');
+  const d = mkdtempSync(pj(tmpdir(), 'guard-ctl-'));
+  wf(pj(d, 'imports.json'), '["PEqualNP.Defs"]'); wf(pj(d, 'c.lean'), `${head}import Evil.X\n-- \u0007\n`);
+  assert.equal(cli('imports', pj(d, 'c.lean'), pj(d, 'imports.json'), 'lean/PEqualNP/Outside/L_x_1.lean', 'check').stdout, 'REFUSED: the file holds control characters\n');
+});
+test('all problems: a quoted import name is cut to 60 characters (red team C2)', () => {
+  const name = `Evil.${'A'.repeat(195)}`;
+  assert.throws(() => run(`import ${name}\n${thm}`), (e) => e.message === `line 4: import ${name.slice(0, 60)} is not allowed (only Mathlib and the modules the gap lists)`);
+});
+test('all problems: a quoted name outside letters, digits, dot, underscore and apostrophe is sanitised (red team C2)', () => {
+  assert.throws(() => own(M, `namespace Δέλτα.x₁\nend Δέλτα.x₁\n${t9}`), (e) => e.message.startsWith('line 4: `namespace ?????.x?` at the top level') && !/[^\x20-\x7e\n]/.test(e.message));
+  assert.throws(() => own(M, `namespace ${M}\nend Ωmega\n${t9}`), (e) => e.message.includes('`end ?mega` does not name what it closes'));
+});
+test('all problems: no line is longer than 400 characters', () => {
+  const body = Array.from({ length: 30 }, (_, k) => `namespace N${k}${'a'.repeat(900)}\nend N${k}${'a'.repeat(900)}`).join('\n') + `\n${t9}`;
+  assert.throws(() => own(M, body), (e) => e.message.split('\n').every((l) => l.length <= 400));
 });
 test('all problems: a listed outside module names every problem too', () => {
   assert.throws(() => closure(['PEqualNP.Outside.L_x_2'], { 'PEqualNP.Outside.L_x_2': `import Mathlib\ninitialize pure ()\n#eval 1\n${thm}` }),
-    (e) => e.message.startsWith('the listed outside module PEqualNP.Outside.L_x_2: line 2: "initialize"') && e.message.includes('\nline 3: "#eval"'));
+    (e) => e.message.startsWith('the listed outside module PEqualNP.Outside.L_x_2: line 2: "initialize"') && e.message.includes('\nline 3: "?eval"'));
 });
