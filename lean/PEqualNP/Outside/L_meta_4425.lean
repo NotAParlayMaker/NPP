@@ -1,7 +1,7 @@
 import PEqualNP.Defs
 
 -- The lower-bound certificate is errornesttorn's checked L-meta-2960, PR #5972.
--- Canonical source blob 4b382847535b94e984790b94ae301d236378b804. Only its namespaces change.
+-- Canonical source blob 4b382847535b94e984790b94ae301d236378b804. The advice nodes below are stored as indexed tables.
 namespace PEqualNP.Outside.L_meta_4425
 
 namespace Reused2960Aux
@@ -121,29 +121,57 @@ namespace Reused2960Aux
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 def Good (m a : ℕ) := ∀ i<m, a.testBit i ≠ a.testBit (m+i)
 
-inductive Live (m : ℕ) : ℕ → Finset ℕ → Prop
-  | done {a} (hg : Good m a) (nonzero : a≠0) : Live m 0 {a}
-  | step {k U a b d} (hd : d<4) (ha : a≠0) (hb : b≠0) (diff : a≠b)
-      (fresh : combine d a b ∉ insert a (insert b U))
-      (next : Live m k (insert (combine d a b) U)) :
-      Live m (k+1) (insert a (insert b U))
+def Live (m : ℕ) : ℕ → Finset ℕ → Prop
+  | 0, S => ∃ a, S = {a} ∧ Good m a ∧ a ≠ 0
+  | k+1, S => ∃ (U : Finset ℕ) (a b d : ℕ),
+      S = insert a (insert b U) ∧
+      d < 4 ∧ a ≠ 0 ∧ b ≠ 0 ∧ a ≠ b ∧
+      combine d a b ∉ insert a (insert b U) ∧
+      Live m k (insert (combine d a b) U)
+
+namespace Live
+
+lemma done {m a : ℕ} (hg : Good m a) (nonzero : a ≠ 0) : Live m 0 {a} := by
+  rw [Live]
+  exact ⟨a, rfl, hg, nonzero⟩
+
+lemma step {m k : ℕ} {U : Finset ℕ} {a b d : ℕ}
+    (hd : d < 4) (ha : a ≠ 0) (hb : b ≠ 0) (diff : a ≠ b)
+    (fresh : combine d a b ∉ insert a (insert b U))
+    (next : Live m k (insert (combine d a b) U)) :
+    Live m (k+1) (insert a (insert b U)) := by
+  rw [Live]
+  exact ⟨U, a, b, d, rfl, hd, ha, hb, diff, fresh, next⟩
+
+end Live
 
 lemma liveNonzero {m k S} (h : Live m k S) : ∀ a∈S,a≠0 := by
-  induction h with
-  | done hg hn => simpa using hn
-  | @step k U a b d hd ha hb ne fresh tail ih =>
+  induction k generalizing S with
+  | zero =>
+    rw [Live] at h
+    obtain ⟨a, rfl, _, hn⟩ := h
+    simpa using hn
+  | succ k ih =>
+    rw [Live] at h
+    obtain ⟨U, a, b, d, rfl, _, ha, hb, _, _, tail⟩ := h
     intro x hx
     rcases Finset.mem_insert.mp hx with rfl|hx
     · exact ha
     rcases Finset.mem_insert.mp hx with rfl|hx
     · exact hb
-    exact ih x (Finset.mem_insert_of_mem hx)
+    exact ih tail x (Finset.mem_insert_of_mem hx)
 lemma liveSize {m k S} (h : Live m k S) : S.card≤k+1 := by
-  induction h with
-  | done hg hn => simp
-  | @step k U a b d hd ha hb ne fresh tail ih =>
+  induction k generalizing S with
+  | zero =>
+    rw [Live] at h
+    obtain ⟨a, rfl, _, _⟩ := h
+    simp
+  | succ k ih =>
+    rw [Live] at h
+    obtain ⟨U, a, b, d, rfl, _, _, _, _, fresh, tail⟩ := h
+    have bound := ih tail
     have z : combine d a b ∉ U := fun m => fresh (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem m))
-    rw [Finset.card_insert_of_notMem z] at ih
+    rw [Finset.card_insert_of_notMem z] at bound
     have u := Finset.card_insert_le a (insert b U)
     have v := Finset.card_insert_le b U
     omega
@@ -152,10 +180,15 @@ lemma combine_congr_bits (d a b i j : ℕ) (p : a.testBit i=a.testBit j) (q : b.
   rcases d with _|(_|(_|d)) <;> simp [combine,Nat.testBit_and,Nat.testBit_or,Nat.testBit_xor,p,q]
 lemma liveSeparates {m k S} (h : Live m k S) (i : ℕ) (hi : i<m) :
     ∃ a∈S,a.testBit i≠a.testBit (m+i) := by
-  induction h with
-  | done hg hn => exact ⟨_,Finset.mem_singleton_self _,hg i hi⟩
-  | @step k U a b d hd ha hb ne fresh tail ih =>
-    obtain ⟨x,hx,dist⟩ := ih
+  induction k generalizing S with
+  | zero =>
+    rw [Live] at h
+    obtain ⟨a, rfl, hg, _⟩ := h
+    exact ⟨a, Finset.mem_singleton_self a, hg i hi⟩
+  | succ k ih =>
+    rw [Live] at h
+    obtain ⟨U, a, b, d, rfl, _, _, _, _, _, tail⟩ := h
+    obtain ⟨x,hx,dist⟩ := ih tail
     rcases Finset.mem_insert.mp hx with rfl|hx
     · by_cases v : a.testBit i=a.testBit (m+i)
       · exact ⟨b,Finset.mem_insert_of_mem (Finset.mem_insert_self _ _),fun u => dist (combine_congr_bits _ _ _ _ _ v u)⟩
@@ -360,14 +393,22 @@ theorem complete (m fuel : ℕ) {n S} (h : Live m n S) (lim : n≤fuel)
     (v : List ℕ) (rep : v.toFinset=S) (nd : v.Nodup) : search m fuel v=true := by
   induction fuel generalizing n S v with
   | zero =>
-    cases h with
-    | done hg hn => exact ends hg v (List.mem_toFinset.mp (rep ▸ Finset.mem_singleton_self _))
-    | step hd _ _ _ _ _ => omega
+    cases n with
+    | zero =>
+      rw [Live] at h
+      obtain ⟨a, rfl, hg, _⟩ := h
+      exact ends hg v (List.mem_toFinset.mp (rep ▸ Finset.mem_singleton_self a))
+    | succ n => omega
   | succ k ih =>
     rw [search,Bool.or_eq_true]
-    cases h with
-    | done hg hn => exact Or.inl (ends hg v (List.mem_toFinset.mp (rep ▸ Finset.mem_singleton_self _)))
-    | step hd _ _ ab fresh tail =>
+    cases n with
+    | zero =>
+      rw [Live] at h
+      obtain ⟨a, rfl, hg, _⟩ := h
+      exact Or.inl (ends hg v (List.mem_toFinset.mp (rep ▸ Finset.mem_singleton_self a)))
+    | succ n =>
+      rw [Live] at h
+      obtain ⟨U, a, b, d, rfl, hd, _, _, ab, fresh, tail⟩ := h
       exact Or.inr (transition hd ab fresh rep nd (by omega) tail (fun v hv nv => ih tail (by omega) v hv nv))
 end Reused2960Aux
 
@@ -375,12 +416,20 @@ namespace Reused2960Aux
 
 /- A restriction can force several live signals to zero. Projecting the rest of a trace saves at least one binary gate for each such signal. -/
 
-structure Projection (m h : ℕ) where
-  toFun : ℕ → ℕ
-  atZero : toFun 0=0
-  combineEq : ∀ d a b, d<4 → toFun (combine d a b)=combine d (toFun a) (toFun b)
-  good : ∀ a, Good m a → Good h (toFun a)
-  someRow : 0<h
+abbrev Projection (m h : ℕ) := { f : ℕ → ℕ //
+  f 0 = 0 ∧ (∀ d a b, d < 4 → f (combine d a b) = combine d (f a) (f b)) ∧
+  (∀ a, Good m a → Good h (f a)) ∧ 0 < h }
+
+namespace Projection
+def toFun {m h : ℕ} (p : Projection m h) : ℕ → ℕ := p.val
+theorem atZero {m h : ℕ} (p : Projection m h) : p.toFun 0 = 0 := p.property.1
+theorem combineEq {m h : ℕ} (p : Projection m h) (d a b : ℕ) (hd : d < 4) :
+    p.toFun (combine d a b) = combine d (p.toFun a) (p.toFun b) :=
+  p.property.2.1 d a b hd
+theorem good {m h : ℕ} (p : Projection m h) (a : ℕ) (ha : Good m a) :
+    Good h (p.toFun a) := p.property.2.2.1 a ha
+theorem someRow {m h : ℕ} (p : Projection m h) : 0 < h := p.property.2.2.2
+end Projection
 
 def Possible (m k : ℕ) (av : List ℕ) :=
   ∃ j S, j≤k ∧ Live m j S ∧ ∀ x∈S,x∈av
@@ -447,13 +496,17 @@ lemma countCharge {m h d a b : ℕ} (p : Projection m h) (hd : d<4) (U : Finset 
 
 theorem projectLive {m h k S} (p : Projection m h) (live : Live m k S) :
     ∃ j T,j+dead p.toFun S≤k ∧ Live h j T ∧ ∀ x∈T,x∈S.image p.toFun := by
-  induction live with
-  | @done a hg hn =>
+  induction k generalizing S with
+  | zero =>
+    rw [Live] at live
+    obtain ⟨a, rfl, hg, _⟩ := live
     have gp := p.good a hg
     have nz : p.toFun a≠0 := by intro e;have x := gp 0 p.someRow;simp [e] at x
     exact ⟨0,{p.toFun a},by simp [dead,nz],Live.done gp nz,by simp⟩
-  | @step k U a b d hd ha hb ab fz tail ih =>
-    obtain ⟨j,T,cost,ok,raw⟩ := ih
+  | succ k ih =>
+    rw [Live] at live
+    obtain ⟨U, a, b, d, rfl, hd, ha, hb, ab, fz, tail⟩ := live
+    obtain ⟨j,T,cost,ok,raw⟩ := ih tail
     let av := ((insert a (insert b U)).image p.toFun).toList
     have ma : p.toFun a∈av := by simp [av]
     have mb : p.toFun b∈av := by simp [av]
@@ -507,17 +560,14 @@ lemma slice_hom (m q r d a b : ℕ) (hd : d<4) : slice m q r (combine d a b)=com
     interval_cases d <;> simp [combine,Nat.testBit_and,Nat.testBit_or,Nat.testBit_xor,slice_hi _ _ _ h]
   · have large := slice_above (m:=m) (i:=i) (hi := (show 2 * m ≤ i from by omega))
     interval_cases d <;> simp [combine,Nat.testBit_and,Nat.testBit_or,Nat.testBit_xor,large]
-def projection (m q r : ℕ) (hr : r<m) : Projection m m where
-  toFun := slice m q r
-  atZero := by simp [slice,half]
-  combineEq := slice_hom m q r
-  good := by
-    intro a ga i hi
-    rw [slice_lo _ _ _ hi,slice_hi _ _ _ hi]
+def projection (m q r : ℕ) (hr : r < m) : Projection m m := by
+  refine ⟨slice m q r, ?_, slice_hom m q r, ?_, by omega⟩
+  · simp [slice, half]
+  · intro a ga i hi
+    rw [slice_lo _ _ _ hi, slice_hi _ _ _ hi]
     cases q.testBit i
     · exact ga r hr
     · exact ga i hi
-  someRow := by omega
 
 lemma enoughSup {m k S} (h : Live m k S) (v : List ℕ) (sub : ∀ x∈S,x∈v) : enough m (cover m v)=true := by
   apply beq_iff_eq.mpr;apply Nat.eq_of_testBit_eq;intro i
@@ -595,7 +645,7 @@ theorem cut_complete {m k S} (hm : 0<m) (h : Live m k S) (v : List ℕ) (rep : v
     rw [List.countP_eq_length_filter]
     congr 2
   rw [fixed] at cost
-  have has (x : ℕ) (hx : x∈T) : x∈xs := by simpa [xs,p,projection,←rep] using sub x hx
+  have has (x : ℕ) (hx : x∈T) : x∈xs := by simpa [xs, p, projection, Projection.toFun, ←rep] using sub x hx
   have test := start_complete live xs has (fuel-xs.count 0) (by omega)
   change (decide (xs.count 0≤fuel) && start m (fuel-xs.count 0) xs)=true
   simp [test,show xs.count 0≤fuel by omega]
@@ -642,9 +692,14 @@ theorem move {m fuel : ℕ} {v : List ℕ} (h : feasible m (fuel+1) v) :
   classical
   obtain ⟨k,lim,live,nd⟩ := h
   generalize e : v.toFinset=S at live
-  cases live with
-  | done hg hn => exact Or.inl (ends hg v (List.mem_toFinset.mp (e ▸ Finset.mem_singleton_self _)))
-  | step hd ha hb ab fz tail =>
+  cases k with
+  | zero =>
+    rw [Live] at live
+    obtain ⟨a, rfl, hg, _⟩ := live
+    exact Or.inl (ends hg v (List.mem_toFinset.mp (e ▸ Finset.mem_singleton_self a)))
+  | succ k =>
+    rw [Live] at live
+    obtain ⟨U, a, b, d, rfl, hd, _, _, ab, fz, tail⟩ := live
     let step := fun w => decide (feasible m fuel w)
     have hit := transition (go:=step) hd ab fz e nd (by omega : _≤fuel) tail (fun w rep nu => by
       apply decide_eq_true;exact ⟨_,by omega,rep ▸ tail,nu⟩)
@@ -705,14 +760,19 @@ lemma turnGood {m i j a : ℕ} (hi : i<m) (hj : j<m) (g : Good m a) : Good m (tu
 theorem relabelLive {m k S} (f : ℕ→ℕ) (fz : f 0=0) (inj : Function.Injective f)
     (op : ∀ d a b,d<4 → f (combine d a b)=combine d (f a) (f b))
     (labels : ∀ a,Good m a → Good m (f a)) (live : Live m k S) : Live m k (S.image f) := by
-  induction live with
-  | done hg hn =>
+  induction k generalizing S with
+  | zero =>
+    rw [Live] at live
+    obtain ⟨a, rfl, hg, hn⟩ := live
     simp only [Finset.image_singleton]
     exact Live.done (labels _ hg) (fun h => hn (inj (h.trans fz.symm)))
-  | @step k U a b d hd ha hb ne fresh tail ih =>
+  | succ k ih =>
+    rw [Live] at live
+    obtain ⟨U, a, b, d, rfl, hd, ha, hb, ne, fresh, tail⟩ := live
+    have next := ih tail
     rw [Finset.image_insert,Finset.image_insert]
-    rw [Finset.image_insert,op d a b hd] at ih
-    apply Live.step hd (fun h => ha (inj (h.trans fz.symm))) (fun h => hb (inj (h.trans fz.symm))) (fun h => ne (inj h)) _ ih
+    rw [Finset.image_insert,op d a b hd] at next
+    apply Live.step hd (fun h => ha (inj (h.trans fz.symm))) (fun h => hb (inj (h.trans fz.symm))) (fun h => ne (inj h)) _ next
     rw [←op d a b hd,←Finset.image_insert,←Finset.image_insert]
     exact fun h => fresh ((Finset.mem_image.mp h).elim (fun x hh => inj hh.2 ▸ hh.1))
 def permute (m : ℕ) : List (ℕ×ℕ) → ℕ → ℕ
@@ -768,11 +828,14 @@ end Reused2960Aux
 namespace Reused2960Aux
 
 /- A stored bound proves that a smaller set of signals needs a stated number of gates. A receipt reconstructs all the restricted live signals from that set. Combining the bound with the zero signals lost by restriction excludes the proposed continuation. -/
-structure FloorData where
-  pairMask : ℕ
-  lower : ℕ
-  basis : List ℕ
-deriving Inhabited
+-- The parameters checked by a floor certificate are its pair mask, lower bound and basis.
+abbrev FloorData := ℕ × ℕ × List ℕ
+namespace FloorData
+def pairMask (data : FloorData) : ℕ := data.1
+def lower (data : FloorData) : ℕ := data.2.1
+def basis (data : FloorData) : List ℕ := data.2.2
+end FloorData
+
 def Floor (m : ℕ) (s : FloorData) := ∀ k,Possible m k (0::s.basis) → s.lower≤k
 theorem floorChecked {m : ℕ} {s : FloorData} (checked : start m (s.lower-1) (0::s.basis)=false) : Floor m s := by
   intro k poss
@@ -853,61 +916,84 @@ theorem floor_consistent {m fuel : ℕ} (pos : 0<m) {v : List ℕ} (ok : feasibl
 
 def Memo := ℕ → FloorData × ℕ
 def Certified (m : ℕ) (db : Memo) := ∀ i,Floor m (db i).1
-inductive Advice where
-  | plain
-  | restrict (which : ℕ)
-  | saved (index : ℕ)
-  | fork (codes : ℕ) (nested : List Advice)
-deriving Inhabited
-def chooseAdvice (tag : ℕ) (gs : List Advice) : Advice :=
-  if tag=1 then gs.headD .plain else if tag=0 then .plain else if tag<1024 then .restrict (tag-2) else .saved (tag-1024)
-def memoRows (go : Advice → List ℕ → Bool) : List (List ℕ) → ℕ → List Advice → Bool
-  | [],_,_ => false
-  | v::vs,code,gs =>
+-- Advice imported from the checked certificate is stored as a flat table. Each fork
+-- gives the original row codes and the indices of its nested advice, in order.
+abbrev AdviceNode := Sum (Option ℕ) (Sum ℕ (ℕ × List ℕ))
+abbrev AdviceTable := Array AdviceNode
+abbrev AdviceForest := AdviceTable × List ℕ
+
+namespace AdviceNode
+abbrev plain : AdviceNode := .inl none
+abbrev restrict (which : ℕ) : AdviceNode := .inl (some which)
+abbrev saved (index : ℕ) : AdviceNode := .inr (.inl index)
+abbrev fork (codes : ℕ) (children : List ℕ) : AdviceNode := .inr (.inr (codes, children))
+end AdviceNode
+
+def chooseAdvice (tag : ℕ) (gs : AdviceForest) : AdviceNode :=
+  if tag = 1 then (gs.2.head?.bind fun i => gs.1[i]?).getD AdviceNode.plain
+  else if tag = 0 then AdviceNode.plain
+  else if tag < 1024 then AdviceNode.restrict (tag-2)
+  else AdviceNode.saved (tag-1024)
+
+def memoRows (go : AdviceTable → AdviceNode → List ℕ → Bool) :
+    List (List ℕ) → ℕ → AdviceForest → Bool
+  | [], _, _ => false
+  | v::vs, code, gs =>
     let tag := code &&& 4095
-    go (chooseAdvice tag gs) v || memoRows go vs (code >>> 12) (if tag=1 then gs.tail else gs)
-lemma memoRows_ok {go : Advice→List ℕ→Bool} {v : List ℕ} {vs : List (List ℕ)} (mem : v∈vs)
-    (all : ∀ g,go g v=true) (code : ℕ) (gs : List Advice) : memoRows go vs code gs=true := by
+    go gs.1 (chooseAdvice tag gs) v ||
+      memoRows go vs (code >>> 12) (gs.1, if tag = 1 then gs.2.tail else gs.2)
+
+lemma memoRows_ok {go : AdviceTable → AdviceNode → List ℕ → Bool}
+    {v : List ℕ} {vs : List (List ℕ)} (mem : v∈vs)
+    (all : ∀ table node, go table node v = true) (code : ℕ) (gs : AdviceForest) :
+    memoRows go vs code gs = true := by
   induction vs generalizing code gs with
   | nil => simp at mem
   | cons x xs ih =>
-    rw [memoRows,Bool.or_eq_true]
-    rcases List.mem_cons.mp mem with rfl|next
-    · exact Or.inl (all _)
+    rw [memoRows, Bool.or_eq_true]
+    rcases List.mem_cons.mp mem with rfl | next
+    · exact Or.inl (all _ _)
     · exact Or.inr (ih next _ _)
-def audited (m : ℕ) (db : Memo) : ℕ → Advice → List ℕ → Bool
-  | 0,_,v => terminal m v
-  | k+1,.plain,v => search m (k+1) v
-  | k+1,.restrict which,v => cutSearch m (zeroPairs m v which (full m)) (k+1) v
-  | k+1,.saved i,v => !(contradictsFloor m (k+1) v (db i).1 (db i).2)
-  | k+1,.fork code gs,v => terminal m v || memoRows (audited m db k) (successors m k v) code gs
+
+def audited (m : ℕ) (db : Memo) : ℕ → AdviceTable → AdviceNode → List ℕ → Bool
+  | 0, _, _, v => terminal m v
+  | k+1, _, .inl none, v => search m (k+1) v
+  | k+1, _, .inl (some which), v => cutSearch m (zeroPairs m v which (full m)) (k+1) v
+  | k+1, _, .inr (.inl i), v => !(contradictsFloor m (k+1) v (db i).1 (db i).2)
+  | k+1, table, .inr (.inr (code, children)), v =>
+    terminal m v || memoRows (audited m db k) (successors m k v) code (table, children)
+
 theorem audited_complete {m : ℕ} (hm : 0<m) (db : Memo) (safe : Certified m db)
-    (fuel : ℕ) (v : List ℕ) (h : feasible m fuel v) (g : Advice) : audited m db fuel g v=true := by
-  induction fuel generalizing v g with
+    (fuel : ℕ) (v : List ℕ) (h : feasible m fuel v) (table : AdviceTable) (g : AdviceNode) :
+    audited m db fuel table g v = true := by
+  induction fuel generalizing v table g with
   | zero =>
-    obtain ⟨j,lim,live,nd⟩ := h
+    obtain ⟨j, lim, live, nd⟩ := h
     exact complete m 0 live lim v rfl nd
   | succ k ih =>
-    cases g with
-    | plain =>
-      obtain ⟨j,lim,live,nd⟩ := h
-      exact complete m (k+1) live lim v rfl nd
-    | restrict which =>
-      obtain ⟨j,lim,live,nd⟩ := h
-      exact cut_complete hm live v rfl nd _ _ lim
-    | saved i => simp [audited,floor_consistent hm h _ (safe i) _]
-    | fork code gs =>
-      rw [audited,Bool.or_eq_true]
-      rcases move h with endNow|⟨w,hw,next⟩
+    rcases g with (which | i | ⟨code, children⟩)
+    · rcases which with _ | which
+      · obtain ⟨j, lim, live, nd⟩ := h
+        exact complete m (k+1) live lim v rfl nd
+      · obtain ⟨j, lim, live, nd⟩ := h
+        exact cut_complete hm live v rfl nd _ _ lim
+    · simp [audited, floor_consistent hm h _ (safe i) _]
+    · rw [audited, Bool.or_eq_true]
+      rcases move h with endNow | ⟨w, hw, next⟩
       · exact Or.inl endNow
-      · exact Or.inr (memoRows_ok hw (fun g => ih w next g) _ _)
-lemma offAudit {m k v g} {db : Memo} (safe : Certified m db) (pos : 0<m) (e : audited m db k g v=false) : Excluded m k v := by
-  intro h;exact Bool.noConfusion (e.symm.trans (audited_complete pos db safe k v h g))
-lemma offMemoRows {m k : ℕ} {vs : List (List ℕ)} {i n code : ℕ} {gs : List Advice} {db : Memo}
+      · exact Or.inr (memoRows_ok hw (fun table node => ih w next table node) _ _)
+
+lemma offAudit {m k v table g} {db : Memo} (safe : Certified m db) (pos : 0<m)
+    (e : audited m db k table g v = false) : Excluded m k v := by
+  intro h
+  exact Bool.noConfusion (e.symm.trans (audited_complete pos db safe k v h table g))
+
+lemma offMemoRows {m k : ℕ} {vs : List (List ℕ)} {i n code : ℕ} {gs : AdviceForest} {db : Memo}
     (safe : Certified m db) (pos : 0<m)
-    (e : memoRows (audited m db k) ((vs.drop i).take n) code gs=false) : Block m k vs i n := by
+    (e : memoRows (audited m db k) ((vs.drop i).take n) code gs = false) : Block m k vs i n := by
   intro w hw h
-  exact Bool.noConfusion (e.symm.trans (memoRows_ok hw (fun g => audited_complete pos db safe k w h g) code gs))
+  exact Bool.noConfusion (e.symm.trans
+    (memoRows_ok hw (fun table node => audited_complete pos db safe k w h table node) code gs))
 end Reused2960Aux
 
 namespace Reused2960Aux
@@ -1494,55 +1580,55 @@ end Reused2960Aux
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc0 : Excluded 87 9 s00 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
+theorem exc0 : Excluded 87 9 s00 := offAudit (table:=#[]) (g:=AdviceNode.saved 0) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x0 : Block 87 8 (successors 87 8 s01) 0 10 := offMemoRows (code:=0x40f400001401402001001001402401) (gs:=[(.fork 0x40c40b09240b00040a40b40b40a40a40940808a408000407408408407407000406052406000022000405022405404404403403402402 []),(.fork 0x8440e08440d404409403402402401 []),(.fork 0x40241140240a41140a40241040240741040740240240640640200000040640240240240240540205240540f40040040f40040f40f40004a402 []),(.fork 0x4405240440240108a04a04a [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x0 : Block 87 8 (successors 87 8 s01) 0 10 := offMemoRows (code:=0x40f400001401402001001001402401) (gs:=(#[AdviceNode.fork 0x40c40b09240b00040a40b40b40a40a40940808a408000407408408407407000406052406000022000405022405404404403403402402 [], AdviceNode.fork 0x8440e08440d404409403402402401 [], AdviceNode.fork 0x40241140240a41140a40241040240741040740240240640640200000040640240240240240540205240540f40040040f40040f40f40004a402 [], AdviceNode.fork 0x4405240440240108a04a04a []], [0, 1, 2, 3])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x1 : Block 87 8 (successors 87 8 s01) 10 10 := offMemoRows (code:=0x40040040f400400400400400400400) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x1 : Block 87 8 (successors 87 8 s01) 10 10 := offMemoRows (code:=0x40040040f400400400400400400400) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x2 : Block 87 8 (successors 87 8 s01) 20 10 := offMemoRows (code:=0x140f400400400400400400400001) (gs:=[(.fork 0x40e40e40e40e40e40e09240e40e40e40e40840c40840840840801200040c00041241202301205205240040040c00040440f40440f40f40140240140240140140f40140f40f400400 []),(.fork 0x40b40940b40b40b40b40d40d40d40d40d40d09240d40d40d40d01200040900041341302301209209240f40f40900040340040340040040140240140240140140040140040040f40f [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x2 : Block 87 8 (successors 87 8 s01) 20 10 := offMemoRows (code:=0x140f400400400400400400400001) (gs:=(#[AdviceNode.fork 0x40e40e40e40e40e40e09240e40e40e40e40840c40840840840801200040c00041241202301205205240040040c00040440f40440f40f40140240140240140140f40140f40f400400 [], AdviceNode.fork 0x40b40940b40b40b40b40d40d40d40d40d40d09240d40d40d40d01200040900041341302301209209240f40f40900040340040340040040140240140240140140040140040040f40f []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x3 : Block 87 8 (successors 87 8 s01) 30 10 := offMemoRows (code:=0x140500100140240540f40f40f40f) (gs:=[(.fork 0x41740a41740a416407416407000406032406415415414414402402401000022401 []),(.fork 0x415418414405402402 []),(.fork 0x41540240504a02a000 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x3 : Block 87 8 (successors 87 8 s01) 30 10 := offMemoRows (code:=0x140500100140240540f40f40f40f) (gs:=(#[AdviceNode.fork 0x41740a41740a416407416407000406032406415415414414402402401000022401 [], AdviceNode.fork 0x415418414405402402 [], AdviceNode.fork 0x41540240504a02a000 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x4 : Block 87 8 (successors 87 8 s01) 40 10 := offMemoRows (code:=0x140f400400400400001400402001) (gs:=[(.fork 0x40240a41140a40240741040741941940240600440640040f40040f40f40040f400000022402402402402402000401402052401 []),(.fork 0x40e40e40e40e40e40e41641a41641600003241a00040040041a01240240540240540540040005205240f41540f41540f40f40540f40540f []),(.fork 0x41741841741740d40d40d40d40d40d00005241800040f40f41440041440040040540040540040041801240240540240540540f40f092092 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x4 : Block 87 8 (successors 87 8 s01) 40 10 := offMemoRows (code:=0x140f400400400400001400402001) (gs:=(#[AdviceNode.fork 0x40240a41140a40240741040741941940240600440640040f40040f40f40040f400000022402402402402402000401402052401 [], AdviceNode.fork 0x40e40e40e40e40e40e41641a41641600003241a00040040041a01240240540240540540040005205240f41540f41540f40f40540f40540f [], AdviceNode.fork 0x41741841741740d40d40d40d40d40d00005241800040f40f41440041440040040540040540040041801240240540240540540f40f092092 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x5 : Block 87 8 (successors 87 8 s01) 50 10 := offMemoRows (code:=0x40240600100100108b40f40f40f40f) (gs:=[(.fork 0x4a41c01240f09241b012400052401022025402022402022405047 []),(.fork 0x41500040504740e08a40d08a40f092400052402405052405 []),(.fork 0x2440f092404024400052401000401402052401048 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x5 : Block 87 8 (successors 87 8 s01) 50 10 := offMemoRows (code:=0x40240600100100108b40f40f40f40f) (gs:=(#[AdviceNode.fork 0x4a41c01240f09241b012400052401022025402022402022405047 [], AdviceNode.fork 0x41500040504740e08a40d08a40f092400052402405052405 [], AdviceNode.fork 0x2440f092404024400052401000401402052401048 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x6 : Block 87 8 (successors 87 8 s01) 60 10 := offMemoRows (code:=0x40040040040040200141c406001001) (gs:=[(.fork 0x41d41f41d40a41d40a42242141c42242240742240742105241f03203200000040503200040540542100042042041f00041e41e05241c41c41d41c032402402401006052401 []),(.fork 0x2600042041f41e406402402 []),(.fork 0x41140240240a41140a41040240240741040740200040200040240500040540201240040640040640201240f40040f40040240240240240241c401402000401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x6 : Block 87 8 (successors 87 8 s01) 60 10 := offMemoRows (code:=0x40040040040040200141c406001001) (gs:=(#[AdviceNode.fork 0x41d41f41d40a41d40a42242141c42242240742240742105241f03203200000040503200040540542100042042041f00041e41e05241c41c41d41c032402402401006052401 [], AdviceNode.fork 0x2600042041f41e406402402 [], AdviceNode.fork 0x41140240240a41140a41040240240741040740200040200040240500040540201240040640040640201240f40040f40040240240240240241c401402000401 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x7 : Block 87 8 (successors 87 8 s01) 70 10 := offMemoRows (code:=0x40e40e00141c00141c40f40f40f40f) (gs:=[(.fork 0x42440603241c402423032423 []),(.fork 0x41541c40f052400032402405000405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x7 : Block 87 8 (successors 87 8 s01) 70 10 := offMemoRows (code:=0x40e40e00141c00141c40f40f40f40f) (gs:=(#[AdviceNode.fork 0x42440603241c402423032423 [], AdviceNode.fork 0x41541c40f052400032402405000405 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x8 : Block 87 8 (successors 87 8 s01) 80 10 := offMemoRows (code:=0x40d40d40d40700141c00141c40e40e) (gs:=[(.fork 0x42642540205240241c []),(.fork 0x40f09240440005240140205240140605241c [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x8 : Block 87 8 (successors 87 8 s01) 80 10 := offMemoRows (code:=0x40d40d40d40700141c00141c40e40e) (gs:=(#[AdviceNode.fork 0x42642540205240241c [], AdviceNode.fork 0x40f09240440005240140205240140605241c []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x9 : Block 87 8 (successors 87 8 s01) 90 10 := offMemoRows (code:=0x40040040040040d40040d40d40d407) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x9 : Block 87 8 (successors 87 8 s01) 90 10 := offMemoRows (code:=0x40040040040040d40040d40d40d407) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x10 : Block 87 8 (successors 87 8 s01) 100 10 := offMemoRows (code:=0x40d40d40d40d40f40f40d40f40f40f) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x10 : Block 87 8 (successors 87 8 s01) 100 10 := offMemoRows (code:=0x40d40d40d40d40f40f40d40f40f40f) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x11 : Block 87 8 (successors 87 8 s01) 110 10 := offMemoRows (code:=0x40d40d40e40e40e40e40d40d40d40d) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x11 : Block 87 8 (successors 87 8 s01) 110 10 := offMemoRows (code:=0x40d40d40e40e40e40e40d40d40d40d) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x12 : Block 87 8 (successors 87 8 s01) 120 10 := offMemoRows (code:=0x40e40e40e40a40e40e40e40a40d40d) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x12 : Block 87 8 (successors 87 8 s01) 120 10 := offMemoRows (code:=0x40e40e40e40a40e40e40e40a40d40d) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x13 : Block 87 8 (successors 87 8 s01) 130 10 := offMemoRows (code:=0x40f40f40e40f40040040e400400400) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x13 : Block 87 8 (successors 87 8 s01) 130 10 := offMemoRows (code:=0x40f40f40e40f40040040e400400400) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b1x14 : Block 87 8 (successors 87 8 s01) 140 10 := offMemoRows (code:=0x40e40e40e40e40e40e40e40e40f40f) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b1x14 : Block 87 8 (successors 87 8 s01) 140 10 := offMemoRows (code:=0x40e40e40e40e40e40e40e40e40f40f) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc1 : Excluded 87 9 s01 := by
@@ -1569,64 +1655,64 @@ end Reused2960Aux
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc2 : Excluded 87 9 s02 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
+theorem exc2 : Excluded 87 9 s02 := offAudit (table:=#[]) (g:=AdviceNode.saved 0) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc4 : Excluded 87 9 s04 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
+theorem exc4 : Excluded 87 9 s04 := offAudit (table:=#[]) (g:=AdviceNode.saved 0) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x0 : Block 87 8 (successors 87 8 s05) 0 10 := offMemoRows (code:=0x401400400400400400400400401400) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x0 : Block 87 8 (successors 87 8 s05) 0 10 := offMemoRows (code:=0x401400400400400400400400401400) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x1 : Block 87 8 (successors 87 8 s05) 10 10 := offMemoRows (code:=0x400400400400400400400001400400) (gs:=[(.fork 0x40e40e08a40e40e40e40e40e40e40e40e40840840840c40840800600002300a04a04a40c00041241240040040c00040440f40440f40f40040040140240140240140140f40140f40f [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x1 : Block 87 8 (successors 87 8 s05) 10 10 := offMemoRows (code:=0x400400400400400400400001400400) (gs:=(#[AdviceNode.fork 0x40e40e08a40e40e40e40e40e40e40e40e40840840840c40840800600002300a04a04a40c00041241240040040c00040440f40440f40f40040040140240140240140140f40140f40f []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x2 : Block 87 8 (successors 87 8 s05) 20 10 := offMemoRows (code:=0x400400404001001405001001404405) (gs:=[(.fork 0x40f02240f42742702242700040a42742740a40a00040702240741b00404a00000040604a00340640641541541b04400741b41241b404404 []),(.fork 0x2242700740e04642841541b005405404404 []),(.fork 0x2e42a41540440540e0c242904a04a022012 []),(.fork 0x40440f00040f40440a40440a404407000407404047404406000406404044401404400404401401400404404404412022404404404012405400400405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x2 : Block 87 8 (successors 87 8 s05) 20 10 := offMemoRows (code:=0x400400404001001405001001404405) (gs:=(#[AdviceNode.fork 0x40f02240f42742702242700040a42742740a40a00040702240741b00404a00000040604a00340640641541541b04400741b41241b404404 [], AdviceNode.fork 0x2242700740e04642841541b005405404404 [], AdviceNode.fork 0x2e42a41540440540e0c242904a04a022012 [], AdviceNode.fork 0x40440f00040f40440a40440a404407000407404047404406000406404044401404400404401401400404404404412022404404404012405400400405 []], [0, 1, 2, 3])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x3 : Block 87 8 (successors 87 8 s05) 30 10 := offMemoRows (code:=0x401001001001001401400400001400) (gs:=[(.fork 0x40e40e00a40e40e40e40e40e40e40e40e412082412082400400412412404412022412404412022401412401412401401412401412401400400 []),(.fork 0x2241b42702242742742742742741b02200004241b04408204204205204204341b00440140100740041b40040041241b404405404405405401401400405400405400 []),(.fork 0x2242b04a42840140100540040440540140140040541b400 []),(.fork 0x3642a40140440540140e0c2429052400022400405012400042 []),(.fork 0x40400040140140440442c42c401404404026404048404000404026401401401400400401400412404405405401042415401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x3 : Block 87 8 (successors 87 8 s05) 30 10 := offMemoRows (code:=0x401001001001001401400400001400) (gs:=(#[AdviceNode.fork 0x40e40e00a40e40e40e40e40e40e40e40e412082412082400400412412404412022412404412022401412401412401401412401412401400400 [], AdviceNode.fork 0x2241b42702242742742742742741b02200004241b04408204204205204204341b00440140100740041b40040041241b404405404405405401401400405400405400 [], AdviceNode.fork 0x2242b04a42840140100540040440540140140040541b400 [], AdviceNode.fork 0x3642a40140440540140e0c2429052400022400405012400042 [], AdviceNode.fork 0x40400040140140440442c42c401404404026404048404000404026401401401400400401400412404405405401042415401 []], [0, 1, 2, 3, 4])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x4 : Block 87 8 (successors 87 8 s05) 40 10 := offMemoRows (code:=0x42840600100140440640c00100140c) (gs:=[(.fork 0x4442d41800000540040c404414022414 []),(.fork 0x4c42a41540c40108241240040440508a405 []),(.fork 0x40f04440f00642e00040a42e42e40a40a42804a00040704a40700004200040504a40542042042542542842e404404404404 []),(.fork 0x642e00740e420426425406404404 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x4 : Block 87 8 (successors 87 8 s05) 40 10 := offMemoRows (code:=0x42840600100140440640c00100140c) (gs:=(#[AdviceNode.fork 0x4442d41800000540040c404414022414 [], AdviceNode.fork 0x4c42a41540c40108241240040440508a405 [], AdviceNode.fork 0x40f04440f00642e00040a42e42e40a40a42804a00040704a40700004200040504a40542042042542542842e404404404404 [], AdviceNode.fork 0x642e00740e420426425406404404 []], [0, 1, 2, 3])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x5 : Block 87 8 (successors 87 8 s05) 50 10 := offMemoRows (code:=0x1401400400400400001400404001) (gs:=[(.fork 0x40440f08a40f40440a40440a40440700040740408240440504a40540040640040640140040140042804404c428404404404404404428 []),(.fork 0x40e40e00a40e40e40e40e40e40e42800004704204b04a04700a41241240040040e40e428001404404404406404406406400400006000401420401420401401406401406406 [(.fork 0x42f022412423400 [])]),(.fork 0x44430401425400406400426400404406401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x5 : Block 87 8 (successors 87 8 s05) 50 10 := offMemoRows (code:=0x1401400400400400001400404001) (gs:=(#[AdviceNode.fork 0x40440f08a40f40440a40440a40440700040740408240440504a40540040640040640140040140042804404c428404404404404404428 [], AdviceNode.fork 0x42f022412423400 [], AdviceNode.fork 0x40e40e00a40e40e40e40e40e40e42800004704204b04a04700a41241240040040e40e428001404404404406404406406400400006000401420401420401401406401406406 [1], AdviceNode.fork 0x44430401425400406400426400404406401 []], [0, 2, 3])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x6 : Block 87 8 (successors 87 8 s05) 60 10 := offMemoRows (code:=0x40e40e40e40e001428001428401428) (gs:=[(.fork 0x1443142405200142800740040442304a423 [(.fork 0x42f022412423400 [])]),(.fork 0x1842a41504204e40642840105241240040440504a405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x6 : Block 87 8 (successors 87 8 s05) 60 10 := offMemoRows (code:=0x40e40e40e40e001428001428401428) (gs:=(#[AdviceNode.fork 0x42f022412423400 [], AdviceNode.fork 0x1443142405200142800740040442304a423 [0], AdviceNode.fork 0x1842a41504204e40642840105241240040440504a405 []], [1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x7 : Block 87 8 (successors 87 8 s05) 70 10 := offMemoRows (code:=0x42940700100140440740c428001428) (gs:=[(.fork 0x4443241f40000004640642840441e04641e []),(.fork 0x40840f40840f04243300040a43343340a40a00040604a406000405022405436436435408434434429433404404 []),(.fork 0x4243300740e436435434407404404 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x7 : Block 87 8 (successors 87 8 s05) 70 10 := offMemoRows (code:=0x42940700100140440740c428001428) (gs:=(#[AdviceNode.fork 0x4443241f40000004640642840441e04641e [], AdviceNode.fork 0x40840f40840f04243300040a43343340a40a00040604a406000405022405436436435408434434429433404404 [], AdviceNode.fork 0x4243300740e436435434407404404 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x8 : Block 87 8 (successors 87 8 s05) 80 10 := offMemoRows (code:=0x1401400400400400001400404001) (gs:=[(.fork 0x40440f40840f40440a40440a404406000406404405022405400407400407404408401400401400408429429016404404404404404429 []),(.fork 0x40840840e40e08240e40e40e00004202302241241240040040e40e429042404407404407407400400408408401436401436401401407401407407 []),(.fork 0x44437401434400404407401400407435400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x8 : Block 87 8 (successors 87 8 s05) 80 10 := offMemoRows (code:=0x1401400400400400001400404001) (gs:=(#[AdviceNode.fork 0x40440f40840f40440a40440a404406000406404405022405400407400407404408401400401400408429429016404404404404404429 [], AdviceNode.fork 0x40840840e40e08240e40e40e00004202302241241240040040e40e429042404407404407407400400408408401436401436401401407401407407 [], AdviceNode.fork 0x44437401434400404407401400407435400 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x9 : Block 87 8 (successors 87 8 s05) 90 10 := offMemoRows (code:=0x428429001428001429001429401429) (gs:=[(.fork 0x8443a43904204201340742908a40c007400404438022438 []),(.fork 0x5a42a41500042940105241240040440504a405 []),(.fork 0x2443d43c00040604a42805240140004240443b04a43b [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x9 : Block 87 8 (successors 87 8 s05) 90 10 := offMemoRows (code:=0x428429001428001429001429401429) (gs:=(#[AdviceNode.fork 0x8443a43904204201340742908a40c007400404438022438 [], AdviceNode.fork 0x5a42a41500042940105241240040440504a405 [], AdviceNode.fork 0x2443d43c00040604a42805240140004240443b04a43b []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x10 : Block 87 8 (successors 87 8 s05) 100 10 := offMemoRows (code:=0x40a40a40c42940842940e40e40e40e) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x10 : Block 87 8 (successors 87 8 s05) 100 10 := offMemoRows (code:=0x40a40a40c42940842940e40e40e40e) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x11 : Block 87 8 (successors 87 8 s05) 110 10 := offMemoRows (code:=0x40e00140e00140e40a40e40e40e40e) (gs:=[(.fork 0x42c43e08342c42c43e08442c43e44044144043f44002343f05644008344042c44004342c40e40e40e40e42c44008442c43e43f04343f01543f01343f42c43f04342c40e40e40e40e42c43f00442c43e04704343e42c03402242c40e40e40e40e42c02c02242c40e40e40e40e40e40e40e40e40e40e40e40e40e40e40e40e []),(.fork 0x42c43e08442c40e08242c44004242c40e00442c43f00442c42c02200440e42c02c02242c40e40e40e40e40e08442c40e40e40e40e42c40e42c40e40e40e40a [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x11 : Block 87 8 (successors 87 8 s05) 110 10 := offMemoRows (code:=0x40e00140e00140e40a40e40e40e40e) (gs:=(#[AdviceNode.fork 0x42c43e08342c42c43e08442c43e44044144043f44002343f05644008344042c44004342c40e40e40e40e42c44008442c43e43f04343f01543f01343f42c43f04342c40e40e40e40e42c43f00442c43e04704343e42c03402242c40e40e40e40e42c02c02242c40e40e40e40e40e40e40e40e40e40e40e40e40e40e40e40e [], AdviceNode.fork 0x42c43e08442c40e08242c44004242c40e00442c43f00442c42c02200440e42c02c02242c40e40e40e40e40e08442c40e40e40e40e42c40e42c40e40e40e40a []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x12 : Block 87 8 (successors 87 8 s05) 120 10 := offMemoRows (code:=0x40e40e40e40e40040040040040e400) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x12 : Block 87 8 (successors 87 8 s05) 120 10 := offMemoRows (code:=0x40e40e40e40e40040040040040e400) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x13 : Block 87 8 (successors 87 8 s05) 130 10 := offMemoRows (code:=0x40e40e40e40e40e40e40e40e40e40e) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x13 : Block 87 8 (successors 87 8 s05) 130 10 := offMemoRows (code:=0x40e40e40e40e40e40e40e40e40e40e) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x14 : Block 87 8 (successors 87 8 s05) 140 10 := offMemoRows (code:=0x140140400140c40f00100140440f) (gs:=[(.fork 0x40c40b08640b00040a40b40b40a40a40940808a408000407408408407407000406046406000022000405022405402402403403404404 []),(.fork 0x8640b00740e08642940240940340f404404 []),(.fork 0x40440a40440a40440840440740840740440600040640400040440500040540440440440440f40040040f40040140140040c404 []),(.fork 0x8444208a42940100040340040f40040940040440f401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x14 : Block 87 8 (successors 87 8 s05) 140 10 := offMemoRows (code:=0x140140400140c40f00100140440f) (gs:=(#[AdviceNode.fork 0x40c40b08640b00040a40b40b40a40a40940808a408000407408408407407000406046406000022000405022405402402403403404404 [], AdviceNode.fork 0x8640b00740e08642940240940340f404404 [], AdviceNode.fork 0x40440a40440a40440840440740840740440600040640400040440500040540440440440440f40040040f40040140140040c404 [], AdviceNode.fork 0x8444208a42940100040340040f40040940040440f401 []], [0, 1, 2, 3])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b5x15 : Block 87 8 (successors 87 8 s05) 150 10 := offMemoRows (code:=0x40140c) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b5x15 : Block 87 8 (successors 87 8 s05) 150 10 := offMemoRows (code:=0x40140c) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc5 : Excluded 87 9 s05 := by
@@ -1654,52 +1740,52 @@ end Reused2960Aux
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc6 : Excluded 87 9 s06 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
+theorem exc6 : Excluded 87 9 s06 := offAudit (table:=#[]) (g:=AdviceNode.saved 0) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b7x0 : Block 87 8 (successors 87 8 s07) 0 10 := offMemoRows (code:=0x40100140140f400400400400400401) (gs:=[(.fork 0x40344440340a44440a40340340340740340740300440340600040640100002440340340504640540140140344340340044340040140140140140040f40f400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b7x0 : Block 87 8 (successors 87 8 s07) 0 10 := offMemoRows (code:=0x40100140140f400400400400400401) (gs:=(#[AdviceNode.fork 0x40344440340a44440a40340340340740340740300440340600040640100002440340340504640540140140344340340044340040140140140140040f40f400 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b7x1 : Block 87 8 (successors 87 8 s07) 10 10 := offMemoRows (code:=0x40040040040140040040140f401401) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b7x1 : Block 87 8 (successors 87 8 s07) 10 10 := offMemoRows (code:=0x40040040040140040040140f401401) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b7x2 : Block 87 8 (successors 87 8 s07) 20 10 := offMemoRows (code:=0x401001401405400400400400400400) (gs:=[(.fork 0x42742742740a42740a00008400040708440700000400040600040640340340140141b41b40140140f02704440f40040540540040041b41b400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b7x2 : Block 87 8 (successors 87 8 s07) 20 10 := offMemoRows (code:=0x401001401405400400400400400400) (gs:=(#[AdviceNode.fork 0x42742742740a42740a00008400040708440700000400040600040640340340140141b41b40140140f02704440f40040540540040041b41b400 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b7x3 : Block 87 8 (successors 87 8 s07) 30 10 := offMemoRows (code:=0x1401400400400400401401401405) (gs:=[(.fork 0x42742742742700000040100000000000000040040040100041b401415401405405401401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b7x3 : Block 87 8 (successors 87 8 s07) 30 10 := offMemoRows (code:=0x1401400400400400401401401405) (gs:=(#[AdviceNode.fork 0x42742742742700000040100000000000000040040040100041b401415401405405401401 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b7x4 : Block 87 8 (successors 87 8 s07) 40 10 := offMemoRows (code:=0x40140640300c001403401401401401) (gs:=[(.fork 0x418414401046401403 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b7x4 : Block 87 8 (successors 87 8 s07) 40 10 := offMemoRows (code:=0x40140640300c001403401401401401) (gs:=(#[AdviceNode.fork 0x418414401046401403 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b7x5 : Block 87 8 (successors 87 8 s07) 50 10 := offMemoRows (code:=0x400400400400401401401406401001) (gs:=[(.fork 0x42540a43040a42543c42540743c40740100042540500040540140142543040140142542640140140f42500040f400406406400400425426400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b7x5 : Block 87 8 (successors 87 8 s07) 50 10 := offMemoRows (code:=0x400400400400401401401406401001) (gs:=(#[AdviceNode.fork 0x42540a43040a42543c42540743c40740100042540500040540140142543040140142542640140140f42500040f400406406400400425426400 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b7x6 : Block 87 8 (successors 87 8 s07) 60 10 := offMemoRows (code:=0x40e40e00e425001425401401401401) (gs:=[(.fork 0x424000405006425401423000401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b7x6 : Block 87 8 (successors 87 8 s07) 60 10 := offMemoRows (code:=0x40e40e00e425001425401401401401) (gs:=(#[AdviceNode.fork 0x424000405006425401423000401 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b7x7 : Block 87 8 (successors 87 8 s07) 70 10 := offMemoRows (code:=0x40100140140740342500142540e40e) (gs:=[(.fork 0x41f40f00641e401000401425 []),(.fork 0x43440a43340a43440643c40643440508640540140143443343443c40140143443540140140f43440340f400407407400400434435400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b7x7 : Block 87 8 (successors 87 8 s07) 70 10 := offMemoRows (code:=0x40100140140740342500142540e40e) (gs:=(#[AdviceNode.fork 0x41f40f00641e401000401425 [], AdviceNode.fork 0x43440a43340a43440643c40643440508640540140143443343443c40140143443540140140f43440340f400407407400400434435400 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b7x8 : Block 87 8 (successors 87 8 s07) 80 10 := offMemoRows (code:=0x401401400400400400401401401407) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b7x8 : Block 87 8 (successors 87 8 s07) 80 10 := offMemoRows (code:=0x401401400400400400401401401407) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b7x9 : Block 87 8 (successors 87 8 s07) 90 10 := offMemoRows (code:=0x42543443c42500e434001434401401) (gs:=[(.fork 0x439000405086445407434064403401438084401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b7x9 : Block 87 8 (successors 87 8 s07) 90 10 := offMemoRows (code:=0x42543443c42500e434001434401401) (gs:=(#[AdviceNode.fork 0x439000405086445407434064403401438084401 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b7x10 : Block 87 8 (successors 87 8 s07) 100 10 := offMemoRows (code:=0x40e40a40343440343440e40e40e40e) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b7x10 : Block 87 8 (successors 87 8 s07) 100 10 := offMemoRows (code:=0x40e40a40343440343440e40e40e40e) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b7x11 : Block 87 8 (successors 87 8 s07) 110 10 := offMemoRows (code:=0x40040040040040e40e40e40a40e40e) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b7x11 : Block 87 8 (successors 87 8 s07) 110 10 := offMemoRows (code:=0x40040040040040e40e40e40a40e40e) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b7x12 : Block 87 8 (successors 87 8 s07) 120 10 := offMemoRows (code:=0x40e40e40e40e40e40e40e40e40e40e) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b7x12 : Block 87 8 (successors 87 8 s07) 120 10 := offMemoRows (code:=0x40e40e40e40e40e40e40e40e40e40e) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b7x13 : Block 87 8 (successors 87 8 s07) 130 10 := offMemoRows (code:=0x40140140140140e40e40e40e) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b7x13 : Block 87 8 (successors 87 8 s07) 130 10 := offMemoRows (code:=0x40140140140140e40e40e40e) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc7 : Excluded 87 9 s07 := by
@@ -1725,52 +1811,52 @@ end Reused2960Aux
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc8 : Excluded 87 9 s08 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
+theorem exc8 : Excluded 87 9 s08 := offAudit (table:=#[]) (g:=AdviceNode.saved 0) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b9x0 : Block 87 8 (successors 87 8 s09) 0 10 := offMemoRows (code:=0x41540141a40f41500100100141540f) (gs:=[(.fork 0x41740a41740a416407416407000406026406414414402402415415401000022401 []),(.fork 0x41441840241541540f []),(.fork 0x41540a42a40a41641a41540741640741540642440641541541541540040f40040f41a00e40141502240140040540540041a415 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b9x0 : Block 87 8 (successors 87 8 s09) 0 10 := offMemoRows (code:=0x41540141a40f41500100100141540f) (gs:=(#[AdviceNode.fork 0x41740a41740a416407416407000406026406414414402402415415401000022401 [], AdviceNode.fork 0x41441840241541540f [], AdviceNode.fork 0x41540a42a40a41641a41540741640741540642440641541541541540040f40040f41a00e40141502240140040540540041a415 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b9x1 : Block 87 8 (successors 87 8 s09) 10 10 := offMemoRows (code:=0x400400400400143401415001001001) (gs:=[(.fork 0x40f02240f42742702242700040a42742740a40a00040702240741b00405200000040605200340640641b04400b41b41241b404404415415 []),(.fork 0x2440e04442441200b41b404415415401 []),(.fork 0x41542a41540700040741542441504441541541541541541540f41500040f40a41542a40a406415424406400405405400405400400405012415 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b9x1 : Block 87 8 (successors 87 8 s09) 10 10 := offMemoRows (code:=0x400400400400143401415001001001) (gs:=(#[AdviceNode.fork 0x40f02240f42742702242700040a42742740a40a00040702240741b00405200000040605200340640641b04400b41b41241b404404415415 [], AdviceNode.fork 0x2440e04442441200b41b404415415401 [], AdviceNode.fork 0x41542a41540700040741542441504441541541541541541540f41500040f40a41542a40a406415424406400405405400405400400405012415 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b9x2 : Block 87 8 (successors 87 8 s09) 20 10 := offMemoRows (code:=0x405001405400400400405400400400) (gs:=[(.fork 0x1241440041540f40f400418400405405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b9x2 : Block 87 8 (successors 87 8 s09) 20 10 := offMemoRows (code:=0x405001405400400400405400400400) (gs:=(#[AdviceNode.fork 0x1241440041540f40f400418400405405 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b9x3 : Block 87 8 (successors 87 8 s09) 30 10 := offMemoRows (code:=0x140040040540000140500140541a) (gs:=[(.fork 0x4a42400540041540140140041b400405405 []),(.fork 0x41a0924000a2415401401400012400405405 []),(.fork 0x40e40e40e40e40e40e41641641641a00002640040041a01240240540240540504a04a40f41540f41540f40f40540f40540f41a000400400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b9x3 : Block 87 8 (successors 87 8 s09) 30 10 := offMemoRows (code:=0x140040040540000140500140541a) (gs:=(#[AdviceNode.fork 0x4a42400540041540140140041b400405405 [], AdviceNode.fork 0x41a0924000a2415401401400012400405405 [], AdviceNode.fork 0x40e40e40e40e40e40e41641641641a00002640040041a01240240540240540504a04a40f41540f41540f40f40540f40540f41a000400400 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b9x4 : Block 87 8 (successors 87 8 s09) 40 10 := offMemoRows (code:=0x415406400400400400400400400400) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b9x4 : Block 87 8 (successors 87 8 s09) 40 10 := offMemoRows (code:=0x415406400400400400400400400400) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b9x5 : Block 87 8 (successors 87 8 s09) 50 10 := offMemoRows (code:=0x405424424405415001424406424001) (gs:=[(.fork 0x42440a42f40a42440704440742342342042041541540142405240140f42402440f []),(.fork 0x41540a42a40a42404441540704b40740540040540040040640040605442442442a41541541541541542440141505240140f41500040f [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b9x5 : Block 87 8 (successors 87 8 s09) 50 10 := offMemoRows (code:=0x405424424405415001424406424001) (gs:=(#[AdviceNode.fork 0x42440a42f40a42440704440742342342042041541540142405240140f42402440f [], AdviceNode.fork 0x41540a42a40a42404441540704b40740540040540040040640040605442442442a41541541541541542440141505240140f41500040f []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b9x6 : Block 87 8 (successors 87 8 s09) 60 10 := offMemoRows (code:=0x40e40e40e40e400400400400001400) (gs:=[(.fork 0x40e40e40e40e42404440040042040542040540542400a0a242440e40e424424415406415406406400400424024405406405406406 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b9x6 : Block 87 8 (successors 87 8 s09) 60 10 := offMemoRows (code:=0x40e40e40e40e400400400400001400) (gs:=(#[AdviceNode.fork 0x40e40e40e40e42404440040042040542040540542400a0a242440e40e424424415406415406406400400424024405406405406406 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b9x7 : Block 87 8 (successors 87 8 s09) 70 10 := offMemoRows (code:=0x41540700142400142441a424001424) (gs:=[(.fork 0x40002644641e415026415424 []),(.fork 0x426425415052415424 []),(.fork 0x4044014150524010a2056406424 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b9x7 : Block 87 8 (successors 87 8 s09) 70 10 := offMemoRows (code:=0x41540700142400142441a424001424) (gs:=(#[AdviceNode.fork 0x40002644641e415026415424 [], AdviceNode.fork 0x426425415052415424 [], AdviceNode.fork 0x4044014150524010a2056406424 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b9x8 : Block 87 8 (successors 87 8 s09) 80 10 := offMemoRows (code:=0x405448001405415001448407001001) (gs:=[(.fork 0x44740a44740a00040604640643941643843843643644844741541540100002240140f41602200041640f41640f []),(.fork 0x43843943640741541502641a []),(.fork 0x41540a42a40a41540642440641541640540040540040040740040741541541541541544840141500040140f41541640f []),(.fork 0x40541540740502a41a438400400407439400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b9x8 : Block 87 8 (successors 87 8 s09) 80 10 := offMemoRows (code:=0x405448001405415001448407001001) (gs:=(#[AdviceNode.fork 0x44740a44740a00040604640643941643843843643644844741541540100002240140f41602200041640f41640f [], AdviceNode.fork 0x43843943640741541502641a [], AdviceNode.fork 0x41540a42a40a41540642440641541640540040540040040740040741541541541541544840141500040140f41541640f [], AdviceNode.fork 0x40541540740502a41a438400400407439400 []], [0, 1, 2, 3])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b9x9 : Block 87 8 (successors 87 8 s09) 90 10 := offMemoRows (code:=0x40e40e424448001424400400400400) (gs:=[(.fork 0x44904604640642441543b044415 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b9x9 : Block 87 8 (successors 87 8 s09) 90 10 := offMemoRows (code:=0x40e40e424448001424400400400400) (gs:=(#[AdviceNode.fork 0x44904604640642441543b044415 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b9x10 : Block 87 8 (successors 87 8 s09) 100 10 := offMemoRows (code:=0x144800144841a44841644840e40e) (gs:=[(.fork 0x435434415022415448 []),(.fork 0x404401415052401448 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b9x10 : Block 87 8 (successors 87 8 s09) 100 10 := offMemoRows (code:=0x144800144841a44841644840e40e) (gs:=(#[AdviceNode.fork 0x435434415022415448 [], AdviceNode.fork 0x404401415052401448 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b9x11 : Block 87 8 (successors 87 8 s09) 110 10 := offMemoRows (code:=0x40e40540e40e40e40a40e40e40e40a) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b9x11 : Block 87 8 (successors 87 8 s09) 110 10 := offMemoRows (code:=0x40e40540e40e40e40a40e40e40e40a) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b9x12 : Block 87 8 (successors 87 8 s09) 120 10 := offMemoRows (code:=0x40e40e40040040040040540e40e40e) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b9x12 : Block 87 8 (successors 87 8 s09) 120 10 := offMemoRows (code:=0x40e40e40040040040040540e40e40e) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b9x13 : Block 87 8 (successors 87 8 s09) 130 10 := offMemoRows (code:=0x141a00141a40e40e40e40e40e40e) (gs:=[(.fork 0x4a44800040900b40f40341502241541a []),(.fork 0x40441a415401092401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b9x13 : Block 87 8 (successors 87 8 s09) 130 10 := offMemoRows (code:=0x141a00141a40e40e40e40e40e40e) (gs:=(#[AdviceNode.fork 0x4a44800040900b40f40341502241541a [], AdviceNode.fork 0x40441a415401092401 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc9 : Excluded 87 9 s09 := by
@@ -1796,46 +1882,46 @@ end Reused2960Aux
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b10x0 : Block 87 8 (successors 87 8 s10) 0 10 := offMemoRows (code:=0x40500140540f400400405400400400) (gs:=[(.fork 0x41741841440a41740a41440743840741444641440644640641802241441841440041840040540540540540f40040f400405405401414046401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b10x0 : Block 87 8 (successors 87 8 s10) 0 10 := offMemoRows (code:=0x40500140540f400400405400400400) (gs:=(#[AdviceNode.fork 0x41741841440a41740a41440743840741444641440644640641802241441841440041840040540540540540f40040f400405405401414046401 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b10x1 : Block 87 8 (successors 87 8 s10) 10 10 := offMemoRows (code:=0x40540540500140540540540f405405) (gs:=[(.fork 0x4200040f04440f40542742740a42740a0004070844070a20040a200000040600400340640641b41b41b40041b400405405405400405400405405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b10x1 : Block 87 8 (successors 87 8 s10) 10 10 := offMemoRows (code:=0x40540540500140540540540f405405) (gs:=(#[AdviceNode.fork 0x4200040f04440f40542742740a42740a0004070844070a20040a200000040600400340640641b41b41b40041b400405405405400405400405405 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b10x2 : Block 87 8 (successors 87 8 s10) 20 10 := offMemoRows (code:=0x400400400400400405400400405401) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b10x2 : Block 87 8 (successors 87 8 s10) 20 10 := offMemoRows (code:=0x400400400400400405400400405401) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b10x3 : Block 87 8 (successors 87 8 s10) 30 10 := offMemoRows (code:=0x400400405405405405405405405405) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b10x3 : Block 87 8 (successors 87 8 s10) 30 10 := offMemoRows (code:=0x400400405405405405405405405405) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b10x4 : Block 87 8 (successors 87 8 s10) 40 10 := offMemoRows (code:=0x405406400400400400001400400400) (gs:=[(.fork 0x40e40e40e40e40e40e01240e40e40e40e412082412082412412404412022412404412022400400401412401412401401412401412401400400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b10x4 : Block 87 8 (successors 87 8 s10) 40 10 := offMemoRows (code:=0x405406400400400400001400400400) (gs:=(#[AdviceNode.fork 0x40e40e40e40e40e40e01240e40e40e40e412082412082412412404412022412404412022400400401412401412401401412401412401400400 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b10x5 : Block 87 8 (successors 87 8 s10) 50 10 := offMemoRows (code:=0x405405405405405405405406405001) (gs:=[(.fork 0x42f42442340a42f40a42340704440742408240540540640040640042344642342440540540540540142300640140f42344640f400423424400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b10x5 : Block 87 8 (successors 87 8 s10) 50 10 := offMemoRows (code:=0x405405405405405405405406405001) (gs:=(#[AdviceNode.fork 0x42f42442340a42f40a42340704440742408240540540640040640042344642342440540540540540142300640140f42344640f400423424400 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b10x6 : Block 87 8 (successors 87 8 s10) 60 10 := offMemoRows (code:=0x44642340e40e40e40e400400400400) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b10x6 : Block 87 8 (successors 87 8 s10) 60 10 := offMemoRows (code:=0x44642340e40e40e40e400400400400) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b10x7 : Block 87 8 (successors 87 8 s10) 70 10 := offMemoRows (code:=0x405001405407001423001423414423) (gs:=[(.fork 0x426401006425405004405423 []),(.fork 0x4000124044010a240140500440544a406423 []),(.fork 0x43840a44740a43840604640643908240740040740000443843843843844743800443843940540540540540143808640140f43844b02a43840f44b40f400438439400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b10x7 : Block 87 8 (successors 87 8 s10) 70 10 := offMemoRows (code:=0x405001405407001423001423414423) (gs:=(#[AdviceNode.fork 0x426401006425405004405423 [], AdviceNode.fork 0x4000124044010a240140500440544a406423 [], AdviceNode.fork 0x43840a44740a43840604640643908240740040740000443843843843844743800443843940540540540540143808640140f43844b02a43840f44b40f400438439400 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b10x8 : Block 87 8 (successors 87 8 s10) 80 10 := offMemoRows (code:=0x400400405405405405405405405407) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b10x8 : Block 87 8 (successors 87 8 s10) 80 10 := offMemoRows (code:=0x400400405405405405405405405407) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b10x9 : Block 87 8 (successors 87 8 s10) 90 10 := offMemoRows (code:=0x40e40e40e40e423438001423400400) (gs:=[(.fork 0x44943840640700642340543b044405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b10x9 : Block 87 8 (successors 87 8 s10) 90 10 := offMemoRows (code:=0x40e40e40e40e423438001423400400) (gs:=(#[AdviceNode.fork 0x44943840640700642340543b044405 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b10x10 : Block 87 8 (successors 87 8 s10) 100 10 := offMemoRows (code:=0x40540a001438001438414438438414) (gs:=[(.fork 0x435434405084405438 []),(.fork 0x400012404401405022405407006438 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b10x10 : Block 87 8 (successors 87 8 s10) 100 10 := offMemoRows (code:=0x40540a001438001438414438438414) (gs:=(#[AdviceNode.fork 0x435434405084405438 [], AdviceNode.fork 0x400012404401405022405407006438 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b10x11 : Block 87 8 (successors 87 8 s10) 110 10 := offMemoRows (code:=0x40540540e40540540540540a40540e) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b10x11 : Block 87 8 (successors 87 8 s10) 110 10 := offMemoRows (code:=0x40540540e40540540540540a40540e) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b10x12 : Block 87 8 (successors 87 8 s10) 120 10 := offMemoRows (code:=0x40e40e40040040e400400400405405) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b10x12 : Block 87 8 (successors 87 8 s10) 120 10 := offMemoRows (code:=0x40e40e40040040e400400400405405) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b10x13 : Block 87 8 (successors 87 8 s10) 130 10 := offMemoRows (code:=0x1341400141440e40e40e40e40e40e) (gs:=[(.fork 0x5443840940104241340f403405044405414 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b10x13 : Block 87 8 (successors 87 8 s10) 130 10 := offMemoRows (code:=0x1341400141440e40e40e40e40e40e) (gs:=(#[AdviceNode.fork 0x5443840940104241340f403405044405414 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc10 : Excluded 87 9 s10 := by
@@ -1861,52 +1947,52 @@ end Reused2960Aux
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc11 : Excluded 87 9 s11 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
+theorem exc11 : Excluded 87 9 s11 := offAudit (table:=#[]) (g:=AdviceNode.saved 0) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b16x0 : Block 87 8 (successors 87 8 s16) 0 10 := offMemoRows (code:=0x405001405400405401405405405405) (gs:=[(.fork 0x41542a41540a42a40a41504741540700040741542441540642440640540540540540040540040541504740140140540540f41500040f401400400401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b16x0 : Block 87 8 (successors 87 8 s16) 0 10 := offMemoRows (code:=0x405001405400405401405405405405) (gs:=(#[AdviceNode.fork 0x41542a41540a42a40a41504741540700040741542441540642440640540540540540040540040541504740140140540540f41500040f401400400401 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b16x1 : Block 87 8 (successors 87 8 s16) 10 10 := offMemoRows (code:=0x40540540500140540f405400405405) (gs:=[(.fork 0x41402741440a00040a41443841440743840741444641440644640641404741440000040040540540540540f40540f40540140140540540140f40f401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b16x1 : Block 87 8 (successors 87 8 s16) 10 10 := offMemoRows (code:=0x40540540500140540f405400405405) (gs:=(#[AdviceNode.fork 0x41402741440a00040a41443841440743840741444641440644640641404741440000040040540540540540f40540f40540140140540540140f40f401 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b16x2 : Block 87 8 (successors 87 8 s16) 20 10 := offMemoRows (code:=0x40540540540540540140500140540f) (gs:=[(.fork 0x2b41404c41441445703341441545742a41540540540540501c45701c45741443443841445743403343442343443c42341543403341540540540540502b43408c43441442344642345742343042341542342441540540540540502b40500c02e42300c42300741441505341501b41504c415405405405405405405405405405001405001 [(.fork 0x1541403341441445703341441545742a41500d45701b45741443443841445743403343442343443c42341543403341501543405343441442344642345742343042341542342441500d42302b42341441503341500d41502b415 []),(.fork 0x41403441400045701c45700043405443402a00000042302c02b42300f02b02b00041502c415405405 [])])]) certifiedDB (by decide) (by decide +kernel)
+theorem b16x2 : Block 87 8 (successors 87 8 s16) 20 10 := offMemoRows (code:=0x40540540540540540140500140540f) (gs:=(#[AdviceNode.fork 0x1541403341441445703341441545742a41500d45701b45741443443841445743403343442343443c42341543403341501543405343441442344642345742343042341542342441500d42302b42341441503341500d41502b415 [], AdviceNode.fork 0x41403441400045701c45700043405443402a00000042302c02b42300f02b02b00041502c415405405 [], AdviceNode.fork 0x2b41404c41441445703341441545742a41540540540540501c45701c45741443443841445743403343442343443c42341543403341540540540540502b43408c43441442344642345742343042341542342441540540540540502b40500c02e42300c42300741441505341501b41504c415405405405405405405405405405001405001 [0, 1]], [2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b16x3 : Block 87 8 (successors 87 8 s16) 30 10 := offMemoRows (code:=0x401401405405405405405405405405) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b16x3 : Block 87 8 (successors 87 8 s16) 30 10 := offMemoRows (code:=0x401401405405405405405405405405) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b16x4 : Block 87 8 (successors 87 8 s16) 40 10 := offMemoRows (code:=0x40500140540641441508b415401401) (gs:=[(.fork 0x42340a43040a42343c42340743c40740540540140502c40640540640542344642343042342440140140540540540540f42344640f400423424400401406406401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b16x4 : Block 87 8 (successors 87 8 s16) 40 10 := offMemoRows (code:=0x40500140540641441508b415401401) (gs:=(#[AdviceNode.fork 0x42340a43040a42343c42340743c40740540540140502c40640540640542344642343042342440140140540540540540f42344640f400423424400401406406401 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b16x5 : Block 87 8 (successors 87 8 s16) 50 10 := offMemoRows (code:=0x401401405405405405405405405406) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b16x5 : Block 87 8 (successors 87 8 s16) 50 10 := offMemoRows (code:=0x401401405405405405405405405406) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b16x6 : Block 87 8 (successors 87 8 s16) 60 10 := offMemoRows (code:=0x457423430423415423424415401401) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b16x6 : Block 87 8 (successors 87 8 s16) 60 10 := offMemoRows (code:=0x457423430423415423424415401401) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b16x7 : Block 87 8 (successors 87 8 s16) 70 10 := offMemoRows (code:=0x405407405001405407414423446423) (gs:=[(.fork 0x43440a00040a43440643c40640540140740540740543443843402743443c43404740140140540540540540f43443840f400434000400401407407401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b16x7 : Block 87 8 (successors 87 8 s16) 70 10 := offMemoRows (code:=0x405407405001405407414423446423) (gs:=(#[AdviceNode.fork 0x43440a00040a43440643c40640540140740540740543443843402743443c43404740140140540540540540f43443840f400434000400401407407401 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b16x8 : Block 87 8 (successors 87 8 s16) 80 10 := offMemoRows (code:=0x401401401401405405405405405405) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b16x8 : Block 87 8 (successors 87 8 s16) 80 10 := offMemoRows (code:=0x401401401401405405405405405405) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b16x9 : Block 87 8 (successors 87 8 s16) 90 10 := offMemoRows (code:=0x4b43442343443c42341543408b415) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b16x9 : Block 87 8 (successors 87 8 s16) 90 10 := offMemoRows (code:=0x4b43442343443c42341543408b415) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b16x10 : Block 87 8 (successors 87 8 s16) 100 10 := offMemoRows (code:=0x40500140540a414434438414457434) (gs:=[(.fork 0x45702745740700040745743045740643040640540140a40540a40545702745742a40140140540540540540f45700040f40045742a40040140a40a401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b16x10 : Block 87 8 (successors 87 8 s16) 100 10 := offMemoRows (code:=0x40500140540a414434438414457434) (gs:=(#[AdviceNode.fork 0x45702745740700040745743045740643040640540140a40540a40545702745742a40140140540540540540f45700040f40045742a40040140a40a401 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b16x11 : Block 87 8 (successors 87 8 s16) 110 10 := offMemoRows (code:=0x40140140540540540540540540540a) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b16x11 : Block 87 8 (successors 87 8 s16) 110 10 := offMemoRows (code:=0x40140140540540540540540540540a) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b16x12 : Block 87 8 (successors 87 8 s16) 120 10 := offMemoRows (code:=0x41445704b41441545742a415401401) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b16x12 : Block 87 8 (successors 87 8 s16) 120 10 := offMemoRows (code:=0x41445704b41441545742a415401401) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b16x13 : Block 87 8 (successors 87 8 s16) 130 10 := offMemoRows (code:=0x401401401401) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b16x13 : Block 87 8 (successors 87 8 s16) 130 10 := offMemoRows (code:=0x401401401401) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc16 : Excluded 87 9 s16 := by
@@ -1932,49 +2018,49 @@ end Reused2960Aux
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x0 : Block 87 8 (successors 87 8 s17) 0 10 := offMemoRows (code:=0x401405405405401405001401401401) (gs:=[(.fork 0x2b41404c41441445702b41441545742a41501c45701c45740540540540541443443841445743402b43442343443c42341543402b41502b43408c43440540540540541442344642345742343042341542342441500c02e42300c42300740540540540502b40541441504b41501b41504c415405405405405405405405405405001405001 [(.fork 0x1541403341441445703341441545742a41500d45701b45741443443841445743403343442343443c42341543403341501543405343441442344642345742343042341542342441500d42302b42341441503341500d41502b415 []),(.fork 0x41403441400045701c45700043405443402a00000042302c02b42300f02b02b00041502c415405405 [])])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x0 : Block 87 8 (successors 87 8 s17) 0 10 := offMemoRows (code:=0x401405405405401405001401401401) (gs:=(#[AdviceNode.fork 0x1541403341441445703341441545742a41500d45701b45741443443841445743403343442343443c42341543403341501543405343441442344642345742343042341542342441500d42302b42341441503341500d41502b415 [], AdviceNode.fork 0x41403441400045701c45700043405443402a00000042302c02b42300f02b02b00041502c415405405 [], AdviceNode.fork 0x2b41404c41441445702b41441545742a41501c45701c45740540540540541443443841445743402b43442343443c42341543402b41502b43408c43440540540540541442344642345742343042341542342441500c02e42300c42300740540540540502b40541441504b41501b41504c415405405405405405405405405405001405001 [0, 1]], [2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x1 : Block 87 8 (successors 87 8 s17) 10 10 := offMemoRows (code:=0x40544c40500140541b405001405401) (gs:=[(.fork 0x4442400740040540541540140140041b400 []),(.fork 0x4444600740f40540541440140140f44c40f [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x1 : Block 87 8 (successors 87 8 s17) 10 10 := offMemoRows (code:=0x40544c40500140541b405001405401) (gs:=(#[AdviceNode.fork 0x4442400740040540541540140140041b400 [], AdviceNode.fork 0x4444600740f40540541440140140f44c40f []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x2 : Block 87 8 (successors 87 8 s17) 20 10 := offMemoRows (code:=0x100141b40000100141b400405405) (gs:=[(.fork 0x40f02240f42742702242700040a42742740a40a00040702240741b00404600000040604600340640641541541241b40440441b04400741b []),(.fork 0x2242b04600304445a41504740440000741b []),(.fork 0x42742742741b42740a42740a00040708440700040600040641b00840140040140041b00e40f02b00040f40040540540041b008 []),(.fork 0x1500c41b008405401400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x2 : Block 87 8 (successors 87 8 s17) 20 10 := offMemoRows (code:=0x100141b40000100141b400405405) (gs:=(#[AdviceNode.fork 0x40f02240f42742702242700040a42742740a40a00040702240741b00404600000040604600340640641541541241b40440441b04400741b [], AdviceNode.fork 0x2242b04600304445a41504740440000741b [], AdviceNode.fork 0x42742742741b42740a42740a00040708440700040600040641b00840140040140041b00e40f02b00040f40040540540041b008 [], AdviceNode.fork 0x1500c41b008405401400 []], [0, 1, 2, 3])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x3 : Block 87 8 (successors 87 8 s17) 30 10 := offMemoRows (code:=0x44c41b00141b40100141b001001401) (gs:=[(.fork 0x2242742742742741b42702242700004241b02204204a04204341b04408204240140141241b40440540440540540040540040540041b00400b40041b400400401401 []),(.fork 0x2242b04442840140140440540040541b40000b400401401 []),(.fork 0x42742742742700000000000000000040100040140140540540040040100041540141b401 []),(.fork 0x4441c04502240500640f08600640004641b40102202b402022402 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x3 : Block 87 8 (successors 87 8 s17) 30 10 := offMemoRows (code:=0x44c41b00141b40100141b001001401) (gs:=(#[AdviceNode.fork 0x2242742742742741b42702242700004241b02204204a04204341b04408204240140141241b40440540440540540040540040540041b00400b40041b400400401401 [], AdviceNode.fork 0x2242b04442840140140440540040541b40000b400401401 [], AdviceNode.fork 0x42742742742700000000000000000040100040140140540540040040100041540141b401 [], AdviceNode.fork 0x4441c04502240500640f08600640004641b40102202b402022402 []], [0, 1, 2, 3])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x4 : Block 87 8 (successors 87 8 s17) 40 10 := offMemoRows (code:=0x100145a40600100145a001406406) (gs:=[(.fork 0x4600041e00641e00002600045100645100008600043b00643b00004600042000642042342342542342542300542542545a45a45a45a45a45a45a45a45a45a45a45a05245a000 []),(.fork 0x40f04440f00040a02440a00040708440700040004440042342342542505245a000 []),(.fork 0x42300742540605245a052 []),(.fork 0x45b45d04345b04445d04445d45d45f04345f45c45f46145c45b45f02345b44a45f02344a02445f02445f45d45e46045e45f45e04345e45c45e04345c45b45e08345b44a45e08344a08445e08445e45d45c04345c45b45c04345b04445c04445c44a45a05245b45d44a04344a45c44a04344a45b44a05244a45b45a05244a []),(.fork 0x40f04440f00040a02440a45a45e08445a00040708440700040004440040540640540640140640140645d45a04445a45f45a02445a45c45a04445a45b45a05245a44a45a05245a05245a [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x4 : Block 87 8 (successors 87 8 s17) 40 10 := offMemoRows (code:=0x100145a40600100145a001406406) (gs:=(#[AdviceNode.fork 0x4600041e00641e00002600045100645100008600043b00643b00004600042000642042342342542342542300542542545a45a45a45a45a45a45a45a45a45a45a45a05245a000 [], AdviceNode.fork 0x40f04440f00040a02440a00040708440700040004440042342342542505245a000 [], AdviceNode.fork 0x42300742540605245a052 [], AdviceNode.fork 0x45b45d04345b04445d04445d45d45f04345f45c45f46145c45b45f02345b44a45f02344a02445f02445f45d45e46045e45f45e04345e45c45e04345c45b45e08345b44a45e08344a08445e08445e45d45c04345c45b45c04345b04445c04445c44a45a05245b45d44a04344a45c44a04344a45b44a05244a45b45a05244a [], AdviceNode.fork 0x40f04440f00040a02440a45a45e08445a00040708440700040004440040540640540640140640140645d45a04445a45f45a02445a45c45a04445a45b45a05245a44a45a05245a05245a []], [0, 1, 2, 3, 4])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x5 : Block 87 8 (successors 87 8 s17) 50 10 := offMemoRows (code:=0x140140500145a001001405001001) (gs:=[(.fork 0x4200045d04445d00002200045f02445f00008200045e08445e00004200045c04445c44a44a44a05245b44a45b44a02b45b45b45b05245a45a406 []),(.fork 0x40540100740140505205205205245a05245a406 []),(.fork 0x4400002200008200004440540545a04445a04445a45a05240645a406406405405401423401423401401406401406406 []),(.fork 0x40540505240640540542340140140645a406 []),(.fork 0x4240502245a08440508200004240540545a02445b45a02a45a45a05240645a40640640545a401405405405405425405 []),(.fork 0x4200002400008445a08400004240140142540542540540540640540640540645a02445a45a05240645a406406401401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x5 : Block 87 8 (successors 87 8 s17) 50 10 := offMemoRows (code:=0x140140500145a001001405001001) (gs:=(#[AdviceNode.fork 0x4200045d04445d00002200045f02445f00008200045e08445e00004200045c04445c44a44a44a05245b44a45b44a02b45b45b45b05245a45a406 [], AdviceNode.fork 0x40540100740140505205205205245a05245a406 [], AdviceNode.fork 0x4400002200008200004440540545a04445a04445a45a05240645a406406405405401423401423401401406401406406 [], AdviceNode.fork 0x40540505240640540542340140140645a406 [], AdviceNode.fork 0x4240502245a08440508200004240540545a02445b45a02a45a45a05240645a40640640545a401405405405405425405 [], AdviceNode.fork 0x4200002400008445a08400004240140142540542540540540640540640540645a02445a45a05240645a406406401401 []], [0, 1, 2, 3, 4, 5])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x6 : Block 87 8 (successors 87 8 s17) 60 10 := offMemoRows (code:=0x145a41b45a00141b40100145a001) (gs:=[(.fork 0x40140142540540640545a406052406401401 []),(.fork 0x40104200002200008240104240140140140540140540545a04445a04444a45a02a45a45a05240645a40640640145a423401 []),(.fork 0x42404640000604604604640641b401042000420046420 []),(.fork 0x43002640a00602602602640645a405022000451026451 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x6 : Block 87 8 (successors 87 8 s17) 60 10 := offMemoRows (code:=0x145a41b45a00141b40100145a001) (gs:=(#[AdviceNode.fork 0x40140142540540640545a406052406401401 [], AdviceNode.fork 0x40104200002200008240104240140140140540140540545a04445a04444a45a02a45a45a05240645a40640640145a423401 [], AdviceNode.fork 0x42404640000604604604640641b401042000420046420 [], AdviceNode.fork 0x43002640a00602602602640645a405022000451026451 []], [0, 1, 2, 3])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x7 : Block 87 8 (successors 87 8 s17) 70 10 := offMemoRows (code:=0x100146240744c45a00145a42b45a) (gs:=[(.fork 0x44604640f00604604604640645a40104200041e04641e []),(.fork 0x44d44d04244d00040f44d44d40f40f00040a04240a08600000040608600340640600040002240043843843443446202446200444546200b462 []),(.fork 0x4244c08600308445a43808743440700b462 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x7 : Block 87 8 (successors 87 8 s17) 70 10 := offMemoRows (code:=0x100146240744c45a00145a42b45a) (gs:=(#[AdviceNode.fork 0x44604640f00604604604640645a40104200041e04641e [], AdviceNode.fork 0x44d44d04244d00040f44d44d40f40f00040a04240a08600000040608600340640600040002240043843843443446202446200444546200b462 [], AdviceNode.fork 0x4244c08600308445a43808743440700b462 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x8 : Block 87 8 (successors 87 8 s17) 80 10 := offMemoRows (code:=0x405001462001001405001001462407) (gs:=[(.fork 0x44d44d44d40f44d40f05340a00040a00040600040600040004440040540740540740140740140744d46246200846200e00c462 []),(.fork 0x2540140500c46200c407 []),(.fork 0x44d44d44d44d00004208208a08208304208200004240540546244d46200446208446202244546200b40746240740740540504244d401438401438401401407401407407 []),(.fork 0x8446340540500b40740540504244c438401401407462407 []),(.fork 0x44d44d44d44d405000000000000000405000000000405405407407405462401405434405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x8 : Block 87 8 (successors 87 8 s17) 80 10 := offMemoRows (code:=0x405001462001001405001001462407) (gs:=(#[AdviceNode.fork 0x44d44d44d40f44d40f05340a00040a00040600040600040004440040540740540740140740140744d46246200846200e00c462 [], AdviceNode.fork 0x2540140500c46200c407 [], AdviceNode.fork 0x44d44d44d44d00004208208a08208304208200004240540546244d46200446208446202244546200b40746240740740540504244d401438401438401401407401407407 [], AdviceNode.fork 0x8446340540500b40740540504244c438401401407462407 [], AdviceNode.fork 0x44d44d44d44d405000000000000000405000000000405405407407405462401405434405 []], [0, 1, 2, 3, 4])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x9 : Block 87 8 (successors 87 8 s17) 90 10 := offMemoRows (code:=0x145a41b46200141b401462001401) (gs:=[(.fork 0x8443c401434405407405462407007407401 []),(.fork 0x4446402502202241b000436022436 []),(.fork 0x43c08608608640608640700645a40508200043b08443b [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x9 : Block 87 8 (successors 87 8 s17) 90 10 := offMemoRows (code:=0x145a41b46200141b401462001401) (gs:=(#[AdviceNode.fork 0x8443c401434405407405462407007407401 [], AdviceNode.fork 0x4446402502202241b000436022436 [], AdviceNode.fork 0x43c08608608640608640700645a40508200043b08443b []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x10 : Block 87 8 (successors 87 8 s17) 100 10 := offMemoRows (code:=0x44c46244d46242b46200146245a462) (gs:=[(.fork 0x4446602500640a086006407026462042401405042053465042465 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x10 : Block 87 8 (successors 87 8 s17) 100 10 := offMemoRows (code:=0x44c46244d46242b46200146245a462) (gs:=(#[AdviceNode.fork 0x4446602500640a086006407026462042401405042053465042465 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x11 : Block 87 8 (successors 87 8 s17) 110 10 := offMemoRows (code:=0x140500100142b40a00100142b40a) (gs:=[(.fork 0x40f04240f42b08400040704240742b00402600000040602600340640642742702242700040042742740040042a42a45745746742b00b42b []),(.fork 0x2600302445a02241b42a01745740a00b42b []),(.fork 0x40f08440f05340700040700040600040642742742740042740040540a40540a40140a40140a42742b42b00842b00e00c42b []),(.fork 0x1740140500c42b00c40a []),(.fork 0x2242b00400004202202a02202342b02404202242742742742740540542b04242b42746742b00b40a42b40a40a40540502242740142a40142a40140140a40140a40a [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x11 : Block 87 8 (successors 87 8 s17) 110 10 := offMemoRows (code:=0x140500100142b40a00100142b40a) (gs:=(#[AdviceNode.fork 0x40f04240f42b08400040704240742b00402600000040602600340640642742702242700040042742740040042a42a45745746742b00b42b [], AdviceNode.fork 0x2600302445a02241b42a01745740a00b42b [], AdviceNode.fork 0x40f08440f05340700040700040600040642742742740042740040540a40540a40140a40140a42742b42b00842b00e00c42b [], AdviceNode.fork 0x1740140500c42b00c40a [], AdviceNode.fork 0x2242b00400004202202a02202342b02404202242742742742740540542b04242b42746742b00b40a42b40a40a40540502242740142a40142a40140140a40140a40a []], [0, 1, 2, 3, 4])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x12 : Block 87 8 (successors 87 8 s17) 120 10 := offMemoRows (code:=0x42741b40142b00140140500142b001) (gs:=[(.fork 0x2446840540500b40a40540502241b42a40140140a42b40a []),(.fork 0x40500000000000000040500042742742742740540540a40a40542b401405457405 []),(.fork 0x2443040145740540a40542b40a00740a401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x12 : Block 87 8 (successors 87 8 s17) 120 10 := offMemoRows (code:=0x42741b40142b00140140500142b001) (gs:=(#[AdviceNode.fork 0x2446840540500b40a40540502241b42a40140140a42b40a [], AdviceNode.fork 0x40500000000000000040500042742742742740540540a40a40542b401405457405 [], AdviceNode.fork 0x2443040145740540a40542b40a00740a401 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x13 : Block 87 8 (successors 87 8 s17) 130 10 := offMemoRows (code:=0x100144c40f44c42b00142b41b42b) (gs:=[(.fork 0x4446902504204242b000454042454 []),(.fork 0x40a04240a44d44d04244d00040744d44d40740744c00404600000040604600340640644c08400040002240041441441344c40340300744c []),(.fork 0x4246204600304445a41404740340f00744c [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x13 : Block 87 8 (successors 87 8 s17) 130 10 := offMemoRows (code:=0x100144c40f44c42b00142b41b42b) (gs:=(#[AdviceNode.fork 0x4446902504204242b000454042454 [], AdviceNode.fork 0x40a04240a44d44d04244d00040744d44d40740744c00404600000040604600340640644c08400040002240041441441344c40340300744c [], AdviceNode.fork 0x4246204600304445a41404740340f00744c []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b17x14 : Block 87 8 (successors 87 8 s17) 140 10 := offMemoRows (code:=0x40100144c00100140100100144c40f) (gs:=[(.fork 0x40a02440a44d44d44d44c44d40744d40700040600040644c00840140f40140f44c00e40002b00040040f40540540f44c008 []),(.fork 0x2500c44c00840540140f []),(.fork 0x2244c04244d44d44d44d44c44d04244d04204a04204344c04402204244c00400002240140141344c40340540340540540f40540f40540f00b40f44c40f40f401401 []),(.fork 0x4246204446a40140140340540f40544c40f00b40f401401 []),(.fork 0x44d44d44d44d00000000000040100040140140540540f40f40100041440144c401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b17x14 : Block 87 8 (successors 87 8 s17) 140 10 := offMemoRows (code:=0x40100144c00100140100100144c40f) (gs:=(#[AdviceNode.fork 0x40a02440a44d44d44d44c44d40744d40700040600040644c00840140f40140f44c00e40002b00040040f40540540f44c008 [], AdviceNode.fork 0x2500c44c00840540140f [], AdviceNode.fork 0x2244c04244d44d44d44d44c44d04244d04204a04204344c04402204244c00400002240140141344c40340540340540540f40540f40540f00b40f44c40f40f401401 [], AdviceNode.fork 0x4246204446a40140140340540f40544c40f00b40f401401 [], AdviceNode.fork 0x44d44d44d44d00000000000040100040140140540540f40f40100041440144c401 []], [0, 1, 2, 3, 4])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc17 : Excluded 87 9 s17 := by
@@ -2001,49 +2087,49 @@ end Reused2960Aux
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x0 : Block 87 8 (successors 87 8 s18) 0 10 := offMemoRows (code:=0x405001405400405001405405405405) (gs:=[(.fork 0x40104200040f02240f40501200040a02240a405082000407022407405052401052052000000406052003406406401042000400012400401405405405405401405405405 []),(.fork 0x40542a41540a42a40a41540700040741542441540642440640540540540540040540040541504441502240540540f41504440f400415012400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x0 : Block 87 8 (successors 87 8 s18) 0 10 := offMemoRows (code:=0x405001405400405001405405405405) (gs:=(#[AdviceNode.fork 0x40104200040f02240f40501200040a02240a405082000407022407405052401052052000000406052003406406401042000400012400401405405405405401405405405 [], AdviceNode.fork 0x40542a41540a42a40a41540700040741542441540642440640540540540540040540040541504441502240540540f41504440f400415012400 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x1 : Block 87 8 (successors 87 8 s18) 10 10 := offMemoRows (code:=0x405405405001405406405400405405) (gs:=[(.fork 0x42340700040740540542344642342442305240540540540540f42344640f40a42300040a400423424400406423052406405406406405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x1 : Block 87 8 (successors 87 8 s18) 10 10 := offMemoRows (code:=0x405405405001405406405400405405) (gs:=(#[AdviceNode.fork 0x42340700040740540542344642342442305240540540540540f42344640f40a42300040a400423424400406423052406405406406405 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x2 : Block 87 8 (successors 87 8 s18) 20 10 := offMemoRows (code:=0x405405405001405001405407405406) (gs:=[(.fork 0x46b4140a241441442a04341441542a42a41546b42a02442a40540540540541442344642342a42304342341542342441546b42300442340540540540541441508341546b41504441540540540540540540540540540540540540541443843841442a43802642a42343808342341543804641546b438022438405405405405 []),(.fork 0x41443843841442a43802442a42343808742341543804441546b43805243840540540540540540540f43843840f40a43802440a406438000406400438000400407438022407405407407405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x2 : Block 87 8 (successors 87 8 s18) 20 10 := offMemoRows (code:=0x405405405001405001405407405406) (gs:=(#[AdviceNode.fork 0x46b4140a241441442a04341441542a42a41546b42a02442a40540540540541442344642342a42304342341542342441546b42300442340540540540541441508341546b41504441540540540540540540540540540540540540541443843841442a43802642a42343808342341543804641546b438022438405405405405 [], AdviceNode.fork 0x41443843841442a43802442a42343808742341543804441546b43805243840540540540540540540f43843840f40a43802440a406438000406400438000400407438022407405407407405 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x3 : Block 87 8 (successors 87 8 s18) 30 10 := offMemoRows (code:=0x40500140500140540a405407405407) (gs:=[(.fork 0x46c41408441441443843841442343808342341543808341546c43808443840540540540542a43808442a41442344642341542342441546c42300442340540540540542a42302342341441508341546c4150c241540540540540540540540540540540540540541442a08641441542a42a41546c42a02242a405405405405 []),(.fork 0x42a43808442a42a40702640742a42302742342a40600040641442a08441441542a42a41546c42a0c242a40540540540540540540f42a00040f40042a42a40040a42a02240a40540a40a405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x3 : Block 87 8 (successors 87 8 s18) 30 10 := offMemoRows (code:=0x40500140500140540a405407405407) (gs:=(#[AdviceNode.fork 0x46c41408441441443843841442343808342341543808341546c43808443840540540540542a43808442a41442344642341542342441546c42300442340540540540542a42302342341441508341546c4150c241540540540540540540540540540540540540541442a08641441542a42a41546c42a02242a405405405405 [], AdviceNode.fork 0x42a43808442a42a40702640742a42302742342a40600040641442a08441441542a42a41546c42a0c242a40540540540540540540f42a00040f40042a42a40040a42a02240a40540a40a405 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x4 : Block 87 8 (successors 87 8 s18) 40 10 := offMemoRows (code:=0x40500140540f40540a40540a405405) (gs:=[(.fork 0x41440a00040a40543841440743840741444641440644640641408441440004640040540540540540f40540f40541404240540540f41402240f [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x4 : Block 87 8 (successors 87 8 s18) 40 10 := offMemoRows (code:=0x40500140540f40540a40540a405405) (gs:=(#[AdviceNode.fork 0x41440a00040a40543841440743840741444641440644640641408441440004640040540540540540f40540f40541404240540540f41402240f []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x5 : Block 87 8 (successors 87 8 s18) 50 10 := offMemoRows (code:=0x40500140540540540540540f405405) (gs:=[(.fork 0x40140140140140140141445702b41441545742a41540140140140141443443841445743403343442343443c42341543402b41540140140140141442344642345742343042341542342441540140140140141441504b415401401401401401401405405405405405405405405405405405405405405405405405405405405405405405405405401405001 [(.fork 0x1541403341441445703341441545742a41500d45701b45741443443841445743403343442343443c42341543403341501543405343441442344642345742343042341542342441500d42302b42341441503341500d41502b415 [])])]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x5 : Block 87 8 (successors 87 8 s18) 50 10 := offMemoRows (code:=0x40500140540540540540540f405405) (gs:=(#[AdviceNode.fork 0x1541403341441445703341441545742a41500d45701b45741443443841445743403343442343443c42341543403341501543405343441442344642345742343042341542342441500d42302b42341441503341500d41502b415 [], AdviceNode.fork 0x40140140140140140141445702b41441545742a41540140140140141443443841445743403343442343443c42341543402b41540140140140141442344642345742343042341542342441540140140140141441504b415401401401401401401405405405405405405405405405405405405405405405405405405405405405405405405405401405001 [0]], [1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x6 : Block 87 8 (successors 87 8 s18) 60 10 := offMemoRows (code:=0x405405405405405405405405405401) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x6 : Block 87 8 (successors 87 8 s18) 60 10 := offMemoRows (code:=0x405405405405405405405405405401) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x7 : Block 87 8 (successors 87 8 s18) 70 10 := offMemoRows (code:=0x1405414415001415401415001401) (gs:=[(.fork 0x3442a40140440540e0c2429046042400022400405012400401 []),(.fork 0x4500040540e08440d08440f086400046402405046405415 []),(.fork 0x423000423000405405405405052405406406423405423446423424405405401401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x7 : Block 87 8 (successors 87 8 s18) 70 10 := offMemoRows (code:=0x1405414415001415401415001401) (gs:=(#[AdviceNode.fork 0x3442a40140440540e0c2429046042400022400405012400401 [], AdviceNode.fork 0x4500040540e08440d08440f086400046402405046405415 [], AdviceNode.fork 0x423000423000405405405405052405406406423405423446423424405405401401 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x8 : Block 87 8 (successors 87 8 s18) 80 10 := offMemoRows (code:=0x424415401423001401405405405405) (gs:=[(.fork 0x40142540543000643c006052406052406405052406401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x8 : Block 87 8 (successors 87 8 s18) 80 10 := offMemoRows (code:=0x424415401423001401405405405405) (gs:=(#[AdviceNode.fork 0x40142540543000643c006052406052406405052406401 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x9 : Block 87 8 (successors 87 8 s18) 90 10 := offMemoRows (code:=0x41442344642342a42304b423415423) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x9 : Block 87 8 (successors 87 8 s18) 90 10 := offMemoRows (code:=0x41442344642342a42304b423415423) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x10 : Block 87 8 (successors 87 8 s18) 100 10 := offMemoRows (code:=0x401438001401405405405405001405) (gs:=[(.fork 0x43800043800040543840540508240540740540740540743440543843843804a43808c43802a44543840540544b44b401401 []),(.fork 0x401434405437086407052407405022407401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x10 : Block 87 8 (successors 87 8 s18) 100 10 := offMemoRows (code:=0x401438001401405405405405001405) (gs:=(#[AdviceNode.fork 0x43800043800040543840540508240540740540740540743440543843843804a43808c43802a44543840540544b44b401401 [], AdviceNode.fork 0x401434405437086407052407405022407401 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x11 : Block 87 8 (successors 87 8 s18) 110 10 := offMemoRows (code:=0x142a42343810b423415438001415) (gs:=[(.fork 0x2540e08440704643640500040502a415 []),(.fork 0x3440a08640702646540502640504a04a42a405000 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x11 : Block 87 8 (successors 87 8 s18) 110 10 := offMemoRows (code:=0x142a42343810b423415438001415) (gs:=(#[AdviceNode.fork 0x2540e08440704643640500040502a415 [], AdviceNode.fork 0x3440a08640702646540502640504a04a42a405000 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x12 : Block 87 8 (successors 87 8 s18) 120 10 := offMemoRows (code:=0x40540500140541443843841442a438) (gs:=[(.fork 0x42a04a42a00042a02c42a00040540540542a01240540a40540a40540a45740542a04a42a42a46742a405405459459401401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x12 : Block 87 8 (successors 87 8 s18) 120 10 := offMemoRows (code:=0x40540500140541443843841442a438) (gs:=(#[AdviceNode.fork 0x42a04a42a00042a02c42a00040540540542a01240540a40540a40540a45740542a04a42a42a46742a405405459459401401 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x13 : Block 87 8 (successors 87 8 s18) 130 10 := offMemoRows (code:=0x41542a42a41540142a001401405405) (gs:=[(.fork 0x40145740546d02640a0c240a40502240a401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x13 : Block 87 8 (successors 87 8 s18) 130 10 := offMemoRows (code:=0x41542a42a41540142a001401405405) (gs:=(#[AdviceNode.fork 0x40145740546d02640a0c240a40502240a401 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b18x14 : Block 87 8 (successors 87 8 s18) 140 10 := offMemoRows (code:=0x40141400140141442a001414) (gs:=[(.fork 0x2540d04440a08645440500040504a414 []),(.fork 0x5443840140340544208640d0a204240f04240f40502240f401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b18x14 : Block 87 8 (successors 87 8 s18) 140 10 := offMemoRows (code:=0x40141400140141442a001414) (gs:=(#[AdviceNode.fork 0x2540d04440a08645440500040504a414 [], AdviceNode.fork 0x5443840140340544208640d0a204240f04240f40502240f401 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc18 : Excluded 87 9 s18 := by
@@ -2070,55 +2156,55 @@ end Reused2960Aux
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc20 : Excluded 87 9 s20 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
+theorem exc20 : Excluded 87 9 s20 := offAudit (table:=#[]) (g:=AdviceNode.saved 0) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x0 : Block 87 8 (successors 87 8 s21) 0 10 := offMemoRows (code:=0x42040142140f42000100100142040f) (gs:=[(.fork 0x41d41f41d40a41d40a41c42242242142240742240741f02a42105202600000040502600040540541f00041e41e04a41c41c41d41c02a40240242100042042040100a046401 []),(.fork 0x4442441e41f40242042040f []),(.fork 0x46f42042040a46f40a42042242040742240742042442001242042000042042046f42042442042040040640040640142000a401405420424405400406406400421420 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x0 : Block 87 8 (successors 87 8 s21) 0 10 := offMemoRows (code:=0x42040142140f42000100100142040f) (gs:=(#[AdviceNode.fork 0x41d41f41d40a41d40a41c42242242142240742240741f02a42105202600000040502600040540541f00041e41e04a41c41c41d41c02a40240242100042042040100a046401 [], AdviceNode.fork 0x4442441e41f40242042040f [], AdviceNode.fork 0x46f42042040a46f40a42042242040742240742042442001242042000042042046f42042442042040040640040640142000a401405420424405400406406400421420 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x1 : Block 87 8 (successors 87 8 s21) 10 10 := offMemoRows (code:=0x400400400400001401420001001001) (gs:=[(.fork 0x40f04440f00a42e00040a42e42e40a40a42805200040705240700004200040505240542542542842e404404404404420420 []),(.fork 0x2440e425426404420420401 []),(.fork 0x42005242040700040742042042046f40442002642042040042040642040040040640f42000040f40a42046f40a40542042440540040640640004a420 []),(.fork 0x42504a42040100a04a [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x1 : Block 87 8 (successors 87 8 s21) 10 10 := offMemoRows (code:=0x400400400400001401420001001001) (gs:=(#[AdviceNode.fork 0x40f04440f00a42e00040a42e42e40a40a42805200040705240700004200040505240542542542842e404404404404420420 [], AdviceNode.fork 0x2440e425426404420420401 [], AdviceNode.fork 0x42005242040700040742042042046f40442002642042040042040642040040040640f42000040f40a42046f40a40542042440540040640640004a420 [], AdviceNode.fork 0x42504a42040100a04a []], [0, 1, 2, 3])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x2 : Block 87 8 (successors 87 8 s21) 20 10 := offMemoRows (code:=0x406001406400400400406400400400) (gs:=[(.fork 0x42f42442442f424044424001406406424024424052424424420405420405405406406404424400423400423400400405400405400 [(.fork 0x42f412022400423 [])])]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x2 : Block 87 8 (successors 87 8 s21) 20 10 := offMemoRows (code:=0x406001406400400400406400400400) (gs:=(#[AdviceNode.fork 0x42f412022400423 [], AdviceNode.fork 0x42f42442442f424044424001406406424024424052424424420405420405405406406404424400423400423400400405400405400 [0]], [1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x3 : Block 87 8 (successors 87 8 s21) 30 10 := offMemoRows (code:=0x40640640640640640e406406406406) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x3 : Block 87 8 (successors 87 8 s21) 30 10 := offMemoRows (code:=0x40640640640640640e406406406406) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x4 : Block 87 8 (successors 87 8 s21) 40 10 := offMemoRows (code:=0x400406001406406406406406406406) (gs:=[(.fork 0x4044044044044040004040a244a44a404052404052406406404404404400400404400000044404420026404420404400400404400406406 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x4 : Block 87 8 (successors 87 8 s21) 40 10 := offMemoRows (code:=0x400406001406406406406406406406) (gs:=(#[AdviceNode.fork 0x4044044044044040004040a244a44a404052404052406406404404404400400404400000044404420026404420404400400404400406406 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x5 : Block 87 8 (successors 87 8 s21) 50 10 := offMemoRows (code:=0x400400001400400400400400400406) (gs:=[(.fork 0x40e40e40e40e01240e40e40e40e42800005304241241205305204b01240e40e428001400400404404404406404406406012000401420401420401401406401406406400400 [(.fork 0x42f412022400423 [])])]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x5 : Block 87 8 (successors 87 8 s21) 50 10 := offMemoRows (code:=0x400400001400400400400400400406) (gs:=(#[AdviceNode.fork 0x42f412022400423 [], AdviceNode.fork 0x40e40e40e40e01240e40e40e40e42800005304241241205305204b01240e40e428001400400404404404406404406406012000401420401420401401406401406406400400 [0]], [1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x6 : Block 87 8 (successors 87 8 s21) 60 10 := offMemoRows (code:=0x420001424405424001420405400400) (gs:=[(.fork 0x42440a47040a42440704440742342341541542042040142405240140f42402440f []),(.fork 0x42040a46f40a42404442040700040740640040640042042040040640040647142442042042042440142005240140f42002440f [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x6 : Block 87 8 (successors 87 8 s21) 60 10 := offMemoRows (code:=0x420001424405424001420405400400) (gs:=(#[AdviceNode.fork 0x42440a47040a42440704440742342341541542042040142405240140f42402440f [], AdviceNode.fork 0x42040a46f40a42404442040700040740640040640042042040040640040647142442042042042440142005240140f42002440f []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x7 : Block 87 8 (successors 87 8 s21) 70 10 := offMemoRows (code:=0x421424001424400400400400001400) (gs:=[(.fork 0x40e40e40e40e4240440a242440e40e400400424424415406415406406424024405406405406406420405420405405400400424012 []),(.fork 0x44640f052414420026420424 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x7 : Block 87 8 (successors 87 8 s21) 70 10 := offMemoRows (code:=0x421424001424400400400400001400) (gs:=(#[AdviceNode.fork 0x40e40e40e40e4240440a242440e40e400400424424415406415406406424024405406405406406420405420405405400400424012 [], AdviceNode.fork 0x44640f052414420026420424 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x8 : Block 87 8 (successors 87 8 s21) 80 10 := offMemoRows (code:=0x47240700100142040708b424001424) (gs:=[(.fork 0x5240001241b052052052406401042000420052420424 []),(.fork 0x47340a47340a00040504640544904243b43b43643647204242042040100005240140f42242240f []),(.fork 0x43b449436407420420 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x8 : Block 87 8 (successors 87 8 s21) 80 10 := offMemoRows (code:=0x47240700100142040708b424001424) (gs:=(#[AdviceNode.fork 0x5240001241b052052052406401042000420052420424 [], AdviceNode.fork 0x47340a47340a00040504640544904243b43b43643647204242042040100005240140f42242240f [], AdviceNode.fork 0x43b449436407420420 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x9 : Block 87 8 (successors 87 8 s21) 90 10 := offMemoRows (code:=0x400400406406406406001406420001) (gs:=[(.fork 0x42040a46f40a42040542440542005640640040640040040640040642042042042042047240142000040140f42040f42042242002a40f []),(.fork 0x47344944904a43843844900040640605205242242247205242247247200042040742040740740640640440447347303204640043b40043b400400407400407400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x9 : Block 87 8 (successors 87 8 s21) 90 10 := offMemoRows (code:=0x400400406406406406001406420001) (gs:=(#[AdviceNode.fork 0x42040a46f40a42040542440542005640640040640040040640040642042042042042047240142000040140f42040f42042242002a40f [], AdviceNode.fork 0x47344944904a43843844900040640605205242242247205242247247200042040742040740740640640440447347303204640043b40043b400400407400407400 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x10 : Block 87 8 (successors 87 8 s21) 100 10 := offMemoRows (code:=0x40e40e40e40e424472001424400400) (gs:=[(.fork 0x43940604404640500040704242400e421420438044420 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x10 : Block 87 8 (successors 87 8 s21) 100 10 := offMemoRows (code:=0x40e40e40e40e424472001424400400) (gs:=(#[AdviceNode.fork 0x43940604404640500040704242400e421420438044420 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x11 : Block 87 8 (successors 87 8 s21) 110 10 := offMemoRows (code:=0x40e40a001472001472421472422472) (gs:=[(.fork 0x43c052406434420052420052472 []),(.fork 0x400012425404406401420052401472 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x11 : Block 87 8 (successors 87 8 s21) 110 10 := offMemoRows (code:=0x40e40a001472001472421472422472) (gs:=(#[AdviceNode.fork 0x43c052406434420052420052472 [], AdviceNode.fork 0x400012425404406401420052401472 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x12 : Block 87 8 (successors 87 8 s21) 120 10 := offMemoRows (code:=0x40e40040040040e40e40e40a40e40e) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x12 : Block 87 8 (successors 87 8 s21) 120 10 := offMemoRows (code:=0x40e40040040040e40e40e40a40e40e) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x13 : Block 87 8 (successors 87 8 s21) 130 10 := offMemoRows (code:=0x40e40e40e40e40e40e40e40e400400) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x13 : Block 87 8 (successors 87 8 s21) 130 10 := offMemoRows (code:=0x40e40e40e40e40e40e40e40e400400) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b21x14 : Block 87 8 (successors 87 8 s21) 140 10 := offMemoRows (code:=0x142100142140e40e40e40e) (gs:=[(.fork 0x4a47240909240640f000403420044420421 []),(.fork 0x425421400012420401000401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b21x14 : Block 87 8 (successors 87 8 s21) 140 10 := offMemoRows (code:=0x142100142140e40e40e40e) (gs:=(#[AdviceNode.fork 0x4a47240909240640f000403420044420421 [], AdviceNode.fork 0x425421400012420401000401 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc21 : Excluded 87 9 s21 := by
@@ -2145,64 +2231,64 @@ end Reused2960Aux
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc22 : Excluded 87 9 s22 := offAudit (g:=(.saved 6)) certifiedDB (by decide) (by decide +kernel)
+theorem exc22 : Excluded 87 9 s22 := offAudit (table:=#[]) (g:=AdviceNode.saved 6) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc23 : Excluded 87 9 s23 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
+theorem exc23 : Excluded 87 9 s23 := offAudit (table:=#[]) (g:=AdviceNode.saved 0) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc24 : Excluded 87 9 s24 := offAudit (g:=(.saved 6)) certifiedDB (by decide) (by decide +kernel)
+theorem exc24 : Excluded 87 9 s24 := offAudit (table:=#[]) (g:=AdviceNode.saved 6) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b25x0 : Block 87 8 (successors 87 8 s25) 0 10 := offMemoRows (code:=0x42340f424400423001424001423400) (gs:=[(.fork 0x42440a42f40a42440704440742042041541542342340142404640140f42402440f []),(.fork 0x42f42442340a42f40a42340705340742342340640040640042342340540040540042401640142300a40140f42344640f424423 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b25x0 : Block 87 8 (successors 87 8 s25) 0 10 := offMemoRows (code:=0x42340f424400423001424001423400) (gs:=(#[AdviceNode.fork 0x42440a42f40a42440704440742042041541542342340142404640140f42402440f [], AdviceNode.fork 0x42f42442340a42f40a42340705340742342340640040640042342340540040540042401640142300a40140f42344640f424423 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b25x1 : Block 87 8 (successors 87 8 s25) 10 10 := offMemoRows (code:=0x100142340144640f423001446001) (gs:=[(.fork 0x44640a02440a44640745040744640002640041e41e414414423423401446046401 []),(.fork 0x42340a03340a45044642340745040742342340640f40640f42342340540640540644601640142300a401400423424400446423 []),(.fork 0x40f04440f00040a02440a00040708440700040004440042542505245a000423423 []),(.fork 0x42545a052423423401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b25x1 : Block 87 8 (successors 87 8 s25) 10 10 := offMemoRows (code:=0x100142340144640f423001446001) (gs:=(#[AdviceNode.fork 0x44640a02440a44640745040744640002640041e41e414414423423401446046401 [], AdviceNode.fork 0x42340a03340a45044642340745040742342340640f40640f42342340540640540644601640142300a401400423424400446423 [], AdviceNode.fork 0x40f04440f00040a02440a00040708440700040004440042542505245a000423423 [], AdviceNode.fork 0x42545a052423423401 []], [0, 1, 2, 3])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b25x2 : Block 87 8 (successors 87 8 s25) 20 10 := offMemoRows (code:=0x406406406406405406001401423001) (gs:=[(.fork 0x42340700040742342342342340540640540640f42344640f40a42300040a400423424400405406406405052423 []),(.fork 0x44600a42400a00a42544a052423401052 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b25x2 : Block 87 8 (successors 87 8 s25) 20 10 := offMemoRows (code:=0x406406406406405406001401423001) (gs:=(#[AdviceNode.fork 0x42340700040742342342342340540640540640f42344640f40a42300040a400423424400405406406405052423 [], AdviceNode.fork 0x44600a42400a00a42544a052423401052 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b25x3 : Block 87 8 (successors 87 8 s25) 30 10 := offMemoRows (code:=0x406406406001406406405406406406) (gs:=[(.fork 0x42442f42f42442404442404a406406424424420405420405405404424400423400423400400405400405400424001406406424024 [(.fork 0x42f412022400423 [])])]) certifiedDB (by decide) (by decide +kernel)
+theorem b25x3 : Block 87 8 (successors 87 8 s25) 30 10 := offMemoRows (code:=0x406406406001406406405406406406) (gs:=(#[AdviceNode.fork 0x42f412022400423 [], AdviceNode.fork 0x42442f42f42442404442404a406406424424420405420405405404424400423400423400400405400405400424001406406424024 [0]], [1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b25x4 : Block 87 8 (successors 87 8 s25) 40 10 := offMemoRows (code:=0x406406406001406406406406406406) (gs:=[(.fork 0x44602444645045044644602644604a40640644644641e40541e40540540344640f42340f42340f40f40540f40540f446001406406 [(.fork 0x45041302240f423 [])])]) certifiedDB (by decide) (by decide +kernel)
+theorem b25x4 : Block 87 8 (successors 87 8 s25) 40 10 := offMemoRows (code:=0x406406406001406406406406406406) (gs:=(#[AdviceNode.fork 0x45041302240f423 [], AdviceNode.fork 0x44602444645045044644602644604a40640644644641e40541e40540540344640f42340f42340f40f40540f40540f446001406406 [0]], [1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b25x5 : Block 87 8 (successors 87 8 s25) 50 10 := offMemoRows (code:=0x424405406406406406406406406406) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b25x5 : Block 87 8 (successors 87 8 s25) 50 10 := offMemoRows (code:=0x424405406406406406406406406406) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b25x6 : Block 87 8 (successors 87 8 s25) 60 10 := offMemoRows (code:=0x1001001405446405446405424405) (gs:=[(.fork 0x4400002200008200004445a04445a04440540545a45a05240645a406406401423401423401401406401406406405405 []),(.fork 0x40540505240642340140140645a406405405 []),(.fork 0x423000423000423446423424405405401401405405405405406406423405052405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b25x6 : Block 87 8 (successors 87 8 s25) 60 10 := offMemoRows (code:=0x1001001405446405446405424405) (gs:=(#[AdviceNode.fork 0x4400002200008200004445a04445a04440540545a45a05240645a406406401423401423401401406401406406405405 [], AdviceNode.fork 0x40540505240642340140140645a406405405 [], AdviceNode.fork 0x423000423000423446423424405405401401405405405405406406423405052405 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b25x7 : Block 87 8 (successors 87 8 s25) 70 10 := offMemoRows (code:=0x1424001424446424001424001405) (gs:=[(.fork 0x446012424012405406052423401401406052406405052 []),(.fork 0x41c406026402423026423424 []),(.fork 0xc431046428001013400404423044423424 [(.fork 0x42f022412423400 [])]),(.fork 0x405012425401423000401424 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b25x7 : Block 87 8 (successors 87 8 s25) 70 10 := offMemoRows (code:=0x1424001424446424001424001405) (gs:=(#[AdviceNode.fork 0x446012424012405406052423401401406052406405052 [], AdviceNode.fork 0x41c406026402423026423424 [], AdviceNode.fork 0x42f022412423400 [], AdviceNode.fork 0xc431046428001013400404423044423424 [2], AdviceNode.fork 0x405012425401423000401424 []], [0, 1, 3, 4])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b25x8 : Block 87 8 (successors 87 8 s25) 80 10 := offMemoRows (code:=0x406406423001474407001001423407) (gs:=[(.fork 0x40a02440a00008243b43b46345046304a43843843843842342340100008640140f45000a00045040f45040f400000046400 []),(.fork 0x43b463438438407423423026446 []),(.fork 0x42340a00040a42300040640740640742344642342442342340540640540642342342342342347440142300040140f42344640f400423424400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b25x8 : Block 87 8 (successors 87 8 s25) 80 10 := offMemoRows (code:=0x406406423001474407001001423407) (gs:=(#[AdviceNode.fork 0x40a02440a00008243b43b46345046304a43843843843842342340100008640140f45000a00045040f45040f400000046400 [], AdviceNode.fork 0x43b463438438407423423026446 [], AdviceNode.fork 0x42340a00040a42300040640740640742344642342442342340540640540642342342342342347440142300040140f42344640f400423424400 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b25x9 : Block 87 8 (successors 87 8 s25) 90 10 := offMemoRows (code:=0x424474001424405474001405406406) (gs:=[(.fork 0x40543840642340740502a446406407463406 []),(.fork 0x464436423044423424 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b25x9 : Block 87 8 (successors 87 8 s25) 90 10 := offMemoRows (code:=0x424474001424405474001405406406) (gs:=(#[AdviceNode.fork 0x40543840642340740502a446406407463406 [], AdviceNode.fork 0x464436423044423424 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b25x10 : Block 87 8 (successors 87 8 s25) 100 10 := offMemoRows (code:=0x1474446474450446431474001474) (gs:=[(.fork 0x466474423465026423 []),(.fork 0x43c434423084423474 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b25x10 : Block 87 8 (successors 87 8 s25) 100 10 := offMemoRows (code:=0x1474446474450446431474001474) (gs:=(#[AdviceNode.fork 0x466474423465026423 [], AdviceNode.fork 0x43c434423084423474 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b25x11 : Block 87 8 (successors 87 8 s25) 110 10 := offMemoRows (code:=0x42300143140a00100142340a001474) (gs:=[(.fork 0x40501242540142300a401474 []),(.fork 0x40702640700002245145146802a46842f42a42a42a42a42342340100002640140f00002640f40042f00a00042f40042f400 []),(.fork 0x45146842a42a40a423423046424 []),(.fork 0x42340700040742300040640a40640a42344642342442342342342340540640540642342342343140142300040140f42344640f400423424400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b25x11 : Block 87 8 (successors 87 8 s25) 110 10 := offMemoRows (code:=0x42300143140a00100142340a001474) (gs:=(#[AdviceNode.fork 0x40501242540142300a401474 [], AdviceNode.fork 0x40702640700002245145146802a46842f42a42a42a42a42342340100002640140f00002640f40042f00a00042f40042f400 [], AdviceNode.fork 0x45146842a42a40a423423046424 [], AdviceNode.fork 0x42340700040742300040640a40640a42344642342442342342342340540640540642342342343140142300040140f42344640f400423424400 []], [0, 1, 2, 3])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b25x12 : Block 87 8 (successors 87 8 s25) 120 10 := offMemoRows (code:=0x144642443142f424405431001405) (gs:=[(.fork 0x40542a40640a40646840642340a40504a424 []),(.fork 0x469454423024423446 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b25x12 : Block 87 8 (successors 87 8 s25) 120 10 := offMemoRows (code:=0x144642443142f424405431001405) (gs:=(#[AdviceNode.fork 0x40542a40640a40646840642340a40504a424 [], AdviceNode.fork 0x469454423024423446 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b25x13 : Block 87 8 (successors 87 8 s25) 130 10 := offMemoRows (code:=0x1446001446001431001431446431) (gs:=[(.fork 0x430457423024423431 []),(.fork 0x40501242540142300a401431 []),(.fork 0xc47404646a00101340f403423044423446 [(.fork 0x45002241342340f [])]),(.fork 0x405012425401423000401446 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b25x13 : Block 87 8 (successors 87 8 s25) 130 10 := offMemoRows (code:=0x1446001446001431001431446431) (gs:=(#[AdviceNode.fork 0x430457423024423431 [], AdviceNode.fork 0x40501242540142300a401431 [], AdviceNode.fork 0x45002241342340f [], AdviceNode.fork 0xc47404646a00101340f403423044423446 [2], AdviceNode.fork 0x405012425401423000401446 []], [0, 1, 3, 4])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc25 : Excluded 87 9 s25 := by
@@ -2228,55 +2314,55 @@ end Reused2960Aux
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc26 : Excluded 87 9 s26 := offAudit (g:=(.saved 6)) certifiedDB (by decide) (by decide +kernel)
+theorem exc26 : Excluded 87 9 s26 := offAudit (table:=#[]) (g:=AdviceNode.saved 6) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x0 : Block 87 8 (successors 87 8 s27) 0 10 := offMemoRows (code:=0x400405405405001405400406406406) (gs:=[(.fork 0x41540a42a40a42400041540704440740540540040640040600042442442a40540541542441540042440041502440540540141504640140f41500040f [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x0 : Block 87 8 (successors 87 8 s27) 0 10 := offMemoRows (code:=0x400405405405001405400406406406) (gs:=(#[AdviceNode.fork 0x41540a42a40a42400041540704440740540540040640040600042442442a40540541542441540042440041502440540540141504640140f41500040f []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x1 : Block 87 8 (successors 87 8 s27) 10 10 := offMemoRows (code:=0x40540540f40540540500140540f405) (gs:=[(.fork 0x41440a02440a44643841440743840741404441440000040040540540f40640f406000446446000405405414446414406446406405405401414046401 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x1 : Block 87 8 (successors 87 8 s27) 10 10 := offMemoRows (code:=0x40540540f40540540500140540f405) (gs:=(#[AdviceNode.fork 0x41440a02440a44643841440743840741404441440000040040540540f40640f406000446446000405405414446414406446406405405401414046401 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x2 : Block 87 8 (successors 87 8 s27) 20 10 := offMemoRows (code:=0x406405406405401405405405001405) (gs:=[(.fork 0x4400040f04440f00040a02440a45a06200040708440700004400040004440040540540540640540645a02445b45a02a45a45a05245a00040645a45a406405405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x2 : Block 87 8 (successors 87 8 s27) 20 10 := offMemoRows (code:=0x406405406405401405405405001405) (gs:=(#[AdviceNode.fork 0x4400040f04440f00040a02440a45a06200040708440700004400040004440040540540540640540645a02445b45a02a45a45a05245a00040645a45a406405405 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x3 : Block 87 8 (successors 87 8 s27) 30 10 := offMemoRows (code:=0x406406406406406406406405406406) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x3 : Block 87 8 (successors 87 8 s27) 30 10 := offMemoRows (code:=0x406406406406406406406405406406) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x4 : Block 87 8 (successors 87 8 s27) 40 10 := offMemoRows (code:=0x406406406406406406001406406406) (gs:=[(.fork 0x2642a02a42a02a42a00042a42a40640642a0c242442442a42a42a40a40a42a40a40640645b45b42a45100c42a45142a40a40a42a40a [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x4 : Block 87 8 (successors 87 8 s27) 40 10 := offMemoRows (code:=0x406406406406406406001406406406) (gs:=(#[AdviceNode.fork 0x2642a02a42a02a42a00042a42a40640642a0c242442442a42a42a40a40a42a40a40640645b45b42a45100c42a45142a40a40a42a40a []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x5 : Block 87 8 (successors 87 8 s27) 50 10 := offMemoRows (code:=0x405405406001406406406406406406) (gs:=[(.fork 0x45b00045b00044a44a45b44a02a44a44a45b44a02a44a00044a00040640644a44a45b44a02a44a44a45b44a000406406 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x5 : Block 87 8 (successors 87 8 s27) 50 10 := offMemoRows (code:=0x405405406001406406406406406406) (gs:=(#[AdviceNode.fork 0x45b00045b00044a44a45b44a02a44a44a45b44a02a44a00044a00040640644a44a45b44a02a44a44a45b44a000406406 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x6 : Block 87 8 (successors 87 8 s27) 60 10 := offMemoRows (code:=0x405405001405405405405405405405) (gs:=[(.fork 0x4240502245a08440508200004245a02440545a45b45a02a45a45a05240645a406406401405405405405425405405405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x6 : Block 87 8 (successors 87 8 s27) 60 10 := offMemoRows (code:=0x405405001405405405405405405405) (gs:=(#[AdviceNode.fork 0x4240502245a08440508200004245a02440545a45b45a02a45a45a05240645a406406401405405405405425405405405 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x7 : Block 87 8 (successors 87 8 s27) 70 10 := offMemoRows (code:=0x23415001415414415001415405405) (gs:=[(.fork 0x41c40f046400026402405000405415 []),(.fork 0x1c42a042428048406401046412400404405044405415 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x7 : Block 87 8 (successors 87 8 s27) 70 10 := offMemoRows (code:=0x23415001415414415001415405405) (gs:=(#[AdviceNode.fork 0x41c40f046400026402405000405415 [], AdviceNode.fork 0x1c42a042428048406401046412400404405044405415 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x8 : Block 87 8 (successors 87 8 s27) 80 10 := offMemoRows (code:=0x1406405405405407405001405407) (gs:=[(.fork 0x43840a02440a40508240740640740643840646340600443843843843802443802240540543846340540540143808640140f43844b00043840f44b40f400438046400 []),(.fork 0x43808a43806243843843800040640643806244644643843843840740743840740640645b45b00002443843b02443843b438407407438407 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x8 : Block 87 8 (successors 87 8 s27) 80 10 := offMemoRows (code:=0x1406405405405407405001405407) (gs:=(#[AdviceNode.fork 0x43840a02440a40508240740640740643840646340600443843843843802443802240540543846340540540143808640140f43844b00043840f44b40f400438046400 [], AdviceNode.fork 0x43808a43806243843843800040640643806244644643843843840740743840740640645b45b00002443843b02443843b438407407438407 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x9 : Block 87 8 (successors 87 8 s27) 90 10 := offMemoRows (code:=0x1415405405405405406406406406) (gs:=[(.fork 0x464436405044405407022415 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x9 : Block 87 8 (successors 87 8 s27) 90 10 := offMemoRows (code:=0x1415405405405405406406406406) (gs:=(#[AdviceNode.fork 0x464436405044405407022415 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x10 : Block 87 8 (successors 87 8 s27) 100 10 := offMemoRows (code:=0x41443843841442a43800142a415438) (gs:=[(.fork 0x46640602640a04640702642a405465026405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x10 : Block 87 8 (successors 87 8 s27) 100 10 := offMemoRows (code:=0x41443843841442a43800142a415438) (gs:=(#[AdviceNode.fork 0x46640602640a04640702642a405465026405 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x11 : Block 87 8 (successors 87 8 s27) 110 10 := offMemoRows (code:=0x40540a40500140540a001438001438) (gs:=[(.fork 0x43c072406434405084405062438 []),(.fork 0x40506242545b40640140500a405407006438 []),(.fork 0x42a04442a40702640740502240a40640a40642a46842a40646840600442a42a02242a42a40540540540540142a02640140f42a02640f40042a45900042a400459400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x11 : Block 87 8 (successors 87 8 s27) 110 10 := offMemoRows (code:=0x40540a40500140540a001438001438) (gs:=(#[AdviceNode.fork 0x43c072406434405084405062438 [], AdviceNode.fork 0x40506242545b40640140500a405407006438 [], AdviceNode.fork 0x42a04442a40702640740502240a40640a40642a46842a40646840600442a42a02242a42a40540540540540142a02640140f42a02640f40042a45900042a400459400 []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x12 : Block 87 8 (successors 87 8 s27) 120 10 := offMemoRows (code:=0x41542a42a415405405405405405405) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x12 : Block 87 8 (successors 87 8 s27) 120 10 := offMemoRows (code:=0x41542a42a415405405405405405405) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x13 : Block 87 8 (successors 87 8 s27) 130 10 := offMemoRows (code:=0x141400142a00142a41442a001414) (gs:=[(.fork 0x46945440502440540a022414 []),(.fork 0x4300c202840645740502440542a []),(.fork 0x4050c242545b40640140500a40540a00642a []),(.fork 0x1c43804246a04840640104641340f403405044405414 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x13 : Block 87 8 (successors 87 8 s27) 130 10 := offMemoRows (code:=0x141400142a00142a41442a001414) (gs:=(#[AdviceNode.fork 0x46945440502440540a022414 [], AdviceNode.fork 0x4300c202840645740502440542a [], AdviceNode.fork 0x4050c242545b40640140500a40540a00642a [], AdviceNode.fork 0x1c43804246a04840640104641340f403405044405414 []], [0, 1, 2, 3])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b27x14 : Block 87 8 (successors 87 8 s27) 140 10 := offMemoRows (code:=0x23414) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b27x14 : Block 87 8 (successors 87 8 s27) 140 10 := offMemoRows (code:=0x23414) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc27 : Excluded 87 9 s27 := by
@@ -2303,55 +2389,55 @@ end Reused2960Aux
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc40 : Excluded 87 9 s40 := offAudit (g:=(.saved 0)) certifiedDB (by decide) (by decide +kernel)
+theorem exc40 : Excluded 87 9 s40 := offAudit (table:=#[]) (g:=AdviceNode.saved 0) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x0 : Block 87 8 (successors 87 8 s41) 0 10 := offMemoRows (code:=0x43640140d40f40d40d40d40d40d40f) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x0 : Block 87 8 (successors 87 8 s41) 0 10 := offMemoRows (code:=0x43640140d40f40d40d40d40d40d40f) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x1 : Block 87 8 (successors 87 8 s41) 10 10 := offMemoRows (code:=0x400400400400001401436001001001) (gs:=[(.fork 0x40840f40840f04243300040a43343340a40a000406052406000405022405435408434434429433404404436436 []),(.fork 0x8440e434435404436436401 []),(.fork 0x43641043643643648143643640040740040740f43641040f40a43648140a40643600040640543605240540040740740004a436 []),(.fork 0x43404a43640104204a [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x1 : Block 87 8 (successors 87 8 s41) 10 10 := offMemoRows (code:=0x400400400400001401436001001001) (gs:=(#[AdviceNode.fork 0x40840f40840f04243300040a43343340a40a000406052406000405022405435408434434429433404404436436 [], AdviceNode.fork 0x8440e434435404436436401 [], AdviceNode.fork 0x43641043643643648143643640040740040740f43641040f40a43648140a40643600040640543605240540040740740004a436 [], AdviceNode.fork 0x43404a43640104204a []], [0, 1, 2, 3])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x2 : Block 87 8 (successors 87 8 s41) 20 10 := offMemoRows (code:=0x407001407400400400407400400400) (gs:=[(.fork 0x44744744744700004243904240d40d40740744544540d40d02302240d40d43640543640540540740704240d400438400438400400405400405400 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x2 : Block 87 8 (successors 87 8 s41) 20 10 := offMemoRows (code:=0x407001407400400400407400400400) (gs:=(#[AdviceNode.fork 0x44744744744700004243904240d40d40740744544540d40d02302240d40d43640543640540540740704240d400438400438400400405400405400 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x3 : Block 87 8 (successors 87 8 s41) 30 10 := offMemoRows (code:=0x40740e407407407407407407407407) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x3 : Block 87 8 (successors 87 8 s41) 30 10 := offMemoRows (code:=0x40740e407407407407407407407407) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x4 : Block 87 8 (successors 87 8 s41) 40 10 := offMemoRows (code:=0x407407407407407407407407407407) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x4 : Block 87 8 (successors 87 8 s41) 40 10 := offMemoRows (code:=0x407407407407407407407407407407) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x5 : Block 87 8 (successors 87 8 s41) 50 10 := offMemoRows (code:=0x40040040040040d400400407400407) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x5 : Block 87 8 (successors 87 8 s41) 50 10 := offMemoRows (code:=0x40040040040040d400400407400407) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x6 : Block 87 8 (successors 87 8 s41) 60 10 := offMemoRows (code:=0x1001436405400400400400001400) (gs:=[(.fork 0x40840840e40e40e40e08240e00004241241202302240e40e429042400400404407404407407408408401436401436401401407401407407400400 []),(.fork 0x48240a48240a00040604a40648341643843844848241541543643640100002240140f41602200041640f41640f []),(.fork 0x43848341540543643604640d [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x6 : Block 87 8 (successors 87 8 s41) 60 10 := offMemoRows (code:=0x1001436405400400400400001400) (gs:=(#[AdviceNode.fork 0x40840840e40e40e40e08240e00004241241202302240e40e429042400400404407404407407408408401436401436401401407401407407400400 [], AdviceNode.fork 0x48240a48240a00040604a40648341643843844848241541543643640100002240140f41602200041640f41640f [], AdviceNode.fork 0x43848341540543643604640d []], [0, 1, 2])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x7 : Block 87 8 (successors 87 8 s41) 70 10 := offMemoRows (code:=0x40d40d400400400400436001001405) (gs:=[(.fork 0x41504243640504a046 []),(.fork 0x43640a48140a43640600040643641040740040740043648143643640040740040743643643604640143605240140f43641040f [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x7 : Block 87 8 (successors 87 8 s41) 70 10 := offMemoRows (code:=0x40d40d400400400400436001001405) (gs:=(#[AdviceNode.fork 0x41504243640504a046 [], AdviceNode.fork 0x43640a48140a43640600040643641040740040740043648143643640040740040743643643604640143605240140f43641040f []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x8 : Block 87 8 (successors 87 8 s41) 80 10 := offMemoRows (code:=0x100143640600100100108b40d40d) (gs:=[(.fork 0x4a46402241b022000436022436027 []),(.fork 0x41502402740e08a407052436405000405 []),(.fork 0x40d08a024400092434401436000401027 []),(.fork 0x48540a48540a00040504a40548404243b43b47204242042043643640100005240140f42242240f []),(.fork 0x43b484420406436436 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x8 : Block 87 8 (successors 87 8 s41) 80 10 := offMemoRows (code:=0x100143640600100100108b40d40d) (gs:=(#[AdviceNode.fork 0x4a46402241b022000436022436027 [], AdviceNode.fork 0x41502402740e08a407052436405000405 [], AdviceNode.fork 0x40d08a024400092434401436000401027 [], AdviceNode.fork 0x48540a48540a00040504a40548404243b43b47204242042043643640100005240140f42242240f [], AdviceNode.fork 0x43b484420406436436 []], [0, 1, 2, 3, 4])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x9 : Block 87 8 (successors 87 8 s41) 90 10 := offMemoRows (code:=0x1464400400400400436001464406) (gs:=[(.fork 0x43640a48140a43640500040543600043600043643640040640040643643643646440143600040140f43641040f400407407400 []),(.fork 0x42446443642304a423 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x9 : Block 87 8 (successors 87 8 s41) 90 10 := offMemoRows (code:=0x1464400400400400436001464406) (gs:=(#[AdviceNode.fork 0x43640a48140a43640500040543600043600043643640040640040643643643646440143600040140f43641040f400407407400 [], AdviceNode.fork 0x42446443642304a423 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x10 : Block 87 8 (successors 87 8 s41) 100 10 := offMemoRows (code:=0x40d40d40d40d40e40e40e40e001464) (gs:=[(.fork 0x41540702246443640504a405 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x10 : Block 87 8 (successors 87 8 s41) 100 10 := offMemoRows (code:=0x40d40d40d40d40e40e40e40e001464) (gs:=(#[AdviceNode.fork 0x41540702246443640504a405 []], [0])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x11 : Block 87 8 (successors 87 8 s41) 110 10 := offMemoRows (code:=0x40e40a40e40e40e40a001464001464) (gs:=[(.fork 0x43c425436052436464 []),(.fork 0x400042434401436052401464 [])]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x11 : Block 87 8 (successors 87 8 s41) 110 10 := offMemoRows (code:=0x40e40a40e40e40e40a001464001464) (gs:=(#[AdviceNode.fork 0x43c425436052436464 [], AdviceNode.fork 0x400042434401436052401464 []], [0, 1])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x12 : Block 87 8 (successors 87 8 s41) 120 10 := offMemoRows (code:=0x40e40e40e40e40040040040040e40e) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x12 : Block 87 8 (successors 87 8 s41) 120 10 := offMemoRows (code:=0x40e40e40e40e40040040040040e40e) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x13 : Block 87 8 (successors 87 8 s41) 130 10 := offMemoRows (code:=0x40d40d40e40e40e40e40e40e40e40e) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x13 : Block 87 8 (successors 87 8 s41) 130 10 := offMemoRows (code:=0x40d40d40e40e40e40e40e40e40e40e) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem b41x14 : Block 87 8 (successors 87 8 s41) 140 10 := offMemoRows (code:=0x40d40d) (gs:=[]) certifiedDB (by decide) (by decide +kernel)
+theorem b41x14 : Block 87 8 (successors 87 8 s41) 140 10 := offMemoRows (code:=0x40d40d) (gs:=(#[], [])) certifiedDB (by decide) (by decide +kernel)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
 theorem exc41 : Excluded 87 9 s41 := by
@@ -2378,25 +2464,25 @@ end Reused2960Aux
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc42 : Excluded 87 9 s42 := offAudit (g:=(.saved 7)) certifiedDB (by decide) (by decide +kernel)
+theorem exc42 : Excluded 87 9 s42 := offAudit (table:=#[]) (g:=AdviceNode.saved 7) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc56 : Excluded 87 9 s56 := offAudit (g:=(.saved 7)) certifiedDB (by decide) (by decide +kernel)
+theorem exc56 : Excluded 87 9 s56 := offAudit (table:=#[]) (g:=AdviceNode.saved 7) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc57 : Excluded 87 9 s57 := offAudit (g:=(.saved 13)) certifiedDB (by decide) (by decide +kernel)
+theorem exc57 : Excluded 87 9 s57 := offAudit (table:=#[]) (g:=AdviceNode.saved 13) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 0 in
-theorem exc58 : Excluded 87 9 s58 := offAudit (g:=(.saved 7)) certifiedDB (by decide) (by decide +kernel)
+theorem exc58 : Excluded 87 9 s58 := offAudit (table:=#[]) (g:=AdviceNode.saved 7) certifiedDB (by decide) (by decide +kernel)
 end Reused2960Aux
 
 namespace Reused2960Aux
