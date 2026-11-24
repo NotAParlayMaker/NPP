@@ -1,6 +1,7 @@
 import PEqualNP.Defs
 
-namespace Deep2654Reindex
+namespace PEqualNP.Outside.L_meta_2654
+
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
@@ -103,10 +104,8 @@ theorem remap_monotone (n r : Nat) (gs : List Gate) (o : Nat)
     List.mem_map.mp (show g ∈ gs.map (remapGate n r) from hg)
   simpa only [remapGate, List.length_map] using h orig horig
 
-end Deep2654Reindex
 
 
-namespace PEqualNP.Outside.Deep2654Boundary
 
 open PEqualNP.CircuitLowerBounds
 
@@ -235,10 +234,8 @@ theorem eval_cons_and {n : Nat} (C : Circuit) (tail : List Gate)
   rw [he]
   rfl
 
-end PEqualNP.Outside.Deep2654Boundary
 
 
-namespace PEqualNP.Outside.Deep2654Assembly
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
@@ -250,9 +247,9 @@ theorem dropFirstAnd {n : ℕ} (edges : List (ℕ × ℕ)) (C : Circuit) (tail :
     (p q : ℕ) (hGates : C.gates = ⟨.and, [p, q]⟩ :: tail)
     (hp : p < n) (hq : q < n) (hne : ¬ ((p, q) ∈ edges ∨ (q, p) ∈ edges))
     (hMono : Monotone2 C)
-    (hCorrect : ∀ x : Fin n → Bool, C.eval (List.ofFn x) = true ↔ Deep2654Boundary.edgeOn edges x) :
+    (hCorrect : ∀ x : Fin n → Bool, C.eval (List.ofFn x) = true ↔ edgeOn edges x) :
     ∃ D : Circuit, Monotone2 D ∧ D.size + 1 ≤ C.size ∧
-      ∀ x : Fin n → Bool, D.eval (List.ofFn x) = true ↔ Deep2654Boundary.edgeOn edges x := by
+      ∀ x : Fin n → Bool, D.eval (List.ofFn x) = true ↔ edgeOn edges x := by
   let u : Fin n := ⟨p, hp⟩
   let v : Fin n := ⟨q, hq⟩
   have hTailMono : Monotone2 (Circuit.mk tail C.output) := by
@@ -264,15 +261,15 @@ theorem dropFirstAnd {n : ℕ} (edges : List (ℕ × ℕ)) (C : Circuit) (tail :
     intro g hg
     simpa only [Set.mem_insert_iff, Set.mem_singleton_iff] using (hTailMono g hg).1
   have hOrig (x : Fin n → Bool) :
-      Deep2654Boundary.tailValue tail C.output x (x u && x v) = true ↔
-        Deep2654Boundary.edgeOn edges x := by
-    rw [← Deep2654Boundary.eval_cons_and C tail u v hGates x]
+      tailValue tail C.output x (x u && x v) = true ↔
+        edgeOn edges x := by
+    rw [← eval_cons_and C tail u v hGates x]
     exact hCorrect x
   let redirect := if p = q then p else n + tail.length
-  let D := Deep2654Reindex.remapCircuit n redirect tail C.output
-  refine ⟨D, Deep2654Reindex.remap_monotone n redirect tail C.output hTailMono, ?_, ?_⟩
-  · change (Deep2654Reindex.remapCircuit n redirect tail C.output).size + 1 ≤ C.size
-    rw [Deep2654Reindex.remap_size]
+  let D := remapCircuit n redirect tail C.output
+  refine ⟨D, remap_monotone n redirect tail C.output hTailMono, ?_, ?_⟩
+  · change (remapCircuit n redirect tail C.output).size + 1 ≤ C.size
+    rw [remap_size]
     simp [Circuit.size, hGates]
   · intro x
     have hLength : (List.ofFn x).length = n := List.length_ofFn
@@ -281,11 +278,11 @@ theorem dropFirstAnd {n : ℕ} (edges : List (ℕ × ℕ)) (C : Circuit) (tail :
       by_cases hEq : p = q
       · simp [redirect, hEq, hq]
       · simp [redirect, hEq]
-    have hEval := Deep2654Reindex.remap_eval (List.ofFn x) tail C.output redirect hRedirect
+    have hEval := remap_eval (List.ofFn x) tail C.output redirect hRedirect
     rw [hLength] at hEval
-    change (Deep2654Reindex.remapCircuit n redirect tail C.output).eval (List.ofFn x) = true ↔ _
+    change (remapCircuit n redirect tail C.output).eval (List.ofFn x) = true ↔ _
     rw [hEval]
-    change Deep2654Boundary.tailValue tail C.output x ((List.ofFn x).getD redirect false) = true ↔ _
+    change tailValue tail C.output x ((List.ofFn x).getD redirect false) = true ↔ _
     by_cases hEq : p = q
     · have hUV : u = v := Fin.ext hEq
       have hU : (List.ofFn x).getD p false = x u := inputAt x u
@@ -296,13 +293,14 @@ theorem dropFirstAnd {n : ℕ} (edges : List (ℕ × ℕ)) (C : Circuit) (tail :
         rw [hLength]
         simp [redirect, hEq]
       rw [List.getD_eq_default _ _ hOutside]
-      exact Deep2654Boundary.eval_tail_false_nonedge edges tail C.output u v
+      exact eval_tail_false_nonedge edges tail C.output u v
         (fun huv => hEq (congrArg Fin.val huv)) hne hTailOps hOrig x
 
-end PEqualNP.Outside.Deep2654Assembly
+
+end PEqualNP.Outside.L_meta_2654
 
 theorem PEqualNP.Outside.L_meta_2654 :
     have x1 : List (ℕ × ℕ) := [((0 : ℕ), (7 : ℕ)), ((0 : ℕ), (8 : ℕ)), ((0 : ℕ), (10 : ℕ)), ((1 : ℕ), (7 : ℕ)), ((1 : ℕ), (9 : ℕ)), ((1 : ℕ), (13 : ℕ)), ((2 : ℕ), (8 : ℕ)), ((2 : ℕ), (12 : ℕ)), ((2 : ℕ), (13 : ℕ)), ((3 : ℕ), (7 : ℕ)), ((3 : ℕ), (11 : ℕ)), ((3 : ℕ), (12 : ℕ)), ((4 : ℕ), (10 : ℕ)), ((4 : ℕ), (11 : ℕ)), ((4 : ℕ), (13 : ℕ)), ((5 : ℕ), (9 : ℕ)), ((5 : ℕ), (10 : ℕ)), ((5 : ℕ), (12 : ℕ)), ((6 : ℕ), (8 : ℕ)), ((6 : ℕ), (9 : ℕ)), ((6 : ℕ), (11 : ℕ))]; have x2 : (Fin (14 : ℕ) → Bool) → Prop := fun (x2 : Fin (14 : ℕ) → Bool) => ∃ (x3 : Fin (14 : ℕ)) (x4 : Fin (14 : ℕ)), (↑x3, ↑x4) ∈ x1 ∧ x2 x3 = Bool.true ∧ x2 x4 = Bool.true; ∀ (x3 : PEqualNP.CircuitLowerBounds.Circuit) (x4 : List PEqualNP.CircuitLowerBounds.Gate) (x5 x6 : ℕ), x3.gates = { op := PEqualNP.CircuitLowerBounds.GateOp.and, inputs := [x5, x6] : PEqualNP.CircuitLowerBounds.Gate } :: x4 → x5 < (14 : ℕ) → x6 < (14 : ℕ) → ¬((x5, x6) ∈ x1 ∨ (x6, x5) ∈ x1) → PEqualNP.MetaComplexity.Monotone2 x3 → (∀ (x12 : Fin (14 : ℕ) → Bool), x3.eval (List.ofFn x12) = Bool.true ↔ x2 x12) → ∃ (x13 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.Monotone2 x13 ∧ x13.size + (1 : ℕ) ≤ x3.size ∧ ∀ (x14 : Fin (14 : ℕ) → Bool), x13.eval (List.ofFn x14) = Bool.true ↔ x2 x14 := by
   dsimp only
   intro C tail p q hGates hp hq hne hMono hCorrect
-  exact PEqualNP.Outside.Deep2654Assembly.dropFirstAnd _ C tail p q hGates hp hq hne hMono hCorrect
+  exact PEqualNP.Outside.L_meta_2654.dropFirstAnd _ C tail p q hGates hp hq hne hMono hCorrect
