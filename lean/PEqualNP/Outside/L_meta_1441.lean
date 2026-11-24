@@ -1,4 +1,6 @@
-import Mathlib
+import Mathlib.Data.Fintype.Pi
+import Mathlib.Tactic.FinCases
+import Mathlib.Tactic.SplitIfs
 import PEqualNP.Defs
 
 -- The separation search and its soundness proof come from L-meta-163, which
@@ -10,7 +12,7 @@ namespace PEqualNP.Outside.L_meta_1441
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
-abbrev B := BitVec 66
+abbrev B := BitVec 20
 abbrev Sig := B × B
 
 def mask (i : Fin 10) : ℕ := match i.val with
@@ -38,21 +40,21 @@ def budget (i : Fin 10) : ℕ := match i.val with
   | _ => 8
 
 def pairs (i : Fin 10) : List (ℕ × ℕ) := match i.val with
-  | 0 => [(6, 3), (6, 5), (6, 10), (6, 12), (6, 18), (6, 20), (6, 24), (9, 3), (9, 5), (9, 10), (9, 12), (9, 18), (9, 20), (9, 24), (17, 3), (17, 5), (17, 10), (17, 12), (17, 18), (17, 20), (17, 24), (26, 3), (26, 5), (26, 10), (26, 12), (26, 18), (26, 20), (26, 24), (28, 3), (28, 5), (28, 10), (28, 12), (28, 18), (28, 20), (28, 24), (6, 4), (6, 2), (7, 5), (7, 3), (9, 8), (9, 1), (11, 10), (11, 3), (13, 12), (13, 5), (14, 12), (14, 10), (17, 16), (17, 1), (19, 18), (19, 3), (21, 20), (21, 5), (22, 20), (22, 18), (25, 24), (6, 3), (6, 3), (6, 3), (6, 3), (6, 3), (6, 3), (6, 3), (6, 3), (6, 3), (6, 3)]
-  | 1 => [(1, 6), (1, 10), (1, 18), (1, 28), (14, 6), (14, 10), (14, 18), (14, 28), (22, 6), (22, 10), (22, 18), (22, 28), (26, 6), (26, 10), (26, 18), (26, 28), (1, 0), (3, 2), (5, 4), (7, 6), (9, 8), (11, 10), (13, 12), (14, 12), (17, 16), (19, 18), (21, 20), (22, 20), (25, 24), (26, 24), (29, 28), (30, 28), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6), (1, 6)]
-  | 2 => [(3, 1), (3, 10), (3, 18), (3, 28), (5, 1), (5, 10), (5, 18), (5, 28), (6, 1), (6, 10), (6, 18), (6, 28), (9, 1), (9, 10), (9, 18), (9, 28), (17, 1), (17, 10), (17, 18), (17, 28), (26, 1), (26, 10), (26, 18), (26, 28), (3, 2), (5, 4), (6, 4), (6, 2), (9, 8), (11, 10), (13, 12), (14, 12), (14, 10), (17, 16), (19, 18), (21, 20), (22, 20), (22, 18), (25, 24), (26, 24), (29, 28), (30, 28), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1)]
-  | 3 => [(3, 9), (3, 18), (3, 28), (5, 9), (5, 18), (5, 28), (6, 9), (6, 18), (6, 28), (10, 9), (10, 18), (10, 28), (17, 9), (17, 18), (17, 28), (3, 2), (3, 1), (5, 4), (5, 1), (6, 4), (6, 2), (10, 8), (10, 2), (11, 9), (13, 12), (13, 9), (14, 12), (17, 16), (17, 1), (19, 18), (21, 20), (22, 20), (22, 18), (25, 24), (25, 9), (26, 24), (26, 18), (29, 28), (30, 28), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9), (3, 9)]
-  | 4 => [(5, 3), (5, 18), (5, 28), (6, 3), (6, 18), (6, 28), (9, 3), (9, 18), (9, 28), (10, 3), (10, 18), (10, 28), (17, 3), (17, 18), (17, 28), (5, 4), (5, 1), (6, 4), (6, 2), (7, 3), (9, 8), (9, 1), (10, 8), (10, 2), (11, 3), (13, 12), (14, 12), (17, 16), (17, 1), (19, 18), (19, 3), (21, 20), (22, 20), (22, 18), (25, 24), (26, 24), (26, 18), (29, 28), (30, 28), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3)]
-  | 5 => [(3, 10), (3, 12), (3, 17), (3, 18), (3, 20), (3, 24), (5, 10), (5, 12), (5, 17), (5, 18), (5, 20), (5, 24), (6, 10), (6, 12), (6, 17), (6, 18), (6, 20), (6, 24), (9, 10), (9, 12), (9, 17), (9, 18), (9, 20), (9, 24), (26, 10), (26, 12), (26, 17), (26, 18), (26, 20), (26, 24), (28, 10), (28, 12), (28, 17), (28, 18), (28, 20), (28, 24), (3, 2), (3, 1), (5, 4), (5, 1), (6, 4), (6, 2), (9, 8), (9, 1), (11, 10), (13, 12), (14, 12), (14, 10), (19, 18), (19, 17), (21, 20), (21, 17), (22, 20), (22, 18), (25, 24), (25, 17), (3, 10), (3, 10), (3, 10), (3, 10), (3, 10), (3, 10), (3, 10), (3, 10), (3, 10), (3, 10)]
-  | 6 => [(5, 3), (5, 12), (5, 17), (5, 18), (5, 20), (5, 24), (6, 3), (6, 12), (6, 17), (6, 18), (6, 20), (6, 24), (9, 3), (9, 12), (9, 17), (9, 18), (9, 20), (9, 24), (10, 3), (10, 12), (10, 17), (10, 18), (10, 20), (10, 24), (19, 3), (19, 12), (19, 17), (19, 18), (19, 20), (19, 24), (28, 3), (28, 12), (28, 17), (28, 18), (28, 20), (28, 24), (5, 4), (5, 1), (6, 4), (6, 2), (7, 3), (9, 8), (9, 1), (10, 8), (10, 2), (11, 3), (13, 12), (14, 12), (21, 20), (21, 17), (22, 20), (22, 18), (25, 24), (25, 17), (26, 24), (26, 18), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3)]
-  | 7 => [(3, 1), (3, 6), (3, 10), (3, 12), (3, 18), (3, 20), (3, 24), (5, 1), (5, 6), (5, 10), (5, 12), (5, 18), (5, 20), (5, 24), (9, 1), (9, 6), (9, 10), (9, 12), (9, 18), (9, 20), (9, 24), (14, 1), (14, 6), (14, 10), (14, 12), (14, 18), (14, 20), (14, 24), (17, 1), (17, 6), (17, 10), (17, 12), (17, 18), (17, 20), (17, 24), (22, 1), (22, 6), (22, 10), (22, 12), (22, 18), (22, 20), (22, 24), (26, 1), (26, 6), (26, 10), (26, 12), (26, 18), (26, 20), (26, 24), (28, 1), (28, 6), (28, 10), (28, 12), (28, 18), (28, 20), (28, 24), (3, 2), (5, 4), (7, 6), (9, 8), (11, 10), (13, 12), (17, 16), (19, 18), (21, 20), (25, 24)]
-  | 8 => [(3, 5), (3, 10), (3, 12), (3, 18), (3, 20), (3, 24), (6, 5), (6, 10), (6, 12), (6, 18), (6, 20), (6, 24), (9, 5), (9, 10), (9, 12), (9, 18), (9, 20), (9, 24), (17, 5), (17, 10), (17, 12), (17, 18), (17, 20), (17, 24), (26, 5), (26, 10), (26, 12), (26, 18), (26, 20), (26, 24), (28, 5), (28, 10), (28, 12), (28, 18), (28, 20), (28, 24), (3, 2), (3, 1), (6, 4), (6, 2), (7, 5), (9, 8), (9, 1), (11, 10), (13, 12), (13, 5), (14, 12), (14, 10), (17, 16), (17, 1), (19, 18), (21, 20), (21, 5), (22, 20), (22, 18), (25, 24), (3, 5), (3, 5), (3, 5), (3, 5), (3, 5), (3, 5), (3, 5), (3, 5), (3, 5), (3, 5)]
-  | _ => [(5, 3), (5, 9), (5, 12), (5, 18), (5, 20), (5, 24), (6, 3), (6, 9), (6, 12), (6, 18), (6, 20), (6, 24), (10, 3), (10, 9), (10, 12), (10, 18), (10, 20), (10, 24), (17, 3), (17, 9), (17, 12), (17, 18), (17, 20), (17, 24), (28, 3), (28, 9), (28, 12), (28, 18), (28, 20), (28, 24), (5, 4), (5, 1), (6, 4), (6, 2), (7, 3), (10, 8), (10, 2), (11, 9), (11, 3), (13, 12), (13, 9), (14, 12), (17, 16), (17, 1), (19, 18), (19, 3), (21, 20), (22, 20), (22, 18), (25, 24), (25, 9), (26, 24), (26, 18), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3), (5, 3)]
+  | 0 => [(9, 5), (9, 24), (17, 20), (26, 10), (26, 24), (28, 20), (28, 24), (7, 5), (7, 3), (11, 10), (11, 3), (14, 12), (14, 10), (17, 1), (19, 18), (21, 5), (22, 20), (9, 5), (9, 5), (9, 5)]
+  | 1 => [(14, 6), (22, 18), (26, 10), (7, 6), (14, 12), (22, 20), (25, 24), (14, 6), (14, 6), (14, 6), (14, 6), (14, 6), (14, 6), (14, 6), (14, 6), (14, 6), (14, 6), (14, 6), (14, 6), (14, 6)]
+  | 2 => [(3, 1), (5, 1), (9, 1), (9, 10), (17, 1), (26, 10), (26, 18), (5, 4), (11, 10), (14, 10), (22, 18), (29, 28), (30, 28), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1)]
+  | 3 => [(3, 1), (10, 2), (13, 12), (22, 18), (25, 9), (26, 24), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1), (3, 1)]
+  | 4 => [(9, 8), (17, 1), (22, 18), (26, 18), (30, 28), (9, 8), (9, 8), (9, 8), (9, 8), (9, 8), (9, 8), (9, 8), (9, 8), (9, 8), (9, 8), (9, 8), (9, 8), (9, 8), (9, 8), (9, 8)]
+  | 5 => [(5, 12), (6, 20), (9, 10), (26, 10), (26, 24), (28, 12), (28, 20), (3, 1), (5, 1), (6, 4), (9, 1), (13, 12), (14, 10), (19, 18), (21, 20), (21, 17), (25, 24), (5, 12), (5, 12), (5, 12)]
+  | 6 => [(6, 18), (9, 17), (10, 3), (19, 3), (19, 17), (19, 18), (28, 12), (28, 20), (28, 24), (7, 3), (9, 1), (10, 8), (13, 12), (14, 12), (21, 20), (21, 17), (6, 18), (6, 18), (6, 18), (6, 18)]
+  | 7 => [(3, 1), (5, 1), (9, 1), (14, 10), (14, 12), (17, 1), (17, 18), (17, 20), (22, 6), (26, 18), (26, 24), (28, 12), (28, 20), (28, 24), (7, 6), (11, 10), (13, 12), (19, 18), (25, 24), (3, 1)]
+  | 8 => [(3, 5), (3, 10), (6, 5), (6, 18), (9, 5), (9, 12), (26, 10), (26, 18), (26, 24), (28, 12), (28, 24), (3, 2), (3, 1), (6, 2), (13, 5), (14, 12), (17, 1), (21, 20), (22, 20), (25, 24)]
+  | _ => [(5, 9), (5, 12), (6, 12), (10, 24), (17, 18), (28, 12), (28, 20), (28, 24), (5, 4), (7, 3), (11, 9), (11, 3), (17, 1), (19, 3), (21, 20), (22, 20), (25, 24), (26, 18), (5, 9), (5, 9)]
 
 def maskFun (m : ℕ) : Fin 5 → Bool := fun i => m.testBit i.val
 
-def pairA (t : Fin 10) (r : Fin 66) : Fin 5 → Bool := maskFun ((pairs t).getD r.val (0,0)).1
-def pairB (t : Fin 10) (r : Fin 66) : Fin 5 → Bool := maskFun ((pairs t).getD r.val (0,0)).2
+def pairA (t : Fin 10) (r : Fin 20) : Fin 5 → Bool := maskFun ((pairs t).getD r.val (0,0)).1
+def pairB (t : Fin 10) (r : Fin 20) : Fin 5 → Bool := maskFun ((pairs t).getD r.val (0,0)).2
 
 def targetFun (T : ℕ) (x : Fin 5 → Bool) : Bool :=
   Nat.testBit T (∑ i : Fin 5, if x i then 2 ^ (i : ℕ) else 0)
@@ -61,8 +63,8 @@ def mkBVLoop : ℕ → (ℕ → Bool) → ℕ
   | 0, _ => 0
   | n + 1, p => 2 * mkBVLoop n (fun k => p (k + 1)) + if p 0 then 1 else 0
 
-def mkBV (p : Fin 66 → Bool) : B :=
-  BitVec.ofNat 66 (mkBVLoop 66 (fun i => if h : i < 66 then p ⟨i, h⟩ else false))
+def mkBV (p : Fin 20 → Bool) : B :=
+  BitVec.ofNat 20 (mkBVLoop 20 (fun i => if h : i < 20 then p ⟨i, h⟩ else false))
 
 lemma testBit_mkBVLoop (n : ℕ) : ∀ (p : ℕ → Bool) (i : ℕ), i < n →
     (mkBVLoop n p).testBit i = p i := by
@@ -81,17 +83,17 @@ lemma testBit_mkBVLoop (n : ℕ) : ∀ (p : ℕ → Bool) (i : ℕ), i < n →
         cases p 0 <;> simp [Nat.testBit_succ, Nat.mul_add_div]
       rw [hbit, ih (fun k => p (k + 1)) i (by omega)]
 
-lemma getElem_mkBV (p : Fin 66 → Bool) (i : ℕ) (hi : i < 66) :
+lemma getElem_mkBV (p : Fin 20 → Bool) (i : ℕ) (hi : i < 20) :
     (mkBV p)[i] = p ⟨i, hi⟩ := by
   unfold mkBV
   rw [BitVec.getElem_eq_testBit_toNat, BitVec.toNat_ofNat, Nat.testBit_mod_two_pow]
   simp only [decide_eq_true hi, Bool.true_and]
-  rw [testBit_mkBVLoop 66 _ i hi]
+  rw [testBit_mkBVLoop 20 _ i hi]
   simp [hi]
 
-lemma zero_bit (i : ℕ) (hi : i < 66) : (0 : B)[i] = false := by simp
+lemma zero_bit (i : ℕ) (hi : i < 20) : (0 : B)[i] = false := by simp
 
-def top : B := BitVec.allOnes 66
+def top : B := BitVec.allOnes 20
 def zero : Sig := (0, 0)
 def one : Sig := (top, top)
 def target : Sig := (top, 0)
@@ -136,22 +138,22 @@ def search : ℕ → ℕ → List Sig → Bool
          tryGate k t (search k t) v rest (bin false a b) keep ||
          tryGate k t (search k t) v rest (bin true a b) keep))))
 
-def wiresToSigs (wa wb : Fin 66 → List Bool) (len : ℕ) : List Sig :=
+def wiresToSigs (wa wb : Fin 20 → List Bool) (len : ℕ) : List Sig :=
   (List.range len).map (fun idx =>
     (mkBV (fun r => (wa r).getD idx false),
      mkBV (fun r => (wb r).getD idx false)))
 
 def initList (i : Fin 10) : List Sig := match i.val with
-  | 0 => [(BitVec.ofNat 66 44930305720582016, BitVec.ofNat 66 73720853178183893379), (BitVec.ofNat 66 73743741814273212543, BitVec.ofNat 66 73734699264262883989), (BitVec.ofNat 66 73748828188888268927, BitVec.ofNat 66 15824354508707114), (BitVec.ofNat 66 36169019109162880, BitVec.ofNat 66 36145915569055308), (BitVec.ofNat 66 71916890909294592, BitVec.ofNat 66 66005912340150384)]
-  | 1 => [(BitVec.ofNat 66 73786976292011180047, BitVec.ofNat 66 0), (BitVec.ofNat 66 2863333360, BitVec.ofNat 66 73786976290579576695), (BitVec.ofNat 66 3435925488, BitVec.ofNat 66 73786976293979199897), (BitVec.ofNat 66 4042322160, BitVec.ofNat 66 4042304170), (BitVec.ofNat 66 4278255360, BitVec.ofNat 66 4278242508)]
-  | 2 => [(BitVec.ofNat 66 73786973333241196799, BitVec.ofNat 66 73786971896792813841), (BitVec.ofNat 66 73786974876122222351, BitVec.ofNat 66 159608366694), (BitVec.ofNat 66 3546804129776, BitVec.ofNat 66 3404944935048), (BitVec.ofNat 66 4131505893376, BitVec.ofNat 66 4131501288106), (BitVec.ofNat 66 4389473288192, BitVec.ofNat 66 4389469998284)]
-  | 3 => [(BitVec.ofNat 66 73786975910363656255, BitVec.ofNat 66 73786975762572972617), (BitVec.ofNat 66 73786976130102300615, BitVec.ofNat 66 73556599954), (BitVec.ofNat 66 419952460280, BitVec.ofNat 66 415622646052), (BitVec.ofNat 66 541298003456, BitVec.ofNat 66 73786976217656744813), (BitVec.ofNat 66 549621624832, BitVec.ofNat 66 532173319606)]
-  | 4 => [(BitVec.ofNat 66 73786975903916093895, BitVec.ofNat 66 73786975746444038729), (BitVec.ofNat 66 392550026808, BitVec.ofNat 66 73786975824028382939), (BitVec.ofNat 66 73786976172533317695, BitVec.ofNat 66 418860157220), (BitVec.ofNat 66 532709117888, BitVec.ofNat 66 463962392868), (BitVec.ofNat 66 549621624832, BitVec.ofNat 66 548279446966)]
-  | 5 => [(BitVec.ofNat 66 73773251022485721087, BitVec.ofNat 66 38853034437001476), (BitVec.ofNat 66 73729506128781635647, BitVec.ofNat 66 73724367982265930313), (BitVec.ofNat 66 17138980021862336, BitVec.ofNat 66 5736446674150546), (BitVec.ofNat 66 54320341177860096, BitVec.ofNat 66 73733201418324424931), (BitVec.ofNat 66 71776187763916800, BitVec.ofNat 66 71776184508337980)]
-  | 6 => [(BitVec.ofNat 66 73729387381525835839, BitVec.ofNat 66 73724529674831548741), (BitVec.ofNat 66 57625130607316928, BitVec.ofNat 66 73753253733275570761), (BitVec.ofNat 66 73719354129632989183, BitVec.ofNat 66 1618844347606162), (BitVec.ofNat 66 67833338026520576, BitVec.ofNat 66 22740136572364962), (BitVec.ofNat 66 71776187763916800, BitVec.ofNat 66 71776184508337980)]
-  | 7 => [(BitVec.ofNat 66 73714918734893678591, BitVec.ofNat 66 567382630219905), (BitVec.ofNat 66 10737144427511283839, BitVec.ofNat 66 10749063929516100374), (BitVec.ofNat 66 21256431655188447104, BitVec.ofNat 66 21208762717620049194), (BitVec.ofNat 66 41000766609802903552, BitVec.ofNat 66 40971834493439780428), (BitVec.ofNat 66 69247347870180311040, BitVec.ofNat 66 69238837130995447920)]
-  | 8 => [(BitVec.ofNat 66 73759742697505026111, BitVec.ofNat 66 73720026070841036865), (BitVec.ofNat 66 73743288232157646847, BitVec.ofNat 66 19290461380846218), (BitVec.ofNat 66 34042871787032512, BitVec.ofNat 66 73730805842094413141), (BitVec.ofNat 66 36308141675376640, BitVec.ofNat 66 36268532003662246), (BitVec.ofNat 66 71776187780431872, BitVec.ofNat 66 66709630564404792)]
-  | _ => [(BitVec.ofNat 66 73779796366887485503, BitVec.ofNat 66 73779140507162390723), (BitVec.ofNat 66 7233132948619200, BitVec.ofNat 66 73782807316266259017), (BitVec.ofNat 66 73778465559426371583, BitVec.ofNat 66 213860721181972), (BitVec.ofNat 66 8448614045315072, BitVec.ofNat 66 3944670410992038), (BitVec.ofNat 66 9002802281709568, BitVec.ofNat 66 7832921790713400)]
+  | 0 => [(BitVec.ofNat 20 976775, BitVec.ofNat 20 959873), (BitVec.ofNat 20 90008, BitVec.ofNat 20 22280), (BitVec.ofNat 20 104928, BitVec.ofNat 20 1018021), (BitVec.ofNat 20 925307, BitVec.ofNat 20 6746), (BitVec.ofNat 20 123004, BitVec.ofNat 20 82038)]
+  | 1 => [(BitVec.ofNat 20 72, BitVec.ofNat 20 0), (BitVec.ofNat 20 1048511, BitVec.ofNat 20 1048463), (BitVec.ofNat 20 1048507, BitVec.ofNat 20 1048505), (BitVec.ofNat 20 1048533, BitVec.ofNat 20 84), (BitVec.ofNat 20 102, BitVec.ofNat 20 98)]
+  | 2 => [(BitVec.ofNat 20 1042847, BitVec.ofNat 20 1040407), (BitVec.ofNat 20 1046369, BitVec.ofNat 20 1896), (BitVec.ofNat 20 7810, BitVec.ofNat 20 6272), (BitVec.ofNat 20 7020, BitVec.ofNat 20 6952), (BitVec.ofNat 20 7280, BitVec.ofNat 20 7232)]
+  | 3 => [(BitVec.ofNat 20 1048533, BitVec.ofNat 20 1048529), (BitVec.ofNat 20 1048555, BitVec.ofNat 20 10), (BitVec.ofNat 20 12, BitVec.ofNat 20 4), (BitVec.ofNat 20 54, BitVec.ofNat 20 52), (BitVec.ofNat 20 56, BitVec.ofNat 20 40)]
+  | 4 => [(BitVec.ofNat 20 1048547, BitVec.ofNat 20 2), (BitVec.ofNat 20 28, BitVec.ofNat 20 12), (BitVec.ofNat 20 20, BitVec.ofNat 20 16), (BitVec.ofNat 20 1048569, BitVec.ofNat 20 1048561), (BitVec.ofNat 20 30, BitVec.ofNat 20 28)]
+  | 5 => [(BitVec.ofNat 20 1043845, BitVec.ofNat 20 34176), (BitVec.ofNat 20 12954, BitVec.ofNat 20 12300), (BitVec.ofNat 20 973667, BitVec.ofNat 20 936547), (BitVec.ofNat 20 72828, BitVec.ofNat 20 989245), (BitVec.ofNat 20 123000, BitVec.ofNat 20 122962)]
+  | 6 => [(BitVec.ofNat 20 54842, BitVec.ofNat 20 34334), (BitVec.ofNat 20 993853, BitVec.ofNat 20 983597), (BitVec.ofNat 20 1045441, BitVec.ofNat 20 28864), (BitVec.ofNat 20 15814, BitVec.ofNat 20 14656), (BitVec.ofNat 20 49656, BitVec.ofNat 20 1032627)]
+  | 7 => [(BitVec.ofNat 20 1032423, BitVec.ofNat 20 524327), (BitVec.ofNat 20 706329, BitVec.ofNat 20 181064), (BitVec.ofNat 20 96538, BitVec.ofNat 20 88464), (BitVec.ofNat 20 376348, BitVec.ofNat 20 371736), (BitVec.ofNat 20 409568, BitVec.ofNat 20 407232)]
+  | 8 => [(BitVec.ofNat 20 743475, BitVec.ofNat 20 86037), (BitVec.ofNat 20 309711, BitVec.ofNat 20 10442), (BitVec.ofNat 20 452108, BitVec.ofNat 20 442933), (BitVec.ofNat 20 575472, BitVec.ofNat 20 558946), (BitVec.ofNat 20 985024, BitVec.ofNat 20 918920)]
+  | _ => [(BitVec.ofNat 20 884499, BitVec.ofNat 20 802305), (BitVec.ofNat 20 175628, BitVec.ofNat 20 141840), (BitVec.ofNat 20 836583, BitVec.ofNat 20 49510), (BitVec.ofNat 20 199912, BitVec.ofNat 20 853167), (BitVec.ofNat 20 258288, BitVec.ofNat 20 245976)]
 
 def evalGateSig (g : Gate) (W : List Sig) : Sig :=
   match g.op, g.inputs with
@@ -187,11 +189,11 @@ lemma initList_eq : ∀ t : Fin 10,
 
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 10000000 in
-lemma pairA_true : ∀ t (r : Fin 66), targetFun (mask t) (pairA t r) = true := by decide +kernel
+lemma pairA_true : ∀ t (r : Fin 20), targetFun (mask t) (pairA t r) = true := by decide +kernel
 
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 10000000 in
-lemma pairB_false : ∀ t (r : Fin 66), targetFun (mask t) (pairB t r) = false := by decide +kernel
+lemma pairB_false : ∀ t (r : Fin 20), targetFun (mask t) (pairB t r) = false := by decide +kernel
 
 lemma initList_nodup : ∀ t : Fin 10, (initList t).Nodup := by decide
 lemma initList_len : ∀ t : Fin 10, (initList t).length = 5 := by decide
@@ -290,7 +292,7 @@ lemma unionSep_append (d : Bool) (l₁ l₂ : List Sig) :
   | nil => simp [unionSep]
   | cons a t ih => simp only [List.cons_append, unionSep, ih, BitVec.or_assoc]
 
-lemma unionSep_bit_iff (d : Bool) (v : List Sig) (i : ℕ) (hi : i < 66) :
+lemma unionSep_bit_iff (d : Bool) (v : List Sig) (i : ℕ) (hi : i < 20) :
     (unionSep d v)[i] = true ↔ ∃ s ∈ v, (sep d s)[i] = true := by
   induction v with
   | nil => simp [unionSep]
@@ -304,16 +306,16 @@ lemma unionSep_bit_iff (d : Bool) (v : List Sig) (i : ℕ) (hi : i < 66) :
       · exact Or.inl h
       · exact Or.inr ⟨s, hs, h⟩
 
-lemma bv_eq_top_of_bits {x : B} (h : ∀ i (hi : i < 66), x[i] = true) : x = top := by
+lemma bv_eq_top_of_bits {x : B} (h : ∀ i (hi : i < 20), x[i] = true) : x = top := by
   apply BitVec.eq_of_getElem_eq
   intro i hi
   rw [top, BitVec.getElem_allOnes]
   exact h i hi
 
-lemma top_bit (i : ℕ) (hi : i < 66) : top[i] = true := by
+lemma top_bit (i : ℕ) (hi : i < 20) : top[i] = true := by
   rw [top, BitVec.getElem_allOnes]
 
-lemma sep_mono_true (d : Bool) (a : Sig) (i : ℕ) (hi : i < 66) :
+lemma sep_mono_true (d : Bool) (a : Sig) (i : ℕ) (hi : i < 20) :
     (sep d a)[i] = true → (sep true a)[i] = true := by
   cases d
   · simp only [sep, Bool.false_eq_true, ↓reduceIte, BitVec.getElem_and, BitVec.getElem_not,
@@ -322,12 +324,12 @@ lemma sep_mono_true (d : Bool) (a : Sig) (i : ℕ) (hi : i < 66) :
     simp [h.1, h.2]
   · exact id
 
-lemma sep_neg_true (a : Sig) (i : ℕ) (hi : i < 66) :
+lemma sep_neg_true (a : Sig) (i : ℕ) (hi : i < 20) :
     (sep true (neg a))[i] = (sep true a)[i] := by
   simp only [sep, neg, ↓reduceIte, BitVec.getElem_xor, BitVec.getElem_not]
   cases a.1[i] <;> cases a.2[i] <;> rfl
 
-lemma sep_bin_bit (d isOr : Bool) (a b : Sig) (i : ℕ) (hi : i < 66) :
+lemma sep_bin_bit (d isOr : Bool) (a b : Sig) (i : ℕ) (hi : i < 20) :
     (sep d (bin isOr a b))[i] = true → (sep d a)[i] = true ∨ (sep d b)[i] = true := by
   cases d <;> cases isOr <;>
     simp only [sep, bin, ↓reduceIte, Bool.false_eq_true, BitVec.getElem_and,
@@ -854,7 +856,7 @@ lemma extract_live (gs : List Gate) (hfan : ∀ g ∈ gs,
           exact ⟨k + 1, by simp; omega, t + 1, by omega, by simp [isNot, hop]; omega,
             by simp [isNot, hop]; omega, V, hV_nd, hV_sub, hV_len, hV_sep, hsearch_new⟩
 
-lemma wiresToSigs_getD (wa wb : Fin 66 → List Bool) (len : ℕ)
+lemma wiresToSigs_getD (wa wb : Fin 20 → List Bool) (len : ℕ)
     (hwa : ∀ r, (wa r).length = len) (hwb : ∀ r, (wb r).length = len) (i : ℕ) :
     (wiresToSigs wa wb len).getD i zero =
       (mkBV (fun r => (wa r).getD i false),
@@ -871,7 +873,7 @@ lemma wiresToSigs_getD (wa wb : Fin 66 → List Bool) (len : ℕ)
     · simp only [zero, getElem_mkBV]
       rw [zero_bit r hr, List.getD_eq_default _ _ (by rw [hwb ⟨r, hr⟩]; omega)]
 
-lemma wiresToSigs_step (wa wb : Fin 66 → List Bool) (len : ℕ)
+lemma wiresToSigs_step (wa wb : Fin 20 → List Bool) (len : ℕ)
     (hwa : ∀ r, (wa r).length = len) (hwb : ∀ r, (wb r).length = len)
     (g : Gate) (hg : g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) ∧ g.inputs.length ≤ 2) :
     wiresToSigs
@@ -963,7 +965,7 @@ lemma evalWires_len (gs : List Gate) (w : List Bool) :
 
 lemma wiresToSigs_evalGates (gs : List Gate)
     (hfan : ∀ g ∈ gs, g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) ∧ g.inputs.length ≤ 2) :
-    ∀ (wa wb : Fin 66 → List Bool) (len : ℕ),
+    ∀ (wa wb : Fin 20 → List Bool) (len : ℕ),
       (∀ r, (wa r).length = len) → (∀ r, (wb r).length = len) →
       wiresToSigs (fun r => evalWires gs (wa r)) (fun r => evalWires gs (wb r)) (len + gs.length) =
         evalGates gs (wiresToSigs wa wb len) := by
@@ -998,8 +1000,8 @@ lemma sample_lower (tidx : Fin 10) (C : Circuit)
     (hnot : C.gates.countP isNot = 1)
     (hcheck : ∀ k t : ℕ, k < budget tidx → t ≤ 1 →
       (t = 0 → k + 1 < budget tidx) → search k t (initList tidx) = false)
-    (accepts : ∀ r : Fin 66, C.eval (List.ofFn (pairA tidx r)) = true)
-    (rejects : ∀ r : Fin 66, C.eval (List.ofFn (pairB tidx r)) = false) :
+    (accepts : ∀ r : Fin 20, C.eval (List.ofFn (pairA tidx r)) = true)
+    (rejects : ∀ r : Fin 20, C.eval (List.ofFn (pairB tidx r)) = false) :
     budget tidx ≤ C.size := by
   by_contra small
   have hlen : C.gates.length < budget tidx := Nat.lt_of_not_ge small
@@ -1121,7 +1123,8 @@ private lemma first_step_no (i : Fin 10) (k t : ℕ)
 set_option maxRecDepth 50000 in
 set_option maxHeartbeats 100000000 in
 private theorem check_small : ∀ (i : Fin 10) (k : Fin 8) (t : Fin 2),
-    k.val < budget i → search k.val t.val (initList i) = false := by
+    k.val < budget i → (t.val = 0 → k.val + 1 < budget i) →
+    search k.val t.val (initList i) = false := by
   intro i
   fin_cases i <;> decide +kernel
 
@@ -1148,7 +1151,7 @@ private theorem check_large_8_1 : search 8 1 (initList 8) = false := by
 private theorem check_bounds (i : Fin 10) (k t : ℕ) (hk : k < budget i) (ht : t ≤ 1)
     (hmono : t = 0 → k + 1 < budget i) : search k t (initList i) = false := by
   by_cases hs : k < 8
-  · exact check_small i ⟨k,hs⟩ ⟨t,by omega⟩ hk
+  · exact check_small i ⟨k,hs⟩ ⟨t,by omega⟩ hk hmono
   have hm : ∀ i : Fin 10, budget i ≤ 9 := by decide
   have ho : ∀ i : Fin 10, i ≠ 7 → i ≠ 8 → budget i ≤ 8 := by decide
   have hi : i = 7 ∨ i = 8 := by
