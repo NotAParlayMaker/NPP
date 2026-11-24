@@ -22,8 +22,9 @@ certificate proves. The whole search visits 46,406 positions and takes about 3 s
 
 Lean's kernel is far slower. Timed here on four direct searches: about **100 search
 steps per second**. The checker runs the kernel twice (once to build, once to re-check),
-so a 20-minute check leaves room for only about 40,000 search steps on top of the
-4 minutes the embedded 8-input proof needs. The accepted certificate gets under this by
+so a 20-minute check leaves room for only about 40,000 search steps on top of what the
+embedded 8-input proof needs. That figure is an estimate: I did not time the 8-input
+part on its own, and the checker's machine may be faster or slower than this one. The accepted certificate gets under this by
 storing positions and by using the graph's 12 symmetries, which cut the work twelvefold.
 
 ## What the three live steps are
