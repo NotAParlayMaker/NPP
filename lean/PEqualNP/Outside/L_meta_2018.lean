@@ -7,7 +7,6 @@ import Mathlib.Data.List.Sublists
 import Mathlib.Tactic.FinCases
 import Mathlib.Tactic.GCongr
 import Mathlib.Tactic.IntervalCases
-import Mathlib.Tactic.Push
 import Mathlib.Tactic.Tauto
 import PEqualNP.Defs
 
@@ -3583,37 +3582,6 @@ lemma circuit_target (C : Circuit) (h : PEqualNP.MetaComplexity.FanInTwo C)
   have rep := get_rep w C.output
   rw [et] at rep
   exact rep.resolve_right (fun hn => hn target_proper)
-lemma wire9_sig (g0 : Gate) (gs : List Gate)
-    (hg0 : g0.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp))
-    (hw9 : ∀ y : Fin 9 → Bool,
-      ((Circuit.mk (g0 :: gs) 0).wires (List.ofFn y)).getD 9 false = (y 4 && y 6)) :
-    gv raw g0 = bin false raw4 raw6 := by
-  have hv : Valid (gv raw g0) := gv_valid raw_valid g0
-  have hv46 : Valid (bin false raw4 raw6) :=
-    valid_bin (raw_valid raw4 (by simp [raw])) (raw_valid raw6 (by simp [raw]))
-  have hbit (s : Bool) (i : Fin 414) : bit s i (gv raw g0) = bit s i (bin false raw4 raw6) := by
-    have h1 := hw9 (sample s i)
-    simp only [Circuit.wires, List.foldl_cons] at h1
-    have hlen : (List.ofFn (sample s i)).length = 9 := by simp
-    have hlt : 9 < (List.ofFn (sample s i) ++ [g0.op.eval (g0.inputs.map fun j =>
-        (List.ofFn (sample s i)).getD j false)]).length := by simp
-    rw [foldl_append_getD _ gs _ 9 hlt false] at h1
-    have hget : (List.ofFn (sample s i) ++ [g0.op.eval (g0.inputs.map fun j =>
-        (List.ofFn (sample s i)).getD j false)]).getD 9 false =
-        g0.op.eval (g0.inputs.map fun j => (List.ofFn (sample s i)).getD j false) := by
-      simp [List.getD_eq_getElem?_getD]
-    rw [hget, sample_list] at h1
-    rw [run_bit s i g0 raw raw_valid hg0, h1, bit_bin]
-    rfl
-  apply Prod.ext
-  · apply Nat.eq_of_testBit_eq; intro i
-    by_cases hi : i < 414
-    · simpa [bit] using hbit true ⟨i, hi⟩
-    · rw [hv.1 i (by omega), hv46.1 i (by omega)]
-  · apply Nat.eq_of_testBit_eq; intro i
-    by_cases hi : i < 414
-    · simpa [bit] using hbit false ⟨i, hi⟩
-    · rw [hv.2 i (by omega), hv46.2 i (by omega)]
 def index9 (key : Nat) (j : Nat) : Nat := (key >>> (9 * j)) &&& 511
 def reindexLoop (f : Fin 414 → Fin 414) (x : Nat) : Nat → Nat
   | 0 => 0
@@ -4727,91 +4695,19 @@ lemma rootTag_ok {k : Nat} (hk : k ≤ 14) : TagOk k raw.toFinset rootTag := by
   · exact checkV 6 rfl
   · exact checkV 7 rfl
   · exact checkV 8 rfl
-lemma part1_case3_fail : unionSep true (raw.erase raw4 ++ [bin false raw4 raw6]) != top := by
-  decide +kernel
-lemma raw4_ne_and46 : raw4 ≠ bin false raw4 raw6 := by decide +kernel
-lemma circuit_trestricted (C : Circuit) (hc : C.size ≤ 15)
-    (hf : PEqualNP.MetaComplexity.FanInTwo C)
-    (hw9 : ∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = (y 4 && y 6))
-    (he : ∀ x : Fin 9 → Bool, C.eval (List.ofFn x) = edgeF x) :
+lemma circuit_trestricted_14 (D : Circuit) (hc : D.size ≤ 14)
+    (hf : PEqualNP.MetaComplexity.FanInTwo D)
+    (he : ∀ x : Fin 9 → Bool, D.eval (List.ofFn x) = edgeF x) :
     ∃ k ≤ 14, ∃ t ≤ 6, TRestricted k t raw.toFinset rootTag := by
-  cases hgs : C.gates with
-  | nil =>
-    have h := hw9 (fun j => decide (j.val = 4 ∨ j.val = 6))
-    simp [Circuit.wires, hgs] at h
-  | cons g0 gs =>
-    have hlen : gs.length ≤ 14 := by
-      change C.gates.length ≤ 15 at hc; rw [hgs] at hc; simp at hc; omega
-    have hg0 : g0.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) :=
-      (hf g0 (by rw [hgs]; simp)).1
-    have h9 : gv raw g0 = bin false raw4 raw6 := by
-      apply wire9_sig g0 gs hg0
-      intro y; have := hw9 y; simpa [Circuit.wires, hgs] using this
-    have htgt : target ∈ execute gs (raw ++ [bin false raw4 raw6]) := by
-      have h1 := circuit_target C hf he
-      rw [hgs] at h1
-      change target ∈ execute gs (raw ++ [gv raw g0]) at h1
-      rwa [h9] at h1
-    have hwv : ∀ a ∈ raw ++ [bin false raw4 raw6], Valid a := by
-      intro a ha; rcases List.mem_append.mp ha with ha | ha
-      · exact raw_valid a ha
-      · simp only [List.mem_singleton] at ha; subst a
-        exact valid_bin (raw_valid raw4 (by simp [raw])) (raw_valid raw6 (by simp [raw]))
-    obtain ⟨k, t, S, hk, hlive, hsub⟩ := extract gs (raw ++ [bin false raw4 raw6]) hwv
-      (fun g hg => hf g (by rw [hgs]; simp [hg])) htgt
-    have hk14 : k ≤ 14 := hk.trans hlen
-    by_cases h46 : bin false raw4 raw6 ∈ S
-    · by_cases h4 : raw4 ∈ S
-      · have hz4 : ¬ proper (homProject4.fn raw4) := fun hp => hp.2.1 project4_raw4
-        have hz46 : ¬ proper (homProject4.fn (bin false raw4 raw6)) := fun hp =>
-          hp.2.1 (by
-            rw [homProject4.hbin, project4_raw4, bin_comm]
-            exact (bin_laws (homProject4.valid raw6)).2.2.1)
-        obtain ⟨q, hq, hfe⟩ := feasible_two_consts hlive homProject4 raw4 (bin false raw4 raw6)
-          h4 h46 raw4_ne_and46 hz4 hz46
-        have himg : S.image homProject4.fn ⊆ raw.toFinset.image homProject4.fn := by
-          intro x hx
-          obtain ⟨a, haS, rfl⟩ := Finset.mem_image.mp hx
-          rcases List.mem_append.mp (hsub a haS) with haR | haEq
-          · exact Finset.mem_image_of_mem _ (List.mem_toFinset.mpr haR)
-          · simp only [List.mem_singleton] at haEq; subst a
-            have h0 : homProject4.fn (bin false raw4 raw6) = homProject4.fn raw4 := by
-              rw [homProject4.hbin, project4_raw4, bin_comm]
-              exact (bin_laws (homProject4.valid raw6)).2.2.1
-            rw [h0]
-            exact Finset.mem_image_of_mem _ (List.mem_toFinset.mpr (by simp [raw]))
-        exact False.elim (root_project4_impossible (feasible_mono (feasible_subset hfe himg) (by omega)))
-      · exfalso
-        have hcov : unionSep true (raw.erase raw4 ++ [bin false raw4 raw6]) = top := by
-          apply Nat.eq_of_testBit_eq; intro i
-          rw [testBit_top]
-          by_cases hi : i < 414
-          · simp only [hi, decide_true]
-            obtain ⟨b, hbS, hsep⟩ := live_sep hlive i hi
-            have hbne : b ≠ raw4 := fun e => h4 (e ▸ hbS)
-            have hbm : b ∈ raw.erase raw4 ++ [bin false raw4 raw6] := by
-              rcases List.mem_append.mp (hsub b hbS) with hbR | hbEq
-              · exact List.mem_append_left _ ((List.mem_erase_of_ne hbne).mpr hbR)
-              · exact List.mem_append_right _ hbEq
-            exact (mem_unionSep true _ _).2 ⟨b, hbm, sep_weaken _ (live_proper hlive b hbS).1 i hi hsep⟩
-          · simp only [hi, decide_false]
-            apply valid_unionSep _ i (by omega)
-            intro x hx; rcases List.mem_append.mp hx with hx | hx
-            · exact raw_valid x (List.mem_of_mem_erase hx)
-            · simp only [List.mem_singleton] at hx; subst x
-              exact valid_bin (raw_valid raw4 (by simp [raw])) (raw_valid raw6 (by simp [raw]))
-        have hf1 := part1_case3_fail
-        simp [hcov] at hf1
-    · have hsubRaw : ∀ a ∈ S, a ∈ raw := by
-        intro a ha; rcases List.mem_append.mp (hsub a ha) with haR | haEq
-        · exact haR
-        · simp only [List.mem_singleton] at haEq; exact False.elim (h46 (haEq ▸ ha))
-      have heq := necessary hlive hsubRaw
-      subst S
-      have sz := live_size hlive
-      rw [List.toFinset_card_of_nodup raw_nd] at sz
-      have hlenRaw : raw.length = 9 := rfl
-      exact ⟨k, hk14, t, by omega, restrict_live hlive (rootTag_ok hk14)⟩
+  have htgt : target ∈ execute D.gates raw := circuit_target D hf he
+  obtain ⟨k, t, S, hk, hlive, hsub⟩ := extract D.gates raw raw_valid hf htgt
+  have hk14 : k ≤ 14 := hk.trans hc
+  have heq := necessary hlive hsub
+  subst S
+  have sz := live_size hlive
+  rw [List.toFinset_card_of_nodup raw_nd] at sz
+  have hlenRaw : raw.length = 9 := rfl
+  exact ⟨k, hk14, t, by omega, restrict_live hlive (rootTag_ok hk14)⟩
 def sigsOf (v : List Wire) : List Sig := v.map Prod.fst
 def Represents (v : List Wire) (S : Finset Sig) (τ : Sig → Tag) : Prop :=
   (sigsOf v).Nodup ∧ (sigsOf v).toFinset = S ∧ ∀ w ∈ v, w.2 = τ w.1
@@ -7111,90 +7007,103 @@ lemma rootWires_rep : Represents rootWires raw.toFinset rootTag := by
   intro w hw
   simp only [rootWires, List.mem_cons, List.not_mem_nil, or_false] at hw
   rcases hw with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide +kernel
-theorem finalBound :
-    ∀ C : PEqualNP.CircuitLowerBounds.Circuit,
-      PEqualNP.MetaComplexity.FanInTwo C →
-      (∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = (y 4 && y 6)) →
-      PEqualNP.MetaComplexity.circuitFun 9 C =
-        (fun x : Fin 9 → Bool =>
-          (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) ||
-          (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) ||
-          (x 6 && x 8) || (x 8 && x 5)) →
-      16 ≤ C.size := by
-  intro C hf hw9 he
-  by_contra hlt
-  have hle : C.size ≤ 15 := by omega
-  have he' : ∀ x : Fin 9 → Bool, C.eval (List.ofFn x) = edgeF x := fun x => congrFun he x
-  obtain ⟨k, hk, t, ht, hr⟩ := circuit_trestricted C hle hf hw9 he'
-  exact rootImpossible t ht k hk raw.toFinset rootTag rootWires_rep hr
-end Main1672
+def unwire (i : ℕ) : ℕ := if i < 9 then i else i - 1
 
-lemma step_append_len (gs : List PEqualNP.CircuitLowerBounds.Gate) (w : List Bool) :
-    ∃ extra, gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w = w ++ extra := by
+def unwireGate (g : PEqualNP.CircuitLowerBounds.Gate) : PEqualNP.CircuitLowerBounds.Gate :=
+  ⟨g.op, g.inputs.map unwire⟩
+
+def ins9 (w : List Bool) (b : Bool) : List Bool := w.take 9 ++ b :: w.drop 9
+
+lemma getD_ins9 (w : List Bool) (b : Bool) (hw : 9 ≤ w.length) (i : ℕ) (hi : i ≠ 9) :
+    (ins9 w b).getD i false = w.getD (unwire i) false := by
+  unfold ins9 unwire
+  have htake : (w.take 9).length = 9 := by simp [hw]
+  by_cases hlt : i < 9
+  · simp only [hlt, ite_true]
+    rw [List.getD_append _ _ false i (by omega)]
+    rw [List.getD_eq_getElem _ _ (by omega), List.getD_eq_getElem _ _ (by omega)]
+    exact List.getElem_take
+  · simp only [hlt, ite_false]
+    rw [List.getD_append_right _ _ false i (by omega), htake]
+    obtain ⟨m, hm⟩ : ∃ m, i - 9 = m + 1 := ⟨i - 10, by omega⟩
+    rw [hm]
+    simp only [List.getD_cons_succ]
+    have hidx : i - 1 = 9 + m := by omega
+    rw [hidx]
+    simp only [List.getD_eq_getElem?_getD, List.getElem?_drop]
+
+lemma ins9_append (w : List Bool) (b v : Bool) (hw : 9 ≤ w.length) :
+    ins9 w b ++ [v] = ins9 (w ++ [v]) b := by
+  unfold ins9
+  rw [List.take_append_of_le_length hw, List.drop_append_of_le_length hw]
+  simp [List.append_assoc]
+
+lemma foldl_unwire (gs : List PEqualNP.CircuitLowerBounds.Gate)
+    (h9 : ∀ g ∈ gs, ∀ i ∈ g.inputs, i ≠ 9)
+    (w : List Bool) (b : Bool) (hw : 9 ≤ w.length) :
+    gs.foldl (fun u g => u ++ [g.op.eval (g.inputs.map fun i => u.getD i false)]) (ins9 w b) =
+    ins9 ((gs.map unwireGate).foldl
+      (fun u g => u ++ [g.op.eval (g.inputs.map fun i => u.getD i false)]) w) b := by
   induction gs generalizing w with
-  | nil => exact ⟨[], by simp⟩
+  | nil => rfl
   | cons g gs ih =>
-    obtain ⟨extra, heq⟩ := ih (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
-    refine ⟨g.op.eval (g.inputs.map fun i => w.getD i false) :: extra, ?_⟩
-    simpa [List.foldl_cons, List.append_assoc] using heq
+    simp only [List.map_cons, List.foldl_cons]
+    have hmap : (g.inputs.map fun i => (ins9 w b).getD i false) =
+        ((unwireGate g).inputs.map fun i => w.getD i false) := by
+      simp only [unwireGate, List.map_map, Function.comp_def]
+      apply List.map_congr_left
+      intro i hi
+      exact getD_ins9 w b hw i (h9 g (List.mem_cons_self ..) i hi)
+    rw [hmap, ins9_append w b _ hw]
+    exact ih (fun g' hg' => h9 g' (List.mem_cons_of_mem _ hg')) _ (by simp; omega)
 
-lemma and2_eval (a b : Bool) : PEqualNP.CircuitLowerBounds.GateOp.and.eval [a, b] = (a && b) := by
-  cases a <;> cases b <;> rfl
-
-lemma gate0_step (y : Fin 9 → Bool) :
-    List.ofFn y ++ [PEqualNP.CircuitLowerBounds.GateOp.and.eval
-      (([4, 6] : List ℕ).map fun i => (List.ofFn y).getD i false)] =
-    List.ofFn y ++ [y 4 && y 6] := by
-  have h4 : (List.ofFn y).getD 4 false = y 4 := by
-    rw [List.getD_eq_getElem _ _ (by simp), List.getElem_ofFn]; rfl
-  have h6 : (List.ofFn y).getD 6 false = y 6 := by
-    rw [List.getD_eq_getElem _ _ (by simp), List.getElem_ofFn]; rfl
-  simp only [List.map_cons, List.map_nil, h4, h6, and2_eval]
+lemma foldl_len (gs : List PEqualNP.CircuitLowerBounds.Gate) (w : List Bool) :
+    (gs.foldl (fun u g => u ++ [g.op.eval (g.inputs.map fun i => u.getD i false)]) w).length =
+      w.length + gs.length := by
+  induction gs generalizing w with
+  | nil => simp
+  | cons g gs ih =>
+    simp only [List.foldl_cons, ih, List.length_append, List.length_cons, List.length_nil]
+    omega
 
 theorem prove_2018 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), x1.size ≤ (14 : ℕ) → PEqualNP.MetaComplexity.FanInTwo x1 → x1.output ≤ (24 : ℕ) → x1.output ≠ (9 : ℕ) → (∀ x6 ∈ x1.gates, ∀ x8 ∈ x6.inputs, x8 ≤ (24 : ℕ) ∧ x8 ≠ (9 : ℕ)) → ∃ (x7 : Fin (9 : ℕ) → Bool), x1.eval (List.ofFn x7 ++ [x7 (4 : Fin (9 : ℕ)) && x7 (6 : Fin (9 : ℕ))]) ≠ (x7 (0 : Fin (9 : ℕ)) && x7 (1 : Fin (9 : ℕ)) || x7 (1 : Fin (9 : ℕ)) && x7 (2 : Fin (9 : ℕ)) || x7 (2 : Fin (9 : ℕ)) && x7 (3 : Fin (9 : ℕ)) || x7 (3 : Fin (9 : ℕ)) && x7 (4 : Fin (9 : ℕ)) || x7 (4 : Fin (9 : ℕ)) && x7 (0 : Fin (9 : ℕ)) || x7 (0 : Fin (9 : ℕ)) && x7 (5 : Fin (9 : ℕ)) || x7 (1 : Fin (9 : ℕ)) && x7 (6 : Fin (9 : ℕ)) || x7 (2 : Fin (9 : ℕ)) && x7 (7 : Fin (9 : ℕ)) || x7 (3 : Fin (9 : ℕ)) && x7 (8 : Fin (9 : ℕ)) || x7 (5 : Fin (9 : ℕ)) && x7 (7 : Fin (9 : ℕ)) || x7 (6 : Fin (9 : ℕ)) && x7 (8 : Fin (9 : ℕ)) || x7 (8 : Fin (9 : ℕ)) && x7 (5 : Fin (9 : ℕ))) := by
-  intro C hsz hfan _ _ _
+  intro C hsz hfan _ hout9 hin9
   by_contra hno
-  push Not at hno
-  let g0 : PEqualNP.CircuitLowerBounds.Gate := ⟨PEqualNP.CircuitLowerBounds.GateOp.and, [4, 6]⟩
-  let C' : PEqualNP.CircuitLowerBounds.Circuit := ⟨g0 :: C.gates, C.output⟩
-  have hfan' : PEqualNP.MetaComplexity.FanInTwo C' := by
+  have hall : ∀ x : Fin 9 → Bool, C.eval (List.ofFn x ++ [x 4 && x 6]) = edgeF x := by
+    intro x
+    by_contra hne
+    exact hno ⟨x, hne⟩
+  let D : PEqualNP.CircuitLowerBounds.Circuit := ⟨C.gates.map unwireGate, unwire C.output⟩
+  have hDsz : D.size ≤ 14 := by
+    change (C.gates.map unwireGate).length ≤ 14
+    rw [List.length_map]
+    exact hsz
+  have hDfan : PEqualNP.MetaComplexity.FanInTwo D := by
     intro g hg
-    simp only [C', List.mem_cons] at hg
-    rcases hg with rfl | hg
-    · exact ⟨Or.inl rfl, by decide⟩
-    · exact hfan g hg
-  have hwires' (y : Fin 9 → Bool) : C'.wires (List.ofFn y) = C.wires (List.ofFn y ++ [y 4 && y 6]) := by
-    change C.gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
-      (List.ofFn y ++ [g0.op.eval (g0.inputs.map fun i => (List.ofFn y).getD i false)]) =
-      C.wires (List.ofFn y ++ [y 4 && y 6])
-    rw [gate0_step y]
-    rfl
-  have hw9 : ∀ y : Fin 9 → Bool, (C'.wires (List.ofFn y)).getD 9 false = (y 4 && y 6) := by
-    intro y
-    rw [hwires' y]
-    obtain ⟨extra, heq⟩ := step_append_len C.gates (List.ofFn y ++ [y 4 && y 6])
-    change (C.gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
-      (List.ofFn y ++ [y 4 && y 6])).getD 9 false = (y 4 && y 6)
-    rw [heq, List.getD_append _ _ false 9 (by simp), List.getD_append_right _ _ false 9 (by simp)]
-    simp
-  have hfun' : PEqualNP.MetaComplexity.circuitFun 9 C' =
-      (fun x : Fin 9 → Bool =>
-        (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) ||
-        (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) ||
-        (x 6 && x 8) || (x 8 && x 5)) := by
-    funext x
-    change (C'.wires (List.ofFn x)).getD C'.output false = _
-    rw [hwires' x]
-    exact hno x
-  have hge := Main1672.finalBound C' hfan' hw9 hfun'
-  have hle : C'.size ≤ 15 := by
-    change (g0 :: C.gates).length ≤ 15
-    change C.gates.length ≤ 14 at hsz
-    simp only [List.length_cons]
-    omega
-  omega
-
+    obtain ⟨g0, hg0, rfl⟩ := List.mem_map.mp hg
+    exact ⟨(hfan g0 hg0).1, by simpa [unwireGate] using (hfan g0 hg0).2⟩
+  have hDeval : ∀ x : Fin 9 → Bool, D.eval (List.ofFn x) = edgeF x := by
+    intro x
+    have h1 := hall x
+    have hinit : List.ofFn x ++ [x 4 && x 6] = ins9 (List.ofFn x) (x 4 && x 6) := by
+      simp [ins9]
+    have hlen : 9 ≤ (List.ofFn x).length := by simp
+    have hnw : ∀ g ∈ C.gates, ∀ i ∈ g.inputs, i ≠ 9 := fun g hg i hi => (hin9 g hg i hi).2
+    have hw := foldl_unwire C.gates hnw (List.ofFn x) (x 4 && x 6) hlen
+    have hDlen : 9 ≤ (D.wires (List.ofFn x)).length := by
+      change 9 ≤ ((C.gates.map unwireGate).foldl _ (List.ofFn x)).length
+      rw [foldl_len]
+      simp
+    have heq : C.eval (List.ofFn x ++ [x 4 && x 6]) = D.eval (List.ofFn x) := by
+      change (C.gates.foldl _ (List.ofFn x ++ [x 4 && x 6])).getD C.output false =
+        (D.wires (List.ofFn x)).getD (unwire C.output) false
+      rw [hinit, hw]
+      exact getD_ins9 (D.wires (List.ofFn x)) (x 4 && x 6) hDlen C.output hout9
+    exact heq.symm.trans h1
+  obtain ⟨k, hk, t, ht, hr⟩ := circuit_trestricted_14 D hDsz hDfan hDeval
+  exact rootImpossible t ht k hk raw.toFinset rootTag rootWires_rep hr
+end Main1672
 end PEqualNP.Outside.L_meta_2018
 
 theorem PEqualNP.Outside.L_meta_2018 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), x1.size ≤ (14 : ℕ) → PEqualNP.MetaComplexity.FanInTwo x1 → x1.output ≤ (24 : ℕ) → x1.output ≠ (9 : ℕ) → (∀ x6 ∈ x1.gates, ∀ x8 ∈ x6.inputs, x8 ≤ (24 : ℕ) ∧ x8 ≠ (9 : ℕ)) → ∃ (x7 : Fin (9 : ℕ) → Bool), x1.eval (List.ofFn x7 ++ [x7 (4 : Fin (9 : ℕ)) && x7 (6 : Fin (9 : ℕ))]) ≠ (x7 (0 : Fin (9 : ℕ)) && x7 (1 : Fin (9 : ℕ)) || x7 (1 : Fin (9 : ℕ)) && x7 (2 : Fin (9 : ℕ)) || x7 (2 : Fin (9 : ℕ)) && x7 (3 : Fin (9 : ℕ)) || x7 (3 : Fin (9 : ℕ)) && x7 (4 : Fin (9 : ℕ)) || x7 (4 : Fin (9 : ℕ)) && x7 (0 : Fin (9 : ℕ)) || x7 (0 : Fin (9 : ℕ)) && x7 (5 : Fin (9 : ℕ)) || x7 (1 : Fin (9 : ℕ)) && x7 (6 : Fin (9 : ℕ)) || x7 (2 : Fin (9 : ℕ)) && x7 (7 : Fin (9 : ℕ)) || x7 (3 : Fin (9 : ℕ)) && x7 (8 : Fin (9 : ℕ)) || x7 (5 : Fin (9 : ℕ)) && x7 (7 : Fin (9 : ℕ)) || x7 (6 : Fin (9 : ℕ)) && x7 (8 : Fin (9 : ℕ)) || x7 (8 : Fin (9 : ℕ)) && x7 (5 : Fin (9 : ℕ))) :=
-  PEqualNP.Outside.L_meta_2018.prove_2018
+  PEqualNP.Outside.L_meta_2018.Main1672.prove_2018
