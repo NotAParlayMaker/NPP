@@ -3,14 +3,10 @@ import PEqualNP.Defs
 
 namespace PEqualNP.Outside.L_meta_3420
 
--- Words are naturals below 2^24.  Bits 0..11 are edge rows, bits 12..23 independent rows.
-
-/-- dominance test: `d` has every edge bit of `w` and no independent bit outside `w`. -/
 def domN (w d : ℕ) : Bool :=
   Nat.beq (Nat.land (Nat.land w 4095) (Nat.sub 16777215 d)) 0 &&
   Nat.beq (Nat.land (Nat.land d (Nat.sub 16777215 w)) 16773120) 0
 
-/-- the blocking relation: dominance (`m = true`) or plain equality (`m = false`). -/
 def blk (m : Bool) (w d : ℕ) : Bool := cond m (domN w d) (Nat.beq w d)
 
 def base10 : List ℕ :=
@@ -45,7 +41,6 @@ theorem blk_refl (m : Bool) (w : ℕ) : blk m w w = true := by
   · simp [blk]
   · simp [blk, domN_refl]
 
-/-- abstract reachability of the final live set `{4095}` from live set `D` within `k` steps. -/
 inductive Reach (m : Bool) : Finset ℕ → ℕ → Prop
   | done (k : ℕ) : Reach m {4095} k
   | step (D : Finset ℕ) (k u v w : ℕ) (ka kb : Bool) :
@@ -140,8 +135,6 @@ theorem Reach.sep {m : Bool} {D : Finset ℕ} {k : ℕ} (h : Reach m D k) (e i :
         · exact ⟨u, hu, hue, by simp_all⟩
     · exact ⟨x, Finset.mem_of_mem_filter _ hx, h1, h2⟩
 
--- the computable checker
-
 def tb (w e : ℕ) : Bool := !(Nat.beq (Nat.land (Nat.shiftRight w e) 1) 0)
 
 theorem tb_eq (w e : ℕ) : tb w e = w.testBit e := by
@@ -151,8 +144,6 @@ theorem tb_eq (w e : ℕ) : tb w e = w.testBit e := by
   generalize (1 &&& w >>> e) = X
   cases X <;> rfl
 
-/-- the rectangle of `x`: bit `12 * e + i` is set when `x` has edge bit `e` and lacks
-independent bit `12 + i`. -/
 def rect (x J : ℕ) : ℕ → ℕ
   | 0 => 0
   | e + 1 => Nat.lor (cond (tb x e) (Nat.shiftLeft J (Nat.mul 12 e)) 0) (rect x J e)
@@ -193,7 +184,6 @@ def full : ℕ := 22300745198530623141535718272648361505980415
 
 theorem full_eq : full = 2 ^ 144 - 1 := by norm_num [full]
 
-/-- cover test on the union `c` of rectangles. -/
 def covR (c : ℕ) : Bool := Nat.beq (Nat.land c full) full
 
 theorem covR_of (c : ℕ) (h : ∀ p, p < 144 → c.testBit p = true) : covR c = true := by
@@ -263,7 +253,6 @@ theorem notFinal {l : List ℕ} (h : allFinal l = false) : l.toFinset ≠ {4095}
   rw [h] at this
   exact Bool.noConfusion this
 
-/-- sorted insertion (only `Perm` to `w :: l` matters for soundness). -/
 def ins (w : ℕ) : List ℕ → List ℕ
   | [] => [w]
   | a :: l => cond (Nat.blt w a) (w :: a :: l) (a :: ins w l)
@@ -313,7 +302,6 @@ theorem sortedB_nodup {l : List ℕ} (h : sortedB l = true) : l.Nodup := by
   | nil => simp
   | cons a l => exact sortedFrom_nodup l a h
 
-/-- certificate tables: binary search trees of states (soundness does not need the order). -/
 abbrev Tree : Type := BinaryTree (List ℕ)
 
 def lcmp : List ℕ → List ℕ → Ordering
@@ -370,7 +358,6 @@ theorem thas_all (p : List ℕ → Bool) : ∀ (t : Tree) (x : List ℕ), tall p
     · rw [lcmp_eq x key hc]; exact ha.1.1
     · rw [hc] at hh; exact ihr x ha.2 hh
 
-/-- `closed`: the state `l` with `k` steps left certainly cannot reach the target. -/
 def closed (prev : Tree) (k : ℕ) (l : List ℕ) : Bool :=
   Nat.blt (Nat.succ k) l.length || !(covR (orR l)) || (Nat.beq k 0 && !(allFinal l)) || thas prev l
 
@@ -404,7 +391,6 @@ theorem beq_false_iff (x u : ℕ) : Nat.beq x u = false ↔ x ≠ u := by
 
 def remF (ka kb : Bool) (u v x : ℕ) : Bool := (ka || !(Nat.beq x u)) && (kb || !(Nat.beq x v))
 
-/-- soundness of a pruning rule: a state that can reach the target passes the test. -/
 def PruneOK (m : Bool) (P : List ℕ → ℕ → Bool) : Prop :=
   ∀ (l : List ℕ) (k : ℕ), l.Nodup → Reach m l.toFinset k → P l k = true
 
@@ -428,7 +414,6 @@ theorem lastOK_sound {m : Bool} {P : List ℕ → ℕ → Bool} {prev : Tree} {k
   · exact hinv l h hR
   · rw [hP l k hnd hR] at h; exact Bool.noConfusion h
 
-/-- one successor: size test `sz`, cover test on the rectangle union `c`, then table lookup. -/
 def sOK (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) (u v w : ℕ) (sz : Bool) (c : ℕ) (ka kb : Bool) : Bool :=
   sz || !(covR c) || lastOK P prev k (ins w (l.filter (remF ka kb u v)))
 
@@ -455,7 +440,6 @@ def opOK2 (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ)
 def opOK (m : Bool) (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) (u ru v rv ro w : ℕ) : Bool :=
   blkAny m w base12 || blkAny m w l || opOK2 P prev k l u ru v rv w (Nat.lor (rectW w) ro)
 
-/-- union of the rectangles of the words other than `u`, `v`. -/
 def orEx (u v : ℕ) : List ℕ → ℕ
   | [] => 0
   | x :: l => cond (Nat.beq x u || Nat.beq x v) (orEx u v l) (Nat.lor (rectW x) (orEx u v l))
@@ -553,7 +537,7 @@ theorem pair_sound {m : Bool} {P : List ℕ → ℕ → Bool} {prev : Tree} {k :
     have := hd w hm
     rw [blk_refl] at this
     exact Bool.noConfusion this
-  -- size
+
   have hsz : l.length ≤ k + (cond ka 0 1 + cond kb 0 1) := by
     have h1 := hR.card
     have hwF : w ∉ l.toFinset.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)) :=
@@ -562,7 +546,7 @@ theorem pair_sound {m : Bool} {P : List ℕ → ℕ → Bool} {prev : Tree} {k :
     have h2 := size_lb l.toFinset u v ka kb
     rw [List.toFinset_card_of_nodup hnd] at h2
     omega
-  -- cover
+
   have hbit : ∀ p, p < 144 → ((rectW w).testBit p = true ∨ (orEx u v l).testBit p = true) ∨
       (ka = true ∧ (rectW u).testBit p = true) ∨ (kb = true ∧ (rectW v).testBit p = true) := by
     intro p hp
@@ -654,7 +638,6 @@ theorem expOK_sound {m : Bool} {P : List ℕ → ℕ → Bool} {prev : Tree} {k 
       rw [hfe] at this
       exact this hR'
 
-/-- all sublists of a list satisfy `p`. -/
 def subsAll : List ℕ → (List ℕ → Bool) → Bool
   | [], p => p []
   | a :: l, p => subsAll l p && subsAll l (fun s => p (a :: s))
@@ -672,8 +655,6 @@ theorem subsAll_sub : ∀ (l : List ℕ) (p : List ℕ → Bool), subsAll l p = 
     cases hs with
     | cons _ hs' => exact ih p h.1 s hs'
     | cons_cons _ hs' => exact ih _ h.2 _ hs'
-
--- kernel-friendly versions: raw recursors, fully unfolded into one term
 
 def bor (a b : Bool) : Bool := @Bool.rec (fun _ => Bool) b true a
 def band (a b : Bool) : Bool := @Bool.rec (fun _ => Bool) false b a
@@ -829,15 +810,12 @@ theorem lastOK'_eq (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : 
 
 def covR' (c : ℕ) : Bool := Nat.beq (Nat.land c full) full
 
-/-- hand `f` the value of `x` as an evaluated numeral (the kernel substitutes arguments
-unevaluated; a recursor on the argument forces it). -/
 def forceN (x : ℕ) (f : ℕ → Bool) : Bool :=
   @Nat.rec (fun _ => Bool) (f 0) (fun p _ => f (Nat.succ p)) x
 
 theorem forceN_eq (x : ℕ) (f : ℕ → Bool) : forceN x f = f x := by
   cases x <;> rfl
 
-/-- hand `c` the list `l` with evaluated spine and elements. -/
 def forceL (l : List ℕ) (c : List ℕ → Bool) : Bool :=
   @List.rec ℕ (fun _ => (List ℕ → Bool) → Bool) (fun c => c [])
     (fun x _ ih c => forceN x (fun x' => ih (fun t => c (x' :: t)))) l c
@@ -924,7 +902,6 @@ theorem expOK'_eq (m : Bool) (P : List ℕ → ℕ → Bool) (prev : Tree) (k : 
     funext u v; exact pairOK'_eq m P prev k l u v
   rw [band_eq, band_eq, bnot_eq, allFinal'_eq, pairsAll'_eq, this]
 
-/-- `expOK'` with every auxiliary definition unfolded (one closed term for the kernel). -/
 noncomputable def expFastSub :
     {f : Bool → (List ℕ → ℕ → Bool) → Tree → ℕ → List ℕ → Bool // f = expOK'} := by
   refine ⟨?f, ?h⟩
@@ -959,7 +936,6 @@ theorem inv_leaf (m : Bool) : Inv m BinaryTree.nil 0 := by
   intro x hx
   simp [thas] at hx
 
-/-- the conclusion of a certificate: no subset of the base words reaches the target. -/
 def NoStart (m : Bool) (n : ℕ) : Prop :=
   ∀ L : Finset ℕ, (∀ x ∈ L, x ∈ base10) → ¬ Reach m L n
 
@@ -976,8 +952,6 @@ theorem start_sound {m : Bool} {prev : Tree} {n : ℕ} (hinv : Inv m prev n)
   rw [he] at this
   exact this
 
-/-- reachability with history: `H` = all words produced so far (live or not); a new word must
-not be blocked by `base12`, by `H`, or by the live set `D`. -/
 inductive ReachH (m : Bool) : Finset ℕ → Finset ℕ → ℕ → Prop
   | done (H : Finset ℕ) (k : ℕ) : ReachH m H {4095} k
   | step (H D : Finset ℕ) (k u v w : ℕ) (ka kb : Bool) :
@@ -1028,8 +1002,6 @@ theorem ReachH.inv' {m : Bool} {H D : Finset ℕ} {k' : ℕ} (h : ReachH m H D k
     intro k hk
     obtain rfl : k0 = k := by omega
     exact Or.inr ⟨u, v, w, ka, kb, hu, hv, hw, hH, hd, hb, hr⟩
-
--- from a trace to `Reach`
 
 inductive Tr (m : Bool) : List ℕ → Prop
   | nil : Tr m []
@@ -1193,22 +1165,18 @@ theorem Tr.reach {m : Bool} {s : List ℕ} (h : Tr m s) : ∀ (L : Finset ℕ) (
         exact List.mem_append_left _ hx))
       exact ⟨L0, hL0, hR0.mono⟩
 
-/-- conclusion of a certificate with history. -/
 def NoStartH (m : Bool) (n : ℕ) : Prop :=
   ∀ L : Finset ℕ, (∀ x ∈ L, x ∈ base10) → ¬ ReachH m ∅ L n
 
 theorem NoStart.toH {m : Bool} {n : ℕ} (h : NoStart m n) : NoStartH m n :=
   fun L hL hR => h L hL hR.toReach
 
-/-- Nat-level conclusion: no trace of length at most `n` contains 4095. -/
 theorem no_trace {m : Bool} {n : ℕ} (h : NoStartH m n) {s : List ℕ}
     (hs : Tr m s) (hlen : s.length ≤ n) : 4095 ∉ s := by
   intro hmem
   obtain ⟨L0, hL0, hR0⟩ := hs.reach {4095} 0
     (fun x hx => Or.inr (Finset.mem_singleton.mp hx ▸ hmem)) (ReachH.done _ 0)
   exact h L0 hL0 (hR0.mono_le (by omega))
-
--- bridge to `BitVec 24`
 
 def sD (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) (u v w : ℕ) (sz : Bool) (c : ℕ)
     (ka kb : Bool) : Bool :=
@@ -1227,7 +1195,6 @@ def pairD (m : Bool) (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) 
   opD m rec k l u (rectW u) v (rectW v) (orEx u v l) (Nat.land u v) &&
   opD m rec k l u (rectW u) v (rectW v) (orEx u v l) (Nat.lor u v)
 
-/-- one node: pruned, or (not final and every move is blocked or leads to a closed child). -/
 def node (m : Bool) (P : List ℕ → ℕ → Bool) (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) : Bool :=
   !(P l k) || (!(allFinal l) && (Nat.beq k 0 || pairsAll (pairD m rec (Nat.pred k) l) l))
 
@@ -1257,8 +1224,6 @@ theorem pw_forall {α : Type} {R : α → α → Prop} (hs : ∀ a b, R a b → 
       · rw [hb']; exact hs _ _ (h.1 a ha')
       · exact ih h.2 a ha' b hb' hab
 
-/-- one backward step of the Karchmer-Wigderson partition: the cells owned by the gate `w` are
-handed to its two inputs `u`, `v` according to `c`. -/
 theorem kw_step (D D' : Finset ℕ) (u v w : ℕ) (c : ℕ → ℕ → Bool) (f : ℕ → ℕ → ℕ)
     (hu : u ∈ D) (hv : v ∈ D) (huv : u ≠ v) (huD : u ∉ D') (hvD : v ∉ D')
     (hsub : ∀ x ∈ D', x ≠ w → x ∈ D)
@@ -1366,10 +1331,6 @@ theorem or_cv (u v e i : ℕ) (h1 : (u ||| v).testBit e = true) (h2 : (u ||| v).
   rw [Nat.testBit_or] at h1 h2
   cases hue : u.testBit e <;> cases hui : u.testBit i <;> simp_all
 
-/-- **Karchmer-Wigderson partition.**  In a tight state (`|D| = k + 1`: every live word is read
-exactly once, the rest of the computation is a read-once formula over `D`) every grid cell
-(edge row `e < 12`, independent row `i ≥ 12`) has an owner `f e i ∈ D` with `e ∈ E(owner)`,
-`i ∉ I(owner)`, and the cells of one owner form a combinatorial rectangle. -/
 theorem Reach.kw {m : Bool} {D : Finset ℕ} {k : ℕ} (h : Reach m D k) (ht : D.card = k + 1) :
     ∃ f : ℕ → ℕ → ℕ,
       (∀ e i, e < 12 → 12 ≤ i →
@@ -1451,8 +1412,6 @@ theorem Reach.kw {m : Bool} {D : Finset ℕ} {k : ℕ} (h : Reach m D k) (ht : D
         (fun e i h1 h2 h3 => or_cu u v e i h1 h2 h3) (fun e i h1 h2 h3 => or_cv u v e i h1 h2 h3)
         (fun e i e' i' _ => rfl)
 
--- bit lemmas for the raw operations
-
 theorem tb_land (a b q : ℕ) : (Nat.land a b).testBit q = (a.testBit q && b.testBit q) :=
   Nat.testBit_and a b q
 
@@ -1484,8 +1443,6 @@ theorem land_disj (a h : ℕ) (H : ∀ q, a.testBit q = true → h.testBit q = t
   · cases hh : h.testBit q
     · rfl
     · exact (H q ha hh).elim
-
--- the rectangular hull of a 144-bit cell set, by shifts and masks only
 
 def orS (x s : ℕ) : ℕ := Nat.lor x (Nat.shiftRight x s)
 
@@ -1525,7 +1482,6 @@ theorem orSL_ex (k p x n s : ℕ)
     · rw [Nat.mul_add]; omega
     · rw [e]; exact hp
 
-/-- bit `12 * e` for every row `e < 12`. -/
 def rowM : ℕ := 5445847423328601499764522166702896582657
 
 theorem rowM_tb (q : ℕ) (h : rowM.testBit q = true) : q < 144 ∧ q % 12 = 0 := by
@@ -1541,17 +1497,14 @@ theorem rowM_tb (q : ℕ) (h : rowM.testBit q = true) : q < 144 ∧ q % 12 = 0 :
   have hall : ∀ q : ℕ, q < 144 → rowM.testBit q = true → q % 12 = 0 := by decide +kernel
   exact ⟨hlt, hall q hlt h⟩
 
-/-- bit `12 * e` is set when row `e` of `p` is not empty. -/
 def rowsOf (p : ℕ) : ℕ := Nat.land (orS (orS (orS (orS p 6) 3) 1) 1) rowM
 
-/-- the union of the rows of `p` (12 bits). -/
 def colsOf (p : ℕ) : ℕ := Nat.land (orS (orS (orS (orS p 96) 48) 24) 12) 4095
 
 def hullC (p : ℕ) : ℕ :=
   Nat.land (orSL (orSL (orSL (orSL (rowsOf p) 6) 3) 1) 1)
     (orSL (orSL (orSL (orSL (colsOf p) 96) 48) 24) 12)
 
-/-- rectangular hull (rows of `p` times columns of `p`) of the cells of `p` below 144. -/
 def hull (p : ℕ) : ℕ := hullC (Nat.land p full)
 
 theorem rowsOf_tb (p q : ℕ) (h : (rowsOf p).testBit q = true) :
@@ -1625,37 +1578,29 @@ theorem hull_spec (p q : ℕ) (h : (hull p).testBit q = true) :
   rw [tb_land, Bool.and_eq_true] at ha hb
   exact ⟨h1, i, e', hi, he, ha.1, hb.1⟩
 
--- the test on the list of available cell sets (one 144-bit mask per live word)
-
-/-- cells lying in at least two of the masks (`o`: union so far, `t`: result so far). -/
 def tw : List ℕ → ℕ → ℕ → ℕ
   | [], _, t => t
   | a :: l, o, t => tw l (Nat.lor o a) (Nat.lor t (Nat.land o a))
 
-/-- hull of the private cells of `a` (`t`: the cells covered at least twice). -/
 def priv (t a : ℕ) : ℕ := hull (Nat.land a (Nat.xor t full))
 
-/-- every private hull lies inside its own mask and the hulls are pairwise disjoint. -/
 def hullsOK (t : ℕ) : List ℕ → ℕ → Bool
   | [], _ => true
   | a :: l, acc => Nat.beq (Nat.land (priv t a) a) (priv t a) &&
       (Nat.beq (Nat.land acc (priv t a)) 0 && hullsOK t l (Nat.lor acc (priv t a)))
 
-/-- one propagation round. -/
 def avOK1 (as : List ℕ) : Bool := hullsOK (tw as 0 0) as 0
 
 def orL : List ℕ → ℕ
   | [] => 0
   | a :: l => Nat.lor a (orL l)
 
-/-- one-round rectangle test of a state. -/
 def rectOK1 (l : List ℕ) : Bool := avOK1 (l.map rectW)
 
 def IsRect (R : ℕ → Prop) : Prop :=
   ∀ e i e' i' : ℕ, e < 12 → i < 12 → e' < 12 → i' < 12 →
     R (12 * e + i) → R (12 * e' + i') → R (12 * e + i')
 
-/-- a partition of the 144 cells into rectangles, one inside each mask. -/
 structure Part (zs : List ((ℕ → Prop) × ℕ)) : Prop where
   rect : ∀ z ∈ zs, IsRect z.1
   bnd : ∀ z ∈ zs, ∀ q, z.1 q → q < 144
@@ -1761,7 +1706,6 @@ theorem Part.covR {zs : List ((ℕ → Prop) × ℕ)} (hP : Part zs) :
   obtain ⟨z, hz, hzq⟩ := hP.cov q hq
   exact orL_tb' q _ z.2 (List.mem_map.mpr ⟨z, hz, rfl⟩) (hP.sub z hz q hzq)
 
-/-- a tight reachable state has a rectangle partition inside the rectangles of its words. -/
 theorem part_of_reach {m : Bool} {l : List ℕ} {k : ℕ} (hnd : l.Nodup) (hlen : l.length = k + 1)
     (hR : Reach m l.toFinset k) :
     ∃ zs : List ((ℕ → Prop) × ℕ), zs.map Prod.snd = l.map rectW ∧ Part zs := by
@@ -1812,7 +1756,6 @@ theorem rectOK1_sound {m : Bool} {l : List ℕ} {k : ℕ} (hnd : l.Nodup) (hlen 
   rw [← he]
   exact avOK1_sound hP
 
-/-- prune test: a tight state must pass the one-round rectangle test. -/
 def rectP1 (l : List ℕ) (k : ℕ) : Bool := !(Nat.beq l.length (Nat.succ k)) || rectOK1 l
 
 theorem rectP1_ok (m : Bool) : PruneOK m rectP1 := by
@@ -1861,7 +1804,6 @@ theorem mapW'_eq (l : List ℕ) : mapW' l = l.map rectW := by
     show rectW' x :: mapW' l = rectW x :: l.map rectW
     rw [ih, rectW'_eq]
 
-/-- `rectP1` in kernel-friendly form. -/
 def rectP1' (l : List ℕ) (k : ℕ) : Bool :=
   bor (bnot (Nat.beq (len' l) (Nat.succ k)))
     ((fun as => hullsOK' (tw' as 0 0) as 0) (mapW' l))
@@ -1876,17 +1818,12 @@ theorem rectP1'_ok (m : Bool) : PruneOK m rectP1' := by
   rw [rectP1'_eq]
   exact rectP1_ok m l k hnd hR
 
--- ===== class rule (labels for words below a re-read word); K = 0 is the rectangle rule =====
-
-/-- the cell (edge row `e`, independent row `i`) is separated by `x`. -/
 def Pc (x e i : ℕ) : Prop := x.testBit e = true ∧ x.testBit i = false
 
 def IsRect2 (S : ℕ → ℕ → Prop) : Prop := ∀ e i e' i' : ℕ, S e i → S e' i' → S e i'
 
 theorem pc_rect (x : ℕ) : IsRect2 (Pc x) := fun _ _ _ _ h1 h2 => ⟨h1.1, h2.2⟩
 
-/-- a structure of width `j` on the live set `D` (NOTES-search.md, section 4): owner `f` of every
-cell, rectangular envelopes `env`, labels `c`, one rectangle `Pi n` per positive label. -/
 structure KS (D : Finset ℕ) (j : ℕ) (f : ℕ → ℕ → ℕ) (env : ℕ → ℕ → ℕ → Prop) (c : ℕ → ℕ)
     (Pi : ℕ → ℕ → ℕ → Prop) : Prop where
   own : ∀ e i, e < 12 → 12 ≤ i → f e i ∈ D ∧ env (f e i) e i
@@ -1915,7 +1852,6 @@ theorem ks_done : KS {4095} 0 (fun _ _ => 4095) (fun _ e i => Pc 4095 e i) (fun 
   · intro n e i _ h; exact h.elim
   · intro x _; exact le_rfl
 
-/-- labels after `x` became label 1: positive labels move up by one. -/
 def shiftL (c : ℕ → ℕ) (x y : ℕ) : ℕ := if y = x then 1 else if c y = 0 then 0 else c y + 1
 
 theorem shiftL_self (c : ℕ → ℕ) (x : ℕ) : shiftL c x x = 1 := by
@@ -1929,7 +1865,6 @@ theorem shiftL_ne (c : ℕ → ℕ) (x y : ℕ) (h : y ≠ x) :
   · rw [ite_p _ _ h0]; exact Or.inl ⟨h0, rfl⟩
   · rw [ite_n _ _ h0]; exact Or.inr ⟨by omega, rfl⟩
 
-/-- `x` is re-read: it gets a new label 1, its whole rectangle as envelope and as `Pi 1`. -/
 theorem KS.promote {D : Finset ℕ} {j : ℕ} {f : ℕ → ℕ → ℕ} {env : ℕ → ℕ → ℕ → Prop} {c : ℕ → ℕ}
     {Pi : ℕ → ℕ → ℕ → Prop} (h : KS D j f env c Pi) (x : ℕ) (hxD : x ∈ D) :
     KS D (j + 1) f (fun y e i => (y = x ∧ Pc x e i) ∨ (y ≠ x ∧ env y e i)) (shiftL c x)
@@ -1997,7 +1932,6 @@ theorem KS.promote {D : Finset ℕ} {j : ℕ} {f : ℕ → ℕ → ℕ} {env : �
     · rw [hyx, shiftL_self]; omega
     · rcases shiftL_ne c x y hyx with ⟨_, h6⟩ | ⟨_, h6⟩ <;> omega
 
-/-- `x` is ready to absorb cells of the gate `w`: full envelope, positive label not above `w`'s. -/
 def Prom (env : ℕ → ℕ → ℕ → Prop) (c : ℕ → ℕ) (w x : ℕ) : Prop :=
   (∀ e i, Pc x e i → env x e i) ∧ 1 ≤ c x ∧ (1 ≤ c w → c x ≤ c w)
 
@@ -2015,7 +1949,6 @@ theorem prom_other (env : ℕ → ℕ → ℕ → Prop) (c : ℕ → ℕ) (w x y
     rcases shiftL_ne c x y hyx with ⟨_, h6⟩ | ⟨_, h6⟩ <;>
       rcases shiftL_ne c x w hwx with ⟨_, h7⟩ | ⟨_, h7⟩ <;> omega
 
-/-- promote the kept operands of a step. -/
 theorem ks_prom {D' : Finset ℕ} {j : ℕ} {f : ℕ → ℕ → ℕ} {env : ℕ → ℕ → ℕ → Prop} {c : ℕ → ℕ}
     {Pi : ℕ → ℕ → ℕ → Prop} (hK : KS D' j f env c Pi) (u v w : ℕ) (_huw : u ≠ w) (hvw : v ≠ w)
     (huv : u ≠ v) (ka kb : Bool) (hua : u ∈ D' ↔ ka = true) (hvb : v ∈ D' ↔ kb = true) :
@@ -2033,7 +1966,6 @@ theorem ks_prom {D' : Finset ℕ} {j : ℕ} {f : ℕ → ℕ → ℕ} {env : ℕ
       fun _ => prom_other _ _ w v u huv (Ne.symm hvw) (prom_self env c w u),
       fun _ => prom_self _ _ w v⟩
 
-/-- one backward step: the gate `w` hands its cells, envelope and label to its operands. -/
 theorem KS.step {D D' : Finset ℕ} {j : ℕ} {f : ℕ → ℕ → ℕ} {env : ℕ → ℕ → ℕ → Prop} {c : ℕ → ℕ}
     {Pi : ℕ → ℕ → ℕ → Prop} (h : KS D' j f env c Pi) (u v w : ℕ) (hu : u ∈ D) (hv : v ∈ D)
     (huv : u ≠ v) (hwD : w ∉ D) (hw : w ∈ D') (hD' : ∀ x ∈ D', x ≠ w → x ∈ D)
@@ -2145,8 +2077,6 @@ theorem KS.step {D D' : Finset ℕ} {j : ℕ} {f : ℕ → ℕ → ℕ} {env : �
 
 theorem cond_sum (b : Bool) : (cond b 1 0 : ℕ) + cond b 0 1 = 1 := by cases b <;> rfl
 
-/-- **Lemma A.**  A state that reaches the target in `k` steps carries a structure whose width is
-at most the number of spare reads `k + 1 - |D|`. -/
 theorem Reach.ks {m : Bool} {D : Finset ℕ} {k : ℕ} (h : Reach m D k) :
     ∃ (j : ℕ) (f : ℕ → ℕ → ℕ) (env : ℕ → ℕ → ℕ → Prop) (c : ℕ → ℕ) (Pi : ℕ → ℕ → ℕ → Prop),
       KS D j f env c Pi ∧ j + D.card ≤ k + 1 := by
@@ -2214,8 +2144,6 @@ theorem Reach.ks {m : Bool} {D : Finset ℕ} {k : ℕ} (h : Reach m D k) :
     have e2 := cond_sum kb
     omega
 
--- the structure in mask coordinates (cell `q = 12 * e + i'`, `i = 12 + i'`), keyed by the words of a list
-
 structure MS (l : List ℕ) (j : ℕ) (Env : ℕ → ℕ → Prop) (c : ℕ → ℕ) (PiM : ℕ → ℕ → Prop) : Prop where
   own : ∀ q, q < 144 → ∃ x ∈ l, Env x q
   envR : ∀ x ∈ l, IsRect (Env x)
@@ -2272,7 +2200,6 @@ theorem KS.toMS {l : List ℕ} {j : ℕ} {f : ℕ → ℕ → ℕ} {env : ℕ �
   · intro x hx
     exact h.lab x (List.mem_toFinset.mpr hx)
 
-/-- the private hull of a word lies in its envelope. -/
 theorem MS.priv_env {l : List ℕ} {j : ℕ} {Env : ℕ → ℕ → Prop} {c : ℕ → ℕ} {PiM : ℕ → ℕ → Prop}
     (hM : MS l j Env c PiM) : ∀ y ∈ l, ∀ q,
     (priv (tw (l.map rectW) 0 0) (rectW y)).testBit q = true → Env y q := by
@@ -2298,13 +2225,6 @@ theorem MS.priv_env {l : List ℕ} {j : ℕ} {Env : ℕ → ℕ → Prop} {c : �
     h1 h2
   rwa [Nat.div_add_mod] at h3
 
-/-- a valid labelling of the words of `l` with `K` spare reads (`T` = cells in at least two
-rectangles, `priv T (rectW x)` = hull of the private cells of `x`):
-labels at most `K`; words with the same label have disjoint private hulls; for every label `i ≥ 1`
-the hull of any cell set inside the private hulls of the words labelled `i` is covered by the
-rectangles of the words labelled `1..i`; every private hull lies in its own rectangle.
-(Conditions (1), (2) of the class rule follow: restrict `c` to the conflict words; the rule's cover
-set additionally contains the conflict-free words.) -/
 def ValidLab (l : List ℕ) (K : ℕ) (c : ℕ → ℕ) : Prop :=
   (∀ x ∈ l, c x ≤ K) ∧
   (∀ x ∈ l, ∀ y ∈ l, x ≠ y → c x = c y →
@@ -2337,8 +2257,6 @@ theorem MS.validLab {l : List ℕ} {j : ℕ} {Env : ℕ → ℕ → Prop} {c : �
   · intro x hx q hq
     exact (hM.envB x hx q (hM.priv_env x hx q hq)).2
 
-/-- **Lemma A + B, statement form.**  A state that reaches the target (either mode `m`) has a valid
-labelling with `K = k + 1 - |l|` labels above 0. -/
 theorem reach_validLab {m : Bool} {l : List ℕ} {k : ℕ} (hnd : l.Nodup) (hR : Reach m l.toFinset k) :
     ∃ c : ℕ → ℕ, ValidLab l (Nat.sub (Nat.succ k) l.length) c := by
   obtain ⟨j, f, env, c, Pi, hK, hj⟩ := hR.ks
@@ -2347,29 +2265,18 @@ theorem reach_validLab {m : Bool} {l : List ℕ} {k : ℕ} (hnd : l.Nodup) (hR :
     show j ≤ (k + 1) - l.length
     omega)⟩
 
--- CLASS RULE as a Bool function (specification: cert/spec.py `class_rule`, NOTES-search.md 3.4).
--- Uses `rectW`, `full`, `band`, `bor`, `bnot`, `len'` (Core) and `tw`, `priv`, `hull` (RectPart).
--- Packed fields: field `i` of `x` = bits `144 * i .. 144 * i + 143`.
-
 def fld (x i : ℕ) : ℕ := Nat.land (Nat.shiftRight x (Nat.mul 144 i)) full
 
 def put (x i v : ℕ) : ℕ := Nat.lor x (Nat.shiftLeft v (Nat.mul 144 i))
 
-/-- `h ⊆ c` as cell sets. -/
 def subM (h c : ℕ) : Bool := Nat.beq (Nat.land h c) h
 
-/-- condition (2) for the labels `K - n + 1 .. K`: the hull of class `i` (field `i` of `hs`) is
-covered by `bc` (free words and words not labelled yet) and the classes `1 .. i` (fields of `cs`);
-`pre` = union of the fields `1 .. K - n` of `cs`. -/
 def chkA (bc hs cs K : ℕ) : ℕ → ℕ → Bool
   | 0, _ => true
   | n + 1, pre =>
     subM (fld hs (Nat.sub K n)) (Nat.lor bc (Nat.lor pre (fld cs (Nat.sub K n)))) &&
     chkA bc hs cs K n (Nat.lor pre (fld cs (Nat.sub K n)))
 
-/-- try the labels `K - n + 1 .. K` (so `n = K + 1` tries `0 .. K`) for a word with mask `a` and
-private hull `h`.  `us`: union of the private hulls per label, `hs`: hull of that union,
-`cs`: union of the masks per label. -/
 def tryL (K bc a h : ℕ) (cont : ℕ → ℕ → ℕ → Bool) (us hs cs : ℕ) : ℕ → Bool
   | 0 => false
   | n + 1 =>
@@ -2381,31 +2288,24 @@ def tryL (K bc a h : ℕ) (cont : ℕ → ℕ → ℕ → Bool) (us hs cs : ℕ)
           (put cs (Nat.sub K n) a))) ||
     tryL K bc a h cont us hs cs n
 
-/-- union of the masks (field 0) of the items. -/
 def orA : List ℕ → ℕ
   | [] => 0
   | it :: r => Nat.lor (fld it 0) (orA r)
 
-/-- branch and bound over the labels of the conflict words; item = mask (field 0), private hull
-(field 1). -/
 def go (K base : ℕ) : List ℕ → ℕ → ℕ → ℕ → Bool
   | [] => fun _ _ _ => true
   | it :: rest => fun us hs cs =>
     tryL K (Nat.lor base (orA rest)) (fld it 0) (fld it 1) (go K base rest) us hs cs (Nat.succ K)
 
-/-- items of the words whose private hull meets another private hull (`t2`: cells in at least two
-private hulls). -/
 def vs (t t2 : ℕ) : List ℕ → List ℕ
   | [] => []
   | a :: l => cond (Nat.beq (Nat.land (priv t a) t2) 0) (vs t t2 l)
       (put (Nat.land a full) 1 (priv t a) :: vs t t2 l)
 
-/-- union of the masks of the other (free) words. -/
 def fcov (t t2 : ℕ) : List ℕ → ℕ
   | [] => 0
   | a :: l => cond (Nat.beq (Nat.land (priv t a) t2) 0) (Nat.lor a (fcov t t2 l)) (fcov t t2 l)
 
-/-- number of items of `all` whose private hull meets that of `x`. -/
 def degI (x : ℕ) : List ℕ → ℕ
   | [] => 0
   | y :: l => cond (Nat.beq (Nat.land (fld y 1) (fld x 1)) 0) (degI x l) (Nat.succ (degI x l))
@@ -2414,7 +2314,6 @@ def insD (all : List ℕ) (x : ℕ) : List ℕ → List ℕ
   | [] => [x]
   | y :: l => cond (Nat.blt (degI y all) (degI x all)) (x :: y :: l) (y :: insD all x l)
 
-/-- the items by decreasing degree (only a heuristic order; any permutation is sound). -/
 def sortD (all : List ℕ) : List ℕ → List ℕ
   | [] => []
   | x :: l => insD all x (sortD all l)
@@ -2441,11 +2340,8 @@ def classP3 (K t t2 : ℕ) (as : List ℕ) : Bool :=
 
 def classP2 (K : ℕ) (as : List ℕ) (t : ℕ) : Bool := classP3 K t (tw (as.map (priv t)) 0 0) as
 
-/-- the class rule on a live list `l` with `k` steps left (`K = k + 1 - |l|`). -/
 def classP (l : List ℕ) (k : ℕ) : Bool :=
   classP2 (Nat.sub (Nat.succ k) l.length) (l.map rectW) (tw (l.map rectW) 0 0)
-
--- kernel-friendly twins (raw recursors)
 
 def chkA' (bc hs cs K n : ℕ) : ℕ → Bool :=
   @Nat.rec (fun _ => ℕ → Bool) (fun _ => true)
@@ -2588,7 +2484,6 @@ theorem mapP'_eq (t : ℕ) (l : List ℕ) : mapP' t l = l.map (priv t) := by
   | nil => rfl
   | cons a l ih => show priv t a :: mapP' t l = priv t a :: l.map (priv t); rw [ih]
 
-/-- `classP` in kernel-friendly form (`as`: evaluated mask list). -/
 def classQ (K : ℕ) (as : List ℕ) : Bool :=
   (fun t => (fun t2 => (fun items =>
       go' K (fcov' t t2 as)
@@ -2605,18 +2500,12 @@ theorem classP'_eq (l : List ℕ) (k : ℕ) : classP' l k = classP l k := by
   unfold classP classP2 classP3
   cases Nat.blt 1 (Nat.sub (Nat.succ k) l.length) <;> rfl
 
-/-- private hull of the word `x` in the live list `l`. -/
 def privH (l : List ℕ) (x : ℕ) : ℕ := priv (tw (l.map rectW) 0 0) (rectW x)
 
-/-- cells lying in at least two private hulls. -/
 def t2Of (l : List ℕ) : ℕ := tw ((l.map rectW).map (priv (tw (l.map rectW) 0 0))) 0 0
 
-/-- `x` is a conflict word (its private hull meets another private hull). -/
 def isConf (l : List ℕ) (x : ℕ) : Prop := Nat.land (privH l x) (t2Of l) ≠ 0
 
-/-- a valid labelling of the conflict words (NOTES-search.md 3.4): labels `0..K` on the conflict
-words, (1) conflicting words get different labels, (2) for `i ≥ 1` the hull of any cell set inside
-the private hulls of class `i` is covered by the free words and the classes `1..i`. -/
 structure ClassLab (l : List ℕ) (K : ℕ) (c : ℕ → ℕ) : Prop where
   le : ∀ x ∈ l, isConf l x → c x ≤ K
   ne : l.Pairwise (fun x y => isConf l x → isConf l y → c x = c y →
@@ -2627,8 +2516,6 @@ structure ClassLab (l : List ℕ) (K : ℕ) (c : ℕ → ℕ) : Prop where
         ∀ q, (hull U).testBit q = true →
         ∃ y ∈ l, (rectW y).testBit q = true ∧ (isConf l y → 1 ≤ c y ∧ c y ≤ i)
 
-/-- `ValidLab` (ClassPartA: labels on all words, cover by the classes `1..i` only) gives a
-labelling in the sense of the rule. -/
 theorem ValidLab.classLab {l : List ℕ} {K : ℕ} {c : ℕ → ℕ} (hnd : l.Nodup)
     (h : ValidLab l K c) : ClassLab l K c := by
   obtain ⟨h1, h2, h3, _⟩ := h
@@ -2639,8 +2526,6 @@ theorem ValidLab.classLab {l : List ℕ} {K : ℕ} {c : ℕ → ℕ} (hnd : l.No
     obtain ⟨y, hy, hc1, hc2, hb⟩ :=
       h3 i U hi1 (fun r hr => (hU r hr).imp (fun x hx => ⟨hx.1, hx.2.2⟩)) q hq
     exact ⟨y, hy, hb, fun _ => ⟨hc1, hc2⟩⟩
-
--- bits of the packed fields
 
 theorem fld_tb (x i q : ℕ) :
     (fld x i).testBit q = (x.testBit (144 * i + q) && decide (q < 144)) := by
@@ -2699,8 +2584,6 @@ theorem land_zero_tb (a b q : ℕ) (h : Nat.land a b = 0) (ha : a.testBit q = tr
   have e := tb_land a b q
   rw [h, ha, hb, Nat.zero_testBit] at e
   exact Bool.noConfusion e
-
--- the three layers of the search
 
 theorem chkA_true (bc hs cs K : ℕ)
     (G : ∀ i, 1 ≤ i → i ≤ K → ∀ q, (fld hs i).testBit q = true →
@@ -2774,7 +2657,6 @@ theorem orA_tb (q : ℕ) : ∀ (rest : List (ℕ × ℕ)), ∀ p ∈ rest, (fld 
     · rw [hb]; rfl
     · rw [ih p hp hb]; exact Bool.or_true _
 
-/-- invariant form: `rest` = items (with their labels) still to be placed, `M` = all items. -/
 theorem go_inv (K base : ℕ) (M : ℕ × ℕ → Prop)
     (h2 : ∀ i, 1 ≤ i → i ≤ K → ∀ q,
       (∃ U : ℕ, (∀ r, U.testBit r = true → ∃ p, M p ∧ p.2 = i ∧ (fld p.1 1).testBit r = true) ∧
@@ -2907,7 +2789,6 @@ theorem perm_map_lift {α β : Type} (f : α → β) {l1 l2 : List β} (h : l1.P
     obtain ⟨rs, c, d⟩ := ih2 qs b
     exact ⟨rs, c.trans a, d⟩
 
-/-- `go` succeeds on any ordering of the items of a validly labelled item list `all`. -/
 theorem go_complete (K base : ℕ) (all : List (ℕ × ℕ)) (its : List ℕ)
     (hperm : its.Perm (all.map Prod.fst))
     (hK : ∀ p ∈ all, p.2 ≤ K)
@@ -2942,8 +2823,6 @@ theorem go_complete (K base : ℕ) (all : List (ℕ × ℕ)) (its : List ℕ)
     rw [fld_zero] at hq
     exact Bool.noConfusion hq
   · exact fun p hp => Or.inl (hps.mem_iff.mpr hp)
-
--- the items of classP
 
 theorem vs_eq (t t2 : ℕ) : ∀ l : List ℕ, vs t t2 (l.map rectW) =
     (l.filter (fun x => !(Nat.beq (Nat.land (priv t (rectW x)) t2) 0))).map
@@ -3109,23 +2988,15 @@ theorem classP'_of_validLab (l : List ℕ) (k : ℕ) (c : ℕ → ℕ) (hnd : l.
   rw [classP'_eq]
   exact classP_of_validLab l k c hnd h
 
-/-- the checker's class rule is a sound pruning rule (with `reach_validLab` of ClassPartA). -/
 theorem classP'_sound (m : Bool) : PruneOK m classP' := by
   intro l k hnd hR
   obtain ⟨c, hc⟩ := reach_validLab hnd hR
   exact classP'_of_validLab l k c hnd hc
 
--- SYMMETRY: the 4 row permutations induced by the automorphisms of the graph that fix {0,3}
--- (search/aut.json).  They permute bits 0..11 among themselves and bits 12..23 among themselves,
--- map `base12` onto itself (single base words are NOT fixed) and fix 4095.
--- Each one is an involution, written as a product of delta swaps (sym/mkperm.py).
-
-/-- delta swap: exchanges bit `j` with bit `j + d` for every `j` in the mask `mk`. -/
 def dsw (mk d x : ℕ) : ℕ :=
   Nat.xor (Nat.xor x (Nat.land (Nat.xor (Nat.shiftRight x d) x) mk))
     (Nat.shiftLeft (Nat.land (Nat.xor (Nat.shiftRight x d) x) mk) d)
 
-/-- hand `f` the evaluated numeral of `x` (kernel: arguments are substituted unevaluated). -/
 def letN (x : ℕ) (f : ℕ → ℕ) : ℕ := @Nat.rec (fun _ => ℕ) (f 0) (fun p _ => f (Nat.succ p)) x
 
 theorem letN_eq (x : ℕ) (f : ℕ → ℕ) : letN x f = f x := by
@@ -3143,7 +3014,6 @@ def sig3 (x : ℕ) : ℕ :=
   letN (dsw 16392 1 x) fun x => letN (dsw 128 2 x) fun x => letN (dsw 4 3 x) fun x =>
   letN (dsw 64 4 x) fun x => letN (dsw 131072 5 x) fun x => letN (dsw 12289 8 x) fun x => dsw 2 10 x
 
-/-- `f` permutes the bits of a word, inside the blocks 0..11, 12..23 and 24.. -/
 def BitPerm (f : ℕ → ℕ) : Prop :=
   ∃ p : ℕ → ℕ, (∀ j, ∃ i, p i = j) ∧ (∀ i, p i < 12 ↔ i < 12) ∧ (∀ i, p i < 24 ↔ i < 24) ∧
     ∀ x i, (f x).testBit i = x.testBit (p i)
@@ -3159,7 +3029,6 @@ theorem BitPerm.comp {f g : ℕ → ℕ} (hf : BitPerm f) (hg : BitPerm g) :
   obtain ⟨i', hi'⟩ := ps i
   exact ⟨i', by show q (p i') = j; rw [hi', hi]⟩
 
-/-- the bit permutation of `dsw mk d`. -/
 def dpi (mk d i : ℕ) : ℕ :=
   if mk.testBit i = true then i + d else if d ≤ i ∧ mk.testBit (i - d) = true then i - d else i
 
@@ -3194,7 +3063,7 @@ theorem dsw_perm (mk d : ℕ) (h1 : mk < 16777216)
     · have h3 := (key (i - d) hc).2
       rw [Nat.sub_add_cancel hd, hi] at h3
       exact Bool.noConfusion h3
-  -- the three cases of a position
+
   have cases3 : ∀ i, (mk.testBit i = true ∧ (d ≤ i → mk.testBit (i - d) = false)) ∨
       (mk.testBit i = false ∧ d ≤ i ∧ mk.testBit (i - d) = true) ∨
       (mk.testBit i = false ∧ ¬ (d ≤ i ∧ mk.testBit (i - d) = true)) := by
@@ -3375,7 +3244,7 @@ theorem BitPerm.domN {f : ℕ → ℕ} (hf : BitPerm f) (w d : ℕ) : domN (f w)
       f (Nat.land (Nat.land d (Nat.sub 16777215 w)) 16773120) := by
     show (f d &&& (16777215 - f w)) &&& 16773120 = f ((d &&& (16777215 - w)) &&& 16773120)
     rw [hf.and, hf.and, hf.hi, hf.sub]
-  unfold _root_.PEqualNP.Outside.L_meta_3420.domN
+  unfold PEqualNP.Outside.L_meta_3420.domN
   rw [e1, e2, hf.beq0, hf.beq0]
 
 theorem BitPerm.blk {f : ℕ → ℕ} (hf : BitPerm f) (m : Bool) (w d : ℕ) :
@@ -3384,11 +3253,8 @@ theorem BitPerm.blk {f : ℕ → ℕ} (hf : BitPerm f) (m : Bool) (w d : ℕ) :
   · exact hf.beq w d
   · exact hf.domN w d
 
-/-- `f` maps `base12` onto itself. -/
 def BaseOK (f : ℕ → ℕ) : Prop := ∀ d ∈ base12, ∃ d' ∈ base12, f d' = d
 
-/-- INVARIANCE of reachability under a block-preserving bit permutation that maps `base12`
-onto itself (both side conditions: dominance `m = true` and equality `m = false`). -/
 theorem Reach.image {f : ℕ → ℕ} (hf : BitPerm f) (hb : BaseOK f) {m : Bool} {D : Finset ℕ} {k : ℕ}
     (h : Reach m D k) : Reach m (D.image f) k := by
   induction h with
@@ -3454,10 +3320,6 @@ theorem sig1_base : BaseOK sig1 := by unfold BaseOK; decide +kernel
 theorem sig2_base : BaseOK sig2 := by unfold BaseOK; decide +kernel
 theorem sig3_base : BaseOK sig3 := by unfold BaseOK; decide +kernel
 
--- the checker with symmetric lookup: a child is closed when one of its 3 non-trivial images
--- (as a sorted list) is in the next table.  It enters through the pruning hook, AFTER the
--- plain lookup and the rule `P`, so the images are only computed for children that pass `P`.
-
 def map' (f : ℕ → ℕ) (l : List ℕ) : List ℕ :=
   @List.rec ℕ (fun _ => List ℕ) [] (fun a _ ih => f a :: ih) l
 
@@ -3477,7 +3339,6 @@ theorem sort'_perm (l : List ℕ) : (sort' l).Perm l := by
     rw [ins'_eq]
     exact (ins_perm a _).trans (List.Perm.cons a ih)
 
-/-- the sorted image of `l` under `f` is in the table. -/
 noncomputable def symHas1 (f : ℕ → ℕ) (prev : Tree) (l : List ℕ) : Bool :=
   forceL (map' f l) (fun l1 => forceL (sort' l1) (has' prev))
 
@@ -3507,7 +3368,6 @@ theorem symHas_sound {m : Bool} {prev : Tree} {k : ℕ} {l : List ℕ}
   · exact symHas1_sound sig2_perm sig2_base hinv h
   · exact symHas1_sound sig3_perm sig3_base hinv h
 
-/-- pruning rule `P` extended by the symmetric lookup in the table `prev` of level `k0`. -/
 noncomputable def symP (P : List ℕ → ℕ → Bool) (prev : Tree) (k0 : ℕ) (l : List ℕ) (k : ℕ) : Bool :=
   band (P l k) (bnot (band (Nat.beq k k0) (symHas prev l)))
 
@@ -3524,13 +3384,11 @@ theorem symP_ok {m : Bool} {P : List ℕ → ℕ → Bool} {prev : Tree} {k0 : �
     · rfl
     · exact absurd hR (symHas_sound hinv hs)
 
-/-- one level of the symmetry-reduced table. -/
 theorem level_sym {m : Bool} {P : List ℕ → ℕ → Bool} {prev T : Tree} {k : ℕ}
     (hP : PruneOK m P) (hinv : Inv m prev k)
     (h : tall (expFast m (symP P prev k) prev k) T = true) : Inv m T (k + 1) :=
   level_fast (symP_ok hP hinv) hinv h
 
-/-- start states: closed directly or through a symmetric image. -/
 noncomputable def closedS (prev : Tree) (k : ℕ) (l : List ℕ) : Bool :=
   bor (closed prev k l) (symHas prev l)
 
@@ -3551,13 +3409,6 @@ theorem start_sym {m : Bool} {prev : Tree} {n : ℕ} (hinv : Inv m prev n)
   · exact closed_sound hnd hinv h2
   · exact symHas_sound hinv h2
 
-
--- CANONICAL LOOKUP AND REFUTED STATES: a child with K = k + 1 - |l| at least 2 is replaced by
--- the smallest of its 4 images (all images can reach the target together or not at all).  It
--- is closed when that image is in the table of the next level, or in a list `R` of images
--- refuted once by the rule (checked by its own theorems), else the rule must refute it.
-
-/-- the smaller of two sorted lists (lexicographic). -/
 noncomputable def minL (a b : List ℕ) : List ℕ := @Ordering.rec (fun _ => List ℕ) a a b (lcmp' a b)
 
 theorem minL_cases (a b : List ℕ) : minL a b = a ∨ minL a b = b := by
@@ -3567,10 +3418,8 @@ theorem minL_cases (a b : List ℕ) : minL a b = a ∨ minL a b = b := by
   · exact Or.inl rfl
   · exact Or.inr rfl
 
-/-- sorted image of a list. -/
 noncomputable def img (f : ℕ → ℕ) (l : List ℕ) : List ℕ := sort' (map' f l)
 
-/-- the smallest of the 4 images. -/
 noncomputable def canon (l : List ℕ) : List ℕ := minL (minL (minL l (img sig1 l)) (img sig2 l)) (img sig3 l)
 
 theorem img_reach {m : Bool} {f : ℕ → ℕ} (hf : BitPerm f) (hb : BaseOK f) {l : List ℕ} {k : ℕ}
@@ -3601,7 +3450,6 @@ theorem canon_reach {m : Bool} {l : List ℕ} {k : ℕ} (hnd : l.Nodup) (hR : Re
     · exact h2
   · exact h3
 
-/-- the rule with canonical lookup in `T` and `R` for `K ≥ 2` at level `k0`, else `symP`. -/
 noncomputable def RP (P : List ℕ → ℕ → Bool) (T R : Tree) (k0 : ℕ) (l : List ℕ) (k : ℕ) : Bool :=
   @Bool.rec (fun _ => Bool) (symP P T k0 l k)
     (forceL (canon l) (fun c => band (bnot (bor (has' T c) (has' R c))) (P c k)))
@@ -3630,13 +3478,11 @@ theorem RP_ok {m : Bool} {P : List ℕ → ℕ → Bool} {T R : Tree} {k0 : ℕ}
     rw [hTf, hRf, hP _ k hnd' hR']
     rfl
 
-/-- one level with the canonical lookup. -/
 theorem level_R {m : Bool} {P : List ℕ → ℕ → Bool} {prev R T : Tree} {k : ℕ}
     (hP : PruneOK m P) (hinv : Inv m prev k) (hRi : Inv m R k)
     (h : tall (expFast m (RP P prev R k) prev k) T = true) : Inv m T (k + 1) :=
   level_fast (RP_ok hP hinv hRi) hinv h
 
-/-- a list of refuted states: every entry is sorted and refuted by the rule. -/
 def refOK (P : List ℕ → ℕ → Bool) (k : ℕ) (x : List ℕ) : Bool := band (sortedB x) (bnot (P x k))
 
 theorem refuted {m : Bool} {P : List ℕ → ℕ → Bool} {R : Tree} {k : ℕ} (hP : PruneOK m P)
@@ -3653,7 +3499,6 @@ theorem inv_nil (m : Bool) (k : ℕ) : Inv m BinaryTree.nil k := by
   intro x hx
   simp [thas] at hx
 
-/-- the class rule with all its auxiliary definitions unfolded (one closed term for the kernel). -/
 noncomputable def cpSub : {f : List ℕ → ℕ → Bool // f = classP'} := by
   refine ⟨?f, ?h⟩
   case h =>
@@ -3669,7 +3514,6 @@ theorem cpF_sound (m : Bool) : PruneOK m cpF := by
   rw [e]
   exact classP'_sound m
 
-/-- the pruning rule of the table: one-round rectangle test, then the class rule. -/
 noncomputable def PR (l : List ℕ) (k : ℕ) : Bool := rectP1' l k && cpF l k
 
 theorem PR_sound : PruneOK false PR := PruneOK.and (rectP1'_ok false) (cpF_sound false)
@@ -5126,8 +4970,6 @@ theorem start_ok : subsAll base10 (closedS T14 14) = true := by decide +kernel
 
 theorem noStart : NoStart false 14 :=
   start_sym (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (inv_leaf false) (inv_nil false 0) T1_ok) (inv_nil false 1) T2_ok) (inv_nil false 2) T3_ok) (inv_nil false 3) T4_ok) (inv_nil false 4) T5_ok) (inv_nil false 5) T6_ok) (inv_nil false 6) T7_ok) (inv_nil false 7) T8_ok) (inv_nil false 8) T9_ok) (refuted (cpF_sound false) R9_ok) T10_ok) (refuted (cpF_sound false) R10_ok) T11_ok) (refuted (cpF_sound false) R11_ok) T12_ok) (refuted (cpF_sound false) R12_ok) T13_ok) (refuted (cpF_sound false) R13_ok) T14_ok) start_ok
-
--- bridge to the original L-meta-3420 statement (pairwise distinct words instead of dominance)
 
 theorem take10_mem {x : BitVec 24}
     (h : x ∈ ([5521457, 8532035, 3227782, 430348, 11083800, 113184, 902208, 13501056, 15731968,
