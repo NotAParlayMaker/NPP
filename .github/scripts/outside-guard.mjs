@@ -31,6 +31,7 @@ export const L_FILE_RE = /^lean\/PEqualNP\/Outside\/L_[a-z0-9_]+\.lean$/;
 export const R_FILE_RE = /^lean\/PEqualNP\/Outside\/R_[a-z0-9_]+_[1-9][0-9]{0,2}\.lean$/;
 export const KINDS = ['check', 'refute', 'reduce'];
 const FILE_SAY = 'the one file must be lean/PEqualNP/Outside/L_<gap>.lean (or R_<gap>_<n>.lean, n from 1 to 999, for a reduction)';
+const ONE_FILE_SAY = "one file per pull request, so send each step as its own pull request";
 // The file name must fit the run's kind: an R_ file only for reduce, an L_ file never for reduce.
 export function checkFileKind(file, kind) {
   if (typeof file !== 'string' || !FILE_RE.test(file)) refuse(FILE_SAY);
@@ -84,8 +85,11 @@ export function checkPr(pr, files, tree, repo, defaultBranch) {
   const author = pr.user?.login;
   if (!LOGIN_RE.test(author ?? '')) refuse('the pull request author is not a plain account name');
   // changed_files is the whole count, so a long file list cannot hide a second file on another page.
+  // The fixed sentence for more than one file (red team, 2026-11-24, a repeated honest mistake): it says
+  // what to do, not only what is wrong. No colon inside it: the intake keeps a reason up to its first colon.
+  if (pr.changed_files > 1) refuse(`the pull request changes ${pr.changed_files} files; ${ONE_FILE_SAY}`);
   if (pr.changed_files !== 1) refuse(`the pull request changes ${pr.changed_files} files; it must add exactly one`);
-  if (!Array.isArray(files) || files.length !== 1) refuse('the pull request must add exactly one file');
+  if (!Array.isArray(files) || files.length !== 1) refuse(Array.isArray(files) && files.length > 1 ? ONE_FILE_SAY : "the pull request must add exactly one file");
   const f = files[0];
   if (typeof f.filename !== 'string' || !FILE_RE.test(f.filename)) refuse(FILE_SAY);
   if (f.status !== 'added') refuse(`the file must be added, not ${f.status}`);
