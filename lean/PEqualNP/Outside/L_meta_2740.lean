@@ -7253,7 +7253,7 @@ theorem PEqualNP.Outside.L_meta_2740 : ∀ (x1 : List PEqualNP.CircuitLowerBound
     have h := not_ne_iff.mp (claimed x)
     exact h.trans ((show ∀ y : Fin 9 → Bool,
       ([1,12,23,34,40,5,16,27,38,57,68,85] : List ℕ).any
-        (fun e => y (Fin.ofNat 9 (e/10)) && y (Fin.ofNat 9 (e%10))) = graph y by decide) x)
+        (fun e => y (Fin.ofNat 9 (e / 10)) && y (Fin.ofNat 9 (e % 10))) = graph y by decide) x)
   let last : Gate := ⟨.or,[l,r]⟩
   let C : Circuit := ⟨gs++[last],12+gs.length⟩
   have legal : FanInTwo C := by
