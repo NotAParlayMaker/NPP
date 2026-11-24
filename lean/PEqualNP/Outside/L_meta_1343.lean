@@ -1668,7 +1668,7 @@ end Elim
 namespace Proof
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.Outside.L_meta_1343_graph
+open PEqualNP.Outside.L_meta_1343.Graph
 open PEqualNP.Outside.L_meta_1343.Elim
 
 /-- Primary-primary unclean AND is false on every edge. -/
@@ -1858,10 +1858,10 @@ theorem size_ge_22 :
 
 end Proof
 
-open PEqualNP.Outside.L_meta_1343_graph
-open PEqualNP.Outside.L_meta_1343_proof
-
 end PEqualNP.Outside.L_meta_1343
+
+open PEqualNP.Outside.L_meta_1343.Graph
+open PEqualNP.Outside.L_meta_1343.Proof
 
 theorem PEqualNP.Outside.L_meta_1343 :
     ∀ C : PEqualNP.CircuitLowerBounds.Circuit,
