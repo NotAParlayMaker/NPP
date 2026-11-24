@@ -64,10 +64,11 @@ theorem PEqualNP.Outside.R_meta_3178_1
   have heval (x : Fin 9 → Bool) :
       PEqualNP.CircuitLowerBounds.GateOp.or.eval
         (xs.map fun i => (List.ofFn x ++ [!x 0]).getD i false) = (x 0 || x j) := by
+    change (xs.map fun i => (List.ofFn x ++ [!x 0]).getD i false).any id = (x 0 || x j)
     rcases hform with hxs | hxs
-    · simp only [hxs, List.map_cons, List.map_nil, PEqualNP.CircuitLowerBounds.GateOp.eval, List.any_cons, List.any_nil, Bool.or_false, hget0, hgetj]
+    · simp only [hxs, List.map_cons, List.map_nil, List.any_cons, List.any_nil, Bool.or_false, hget0, hgetj]
       simp
-    · simp only [hxs, List.map_cons, List.map_nil, PEqualNP.CircuitLowerBounds.GateOp.eval, List.any_cons, List.any_nil, Bool.or_false, hget0, hgetj, Bool.or_comm]
+    · simp only [hxs, List.map_cons, List.map_nil, List.any_cons, List.any_nil, Bool.or_false, hget0, hgetj, Bool.or_comm]
       simp
   by_cases hn : near
   · obtain ⟨x,hx⟩ := hAdjacent j C hn hfan hsize
