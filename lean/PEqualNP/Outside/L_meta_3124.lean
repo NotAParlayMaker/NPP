@@ -53,22 +53,28 @@ private lemma ind_number_petersen_minus_one :
     all_goals
       try (apply h; simp [h0, h1, h2, h3, h4]; done)
     all_goals
-      exfalso
-      apply hlt
-      -- 5choose3+ cases where >=3 are in S:
-      have : ∀ (s : Finset (Fin 9)), s ⊆ S ∩ {0, 1, 2, 3, 4} → s.card ≥ 3 → (S ∩ {0, 1, 2, 3, 4}).card ≥ 3 :=
-        fun s hs hsc => le_trans hsc (Finset.card_le_card hs)
+      have hsub : ∀ (a b c : Fin 9), a ∈ S → b ∈ S → c ∈ S →
+          ({a, b, c} : Finset (Fin 9)).card = 3 →
+          ({a, b, c} : Finset (Fin 9)) ⊆ {0, 1, 2, 3, 4} → False := by
+        intro a b c ha hb hc hcard hs
+        have hle : ({a, b, c} : Finset (Fin 9)) ⊆ S ∩ {0, 1, 2, 3, 4} := by
+          intro x hx
+          refine Finset.mem_inter.mpr ⟨?_, hs hx⟩
+          simp only [Finset.mem_insert, Finset.mem_singleton] at hx
+          rcases hx with rfl | rfl | rfl <;> assumption
+        have := Finset.card_le_card hle
+        omega
       first
-      | exact this {0, 1, 2} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
-      | exact this {0, 1, 3} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
-      | exact this {0, 1, 4} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
-      | exact this {0, 2, 3} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
-      | exact this {0, 2, 4} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
-      | exact this {0, 3, 4} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
-      | exact this {1, 2, 3} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
-      | exact this {1, 2, 4} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
-      | exact this {1, 3, 4} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
-      | exact this {2, 3, 4} (by intro x hx; simp at hx; rcases hx with rfl | rfl | rfl <;> simp [*]) (by decide)
+      | exact hsub 0 1 2 h0 h1 h2 (by decide) (by decide)
+      | exact hsub 0 1 3 h0 h1 h3 (by decide) (by decide)
+      | exact hsub 0 1 4 h0 h1 h4 (by decide) (by decide)
+      | exact hsub 0 2 3 h0 h2 h3 (by decide) (by decide)
+      | exact hsub 0 2 4 h0 h2 h4 (by decide) (by decide)
+      | exact hsub 0 3 4 h0 h3 h4 (by decide) (by decide)
+      | exact hsub 1 2 3 h1 h2 h3 (by decide) (by decide)
+      | exact hsub 1 2 4 h1 h2 h4 (by decide) (by decide)
+      | exact hsub 1 3 4 h1 h3 h4 (by decide) (by decide)
+      | exact hsub 2 3 4 h2 h3 h4 (by decide) (by decide)
   have hdisj : Disjoint (S ∩ {0, 1, 2, 3, 4}) (S ∩ {5, 6, 7, 8}) := by
     rw [Finset.disjoint_left]
     intro x hx1 hx2
@@ -86,7 +92,7 @@ private lemma getD_pair (y : Fin 9 → Bool) (b : Bool) (j : ℕ) :
   simp only [List.getD_eq_getElem?_getD]
   by_cases h9 : j < 9
   · rw [dif_pos h9, List.getElem?_append_left (by simp [h9])]
-    simp [List.getElem?_ofFn, h9]
+    rcases j with _ | _ | _ | _ | _ | _ | _ | _ | _ | j <;> first | rfl | omega
   · rw [dif_neg h9]
     by_cases heq9 : j = 9
     · subst heq9
@@ -102,7 +108,7 @@ private lemma getD_triple (y : Fin 9 → Bool) (b c : Bool) (j : ℕ) :
   simp only [List.getD_eq_getElem?_getD]
   by_cases h9 : j < 9
   · rw [dif_pos h9, List.getElem?_append_left (by simp; omega), List.getElem?_append_left (by simp; omega)]
-    simp
+    rcases j with _ | _ | _ | _ | _ | _ | _ | _ | _ | j <;> first | rfl | omega
   · rw [dif_neg h9]
     by_cases heq9 : j = 9
     · subst heq9
