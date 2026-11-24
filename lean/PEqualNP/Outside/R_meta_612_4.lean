@@ -3,7 +3,7 @@ import PEqualNP.Defs
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.TopForm
 
-theorem PEqualNP.Outside.R_meta_612_2
+theorem PEqualNP.Outside.R_meta_612_4
     (normalize : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (C : Circuit),
       G.edgeFinset.Nonempty → Monotone2 C → circuitFun n C = NestedCover.graphFun G ∅ →
       ∃ D : Circuit, IsLeastAO G D ∧ PEqualNP.TopForm.TopForm G D ∧ D.size ≤ C.size)
