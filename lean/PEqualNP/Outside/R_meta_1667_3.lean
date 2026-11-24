@@ -12,23 +12,23 @@ open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 -- be completed by computing edge 0,1 first and joining it to the output by OR.
 
 theorem PEqualNP.Outside.R_meta_1667_3
-    (pinFalse : ? (n : Nat) (C : Circuit), FanInTwo C 
-      (? a b : Fin n  Bool, C.eval (List.ofFn a ++ [false]) ?
-        C.eval (List.ofFn b ++ [false])) 
-      (? x : Fin n  Bool, C.eval (List.ofFn x ++ [true]) ?
-        C.eval (List.ofFn x ++ [false])) 
-      ? D : Circuit, FanInTwo D ? D.size < C.size ?
-        ? x : Fin n  Bool, D.eval (List.ofFn x ++ [false]) =
+    (pinFalse : ∀ (n : Nat) (C : Circuit), FanInTwo C →
+      (∃ a b : Fin n → Bool, C.eval (List.ofFn a ++ [false]) ≠
+        C.eval (List.ofFn b ++ [false])) →
+      (∃ x : Fin n → Bool, C.eval (List.ofFn x ++ [true]) ≠
+        C.eval (List.ofFn x ++ [false])) →
+      ∃ D : Circuit, FanInTwo D ∧ D.size < C.size ∧
+        ∀ x : Fin n → Bool, D.eval (List.ofFn x ++ [false]) =
           C.eval (List.ofFn x ++ [false]))
-    (full : ? D : Circuit, FanInTwo D 
-      (? x : Fin 9  Bool, D.eval (List.ofFn x ++ [false]) =
-        ((x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)))  15 � D.size)
-    (promised : ? D : Circuit, FanInTwo D 
-      (? x : Fin 9  Bool, (x 0 && x 1) = false 
+    (full : ∀ D : Circuit, FanInTwo D →
+      (∀ x : Fin 9 → Bool, D.eval (List.ofFn x ++ [false]) =
+        ((x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5))) → 15 ≤ D.size)
+    (promised : ∀ D : Circuit, FanInTwo D →
+      (∀ x : Fin 9 → Bool, (x 0 && x 1) = false →
         D.eval (List.ofFn x ++ [false]) =
-        ((x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)))  14 � D.size) :
-    ? C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C  (? y : Fin 9  Bool, (C.wires (List.ofFn y)).getD 9 false = (y 0 && y 1))  PEqualNP.MetaComplexity.circuitFun 9 C = (fun x : Fin 9  Bool => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5))  16 � C.size := by
-  let f : (Fin 9  Bool)  Bool := fun x => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)
+        ((x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5))) → 14 ≤ D.size) :
+    ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C → (∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = (y 0 && y 1)) → PEqualNP.MetaComplexity.circuitFun 9 C = (fun x : Fin 9 → Bool => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)) → 16 ≤ C.size := by
+  let f : (Fin 9 → Bool) → Bool := fun x => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)
   let step (w : List Bool) (g : Gate) :=
     w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
   have preserved (gs : List Gate) (w : List Bool) (i : Nat) (hi : i < w.length) :
@@ -47,18 +47,18 @@ theorem PEqualNP.Outside.R_meta_1667_3
     rw [List.getElem?_append_right (le_refl w.length)]
     simp
   intro C hm hfirst hout
-  obtain ?gs, o? := C
+  obtain ⟨gs, o⟩ := C
   cases gs with
   | nil =>
     have h := hfirst (fun _ => true)
     change (List.ofFn (fun _ : Fin 9 => true)).getD 9 false = true at h
-    rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none (by simp : _ � 9)] at h
+    rw [List.getD_eq_getElem?_getD, List.getElem?_eq_none (by simp : _ ≤ 9)] at h
     cases h
   | cons g gs =>
-    let T : Circuit := ?gs, o?
+    let T : Circuit := ⟨gs, o⟩
     have hT : FanInTwo T := fun k hk => hm k (List.mem_cons_of_mem g hk)
     have sz : (Circuit.mk (g :: gs) o).size = T.size + 1 := rfl
-    have correct (x : Fin 9  Bool) :
+    have correct (x : Fin 9 → Bool) :
         T.eval (List.ofFn x ++ [x 0 && x 1]) = f x := by
       let w := List.ofFn x
       have hw : w.length = 9 := by simp [w]
@@ -71,28 +71,28 @@ theorem PEqualNP.Outside.R_meta_1667_3
       rw [hlast] at hv
       have h := congrFun hout x
       change T.eval (w ++ [b]) = f x at h
-      simpa only [ hv] using h
-    have zeroRow (x : Fin 9  Bool) (hx : (x 0 && x 1) = false) :
+      simpa only [← hv] using h
+    have zeroRow (x : Fin 9 → Bool) (hx : (x 0 && x 1) = false) :
         T.eval (List.ofFn x ++ [false]) = f x := by
       simpa only [hx] using correct x
-    by_cases hwhole : ? x : Fin 9  Bool, T.eval (List.ofFn x ++ [false]) = f x
-    � have h := full T hT hwhole
+    by_cases hwhole : ∀ x : Fin 9 → Bool, T.eval (List.ofFn x ++ [false]) = f x
+    · have h := full T hT hwhole
       omega
-    � have dep : ? x : Fin 9  Bool,
-          T.eval (List.ofFn x ++ [true]) ? T.eval (List.ofFn x ++ [false]) := by
+    · have dep : ∃ x : Fin 9 → Bool,
+          T.eval (List.ofFn x ++ [true]) ≠ T.eval (List.ofFn x ++ [false]) := by
         by_contra! h
         apply hwhole
         intro x
         cases hbit : (x 0 && x 1) with
         | false => exact zeroRow x hbit
         | true => simpa only [hbit, h x] using correct x
-      let a : Fin 9  Bool := fun _ => false
-      let b : Fin 9  Bool := fun i => decide (i = 2 ? i = 3)
+      let a : Fin 9 → Bool := fun _ => false
+      let b : Fin 9 → Bool := fun i => decide (i = 2 ∨ i = 3)
       have ha := zeroRow a (by decide)
       have hb := zeroRow b (by decide)
-      have hab : T.eval (List.ofFn a ++ [false]) ? T.eval (List.ofFn b ++ [false]) := by
+      have hab : T.eval (List.ofFn a ++ [false]) ≠ T.eval (List.ofFn b ++ [false]) := by
         rw [ha, hb]
         decide
-      obtain ?D, hD, hs, heq? := pinFalse 9 T hT ?a, b, hab? dep
+      obtain ⟨D, hD, hs, heq⟩ := pinFalse 9 T hT ⟨a, b, hab⟩ dep
       have hsmall := promised D hD (fun x hx => (heq x).trans (zeroRow x hx))
       omega
