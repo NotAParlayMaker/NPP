@@ -72,7 +72,8 @@ Words.
   gives the ORs of the parts; an AND of a and b gives (a0 AND b0, (a0 AND b1) OR (a1 AND b0)),
   folded over any fan-in from (true, false). Any other gate gives (false, false).
 * Edge (p, l) is LINE-SINGLE in `C` (in E_y(C)) if the output's part 1 is true at the input with
-  only p and l true: some proof tree of {p, l} reads l exactly once. POINT-SINGLE (E_x(C)): the
+  only p and l true: some proof tree with every leaf p or l has exactly one leaf l (the tree may
+  have no leaf p; that happens only when the circuit accepts the line alone). POINT-SINGLE (E_x(C)): the
   same with the roles of points and lines exchanged (`isLine` negated).
 * The DOUBLE RE-READ SET D(C): the edges of `E` that are neither line-single nor point-single.
   `C` is SINGLE-READ if D(C) is empty.

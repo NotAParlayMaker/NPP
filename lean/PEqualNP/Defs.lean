@@ -72,6 +72,9 @@ import PEqualNP.Defs.SyntacticMultilinear
 import PEqualNP.Defs.TopFormNames
 import PEqualNP.Defs.HeptadCover
 import PEqualNP.Defs.ReadK
+import PEqualNP.Defs.GenericRejection
+import PEqualNP.Defs.CrossAnd
+import PEqualNP.Defs.ReadKJoin
 
 /-!
 # The definitions root
