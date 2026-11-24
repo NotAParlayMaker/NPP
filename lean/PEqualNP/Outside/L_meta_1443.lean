@@ -1045,11 +1045,152 @@ def r6 : List Sig := [(0x1ffffffff001ffc007ff001fffff800fffffffffff001ffffffffff
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma negative6_0 : search 8 0 r6 = false := by decide +kernel
+private lemma case6Zero01 :
+    slowBinary 7 0 (search 7 0) r6 (coverage false r6) r6[0]! r6[1]! = false := by decide +kernel
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
-lemma negative6_1 : search 8 1 r6 = false := by decide +kernel
+private lemma case6Zero02 :
+    slowBinary 7 0 (search 7 0) r6 (coverage false r6) r6[0]! r6[2]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6Zero03 :
+    slowBinary 7 0 (search 7 0) r6 (coverage false r6) r6[0]! r6[3]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6Zero04 :
+    slowBinary 7 0 (search 7 0) r6 (coverage false r6) r6[0]! r6[4]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6Zero12 :
+    slowBinary 7 0 (search 7 0) r6 (coverage false r6) r6[1]! r6[2]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6Zero13 :
+    slowBinary 7 0 (search 7 0) r6 (coverage false r6) r6[1]! r6[3]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6Zero14 :
+    slowBinary 7 0 (search 7 0) r6 (coverage false r6) r6[1]! r6[4]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6Zero23 :
+    slowBinary 7 0 (search 7 0) r6 (coverage false r6) r6[2]! r6[3]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6Zero24 :
+    slowBinary 7 0 (search 7 0) r6 (coverage false r6) r6[2]! r6[4]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6Zero34 :
+    slowBinary 7 0 (search 7 0) r6 (coverage false r6) r6[3]! r6[4]! = false := by decide +kernel
+
+lemma negative6_0 : search 8 0 r6 = false := by
+  have bin : binaryMoves 7 0 (search 7 0) r6 = false := by
+    change scanPairs (slowBinary 7 0 (search 7 0) r6 (coverage false r6)) [r6[0]!, r6[1]!, r6[2]!, r6[3]!, r6[4]!] = false
+    simp only [scanPairs, List.any_cons, List.any_nil, case6Zero01, case6Zero02, case6Zero03, case6Zero04, case6Zero12, case6Zero13, case6Zero14, case6Zero23, case6Zero24, case6Zero34, Bool.false_or]
+
+  change stepTest 7 0 r6 (search 7 0) (search 7 0) = false
+  unfold stepTest
+  rw [bin]
+  rfl
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6One01 :
+    slowBinary 7 1 (search 7 1) r6 (coverage true r6) r6[0]! r6[1]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6One02 :
+    slowBinary 7 1 (search 7 1) r6 (coverage true r6) r6[0]! r6[2]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6One03 :
+    slowBinary 7 1 (search 7 1) r6 (coverage true r6) r6[0]! r6[3]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6One04 :
+    slowBinary 7 1 (search 7 1) r6 (coverage true r6) r6[0]! r6[4]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6One12 :
+    slowBinary 7 1 (search 7 1) r6 (coverage true r6) r6[1]! r6[2]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6One13 :
+    slowBinary 7 1 (search 7 1) r6 (coverage true r6) r6[1]! r6[3]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6One14 :
+    slowBinary 7 1 (search 7 1) r6 (coverage true r6) r6[1]! r6[4]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6One23 :
+    slowBinary 7 1 (search 7 1) r6 (coverage true r6) r6[2]! r6[3]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6One24 :
+    slowBinary 7 1 (search 7 1) r6 (coverage true r6) r6[2]! r6[4]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6One34 :
+    slowBinary 7 1 (search 7 1) r6 (coverage true r6) r6[3]! r6[4]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6Unary0 :
+    unaryAt 7 0 (search 7 0) r6 (coverage false r6) r6[0]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6Unary1 :
+    unaryAt 7 0 (search 7 0) r6 (coverage false r6) r6[1]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6Unary2 :
+    unaryAt 7 0 (search 7 0) r6 (coverage false r6) r6[2]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6Unary3 :
+    unaryAt 7 0 (search 7 0) r6 (coverage false r6) r6[3]! = false := by decide +kernel
+
+set_option maxRecDepth 24000 in
+set_option maxHeartbeats 0 in
+private lemma case6Unary4 :
+    unaryAt 7 0 (search 7 0) r6 (coverage false r6) r6[4]! = false := by decide +kernel
+
+lemma negative6_1 : search 8 1 r6 = false := by
+  have bin : binaryMoves 7 1 (search 7 1) r6 = false := by
+    change scanPairs (slowBinary 7 1 (search 7 1) r6 (coverage true r6)) [r6[0]!, r6[1]!, r6[2]!, r6[3]!, r6[4]!] = false
+    simp only [scanPairs, List.any_cons, List.any_nil, case6One01, case6One02, case6One03, case6One04, case6One12, case6One13, case6One14, case6One23, case6One24, case6One34, Bool.false_or]
+
+  have un : unaryMoves 7 0 (search 7 0) r6 = false := by
+    change [r6[0]!, r6[1]!, r6[2]!, r6[3]!, r6[4]!].any (unaryAt 7 0 (search 7 0) r6 (coverage false r6)) = false
+    simp only [List.any_cons, List.any_nil, case6Unary0, case6Unary1, case6Unary2, case6Unary3, case6Unary4, Bool.false_or]
+
+  change stepTest 7 1 r6 (search 7 0) (search 7 1) = false
+  unfold stepTest
+  rw [bin, un]
+  rfl
 
 set_option maxRecDepth 24000 in
 set_option maxHeartbeats 0 in
