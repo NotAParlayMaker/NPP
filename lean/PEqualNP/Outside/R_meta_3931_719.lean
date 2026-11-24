@@ -96,8 +96,9 @@ theorem PEqualNP.Outside.R_meta_3931_719
       apply preserves
       simp [emitLength]
     have hi : (List.ofFn x).length = 9 := by simp
+    have firstValue : W x 9 = (x 0 || x 1) := hFirst x
     have he := emitRead (List.ofFn x) first
-    rw [hi, ← hv, hFirst] at he
+    rw [hi, ← hv, firstValue] at he
     exact congrArg (fun b => List.ofFn x ++ [b]) he.symm
   have foldPrefix (x : Fin 9 → Bool) :
       C.wires (List.ofFn x) = (g :: rest).foldl emit (P x) := by
@@ -139,18 +140,19 @@ theorem PEqualNP.Outside.R_meta_3931_719
 
   have gMem : g ∈ C.gates := List.mem_iff_getElem?.mpr ⟨1, hGate⟩
   have gBound := (hFan g gMem).2
+  have andEval (bits : List Bool) : GateOp.and.eval bits = bits.all id := rfl
   obtain ⟨a, b, hab, hAbsorb, hProduct⟩ :
       ∃ (a b : Fin 10), a < b ∧ (b.val = 9 → 2 ≤ a.val) ∧
         ∀ x, W x 10 = ((P x).getD a.val false && (P x).getD b.val false) := by
     cases hInputs : g.inputs with
     | nil =>
         exact (noConstant true (fun x => by
-          simp [secondValue, hInputs, hOp, GateOp.eval])).elim
+          simp [secondValue, hInputs, hOp, andEval])).elim
     | cons u tail =>
       cases tail with
       | nil =>
           have huVal (x : Fin 9 → Bool) : W x 10 = (P x).getD u false := by
-            simp [secondValue, hInputs, hOp, GateOp.eval]
+            simp [secondValue, hInputs, hOp, andEval]
           by_cases hu : u < 10
           · exact (noAlias u hu (fun x => (huVal x).trans (early x u hu).symm)).elim
           · exact (noConstant false (fun x => (huVal x).trans (outside x u (by omega)))).elim
@@ -159,7 +161,7 @@ theorem PEqualNP.Outside.R_meta_3931_719
         | nil =>
             have he (x : Fin 9 → Bool) :
                 W x 10 = ((P x).getD u false && (P x).getD v false) := by
-              simp [secondValue, hInputs, hOp, GateOp.eval]
+              simp [secondValue, hInputs, hOp, andEval]
             by_cases hu : u < 10
             · by_cases hv : v < 10
               · rcases lt_trichotomy u v with huv | huv | hvu
@@ -171,7 +173,6 @@ theorem PEqualNP.Outside.R_meta_3931_719
             · exact (noConstant false (fun x => by rw [he, outside x u (by omega), Bool.false_and])).elim
         | cons w tail =>
             simp [hInputs] at gBound
-            omega
 
   let D : Circuit := ⟨rest, C.output⟩
   have hDSize : D.size = 13 := by
@@ -211,15 +212,22 @@ theorem PEqualNP.Outside.R_meta_3931_719
     intro j hj
     refine ⟨by rw [hSize]; exact (hSet j hj).1, ?_⟩
     rcases (hSet j hj).2 with ⟨c, hc⟩ | ⟨i, hi, he⟩
-    · exact Or.inl ⟨c, fun x hx => by simpa only [suffixWires] using hc x hx⟩
-    · exact Or.inr ⟨i, hi, fun x hx => by simpa only [suffixWires] using he x hx⟩
+    · refine Or.inl ⟨c, fun x hx => ?_⟩
+      change (C.wires (List.ofFn x)).getD (9 + j) false = c
+      rw [← suffixWires x]
+      exact hc x hx
+    · refine Or.inr ⟨i, hi, fun x hx => ?_⟩
+      change (C.wires (List.ofFn x)).getD (9 + j) false =
+        (C.wires (List.ofFn x)).getD i false
+      rw [← suffixWires x]
+      exact he x hx
   have hLimit := hCollapse v S hOriginal
   have cover : ∀ z : Fin 9, z ∈ ([4, 6, 7] : List (Fin 9)) ∨
       z ∈ ([0, 1, 2, 3, 5, 8] : List (Fin 9)) := by decide
   by_cases hv : v ∈ ([4, 6, 7] : List (Fin 9))
   · have hb := hLimit.2 hv
-    rw [if_pos hv] at hMany
+    simp only [hv, ↓reduceIte] at hMany
     omega
   · have hb := hLimit.1 ((cover v).resolve_left hv)
-    rw [if_neg hv] at hMany
+    simp only [hv, ↓reduceIte] at hMany
     omega
