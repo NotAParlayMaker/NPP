@@ -80,6 +80,7 @@ import PEqualNP.Defs.ReadTwo
 import PEqualNP.Defs.LratEncoding
 import PEqualNP.Defs.Core
 import PEqualNP.Defs.PointTypes
+import PEqualNP.Defs.FactorSubst
 
 /-!
 # The definitions root
