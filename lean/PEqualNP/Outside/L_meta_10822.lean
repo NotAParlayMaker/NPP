@@ -4,7 +4,9 @@ import PEqualNP.Defs
 -- L-meta-9380 by barelyanything and its credited project contributors.
 -- The new argument handles the additional edge from vertex zero to vertex seven.
 
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
+namespace PEqualNP.Outside.L_meta_10822
+
+namespace Reused.Maj.Helpers
 open PEqualNP.MetaComplexity
 open PEqualNP.CircuitLowerBounds
 def wiresFrom (gs : List Gate) (w : List Bool) : List Bool :=
@@ -104,8 +106,8 @@ theorem shannon (k : ℕ) : ∀ (f : (Fin k → Bool) → Bool) (m : ℕ), k ≤
       have h12 : o1 < w2.length := by omega
       rw [show M = w2.length from l2.symm, final_gates w2 k o0 o1 hk2 h02 h12, ek, e0, e1]
       cases w.getD k false <;> simp
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
+end Reused.Maj.Helpers
+namespace Reused.Maj.Helpers
 open PEqualNP.MetaComplexity
 open PEqualNP.CircuitLowerBounds
 variable {n : ℕ}
@@ -241,8 +243,8 @@ theorem dep_lower (n : ℕ) (f : (Fin n → Bool) → Bool)
   simp only [Finset.singleton_biUnion, Finset.card_singleton, zero_add] at hc
   rw [← hS, hcard] at hc
   omega
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
+end Reused.Maj.Helpers
+namespace Reused.Maj.Helpers
 open PEqualNP.MetaComplexity
 open PEqualNP.CircuitLowerBounds
 def normGate (g : Gate) : Gate :=
@@ -622,8 +624,8 @@ theorem gate_elim (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (b : Bool) (s 
     have := hval y
     rw [hst] at this
     exact this
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
+end Reused.Maj.Helpers
+namespace Reused.Maj.Helpers
 open PEqualNP.MetaComplexity
 open PEqualNP.CircuitLowerBounds
 theorem elim_cons (n : ℕ) (g : Gate) (gs : List Gate) (acc : List Stat × List Gate) :
@@ -939,8 +941,8 @@ theorem parity_lower : ∀ (n s : ℕ),
       rw [e]; exact h
     have := par_lower n false s h'
     omega
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
+end Reused.Maj.Helpers
+namespace Reused.Maj.Helpers
 open PEqualNP.MetaComplexity
 open PEqualNP.CircuitLowerBounds
 def CleanGate (m : ℕ) (g : Gate) : Prop :=
@@ -1606,8 +1608,8 @@ theorem parity_lower3 : ∀ (n s : ℕ),
       simp
     have := par_lower3 n false s (clean_of (n + 1) _ s hnc h')
     omega
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
+end Reused.Maj.Helpers
+namespace Reused.Maj.Helpers
 open PEqualNP.MetaComplexity
 open PEqualNP.CircuitLowerBounds
 def vl {k : ℕ} (gs : List Gate) (u : Fin k → Bool) (j : ℕ) : Bool :=
@@ -2683,8 +2685,8 @@ theorem parity_lower4 : ∀ (n s : ℕ),
       simp
     have := par_lower4 n false s (clean_of (n + 1) _ s hnc h')
     omega
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.PermInputs
+end Reused.Maj.Helpers
+namespace Reused.Maj.Helpers.PermInputs
 open PEqualNP.MetaComplexity
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 def wmap (n m : ℕ) (π : Fin n → Fin m) (w : ℕ) : ℕ :=
@@ -2920,11 +2922,11 @@ theorem fix_many {N : ℕ} (T : Finset (Fin N)) (hT : T.Nonempty) :
         show f _ ≠ f _
         rw [e1, e2]
         exact hx
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.PermInputs
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Forest
+end Reused.Maj.Helpers.PermInputs
+namespace Reused.Maj.Helpers.Forest
 open PEqualNP.MetaComplexity
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.PermInputs
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.PermInputs
 theorem one_gate_at (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (p : Fin (n + 1)) (b : Bool)
     (s : ℕ)
     (hdep : ∃ x : Fin (n + 1) → Bool, f (Function.update x p (!x p)) ≠ f x)
@@ -2956,7 +2958,7 @@ theorem one_gate_at (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (p : Fin (n 
     simp only
     rw [snoc_swap, snoc_swap]
     exact hxy
-  have h' := PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.gate_elim n _ b s hdep' hnc' hg
+  have h' := PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.gate_elim n _ b s hdep' hnc' hg
   have h'' := relabel_size (fun j : Fin n => σ j.castSucc) _ s h'
   have e : (fun x : Fin (n + 1) → Bool =>
       (fun y : Fin n → Bool => (fun x => f (x ∘ σ)) (Fin.snoc y b))
@@ -2967,11 +2969,11 @@ theorem one_gate_at (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (p : Fin (n 
     exact congrArg f (snoc_swap n p x b)
   rw [e] at h''
   exact h''
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Forest
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+end Reused.Maj.Helpers.Forest
+namespace Reused.Maj.Helpers.Readers
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.PermInputs
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.PermInputs
 def Dep {m : ℕ} (f : (Fin m → Bool) → Bool) (p : Fin m) : Prop :=
   ∃ x : Fin m → Bool, f (Function.update x p (!x p)) ≠ f x
 abbrev set2 {m : ℕ} (x : Fin m → Bool) (p : Fin m) (a : Bool) (q : Fin m) (b : Bool) :
@@ -3200,7 +3202,7 @@ variable {n : ℕ} {f : (Fin (n + 1) → Bool) → Bool} {gs : List Gate} {o : �
 theorem Least.save (L : Least (n + 1) f gs o) (i : Fin (n + 1)) (b : Bool)
     (hnc : ∃ x y : Fin (n + 1) → Bool, f (Function.update x i b) ≠ f (Function.update y i b))
     (S : Finset ℕ) (hS : ∀ p ∈ S, RC n gs i b p) : Drop f i b S.card gs.length :=
-  PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers.save n f gs o L.hcl L.hev i b hnc S hS
+  PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Readers.save n f gs o L.hcl L.hev i b hnc S hS
 theorem Least.save2 (L : Least (n + 1) f gs o) (i : Fin (n + 1)) (b : Bool)
     (hnc : ∃ x y : Fin (n + 1) → Bool, f (Function.update x i b) ≠ f (Function.update y i b))
     (p1 p2 : ℕ) (h12 : p1 ≠ p2) (h1 : RC n gs i b p1) (h2 : RC n gs i b p2) :
@@ -3290,10 +3292,10 @@ theorem Least.next (L : Least (n + 1) f gs o) (i : Fin (n + 1)) (b : Bool)
   obtain ⟨q, hpq, hr⟩ := L.live hfnc p hp ho
   exact ⟨q, hpq, hr, rc_of_reads hr hc⟩
 end
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+end Reused.Maj.Helpers.Readers
+namespace Reused.Maj.Helpers.Readers
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
 theorem gate_cases {k : ℕ} (gs : List Gate) (hcl : CleanL k gs) (q : ℕ) (g : Gate)
     (hq : gs[q]? = some g) (a : ℕ) (ha : a ∈ g.inputs) :
     (g.op = GateOp.not ∧ g.inputs = [a] ∧ ∀ u : Fin k → Bool, vl gs u (k + q) = !vl gs u a) ∨
@@ -3469,10 +3471,10 @@ theorem Least.not_two_readers (L : Least (n + 1) f gs o) (i : Fin (n + 1))
       (rc_of_reads hp hc) (rc_of_reads hq hc)
   exact ⟨key false, key true⟩
 end
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+end Reused.Maj.Helpers.Readers
+namespace Reused.Maj.Helpers.Readers
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
 theorem lit_contra {m : ℕ} {f : (Fin m → Bool) → Bool} (hnc : RestrNC f) (v : Fin m) (c : Bool)
     (h : ∀ u, f u = xor (u v) c) : False := by
   have hd : Dep f v := ⟨fun _ => false, by rw [h, h]; cases c <;> simp⟩
@@ -3664,10 +3666,10 @@ theorem Least.funnel (L : Least (n + 1) f gs o) (hdep : ∃ p, Dep f p) (hnc : R
   · refine ⟨cj, ck, fun x => ⟨KC _ _ (hag x _ _ _ _) ?_, KC _ _ (hag x _ _ _ _) ?_⟩⟩ <;>
       rw [hval, hval, hop] <;> cases cj <;> cases ck <;> rfl
 end
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+end Reused.Maj.Helpers.Readers
+namespace Reused.Maj.Helpers.Readers
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
 theorem fanout_step (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (s : ℕ) (hdep : ∃ p, Dep f p)
     (hnc : RestrNC f) (hnf : NoFunnel f) (h : HasCircuitSize (n + 1) f s) :
     ∃ y : Fin (n + 1), Dep f y ∧ Pays f y s := by
@@ -3725,11 +3727,11 @@ theorem noFunnel_of_sep {m : ℕ} (f : (Fin m → Bool) → Bool)
   · exact h1 (hab x1).2.symm
   · exact h2 ((hab x2).1.trans (hab x2).2).symm
   · exact h1 (hab x1).2
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
+end Reused.Maj.Helpers.Readers
+namespace Reused.Maj.EdgeFn
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Readers
 def rd (N p a w : ℕ) : ℕ := if w < N + p then w else if w = N + p then a else w - 1
 def rdel (N p a : ℕ) (gs : List Gate) : List Gate :=
   gs.take p ++ (gs.drop (p + 1)).map fun g => ⟨g.op, g.inputs.map (rd N p a)⟩
@@ -3849,11 +3851,11 @@ def StmtLB : Prop :=
       (fun x : Fin n → Bool => @decide ((∃ a ∈ A, x a = true) ∨
         ∃ i j : Fin n, G.Adj i j ∧ x i = true ∧ x j = true) (Classical.propDecidable _)) s →
     A.card + G.edgeSet.ncard + k ≤ s + 1
-end PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
+end Reused.Maj.EdgeFn
+namespace Reused.Maj.EdgeFn
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Readers
 theorem rdel_length (N p a : ℕ) (gs : List Gate) (hp : p < gs.length) :
     (rdel N p a gs).length + 1 = gs.length := by
   simp [rdel]; omega
@@ -3993,11 +3995,11 @@ theorem least_of {N : ℕ} {F : (Fin N → Bool) → Bool} {gs gs0 : List Gate} 
     (h0 : Least N F gs0 o0) (hcl : CleanL N gs) (hev : ∀ x, vl gs x o = F x)
     (hle : gs.length ≤ gs0.length) : Least N F gs o :=
   ⟨hcl, hev, fun gs' o' hc he => le_trans hle (h0.hmin gs' o' hc he)⟩
-end PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
+end Reused.Maj.EdgeFn
+namespace Reused.Maj.EdgeFn
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Readers
 theorem deepHyp_nc {N : ℕ} {F : (Fin N → Bool) → Bool} {D : Finset (Fin N)}
     (hD : DeepHyp F D) (hne : D.Nonempty) : ∃ x y : Fin N → Bool, F x ≠ F y := by
   obtain ⟨y, hy⟩ := hne
@@ -4131,8 +4133,8 @@ theorem stmtML (hAnd : StmtAnd) (hExt : StmtExt) : StmtML := by
     by_cases hl : l = (y : ℕ)
     · exact Or.inl ((hA.1 hl).mono le_rfl hls)
     · exact Or.inr ((hA.2 hl).mono le_rfl hls)
-end PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.TableSearch
+end Reused.Maj.EdgeFn
+namespace Reused.Maj.Helpers.TableSearch
 open PEqualNP.MetaComplexity
 open PEqualNP.CircuitLowerBounds
 def gt (M : ℕ) : GateOp → List ℕ → ℕ
@@ -4388,8 +4390,8 @@ theorem lower_of_search (n B : ℕ) (f : (Fin n → Bool) → Bool) (T0 : List �
   have := reach_sound (2 ^ B - 1) (fun t => t % 2 ^ B == tgt) C.gates k T0 C.output hsize hok hgood
   rw [hsearch] at this
   exact absurd this (by decide)
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.TableSearch
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Exchange
+end Reused.Maj.Helpers.TableSearch
+namespace Reused.Maj.Exchange
 open PEqualNP.MetaComplexity
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 def StmtExchange : Prop :=
@@ -4455,7 +4457,7 @@ theorem nand3C_hyp :
   intro g hg
   simp only [nand3C, List.mem_cons, List.mem_nil_iff, or_false] at hg
   rcases hg with rfl | rfl | rfl <;> simp
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.TableSearch in
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.TableSearch in
 theorem nand3C_minimal : IsMinimalCircuit 3 nand3C := by
   have hlow : ¬ HasCircuitSize 3 (circuitFun 3 nand3C) 2 := by
     apply lower_of_search 3 8 _ [170, 204, 240] 127 2 (by norm_num) _ (by decide +kernel)
@@ -4486,7 +4488,7 @@ def StmtTwoReadersSyntactic : Prop :=
     (C.gates.filter fun g => g.inputs.contains h).length ≤ 2
 def synC : Circuit :=
   ⟨[⟨GateOp.not, [1, 2]⟩, ⟨GateOp.or, [0, 3]⟩, ⟨GateOp.and, [2, 4]⟩, ⟨GateOp.not, [5, 2]⟩], 6⟩
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.TableSearch in
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.TableSearch in
 theorem synC_minimal : IsMinimalCircuit 3 synC := by
   have hlow : ¬ HasCircuitSize 3 (circuitFun 3 synC) 3 := by
     apply lower_of_search 3 8 _ [170, 204, 240] 79 3 (by norm_num) _ (by decide +kernel)
@@ -4512,10 +4514,10 @@ theorem synC_semantic :
          | GateOp.not => p.1.inputs.take 1
          | _ => p.1.inputs).contains 2) = 1 := by
   decide
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Exchange
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.Exchange
+end Reused.Maj.Exchange
+namespace Reused.Maj.Exchange
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
 theorem elim_prefix (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
     ∃ t : List Gate, (elim n gs acc).2 = acc.2 ++ t := by
   induction gs with
@@ -4795,11 +4797,11 @@ theorem exchange' : StmtExchange := by
          | _ => g.inputs).contains h)
     (fun g => by obtain ⟨op, ins⟩ := g; cases op <;> rfl) hC hcov
 theorem twoReaders' : StmtTwoReaders := twoReaders_of_exchange exchange'
-end PEqualNP.Outside.L_meta_10822_reused.Maj.Exchange
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
+end Reused.Maj.Exchange
+namespace Reused.Maj.EdgeFn
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Readers
 theorem exch_startStats_length (m h : ℕ) : (Exchange.startStats m h).length = m := by
   simp [Exchange.startStats]
 theorem exch_clean_take (N k : ℕ) (gs : List Gate) (hcl : CleanL N gs) :
@@ -5017,11 +5019,11 @@ theorem stmtExch : StmtExch := by
         rw [hcov x hx', hx']; simp
     · simp only [List.length_append, List.length_cons, List.length_nil]
       omega
-end PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
+end Reused.Maj.EdgeFn
+namespace Reused.Maj.EdgeFn
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Readers
 theorem out_lt_of_nc {N : ℕ} {F : (Fin N → Bool) → Bool} {gs : List Gate} {o : ℕ}
     (hev : ∀ x, vl gs x o = F x) (hnc : ∃ x y : Fin N → Bool, F x ≠ F y) :
     o < N + gs.length := by
@@ -5087,11 +5089,11 @@ theorem stmtLift : StmtLift := by
     subst hi
     refine ⟨_, by simpa using hlast, Or.inr ⟨rfl, fun x hx => ?_⟩⟩
     rw [← hval x]; simpa using hx
-end PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
+end Reused.Maj.EdgeFn
+namespace Reused.Maj.EdgeFn
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Readers
 theorem not_tailOK_and {N : ℕ} {F : (Fin N → Bool) → Bool} {gs : List Gate} {j : ℕ} {g : Gate}
     (hg : gs[j]? = some g) (hop : g.op = GateOp.and) : ¬ TailOK N F gs j := by
   rintro ⟨g0, hg0, h | ⟨h, _⟩⟩ <;>
@@ -5213,11 +5215,11 @@ theorem stmtXMove : StmtXMove := by
         rw [show N + (gs2.length + 1) = N + (gs2.length + 1) from rfl, hvtop x] at hx
         exact hx)
   simpa [hnew] using this
-end PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
+end Reused.Maj.EdgeFn
+namespace Reused.Maj.EdgeFn
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Readers
 def andSwap (gs : List Gate) (ph : ℕ) {N : ℕ} (y : Fin N) : List Gate :=
   gs.set ph ⟨GateOp.not, [(y : ℕ)]⟩
 theorem andSwap_length (gs : List Gate) (ph : ℕ) {N : ℕ} (y : Fin N) :
@@ -5385,11 +5387,11 @@ theorem stmtAnd : StmtAnd := by
       rw [Finset.card_insert_of_notMem (by simp; omega),
         Finset.card_eq_three.2 ⟨pn, p, S, by omega, by omega, by omega, rfl⟩]
     rwa [hcard] at h4
-end PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
+end Reused.Maj.EdgeFn
+namespace Reused.Maj.EdgeFn
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Readers
 theorem vl_dfree {N : ℕ} {D : Finset (Fin N)} {gs : List Gate} {h : ℕ} (hD : DFree D gs h)
     (u u' : Fin N → Bool) (hu : ∀ i, i ∉ D → u i = u' i) : vl gs u h = vl gs u' h := by
   unfold vl
@@ -5479,11 +5481,11 @@ theorem stmtWin : StmtWin := by
   have h0 := core (fun _ => false) (by rw [vl_input _ _ _ hlt]; simp [fixBit, e])
   rw [H.zero] at h0
   cases h0
-end PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
+end Reused.Maj.EdgeFn
+namespace Reused.Maj.EdgeFn
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Readers
 theorem vl_update_of_not_supp {N : ℕ} (gs : List Gate) (h : ℕ) (y : Fin N)
     (hy : y ∉ (suppsFrom gs (inputSupps N)).getD h ∅) (x : Fin N → Bool) (b : Bool) :
     vl gs (Function.update x y b) h = vl gs x h := by
@@ -5627,11 +5629,11 @@ theorem stmtTwo : StmtExch → StmtWin → StmtTwo := by
         rw [Finset.card_insert_of_notMem (by simp [hrp.symm, htp.symm]),
           Finset.card_insert_of_notMem (by simp; omega), Finset.card_singleton] at this
         omega
-end PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
+end Reused.Maj.EdgeFn
+namespace Reused.Maj.EdgeFn
 open PEqualNP.MetaComplexity
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Readers
 theorem front_suppsFrom_prefix {m : ℕ} (gs : List Gate) :
     ∀ L : List (Finset (Fin m)), ∃ T, suppsFrom gs L = L ++ T := by
   induction gs with
@@ -5918,19 +5920,19 @@ theorem stmtFront : StmtFront := by
     · obtain ⟨x, x', hxx⟩ := hfnc
       apply hxx
       rw [← L.hev, ← L.hev, vl_beyond gs x o (by omega), vl_beyond gs x' o (by omega)]
-end PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj
+end Reused.Maj.EdgeFn
+namespace Reused.Maj
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.PermInputs
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Forest
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.PermInputs
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Forest
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Readers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.EdgeFn
 theorem stmtML_final : StmtML :=
   stmtML stmtAnd (stmtExt stmtLift stmtXMove stmtFront stmtWin (stmtTwo stmtExch stmtWin))
-end PEqualNP.Outside.L_meta_10822_reused.Maj
+end Reused.Maj
 
-namespace PEqualNP.Outside.L_meta_10822_reused.T6
+namespace Reused.T6
 
 section LiveGen
 
@@ -6572,12 +6574,12 @@ theorem h6_bound : ∀ t : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 6 (fun x 
   by_contra hlt
   exact no_small C hf (by omega) (fun x => (hr x).trans rfl)
 
-end PEqualNP.Outside.L_meta_10822_reused.T6
+end Reused.T6
 
-namespace PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
+namespace Reused.Maj.EdgeFn
 open PEqualNP.MetaComplexity PEqualNP.CircuitLowerBounds
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Readers
 
 def base (x : Fin 9 → Bool) : Bool :=
   (x 1 && x 6) || (x 2 && x 6) || (x 1 && x 7) || (x 3 && x 7) ||
@@ -6647,12 +6649,12 @@ lemma deep_target : DeepHyp target special := by
     simp [target, hg]
   · decide
 
-end PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn
+end Reused.Maj.EdgeFn
 
-namespace PEqualNP.Outside.L_meta_10822_reused
+namespace Reused
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.PermInputs
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Forest
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.PermInputs
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Forest
 
 def postedF (x : Fin 9 → Bool) : Bool :=
   (x 0 && x 4) || (x 0 && x 5) || (x 4 && x 5) || (x 1 && x 6) || (x 2 && x 6) ||
@@ -6785,13 +6787,13 @@ theorem true_case (y : Fin 9) (hy : y = 4 ∨ y = 5) (s : ℕ)
     rw [heq] at h
     exact twoOrF_bound 4 (Or.inl rfl) s h
 
-end PEqualNP.Outside.L_meta_10822_reused
+end Reused
 
-namespace PEqualNP.Outside.L_meta_10822_aux.EdgeFn
+namespace Bridge.EdgeFn
 open PEqualNP.MetaComplexity PEqualNP.CircuitLowerBounds
-open PEqualNP.Outside.L_meta_10822_reused.Maj.EdgeFn (zeroOn DeepHyp)
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Readers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.EdgeFn (zeroOn DeepHyp)
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Readers
 
 def base (x : Fin 9 → Bool) : Bool :=
   (x 1 && x 6) || (x 2 && x 6) || (x 1 && x 7) || (x 3 && x 7) ||
@@ -6861,13 +6863,13 @@ lemma deep_target : DeepHyp target special := by
     simp [target, hg]
   · decide
 
-end PEqualNP.Outside.L_meta_10822_aux.EdgeFn
+end Bridge.EdgeFn
 
-namespace PEqualNP.Outside.L_meta_10822_aux
+namespace Bridge
 open PEqualNP.MetaComplexity PEqualNP.CircuitLowerBounds
-open PEqualNP.Outside.L_meta_10822_reused
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.PermInputs
-open PEqualNP.Outside.L_meta_10822_reused.Maj.Helpers.Forest
+open PEqualNP.Outside.L_meta_10822.Reused
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.PermInputs
+open PEqualNP.Outside.L_meta_10822.Reused.Maj.Helpers.Forest
 
 def residual (z : Fin 9) (x : Fin 9 → Bool) : Bool :=
   Maj.EdgeFn.base x || (x 0 && (x z || x 7))
@@ -6933,12 +6935,13 @@ theorem bridge_bound (t : ℕ) (h : HasCircuitSize 9 EdgeFn.target t) : 15 ≤ t
     have hb := true_case y hp s ht
     omega
 
-end PEqualNP.Outside.L_meta_10822_aux
+end Bridge
 
+end PEqualNP.Outside.L_meta_10822
 
 theorem PEqualNP.Outside.L_meta_10822 : ∀ t : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 9 (fun x : Fin 9 → Bool => (x 0 && x 4) || (x 0 && x 5) || (x 4 && x 5) || (x 1 && x 6) || (x 2 && x 6) || (x 0 && x 7) || (x 1 && x 7) || (x 3 && x 7) || (x 2 && x 8) || (x 3 && x 8) || (x 6 && x 8)) t → 15 ≤ t := by
   intro t h
-  have heq : (fun x : Fin 9 → Bool => (x 0 && x 4) || (x 0 && x 5) || (x 4 && x 5) || (x 1 && x 6) || (x 2 && x 6) || (x 0 && x 7) || (x 1 && x 7) || (x 3 && x 7) || (x 2 && x 8) || (x 3 && x 8) || (x 6 && x 8)) = PEqualNP.Outside.L_meta_10822_aux.EdgeFn.target := by
+  have heq : (fun x : Fin 9 → Bool => (x 0 && x 4) || (x 0 && x 5) || (x 4 && x 5) || (x 1 && x 6) || (x 2 && x 6) || (x 0 && x 7) || (x 1 && x 7) || (x 3 && x 7) || (x 2 && x 8) || (x 3 && x 8) || (x 6 && x 8)) = PEqualNP.Outside.L_meta_10822.Bridge.EdgeFn.target := by
     funext x; revert x; decide +kernel
   rw [heq] at h
-  exact PEqualNP.Outside.L_meta_10822_aux.bridge_bound t h
+  exact PEqualNP.Outside.L_meta_10822.Bridge.bridge_bound t h
