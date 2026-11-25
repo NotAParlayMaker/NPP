@@ -1,6 +1,10 @@
 import Mathlib
 import PEqualNP.Defs
 open PEqualNP.CircuitLowerBounds
+open PEqualNP.MetaComplexity
+open PEqualNP.MetaComplexity.NestedCover
+
+namespace PEqualNP.Outside.L_meta_2122
 
 def K (x : Fin 4 → Bool) : Bool :=
   (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 3)
@@ -275,8 +279,9 @@ lemma oob_no (C : Circuit) (h : 4 + C.size ≤ C.output) :
   rw [eval_oob C h]
   decide
 
-open PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.NestedCover
+end PEqualNP.Outside.L_meta_2122
+
+open PEqualNP.Outside.L_meta_2122
 
 set_option maxHeartbeats 2000000 in
 theorem PEqualNP.Outside.L_meta_2122 :
