@@ -10,7 +10,9 @@ import PEqualNP.Defs
 
 -- The four-input certificate search is adapted from the checked L-meta-1449 proof.
 
-section
+namespace PEqualNP.Outside.L_meta_10586
+
+section ProofPart1
 namespace L10586Control
 open PEqualNP.CircuitLowerBounds
 def edgeData : List ℕ :=
@@ -36,9 +38,9 @@ theorem replacement_at_thirteen (gs : List Gate) (large : 13 ≤ gs.length) :
       gs'.length ≤ gs.length ∧ ∀ x : Fin 7 → Bool, (⟨gs',out'⟩ : Circuit).eval (List.ofFn x) = target x :=
   ⟨control.gates,control.output,basis,by simpa only [size] using large,computes⟩
 end L10586Control
-end
+end ProofPart1
 
-section
+section ProofPart2
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 namespace L11022RestrictSupport
 namespace BranchGraph
@@ -310,7 +312,7 @@ theorem roots_required (label : V → Fin m) (out : Fin m) (branches : Finset (F
   simpa [roots] using required (roots.map (bucket label)) valid last
 end Graph
 end BranchGroupsLean
-namespace PEqualNP.MetaComplexity.Helpers
+namespace CircuitHelpers
 open PEqualNP.CircuitLowerBounds
 def wiresFrom (gs : List Gate) (w : List Bool) : List Bool :=
   gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w
@@ -338,8 +340,8 @@ theorem getD_wiresFrom (gs : List Gate) (w : List Bool) (i : ℕ) (h : i < w.len
   rw [ht, List.getD_append _ _ _ _ h]
 def Ok (g : Gate) : Prop :=
   g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) ∧ g.inputs.length ≤ 2
-end PEqualNP.MetaComplexity.Helpers
-namespace PEqualNP.MetaComplexity.Helpers
+end CircuitHelpers
+namespace CircuitHelpers
 open PEqualNP.CircuitLowerBounds
 variable {n : ℕ}
 theorem getD_snoc_ne {α : Type} (L : List α) (S d : α) (j : ℕ) (h : j ≠ L.length) :
@@ -474,8 +476,8 @@ theorem dep_lower (n : ℕ) (f : (Fin n → Bool) → Bool)
   simp only [Finset.singleton_biUnion, Finset.card_singleton, zero_add] at hc
   rw [← hS, hcard] at hc
   omega
-end PEqualNP.MetaComplexity.Helpers
-namespace PEqualNP.MetaComplexity.Helpers
+end CircuitHelpers
+namespace CircuitHelpers
 open PEqualNP.CircuitLowerBounds
 def normGate (g : Gate) : Gate :=
   match g.op with
@@ -854,8 +856,8 @@ theorem gate_elim (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (b : Bool) (s 
     have := hval y
     rw [hst] at this
     exact this
-end PEqualNP.MetaComplexity.Helpers
-namespace PEqualNP.MetaComplexity.Helpers
+end CircuitHelpers
+namespace CircuitHelpers
 open PEqualNP.CircuitLowerBounds
 theorem elim_cons (n : ℕ) (g : Gate) (gs : List Gate) (acc : List Stat × List Gate) :
     elim n (g :: gs) acc = elim n gs (elimStep n acc g) := rfl
@@ -1109,8 +1111,8 @@ theorem gate_elim_two (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (s : ℕ)
     have := hval b y
     rw [hst] at this
     exact this
-end PEqualNP.MetaComplexity.Helpers
-namespace PEqualNP.MetaComplexity.Helpers
+end CircuitHelpers
+namespace CircuitHelpers
 open PEqualNP.CircuitLowerBounds
 def CleanGate (m : ℕ) (g : Gate) : Prop :=
   (g.op = GateOp.not ∧ ∃ j, j < m ∧ g.inputs = [j]) ∨
@@ -1408,8 +1410,8 @@ theorem agree_except (k : ℕ) (gs : List Gate) : ∀ w w' : List Bool,
       exact h j hj
 def RC (n : ℕ) (gs : List Gate) (i : Fin (n + 1)) (b : Bool) (p : ℕ) : Prop :=
   ∃ g, gs[p]? = some g ∧ ∃ a ∈ g.inputs, ∃ c, stF n gs i b a = Stat.const c
-end PEqualNP.MetaComplexity.Helpers
-namespace PEqualNP.MetaComplexity.Helpers
+end CircuitHelpers
+namespace CircuitHelpers
 open PEqualNP.CircuitLowerBounds
 def vl {k : ℕ} (gs : List Gate) (u : Fin k → Bool) (j : ℕ) : Bool :=
   (wiresFrom gs (List.ofFn u)).getD j false
@@ -1683,10 +1685,10 @@ theorem const_read (n : ℕ) (gs : List Gate) (hcl : CleanL (n + 1) gs) (i : Fin
     (by rw [hL]; exact (hcl p g hp).lt a ha) hc
   rw [hL] at h
   exact h
-end PEqualNP.MetaComplexity.Helpers
+end CircuitHelpers
 namespace PetersenCutTrace
 open PEqualNP.CircuitLowerBounds
-open PEqualNP.MetaComplexity.Helpers
+open CircuitHelpers
 def avoid {W : Type} (edge : W → W → Prop) (cut : W) (a b : W) : Prop :=
   edge a b ∧ a ≠ cut ∧ b ≠ cut
 theorem difference_traces {W : Type} (rank : W → Nat) (input : W → Prop)
@@ -1797,7 +1799,7 @@ theorem circuit_cut_factors {n : Nat} {gs : List Gate} (hcl : CleanL n gs)
       exact diff ((x.property i notGroup).trans (y.property i notGroup).symm))
   exact ⟨outer, fun x agrees => ho ⟨x, agrees⟩⟩
 end PetersenCutTrace
-namespace PEqualNP.MetaComplexity.Helpers.PermInputs
+namespace CircuitHelpers.PermInputs
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 def wmap (n m : ℕ) (π : Fin n → Fin m) (w : ℕ) : ℕ :=
   if h : w < n then (π ⟨w, h⟩ : ℕ) else w - n + m
@@ -1936,10 +1938,10 @@ theorem gate_elim_at (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (p : Fin (n
     exact congrArg f (snoc_swap n p x b)
   rw [e] at h''
   exact h''
-end PEqualNP.MetaComplexity.Helpers.PermInputs
-namespace PEqualNP.MetaComplexity.Helpers.Forest
+end CircuitHelpers.PermInputs
+namespace CircuitHelpers.Forest
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers.PermInputs
+open CircuitHelpers.PermInputs
 theorem one_gate_at (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (p : Fin (n + 1)) (b : Bool)
     (s : ℕ)
     (hdep : ∃ x : Fin (n + 1) → Bool, f (Function.update x p (!x p)) ≠ f x)
@@ -1971,7 +1973,7 @@ theorem one_gate_at (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (p : Fin (n 
     simp only
     rw [snoc_swap, snoc_swap]
     exact hxy
-  have h' := PEqualNP.MetaComplexity.Helpers.gate_elim n _ b s hdep' hnc' hg
+  have h' := CircuitHelpers.gate_elim n _ b s hdep' hnc' hg
   have h'' := relabel_size (fun j : Fin n => σ j.castSucc) _ s h'
   have e : (fun x : Fin (n + 1) → Bool =>
       (fun y : Fin n → Bool => (fun x => f (x ∘ σ)) (Fin.snoc y b))
@@ -1982,10 +1984,10 @@ theorem one_gate_at (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (p : Fin (n 
     exact congrArg f (snoc_swap n p x b)
   rw [e] at h''
   exact h''
-end PEqualNP.MetaComplexity.Helpers.Forest
-namespace PEqualNP.MetaComplexity.Helpers.Readers
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.MetaComplexity.Helpers
-open PEqualNP.MetaComplexity.Helpers.PermInputs
+end CircuitHelpers.Forest
+namespace CircuitHelpers.Readers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity CircuitHelpers
+open CircuitHelpers.PermInputs
 def Dep {m : ℕ} (f : (Fin m → Bool) → Bool) (p : Fin m) : Prop :=
   ∃ x : Fin m → Bool, f (Function.update x p (!x p)) ≠ f x
 abbrev set2 {m : ℕ} (x : Fin m → Bool) (p : Fin m) (a : Bool) (q : Fin m) (b : Bool) :
@@ -2214,7 +2216,7 @@ variable {n : ℕ} {f : (Fin (n + 1) → Bool) → Bool} {gs : List Gate} {o : �
 theorem Least.save (L : Least (n + 1) f gs o) (i : Fin (n + 1)) (b : Bool)
     (hnc : ∃ x y : Fin (n + 1) → Bool, f (Function.update x i b) ≠ f (Function.update y i b))
     (S : Finset ℕ) (hS : ∀ p ∈ S, RC n gs i b p) : Drop f i b S.card gs.length :=
-  PEqualNP.MetaComplexity.Helpers.Readers.save n f gs o L.hcl L.hev i b hnc S hS
+  CircuitHelpers.Readers.save n f gs o L.hcl L.hev i b hnc S hS
 theorem Least.save2 (L : Least (n + 1) f gs o) (i : Fin (n + 1)) (b : Bool)
     (hnc : ∃ x y : Fin (n + 1) → Bool, f (Function.update x i b) ≠ f (Function.update y i b))
     (p1 p2 : ℕ) (h12 : p1 ≠ p2) (h1 : RC n gs i b p1) (h2 : RC n gs i b p2) :
@@ -2304,9 +2306,9 @@ theorem Least.next (L : Least (n + 1) f gs o) (i : Fin (n + 1)) (b : Bool)
   obtain ⟨q, hpq, hr⟩ := L.live hfnc p hp ho
   exact ⟨q, hpq, hr, rc_of_reads hr hc⟩
 end LocalSection2
-end PEqualNP.MetaComplexity.Helpers.Readers
-namespace PEqualNP.MetaComplexity.Helpers.Readers
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.MetaComplexity.Helpers
+end CircuitHelpers.Readers
+namespace CircuitHelpers.Readers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity CircuitHelpers
 theorem gate_cases {k : ℕ} (gs : List Gate) (hcl : CleanL k gs) (q : ℕ) (g : Gate)
     (hq : gs[q]? = some g) (a : ℕ) (ha : a ∈ g.inputs) :
     (g.op = GateOp.not ∧ g.inputs = [a] ∧ ∀ u : Fin k → Bool, vl gs u (k + q) = !vl gs u a) ∨
@@ -2482,9 +2484,9 @@ theorem Least.not_two_readers (L : Least (n + 1) f gs o) (i : Fin (n + 1))
       (rc_of_reads hp hc) (rc_of_reads hq hc)
   exact ⟨key false, key true⟩
 end LocalSection2
-end PEqualNP.MetaComplexity.Helpers.Readers
-namespace PEqualNP.MetaComplexity.Helpers.Readers
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.MetaComplexity.Helpers
+end CircuitHelpers.Readers
+namespace CircuitHelpers.Readers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity CircuitHelpers
 theorem lit_contra {m : ℕ} {f : (Fin m → Bool) → Bool} (hnc : RestrNC f) (v : Fin m) (c : Bool)
     (h : ∀ u, f u = xor (u v) c) : False := by
   have hd : Dep f v := ⟨fun _ => false, by rw [h, h]; cases c <;> simp⟩
@@ -2676,9 +2678,9 @@ theorem Least.funnel (L : Least (n + 1) f gs o) (hdep : ∃ p, Dep f p) (hnc : R
   · refine ⟨cj, ck, fun x => ⟨KC _ _ (hag x _ _ _ _) ?_, KC _ _ (hag x _ _ _ _) ?_⟩⟩ <;>
       rw [hval, hval, hop] <;> cases cj <;> cases ck <;> rfl
 end LocalSection1
-end PEqualNP.MetaComplexity.Helpers.Readers
-namespace PEqualNP.MetaComplexity.Helpers.Readers
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.MetaComplexity.Helpers
+end CircuitHelpers.Readers
+namespace CircuitHelpers.Readers
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity CircuitHelpers
 theorem fanout_step (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (s : ℕ) (hdep : ∃ p, Dep f p)
     (hnc : RestrNC f) (hnf : NoFunnel f) (h : HasCircuitSize (n + 1) f s) :
     ∃ y : Fin (n + 1), Dep f y ∧ Pays f y s := by
@@ -2723,11 +2725,11 @@ theorem fanout_step_3_4 (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (s : ℕ
   · exact Or.inl ⟨y, s', h1, h2⟩
   · exact Or.inl ⟨y, s', by omega, h2⟩
   · exact Or.inr ⟨y, s', h1, h2⟩
-end PEqualNP.MetaComplexity.Helpers.Readers
-namespace PEqualNP.MetaComplexity.Helpers.RunAsm
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.MetaComplexity.Helpers
-open PEqualNP.MetaComplexity.Helpers.Readers PEqualNP.MetaComplexity.Helpers.PermInputs
-open PEqualNP.MetaComplexity.Helpers.Forest
+end CircuitHelpers.Readers
+namespace CircuitHelpers.RunAsm
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity CircuitHelpers
+open CircuitHelpers.Readers CircuitHelpers.PermInputs
+open CircuitHelpers.Forest
 theorem pq2f_nodup {m : ℕ} {f : (Fin m → Bool) → Bool} {gs : List Gate} {o : ℕ}
     (L : Least m f gs o) (hnc : ∃ x y : Fin m → Bool, f x ≠ f y) {p : ℕ} {g : Gate}
     (hg : gs[p]? = some g) (hop : g.op = GateOp.and ∨ g.op = GateOp.or) {a b : ℕ}
@@ -2749,10 +2751,10 @@ theorem pq2f_ne_pair {m : ℕ} {f : (Fin m → Bool) → Bool} {gs : List Gate} 
   rcases hin with h | h
   · exact pq2f_nodup L hnc hg hop h
   · exact (pq2f_nodup L hnc hg hop h).symm
-end PEqualNP.MetaComplexity.Helpers.RunAsm
+end CircuitHelpers.RunAsm
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
-open PEqualNP.MetaComplexity.Helpers.RunAsm
+open CircuitHelpers CircuitHelpers.Readers
+open CircuitHelpers.RunAsm
 theorem least_wire_used {n out : Nat} {f : (Fin n → Bool) → Bool} {gs : List Gate}
     (least : Least n f gs out) (nonconstant : ∃ x y, f x ≠ f y)
     (dependent : ∀ v : Fin n, Dep f v)
@@ -2789,7 +2791,7 @@ theorem least_wire_readers_in_range {n out : Nat} {gs : List Gate}
   exact ⟨p, g, hit, reads, by omega⟩
 namespace PetersenCutTrace
 open PEqualNP.CircuitLowerBounds
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 def predecessors {n : Nat} {gs : List Gate} (clean : CleanL n gs)
     (b : Fin (n + gs.length)) : List (Fin (n + gs.length)) :=
   if gate : n ≤ b.val then
@@ -3146,7 +3148,7 @@ end PetersenScratch
 namespace PetersenCutFormula
 open PEqualNP.CircuitLowerBounds
 open PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers
+open CircuitHelpers
 open PetersenScratch
 def negFormula {n : Nat} : DMFormula n → DMFormula n
   | .lit i sign => .lit i (!sign)
@@ -3267,7 +3269,7 @@ theorem wireFormula_count_gate_fin {n : Nat} (fallback chosen : Fin n) {gs : Lis
 end PetersenCutFormula
 namespace PetersenCutIndependent
 open PEqualNP.CircuitLowerBounds
-open PEqualNP.MetaComplexity.Helpers
+open CircuitHelpers
 open PetersenCutFormula PetersenCutTrace PetersenScratch
 theorem wireFormula_count_input_fin {n : Nat} {gs : List Gate} (fallback chosen : Fin n)
     (a : Fin (n + gs.length)) (ha : a.val < n) :
@@ -3559,7 +3561,7 @@ end Count
 end FirstBranchRoute
 namespace PetersenFirstGroup
 open PEqualNP.CircuitLowerBounds
-open PEqualNP.MetaComplexity.Helpers
+open CircuitHelpers
 open PetersenCutFormula PetersenCutIndependent PetersenCutTrace PetersenScratch
 noncomputable def firstInputBoundary {n : Nat} {gs : List Gate} (clean : CleanL n gs)
     (out : Fin (n + gs.length))
@@ -3923,7 +3925,7 @@ theorem groups_exceed_budget [Nonempty (Fin g.width)] (k : Nat) (noFinish : full
 end Graph
 end PetersenMaskBridge
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open scoped BigOperators
 def operands (gs : List Gate) : List Nat := gs.flatMap Gate.inputs
 def isNotGate (op : GateOp) : Bool :=
@@ -4057,7 +4059,7 @@ theorem one_not_gate_positive {gs : List Gate} (notUsed : ∃ g ∈ gs, g.op = G
   have pos := List.length_pos_of_mem kept
   exact pos
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open PetersenCutTrace
 theorem least_read_edge_live {n out : Nat} {gs : List Gate}
     {f : (Fin n → Bool) → Bool} (least : Least n f gs out) (nonnull : ∃ x y, f x ≠ f y)
@@ -4151,7 +4153,7 @@ theorem class_twins_of_later_factor {V W : Type} [Fintype V] [DecidableEq V] [Li
     rw [sameCode]
     exact (single v z vGroup pos).mp edge
 namespace PetersenCutTrace
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity.Helpers
+open PEqualNP.CircuitLowerBounds CircuitHelpers
 open Relation
 theorem agree_on_input_ancestors {n : Nat} {gs : List Gate} (clean : CleanL n gs)
     (x y : Fin n → Bool) (w : Fin (n + gs.length))
@@ -4184,7 +4186,7 @@ theorem agree_on_input_ancestors {n : Nat} {gs : List Gate} (clean : CleanL n gs
       exact agree i (path.tail read)
 end PetersenCutTrace
 open PEqualNP.CircuitLowerBounds
-open PEqualNP.MetaComplexity.Helpers
+open CircuitHelpers
 open PetersenCutTrace Relation
 def setInput {n : Nat} (S : Finset (Fin n)) (i : Fin n) : Bool := decide (i ∈ S)
 theorem finite_branch_bit_factor {n : Nat} {gs : List Gate} (clean : CleanL n gs)
@@ -4244,7 +4246,7 @@ theorem finite_branch_bit_factor {n : Nat} {gs : List Gate} (clean : CleanL n gs
         ReflTransGen.mono weaker _ _ bypass
       simpa only [groupLabel] using convert)
     rwa [eq]
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity.Helpers
+open PEqualNP.CircuitLowerBounds CircuitHelpers
 open PetersenCutTrace
 theorem circuit_branch_class_twins {n : Nat} {gs : List Gate} (clean : CleanL n gs)
     (out : Fin (n + gs.length))
@@ -4265,12 +4267,12 @@ theorem circuit_branch_class_twins {n : Nat} {gs : List Gate} (clean : CleanL n 
     rw [← computes (I ∪ O)]
     exact factors I O group after)
 end L11022RestrictSupport
-end
+end ProofPart2
 
-section
+section ProofPart3
 namespace L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds
-open PEqualNP.MetaComplexity.Helpers
+open CircuitHelpers
 open PetersenCutTrace Relation
 theorem fixed_context_branch_factor {n : Nat} {gs : List Gate} (clean : CleanL n gs)
     (out : Fin (n + gs.length))
@@ -4354,13 +4356,13 @@ theorem three_residuals_repeat {n : Nat} {gs : List Gate} (clean : CleanL n gs)
   · exact Or.inr (Or.inl (fun O hO => factor I K O hI hK hO eq))
   · exact Or.inr (Or.inr (fun O hO => factor J K O hJ hK hO eq))
 end L11022RestrictSupport
-end
+end ProofPart3
 
-section
+section ProofPart4
 namespace L10586Branch
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open PetersenCutTrace PetersenFirstGroup L10586Control
 abbrev V := Fin 7
 def edges : List (V × V) :=
@@ -4739,15 +4741,15 @@ theorem replacement_at_eleven (s : ℕ) (small : s ≤ 11) (fit : HasCircuitSize
     omega
   · exact ⟨tags,by simp [args]⟩
 end L10586Branch
-end
+end ProofPart4
 
-section
+section ProofPart5
 namespace L10586OffThree
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open PetersenCutTrace PetersenFirstGroup
-open PEqualNP.MetaComplexity.Helpers.PermInputs
+open CircuitHelpers.PermInputs
 abbrev V := Fin 6
 def edges : List (V × V) :=
   [(0,2),(0,3),(1,3),(2,3),(0,4),(2,4),(0,5),(1,5),(2,5),(3,5),(4,5)]
@@ -4932,10 +4934,10 @@ set_option maxHeartbeats 4000000 in
 theorem control_computes : ∀ x : V → Bool, control.eval (List.ofFn x) = target x := by
   decide
 end L10586OffThree
-end
+end ProofPart5
 
-section
-namespace PEqualNP.MetaComplexity.LineDegTest
+section ProofPart6
+namespace LineDegTest
 open PEqualNP.CircuitLowerBounds
 def W (gs : List Gate) (x : List Bool) : List Bool :=
   gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) x
@@ -4987,14 +4989,14 @@ theorem ofFn_getD {n : ℕ} (f : Fin n → Bool) (k : ℕ) :
     (List.ofFn f).getD k false = if h : k < n then f ⟨k, h⟩ else false := by
   rw [List.getD_eq_getElem?_getD, List.getElem?_ofFn]
   by_cases h : k < n <;> simp [h]
-end PEqualNP.MetaComplexity.LineDegTest
-end
+end LineDegTest
+end ProofPart6
 
-section
+section ProofPart7
 namespace L11022Rewire
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 open L11022RestrictSupport
-open PEqualNP.MetaComplexity.Helpers
+open CircuitHelpers
 def redirect (cut source wire : ℕ) : ℕ :=
   if wire < cut then wire else if wire = cut then source else wire - 1
 def rewire (cut source : ℕ) (g : Gate) : Gate :=
@@ -5156,7 +5158,7 @@ theorem splice_increases (n : ℕ) (x : Fin n → Bool) (pre : List Gate) (g : G
     rw [wiresFrom_append] at on
     exact on
   have up : (wiresFrom post (wires ++ [wires.getD source false])).getD output false = true :=
-    PEqualNP.MetaComplexity.LineDegTest.W_mono post monotone _ _ (by simp) before output oldValue
+    LineDegTest.W_mono post monotone _ _ (by simp) before output oldValue
   have aligned := after_suffix (n+pre.length) source earlier post _ _ (at_cut _ source wires length)
   change (wiresFrom (pre ++ post.map (rewire (n+pre.length) source)) (List.ofFn x)).getD
     (redirect (n+pre.length) source output) false = true
@@ -5234,23 +5236,23 @@ theorem promote_eval (n : ℕ) (pre post : List Gate) (source other output : ℕ
 theorem promote_size (n : ℕ) (pre post : List Gate) (source other output : ℕ) :
     (appendOr n (splice n pre post source output) other).size = (pre ++ post).length + 1 := by
   simp [appendOr,splice,Circuit.size,Nat.add_assoc]
-def unsafeReads (dirty : ℕ → Bool) (rank : ℕ) : List Gate → ℕ
+def badReads (dirty : ℕ → Bool) (rank : ℕ) : List Gate → ℕ
   | [] => 0
   | g :: rest => (if dirty rank then g.inputs.countP (fun w => !(dirty w)) else 0) +
-      unsafeReads dirty (rank+1) rest
-private theorem unsafeReads_append (dirty : ℕ → Bool) (rank : ℕ) (pre post : List Gate) :
-    unsafeReads dirty rank (pre ++ post) =
-      unsafeReads dirty rank pre + unsafeReads dirty (rank+pre.length) post := by
+      badReads dirty (rank+1) rest
+private theorem badReads_append (dirty : ℕ → Bool) (rank : ℕ) (pre post : List Gate) :
+    badReads dirty rank (pre ++ post) =
+      badReads dirty rank pre + badReads dirty (rank+pre.length) post := by
   induction pre generalizing rank with
-  | nil => simp [unsafeReads]
+  | nil => simp [badReads]
   | cons g pre ih =>
-    simp only [List.cons_append,unsafeReads,List.length_cons,ih]
+    simp only [List.cons_append,badReads,List.length_cons,ih]
     rw [show rank+1+pre.length = rank+(pre.length+1) by omega]
     omega
-private theorem unsafeReads_past {old fresh : ℕ → Bool} (cut source : ℕ)
+private theorem badReads_past {old fresh : ℕ → Bool} (cut source : ℕ)
     (same : ∀ w, fresh (redirect cut source w) = old w)
     (post : List Gate) (rank : ℕ) (after : cut < rank) :
-    unsafeReads fresh (rank-1) (post.map (rewire cut source)) = unsafeReads old rank post := by
+    badReads fresh (rank-1) (post.map (rewire cut source)) = badReads old rank post := by
   induction post generalizing rank with
   | nil => rfl
   | cons g post ih =>
@@ -5264,12 +5266,12 @@ private theorem unsafeReads_past {old fresh : ℕ → Bool} (cut source : ℕ)
       intro w _
       simp only [Function.comp_apply,same]
     have advance : (rank-1)+1 = (rank+1)-1 := by omega
-    simp only [List.map_cons,unsafeReads,rankMark,inputs,advance,ih (rank+1) (by omega : cut < rank+1)]
-private theorem unsafeReads_before {old fresh : ℕ → Bool} (cut source : ℕ)
+    simp only [List.map_cons,badReads,rankMark,inputs,advance,ih (rank+1) (by omega : cut < rank+1)]
+private theorem badReads_before {old fresh : ℕ → Bool} (cut source : ℕ)
     (same : ∀ w, fresh (redirect cut source w) = old w)
     (pre : List Gate) (rank : ℕ) (before : rank+pre.length ≤ cut)
     (reads : ∀ g ∈ pre, ∀ w ∈ g.inputs, w < cut) :
-    unsafeReads fresh rank pre = unsafeReads old rank pre := by
+    badReads fresh rank pre = badReads old rank pre := by
   induction pre generalizing rank with
   | nil => rfl
   | cons g pre ih =>
@@ -5283,26 +5285,26 @@ private theorem unsafeReads_before {old fresh : ℕ → Bool} (cut source : ℕ)
         simpa only [redirect_below cut source w (reads g (by simp) w hw)] using same w
       rw [mark]
     have bound : rank+1+pre.length ≤ cut := by simp only [List.length_cons] at before; omega
-    simp only [unsafeReads,rankMark,inputs,ih (rank+1) bound (fun t ht => reads t (by simp [ht]))]
-theorem promotion_removes_one_unsafe_read (n : ℕ) (pre post : List Gate) (source other output : ℕ)
+    simp only [badReads,rankMark,inputs,ih (rank+1) bound (fun t ht => reads t (by simp [ht]))]
+theorem promotion_removes_one_bad_read (n : ℕ) (pre post : List Gate) (source other output : ℕ)
     (old fresh : ℕ → Bool)
     (same : ∀ w, fresh (redirect (n+pre.length) source w) = old w)
     (reads : ∀ g ∈ pre, ∀ w ∈ g.inputs, w < n+pre.length)
     (dirtyGate : old (n+pre.length) = true) (dirtySource : old source = true) (safeOther : old other = false)
     (safeNewOutput : fresh (n+(splice n pre post source output).gates.length) = false) :
-    unsafeReads fresh n (appendOr n (splice n pre post source output) other).gates + 1 =
-      unsafeReads old n (pre ++ ⟨.or,[source,other]⟩ :: post) := by
-  change unsafeReads fresh n ((splice n pre post source output).gates ++ _) + 1 = _
-  rw [unsafeReads_append]
-  rw [show unsafeReads fresh (n+(splice n pre post source output).gates.length)
-      [⟨.or,[(splice n pre post source output).output,other]⟩] = 0 by simp [unsafeReads,safeNewOutput],Nat.add_zero]
-  change unsafeReads fresh n (pre ++ post.map (rewire (n+pre.length) source)) + 1 = _
-  rw [unsafeReads_append,unsafeReads_append]
-  rw [unsafeReads_before (n+pre.length) source same pre n (le_refl _) reads]
-  have suffix := unsafeReads_past (n+pre.length) source same post (n+pre.length+1) (by omega)
+    badReads fresh n (appendOr n (splice n pre post source output) other).gates + 1 =
+      badReads old n (pre ++ ⟨.or,[source,other]⟩ :: post) := by
+  change badReads fresh n ((splice n pre post source output).gates ++ _) + 1 = _
+  rw [badReads_append]
+  rw [show badReads fresh (n+(splice n pre post source output).gates.length)
+      [⟨.or,[(splice n pre post source output).output,other]⟩] = 0 by simp [badReads,safeNewOutput],Nat.add_zero]
+  change badReads fresh n (pre ++ post.map (rewire (n+pre.length) source)) + 1 = _
+  rw [badReads_append,badReads_append]
+  rw [badReads_before (n+pre.length) source same pre n (le_refl _) reads]
+  have suffix := badReads_past (n+pre.length) source same post (n+pre.length+1) (by omega)
   rw [show n+pre.length+1-1 = n+pre.length by omega] at suffix
   rw [suffix]
-  simp only [unsafeReads,dirtyGate,ite_true,List.countP_cons,dirtySource,safeOther,
+  simp only [badReads,dirtyGate,ite_true,List.countP_cons,dirtySource,safeOther,
     Bool.not_true,Bool.not_false,Bool.false_eq_true,ite_false,List.countP_nil]
   omega
 noncomputable def dirty (n : ℕ) (f : (Fin n → Bool) → Bool) (C : Circuit) (wire : ℕ) : Bool := by
@@ -5332,7 +5334,7 @@ theorem promotion_reduces_dirty_reads (n : ℕ) (f : (Fin n → Bool) → Bool)
     let old : Circuit := ⟨pre ++ ⟨.or,[source,other]⟩ :: post,output⟩
     let fresh := appendOr n (splice n pre post source output) other
     (∀ x : Fin n → Bool, fresh.eval (List.ofFn x) = f x) ∧
-      unsafeReads (dirty n f fresh) n fresh.gates + 1 = unsafeReads (dirty n f old) n old.gates := by
+      badReads (dirty n f fresh) n fresh.gates + 1 = badReads (dirty n f old) n old.gates := by
   let old : Circuit := ⟨pre ++ ⟨.or,[source,other]⟩ :: post,output⟩
   let reduced := splice n pre post source output
   let fresh := appendOr n reduced other
@@ -5396,7 +5398,7 @@ theorem promotion_reduces_dirty_reads (n : ℕ) (f : (Fin n → Bool) → Bool)
     change fresh.eval (List.ofFn x) = true at value
     rw [computes x,neg] at value
     cases value
-  exact promotion_removes_one_unsafe_read n pre post source other output _ _ same reads
+  exact promotion_removes_one_bad_read n pre post source other output _ _ same reads
     dirtyGate dirtySource safeOther safeOutput
 theorem bypass_neutral_and (n : ℕ) (f : (Fin n → Bool) → Bool)
     (pre post : List Gate) (source other output : ℕ)
@@ -5421,10 +5423,10 @@ theorem bypass_neutral_and (n : ℕ) (f : (Fin n → Bool) → Bool)
     cases (wiresFrom pre (List.ofFn x)).getD source false <;> rfl
   rcases oneSide with before | after
   · apply agrees
-    refine PEqualNP.MetaComplexity.LineDegTest.W_mono pre before
+    refine LineDegTest.W_mono pre before
       (List.ofFn (fun _ : Fin n => false)) (List.ofFn x) (by simp) ?_ other (neutral _ zeroRejects)
     intro i h
-    rw [PEqualNP.MetaComplexity.LineDegTest.ofFn_getD] at h
+    rw [LineDegTest.ofFn_getD] at h
     split at h <;> cases h
   · by_cases no : f x = false
     · exact agrees (neutral x no)
@@ -5451,7 +5453,7 @@ private theorem monotone_except (gs : List Gate) (ignored : ℕ) (x y : List Boo
       · rw [atEnd,getD_snoc_eq] at h
         rw [atEnd,hlen,getD_snoc_eq]
         have gate := gates g (by simp)
-        apply PEqualNP.MetaComplexity.LineDegTest.eval_mono g gate.1 x y _ h
+        apply LineDegTest.eval_mono g gate.1 x y _ h
         intro w mem
         apply before w
         exact fun eq => gate.2 (eq ▸ mem)
@@ -5474,7 +5476,7 @@ theorem sole_not_reader_antitone (n : ℕ) (p : Fin n) (pre post : List Gate) (o
     apply monotone_except pre p.val (List.ofFn y) (List.ofFn x) (by simp)
       (fun g mem => gates g (List.mem_append_left _ mem))
     intro i apart h
-    rw [PEqualNP.MetaComplexity.LineDegTest.ofFn_getD] at h ⊢
+    rw [LineDegTest.ofFn_getD] at h ⊢
     by_cases valid : i < n
     · rw [dite_eq_left valid] at h ⊢
       rw [same ⟨i,valid⟩ (fun eq => apart (congrArg Fin.val eq))]
@@ -5509,9 +5511,9 @@ theorem sole_not_reader_antitone (n : ℕ) (p : Fin n) (pre post : List Gate) (o
   rw [wiresFrom_append]
   change (wiresFrom post (high ++ [!high.getD p.val false])).getD output false = true
   simpa only [bitHigh,Bool.not_false] using fresh
-open PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers.Readers
 noncomputable def dirtyReads (n : ℕ) (f : (Fin n → Bool) → Bool) (gs : List Gate) : ℕ :=
-  unsafeReads (dirty n f ⟨gs,0⟩) n gs
+  badReads (dirty n f ⟨gs,0⟩) n gs
 theorem exists_least_fewest_dirty_reads (n s : ℕ) (f : (Fin n → Bool) → Bool)
     (nonconstant : ∃ x y, f x ≠ f y) (fit : HasCircuitSize n f s) :
     ∃ (gs : List Gate) (out : ℕ), Least n f gs out ∧ gs.length ≤ s ∧
@@ -5533,12 +5535,12 @@ theorem exists_least_fewest_dirty_reads (n s : ℕ) (f : (Fin n → Bool) → Bo
   rw [cost]
   exact Nat.find_min' existsCost ⟨zs,zOut,⟨zClean,zFit,zSize.trans sameSize⟩,rfl⟩
 end L11022Rewire
-end
+end ProofPart7
 
-section
+section ProofPart8
 namespace L11022ReaderSwap
 open L11022RestrictSupport L11022Rewire
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity.Helpers
+open PEqualNP.CircuitLowerBounds CircuitHelpers
 private theorem swap_clean (n : ℕ) (pre post : List Gate) (op : GateOp) (a b : ℕ)
     (binary : op = .and ∨ op = .or)
     (clean : CleanL n (pre ++ ⟨op,[b,a]⟩ :: post)) :
@@ -5572,17 +5574,17 @@ private theorem swap_wires (pre post : List Gate) (op : GateOp) (a b : ℕ)
   have commute (x y : Bool) : op.eval [x,y] = op.eval [y,x] := by
     rcases binary with rfl | rfl <;> cases x <;> cases y <;> rfl
   rw [commute]
-private theorem swap_unsafe_reads (mark : ℕ → Bool) (rank : ℕ) (pre post : List Gate)
+private theorem swap_bad_reads (mark : ℕ → Bool) (rank : ℕ) (pre post : List Gate)
     (op : GateOp) (a b : ℕ) :
-    unsafeReads mark rank (pre ++ ⟨op,[a,b]⟩ :: post) =
-      unsafeReads mark rank (pre ++ ⟨op,[b,a]⟩ :: post) := by
+    badReads mark rank (pre ++ ⟨op,[a,b]⟩ :: post) =
+      badReads mark rank (pre ++ ⟨op,[b,a]⟩ :: post) := by
   induction pre generalizing rank with
   | nil =>
     have counts : ([a,b] : List ℕ).countP (fun w => !(mark w)) =
         ([b,a] : List ℕ).countP (fun w => !(mark w)) := by
       simp only [List.countP_cons,List.countP_nil,Nat.zero_add,Nat.add_comm]
-    simp only [List.nil_append,unsafeReads,counts]
-  | cons h pre ih => simp only [List.cons_append,unsafeReads,ih]
+    simp only [List.nil_append,badReads,counts]
+  | cons h pre ih => simp only [List.cons_append,badReads,ih]
 theorem swap_middle (n : ℕ) (f : (Fin n → Bool) → Bool) (pre post : List Gate)
     (op : GateOp) (a b : ℕ) (binary : op = .and ∨ op = .or)
     (clean : CleanL n (pre ++ ⟨op,[b,a]⟩ :: post)) :
@@ -5607,11 +5609,11 @@ theorem swap_middle (n : ℕ) (f : (Fin n → Bool) → Bool) (pre post : List G
       exact ⟨x,no,(values x w).trans yes⟩
   unfold dirtyReads
   rw [marks]
-  exact swap_unsafe_reads _ n pre post op a b
+  exact swap_bad_reads _ n pre post op a b
 end L11022ReaderSwap
-end
+end ProofPart8
 
-section
+section ProofPart9
 namespace L8703Lower
 section LivePart1
 open PEqualNP.MetaComplexity PEqualNP.CircuitLowerBounds
@@ -6683,14 +6685,14 @@ theorem fourLower2 (s : Nat) (h : HasCircuitSize 4 (targetFour 0xfee8) s) : 6 < 
   decide +kernel
 end LivePart6
 end L8703Lower
-end
+end ProofPart9
 
-section
+section ProofPart10
 namespace L10586OffThreeLower
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
-open PEqualNP.MetaComplexity.Helpers.PermInputs PEqualNP.MetaComplexity.Helpers.Forest
+open CircuitHelpers CircuitHelpers.Readers
+open CircuitHelpers.PermInputs CircuitHelpers.Forest
 open L10586OffThree (V target)
 open L11022Rewire
 private def leafTarget (x : Fin 5 → Bool) : Bool :=
@@ -6812,7 +6814,7 @@ private theorem peer_sound (pre post : List Gate) (peer out : ℕ)
   cases value : (wiresFrom pre (List.ofFn x0)).getD peer false with
   | false => rfl
   | true =>
-    have pos := PEqualNP.MetaComplexity.LineDegTest.W_mono pre mono
+    have pos := LineDegTest.W_mono pre mono
       (List.ofFn x0) (List.ofFn y) (by simp) (by
         intro j positive
         by_cases valid : j < 6
@@ -6972,14 +6974,14 @@ theorem pin_three_false_lower_ten (s : ℕ)
   rw [funext L10586OffThree.compact_pin] at compact
   exact size_lower_ten _ compact
 end L10586OffThreeLower
-end
+end ProofPart10
 
-section
+section ProofPart11
 namespace L10586EarCofactors
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
-open PEqualNP.MetaComplexity.Helpers.PermInputs PEqualNP.MetaComplexity.Helpers.Forest
+open CircuitHelpers CircuitHelpers.Readers
+open CircuitHelpers.PermInputs CircuitHelpers.Forest
 open L10586Control (target)
 abbrev Input := Fin 7 → Bool
 private def onThree (x : Input) : Bool := target (Function.update x 3 true)
@@ -7021,13 +7023,13 @@ theorem three_unique_reader {gs : List Gate} {out : ℕ}
   · have := pin_three_true_lower s fit
     omega
 end L10586EarCofactors
-end
+end ProofPart11
 
-section
+section ProofPart12
 namespace L10586EarShape
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control (target)
 private theorem binary_of_no_not {gs sub : List Gate} (clean : CleanL 7 gs)
     (part : ∀ g ∈ sub, g ∈ gs) (count : notGateCount sub = 0) :
@@ -7165,13 +7167,13 @@ theorem and_reader_next_or {gs : List Gate} {out r : ℕ} {g : Gate}
   exact no_three_low_losses cap <| least.save3 (3 : Fin 7) false nc r q v
     (by omega) (by omega) (by omega) rawRC qRC vRC
 end L10586EarShape
-end
+end ProofPart12
 
-section
+section ProofPart13
 namespace L10586WeightedRestriction
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 def opCount (test : GateOp → Bool) (gs : List Gate) : ℕ :=
   gs.countP (fun g => test g.op)
 abbrev binaryCount (gs : List Gate) : ℕ := opCount (fun op => !isNotGate op) gs
@@ -7358,13 +7360,13 @@ theorem binary_reader_of_pivot {m : ℕ} {gs : List Gate} {out : ℕ}
     outApart x y off on same accept
   exact Bool.false_ne_true (reject.symm.trans contradiction)
 end L10586WeightedRestriction
-end
+end ProofPart13
 
-section
+section ProofPart14
 namespace L10586BinaryCofactors
 open L11022RestrictSupport L10586WeightedRestriction
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control (target)
 abbrev cliqueTarget := L8703Lower.targetFour 0xfee8
 def K4BinaryLower : Prop := ∀ (gs : List Gate) (out : ℕ), CleanL 4 gs →
@@ -7437,13 +7439,13 @@ theorem pin_three_true_binary (clique : K4BinaryLower) {gs : List Gate} {out : �
   exact high_six_binary_lower clique strict ((not_count_le clean (3 : Fin 7) true).trans oneNot)
     (fun x => (compute x).trans (high_table x))
 end L10586BinaryCofactors
-end
+end ProofPart14
 
-section
+section ProofPart15
 namespace L10586EarOrShape
 open L11022RestrictSupport L10586WeightedRestriction
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control (target)
 private def BinaryConstReader (gs : List Gate) (p : ℕ) : Prop :=
   ∃ g, gs[p]? = some g ∧ (g.op = .and ∨ g.op = .or) ∧
@@ -7575,13 +7577,13 @@ theorem or_reader_next_and {gs : List Gate} {out r q : ℕ} {g h : Gate}
     obtain ⟨t,qt,tRC⟩ := binary_after_const least oneNot (List.getElem?_eq_some_iff.mp hitQ).1 qConstant
     exact (no_three_high clique least budget oneNot (by omega) (by omega) (by omega) gRC qRC tRC).elim
 end L10586EarOrShape
-end
+end ProofPart15
 
-section
+section ProofPart16
 namespace L10586Tight
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control L10586Branch
 open PetersenCutTrace
 open scoped BigOperators
@@ -7698,13 +7700,13 @@ theorem from_critical_case
     omega
   · exact ⟨tags,by simp [args]⟩
 end L10586Tight
-end
+end ProofPart16
 
-section
+section ProofPart17
 namespace L10586SignedInfluence
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control L10586Branch PetersenCutTrace Relation
 def NotWire {n : ℕ} (gs : List Gate) (w : Fin (n + gs.length)) : Prop :=
   ∃ (p : ℕ) (g : Gate), gs[p]? = some g ∧ w.val = n + p ∧ g.op = .not
@@ -7914,13 +7916,13 @@ theorem unique_negation {n : ℕ} {gs : List Gate} (one : notGateCount gs = 1) :
     apply Fin.ext
     simpa [neg,same] using index
 end L10586SignedInfluence
-end
+end ProofPart17
 
-section
+section ProofPart18
 namespace L10586OrPeers
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control L10586Branch PetersenCutTrace Relation
 def single (v : Fin 7) : Fin 7 → Bool := fun i => decide (i = v)
 def PeerTest (owner other : Fin 7) : Prop :=
@@ -8101,13 +8103,13 @@ theorem two_dirty_or_readers_impossible {gs : List Gate} (clean : CleanL 7 gs)
   change reader1.val ≤ peer5.val at reader1Before
   omega
 end L10586OrPeers
-end
+end ProofPart18
 
-section
+section ProofPart19
 namespace L10586OrPeerAncestry
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control L10586OrPeers L10586SignedInfluence PetersenCutTrace Relation
 def ExtendsToPositivePivot (owner : Fin 7) : Prop :=
   ∀ x : Fin 7 → Bool, target x = false → x owner = false →
@@ -8190,13 +8192,13 @@ theorem early_wire_rejects_single_one {gs : List Gate} (clean : CleanL 7 gs)
     · simp [single,hit]
   exact same.trans (false_at_zero_without_negation clean wire none)
 end L10586OrPeerAncestry
-end
+end ProofPart19
 
-section
+section ProofPart20
 namespace L10586RawRoute
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control L10586OrPeers L10586OrPeerAncestry PetersenCutTrace Relation
 def soleReader {n : ℕ} (gs : List Gate) (source reader : Fin (n+gs.length)) : Prop :=
   ∀ other, readEdge gs source other → other = reader
@@ -8286,13 +8288,13 @@ theorem second_peer_pivotal {gs : List Gate} (clean : CleanL 7 gs)
   by_contra wrong
   cases andGate <;> cases value : vl gs x peer.val <;> simp_all [Bin]
 end L10586RawRoute
-end
+end ProofPart20
 
-section
+section ProofPart21
 namespace L10586EarLocal
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control L10586Branch L10586RawRoute L10586OrPeers PetersenCutTrace
 def slotWire {gs : List Gate} {p : ℕ} {g : Gate} (hit : gs[p]? = some g) : Fin (7+gs.length) :=
   ⟨7+p,by have := (List.getElem?_eq_some_iff.mp hit).1; omega⟩
@@ -8489,13 +8491,13 @@ theorem local_clearance {gs : List Gate} {out r q : ℕ} {g h : Gate}
       rw [dAtY,valEq,v1.1] at sameD
       cases sameD
 end L10586EarLocal
-end
+end ProofPart21
 
-section
+section ProofPart22
 namespace L10586DoublePin
 open L11022RestrictSupport L10586WeightedRestriction
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 def pin (a : Fin 7) (b : Fin 6) (high : Bool) (x : Fin 5 → Bool) : Fin 7 → Bool :=
   ins a high (ins b false x)
 private def init (a : Fin 7) (b : Fin 6) (high : Bool) : List Stat × List Gate :=
@@ -8700,14 +8702,14 @@ theorem clean_and_exact {gs : List Gate} {out : ℕ} {f : (Fin 7 → Bool) → B
     rw [result] at h
     exact h.trans (exactness _)
 end L10586DoublePin
-end
+end ProofPart22
 
-section
+section ProofPart23
 namespace L10586DoubleLower
 open L11022RestrictSupport L10586WeightedRestriction L10586DoublePin
 open L10586BinaryCofactors
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control (target)
 private def offOne (high : Bool) (x : Fin 5 → Bool) : Bool := target (pin 3 1 high x)
 private def offFive (high : Bool) (x : Fin 5 → Bool) : Bool := target (pin 3 4 high x)
@@ -8779,13 +8781,13 @@ theorem no_four_charges (clique : K4BinaryLower) {gs : List Gate} {out : ℕ}
       Finset.card_eq_three.mpr ⟨b,c,d,bc,bd,cd,rfl⟩]
   omega
 end L10586DoubleLower
-end
+end ProofPart23
 
-section
+section ProofPart24
 namespace L10586RawReaderProof
 open L11022RestrictSupport L10586WeightedRestriction L10586DoublePin
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control (target)
 open L10586SignedInfluence PetersenCutTrace Relation
 abbrev raw (ear : Fin 6) : ℕ := ((3 : Fin 7).succAbove ear).val
@@ -9062,13 +9064,13 @@ theorem sole_or_of_local_exclusions (clique : L10586BinaryCofactors.K4BinaryLowe
     · exact noExtra rk hq pk.ne (read_loss ⟨J,hitJ,tagJ,used⟩ pConst)
   · exact isOr
 end L10586RawReaderProof
-end
+end ProofPart24
 
-section
+section ProofPart25
 namespace L10586EarAndClose
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control L10586Branch L10586OrPeers L10586SignedInfluence
 open L10586OrPeerAncestry L10586RawRoute PetersenCutTrace Relation
 private theorem raw_three_pivots : ∀ i : Fin 7, i = 1 ∨ i = 5 →
@@ -9111,13 +9113,13 @@ theorem no_ear_path_to_not_of_and_peer {gs : List Gate} {out : ℕ} (least : Lea
   rw [peerOn 1 (Or.inl rfl)] at absent
   cases absent
 end L10586EarAndClose
-end
+end ProofPart25
 
-section
+section ProofPart26
 namespace L10586EarOrClose
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control L10586Branch L10586OrPeers L10586SignedInfluence
 open L10586OrPeerAncestry L10586RawRoute PetersenCutTrace PetersenFirstGroup Relation
 private theorem compare_single_one : target (single 1) ≠
@@ -9186,13 +9188,13 @@ theorem no_ear_path_to_not {gs : List Gate} {out : ℕ} (least : Least 7 target 
   rw [peerOn,peerZero] at samePeer
   cases samePeer
 end L10586EarOrClose
-end
+end ProofPart26
 
-section
+section ProofPart27
 namespace L10586OrPromotion
 open L11022RestrictSupport
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control L10586Branch L10586OrPeers L11022Rewire PetersenCutTrace
 theorem dirty_peer_of_sole_or {gs : List Gate} {out : ℕ} (least : Least 7 target gs out)
     (fewest : ∀ (ys : List Gate) (o : ℕ), CleanL 7 ys →
@@ -9312,13 +9314,13 @@ theorem dirty_peer_of_sole_or {gs : List Gate} {out : ℕ} (least : Least 7 targ
   rw [update.2.2] at counts
   omega
 end L10586OrPromotion
-end
+end ProofPart27
 
-section
+section ProofPart28
 namespace L10586Closure
 open L11022RestrictSupport L10586WeightedRestriction
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 open L10586Control L10586Branch L10586OrPeers L10586SignedInfluence
 open L10586RawRoute L10586EarLocal L10586RawReaderProof L10586OrPromotion
 open L10586BinaryCofactors L11022Rewire PetersenCutTrace Relation
@@ -9455,9 +9457,9 @@ theorem replacement (clique : K4BinaryLower) (s : ℕ) (fit : HasCircuitSize 7 t
     omega
   · exact ⟨tags,by simp [args]⟩
 end L10586Closure
-end
+end ProofPart28
 
-section
+section ProofPart29
 namespace L10586K4Core
 section Live
 variable {α : Type} [DecidableEq α]
@@ -10034,13 +10036,13 @@ theorem total_at_least_seven_add_not (gs : List Gate) (out : ℕ)
   have count := binary_and_not_count gs
   omega
 end L10586K4Binary
-end
+end ProofPart29
 
-section
+section ProofPart30
 namespace L10586K4Bridge
 open L11022RestrictSupport L10586WeightedRestriction L10586BinaryCofactors
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-open PEqualNP.MetaComplexity.Helpers PEqualNP.MetaComplexity.Helpers.Readers
+open CircuitHelpers CircuitHelpers.Readers
 theorem clique_binary_lower : K4BinaryLower := by
   intro gs out strict ev
   have legal : ∀ g ∈ gs, L10586K4Core.legal g := by
@@ -10058,20 +10060,22 @@ theorem clique_binary_lower : K4BinaryLower := by
   rw [← cost]
   exact L10586K4Binary.binary_at_least_seven gs out legal ev
 end L10586K4Bridge
-end
+end ProofPart30
+
+end PEqualNP.Outside.L_meta_10586
 
 theorem PEqualNP.Outside.L_meta_10586 :
     ∀ (gates : List PEqualNP.CircuitLowerBounds.Gate) (o : ℕ), (∀ g ∈ gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.not) ∧ g.inputs.length ≤ 2) → (∀ i j : Fin gates.length, (gates.get i).op = PEqualNP.CircuitLowerBounds.GateOp.not → (gates.get j).op = PEqualNP.CircuitLowerBounds.GateOp.not → i = j) → (∀ x : Fin 7 → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, o⟩ (List.ofFn x) = decide (∃ i < ([0, 2, 1, 3, 0, 4, 1, 4, 2, 4, 0, 5, 2, 5, 3, 5, 0, 6, 1, 6, 2, 6, 4, 6, 5, 6] : List ℕ).length / 2, (List.ofFn x).getD (([0, 2, 1, 3, 0, 4, 1, 4, 2, 4, 0, 5, 2, 5, 3, 5, 0, 6, 1, 6, 2, 6, 4, 6, 5, 6] : List ℕ).getD (2 * i) 0) false = true ∧ (List.ofFn x).getD (([0, 2, 1, 3, 0, 4, 1, 4, 2, 4, 0, 5, 2, 5, 3, 5, 0, 6, 1, 6, 2, 6, 4, 6, 5, 6] : List ℕ).getD (2 * i + 1) 0) false = true)) → ∃ (gates' : List PEqualNP.CircuitLowerBounds.Gate) (o' : ℕ), (∀ g ∈ gates', (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length ≤ 2) ∧ gates'.length ≤ gates.length ∧ ∀ x : Fin 7 → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates', o'⟩ (List.ofFn x) = decide (∃ i < ([0, 2, 1, 3, 0, 4, 1, 4, 2, 4, 0, 5, 2, 5, 3, 5, 0, 6, 1, 6, 2, 6, 4, 6, 5, 6] : List ℕ).length / 2, (List.ofFn x).getD (([0, 2, 1, 3, 0, 4, 1, 4, 2, 4, 0, 5, 2, 5, 3, 5, 0, 6, 1, 6, 2, 6, 4, 6, 5, 6] : List ℕ).getD (2 * i) 0) false = true ∧ (List.ofFn x).getD (([0, 2, 1, 3, 0, 4, 1, 4, 2, 4, 0, 5, 2, 5, 3, 5, 0, 6, 1, 6, 2, 6, 4, 6, 5, 6] : List ℕ).getD (2 * i + 1) 0) false = true) := by
   intro gates out legal _oneNot evaluates
-  have fit : PEqualNP.MetaComplexity.HasCircuitSize 7 L10586Control.target gates.length := by
+  have fit : PEqualNP.MetaComplexity.HasCircuitSize 7 PEqualNP.Outside.L_meta_10586.L10586Control.target gates.length := by
     refine ⟨⟨gates,out⟩,?_,le_rfl,?_⟩
     · intro gate member
       have ok := legal gate member
       refine ⟨?_,ok.2⟩
       rcases ok.1 with andGate | orGate | notGate <;> simp_all
     · intro x
-      simpa [L10586Control.target,L10586Control.edgeData] using evaluates x
+      simpa [PEqualNP.Outside.L_meta_10586.L10586Control.target,PEqualNP.Outside.L_meta_10586.L10586Control.edgeData] using evaluates x
   obtain ⟨fresh,output,monotone,size,same⟩ :=
-    L10586Closure.replacement L10586K4Bridge.clique_binary_lower gates.length fit
+    PEqualNP.Outside.L_meta_10586.L10586Closure.replacement PEqualNP.Outside.L_meta_10586.L10586K4Bridge.clique_binary_lower gates.length fit
   exact ⟨fresh,output,monotone,size,fun x => by
-    simpa [L10586Control.target,L10586Control.edgeData] using same x⟩
+    simpa [PEqualNP.Outside.L_meta_10586.L10586Control.target,PEqualNP.Outside.L_meta_10586.L10586Control.edgeData] using same x⟩
