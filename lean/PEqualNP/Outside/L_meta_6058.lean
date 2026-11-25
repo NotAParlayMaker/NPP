@@ -105,7 +105,7 @@ abbrev test (S : Finset Nat) (a b c z : Nat) : Prop :=
   let V := merge S a b c
   if z<256 then
     let p := z/16
-    let q := z%16
+    let q := z % 16
     (5071 : Nat).testBit p=true ∧ (5071 : Nat).testBit q=false ∧ ∀ m∈V,¬(m.testBit p=true ∧ m.testBit q=false)
   else family[z-256]?=some V
 theorem test_ok {S : Finset Nat} {a b c z : Nat} (h : test S a b c z) (ok : good (merge S a b c)) :
@@ -115,7 +115,7 @@ theorem test_ok {S : Finset Nat} {a b c z : Nat} (h : test S a b c z) (ok : good
   split at h
   · rename_i lt
     obtain ⟨pos,neg,no⟩ := h
-    obtain ⟨m,hm,x,y⟩ := ok ⟨z/16,by omega⟩ ⟨z%16,by omega⟩ pos neg
+    obtain ⟨m,hm,x,y⟩ := ok ⟨z/16,by omega⟩ ⟨z % 16,by omega⟩ pos neg
     exact (no m hm ⟨x,y⟩).elim
   · exact List.mem_of_getElem? h
 def code0 : Nat → Nat → Nat → Nat := pick [15,192,3840,4369,8738,61440] [0,0,4,285,4,42,21,4,4,21,4,29,4,285,0,0,100,106,100,100,100,101,100,109,4,42,100,106,0,0,149,132,132,149,132,157,21,4,100,100,149,132,0,0,138,205,138,196,4,21,100,101,132,149,138,205,0,0,154,257,4,29,100,109,132,157,138,196,154,257,0,0]
