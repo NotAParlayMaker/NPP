@@ -233,7 +233,9 @@ theorem PEqualNP.Outside.R_meta_5792_643
       obtain ⟨g',hg',rfl⟩ := List.mem_map.mp hh
       obtain ⟨hop,hlen⟩ := hC g' hg'
       exact ⟨hop,by simpa [mapGate] using hlen⟩
-    have hDSize : D.size ≤ 17 := by simpa [D,Circuit.size] using hsize
+    have hDSize : D.size ≤ 17 := by
+      change (C.gates.map (mapGate r)).length ≤ 17
+      simpa only [List.length_map] using (show C.gates.length ≤ 17 from hsize)
     have correct (x : Fin 10 → Bool) :
         (if b then !D.eval (List.ofFn x ++ [seed x])
           else D.eval (List.ofFn x ++ [seed x])) = f x := by
@@ -364,29 +366,32 @@ theorem PEqualNP.Outside.R_meta_5792_643
     · exact Or.inl ⟨false,fun x => by rw [h,hs,ht]; cases a <;> rfl⟩
   have gLegal := hg g (List.mem_singleton_self g)
   have gOps : g.op = GateOp.and ∨ g.op = GateOp.or ∨ g.op = GateOp.not := by simpa using gLegal.1
+  have andEval (xs : List Bool) : GateOp.and.eval xs = xs.all id := rfl
+  have orEval (xs : List Bool) : GateOp.or.eval xs = xs.any id := rfl
+  have notEval (xs : List Bool) : GateOp.not.eval xs = !(xs.headD false) := rfl
   have hClass : Const ∨ Alias ∨ Signed ∨ Pair := by
     cases e : g.inputs with
     | nil =>
       rcases gOps with ho|ho|ho
-      · exact Or.inl ⟨true,fun x => by simp [first,ho,e,GateOp.eval]⟩
-      · exact Or.inl ⟨false,fun x => by simp [first,ho,e,GateOp.eval]⟩
-      · exact Or.inl ⟨true,fun x => by simp [first,ho,e,GateOp.eval]⟩
+      · exact Or.inl ⟨true,fun x => by simp [first,ho,e,andEval,orEval,notEval]⟩
+      · exact Or.inl ⟨false,fun x => by simp [first,ho,e,andEval,orEval,notEval]⟩
+      · exact Or.inl ⟨true,fun x => by simp [first,ho,e,andEval,orEval,notEval]⟩
     | cons i tail =>
       have hTail : tail.length ≤ 1 := by have hL := gLegal.2; rw [e,List.length_cons] at hL; omega
       rcases gOps with ho|ho|ho
       · cases tail with
-        | nil => exact unary i (fun x => by simp [first,ho,e,GateOp.eval])
+        | nil => exact unary i (fun x => by simp [first,ho,e,andEval,orEval,notEval])
         | cons j rest =>
           have hz : rest.length = 0 := by simp only [List.length_cons] at hTail; omega
           obtain rfl := List.length_eq_zero_iff.mp hz
-          exact binary true i j (fun x => by simp [first,ho,e,GateOp.eval])
+          exact binary true i j (fun x => by simp [first,ho,e,andEval,orEval,notEval])
       · cases tail with
-        | nil => exact unary i (fun x => by simp [first,ho,e,GateOp.eval])
+        | nil => exact unary i (fun x => by simp [first,ho,e,andEval,orEval,notEval])
         | cons j rest =>
           have hz : rest.length = 0 := by simp only [List.length_cons] at hTail; omega
           obtain rfl := List.length_eq_zero_iff.mp hz
-          exact binary false i j (fun x => by simp [first,ho,e,GateOp.eval])
-      · exact negated i (fun x => by simp [first,ho,e,GateOp.eval])
+          exact binary false i j (fun x => by simp [first,ho,e,andEval,orEval,notEval])
+      · exact negated i (fun x => by simp [first,ho,e,andEval,orEval,notEval])
   rcases hClass with ⟨q,hq⟩|⟨i,hi⟩|⟨i,hi⟩|⟨i,j,hne,a,hab⟩
   · apply transfer id 10 (by decide) (fun _ => q) (fun _ => rfl) _ (fun _ => True) (noConstant q b)
         (fun i _ => (constantNeeds i).imp (fun _ hx => ⟨rfl,hx⟩)) _
