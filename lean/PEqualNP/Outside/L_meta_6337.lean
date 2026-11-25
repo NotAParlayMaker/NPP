@@ -1462,6 +1462,177 @@ theorem batch_clear (xs : List (Nat × Nat × List W))
     simpa only [List.all_cons, evaluateN, asNode, optN_eq, ih h.2, Bool.and_true,
       Bool.not_eq_true'] using h.1
 
+def scanPairs (visit : Nat → Nat → List Nat → Bool) : List Nat → Bool
+  | [] => false
+  | [a] => false
+  | [a, b] => visit a b [] ||
+      false
+  | [a, b, c] => visit a b [c] ||
+      visit a c [b] ||
+      visit b c [a] ||
+      false
+  | [a, b, c, d] => visit a b [c, d] ||
+      visit a c [b, d] ||
+      visit a d [b, c] ||
+      visit b c [a, d] ||
+      visit b d [a, c] ||
+      visit c d [a, b] ||
+      false
+  | [a, b, c, d, e] => visit a b [c, d, e] ||
+      visit a c [b, d, e] ||
+      visit a d [b, c, e] ||
+      visit a e [b, c, d] ||
+      visit b c [a, d, e] ||
+      visit b d [a, c, e] ||
+      visit b e [a, c, d] ||
+      visit c d [a, b, e] ||
+      visit c e [a, b, d] ||
+      visit d e [a, b, c] ||
+      false
+  | [a, b, c, d, e, f] => visit a b [c, d, e, f] ||
+      visit a c [b, d, e, f] ||
+      visit a d [b, c, e, f] ||
+      visit a e [b, c, d, f] ||
+      visit a f [b, c, d, e] ||
+      visit b c [a, d, e, f] ||
+      visit b d [a, c, e, f] ||
+      visit b e [a, c, d, f] ||
+      visit b f [a, c, d, e] ||
+      visit c d [a, b, e, f] ||
+      visit c e [a, b, d, f] ||
+      visit c f [a, b, d, e] ||
+      visit d e [a, b, c, f] ||
+      visit d f [a, b, c, e] ||
+      visit e f [a, b, c, d] ||
+      false
+  | [a, b, c, d, e, f, g] => visit a b [c, d, e, f, g] ||
+      visit a c [b, d, e, f, g] ||
+      visit a d [b, c, e, f, g] ||
+      visit a e [b, c, d, f, g] ||
+      visit a f [b, c, d, e, g] ||
+      visit a g [b, c, d, e, f] ||
+      visit b c [a, d, e, f, g] ||
+      visit b d [a, c, e, f, g] ||
+      visit b e [a, c, d, f, g] ||
+      visit b f [a, c, d, e, g] ||
+      visit b g [a, c, d, e, f] ||
+      visit c d [a, b, e, f, g] ||
+      visit c e [a, b, d, f, g] ||
+      visit c f [a, b, d, e, g] ||
+      visit c g [a, b, d, e, f] ||
+      visit d e [a, b, c, f, g] ||
+      visit d f [a, b, c, e, g] ||
+      visit d g [a, b, c, e, f] ||
+      visit e f [a, b, c, d, g] ||
+      visit e g [a, b, c, d, f] ||
+      visit f g [a, b, c, d, e] ||
+      false
+  | [a, b, c, d, e, f, g, h] => visit a b [c, d, e, f, g, h] ||
+      visit a c [b, d, e, f, g, h] ||
+      visit a d [b, c, e, f, g, h] ||
+      visit a e [b, c, d, f, g, h] ||
+      visit a f [b, c, d, e, g, h] ||
+      visit a g [b, c, d, e, f, h] ||
+      visit a h [b, c, d, e, f, g] ||
+      visit b c [a, d, e, f, g, h] ||
+      visit b d [a, c, e, f, g, h] ||
+      visit b e [a, c, d, f, g, h] ||
+      visit b f [a, c, d, e, g, h] ||
+      visit b g [a, c, d, e, f, h] ||
+      visit b h [a, c, d, e, f, g] ||
+      visit c d [a, b, e, f, g, h] ||
+      visit c e [a, b, d, f, g, h] ||
+      visit c f [a, b, d, e, g, h] ||
+      visit c g [a, b, d, e, f, h] ||
+      visit c h [a, b, d, e, f, g] ||
+      visit d e [a, b, c, f, g, h] ||
+      visit d f [a, b, c, e, g, h] ||
+      visit d g [a, b, c, e, f, h] ||
+      visit d h [a, b, c, e, f, g] ||
+      visit e f [a, b, c, d, g, h] ||
+      visit e g [a, b, c, d, f, h] ||
+      visit e h [a, b, c, d, f, g] ||
+      visit f g [a, b, c, d, e, h] ||
+      visit f h [a, b, c, d, e, g] ||
+      visit g h [a, b, c, d, e, f] ||
+      false
+  | ws => (pairs ws).any fun (a,b,r) => visit a b r
+
+theorem scanPairs_eq (visit : Nat → Nat → List Nat → Bool) (ws : List Nat) :
+    scanPairs visit ws = (pairs ws).any (fun (a,b,r) => visit a b r) := by
+  rcases ws with _ | ⟨a, _ | ⟨b, _ | ⟨c, _ | ⟨d, _ | ⟨e, _ | ⟨f, _ | ⟨g, _ | ⟨h, _ | ⟨i, tail⟩⟩⟩⟩⟩⟩⟩⟩⟩
+  all_goals first | rfl | simp [scanPairs, pairs, singles, List.any_cons, Bool.or_assoc]
+
+def keptCalls (e l : Nat) (next : Nat → Nat → List Nat → Bool)
+    (a b : Nat) (r : List Nat) (w : Nat) : Bool :=
+  if w == a || w == b || r.elem w || (a != l && b != l && w < l) then false
+  else
+    let v := sepN w ||| cutsN r
+    let dropBoth := v == allPairCuts && next e w (w :: r)
+    let keepOne := ((v ||| sepN a == allPairCuts) && next (e-1) w (w :: a :: r)) ||
+                   ((v ||| sepN b == allPairCuts) && next (e-1) w (w :: b :: r))
+    match e with
+    | 0 => dropBoth
+    | 1 => dropBoth || keepOne
+    | _+2 => (dropBoth || keepOne) ||
+        ((v ||| sepN a ||| sepN b == allPairCuts) && next (e-2) w (w :: a :: b :: r))
+
+def quickDispatch (e l : Nat) (next : Nat → Nat → List Nat → Bool)
+    (a b : Nat) (r : List Nat) : Bool :=
+  let both := a &&& b
+  let either := a ||| b
+  ((both != 0 && both != allWireBits) && keptCalls e l next a b r both) ||
+    ((either != 0 && either != allWireBits) && keptCalls e l next a b r either)
+
+theorem quickDispatch_eq (e l : Nat) (next : Nat → Nat → List Nat → Bool)
+    (a b : Nat) (r : List Nat) : quickDispatch e l next a b r = dispatchN e l next a b r := by
+  unfold quickDispatch dispatchN opsN
+  generalize a &&& b = meet
+  generalize a ||| b = join
+  have kept (w : Nat) : keptCalls e l next a b r w =
+      (if w == a || w == b || r.elem w || (a != l && b != l && w < l) then false
+       else
+        let v := sepN w ||| cutsN r
+        ((v == allPairCuts) && next e w (w :: r)) ||
+          ((e != 0) && (((v ||| sepN a == allPairCuts) && next (e-1) w (w :: a :: r)) ||
+                        ((v ||| sepN b == allPairCuts) && next (e-1) w (w :: b :: r)))) ||
+          ((e ≥ 2) && (v ||| sepN a ||| sepN b == allPairCuts) && next (e-2) w (w :: a :: b :: r))) := by
+    rcases e with _ | _ | e <;> simp [keptCalls, Bool.or_assoc, Bool.and_assoc]
+  dsimp only
+  simp only [kept, List.filter_cons, List.filter_nil]
+  generalize (meet != 0 && meet != allWireBits) = okM
+  generalize (join != 0 && join != allWireBits) = okJ
+  cases okM <;> cases okJ <;> simp
+
+def tightEval : Nat → Nat → Nat → List Nat → Bool
+  | 0, e, l, ws => optN 0 e l ws
+  | 1, e, l, ws => optN 1 e l ws
+  | 2, e, l, ws => optN 2 e l ws
+  | k+3, e, l, ws => ws == [targetBits] || scanPairs (quickDispatch e l (tightEval (k+2))) ws
+
+theorem tightEval_eq (k e l : Nat) (ws : List Nat) : tightEval k e l ws = optN k e l ws := by
+  induction k generalizing e l ws with
+  | zero => rfl
+  | succ k ih =>
+    cases k with
+    | zero => rfl
+    | succ k =>
+      cases k with
+      | zero => rfl
+      | succ k =>
+        have same : tightEval (k+2) = optN (k+2) := funext fun e => funext fun l => funext fun ws => ih e l ws
+        have d : quickDispatch e l (optN (k+2)) = dispatchN e l (optN (k+2)) :=
+          funext fun a => funext fun b => funext fun r => quickDispatch_eq _ _ _ a b r
+        change (ws == [targetBits] || scanPairs (quickDispatch e l (tightEval (k+2))) ws) = _
+        rw [same, d, scanPairs_eq]
+        rfl
+
+def tightNode (k : Nat) (s : SearchNode) : Bool := tightEval k s.1 s.2.1 s.2.2
+
+theorem tightNode_eq (k : Nat) : tightNode k = evaluateN k := by
+  funext s
+  exact tightEval_eq k _ _ _
+
 def mask0 : Nat := 0x0
 
 def mask1 : Nat := 0x409840
@@ -1665,6 +1836,7 @@ def branch0Part0 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch0Part0_dead : branch0Part0.any (evaluateN 6) = false := by
+  rw [← tightNode_eq 6]
   decide +kernel
 
 def branch0Part1 : List SearchNode :=
@@ -1681,6 +1853,7 @@ def branch0Part1 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch0Part1_dead : branch0Part1.any (evaluateN 6) = false := by
+  rw [← tightNode_eq 6]
   decide +kernel
 
 def branch0Part2 : List SearchNode :=
@@ -1689,6 +1862,7 @@ def branch0Part2 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch0Part2_dead : branch0Part2.any (evaluateN 6) = false := by
+  rw [← tightNode_eq 6]
   decide +kernel
 
 def branch0Next : List SearchNode :=
@@ -1735,6 +1909,7 @@ def branch1Part0 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch1Part0_dead : branch1Part0.any (evaluateN 6) = false := by
+  rw [← tightNode_eq 6]
   decide +kernel
 
 def branch1Part1 : List SearchNode :=
@@ -1753,6 +1928,7 @@ def branch1Part1 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch1Part1_dead : branch1Part1.any (evaluateN 6) = false := by
+  rw [← tightNode_eq 6]
   decide +kernel
 
 def branch1Next : List SearchNode :=
@@ -1790,6 +1966,7 @@ def branch2Part0 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch2Part0_dead : branch2Part0.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch2Part1 : List SearchNode :=
@@ -1809,6 +1986,7 @@ def branch2Part1 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch2Part1_dead : branch2Part1.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch2Part2 : List SearchNode :=
@@ -1825,6 +2003,7 @@ def branch2Part2 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch2Part2_dead : branch2Part2.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch2Part3 : List SearchNode :=
@@ -1837,6 +2016,7 @@ def branch2Part3 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch2Part3_dead : branch2Part3.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch2Part4 : List SearchNode :=
@@ -1852,6 +2032,7 @@ def branch2Part4 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch2Part4_dead : branch2Part4.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch2Next : List SearchNode :=
@@ -1884,6 +2065,7 @@ def branch3Part0 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch3Part0_dead : branch3Part0.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch3Part1 : List SearchNode :=
@@ -1899,6 +2081,7 @@ def branch3Part1 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch3Part1_dead : branch3Part1.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch3Part2 : List SearchNode :=
@@ -1919,6 +2102,7 @@ def branch3Part2 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch3Part2_dead : branch3Part2.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch3Part3 : List SearchNode :=
@@ -1931,6 +2115,7 @@ def branch3Part3 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch3Part3_dead : branch3Part3.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch3Next : List SearchNode :=
@@ -1977,6 +2162,7 @@ def branch4Part0 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch4Part0_dead : branch4Part0.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch4Part1 : List SearchNode :=
@@ -1992,6 +2178,7 @@ def branch4Part1 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch4Part1_dead : branch4Part1.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch4Part2 : List SearchNode :=
@@ -2004,6 +2191,7 @@ def branch4Part2 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch4Part2_dead : branch4Part2.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch4Next : List SearchNode :=
@@ -2043,6 +2231,7 @@ def branch5Part0 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch5Part0_dead : branch5Part0.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch5Part1 : List SearchNode :=
@@ -2062,6 +2251,7 @@ def branch5Part1 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch5Part1_dead : branch5Part1.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch5Part2 : List SearchNode :=
@@ -2075,6 +2265,7 @@ def branch5Part2 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch5Part2_dead : branch5Part2.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch5Next : List SearchNode :=
@@ -2114,6 +2305,7 @@ def branch6Part0 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch6Part0_dead : branch6Part0.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch6Part1 : List SearchNode :=
@@ -2124,6 +2316,7 @@ def branch6Part1 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch6Part1_dead : branch6Part1.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch6Part2 : List SearchNode :=
@@ -2138,6 +2331,7 @@ def branch6Part2 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch6Part2_dead : branch6Part2.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch6Part3 : List SearchNode :=
@@ -2150,6 +2344,7 @@ def branch6Part3 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch6Part3_dead : branch6Part3.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch6Part4 : List SearchNode :=
@@ -2166,6 +2361,7 @@ def branch6Part4 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch6Part4_dead : branch6Part4.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch6Next : List SearchNode :=
@@ -2194,6 +2390,7 @@ def branch7Part0 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part0_dead : branch7Part0.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part1 : List SearchNode :=
@@ -2203,6 +2400,7 @@ def branch7Part1 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part1_dead : branch7Part1.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part2 : List SearchNode :=
@@ -2212,6 +2410,7 @@ def branch7Part2 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part2_dead : branch7Part2.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part3 : List SearchNode :=
@@ -2221,6 +2420,7 @@ def branch7Part3 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part3_dead : branch7Part3.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part4 : List SearchNode :=
@@ -2230,6 +2430,7 @@ def branch7Part4 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part4_dead : branch7Part4.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part5 : List SearchNode :=
@@ -2238,6 +2439,7 @@ def branch7Part5 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part5_dead : branch7Part5.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part6 : List SearchNode :=
@@ -2246,6 +2448,7 @@ def branch7Part6 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part6_dead : branch7Part6.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part7 : List SearchNode :=
@@ -2255,6 +2458,7 @@ def branch7Part7 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part7_dead : branch7Part7.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part8 : List SearchNode :=
@@ -2263,6 +2467,7 @@ def branch7Part8 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part8_dead : branch7Part8.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part9 : List SearchNode :=
@@ -2273,6 +2478,7 @@ def branch7Part9 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part9_dead : branch7Part9.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part10 : List SearchNode :=
@@ -2282,6 +2488,7 @@ def branch7Part10 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part10_dead : branch7Part10.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part11 : List SearchNode :=
@@ -2290,6 +2497,7 @@ def branch7Part11 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part11_dead : branch7Part11.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part12 : List SearchNode :=
@@ -2298,6 +2506,7 @@ def branch7Part12 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part12_dead : branch7Part12.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part13 : List SearchNode :=
@@ -2308,6 +2517,7 @@ def branch7Part13 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part13_dead : branch7Part13.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part14 : List SearchNode :=
@@ -2316,6 +2526,7 @@ def branch7Part14 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part14_dead : branch7Part14.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part15 : List SearchNode :=
@@ -2324,6 +2535,7 @@ def branch7Part15 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part15_dead : branch7Part15.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part16 : List SearchNode :=
@@ -2334,6 +2546,7 @@ def branch7Part16 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part16_dead : branch7Part16.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part17 : List SearchNode :=
@@ -2342,6 +2555,7 @@ def branch7Part17 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part17_dead : branch7Part17.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Part18 : List SearchNode :=
@@ -2351,6 +2565,7 @@ def branch7Part18 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part18_dead : branch7Part18.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch7Next : List SearchNode :=
@@ -2388,6 +2603,7 @@ def branch8Part0 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch8Part0_dead : branch8Part0.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch8Part1 : List SearchNode :=
@@ -2399,6 +2615,7 @@ def branch8Part1 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch8Part1_dead : branch8Part1.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch8Part2 : List SearchNode :=
@@ -2408,6 +2625,7 @@ def branch8Part2 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch8Part2_dead : branch8Part2.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch8Part3 : List SearchNode :=
@@ -2421,6 +2639,7 @@ def branch8Part3 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch8Part3_dead : branch8Part3.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch8Part4 : List SearchNode :=
@@ -2433,6 +2652,7 @@ def branch8Part4 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch8Part4_dead : branch8Part4.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch8Part5 : List SearchNode :=
@@ -2444,6 +2664,7 @@ def branch8Part5 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch8Part5_dead : branch8Part5.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch8Part6 : List SearchNode :=
@@ -2459,6 +2680,7 @@ def branch8Part6 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch8Part6_dead : branch8Part6.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch8Part7 : List SearchNode :=
@@ -2468,6 +2690,7 @@ def branch8Part7 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch8Part7_dead : branch8Part7.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch8Part8 : List SearchNode :=
@@ -2477,6 +2700,7 @@ def branch8Part8 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch8Part8_dead : branch8Part8.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch8Part9 : List SearchNode :=
@@ -2490,6 +2714,7 @@ def branch8Part9 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch8Part9_dead : branch8Part9.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch8Next : List SearchNode :=
@@ -2529,6 +2754,7 @@ def branch9Part0 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch9Part0_dead : branch9Part0.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch9Part1 : List SearchNode :=
@@ -2541,6 +2767,7 @@ def branch9Part1 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch9Part1_dead : branch9Part1.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch9Part2 : List SearchNode :=
@@ -2555,6 +2782,7 @@ def branch9Part2 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch9Part2_dead : branch9Part2.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch9Part3 : List SearchNode :=
@@ -2570,6 +2798,7 @@ def branch9Part3 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch9Part3_dead : branch9Part3.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch9Part4 : List SearchNode :=
@@ -2578,6 +2807,7 @@ def branch9Part4 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch9Part4_dead : branch9Part4.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch9Part5 : List SearchNode :=
@@ -2592,6 +2822,7 @@ def branch9Part5 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch9Part5_dead : branch9Part5.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch9Part6 : List SearchNode :=
@@ -2606,6 +2837,7 @@ def branch9Part6 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch9Part6_dead : branch9Part6.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch9Next : List SearchNode :=
@@ -2644,6 +2876,7 @@ def branch10Part0 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch10Part0_dead : branch10Part0.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch10Part1 : List SearchNode :=
@@ -2665,6 +2898,7 @@ def branch10Part1 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch10Part1_dead : branch10Part1.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch10Part2 : List SearchNode :=
@@ -2682,6 +2916,7 @@ def branch10Part2 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch10Part2_dead : branch10Part2.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch10Next : List SearchNode :=
@@ -2724,6 +2959,7 @@ def branch11Part0 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch11Part0_dead : branch11Part0.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch11Part1 : List SearchNode :=
@@ -2744,6 +2980,7 @@ def branch11Part1 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch11Part1_dead : branch11Part1.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch11Part2 : List SearchNode :=
@@ -2752,6 +2989,7 @@ def branch11Part2 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch11Part2_dead : branch11Part2.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch11Next : List SearchNode :=
@@ -2793,6 +3031,7 @@ def branch12Part0 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch12Part0_dead : branch12Part0.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch12Part1 : List SearchNode :=
@@ -2807,6 +3046,7 @@ def branch12Part1 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch12Part1_dead : branch12Part1.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch12Part2 : List SearchNode :=
@@ -2818,6 +3058,7 @@ def branch12Part2 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch12Part2_dead : branch12Part2.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch12Part3 : List SearchNode :=
@@ -2834,6 +3075,7 @@ def branch12Part3 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch12Part3_dead : branch12Part3.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch12Part4 : List SearchNode :=
@@ -2845,6 +3087,7 @@ def branch12Part4 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch12Part4_dead : branch12Part4.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch12Part5 : List SearchNode :=
@@ -2856,6 +3099,7 @@ def branch12Part5 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch12Part5_dead : branch12Part5.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch12Part6 : List SearchNode :=
@@ -2868,6 +3112,7 @@ def branch12Part6 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch12Part6_dead : branch12Part6.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch12Next : List SearchNode :=
@@ -2909,6 +3154,7 @@ def branch13Part0 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch13Part0_dead : branch13Part0.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch13Part1 : List SearchNode :=
@@ -2926,6 +3172,7 @@ def branch13Part1 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch13Part1_dead : branch13Part1.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch13Part2 : List SearchNode :=
@@ -2941,6 +3188,7 @@ def branch13Part2 : List SearchNode :=
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch13Part2_dead : branch13Part2.any (evaluateN 7) = false := by
+  rw [← tightNode_eq 7]
   decide +kernel
 
 def branch13Next : List SearchNode :=
