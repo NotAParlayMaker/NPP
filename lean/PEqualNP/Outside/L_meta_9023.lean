@@ -124,7 +124,7 @@ theorem encode {m : Nat} (n base : Nat) (raw : Fin m → Nat) (hr : ∀ j, raw j
         rw [keep Q _ _ (len ▸ bp i hin b),ep xs hx v hv i hin b]
 
 theorem bitsOnto (d i : Nat) (hi : i<d) :
-    Function.Surjective (fun v : Fin (2^d) => v.val.testBit i) := by
+    Function.Surjective (fun v : Fin (2^d) => (v : Nat).testBit i) := by
   intro b
   cases b with
   | false => exact ⟨⟨0,by positivity⟩,by simp⟩
@@ -135,10 +135,10 @@ theorem chunk {k d : Nat} (base : Nat) (raw : Fin (2^k) → Nat) (hr : ∀ j, ra
     ∃ gs : List Gate, ∃ p : Nat → Bool → Nat, legal gs ∧ gs.length = 2^k+d*2^d ∧
       (∀ i<d, ∀ b, p i b < base+gs.length) ∧ ∀ xs : List Bool, xs.length=base → ∀ v : Fin (2^k),
       (∀ j, xs.getD (raw j) false = decide (j=v)) → ∀ i<d, ∀ b,
-      (run gs xs).getD (p i b) false = decide ((key v).val.testBit i=b) := by
+      (run gs xs).getD (p i b) false = decide (((key v) : Nat).testBit i=b) := by
   obtain ⟨P,p,hp,lp,bp,ep⟩ := classify base raw key hr onto
   obtain ⟨Q,q,hq,lq,bq,eq⟩ := encode d (base+P.length) p bp
-    (fun i a => a.val.testBit i) (bitsOnto d)
+    (fun i a => (a : Nat).testBit i) (bitsOnto d)
   exact ⟨P++Q,q,legalAppend hp hq,by simp [lp,lq],by simpa [Nat.add_assoc] using bq,
     fun xs hx v hv i hi b => by
       rw [run_append]
@@ -157,7 +157,7 @@ theorem literalSide (k base : Nat) (raw : Fin (2^k) → Nat) (hr : ∀ i, raw i 
     ∃ gs : List Gate, ∃ p : Fin k → Bool → Nat, legal gs ∧ gs.length ≤ budget k ∧
       (∀ i b, p i b < base+gs.length) ∧ ∀ xs : List Bool, xs.length=base → ∀ v : Fin (2^k),
       (∀ j, xs.getD (raw j) false = decide (j=v)) → ∀ i b,
-      (run gs xs).getD (p i b) false = decide (v.val.testBit i=b) := by
+      (run gs xs).getD (p i b) false = decide ((v : Nat).testBit i=b) := by
   let h := (k+1)/2
   let l := k/2
   have sum : h+l=k := by dsimp [h,l]; omega
@@ -166,18 +166,18 @@ theorem literalSide (k base : Nat) (raw : Fin (2^k) → Nat) (hr : ∀ i, raw i 
   have pos : 0 < 2^l := by positivity
   have ple : (2:Nat)^l ≤ 2^h := Nat.pow_le_pow_right (by decide) smaller
   have pk : (2:Nat)^l ≤ 2^k := Nat.pow_le_pow_right (by decide) (by omega)
-  let low (v : Fin (2^k)) : Fin (2^l) := ⟨v.val%2^l,Nat.mod_lt _ pos⟩
-  let high (v : Fin (2^k)) : Fin (2^h) := ⟨v.val/2^l, (Nat.div_lt_iff_lt_mul pos).mpr (by rw [powers]; exact v.isLt)⟩
+  let low (v : Fin (2^k)) : Fin (2^l) := ⟨(v : Nat)%2^l,Nat.mod_lt _ pos⟩
+  let high (v : Fin (2^k)) : Fin (2^h) := ⟨(v : Nat)/2^l, (Nat.div_lt_iff_lt_mul pos).mpr (by rw [powers]; exact v.isLt)⟩
   have ontoL : Function.Surjective low := by
     intro v
-    exact ⟨⟨v.val,v.isLt.trans_le pk⟩,Fin.ext (Nat.mod_eq_of_lt v.isLt)⟩
+    exact ⟨⟨(v : Nat),v.isLt.trans_le pk⟩,Fin.ext (Nat.mod_eq_of_lt v.isLt)⟩
   have ontoH : Function.Surjective high := by
     intro v
-    exact ⟨⟨v.val*2^l,by rw [←powers]; exact Nat.mul_lt_mul_of_pos_right v.isLt pos⟩,
+    exact ⟨⟨(v : Nat)*2^l,by rw [←powers]; exact Nat.mul_lt_mul_of_pos_right v.isLt pos⟩,
       Fin.ext (Nat.mul_div_cancel _ pos)⟩
   obtain ⟨P,p,hp,lp,bp,ep⟩ := chunk base raw hr low ontoL
   obtain ⟨Q,q,hq,lq,bq,eq⟩ := chunk (base+P.length) raw (fun i => (hr i).trans_le (Nat.le_add_right ..)) high ontoH
-  let out (i : Fin k) (b : Bool) := if i.val<l then p i b else q (i.val-l) b
+  let out (i : Fin k) (b : Bool) := if (i : Nat)<l then p i b else q ((i : Nat)-l) b
   refine ⟨P++Q,out,legalAppend hp hq,?_,?_,?_⟩
   · have add : l*2^l + h*2^h ≤ k*2^h := by
       calc
@@ -190,7 +190,7 @@ theorem literalSide (k base : Nat) (raw : Fin (2^k) → Nat) (hr : ∀ i, raw i 
     dsimp [out]
     split
     next e => have := bp i e b; simp; omega
-    next e => simpa [Nat.add_assoc] using bq (i.val-l) (by have := i.isLt; omega) b
+    next e => simpa [Nat.add_assoc] using bq ((i : Nat)-l) (by have := i.isLt; omega) b
   · intro xs hx v hot i b
     have len : (run P xs).length=base+P.length := by rw [run_length,hx]
     rw [run_append]
@@ -299,7 +299,7 @@ theorem testBit_tableIndex : ∀ (m : ℕ) (x : Fin m → Bool) (j : ℕ),
       · rw [dif_neg hj, dif_neg (by omega)]
 
 theorem index_of_bits {d : Nat} (v : Fin (2^d)) :
-    tableIndex (fun i : Fin d => v.val.testBit i) = v.val := by
+    tableIndex (fun i : Fin d => (v : Nat).testBit i) = (v : Nat) := by
   apply Nat.eq_of_testBit_eq
   intro j
   rw [testBit_tableIndex]
@@ -308,7 +308,7 @@ theorem index_of_bits {d : Nat} (v : Fin (2^d)) :
   next h => exact (Nat.testBit_lt_two_pow (v.isLt.trans_le (Nat.pow_le_pow_right (by decide) (by omega)))).symm
 
 def bits {k l : Nat} (u : Fin (2^k)) (v : Fin (2^l)) : Fin (k+l) → Bool :=
-  Fin.addCases (fun i => u.val.testBit i) (fun i => v.val.testBit i)
+  Fin.addCases (fun i => (u : Nat).testBit i) (fun i => (v : Nat).testBit i)
 
 theorem adjBits {k l : Nat} (A : Fin (2^k) → Fin (2^l) → Bool) (u v) :
     adjFun A (bits u v) = A u v := by
@@ -319,8 +319,8 @@ theorem network (k l : Nat) :
       (∀ i b, p i b < 2^k+2^l+G.length) ∧ ∀ (u : Fin (2^k)) (v : Fin (2^l)) i b,
         (run G (oneEach u v)).getD (p i b) false = decide (bits u v i=b) := by
   let n := 2^k+2^l
-  obtain ⟨P,a,hp,lp,bp,ep⟩ := literalSide k n Fin.val (fun i => i.isLt.trans_le (Nat.le_add_right ..))
-  obtain ⟨Q,b,hq,lq,bq,eq⟩ := literalSide l (n+P.length) (fun j => 2^k+j.val) (by intro j; have := j.isLt; dsimp [n]; omega)
+  obtain ⟨P,a,hp,lp,bp,ep⟩ := literalSide k n (fun i => (i : Nat)) (fun i => i.isLt.trans_le (Nat.le_add_right ..))
+  obtain ⟨Q,b,hq,lq,bq,eq⟩ := literalSide l (n+P.length) (fun j => 2^k+(j : Nat)) (by intro j; have := j.isLt; dsimp [n]; omega)
   let p : Fin (k+l) → Bool → Nat := Fin.addCases a b
   refine ⟨P++Q,p,legalAppend hp hq,by simpa using Nat.add_le_add lp lq,?_,?_⟩
   · intro i c
@@ -337,7 +337,7 @@ theorem network (k l : Nat) :
       rw [keep Q _ _ (lenP ▸ bp i c)]
       apply ep _ len u _ i c
       intro j
-      simp [oneEach,List.getD_eq_getElem?_getD,List.getElem?_append_left (by simpa using j.isLt : j.val < (List.ofFn (fun t : Fin (2^k) => decide (t=u))).length)]
+      simp [oneEach,List.getD_eq_getElem?_getD,List.getElem?_append_left (by simpa using j.isLt : (j : Nat) < (List.ofFn (fun t : Fin (2^k) => decide (t=u))).length)]
     | right i =>
       simp only [p,bits,Fin.addCases_right]
       apply eq _ lenP v _ i c
@@ -374,7 +374,7 @@ theorem main (k l s : Nat) (A : Fin (2^k) → Fin (2^l) → Bool) (hf : HasLitSi
       induction i using Fin.addCases with
       | left i =>
         simp only [ports,Fin.addCases_left,y,x,Fin.val_castAdd,spec]
-        have hi : i.val < k+l := i.isLt
+        have hi : (i : Nat) < k+l := i.isLt
         rw [List.getD_append _ _ _ _ (by rw [List.length_ofFn]; exact hi)]
         simp [List.getD_eq_getElem?_getD,z,hi]
       | right i =>
