@@ -50,9 +50,11 @@ theorem PEqualNP.Outside.R_meta_4833_32
           bstep (w.map (fun v => v.getLsbD k)) g := by
       classical
       obtain ⟨x,y,hxy,hx,hy⟩ := hinputs
+      have andEval (xs : List Bool) : GateOp.and.eval xs = xs.all id := rfl
+      have orEval (xs : List Bool) : GateOp.or.eval xs = xs.any id := rfl
       rcases hop with hop | hop <;>
         simp [vstep, bstep, enc, hxy, hop, Nat.mod_eq_of_lt hx, Nat.mod_eq_of_lt hy,
-          GateOp.eval, BitVec.getLsbD_and, BitVec.getLsbD_or] <;>
+          andEval, orEval, BitVec.getLsbD_and, BitVec.getLsbD_or] <;>
         cases hxw : w[x]? <;> cases hyw : w[y]? <;> simp [hxw, hyw]
 
     have fold_sim (gs : List Gate) (w : List (BitVec 32)) (k : Nat)
@@ -67,11 +69,12 @@ theorem PEqualNP.Outside.R_meta_4833_32
         rw [ih _ (fun g hg => h g (by simp [hg])), step g w k (h g (by simp)).1 (h g (by simp)).2]
 
     intro C a hC ha hs
+    have sizeEq (D : Circuit) : D.size = D.gates.length := rfl
     let p : Fin 18 → Bool × Fin 29 × Fin 29 := fun i => enc (C.gates.getD i.val ⟨GateOp.or, []⟩)
     have hp : (List.ofFn p).take C.size = C.gates.map enc := by
       apply List.ext_getElem
-      · simp only [List.length_take, List.length_ofFn, List.length_map, Circuit.size]
-        simp only [Circuit.size] at hs
+      · simp only [List.length_take, List.length_ofFn, List.length_map, sizeEq]
+        simp only [sizeEq] at hs
         omega
       · intro i hi hi2
         have hi3 : i < C.gates.length := by simpa using hi2
@@ -89,11 +92,11 @@ theorem PEqualNP.Outside.R_meta_4833_32
         rw [List.getD_eq_getElem _ _ hj, hjg]
       have hx : x < 29 := by
         have h := hC.2.1 j hj x (by simpa [hgate, hxy])
-        simp only [Circuit.size] at hs
+        simp only [sizeEq] at hs
         omega
       have hy : y < 29 := by
         have h := hC.2.1 j hj y (by simpa [hgate, hxy])
-        simp only [Circuit.size] at hs
+        simp only [sizeEq] at hs
         omega
       exact ⟨hop, x,y,hxy,hx,hy⟩
     refine ⟨p, ?_⟩
