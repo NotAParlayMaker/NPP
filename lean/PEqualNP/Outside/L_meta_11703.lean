@@ -4,6 +4,9 @@ namespace PEqualNP.Outside.L_meta_11703
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
+-- This file follows the merged proof of L-meta-11485 by k-sandhu (same repository): the helper lemmas, the search
+-- bound for majority and the scheme (one gate for each vertex fixed to false, then a projection onto a triangle)
+-- are his; the graph, the order of the vertices and the circuit are those of this step.
 -- Circuit restrictions adapted from L-meta-9349 and L-meta-9129.
 lemma lLC {α:Type _} {a : α} {l:List α}:(a::l).length=l.length+1:=List.length_cons
 lemma lLA {α:Type _} {l1 l2:List α}:(l1++l2).length=l1.length+l2.length:=List.length_append
@@ -223,6 +226,18 @@ def elim (n : ℕ) (gs:List Gate) (acc:List Stat × List Gate):List Stat × List
  gs.foldl (qa n) acc
 lemma k4 (n : ℕ) (g:Gate) (gs:List Gate) (acc:List Stat × List Gate) :
    elim n (g::gs) acc=elim n gs (qa n acc g):=rfl
+lemma jz (n : ℕ) (pre post:List Gate) (acc:List Stat × List Gate) :
+   elim n (pre++post) acc=elim n post (elim n pre acc):=by
+ simp [elim,List.foldl_append]
+lemma q50 (n : ℕ) (gs:List Gate):∀ acc:List Stat × List Gate,
+   (elim n gs acc).1.length=acc.1.length+gs.length:=by
+ induction gs with
+ | nil => intro acc;rfl
+ | cons g gs ih =>
+   intro acc
+   rw [k4,ih]
+   simp only [qa,lLA,lLC,List.length_nil]
+   omega
 lemma wy (n k : ℕ) (d:Stat) (gs:List Gate):∀ acc:List Stat × List Gate,
    k < acc.1.length->(elim n gs acc).1.getD k d=acc.1.getD k d:=by
  induction gs with
@@ -355,6 +370,9 @@ lemma j7 (n : ℕ) (y:List Bool) (hy:y.length=n) (gs:List Gate) :
      exact (hi i).2
 def qd (n : ℕ) (b:Bool):List Stat :=
  List.ofFn (fun i:Fin n => Sum.inr (i : ℕ))++[Sum.inl b]
+lemma kp (n : ℕ) (b:Bool) :
+   (qd n b).getD n (Sum.inl false)=Sum.inl b :=
+ z2 _ _ _ _ (by simp)
 lemma q159 (n : ℕ) (b:Bool) (y:Fin n->Bool) :
    Inv n (List.ofFn y) (List.ofFn y++[b]) (qd n b,[]):=by
  refine ⟨by simp [qd],?_⟩
@@ -908,6 +926,12 @@ lemma majority_lower {s : ℕ} (h : HasCircuitSize 3 majority s) : 4 ≤ s := by
 def fix {n : ℕ} (f : BFn n) (p : Fin n) (b : Bool) : BFn n :=
   fun x => f (Function.update x p b)
 
+def depends {n : ℕ} (f : BFn n) (p : Fin n) : Prop :=
+  ∃ x : Fin n → Bool, fix f p (!x p) x ≠ f x
+
+def nonconstant {n : ℕ} (f : BFn n) : Prop :=
+  ∃ x y : Fin n → Bool, f x ≠ f y
+
 def graphTable (a : ℕ) (x : Fin 7 → Bool) : Bool := a.testBit (tableIndex x)
 
 def assignment (a : ℕ) (i : Fin 7) : Bool := a.testBit i.val
@@ -922,52 +946,53 @@ theorem equalSeven {f g : (Fin 7 → Bool) → Bool}
   rw [inputVector x]
   exact h (x 0) (x 1) (x 2) (x 3) (x 4) (x 5) (x 6)
 
-theorem lower340282366916277983315476705216340951040 (t : ℕ) (h : HasCircuitSize 7 (graphTable 340282366916277983315476705216340951040) t) : 4 ≤ t := by
-  let r : Fin 7 → Fin 3 := ![0, 0, 2, 0, 0, 1, 0]
-  have eq : (fun x : Fin 3 → Bool => (graphTable 340282366916277983315476705216340951040) (x ∘ r)) = majority := by decide +kernel
-  have reduced := yn r (graphTable 340282366916277983315476705216340951040) t h
+
+theorem lower340282366894529075958619828231056916480 (t : ℕ) (h : HasCircuitSize 7 (graphTable 340282366894529075958619828231056916480) t) : 4 ≤ t := by
+  let r : Fin 7 → Fin 3 := ![0, 0, 0, 0, 0, 1, 2]
+  have eq : (fun x : Fin 3 → Bool => (graphTable 340282366894529075958619828231056916480) (x ∘ r)) = majority := by decide +kernel
+  have reduced := yn r (graphTable 340282366894529075958619828231056916480) t h
   rw [eq] at reduced
   exact majority_lower reduced
 
-theorem lower340282366920938392350091100684833259520 (t : ℕ) (h : HasCircuitSize 7 (graphTable 340282366920938392350091100684833259520) t) : 5 ≤ t := by
-  have eq : fix (graphTable 340282366920938392350091100684833259520) 4 false = (graphTable 340282366916277983315476705216340951040) := equalSeven (by decide)
-  obtain ⟨s, hs, reduced⟩ := q70 6 (graphTable 340282366920938392350091100684833259520) 4 false t ⟨assignment 64, by decide⟩ ⟨assignment 0, assignment 36, by decide⟩ h
-  change HasCircuitSize 7 (fix (graphTable 340282366920938392350091100684833259520) 4 false) s at reduced
+theorem lower340282366920938060488101402552513331200 (t : ℕ) (h : HasCircuitSize 7 (graphTable 340282366920938060488101402552513331200) t) : 5 ≤ t := by
+  have eq : fix (graphTable 340282366920938060488101402552513331200) 4 false = (graphTable 340282366894529075958619828231056916480) := equalSeven (by decide)
+  obtain ⟨s, hs, reduced⟩ := q70 6 (graphTable 340282366920938060488101402552513331200) 4 false t ⟨assignment 64, by decide⟩ ⟨assignment 0, assignment 33, by decide⟩ h
+  change HasCircuitSize 7 (fix (graphTable 340282366920938060488101402552513331200) 4 false) s at reduced
   rw [eq] at reduced
-  have smaller := lower340282366916277983315476705216340951040 s reduced
+  have smaller := lower340282366894529075958619828231056916480 s reduced
   omega
 
-theorem lower340282366920938392351171981088076595200 (t : ℕ) (h : HasCircuitSize 7 (graphTable 340282366920938392351171981088076595200) t) : 6 ≤ t := by
-  have eq : fix (graphTable 340282366920938392351171981088076595200) 3 false = (graphTable 340282366920938392350091100684833259520) := equalSeven (by decide)
-  obtain ⟨s, hs, reduced⟩ := q70 6 (graphTable 340282366920938392351171981088076595200) 3 false t ⟨assignment 32, by decide⟩ ⟨assignment 0, assignment 36, by decide⟩ h
-  change HasCircuitSize 7 (fix (graphTable 340282366920938392351171981088076595200) 3 false) s at reduced
+theorem lower340282366920938060494226391504225566720 (t : ℕ) (h : HasCircuitSize 7 (graphTable 340282366920938060494226391504225566720) t) : 6 ≤ t := by
+  have eq : fix (graphTable 340282366920938060494226391504225566720) 3 false = (graphTable 340282366920938060488101402552513331200) := equalSeven (by decide)
+  obtain ⟨s, hs, reduced⟩ := q70 6 (graphTable 340282366920938060494226391504225566720) 3 false t ⟨assignment 32, by decide⟩ ⟨assignment 0, assignment 33, by decide⟩ h
+  change HasCircuitSize 7 (fix (graphTable 340282366920938060494226391504225566720) 3 false) s at reduced
   rw [eq] at reduced
-  have smaller := lower340282366920938392350091100684833259520 s reduced
+  have smaller := lower340282366920938060488101402552513331200 s reduced
   omega
 
-theorem lower340282366920938449240934082159593914368 (t : ℕ) (h : HasCircuitSize 7 (graphTable 340282366920938449240934082159593914368) t) : 7 ≤ t := by
-  have eq : fix (graphTable 340282366920938449240934082159593914368) 1 false = (graphTable 340282366920938392351171981088076595200) := equalSeven (by decide)
-  obtain ⟨s, hs, reduced⟩ := q70 6 (graphTable 340282366920938449240934082159593914368) 1 false t ⟨assignment 32, by decide⟩ ⟨assignment 0, assignment 36, by decide⟩ h
-  change HasCircuitSize 7 (fix (graphTable 340282366920938449240934082159593914368) 1 false) s at reduced
+theorem lower340282366920938439759307065314341027840 (t : ℕ) (h : HasCircuitSize 7 (graphTable 340282366920938439759307065314341027840) t) : 7 ≤ t := by
+  have eq : fix (graphTable 340282366920938439759307065314341027840) 2 false = (graphTable 340282366920938060494226391504225566720) := equalSeven (by decide)
+  obtain ⟨s, hs, reduced⟩ := q70 6 (graphTable 340282366920938439759307065314341027840) 2 false t ⟨assignment 32, by decide⟩ ⟨assignment 0, assignment 33, by decide⟩ h
+  change HasCircuitSize 7 (fix (graphTable 340282366920938439759307065314341027840) 2 false) s at reduced
   rw [eq] at reduced
-  have smaller := lower340282366920938392351171981088076595200 s reduced
+  have smaller := lower340282366920938060494226391504225566720 s reduced
   omega
 
 theorem lower340282366920938458722561099004846800896 (t : ℕ) (h : HasCircuitSize 7 (graphTable 340282366920938458722561099004846800896) t) : 8 ≤ t := by
-  have eq : fix (graphTable 340282366920938458722561099004846800896) 0 false = (graphTable 340282366920938449240934082159593914368) := equalSeven (by decide)
-  obtain ⟨s, hs, reduced⟩ := q70 6 (graphTable 340282366920938458722561099004846800896) 0 false t ⟨assignment 32, by decide⟩ ⟨assignment 0, assignment 34, by decide⟩ h
-  change HasCircuitSize 7 (fix (graphTable 340282366920938458722561099004846800896) 0 false) s at reduced
+  have eq : fix (graphTable 340282366920938458722561099004846800896) 1 false = (graphTable 340282366920938439759307065314341027840) := equalSeven (by decide)
+  obtain ⟨s, hs, reduced⟩ := q70 6 (graphTable 340282366920938458722561099004846800896) 1 false t ⟨assignment 32, by decide⟩ ⟨assignment 0, assignment 33, by decide⟩ h
+  change HasCircuitSize 7 (fix (graphTable 340282366920938458722561099004846800896) 1 false) s at reduced
   rw [eq] at reduced
-  have smaller := lower340282366920938449240934082159593914368 s reduced
+  have smaller := lower340282366920938439759307065314341027840 s reduced
   omega
 
-def graph (x : Fin 7 → Bool) : Bool := (x 0 && x 5) || (x 0 && x 6) || (x 1 && x 5) || (x 1 && x 6) || (x 2 && x 5) || (x 2 && x 6) || (x 3 && x 5) || (x 4 && x 6) || (x 5 && x 6)
+def graph (x : Fin 7 → Bool) : Bool := (x 0 && x 5) || (x 1 && x 5) || (x 2 && x 5) || (x 3 && x 5) || (x 0 && x 6) || (x 1 && x 6) || (x 2 && x 6) || (x 4 && x 6) || (x 5 && x 6)
 
 theorem lower (t : ℕ) (h : HasCircuitSize 7 graph t) : 8 ≤ t := by
   have eq : graph = (graphTable 340282366920938458722561099004846800896) := equalSeven (by decide)
   exact lower340282366920938458722561099004846800896 t (eq ▸ h)
 
-def witness : List Gate := [⟨.or, [5, 6]⟩, ⟨.or, [4, 5]⟩, ⟨.or, [3, 6]⟩, ⟨.and, [8, 9]⟩, ⟨.or, [2, 10]⟩, ⟨.or, [1, 11]⟩, ⟨.or, [0, 12]⟩, ⟨.and, [7, 13]⟩]
+def witness : List Gate := [⟨.or, [4, 5]⟩, ⟨.or, [3, 6]⟩, ⟨.or, [5, 6]⟩, ⟨.and, [7, 8]⟩, ⟨.or, [0, 10]⟩, ⟨.or, [2, 11]⟩, ⟨.or, [1, 12]⟩, ⟨.and, [9, 13]⟩]
 
 theorem witnessBasis : ∀ g ∈ witness,
     (g.op = GateOp.and ∨ g.op = GateOp.or) ∧ g.inputs.length ≤ 2 := by
