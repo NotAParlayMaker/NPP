@@ -561,72 +561,6 @@ def ext17 (x : Fin 11 → Bool) (i : Fin 17) : Bool :=
   else if i.val = 16 then x ⟨10, by omega⟩
   else false
 
-lemma project17to11 (C : Circuit) (hM : Monotone2 C)
-    (x0 x1 : Fin 11 → Bool)
-    (h0 : C.eval (List.ofFn (ext17 x0)) = false)
-    (h1 : C.eval (List.ofFn (ext17 x1)) = true) :
-    ∃ C' : Circuit, Monotone2 C' ∧ C'.size ≤ C.size ∧
-      ∀ x : Fin 11 → Bool, C'.eval (List.ofFn x) = C.eval (List.ofFn (ext17 x)) := by
-  let wmap0 : List (Option (Option ℕ)) :=
-    (List.range 17).map fun i => if i < 10 then some (some i) else if i = 16 then some (some 10) else none
-  have hw0_len : wmap0.length = 17 := by simp [wmap0]
-  have hw0_bd : ∀ a, some (some a) ∈ wmap0 → a < 11 + ([] : List Gate).length := by
-    intro a ha
-    simp only [wmap0, List.mem_map, List.mem_range] at ha
-    obtain ⟨i, hi, hia⟩ := ha
-    split_ifs at hia with hlt heq
-    · cases hia; simp; omega
-    · cases hia; simp
-  have hw0_ev : ∀ x : Fin 11 → Bool, ∀ i,
-      evalOpt (wiresFrom [] (List.ofFn x)) (wmap0.getD i none) = (List.ofFn (ext17 x)).getD i false := by
-    intro x i
-    by_cases hi : i < 17
-    · rw [List.getD_eq_getElem wmap0 none (by simp [wmap0, hi])]
-      rw [List.getD_eq_getElem (List.ofFn _) false (by simp [hi]), List.getElem_ofFn]
-      simp only [wmap0, List.getElem_map, List.getElem_range, ext17]
-      by_cases h10 : i < 10
-      · simp only [h10, ↓reduceIte, ↓reduceDIte, evalOpt, wiresFrom, List.foldl_nil]
-        rw [List.getD_eq_getElem _ _ (by simp; omega), List.getElem_ofFn]
-      · simp only [h10, ↓reduceIte, ↓reduceDIte]
-        by_cases h16 : i = 16
-        · simp only [h16, ↓reduceIte, evalOpt, wiresFrom, List.foldl_nil]
-          rw [List.getD_eq_getElem _ _ (by simp), List.getElem_ofFn]
-        · simp [h16, evalOpt]
-    · rw [List.getD_eq_default wmap0 none (by simp [wmap0]; omega)]
-      rw [List.getD_eq_default (List.ofFn _) false (by simp; omega)]
-      rfl
-  have hgs : ∀ g ∈ C.gates, (g.op = GateOp.and ∨ g.op = GateOp.or) ∧ g.inputs.length ≤ 2 := by
-    intro g hg
-    have hm := hM g hg
-    exact ⟨by simpa using hm.1, hm.2⟩
-  obtain ⟨_, hsz, _, hmon, hev⟩ := zeroFold_inv 11 C.gates (wmap0, []) hgs (by simp) hw0_bd
-  let res := C.gates.foldl (zeroStep 11) (wmap0, [])
-  have hres_ev : ∀ x : Fin 11 → Bool,
-      evalOpt (wiresFrom res.2 (List.ofFn x)) (res.1.getD C.output none) = C.eval (List.ofFn (ext17 x)) := by
-    intro x
-    exact hev x (List.ofFn (ext17 x)) (by simp [hw0_len]) (hw0_ev x) C.output
-  cases ho : res.1.getD C.output none with
-  | none =>
-    have := hres_ev x1
-    rw [ho, h1] at this
-    exact Bool.noConfusion this
-  | some o =>
-    cases o with
-    | none =>
-      have := hres_ev x0
-      rw [ho, h0] at this
-      exact Bool.noConfusion this
-    | some out =>
-      refine ⟨⟨res.2, out⟩, ?_, ?_, ?_⟩
-      · intro g hg
-        have hm := hmon g hg
-        exact ⟨by simpa using hm.1, hm.2⟩
-      · simpa [Circuit.size] using hsz
-      · intro x
-        have := hres_ev x
-        rw [ho] at this
-        exact this
-
 def core5Edges : List (ℕ × ℕ) :=
   [(0, 5), (1, 5), (3, 5), (1, 6), (2, 6), (4, 6), (2, 7), (3, 7),
    (3, 8), (4, 8), (0, 9), (4, 9), (0, 10), (2, 10)]
@@ -647,9 +581,6 @@ def negMasks44 : List ℕ :=
    8718, 9229, 10251, 12295, 14723, 16414, 16910, 17436, 18458, 20502, 24590,
    29446, 33821, 34841, 36885, 40081, 40973, 44105, 46341, 48577, 49180, 54324,
    58892, 63268, 67610, 81946, 88210, 92682, 97154, 117784, 122032, 126536, 131040]
-
-def emb17 (i : Fin 17) : Fin 26 :=
-  Fin.ofNat 26 (if i.val < 5 then i.val else if i.val < 14 then i.val + 8 else i.val + 9)
 
 def enc : List Bool → ℕ
   | [] => 0
@@ -745,12 +676,6 @@ lemma core5_indep_covered (x : Fin 11 → Bool)
     have h3 := congrArg (fun z => z.testBit k.val) heq
     simp only [Nat.testBit_or, h2, Bool.true_or] at h3
     exact h3.symm
-
-lemma core5_pos_edge : ∀ u v : Fin 11, core5AdjB u v = true →
-    ∃ p l : Fin 13, p.val < 5 ∧ (∃ d ∈ ({0, 1, 3, 9} : Finset (Fin 13)), p = l + d) ∧
-      ∀ k : Fin 17, decide (emb17 k = Fin.castAdd 13 p ∨ emb17 k = Fin.natAdd 13 l) = true →
-        ext17 (fun i : Fin 11 => decide (i = u ∨ i = v)) k = true := by
-  decide +kernel
 
 def isVcB (m : ℕ) : Bool :=
   core5Edges.all fun e => m.testBit e.1 || m.testBit e.2
@@ -3457,7 +3382,8 @@ lemma project4232 (C : Circuit) (hM : Monotone2 C)
       · intro g hg
         have hg' := hmon g hg
         exact ⟨by simpa using hg'.1, hg'.2⟩
-      · exact hsz
+      · change result.2.length ≤ C.gates.length
+        simpa only [List.length_nil, Nat.zero_add] using hsz
       · intro x
         have h := runs x
         rw [hOut] at h
@@ -3487,7 +3413,7 @@ lemma expandRaw4232 (x : Fin 11 → Bool) (i : Fin 17) :
 lemma expandMono4232 {x y : Fin 11 → Bool} (h : ∀ i, x i = true → y i = true) :
     ∀ i, expand4232 x i = true → expand4232 y i = true := by
   intro i
-  fin_cases i <;> first | exact h _ | decide
+  fin_cases i <;> first | exact h _ | exact fun hf => Bool.noConfusion hf
 
 lemma negativeCover4232 (x : Fin 11 → Bool)
     (indep : ∀ u v : Fin 11, core5.Adj u v → ¬ (x u = true ∧ x v = true)) :
