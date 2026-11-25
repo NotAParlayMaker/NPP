@@ -2,7 +2,7 @@ import Mathlib
 import PEqualNP.Defs
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.MetaComplexity.NestedCover
-  PEqualNP.EdgeOwnership PEqualNP.CleanedNonEdge PEqualNP.TopForm
+open PEqualNP.EdgeOwnership PEqualNP.CleanedNonEdge PEqualNP.TopForm
 
 theorem PEqualNP.Outside.R_meta_5328_2
     (hW : ∃ c : ℕ, ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (C : Circuit), (∀ (v : Fin n) (p : G.Walk v v), p.IsCycle → 5 ≤ p.length) → IsLeastAO G C → TopForm G C → ((Ustar G C).filter (fun e => ∃ (u v : Fin n), e = s(u, v) ∧ ∃ g ∈ junk G C, u ∈ wmax G C g ∧ gateVal n C g (pairInput u v) = true ∧ gateVal n C g (pairInput u u) = false ∧ gateVal n C g (pairInput v v) = false ∧ ∃ b : Fin 2, u ∈ orIn n C (opnd C g b) ∧ v ∈ orIn n C (opnd C g (1 - b)) ∧ 2 ≤ (orIn n C (opnd C g (1 - b))).card)).card ≤ c * (C.size + 1))
