@@ -8,7 +8,7 @@ theorem PEqualNP.Outside.R_meta_5056_1
     (∀ x : Fin 9 → Bool, (C.wires (List.ofFn x)).getD 9 false=(x 0||x 2)) →
     let f := fun (x : Fin 9 → Bool) =>
       ([1,12,23,34,40,5,16,27,38,57,68,85] : List ℕ).any fun t =>
-        x (Fin.ofNat 9 (t/10)) && x (Fin.ofNat 9 (t%10))
+        x (Fin.ofNat 9 (t / 10)) && x (Fin.ofNat 9 (t % 10))
     ∀ S : Finset ℕ, ¬(0∈S ∧ 2∈S) →
     (∀ x y, (∀ j∈S, (C.wires (List.ofFn x)).getD j false=(C.wires (List.ofFn y)).getD j false) → f x=f y) →
     ∃ i∈S, i<9 ∧ i≠0 ∧ i≠2)
@@ -16,7 +16,7 @@ theorem PEqualNP.Outside.R_meta_5056_1
     (∀ g∈gs, g.inputs.length≤2 ∧ (g.op=.and ∨ g.op=.or)) →
     let f := fun (x : Fin 9 → Bool) =>
       ([1,12,23,34,40,5,16,27,38,57,68,85] : List ℕ).any fun t =>
-        x (Fin.ofNat 9 (t/10)) && x (Fin.ofNat 9 (t%10))
+        x (Fin.ofNat 9 (t / 10)) && x (Fin.ofNat 9 (t % 10))
     let h := fun (x : Fin 9 → Bool) => x 0 || x 2
     let V := fun x => gs.foldl (fun w g => w++[g.op.eval (g.inputs.map fun j => w.getD j false)])
       (List.ofFn x++[h x])
