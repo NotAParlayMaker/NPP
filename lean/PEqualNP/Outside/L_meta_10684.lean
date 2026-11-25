@@ -2220,7 +2220,7 @@ lemma upd_r (sa da sc dc : ℕ) (w : W) : (upd sa da sc dc w).r = w.r := by
   unfold upd; cases Nat.beq w.s sa <;> cases Nat.beq w.s sc <;> rfl
 lemma fl_upd (sa da sc dc : ℕ) (w : W) (j : ℕ) : fl (upd sa da sc dc w) j = fl w j := by unfold fl; rw [upd_c]
 lemma WOk.upd {P : List ℕ} {w : W} (h : WOk P w) (sa da sc dc : ℕ) : WOk P (upd sa da sc dc w) := by
-  unfold L_meta_8405.upd
+  unfold PEqualNP.Outside.L_meta_10684_aux.Certificate.upd
   cases Nat.beq w.s sa <;> cases Nat.beq w.s sc
   · exact h
   · exact ⟨h.pa, h.pb, h.ec, h.ca, h.cb⟩
@@ -2230,7 +2230,7 @@ lemma map_upd_s (sa da sc dc : ℕ) (v : List W) : (v.map (upd sa da sc dc)).map
   rw [List.map_map]; exact List.map_congr_left fun w _ => upd_s _ _ _ _ w
 lemma cnt_upd (sa da sc dc : ℕ) (v : List W) (j : ℕ) : cnt (v.map (upd sa da sc dc)) j = cnt v j := by
   unfold cnt; rw [List.map_map]; congr 1; exact List.map_congr_left fun w _ => fl_upd _ _ _ _ w j
-lemma Rep.upd {v : List W} {S : Finset ℕ} (h : Rep v S) (sa da sc dc : ℕ) : Rep (v.map (L_meta_8405.upd sa da sc dc)) S := by
+lemma Rep.upd {v : List W} {S : Finset ℕ} (h : Rep v S) (sa da sc dc : ℕ) : Rep (v.map (PEqualNP.Outside.L_meta_10684_aux.Certificate.upd sa da sc dc)) S := by
   unfold Rep; rw [map_upd_s]; exact h
 def kp (sa : ℕ) (ka : Bool) (sc : ℕ) (kc : Bool) (w : W) : Bool := bif Nat.beq w.s sa then ka else bif Nat.beq w.s sc then kc else true
 lemma rmk_eq (sa : ℕ) (ka : Bool) (da sc : ℕ) (kc : Bool) (dc : ℕ) (v : List W) : ∀ h, rmk sa ka da sc kc dc v h = h ((v.filter (kp sa ka sc kc)).map (upd sa da sc dc)) := by
@@ -4413,12 +4413,12 @@ lemma cv_ok {t k k' z : ℕ} {v : List W} {S : Finset ℕ} {b : Bool} (hs : StOk
   simp only [cv, bR, hcov, cond_true] at h
   cases hp : pos' t <;> rw [hp] at h <;> simpa using h
 lemma nodeH_bi {f : ℕ → List W → Bool} {h : W → W → Bool → Bool → Bool → Bool → Bool → Nat → Nat → Nat → Bool} {d : Bool} {e n z t k k' : ℕ} {v : List W} {S S' : Finset ℕ} {x y : ℕ} {d' : Bool}
-    {κ : ℕ → Bool} {κ2 : ℕ → ℕ → Bool} {go : (L_meta_8405.X → L_meta_8405.X → Bool) → List L_meta_8405.X → Bool}
+    {κ : ℕ → Bool} {κ2 : ℕ → ℕ → Bool} {go : (PEqualNP.Outside.L_meta_10684_aux.Certificate.X → PEqualNP.Outside.L_meta_10684_aux.Certificate.X → Bool) → List PEqualNP.Outside.L_meta_10684_aux.Certificate.X → Bool}
     (hs : StOk P T l (k + 1) z v S) (hm : Min R m T (k' + 1) t S) (hk : k' ≤ k) (hd : d = pos' t) (hn : n = v.length)
     (hSe : S'.card ≤ e) (hb : Bi R d' x y S S') (hl : Live R m T k' t S') (hKP : KP R m T (k' + 1) t S v κ κ2)
     (hh : ∀ (a c : W) (oa oc ka kc kb : Bool) (x1 y1 : ℕ), op d' a.s c.s = op d' x y → h a c oa oc ka kc kb (op d' a.s c.s) x1 y1 = false →
       mid f m g np e (Nat.pred n) z v a c oa oc ka kc kb (op d' a.s c.s) x1 y1 = false)
-    (hgo : ∀ h xs, go h xs = false → xs = mkX d l (wst d l v) v → ∀ a c : L_meta_8405.X, a ∈ xs → c ∈ xs → a.w ∈ v → c.w ∈ v → a.s = a.w.s → c.s = c.w.s → a.s = x → c.s = y →
+    (hgo : ∀ h xs, go h xs = false → xs = mkX d l (wst d l v) v → ∀ a c : PEqualNP.Outside.L_meta_10684_aux.Certificate.X, a ∈ xs → c ∈ xs → a.w ∈ v → c.w ∈ v → a.s = a.w.s → c.s = c.w.s → a.s = x → c.s = y →
       h a c = false ∨ h c a = false)
     (hp : nodeH h d l e n v κ κ2 go = false) :
     ∃ z' r, f z' r = false ∧ StOk P T l k z' r S' ∧ ∀ w ∈ r, (w.s = op d' x y ∧ w.r = 0) ∨ ∃ w' ∈ v, w'.s = w.s ∧ w'.r = w.r := by
@@ -4498,10 +4498,10 @@ section sound
 variable {P : List ℕ} {l m g np T : ℕ} (X : Ctx P l m g np T)
 include X
 lemma node_bi {f : ℕ → List W → Bool} {d : Bool} {e n z t k k' : ℕ} {v : List W} {S S' : Finset ℕ} {x y : ℕ} {d' : Bool}
-    {κ : ℕ → Bool} {κ2 : ℕ → ℕ → Bool} {go : (L_meta_8405.X → L_meta_8405.X → Bool) → List L_meta_8405.X → Bool}
+    {κ : ℕ → Bool} {κ2 : ℕ → ℕ → Bool} {go : (PEqualNP.Outside.L_meta_10684_aux.Certificate.X → PEqualNP.Outside.L_meta_10684_aux.Certificate.X → Bool) → List PEqualNP.Outside.L_meta_10684_aux.Certificate.X → Bool}
     (hs : StOk P T l (k + 1) z v S) (hm : Min R m T (k' + 1) t S) (hk : k' ≤ k) (hd : d = pos' t) (hn : n = v.length)
     (hSe : S'.card ≤ e) (hb : Bi R d' x y S S') (hl : Live R m T k' t S') (hKP : KP R m T (k' + 1) t S v κ κ2)
-    (hgo : ∀ h xs, go h xs = false → xs = mkX d l (wst d l v) v → ∀ a c : L_meta_8405.X, a ∈ xs → c ∈ xs → a.w ∈ v → c.w ∈ v → a.s = a.w.s → c.s = c.w.s → a.s = x → c.s = y →
+    (hgo : ∀ h xs, go h xs = false → xs = mkX d l (wst d l v) v → ∀ a c : PEqualNP.Outside.L_meta_10684_aux.Certificate.X, a ∈ xs → c ∈ xs → a.w ∈ v → c.w ∈ v → a.s = a.w.s → c.s = c.w.s → a.s = x → c.s = y →
       h a c = false ∨ h c a = false)
     (hp : node f d l m g np e n z v κ κ2 go = false) :
     ∃ z' r, f z' r = false ∧ StOk P T l k z' r S' ∧ ∀ w ∈ r, (w.s = op d' x y ∧ w.r = 0) ∨ ∃ w' ∈ v, w'.s = w.s ∧ w'.r = w.r :=
@@ -5558,9 +5558,9 @@ lemma one_sound (hR : RR R) (hR2 : ∀ d a b, (R a = 0 ∨ R b = 0) → Al R d a
     (hF : P1 R P l m T Fs f) {k t z : ℕ} {v : List W} {S : Finset ℕ} {κ : ℕ → Bool} {κ2 : ℕ → ℕ → Bool} (hs : StOk P T l k z v S) (hcod : ∀ w ∈ v, w.r = R w.s) (hlen : 2 ≤ v.length)
     {k' : ℕ} (hk : k' ≤ k) (hl : Live Z0 m T k' t S) (hmW : MW R m T k' S) (hFb : MF R m T k' Fs S) (hKP : KP Z0 m T k' t S v κ κ2)
     (h2 : mv (look l m g np fu) l m g np k t z v κ κ2 = false)
-    (h1 : ∀ x y, x ∈ S → y ∈ S → x ≠ y → R x ≠ 0 → R y ≠ 0 → ∃ go : (L_meta_8405.X → L_meta_8405.X → Bool) → List L_meta_8405.X → Bool,
+    (h1 : ∀ x y, x ∈ S → y ∈ S → x ≠ y → R x ≠ 0 → R y ≠ 0 → ∃ go : (PEqualNP.Outside.L_meta_10684_aux.Certificate.X → PEqualNP.Outside.L_meta_10684_aux.Certificate.X → Bool) → List PEqualNP.Outside.L_meta_10684_aux.Certificate.X → Bool,
       node1 (f (k - 1) t) (pos' t) l m g np fm fh (k - t) v.length z v κ κ2 go = false ∧
-      ∀ h xs, go h xs = false → ∀ a c : L_meta_8405.X, a ∈ xs → c ∈ xs → a.w.r ≠ 0 → c.w.r ≠ 0 → a.s = x → c.s = y → h a c = false ∨ h c a = false) : False := by
+      ∀ h xs, go h xs = false → ∀ a c : PEqualNP.Outside.L_meta_10684_aux.Certificate.X, a ∈ xs → c ∈ xs → a.w.r ≠ 0 → c.w.r ≠ 0 → a.s = x → c.s = y → h a c = false ∨ h c a = false) : False := by
   refine phase_step hR2 (P := P) (l := l) (f := f (k - 1) t) (fm := fm) (fh := fh) (Fs := Fs) hs.rep hcod hk hl hmW hFb hfb ?_ ?_ ?_
   · intro hm
     exact mv_sound X hR (look_sound X hR fu) hs (fun w hw => Or.inr (hcod w hw)) hlen h2 k' hk hm hKP.toR
