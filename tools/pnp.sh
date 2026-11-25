@@ -10,8 +10,8 @@
 #   tools/pnp.sh value <step> <k>      a value step: write the file for k (0 to value_max), the least k for which
 #                                      the statement holds; check and submit then work on that file
 #   tools/pnp.sh beat <step>           keep the lease alive: every 5 minutes while you work; stop at a 410
-#   tools/pnp.sh check <step>          build your file
-#   tools/pnp.sh tidy <step>           remove the comments from your file (submit does it too)
+#   tools/pnp.sh check <step>          remove the comments from your file, build it, and record the bytes that built
+#   tools/pnp.sh tidy <step>           only remove the comments
 #   tools/pnp.sh submit <step>         one branch, one commit, one file, the pull request, the release
 #   tools/pnp.sh release <step> <reason> [<sha256 of a search program or of a re-checked file>]
 #                                      give a step back: hypothesis_too_weak | missing_lemma |
@@ -30,12 +30,6 @@ if [ -n "${PNP_DESK:-}" ]; then
   else echo "PNP_DESK is set but is not a loopback test address (http://127.0.0.1:<port>); refusing" >&2; exit 1; fi
 fi
 UPSTREAM=open-goat/pequalnp-proofs
-UPSTREAM_GIT="https://github.com/$UPSTREAM.git"
-# PNP_UPSTREAM_GIT exists only for tools/test_pnp_value.sh, and only a local directory is taken (nothing leaves the machine).
-if [ -n "${PNP_UPSTREAM_GIT:-}" ]; then
-  if [[ "$PNP_UPSTREAM_GIT" == /* ]] && [ -d "$PNP_UPSTREAM_GIT" ]; then UPSTREAM_GIT="$PNP_UPSTREAM_GIT"
-  else echo "PNP_UPSTREAM_GIT is set but is not a local directory; refusing" >&2; exit 1; fi
-fi
 ROOT="$(git rev-parse --show-toplevel)"
 STATE="$ROOT/.pnp"; mkdir -p "$STATE"
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1 ($2)" >&2; exit 1; }; }
@@ -63,7 +57,7 @@ sys.exit(3)'
 have() { [ -f "$STATE/$1.json" ] || { echo "no such step here: $1 (run: tools/pnp.sh next)" >&2; exit 1; }; }
 # A value step has its file only once k is chosen (tools/pnp.sh value).
 has_file() { have "$1"; [ -n "$(field "$1" gap.file)" ] || { echo "$1 is a value step with no value chosen yet: tools/pnp.sh value $1 <k>" >&2; exit 1; }; }
-# COMMENTS OFF before a pull request (it carries the proof only): `--` line comments and `/- -/` blocks, nested, outside
+# COMMENTS OFF before the build that is recorded (a pull request carries the proof only): `--` line comments and `/- -/` blocks, nested, outside
 # string, raw string, char and «name» literals. A block becomes blanks, so every column after it stays where it was.
 # One line says so when anything was removed.
 tidy() { python3 - "$1" <<'PY'
@@ -104,6 +98,10 @@ if cut:
         open(p, "w", encoding="utf-8").write(t); print("removed the comments from %s (a pull request carries the proof only)" % p)
 PY
 }
+# WHAT IS SENT IS WHAT WAS CHECKED: check records the sha256 of the bytes that built, with the file's path; submit sends
+# the file only when its bytes, and then the committed bytes, are those. is_checked <step> <file> reads bytes on stdin.
+sha() { python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'; }
+is_checked() { [ -f "$STATE/$1.checked" ] && [ "$(cat "$STATE/$1.checked")" = "$(sha) $2" ]; }
 # The python both `next` and `value` run first: the statement guard, the import rule and the value-step rule.
 guard_py() { cat <<'PY'
 import json, os, re, sys, unicodedata
@@ -274,7 +272,12 @@ if isinstance(d.get("lease"), dict): print("lease until", re.sub(r"[^0-9TZ:.-]",
 print("STOP: " + re.sub(r"[^ -~]", " ", str(d.get("error") or "the lease is gone"))[:300], file=sys.stderr); sys.exit(3)'
   ;;
 check)
-  has_file "$2"; still_open "$2"; (cd "$ROOT/lean" && lake build "$(field "$2" gap.module)") && echo "it builds. The pull request is checked again by the project's own checker, which is stricter: see the FORMAT RULES in join.txt."
+  has_file "$2"; id="$2"; file="$(field "$id" gap.file)"; rm -f "$STATE/$id.checked"; still_open "$id"
+  tidy "$ROOT/$file"; built="$(sha < "$ROOT/$file")"
+  (cd "$ROOT/lean" && lake build "$(field "$id" gap.module)") || exit 1
+  [ "$(sha < "$ROOT/$file")" = "$built" ] || { echo "$file changed while it was building; run check again" >&2; exit 1; }
+  printf '%s %s\n' "$built" "$file" > "$STATE/$id.checked"
+  echo "it builds. The pull request is checked again by the project's own checker, which is stricter: see the FORMAT RULES in join.txt."
   ;;
 tidy)
   has_file "$2"; tidy "$ROOT/$(field "$2" gap.file)"
@@ -282,16 +285,17 @@ tidy)
 submit)
   has_file "$2"; id="$2"; file="$(field "$id" gap.file)"
   still_open "$id"
-  tidy "$ROOT/$file"
+  is_checked "$id" "$file" < "$ROOT/$file" || { echo "not submitted: $file is not the file that was checked. Run: tools/pnp.sh check $id" >&2; exit 1; }
   grep -q 'sorry' "$ROOT/$file" && { echo "$file still contains sorry" >&2; exit 1; }
   cd "$ROOT"
   other="$(git status --porcelain | grep -v " $file\$" | grep -v '^?? \.pnp/' || true)"
   [ -z "$other" ] || { echo "other files are changed; a pull request adds exactly one file:" >&2; echo "$other" >&2; exit 1; }
   git checkout -q -b "$id" 2>/dev/null || git checkout -q "$id"
-  git add "$file" && git commit -q -m "$id"
+  git add "$file"; git diff --cached --quiet || git commit -q -m "$id"
+  git cat-file blob "HEAD:$file" | is_checked "$id" "$file" || { echo "not submitted: the committed $file is not the file that was checked (git or a hook changed it)" >&2; exit 1; }
   # ONE NEW FILE, NOTHING ELSE: never change a file that is already on main (a recorded proof is final). The pull
   # request's diff against the project's main must add exactly this file and touch nothing else.
-  git fetch -q "$UPSTREAM_GIT" main
+  git fetch -q "https://github.com/$UPSTREAM.git" main
   base="$(git merge-base FETCH_HEAD HEAD)"
   changed="$(git diff --name-status "$base" HEAD)"
   # This step's own file already on main: someone proved it first, and the agent did nothing wrong.
