@@ -50,9 +50,13 @@ theorem PEqualNP.Outside.R_meta_6961_704
       (h : ∀ i ∈ g.inputs, w.getD i false = true → w'.getD i false = true)
       (he : g.op.eval (g.inputs.map fun i => w.getD i false) = true) :
       g.op.eval (g.inputs.map fun i => w'.getD i false) = true := by
-    rcases hg with hg | hg <;> rw [hg] at he ⊢ <;> simp [GateOp.eval] at he ⊢
-    · intro i hi; exact h i hi (he i hi)
-    · obtain ⟨i, hi, hv⟩ := he; exact ⟨i, hi, h i hi hv⟩
+    rcases hg with hg | hg <;> rw [hg] at he ⊢
+    · change List.all _ id = true at he ⊢
+      simp at he ⊢
+      intro i hi; exact h i hi (he i hi)
+    · change List.any _ id = true at he ⊢
+      simp at he ⊢
+      obtain ⟨i, hi, hv⟩ := he; exact ⟨i, hi, h i hi hv⟩
   have W_mono (gs : List Gate) (hm : ∀ g ∈ gs, g.op = GateOp.and ∨ g.op = GateOp.or)
       (x y : List Bool) (hl : x.length = y.length) (hxy : Le x y) : Le (W gs x) (W gs y) := by
     induction gs using List.reverseRecOn with
