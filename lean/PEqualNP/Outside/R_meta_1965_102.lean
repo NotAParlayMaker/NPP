@@ -30,6 +30,20 @@ import PEqualNP.Defs
 -- keeps the property) one reaches an AND gate inside the cone of the double re-read gate.
 theorem PEqualNP.Outside.R_meta_1965_102 (h1 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), x1.size ≤ (27 : ℕ) → (∀ (x2 : ℕ) (x3 : PEqualNP.CircuitLowerBounds.Gate), x1.gates[x2]? = Option.some x3 → (x3.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ x3.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ ∃ (x5 : ℕ) (x6 : ℕ), x3.inputs = [x5, x6] ∧ x5 ≠ x6 ∧ x5 < (14 : ℕ) + x2 ∧ x6 < (14 : ℕ) + x2) → (∀ (x2 : Fin (14 : ℕ) → Bool), x1.eval (List.ofFn x2) = Bool.true ↔ ∃ (x3 : Fin (7 : ℕ)) (x4 : Fin (7 : ℕ)), (x3 = x4 ∨ x3 = x4 + (1 : Fin (7 : ℕ)) ∨ x3 = x4 + (3 : Fin (7 : ℕ))) ∧ x2 (Fin.castAdd (7 : ℕ) x3) = Bool.true ∧ x2 (Fin.natAdd (7 : ℕ) x4) = Bool.true) → (∀ (y1 : PEqualNP.CircuitLowerBounds.Circuit), (∀ (x2 : ℕ) (x3 : PEqualNP.CircuitLowerBounds.Gate), y1.gates[x2]? = Option.some x3 → (x3.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ x3.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ ∃ (x5 : ℕ) (x6 : ℕ), x3.inputs = [x5, x6] ∧ x5 ≠ x6 ∧ x5 < (14 : ℕ) + x2 ∧ x6 < (14 : ℕ) + x2) → (∀ (x2 : Fin (14 : ℕ) → Bool), y1.eval (List.ofFn x2) = Bool.true ↔ ∃ (x3 : Fin (7 : ℕ)) (x4 : Fin (7 : ℕ)), (x3 = x4 ∨ x3 = x4 + (1 : Fin (7 : ℕ)) ∨ x3 = x4 + (3 : Fin (7 : ℕ))) ∧ x2 (Fin.castAdd (7 : ℕ) x3) = Bool.true ∧ x2 (Fin.natAdd (7 : ℕ) x4) = Bool.true) → x1.size ≤ y1.size) → ¬(∃ (x2 : ℕ) (x3 : ℕ), (PEqualNP.MetaComplexity.NestedCover.gateAt x1 x2).op = PEqualNP.CircuitLowerBounds.GateOp.and ∧ (PEqualNP.MetaComplexity.NestedCover.gateAt x1 x3).op = PEqualNP.CircuitLowerBounds.GateOp.and ∧ PEqualNP.EdgeOwnership.InCone (14 : ℕ) x1 x2 x3 ∧ ((14 : ℕ) + x3 = x1.output ∨ PEqualNP.EdgeOwnership.InCone (14 : ℕ) x1 x3 (x1.output - (14 : ℕ))))) (h2 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), (∀ (x2 : ℕ) (x3 : PEqualNP.CircuitLowerBounds.Gate), x1.gates[x2]? = Option.some x3 → (x3.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ x3.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ ∃ (x5 : ℕ) (x6 : ℕ), x3.inputs = [x5, x6] ∧ x5 ≠ x6 ∧ x5 < (14 : ℕ) + x2 ∧ x6 < (14 : ℕ) + x2) → (∀ (x2 : Fin (14 : ℕ) → Bool), x1.eval (List.ofFn x2) = Bool.true ↔ ∃ (x3 : Fin (7 : ℕ)) (x4 : Fin (7 : ℕ)), (x3 = x4 ∨ x3 = x4 + (1 : Fin (7 : ℕ)) ∨ x3 = x4 + (3 : Fin (7 : ℕ))) ∧ x2 (Fin.castAdd (7 : ℕ) x3) = Bool.true ∧ x2 (Fin.natAdd (7 : ℕ) x4) = Bool.true) → ¬(∃ (x2 : ℕ) (x3 : ℕ), (PEqualNP.MetaComplexity.NestedCover.gateAt x1 x2).op = PEqualNP.CircuitLowerBounds.GateOp.and ∧ (PEqualNP.MetaComplexity.NestedCover.gateAt x1 x3).op = PEqualNP.CircuitLowerBounds.GateOp.and ∧ PEqualNP.EdgeOwnership.InCone (14 : ℕ) x1 x2 x3 ∧ ((14 : ℕ) + x3 = x1.output ∨ PEqualNP.EdgeOwnership.InCone (14 : ℕ) x1 x3 (x1.output - (14 : ℕ)))) → (27 : ℕ) ≤ x1.size) : ¬∃ (x1 : PEqualNP.CircuitLowerBounds.Circuit), x1.size ≤ (27 : ℕ) ∧ (∀ (x2 : ℕ) (x3 : PEqualNP.CircuitLowerBounds.Gate), x1.gates[x2]? = Option.some x3 → (x3.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ x3.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ ∃ (x5 : ℕ) (x6 : ℕ), x3.inputs = [x5, x6] ∧ x5 ≠ x6 ∧ x5 < (14 : ℕ) + x2 ∧ x6 < (14 : ℕ) + x2) ∧ (∀ (x2 : Fin (14 : ℕ) → Bool), x1.eval (List.ofFn x2) = Bool.true ↔ ∃ (x3 : Fin (7 : ℕ)) (x4 : Fin (7 : ℕ)), (x3 = x4 ∨ x3 = x4 + (1 : Fin (7 : ℕ)) ∨ x3 = x4 + (3 : Fin (7 : ℕ))) ∧ x2 (Fin.castAdd (7 : ℕ) x3) = Bool.true ∧ x2 (Fin.natAdd (7 : ℕ) x4) = Bool.true) ∧ ∃ (x2 : ℕ), (PEqualNP.MetaComplexity.NestedCover.gateAt x1 x2).op = PEqualNP.CircuitLowerBounds.GateOp.and ∧ ((14 : ℕ) + x2 = x1.output ∨ PEqualNP.EdgeOwnership.InCone (14 : ℕ) x1 x2 (x1.output - (14 : ℕ))) ∧ PEqualNP.EdgeOwnership.gateVal (14 : ℕ) x1 x2 (PEqualNP.EdgeOwnership.pairInput (0 : Fin (14 : ℕ)) (7 : Fin (14 : ℕ))) = Bool.true ∧ ∀ (x3 : Fin (2 : ℕ)), PEqualNP.CleanedNonEdge.wireVal (14 : ℕ) x1 (PEqualNP.TopForm.opnd x1 x2 x3) (PEqualNP.EdgeOwnership.pairInput (0 : Fin (14 : ℕ)) (0 : Fin (14 : ℕ))) = Bool.false ∧ PEqualNP.CleanedNonEdge.wireVal (14 : ℕ) x1 (PEqualNP.TopForm.opnd x1 x2 x3) (PEqualNP.EdgeOwnership.pairInput (7 : Fin (14 : ℕ)) (7 : Fin (14 : ℕ))) = Bool.false := by
   classical
+  -- definitional facts proved by rfl, so that no equation lemma of a library definition is
+  -- generated in this file (the reduction file must declare nothing but its theorem)
+  have evAnd : ∀ l : List Bool, PEqualNP.CircuitLowerBounds.GateOp.eval PEqualNP.CircuitLowerBounds.GateOp.and l = l.all id := fun _ => rfl
+  have evOr : ∀ l : List Bool, PEqualNP.CircuitLowerBounds.GateOp.eval PEqualNP.CircuitLowerBounds.GateOp.or l = l.any id := fun _ => rfl
+  have evNot : ∀ l : List Bool, PEqualNP.CircuitLowerBounds.GateOp.eval PEqualNP.CircuitLowerBounds.GateOp.not l = !(l.headD false) := fun _ => rfl
+  have evMod : ∀ (m : ℕ) (l : List Bool), PEqualNP.CircuitLowerBounds.GateOp.eval (PEqualNP.CircuitLowerBounds.GateOp.mod m) l = decide (l.count true % m = 0) := fun _ _ => rfl
+  have evMaj : ∀ l : List Bool, PEqualNP.CircuitLowerBounds.GateOp.eval PEqualNP.CircuitLowerBounds.GateOp.maj l = decide (l.length ≤ 2 * l.count true) := fun _ => rfl
+  have wiresDef : ∀ (D : PEqualNP.CircuitLowerBounds.Circuit) (x : List Bool), D.wires x =
+      D.gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) x := fun _ _ => rfl
+  have coneStepDef : ∀ (n : ℕ) (cs : List (List ℕ)) (g : PEqualNP.CircuitLowerBounds.Gate),
+      PEqualNP.EdgeOwnership.coneStep n cs g = cs ++ [(g.inputs.filter (fun w => decide (n ≤ w ∧ w < n + cs.length))).flatMap
+        (fun w => (w - n) :: cs.getD (w - n) [])] := fun _ _ _ => rfl
+  have pairDef : ∀ {n : ℕ} (u v : Fin n), PEqualNP.EdgeOwnership.pairInput u v = fun w => decide (w = u ∨ w = v) :=
+    fun _ _ => rfl
   rintro ⟨C, hsize, hmodel, hcorrect, g, hgand, hgcone, hgval, hops⟩
   -- pass to a least circuit: by h1 it is flat, by h2 it has at least 27 gates
   have hex : ∃ (s : ℕ) (D : PEqualNP.CircuitLowerBounds.Circuit), (∀ (x2 : ℕ) (x3 : PEqualNP.CircuitLowerBounds.Gate), D.gates[x2]? = Option.some x3 → (x3.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ x3.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ ∃ (x5 : ℕ) (x6 : ℕ), x3.inputs = [x5, x6] ∧ x5 ≠ x6 ∧ x5 < (14 : ℕ) + x2 ∧ x6 < (14 : ℕ) + x2) ∧ (∀ (x2 : Fin (14 : ℕ) → Bool), D.eval (List.ofFn x2) = Bool.true ↔ ∃ (x3 : Fin (7 : ℕ)) (x4 : Fin (7 : ℕ)), (x3 = x4 ∨ x3 = x4 + (1 : Fin (7 : ℕ)) ∨ x3 = x4 + (3 : Fin (7 : ℕ))) ∧ x2 (Fin.castAdd (7 : ℕ) x3) = Bool.true ∧ x2 (Fin.natAdd (7 : ℕ) x4) = Bool.true) ∧ D.size = s :=
@@ -52,7 +66,7 @@ theorem PEqualNP.Outside.R_meta_1965_102 (h1 : ∀ (x1 : PEqualNP.CircuitLowerBo
       (PEqualNP.CircuitLowerBounds.Circuit.wires ⟨gs, 0⟩ w).length = w.length + gs.length := by
     intro gs
     induction gs with
-    | nil => intro w; simp [PEqualNP.CircuitLowerBounds.Circuit.wires]
+    | nil => intro w; simp [wiresDef]
     | cons a gs ih =>
       intro w
       change (PEqualNP.CircuitLowerBounds.Circuit.wires ⟨gs, 0⟩ (w ++ [a.op.eval (a.inputs.map fun i => w.getD i false)])).length = _
@@ -77,7 +91,7 @@ theorem PEqualNP.Outside.R_meta_1965_102 (h1 : ∀ (x1 : PEqualNP.CircuitLowerBo
       PEqualNP.CircuitLowerBounds.Circuit.wires ⟨gs ++ [a], 0⟩ w = PEqualNP.CircuitLowerBounds.Circuit.wires ⟨gs, 0⟩ w ++
         [a.op.eval (a.inputs.map fun i => (PEqualNP.CircuitLowerBounds.Circuit.wires ⟨gs, 0⟩ w).getD i false)] := by
     intro gs a w
-    simp only [PEqualNP.CircuitLowerBounds.Circuit.wires, List.foldl_append, List.foldl_cons, List.foldl_nil]
+    simp only [wiresDef, List.foldl_append, List.foldl_cons, List.foldl_nil]
   have wchar : ∀ (gs : List PEqualNP.CircuitLowerBounds.Gate) (w : List Bool) (j : ℕ), j < gs.length →
       (PEqualNP.CircuitLowerBounds.Circuit.wires ⟨gs, 0⟩ w).getD (w.length + j) false =
         (gs.getD j ⟨PEqualNP.CircuitLowerBounds.GateOp.or, []⟩).op.eval ((gs.getD j ⟨PEqualNP.CircuitLowerBounds.GateOp.or, []⟩).inputs.map fun i =>
@@ -168,7 +182,7 @@ theorem PEqualNP.Outside.R_meta_1965_102 (h1 : ∀ (x1 : PEqualNP.CircuitLowerBo
     | cons a gs ih =>
       intro cs
       rw [List.foldl_cons, ih]
-      simp [PEqualNP.EdgeOwnership.coneStep]
+      simp [coneStepDef]
       omega
   have cchar : ∀ (gs : List PEqualNP.CircuitLowerBounds.Gate) (i j : ℕ), i ∈ (gs.foldl (PEqualNP.EdgeOwnership.coneStep 14) []).getD j [] ↔
       j < gs.length ∧ ∃ w ∈ (gs.getD j ⟨PEqualNP.CircuitLowerBounds.GateOp.or, []⟩).inputs, 14 ≤ w ∧ w < 14 + j ∧
@@ -184,7 +198,7 @@ theorem PEqualNP.Outside.R_meta_1965_102 (h1 : ∀ (x1 : PEqualNP.CircuitLowerBo
       have key : ∀ k, k < gs.length →
           (PEqualNP.EdgeOwnership.coneStep 14 (gs.foldl (PEqualNP.EdgeOwnership.coneStep 14) []) a).getD k [] = (gs.foldl (PEqualNP.EdgeOwnership.coneStep 14) []).getD k [] := by
         intro k hk
-        simp only [PEqualNP.EdgeOwnership.coneStep, List.getD_eq_getElem?_getD]
+        simp only [coneStepDef, List.getD_eq_getElem?_getD]
         rw [List.getElem?_append_left (by omega)]
       rcases Nat.lt_trichotomy j gs.length with h | h | h
       · have e1 : (gs ++ [a]).getD j ⟨PEqualNP.CircuitLowerBounds.GateOp.or, []⟩ = gs.getD j ⟨PEqualNP.CircuitLowerBounds.GateOp.or, []⟩ := by
@@ -206,7 +220,7 @@ theorem PEqualNP.Outside.R_meta_1965_102 (h1 : ∀ (x1 : PEqualNP.CircuitLowerBo
         have e2 : (PEqualNP.EdgeOwnership.coneStep 14 (gs.foldl (PEqualNP.EdgeOwnership.coneStep 14) []) a).getD gs.length [] =
             (a.inputs.filter (fun w => decide (14 ≤ w ∧ w < 14 + gs.length))).flatMap
               (fun w => (w - 14) :: (gs.foldl (PEqualNP.EdgeOwnership.coneStep 14) []).getD (w - 14) []) := by
-          simp only [PEqualNP.EdgeOwnership.coneStep, List.getD_eq_getElem?_getD]
+          simp only [coneStepDef, List.getD_eq_getElem?_getD]
           rw [List.getElem?_append_right (by omega)]
           simp [hlen]
         rw [e2, e1]
@@ -220,7 +234,7 @@ theorem PEqualNP.Outside.R_meta_1965_102 (h1 : ∀ (x1 : PEqualNP.CircuitLowerBo
           rw [key (w - 14) (by omega)] at k3
           exact ⟨w, ⟨hw, k1, k2⟩, k3⟩
       · have e0 : (PEqualNP.EdgeOwnership.coneStep 14 (gs.foldl (PEqualNP.EdgeOwnership.coneStep 14) []) a).getD j [] = [] := by
-          simp only [PEqualNP.EdgeOwnership.coneStep, List.getD_eq_getElem?_getD]
+          simp only [coneStepDef, List.getD_eq_getElem?_getD]
           rw [List.getElem?_eq_none (by simp; omega)]
           rfl
         rw [e0]
@@ -246,7 +260,7 @@ theorem PEqualNP.Outside.R_meta_1965_102 (h1 : ∀ (x1 : PEqualNP.CircuitLowerBo
       PEqualNP.EdgeOwnership.pairInput (0 : Fin 14) (0 : Fin 14) ⟨w, hw⟩ = false →
       PEqualNP.EdgeOwnership.pairInput (7 : Fin 14) (7 : Fin 14) ⟨w, hw⟩ = false → False := by
     intro w hw hx h0 h7
-    simp [PEqualNP.EdgeOwnership.pairInput, Fin.ext_iff] at hx h0 h7
+    simp [pairDef, Fin.ext_iff] at hx h0 h7
     all_goals omega
   -- creation: a wire true at 1_(0,7) and false at 1_0 and at 1_7 is a gate wire with an AND
   -- gate in its reflexive cone
@@ -274,7 +288,7 @@ theorem PEqualNP.Outside.R_meta_1965_102 (h1 : ∀ (x1 : PEqualNP.CircuitLowerBo
                 ((C.wires (List.ofFn v)).getD a false || (C.wires (List.ofFn v)).getD b false) := by
               intro v
               rw [vgate v j hj, hor, hin]
-              simp [PEqualNP.CircuitLowerBounds.GateOp.eval, ha, hb]
+              simp [evAnd, evOr, evNot, evMod, evMaj, ha, hb]
             rw [ev] at hx
             rw [ev] at h0
             rw [ev] at h7
@@ -310,7 +324,7 @@ theorem PEqualNP.Outside.R_meta_1965_102 (h1 : ∀ (x1 : PEqualNP.CircuitLowerBo
   have hval : (C.wires (List.ofFn (PEqualNP.EdgeOwnership.pairInput (0 : Fin 14) (7 : Fin 14)))).getD (14 + g) false =
       ((C.wires (List.ofFn (PEqualNP.EdgeOwnership.pairInput (0 : Fin 14) (7 : Fin 14)))).getD a false && (C.wires (List.ofFn (PEqualNP.EdgeOwnership.pairInput (0 : Fin 14) (7 : Fin 14)))).getD b false) := by
     rw [vgate _ g hg, hgand, hin]
-    simp [PEqualNP.CircuitLowerBounds.GateOp.eval, ha, hb]
+    simp [evAnd, evOr, evNot, evMod, evMaj, ha, hb]
   have hgv : (C.wires (List.ofFn (PEqualNP.EdgeOwnership.pairInput (0 : Fin 14) (7 : Fin 14)))).getD (14 + g) false = true := hgval
   rw [hval, Bool.and_eq_true] at hgv
   have hopnd : PEqualNP.TopForm.opnd C g 0 = a := by
