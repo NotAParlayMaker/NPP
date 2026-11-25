@@ -3,19 +3,19 @@ import PEqualNP.Defs
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
-/-
-L-meta-5477. The graph has vertex 0 joined to 1, 2, 3, 4, 5 and vertex 1 joined to 2, 3.
-Plan: a circuit with at most 6 gates would, after fixing x4 := false and then x5 := false, leave a
-circuit with at most 4 gates for the function (x0 and (x1 or x2 or x3)) or (x1 and (x2 or x3)) read on
-six input wires, and an exhaustive kernel-checked search over truth tables shows 4 gates do not suffice.
-
-Sources, both merged in this repository under Apache 2.0, copied here because Outside files cannot
-import each other:
- * Part 1 (fixing an input removes a gate) is the body of L_meta_4047 by G30 (pull request 8332),
-   itself adapted from L_meta_538, unchanged except for the namespace.
- * Part 2 (truth-table search) is the method of L_meta_139 by Lewis Watson (pull request 36), moved
-   from 5 inputs and 32-bit tables to 6 inputs and 64-bit tables, with a new target and depth.
--/
+-- L-meta-5477. The graph has vertex 0 joined to 1, 2, 3, 4, 5 and vertex 1 joined to 2, 3.
+-- Plan: a circuit with at most 6 gates would, after fixing x4 := false and then x5 := false, leave
+-- a circuit with at most 4 gates for (x0 and (x1 or x2 or x3)) or (x1 and (x2 or x3)) read on six
+-- input wires, and an exhaustive kernel-checked search over truth tables shows 4 gates do not
+-- suffice.
+--
+-- Sources, both merged in this repository under Apache 2.0 and copied here, since one Outside
+-- file cannot build on another:
+--  * Part 1 (fixing an input removes a gate) is the body of L_meta_4047 by G30 (pull request
+--    8332), itself adapted from L_meta_538, unchanged except for the namespace.
+--  * Part 2 (truth-table search) is the method of L_meta_139 by Lewis Watson (pull request 36),
+--    moved from 5 inputs and 32-bit tables to 6 inputs and 64-bit tables, with a new target and
+--    depth.
 
 namespace PEqualNP.Outside.L_meta_5477
 
