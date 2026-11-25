@@ -154,12 +154,16 @@ theorem PEqualNP.Outside.R_meta_5234_512
             g.op.eval (g.inputs.map (fun i => w1.getD i false)) = true := by
           rcases hgao with hop | hop
           · rw [hop]
-            simp only [GateOp.eval, List.all_eq_true, List.mem_map]
+            change (g.inputs.map (fun i => w0.getD i false)).all id = true →
+              (g.inputs.map (fun i => w1.getD i false)).all id = true
+            simp only [List.all_eq_true, List.mem_map, id_eq]
             intro h b hb
             rcases hb with ⟨u, hu, rfl⟩
             exact hle u (h (w0.getD u false) ⟨u, hu, rfl⟩)
           · rw [hop]
-            simp only [GateOp.eval, List.any_eq_true, List.mem_map]
+            change (g.inputs.map (fun i => w0.getD i false)).any id = true →
+              (g.inputs.map (fun i => w1.getD i false)).any id = true
+            simp only [List.any_eq_true, List.mem_map, id_eq]
             rintro ⟨_, ⟨u, hu, rfl⟩, htrue⟩
             exact ⟨w1.getD u false, ⟨u, hu, rfl⟩, hle u htrue⟩
         apply ih (wireStep w0 g) (wireStep w1 g) (by simp [wireStep, hlen])
@@ -222,7 +226,8 @@ theorem PEqualNP.Outside.R_meta_5234_512
       rw [hfold_prev _ _ C.output (by simp [wireStep, hwk_len])]
       dsimp only [wireStep]
       rw [List.getD_eq_getElem?_getD, List.getElem?_append_right (by omega), hwk_len]
-      simp [hgkNot, GateOp.eval]
+      simp only [Nat.sub_self, List.getElem?_cons_zero, Option.getD_some, hgkNot]
+      rfl
     have h0 := heval_at x0
     have h1 := heval_at x1
     cases hhead0 : (C.gates[k].inputs.map (fun i => w0.getD i false)).headD false with
