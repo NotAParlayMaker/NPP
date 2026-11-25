@@ -1,5 +1,6 @@
 import PEqualNP.Defs
 
+namespace PEqualNP.Outside.L_meta_11064_aux
 namespace Witness11065
 open PEqualNP.CircuitLowerBounds
 def gates : List Gate := [⟨.or,[3,4]⟩,⟨.or,[2,5]⟩,⟨.or,[1,6]⟩,⟨.or,[7,8]⟩,⟨.and,[7,8]⟩,⟨.and,[10,9]⟩,⟨.or,[11,12]⟩,⟨.or,[0,13]⟩,⟨.or,[4,5]⟩,⟨.or,[15,6]⟩,⟨.and,[14,16]⟩]
@@ -2716,6 +2717,9 @@ set_option maxHeartbeats 10000000 in
 private theorem h6_39 : ¬Prog q39.toFinset 6 := localSound 5 q39 [q0,q1,q2,q3,q5,q7,q8,q11,q13,q15,q18,q20,q24,q26,q28,q30,q32,q34,q35,q37,q38,q40,q41,q42] (by decide +kernel) (consSafe h5_0 (consSafe h5_1 (consSafe h5_2 (consSafe h5_3 (consSafe h5_5 (consSafe h5_7 (consSafe h5_8 (consSafe h5_11 (consSafe h5_13 (consSafe h5_15 (consSafe h5_18 (consSafe h5_20 (consSafe h5_24 (consSafe h5_26 (consSafe h5_28 (consSafe h5_30 (consSafe h5_32 (consSafe h5_34 (consSafe h5_35 (consSafe h5_37 (consSafe h5_38 (consSafe h5_40 (consSafe h5_41 (consSafe h5_42 (nilSafe 5)))))))))))))))))))))))))
 theorem core : ¬Prog initial.toFinset 6 := h6_39
 end Cert11065
+end PEqualNP.Outside.L_meta_11064_aux
+
+open PEqualNP.Outside.L_meta_11064_aux
 
 theorem PEqualNP.Outside.L_meta_11064 : ∀ (gates : List PEqualNP.CircuitLowerBounds.Gate) (o : ℕ), (∀ g ∈ gates, (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.not) ∧ g.inputs.length ≤ 2) → (∀ i j : Fin gates.length, (gates.get i).op = PEqualNP.CircuitLowerBounds.GateOp.not → (gates.get j).op = PEqualNP.CircuitLowerBounds.GateOp.not → i = j) → (∀ x : Fin 7 → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates, o⟩ (List.ofFn x) = decide (∃ i < ([0, 4, 1, 4, 2, 4, 0, 5, 1, 5, 3, 5, 4, 5, 0, 6, 2, 6, 3, 6, 4, 6, 5, 6] : List ℕ).length / 2, (List.ofFn x).getD (([0, 4, 1, 4, 2, 4, 0, 5, 1, 5, 3, 5, 4, 5, 0, 6, 2, 6, 3, 6, 4, 6, 5, 6] : List ℕ).getD (2 * i) 0) false = true ∧ (List.ofFn x).getD (([0, 4, 1, 4, 2, 4, 0, 5, 1, 5, 3, 5, 4, 5, 0, 6, 2, 6, 3, 6, 4, 6, 5, 6] : List ℕ).getD (2 * i + 1) 0) false = true)) → ∃ (gates' : List PEqualNP.CircuitLowerBounds.Gate) (o' : ℕ), (∀ g ∈ gates', (g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) ∧ g.inputs.length ≤ 2) ∧ gates'.length ≤ gates.length ∧ ∀ x : Fin 7 → Bool, PEqualNP.CircuitLowerBounds.Circuit.eval ⟨gates', o'⟩ (List.ofFn x) = decide (∃ i < ([0, 4, 1, 4, 2, 4, 0, 5, 1, 5, 3, 5, 4, 5, 0, 6, 2, 6, 3, 6, 4, 6, 5, 6] : List ℕ).length / 2, (List.ofFn x).getD (([0, 4, 1, 4, 2, 4, 0, 5, 1, 5, 3, 5, 4, 5, 0, 6, 2, 6, 3, 6, 4, 6, 5, 6] : List ℕ).getD (2 * i) 0) false = true ∧ (List.ofFn x).getD (([0, 4, 1, 4, 2, 4, 0, 5, 1, 5, 3, 5, 4, 5, 0, 6, 2, 6, 3, 6, 4, 6, 5, 6] : List ℕ).getD (2 * i + 1) 0) false = true) := by
   apply positiveFromSigned
