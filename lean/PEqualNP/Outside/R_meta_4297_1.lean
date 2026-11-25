@@ -1,69 +1,12 @@
-import Mathlib
 import PEqualNP.Defs
 
-open PEqualNP.CircuitLowerBounds PEqualNP.CircuitMoves PEqualNP.MetaComplexity PEqualNP.TopForm
-theorem PEqualNP.Outside.R_meta_4297_1
-    (hRectangles : ∀ (Np Nl : ℕ) (I : Fin Np → Fin Nl → Prop) [DecidableRel I]
-      (C : Circuit),
-      IsAO2 (Np + Nl) C → C.output < Np + Nl + C.gates.length →
-      (∀ z : Fin (Np + Nl) → Bool,
-        circuitFun (Np + Nl) C z =
-          decide (∃ p l, I p l ∧ z (Fin.castAdd Nl p) = true ∧
-            z (Fin.natAdd Np l) = true)) →
-      (∀ i < C.gates.length, ∀ a b,
-        C.gates[i]? = some ⟨GateOp.or, [a, b]⟩ →
-          (Np + Nl ≤ b → WireBelowOutput (Np + Nl) C b →
-            WireBelowOutput (Np + Nl) C a) ∧
-          (Np + Nl ≤ a → WireBelowOutput (Np + Nl) C a →
-            WireBelowOutput (Np + Nl) C b)) →
-      ∃ B : List (Finset (Fin Np) × Finset (Fin Nl)),
-        (∀ R ∈ B, R.1.Nonempty ∧ R.2.Nonempty ∧
-          ∀ p ∈ R.1, ∀ l ∈ R.2, I p l) ∧
-        (∀ p l, I p l ↔ ∃ R ∈ B, p ∈ R.1 ∧ l ∈ R.2) ∧
-        (B.map fun R => R.1.card + R.2.card).sum - 1 ≤ C.size)
-    (hStars : ∀ (Np Nl : ℕ) (I : Fin Np → Fin Nl → Prop) [DecidableRel I]
-      (B : List (Finset (Fin Np) × Finset (Fin Nl))),
-      (∀ p p' l l', p ≠ p' → l ≠ l' →
-        ¬ (I p l ∧ I p l' ∧ I p' l ∧ I p' l')) →
-      (∀ R ∈ B, R.1.Nonempty ∧ R.2.Nonempty ∧
-        ∀ p ∈ R.1, ∀ l ∈ R.2, I p l) →
-      (∀ p l, I p l ↔ ∃ R ∈ B, p ∈ R.1 ∧ l ∈ R.2) →
-      ∃ W : List (ℕ × List ℕ),
-        (∀ b ∈ W, b.2 ≠ [] ∧
-          ((b.1 < Np ∧ ∀ w ∈ b.2, Np ≤ w ∧ w < Np + Nl) ∨
-            (Np ≤ b.1 ∧ b.1 < Np + Nl ∧ ∀ w ∈ b.2, w < Np))) ∧
-        (∀ p l, I p l ↔ ∃ b ∈ W,
-          (b.1 = (p : Fin Np).val ∧ Np + (l : Fin Nl).val ∈ b.2) ∨
-          (b.1 = Np + (l : Fin Nl).val ∧ (p : Fin Np).val ∈ b.2)) ∧
-        (W.map fun b => b.2.length).sum + W.length - 1 ≤
-          (B.map fun R => R.1.card + R.2.card).sum - 1) :
-    ∀ (Np Nl : ℕ) (I : Fin Np → Fin Nl → Prop) [DecidableRel I]
-      (C : PEqualNP.CircuitLowerBounds.Circuit),
-      (∀ p p' : Fin Np, ∀ l l' : Fin Nl,
-        p ≠ p' → l ≠ l' →
-          ¬ (I p l ∧ I p l' ∧ I p' l ∧ I p' l')) →
-      IsAO2 (Np + Nl) C → C.output < Np + Nl + C.gates.length →
-      (∀ z : Fin (Np + Nl) → Bool,
-        MetaComplexity.circuitFun (Np + Nl) C z =
-          decide (∃ p : Fin Np, ∃ l : Fin Nl, I p l ∧
-            z (Fin.castAdd Nl p) = true ∧ z (Fin.natAdd Np l) = true)) →
-      (∀ i < C.gates.length, ∀ a b,
-        C.gates[i]? = some ⟨GateOp.or, [a, b]⟩ →
-          (Np + Nl ≤ b → WireBelowOutput (Np + Nl) C b →
-            WireBelowOutput (Np + Nl) C a) ∧
-          (Np + Nl ≤ a → WireBelowOutput (Np + Nl) C a →
-            WireBelowOutput (Np + Nl) C b)) →
-      ∃ W : List (ℕ × List ℕ),
-        (∀ b ∈ W, b.2 ≠ [] ∧
-          ((b.1 < Np ∧ ∀ w ∈ b.2, Np ≤ w ∧ w < Np + Nl) ∨
-            (Np ≤ b.1 ∧ b.1 < Np + Nl ∧ ∀ w ∈ b.2, w < Np))) ∧
-        (∀ p l, I p l ↔ ∃ b ∈ W,
-          (b.1 = (p : Fin Np).val ∧ Np + (l : Fin Nl).val ∈ b.2) ∨
-          (b.1 = Np + (l : Fin Nl).val ∧ (p : Fin Np).val ∈ b.2)) ∧
-        (W.map fun b => b.2.length).sum + W.length - 1 ≤ C.size := by
-  intro Np Nl I _ C hNoFour hAO hOut hFun hOr
-  obtain ⟨B, hB, hCover, hCost⟩ := hRectangles Np Nl I C hAO hOut hFun hOr
-  obtain ⟨W, hW, hInc, hWCost⟩ :=
-    hStars Np Nl I B hNoFour hB hCover
-  refine ⟨W, hW, hInc, ?_⟩
-  exact hWCost.trans hCost
+theorem PEqualNP.Outside.R_meta_4297_1 :
+    (∀ (x1 x2 : ℕ) (x3 : Fin x1 → Fin x2 → Prop) [x4 : DecidableRel x3] (x5 : PEqualNP.CircuitLowerBounds.Circuit), (∀ (x6 x7 : Fin x1) (x8 x9 : Fin x2), x6 ≠ x7 → x8 ≠ x9 → ¬(x3 x6 x8 ∧ x3 x6 x9 ∧ x3 x7 x8 ∧ x3 x7 x9)) → PEqualNP.TopForm.IsAO2 (x1 + x2) x5 → x5.output < x1 + x2 + x5.gates.length → (∀ (x9 : Fin (x1 + x2) → Bool), PEqualNP.MetaComplexity.circuitFun (x1 + x2) x5 x9 = Decidable.decide (∃ (x10 : Fin x1) (x11 : Fin x2), x3 x10 x11 ∧ x9 (Fin.castAdd x2 x10) = Bool.true ∧ x9 (Fin.natAdd x1 x11) = Bool.true)) → (∀ x10 < x5.gates.length, ∀ (x12 x13 : ℕ), x5.gates[x10]? = Option.some { op := PEqualNP.CircuitLowerBounds.GateOp.or, inputs := [x12, x13] : PEqualNP.CircuitLowerBounds.Gate } → (x1 + x2 ≤ x13 → PEqualNP.CircuitMoves.WireBelowOutput (x1 + x2) x5 x13 → PEqualNP.CircuitMoves.WireBelowOutput (x1 + x2) x5 x12) ∧ (x1 + x2 ≤ x12 → PEqualNP.CircuitMoves.WireBelowOutput (x1 + x2) x5 x12 → PEqualNP.CircuitMoves.WireBelowOutput (x1 + x2) x5 x13)) → (x1 % (2 : ℕ) = (0 : ℕ)) → ∃ (x11 : List (ℕ × List ℕ)), (∀ x12 ∈ x11, x12.2 ≠ [] ∧ ((x12.1 < x1 ∧ ∀ x14 ∈ x12.2, x1 ≤ x14 ∧ x14 < x1 + x2) ∨ x1 ≤ x12.1 ∧ x12.1 < x1 + x2 ∧ ∀ x14 ∈ x12.2, x14 < x1)) ∧ (∀ (x12 : Fin x1) (x13 : Fin x2), x3 x12 x13 ↔ ∃ x14 ∈ x11, x14.1 = ↑x12 ∧ x1 + ↑x13 ∈ x14.2 ∨ x14.1 = x1 + ↑x13 ∧ ↑x12 ∈ x14.2) ∧ (List.map (fun (x12 : ℕ × List ℕ) => x12.2.length) x11).sum + x11.length - (1 : ℕ) ≤ x5.size) →
+    (∀ (x1 x2 : ℕ) (x3 : Fin x1 → Fin x2 → Prop) [x4 : DecidableRel x3] (x5 : PEqualNP.CircuitLowerBounds.Circuit), (∀ (x6 x7 : Fin x1) (x8 x9 : Fin x2), x6 ≠ x7 → x8 ≠ x9 → ¬(x3 x6 x8 ∧ x3 x6 x9 ∧ x3 x7 x8 ∧ x3 x7 x9)) → PEqualNP.TopForm.IsAO2 (x1 + x2) x5 → x5.output < x1 + x2 + x5.gates.length → (∀ (x9 : Fin (x1 + x2) → Bool), PEqualNP.MetaComplexity.circuitFun (x1 + x2) x5 x9 = Decidable.decide (∃ (x10 : Fin x1) (x11 : Fin x2), x3 x10 x11 ∧ x9 (Fin.castAdd x2 x10) = Bool.true ∧ x9 (Fin.natAdd x1 x11) = Bool.true)) → (∀ x10 < x5.gates.length, ∀ (x12 x13 : ℕ), x5.gates[x10]? = Option.some { op := PEqualNP.CircuitLowerBounds.GateOp.or, inputs := [x12, x13] : PEqualNP.CircuitLowerBounds.Gate } → (x1 + x2 ≤ x13 → PEqualNP.CircuitMoves.WireBelowOutput (x1 + x2) x5 x13 → PEqualNP.CircuitMoves.WireBelowOutput (x1 + x2) x5 x12) ∧ (x1 + x2 ≤ x12 → PEqualNP.CircuitMoves.WireBelowOutput (x1 + x2) x5 x12 → PEqualNP.CircuitMoves.WireBelowOutput (x1 + x2) x5 x13)) → ¬(x1 % (2 : ℕ) = (0 : ℕ)) → ∃ (x11 : List (ℕ × List ℕ)), (∀ x12 ∈ x11, x12.2 ≠ [] ∧ ((x12.1 < x1 ∧ ∀ x14 ∈ x12.2, x1 ≤ x14 ∧ x14 < x1 + x2) ∨ x1 ≤ x12.1 ∧ x12.1 < x1 + x2 ∧ ∀ x14 ∈ x12.2, x14 < x1)) ∧ (∀ (x12 : Fin x1) (x13 : Fin x2), x3 x12 x13 ↔ ∃ x14 ∈ x11, x14.1 = ↑x12 ∧ x1 + ↑x13 ∈ x14.2 ∨ x14.1 = x1 + ↑x13 ∧ ↑x12 ∈ x14.2) ∧ (List.map (fun (x12 : ℕ × List ℕ) => x12.2.length) x11).sum + x11.length - (1 : ℕ) ≤ x5.size) →
+    (∀ (x1 x2 : ℕ) (x3 : Fin x1 → Fin x2 → Prop) [x4 : DecidableRel x3] (x5 : PEqualNP.CircuitLowerBounds.Circuit), (∀ (x6 x7 : Fin x1) (x8 x9 : Fin x2), x6 ≠ x7 → x8 ≠ x9 → ¬(x3 x6 x8 ∧ x3 x6 x9 ∧ x3 x7 x8 ∧ x3 x7 x9)) → PEqualNP.TopForm.IsAO2 (x1 + x2) x5 → x5.output < x1 + x2 + x5.gates.length → (∀ (x9 : Fin (x1 + x2) → Bool), PEqualNP.MetaComplexity.circuitFun (x1 + x2) x5 x9 = Decidable.decide (∃ (x10 : Fin x1) (x11 : Fin x2), x3 x10 x11 ∧ x9 (Fin.castAdd x2 x10) = Bool.true ∧ x9 (Fin.natAdd x1 x11) = Bool.true)) → (∀ x10 < x5.gates.length, ∀ (x12 x13 : ℕ), x5.gates[x10]? = Option.some { op := PEqualNP.CircuitLowerBounds.GateOp.or, inputs := [x12, x13] : PEqualNP.CircuitLowerBounds.Gate } → (x1 + x2 ≤ x13 → PEqualNP.CircuitMoves.WireBelowOutput (x1 + x2) x5 x13 → PEqualNP.CircuitMoves.WireBelowOutput (x1 + x2) x5 x12) ∧ (x1 + x2 ≤ x12 → PEqualNP.CircuitMoves.WireBelowOutput (x1 + x2) x5 x12 → PEqualNP.CircuitMoves.WireBelowOutput (x1 + x2) x5 x13)) → ∃ (x11 : List (ℕ × List ℕ)), (∀ x12 ∈ x11, x12.2 ≠ [] ∧ ((x12.1 < x1 ∧ ∀ x14 ∈ x12.2, x1 ≤ x14 ∧ x14 < x1 + x2) ∨ x1 ≤ x12.1 ∧ x12.1 < x1 + x2 ∧ ∀ x14 ∈ x12.2, x14 < x1)) ∧ (∀ (x12 : Fin x1) (x13 : Fin x2), x3 x12 x13 ↔ ∃ x14 ∈ x11, x14.1 = ↑x12 ∧ x1 + ↑x13 ∈ x14.2 ∨ x14.1 = x1 + ↑x13 ∧ ↑x12 ∈ x14.2) ∧ (List.map (fun (x12 : ℕ × List ℕ) => x12.2.length) x11).sum + x11.length - (1 : ℕ) ≤ x5.size) := by
+  classical
+  intro h1 h2 x1 x2 x3 x4 x5
+  intros
+  by_cases h : (x1 % (2 : ℕ) = (0 : ℕ))
+  · apply (h1 x1 x2 x3 x5) <;> assumption
+  · apply (h2 x1 x2 x3 x5) <;> assumption
