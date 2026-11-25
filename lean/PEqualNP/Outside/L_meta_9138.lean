@@ -2395,7 +2395,8 @@ def witness : Circuit := ⟨[⟨.or, [3, 5]⟩, ⟨.and, [0, 6]⟩, ⟨.or, [2, 
 theorem good : ∀ g ∈ witness.gates, (g.op = GateOp.and ∨ g.op = GateOp.or) ∧ g.inputs.length ≤ 2 := by
   intro g hg
   simp only [witness, List.mem_cons, List.not_mem_nil, or_false] at hg
-  rcases hg with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide
+  rcases hg with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+    first | exact ⟨Or.inl rfl, by decide⟩ | exact ⟨Or.inr rfl, by decide⟩
 
 theorem values : ∀ x : Fin 6 → Bool, witness.eval (List.ofFn x) = six x := by decide +kernel
 
