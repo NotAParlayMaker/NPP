@@ -2494,9 +2494,6 @@ theorem main (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (C : Circu
     rw [Finset.mem_sdiff, SimpleGraph.mem_edgeFinset]
     exact ⟨huv.1, fun h => huv.2 (Finset.mem_coe.2 h)⟩
 
-end PEqualNP.Outside.L_meta_5781
-
-namespace PEqualNP.Outside.L_meta_5781
 
 theorem old_main : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (C : PEqualNP.CircuitLowerBounds.Circuit),
   PEqualNP.TopForm.NoFourCycle G → G.edgeFinset.Nonempty → PEqualNP.TopForm.IsLeastAO G C →
