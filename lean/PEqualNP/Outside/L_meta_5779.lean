@@ -1116,9 +1116,6 @@ lemma main_ind (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
       · intro k
         exact mem_junk n G C' k
 
-end PEqualNP.Outside.L_meta_5779
-
-namespace PEqualNP.Outside.L_meta_5779
 
 theorem old_main : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (C : PEqualNP.CircuitLowerBounds.Circuit),
   G.edgeFinset.Nonempty → PEqualNP.TopForm.IsLeastAO G C →
