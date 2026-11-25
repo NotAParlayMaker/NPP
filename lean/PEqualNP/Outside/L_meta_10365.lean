@@ -1,10 +1,10 @@
-import PEqualNP.Defs.Represents
+import Mathlib.Tactic
 import PEqualNP.Defs
 
 namespace PEqualNP.Outside.L_meta_10365
 
--- Adapted from the checked L-meta-9405 and the original L-meta-9195 by tb-16, with the mask and its
--- positive and negative entries specialized to this matrix.
+-- This file is the proof of L-meta-9195 by tb-16 (same repository) with the mask, the list OO of its
+-- one-points and the list ZZ of its zero-points replaced; the argument is unchanged.
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Represents
 
 -- Wires as a fold. A wire that is never read does not influence the output; a monotone circuit
