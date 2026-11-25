@@ -7,18 +7,20 @@ open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 -- Test the maximal extension of each small side, and the individual flags.
 set_option maxHeartbeats 4000000 in
 theorem PEqualNP.Outside.R_meta_6961_704
-    (geometry : let I := fun p l : Fin 13 => ∃ d ∈ ([0,1,3,9] : List (Fin 13)), p = l + d
-      ∀ S ∈ (Finset.univ : Finset (Fin 13)).powersetCard 4,
-        (Finset.univ.filter fun l : Fin 13 => ∀ p ∈ S, ¬ I p l).card ≤ 3)
+    (geometry : let U : Finset (Fin 13) := Finset.univ
+      let I := fun p l : Fin 13 => ∃ d ∈ ([0,1,3,9] : List (Fin 13)), p = l + d
+      ∀ S : Finset (Fin 13), S.card = 4 →
+        (U.filter fun l : Fin 13 => ∀ p ∈ S, ¬ I p l).card ≤ 3)
     (search :
+      let U : Finset (Fin 13) := Finset.univ
       let I := fun p l : Fin 13 => ∃ d ∈ ([0,1,3,9] : List (Fin 13)), p = l + d
       let row := fun (P L : Finset (Fin 13)) => Fin.append (fun p => decide (p ∈ P)) (fun l => decide (l ∈ L))
       ∃ C : Circuit, Monotone2 C ∧ C.size ≤ 63 ∧
         (∀ p l, I p l → circuitFun 26 C (row {p} {l}) = true) ∧
         (∀ P : Finset (Fin 13), P.card ≤ 3 → circuitFun 26 C
-          (row P (Finset.univ.filter fun l => ∀ p ∈ P, ¬ I p l)) = false) ∧
+          (row P (U.filter fun l => ∀ p ∈ P, ¬ I p l)) = false) ∧
         (∀ L : Finset (Fin 13), L.card ≤ 3 → circuitFun 26 C
-          (row (Finset.univ.filter fun p => ∀ l ∈ L, ¬ I p l) L) = false)) :
+          (row (U.filter fun p => ∀ l ∈ L, ¬ I p l) L) = false)) :
     ∃ (x1 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.Monotone2 x1 ∧ x1.size ≤ (63 : ℕ) ∧ ∀ (x2 : Fin (26 : ℕ) → Bool), PEqualNP.MetaComplexity.circuitFun (26 : ℕ) x1 x2 = Decidable.decide (∃ (x3 : Fin (13 : ℕ)) (x4 : Fin (13 : ℕ)), (∃ x5 ∈ [(0 : Fin (13 : ℕ)), (1 : Fin (13 : ℕ)), (3 : Fin (13 : ℕ)), (9 : Fin (13 : ℕ))], x3 = x4 + x5) ∧ x2 (Fin.castAdd (13 : ℕ) x3) = Bool.true ∧ x2 (Fin.natAdd (13 : ℕ) x4) = Bool.true) := by
   let I := fun p l : Fin 13 => ∃ d ∈ ([0,1,3,9] : List (Fin 13)), p = l + d
   let row := fun (P L : Finset (Fin 13)) => Fin.append (fun p => decide (p ∈ P)) (fun l => decide (l ∈ L))
@@ -134,7 +136,7 @@ theorem PEqualNP.Outside.R_meta_6961_704
     · obtain ⟨S,sub,card⟩ := Finset.exists_subset_card_eq (show 4 ≤ P.card by omega)
       have smallL : L.card ≤ 3 := by
         apply le_trans (Finset.card_le_card (t := Finset.univ.filter fun l => ∀ p ∈ S, ¬ I p l) ?_)
-          (geometry S (Finset.mem_powersetCard.mpr ⟨Finset.subset_univ _,card⟩))
+          (geometry S card)
         intro l hl
         exact Finset.mem_filter.mpr ⟨Finset.mem_univ _,fun p hp => dis p (sub hp) l hl⟩
       have subP : P ⊆ Finset.univ.filter (fun p => ∀ l ∈ L, ¬ I p l) := by
