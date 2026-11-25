@@ -2496,7 +2496,9 @@ theorem main (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (C : Circu
 
 end PEqualNP.Outside.L_meta_5781
 
-theorem PEqualNP.Outside.L_meta_5781.old_main : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (C : PEqualNP.CircuitLowerBounds.Circuit),
+namespace PEqualNP.Outside.L_meta_5781
+
+theorem old_main : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (C : PEqualNP.CircuitLowerBounds.Circuit),
   PEqualNP.TopForm.NoFourCycle G → G.edgeFinset.Nonempty → PEqualNP.TopForm.IsLeastAO G C →
   PEqualNP.TopForm.TopForm G C →
     G.edgeFinset.card + (PEqualNP.TopForm.tops G C \ PEqualNP.TopForm.centreless G C).card +
@@ -2508,6 +2510,8 @@ theorem PEqualNP.Outside.L_meta_5781.old_main : ∀ (n : ℕ) (G : SimpleGraph (
       K.card ≤ (PEqualNP.TopForm.tops G C \ PEqualNP.TopForm.centreless G C).card := by
   intro n G _ C h4 hne hL hTF
   exact PEqualNP.Outside.L_meta_5781.main n G C h4 hne hL hTF
+
+end PEqualNP.Outside.L_meta_5781
 
 theorem PEqualNP.Outside.L_meta_5781 : ∀ (x1 : ℕ) (x2 : SimpleGraph (Fin x1)) [x3 : DecidableRel x2.Adj] (x4 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.TopForm.NoFourCycle x2 → x2.edgeFinset.Nonempty → PEqualNP.TopForm.IsLeastAO x2 x4 → PEqualNP.TopForm.TopForm x2 x4 → x2.edgeFinset.card + (PEqualNP.TopForm.tops x2 x4 \ PEqualNP.TopForm.centreless x2 x4).card + (2 : ℕ) * (PEqualNP.TopForm.centreless x2 x4).card + (PEqualNP.TopForm.junk x2 x4).card + (PEqualNP.TopForm.orN x2 x4 \ PEqualNP.TopForm.lam x2 x4).card ≤ x4.size + (PEqualNP.TopForm.Ustar x2 x4).card + (1 : ℕ) ∧ ∀ (x9 : Finset (Fin x1)), PEqualNP.MetaComplexity.NestedCover.IsMinCover (x2.deleteEdges ↑(PEqualNP.TopForm.Ustar x2 x4)) x9 → x9.card ≤ (PEqualNP.TopForm.tops x2 x4 \ PEqualNP.TopForm.centreless x2 x4).card :=
   PEqualNP.Outside.L_meta_5781.old_main
