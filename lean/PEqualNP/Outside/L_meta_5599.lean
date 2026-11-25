@@ -5,9 +5,9 @@ import PEqualNP.Defs
 -- L-meta-139 (PEqualNP/Outside/L_meta_139.lean, by Lewis Watson), here without NOT gates and on
 -- the 16 inputs with one vertex on each side on; target, bound and final theorems differ.
 
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
+namespace PEqualNP.Outside.L_meta_5599
 
-namespace TableRow5599
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 private abbrev T := BitVec 16
 private def ins : List T := [0x000f, 0x00f0, 0x0f00, 0xf000, 0x1111, 0x2222, 0x4444, 0x8888]
 private def target : T := 0x0033
@@ -277,8 +277,8 @@ private theorem upper : PEqualNP.Represents.RepSizeAtMost A 3 := by
   · decide
   · decide
 
-end TableRow5599
+end PEqualNP.Outside.L_meta_5599
 
 theorem PEqualNP.Outside.L_meta_5599 : PEqualNP.Represents.RepSizeAtMost (fun u v : Fin 4 => (51 : ℕ).testBit (4 * u.val + v.val)) 3 ∧
   ¬ PEqualNP.Represents.RepSizeAtMost (fun u v : Fin 4 => (51 : ℕ).testBit (4 * u.val + v.val)) 2 :=
-  ⟨TableRow5599.upper, fun h => TableRow5599.lower h⟩
+  ⟨PEqualNP.Outside.L_meta_5599.upper, fun h => PEqualNP.Outside.L_meta_5599.lower h⟩
