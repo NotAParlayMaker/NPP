@@ -24,6 +24,10 @@ jobs:
       # Values from the event go through env and a strict pattern, never into a script as text.
       PR: ${{ github.event.pull_request.number }}
       GAPS_URL: https://data.pequalnp.com/data/desk/gaps.json
+      # THE PINNED ELAN, the same two values as authoritative.yml (a test keeps them equal). To bump: change
+      # both files together (authoritative.yml says how to get the values).
+      ELAN_VERSION: v4.4.0
+      ELAN_SHA256: 0e8250aa2be86c7af929ade68db617af9edc8b9ccf6eaf5ece228250d0d032e2
     steps:
       - name: Fetch the pull request (plain git, no stored credentials)
         run: |
@@ -68,9 +72,12 @@ jobs:
         if: steps.one.outputs.run == 'yes'
         run: |
           set -eu
-          curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+          # The installer pinned by release and sha256 (.github/scripts/install-elan.sh, as in authoritative.yml).
+          # The script is read from the BASE side of the merge (HEAD^1), never from the pull request's copy.
+          # (A fork can still rewrite this whole file in its own pull_request run; that is why this check is advisory.)
+          git show 'HEAD^1:.github/scripts/install-elan.sh' > "$RUNNER_TEMP/install-elan.sh"
+          sh "$RUNNER_TEMP/install-elan.sh" "$ELAN_VERSION" "$ELAN_SHA256" "$HOME/.elan" "$(cat lean/lean-toolchain)"
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-          "$HOME/.elan/bin/elan" toolchain install "$(cat lean/lean-toolchain)"
 
       - name: Fetch the prebuilt Mathlib
         if: steps.one.outputs.run == 'yes'
