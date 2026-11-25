@@ -1,4 +1,3 @@
-import Mathlib
 import PEqualNP.Defs
 
 namespace PEqualNP.Outside.L_meta_14920
@@ -527,9 +526,15 @@ theorem mk_perm (ws : List ℕ) (h : ∀ w ∈ ws, w = 481 ∨ w = 3618 ∨ w = 
   have : a ∉ ws := fun hm => by rcases h a hm with h | h | h | h | h <;> contradiction
   simp [List.count_eq_zero_of_not_mem this, Ne.symm h0, Ne.symm h1, Ne.symm h2, Ne.symm h3, Ne.symm h4]
 
-def searchS (s : ℕ) : Bool :=
-  (List.range (s + 2)).any fun m0 => (List.range (s + 2)).any fun m1 => (List.range (s + 2)).any fun m2 => (List.range (s + 2)).any fun m3 => (List.range (s + 2)).any fun m4 =>
+def searchS2 (s m0 m1 : ℕ) : Bool :=
+  (List.range (s + 2)).any fun m2 => (List.range (s + 2)).any fun m3 => (List.range (s + 2)).any fun m4 =>
     search s (mk m0 m1 m2 m3 m4)
+
+def searchS1 (s m0 : ℕ) : Bool :=
+  (List.range (s + 2)).any fun m1 => searchS2 s m0 m1
+
+def searchS (s : ℕ) : Bool :=
+  (List.range (s + 2)).any fun m0 => searchS1 s m0
 
 theorem run_searchS {s : ℕ} {ws : List ℕ} (h : NR s ws)
     (hw : ∀ w ∈ ws, w = 481 ∨ w = 3618 ∨ w = 12868 ∨ w = 21640 ∨ w = 26896) : searchS s = true := by
@@ -538,12 +543,158 @@ theorem run_searchS {s : ℕ} {ws : List ℕ} (h : NR s ws)
   rw [hp.length_eq] at hl
   simp only [mk, List.length_append, List.length_replicate, List.length_singleton] at hl
   have hs := search_perm s _ _ hp (run_search h)
-  simp only [searchS, List.any_eq_true, List.mem_range]
+  simp only [searchS, searchS1, searchS2, List.any_eq_true, List.mem_range]
   exact ⟨ws.count 481, by omega, ws.count 3618, by omega, ws.count 12868, by omega, ws.count 21640, by omega, ws.count 26896, by omega, hs⟩
 
 set_option maxRecDepth 100000 in
-theorem searchS_false : (List.range 7).all (fun s => !searchS s) = true := by
+theorem f0 : searchS 0 = false := by
   decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem f1 : searchS 1 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem f2 : searchS 2 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem f3 : searchS 3 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem f4 : searchS 4 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem f5 : searchS 5 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_0 : searchS1 6 0 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_1_0 : searchS2 6 1 0 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_1_1 : searchS2 6 1 1 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_1_2 : searchS2 6 1 2 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_1_3 : searchS2 6 1 3 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_1_4 : searchS2 6 1 4 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_1_5 : searchS2 6 1 5 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_1_6 : searchS2 6 1 6 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_1_7 : searchS2 6 1 7 = false := by
+  decide +kernel
+
+theorem g6_1 : searchS1 6 1 = false := by
+  by_contra hne
+  have h : searchS1 6 1 = true := by simpa using hne
+  unfold searchS1 at h
+  rw [List.any_eq_true] at h
+  obtain ⟨m1, hm, hv⟩ := h
+  have hlt : m1 < 8 := by simpa using List.mem_range.1 hm
+  interval_cases m1 <;> simp [g6_1_0, g6_1_1, g6_1_2, g6_1_3, g6_1_4, g6_1_5, g6_1_6, g6_1_7] at hv
+
+set_option maxRecDepth 100000 in
+theorem g6_2_0 : searchS2 6 2 0 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_2_1 : searchS2 6 2 1 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_2_2 : searchS2 6 2 2 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_2_3 : searchS2 6 2 3 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_2_4 : searchS2 6 2 4 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_2_5 : searchS2 6 2 5 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_2_6 : searchS2 6 2 6 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_2_7 : searchS2 6 2 7 = false := by
+  decide +kernel
+
+theorem g6_2 : searchS1 6 2 = false := by
+  by_contra hne
+  have h : searchS1 6 2 = true := by simpa using hne
+  unfold searchS1 at h
+  rw [List.any_eq_true] at h
+  obtain ⟨m1, hm, hv⟩ := h
+  have hlt : m1 < 8 := by simpa using List.mem_range.1 hm
+  interval_cases m1 <;> simp [g6_2_0, g6_2_1, g6_2_2, g6_2_3, g6_2_4, g6_2_5, g6_2_6, g6_2_7] at hv
+
+set_option maxRecDepth 100000 in
+theorem g6_3 : searchS1 6 3 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_4 : searchS1 6 4 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_5 : searchS1 6 5 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_6 : searchS1 6 6 = false := by
+  decide +kernel
+
+set_option maxRecDepth 100000 in
+theorem g6_7 : searchS1 6 7 = false := by
+  decide +kernel
+
+theorem f6 : searchS 6 = false := by
+  by_contra hne
+  have h : searchS 6 = true := by simpa using hne
+  unfold searchS at h
+  rw [List.any_eq_true] at h
+  obtain ⟨m0, hm, hv⟩ := h
+  have hlt : m0 < 8 := by simpa using List.mem_range.1 hm
+  interval_cases m0 <;> simp [g6_0, g6_1, g6_2, g6_3, g6_4, g6_5, g6_6, g6_7] at hv
+
+theorem searchS_false : ∀ s, s < 7 → searchS s = false := by
+  intro s hs
+  interval_cases s
+  · exact f0
+  · exact f1
+  · exact f2
+  · exact f3
+  · exact f4
+  · exact f5
+  · exact f6
 
 theorem Ucore (ι : Fin 5 → Fin 8) (hι : Function.Injective ι) (F : BF)
     (hs : ∀ j, F (singleInput (ι j)) = false)
@@ -577,9 +728,7 @@ theorem Ucore (ι : Fin 5 → Fin 8) (hι : Function.Injective ι) (F : BF)
     gN_zero_left gN_zero_right gN_self 6 _ 31520
     (by rintro w (rfl | rfl | rfl | rfl | rfl) <;> norm_num) (by decide) hu2
   have h1 := run_searchS hr fun w hw => (hws w hw).1
-  have h2 := searchS_false
-  rw [List.all_eq_true] at h2
-  have h3 := h2 t' (List.mem_range.2 (by omega))
+  have h3 := searchS_false t' (by omega)
   rw [h1] at h3
   exact Bool.noConfusion h3
 
