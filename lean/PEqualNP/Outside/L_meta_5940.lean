@@ -114,12 +114,9 @@ lemma contract {P : Pool} {a b : Nat} (ha : a∈P) (hb : b∈P) (op : Bool)
     have eq : combine op b a=combine op a b := by cases op <;> simp [combine,Nat.and_comm,Nat.or_comm]
     simpa only [eq] using h
 
-end PEqualNP.Outside.L_meta_5940_aux
-
-namespace PEqualNP.Outside.L_meta_5940_aux
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Represents
 
-def inputs (p : Fin 16) : List Bool := oneEach (⟨p.val/4,by omega⟩ : Fin 4) (⟨p.val%4,by omega⟩ : Fin 4)
+def inputs (p : Fin 16) : List Bool := oneEach (⟨p.val / 4,by omega⟩ : Fin 4) (⟨p.val % 4,by omega⟩ : Fin 4)
 -- Each mask records one wire on the sixteen promised inputs.
 def Signal (w : Nat) (f : Fin 16 → Bool) := (∀ i : Nat, 16 ≤ i → w.testBit i=false) ∧ ∀ p, w.testBit p.val=f p
 def Models (P : Pool) (x : Fin 16 → List Bool) := ∀ i : Nat, ∃ w∈P, Signal w (fun p => (x p).getD i false)
@@ -225,12 +222,9 @@ lemma necessary (C : Circuit) (hc : Monotone2 C) (size : C.size≤7)
   apply mono_time (k:=C.gates.length) _ size
   apply simulate C.gates raw inputs 8 C.output (by decide) (by decide) initial (fun p => by simp [inputs,oneEach]) hc
   intro p
-  have h := ev (⟨p.val/4,by omega⟩ : Fin 4) (⟨p.val%4,by omega⟩ : Fin 4)
+  have h := ev (⟨p.val / 4,by omega⟩ : Fin 4) (⟨p.val % 4,by omega⟩ : Fin 4)
   exact h.trans (congrArg (318 : Nat).testBit (Nat.div_add_mod p.val 4))
 
-end PEqualNP.Outside.L_meta_5940_aux
-
-namespace PEqualNP.Outside.L_meta_5940_aux
 open PEqualNP.Represents PEqualNP.CircuitLowerBounds
 
 def graph (u v : Fin 4) := (318 : Nat).testBit (4*u.val+v.val)
@@ -241,9 +235,6 @@ theorem upper : RepSizeAtMost graph 8 := by
   intro g hg
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
   rcases hg with rfl|rfl|rfl|rfl|rfl|rfl|rfl|rfl <;> simp
-end PEqualNP.Outside.L_meta_5940_aux
-
-namespace PEqualNP.Outside.L_meta_5940_aux
 
 abbrev admitted (k : Nat) (S : Pool) := S.card ≤ k+1 ∧ Separates S
 
@@ -267,9 +258,6 @@ lemma exclude (k : Nat) (S : Pool) (next : List Pool) (not_hit : 318 ∉ S)
     have sub := of_decide_eq_true all_children
     exact Bool.noConfusion (v.symm.trans (done _ (sub a ha b hb lt op ho hc U hu adm)))
 
-end PEqualNP.Outside.L_meta_5940_aux
-
-namespace PEqualNP.Outside.L_meta_5940_aux
 -- Each finite check lists every successor that still distinguishes all positive
 -- inputs from all negative inputs. Deeper states use the same recurrence directly.
 theorem excluded3 : search 3 {240,4383,8738,53196}=false := by decide +kernel
@@ -2485,9 +2473,6 @@ def roots : List (Nat × Pool) := [(6,{15,240,3840,4369,8738,17476,34952}),(7,{1
 theorem no_root : ∀ z∈roots, search z.1 z.2=false := by
   simp only [roots,List.forall_mem_cons,List.not_mem_nil,false_imp_iff,implies_true,and_true]
   exact ⟨excluded0,excluded24,excluded408,excluded449,excluded473⟩
-end PEqualNP.Outside.L_meta_5940_aux
-
-namespace PEqualNP.Outside.L_meta_5940_aux
 
 def required : Pool := {15,240,3840,4369,8738,17476,34952}
 
