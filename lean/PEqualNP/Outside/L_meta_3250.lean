@@ -1,4 +1,5 @@
-import Mathlib
+import Mathlib.Tactic.IntervalCases
+import Mathlib.Tactic.FinCases
 import PEqualNP.Defs
 
 -- The checker and the plain bound certificates are adapted from PEqualNP/Outside/L_meta_1667.lean (Apache-2.0).
@@ -2894,6 +2895,176 @@ def joint (g : Forest) (k start n ar : Nat) :=
   let xs := contexts g k start n
   xs.all (fun c => c.2.1==ar && prelim (targetOf g) c) && runBatch k ar xs
 
+-- Each marked move carries a witness selecting a verified pool or link.
+def readWitness (s : Nat) : Nat × Nat :=
+  if s &&& 1 == 0 then (0,s >>> 1) else
+    let v := (s >>> 1) &&& 7
+    if v < 7 then (v+1,s >>> 4) else ((s >>> 4) &&& 127,s >>> 11)
+
+def selectedMove (c : NodeContext) (i j op : Nat) (ka kb : Bool) (tag : Nat) :=
+  let a := contextWire c i
+  let b := contextWire c j
+  let ws := c.2.2.1
+  let pools := c.2.2.2.2.1
+  if tag % 2 == 0 then
+    decide (i < ws.length ∧ j < ws.length) &&
+      (pools[tag/2]?).any (fun p => fastCost (summarizePool ws p) (c.1-1) a b op ka kb)
+  else
+    let z := (movedDecor op a b).1
+    if tag == 1 then !properB z || ws.any (fun v => v.1==z) else
+      let rest := (opKeep (op==2) ka kb a b ws).map Prod.fst
+      if tag == 3 then (c.2.2.2.2.2 (keySet (z::rest))).any (sameWords (z::rest))
+      else (pools[(tag-5)/2]?).any (fun p => scalarPoolCut p (c.1-1) rest (movedChoice op a b))
+
+theorem chosenPool {α : Type} {ps : List α} {i : Nat} {f : α → Bool}
+    (h : (ps[i]?).any f = true) : ps.any f = true := by
+  cases e : ps[i]? with
+  | none => simp [e] at h
+  | some p => exact List.any_eq_true.mpr ⟨p,List.mem_of_getElem? e,by simpa [e] using h⟩
+
+theorem selectedMove_ok {c i j op ka kb tag} (h : selectedMove c i j op ka kb tag = true) :
+    fallbackAt c i j op ka kb = true := by
+  simp only [fallbackAt,Bool.or_eq_true]
+  right
+  unfold selectedMove at h
+  dsimp only at h
+  split at h
+  · simp only [Bool.and_eq_true] at h
+    obtain ⟨idx, p⟩ := h
+    obtain ⟨hi,hj⟩ := of_decide_eq_true idx
+    apply quickAt_good hi hj
+    obtain ⟨a,ha,hp⟩ := List.any_eq_true.mp (chosenPool p)
+    exact List.any_eq_true.mpr ⟨_,List.mem_map_of_mem ha,hp⟩
+  · split at h
+    · simp only [checkAt,evalMove,h,ite_true]
+      repeat' split
+      all_goals rfl
+    · have closed : closeChild c.2.2.2.2.1 c.2.2.2.2.2 (c.1-1)
+          ((opKeep (op==2) ka kb (contextWire c i) (contextWire c j) c.2.2.1).map Prod.fst)
+          (movedChoice op (contextWire c i) (contextWire c j)) = true := by
+        unfold closeChild
+        simp only [Bool.or_eq_true]
+        split at h
+        · left
+          simpa only [moved_full] using h
+        · exact Or.inr (chosenPool h)
+      simp only [checkAt,evalMove,closed]
+      repeat' split
+      all_goals rfl
+
+abbrev WitnessReader := Nat → Option Nat
+def ReaderChecks (r : WitnessReader) (b : Bool) := ∀ s t, r s = some t → b = true
+def followRead (f g : WitnessReader) : WitnessReader := fun s => (f s).bind g
+theorem followRead_ok {f g a b} (h : ReaderChecks f a) (j : ReaderChecks g b) :
+    ReaderChecks (followRead f g) (a && b) := by
+  intro s t ok
+  obtain ⟨m,hm,ht⟩ := Option.bind_eq_some_iff.mp ok
+  simp [h _ _ hm,j _ _ ht]
+
+def readList {α : Type} (f : α → WitnessReader) : List α → WitnessReader
+  | [] => some
+  | a::xs => followRead (f a) (readList f xs)
+theorem readList_ok {α : Type} {f : α → WitnessReader} {b : α → Bool}
+    (h : ∀ a, ReaderChecks (f a) (b a)) (xs : List α) :
+    ReaderChecks (readList f xs) (xs.all b) := by
+  induction xs with
+  | nil => intro _ _ _; rfl
+  | cons a xs ih => exact followRead_ok (h a) ih
+
+def readMarked {α : Type} (f : α → Nat → Bool) (mask : Nat) : List α → WitnessReader
+  | [] => some
+  | x::xs => fun s =>
+    if mask = 0 then some s else
+      if mask &&& 1 == 0 then readMarked f (mask >>> 256) xs s else
+        let (tag,rest) := readWitness s
+        if f x tag then readMarked f (mask >>> 256) xs rest else none
+
+theorem readMarked_ok {α : Type} {f : α → Nat → Bool} {b : α → Bool}
+    (h : ∀ x tag, f x tag = true → b x = true) (xs : List α) (mask : Nat) :
+    ReaderChecks (readMarked f mask xs) (onMarks b mask xs) := by
+  induction xs generalizing mask with
+  | nil => intro _ _ _; rfl
+  | cons x xs ih =>
+    intro s t ok
+    by_cases zero : mask = 0
+    · simp [onMarks,zero]
+    · simp only [readMarked,zero,if_false] at ok
+      simp only [onMarks,zero,if_false]
+      cases mark : (mask &&& 1 == 0) with
+      | true =>
+        simp only [mark,ite_true] at ok
+        simp only [Bool.true_or,Bool.true_and]
+        exact ih _ _ _ ok
+      | false =>
+        simp only [mark,Bool.false_eq_true,ite_false] at ok
+        cases e : readWitness s with
+        | mk tag rest =>
+          simp only [e] at ok
+          by_cases pass : f x tag = true
+          · simp only [pass,ite_true] at ok
+            simp [h x tag pass,ih _ _ _ ok]
+          · simp [pass] at ok
+
+def readMove (b : Batch) (xs : List NodeContext) (i j op : Nat) (ka kb : Bool) : WitnessReader :=
+  let (k,n,r,_,u,v) := b
+  let un := op==2
+  let len := 1+(n-(if ka then 0 else 1)-(if un || kb then 0 else 1))
+  if len>k then some else
+    let d := len==k
+    let a := laneWire b i
+    let b' := laneWire b j
+    let z := packedOp (r*(BitVec.allOnes 255).toNat) op a b'
+    let cov := if d then v else u
+    let mask := fullMarks r (takePacked cov (packedColumn d a) (packedColumn d b') un ka kb ||| packedColumn d z)
+    readMarked (fun c => selectedMove c i j op ka kb) mask xs
+
+
+theorem readMove_ok (b xs i j op ka kb) :
+    ReaderChecks (readMove b xs i j op ka kb) (batchMove b xs i j op ka kb) := by
+  rcases b with ⟨k,n,r,ws,u,v⟩
+  unfold readMove batchMove
+  dsimp only
+  by_cases cap : 1+(n-(if ka then 0 else 1)-(if (op==2) || kb then 0 else 1)) > k
+  · simp only [cap,ite_true]
+    intro _ _ _; rfl
+  · simp only [cap,ite_false]
+    exact readMarked_ok (fun c tag h => selectedMove_ok (c:=c) (tag:=tag) h) _ _
+
+def readPair (b xs i j op) :=
+  let f := readMove b xs i j op
+  followRead (followRead (followRead (f false false) (f true false)) (f false true)) (f true true)
+theorem readPair_ok (b xs i j op) : ReaderChecks (readPair b xs i j op) (batchPair b xs i j op) :=
+  followRead_ok (followRead_ok (followRead_ok (readMove_ok b xs i j op false false)
+    (readMove_ok b xs i j op true false)) (readMove_ok b xs i j op false true)) (readMove_ok b xs i j op true true)
+
+def readRow (b xs i js) :=
+  followRead (followRead (readMove b xs i i 2 false false) (readMove b xs i i 2 true true))
+    (readList (fun j => followRead (readPair b xs i j 0) (readPair b xs i j 1)) js)
+theorem readRow_ok (b xs i js) : ReaderChecks (readRow b xs i js) (batchRow b xs i js) :=
+  followRead_ok (followRead_ok (readMove_ok b xs i i 2 false false) (readMove_ok b xs i i 2 true true))
+    (readList_ok (fun j => followRead_ok (readPair_ok b xs i j 0) (readPair_ok b xs i j 1)) js)
+
+def readRows (b : Batch) (xs : List NodeContext) : List Nat → WitnessReader
+  | [] => some
+  | i::js => followRead (readRow b xs i js) (readRows b xs js)
+theorem readRows_ok (b xs js) : ReaderChecks (readRows b xs js) (batchRows b xs js) := by
+  induction js with
+  | nil => intro _ _ _; rfl
+  | cons i js ih => exact followRead_ok (readRow_ok b xs i js) ih
+
+def streamJoint (w : Nat) (g : Forest) (k start n ar : Nat) :=
+  let xs := contexts g k start n
+  xs.all (fun c => c.2.1==ar && prelim (targetOf g) c) &&
+    (readRows (makeBatch k ar xs) xs (List.range ar) w).isSome
+
+theorem checkedStream (w : Nat) {g k start n ar}
+    (h : streamJoint w g k start n ar = true) : joint g k start n ar = true := by
+  simp only [streamJoint,Bool.and_eq_true] at h
+  obtain ⟨head,body⟩ := h
+  obtain ⟨t,ht⟩ := Option.isSome_iff_exists.mp body
+  simp only [joint,Bool.and_eq_true]
+  exact ⟨head,readRows_ok _ _ _ w t ht⟩
+
 def grouped (g : Forest) (k start n ar : Nat) : Nat → Prop
   | 0 => joint g k start n ar = true
   | d+1 => grouped g k start (n/2) ar d ∧ grouped g k (start+n/2) (n-n/2) ar d
@@ -3550,7 +3721,7 @@ theorem s383_10_0 : block g383 10 0 5=true := by
   apply groupedBlock (ar:=8) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0x75319e3bd54e6554c478af7535555511e2bd556646633c778cd546623c578cd5466aa335532eccbb32eccbb1762eccbb32ecc7731dcc7731dc3b87731dcc7731dcc773333333333335333353319998ccccc3330ccc3330cccd4cccd4cd4cc3bdcccaa6615ea665199466531662cc398733319998d4ccaa665033c1404782828285858383818180600a0a (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_10_1 : block g383 10 5 16=true := by
@@ -3574,14 +3745,14 @@ theorem s383_11_0 : block g383 11 0 1=true := by
   apply groupedBlock (ar:=8) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0x11f223d556eeeeeddddddddccccccccccc47aaaddbb99aa800023d556eddccd5455 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_11_1 : block g383 11 1 5=true := by
   apply groupedBlock (ar:=9) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0x14a152854a15554aa509f89f87faaaaaaaaaa8af0af015ee2bccaa2bc2bc15e15e715ee2bcdc57b8af3715ee2bcdc57b8af3711e11e0478478a23c23c11e11e08f08f047847823c23c11e11e08f08f04784796b16762dacbb59767659d967659d96b2d659d967608a8211550a88a822247c37c54d555cd5545798af377315e6e23c23c11ee11e59d96e7639aaaa9aaa99c19b994ce19c666e6666e6666e6666e66670ce19b866e19b9999b9999b9999b99a8442aa221508848f8445f8aaa9aaa99a8af715e6e2bdccdc47847823c478cb3b2eccc5353557333533733333335533555535111111111111111111111111111111528aa00af0af057b8023c23c016b2c0094350438670dcc05086a0230054a1 (by decide +kernel)
 theorem bl383_11 : block g383 11 0 6 = true := (@block_merge g383 11 0 1 5 s383_11_0 s383_11_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
@@ -3591,7 +3762,7 @@ theorem s383_12_0 : block g383 12 0 1=true := by
   apply groupedBlock (ar:=8) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0x55bbbb7777773333333355bb77335500055bb77335515556eddccd545555 (by decide +kernel)
 theorem bl383_12 : block g383 12 0 1 = true := s383_12_0
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
@@ -3791,14 +3962,15 @@ theorem sdead12_0 : block dead 12 0 3=true := by
   apply groupedBlock (ar:=9) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0x10f15e23c878af11eeeeeeeeeeeee43c5788f19e2bc47bbbbbb8cf19e33d554578af11e2bc5788f77777715e2bc578af15e2bc578af15e2bc578af11e23c4788f11e23ddddddc4788f11e23c4788f11e23c4788f11e23c4788f11e23c4788f21e2bc47dddbbbbbbaaaddd8af15e2beeec4788f11f777776aaaeeeee6eeeee6eeeee6eeeee6eeeee6eeeee6ee6eee43c5788f33377733355533315e2bc5799988f11e23cccd554ccddcccccccd554878af11e1ddc2aa815e2bc57811e23c4785550eee15540555 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead12_3 : block dead 12 3 14=true := by
   apply groupedBlock (ar:=10) (d:=1)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  · exact checkedStream 0xa43cdd4caaaaaabb31de33c47aec478ef19e23d766e33cc57dd88f1de33c478afbb31de33c47add88f1de33c4785555542aaaaa119e6e2bcc44788cf19e33c578cf111f7663bc6788f11f7623c678af11e23c578cf19e33c578cf11e2bd55554662bcc47b8cc57988f7199988f3319b988f73199988f719b988f7198af311ee6337311ee337311ee3315e623dc2bc57857815e2bc2bc0579c23e15e15e2dd85796b0af0478af15e15e58578578331818cb0af0af14578af0af0a22aaa51155508f117b31108f1111f62bc457663bc6788f5d988fb11e23c2bc478af55508f11e623ec578cc57988f731999db85788f0af008f08f023c47988fb15e511e2bd5557623edc47aec47db88f5b9bb9bdbddb88f5bb3b711ef6f76e23c47dd88fb711ef6f76e23c6623cddc66e6eeb76b1ceb17623edc47adcedc47bdbddb88f5bb11f6e23caaa22a5551153b98898891f77b11b115bb3b711e6ef6ef6e23c57aadbaa9bbdbbd8cc579bb98cdcddd4578af58339c288f15f6eaa77377b5b7bb711e6ef6ef66ef6ef6aaab6ea1151510454544444c4c44444445c4c44444666633dc66e6666e1353575519b999998cdcc47b98cdcccc663145783183115e6ae55199999998cc479bbd8cdcccc66a2eeaa3373333319b9998cd4d5caa2a222a8a888821111110422222bb0ef0002bd4a2aa80198c0af7000af0af0014478a8a005dac700555895540033185400002a94 (by decide +kernel)
+  · exact checkedStream 0x14679a999565554266aa0aaa84c778cf309867898ef19e33c2619e2bd4778cf19e6a2bd55554ea62bed4f62bece2bec57998af7b15f62bdd6c57daa8af715f62becc57b8afb15f633c57bad8afb50af333770af319e6e3319e66623cc679b88f15e633cdddc47998cf37311ee766ee23ccecddc47998cf37711e2bcc679bb94479aa8aaaa08f11e2bc479ac478af11e2bd45788f555588f11e2bc478af0af711f62bed6e23ec47d8478af319e6eb3315e6eb11e23c5788f15e5511eaaa14280a583002852c18a14b02bc30e18704781605815e2852b98a88f154546dc47899b88d88f111e215eeb6a23dd6e23ec4799deeec479deeeec2bcc679bb8cc479bb95d6d4ab711f623c3811e1c5adc47d88fb2bada88f08945411288445c4c445c45c4455ded6d55ddcdccddc57bbd8afb5777373b11ee766eee66666eaef6b6557773730e15438b3bddddb9dcdcedddcdced5ded6d4a66222551111998889888999b8888a8af1537351331333317715ee766ee666666623ccc679bb9999999aa9a9b8cccccc18752860ca6a6eee23d4666666ae6666ea66666666666666aa6a6ee1508961508888444222111110888a0544011142c00600011e000502801c154478007055500060aa000050 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead12_17 : block dead 12 17 15=true := by
@@ -3813,14 +3985,14 @@ theorem sdead13_0 : block dead 13 0 1=true := by
   apply groupedBlock (ar:=9) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0x2eeec77add8cf19e33c67dd8af15e2bc578af15f76a23c6788f15e23c47adddddddddddddbab8cf715eeaf6eeb66a633cc579a9d9a99ad9433c2bcab2945 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead13_1 : block dead 13 1 3=true := by
   apply groupedBlock (ar:=10) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0x43d4d555555554778cf31de33c778ef19e3bd55467b8cf19ee33c67b98cf719e33dc678cf719e33dc678cf719e2bc57b8af15ee2bc5798af15ee2bc57b8af15ee2bddc57bb8af15ee2bc57baaaaaa88f11e623c478af55511e23c578cf719e23dc578af15ee23c47b88f11e2bd554000000000005545546cc46c478daadd88fb719f6e23ec57bddbdaaadd88f017623ed55455455c4c5c6c55d5dec67b8cf77b15eeeeeeaeaaef602dd5dedded5d5545544cc44cc4555cccc67bb9998af15ee666aaea66602d5d4ccd5dd4cccccd55c444444444444444444280e03800008a0095400a800 (by decide +kernel)
 theorem alldead13 : block dead 13 0 4=true := (@block_merge dead 13 0 1 3 sdead13_0 sdead13_1)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
@@ -3828,7 +4000,7 @@ theorem sdead14_0 : block dead 14 0 1=true := by
   apply groupedBlock (ar:=9) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0x87a8ef1de3bc778cf19e33c678cf19ea2bc778af19e2bc57a88f11e23c4788f11e23c4788f11eb63bec67dad88fbb5571dee33dd5c47babbaa98ef319e6a623cd4d4cd543bc33ca11e52945 (by decide +kernel)
 theorem alldead14 : block dead 14 0 1=true := sdead14_0
 theorem tablesdead : checkedTables dead 14 := by
   intro k hk
@@ -4885,14 +5057,15 @@ theorem sx191_10_0 : block x191 10 0 3=true := by
   apply groupedBlock (ar:=7) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0x6f9c5f8bf17ea733333355553999999999999aaaa9c2aa8555015554e52aa8caaa3140a55553abaaaa999aaa999aaa8555395d55554eeaaaaa666aaa666aaa1554a555775755555 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_10_3 : block x191 10 3 13=true := by
   apply groupedBlock (ar:=8) (d:=1)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  · exact checkedStream 0x1c0a050205554c55544c08c08c7f999ba8ff37e665fd4102aaa26aa260860866fcccdcecccdcecccdd50f99f332bea202a202100828005000028142222111150888a8888822220888a80c0250180800001402010aaaaa8a88040a67cbf9993f323e666eaaa66a76666ea050140008f1be2fc5f8bf1bea37c5f8bf17e37d404155555155170115e02aaa6666e6666aaa6666e6666a00140300a97f27e4fc9f988f731e43c5798af731e43c579a9ff1be37caf9888811111155511111102221554cd4ccccdd4af95f3323e66666ea02841405042aaaa99f55131fe3fc6f8ff527e47c8f91f37331e43c579b989f13e27c5fa9df13e27c4f8bf (by decide +kernel)
+  · exact checkedStream 0x88a9544454aae29554555530c6666e633337333353be97d4efaab8a15515454c309899b984c4cdccccccdccccccdccccd4dfa3f537eaae08aaa822aa044110c441151df52a860a552aaa86018290fa955c4a22a2a2511508221110984422a552aaa860511f50aa86030610180098289ff52ab8a55515555452aaaaa9554cf9bf52feaa66e6666aaaaaaaa66e6666a552aa860a33ea5550c0a37cafa91f5551be57d48faab854a22a15551b0dac446dc6d622aa55555331999954aaaaaa66333328a5555500514aaaa00527e52beaab6eb11f6eb71b11f6ea57c54cfaa88251110554441288888aa89444555555554cdcccccd4bf97f527eaaa66e66666a1fe25550c0552a95555554301546faaaaaab8ff17ea27d55548f945fa8aabbac47dbdb9445f93f51feaa22fc9fa8ff55 (by decide +kernel)
 theorem allx191_10 : block x191 10 0 16=true := (@block_merge x191 10 0 3 13 sx191_10_0 sx191_10_3)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
@@ -4900,35 +5073,45 @@ theorem sx191_9_0 : block x191 9 0 15=true := by
   apply groupedBlock (ar:=7) (d:=1)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  · exact checkedStream 0xff0c7f83fc1fe3fc3fe1a1f2c5b73b71fe23edccdfc8ff23e77c06039c743e23c61db8c3b728a77d40301c7338478cc6718671867198ce532941df0ccf887c1ff1a8df88f51d8ffac154a160c2946028df0df0df28df0df51be286a3877357511eae6eae75155461b8a6528cc60a67c67c5fcee73abbab9d54afa93f537e286a1966e65fdd44795f733b3b3514bfa8c3372994a2998ce2a9554a631aa93f52bea4fd5cecc6aa76766aa47d48fa91f (by decide +kernel)
+  · exact checkedStream 0xb05f8ff1be1bf20bf1fe37c37c19df3fe50687ed6198dfb7b0cc6f9df937f61a8ae1d8e0cff9cff83b1bb98ec6ea67c667ca57ec03800c38306730339818e660ca57cc2ac143043e061bf032c537e029980aa6033300c6fa83fc51bea0ff2c23e5fd45fcc2feee43e19aab99f0cddd6d546a55331b8dd54c294ccc18c9fa85fc3771c3771beeea3fd48fa8df2be57d47fd83fd4cf89fa857ccc619aaba8666766aa337e53beae63319a97f30a5733065551433bea18a3fd549f93f5537727e6766a2fd44f99d9a8bf513e47c8fa91f (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_9_15 : block x191 9 15 36=true := by
   apply groupedBlock (ar:=8) (d:=2)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  · exact checkedStream 0x7373d13ea67cd47faa8cd4427c66a627c6666a286f988f355256623ce491df337e722626257c44c4af898989888888e888df111e2622222b311e3998ce66667cc6fcccf8cc446a662209888444f4cc4411110018181999832fe660601018808840622200014c0185300c030619e6e2fc4f88a9a8bf139a988893f111fe4fc6f93f10888bf997f2cc47966a27d4e66060ca3060c00bf1fea47c6f89f0bf1fea47d4e6e6a4fd54d5d55cecc8f8ff1be37c8fdb89f1be5373999ccd554e66614c185753057cafababbd9bbd98ff1bea5fccfabaa8445554222aa08844af91f17e088bf17e223350ccc666aa333181981829814d45f8bf557373735373737737317e2fd49f9a8ff55 (by decide +kernel)
+  · exact checkedStream 0x1ccc2fc7f95554a1be06f889f13e2fda3084e2a55511d273323fe959949452aa88c1389fdd13e227c4e14e0e1df2fea551fe3098a2aa3088c27f744f81400030c57d4aa37c633022a6311368474443550d6055062a9863319f2847d544d4422b8a88447c74417e3a20df32a8d4294618530ca3181be6a37c7f8ff2827d5cccaf91f155152b9b8887f93f11be237c4f8894c4446e511e2528c6186553185fcd447d5cddcdc9f97f27eaaaa6a2a6287c2a2226622a22362fc46f8bf11111128942a71130df94e061a94c318aa63315554ae66b399f5573337b317e57c8fdaa98bf5 (by decide +kernel)
+  · exact checkedStream 0x330ffd2aa1f3502621113fa511882aa311cc8c9991744555115131113ed113111955546199f1feaa2a91f11155422aaa222227da11111546146317f1beaa7551fe2054a2aaaa210544d117e2117e50c14319cc295cd49f9889fa8aa8d8889bf08df27e22251151182555519955c47ba94d623caf89f529ff7513e6108a8aa890f71151117e23fdc447f94d4a305f9546194aeeeaaa60efaadb986fb98bf2b8df551be6222fc5454df89888891f08bf23e22225111110444aa18ca61554caae3067d545fa99f4c1bfaaaa5fca (by decide +kernel)
+  · exact checkedStream 0x373732beaa8fd564cf988f71289aa889f17e5113311889b98aa86f8889b99cc88f99aadcc88f988f73198aa91f294cccc4c45ccaf84f88df13e2e6643e47dccc6b7331954ff946fcaf886082a6310c2108227cc27c420000300180a627e101095410842222109fd1088880000000180c0630aa608f77717e4fd547faaa8bf1b9b997f1fe37cbf8dfd23e4fcaae3be3fce663ff6aa6557371832aa830328315ddc7f91f5543eaaa3fc22e3bc4544544544c444dc4444445f8893f1121e237c44446d5ceaa6663357bb531a94cdc6e0c030062832d4efab8bf37773373b1be43cc6fda8df355723e22766a236a2ae6226e62223fc46c5f88ff717e222aa6553331daa98d54ccc60caa0c0ca0caaaaaaa6e6e6726fd4d4bf9d9d994e6a76627d54cfa94af8ff (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_9_51 : block x191 9 51 36=true := by
   apply groupedBlock (ar:=8) (d:=2)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  · exact checkedStream 0xce3377186f8ff91f1be67d42cc63147f99f350331850df09f88f18bf05faececc619f1be87d1f9bf1a8e15730451535510c2666621be111e62bb3711e30ff55399998cdce66623cccc5fccf9ff72fe77cd4ce1c294298c1857a9980af1d980a88cec04466a18c3330c6b33b0c657cc9f9df0cf942001500801142008c4c1045462e0822358286301cd606aae6701cce07315f05308d8b8bf0a845445f89844c5dc2264fc4af895f11df10f98cb2cc60ab1d4df9aaaaa9c333338af3051aa956cc0c7300573001be3fc1be6e47c37c7f837c8f97f23ea6719b8854aae226719d8b8991f11f7112d9a98c6aaa777331b99cbfa9ba9a9a9ccccccccdecd5451accdc339cce0a3b99c027e6fc3be657c47a8bf5b70cddc23cf6eee663fddc8f95f2be67ccfb8ff11ea22e317e2e221123ee2fc47f888ac4cc5c42221727e4fcb3b5182de23ccc6650df14df995f5331bf0ccc47999b994bf84fc66a63b0c66582b94ca63806145faaaa95545f9833770c47c9f9b91f751fe67733b7311e62de23cc7fdb9987f8ff2fe3fc6f97f5 (by decide +kernel)
+  · exact checkedStream 0x3779d59533e6267ec22213e2a108984114e131174bb8694ca86b12a9aa891f0c43a27cf5c4c4f85c707149f9aa89fa866a57c546a3198e89f1d1989f310601819a8ff3518df5310441010442220861108750014066aa0cc660319877b889444a223fc4ee22233e222be224fc4547183fcc0a1aaa9819aa8cc0cc3198637dc5fc51be625fcc517eaaa1fe1837c8f8df1be3fc62fca29850c0cd46633355199dba9bb86eea37d556c5fad9c87a8aa87fa94ee22fc45f8bf11f31be47c542b8507fb833198cd46614df9bf5553772bd9bb88f71bebaaaa5fc4fa8df (by decide +kernel)
+  · exact checkedStream 0x73381fe6ba3fc7f8331aa8ccfa89983319847ccc8f8cc47bb9b8666fcef9ff337ea3306626a8fc6a26306626211f33131888f773718ddcdc66ee6e333e6fcef993f5318052fe14440308837c11e221111f7628eee035770311e2bc31eec317f3fe87c530023550210088441be110845d54319867bb83bb80eec11e7bb0c7bb0c1eec315f2be67c51845138888ff28aaa91f1111c4dc457c9f893f2be5fcaf8cf9bf33533b998cee663508f15e6666bb0c550ef25e1887d1f86355d8608f93f23e66e23e4fc8f9a8ff27e5fc117e622b3117e5fc554422e6222221111e6237c8f8888d999bb9aa9999d8cccccd46a66666ee766639466619ccc32a9998e0ccbf9bb91fb1988f3373333311f6ef66657c8fb8bf1be53c222617e1b1115523e27c5fd884267084263fc9f95f27e223c3718c3b1998657c6661b8c5782827cc07032aa9800a6aa1feaaa1cce60bf1fee53c31ece08fb29e638df0df27e0ff1bea27c5f8df (by decide +kernel)
+  · exact checkedStream 0x333389f95952be1bea18df1a8a89f1be359cc658ea5fc9f99666f24fccca6ab24fcef9966a3555151a8dcc63627dc46793f313e36ae97ccd46e33ccccee33ccd4cfaa99ff37e6ab019ea3fd4614cc4189f130ff09f550c666395c19e53863371ca5fd4643e50828403101301fe2831862c28700c61c61c61ca033e062222a2a2222a2a11e2111108ff11fe2223c45f8888a946f9998df59cccc5fcca5533531cccc33ca1c6183143860c05299ba8a2be23c6faacc5f9c67b8bf5517e2fe2266671127e2fc6f8af2be47c45d554ccc662becd4aaa33cd54e62bccdd425e55538e70e2859ca2fedc5fa8bf0ccdc5794c57dbb95f5553be7fcaf98ca2ae752a3f15113133a8448f8df117ee1fe22a2aa3109b8c54aa87c6337188f50180a0280a552a88f55506677299bf13f519b9dcdcc66e17e27c6faca99f0bf5 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_9_87 : block x191 9 87 36=true := by
   apply groupedBlock (ar:=8) (d:=2)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  · exact checkedStream 0x6ae1355d1df5308889744444f889844222665115108ed64d2327eb2349a85294dc17e27cc6ad4aab72dc5fd48fa88f93f294c091f353988bf13e11e89467070e3995f5287f8df3528298309f36828c614314d4663327e6551be66157104547f8889b8889f1be2227e2226a551fe661a8a66298660cc6666e3fd4d544f8ff37e317145444fa898d8888df17e627c47c46e4257b2d8954ee29aa9cca6a199a99f3371ec37c8fa8ff550bf1bea04444a25102251105f885f8d88cc54ae204c57c55701aa86066a6a18caaaaaaa6738bfa95d6675988df28bf15f5 (by decide +kernel)
+  · exact checkedStream 0x19aaaa84fa97f0d457622aa22333d129d886f9af1315acc66bc1beb66523e09aaaaa8a9c4c44f89fd0bf135e27c466bcce66e66aaaa5fccfa99f2be155547f95f0e04f89fd0bf04f81c70e38aaaa4fc8f84fc2288df0810856208c4214011ea051402a8af831d8895547f8db98888886fc7f93f111129df53b3b29a9abb9a8ae28a15ed5542fcbfa9bf3131151513e37d443622a223a37c4fec46f8e895c33319a999aaa9d99830c503571fea6e66667666a6a47c7fab8ff098a88888b84262a2222fc47f8888b8bf11111353084cd4754cd466a00a502aa9546633c579a9a89f519b8cd555427d4af91f (by decide +kernel)
+  · exact checkedStream 0x1be17eb2151047942a2a1c34ae3fc43c728ff57308fb7708f3fe77cb267dd204fcaaa5fca70e3fc7f90f13e17e27c4fb990f7733b99cef9bf3feaa57d55456117f553284088df1fe3bc4f85f89f13e26ea61d999a9ac67b3b43e77d54d55446089faa994208846f89f1dfa3bba237caa633331a99b8ce3bcce66733b2be6fd54d55426515755282097f113efaddd143e7fc479bf19ba9abad67530cf3325f3339986798df47e5fc8faa8df5550423fc37c547f844a78422257c9f95f11be1be2222aaeaa23d5cce299d55ed6377355558c5335553718dfa3f327eab5b88fdac8f99f33eea47d54444222222e2222110442222217111117e2222a52adcc1a27e154c0d653500a5551814a55552803fc28df553011ef63037c2fd4155 (by decide +kernel)
+  · exact checkedStream 0x7336a97f517ea47c6fb884f88ad898988c67e8819e763243b18e43fcffd8c37dcc55554ccf84dc442fc6f9989f1852a9818ff293f537e65fc3fc2655511511708882fc6f8889f1088825150447fc39e0e7948fa8c9f86f846a510c46234430831430af0a00d401a9418efb89a89f533e22a223c4c44467f49f888bf1143e30a67cc7a53be353714aa7018188f7352bea8fc2fd48f9bf13311111523ea22f622222223fcaf89f111b182a9acc67da8ec52aaaac2943b33e7fc4fdb9ddd99ada8ff52fe5fdccc447fa95f5515517375112fe2fc7f8df37e22fc544c4aa62e277d45330df86023ea1aaaaab99d95f27e6573737370df523ea37d49f95f (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_9_123 : block x191 9 123 2=true := by
   apply groupedBlock (ar:=8) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0xbaaa2ae2ee5557773b8df55514aa505faaa85140a2a22222a75752ac7fa8888889954cccc633313e622222222a2e2aea56d99e88fd5 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_9_125 : block x191 9 125 36=true := by
@@ -5048,7 +5231,7 @@ theorem sx191_8_454 : block x191 8 454 3=true := by
   apply groupedBlock (ar:=8) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0x11119 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx191_8_457 : block x191 8 457 36=true := by
@@ -5404,7 +5587,7 @@ theorem sx511_14_0 : block x511 14 0 1=true := by
   apply groupedBlock (ar:=10) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0x55550aaa23c47a847a8888888ee3aaa91f5288f752aaa99a94dd4a66aaaa4fd4a23dd4aaa6aaaaa3fd4a23dcaaa6aaaaab76a5b752da9adadda888888aa94c435333535355335 (by decide +kernel)
 theorem allx511_14 : block x511 14 0 1=true := sx511_14_0
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
@@ -5412,21 +5595,27 @@ theorem sx511_13_0 : block x511 13 0 22=true := by
   apply groupedBlock (ar:=10) (d:=2)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  · exact checkedStream 0x6fbdbb8df7b6be27b117b11ec4cf626108c478cf68df4fe6fc17773153177b1b35b8edcb70d6e6b7b35bb9f282e2ee0888d988ac44e22115888898182dc5a5f03dbba9f1ecff8c3fc44478cf08a1f2be224fc4784449f88f135bb3f2decc60aaa00cf88f33e633e87ccf89f9999bb999990f333293f333998779998ccd4c6676e0cedc18ccd543331dee6667fd0f99996fbdbaadecef93f188f19e755591f1de723e3bcd6eaa5bdbaff0aaa7025f563eea1ff11e97dd4ccce666b2fe3bcbfbb1f2fe7fcbf95edd5c8fbd9bf1be43cc478cf2aaa88f8ff15e25e3fc579add7f9adeed45b83299f5550ef88f47ea7fcccc77b999ba9f47e5fd6facdf8af43e4bcbf95f15e57cef97f2be77caf9474fee3fc723e43cc28a1fe07f8614c3da3f05b830a0eaa18ef70dd4558e6fcef8afc979bf1ccf95f1ccf95f1bf8cf998b99f1199898888c4423c446221111e22226333750cced44430019988f50ccc47a9998cccca666333311ea666333311e9fc30618cccc47abf333 (by decide +kernel)
+  · exact checkedStream 0x11e8fd1f88f27eb26604788f11e66025e23cc6fa99991f31be6608799a3f27eaaee33b88f30c7711e2bccccce6ae661cddc47999dc4799ab889d62222ebb11111133775bd85dbd9999ab86671deeccddd6c57b829f3fea0a3333e5fcccc4422226622a22222222e23ccd4e23c0cc6666a0b15f27e28af93f335048fc23ec54223c633c6c44cc578af10f53eaa0633ccf8cf7733570cce3bad8ee776e66a55503057cbf98cfb15e57cbfaa8af704d4ef8809897f2be660ecccc335b33711e66a6aee0ccddd4d40cd545588f33fee1adec479981993f70cc9fa5fb11ea62bdca11e9fd411e51de6fccf998af15e21eaaa6628ef37e3bdc4799abb88f33399bbad8ef76aa66a5553be6fc55baaaa87fcef98cf43e87ec47a9a5f70cc8f91f27e57d47791f23e4fcafaa8867c1b5108f02362662bc5789fccf802fe3bcf6660660eea1dc11f666a002aaac3be6fc11f7623d4a008fb43e7fd425f43e047c8f823ec8f91f5088462222217311b15117113310888882111b111b111711e66a66ae031dd4c1cec578946c1c63176e6a0676e2988f033b15f76a60e65da940039d8afbb53 (by decide +kernel)
+  · exact checkedStream 0x8f0779c98af937ee08f31deeae10f33357332fe66e08f3737e5fd54fd9bb8d8d8e23662bc45edddddc737bb777b47eb7ddc6f626112c444456f6762cd655735bbb847dd990fabfb711e6e35553fe2bc589f93f7b714be2e09888d9df4fe7bb73823ec6aa11f67511f6b52be67c8fcc23bc6e2308af098c11e530578cc579b9b94c71cec62c6e6298182bc6e6a11e6e66aaaa2bc31fe57c7fbdb9adf27e6e199d9ff4be6f76e6e5533508fb3755529a88fb59b998c328ff11e637d47f91f31be23cdc779aa8af067d91f23ef6e23d4bfab833cc67daabbddbbb92fa1fb308fbb75555a88fb59b9a8c15e527e57cccfa99f11e76a47c7f8cfb523e3fd50f84309df3be10c457c0c06661b9d540c6a3018cdf94060500d4a06347e57e0606353e4fe0c4110c4cc44cc44c444e22262221111137332ab9863998183731180618c31b998c31b998c30067fc030c6e66 (by decide +kernel)
+  · exact checkedStream 0x5798e3bd56d5646388fb1de5518e43ec5fa8af8df23e2fc6388f2a5f555731ddd55dcc6eee33cca657357186e6eee6377535571106c44445cc6c44444444472dd6c1acf61a9c31c7358eab130b85454542a13108ff1be25128888c4dc45444c445d4d54aee18c198a0c11ea352a9aaac39d956d6f66b5819e5347e61dcccf9b8d54dc6331d461cc7635529d876b15f7b3b15f55315e238ef515551b5515e24fc47f8946794479bf5195c578af15eea6aaeee6371d56a39ad54d54aa23ec6ab2aa9d857bd9ad8af5515eaa77d554579823bd54556d4467895f23e22519e511eaaa3298cf2fe33dd4d4dddcc6e3aac735aa9aa847a8cd65553b21f733553feaaab62bd4c57aa93f5319eaa4fd554cc0d54660327e0c04786023c578d4c1980ea003528623d4660611ea180d447a8a6606a23d41981981a88f5044131111138988a888b8888944544a222311711111111753553357770cc751831ca8aa888f11e3b18d6b7b3b1ecd66d54c67d9ecd56d64c6788f3999a9411ea1980cf11e7b355b553 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx511_13_22 : block x511 13 22 36=true := by
   apply groupedBlock (ar:=11) (d:=2)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  · exact checkedStream 0x3fce0ff83fc67c585c5c11f0a8b8c792fb35e2e297d0797f523ea2a2a7fc04200a1f153e0cf842067c287c54f8c78efb35e03bc8faa9f2fe4fe4fe8fc10ff9c76263fe6a608e15e10470af09dd99c77ccec47994cef99d8c0cec629e15e6763398af33b11e66be707cc41153843bc454d9f88f1046c23c22221de23611e1112c2e5fe23c1de1535fe23c004781ec23c4788f029a998ef03988f307b711e23c1de11ecfddff88f013171466e626366aaa0211c4470847111111111111111111111111111111111111111111111111111111113318d666630333731acc06b30033318199b98d6622229c22223fca6aa222211f13f088889c8f89f844b35e717f41e11f2be4be65fcaf811e03bc08f737e43e6fc132ff373e60ce62bcec478875beedfc4783db88f11e031acdc5529aaa8303023dcbf91f37e67c3fe77ccf97f23e6fccf8613f089dcdc4fc22a0044443182222ee6e0773729f19dcdc06ee6e657c63373328c66e3006357e32818199981dcdca3198c01b9a8ca1cc1dcdcc1dcdcd8f8c0ff04e2aa3fcdf84c8f8804e22221f11f11af11131e4becd79c57ceaaaa532be52be3bcbf93f015f2be5fc9f9df2be71d88f31ff36be3b19cdc0ef08f575283dbb8cdcc6b1aaaa94d4a663003fd4dfa9bf50ff023dc8f97f73b9b993f18abb9b9804fc8f9df23e3fc7f8ff713f23e77c8f8ff1fe3fdef82a21be108ff1510df3143e210ac2110a3f1bb0844c788fb1ca83d447a88fcd544788f2be01de23c4795f5d8478ff3b11e29a99d87311e60ef1bb711e23c1edc4788f0cdc3599980628afaaaa87f8ff11e11ecaf88f3beee635095dcc60333e23d3f89f8df33e47c47c6f88f11e97d764fdc23c479bf5d8df11e5fcdf88f37e2fe77c6f99f2fe3822eb37b08adf7008822382208d9bd827b37b18abf7b37b07359bd8c7bdceccdcc663e6a663031c32bd801ccdcc0ecdec68bee663031ec687ee2c1dccdc0aae66e0b37b09566f60359b865beeb66e07b37b07b37b19dfb8615133b9b8a89d8084110c21044444444444444444444444444444444444444444444444444444444dccca333b11e65353353718186351db818b11111111133181998c6333333331986e697c761cc5bb9b983b9b981bb9b9a8cb6ee6e60ee6347e3b377318b733707b37b195fbb99b83bb9b98b773734fe3b (by decide +kernel)
+  · exact checkedStream 0x2c47a88095f551010af5104455104415e4fc4111544c6f88823c67882208f33e20884fc67882257caa26c7c455c578cf1029e57d544155d410aea311adec1023bdecc2389bf75038dfba9986eaef6071def6071def6661bb5f75330dc6c00d8eeb0d8010d8c3589605ac6e5dac0b2c39ac71986e71986eb3bb9ddaceef77600800211f23e04100808231989888888888888888888888888888888888888888888888888888888801800c00c00c00c00c00ed440847d4437d6f8aac47881044d796f13042bc448f8af50229e47d54c6f8555cb788f00af596f11e17f30af563eea661bdbd9986eb3bb9dd9bfaceee776006aaa6a2a801d96f11e3fc9f93f31fe2bd4faa8ff27e4fd0f8ff37e66a019a860ccc03330e19a8066a0199806661b866a019980306e18c19800335000066a1b86661986661b866a1b8a2a02222a2a55fe111b150111133e257cc27e222a2bd4014f555351caae23c6780867c4797f0afa88efdd4cc338ef7b330c59ddedd76ab3bb9b8001aaa9a8e550015549faa7f2fee55b11e23cef97f3fe6e19a86e0ccc3705fc47a8df23e47c8fb897f551be47c8f91f713be2201df110bf57e5588802223c44c2be31e22a2bd4053d554c5f8aae23c5780c788f11e2bc33ea31eaea661bbaa88f7b330dd6777bbb2ceee7760030034bea26fd554afad88f11e57caf9df327e2bc478af3350dc33330dc47e2a67ccfa1f3fee511e23c5797f37e8fcdfb86792f08f11e2bc5f8ff1fe3fc6f98f4feaa2fc7f8ff1fe37c8f8ff28440ff284439c22045ce110c45ca031fe501b9c0639e701daff2821b9c06001a80180196f9406a006afca033beaa7380cca00c60294051b9c039f280dce037380d9f940626a108109a846f88e237c4cc442088899888423c44444444444444444444444444444444444444444444444444444444444cd40eaea661baa99981c261ed6e30e6b022222222220060060371999a897c4f84791f1be666598478ccc3706661b863351545508f3332c47819a8a7cef847a8bf53332c478478ca1063fca10663018666588f08f3350df99f08f (by decide +kernel)
+  · exact checkedStream 0x47c18b847c2fe57c4af86111e04542a044c97888f022aa2a0446f840446f840446f84df89f8446f84df9422623c23c5788f30bfa93fa3f57fe082e77e0d85cefddc413382220bd88f045611ef667c5857bd99f7758f662c7b11e2c7b11eeeb0af7b73eee9fcb3289fdd623ca66e0ce38ec4785786eb11e2fe2bac478bf99bbacc63b9d9857875b94cd4e184799bb9d985799b1f74bf623cdfccc1001898147f82004c04c60260888888888888888888888888888888888888888888888888888888c181830318c0c601801830318c2888f894422a223e2515114be209c4297c47fa3f119e87c426e11e83c47a833ee4bf2aa6aa87dc77cc6798857a1f753be633d1f88df9c2bded9f9b9c3b11e6edfdd1fd997f99bb9d9857998c630572aaa9aa8c183fee37cff98cf3be63fcffb8df3fe57cbf9df31fea0c147b0b060b3bdb818f6e19f8f6e2c1b8b38dc03b870370e7ca7dcc1c63001851edc00c295cdc5d9c6e2ce370efcafdedc0ff10a8411fe2150aa8a3f109841147e247c5178af1044c11e83c47c8a2aacaa9df02bc5798677ca45e2bdc3fe05eddfbba83dbbb88f15ea5b11e533718ce660306a2aaaaaa80c2bf17f23eaaa647dc8fa96f8a7f18af731bed7c87d6e1671b837e17e45e2bdc5f8bf37e17e5fc8f95f2be2fc5f8849fa891f0888a893f5123ea222118b844444287ccf8a5f088992f111e83ca08f2a8aa954d55c478cf8af184727e667cef93f8543615ee573b558e11ee61dcec4796f999dcecc2bccc318061802baaa94cd55dcd4f998f9994af60ee31807f8df93f43e23e47cc7fab8c8bce4fcce3fccaf93f137e37cc8f8ff33e57c9f89bf1be657c3142be6314301830c6613f3318cc27e63193f0cc63312798c693c18c6a28c198a6314331860c630a63193f060c298c6afc198c66286306061431a8a606615f318f7c1998c30663198bfcc636be285c42294f1710961084111b0b8b88222222222222222222222222222222222222222222222222222222222b3bbd8b0af7b577586e62bab9ac11eaee6e63044444444460c0c181b98c19f73fee2f62dddcdccbbbb3b9b859c6e14af6e259c6e659a94f2bef6b15ce23cdcc609f98c6613f318d43318ccb11eee6e617f29e77dedec (by decide +kernel)
+  · exact checkedStream 0x15f399f591f19e2be93e67cdfc8f97f10ba9cc87885d2f87f8ff1fe2111e8fc67b990f10c5f54fe3fc7f8ff1087f8084678ff5b5f19e210ff010d1f1fe87ed7d5f9c27e33c0af93f93f2be67d4fa7f084ef90f93f33109df743e4fcc2119e73311084679ccc441abb99986aeaa6033dc018cf749e7bcc618cf773330dafbb9f63e6538889df73547f1113beeb0af111b71115d8af111b71113847866ee6bfcf7c35755805d8af0edcc30d4d54c30ccdeec57876eecfd1fc1f0d7fb884c33351098cccd4420084c420084c44444444444444444444444444444444444444444444444444444418cccc06018cc479830cccc000300c6623cc37cea3fe2a637d3fd54f9ff155867bac4678ac9f9bf70cf13be2708f37e33dcc87998df29f37e67cdf8ff53e3fd638af0b53bee2bc67da1f30d8fbb5f27e6d7cc3777337b43f0fc3b77bb15e1db8c18cccccd4aaaaaaa0303fec8f97f715e33ecdf8ff47e47cbfabf43ebfc8f9bf130a1f147ef626143e28fdec4c262042226626205c444c3fe02673fe7bef630c1633b313f7b19f6054ae6606061bb84ddd4660000319d4af6a001bba95ed546630198c06f6dfd07dec6fc5c4aa4fccdf899f157eaa4fc4fc5c5667c678889f89af125f33e7fc44e223d467b990f35163ea8fd5544fc311e027e6e623c9f9ff47ea619df767eb7ce6f9866ee66eaaa235757b370edc063333352aaaaa80c15f43e5fd7faaaaaadd9b988f19f697c66e67fef667c6630b33e6e623caf97f33e4fccf99f57e67cbf95f2fe67ca72beb5135295f4be77d4447c33ed66fc4447cafa1fb22f37e22708f519ee643c879a9554bfa7f1fe3fc47cb1de047d51fd8efb43e33cc35755330eddccdd6fa9f77e1b3f753bef762bc3b7063333301855554fe77d8faaa99fb4bedfdc57dd8cf1bba95ed466302fe7fcdfadf2be6fd6fa5f27e57ed4f9b988fb57e33c6f97f1fe4fec77d95f19e37cbf8ff27ea7cffabf2be5fc3fcea1110ff4bf531113823c22222270478444444e17f301fe2be5fcc4788f11e70479811e31e41e23cec4788f11e0d7f9b99aa808f30528223dd5ce00c0304fe6bea623c4788f01825f33f5311e223d4e398b0c5028c302954c4788f11ea38660afce7d6f9d88f177e72cc08f1c11e60c7cffd9f988f11e23c445d43fdec4446d6c7fbd888887f808888887f808888888888888888888888888888888888888888888888888888888888846aeae662357553b5019ee01ad86eeab6a3b00c444444444406018cdcc7319b98cffd9bfb37ef637dc623cf60c6e3fe0633181d8c4fbadabda8cc760c69fed6cbfbdad8c47aec18c2fe603fc57cbf988f11e23dd4608f306311e27f60677ec9fd99f7b (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx511_13_58 : block x511 13 58 6=true := by
   apply groupedBlock (ar:=11) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0xa1fe1287f85608a09643c22a8447c478228208f04af94155b11f611e555fe50a216a267ea588258d8576365a7f1b5febb58b3deb5aed66b67eb57ea27e0ae4fc73ea6706772dec2ba5f11f9bb837770ea29dc337775abb1f3fe53e0450611548f8102026098888888888888888888888888888888888888c30c30c30c06030c30c250822aa13fea233e10888cf95f10d90fb023d55433ea623c478193f37e57c2d6f89fd6bb0c6ea7d2f96f8dddd6181aaa8aa3018ff2fe3fc47fa8ff2fe3fc47fa8c128c1571822e33711b19c519cd7dc6738cdc19ca19ca330c66018a33940ca3315cc661c66e519b8448f811123e37f111502227fc9f8af0dac23ca529bf708f0af390f93f15e15fad2f8b59a954aa67738194a5503094cf954cd7d0f9cdce33738cdc715f1be2bdd457c6f99f27ea220544477e2a22047f8891f2de1b7b08f2bc94bf88f7716f08f23eee47cb78ef9d56a7759abba3f21f377758c30c32baa95554ddcef8ef9466e35719b9447cbf9df2be771737e2bdd5dc5f96f1beae3fc5f91f1bea025302b602360c46cc32986b30c43cc30c306194c0cc06194c30c329819981418b830a0cae0ca619661acc329865088551114478441111e11708888888888888888888888888888888888888acce5aad56672b998a6e660888888c30c30c6652fe663988f3303bc66e38cdca3372ab8cdcae26e11ee66e33530ca618c7ecc308f11e66e533e66e (by decide +kernel)
 theorem allx511_13 : block x511 13 0 64=true := (@block_merge x511 13 0 58 6 (@block_merge x511 13 0 22 36 sx511_13_0 sx511_13_22) sx511_13_58)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
@@ -5434,21 +5623,28 @@ theorem sx511_12_0 : block x511 12 0 36=true := by
   apply groupedBlock (ar:=10) (d:=2)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  · exact checkedStream 0x27e004fc00c2084203082ce6fcd45eece2bc5fd8af372be7517e5fe4dc023c1c0b087c35871dc18e1b8338e70dd6716e2fe701c11881c10806c458b8cb17062e304c39c60338c1c6718eb38c03000304fd667153b388ce2e6671112dc60198c39c630a38c60c6f8df3733598df1bee77cec47c40228820804110cc443cafac62a6215ee31889f870810e10118d60146300ccee31a998dc633311f718ccc47c9fac6102020941020448f87fb9c87cdcdce71999b8cc58670478619c30632a860c6332fe4be6651999f199accc518c6a6618c6e63fc667637dcc7f91f9b91f1be0840844a20840888884454f6a15e6ebb1998479b986e1c0cc387183071831a95f3559cc7f9998ce66b1feb18cc6631b99df19c7fb9ccc63b71be2fcccc23c6fb8df17e6feccf946fb814000df8027e4fc11e9fd408fb0cbfd818708f006b00670033830cff9811e61b983047a81461b838530706608f8647c05fc3301fe18df23e07f823c6f91f0050404077c108c2222115f718888221598c44444384788ee57c43ac4086b380633818466318c6633718bf863328c2bc318c198dd460cc6358e30630c60478cf808f018ff8185787f98c633e1fee3 (by decide +kernel)
+  · exact checkedStream 0x57801bf0041021084d444208040823880efb1b98511e353ee1c039b93f0700ee01cc6a38398dc71ddccf61bf7733a5f046c0117053c2260111106222dc1d983706187300660e1b986e5b9961c041544180b891f27e60440867fc2021b84447fddc743e3b98f6770c60ae18c0df17e3fcd637c7f86f8bf1fee27e37c7f819f01050447815e021330262077d8353504bc47832be3373019b98196e618186e61999bac29999ac19991f1bf6199991f1be3fcb108010ad42102088ff108c4033be60066615c3a86770e67030c57030c8f95f2be3da7f1677ec7b31998e19998e1ac6fd8f66657c6f99f1ecafb840095541002247c12f10b1abf35058ddc7719ccf8ee33d9c3996e1cc355508f91f47e17f737e58af37e3332a96a666bb0c9f97f2fe3d97f7b7b1eccc7fb8df58df15e37c978ff33e37c3fc6f93f1be37c58000300027e4fc5843588308e230e0060061606060c00c02c2c181803ba80060057c00978301fe2c07f844478044478044c011188808811e01a988f086018cdc206233308130c066180cccc023ccccc066623c0199980ccc0199806660199800c002be0c06666033311e0 (by decide +kernel)
+  · exact checkedStream 0x700af1be701df1be7101de0a8805c4047815e97c4d4311e6623c478478c479bcc946e0b1dc7380c7061dc4798996311f623cc618c47b8c2bdc6333ab8cf6770388604e0262710ec566711e103667b08221b31865acc618bb33d8cb338af38e046fd40247ce0888af7084446f8b8c0ef195c60478c57dc0ecee703338ee0715c0638c323ee3fdd61bf23e7fc7f82047ca2581070830c66300663005c18117060426230c023e18600c33940c33837cc66706fd8ec67ce043102a2e043111188444478c479826111e3b304c42bc338ea33c318e19f6398035b1cc1c615f195f371863b0c7632863318678ecc6f8ed4ea637c65fcc168fca14603b0ec37cccc4788f58ec66e2bec6333719cce63718cce6667b18667b186b16d49fa98c33733e5b1d89f8d663338cea65fc66fc63b33be3b3b1de2bec7f9d91f31fe37d547fd95f23e03a1f00033be0061c71c1860180060031c030b0e6fc0306e2c140c1c3818181823e0cbf81de0ec0ff063fc0ff0e3fc604a0a049f8608888f04222130e10608c384111103b0c220660884c384b187186e6065fc30311e020cc00cc060d4060cc18733f61873300703806187311e1873fe67c (by decide +kernel)
+  · exact checkedStream 0x3fcdc603fcdc23c02e3102205ce2047880a9adc11e7315e60479ce4c371307310dc44783888f020d823ce6047b823ce6047b980c5798cf3035353026e260221371b01104c12ce76222259ccc44443b5985d8ed661767b5b987b5bd8a2e30810b8b8c2089888e711847188c23988f0711e3998398eb00e3073998ee77ce623c27ee67cc0408e60205c440b3003303131011189880888889c0c3fe703070c3bb861ddc6f9c37b2fe37ce58ff2be63180318c06f98673730319998337306e0cccc19867730cc31b9863330ccc6661998e1999b98e19998c5f98bf333318bf717ee66a6e260221f37111e02223c411e7315e6023ce623cc315e633cc2a8c6798ef3033c779ed6f61ed6e629cc47847ddce663b91f1fe32d48fabd8c37b319b8ff733319991f3331bf633cc778df11e37c7f8df23ea6a37d46f8ff37e00160003fc0000000000000a00b00e700ea014380b3006600caf8027f600bfd801be4fc00df09898408884c4c20888226222338b98222318998441310442222098822111111110d631760cd554318c0ccc330ccc3305c46661c33300dcc6661b98ccc3315e7330ccc66600600061b98ccc3715e733 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx511_12_36 : block x511 12 36 36=true := by
   apply groupedBlock (ar:=10) (d:=2)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  · exact checkedStream 0x29c0000cf0615e6fdc7f98af58e6e47c6f86783fddc8f8df000c60000c019988103331080ccc03b302004040088080510807108000031b87591fb843e02108098a88108422223c215866e308f0cdc66066601998643ee01a98dc0623c6fb998df1d93f1bee667c6f8c0040080084c18c05fcc181cc00a00192f98706a6330e33530333730333730e6e69fcc19f308801129411004421be13837ddccff9c737373b81d98303331cae0caa637067727ee657c7f8c6eee6763737306666e60cdddc6f8bf23f66eee67c6f8bf23e47ccef801063100221b0df1588dcc7fa84b1199d99f103b300cccb1b850c6e1d647d5cc9f98cecdcccc6e6a609f999998737725e3fccdf99a1f77323e65fccdc6fd98bf31fe763fc6f95f37e2fcc7f99df1fe04004010080037e4fc01ff2be047c00000047e007001801805300e600d4006e00af91f00b2fe007f8bf003fc5f8400804004626044c440e2221311008880000065300c660333be6019d980cecc03373039a980cdcc02bccaf9801999800000033b300af33fe60 (by decide +kernel)
+  · exact checkedStream 0x47c0391f0067c2047717080033c06799631b960ef1b9628038c00b300e370c16b0c1616187586057aec02302e0105ce2230e198c38001800ee7771adc47ddd661021771504210211888886c4470088e010444462d62230e09661dc30770c0bf71feb302fc7f8ff15fbb33e00c0380311f13f3318b0d0f98c5866018c00c6ee33719bb8cdc60663330c198cce37c663fccccaf8df198ff3733044271888460884e221318988cc30779a8cc31ce1815eb0c39d666b73599999dcc60ec8f89fdd8a1bdacc6633337333199999999dd98df1fee667657cc6f8ff2bea0227188a3f011044878444466182bc2bc6618061d6030e5b89fb9acee773183552d80dcbf9cc4fd46666e6e43c66666333b27e7a47c57999dd9b93f0ff21e637c6f9b8df0ff17e637c6f997f1be2bcdf8841c42077c42011088f848f8c5823c478c5800160016e1c3b8700008f002b850ddc15f0660c11e198305fdc183fee0c0df7037c0df7037c11e009c08027010661327e220808844410111044404636b110118b888330cc19860663310a0cc663833199a8331998331bb83319b8331b8af50331980047811e0003319b8331b92f (by decide +kernel)
+  · exact checkedStream 0x23e011f11f0591f182594f1b5060815e613f3312cec479982bc5799df97315403b800e0633708f318eeeeb318ee76e5fddc23cc66eee23e6337771811584460441118446e306c6c6e30408846631dc198c1c6e701b9c7b022dc5081100447f986214f115130c415e20893f1108377710837708e601c14016186f8ff23e15e386f8ff23ee301980c033373111e661989998d99866266331999998cc6666637386631b9c2c339998ccd6c3399acecc5fb99991f35b17ee6662e033102e0189cdc60cdcccdce0cc66706e66706e663180cc18c018e723e66e330ce5fcc66b3999998ce6666e1fe71be666e1fe71be66502c077803332be23cccbbbb3b15ee6004798cdddca0ef319b837380dce02bc71ad96c3199f14d6c7f999995fb3b311e661b88f8c9f99d9b8478caf837c778af11e23cc5f837cffa93f23e62feeca008f005780028088f11e223c47ac041023c0ee15e001800478c00011e50478006033180380cd470037e002bc00578019f008f11e011b2be088208857822e2622618822088986208888888888233773771110466ee22006c0016ee188f995f1386b315e0ee19cccdc33999996733330ce666e58ceedc3198004788f011e23c00e1acc578af72c4fccbf97f (by decide +kernel)
+  · exact checkedStream 0xc0c1818101021c5c2020441aca0479adc4789715f790002be60006e6021b88c2221988ce2271b9d865b99ff0c6221808813f3110c0888987110e0e660e0e0c0660c0638c731c639818201fe62608c222637c42220673019cc2bc6eb0c371860c0c14c0c3991f1bb99ec8f8efbb98060000c0cccb3023c27e11e2cb58ccc033300718e0e31c663b86198ee0cec2fc7face6a17e3fca6100223e5184017106206373031b99dca186e30c600d4c01bb93f18cc73b18cc73063198318bf7b18ecc5fb95f19f18ff33031085151303108891f1be608811ee37702bcc6eeb7343e18c6e7618638c718e31ded45fdccc6e667c6e6639a87f99c67611e671fee5fc6fc647cc8fbd8c76637c6f8ff15e37c4798df71be37c7fa8df23e637dc10020080208091f008f8016000000000007001c01400bf801801801800c006f800df022010880844404221111044440119c40118899820c444cc1022001998018cc00cc00660351980ce60330cc0615e6030cc06000000cc0615e603 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx511_12_72 : block x511 12 72 14=true := by
   apply groupedBlock (ar:=10) (d:=1)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  · exact checkedStream 0x7f803fc1df00778a00014399c47823c67f2280e2be000319c38e1870cf1b8673707f92fbb8a080ac2208444e2cb2c031847870603b0375be2cc01bf280030478208b041311fe2123f37084e60b980c603358ff30df11e15e3fc47b8df15f0a062ac033983bc57ea59823c657dc23c66e2be19cdc762cc3b033199bbaa98ecce766663fded1f9dd8ff70430247c0440448f84c304c130c247cdc2b981998370330c0623c64fc479b86a63333d8cecdd4c6666e3fc663fcdc7f8cef8ff3729f0651c07388f0c31ec339984794fb997f867333a833370375ab99a99ad3f98dcdf99b999b9d999b8cdfb99b7f719b99bbd8df733733ea37dccca0018f8038b2c19e0011e1c30077c058000028b2c0030005fc1ace013f009f8b10f8247c23e5fc4611011b88d88bb8220b9f1113704444444444462a6e3846266e1351663303333a1f3123e7fcce66b39a5f3332fee6666623dec6766ea63333775733ee6666e66664fe2c03019b9988fbb6bee7feccf93f (by decide +kernel)
+  · exact checkedStream 0xb585857808f10049f840104384cc010038c33718697dc202084408844422110216202040c00c0660b300802a0404c4fd60e08f070c23f70c1b830018188f30bf17ee647caf85f8bf7000af800e371858c2cc34fe6186660cc0660ccca6e666737733773b737757e63fc440225044022223e2703381986ae1866e396600660dc8f88f8ff33732df2fe6e6eea7ccdccddccc5fb8ff17e37c6f98bf71fe2fc6f8df300883fc44044444c445606a58198370c1b865803031fea5733b31b999b94ccccc6666e4fc6fdccdcbf8dccec6f8dccc9f8df1df7302004502040af816008f0c1803006006007007062832c186061806003060df060df10104bf8840884113311111841c4311026235304c46661066019833321f31999cce66ee673377339bba99ccddcc66e33e61998cc0c0030e66ee673773fe6 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx511_12_86 : block x511 12 86 36=true := by
@@ -5469,21 +5665,30 @@ theorem sx511_12_158 : block x511 12 158 36=true := by
   apply groupedBlock (ar:=11) (d:=2)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  · exact checkedStream 0xc0319df283082042023fc441fe23fc41fe2104085c2042f62647c2173fe2647c233cb198cf28df9bf27e6afd400511e30478008fc60cc1988f0308f0df08f0c23c11e0611e27e623c4fc6611e27e623c0c23c23c87c4fcc23c30419d88ea330831184dc6260898b8c62262e318898b8444ec4c5ec44c619c31833386667663337b3b3198af73be0081cea130ff0e08820ff110444e044c45d4111be22ee044444445c11111173819ce019c67318c30c60673b8339dd3f861840d4d44c727e309831319996f1998e137099c56fb84c731371993f7312dee47cc2133844c21338422e2766333737e743e76199bd998af31b98633718e0c647ce666e3fcc8f9b99a3f71fe300edca5b8c5780c333eb188fb0c3b58c23ed615e61d96e6a7d76ef615e163fe7fec0b19f37318ddcd4dcc1bbb9cc1ac5b9cc18dcccc6eeaa6e30ddedcaf9876f6e57cd0f847db8c044446708888c0445c446ee222e22113f0a820d93f715041584c2212be25fc2203023ec062c663315e377183318ee01c0700ce6677c66b7719c2630ecc11e318c318c3fce57c63b1feee57c6222106222220c444420c4444447fb8c440df1327e1037d49f841bbb330d88f10d97fb3708961811e4bedaa1662c663371993f198ccc63bacf00ee019b99a5f19da94673331876647c23c7647c76618c7667ddd0f8ccc63be77183b23f62fdc63b23e8fc5f9ff1801c50c0abc1c38ff01dee10267094267084784c227026121ee01897b8df7023c338c6309860c30e72bf0ce3380630618d460c339ca19c0303806001c6fc17fb82c1c15f0ce715f0c3011963fd436a3022308ccbf888c444218888889df29f111110862222222222b1111111b088b08f09847888d844584444ecc4c6e6bcc554ec0dec139813b860ce6371997f1331b97f75311e30dc47999db8cf30edcedc61db98c618d6d4632c663b3518c6fd8ff19e318e337097c338619ee019623c61d88fb2be33cd6f93fd99f (by decide +kernel)
+  · exact checkedStream 0x83dec579db85fa93f23ea47cafa85fd8a6094c565089f883b8c40df25e621dc6206f92f310ee186785fcaf8afbace33c05b719e70ee188fc6770c181865b9b838670672ce70cfb1dcc31ff397f2be3728ecc5c53b1b58ecc5c0d8ece788362b50c276aae1399cc233c6b58ecc30afcbfa86e6330ec7667321f1db5f1dfb1b8cddce63739b8ddc73311e637399984c4108f1111e20988211111111130cc023c1b82eccc3b38e61981b8ddc7311e3b711e7108d4c21095544213d984444444fc222261c31a99f381c6e0618f23e317130b84442e2e13088888898cc7c7630c63198330ee67355fe61dc7359c6f98ff7311f2df1be63fddc42311b88462308462311104c62218411042218411093f0827e0300503038f6666e18e280c0763186623c1c630cc0cc60d4c030d63186e4fc6333e3531be23c4dc2a37c47898af11e22bcedc4c11115e2bdcc2363a82555083b8210df11b3b9862fe0af0ee37c30df31be66fc766fc2bcc6fc763730c663b30dd54cc6e61986f94ccc5437c478af359cc23cccdcc630c631862bcc57b91f31993f32be23c8f98af11e62e6a62e2a2267cd4454450f98af15e2a233c444ccf888cf11b14bf8632fee1dca60afbb18cf30c550dc578cc57cc478ed44df996c766730623c76e23ce6371bb8f62325f73b752aa98cee66e666e2bc6371aaac630c479988f47e62bcccc4799b8af31988f23e64fc57b91f319e23c8f993f4fee47ec6fab84ce285561c2602081057c9f815f13f01cc06033cc057ec39817f35e7659acb50b30371d8194e33030a7c619f5818057840aab1c60335308f5050ce6023cef8efb3f5870af3038579823f37e37edfd639830dc318c198c606630444221888889ff0444227111089c44c4c444441110bb888888888222111088888445c014a51a80619884c311e3061818831199f00cc63318c1866651830ce60c311ea63061b9830d55c183318c01df13f5860060c3730663 (by decide +kernel)
+  · exact checkedStream 0x31dc3332fe537e47c6fccf8031a9cca030b0613f23f315f06fd8cc1be87ccc18330af91f23e2be687c00006019988f0c63033311e001b9c000613f08f181af3730032fe6be2be0c4e60988cbf85cc4e6e1711315e6bccdc306188f3be5fd4ce1b85798715ee31801a9f4fee63857811e11e31b98af33988f43ec7cdaf99ca2e2bc266a2a223c1384cc4c44479888f11008429f28844796042115857844e005be003308f2998e0306b0478665fe67e87cce23c4115e0212fe082e604c4c478c9f88f3b02302089aa98844618826132be2bcc41081088888840844223c4442bc199f3330ccf863330cc1823cc004780611e760cffabf3be760df8c19865280331ce57ddc308cc657317750cf308cc6219ee65bcdc67006fd5f8000479998f99cd8fb860c619e0332ff2c066e330dc2a9430e067987332df7329f772fe6171098c544461b1098c46c4236211b104c433289bf13711e9fc1b10cc221b1323e226003719960311e652fe6e61a98dcc605b0ce7dc6386156cec537033ac1cc73298cc39857aedc23cc27cccf91fbb11e97c63b88c447c42634f7123f108d95f311be208149e151fe24fc5441b38984cf86bc4dfb891f09801abf51823ce0cf9c615ea65fcce6373733949fcff99ed41c331554cc5b55358673108fdcca6f6eaa183331beb27eee67fd66fe47c57aedc6617eb2beee64fec5fa1f23e57ccf91f327f66a710ccca24fc6fcc0bac9f8844fc42049e31292f87f91f0811e3084eb13700a47cc0478198f311e728e66023c7583388f1feb01998c1834be030507fcea5ac0666251728a33018c631fe5fe27e33f63fd1f8c1d7676047ac7f995f37f21f17f1fe33e20433e25101304098826104c442218889df115bee222e221888888445c446222222e110044441101110c78e637f30d54daf8330c28045538002661b897d1f81870627f30e1b9df39870311c2fe50dcc70cca2298aa1cc31dc77c33f0651df38039870cfdcce7dc (by decide +kernel)
+  · exact checkedStream 0x1bedd141be0019e33c037c57857c1be4fc001540bf89f8df1de23d43fc64fc6f8ef33e43c7f95f31c47c8678d552f91f928c03295c1fe31fe0185fc2dee13fb30ef27e608ac1be5711b0115822a2dee236611015f665714afd980b29d96b501c763fdec47b87708f0ed5dc4783b84787647dc47b82eccf760bb35d8ef623dc76afdeec47d8110cee22182219c4477110cdc442208898882236220889888af11111044c44578880cc00ccee3006601980676ee0676008cc6618422021111fe23cc77888e219e125f65fc54238877844c6ecdf88ef711102366735be22036608822223b988f718ee623dc66033312fb280666388f31dee64bed4f91f3351be633cc1057cc1100202366662e315333389a999b8b86671306cccce262a61c30070333338199c73067299c0670cce330f666671d9999cea66639c6798811b2989c22110444444af8897f7111153717e0d4c9f8bf1cb11e0ccf9d95f06a6387377070777335771623ec3bb87303a99c00e1df17e613517eef66e23cc33194ccc3bd9998753b27ee3a9a3f27eee398cf08ab1a845ca20848f8444af8ff11123e2262bddc19a99f771435ee0ccbf91f713f3370578cb633d4023c619e23ced3fbdac763bd9c6e07600ec57329aa9dbb99cccccccc3b9999870cd0fbb8e676ee386a57dc4787f8df352bee33c9f87f8df19e33c0caa18c0182bc5786666fd4578315430060af29e1995c3330cc0ccc663b0ccc06667706655180cc06665335d866653061acc18a61818579860d431862bc318578af0cccaa1999811015511704110112c6f88bb8c44444c2222222611111113088888888888988888888882170ab8d988880b8422211110cce2dd83338622046b00c6ee37730cc5c25fc3338ccc663b33338cc199c66a6660c9fa8330666a660ccfab8660cd5418aa19980603338d54cdce3 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx511_12_194 : block x511 12 194 36=true := by
   apply groupedBlock (ar:=11) (d:=2)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  · exact checkedStream 0xc0ccc9f954a6a77c082144cdd613085fc4ddc0823fe1fe2610ff84c251fe2610c30c5fe8fc47d0f8bf808c608f0ab9c05cce17e365849f99cdf8df1b10880422aee211702621b1088cf02d7c46c067b9c11e29f7398189a9f70ec44798189b9888f389799888f73106210ea7c5c4478310844479c9788206e7140e3061ac68fce4be7611e04463b88940446111dc44e11088826222231511111898888d888888c44446c440c0060e31c0c000618cb77190f84218c21147f94210c6236221fe63cc57c46c5fc602feafd4bfb9bf1957831f588f15e3bc6f98f03fc12fb8b8881c4c4444c5beb1ba7f30d63161814aea181662bcabc37c64fd2fadf15f3fe37c67cc06718aca318309cc5ec47c215f330c2be6b60c619dcdec0d6000398cc16a6182cc6303031a957806e6606e6619d9f9babfb1df5881313be2a65151315389888899f33e677ccf88ff1112d9862a93f53b18dc61bf11e6fd3f9bf008f23f339406799c23cd4e666b5aa98631adc6314a7630c6b3be55ea6b4be188f1de631b88f33b18cdccc311f11e57ccaf99d91f43e57cd1f95f347f7611133351111353fe6111311e2bc4444af888898ff27e22223b10c27ea22bcd48f8c2e11e12fe53c6788af0411e22bcce23c0399c2fc9fce66611ee30c6331b8c23ce27e30c6b53e262bccaaa198cf25e318ef19eea67633e33330cee87d1fa7f315e697ec9fa5f319e6e67663fcc679b988f15e3fcffa1f2be47c5799ff2fe201112a84784456044423c446c7f8478444cf88f110d81054f847810708ef04ef8479c233cb381450008f8ef1c0a23c002e338478018100aa5800c294a1830a7282c185fe71bf31f11e587161c33f27e11e2be304417331104c1104222ee66220888891f13110891f117e22113171108884445c5c44444444202bb888470222262880478c30335810a8c30606afc87c0bfb8dce019b9b80dc6166a6a0aee37034fe6602bc8f99b99dc06008f1c00dce0eb7cccffd8 (by decide +kernel)
+  · exact checkedStream 0x29832a98a63fc4a082a613125ea15088ff098ac105410af123f664fc247d4d6130677caf84df95f0202989647c8f8401037c204fc6fc437c37cc011188f3044c0111e37dc623c1c4478df730c0c478c2be5060c47d8f60c1dac6673bb30611d8cc2660c217b18618599d9860ef6e198623ec6673b1c2186e2631c2198986e2631308b88c1112b845c56088888ac222000018018031cb38dc43e6e0841857c423998108311046e626204c222287c257c444093f0888f1708ef049fb8898408113130811104422e0c33370618dcc08fce5059ce048f9cbfa3f048fbb98204710273881084e2e2e2e2771330e26e1c4cc1338bb84e019c01ce1818181b89c370e1801b839b9c330cee730ee773388cc44222a6622a267c4507998888f1111141e6233c9f8992f318a7f1a93f311fe318c41b41e710988f1962986015fbb199ccd5c330c6639b8d5431cf60dddcff9d55c7786e73399dc3399ccd683cc5fbb8cfbb2be62fddd1f91f2fe1130667c44a211304798888448f8ff11113b319a87647cc7fa98c6611fb0ffb0af3b1963298af30c05788fb199cd6e1986332cddc18671de0d5dcaaf6199cce27314ef9cce6633bb31beeea7c9f8ffbb377319f63fecdc6f999f1be3fecc7f8df2fe67c6f8af14c221a98446325e611088c9784c464fc1528cc21608230423196183018623c631c70603706331c0038631801b813a8dc18cc666150333047819987fca333047864bcc11e18ff30df8c041c2ae02b0438237ece2222332fe1111a97f0888cc1111158df08810d8988f0888810842222110338c76a06020a798030cc0cefb96a0330ccce398ea0e6638eea32839d8e59a9c2cec3043e330c0b059d8e59ff4be7 (by decide +kernel)
+  · exact checkedStream 0x33718aadfcef8cf9bf55010623e27e71b08f80d87781b5283fdc6c6f8ef07f8d8df48cdc4fc9197f713f2fe2029aa88df07f946f98ff105897f0ff8df891f08f43eb123e43e0611f657cdd4623d41851ca7c08f14f1c632cacfc23cbf8afa5f33718543899b9c36233c4becf6221984c47edc4c3308467acc630d487cd631862ccdcdc687cafc47d9ecc61851811ee1fe70c1de31b847b8ef104622a223cc441044222111111898e62267130171731131128dc66319858cc1adf38479b99b88552888d46f9bb883bc4457c221de220cc764be97ecaf866063fd61de3188a3f1371138c46c4444e22268fdcc319b9861994f8c71dbaac60c7fb983bcff87f99fb719ff304c4e2135137e60988445c44caf8af110009fc02bc657ee0578af11e028c343e00c62bcc38c60c030c1a8186053355300c18e60ccfa5f53e62e20ab88886c48789c444436e22111084c5b08a131c276215e2011e87dcccbf81670dca11e5991f19c180dd46350077c4fc3557299c0af33700af3983961fe38af33ee1fe32df3be26e10448f8df8a98bd85c2226224fc8f8988898653c4ff867d4c333833c57c6308f08f315ea6aa71815e27ee33d7fddbd994ccdcdc1ff3d98d6331554c66a2bcafda996f7b0e2c1df306e332fe37e399dac706796fb23f6e37e2bc6f97f23e77ed1f98c30adafacef88c15e23c42b3d93f1105c9fc27e2e47dc1308f0b8eee3384796b23e47c631ec87aca78cef6518dc65388f307b743e31983be3191fda8ce3828a0623c052a81dc9fcf6a319edc338af11e5b1f3d97f5fee210822e211e2a221082108b823c46f886788884544c4445444422111088888444444220a8447a8888888441088884444222226035288f5a98010882a2001dc398095f3fe30018cc014c01882feaaa08f700182948fbb80e011f2c9f9ec8fb80180ee0478af97f (by decide +kernel)
+  · exact checkedStream 0x3706a2be47caf8ffa9802831e11f0003fc61853ccc507f99826630137e47d4caf80145f9a9823c0ff2be60011e300478c711e3001b31023d60023c6011e30479a80011e2be0e0ed6511e608f0579acb711e13180dba8223c62bc2b301637e87c4795f00af00af011e715f7625fb75be23cff8dc235743ee2647c6611899bdb89989999884351098ccc421131080721f333be01c618286a1873330ee68fcffb8cccf810a510207f8408c11e260b984408131e209454440984478a79843fc4c3fc22088478888888441110888f11111111111110732c1cc1661818dd4a601b8873042bee60dc18954cbfc4666188899f33111333330ccccccc6399830e19f4fe64fc0067c0ef99a5f2ff697c31accccc37e66afcccc398333b94d4d4c330cdccccc37ddcff95f3347e637c4c0cc5c6b1318626e6623ecccc6209989899821cc418308fb3003b84780cc4799c0c66630cc23ccc0cc199cdc3311f66618866e63319b98cc6e63319bb8cc47d98dc21123f626fd44af6233c44444bfd891f11333b30d3f97fbb5315ee319e07fd9858307faa91f00cf05fc16dd4fa3fb1ce2bdcd5dc6eea6661cc398d56aa65b98edcefa99aaab99999ccddc6623ccdcc6631be4fdeec9fb98df27e4feec9f93f1fe1104a11708845c2110888f8b8423fc46704e1587115e70ace70e14e2bc070e59cb0e7288f0396718dc30180c3838c728ce53bea3183338ce708f30c6047ce723f2ce72ce713f15f39c5780411e2fe36e010111f614f1713089830888fb1844c11b130884088f11e21b7110811110d84441ec550386085b301dcc273111f62ff6e61c0c53ce198ee0c38661c1965dd87fac581ce1c590f80b023c11f61bf11f6e (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx511_12_230 : block x511 12 230 36=true := by
   apply groupedBlock (ar:=11) (d:=2)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  · exact checkedStream 0x76305323e50510015810158200200bf88c15e0ac15eea08ccc04668fc30c00cb06580af819d821e5715eafc3020c67608c30202182131d8318ec19f1b8c14c2bca6e3071dc5796ee1846277315e25106118844e5b98ec18e73198339dddcdc66eeee2bdca7dd44020204108105c22210840988204413026208222bc41108445788406174fe101820211e20e180e182cc602be64be350808610131d840445ec4ff88888c13044d424fc22304c0849f84cfb898ec4102afc4c6620844bf8888bbb9866eeee619b9c0230d6a180c63371fe3fcc666ee3fc7f97f1a7f7508f18151cc1518c09b88ee6e06660eee033300dc479870639cef830611e11e71b8cd4637199817f31870b31823c63335775518c6666318ff733308f38ff7737ea7610823098823b08410888ff312fe262208ccc123e97c5ed6f811995f042332be331b80c318dc0637eb3b9b994ae533b9998c6606606372c0cc1ccf9b8cef854cf6663319b98479cddc60c66e630dfb173b23e31be77c5cec8f9444609444a2a2229e0ac4446ca78d88863330a9a98df1fe10c67610847c762263b16394c760c57c4fdddc57badc57b9b9b8cdc08f98ff816633aa90f1abaa8df57311e6333719d5dcd46333ee623cc9fd9b9da1f59ff5b3373bb19d988f29e37c7fd8ffb2be47caf91f1be3fd2f8ff5062008f1006200808f06fc200211e02004004fc58b023e0c1812f061c0c180280478a00c0c39447c1830306062c1c0a6030008f08fc018b0316023c29f093f0825093f08a89888211e2210889c423c4446781188409c420462111104c44444208888ec44442088422211108889c0ca2bdcae2a8c0ce108c1c0603847e099888f27e183338061cc33c30e63728732a9461dc6187315f18775b80008f087c27e00187308f21f0ee5 (by decide +kernel)
+  · exact checkedStream 0xcbf86fc5fcbf9df2be080542e2104027315e27ee2e23e62bc5fc48f98af1cdc057c7f9b8cf97f43eb014657d56323e3fc8f8ff005fc63fd1fa5f27e0df18ff1be31fe1838c6fa866303719af29e3198cd3fd8c0af8cefaadf4fe6fc0719d677c3d83701731c44479aadf71173bb08888f70d61687d5ca63b38cd765bdc77bb7188f75a9f63ee110311188f5110ce226e22318882114237e208411708b8315988f4fe621be010988f2be62e214c35037019dc311eafcddc0a567e328c47c0c1995f065109f944e260c43193f13111888444444ff888c44bf8888888888897f11111108f73b70ee6718cc5781996a0708fd98af8c8f95f198af2be013370544c7f80877845cc231183186186663fe6e0cb73553315f018c8f95f332fe325f331c61980ce303377318ccd6e6aa651830c3323ee6327e8fccc8fa6f10333e24fc5c2062223c5788f1085788acc159b888f11ee6086c7fd8c1dddc578478c1dc47b8afb5bbbb8a6ee0e0ce6ea7c57a8067647cc2bc4fd5dddcbb0730cc478c0ccc47d8df0697ec6fbb88f715e23c42211110a8888888446788888888b893f11109804c26e33c1519e1738cf0d8d6155aa33c0dc0ef2be733e33ecee77d4fbaceef608a671c0ceee573b19e52aa8773032998ff755186b11f6eeeb711e2bcee0ceee4fd65fc7fb99f17f27e33cafa6f0191f2cdaf870dc579615e10810447a3f15e2102221b02cf51f88f0af05781df662bcd788f33e155c23d4cb0e1bf33a3f5fe23c0330c23cb3061c533554be01a8e1db944780c8f8857a1f0ef23e77c3860af057866fcb333e77c479bf4de20cd442bdcc20636215e118861df3137b3101311b02223113111b0222222222262222222231b996afc87d54cc19c18bb80cccccc6262a63061b86eee619a1f71833530662becc0d4c6e6a6351819ff0c676623cec07660cd3f9857b9b99ff (by decide +kernel)
+  · exact checkedStream 0x375199464fd549f9df00cf0ca65330ef067988f98cf9801bf2877caf98df9bf2be0ca57dd4af98c03b2be8fc29f47e4fc9f81c0c23cea07b0023c723e0022e184c23c45d4636045615e104788f117b15e2bc411e3d8c23caf8ec7cd7c1a98cd653306e673b331bf662bccce7d9998189da1fb318aa9805cc47fd857989896198ecd2fabf2c30ec6b315e6733bf76687ccd7faff10c623171888609c445c1110822584e22653e1044ce2220844dc44470cc4dcc52f8e0c5dc2e22398cca39818770ce7771999f8422fc4621117e2ac7c421711888888df12fe24bc4440678ec3647c9fc9fa8806e23633e3bc9792f710474fe3123e08e3885788e263347e653e5fcccbfaff3198af319986e333aca1b8398c4791f1de372bf6657c8fa1f4be7fcef81d818edc186015ee6615ee2bccc017316e260045cc762bc44647c7708f811e009f8cec661cd6301b83146e1c0318ec2a9998c0cc7f8c1cc7f8ec578218a8998a98a8aa8a0f18a894fb1088a0f09bf111117e3bc4433c7622fd444ba47c4c22398fb119e83c46f9df735e11e1d4f8c35027758b6353357eb7d4c373399ce33294a0e19c5f962fd5554a76b71de37730edc5330c067a0f5b97f71bf65fcbfac9f97f37e37d3f844dc466112be2a1137111e623c4446f88af111e43c45477819e31543e5fc97d0fa3f13008f3108ff15ee15e2bc4788847b8ea37731fea38f611ee3ff6e62bccd54cce6e63333bb8cc23c770cea31dea27fcd54ecc47b8af1b8ef15ee6e3b7099b8c033e7fd6e8fccfa1f23e23e57c678af5b8af73b27e2bdc7fb8af11e623c9f9bf71fe6fcff9df37e4fc2088f0984223d454208262221110f11170258b8157e67c40431085c1b188cf1398f630c50c0630f7d9cc30d6d43019cc195c180c4608f0afa7f308f2be730183300d46601c111ea529c030e608f5be33e7fd6f9cc0673019cc11ecfcdfc41d882676220c208413184113104444e211111882222111117104442222089c2211ea2222088e222222222260cc4b3553060661008030c6308ec13f23ee60c0330c0c180661d850dc19c330ec28ff359c19c1807318fb800c18398762bc (by decide +kernel)
+  · exact checkedStream 0xcd4a7723e6a5fc4fa94dfa880251444fc4113f188a0467b94479ff128df823fcaf88f2be0b0af8a5502075708c7f83fc2315e11f12fe23e1191f15e091f30800981180af108f82315e0af1323e0c0af06aa19f18a771847daa8c1ece11f658801711e0200411e43d60c5daac05976707b3847da8ffda8b8c328b98c317330c4dc5cc613504e20b8b826e20885c5c441810419821088330c019b9ccdc69fce63718c4222e518a988887f8c4222e222227e27fcc4444409c1be15701b70578817b11e221815e2277c458e22177138abb0e0ee31ccdc6651c6e311f75bdb88fba1f35737e5fc6f8ca30df1bb99f198c23c6388f71bb88f31d0f818472985c08f3089ccc180ea011e1c0a329f00ce33330718cc0ca660dc35999c611e663be37753317f11150897f11115089888b844444446c4445c4444458f882204a22b10cf1105444233dc49f847f88460e06e02bcee023d4a5aa80e5fe73370e71ce66e02aae4bc37d54ea39deceea3711e667719ccd6b19ef637cb7d65fdd546f84d42771352be67c544c678cf13b88893f19e6fcaf88ff115010bfa84315c411df123e20c0af14aa50371c9fb9c23d4f6a383ba9ccdc6667337195d45c97b8aa0af73bbbdb8df1ba998c63399ad657dc4ef89f9ac67bdb85788f315e33ccfbdbb91f2be37ccf9bf5533e57ccc50993f359a84cc04c4cf9acc228fc2031b50c201580c18cc01864bc6301860357e19863300c628766a180d428300a5a8b5180335a864fccc06660337e6b350c44c546113111ea61131b18444226223eccc44408c4b13101b31054463662220844261111104c44211111111138a3023ed565381831988866660659accc59accce661877999c35998315332988f30ddcccee3665332aacddccc0c5097c6a18c059acccb3711ea66 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx511_12_266 : block x511 12 266 7=true := by
@@ -5519,7 +5724,7 @@ theorem sx511_11_0 : block x511 11 0 5=true := by
   apply groupedBlock (ar:=9) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0x647c37c8f991f0df23e000cf15e000663198c002ccf66623e6fcef98003fe00000398000c5b31dc001fe37e638cc000df0bf771be17e67ecdc4fcdf9b9dc000dd0f98dccc00195dcceee6eeee6e8fcaf97f3319998cc0015f3533999800287f9993f25f33333fe6666e662fcc6f998bf31be6627e2fea11eb3fe000a6659980016ec3773aa93f39bb8caf998cccc23cec7f8af93f1fe3fcd43be677c11e000ccfa83b300018cfacce737729bb9ccd4666e317f23e33e11e611e63fdc23cc7f97f15f (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx511_11_5 : block x511 11 5 36=true := by
@@ -5688,7 +5893,7 @@ theorem sx511_10_0 : block x511 10 0 1=true := by
   apply groupedBlock (ar:=9) (d:=0)
   simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
-  all_goals decide +kernel
+  exact checkedStream 0x1c7780663b99b97f06000a7733770af391f18cccccc633332dcccafb8f66637c6f800060 (by decide +kernel)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sx511_10_1 : block x511 10 1 36=true := by
