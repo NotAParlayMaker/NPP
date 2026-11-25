@@ -40,7 +40,7 @@ theorem PEqualNP.Outside.R_meta_4197_827
     have rx : (fun i : Fin 21 => decide (i=p)) = (fun i => decide (i∈({p}:Finset _))) := by ext i; simp
     have ry : (fun i : Fin 21 => decide (i=l)) = (fun i => decide (i∈({l}:Finset _))) := by ext i; simp
     rw [rx,ry,tape,eqD]
-    by_cases special : p.val%3=0
+    by_cases special : p.val % 3 = 0
     · rw [Bool.or_eq_true]
       exact Or.inr (decide_eq_true ⟨p,by simp,special,l,by simp,ok⟩)
     · rw [Bool.or_eq_true]
