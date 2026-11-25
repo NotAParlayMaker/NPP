@@ -143,13 +143,16 @@ git -C "$R" cat-file blob "L-meta-9507:$F" | cmp -s - "$t/built" || { echo "FAIL
 ! grep -n 'python3 -' "$here/pnp.sh" | grep -v 'python3 -I ' || { echo "FAIL: a python3 that is not isolated"; exit 1; }
 serve "$(row "$T")"; fresh r5; F=lean/PEqualNP/Outside/V_meta_9507__k1.lean
 for m in json re os unicodedata hashlib; do printf 'open(%s, "a").write(%s)\nraise SystemExit(7)\n' "'$t/planted'" "'$m '" > "$R/$m.py"; echo "$m.py" >> "$R/.git/info/exclude"; done
-(cd "$R" && python3 -c 'import json') >/dev/null 2>&1 || true; [ -s "$t/planted" ] || { echo "FAIL: the plant does not work, so this proves nothing"; exit 1; }; rm "$t/planted"
+# -B: this control loads the plant on purpose and must leave no __pycache__ behind, so any found below is pnp.sh's own
+(cd "$R" && python3 -B -c 'import json') >/dev/null 2>&1 || true; [ -s "$t/planted" ] || { echo "FAIL: the plant does not work, so this proves nothing"; exit 1; }; rm "$t/planted"
 export PYTHONPATH="$R"
 pnp next || { cat "$t/out"; echo "FAIL: next beside planted modules"; exit 1; }
 pnp value L-meta-9507 1 || { cat "$t/out"; echo "FAIL: value beside planted modules"; exit 1; }
 printf 'import Mathlib\n-- note\ntheorem PEqualNP.Outside.V_meta_9507__k1 : (1 = 1) := rfl\n' > "$R/$F"
 pnp tidy L-meta-9507 || { cat "$t/out"; echo "FAIL: tidy beside planted modules"; exit 1; }
-check L-meta-9507; pnp beat L-meta-9507 || true; rm -f "$t/pushed"; pnp submit L-meta-9507 || true
+check L-meta-9507; pnp beat L-meta-9507 || true
+[ ! -e "$R/__pycache__" ] || { echo "FAIL: pnp.sh wrote a __pycache__ beside planted modules: $(ls "$R/__pycache__")"; exit 1; }
+rm -f "$t/pushed"; pnp submit L-meta-9507 || true
 [ -s "$t/pushed" ] || { cat "$t/out"; echo "FAIL: submit beside planted modules"; exit 1; }
 unset PYTHONPATH
 [ ! -e "$t/planted" ] || { echo "FAIL: loaded a planted module: $(cat "$t/planted")"; exit 1; }
