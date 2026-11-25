@@ -13,30 +13,19 @@ theorem PEqualNP.Outside.R_meta_972_427
         ∃ D : Circuit, IsAO2 n D ∧ (∀ g ∈ D.gates, g.inputs.Nodup) ∧ D.size ≤ C.size ∧
           ∀ x : Fin n → Bool, D.eval (List.ofFn x) = f x)
     (singleReadLower :
-      let edges : List (ℕ × ℕ) :=
-        [(0, 13), (0, 14), (0, 16), (0, 22), (1, 13), (1, 15), (1, 21), (1, 25),
-         (2, 14), (2, 20), (2, 24), (2, 25), (3, 13), (3, 19), (3, 23), (3, 24),
-         (4, 18), (4, 22), (4, 23), (4, 25), (5, 17), (5, 21), (5, 22), (5, 24),
-         (6, 16), (6, 20), (6, 21), (6, 23), (7, 15), (7, 19), (7, 20), (7, 22),
-         (8, 14), (8, 18), (8, 19), (8, 21), (9, 13), (9, 17), (9, 18), (9, 20),
-         (10, 16), (10, 17), (10, 19), (10, 25), (11, 15), (11, 16), (11, 18), (11, 24),
-         (12, 14), (12, 15), (12, 17), (12, 23)]
       ∀ D : Circuit, IsAO2 26 D → (∀ g ∈ D.gates, g.inputs.Nodup) →
         (∀ x : Fin 26 → Bool, D.eval (List.ofFn x) = true ↔
-          ∃ u v : Fin 26, (u.val, v.val) ∈ edges ∧ x u = true ∧ x v = true) →
-        IsSingleRead D 26 (fun i => decide (13 ≤ i)) edges → 64 ≤ D.size)
+          ∃ u v : Fin 26, u.val < 13 ∧ 13 ≤ v.val ∧ (u.val + (v.val - 13)) % 13 ∈ ([0, 1, 3, 9] : List ℕ) ∧
+            x u = true ∧ x v = true) →
+        (∀ u v : Fin 26, u.val < 13 → 13 ≤ v.val → (u.val + (v.val - 13)) % 13 ∈ ([0, 1, 3, 9] : List ℕ) →
+          lineSingle D 26 (fun i => decide (13 ≤ i)) u.val v.val = true ∨
+          lineSingle D 26 (fun i => !decide (13 ≤ i)) u.val v.val = true) →
+        64 ≤ D.size)
     (doubleRereadAtZero :
-      let edges : List (ℕ × ℕ) :=
-        [(0, 13), (0, 14), (0, 16), (0, 22), (1, 13), (1, 15), (1, 21), (1, 25),
-         (2, 14), (2, 20), (2, 24), (2, 25), (3, 13), (3, 19), (3, 23), (3, 24),
-         (4, 18), (4, 22), (4, 23), (4, 25), (5, 17), (5, 21), (5, 22), (5, 24),
-         (6, 16), (6, 20), (6, 21), (6, 23), (7, 15), (7, 19), (7, 20), (7, 22),
-         (8, 14), (8, 18), (8, 19), (8, 21), (9, 13), (9, 17), (9, 18), (9, 20),
-         (10, 16), (10, 17), (10, 19), (10, 25), (11, 15), (11, 16), (11, 18), (11, 24),
-         (12, 14), (12, 15), (12, 17), (12, 23)]
       ∀ D : Circuit, IsAO2 26 D → (∀ g ∈ D.gates, g.inputs.Nodup) →
         (∀ x : Fin 26 → Bool, D.eval (List.ofFn x) = true ↔
-          ∃ u v : Fin 26, (u.val, v.val) ∈ edges ∧ x u = true ∧ x v = true) →
+          ∃ u v : Fin 26, u.val < 13 ∧ 13 ≤ v.val ∧ (u.val + (v.val - 13)) % 13 ∈ ([0, 1, 3, 9] : List ℕ) ∧
+            x u = true ∧ x v = true) →
         lineSingle D 26 (fun i => decide (13 ≤ i)) 0 13 = false →
         lineSingle D 26 (fun i => !decide (13 ≤ i)) 0 13 = false → 64 ≤ D.size) :
     ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 C → (∀ x : Fin 26 → Bool, (C.eval (List.ofFn x) = true ↔ ∃ u v : Fin 26, (u.val, v.val) ∈ ([(0, 13), (0, 14), (0, 16), (0, 22), (1, 13), (1, 15), (1, 21), (1, 25), (2, 14), (2, 20), (2, 24), (2, 25), (3, 13), (3, 19), (3, 23), (3, 24), (4, 18), (4, 22), (4, 23), (4, 25), (5, 17), (5, 21), (5, 22), (5, 24), (6, 16), (6, 20), (6, 21), (6, 23), (7, 15), (7, 19), (7, 20), (7, 22), (8, 14), (8, 18), (8, 19), (8, 21), (9, 13), (9, 17), (9, 18), (9, 20), (10, 16), (10, 17), (10, 19), (10, 25), (11, 15), (11, 16), (11, 18), (11, 24), (12, 14), (12, 15), (12, 17), (12, 23)] : List (ℕ × ℕ)) ∧ x u = true ∧ x v = true)) → 64 ≤ C.size := by
@@ -70,9 +59,50 @@ theorem PEqualNP.Outside.R_meta_972_427
     rw [hDeq x]
     exact decide_eq_true_iff
   let isL : ℕ → Bool := fun i => decide (13 ≤ i)
+  let isEdge (a b : ℕ) : Bool :=
+    decide (a < 13) && decide (13 ≤ b) && decide (b < 26) &&
+      (let s := (a + (b - 13)) % 13
+       s == 0 || s == 1 || s == 3 || s == 9)
+  have hEdgeIff : ∀ a < 26, ∀ b < 26, (a, b) ∈ edges ↔ isEdge a b = true := by
+    have chk : ((List.range 26).all fun a => (List.range 26).all fun b =>
+        edges.contains (a, b) == isEdge a b) = true := by decide +kernel
+    intro a ha b hb
+    have h1 := beq_iff_eq.mp (List.all_eq_true.mp (List.all_eq_true.mp chk a (List.mem_range.mpr ha)) b (List.mem_range.mpr hb))
+    rw [← List.contains_iff_mem, h1]
+  have hEdgeArith : ∀ u v : Fin 26, (u.val, v.val) ∈ edges ↔
+      u.val < 13 ∧ 13 ≤ v.val ∧ (u.val + (v.val - 13)) % 13 ∈ ([0, 1, 3, 9] : List ℕ) := by
+    intro u v
+    rw [hEdgeIff u.val u.isLt v.val v.isLt]
+    dsimp only [isEdge]
+    simp only [Bool.and_eq_true, Bool.or_eq_true, decide_eq_true_eq, beq_iff_eq, v.isLt, and_true,
+      List.mem_cons, List.not_mem_nil, or_false, and_assoc, or_assoc]
   cases hdr : doubleReread D 26 isL edges with
   | nil =>
-    exact (singleReadLower D hDAO hDnd hDcomp hdr).trans hDsz
+    have hDcompA : ∀ x : Fin 26 → Bool, D.eval (List.ofFn x) = true ↔
+        ∃ u v : Fin 26, u.val < 13 ∧ 13 ≤ v.val ∧ (u.val + (v.val - 13)) % 13 ∈ ([0, 1, 3, 9] : List ℕ) ∧
+          x u = true ∧ x v = true := by
+      intro x
+      rw [hDcomp x]
+      constructor
+      · rintro ⟨u, v, huv, hu, hv⟩
+        obtain ⟨h1, h2, h3⟩ := (hEdgeArith u v).mp huv
+        exact ⟨u, v, h1, h2, h3, hu, hv⟩
+      · rintro ⟨u, v, h1, h2, h3, hu, hv⟩
+        exact ⟨u, v, (hEdgeArith u v).mpr ⟨h1, h2, h3⟩, hu, hv⟩
+    have hSingleAll : ∀ u v : Fin 26, u.val < 13 → 13 ≤ v.val →
+        (u.val + (v.val - 13)) % 13 ∈ ([0, 1, 3, 9] : List ℕ) →
+        lineSingle D 26 isL u.val v.val = true ∨ lineSingle D 26 (fun i => !isL i) u.val v.val = true := by
+      intro u v h1 h2 h3
+      have huv : (u.val, v.val) ∈ edges := (hEdgeArith u v).mpr ⟨h1, h2, h3⟩
+      have hnot : (u.val, v.val) ∉ doubleReread D 26 isL edges := by rw [hdr]; simp
+      unfold doubleReread at hnot
+      rw [List.mem_filter] at hnot
+      cases hL : lineSingle D 26 isL u.val v.val
+      · cases hP : lineSingle D 26 (fun i => !isL i) u.val v.val
+        · exfalso; apply hnot; exact ⟨huv, by simp [hL, hP]⟩
+        · exact Or.inr rfl
+      · exact Or.inl rfl
+    exact (singleReadLower D hDAO hDnd hDcompA hSingleAll).trans hDsz
   | cons e rest =>
     have heMemDR : e ∈ doubleReread D 26 isL edges := by rw [hdr]; simp
     unfold doubleReread at heMemDR
@@ -81,16 +111,6 @@ theorem PEqualNP.Outside.R_meta_972_427
     rw [Bool.and_eq_true, Bool.not_eq_true', Bool.not_eq_true'] at heBoth
     obtain ⟨heL, heP⟩ := heBoth
     -- Build explicit PGL(3, 3) collineation sigma mapping e = (u, v) to (0, 13)
-    let isEdge (a b : ℕ) : Bool :=
-      decide (a < 13) && decide (13 ≤ b) && decide (b < 26) &&
-        (let s := (a + (b - 13)) % 13
-         s == 0 || s == 1 || s == 3 || s == 9)
-    have hEdgeIff : ∀ a < 26, ∀ b < 26, (a, b) ∈ edges ↔ isEdge a b = true := by
-      have chk : ((List.range 26).all fun a => (List.range 26).all fun b =>
-          edges.contains (a, b) == isEdge a b) = true := by decide +kernel
-      intro a ha b hb
-      have h1 := beq_iff_eq.mp (List.all_eq_true.mp (List.all_eq_true.mp chk a (List.mem_range.mpr ha)) b (List.mem_range.mpr hb))
-      rw [← List.contains_iff_mem, h1]
     let tauTbl : List ℕ :=
       [1, 0, 2, 3, 8, 5, 7, 6, 4, 9, 12, 11, 10,
        13, 25, 16, 15, 17, 18, 23, 20, 22, 21, 19, 24, 14]
@@ -415,6 +435,17 @@ theorem PEqualNP.Outside.R_meta_972_427
       (hLineSingleEq isL hIsL).trans heL
     have hP0 : lineSingle D' 26 (fun i => !isL i) 0 13 = false :=
       (hLineSingleEq (fun i => !isL i) (fun i hi => congrArg (!·) (hIsL i hi))).trans heP
-    have h64 : 64 ≤ D'.size := doubleRereadAtZero D' hD'AO hD'nd hD'comp hL0 hP0
+    have hD'compA : ∀ x : Fin 26 → Bool, D'.eval (List.ofFn x) = true ↔
+        ∃ u v : Fin 26, u.val < 13 ∧ 13 ≤ v.val ∧ (u.val + (v.val - 13)) % 13 ∈ ([0, 1, 3, 9] : List ℕ) ∧
+          x u = true ∧ x v = true := by
+      intro x
+      rw [hD'comp x]
+      constructor
+      · rintro ⟨u, v, huv, hu, hv⟩
+        obtain ⟨h1, h2, h3⟩ := (hEdgeArith u v).mp huv
+        exact ⟨u, v, h1, h2, h3, hu, hv⟩
+      · rintro ⟨u, v, h1, h2, h3, hu, hv⟩
+        exact ⟨u, v, (hEdgeArith u v).mpr ⟨h1, h2, h3⟩, hu, hv⟩
+    have h64 : 64 ≤ D'.size := doubleRereadAtZero D' hD'AO hD'nd hD'compA hL0 hP0
     rw [hD'sz] at h64
     exact h64.trans hDsz
