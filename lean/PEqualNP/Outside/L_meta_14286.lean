@@ -1,4 +1,4 @@
-import PEqualNP.Defs.CircuitLowerBounds
+import PEqualNP.Defs
 import Mathlib.Tactic.ByContra
 import Mathlib.Tactic.FinCases
 import Mathlib.Tactic.IntervalCases
@@ -8,11 +8,12 @@ import Mathlib.Tactic.Tauto
 -- The signed circuit search follows L_meta_10856 and L_meta_8453 (Apache-2.0).
 -- Each search leaf either fails a separation test or restricts to a certified smaller graph.
 
-private def certificateWord (words : List Nat) : Nat :=
-  words.foldl (fun value word => (value <<< 64) ||| word) 0
-
 namespace PEqualNP.Outside.L_meta_14286.Model
 open PEqualNP.CircuitLowerBounds
+
+def certificateWord (words : List Nat) : Nat :=
+  words.foldl (fun value word => (value <<< 64) ||| word) 0
+
 abbrev Sig := BitVec 512
 def zero : Sig := 0
 def one : Sig := BitVec.allOnes 512
