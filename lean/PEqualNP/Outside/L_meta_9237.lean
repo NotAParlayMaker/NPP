@@ -49,7 +49,7 @@ theorem disallow {A : Literal V → Prop} {Γ : Set (Clause V)} {C : Clause V}
   exact d k hk
 
 -- This test reads a run from newest to oldest. It asks only what must hold
--- while the older clauses are stable at the selected partial assignment.
+-- while the older clauses are stable at the selected assignment.
 def admissible (A : Literal V → Prop) : List (Clause V) → Prop
   | [] => True
   | C :: cs => admissible A cs ∧ ((∀ D ∈ cs, stable A D) → ¬dead A C)
@@ -203,7 +203,7 @@ theorem predecessor {A : Literal Small → Prop} {c : Choices}
   · apply h.2 ?_ hd
     simpa using And.intro (allStable 2 (by decide)) (And.intro (allStable 1 (by decide)) (allStable 0 (by decide)))
 
--- Each node gives three upper bounds, a partial assignment, a clause position,
+-- Each node gives three upper bounds, an assignment, a clause position,
 -- and the indices of its children packed in fields of eleven bits.
 abbrev Node := Box × Nat × Fin 4 × Nat
 
