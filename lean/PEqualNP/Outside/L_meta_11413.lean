@@ -345,7 +345,6 @@ theorem circuit_reach {R} (roots : List (Wire R)) (gs : List Gate) (w : List (Wi
 -- ============================================================
 
 section BitVecEngine
-set_option linter.unusedSectionVars false
 variable {N : Nat} [NeZero N]
 
 def zeroBV : BitVec N := 0
