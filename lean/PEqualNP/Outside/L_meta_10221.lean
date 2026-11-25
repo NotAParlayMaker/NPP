@@ -1,10 +1,10 @@
 import Mathlib.Tactic
 import PEqualNP.Defs
-import PEqualNP.Defs.Represents
 
--- Based on the previously checked L-meta-9195 proof by tb-16.
--- The mask and both lists of sampled points are specialized to this table.
 namespace PEqualNP.Outside.L_meta_10221
+
+-- This file is the proof of L-meta-9195 by tb-16 (same repository) with the mask, the list OO of its
+-- one-points and the list ZZ of its zero-points replaced; the argument is unchanged.
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Represents
 
 -- Wires as a fold. A wire that is never read does not influence the output; a monotone circuit
@@ -2310,7 +2310,7 @@ theorem c1023 : chkM 1 lf 10 1023 = true := by decide +kernel
 
 end PEqualNP.Outside.L_meta_10221
 
-theorem PEqualNP.Outside.L_meta_10221 : ¬ PEqualNP.Represents.RepSizeAtMost (fun u v : Fin 5 => (15768118 : ℕ).testBit (5 * u.val + v.val)) 10 := by
+theorem PEqualNP.Outside.L_meta_10221 : ¬ (PEqualNP.Represents.RepSizeAtMost (fun u v : Fin 5 => (15768118 : ℕ).testBit (5 * u.val + v.val)) 10) := by
   refine PEqualNP.Outside.L_meta_10221.lower 10 1023 {0, 1, 2, 3, 4, 5, 6, 7, 8, 9} [1023] (by decide +kernel) (by decide +kernel) (by decide)
     (by decide) (by decide +kernel) (fun i hi => ?_) (by decide) (by decide +kernel) (by decide +kernel) ?_
   · exact Nat.testBit_lt_two_pow (lt_of_lt_of_le (by norm_num : 1023 < 2 ^ 10)
