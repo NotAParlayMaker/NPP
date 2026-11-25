@@ -14,7 +14,7 @@ theorem PEqualNP.Outside.R_meta_3983_418
         ∀ i < gs.length-1, j=8+i ∨ ∃ v ∈ gs.drop (i+1), v.left=8+i ∨ v.right=8+i)
     (collision :
     let f (x : Fin 7 → Bool) := ([1,12,4,15,26,35,46,63] : List Nat).any fun e =>
-      x (Fin.ofNat 7 (e/10)) && x (Fin.ofNat 7 (e%10))
+      x (Fin.ofNat 7 (e / 10)) && x (Fin.ofNat 7 (e % 10))
     ∀ (side : Bool) (gs : List BinaryGate), 7 ≤ gs.length → gs.length ≤ 9 →
       (∀ i (h : i < gs.length), let g := gs[i];
         (∃ a b : Bool, g.op = fun x y => (x==a) && (y==b)) ∧
@@ -30,7 +30,7 @@ theorem PEqualNP.Outside.R_meta_3983_418
       ∃ x, f x=(!side) ∧ trace x=trace (fun _ => side)) :
     have x1 : (Fin (7 : ℕ) → Bool) → Bool := fun (x1 : Fin (7 : ℕ) → Bool) => [(1 : ℕ), (12 : ℕ), (4 : ℕ), (15 : ℕ), (26 : ℕ), (35 : ℕ), (46 : ℕ), (63 : ℕ)].any fun (x2 : ℕ) => x1 (Fin.ofNat (7 : ℕ) (x2 / (10 : ℕ))) && x1 (Fin.ofNat (7 : ℕ) (x2 % (10 : ℕ))); have x2 : (Fin (7 : ℕ) → Bool) → List Bool := fun (x2 : Fin (7 : ℕ) → Bool) => List.ofFn x2 ++ [Bool.false]; have x3 : ℕ → PEqualNP.MetaComplexity.BinaryGate → Prop := fun (x3 : ℕ) (x4 : PEqualNP.MetaComplexity.BinaryGate) => (∃ (x5 : Bool) (x6 : Bool), x4.op = fun (x7 x8 : Bool) => x7 == x5 && x8 == x6) ∧ x4.left < x3 ∧ x4.right < x3 ∧ x4.left ≠ (7 : ℕ) ∧ x4.right ≠ (7 : ℕ) ∧ x4.left ≠ x4.right; ¬∃ (x4 : List PEqualNP.MetaComplexity.BinaryGate) (x5 : PEqualNP.MetaComplexity.BinaryGate) (x6 : Bool),     have x7 : List ℕ := List.flatMap (fun (x7 : PEqualNP.MetaComplexity.BinaryGate) => [x7.left, x7.right]) (x4 ++ [x5]);     (7 : ℕ) ≤ x4.length ∧ x4.length ≤ (9 : ℕ) ∧ (∀ (x8 : ℕ) (x9 : x8 < x4.length), x3 ((8 : ℕ) + x8) x4[x8]) ∧ x3 ((8 : ℕ) + x4.length) x5 ∧ (8 : ℕ) ≤ x5.left ∧ (8 : ℕ) ≤ x5.right ∧ (∀ x8 < x4.length, ∃ x10 ∈ List.drop (x8 + (1 : ℕ)) (x4 ++ [x5]), x10.left = (8 : ℕ) + x8 ∨ x10.right = (8 : ℕ) + x8) ∧ (12 : ℕ) ≤ x4.length + {x8 ∈ Finset.range (7 : ℕ) | List.count x8 x7 = (1 : ℕ)}.card ∧ (∀ x8 ∈ x4 ++ [x5], x8.left < (7 : ℕ) → x8.right < (7 : ℕ) → List.count x8.left x7 ≠ (1 : ℕ) ∨ List.count x8.right x7 ≠ (1 : ℕ)) ∧ ∀ (x8 : Fin (7 : ℕ) → Bool), ({ gates := x4 ++ [x5], output := (8 : ℕ) + x4.length : PEqualNP.MetaComplexity.BinaryCircuit }.eval (x2 x8) != x6) = x1 x8 := by
   let f (x : Fin 7 → Bool) := ([1,12,4,15,26,35,46,63] : List Nat).any fun e =>
-    x (Fin.ofNat 7 (e/10)) && x (Fin.ofNat 7 (e%10))
+    x (Fin.ofNat 7 (e / 10)) && x (Fin.ofNat 7 (e % 10))
   let input (x : Fin 7 → Bool) := List.ofFn x ++ [false]
   let good (n : Nat) (g : BinaryGate) := (∃ a b : Bool, g.op=fun x y => (x==a) && (y==b)) ∧
     g.left<n ∧ g.right<n ∧ g.left≠7 ∧ g.right≠7 ∧ g.left≠g.right
