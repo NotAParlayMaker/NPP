@@ -6255,7 +6255,9 @@ theorem PEqualNP.Outside.L_meta_4286 : ∀ (x1 : List PEqualNP.CircuitLowerBound
       (gs.foldl step w).length = w.length + gs.length := by
     induction gs generalizing w with
     | nil => simp
-    | cons g gs ih => simp [List.foldl_cons, ih, step, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
+    | cons g gs ih =>
+      rw [List.foldl_cons, ih]
+      simp [step] <;> omega
   have lstate : state.length = 23 := by simp [state, len, data, gateCount]
   have eq : C.eval data = (state.getD a false && state.getD b false) := by
     change ((gates ++ [gate]).foldl step data).getD 23 false = _
