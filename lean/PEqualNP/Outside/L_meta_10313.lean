@@ -2310,7 +2310,7 @@ theorem c1023 : chkM 1 lf 10 1023 = true := by decide +kernel
 
 end PEqualNP.Outside.L_meta_10313
 
-theorem PEqualNP.Outside.L_meta_10313 : ¬ (PEqualNP.Represents.RepSizeAtMost (fun u v : Fin 5 => (7880921 : ℕ).testBit (5 * u.val + v.val)) 10) := by
+theorem PEqualNP.Outside.L_meta_10313 : ¬ PEqualNP.Represents.RepSizeAtMost (fun u v : Fin 5 => (7880921 : ℕ).testBit (5 * u.val + v.val)) 10 := by
   refine PEqualNP.Outside.L_meta_10313.lower 10 1023 {0, 1, 2, 3, 4, 5, 6, 7, 8, 9} [1023] (by decide +kernel) (by decide +kernel) (by decide)
     (by decide) (by decide +kernel) (fun i hi => ?_) (by decide) (by decide +kernel) (by decide +kernel) ?_
   · exact Nat.testBit_lt_two_pow (lt_of_lt_of_le (by norm_num : 1023 < 2 ^ 10)
