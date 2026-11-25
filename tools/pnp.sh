@@ -55,6 +55,20 @@ sys.exit(3)'
   [ $? -eq 3 ] && exit 3
   return 0
 }
+# THE STOP NOTICE: a file STOP at the root of the project's main on GitHub (never the desk: a domain can be taken, the
+# code host's main cannot) stops every step that takes or holds work, with exit 120. Only its first line is printed,
+# cleaned to plain characters and capped. If GitHub cannot be read within 15 s, the script goes on as before.
+stop_check() {
+  git fetch -q "https://github.com/$UPSTREAM.git" main 2>/dev/null & f=$!
+  ( sleep 15; kill $f ) >/dev/null 2>&1 & w=$!; disown $w
+  if wait $f; then kill $w 2>/dev/null || true
+  else kill $w 2>/dev/null || true; echo "note: the stop notice on GitHub could not be read; going on" >&2; return 0; fi
+  git cat-file -e FETCH_HEAD:STOP 2>/dev/null || return 0
+  { git cat-file blob FETCH_HEAD:STOP 2>/dev/null || true; } | python3 -I -c 'import re,sys
+l=re.sub(r"\x1b(\[[0-9;?]*[ -/]*[@-~]|.)?", "", sys.stdin.buffer.readline(4096).decode("latin-1"))
+print("STOPPED by a notice on the proofs repository: " + re.sub(r"[^A-Za-z0-9 .,:;()\x27-]", "", l)[:200], file=sys.stderr)' || true
+  exit 120
+}
 have() { [ -f "$STATE/$1.json" ] || { echo "no such step here: $1 (run: tools/pnp.sh next)" >&2; exit 1; }; }
 # A value step has its file only once k is chosen (tools/pnp.sh value).
 has_file() { have "$1"; [ -n "$(field "$1" gap.file)" ] || { echo "$1 is a value step with no value chosen yet: tools/pnp.sh value $1 <k>" >&2; exit 1; }; }
@@ -259,6 +273,7 @@ setup)
   echo "ready. Next: tools/pnp.sh next   (add --hard for an open problem the attack is stuck on)"
   ;;
 next)
+  stop_check
   shift; q="handle=$(gh api user --jq .login)&value=1"   # value=1: this script can take a value step
   while [ $# -gt 0 ]; do case "$1" in
     --hard) q="$q&hard=1";; --another) q="$q&another=1";;
@@ -272,6 +287,7 @@ value)
   have "$2"; python3 -I -c "$(guard_py)"$'\n'"$(value_py)" "$STATE" "$ROOT" "$2" "${3:?the value k}"
   ;;
 beat)
+  stop_check
   have "$2"; curl -sS -X POST "$DESK/beat?lease=$(field "$2" lease.id)" | python3 -I -c 'import json,sys,re
 d=json.load(sys.stdin)
 if isinstance(d.get("lease"), dict): print("lease until", re.sub(r"[^0-9TZ:.-]", "", str(d["lease"].get("expires_at")))); sys.exit(0)
@@ -289,6 +305,7 @@ tidy)
   has_file "$2"; tidy "$ROOT/$(field "$2" gap.file)"
   ;;
 submit)
+  stop_check
   has_file "$2"; id="$2"; file="$(field "$id" gap.file)"
   still_open "$id"
   size_ok "$file"
