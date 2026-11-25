@@ -691,13 +691,13 @@ private theorem oneEach_eq {n m : ℕ} (u : Fin n) (v : Fin m) :
         decide_eq_decide]
       omega
 
-private theorem see_pair (C : Circuit) {n : ℕ} (i j : Fin n) : C.eval (oneEach i j) =
-    cut C.gates (List.replicate (n+n) false) C.output {i.val, n + j.val} := by
+private theorem see_pair (C : Circuit) {n m : ℕ} (i : Fin n) (j : Fin m) : C.eval (oneEach i j) =
+    cut C.gates (List.replicate (n + m) false) C.output {i.val, n + j.val} := by
   rw [oneEach_eq]
-  change (wiresFrom C.gates (inp (n+n) _)).getD C.output false = _
+  change (wiresFrom C.gates (inp (n + m) _)).getD C.output false = _
   rw [run_eq]
   unfold cut
-  have hlen : (inp (n+n) {i.val,n + j.val}).length = (n+n) := by simp [inp]
+  have hlen : (inp (n + m) {i.val,n + j.val}).length = (n + m) := by simp [inp]
   rw [hlen, List.length_replicate]
   congr 2
   funext k
@@ -714,18 +714,18 @@ private theorem see_pair (C : Circuit) {n : ℕ} (i j : Fin n) : C.eval (oneEach
   simp only [readCut, hoff, List.length_replicate, Bool.false_or]
 
 
-private theorem full_matrix_rank {n s : ℕ} (hn : 0 < n) (A : Fin n → Fin n → Bool)
+private theorem full_matrix_rank {n m s : ℕ} (hn : 0 < n) (A : Fin n → Fin m → Bool)
     (rows_vary : ∀ a, (∃ b, A a b = true) ∧ (∃ b, A a b = false))
     (cols_vary : ∀ b, (∃ a, A a b = true) ∧ (∃ a, A a b = false))
-    (h : RepSizeAtMost A s) : ∃ t, Rank A t Finset.univ Finset.univ ∧ 2*n + t ≤ s+1 := by
+    (h : RepSizeAtMost A s) : ∃ t, Rank A t Finset.univ Finset.univ ∧ n + m + t ≤ s + 1 := by
   revert h
   rintro ⟨C, hg, hs, hrep⟩
-  let F := cut C.gates (List.replicate (n+n) false) C.output
+  let F := cut C.gates (List.replicate (n + m) false) C.output
   have hm : ∀ {P Q}, P ⊆ Q → F P = true → F Q = true :=
     fun h => cut_mono C.gates (fun g hg' => (hg g hg').1) _ _ h
-  have hv : ∀ a b : Fin n, F {a.val, n + b.val} = A a b := by
+  have hv : ∀ (a : Fin n) (b : Fin m), F {a.val, n + b.val} = A a b := by
     intro a b
-    change cut C.gates (List.replicate (n+n) false) C.output {a.val, n + b.val} = A a b
+    change cut C.gates (List.replicate (n + m) false) C.output {a.val, n + b.val} = A a b
     rw [← see_pair]
     exact hrep a b
   have hS₁ : ∀ a : Fin n, F {a.val} = false := by
@@ -736,7 +736,7 @@ private theorem full_matrix_rank {n s : ℕ} (hn : 0 < n) (A : Fin n → Fin n �
     have h' := hm (Q := {a.val, n + b.val}) (by simp) h
     rw [hv, hb] at h'
     contradiction
-  have hS₂ : ∀ b : Fin n, F {n + b.val} = false := by
+  have hS₂ : ∀ b : Fin m, F {n + b.val} = false := by
     intro b
     obtain ⟨a, ha⟩ := (cols_vary b).2
     rw [← Bool.not_eq_true]
@@ -762,7 +762,7 @@ private theorem full_matrix_rank {n s : ℕ} (hn : 0 < n) (A : Fin n → Fin n �
       simp [hne]
     rw [hv, hb, hS₂] at e
     contradiction
-  have hN₂ : ∀ b : Fin n, n + b.val ∈ N := by
+  have hN₂ : ∀ b : Fin m, n + b.val ∈ N := by
     intro b
     obtain ⟨a, ha⟩ := (cols_vary b).1
     by_contra h
@@ -773,7 +773,7 @@ private theorem full_matrix_rank {n s : ℕ} (hn : 0 < n) (A : Fin n → Fin n �
       simp [hne]
     rw [hv, ha, hS₁] at e
     contradiction
-  have hN : Finset.range (n+n) ⊆ N := by
+  have hN : Finset.range (n + m) ⊆ N := by
     intro i hi
     have hh := Finset.mem_range.1 hi
     by_cases h : i < n
@@ -1016,17 +1016,33 @@ private theorem both_values {n : ℕ} (hn : 2 < n) (p : Fin n → Bool)
   · obtain ⟨x,hx⟩ := Finset.card_pos.mp (by omega : 0 < (Finset.univ.filter fun x => p x = false).card)
     exact ⟨x,(Finset.mem_filter.mp hx).2⟩
 
+-- A size bound for any rectangular matrix whose zero graph has maximum degree
+-- two and contains no four-cycle. The assumptions on each row and column
+-- ensure that every input wire contributes to the gate budget.
+theorem sparse_complement_gate_bound {n m s : ℕ} (hn : 0 < n) (A : Fin n → Fin m → Bool)
+    (rows_vary : ∀ r, (∃ c, A r c = true) ∧ (∃ c, A r c = false))
+    (cols_vary : ∀ c, (∃ r, A r c = true) ∧ (∃ r, A r c = false))
+    (hrow : ∀ r, (Finset.univ.filter fun c => A r c = false).card ≤ 2)
+    (hcol : ∀ c, (Finset.univ.filter fun r => A r c = false).card ≤ 2)
+    (hsq : ∀ r s c d, A r c = false → A r d = false → A s c = false →
+      A s d = false → r = s ∨ c = d)
+    (h : RepSizeAtMost A s) :
+    4 * (n + m) + ((Finset.univ ×ˢ Finset.univ).filter
+      fun e : Fin n × Fin m => A e.1 e.2 = false).card ≤ 4 * s + 12 := by
+  obtain ⟨t, rank, budget⟩ := full_matrix_rank hn A rows_vary cols_vary h
+  have bound := sparse_rank_bound A hrow hcol hsq rank
+  unfold zeros at bound
+  omega
+
 private theorem double_crown_bound {k s : ℕ} (hk : 2 ≤ k) (h : RepSizeAtMost (A k) s) :
     5*k - 3 ≤ s := by
-  obtain ⟨t,rank,budget⟩ := full_matrix_rank (by omega) (A k)
+  have bound := sparse_complement_gate_bound (by omega) (A k)
     (fun r => both_values (by omega) _ (row_card hk r))
-    (fun c => both_values (by omega) _ (col_card hk c)) h
-  have bound := sparse_rank_bound (A k) (fun r => (row_card hk r).le)
-    (fun c => (col_card hk c).le) (fun r s c d h₁ h₂ h₃ h₄ => by
+    (fun c => both_values (by omega) _ (col_card hk c))
+    (fun r => (row_card hk r).le) (fun c => (col_card hk c).le)
+    (fun r s c d h₁ h₂ h₃ h₄ => by
       by_contra! ne
-      exact no_rectangle hk r s c d ne.1 ne.2 ⟨h₁,h₂,h₃,h₄⟩) rank
-  change ((Finset.univ ×ˢ Finset.univ).filter fun e : Fin (2*k) × Fin (2*k) =>
-    A k e.1 e.2 = false).card ≤ 4*t+8 at bound
+      exact no_rectangle hk r s c d ne.1 ne.2 ⟨h₁,h₂,h₃,h₄⟩) h
   rw [zeros_card hk] at bound
   omega
 
