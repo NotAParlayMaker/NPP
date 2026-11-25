@@ -13,8 +13,7 @@ theorem PEqualNP.Outside.R_meta_606_4
       IsMonotoneCircuit C → (∀ g ∈ C.gates, g.inputs.length ≤ 2) →
       (∀ (x : Fin P → Bool) (y : Fin L → Bool), C.eval (List.ofFn x ++ List.ofFn y) =
         decide (∃ (p : Fin P) (w : Fin L), inc p w = true ∧ x p = true ∧ y w = true)) →
-      (Finset.univ.filter (fun e : Fin P × Fin L => inc e.1 e.2 = true)).card
-        ≤ c * (C.gates.length + 1))
+      Fintype.card {e : Fin P × Fin L // inc e.1 e.2 = true} ≤ c * (C.gates.length + 1))
     (cover : ∃ k : ℕ, ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj],
       (∀ (v : Fin n) (p : G.Walk v v), p.IsCycle → 5 ≤ p.length) →
       ∀ D : Circuit, Monotone2 D →
@@ -62,10 +61,9 @@ theorem PEqualNP.Outside.R_meta_606_4
   have hb := hc n n (fun p w => decide (G.Adj p w)) C hC4 hmon hfan hcomp'
   -- Two ordered pairs per edge, one per dart.
   have hpairs : G.edgeFinset.card ≤
-      (Finset.univ.filter (fun e : Fin n × Fin n => decide (G.Adj e.1 e.2) = true)).card := by
+      Fintype.card {e : Fin n × Fin n // decide (G.Adj e.1 e.2) = true} := by
     have hd : Fintype.card G.Dart =
-        (Finset.univ.filter (fun e : Fin n × Fin n => decide (G.Adj e.1 e.2) = true)).card := by
-      rw [← Fintype.card_subtype]
+        Fintype.card {e : Fin n × Fin n // decide (G.Adj e.1 e.2) = true} := by
       exact Fintype.card_congr
         { toFun := fun d => ⟨d.toProd, by simpa using d.adj⟩
           invFun := fun e => ⟨e.1, by simpa using e.2⟩
