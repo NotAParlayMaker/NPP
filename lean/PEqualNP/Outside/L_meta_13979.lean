@@ -1,4 +1,4 @@
-import PEqualNP.Defs.MetaComplexityLgpMono
+import PEqualNP.Defs
 import Mathlib.Tactic.FinCases
 
 namespace PEqualNP.Outside.L_meta_13979_aux.Five
