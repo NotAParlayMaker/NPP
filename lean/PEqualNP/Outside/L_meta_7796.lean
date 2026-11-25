@@ -110,7 +110,7 @@ def tq (Q i : ℕ) : Bool := if i < 13 then Q.testBit i else !(Q.testBit (i - 13
 
 def LS : List ℕ := [2083, 1100, 4752, 2496, 170, 1328, 1794, 4673, 2069, 7176, 420, 616, 2074, 5252, 4392, 337, 135, 1541, 2626, 1232, 5123, 4233, 564, 270, 3712, 6464, 4196, 2689]
 
-def FS (Q : ℕ) : Finset (Fin 13) := Finset.univ.filter fun a => Q.testBit (a : ℕ) = true
+def ptS (Q : ℕ) : Finset (Fin 13) := Finset.univ.filter fun a => Q.testBit (a : ℕ) = true
 
 def FM (Q : ℕ) : Finset (Fin 13) := Finset.univ.filter fun a => tq Q (13 + (a : ℕ)) = true
 
@@ -124,10 +124,10 @@ end PEqualNP.Outside.L_meta_7796
 
 theorem PEqualNP.Outside.L_meta_7796 : let x1 : Type := Fin (13 : ℕ); let x2 : Type := Finset x1; have x3 : x1 → x1 → Prop := fun (x3 x4 : x1) => x3 = x4 ∨ x3 = x4 + (1 : x1) ∨ x3 = x4 + (3 : x1) ∨ x3 = x4 + (9 : x1); have x4 : PEqualNP.CircuitLowerBounds.Circuit → x2 → x2 → Bool := fun (x4 : PEqualNP.CircuitLowerBounds.Circuit) (x5 x6 : x2) => PEqualNP.MetaComplexity.circuitFun (26 : ℕ) x4 fun (x7 : Fin (26 : ℕ)) => Fin.addCases (fun (x8 : Fin (13 : ℕ)) => Decidable.decide (x8 ∈ x5)) (fun (x8 : Fin (13 : ℕ)) => Decidable.decide (x8 ∈ x6)) x7; have x5 : x2 → x2 → Prop := fun (x5 x6 : x2) => (∀ (x7 : x1), x7 ∈ x6 ↔ ∀ x8 ∈ x5, ¬x3 x8 x7) ∧ (∀ x7 ∉ x5, ∃ x9 ∈ x6, x3 x7 x9) ∧ (¬∃ (x7 : x1), ∀ x8 ∈ x5, x3 x8 x7) ∧ ¬∃ (x7 : x1), ∀ x8 ∈ x6, x3 x7 x8; ∀ (x6 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.Monotone2 x6 → (∀ (x8 x9 : x2), x5 x8 x9 → x4 x6 x8 x9 = Bool.false) → ∀ (x9 x10 : Fin (26 : ℕ)), (¬∃ (x11 : x1) (x12 : x1), x3 x11 x12 ∧ (x9 = Fin.castAdd (13 : ℕ) x11 ∧ x10 = Fin.natAdd (13 : ℕ) x12 ∨ x10 = Fin.castAdd (13 : ℕ) x11 ∧ x9 = Fin.natAdd (13 : ℕ) x12)) → (PEqualNP.MetaComplexity.circuitFun (26 : ℕ) x6 fun (x12 : Fin (26 : ℕ)) => Decidable.decide (x12 = x9 ∨ x12 = x10)) = Bool.false := by
   intro V SV I ev good C hC hgood a b hab
-  have hT : ∀ Q ∈ PEqualNP.Outside.L_meta_7796.LS, good (PEqualNP.Outside.L_meta_7796.FS Q) (PEqualNP.Outside.L_meta_7796.FM Q) := by
+  have hT : ∀ Q ∈ PEqualNP.Outside.L_meta_7796.LS, good (PEqualNP.Outside.L_meta_7796.ptS Q) (PEqualNP.Outside.L_meta_7796.FM Q) := by
     simp only [good, I]
     decide +kernel
-  have hl : ∀ Q ∈ PEqualNP.Outside.L_meta_7796.LS, ∀ i : Fin 26, (Fin.addCases (m := 13) (n := 13) (motive := fun _ => Bool) (fun (x4 : Fin 13) => decide (x4 ∈ PEqualNP.Outside.L_meta_7796.FS Q)) (fun (x4 : Fin 13) => decide (x4 ∈ PEqualNP.Outside.L_meta_7796.FM Q)) i) = PEqualNP.Outside.L_meta_7796.tq Q i := by decide +kernel
+  have hl : ∀ Q ∈ PEqualNP.Outside.L_meta_7796.LS, ∀ i : Fin 26, (Fin.addCases (m := 13) (n := 13) (motive := fun _ => Bool) (fun (x4 : Fin 13) => decide (x4 ∈ PEqualNP.Outside.L_meta_7796.ptS Q)) (fun (x4 : Fin 13) => decide (x4 ∈ PEqualNP.Outside.L_meta_7796.FM Q)) i) = PEqualNP.Outside.L_meta_7796.tq Q i := by decide +kernel
   have hadj : ∀ i j : Fin 26, PEqualNP.Outside.L_meta_7796.adj i j = true → ∃ (x5 : Fin 13) (x6 : Fin 13), (x5 = x6 ∨ x5 = x6 + 1 ∨ x5 = x6 + 3 ∨ x5 = x6 + 9) ∧ (i = Fin.castAdd 13 x5 ∧ j = Fin.natAdd 13 x6) := by
     have h : ∀ i j : Fin 26, PEqualNP.Outside.L_meta_7796.adj i j = true → ((⟨(i : ℕ) % 13, Nat.mod_lt _ (by norm_num)⟩ : Fin 13) = (⟨(j : ℕ) % 13, Nat.mod_lt _ (by norm_num)⟩ : Fin 13) ∨ (⟨(i : ℕ) % 13, Nat.mod_lt _ (by norm_num)⟩ : Fin 13) = (⟨(j : ℕ) % 13, Nat.mod_lt _ (by norm_num)⟩ : Fin 13) + 1 ∨ (⟨(i : ℕ) % 13, Nat.mod_lt _ (by norm_num)⟩ : Fin 13) = (⟨(j : ℕ) % 13, Nat.mod_lt _ (by norm_num)⟩ : Fin 13) + 3 ∨ (⟨(i : ℕ) % 13, Nat.mod_lt _ (by norm_num)⟩ : Fin 13) = (⟨(j : ℕ) % 13, Nat.mod_lt _ (by norm_num)⟩ : Fin 13) + 9) ∧ (i = Fin.castAdd 13 (⟨(i : ℕ) % 13, Nat.mod_lt _ (by norm_num)⟩ : Fin 13) ∧ j = Fin.natAdd 13 (⟨(j : ℕ) % 13, Nat.mod_lt _ (by norm_num)⟩ : Fin 13)) := by decide +kernel
     exact fun i j hij => ⟨_, _, h i j hij⟩
@@ -146,7 +146,7 @@ theorem PEqualNP.Outside.L_meta_7796 : let x1 : Type := Fin (13 : ℕ); let x2 :
   | false => rfl
   | true =>
     have := PEqualNP.Outside.L_meta_7796.mono C.gates (List.ofFn fun (x12 : Fin 26) => decide (x12 = a ∨ x12 = b)) (List.ofFn fun (i : Fin 26) => PEqualNP.Outside.L_meta_7796.tq Q i) (by simp) (fun i hi => ?_) (fun g hg => by simpa using (hC g hg).1) C.output hv
-    · have e : (fun (i : Fin 26) => PEqualNP.Outside.L_meta_7796.tq Q i) = fun (i : Fin 26) => (Fin.addCases (m := 13) (n := 13) (motive := fun _ => Bool) (fun (x4 : Fin 13) => decide (x4 ∈ PEqualNP.Outside.L_meta_7796.FS Q)) (fun (x4 : Fin 13) => decide (x4 ∈ PEqualNP.Outside.L_meta_7796.FM Q)) i) := by
+    · have e : (fun (i : Fin 26) => PEqualNP.Outside.L_meta_7796.tq Q i) = fun (i : Fin 26) => (Fin.addCases (m := 13) (n := 13) (motive := fun _ => Bool) (fun (x4 : Fin 13) => decide (x4 ∈ PEqualNP.Outside.L_meta_7796.ptS Q)) (fun (x4 : Fin 13) => decide (x4 ∈ PEqualNP.Outside.L_meta_7796.FM Q)) i) := by
         funext i; exact (hl Q hQ i).symm
       rw [e] at this
       exact absurd (this.symm.trans hz) (by simp)
