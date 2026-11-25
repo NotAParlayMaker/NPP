@@ -204,7 +204,8 @@ theorem PEqualNP.Outside.R_meta_4305_1
       {z : Fin N × Fin N | I z.1 z.2 ∧ ∃ g < m, W (twoN + g) ⊆ W out ∧ (e1 z.1, e1 z.2) ∈ W (twoN + g) ∧
         ∃ a b : ℕ, max a b < twoN + g ∧ W (twoN + g) = W a ∩ W b ∧ ¬ ptOnly a ∧ ¬ lnOnly a ∧ ¬ ptOnly b ∧ ¬ lnOnly b}
     have hcover : E_all ⊆ E_rect ∪ (E_pt ∪ (E_ln ∪ E_both)) := by
-      intro ⟨p, l⟩ hpl
+      intro z hpl
+      rcases z with ⟨p, l⟩
       obtain ⟨g, hg, hsub, hmem, a, b, hmax, hinter⟩ :=
         hevery_and out hout p l (fun _ h => h) (hinc p l hpl)
       have hmax_sym : max b a < twoN + g := by rw [max_comm]; exact hmax
@@ -249,7 +250,8 @@ theorem PEqualNP.Outside.R_meta_4305_1
       have hterm : ∀ l : Fin N, (S.filter (fun z => z.2 = l)).card = q + 1 := by
         intro l
         have heq : S.filter (fun z => z.2 = l) = (Finset.univ.filter (fun p => I p l)).image (fun p => (p, l)) := by
-          ext ⟨p, l'⟩; simp only [S, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image, Prod.mk.injEq]
+          apply Finset.ext; intro z; rcases z with ⟨p, l'⟩
+          simp only [S, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image, Prod.mk.injEq]
           constructor
           · rintro ⟨h1, rfl⟩; exact ⟨p, h1, rfl, rfl⟩
           · rintro ⟨_, h1, rfl, rfl⟩; exact ⟨h1, rfl⟩
