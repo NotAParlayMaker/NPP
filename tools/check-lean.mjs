@@ -48,6 +48,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { counterRose, diedOfMemory, oomKills } from './check-lean-memory.mjs';
 
 export const CHECKER_VERSION = 'check-lean 4';   // 2026-11-24: kind reduce (decomposition door, dark), with the text and waste screens on its children
 const DEFS_ROOT = 'PEqualNP.Defs';
@@ -163,13 +164,25 @@ const verifierHash = sha256(readFileSync(VERIFIER));
 
 // 1. The file builds in the pinned environment, and so does the definitions root.
 stage('building the file and the definitions root');
+const killsBefore = oomKills();
 const build = lake(['build', `+${module}`, `+${DEFS_ROOT}`]);
 if (build.error) fault(`the build could not run: ${build.error.message}`);
 if (build.status !== 0) {
   // "Does not compile" is a verdict on the file only when Lean reported an error in a project
   // source file. A build that failed any other way is a fault, and says nothing of the proof.
   const inSource = new RegExp(`^error: (\\./)?(${LIBRARIES.join('|')})[/A-Za-z0-9_]*\\.lean:`, 'm');
-  if (build.status === null || !inSource.test(build.stdout + build.stderr)) fault(`the build failed for a reason that is not an error in a project file.\n${tail(build)}`);
+  // A build killed at the memory limit is a MEMORY ending (exit 137, as the workflow's own memory
+  // watch): the intake sends 137 to a larger runner. An error in a project file stays does-not-compile
+  // unless the KERNEL counter rose (printed text never overrides it: the file controls its own output).
+  const killsAfter = oomKills();
+  const all = build.stdout + build.stderr;
+  const memory = () => {
+    writeAll(2, `CHECKER MEMORY: the build was killed for memory (out of memory at the checker's limit); this says nothing of the proof.\n${tail(build)}\n`);
+    process.exit(137);
+  };
+  const projectError = build.status !== null && inSource.test(all);
+  if (projectError ? counterRose(killsBefore, killsAfter) : diedOfMemory({ output: all, killsBefore, killsAfter })) memory();
+  if (!projectError) fault(`the build failed for a reason that is not an error in a project file.\n${tail(build)}`);
   out(tail(build));
   reject('does-not-compile', `${module} does not build in the pinned environment`);
 }
