@@ -1,0 +1,1556 @@
+import Mathlib
+import PEqualNP.Defs
+
+namespace PEqualNP.Outside.L_meta_12589_aux
+
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
+
+namespace PetersenSignedSlice
+
+abbrev Signal (α : Type) := α → Bool
+def inv {α} (a : Signal α) : Signal α := fun x => !(a x)
+def meet {α} (a b : Signal α) : Signal α := fun x => a x && b x
+
+-- A pool stores both polarities of every paid AND. Old wires remain available.
+inductive Run {α : Type} (start : List (Signal α)) : ℕ → List (Signal α) → Prop where
+  | nil : Run start 0 start
+  | gate {k w} (h : Run start k w) {a b} (ha : a ∈ w) (hb : b ∈ w) :
+      Run start (k+1) (w ++ [meet a b, inv (meet a b)])
+
+theorem Run.keep {α} {s w : List (Signal α)} {k} (h : Run s k w) :
+    ∀ v ∈ s, v ∈ w := by
+  induction h with
+  | nil => exact fun _ h => h
+  | gate h _ _ ih => exact fun v hv => List.mem_append_left _ (ih v hv)
+
+theorem Run.comp {α} {s w u : List (Signal α)} {k j} (h : Run s k w) (h' : Run w j u) :
+    Run s (k+j) u := by
+  induction h' with
+  | nil => exact h
+  | gate h' ha hb ih => exact Run.gate ih ha hb
+
+structure Wire (α : Type) where
+  f : Signal α
+  lo : Bool
+  hi : Bool
+
+def K {α} (b : Bool) : Wire α := ⟨fun _ => b,b,b⟩
+def neg {α} (a : Wire α) : Wire α := ⟨inv a.f,!a.lo,!a.hi⟩
+def conj {α} (a b : Wire α) : Wire α := ⟨meet a.f b.f,a.lo && b.lo,a.hi && b.hi⟩
+def disj {α} (a b : Wire α) : Wire α := neg (conj (neg a) (neg b))
+
+def Good {α} (w : List (Signal α)) (a : Wire α) : Prop := a.f ∈ w ∧ inv a.f ∈ w
+def Stable {α} (a : Wire α) : Prop := (∃ b, ∀ x, a.f x = b) ∨ a.lo = a.hi
+
+theorem goodNeg {α} {w : List (Signal α)} {a} (h : Good w a) : Good w (neg a) := by
+  refine ⟨h.2,?_⟩
+  have eq : inv (inv a.f) = a.f := by funext x; simp [inv]
+  change inv (inv a.f) ∈ w
+  rw [eq]
+  exact h.1
+
+theorem stableNeg {α} {a : Wire α} (h : Stable a) : Stable (neg a) := by
+  rcases h with ⟨b,hb⟩ | eq
+  · exact Or.inl ⟨!b,fun x => by simp [neg,inv,hb]⟩
+  · exact Or.inr (congrArg Bool.not eq)
+
+def Eval {α} (op : GateOp) (args : List (Wire α)) : Wire α :=
+  ⟨fun x => op.eval (args.map fun a => a.f x),op.eval (args.map Wire.lo),op.eval (args.map Wire.hi)⟩
+
+def Paid (g : Gate) : ℕ :=
+  if g.op.eval [false] then 0 else if g.inputs.length = 2 then 1 else 0
+
+def Effect {α} (w : List (Signal α)) (n : ℕ) (a : Wire α) (inputs : List (Wire α)) : Prop :=
+  ∃ c t, Run w c t ∧ c ≤ n ∧ Good t a ∧
+    (c = n → (∀ u ∈ inputs, Stable u) → Stable a)
+
+private theorem bin {α} (w : List (Signal α)) (base : ∀ b, Good w (K b)) (a b : Wire α)
+    (ha : Good w a) (hb : Good w b) : Effect w 1 (conj a b) [a,b] := by
+  classical
+  by_cases ca : ∃ t, ∀ x, a.f x = t
+  · obtain ⟨t,e⟩ := ca
+    refine ⟨0,w,.nil,by decide,?_,by intro impossible; contradiction⟩
+    cases t
+    · have eq : (conj a b).f = (K (α := α) false).f := by funext x; simp [conj,meet,e,K]
+      simpa only [Good,eq] using base false
+    · have eq : (conj a b).f = b.f := by funext x; simp [conj,meet,e]
+      simpa only [Good,eq] using hb
+  by_cases cb : ∃ t, ∀ x, b.f x = t
+  · obtain ⟨t,e⟩ := cb
+    refine ⟨0,w,.nil,by decide,?_,by intro impossible; contradiction⟩
+    cases t
+    · have eq : (conj a b).f = (K (α := α) false).f := by funext x; simp [conj,meet,e,K]
+      simpa only [Good,eq] using base false
+    · have eq : (conj a b).f = a.f := by funext x; simp [conj,meet,e]
+      simpa only [Good,eq] using ha
+  · refine ⟨1,_,Run.gate Run.nil ha.1 hb.1,le_rfl,?_,?_⟩
+    · exact ⟨List.mem_append_right _ (by simp [conj]),List.mem_append_right _ (by simp [conj])⟩
+    · intro _ stable
+      have ea := (stable a (by simp)).resolve_left ca
+      have eb := (stable b (by simp)).resolve_left cb
+      exact Or.inr (by simp [conj,ea,eb])
+
+private theorem gateEffect {α} (w : List (Signal α)) (base : ∀ b, Good w (K b))
+    (op : GateOp) (args : List (Wire α)) (h : ∀ a ∈ args, Good w a)
+    (ok : op = .and ∨ op = .or ∨ op = .not) (sz : args.length ≤ 2) :
+    Effect w (if op.eval [false] then 0 else if args.length = 2 then 1 else 0) (Eval op args) args := by
+  have zero (z : Wire α) (hz : Good w z) (st : (∀ v ∈ args, Stable v) → Stable z) :
+      Effect w 0 z args := ⟨0,w,.nil,le_rfl,hz,fun _ => st⟩
+  rcases ok with rfl | rfl | rfl
+  · cases args with
+    | nil => exact zero _ (base true) (fun _ => Or.inl ⟨true,fun _ => rfl⟩)
+    | cons a rest =>
+      cases rest with
+      | nil =>
+        have eq : Eval .and [a] = a := by cases a; simp [Eval,GateOp.eval]
+        rw [eq]
+        exact zero a (h a (by simp)) (fun st => st a (by simp))
+      | cons b rest =>
+        have e : rest = [] := List.length_eq_zero_iff.mp (by simp only [List.length_cons] at sz; omega)
+        subst rest
+        have eq : Eval .and [a,b] = conj a b := by simp [Eval,GateOp.eval,conj]; rfl
+        rw [eq]
+        exact bin w base a b (h a (by simp)) (h b (by simp))
+  · cases args with
+    | nil => exact zero _ (base false) (fun _ => Or.inl ⟨false,fun _ => rfl⟩)
+    | cons a rest =>
+      cases rest with
+      | nil =>
+        have eq : Eval .or [a] = a := by cases a; simp [Eval,GateOp.eval]
+        rw [eq]
+        exact zero a (h a (by simp)) (fun st => st a (by simp))
+      | cons b rest =>
+        have e : rest = [] := List.length_eq_zero_iff.mp (by simp only [List.length_cons] at sz; omega)
+        subst rest
+        have eq : Eval .or [a,b] = disj a b := by simp [Eval,GateOp.eval,disj,conj,neg]; funext x; simp [inv,meet]
+        rw [eq]
+        obtain ⟨c,t,r,k,g,st⟩ := bin w base (neg a) (neg b) (goodNeg (h a (by simp))) (goodNeg (h b (by simp)))
+        refine ⟨c,t,r,k,goodNeg g,fun equal stable => stableNeg (st equal ?_)⟩
+        intro v hv
+        rcases List.mem_cons.mp hv with rfl | h'
+        · exact stableNeg (stable _ (by simp))
+        · have hv := List.mem_singleton.mp h'
+          exact hv ▸ stableNeg (stable b (by simp))
+  · cases args with
+    | nil => exact zero _ (base true) (fun _ => Or.inl ⟨true,fun _ => rfl⟩)
+    | cons a rest =>
+      exact zero (neg a) (goodNeg (h a (by simp))) (fun st => stableNeg (st a (by simp)))
+
+
+def step {α} (v : List (Wire α)) (g : Gate) : List (Wire α) :=
+  v ++ [Eval g.op (g.inputs.map fun i => v.getD i (K false))]
+
+theorem get_property {α} (P : α → Prop) (v : List α) (d : α) (i : ℕ)
+    (hd : P d) (h : ∀ z ∈ v, P z) : P (v.getD i d) := by
+  by_cases hi : i < v.length
+  · rw [List.getD_eq_getElem _ _ hi]
+    exact h _ (List.getElem_mem _)
+  · rw [List.getD_eq_default _ _ (by omega)]
+    exact hd
+
+theorem fold {α} (gs : List Gate) (legal : ∀ g ∈ gs,
+    (g.op = .and ∨ g.op = .or ∨ g.op = .not) ∧ g.inputs.length ≤ 2)
+    (w : List (Signal α)) (base : ∀ b, Good w (K b)) (v : List (Wire α))
+    (old : ∀ a ∈ v, Good w a) :
+    ∃ k t, Run w k t ∧ k ≤ (gs.map Paid).sum ∧
+      (∀ a ∈ gs.foldl step v, Good t a) ∧
+      (k = (gs.map Paid).sum → (∀ a ∈ v, Stable a) → ∀ a ∈ gs.foldl step v, Stable a) := by
+  induction gs generalizing w v with
+  | nil => exact ⟨0,w,.nil,le_rfl,old,fun _ st => st⟩
+  | cons g gs ih =>
+    let args := g.inputs.map fun i => v.getD i (K false)
+    have allg : ∀ z ∈ args, Good w z := by
+      intro z mem
+      obtain ⟨i,_,rfl⟩ := List.mem_map.mp mem
+      exact get_property _ _ _ _ (base false) old
+    have h := gateEffect w base g.op args allg (legal g (by simp)).1 (by simpa [args] using (legal g (by simp)).2)
+    obtain ⟨c,t,run,cap,gnew,snew⟩ := h
+    have ec : c ≤ Paid g := by simpa only [Paid,args,List.length_map] using cap
+    have goodKeep {a} (ok : Good w a) : Good t a := ⟨run.keep _ ok.1,run.keep _ ok.2⟩
+    have goodNext : ∀ a ∈ step v g, Good t a := by
+      intro a mem
+      rcases List.mem_append.mp mem with ov | nv
+      · exact goodKeep (old a ov)
+      · exact (List.mem_singleton.mp nv) ▸ gnew
+    obtain ⟨j,u,tail,limit,done,st⟩ := ih (fun z hz => legal z (List.mem_cons_of_mem g hz))
+      t (fun b => goodKeep (base b)) (step v g) goodNext
+    refine ⟨c+j,u,run.comp tail,by simpa using Nat.add_le_add ec limit,done,?_⟩
+    intro equal previous
+    simp only [List.map_cons,List.sum_cons] at equal
+    apply st (by omega)
+    intro a mem
+    rcases List.mem_append.mp mem with ov | nv
+    · exact previous a ov
+    · apply (List.mem_singleton.mp nv) ▸ snew (by simpa only [args,List.length_map,Paid] using (show c = Paid g by omega))
+      intro z hz
+      obtain ⟨i,_,rfl⟩ := List.mem_map.mp hz
+      exact get_property _ _ _ _ (Or.inl ⟨false,fun _ => rfl⟩ : Stable (K (α := α) false)) previous
+
+def addPair (w : List Bool) (ij : ℕ × ℕ) : List Bool :=
+  let z := w.getD ij.1 false && w.getD ij.2 false
+  w ++ [z,!z]
+
+theorem Run.program {α} {s w : List (Signal α)} {k} (r : Run s k w) :
+    ∃ prog : List (ℕ × ℕ), prog.length = k ∧ ∀ x : α,
+      prog.foldl addPair (s.map fun f => f x) = w.map fun f => f x := by
+  induction r with
+  | nil => exact ⟨[],rfl,fun _ => rfl⟩
+  | @gate k w r a b ha hb ih =>
+    obtain ⟨p,len,sim⟩ := ih
+    obtain ⟨i,hi,ei⟩ := List.getElem_of_mem ha
+    obtain ⟨j,hj,ej⟩ := List.getElem_of_mem hb
+    refine ⟨p++[(i,j)],by simp [len],?_⟩
+    intro x
+    rw [List.foldl_append,sim]
+    simp only [List.foldl_cons,List.foldl_nil,addPair,List.map_append,List.map_cons,List.map_nil]
+    rw [List.getD_eq_getElem _ _ (by simpa using hi),List.getD_eq_getElem _ _ (by simpa using hj)]
+    simp [List.getElem_map,ei,ej,meet,inv]
+
+def boolStep (w : List Bool) (g : Gate) : List Bool :=
+  w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
+
+private theorem getMap {α β} (h : α → β) (v : List α) (i : ℕ) (d : α) :
+    h (v.getD i d) = (v.map h).getD i (h d) := by
+  simp [List.getD,List.getElem?_map,Option.getD_map]
+
+theorem aligns {α} (h : Wire α → Bool) (hd : h (K false) = false)
+    (he : ∀ op args, h (Eval op args) = op.eval (args.map h)) (gs : List Gate) (v : List (Wire α)) :
+    (gs.foldl step v).map h = gs.foldl boolStep (v.map h) := by
+  induction gs generalizing v with
+  | nil => rfl
+  | cons g gs ih =>
+    rw [List.foldl_cons,List.foldl_cons,ih]
+    congr 1
+    simp only [step,boolStep,List.map_append,List.map_cons,List.map_nil,he,List.map_map,
+      Function.comp_def,getMap h,hd]
+
+theorem outputMap {α} (h : Wire α → Bool) (hd : h (K false) = false)
+    (he : ∀ op args, h (Eval op args) = op.eval (args.map h)) (C : Circuit) (v : List (Wire α)) :
+    h ((C.gates.foldl step v).getD C.output (K false)) = C.eval (v.map h) := by
+  rw [getMap h,hd,aligns h hd he]
+  rfl
+
+
+theorem compile (α : Type) (C : Circuit) (hc : FanInTwo C) (s : List (α → Bool))
+    (v : List ((α → Bool) × Bool × Bool)) (constants : ∀ b : Bool, (fun _ : α => b) ∈ s)
+    (pins : ∀ a ∈ v, a.1 ∈ s ∧ (fun x => !(a.1 x)) ∈ s ∧
+      ((∃ b, ∀ x, a.1 x = b) ∨ a.2.1 = a.2.2)) :
+    ∃ (p : List (ℕ × ℕ)) (o : ℕ),
+      p.length ≤ (C.gates.map fun g => ite (g.op.eval [false] = true) 0 (ite (g.inputs.length = 2) 1 0)).sum ∧
+      ∀ x : α, (p.foldl (fun w ij =>
+        let z := w.getD ij.1 false && w.getD ij.2 false
+        w ++ [z,!z]) (s.map fun f => f x)).getD o false = C.eval (v.map fun a => a.1 x) := by
+  let make := fun a : (α → Bool) × Bool × Bool => Wire.mk a.1 a.2.1 a.2.2
+  let a := v.map make
+  have base (b : Bool) : Good s (K b) := ⟨constants b,constants (!b)⟩
+  have old : ∀ u ∈ a, Good s u ∧ Stable u := by
+    intro u hu
+    obtain ⟨z,hz,rfl⟩ := List.mem_map.mp hu
+    obtain ⟨hg,hn,hs⟩ := pins z hz
+    exact ⟨⟨hg,hn⟩,hs⟩
+  obtain ⟨k,t,run,limit,accepted,stable⟩ :=
+    fold C.gates (fun g hg => ⟨(hc g hg).1,(hc g hg).2⟩) s base a (fun u hu => (old u hu).1)
+  let out := (C.gates.foldl step a).getD C.output (K false)
+  have values (x : α) : out.f x = C.eval (v.map fun u => u.1 x) := by
+    simpa [out,a,make,List.map_map,Function.comp_def] using
+      outputMap (fun u : Wire α => u.f x) rfl (fun _ _ => rfl) C a
+  have zero : Good t (K false) := ⟨run.keep _ (base false).1,run.keep _ (base false).2⟩
+  have usable : Good t out := get_property _ _ _ _ zero accepted
+  obtain ⟨o,ho,eo⟩ := List.getElem_of_mem usable.1
+  obtain ⟨p,len,sim⟩ := run.program
+  refine ⟨p,o,by rw [len]; exact limit,?_⟩
+  intro x
+  change (p.foldl addPair _).getD o false = _
+  rw [sim,List.getD_eq_getElem _ _ (by simpa using ho),List.getElem_map,eo]
+  exact values x
+
+end PetersenSignedSlice
+
+namespace ThresholdReplacement
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
+
+def target (x : Fin 6 → Bool) := Nat.testBit (4008373992 * 2 ^ 32 + 4008234184) (∑ i : Fin 6, if x i then 2 ^ (i : ℕ) else 0)
+def witness : Circuit := ⟨[
+  ⟨.or, [2,3]⟩,
+  ⟨.and, [6,4]⟩,
+  ⟨.or, [6,4]⟩,
+  ⟨.and, [8,5]⟩,
+  ⟨.or, [7,9]⟩,
+  ⟨.and, [0,10]⟩,
+  ⟨.or, [0,6]⟩,
+  ⟨.and, [1,12]⟩,
+  ⟨.or, [11,13]⟩], 14⟩
+theorem size : witness.size = 9 := by decide +kernel
+theorem legal : Monotone2 witness := by
+  intro g hg
+  simp only [witness,List.mem_cons,List.not_mem_nil,or_false] at hg
+  rcases hg with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> constructor <;> first | exact Or.inl rfl | exact Or.inr rfl | decide +kernel
+theorem value : ∀ x, circuitFun 6 witness x = target x := by decide +kernel
+
+abbrev Input := Fin 6 → Bool
+def sliceTarget (x : Input) := target x
+def signedStart (x : Input) := [false,true] ++ List.ofFn x ++ (List.ofFn x).map Bool.not
+def signed (p : List (ℕ × ℕ)) (o : ℕ) (x : Input) :=
+  (p.foldl PetersenSignedSlice.addPair (signedStart x)).getD o false
+
+-- A signed binary program stores each wire together with its complement.
+-- The entire six-input function is preserved, and NOT gates cost no steps.
+theorem compileFull (C : Circuit) (ok : FanInTwo C) (hit : ∀ x, circuitFun 6 C x = target x) :
+    ∃ p o, p.length ≤ (C.gates.map PetersenSignedSlice.Paid).sum ∧
+      ∀ x, signed p o x = sliceTarget x := by
+  let raw := List.ofFn (fun j : Fin 6 => fun x : Input => x j)
+  let pool := [(fun _ : Input => false), (fun _ : Input => true)] ++ raw ++
+    raw.map (fun u x => !(u x))
+  let wire := fun j : Fin 6 => (fun x : Input => x j, false, false)
+  let v := List.ofFn wire
+  have constants (b : Bool) : (fun _ : Input => b) ∈ pool := by cases b <;> simp [pool]
+  have pins : ∀ a ∈ v, a.1 ∈ pool ∧ (fun x => !(a.1 x)) ∈ pool ∧
+      ((∃ b, ∀ x, a.1 x = b) ∨ a.2.1 = a.2.2) := by
+    intro a ha
+    obtain ⟨j,rfl⟩ := List.mem_ofFn.mp ha
+    have pos : (fun x : Input => x j) ∈ raw := List.mem_ofFn.mpr ⟨j,rfl⟩
+    exact ⟨List.mem_append_left _ (List.mem_append_right _ pos),
+      List.mem_append_right _ (List.mem_map_of_mem pos),Or.inr rfl⟩
+  obtain ⟨p,o,small,ev⟩ := PetersenSignedSlice.compile Input C ok pool v constants pins
+  refine ⟨p,o,small,fun x => ?_⟩
+  have start : pool.map (fun u => u x) = signedStart x := by
+    simp only [pool,raw,signedStart,List.map_append,List.map_cons,List.map_nil,List.map_ofFn]
+    rfl
+  change (p.foldl PetersenSignedSlice.addPair (signedStart x)).getD o false = target x
+  rw [←start]
+  exact (ev x).trans (by simpa [v,wire,circuitFun,List.map_ofFn,Function.comp_def] using hit x)
+
+theorem replacement
+    (sliceLower : ∀ p o, (∀ x, signed p o x = sliceTarget x) → 8 ≤ p.length)
+    (C : Circuit) (ok : FanInTwo C) (hit : ∀ x, circuitFun 6 C x = target x) :
+    ∃ D : Circuit, Monotone2 D ∧ D.size ≤ C.size ∧ ∀ x, circuitFun 6 D x = target x := by
+  by_cases mono : Monotone2 C
+  · exact ⟨C, mono, le_rfl, hit⟩
+  · obtain ⟨p,o,sz,ev⟩ := compileFull C ok hit
+    have paid (gs : List Gate) : (gs.map PetersenSignedSlice.Paid).sum ≤ gs.length ∧
+        ((gs.map PetersenSignedSlice.Paid).sum = gs.length →
+          ∀ g ∈ gs, (g.op = .and ∨ g.op = .or ∨ g.op = .not) →
+            (g.op = .and ∨ g.op = .or)) := by
+      induction gs with
+      | nil => simp
+      | cons g t ih =>
+        have cap : PetersenSignedSlice.Paid g ≤ 1 := by unfold PetersenSignedSlice.Paid; split <;> (first | decide | split <;> decide)
+        simp only [List.map_cons, List.sum_cons, List.length_cons]
+        refine ⟨by omega, ?_⟩
+        intro eq u mem kind
+        rcases List.mem_cons.mp mem with rfl | tail
+        · rcases kind with h | h | h
+          · exact Or.inl h
+          · exact Or.inr h
+          · have := ih.1
+            simp [PetersenSignedSlice.Paid, h, GateOp.eval] at eq
+            omega
+        · exact ih.2 (by omega) _ tail kind
+    obtain ⟨cap, full⟩ := paid C.gates
+    have strict : (C.gates.map PetersenSignedSlice.Paid).sum < C.gates.length := by
+      by_contra! fail
+      apply mono
+      intro g hg
+      exact ⟨full (by omega) _ hg (ok g hg).1, (ok g hg).2⟩
+    have := sliceLower p o ev
+    exact ⟨witness, legal, by rw [size]; change 9 ≤ C.gates.length; omega, value⟩
+
+end ThresholdReplacement
+
+namespace SignedFrontier
+
+abbrev W := BitVec 64
+
+def canonical (w : W) : W := if w.getLsbD 0 then ~~~w else w
+
+def choices (a b : W) : List W :=
+  [a &&& b, a &&& ~~~b, ~~~a &&& b, a ||| b]
+
+theorem canonical_not (w : W) : canonical (~~~w) = canonical w := by
+  cases h : w.getLsbD 0 <;> simp_all [canonical, BitVec.not_not]
+
+theorem canonical_bit (w : W) : (canonical w).getLsbD 0 = false := by
+  unfold canonical
+  split <;> simp_all
+
+theorem operation (a b : W) :
+    canonical (a &&& b) ∈ choices (canonical a) (canonical b) := by
+  cases ha : a.getLsbD 0 <;> cases hb : b.getLsbD 0 <;>
+    simp_all [choices, canonical, BitVec.not_and, BitVec.not_not]
+
+theorem constants (a b : W) (h : a = 0 ∨ b = 0 ∨ a = b) :
+    ∀ w ∈ choices a b, w = 0 ∨ w = a ∨ w = b := by
+  rcases h with rfl | rfl | rfl <;> simp [choices]
+  · exact Or.inr BitVec.allOnes_and
+  · exact Or.inr (Or.inl BitVec.and_allOnes)
+
+-- Read the live gates backwards from the single required output. The two
+-- operands can belong to the suffix already when a wire is shared.
+inductive Cone (goal : W) : ℕ → Finset W → Prop where
+  | done : Cone goal 0 {goal}
+  | step {k : ℕ} {needed : Finset W} {a b w : W}
+      (rest : Cone goal k needed) (wanted : w ∈ needed)
+      (a0 : a ≠ 0) (b0 : b ≠ 0) (ab : a ≠ b) (aw : a ≠ w) (bw : b ≠ w)
+      (form : w ∈ choices a b) :
+      Cone goal (k+1) (insert a (insert b (needed.erase w)))
+
+theorem Cone.size {goal : W} {k : ℕ} {s : Finset W} (h : Cone goal k s) :
+    s.card ≤ k+1 := by
+  induction h with
+  | done => simp
+  | @step k needed a b w rest wanted a0 b0 ab aw bw form ih =>
+    have e := Finset.card_erase_of_mem wanted
+    have hn := Finset.card_pos.mpr ⟨w,wanted⟩
+    have p := Finset.card_insert_le b (needed.erase w)
+    have q := Finset.card_insert_le a (insert b (needed.erase w))
+    omega
+
+def add (ws : List W) (ij : ℕ × ℕ) : List W :=
+  let w := ws.getD ij.1 0 &&& ws.getD ij.2 0
+  ws ++ [w,~~~w]
+
+def available (ws : List W) : Finset W := insert 0 (ws.map canonical).toFinset
+
+theorem available_read (ws : List W) (i : ℕ) : canonical (ws.getD i 0) ∈ available ws := by
+  by_cases hi : i < ws.length
+  · rw [List.getD_eq_getElem _ _ hi]
+    simp only [available, Finset.mem_insert, List.mem_toFinset, List.mem_map]
+    exact Or.inr ⟨_,List.getElem_mem hi,rfl⟩
+  · rw [List.getD_eq_default _ _ (by omega)]
+    simp [available,canonical]
+
+theorem available_add (ws : List W) (ij : ℕ × ℕ) :
+    available (add ws ij) = insert (canonical (ws.getD ij.1 0 &&& ws.getD ij.2 0)) (available ws) := by
+  ext w
+  simp [available,add,canonical_not]
+  tauto
+
+theorem extract (p : List (ℕ × ℕ)) (ws : List W) (g : W) (k : ℕ) (s : Finset W)
+    (h : Cone g k s) (hs : s ⊆ available (p.foldl add ws)) :
+    ∃ j t, j ≤ k+p.length ∧ t ⊆ available ws ∧ Cone g j t := by
+  induction p generalizing ws k s with
+  | nil => exact ⟨k,s,by simp,hs,h⟩
+  | cons ij tail ih =>
+    obtain ⟨j,t,hj,ht,hr⟩ := ih (add ws ij) k s h hs
+    rw [available_add] at ht
+    by_cases sub : t ⊆ available ws
+    · exact ⟨j,t,by simp only [List.length_cons]; omega,sub,hr⟩
+    · let a := canonical (ws.getD ij.1 0)
+      let b := canonical (ws.getD ij.2 0)
+      let w := canonical (ws.getD ij.1 0 &&& ws.getD ij.2 0)
+      have ha : a ∈ available ws := available_read _ _
+      have hb : b ∈ available ws := available_read _ _
+      have hz : (0 : W) ∈ available ws := Finset.mem_insert_self ..
+      have new : w ∉ available ws := by
+        intro hold
+        exact sub (fun z h' => (Finset.mem_insert.mp (ht h')).elim (fun e => e ▸ hold) id)
+      have want : w ∈ t := by
+        by_contra hn
+        exact sub (fun z h' => (Finset.mem_insert.mp (ht h')).resolve_left (by rintro rfl; contradiction))
+      have form : w ∈ choices a b := operation _ _
+      have diff : ¬ (a = 0 ∨ b = 0 ∨ a = b) := by
+        intro bad
+        rcases constants a b bad w form with e | e | e <;> apply new <;> simp_all
+      refine ⟨j+1,_,by simp only [List.length_cons]; omega,?_,
+        Cone.step hr want (fun e => diff (Or.inl e)) (fun e => diff (Or.inr (Or.inl e)))
+          (fun e => diff (Or.inr (Or.inr e))) (fun e => new (e ▸ ha)) (fun e => new (e ▸ hb)) form⟩
+      intro z hz'
+      rcases Finset.mem_insert.mp hz' with rfl | hz'
+      · exact ha
+      rcases Finset.mem_insert.mp hz' with rfl | hz'
+      · exact hb
+      obtain ⟨hne,hzt⟩ := Finset.mem_erase.mp hz'
+      exact (Finset.mem_insert.mp (ht hzt)).resolve_left hne
+
+theorem Cone.noZero {g : W} {k : ℕ} {s : Finset W} (h : Cone g k s) (hg : g ≠ 0) :
+    0 ∉ s := by
+  induction h with
+  | done => exact fun hz => hg (Finset.mem_singleton.mp hz).symm
+  | step rest wanted a0 b0 ab aw bw form ih =>
+    intro hz
+    rcases Finset.mem_insert.mp hz with e | hm
+    · exact a0 e.symm
+    rcases Finset.mem_insert.mp hm with e | hm
+    · exact b0 e.symm
+    exact ih (Finset.mem_of_mem_erase hm)
+
+theorem same_choice (a b w : W) (hw : w ∈ choices a b) (i j : ℕ) (hi : i < 64) (hj : j < 64)
+    (ha : a.getLsbD i = a.getLsbD j) (hb : b.getLsbD i = b.getLsbD j) :
+    w.getLsbD i = w.getLsbD j := by
+  simp only [choices,List.mem_cons,List.not_mem_nil,or_false] at hw
+  rcases hw with rfl | rfl | rfl | rfl <;>
+    simp only [BitVec.getLsbD_and,BitVec.getLsbD_not,BitVec.getLsbD_or,hi,hj,decide_true,
+      Bool.true_and,ha,hb]
+
+theorem Cone.agree {g : W} {k : ℕ} {s : Finset W} (h : Cone g k s)
+    (i j : ℕ) (hi : i < 64) (hj : j < 64)
+    (same : ∀ u ∈ s, u.getLsbD i = u.getLsbD j) : g.getLsbD i = g.getLsbD j := by
+  induction h with
+  | done => exact same _ (Finset.mem_singleton_self _)
+  | @step k needed a b w rest wanted a0 b0 ab aw bw form ih =>
+    apply ih
+    intro u hu
+    by_cases h : u = w
+    · subst u
+      exact same_choice _ _ _ form i j hi hj (same a (by simp)) (same b (by simp))
+    · exact same u (by simp [h, hu])
+
+def rowMask (r : ℕ) (u : W) := if u.getLsbD r then u else ~~~u
+
+def survivors (r : ℕ) : List W → W → W
+  | [], mask => mask
+  | a :: tail, mask =>
+    if mask = 0 then 0 else survivors r tail (mask &&& rowMask r a)
+
+theorem survivor_sound (r j : ℕ) (hj : j < 64) (s : List W) (m : W)
+    (hit : (survivors r s m).getLsbD j = true) :
+    m.getLsbD j = true ∧ ∀ u ∈ s, u.getLsbD r = u.getLsbD j := by
+  induction s generalizing m with
+  | nil => exact ⟨hit,by simp⟩
+  | cons a tail ih =>
+    simp only [survivors] at hit
+    split at hit
+    · simp at hit
+    · obtain ⟨head,rest⟩ := ih _ hit
+      simp only [BitVec.getLsbD_and,Bool.and_eq_true] at head
+      refine ⟨head.1,?_⟩
+      intro u hu
+      rcases List.mem_cons.mp hu with rfl | h
+      · have v := head.2
+        unfold rowMask at v
+        cases h : u.getLsbD r <;> simp_all
+      · exact rest u h
+
+def covered (g : W) (rows : List ℕ) (s : List W) :=
+  rows.all fun r => survivors r s g == 0
+
+theorem Cone.covered {g : W} {k : ℕ} {s : List W} (h : Cone g k s.toFinset)
+    (rows : List ℕ) (neg : ∀ r ∈ rows, r < 64 ∧ g.getLsbD r = false) :
+    covered g rows s = true := by
+  apply List.all_eq_true.mpr
+  intro r hr
+  apply beq_iff_eq.mpr
+  apply BitVec.eq_of_getLsbD_eq
+  intro j hj
+  obtain ⟨limit,off⟩ := neg r hr
+  cases hv : (survivors r s g).getLsbD j with
+  | false => simp
+  | true =>
+    obtain ⟨on,same⟩ := survivor_sound r j hj s g hv
+    have eq := h.agree r j limit hj (by simpa using same)
+    simp [off,on] at eq
+
+def withWire (keep : Bool) (a : W) (s : List W) := if keep then a :: s else s
+
+theorem mem_withWire {u a : W} {s : List W} (keep : Bool) :
+    u ∈ withWire keep a s ↔ (keep = true ∧ u = a) ∨ u ∈ s := by
+  cases keep <;> simp [withWire]
+
+def after (s : List W) (a b w : W) (ka kb : Bool) : List W :=
+  w :: withWire ka a (withWire kb b (s.filter fun u => u != a && u != b))
+
+theorem after_exact (s : List W) (needed : Finset W) (a b w : W)
+    (hs : s.toFinset = insert a (insert b (needed.erase w))) (want : w ∈ needed) :
+    (after s a b w (decide (a ∈ needed)) (decide (b ∈ needed))).toFinset = needed := by
+  ext u
+  have mem : u ∈ s ↔ u = a ∨ u = b ∨ u ≠ w ∧ u ∈ needed := by
+    rw [← List.mem_toFinset,hs]
+    simp
+  simp only [List.mem_toFinset,after,List.mem_cons,mem_withWire,decide_eq_true_eq,
+    List.mem_filter,Bool.and_eq_true,bne_iff_ne,mem]
+  grind
+
+def onePair (s : List W) (f : List W → Bool) (a b : W) :=
+  (choices a b).any fun w => w != 0 && !s.contains w &&
+    ([false,true] : List Bool).any fun ka => ([false,true] : List Bool).any fun kb =>
+      f (after s a b w ka kb)
+
+def moves (s : List W) (f : List W → Bool) :=
+  s.any fun a => s.any fun b => decide (a.toNat < b.toNat) && onePair s f a b
+
+theorem swap_choices {a b w : W} : w ∈ choices a b → w ∈ choices b a := by
+  simp only [choices,List.mem_cons,List.not_mem_nil,or_false]
+  intro h
+  rcases h with rfl | rfl | rfl | rfl <;> simp [BitVec.and_comm,BitVec.or_comm]
+
+theorem after_nodup (s : List W) (hs : s.Nodup) (a b w : W) (ka kb : Bool)
+    (diff : a ≠ b) (fresh : w ∉ s) (aw : a ≠ w) (bw : b ≠ w) :
+    (after s a b w ka kb).Nodup := by
+  have base := hs.filter (fun u => u != a && u != b)
+  have ha : a ∉ s.filter (fun u => u != a && u != b) := by simp
+  have hb : b ∉ s.filter (fun u => u != a && u != b) := by simp
+  have hw : w ∉ s.filter (fun u => u != a && u != b) := by simp [fresh]
+  cases ka <;> cases kb <;> simp [after,withWire,base,fresh,Ne.symm aw,Ne.symm bw,diff]
+
+theorem onePair_complete (s : List W) (f : List W → Bool)
+    {g a b w : W} {k : ℕ} {needed : Finset W} (hg : g ≠ 0)
+    (unique : s.Nodup) (ab : a ≠ b) (rest : Cone g k needed) (want : w ∈ needed)
+    (hs : s.toFinset = insert a (insert b (needed.erase w)))
+    (aw : a ≠ w) (bw : b ≠ w) (form : w ∈ choices a b)
+    (succ : ∀ t : List W, t.Nodup → Cone g k t.toFinset → f t = true) :
+    onePair s f a b = true := by
+  have nz : w ≠ 0 := fun e => rest.noZero hg (e ▸ want)
+  have fresh : w ∉ s := by
+    rw [← List.mem_toFinset,hs]
+    simp [Ne.symm aw,Ne.symm bw]
+  apply List.any_eq_true.mpr
+  refine ⟨w,form,?_⟩
+  simp only [bne_iff_ne.mpr nz,List.contains_eq_mem,decide_eq_false fresh,
+    Bool.not_false,Bool.true_and]
+  apply List.any_eq_true.mpr
+  refine ⟨decide (a ∈ needed),by cases decide (a ∈ needed) <;> simp,?_⟩
+  apply List.any_eq_true.mpr
+  refine ⟨decide (b ∈ needed),by cases decide (b ∈ needed) <;> simp,?_⟩
+  exact succ _ (after_nodup s unique a b w _ _ ab fresh aw bw) ((after_exact s needed a b w hs want).symm ▸ rest)
+
+theorem moves_complete (s : List W) (f : List W → Bool)
+    {g : W} {k : ℕ} {state : Finset W} (hg : g ≠ 0)
+    (unique : s.Nodup) (h : Cone g (k+1) state) (eq : s.toFinset = state)
+    (succ : ∀ t : List W, t.Nodup → Cone g k t.toFinset → f t = true) :
+    moves s f = true := by
+  cases h with
+  | @step _ needed a b w rest want a0 b0 ab aw bw form =>
+    have ha : a ∈ s := List.mem_toFinset.mp (eq.symm ▸ Finset.mem_insert_self ..)
+    have hb : b ∈ s := List.mem_toFinset.mp (eq.symm ▸ Finset.mem_insert_of_mem (Finset.mem_insert_self ..))
+    apply List.any_eq_true.mpr
+    have distinct : a.toNat ≠ b.toNat := fun e => ab (BitVec.eq_of_toNat_eq e)
+    rcases lt_or_gt_of_ne distinct with lt | gt
+    · refine ⟨a,ha,List.any_eq_true.mpr ⟨b,hb,?_⟩⟩
+      simp only [lt,decide_true,Bool.true_and]
+      exact onePair_complete s f hg unique ab rest want eq aw bw form succ
+    · refine ⟨b,hb,List.any_eq_true.mpr ⟨a,ha,?_⟩⟩
+      simp only [gt,decide_true,Bool.true_and]
+      rw [Finset.insert_comm] at eq
+      exact onePair_complete s f hg unique ab.symm rest want eq bw aw (swap_choices form) succ
+
+def feasible (g : W) (rows : List ℕ) : ℕ → List W → Bool
+  | 0, s => s.contains g
+  | k+1, s => s.contains g ||
+    (decide (s.length ≤ k+2) && covered g rows s &&
+      moves s (feasible g rows k))
+
+theorem feasible_complete {g : W} (hg : g ≠ 0) (rows : List ℕ)
+    (neg : ∀ r ∈ rows, r < 64 ∧ g.getLsbD r = false)
+    (cap : ℕ) (s : List W) (unique : s.Nodup) (k : ℕ) (bound : k ≤ cap) (h : Cone g k s.toFinset) :
+    feasible g rows cap s = true := by
+  induction cap generalizing k s with
+  | zero =>
+    have hz : k = 0 := by omega
+    subst k
+    have final {t : Finset W} (c : Cone g 0 t) : g ∈ t := by cases c; simp
+    simpa [feasible] using final h
+  | succ cap ih =>
+    simp only [feasible,Bool.or_eq_true,Bool.and_eq_true,decide_eq_true_eq]
+    cases k with
+    | zero =>
+      left
+      have final {t : Finset W} (c : Cone g 0 t) : g ∈ t := by cases c; simp
+      simpa using final h
+    | succ k =>
+      right
+      refine ⟨⟨by have sz := h.size; rw [List.toFinset_card_of_nodup unique] at sz; omega,h.covered rows neg⟩,?_⟩
+      exact moves_complete _ _ hg unique h rfl (fun t nd ht => ih t nd k (by omega) ht)
+
+def Essential (g : W) (raws : List W) :=
+  ∀ w ∈ raws, ∃ i j : Fin 64, g.getLsbD i.val ≠ g.getLsbD j.val ∧
+    ∀ v ∈ raws, v ≠ w → v.getLsbD i.val = v.getLsbD j.val
+
+theorem Cone.initial {g : W} (hg : g ≠ 0) (raws : List W) (ess : Essential g raws)
+    {k : ℕ} {s : Finset W} (h : Cone g k s) (sub : s ⊆ insert 0 raws.toFinset) :
+    s = raws.toFinset := by
+  have contained : s ⊆ raws.toFinset := by
+    intro z hz
+    exact (Finset.mem_insert.mp (sub hz)).resolve_left (fun e => h.noZero hg (e ▸ hz))
+  apply Finset.Subset.antisymm contained
+  intro w hw
+  by_contra missing
+  obtain ⟨i,j,diff,others⟩ := ess w (List.mem_toFinset.mp hw)
+  exact diff (h.agree _ _ i.isLt j.isLt (fun u hu =>
+    others u (List.mem_toFinset.mp (contained hu)) (fun e => missing (e ▸ hu))))
+
+def evaluate (p : List (ℕ × ℕ)) (ws : List W) (o : ℕ) : W := (p.foldl add ws).getD o 0
+
+theorem from_check (g : W) (hg : g ≠ 0) (raws ws : List W) (unique : raws.Nodup) (start : available ws = insert 0 raws.toFinset)
+    (rows : List ℕ) (neg : ∀ r ∈ rows, r < 64 ∧ g.getLsbD r = false) (ess : Essential g raws)
+    (cap : ℕ) (checked : feasible g rows cap raws = false) (p : List (ℕ × ℕ)) (o : ℕ)
+    (hit : canonical (evaluate p ws o) = g) : cap < p.length := by
+  by_contra! short
+  have sub : {g} ⊆ available (p.foldl add ws) := by
+    apply Finset.singleton_subset_iff.mpr
+    rw [← hit]
+    exact available_read _ _
+  obtain ⟨k,s,bound,inside,run⟩ := extract p ws g 0 {g} Cone.done sub
+  rw [start] at inside
+  have eq := run.initial hg raws ess inside
+  rw [eq] at run
+  have possible := feasible_complete hg rows neg cap raws unique k (by omega) run
+  simp [checked] at possible
+
+-- A mask selects the low positions and the matching high positions of a swap.
+structure Switch where
+  distance : ℕ
+  low : W
+  high : W
+
+def Switch.source (s : Switch) (r : ℕ) :=
+  if s.low.getLsbD r then s.distance + r else if s.high.getLsbD r then r-s.distance else r
+
+def Switch.apply (s : Switch) (w : W) : W :=
+  (w &&& ~~~(s.low ||| s.high)) ||| ((w >>> s.distance) &&& s.low) |||
+    ((w <<< s.distance) &&& s.high)
+
+def Switch.Valid (s : Switch) :=
+  ∀ r : Fin 64, ¬ (s.low.getLsbD r.val = true ∧ s.high.getLsbD r.val = true) ∧
+    (s.high.getLsbD r.val = true → s.distance ≤ r.val) ∧
+    s.source r.val < 64 ∧ s.source (s.source r.val) = r.val
+
+theorem Switch.read (s : Switch) (ok : s.Valid) (w : W) (r : ℕ) (hr : r < 64) :
+    (s.apply w).getLsbD r = w.getLsbD (s.source r) := by
+  obtain ⟨disj,lower,_,_⟩ := ok ⟨r,hr⟩
+  change ¬ (s.low.getLsbD r = true ∧ s.high.getLsbD r = true) at disj
+  change s.high.getLsbD r = true → s.distance ≤ r at lower
+  simp only [Switch.apply, BitVec.getLsbD_and,BitVec.getLsbD_or,BitVec.getLsbD_not,
+    BitVec.getLsbD_shiftLeft,BitVec.getLsbD_ushiftRight,hr,decide_true,Bool.true_and,Switch.source]
+  cases a : s.low.getLsbD r <;> cases b : s.high.getLsbD r <;> simp_all
+
+theorem Switch.inj (s : Switch) (ok : s.Valid) : Function.Injective s.apply := by
+  intro a b h
+  apply BitVec.eq_of_getLsbD_eq
+  intro r hr
+  obtain ⟨_,_,lim,inv⟩ := ok ⟨r,hr⟩
+  have e := congrArg (fun u : W => u.getLsbD (s.source r)) h
+  simpa only [s.read ok _ _ lim, inv] using e
+
+theorem Switch.not (s : Switch) (ok : s.Valid) (w : W) : s.apply (~~~w) = ~~~(s.apply w) := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  have bound := (ok ⟨i,hi⟩).2.2.1
+  simp only [s.read ok _ _ hi,BitVec.getLsbD_not,hi,bound,decide_true,Bool.true_and]
+
+theorem Switch.and (s : Switch) (ok : s.Valid) (a b : W) :
+    s.apply (a &&& b) = s.apply a &&& s.apply b := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  simp only [s.read ok _ _ hi,BitVec.getLsbD_and]
+
+theorem Switch.or (s : Switch) (ok : s.Valid) (a b : W) :
+    s.apply (a ||| b) = s.apply a ||| s.apply b := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  simp only [s.read ok _ _ hi,BitVec.getLsbD_or]
+
+theorem Cone.switched {g : W} {k : ℕ} {xs : Finset W} (h : Cone g k xs) (s : Switch) (ok : s.Valid) :
+    Cone (s.apply g) k (xs.image s.apply) := by
+  have zero : s.apply 0 = 0 := by simp [Switch.apply]
+  have inj := s.inj ok
+  induction h with
+  | done => simpa using (Cone.done (goal := s.apply g))
+  | @step k ys a b w rest want a0 b0 ab aw bw form ih =>
+    have wanted : s.apply w ∈ ys.image s.apply := Finset.mem_image_of_mem _ want
+    have erase : (ys.erase w).image s.apply = (ys.image s.apply).erase (s.apply w) := by
+      ext x
+      simp only [Finset.mem_image,Finset.mem_erase]
+      constructor
+      · rintro ⟨v,⟨hne,mem⟩,rfl⟩
+        exact ⟨fun e => hne (inj e),v,mem,rfl⟩
+      · rintro ⟨hne,v,mem,rfl⟩
+        exact ⟨v,⟨fun e => hne (congrArg _ e),mem⟩,rfl⟩
+    have operate : s.apply w ∈ choices (s.apply a) (s.apply b) := by
+      simp only [choices,List.mem_cons,List.not_mem_nil,or_false] at form ⊢
+      rcases form with rfl | rfl | rfl | rfl <;> simp [s.and ok,s.or ok,s.not ok]
+    simp only [Finset.image_insert,erase]
+    exact Cone.step ih wanted (fun e => a0 (inj (e.trans zero.symm)))
+      (fun e => b0 (inj (e.trans zero.symm))) (fun e => ab (inj e))
+      (fun e => aw (inj e)) (fun e => bw (inj e)) operate
+
+def reindex : List Switch → W → W
+  | [], w => w
+  | s :: tail, w => reindex tail (s.apply w)
+
+theorem Cone.reindex {g : W} {k : ℕ} {s : Finset W} (h : Cone g k s) (ops : List Switch)
+    (ok : ∀ op ∈ ops, op.Valid) :
+    Cone (reindex ops g) k (s.image (reindex ops)) := by
+  induction ops generalizing s g with
+  | nil => simpa [SignedFrontier.reindex] using h
+  | cons op tail ih =>
+    have step := h.switched op (ok _ List.mem_cons_self)
+    have result := ih step (fun u hu => ok u (List.mem_cons_of_mem _ hu))
+    simpa only [SignedFrontier.reindex,Finset.image_image,Function.comp_def] using result
+
+def found (words : ℕ → ℕ → List W) (count : ℕ → ℕ)
+    (lookup : ℕ → List W → ℕ × ℕ) (sym : ℕ → List Switch) (k : ℕ) (s : List W) :=
+  let (i,j) := lookup k s
+  decide (i < count k) && (s.map (reindex (sym j))).isPerm (words k i)
+
+def closed (g : W) (negative : List ℕ) (words : ℕ → ℕ → List W) (count : ℕ → ℕ)
+    (lookup : ℕ → List W → ℕ × ℕ) (sym : ℕ → List Switch) : ℕ → ℕ → Bool
+  | 0, i => !(words 0 i).contains g
+  | k+1, i =>
+    let s := words (k+1) i
+    !s.contains g && !(moves s fun t =>
+      t.contains g || (decide (0 < k) && decide (t.length ≤ k+1) && covered g negative t &&
+        !found words count lookup sym k t))
+
+theorem closed_excludes (g : W) (hg : g ≠ 0) (negative : List ℕ)
+    (neg : ∀ r ∈ negative, r < 64 ∧ g.getLsbD r = false)
+    (words : ℕ → ℕ → List W) (count : ℕ → ℕ) (lookup : ℕ → List W → ℕ × ℕ)
+    (sym : ℕ → List Switch) (valid : ∀ j, ∀ op ∈ sym j, op.Valid)
+    (fix : ∀ j, reindex (sym j) g = g) (cap : ℕ)
+    (nd : ∀ k ≤ cap, ∀ i < count k, (words k i).Nodup)
+    (checks : ∀ k ≤ cap, ∀ i < count k, closed g negative words count lookup sym k i = true) :
+    ∀ k ≤ cap, ∀ i < count k, ∀ d ≤ k, ¬ Cone g d (words k i).toFinset := by
+  intro k
+  induction k with
+  | zero =>
+    intro hk i hi d hd run
+    have de : d = 0 := by omega
+    subst d
+    have terminal {t : Finset W} (p : Cone g 0 t) : g ∈ t := by cases p; simp
+    have mem := List.mem_toFinset.mp (terminal run)
+    simpa [closed,mem] using checks 0 hk i hi
+  | succ k ih =>
+    intro hk i hi d hd run
+    obtain ⟨absent,reject⟩ := Bool.and_eq_true_iff.mp (checks (k+1) hk i hi)
+    cases d with
+    | zero =>
+      have terminal {t : Finset W} (p : Cone g 0 t) : g ∈ t := by cases p; simp
+      have mem := List.mem_toFinset.mp (terminal run)
+      simp [mem] at absent
+    | succ d =>
+      let test := fun t : List W => t.contains g || (decide (0 < k) && decide (t.length ≤ k+1) &&
+        covered g negative t && !found words count lookup sym k t)
+      have next := moves_complete (words (k+1) i) test hg (nd _ hk _ hi) run rfl (fun t uniq ht => by
+        dsimp only [test]
+        by_cases mem : g ∈ t
+        · simp [mem]
+        have positive : 0 < k := by
+          by_contra! fail
+          have dz : d = 0 := by omega
+          subst d
+          have terminal {u : Finset W} (p : Cone g 0 u) : g ∈ u := by cases p; simp
+          exact mem (List.mem_toFinset.mp (terminal ht))
+        have size := ht.size
+        rw [List.toFinset_card_of_nodup uniq] at size
+        have no : found words count lookup sym k t = false := by
+          by_contra! yes
+          have hfound : found words count lookup sym k t = true := by simpa using yes
+          obtain ⟨inside,perm⟩ := Bool.and_eq_true_iff.mp hfound
+          have hree := ht.reindex (sym (lookup k t).2) (valid _)
+          rw [fix] at hree
+          have eq : (t.map (reindex (sym (lookup k t).2))).toFinset = (words k (lookup k t).1).toFinset := by
+            ext v
+            simp only [List.mem_toFinset]
+            exact (List.isPerm_iff.mp perm).mem_iff
+          have into : t.toFinset.image (reindex (sym (lookup k t).2)) = (words k (lookup k t).1).toFinset := by
+            rw [← eq]
+            ext v
+            simp
+          rw [into] at hree
+          exact ih (by omega) _ (of_decide_eq_true inside) d (by omega) hree
+        simp [positive,show t.length ≤ k+1 by omega,ht.covered negative neg,no])
+      change (!moves (words (k+1) i) test) = true at reject
+      simp [next] at reject
+
+end SignedFrontier
+
+namespace SignedFrontier.Packed
+
+-- These packed integers only propose a negative input row. Every proposed
+-- obstruction is tested on the original signals before a successor is skipped.
+structure Columns where
+  w : W
+  pos : Nat
+  neg : Nat
+
+def fullLanes : Nat := 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+def positions (w : W) : Nat := w.toNat * 0x10000000000000001000000000000000100000000000000010000000000000001000000000000000100000000000000010000000000000001000000000000000100000000000000010000000000000001000000000000000100000000000000010000000000000001000000000000000100000000000000010000000000000001000000000000000100000000000000010000000000000001000000000000000100000000000000010000000000000001000000000000000100000000000000010000000000000001
+def equalRows (p : Columns) : Nat := fullLanes ^^^ (p.pos ^^^ p.neg)
+def bothCols (a b : Columns) : Columns := ⟨a.w &&& b.w, a.pos &&& b.pos, a.neg &&& b.neg⟩
+def notCols (a : Columns) : Columns := ⟨~~~a.w, fullLanes ^^^ a.pos, fullLanes ^^^ a.neg⟩
+def orCols (a b : Columns) : Columns := ⟨a.w ||| b.w, a.pos ||| b.pos, a.neg ||| b.neg⟩
+def variants (a b : Columns) : List Columns :=
+  [bothCols a b,bothCols a (notCols b),bothCols (notCols a) b,orCols a b]
+
+end SignedFrontier.Packed
+
+
+namespace SignedFrontier.Vector
+open SignedFrontier.Packed (Columns bothCols orCols notCols variants equalRows fullLanes)
+
+-- Each successive 64-bit lane corresponds to one negative input row.
+def lanes (rows : List Nat) (f : Nat → W) : Nat :=
+  match rows with
+  | [] => 0
+  | r :: rs => (f r).toNat ||| (lanes rs f <<< 64)
+
+theorem lane_bit (rows : List Nat) (f : Nat → W) (i j : Nat) (hj : j < 64) :
+    (lanes rows f).testBit (64*i+j) =
+      match rows[i]? with | some r => (f r).getLsbD j | none => false := by
+  induction rows generalizing i with
+  | nil => simp [lanes]
+  | cons r rs ih =>
+    cases i with
+    | zero => simp [lanes,BitVec.getLsbD, Nat.not_le.mpr hj]
+    | succ i =>
+      have bound : 64 ≤ 64*(i+1)+j := by omega
+      have sub : 64*(i+1)+j-64 = 64*i+j := by omega
+      have off : (f r).toNat.testBit (64*(i+1)+j) = false := by
+        change (f r).getLsbD (64*(i+1)+j) = false
+        simp [BitVec.getLsbD_of_ge, bound]
+      simpa only [lanes,Nat.testBit_or,Nat.testBit_shiftLeft,off,bound,decide_true,
+        Bool.true_and,Bool.false_or,sub,List.getElem?_cons_succ] using ih i
+
+def negativeLane (w : W) (r : Nat) : W := if w.getLsbD r then ~~~0 else 0
+
+def coefficient : Nat → Nat
+  | 0 => 0
+  | n+1 => 2^64 * coefficient n + 1
+
+theorem constant_lanes (rows : List Nat) (w : W) :
+    lanes rows (fun _ => w) = w.toNat * coefficient rows.length := by
+  induction rows with
+  | nil => simp [lanes,coefficient]
+  | cons r rs ih =>
+    simp only [lanes,List.length_cons,coefficient,ih]
+    rw [Nat.or_comm, ← Nat.shiftLeft_add_eq_or_of_lt w.isLt, Nat.shiftLeft_eq]
+    ring
+
+def columns (rows : List Nat) (w : W) : Columns :=
+  ⟨w, Packed.positions w, lanes rows (negativeLane w)⟩
+
+def Valid (rows : List Nat) (c : Columns) : Prop :=
+  ∀ i j r, j < 64 → rows[i]? = some r →
+    c.pos.testBit (64*i+j) = c.w.getLsbD j ∧ c.neg.testBit (64*i+j) = c.w.getLsbD r
+
+theorem columns_valid (rows : List Nat) (length : rows.length = 26) (w : W) : Valid rows (columns rows w) := by
+  intro i j r hj hr
+  have fast : Packed.positions w = lanes rows (fun _ => w) := by
+    rw [constant_lanes,length]
+    rfl
+  simp only [columns,fast,lane_bit rows _ i j hj,hr]
+  cases on : w.getLsbD r
+  · simp [negativeLane,on]
+  · simp only [negativeLane,on,ite_true,BitVec.getLsbD_not,hj,decide_true,
+      Bool.true_and]
+    simp
+
+set_option maxRecDepth 9000 in
+theorem full_bit {rows : List Nat} (length : rows.length = 26) {i j r : Nat}
+    (hj : j < 64) (hr : rows[i]? = some r) : fullLanes.testBit (64*i+j) = true := by
+  have hi := (List.getElem?_eq_some_iff.mp hr).choose
+  have lt : 64*i+j < 1664 := by omega
+  have val : fullLanes = 2^1664-1 := by decide +kernel
+  rw [val, Nat.testBit_two_pow_sub_one, decide_eq_true lt]
+
+theorem valid_and {rows : List Nat} {a b : Columns} (ha : Valid rows a) (hb : Valid rows b) :
+    Valid rows (bothCols a b) := by
+  intro i j r hj hr
+  obtain ⟨ap,an⟩ := ha i j r hj hr
+  obtain ⟨bp,bn⟩ := hb i j r hj hr
+  simp [bothCols,ap,an,bp,bn]
+
+theorem valid_or {rows : List Nat} {a b : Columns} (ha : Valid rows a) (hb : Valid rows b) :
+    Valid rows (orCols a b) := by
+  intro i j r hj hr
+  obtain ⟨ap,an⟩ := ha i j r hj hr
+  obtain ⟨bp,bn⟩ := hb i j r hj hr
+  simp [orCols,ap,an,bp,bn]
+
+theorem valid_not {rows : List Nat} (length : rows.length = 26) (bounds : ∀ r ∈ rows, r < 64)
+    {a : Columns} (ha : Valid rows a) : Valid rows (notCols a) := by
+  intro i j r hj hr
+  have limit := bounds r (List.mem_of_getElem? hr)
+  obtain ⟨ap,an⟩ := ha i j r hj hr
+  simp [notCols,full_bit length hj hr,ap,an,hj,limit]
+
+theorem variant_valid {rows : List Nat} (length : rows.length = 26) (bounds : ∀ r ∈ rows, r < 64)
+    {a b c : Columns} (ha : Valid rows a) (hb : Valid rows b) (hc : c ∈ variants a b) :
+    Valid rows c := by
+  simp only [variants,List.mem_cons,List.not_mem_nil,or_false] at hc
+  rcases hc with rfl | rfl | rfl | rfl
+  · exact valid_and ha hb
+  · exact valid_and ha (valid_not length bounds hb)
+  · exact valid_and (valid_not length bounds ha) hb
+  · exact valid_or ha hb
+
+def Mask (g : W) (rows : List Nat) (s : List W) (m : Nat) : Prop :=
+  ∀ i j, j < 64 → m.testBit (64*i+j) = true → ∃ r, rows[i]? = some r ∧
+    g.getLsbD j = true ∧ ∀ u ∈ s, u.getLsbD r = u.getLsbD j
+
+theorem initial (g : W) (rows : List Nat) : Mask g rows [] (lanes rows (fun _ => g)) := by
+  intro i j hj hit
+  rw [lane_bit rows _ i j hj] at hit
+  cases hr : rows[i]? with
+  | none => simp [hr] at hit
+  | some r => exact ⟨r,rfl,by simpa [hr] using hit,by simp⟩
+
+theorem addMask {g : W} {rows : List Nat} (length : rows.length = 26) {s : List W}
+    {m : Nat} {c : Columns} (mask : Mask g rows s m) (valid : Valid rows c) :
+    Mask g rows (c.w :: s) (m &&& equalRows c) := by
+  intro i j hj hit
+  obtain ⟨old,added⟩ := Bool.and_eq_true_iff.mp ((Nat.testBit_and ..).symm ▸ hit)
+  obtain ⟨r,hr,hg,same⟩ := mask i j hj old
+  obtain ⟨ap,an⟩ := valid i j r hj hr
+  have eq : c.w.getLsbD r = c.w.getLsbD j := by
+    simp only [equalRows,Nat.testBit_xor,full_bit length hj hr,ap,an] at added
+    cases hp : c.w.getLsbD j <;> cases hn : c.w.getLsbD r <;> simp_all
+  exact ⟨r,hr,hg,fun w hw => (List.mem_cons.mp hw).elim (fun h => h ▸ eq) (same w)⟩
+
+theorem survivor_complete (r j : Nat) (hj : j < 64) (s : List W) (m : W)
+    (on : m.getLsbD j = true) (same : ∀ w ∈ s, w.getLsbD r = w.getLsbD j) :
+    (survivors r s m).getLsbD j = true := by
+  induction s generalizing m with
+  | nil => exact on
+  | cons w ws ih =>
+    have ne : m ≠ 0 := by rintro rfl; simp at on
+    rw [survivors,ite_eq_right ne]
+    apply ih
+    · have eq := same w List.mem_cons_self
+      cases hv : w.getLsbD r <;> simp_all [rowMask]
+    · exact fun u hu => same u (List.mem_cons_of_mem _ hu)
+
+theorem clear {g : W} {rows : List Nat} {s : List W} {m : Nat}
+    (mask : Mask g rows s m) (coveredRows : covered g rows s = true) : m = 0 := by
+  apply Nat.eq_of_testBit_eq
+  intro n
+  cases hn : m.testBit n with
+  | false => simp
+  | true =>
+    have split : 64*(n/64)+n%64 = n := by omega
+    obtain ⟨r,hr,hg,agree⟩ := mask (n/64) (n%64) (by omega) (split.symm ▸ hn)
+    have z := beq_iff_eq.mp (List.all_eq_true.mp coveredRows r (List.mem_of_getElem? hr))
+    have p := survivor_complete r (n%64) (by omega) s g hg agree
+    simp [z] at p
+
+
+theorem weaken {g : W} {rows : List Nat} {s t : List W} {m : Nat}
+    (h : Mask g rows s m) (sub : ∀ w ∈ t, w ∈ s) : Mask g rows t m := by
+  intro i j hj hm
+  obtain ⟨r,hr,hg,agree⟩ := h i j hj hm
+  exact ⟨r,hr,hg,fun w hw => agree w (sub w hw)⟩
+
+theorem foldMask {g : W} {rows : List Nat} (length : rows.length = 26) (xs : List Columns)
+    (ok : ∀ c ∈ xs, Valid rows c) (s : List W) (m : Nat) (h : Mask g rows s m) :
+    Mask g rows (xs.map Columns.w ++ s) (xs.foldl (fun n c => n &&& equalRows c) m) := by
+  induction xs generalizing s m with
+  | nil => simpa using h
+  | cons c cs ih =>
+    have rest := ih (fun z hz => ok z (List.mem_cons_of_mem _ hz)) (c.w :: s)
+      (m &&& equalRows c) (addMask length h (ok c List.mem_cons_self))
+    apply weaken rest
+    intro w hw
+    simpa [or_assoc,or_comm,or_left_comm] using hw
+
+def branch (_g : W) (seek : List W → Bool) (k len m : Nat) (next : List W) : Bool :=
+  decide (len ≤ k) && m == 0 && !seek next
+
+theorem branch_of {g : W} {rows : List Nat} {seek : List W → Bool} {k len m : Nat}
+    {next : List W} (dims : len ≤ k) (mask : Mask g rows next m)
+    (cov : covered g rows next = true) (miss : seek next = false) :
+    branch g seek k len m next = true := by simp [branch,dims,clear mask cov,miss]
+def packedPair (g : W) (_rows : List Nat) (seek : List W → Bool) (k : Nat)
+    (initialMask : Nat) (s : List W) (t : List Columns) (a b : Columns) : Bool :=
+  let cs := variants a b
+  cs.any (fun c => c.w == g) ||
+    let base := t.filter (fun u => u.w != a.w && u.w != b.w)
+    let rest := s.filter (fun u => u != a.w && u != b.w)
+    let mask := base.foldl (fun m z => m &&& equalRows z) initialMask
+    let ra := equalRows a
+    let rb := equalRows b
+    let len := rest.length
+    cs.any fun c => c.w != 0 && !s.contains c.w &&
+      let m := mask &&& equalRows c
+      (branch g seek k len m (c.w :: rest) ||
+       branch g seek k (len + 1) (m &&& ra) (c.w :: a.w :: rest) ||
+       branch g seek k (len + 1) (m &&& rb) (c.w :: b.w :: rest) ||
+       branch g seek k (len + 2) (m &&& ra &&& rb) (c.w :: a.w :: b.w :: rest))
+
+theorem pair_of (g : W) (rows : List Nat) (seek : List W → Bool) (k : Nat)
+    (s : List W) (t : List Columns) (a b : Columns)
+    (initialMask : Nat) (start : Mask g rows [] initialMask)
+    (length : rows.length = 26) (bounds : ∀ r ∈ rows, r < 64)
+    (stock : t.map Columns.w = s) (valid : ∀ z ∈ t, Valid rows z)
+    (va : Valid rows a) (vb : Valid rows b)
+    (ha : a.w ∈ s) (hb : b.w ∈ s) (absent : g ∉ s)
+    (slow : onePair s (fun u => u.contains g || (decide (0 < k) && decide (u.length ≤ k+1)
+      && covered g rows u && !seek u)) a.w b.w = true) :
+    packedPair g rows seek k initialMask s t a b = true := by
+  have vw : (variants a b).map Columns.w = choices a.w b.w := rfl
+  obtain ⟨w,form,test⟩ := List.any_eq_true.mp slow
+  obtain ⟨fresh,keeps⟩ := Bool.and_eq_true_iff.mp test
+  obtain ⟨ka,_,next⟩ := List.any_eq_true.mp keeps
+  obtain ⟨kb,_,ok⟩ := List.any_eq_true.mp next
+  rw [←vw] at form
+  obtain ⟨c,hc,rfl⟩ := List.mem_map.mp form
+  unfold packedPair
+  apply Bool.or_eq_true_iff.mpr
+  by_cases hit : c.w = g
+  · exact Or.inl (List.any_eq_true.mpr ⟨c,hc,beq_iff_eq.mpr hit⟩)
+  · right
+    apply List.any_eq_true.mpr
+    refine ⟨c,hc,Bool.and_eq_true_iff.mpr ⟨fresh,?_⟩⟩
+    have na : g ≠ a.w := fun e => absent (e ▸ ha)
+    have nb : g ≠ b.w := fun e => absent (e ▸ hb)
+    have stop : (after s a.w b.w c.w ka kb).contains g = false := by
+      cases ka <;> cases kb <;>
+        simp [after,withWire,List.contains_eq_mem,Ne.symm hit,na,nb,absent]
+    dsimp only at ok
+    rw [stop,Bool.false_or] at ok
+    obtain ⟨first,last⟩ := Bool.and_eq_true_iff.mp ok
+    obtain ⟨dims,cov⟩ := Bool.and_eq_true_iff.mp first
+    have hl := of_decide_eq_true (Bool.and_eq_true_iff.mp dims).2
+    have miss : seek (after s a.w b.w c.w ka kb) = false := by simpa using last
+    let rest := s.filter fun u => u != a.w && u != b.w
+    let base := t.filter fun u => u.w != a.w && u.w != b.w
+    let m := base.foldl (fun n z => n &&& equalRows z) initialMask
+    have shape : base.map Columns.w = rest := by
+      change (t.filter (fun u => u.w != a.w && u.w != b.w)).map Columns.w =
+        s.filter (fun u => u != a.w && u != b.w)
+      rw [← stock, List.filter_map]
+      rfl
+    have core := foldMask length base (fun z hz => valid z (List.mem_filter.mp hz).1) [] _ start
+    have trimmed : Mask g rows rest m := by simpa [shape,m] using core
+    have vc := variant_valid length bounds va vb hc
+    let mc := m &&& equalRows c
+    have raw : Mask g rows (c.w :: rest) mc := addMask length trimmed vc
+    have withA : Mask g rows (c.w :: a.w :: rest) (mc &&& equalRows a) :=
+      weaken (addMask length raw va) (by simp [or_left_comm])
+    have withB : Mask g rows (c.w :: b.w :: rest) (mc &&& equalRows b) :=
+      weaken (addMask length raw vb) (by simp [or_left_comm])
+    have withBoth : Mask g rows (c.w :: a.w :: b.w :: rest)
+        (mc &&& equalRows a &&& equalRows b) :=
+      weaken (addMask length withA vb) (by simp [or_left_comm])
+    cases ka <;> cases kb <;>
+      simp only [after,withWire,Bool.false_eq_true,ite_false,ite_true,List.length_cons] at hl cov miss
+    all_goals
+      simp only [Bool.or_eq_true_iff]
+      first
+      | exact Or.inl (Or.inl (Or.inl (branch_of (by omega) raw cov miss)))
+      | exact Or.inl (Or.inl (Or.inr (branch_of (by omega) withA cov miss)))
+      | exact Or.inl (Or.inr (branch_of (by omega) withB cov miss))
+      | exact Or.inr (branch_of (by omega) withBoth cov miss)
+
+def packedClosed (g : W) (rows : List Nat) (initialMask : Nat) (words : Nat → Nat → List W)
+    (count : Nat → Nat) (lookup : Nat → List W → Nat × Nat) (sym : Nat → List Switch) :
+    Nat → Nat → Bool
+  | 0,i => !(words 0 i).contains g
+  | k+1,i =>
+    let s := words (k+1) i
+    let t := s.map (columns rows)
+    !s.contains g && !(t.any fun a => t.any fun b => decide (a.w.toNat < b.w.toNat) &&
+      packedPair g rows (found words count lookup sym k) k initialMask s t a b)
+
+theorem closed_sound (g : W) (rows : List Nat) (initialMask : Nat)
+    (maskSpec : initialMask = lanes rows (fun _ => g)) (words : Nat → Nat → List W)
+    (count : Nat → Nat) (lookup : Nat → List W → Nat × Nat) (sym : Nat → List Switch)
+    (length : rows.length = 26) (bounds : ∀ r ∈ rows, r < 64)
+    (k i : Nat) (ok : packedClosed g rows initialMask words count lookup sym k i = true) :
+    closed g rows words count lookup sym k i = true := by
+  cases k with
+  | zero => exact ok
+  | succ k =>
+    obtain ⟨absent,verified⟩ := Bool.and_eq_true_iff.mp ok
+    apply Bool.and_eq_true_iff.mpr
+    refine ⟨absent,?_⟩
+    let s := words (k+1) i
+    let t := s.map (columns rows)
+    let seek := found words count lookup sym k
+    have ng : g ∉ s := by simpa [s,List.contains_eq_mem] using absent
+    by_contra! fail
+    have h : moves s (fun u => u.contains g || (decide (0 < k) && decide (u.length ≤ k+1) &&
+        covered g rows u && !seek u)) = true := by simpa [s,seek] using fail
+    obtain ⟨a,ha,inner⟩ := List.any_eq_true.mp h
+    obtain ⟨b,hb,both⟩ := List.any_eq_true.mp inner
+    obtain ⟨lt,slow⟩ := Bool.and_eq_true_iff.mp both
+    have st : t.map Columns.w = s := by simp [t,columns,List.map_map,Function.comp_def]
+    have valid : ∀ z ∈ t, Valid rows z := by
+      rintro z hz
+      obtain ⟨u,_,rfl⟩ := List.mem_map.mp hz
+      exact columns_valid rows length u
+    have fast := pair_of g rows seek k s t (columns rows a) (columns rows b) _
+      (maskSpec.symm ▸ initial g rows) length bounds st valid (columns_valid rows length a) (columns_valid rows length b)
+      ha hb ng slow
+    have yes : (t.any fun a => t.any fun b => decide (a.w.toNat < b.w.toNat) &&
+        packedPair g rows seek k initialMask s t a b) = true :=
+      List.any_eq_true.mpr ⟨columns rows a,List.mem_map.mpr ⟨a,ha,rfl⟩,
+        List.any_eq_true.mpr ⟨columns rows b,List.mem_map.mpr ⟨b,hb,rfl⟩,
+          Bool.and_eq_true_iff.mpr ⟨lt,fast⟩⟩⟩
+    change (!(t.any fun a => t.any fun b => decide (a.w.toNat < b.w.toNat) &&
+      packedPair g rows seek k initialMask s t a b)) = true at verified
+    simp [yes] at verified
+
+end SignedFrontier.Vector
+
+namespace SignedFrontier.SmallCert
+
+def span (f : ℕ → Bool) : ℕ → ℕ → Bool
+  | 0, _ => true
+  | n+1, i => f i && span f n (i+1)
+
+theorem span_member {f n o} (h : span f n o = true) :
+    ∀ i, o ≤ i → i < o+n → f i = true := by
+  induction n generalizing o with
+  | zero => omega
+  | succ n ih =>
+    intro i lo hi
+    obtain ⟨first,tail⟩ := Bool.and_eq_true_iff.mp h
+    rcases Nat.eq_or_lt_of_le lo with rfl | gt
+    · exact first
+    · exact ih tail i (by omega) (by omega)
+
+theorem span_join {f a o b} (left : span f a o = true) (right : span f b (o+a) = true) :
+    span f (a+b) o = true := by
+  induction a generalizing o with
+  | zero => simpa using right
+  | succ a ih =>
+    obtain ⟨first,rest⟩ := Bool.and_eq_true_iff.mp left
+    rw [Nat.succ_add]
+    exact Bool.and_eq_true_iff.mpr ⟨first,ih rest (by simpa [Nat.add_assoc,Nat.add_left_comm,Nat.add_comm] using right)⟩
+
+end SignedFrontier.SmallCert
+
+namespace SignedFrontier.SmallCert.Full
+
+def raw : List W := [0xaaaaaaaaaaaaaaaa, 0xcccccccccccccccc, 0xf0f0f0f0f0f0f0f0, 0xff00ff00ff00ff00, 0xffff0000ffff0000, 0xffffffff00000000]
+def target : W := 0xeeeaeee8eee8ccc8
+def negative : List Nat := [0, 1, 2, 4, 5, 8, 9, 12, 13, 16, 17, 18, 20, 24, 28, 32, 33, 34, 36, 40, 44, 48, 50, 52, 56, 60]
+theorem nonzero : target ≠ 0 := by decide +kernel
+theorem neg : ∀ r ∈ negative, r < 64 ∧ target.getLsbD r = false := by
+  intro r hr
+  simp only [negative,List.mem_cons,List.not_mem_nil,or_false] at hr
+  rcases hr with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide +kernel
+theorem essential : Essential target raw := by
+  intro w hw
+  simp only [raw,List.mem_cons,List.not_mem_nil,or_false] at hw
+  rcases hw with rfl | rfl | rfl | rfl | rfl | rfl
+  · refine ⟨2,3,by decide +kernel,?_⟩
+    intro u hu diff
+    simp only [raw,List.mem_cons,List.not_mem_nil,or_false] at hu
+    rcases hu with rfl | rfl | rfl | rfl | rfl | rfl <;> first | contradiction | decide +kernel
+  · refine ⟨1,3,by decide +kernel,?_⟩
+    intro u hu diff
+    simp only [raw,List.mem_cons,List.not_mem_nil,or_false] at hu
+    rcases hu with rfl | rfl | rfl | rfl | rfl | rfl <;> first | contradiction | decide +kernel
+  · refine ⟨2,6,by decide +kernel,?_⟩
+    intro u hu diff
+    simp only [raw,List.mem_cons,List.not_mem_nil,or_false] at hu
+    rcases hu with rfl | rfl | rfl | rfl | rfl | rfl <;> first | contradiction | decide +kernel
+  · refine ⟨2,10,by decide +kernel,?_⟩
+    intro u hu diff
+    simp only [raw,List.mem_cons,List.not_mem_nil,or_false] at hu
+    rcases hu with rfl | rfl | rfl | rfl | rfl | rfl <;> first | contradiction | decide +kernel
+  · refine ⟨5,21,by decide +kernel,?_⟩
+    intro u hu diff
+    simp only [raw,List.mem_cons,List.not_mem_nil,or_false] at hu
+    rcases hu with rfl | rfl | rfl | rfl | rfl | rfl <;> first | contradiction | decide +kernel
+  · refine ⟨5,37,by decide +kernel,?_⟩
+    intro u hu diff
+    simp only [raw,List.mem_cons,List.not_mem_nil,or_false] at hu
+    rcases hu with rfl | rfl | rfl | rfl | rfl | rfl <;> first | contradiction | decide +kernel
+
+def dictionary (k page : ℕ) : ℕ :=
+  match k with
+  | 0 => if page < 2 then (if page < 1 then 0xccc8ccc8ccc8ccc8ccc0ccc0ccc0ccc0c0f0c0f0c0f0c0f0c0c0c0c0c0c0c0c0bbbb0000bbbb0000aaff0000aaff0000aaaf0000aaaf0000aaaaaaaaaaaaaaaaaaaaaaaa88888888aaaaaaaa00000000aaaa8888aaaa8888aaaa0000ffff0000aaaa0000aaaa0000aaa0aaa0aaa0aaa0a0f0a0f0a0f0a0f0a0a0a0a0a0a0a0a088888888aaaaaaaa88888888888888887777000077770000777077707770777070707070707070705555000055550000555055505550555050f050f050f050f05050505050505050444444444444444433ff000033ff0000333f0000333f0000333333330000000033330000ffff000033330000333300003332333233323332333033303330333030f030f030f030f0303030303030303022aa22aa22aa22aa222a222a222a222a2222222222222222222200002222000000ff0000ffff000000ff000000ff000000f000f0f0f0f0f000f000f000f000f000ee00ee00ee00ee00cc00cc00cc00cc00aa00aa00aa00aa000f0000ffff0000000f0000000f0000000e000e000e000e000c000c000c000c000a000a000a000a0000aaaa0000aaaa00000000fffffff000000000ffffaaaa00000000ffff000000000000fffafffa00000000fff0fff000000000fafafafa00000000f0f0f0f000000000eeeeeeee00000000cccccccc00000000aaaaaaaa00000000222222220000000000000000 else 0xffffffffffff0000fffffffffff00000fffffffff0f00000ffffffffccccccccffffffffcccc0000ffffffffccc0ccc0ffffffffc0c0c0c0ffffffff88888888ffffffff55550000ffffffff55505550ffffffff50505050ffffffff44444444ffffffff00cc00ccffffffff000c000cffffffff0000ccccffffffff00000000fffffff0fffffff0fffff0f0fffff0f0ffffccccffffccccffffaaaaffffaaaaffff0000ffff0000ffff0000fff00000ffff0000aaaa0000ffff000033330000ffff000000000000fffcfffcfffcfffcfffafffafffafffafffa0000fffa0000fff8fff8fff8fff8fff30000fff30000fff0fff0fff0fff0fff0ff00fff0ff00fff00000fff00000ffc0ffc0ffc0ffc0ffa0ffa0ffa0ffa0ff88ff88ff88ff88ff50ff50ff50ff50ff30ff30ff30ff30ff00ff00fff0fff0ff00ff00ff00ff00fef0fef0fef0fef0fcfcfcfcfcfcfcfcfafafafafafafafafafa0000fafa0000f7f0f7f0f7f0f7f0f3f30000f3f30000f0f0f0f0f0f0f0f0f0f000f0f0f000f0f0f00000f0f00000f000f000f000f000eeeeeeeeeeeeeeeeeeeeeeeecccccccceeeecccceeeecccceeee0000eeee0000eeeaeeeaeeeaeeeaeee0eee0eee0eee0eaeaeaeaeaeaeaeae0e0e0e0e0e0e0e0cccccccceeeeeeeecccccccccccccccccccc0000cccc0000) else 0
+  | _ => 0
+
+def encodedPool (k page : ℕ) : ℕ :=
+  match k with
+  | 2 => if page < 1 then 0x17a4b5 else 0
+  | 3 => if page < 1 then 0x1e6f4806f376610092d4c else 0
+  | 4 => if page < 2 then (if page < 1 then 0xbccc107790820ef0c04180bd1b2017a26403cc83407bbc980f579301e6f2603c5e4c077bc980ed79301d6f2603a5e4c073bc980e579301c6f260385e4c06fbc980dd793019ef460335e8c065bd180c37a3017ef4602f518c05e9f180bd223017a3c602f424c05e7f880bcee30179d4602f398c05e6b180bcd2301799c601bb33805e5e980bcb6301792c602f248c05e45180bc863017906202f1cc805e37900bc6630178c4602f118c05e16980bc293017842602f064c05e08980bc09301780a600060cc000bd98001533000286600045cc00059980003f3 else 0x3ceabc1fcc9783f37998779b330f55e430f9bc843bcd9087791a10f55e041de6c092) else 0
+  | 5 => if page < 2 then (if page < 1 then 0x6c09e6608f4208f2a09b1808ff3793bcce3bc863bc0930113e017b701777016f7016b70167701637015f7015b701e9f01e5f01e1f01d9f01d5f01d1f01c9f01c5f01c1f01b9f019af0196f0146f013ef0137b0122f011ef010fb0109f00f7b00eef00eaf00d6f00d2f00cef00c7b00bdf00b6f00afb00a3b0096f008af0086f007bb0073e0066f0062f005bb0057b005370029f0019f0011f0009f0005f017b3 else 0xf97b3d97b3d77b3d57b3d37b3c97b3c77b3c57b3bd733bd4f3bd4b3f3797f3a8ff990fbd333bd2f3bd2b3bd033bcfb3bcf33bccf3bcce7f2ccf6cccfbccb3bcc33bcbb3bcab3bca73bc9f3bc9b3d486dbc873bc867f284f6c84f4684fbc7f3bc773bc6b3bc5f3bc573f255b6656b4256bbc4f3bc4b3bc433bc3b3bc373bc273bc1f3bc173bc0f3bc0b3bc097d408f) else 0
+  | 6 => if page < 1 then 0x1f3fd7feaff4ff93fbdfd3fe97f33f97fcafe07ef3f67fb0fd77eabf4ffa6fd0fe77f35f97fcafe4ff25f89fc2fe0ff05fdedfcbecef43795ec13f7b3 else 0
+  | 7 => if page < 1 then 0x3f else 0
+  | _ => 0
+
+def poolFormat (k page : ℕ) : ℕ :=
+  match k with
+  | 2 => if page < 1 then 0x2a else 0
+  | 3 => if page < 1 then 0x37 else 0
+  | 4 => if page < 1 then 0xdc37 else 0
+  | 5 => if page < 1 then 0xa429 else 0
+  | 6 => if page < 1 then 0x1b else 0
+  | 7 => if page < 1 then 0xd else 0
+  | _ => 0
+
+def counts : ℕ → ℕ
+  | 2 => 1
+  | 3 => 3
+  | 4 => 74
+  | 5 => 121
+  | 6 => 37
+  | 7 => 1
+  | _ => 0
+
+def field (table : ℕ → ℕ → ℕ) (k width i : ℕ) :=
+  (table k (i/64) >>> (width*(i%64))) % (2^width)
+
+def decode : ℕ → ℕ → List W
+  | 0, _ => []
+  | n+1, x =>
+    let digit := x % 128
+    if digit = 0 then [] else BitVec.ofNat 64 (field dictionary 0 64 digit) :: decode n (x >>> 7)
+
+def takeRaw : List W → Nat → List W
+  | [], _ => []
+  | x :: xs, m =>
+    let rest := takeRaw xs (m / 2)
+    if m % 2 = 1 then x :: rest else rest
+
+def pool (k i : ℕ) :=
+  let fmt := field poolFormat k 10 (i/64)
+  let v := field encodedPool k (fmt/2) i
+  if fmt%2=0 then decode (k+1) v else takeRaw raw v ++ decode (k+1) (v >>> 6)
+
+def bucketCount : ℕ → ℕ
+  | 2 => 1
+  | 3 => 2
+  | 4 => 40
+  | 5 => 64
+  | 6 => 25
+  | 7 => 1
+  | _ => 1
+
+def slotCount : ℕ → ℕ
+  | 2 => 4
+  | 3 => 7
+  | 4 => 147
+  | 5 => 230
+  | 6 => 90
+  | 7 => 2
+  | _ => 1
+
+def shiftWidth : ℕ → ℕ
+  | 2 => 1
+  | 3 => 1
+  | 4 => 6
+  | 5 => 6
+  | 6 => 6
+  | 7 => 1
+  | _ => 1
+
+def targetWidth : ℕ → ℕ
+  | 2 => 1
+  | 3 => 4
+  | 4 => 9
+  | 5 => 9
+  | 6 => 8
+  | 7 => 1
+  | _ => 1
+
+def shifts (k page : ℕ) : ℕ :=
+  match k with
+  | 2 => if page < 1 then 0x0 else 0
+  | 3 => if page < 1 then 0x1 else 0
+  | 4 => if page < 1 then 0x24304004103a18014115a04920c00120424300a08b0c1404042001008080 else 0
+  | 5 => if page < 1 then 0x61200fbb002c70054878014409d203039f850022406030002d202318004004b0c01c01d57004c424008404000100824a else 0
+  | 6 => if page < 1 then 0x85a914914e5814c80060011862c61001402d2 else 0
+  | 7 => if page < 1 then 0x0 else 0
+  | _ => 0
+
+def targets (k page : ℕ) : ℕ :=
+  match k with
+  | 2 => if page < 1 then 0x8 else 0
+  | 3 => if page < 1 then 0x14508 else 0
+  | 4 => if page < 3 then (if page < 1 then 0x1cbb142ad322653a3f2a18428a03c8009458000d20a595e24090b87035118f440a90e2b4344305a253ab3172d500000c05f28461504400000007e3e1b138001e2a4000028c9052d1 else (if page < 2 then 0x80a58820032b01c8000e88210006c0859a745ab11610d0c450e0b126222202c07021f000003a0011c644011a007e001a0841800024c52a8a100f000000085e6e80000c134c55285c else 0x240000e00001044b890dabd3f80130403c3700000)) else 0
+  | 5 => if page < 4 then (if page < 2 then (if page < 1 then 0xb0dd4c44626df15242804b33ac0835d26b500f1136848003711b7870331790caa09d719c4176203c44cc54012014f300140d2746780598b212355952b0001c820600139000000000 else 0x32e354930eebc318ddb60246455daf53aa9d0035141c0ec9fc01c8418005000380687200b24950932350036c106b3f5b111d4924c8e884ac2699888423283fa6341f88506c17582e) else (if page < 3 then 0x1a490c623546f07d19c03c988a57a22284f1f06a0e55c0a045c29c1ad131168066393138dc1d0000029000015d749516200946c00000000012914004da39c1ee17690048c741f000 else 0x12ae400596c00000644000076001692e364e800009f5c18d5886800000000000f075c25780190a1b974059)) else 0
+  | 6 => if page < 2 then (if page < 1 then 0x8c0d40117c3a716545142e155d734289725090210a8f5a858029080c3054058860260025005c00002068328e3800042800761c8470621834274e6c742c000000 else 0x583b787a4c101d008d36000000006444510000003c2448001a39) else 0
+  | 7 => if page < 1 then 0x0 else 0
+  | _ => 0
+
+def mix (w : W) : W :=
+  let u := w + 0
+  let v := (u ^^^ (u >>> 30)) * 0xbf58476d1ce4e5b9
+  let z := (v ^^^ (v >>> 27)) * 0x94d049bb133111eb
+  z ^^^ (z >>> 31)
+
+def key (xs : List W) := (xs.foldl (fun h x => h + mix x) (0 : W)).toNat % 4294967296
+
+def lookup (k : ℕ) (xs : List W) : ℕ × ℕ :=
+  let h := key xs
+  let b := bucketCount k
+  let shift := field shifts k (shiftWidth k) (h % b)
+  let slot := field targets k (targetWidth k) ((h / b + shift) % slotCount k)
+  (slot / 4,slot % 4)
+
+def s45 : Switch := ⟨16,0xffff0000,0xffff00000000⟩
+theorem s45_ok : s45.Valid := by unfold Switch.Valid; decide +kernel
+def s23 : Switch := ⟨4,0xf000f000f000f0,0xf000f000f000f00⟩
+theorem s23_ok : s23.Valid := by unfold Switch.Valid; decide +kernel
+
+def steps : ℕ → List Switch
+  | 1 => [s45]
+  | 2 => [s23]
+  | 3 => [s23, s45]
+  | _ => []
+
+theorem valid (j : ℕ) : ∀ s ∈ steps j, s.Valid := by
+  unfold steps
+  split <;> simp [s45_ok, s23_ok]
+
+theorem fix (j : ℕ) : reindex (steps j) target = target := by
+  unfold steps
+  split <;> decide +kernel
+
+
+def goalColumns : Nat := 0xeeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8eeeaeee8eee8ccc8
+theorem mask_valid : goalColumns = Vector.lanes negative (fun _ => target) := by decide +kernel
+
+def checked (k i : Nat) := decide (pool k i).Nodup && Vector.packedClosed target negative goalColumns pool counts lookup steps k i
+theorem root : pool 7 0 = raw := by decide +kernel
+
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 20000 in
+theorem chunk2x0 : span (checked 2) 1 0 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem layer2 : span (checked 2) 1 0 = true :=
+  chunk2x0
+
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 20000 in
+theorem chunk3x0 : span (checked 3) 3 0 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem layer3 : span (checked 3) 3 0 = true :=
+  chunk3x0
+
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 20000 in
+theorem chunk4x0 : span (checked 4) 74 0 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem layer4 : span (checked 4) 74 0 = true :=
+  chunk4x0
+
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 20000 in
+theorem chunk5x0 : span (checked 5) 112 0 = true := by decide +kernel
+
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 20000 in
+theorem chunk5x112 : span (checked 5) 9 112 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem layer5 : span (checked 5) 121 0 = true :=
+  (@span_join (checked 5) 112 0 9 chunk5x0 chunk5x112)
+
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 20000 in
+theorem chunk6x0 : span (checked 6) 37 0 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem layer6 : span (checked 6) 37 0 = true :=
+  chunk6x0
+
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 20000 in
+theorem chunk7x0 : span (checked 7) 1 0 = true := by decide +kernel
+set_option maxRecDepth 20000 in
+set_option maxHeartbeats 0 in
+theorem layer7 : span (checked 7) 1 0 = true :=
+  chunk7x0
+theorem verified : ∀ k ≤ 7, ∀ i < counts k, checked k i = true := by
+  intro k hk
+  interval_cases k
+  · simp [counts]
+  · simp [counts]
+  · intro i hi; exact span_member layer2 i (Nat.zero_le i) (by simpa [counts] using hi)
+  · intro i hi; exact span_member layer3 i (Nat.zero_le i) (by simpa [counts] using hi)
+  · intro i hi; exact span_member layer4 i (Nat.zero_le i) (by simpa [counts] using hi)
+  · intro i hi; exact span_member layer5 i (Nat.zero_le i) (by simpa [counts] using hi)
+  · intro i hi; exact span_member layer6 i (Nat.zero_le i) (by simpa [counts] using hi)
+  · intro i hi; exact span_member layer7 i (Nat.zero_le i) (by simpa [counts] using hi)
+theorem lower {k : Nat} {s : Finset W} (run : Cone target k s) (sub : s ⊆ insert 0 raw.toFinset) : 8 ≤ k := by
+  by_contra! short
+  have eq := run.initial nonzero raw essential sub
+  rw [eq,←root] at run
+  apply closed_excludes target nonzero negative neg pool counts lookup steps valid fix 7
+    (fun k hk i hi => of_decide_eq_true (Bool.and_eq_true_iff.mp (verified k hk i hi)).1)
+    (fun k hk i hi => Vector.closed_sound target negative goalColumns mask_valid pool counts lookup steps (by decide +kernel) (fun r hr => (neg r hr).1) k i (Bool.and_eq_true_iff.mp (verified k hk i hi)).2)
+    7 le_rfl 0 (by decide +kernel) k (by omega) run
+
+end SignedFrontier.SmallCert.Full
+
+
+
+namespace SignedFrontier.CliqueLink
+def target := SmallCert.Full.target
+def raw := SmallCert.Full.raw
+def initial : List W := [0, ~~~(0 : W)] ++ raw ++ raw.map (fun w => ~~~w)
+theorem lower (p : List (ℕ × ℕ)) (o : ℕ) (hit : canonical (evaluate p initial o) = target) : 8 ≤ p.length := by
+  have inside : {target} ⊆ available (p.foldl add initial) := by
+    apply Finset.singleton_subset_iff.mpr
+    rw [←hit]
+    exact available_read _ _
+  obtain ⟨k,s,le,access,run⟩ := extract p initial target 0 {target} Cone.done inside
+  have start : available initial = insert 0 SmallCert.Full.raw.toFinset := by decide +kernel
+  rw [start] at access
+  have bounded := SmallCert.Full.lower run access
+  omega
+end SignedFrontier.CliqueLink
+
+namespace TableLink
+open SignedFrontier
+
+def assignment (r : Fin 64) (v : Fin 6) : Bool := r.val.testBit v.val
+
+theorem rawTable : ∀ r : Fin 64, CliqueLink.initial.map (fun u => u.getLsbD r.val) =
+    ThresholdReplacement.signedStart (assignment r) := by decide +kernel
+
+theorem goalTable : ∀ r : Fin 64, CliqueLink.target.getLsbD r.val =
+    ThresholdReplacement.sliceTarget (assignment r) := by decide +kernel
+
+theorem readDefault (xs : List W) (j r : ℕ) :
+    (xs.getD j 0).getLsbD r = (xs.map (fun u => u.getLsbD r)).getD j false := by
+  by_cases hj : j < xs.length
+  · rw [List.getD_eq_getElem _ _ hj,List.getD_eq_getElem _ _ (by simpa using hj)]
+    simp
+  · rw [List.getD_eq_default _ _ (by omega),List.getD_eq_default _ _ (by simp; omega)]
+    simp
+
+theorem addRow (xs : List W) (ij : ℕ × ℕ) (r : ℕ) (hr : r < 64) :
+    (add xs ij).map (fun u => u.getLsbD r) =
+      PetersenSignedSlice.addPair (xs.map (fun u => u.getLsbD r)) ij := by
+  simp only [add,PetersenSignedSlice.addPair,List.map_append,List.map_cons,List.map_nil,
+      BitVec.getLsbD_and,BitVec.getLsbD_not,hr,decide_true,Bool.true_and,readDefault]
+
+theorem foldRow (p : List (ℕ × ℕ)) (xs : List W) (r : Fin 64) :
+    (p.foldl add xs).map (fun u => u.getLsbD r.val) =
+      p.foldl PetersenSignedSlice.addPair (xs.map (fun u => u.getLsbD r.val)) := by
+  induction p generalizing xs with
+  | nil => rfl
+  | cons ij tail ih =>
+    simp only [List.foldl_cons,ih,addRow _ _ _ r.isLt]
+
+theorem wordOfSolution (p : List (ℕ × ℕ)) (o : ℕ)
+    (hit : ∀ x, ThresholdReplacement.signed p o x = ThresholdReplacement.sliceTarget x) :
+    canonical (evaluate p CliqueLink.initial o) = CliqueLink.target := by
+  have eq : evaluate p CliqueLink.initial o = CliqueLink.target := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro i hi
+    let r : Fin 64 := ⟨i,hi⟩
+    change ((p.foldl add CliqueLink.initial).getD o 0).getLsbD r.val = _
+    rw [readDefault,foldRow p CliqueLink.initial r,rawTable r]
+    exact (hit (assignment r)).trans (goalTable r).symm
+  rw [eq]
+  decide +kernel
+
+theorem sliceRequirement
+    (lower : ∀ p o, canonical (evaluate p CliqueLink.initial o) = CliqueLink.target → 8 ≤ p.length)
+    (p : List (ℕ × ℕ)) (o : ℕ)
+    (hit : ∀ x, ThresholdReplacement.signed p o x = ThresholdReplacement.sliceTarget x) : 8 ≤ p.length :=
+  lower p o (wordOfSolution p o hit)
+
+end TableLink
+
+end PEqualNP.Outside.L_meta_12589_aux
+
+open PEqualNP.Outside.L_meta_12589_aux
+
+theorem PEqualNP.Outside.L_meta_12589 : ∀ s : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 6 (fun x : Fin 6 → Bool => Nat.testBit (4008373992 * 2 ^ 32 + 4008234184) (∑ i : Fin 6, if x i then 2 ^ (i : ℕ) else 0)) s → ∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 C ∧ C.size ≤ s ∧ ∀ x : Fin 6 → Bool, C.eval (List.ofFn x) = Nat.testBit (4008373992 * 2 ^ 32 + 4008234184) (∑ i : Fin 6, if x i then 2 ^ (i : ℕ) else 0) := by
+  intro s existsC
+  obtain ⟨C,ok,bound,hit⟩ := existsC
+  obtain ⟨D,mono,small,evaluates⟩ := ThresholdReplacement.replacement
+    (TableLink.sliceRequirement SignedFrontier.CliqueLink.lower) C ok hit
+  exact ⟨D,mono,small.trans bound,evaluates⟩
