@@ -5,7 +5,7 @@ open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.MetaComplexity
 
 namespace PEqualNP.Outside.L_meta_4754
 
--- The new prefix writes wire 17. Old gate outputs start at 16 and now start at 18.
+-- The added OR gate writes wire 17. Old gate outputs start at 16 and now start at 18.
 def route (i : Nat) : Nat :=
   if i = 10 then 17 else if i = 15 then 16 else if i < 16 then i else i + 2
 
