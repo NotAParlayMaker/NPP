@@ -5,6 +5,7 @@
 //
 //   node outside-guard.mjs pr <pr.json> <files.json> <tree.json> <repo> <default branch> <out dir>
 //   node outside-guard.mjs gap <gaps.json> <gap id> <file path> <out dir> [check|refute|reduce]
+//       (for a VALUE STEP the statement written is the desk's template with the file name's k put in)
 //   node outside-guard.mjs gap-of-file <gaps.json> <file path> <out dir>
 //   node outside-guard.mjs imports <lean file> <imports.json> <file path in the pull request> [kind]
 //   node outside-guard.mjs closure <base dir> <imports.json> <judged file path> <out dir> [kind]
@@ -15,6 +16,12 @@
 // T1 -> ... -> Tk -> S; it is judged only when the run asks for kind reduce AND the desk's row of S
 // carries `reductions: true`. An R_ file is refused for every other kind, an L_ file for reduce.
 // Without a kind argument (the advisory run) an R_ file is refused.
+//
+// A VALUE STEP is a desk row of kind `value`: it carries no statement, but a `template` (the fleet's
+// own text) holding the token @@VALUE@@ `value_holes` times, and a bound `value_max`. A claim that the
+// value is k is the one file lean/PEqualNP/Outside/V_<gap>__k<k>.lean, judged by a run of kind check
+// against the template with k put in (valueGap below: the one rule value steps add). A V_ file is
+// refused for every row that is not a value step, and an L_ or R_ file for a value step.
 //
 // Exit 0: the guard holds. Exit 1: REFUSED, one line per reason, each line starting `REFUSED: `.
 // The pull-request, gap and kind checks give one reason (the first). The checks of the file's text
@@ -29,13 +36,21 @@ import { join } from 'node:path';
 export const FILE_RE = /^lean\/PEqualNP\/Outside\/(L_[a-z0-9_]+|R_[a-z0-9_]+_[1-9][0-9]{0,2})\.lean$/;
 export const L_FILE_RE = /^lean\/PEqualNP\/Outside\/L_[a-z0-9_]+\.lean$/;
 export const R_FILE_RE = /^lean\/PEqualNP\/Outside\/R_[a-z0-9_]+_[1-9][0-9]{0,2}\.lean$/;
+// A claim of value k for a value step: V_<gap>__k<k>.lean. Kept OUT of FILE_RE on purpose: land-by-push
+// reads FILE_RE, and value files stay on the squash landing path until it is taught the name.
+export const VALUE_RE = /^(0|[1-9][0-9]{0,3})$/;
+export const V_FILE_RE = /^lean\/PEqualNP\/Outside\/V_[a-z0-9_]+__k(0|[1-9][0-9]{0,3})\.lean$/;
+export const VALUE_TOKEN = '@@VALUE@@';
+export const MAX_HOLES = 16;
+const outsideFile = (f) => FILE_RE.test(f) || V_FILE_RE.test(f);
 export const KINDS = ['check', 'refute', 'reduce'];
-const FILE_SAY = 'the one file must be lean/PEqualNP/Outside/L_<gap>.lean (or R_<gap>_<n>.lean, n from 1 to 999, for a reduction)';
+const FILE_SAY = 'the one file must be lean/PEqualNP/Outside/L_<gap>.lean (or R_<gap>_<n>.lean, n from 1 to 999, for a reduction; or V_<gap>__k<k>.lean for a value step)';
 const ONE_FILE_SAY = "one file per pull request, so send each step as its own pull request";
 // The file name must fit the run's kind: an R_ file only for reduce, an L_ file never for reduce.
 export function checkFileKind(file, kind) {
-  if (typeof file !== 'string' || !FILE_RE.test(file)) refuse(FILE_SAY);
+  if (typeof file !== 'string' || !outsideFile(file)) refuse(FILE_SAY);
   if (kind !== undefined && !KINDS.includes(kind)) refuse(`the kind must be check, refute or reduce, not ${kind}`);
+  if (V_FILE_RE.test(file) && kind !== undefined && kind !== 'check') refuse(`${file} is a value file (V_<gap>__k<k>); it is judged only by a run of kind check`);
   if (R_FILE_RE.test(file) && kind !== 'reduce') refuse(`${file} is a reduction file (R_<gap>_<n>); it is judged only by a run of kind reduce`);
   if (L_FILE_RE.test(file) && kind === 'reduce') refuse(`a run of kind reduce judges only a reduction file lean/PEqualNP/Outside/R_<gap>_<n>.lean, not ${file}`);
   return file;
@@ -91,7 +106,7 @@ export function checkPr(pr, files, tree, repo, defaultBranch) {
   if (pr.changed_files !== 1) refuse(`the pull request changes ${pr.changed_files} files; it must add exactly one`);
   if (!Array.isArray(files) || files.length !== 1) refuse(Array.isArray(files) && files.length > 1 ? ONE_FILE_SAY : "the pull request must add exactly one file");
   const f = files[0];
-  if (typeof f.filename !== 'string' || !FILE_RE.test(f.filename)) refuse(FILE_SAY);
+  if (typeof f.filename !== 'string' || !outsideFile(f.filename)) refuse(FILE_SAY);
   if (f.status !== 'added') refuse(`the file must be added, not ${f.status}`);
   if (!SHA_RE.test(f.sha ?? '')) refuse('the file list names no content hash');
   // The tree says what kind of entry it is. 100644 is a plain file: a symbolic link is 120000,
@@ -129,6 +144,8 @@ export function checkGap(gaps, pick, file, want) {
   const g = found[0];
   if (typeof g.id !== 'string' || !GAP_RE.test(g.id)) refuse('the posted gap has a malformed id');
   checkFileKind(file, want);
+  if (g.kind === 'value') return valueGap(g, file, want);
+  if (V_FILE_RE.test(file)) refuse(`${file} is a value file, and the desk does not post gap ${g.id} as a value step`);
   if (typeof g.file !== 'string' || !L_FILE_RE.test(g.file)) refuse(`gap ${g.id} names no file lean/PEqualNP/Outside/L_<gap>.lean`);
   if (g.module !== moduleOf(g.file)) refuse(`gap ${g.id} names a module that is not its file`);
   const reduce = want === 'reduce';
@@ -150,6 +167,53 @@ export function checkGap(gaps, pick, file, want) {
   if (kind !== 'check') refuse(`gap ${g.id} is posted as a ${kind} step; only a step posted to be proved is reduced`);
   return { id: g.id, statement: g.statement, imports, kind: 'reduce' };
 }
+
+// THE ONE RULE OF A VALUE STEP. The desk's row carries a template, never a statement; this writes the
+// statement the checker judges. Nothing is read from the pull request but its file's NAME, and the
+// name is not trusted for its shape: in this order,
+//   1. the numeral: k is the name's last piece, ASCII digits only, `0` or no leading zero, at most
+//      four digits, and at most the row's value_max; refused first, before anything else is read;
+//   2. the name: the expected path is REBUILT from the gap id and k and must equal the pull
+//      request's file byte for byte. The separator `__k` stands in no gap id (an id's parts are joined
+//      by single underscores), so a name splits one way only, and k is never parsed out of a free name;
+//   3. the token: the template holds @@VALUE@@ exactly `value_holes` times (the count stored when the
+//      step was posted), each time as a whole term (after a space, a line break or `(`; before a
+//      space, a line break, `)` or the end), and no other doubled at-sign. EVERY occurrence is replaced
+//      by the same decimal numeral. The result holds no doubled at-sign.
+// From there on nothing changes: the statement goes to the checker as for any step, kind check, and
+// the workflow records the sha256 of exactly these bytes. The hub rebuilds the same bytes from its
+// OWN stored template and records the run only when the hashes agree, so a desk file that served
+// another template cannot settle anything.
+export function valueGap(g, file, want) {
+  if (want !== undefined && want !== 'check') refuse(`gap ${g.id} is a value step; it is judged only by a run of kind check, not ${want}`);
+  const say = `the one file of a value step is lean/PEqualNP/Outside/V_<gap>__k<k>.lean, k the value claimed, written in plain digits with no leading zero`;
+  if (!Number.isInteger(g.value_max) || g.value_max < 0 || g.value_max > 9999) refuse(`gap ${g.id} is a value step with a malformed value_max`);
+  if (!V_FILE_RE.test(file)) refuse(`gap ${g.id} is a value step, and ${file} is not a value file; ${say}`);
+  const k = /__k([^_/.]*)\.lean$/.exec(file)?.[1] ?? '';
+  if (!VALUE_RE.test(k)) refuse(`the value in the file name is not a plain numeral; ${say}`);
+  if (Number(k) > g.value_max) refuse(`the value ${k} is above the bound of gap ${g.id}: no value above ${g.value_max} is judged (a circuit of that size is on the record)`);
+  const expected = `lean/PEqualNP/Outside/V_${g.id.slice(2).replace(/-/g, '_')}__k${k}.lean`;
+  if (file !== expected) refuse(`${file} is not the file of value ${k} of gap ${g.id} (that is ${expected})`);
+  const t = g.template;
+  if (typeof t !== 'string' || !t.trim() || t.includes('\0')) refuse(`gap ${g.id} is a value step with no template`);
+  if (!Number.isInteger(g.value_holes) || g.value_holes < 1 || g.value_holes > MAX_HOLES) refuse(`gap ${g.id} is a value step with a malformed value_holes`);
+  const parts = t.split(VALUE_TOKEN);
+  if (parts.length - 1 !== g.value_holes) refuse(`the template of gap ${g.id} holds ${VALUE_TOKEN} ${parts.length - 1} time(s), and the step was posted with ${g.value_holes}`);
+  if (parts.join('').includes('@@')) refuse(`the template of gap ${g.id} holds a doubled at-sign that is not ${VALUE_TOKEN}`);
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const before = parts[i] === '' && i === 0 ? ' ' : parts[i].slice(-1), after = parts[i + 1] === '' && i === parts.length - 2 ? ' ' : parts[i + 1].slice(0, 1);
+    if (!/^[ \n(]$/.test(before) || !/^[ \n)]$/.test(after)) refuse(`the template of gap ${g.id} holds ${VALUE_TOKEN} where it is not a whole term`);
+  }
+  const statement = parts.join(k);
+  if (!statement.trim() || statement.includes('@@')) refuse(`gap ${g.id} has no statement at value ${k}`);
+  const imports = g.imports ?? [];
+  if (!Array.isArray(imports) || !imports.every((m) => typeof m === 'string' && MODULE_RE.test(m))) refuse(`gap ${g.id} lists a malformed import`);
+  return { id: g.id, statement, imports, kind: 'check', value: Number(k) };
+}
+// The row a file belongs to, for the run that is given no gap id: the row that names the file, or the
+// value step whose file of the name's k it is (rebuilt, as above; never parsed apart).
+export const rowOfFile = (file) => (x) => x?.file === file || (x?.kind === 'value' && typeof x.id === 'string' && GAP_RE.test(x.id) && V_FILE_RE.test(String(file))
+  && file === `lean/PEqualNP/Outside/V_${x.id.slice(2).replace(/-/g, '_')}__k${/__k([0-9]+)\.lean$/.exec(file)?.[1]}.lean`);
 
 // The import rule. The file starts with its import lines, one module per line, and nothing else
 // is among them. Each must be Mathlib, a module of Mathlib, or a module the gap lists. After the
@@ -328,7 +392,7 @@ export function checkOwnNamespace(text, module) {
 // reported line by line), so the next problem is found too.
 function namespaceProblems(text, module, problems) {
   const reduction = REDUCTION_MODULE_RE.test(module);
-  if (!OUTSIDE_MODULE_RE.test(module) && !reduction) { problems.push({ at: -1, why: `${module} is not the module of an outside proof file` }); return; }
+  if (!OUTSIDE_MODULE_RE.test(module) && !VALUE_MODULE_RE.test(module) && !reduction) { problems.push({ at: -1, why: `${module} is not the module of an outside proof file` }); return; }
   if (module.endsWith('_aux')) problems.push({ at: -1, why: 'the file name may not end in _aux (that suffix names the helper namespace of another file)' });
   const own = (n) => n === module || n.startsWith(`${module}.`) || n === `${module}_aux` || n.startsWith(`${module}_aux.`);
   const fix = `put every helper inside \`namespace ${module}\` ... \`end ${module}\`; only the imports and the theorem stay outside`;
@@ -408,6 +472,8 @@ export function checkProofFile(bytes, allowed, module) {
 export const OUTSIDE_MODULE_RE = /^PEqualNP\.Outside\.L_[a-z0-9_]+$/;
 // The module of a reduction file. Never a listed import: a gap lists only L_ modules.
 export const REDUCTION_MODULE_RE = /^PEqualNP\.Outside\.R_[a-z0-9_]+_[1-9][0-9]{0,2}$/;
+// The module of a value file. Never a listed import either: a gap lists only L_ modules.
+export const VALUE_MODULE_RE = /^PEqualNP\.Outside\.V_[a-z0-9_]+__k(0|[1-9][0-9]{0,3})$/;
 export const MAX_OUTSIDE = 16;
 const PROJECT_RE = /^(PEqualNP|CheckerSuite)(\.[A-Za-z][A-Za-z0-9_]*)*$/;
 const BASE_ROOT_RE = /^PEqualNP(\.[A-Za-z][A-Za-z0-9_]*)*$/;
@@ -493,7 +559,7 @@ const main = () => {
     const byId = cmd === 'gap';
     const [gapsPath, file, out] = byId ? [a[0], a[2], a[3]] : a;
     if (byId && !GAP_RE.test(a[1])) refuse('the gap id is malformed');
-    const g = checkGap(json(gapsPath), byId ? (x) => x?.id === a[1] : (x) => x?.file === file, file, byId ? a[4] : undefined);
+    const g = checkGap(json(gapsPath), byId ? (x) => x?.id === a[1] : rowOfFile(file), file, byId ? a[4] : undefined);
     put(out, 'gap.id', `${g.id}\n`);
     put(out, 'statement.txt', g.statement);          // the posted text, byte for byte
     put(out, 'imports.json', JSON.stringify(g.imports));

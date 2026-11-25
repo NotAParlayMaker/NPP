@@ -427,3 +427,103 @@ test('the remainder operator after one character or a number is plain; a longer 
   for (const bad of ['have h := eval% (1 + 1)', 'have h := type_of% x', 'have h : ab%2 = 0 := sorry', 'have h := x1%y', 'have h := decl_name%'])
     assert.throws(() => checkPlainAll(T(bad)), /is not allowed|sorry/, bad);
 });
+
+// A VALUE STEP: the desk's row carries a template and a bound, and the statement judged is the
+// template with the file name's k put in. One fixture per way a wrong k could be judged, refused.
+import { checkGap as checkGapValue, checkFileKind as checkFileKindV, checkPr as checkPrV, valueGap, rowOfFile, FILE_RE as FILE_RE_V, V_FILE_RE, VALUE_RE } from './outside-guard.mjs';
+const VT = 'Size.AtMost f @@VALUE@@ ∧\n  ¬ Size.AtMost f (@@VALUE@@ - 1)';
+const VF = (k, gap = 'meta_700') => `lean/PEqualNP/Outside/V_${gap}__k${k}.lean`;
+const vrow = (more = {}) => ({ gaps: [{ id: 'L-meta-700', kind: 'value', template: VT, value_holes: 2, value_max: 12, imports: ['PEqualNP.Defs'], ...more },
+  { id: 'L-meta-70', kind: 'value', template: VT, value_holes: 2, value_max: 99, imports: [] }, { id: 'L-meta-632', file: KF, module: 'PEqualNP.Outside.L_meta_632', statement: 'True', imports: [] }] });
+const pick700 = (x) => x.id === 'L-meta-700';
+test('value: the statement is the template with k put in, every occurrence, byte for byte; the kind is check', () => {
+  const g = checkGapValue(vrow(), pick700, VF(6), 'check');
+  assert.equal(g.statement, 'Size.AtMost f 6 ∧\n  ¬ Size.AtMost f (6 - 1)');
+  assert.equal(g.kind, 'check'); assert.equal(g.value, 6); assert.deepEqual(g.imports, ['PEqualNP.Defs']);
+  assert.equal(checkGapValue(vrow(), pick700, VF(0), 'check').statement, 'Size.AtMost f 0 ∧\n  ¬ Size.AtMost f (0 - 1)');
+  assert.equal(checkGapValue(vrow(), pick700, VF(12)).value, 12, 'the bound itself is a value');
+});
+test('value E1: the numeral is plain ASCII digits, no leading zero, at most the bound', () => {
+  for (const ok of ['0', '6', '12', '9999']) assert.ok(VALUE_RE.test(ok), ok);
+  for (const bad of ['06', '00', '+6', '-6', '6_0', '0x6', '６', '٦', '6.0', '1e1', '', '10000', ' 6']) {
+    assert.ok(!VALUE_RE.test(bad), bad);
+    assert.throws(() => checkGapValue(vrow(), pick700, VF(bad), 'check'), /the one file must be|not a value file/, `a file named for "${bad}"`);
+  }
+  assert.throws(() => checkGapValue(vrow(), pick700, VF(13), 'check'), /the value 13 is above the bound of gap L-meta-700: no value above 12 is judged/);
+  assert.throws(() => checkGapValue(vrow({ value_max: '12' }), pick700, VF(6), 'check'), /malformed value_max/);
+  assert.throws(() => checkGapValue(vrow({ value_max: undefined }), pick700, VF(6), 'check'), /malformed value_max/);
+});
+test('value E2: the file name is rebuilt from the gap and k and compared byte for byte', () => {
+  assert.throws(() => checkGapValue(vrow(), pick700, VF(6, 'meta_70'), 'check'), /is not the file of value 6 of gap L-meta-700 \(that is lean\/PEqualNP\/Outside\/V_meta_700__k6\.lean\)/);
+  assert.throws(() => checkGapValue(vrow(), pick700, VF(6, 'meta_7000'), 'check'), /is not the file of value 6 of gap L-meta-700/);
+  // A name that could be cut two ways if k were parsed out of it: the step 70 at "0__k6" is not a name at all.
+  assert.throws(() => checkGapValue(vrow(), pick700, 'lean/PEqualNP/Outside/V_meta_70__k0__k6.lean', 'check'), /is not the file of value 6 of gap L-meta-700/);
+  assert.throws(() => checkGapValue(vrow(), (x) => x.id === 'L-meta-70', 'lean/PEqualNP/Outside/V_meta_70__k0__k6.lean', 'check'), /is not the file of value 6 of gap L-meta-70 /);
+  assert.throws(() => checkGapValue(vrow(), pick700, 'lean/PEqualNP/Outside/V_meta_700_k6.lean', 'check'), /the one file must be/, 'a single underscore is not the separator');
+  assert.throws(() => checkGapValue(vrow(), pick700, 'lean/PEqualNP/Outside/L_meta_700.lean', 'check'), /is a value step, and .* is not a value file/);
+  assert.throws(() => checkGapValue(vrow(), pick700, 'lean/PEqualNP/Outside/R_meta_700_1.lean', 'reduce'), /is a value step; it is judged only by a run of kind check/);
+});
+test('value E3: the token count is the count stored at posting, each a whole term, and nothing else with at-signs', () => {
+  assert.throws(() => checkGapValue(vrow({ value_holes: 1 }), pick700, VF(6), 'check'), /holds @@VALUE@@ 2 time\(s\), and the step was posted with 1/);
+  assert.throws(() => checkGapValue(vrow({ template: 'Size.AtMost f @@VALUE@@' }), pick700, VF(6), 'check'), /holds @@VALUE@@ 1 time\(s\), and the step was posted with 2/);
+  assert.throws(() => checkGapValue(vrow({ template: 'Size.AtMost f VALUE', value_holes: 1 }), pick700, VF(6), 'check'), /holds @@VALUE@@ 0 time/, 'a bare word is never the token');
+  assert.throws(() => checkGapValue(vrow({ value_holes: 0, template: 'True' }), pick700, VF(6), 'check'), /malformed value_holes/);
+  assert.throws(() => checkGapValue(vrow({ template: 'Size.AtMost f x@@VALUE@@ ∧ g @@VALUE@@' }), pick700, VF(6), 'check'), /where it is not a whole term/);
+  assert.throws(() => checkGapValue(vrow({ template: 'Size.AtMost f @@VALUE@@1 ∧ g @@VALUE@@' }), pick700, VF(6), 'check'), /where it is not a whole term/, 'a digit glued to the hole would make another number');
+  assert.throws(() => checkGapValue(vrow({ template: 'Size.AtMost f @@VALUE@@ ∧ g @@VALUE@@ ∧ h @@ i' }), pick700, VF(6), 'check'), /a doubled at-sign that is not @@VALUE@@/);
+  assert.throws(() => checkGapValue(vrow({ template: undefined }), pick700, VF(6), 'check'), /a value step with no template/);
+  assert.throws(() => checkGapValue(vrow({ template: 'a @@VALUE@@ \0 @@VALUE@@' }), pick700, VF(6), 'check'), /a value step with no template/);
+});
+test('value: a value file is judged only for a value step, and only as a check', () => {
+  assert.throws(() => checkGapValue(vrow(), pick632, 'lean/PEqualNP/Outside/V_meta_632__k6.lean', 'check'), /is a value file, and the desk does not post gap L-meta-632 as a value step/);
+  assert.throws(() => checkGapValue(vrow(), pick700, VF(6), 'refute'), /judged only by a run of kind check/);
+  assert.throws(() => checkGapValue(vrow(), pick700, VF(6), 'reduce'), /judged only by a run of kind check/);
+  assert.throws(() => checkFileKindV(VF(6), 'refute'), /is a value file/);
+  assert.equal(checkFileKindV(VF(6), 'check'), VF(6));
+  assert.throws(() => valueGap(vrow().gaps[0], VF(6), 'refute'), /judged only by a run of kind check/);
+  assert.throws(() => checkGapValue(vrow({ imports: ['Mathlib.Evil'] }), pick700, VF(6), 'check'), /lists a malformed import/);
+});
+test('value: land-by-push does not take a value file (FILE_RE is unchanged), the pull request step does', () => {
+  assert.ok(!FILE_RE_V.test(VF(6)) && V_FILE_RE.test(VF(6)));
+  const sha = 'a'.repeat(40), blob = 'b'.repeat(40);
+  const pr = { state: 'open', base: { repo: { full_name: 'o/r' }, ref: 'main' }, head: { sha }, user: { login: 'someone' }, changed_files: 1 };
+  const r = checkPrV(pr, [{ filename: VF(6), status: 'added', sha: blob }], { tree: [{ path: VF(6), type: 'blob', mode: '100644', sha: blob, size: 10 }] }, 'o/r', 'main');
+  assert.equal(r.module, 'PEqualNP.Outside.V_meta_700__k6');
+  assert.throws(() => checkPrV(pr, [{ filename: VF('06'), status: 'added', sha: blob }], { tree: [] }, 'o/r', 'main'), /the one file must be/);
+});
+test('value: a settled value step is in the checked list, so a later file for any k is told so; a withdrawn one too', () => {
+  const settled = { gaps: [], checked: [{ id: 'L-meta-700', file: VF(6), file_sha256: 'c'.repeat(64) }], withdrawn: { 'L-meta-701': 'settled' } };
+  assert.throws(() => checkGapValue(settled, pick700, VF(7), 'check'), /L-meta-700 is already CHECKED/);
+  assert.throws(() => checkGapValue(settled, (x) => x.id === 'L-meta-701', VF(7, 'meta_701'), 'check'), /L-meta-701 was WITHDRAWN from the desk \(settled\)/);
+});
+test('value: the file of a value step finds its row without a gap id; the own-namespace rule takes the V_ name', () => {
+  assert.equal(checkGapValue(vrow(), rowOfFile(VF(6)), VF(6)).id, 'L-meta-700');
+  assert.equal(checkGapValue(vrow(), rowOfFile(VF(6, 'meta_70')), VF(6, 'meta_70')).id, 'L-meta-70');
+  assert.throws(() => checkGapValue(vrow(), rowOfFile(VF(6, 'meta_7')), VF(6, 'meta_7')), /the step is not on the desk/);
+  const VM = 'PEqualNP.Outside.V_meta_700__k6';
+  checkOwnNamespace(`import Mathlib\nimport PEqualNP.Defs\nnamespace ${VM}\ntheorem up : True := trivial\nend ${VM}\ntheorem ${VM} : True := trivial\n`, VM);
+  assert.throws(() => checkOwnNamespace(`import Mathlib\ntheorem PEqualNP.Outside.V_meta_700__k7 : True := trivial\n`, VM), /line 2: a declaration/, 'the theorem carries the file\'s own k');
+  assert.throws(() => checkOwnNamespace('theorem X : True := trivial\n', 'PEqualNP.Outside.V_meta_700__k06'), /is not the module of an outside proof file/);
+});
+test('value cli: gap writes the instance to statement.txt and check to gap.kind; a wrong name writes nothing', () => {
+  const d = mkdtempSync(pj(tmpdir(), 'guard-value-'));
+  wf(pj(d, 'gaps.json'), JSON.stringify(vrow()));
+  let r = cli('gap', pj(d, 'gaps.json'), 'L-meta-700', VF(6), d, 'check');
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(readFileSync(pj(d, 'statement.txt'), 'utf8'), 'Size.AtMost f 6 ∧\n  ¬ Size.AtMost f (6 - 1)');
+  assert.equal(readFileSync(pj(d, 'gap.kind'), 'utf8'), 'check\n');
+  assert.equal(readFileSync(pj(d, 'gap.id'), 'utf8'), 'L-meta-700\n');
+  const e = mkdtempSync(pj(tmpdir(), 'guard-value-'));
+  r = cli('gap', pj(d, 'gaps.json'), 'L-meta-700', VF(13), e, 'check');
+  assert.equal(r.status, 1); assert.match(r.stdout, /^REFUSED: the value 13 is above the bound/);
+  assert.throws(() => readFileSync(pj(e, 'statement.txt')));
+  r = cli('gap-of-file', pj(d, 'gaps.json'), VF(4), e);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(readFileSync(pj(e, 'statement.txt'), 'utf8'), 'Size.AtMost f 4 ∧\n  ¬ Size.AtMost f (4 - 1)');
+  wf(pj(d, 'imports.json'), '["PEqualNP.Defs"]');
+  wf(pj(d, 'v.lean'), 'import Mathlib\nimport PEqualNP.Defs\ntheorem PEqualNP.Outside.V_meta_700__k6 : True := trivial\n');
+  r = cli('imports', pj(d, 'v.lean'), pj(d, 'imports.json'), VF(6), 'check');
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  r = cli('imports', pj(d, 'v.lean'), pj(d, 'imports.json'), VF(6), 'reduce');
+  assert.equal(r.status, 1); assert.match(r.stdout, /is a value file/);
+});
