@@ -4,7 +4,7 @@ import PEqualNP.Defs
 
 open PEqualNP PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity.NestedCover
 
--- After a circuit prefix is fixed, only pairs that reject every negative row can be used.
+-- After the initial gates are fixed, only pairs that reject every negative row can be used.
 -- On an empty list of inputs, an AND returns true and an OR returns false.
 -- At each choice take a pair that meets the first outstanding obligation and discard all
 -- obligations that it meets. The depth limit is the remaining budget for terminal pairs.
