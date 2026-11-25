@@ -10,7 +10,6 @@ def bin (d : Bool) (a b : Sig) : Sig := if d then a ||| b else a &&& b
 def proper (a : Sig) : Prop := a ≠ zero ∧ a ≠ one
 private theorem bin_comm (d : Bool) (a b : Sig) : bin d a b = bin d b a := by
   cases d <;> simp [bin,BitVec.and_comm,BitVec.or_comm]
-
 def Live (target : Sig) : Nat → Nat → Finset Sig → Prop := fun k t S =>
   ∀ (M : (Nat → Nat → Finset Sig → Prop)), (proper target → M 0 0 {target}) →
   (∀ {k t : Nat} {U : Finset Sig} {a : Sig}, proper a → neg a ∉ insert a U → M k t (insert (neg a) U) → M (k+1) (t+1) (insert a U)) →
@@ -37,15 +36,11 @@ theorem Live.recurse {target : Sig} {M : ∀ (k t : Nat) (S : Finset Sig) (proof
     (@fun k t U a h0 h1 h2 h3 _ => @unary k t U a h0 h1 h2 (h3 h2))
     (@fun k t U a b d h0 h1 h2 h3 h4 h5 _ => @binary k t U a b d h0 h1 h2 h3 h4 (h5 h4))
   exact r h
-
-
-
 theorem Live.zeroSet {T t S} (h : Live T 0 t S) : S = {T} := by
   have hh := h (fun k _ W => k = 0 → W = {T}) (fun _ _ => rfl)
     (@fun _ _ _ _ _ _ _ e => by omega)
     (@fun _ _ _ _ _ _ _ _ _ _ _ e => by omega)
   exact hh rfl
-
 private lemma live_proper {k t S} (h : Live target k t S) : ∀ a ∈ S, proper a := by
   induction h using Live.recurse with
   | stop hp => simpa using hp
@@ -53,7 +48,6 @@ private lemma live_proper {k t S} (h : Live target k t S) : ∀ a ∈ S, proper 
   | binary ha hb hab hf _ ih =>
     simp only [Finset.forall_mem_insert]
     exact ⟨ha,hb,fun a h => ih a (Finset.mem_insert_of_mem h)⟩
-
 private lemma live_size {k t S} (h : Live target k t S) : t ≤ k ∧ S.card+t ≤ k+1 := by
   induction h using Live.recurse with
   | stop hp => simp
@@ -68,8 +62,6 @@ private lemma live_size {k t S} (h : Live target k t S) : t ≤ k ∧ S.card+t �
     have h1 := Finset.card_insert_le (a := a) (s := insert b U)
     have h2 := Finset.card_insert_le (a := b) (s := U)
     exact ⟨by omega,by omega⟩
-
-
 def gv (w : List Sig) (g : Gate) : Sig :=
   let xs := g.inputs.map (fun i => w.getD i zero)
   match g.op with
@@ -77,26 +69,20 @@ def gv (w : List Sig) (g : Gate) : Sig :=
   | .or => xs.foldr (bin true) zero
   | .not => neg (xs.headD zero)
   | _ => zero
-
 def execute (gs : List Gate) (w : List Sig) : List Sig :=
   gs.foldl (fun l g => l ++ [gv l g]) w
-
 def represented (w : List Sig) (v : Sig) : Prop := v ∈ w ∨ ¬proper v
-
 private lemma get_rep (w : List Sig) (i : Nat) : represented w (w.getD i zero) := by
   simp only [List.getD_eq_getElem?_getD]
   cases h : w[i]? with
   | none => exact Or.inr (fun h => h.1 rfl)
   | some a => exact Or.inl (List.mem_of_getElem? h)
-
 private lemma bin_laws (a : Sig) :
     bin false a one = a ∧ bin true a zero = a ∧
     bin false a zero = zero ∧ bin true a one = one ∧
     bin false a a = a ∧ bin true a a = a := by
   simp only [bin,one,zero,Bool.false_eq_true,ite_false,ite_true,BitVec.and_allOnes,BitVec.or_zero,BitVec.and_zero,BitVec.or_allOnes,BitVec.and_self,BitVec.or_self,and_self] <;> simp
-
 private lemma neg_laws : neg zero = one ∧ neg one = zero := by simp [neg,zero,one]
-
 private lemma operand_cases {w : List Sig} {a : Sig} (h : represented w a) :
     a = zero ∨ a = one ∨ a ∈ w ∧ proper a := by
   by_cases hz : a = zero
@@ -104,11 +90,9 @@ private lemma operand_cases {w : List Sig} {a : Sig} (h : represented w a) :
   by_cases ho : a = one
   · exact Or.inr (Or.inl ho)
   exact Or.inr (Or.inr ⟨h.resolve_right (fun x => x ⟨hz,ho⟩),hz,ho⟩)
-
 def witness (w : List Sig) (z : Sig) : Prop :=
   (∃ a ∈ w, proper a ∧ z = neg a) ∨
   (∃ d a b, a ∈ w ∧ b ∈ w ∧ proper a ∧ proper b ∧ a ≠ b ∧ z = bin d a b)
-
 private lemma bin_rep {w a b} (d : Bool) (ha : represented w a) (hb : represented w b) :
     represented w (bin d a b) ∨ witness w (bin d a b) := by
   have rz : represented w zero := Or.inr (fun h => h.1 rfl)
@@ -124,7 +108,6 @@ private lemma bin_rep {w a b} (d : Bool) (ha : represented w a) (hb : represente
   by_cases he : a=b
   · subst b; cases d <;> simp_all
   exact Or.inr (Or.inr ⟨d,a,b,ham,hbm,hap,hbp,he,rfl⟩)
-
 private lemma gate_rep (w : List Sig) (g : Gate)
     (h : g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp) ∧ g.inputs.length≤2) :
     represented w (gv w g) ∨ witness w (gv w g) := by
@@ -159,9 +142,6 @@ private lemma gate_rep (w : List Sig) (g : Gate)
         · simpa only [gv,List.map_cons,List.map_nil,List.foldr_cons,List.foldr_nil,(bin_laws _).1] using bin_rep false (get_rep w i) (get_rep w j)
         · simpa only [gv,List.map_cons,List.map_nil,List.foldr_cons,List.foldr_nil,(bin_laws _).2.1] using bin_rep true (get_rep w i) (get_rep w j)
         · exact nx _ (get_rep w i)
-
-
-
 private lemma pull_gate {w : List Sig} {z : Sig} {k t S} (h : Live target k t S)
     (hz : represented w z ∨ witness w z) (sub : ∀ a ∈ S, a ∈ w++[z]) :
     ∃ k' t' S', k' ≤ k+1 ∧ Live target k' t' S' ∧ ∀ a ∈ S', a ∈ w := by
@@ -208,7 +188,6 @@ private lemma pull_gate {w : List Sig} {z : Sig} {k t S} (h : Live target k t S)
     intro a ha
     have hn : a ≠ z := fun hh => hm (hh ▸ ha)
     simpa [hn] using sub a ha
-
 private lemma extract (gs : List Gate) (w : List Sig)
     (legal : ∀ g ∈ gs, g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp) ∧ g.inputs.length≤2)
     (hp : proper target) (hout : target ∈ execute gs w) :
@@ -219,21 +198,18 @@ private lemma extract (gs : List Gate) (w : List Sig)
     obtain ⟨k,t,S,hk,ht,hs⟩ := ih (w++[gv w g]) (fun a ha => legal a (by simp [ha])) hout
     obtain ⟨l,u,T,hl,hu,hT⟩ := pull_gate ht (gate_rep w g (legal g (by simp))) hs
     exact ⟨l,u,T,by simp; omega,hu,hT⟩
-
 def bit (i : Fin 512) (a : Sig) : Bool := a.getLsbD i.val
 private lemma bit_zero (i) : bit i zero = false := by simp [bit,zero]
 private lemma bit_one (i) : bit i one = true := by unfold bit one; rw [BitVec.getLsbD_allOnes]; simp
 private lemma bit_neg (i) (a : Sig) : bit i (neg a) = !(bit i a) := by simp [bit,neg,i.isLt]
 private lemma bit_bin (i d) (a b : Sig) : bit i (bin d a b) =
     (if d then bit i a || bit i b else bit i a && bit i b) := by cases d <;> simp [bit,bin]
-
 private lemma b_read (i) (w : List Sig) (j : Nat) :
     (w.map (bit i)).getD j false = bit i (w.getD j zero) := by
   simp only [List.getD_eq_getElem?_getD,List.getElem?_map]
   cases w[j]? with
   | none => exact (bit_zero _).symm
   | some a => rfl
-
 private lemma run_bit (i) (g : Gate) (w : List Sig)
     (hg : g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp)) :
     bit i (gv w g) = g.op.eval (g.inputs.map fun j => (w.map (bit i)).getD j false) := by
@@ -256,7 +232,6 @@ private lemma run_bit (i) (g : Gate) (w : List Sig)
       change bit i (neg zero) = !false
       rw [bit_neg,bit_zero]
     | cons a l => exact bit_neg _ _
-
 private lemma execute_bits (gs : List Gate) (i) (w : List Sig)
     (hg : ∀ g ∈ gs, g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp)) :
     (execute gs w).map (bit i) =
@@ -267,28 +242,16 @@ private lemma execute_bits (gs : List Gate) (i) (w : List Sig)
     change (execute gs (w++[gv w g])).map _ = _
     rw [ih _ (fun a ha => hg a (by simp [ha]))]
     simp only [List.foldl_cons,List.map_append,List.map_singleton,run_bit i g w (hg g (by simp))]
-
-
-
-
 abbrev Wire (R : Type) := R → Bool
-
 def inv {R} (a : Wire R) : Wire R := fun r => !(a r)
-
 def combine {R} (isOr : Bool) (a b : Wire R) : Wire R :=
   if isOr then fun r => a r || b r else fun r => a r && b r
-
 def Constant {R} (a : Wire R) : Prop := ∃ b : Bool, a = fun _ => b
-
 noncomputable def cost {R} (a : Wire R) : Nat := by
   classical exact if Constant a then 1 else 0
-
 noncomputable def mass {R} (xs : List (Wire R)) : Nat := (xs.map cost).sum
-
 def Available {R} (pool : List (Wire R)) (v : Wire R) : Prop := v ∈ pool ∨ Constant v
-
 def supply {R} (pool xs : List (Wire R)) := ∀ a ∈ xs, Available pool a
-
 def Reach {R} (roots : List (Wire R)) : Nat → List (Wire R) → Prop := fun p bank =>
   ∀ (M : (Nat → List (Wire R) → Prop)), (M 0 roots) →
   (∀ {p : Nat} {bank : List (Wire R)} {a : Wire R}, M p bank → Available bank a → M (p+1) (inv a :: bank)) →
@@ -315,11 +278,7 @@ theorem Reach.recurse {R} {roots : List (Wire R)} {M : ∀ (p : Nat) (bank : Lis
     (@fun p bank a h0 h1 h2 _ => @one p bank a h0 (h1 h0) h2)
     (@fun p bank a b op h0 h1 h2 h3 _ => @two p bank a b op h0 (h1 h0) h2 h3)
   exact r h
-
-
-
 def kept {α : Type} (save : Bool) (x : α) (xs : List α) := if save then x::xs else xs
-
 def Run {R} (goal : Wire R) : Nat → List (Wire R) → Prop := fun s ws =>
   ∀ (M : (Nat → List (Wire R) → Prop)), (M 0 [goal]) →
   (∀ {s : Nat} {xs zs : List (Wire R)}, xs.Perm zs → M s xs → M s zs) →
@@ -352,25 +311,18 @@ theorem Run.recurse {R} {goal : Wire R} {M : ∀ (s : Nat) (ws : List (Wire R)) 
     (@fun s a rest save h0 h1 _ => @one s a rest save h0 (h1 h0))
     (@fun s a b rest op ka kb h0 h1 _ => @two s a b rest op ka kb h0 (h1 h0))
   exact r h
-
-
-
 theorem mass_cons {R} (a : Wire R) (xs) : mass (a::xs)=cost a + mass xs := by
   simp [mass]
-
 theorem mass_kept {R} (a : Wire R) (xs) (k : Bool) : mass xs ≤ mass (kept k a xs) := by
   cases k <;> simp [kept,mass_cons]
-
 theorem inv_constant {R} {a : Wire R} (h : Constant a) : Constant (inv a) := by
   obtain ⟨v,rfl⟩ := h
   exact ⟨!v,rfl⟩
-
 theorem both_constant {R} {a b : Wire R} (op) (h : Constant a) (g : Constant b) :
     Constant (combine op a b) := by
   obtain ⟨v,rfl⟩ := h
   obtain ⟨w,rfl⟩ := g
   cases op <;> exact ⟨_,rfl⟩
-
 theorem from_constant {R} (op) {a b : Wire R} {bank}
     (h : Constant a ∨ Constant b) (ha : Available bank a) (hb : Available bank b) :
     Available bank (combine op a b) := by
@@ -385,11 +337,9 @@ theorem from_constant {R} (op) {a b : Wire R} {bank}
     · simpa [combine] using ha
     · simpa [combine] using ha
     · exact Or.inr ⟨true, by funext x; simp [combine]⟩
-
 theorem available_cons {R} {bank v} (w : Wire R) (h : Available bank v) :
     Available (w::bank) v := by
   exact h.elim (fun h => Or.inl (List.mem_cons_of_mem _ h)) Or.inr
-
 theorem extend_one {R} (roots : List (Wire R)) {p bank a} (hp : Reach roots p bank)
     (ha : Available bank a) :
     ∃ q next, Reach roots q next ∧ Available next (inv a) ∧
@@ -398,7 +348,6 @@ theorem extend_one {R} (roots : List (Wire R)) {p bank a} (hp : Reach roots p ba
   by_cases c : Constant a
   · exact ⟨p,bank,hp,Or.inr (inv_constant c),fun _ h => h,by simp [cost,c,inv_constant c]⟩
   · exact ⟨p+1,_,Reach.one hp ha,Or.inl (by simp),fun _ h => available_cons _ h,by simp [cost,c]⟩
-
 theorem extend_two {R} (roots : List (Wire R)) {p bank a b} (op) (hp : Reach roots p bank)
     (ha : Available bank a) (hb : Available bank b) :
     ∃ q next, Reach roots q next ∧ Available next (combine op a b) ∧
@@ -416,10 +365,8 @@ theorem extend_two {R} (roots : List (Wire R)) {p bank a b} (op) (hp : Reach roo
     have cb : ¬Constant b := fun h => c (Or.inr h)
     exact ⟨p+1,_,Reach.two op hp ha hb,Or.inl (by simp),fun _ h => available_cons _ h,
       by simp [cost,ca,cb]⟩
-
 theorem mem_kept {α : Type} {k : Bool} {x a : α} {xs} (h : x ∈ kept k a xs) :
     x=a ∨ x∈xs := by cases k <;> simp_all [kept]
-
 theorem contraction {R} {goal : Wire R} (nc : ¬Constant goal) {s ws}
     (h : Run goal s ws) (roots : List (Wire R)) {p bank}
     (hp : Reach roots p bank) (hs : supply bank ws) :
@@ -461,15 +408,12 @@ theorem contraction {R} {goal : Wire R} (nc : ¬Constant goal) {s ws}
     refine ⟨q,W,hW,hv,?_⟩
     rw [mass_cons,mass_cons]
     omega
-
 def restrictRows {R S : Type} (rows : S → R) (a : Wire R) : Wire S :=
   fun r => a (rows r)
-
 theorem restrict_kept {R S : Type} (rows : S → R) (k : Bool) (a : Wire R) (ws) :
     (kept k a ws).map (restrictRows rows) =
     kept k (restrictRows rows a) (ws.map (restrictRows rows)) := by
   cases k <;> simp [kept]
-
 theorem restrict_run {R S : Type} (rows : S → R) {goal s ws} (h : Run goal s ws) :
     Run (restrictRows rows goal) s (ws.map (restrictRows rows)) := by
   induction h using Run.recurse with
@@ -483,7 +427,6 @@ theorem restrict_run {R S : Type} (rows : S → R) {goal s ws} (h : Run goal s w
     cases op
     · exact Run.two false ka kb ih
     · exact Run.two true ka kb ih
-
 theorem projected_bound {R S : Type} (rows : S → R) {goal s ws} (h : Run goal s ws)
     (nc : ¬Constant (restrictRows rows goal)) {roots : List (Wire S)} {p bank L}
     (hp : Reach roots p bank) (hs : supply bank (ws.map (restrictRows rows)))
@@ -492,44 +435,33 @@ theorem projected_bound {R S : Type} (rows : S → R) {goal s ws} (h : Run goal 
   obtain ⟨q,bs,hq,ht,hle⟩ := contraction nc (restrict_run rows h) roots hp hs
   have hqle := hl q bs hq ht
   omega
-
-
 abbrev Row := Fin 512
 def observe (a : Sig) : Wire Row := fun r => bit r a
 def table (f : Wire Row) : Sig :=
   (BitVec.ofBoolListLE (List.ofFn f)).cast (List.length_ofFn)
-
 theorem bit_table (f : Wire Row) (r : Row) : bit r (table f) = f r := by
   simp only [bit,table,BitVec.getLsbD_cast,BitVec.getLsbD_ofBoolListLE,List.getD_eq_getElem?_getD,List.getElem?_ofFn]; simp [r.isLt]
-
 theorem table_observe (v : Sig) : table (observe v) = v := by
   apply BitVec.eq_of_getLsbD_eq
   intro j hj
   exact bit_table (observe v) ⟨j,hj⟩
-
 theorem observe_table (f : Wire Row) : observe (table f) = f := by
   funext r
   exact bit_table f r
-
 theorem obs_neg (a : Sig) : observe (neg a) = inv (observe a) := by
   funext r
   exact bit_neg _ _
-
 theorem obs_bin (d : Bool) (a b : Sig) :
     observe (bin d a b) = combine d (observe a) (observe b) := by
   funext r
   cases d <;> exact bit_bin _ _ _ _
-
 theorem map_kept {α β : Type} (f : α → β) (d : Bool) (a : α) (l : List α) :
     (kept d a l).map f = kept d (f a) (l.map f) := by cases d <;> rfl
-
 theorem kept_nd {α : Type} (k : Bool) (a : α) (l : List α)
     (hn : l.Nodup) (ha : a ∉ l) : (kept k a l).Nodup := by cases k <;> simp [kept,hn,ha]
-
 theorem kept_fin (k : Bool) (a : Sig) (l : List Sig) :
     (kept k a l).toFinset = if k then insert a l.toFinset else l.toFinset := by
   cases k <;> simp [kept]
-
 theorem list_run {T : Sig} {k u S} (h : Live T k u S) (v : List Sig)
     (hv : v.Nodup) (eqv : v.toFinset = S) : Run (observe T) k (v.map observe) := by
   classical
@@ -589,15 +521,11 @@ theorem list_run {T : Sig} {k u S} (h : Live T k u S) (v : List Sig)
       ext j
       by_cases ja : j=a <;> by_cases jb : j=b <;> simp_all [er]
     exact Run.perm (perm.map _) (Run.two d ka kb progress)
-
-
 theorem table_inv (f : Wire Row) : table (inv f) = neg (table f) := by
   rw [←table_observe (neg (table f)),obs_neg,observe_table]
-
 theorem table_bin (d : Bool) (f g : Wire Row) :
     table (combine d f g) = bin d (table f) (table g) := by
   rw [←table_observe (bin d (table f) (table g)),obs_bin,observe_table,observe_table]
-
 theorem available_rep {bank : List (Wire Row)} {a} (h : Available bank a) :
     represented (bank.map table) (table a) := by
   rcases h with hm | ⟨b,rfl⟩
@@ -614,21 +542,18 @@ theorem available_rep {bank : List (Wire Row)} {a} (h : Available bank a) :
         intro j hj
         exact (bit_table _ ⟨j,hj⟩).trans (bit_one ⟨j,hj⟩).symm
       exact fun hp => hp.2 z
-
 theorem inv_rep {w a} (ha : represented w a) :
     represented w (neg a) ∨ witness w (neg a) := by
   rcases operand_cases ha with rfl | rfl | ⟨hm,hp⟩
   · exact Or.inl (Or.inr fun h => h.2 neg_laws.1)
   · exact Or.inl (Or.inr fun h => h.1 neg_laws.2)
   · exact Or.inr (Or.inl ⟨a,hm,hp,rfl⟩)
-
 theorem pull_cons {w : List Sig} {z : Sig} {T k t S} (h : Live T k t S)
     (hz : represented w z ∨ witness w z) (hs : ∀ a ∈ S, a ∈ z::w) :
     ∃ k' t' S', k' ≤ k+1 ∧ Live T k' t' S' ∧ ∀ a ∈ S', a ∈ w := by
   apply pull_gate h hz
   intro a hm
   simpa [or_comm] using hs a hm
-
 theorem reach_live_sub {roots : List (Wire Row)} {p bank}
     (h : Reach roots p bank) {T k t S} (run : Live T k t S)
     (sub : ∀ a ∈ S, a ∈ bank.map table) :
@@ -645,7 +570,6 @@ theorem reach_live_sub {roots : List (Wire Row)} {p bank}
     obtain ⟨k',t',S',hk,run',sub'⟩ := pull_cons run (bin_rep d (available_rep ha) (available_rep hb)) sub
     obtain ⟨l,v,U,hl,hr,hs⟩ := ih run' sub'
     exact ⟨l,v,U,by omega,hr,hs⟩
-
 theorem reach_live {roots : List Sig} {p bank T} (hp : proper T)
     (h : Reach (roots.map observe) p bank) (hit : Available bank (observe T)) :
     ∃ k t S, k ≤ p ∧ Live T k t S ∧ ∀ a ∈ S, a ∈ roots := by
@@ -655,7 +579,6 @@ theorem reach_live {roots : List Sig} {p bank T} (hp : proper T)
   obtain ⟨l,v,U,hl,hr,hs⟩ := reach_live_sub h (Live.stop hp) (by simpa using mem)
   refine ⟨l,v,U,by omega,hr,?_⟩
   simpa [List.map_map,Function.comp_def,table_observe] using hs
-
 theorem live_row_difference {T k t S} (h : Live T k t S) {r s : Row}
     (diff : bit r T ≠ bit s T) : ∃ a ∈ S, bit r a ≠ bit s a := by
   induction h using Live.recurse with
@@ -675,7 +598,6 @@ theorem live_row_difference {T k t S} (h : Live T k t S) {r s : Row}
         exact hd (by rw [bit_bin,bit_bin,aeq,beq])
       · exact ⟨a,by simp,aeq⟩
     · exact ⟨v,Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hu),hd⟩
-
 theorem raw_required {T k t S} (h : Live T k t S) (roots : List Sig) (a : Sig)
     (sub : ∀ v ∈ S, v ∈ roots) (r s : Row) (diff : bit r T ≠ bit s T)
     (isolated : ∀ v ∈ roots, v ≠ a → bit r v = bit s v) : a ∈ S := by
@@ -683,124 +605,17 @@ theorem raw_required {T k t S} (h : Live T k t S) (roots : List Sig) (a : Sig)
   by_cases veq : v=a
   · simpa [veq] using hv
   · exact False.elim (hd (isolated v (sub v hv) veq))
-
 def inputs : List Sig := [0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc,0xf0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0,0xff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00,0xffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000,0xffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000,0xffffffffffffffff0000000000000000ffffffffffffffff0000000000000000ffffffffffffffff0000000000000000ffffffffffffffff0000000000000000,0xffffffffffffffffffffffffffffffff00000000000000000000000000000000ffffffffffffffffffffffffffffffff00000000000000000000000000000000,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000000000000]
 def graph : Sig := 0xfffffffffffffffffffffffffffafff8ffffffffffffffffffffffffffeaffc8fffffffffffefcfcfffffffffffaf8f8ffeefeeeffeefcccffeafaeaffeaf8c8
 def oldSeed : Sig := 0x88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
-
-def seed : Sig := inputs.getD 0 zero ||| inputs.getD 4 zero
 def sample (r : Row) (j : Fin 9) := bit r (inputs.getD j.val zero)
 def edge (x : Fin 9 → Bool) : Bool :=
   (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) ||
   (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) ||
   (x 6 && x 8) || (x 8 && x 5)
 theorem edge_table : ∀ r : Row, bit r graph = edge (sample r) := by decide +kernel
-theorem seed_table : ∀ r : Row, bit r seed = (sample r 0 || sample r 4) := by decide +kernel
 theorem graph_proper : proper graph := by unfold proper; decide +kernel
-theorem seed_nonzero : seed ≠ zero := by decide +kernel
 theorem input_list : List.ofFn (fun j : Fin 9 => inputs.getD j.val zero) = inputs := rfl
-theorem sampled (r : Row) : List.ofFn (sample r) = inputs.map (bit r) := by
-  rw [←input_list]
-  rw [List.map_ofFn]
-  rfl
-
-theorem table_eval (C : Circuit) (h : PEqualNP.MetaComplexity.FanInTwo C)
-    (i : Nat) (r : Row) : bit r ((execute C.gates inputs).getD i zero) =
-      (C.wires (List.ofFn (sample r))).getD i false := by
-  rw [←b_read,execute_bits _ _ _ (fun g hg => (h g hg).1),sampled]
-  rfl
-
-theorem exec_extends (gs : List Gate) (ws : List Sig) : ∃ l, execute gs ws = ws ++ l := by
-  induction gs generalizing ws with
-  | nil => exact ⟨[],by simp [execute]⟩
-  | cons g gs ih =>
-    obtain ⟨l,hl⟩ := ih (ws++[gv ws g])
-    exact ⟨gv ws g::l,by simpa [execute,List.append_assoc] using hl⟩
-
-def neighbor (i : Fin 9) : Nat := [4,2,1,2,0,0,1,2,3].getD i.val 0
-def absentRow (i : Fin 9) : Row := Fin.ofNat 512 (1 <<< neighbor i)
-def presentRow (i : Fin 9) : Row := Fin.ofNat 512 ((1 <<< i.val) ||| (1 <<< neighbor i))
-
-theorem seed_witness : ∀ i : Fin 9,
-    (bit (absentRow i) graph != bit (presentRow i) graph) &&
-    ((inputs++[seed]).all fun w => w == inputs.getD i.val zero ||
-      bit (absentRow i) w == bit (presentRow i) w) = true := by decide +kernel
-
-theorem all_roots {k t S} (h : Live graph k t S) (sub : ∀ v ∈ S, v ∈ inputs++[seed]) :
-    S=inputs.toFinset ∨ S=(inputs++[seed]).toFinset := by
-  have all (i : Fin 9) : inputs.getD i.val zero ∈ S := by
-    have cut := seed_witness i
-    simp only [Bool.and_eq_true,Bool.not_eq_true',bne_iff_ne,List.all_eq_true,
-      Bool.or_eq_true,beq_iff_eq,decide_eq_true_eq] at cut
-    apply raw_required h _ _ sub (absentRow i) (presentRow i) cut.1
-    exact fun v hv hne => (cut.2 v hv).resolve_left hne
-  have needed : inputs.toFinset ⊆ S := by
-    intro v hv
-    have hm := List.mem_toFinset.mp hv
-    rw [←input_list,List.mem_ofFn] at hm
-    obtain ⟨i,rfl⟩ := hm
-    exact all i
-  by_cases hseed : seed ∈ S
-  · right
-    ext w
-    constructor
-    · exact fun hw => List.mem_toFinset.mpr (sub w hw)
-    · intro hw
-      have hx := List.mem_toFinset.mp hw
-      simp only [List.mem_append,List.mem_singleton] at hx
-      exact hx.elim (fun h => needed (List.mem_toFinset.mpr h)) (fun e => e ▸ hseed)
-  · left
-    exact Finset.Subset.antisymm (fun w hw => by
-      have hx := sub w hw
-      simp only [List.mem_append,List.mem_singleton] at hx
-      rcases hx with hin | rfl
-      · exact List.mem_toFinset.mpr hin
-      · exact False.elim (hseed hw)) needed
-
-theorem initial_live (C : Circuit) (legal : PEqualNP.MetaComplexity.FanInTwo C)
-    (first : ∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = (y 0 || y 4))
-    (computes : PEqualNP.MetaComplexity.circuitFun 9 C = edge) (small : C.size ≤ 15) :
-    ∃ k t, k ≤ 14 ∧ (Live graph k t inputs.toFinset ∨ Live graph k t (inputs++[seed]).toFinset) := by
-  have headEq : (execute C.gates inputs).getD 9 zero = seed := by
-    apply BitVec.eq_of_getLsbD_eq
-    intro j hj
-    let r : Row := ⟨j,hj⟩
-    exact (table_eval C legal 9 r).trans ((first (sample r)).trans (seed_table r).symm)
-  have goalEq : (execute C.gates inputs).getD C.output zero = graph := by
-    apply BitVec.eq_of_getLsbD_eq
-    intro j hj
-    let r : Row := ⟨j,hj⟩
-    exact (table_eval C legal C.output r).trans ((congrFun computes (sample r)).trans (edge_table r).symm)
-  have out := get_rep (execute C.gates inputs) C.output
-  rw [goalEq] at out
-  have targetIn := out.resolve_right (fun hn => hn graph_proper)
-  cases hgs : C.gates with
-  | nil =>
-    rw [hgs] at headEq
-    exact False.elim (seed_nonzero headEq.symm)
-  | cons g gs =>
-    have eq0 : gv inputs g = seed := by
-      rw [hgs] at headEq
-      change (execute gs (inputs++[gv inputs g])).getD 9 zero = seed at headEq
-      obtain ⟨l,hl⟩ := exec_extends gs (inputs++[gv inputs g])
-      rw [hl] at headEq
-      exact headEq
-    rw [hgs] at targetIn
-    change graph ∈ execute gs (inputs++[gv inputs g]) at targetIn
-    rw [eq0] at targetIn
-    have tailLegal : ∀ gate ∈ gs, gate.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp) ∧ gate.inputs.length≤2 := by
-      intro gate hg
-      apply legal
-      rw [hgs]
-      exact List.mem_cons_of_mem _ hg
-    obtain ⟨k,t,S,hk,run,hs⟩ := extract gs _ tailLegal graph_proper targetIn
-    have len : gs.length+1 ≤ 15 := by simpa [Circuit.size,hgs] using small
-    refine ⟨k,t,by omega,?_⟩
-    rcases all_roots run hs with h | h
-    · exact Or.inl (h ▸ run)
-    · exact Or.inr (h ▸ run)
-
-
 def rename (f : Row → Row) (a : Sig) := table fun r => bit (f r) a
 theorem bit_rename (f : Row → Row) (a : Sig) (r : Row) :
     bit r (rename f a) = bit (f r) a := bit_table _ _
@@ -853,7 +668,6 @@ theorem live_rename {T k t S} (h : Live T k t S) (f : Row → Row) (onto : Funct
       exact hf (inj eq ▸ hv)
     simp only [Finset.image_insert,rename_bin] at fresh ih ⊢
     exact Live.binary (pp _ ha) (pp _ hb) (fun hh => hab (inj hh)) fresh ih
-
 theorem mono_row_difference {T k t S} (h : Live T k t S) (none : t=0) {r s : Row}
     (pos : bit r T = true) (negRow : bit s T = false) :
     ∃ a ∈ S, bit r a = true ∧ bit s a = false := by
@@ -867,16 +681,12 @@ theorem mono_row_difference {T k t S} (h : Live T k t S) (none : t=0) {r s : Row
       cases d <;> cases p : bit r a <;> cases q : bit s a <;>
         cases u : bit r b <;> cases z : bit s b <;> simp_all
     · exact ⟨v,Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hu),hp,hn⟩
-
 def Lower (roots : List Sig) (T : Sig) (L : Nat) : Prop :=
   ∀ p bank, Reach (roots.map observe) p bank → Available bank (observe T) → L ≤ p
-
 def Impossible (T : Sig) (cap : Nat) (S : Finset Sig) : Prop :=
   ∀ k t, k ≤ cap → ¬Live T k t S
-
 def Essential (T : Sig) (roots : List Sig) (a : Sig) : Prop :=
   ∃ r s : Row, bit r T ≠ bit s T ∧ ∀ v ∈ roots, v ≠ a → bit r v = bit s v
-
 theorem lower_impossible {roots T L} (hp : proper T)
     (essential : ∀ a ∈ roots, Essential T roots a)
     (noRun : Impossible T L roots.toFinset) : Lower roots T (L+1) := by
@@ -890,14 +700,12 @@ theorem lower_impossible {roots T L} (hp : proper T)
     exact raw_required run roots a hs r s hd iso
   by_contra! small
   exact noRun k t (by omega) (he.symm ▸ run)
-
 theorem observe_proper {v : Sig} (hv : proper v) : ¬Constant (observe v) := by
   rintro ⟨b,h⟩
   have hr : represented ([] : List Sig) v := by
     have avail : Available ([] : List (Wire Row)) (observe v) := Or.inr ⟨b,h⟩
     simpa only [List.map_nil,table_observe] using available_rep avail
   exact (hr.resolve_left (by simp)) hv
-
 theorem mass_append {R} (a b : List (Wire R)) : mass (a++b) = mass a + mass b := by
   simp [mass]
 theorem mass_constants {R} (xs : List (Wire R)) (hc : ∀ x ∈ xs, Constant x) :
@@ -908,7 +716,6 @@ theorem mass_constants {R} (xs : List (Wire R)) (hc : ∀ x ∈ xs, Constant x) 
     have ha := hc a (by simp)
     simp only [mass_cons,List.length_cons,cost,if_pos ha,ih (fun x hx => hc x (by simp [hx]))]
     omega
-
 theorem lower_slice {roots other : List Sig} {T G : Sig} (pT : proper T) (pG : proper G)
     (r : Row → Row) (eq : rename r T = G)
     (covered : ∀ a ∈ roots, Available (other.map observe) (observe (rename r a)))
@@ -955,18 +762,13 @@ theorem lower_slice {roots other : List Sig} {T G : Sig} (pT : proper T) (pG : p
     rw [sz]
     omega
   omega
-
-
-
 def childOne (ws : List Sig) (a : Sig) (keep : Bool) : List Sig :=
   neg a :: kept keep a (ws.erase a)
 def childTwo (ws : List Sig) (a b : Sig) (d ka kb : Bool) : List Sig :=
   bin d a b :: kept ka a (kept kb b ((ws.erase a).erase b))
-
 theorem erase_fin {l : List Sig} (h : l.Nodup) (a : Sig) : (l.erase a).toFinset = l.toFinset.erase a := by
   ext x
   simp [h.mem_erase_iff]
-
 theorem enum_step {T : Sig} {cap : Nat} {ws : List Sig} (hn : ws.Nodup) (out : T ∉ ws)
     (oneStep : ∀ a ∈ ws, ∀ keep, neg a ∉ ws → proper (neg a) →
       (childOne ws a keep).length ≤ cap →
@@ -1036,20 +838,16 @@ theorem enum_step {T : Sig} {cap : Nat} {ws : List Sig} (hn : ws.Nodup) (out : T
       rw [←List.toFinset_card_of_nodup nd,eq]
       omega
     exact twoStep a am b bm d ka kb hab fresh hz len k t (by omega) (eq.symm ▸ tail)
-
 def Sep (T : Sig) (width : Nat) (pos negRow : Fin width → Row)
     (asig : Sig → BitVec width × BitVec width) : Prop :=
   (∀ i, bit (pos i) T = true ∧ bit (negRow i) T = false) ∧
   ∀ w i, (asig w).1.getLsbD i.val = bit (pos i) w ∧
     (asig w).2.getLsbD i.val = bit (negRow i) w
-
 def column {n} (oriented : Bool) (s : BitVec n × BitVec n) : BitVec n :=
   if oriented then s.1 &&& ~~~s.2 else s.1 ^^^ s.2
-
 def covered {n} (oriented : Bool) (sig : Sig → BitVec n × BitVec n) : List Sig → BitVec n
   | [] => 0
   | a::ws => column oriented (sig a) ||| covered oriented sig ws
-
 theorem covered_bit {n : Nat} {oriented : Bool} {sig : Sig → BitVec n × BitVec n} {ws : List Sig} {i : Fin n} :
     (covered oriented sig ws).getLsbD i.val = true ↔
     ∃ a ∈ ws, (column oriented (sig a)).getLsbD i.val = true := by
@@ -1057,7 +855,6 @@ theorem covered_bit {n : Nat} {oriented : Bool} {sig : Sig → BitVec n × BitVe
   | nil => simp [covered]
   | cons a ws ih =>
     simp only [covered,BitVec.getLsbD_or,Bool.or_eq_true,ih,List.mem_cons,exists_eq_or_imp]
-
 theorem cover_sound {T k t S} (h : Live T k t S) {ws : List Sig} (he : ws.toFinset=S)
     {width : Nat} {r s : Fin width → Row} {sig} (correct : Sep T width r s sig)
     (oriented : Bool) (zeroNot : oriented=true → t=0) :
@@ -1080,7 +877,6 @@ theorem cover_sound {T k t S} (h : Live T k t S) {ws : List Sig} (he : ws.toFins
     refine ⟨a,List.mem_toFinset.mp (he.symm ▸ ha),?_⟩
     simp only [column,ite_true,BitVec.getLsbD_and,BitVec.getLsbD_not,i.isLt,decide_true,
       Bool.true_and,(correct.2 a i).1,(correct.2 a i).2,hp,hn,Bool.not_false,Bool.and_self]
-
 theorem cover_required {T cap ws k t} (h : Live T k t (List.toFinset ws))
     (hk : k ≤ cap) (hn : ws.Nodup) {n : Nat} {r s : Fin n → Row} {sig}
     (correct : Sep T n r s sig) :
@@ -1091,20 +887,15 @@ theorem cover_required {T cap ws k t} (h : Live T k t (List.toFinset ws))
   have bound := (live_size h).2
   rw [List.toFinset_card_of_nodup hn] at bound
   omega
-
-
-
 def Slice (raw : List Sig) (T d : Sig) (L : Nat) : Prop :=
   ∃ (f : Row → Row) (roots : List Sig), (∀ r, bit (f r) d = true) ∧
     (∀ a ∈ raw, Available (roots.map observe) (restrictRows f (observe a))) ∧
     ¬Constant (restrictRows f (observe T)) ∧
     ∀ p bank, Reach (roots.map observe) p bank → Available bank (restrictRows f (observe T)) → L ≤ p
-
 def masked (d a : Sig) := a &&& d
 def availableB (d : Sig) (pool : List Sig) (a : Sig) :=
   let m := masked d a
   m == zero || m == d || (pool.map (masked d)).any (fun v => v==m)
-
 theorem masked_eq {f : Row → Row} {d a b : Sig} (dom : ∀ r, bit (f r) d = true)
     (eq : masked d a = masked d b) :
     restrictRows f (observe a) = restrictRows f (observe b) := by
@@ -1113,7 +904,6 @@ theorem masked_eq {f : Row → Row} {d a b : Sig} (dom : ∀ r, bit (f r) d = tr
   change bit (f r) a = bit (f r) b
   simpa only [bit,masked,BitVec.getLsbD_and,show d.getLsbD (f r).val = true from dom r,
     Bool.and_true] using h
-
 theorem masked_zero {f : Row → Row} {d a : Sig} (dom : ∀ r, bit (f r) d = true)
     (eq : masked d a = zero) : restrictRows f (observe a) = fun _ => false := by
   funext r
@@ -1122,7 +912,6 @@ theorem masked_zero {f : Row → Row} {d a : Sig} (dom : ∀ r, bit (f r) d = tr
   rw [bit_zero] at he
   simpa only [bit,masked,BitVec.getLsbD_and,show d.getLsbD (f r).val = true from dom r,
     Bool.and_true] using he
-
 theorem masked_one {f : Row → Row} {d a : Sig} (dom : ∀ r, bit (f r) d = true)
     (eq : masked d a = d) : restrictRows f (observe a) = fun _ => true := by
   funext r
@@ -1131,10 +920,8 @@ theorem masked_one {f : Row → Row} {d a : Sig} (dom : ∀ r, bit (f r) d = tru
   rw [dom r] at he
   simpa only [bit,masked,BitVec.getLsbD_and,show d.getLsbD (f r).val = true from dom r,
     Bool.and_true] using he
-
 def poolSupply (f : Row → Row) (bank : List (Wire Row)) (pool : List Sig) :=
   ∀ a ∈ pool, Available bank (restrictRows f (observe a))
-
 theorem availableB_sound {f : Row → Row} {d a : Sig} {bank pool}
     (dom : ∀ r, bit (f r) d = true) (supplyB : poolSupply f bank pool)
     (check : availableB d pool a = true) : Available bank (restrictRows f (observe a)) := by
@@ -1143,13 +930,11 @@ theorem availableB_sound {f : Row → Row} {d a : Sig} {bank pool}
   · exact Or.inr ⟨false,masked_zero dom hz⟩
   · exact Or.inr ⟨true,masked_one dom ho⟩
   · exact masked_eq dom he ▸ supplyB v hv
-
 abbrev Choice := Nat × Sig × Sig
 def choiceVal (c : Choice) :=
   if c.1=2 then neg c.2.1 else bin (c.1==1) c.2.1 c.2.2
 def choiceOK (d : Sig) (pool : List Sig) (c : Choice) :=
   availableB d pool c.2.1 && (c.1==2 || availableB d pool c.2.2)
-
 theorem pay_choice {f : Row → Row} {d : Sig} {roots bank pool q}
     (dom : ∀ r, bit (f r) d = true) (hp : Reach roots q bank) (hs : poolSupply f bank pool)
     (c : Choice) (valid : choiceOK d pool c = true) :
@@ -1174,11 +959,9 @@ theorem pay_choice {f : Row → Row} {d : Sig} {roots bank pool q}
   rcases List.mem_cons.mp hm with rfl | hm
   · exact Or.inl (by simp [z])
   · exact available_cons _ (hs _ hm)
-
 def makePool (d : Sig) (pool : List Sig) : List Choice → Option (List Sig)
   | [] => some pool
   | c::cs => if choiceOK d pool c then makePool d (choiceVal c::pool) cs else none
-
 theorem makePool_sound {d : Sig} {f : Row → Row} (dom : ∀ r, bit (f r) d = true)
     {roots bank q pool} (hp : Reach roots q bank) (hs : poolSupply f bank pool)
     (cs : List Choice) {result} (ok : makePool d pool cs = some result) :
@@ -1193,7 +976,6 @@ theorem makePool_sound {d : Sig} {f : Row → Row} (dom : ∀ r, bit (f r) d = t
       obtain ⟨out,hr',sh'⟩ := ih hr sh ok
       exact ⟨out,by simpa [Nat.add_assoc,Nat.add_comm 1] using hr',sh'⟩
     next => contradiction
-
 def isMaskedConstant (d a : Sig) := masked d a == zero || masked d a == d
 theorem count_constants {d : Sig} {f : Row → Row} (dom : ∀ r, bit (f r) d = true)
     (ws : List Sig) : ws.countP (isMaskedConstant d) ≤ mass ((ws.map observe).map (restrictRows f)) := by
@@ -1210,10 +992,8 @@ theorem count_constants {d : Sig} {f : Row → Row} (dom : ∀ r, bit (f r) d = 
         · exact ⟨false,masked_zero dom hz⟩
         · exact ⟨true,masked_one dom ho⟩
       simpa [cost,hc,Nat.add_comm] using Nat.succ_le_succ ih
-
 def poolCut (d : Sig) (L k p : Nat) (pool ws : List Sig) :=
   decide (k+p < L+ws.countP (isMaskedConstant d)) && ws.all (availableB d pool)
-
 theorem poolCut_sound {raw T d L} (slice : Slice raw T d L) (cs : List Choice)
     {pool ws cap} (built : makePool d raw cs = some pool)
     (nd : ws.Nodup) (cut : poolCut d L cap cs.length pool ws = true) :
@@ -1233,9 +1013,6 @@ theorem poolCut_sound {raw T d L} (slice : Slice raw T d L) (cs : List Choice)
   have hu := ineq
   simp only [Nat.zero_add] at b
   omega
-
-
-
 abbrev Move := Sig × Sig × Row
 def shifted (d r : Row) : Row :=
   if h : r.val < 512-d.val then ⟨d.val+r.val,by omega⟩ else ⟨r.val-(512-d.val),by omega⟩
@@ -1245,24 +1022,19 @@ def rowMove (m : Move) (r : Row) : Row :=
 def mux (m a b : Sig) := (m &&& a) ||| (~~~m &&& b)
 def wordMove (m : Move) (a : Sig) :=
   mux m.1 (a.rotateRight m.2.2.val) (mux m.2.1 (a.rotateRight (backwards m.2.2).val) a)
-
 theorem bit_shift (d r : Row) (a : Sig) : bit r (a.rotateRight d.val) = bit (shifted d r) a := by
   unfold bit
   rw [BitVec.getLsbD_rotateRight_of_lt d.isLt]
   by_cases h : r.val < 512-d.val <;> simp [shifted,h,r.isLt]
-
 theorem bool_mux (p x y : Bool) : (p && x || !p && y) = (if p then x else y) := by cases p <;> simp
-
 theorem bit_mux (r : Row) (m a b : Sig) :
     bit r (mux m a b) = if bit r m then bit r a else bit r b := by
   simp only [bit,mux,BitVec.getLsbD_and,BitVec.getLsbD_or,BitVec.getLsbD_not,r.isLt,
     decide_true,Bool.true_and]
   exact bool_mux _ _ _
-
 theorem bit_move (r : Row) (m : Move) (a : Sig) : bit r (wordMove m a) = bit (rowMove m r) a := by
   simp only [wordMove,bit_mux,bit_shift,rowMove]
   cases bit r m.1 <;> cases bit r m.2.1 <;> rfl
-
 def movedRow (ms : List Move) (r : Row) := ms.foldl (fun j m => rowMove m j) r
 def movedWord (ms : List Move) (a : Sig) := ms.foldr wordMove a
 theorem bit_moved (ms : List Move) (a : Sig) (r : Row) :
@@ -1274,7 +1046,6 @@ theorem moved_eq_rename (ms : List Move) (a : Sig) : movedWord ms a = rename (mo
   apply BitVec.eq_of_getLsbD_eq
   intro j hj
   exact (bit_moved ms a ⟨j,hj⟩).trans (bit_rename _ _ ⟨j,hj⟩).symm
-
 def freeWord (roots : List Sig) (w : Sig) := w==zero || w==one || roots.contains w
 theorem freeWord_ok {roots w} (ok : freeWord roots w = true) :
     Available (roots.map observe) (observe w) := by
@@ -1283,21 +1054,17 @@ theorem freeWord_ok {roots w} (ok : freeWord roots w = true) :
   · exact Or.inr ⟨false,funext bit_zero⟩
   · exact Or.inr ⟨true,funext bit_one⟩
   · exact Or.inl (List.mem_map_of_mem hm)
-
 def checkMap (ms : List Move) (raw : List Sig) (T : Sig) (base : List Sig) (G : Sig) :=
   movedWord ms T == G && raw.all (fun a => freeWord base (movedWord ms a))
-
 theorem map_correct {ms raw T base G} (ok : checkMap ms raw T base G = true) :
     rename (movedRow ms) T = G ∧
     ∀ a ∈ raw, Available (base.map observe) (observe (rename (movedRow ms) a)) := by
   simp only [checkMap,Bool.and_eq_true,beq_iff_eq,List.all_eq_true,moved_eq_rename] at ok
   exact ⟨ok.1,fun a ha => freeWord_ok (ok.2 a ha)⟩
-
 theorem lower_map {ms raw T base G L} (ok : checkMap ms raw T base G = true)
     (pT : proper T) (pG : proper G) (hL : Lower base G L) : Lower raw T L := by
   obtain ⟨eq,supp⟩ := map_correct ok
   simpa using lower_slice pT pG (movedRow ms) eq supp ∅ (by simp) (by simp) L hL
-
 theorem slice_correct {ms raw T base G L d} (ok : checkMap ms raw T base G = true)
     (all : movedWord ms d = one) (properG : proper G) (hL : Lower base G L) :
     Slice raw T d L := by
@@ -1314,14 +1081,12 @@ theorem slice_correct {ms raw T base G L d} (ok : checkMap ms raw T base G = tru
     exact observe_proper properG
   · rw [obs]
     exact hL
-
 def witnessB (T : Sig) (roots : List Sig) (a : Sig) (rs : Row × Row) :=
   (bit rs.1 T != bit rs.2 T) &&
   roots.all (fun w => w == a || bit rs.1 w == bit rs.2 w)
 theorem witnessB_sound {T roots a rs} (ok : witnessB T roots a rs = true) : Essential T roots a := by
   simp only [witnessB,Bool.and_eq_true,bne_iff_ne,List.all_eq_true,Bool.or_eq_true,beq_iff_eq] at ok
   exact ⟨rs.1,rs.2,ok.1,fun w hw hne => (ok.2 w hw).resolve_left hne⟩
-
 def checkEssential (T : Sig) (raw : List Sig) (xs : List (Sig × Row × Row)) :=
   xs.all (fun a => witnessB T raw a.1 a.2)
 theorem essential_ok {T raw xs} (ok : checkEssential T raw xs = true) :
@@ -1329,7 +1094,6 @@ theorem essential_ok {T raw xs} (ok : checkEssential T raw xs = true) :
   intro a ha
   obtain ⟨⟨a,r,s⟩,hm,rfl⟩ := List.mem_map.mp (List.mem_toFinset.mp ha)
   exact witnessB_sound (List.all_eq_true.mp ok _ hm)
-
 theorem lower_count {raw T} (properT : proper T) (xs : List (Sig × Row × Row))
     (ok : checkEssential T raw xs = true) :
     Lower raw T ((xs.map Prod.fst).toFinset.card-1) := by
@@ -1342,12 +1106,10 @@ theorem lower_count {raw T} (properT : proper T) (xs : List (Sig × Row × Row))
     exact raw_required run raw a sub r s hd iso
   have bound := (live_size run).2
   omega
-
 def checkLift (ms : List Move) (T : Sig) (raw : List Sig) (base : List Sig) (G : Sig)
     (xs : List (Sig × Row × Row)) :=
   checkMap ms raw T base G && checkEssential T raw xs &&
     xs.all (fun a => movedWord ms a.1 == zero || movedWord ms a.1 == one)
-
 theorem lift_ok {ms T raw base G xs L} (ok : checkLift ms T raw base G xs = true)
     (properT : proper T) (properG : proper G) (low : Lower base G L) :
     Lower raw T (L+(xs.map Prod.fst).toFinset.card) := by
@@ -1363,9 +1125,6 @@ theorem lift_ok {ms T raw base G xs L} (ok : checkLift ms T raw base G xs = true
     exact ⟨false,funext bit_zero⟩
   · rw [h]
     exact ⟨true,funext bit_one⟩
-
-
-
 def selected (m : Nat) : List (Nat × Sig) :=
   (List.range 9).filterMap fun i => if m.testBit i then some (i,inputs.getD i zero) else none
 def vars (m : Nat) := (selected m).map Prod.snd
@@ -1419,15 +1178,12 @@ def swapRows (v : Nat) : Move :=
   let b := inputs.getD j zero
   let d := (1 <<< j)-(1 <<< i)
   (a &&& ~~~b,b &&& ~~~a,Fin.ofNat 512 d)
-
 def supportPairs (mask : Nat) : List (Sig × Row × Row) :=
   (selected mask).map fun (i,a) => (a,0,Fin.ofNat 512 (1 <<< i))
-
 def graphPairs (m hints : Nat) : List (Sig × Row × Row) :=
   (selected m).map fun (i,a) =>
     let r := 1 <<< ((hints >>> (4*i)) &&& 15)
     (a,Fin.ofNat 512 r,Fin.ofNat 512 (r ||| (1 <<< i)))
-
 def properB (T : Sig) := T != zero && T != one
 theorem proper_of (T : Sig) (h : properB T = true) : proper T := by
   simpa only [properB,proper,Bool.and_eq_true,bne_iff_ne] using h
@@ -1440,7 +1196,6 @@ theorem size_of {m hints L} (h : assertSize m hints L = true) :
   simp only [assertSize,Bool.and_eq_true,decide_eq_true_eq] at h
   intro p bank hr ha
   exact h.2.trans (lower_count (proper_of _ h.1.1) _ h.1.2 p bank hr ha)
-
 abbrev ColumnInfo := Nat × Nat × Nat × Nat × Nat
 def colFree (m z o : Nat) := m ^^^ (m &&& (z ||| o))
 def chartGoal (m : Nat) : Sig :=
@@ -1458,7 +1213,6 @@ def colCheck (m : Nat) (c : ColumnInfo) (prior : Nat → Nat) : Bool :=
      else properB (graphGoal q) &&
        checkLift (fixRows (colFree free q 0) 0) G (vars free) (vars q) (graphGoal q) xs &&
        decide (L ≤ prior q+count))
-
 theorem col_sound {m : Nat} (c : ColumnInfo) (prior : Nat → Nat)
     (valid : ∀ q, Lower (vars q) (graphGoal q) (prior q))
     (ok : colCheck m c prior = true) : Slice (vars m) (chartGoal m) (subcube c.1 c.2.1) c.2.2.2.2 := by
@@ -1478,7 +1232,6 @@ theorem col_sound {m : Nat} (c : ColumnInfo) (prior : Nat → Nat)
     exact hh.2.trans (lower_count (proper_of _ ok.1.1.1) xs hh.1 p bank hr ha)
   · simp only [colCheck,hq,if_false,Bool.and_eq_true,decide_eq_true_eq] at hh
     exact hh.2.trans (lift_ok hh.1.2 (proper_of _ ok.1.1.1) (proper_of _ hh.1.1) (valid q) p bank hr ha)
-
 def relabelOK (old rep : Nat) (swaps : List Nat) :=
   properB (graphGoal old) && properB (graphGoal rep) &&
     checkMap (swaps.map swapRows) (vars old) (graphGoal old) (vars rep) (graphGoal rep)
@@ -1486,7 +1239,6 @@ theorem relabel_of {old rep L swaps} (ok : relabelOK old rep swaps = true)
     (h : Lower (vars rep) (graphGoal rep) L) : Lower (vars old) (graphGoal old) L := by
   simp only [relabelOK,Bool.and_eq_true] at ok
   exact lower_map ok.2 (proper_of _ ok.1.1) (proper_of _ ok.1.2) h
-
 def boundsBefore (entries : List (Nat × Nat)) (q : Nat) :=
   ((entries.find? (fun a => a.1 == q)).map Prod.snd).getD 0
 theorem before_sound (entries : List (Nat × Nat))
@@ -1500,27 +1252,21 @@ theorem before_sound (entries : List (Nat × Nat))
     have hit : (fun a : Nat × Nat => a.1 == q) e = true := List.find?_some (p:=fun a : Nat × Nat => a.1 == q) (a:=e) h
     have eq : e.1=q := beq_iff_eq.mp hit
     simpa only [Option.map_some,Option.getD_some,eq] using sound e he
-
-
 abbrev BoundPool := (Sig) × (Nat) × (Nat) × (List Sig)
 abbrev BoundPool.domain (c : BoundPool) : Sig := c.1
 abbrev BoundPool.bound (c : BoundPool) : Nat := c.2.1
 abbrev BoundPool.paid (c : BoundPool) : Nat := c.2.2.1
 abbrev BoundPool.wires (c : BoundPool) : List Sig := c.2.2.2
-
-
 def ValidPool (raw : List Sig) (T : Sig) (c : BoundPool) :=
   ∃ (f : Row → Row) (roots : List Sig) (bank : List (Wire Row)),
     (∀ r, bit (f r) c.domain = true) ∧ ¬Constant (restrictRows f (observe T)) ∧
     (∀ q ws, Reach (roots.map observe) q ws → Available ws (restrictRows f (observe T)) → c.bound ≤ q) ∧
     Reach (roots.map observe) c.paid bank ∧ poolSupply f bank c.wires ∧ True
-
 theorem build_valid {raw T d lb} (h : Slice raw T d lb) (cs : List Choice) {ws}
     (build : makePool d raw cs = some ws) : ValidPool raw T ⟨d,lb,cs.length,ws⟩ := by
   obtain ⟨f,roots,dom,sup,nc,prior⟩ := h
   obtain ⟨bank,hr,hs⟩ := makePool_sound dom (Reach.start (roots:=roots.map observe)) sup cs build
   exact ⟨f,roots,bank,dom,nc,prior,by simpa using hr,hs,trivial⟩
-
 theorem valid_exclude {raw T c} (valid : ValidPool raw T c) (k : Nat) (rest : List Sig)
     (choice : Choice) (paid : Bool)
     (known : ∀ a ∈ rest, availableB c.domain c.wires a = true)
@@ -1564,13 +1310,11 @@ theorem valid_exclude {raw T c} (valid : ValidPool raw T c) (k : Nat) (rest : Li
           fun u hu => hc u (List.mem_cons_of_mem _ hu)
         exact availableB_sound dom point ha
       · exact Or.inr con
-
 def scalarPoolCut (c : BoundPool) (k : Nat) (rest : List Sig) (op : Choice) :=
   let z := choiceVal op
   let extra := !(availableB c.domain c.wires z)
   ((k+c.paid+extra.toNat < c.bound+(z::rest).countP (isMaskedConstant c.domain)) &&
     rest.all (availableB c.domain c.wires)) && (!extra || choiceOK c.domain c.wires op)
-
 theorem scalarPoolCut_sound {raw T c} (valid : ValidPool raw T c) {k rest op}
     (nd : (choiceVal op::rest).Nodup) (cut : scalarPoolCut c k rest op = true) :
     Impossible T k (choiceVal op::rest).toFinset := by
@@ -1582,7 +1326,6 @@ theorem scalarPoolCut_sound {raw T c} (valid : ValidPool raw T c) {k rest op}
     cases he : availableB c.domain c.wires (choiceVal op) <;> simp_all [extra]
   · simp only [scalarPoolCut,Bool.and_eq_true,decide_eq_true_eq] at cut
     exact cut.1.1
-
 def materialize (raw : List Sig) (cs : List Choice) (d : Sig) (lb : Nat) : Option BoundPool :=
   (makePool d raw cs).map (fun pool => ⟨d,lb,cs.length,pool⟩)
 theorem materialize_sound {raw T d L cs c} (slice : Slice raw T d L)
@@ -1596,12 +1339,9 @@ theorem materialize_sound {raw T d L cs c} (slice : Slice raw T d L)
     injection h with h
     subst c
     exact build_valid slice cs he
-
-
 abbrev Bits := BitVec 768
 abbrev Signals := Bits × Bits
 abbrev Decor := Sig × Signals
-
 def ofRows {n : Nat} (r : Fin n → Row) (v : Sig) : BitVec n :=
   (BitVec.ofBoolListLE (List.ofFn (fun i => bit (r i) v))).cast List.length_ofFn
 theorem ofRows_bit {n : Nat} (r : Fin n → Row) (v : Sig) (i : Fin n) :
@@ -1618,7 +1358,6 @@ def dneg (x : Decor) : Decor := (neg x.1,~~~x.2.1,~~~x.2.2)
 def dbin (d : Bool) (x y : Decor) : Decor :=
   if d then (bin d x.1 y.1,x.2.1 ||| y.2.1,x.2.2 ||| y.2.2)
   else (bin d x.1 y.1,x.2.1 &&& y.2.1,x.2.2 &&& y.2.2)
-
 theorem ofRows_neg (r : Fin 768 → Row) (a : Sig) : ofRows r (neg a) = ~~~ofRows r a := by
   apply BitVec.eq_of_getLsbD_eq
   intro j hj
@@ -1640,7 +1379,6 @@ theorem faithful_bin {r s x y} (d) (hx : faithful r s x) (hy : faithful r s y) :
   change x.2 = _ at hx
   change y.2 = _ at hy
   cases d <;> simp only [faithful,dbin,Bool.false_eq_true,ite_false,ite_true,pairSig,ofRows_bin,hx,hy]
-
 def codeDecor (op : Nat) (x y : Decor) := if op=2 then dneg x else dbin (op==1) x y
 def defaultDecor : Decor := (zero,0,0)
 theorem faithful_default (r s) : faithful r s defaultDecor := by
@@ -1678,7 +1416,6 @@ theorem decode_faithful (n bits) (ws) (r s) (base : ∀ v ∈ ws, faithful r s v
       split
       · exact faithful_neg (faithful_get base _)
       · exact faithful_bin _ (faithful_get base _) (faithful_get base _)
-
 def asRow (cols : Nat → Bits) (i : Fin 768) : Row :=
   (BitVec.ofBoolListLE (List.ofFn (fun j : Fin 9 => (cols j.val).getLsbD i.val))).toFin.cast
     (by simp [List.length_ofFn])
@@ -1729,7 +1466,6 @@ theorem raw_faithful (m) (p q : Nat → Bits) :
   apply Prod.ext <;> apply BitVec.eq_of_getLsbD_eq <;> intro i hi
   · exact (asRow_bit p ⟨i,hi⟩ ⟨j,hj⟩).symm.trans (ofRows_bit _ _ ⟨i,hi⟩).symm
   · exact (asRow_bit q ⟨i,hi⟩ ⟨j,hj⟩).symm.trans (ofRows_bit _ _ ⟨i,hi⟩).symm
-
 def liftGoal (m : Nat) (v : Nat → Bits) : Bits :=
   let x := fun j => if m.testBit j then v j else 0
   (x 0 &&& x 1) ||| (x 1 &&& x 2) ||| (x 2 &&& x 3) ||| (x 3 &&& x 4) |||
@@ -1747,31 +1483,25 @@ theorem bit_liftGoal (m : Nat) (v : Nat → Bits) (i : Fin 768) :
   simp only [bit,graphGoal,liftGoal,BitVec.getLsbD_and,BitVec.getLsbD_or]
   simp only [pos 0 (by decide),pos 1 (by decide),pos 2 (by decide),pos 3 (by decide),pos 4 (by decide),pos 5 (by decide),pos 6 (by decide),pos 7 (by decide),pos 8 (by decide)]
 abbrev Cov := Bits × Bits × Bits
-
 def addCov (z : Bits) (c : Cov) : Cov :=
   (z ||| c.1, (z &&& ~~~c.1) ||| (c.2.1 &&& ~~~z),
    (z &&& c.2.1) ||| (c.2.2 &&& ~~~z))
-
 def coverage (d : Bool) (v : List Decor) : Cov :=
   v.foldr (fun a c => addCov (column d a.2) c) (0,0,0)
-
 def takeOne (c : Cov) (a : Bits) : Bits := c.1 &&& ~~~(c.2.1 &&& a)
 def takeTwo (c : Cov) (a b : Bits) : Bits :=
   c.1 &&& ~~~((c.2.1 &&& (a ||| b)) ||| (c.2.2 &&& (a &&& b)))
-
 private theorem cov_one (c : Cov) (a : Bits) : takeOne (addCov a c) a=c.1 := by
   apply BitVec.eq_of_getLsbD_eq
   intro i hi
   simp only [takeOne,addCov,BitVec.getLsbD_or,BitVec.getLsbD_and,BitVec.getLsbD_not,hi,decide_true,Bool.true_and]
   cases a.getLsbD i <;> cases c.1.getLsbD i <;> cases c.2.1.getLsbD i <;> rfl
-
 private theorem cov_two (c : Cov) (a b : Bits) : takeTwo (addCov a (addCov b c)) a b=c.1 := by
   apply BitVec.eq_of_getLsbD_eq
   intro i hi
   simp only [takeTwo,addCov,BitVec.getLsbD_or,BitVec.getLsbD_and,BitVec.getLsbD_not,hi,decide_true,Bool.true_and]
   cases a.getLsbD i <;> cases b.getLsbD i <;> cases c.1.getLsbD i <;>
     cases c.2.1.getLsbD i <;> cases c.2.2.getLsbD i <;> rfl
-
 private theorem add_swap (c : Cov) (a b : Bits) : addCov a (addCov b c)=addCov b (addCov a c) := by
   apply Prod.ext
   · apply BitVec.eq_of_getLsbD_eq
@@ -1782,16 +1512,12 @@ private theorem add_swap (c : Cov) (a b : Bits) : addCov a (addCov b c)=addCov b
       simp only [addCov,BitVec.getLsbD_or,BitVec.getLsbD_and,BitVec.getLsbD_not,hi,decide_true,Bool.true_and] <;>
       cases a.getLsbD i <;> cases b.getLsbD i <;> cases c.1.getLsbD i <;>
       cases c.2.1.getLsbD i <;> cases c.2.2.getLsbD i <;> rfl
-
 private theorem cov_perm (d : Bool) {l r : List Decor} (h : l.Perm r) : coverage d l=coverage d r := by
   induction h with
   | nil => rfl
   | cons a _ ih => exact congrArg (addCov (column d a.2)) ih
   | swap a b t => exact add_swap _ _ _
   | trans _ _ h1 h2 => exact h1.trans h2
-
-
-
 theorem cov_word (d : Bool) (v : List Decor) {r s} (good : ∀ a ∈ v, faithful r s a) :
     (coverage d v).1 = covered d (pairSig r s) (v.map Prod.fst) := by
   induction v with
@@ -1799,15 +1525,12 @@ theorem cov_word (d : Bool) (v : List Decor) {r s} (good : ∀ a ∈ v, faithful
   | cons a v ih =>
     change (column d a.2 ||| (coverage d v).1) = column d (pairSig r s a.1) ||| _
     rw [show a.2=pairSig r s a.1 from good _ (by simp),ih (fun a ha => good a (by simp [ha]))]
-
 def delOne (ws : List Decor) (a : Decor) (keep : Bool) :=
   if keep then ws else ws.erase a
 def delTwo (ws : List Decor) (a b : Decor) (ka kb : Bool) :=
   delOne (delOne ws a ka) b kb
-
 theorem delOne_perm {ws : List Decor} (a : Decor) (ha : a ∈ ws) :
     ws.Perm (a::ws.erase a) := List.perm_cons_erase ha
-
 theorem cover_one {ws : List Decor} (d : Bool) (a : Decor) (ha : a ∈ ws) (keep : Bool) :
     (coverage d (delOne ws a keep)).1 =
       (if keep then (coverage d ws).1 else takeOne (coverage d ws) (column d a.2)) := by
@@ -1820,7 +1543,6 @@ theorem delTwo_perm {ws : List Decor} (a b : Decor) (ha : a ∈ ws) (hb : b ∈ 
     ws.Perm (a::b::(ws.erase a).erase b) := by
   have hm : b ∈ ws.erase a := (List.mem_erase_of_ne (Ne.symm hne)).mpr hb
   exact (delOne_perm a ha).trans (List.Perm.cons _ (delOne_perm b hm))
-
 theorem cover_two {ws : List Decor} (d : Bool) (a b : Decor) (ha : a ∈ ws) (hb : b ∈ ws)
     (ne : a ≠ b) (ka kb : Bool) :
     (coverage d (delTwo ws a b ka kb)).1 =
@@ -1834,25 +1556,20 @@ theorem cover_two {ws : List Decor} (d : Bool) (a b : Decor) (ha : a ∈ ws) (hb
   · exact cover_one d a ha false
   · exact cover_one d b hb false
   · rfl
-
 def sameWords (a b : List Sig) := (a.all (fun x => b.contains x)) && (b.all (fun x => a.contains x))
 theorem sameWords_sound {xs ys} (h : sameWords xs ys = true) : xs.toFinset=ys.toFinset := by
   simp only [sameWords,Bool.and_eq_true,List.all_eq_true,List.contains_eq_mem,decide_eq_true_eq] at h
   ext a
   simp only [List.mem_toFinset]
   exact ⟨h.1 a,h.2 a⟩
-
-
 def keyWord (v : Sig) :=
   let n := v.toNat % 2305843009213693951
   (n*(n+971)) % 2305843009213693951
 def keySet (xs : List Sig) := xs.foldl (fun v x => v+keyWord x) 0
-
 def closeChild (pools : List BoundPool) (links : Nat → List (List Sig)) (k : Nat)
     (rest : List Sig) (op : Choice) :=
   let ws := choiceVal op::rest
   (links (keySet ws)).any (sameWords ws) || pools.any (fun p => scalarPoolCut p k rest op)
-
 theorem closeChild_sound {raw T pools links k rest op}
     (pValid : ∀ p ∈ pools, ValidPool raw T p)
     (lValid : ∀ tag xs, xs ∈ links tag → Impossible T k (List.toFinset xs))
@@ -1864,7 +1581,6 @@ theorem closeChild_sound {raw T pools links k rest op}
   · rw [sameWords_sound ok]
     exact lValid _ _ hx
   · exact scalarPoolCut_sound (pValid _ hp) nd ok
-
 abbrev CovPair := Cov × Cov
 def preCov (ws : List Decor) : CovPair := (coverage false ws,coverage true ws)
 def getCov (c : CovPair) (d : Bool) := if d then c.2 else c.1
@@ -1875,7 +1591,6 @@ def restCov (v : Cov) (a b : Bits) (un ka kb : Bool) :=
     else if kb then takeOne v a else takeTwo v a b
 def opKeep (un ka kb : Bool) (a b : Decor) (ws : List Decor) :=
   if un then delOne ws a ka else delTwo ws a b ka kb
-
 theorem rest_coverage {ws : List Decor} {a b : Decor} (ha : a ∈ ws) (hb : b ∈ ws)
     (un ka kb d : Bool) (ne : un=false → a≠b) :
     (coverage d (opKeep un ka kb a b ws)).1 =
@@ -1884,7 +1599,6 @@ theorem rest_coverage {ws : List Decor} {a b : Decor} (ha : a ∈ ws) (hb : b �
   cases un
   · exact cover_two d a b ha hb (ne rfl) ka kb
   · exact cover_one d a ha ka
-
 theorem delOne_sub (ws : List Decor) (a : Decor) (k : Bool) : (delOne ws a k).Sublist ws := by
   cases k
   · exact List.erase_sublist
@@ -1902,7 +1616,6 @@ theorem len_keep (ws : List Decor) (a b : Decor) (un ka kb : Bool) (ha : a ∈ w
   · have hm : b ∈ ws.erase a := (List.mem_erase_of_ne (Ne.symm (ne rfl))).mpr hb
     cases ka <;> cases kb <;> simp [opKeep,delTwo,delOne,List.length_erase_of_mem ha,List.length_erase_of_mem hb,List.length_erase_of_mem hm]
   · cases ka <;> cases kb <;> simp [opKeep,delOne,List.length_erase_of_mem ha]
-
 def movedDecor (op : Nat) (a b : Decor) := codeDecor op a b
 def movedChoice (op : Nat) (a b : Decor) : Choice := (op,a.1,b.1)
 theorem moved_full (op) (a b : Decor) :
@@ -1916,7 +1629,6 @@ theorem moved_faithful {r s a b} (ha : faithful r s a) (hb : faithful r s b) (op
   split
   · exact faithful_neg ha
   · exact faithful_bin _ ha hb
-
 abbrev NodeContext := Nat × Nat × List Decor × CovPair × List BoundPool × (Nat → List (List Sig))
 def evalMove (c : NodeContext) (op : Nat) (a b z : Decor) (ka kb : Bool) :=
   let (cap,n,ws,cov,pools,links) := c
@@ -1929,7 +1641,6 @@ def evalMove (c : NodeContext) (op : Nat) (a b z : Decor) (ka kb : Bool) :=
     if !properB z.1 || ws.any (fun v => v.1==z.1) then true else
       let rest := (opKeep un ka kb a b ws).map Prod.fst
       closeChild pools links (cap-1) rest (movedChoice op a b)
-
 def moveFront (ws : List Decor) (op : Nat) (a b : Decor) (ka kb : Bool) :=
   (movedDecor op a b).1 :: (opKeep (op==2) ka kb a b ws).map Prod.fst
 theorem evalMove_sound {raw T r s ws pools links cap a b op ka kb}
@@ -1989,8 +1700,6 @@ theorem evalMove_sound {raw T r s ws pools links cap a b op ka kb}
   change Live T k t (z.1::rest.map Prod.fst).toFinset at h
   rw [val] at nd' h
   exact closeChild_sound pv lv nd' test k t hk h
-
-
 def testPair (ctx : NodeContext) (a b : Decor) (d : Bool) :=
   let op := if d then 1 else 0
   let z := movedDecor op a b
@@ -2003,7 +1712,6 @@ def testRow (ctx : NodeContext) (a : Decor) (bs : List Decor) :=
 def testAll (ctx : NodeContext) : List Decor → Bool
   | [] => true
   | a::bs => testRow ctx a bs && testAll ctx bs
-
 theorem all_unary {ctx ws} (h : testAll ctx ws=true) {a : Decor} (ha : a∈ws) (keep : Bool) :
     evalMove ctx 2 a a (movedDecor 2 a a) keep keep=true := by
   induction ws with
@@ -2015,7 +1723,6 @@ theorem all_unary {ctx ws} (h : testAll ctx ws=true) {a : Decor} (ha : a∈ws) (
       · exact h.1.1.1
       · exact h.1.1.2
     · exact ih h.2 hm
-
 theorem all_binary {ctx ws} (h : testAll ctx ws=true) {a b : Decor} (ha : a∈ws) (hb : b∈ws)
     (ne : a≠b) (d : Bool) : testPair ctx a b d=true ∨ testPair ctx b a d=true := by
   induction ws with
@@ -2030,18 +1737,15 @@ theorem all_binary {ctx ws} (h : testAll ctx ws=true) {a b : Decor} (ha : a∈ws
       · right
         cases d <;> first | exact (h.1.2 a haTail).1 | exact (h.1.2 a haTail).2
       · exact ih h.2 haTail hbTail
-
 theorem testPair_at {ctx a b d} (h : testPair ctx a b d = true) (ka kb : Bool) :
     evalMove ctx (if d then 1 else 0) a b (movedDecor (if d then 1 else 0) a b) ka kb = true := by
   simp only [testPair,Bool.and_eq_true] at h
   cases ka <;> cases kb <;> first | exact h.1.1.1 | exact h.1.2 | exact h.1.1.2 | exact h.2
-
 theorem keep_mem {v : List Sig} {w : Sig} (a : Sig) (k : Bool) :
     w ∈ kept k a v ↔ (w=a ∧ k=true) ∨ w∈v := by cases k <;> simp [kept]
 theorem mem_delone {v : List Decor} (nd : v.Nodup) (a w : Decor) (k : Bool) :
     w ∈ delOne v a k ↔ w∈v ∧ (w≠a ∨ k=true) := by
   cases k <;> simp [delOne,nd.mem_erase_iff,and_comm]
-
 theorem unique_value {ws : List Decor} (nd : (ws.map Prod.fst).Nodup) {a b : Decor}
     (ha : a∈ws) (hb : b∈ws) (eq : a.1=b.1) : a=b := by
   induction ws with
@@ -2053,7 +1757,6 @@ theorem unique_value {ws : List Decor} (nd : (ws.map Prod.fst).Nodup) {a b : Dec
     · exact False.elim (hn (eq ▸ List.mem_map_of_mem hbTail))
     · exact False.elim (hn (eq.symm ▸ List.mem_map_of_mem haTail))
     · exact ih ht haTail hbTail
-
 theorem kept_value {ws : List Decor} (nd : (ws.map Prod.fst).Nodup) {a b : Decor}
     (ha : a ∈ ws) (hb : b ∈ ws) (un ka kb : Bool) (v : Sig) :
     v ∈ (opKeep un ka kb a b ws).map Prod.fst ↔
@@ -2074,7 +1777,6 @@ theorem kept_value {ws : List Decor} (nd : (ws.map Prod.fst).Nodup) {a b : Decor
         h2.imp (fun ne eq => ne (congrArg Prod.fst eq)) id⟩,rfl⟩
     | rintro ⟨⟨w,hm,rfl⟩,h1⟩
       exact ⟨w,⟨hm,h1.imp (fun ne eq => ne (congrArg Prod.fst eq)) id⟩,rfl⟩
-
 theorem unary_front {ws : List Decor} (nd : (ws.map Prod.fst).Nodup) {a : Decor} (ha : a∈ws)
     (keep : Bool) :
     (moveFront ws 2 a a keep keep).toFinset = (childOne (ws.map Prod.fst) a.1 keep).toFinset := by
@@ -2084,7 +1786,6 @@ theorem unary_front {ws : List Decor} (nd : (ws.map Prod.fst).Nodup) {a : Decor}
     Nat.reduceBEq,true_or,and_true]
   have av := List.mem_map_of_mem (f:=Prod.fst) ha
   by_cases e : v=a.1 <;> cases keep <;> simp_all
-
 theorem binary_front {ws : List Decor} (nd : (ws.map Prod.fst).Nodup) {a b : Decor}
     (ha : a∈ws) (hb : b∈ws) (ne : a.1≠b.1) (d ka kb : Bool) :
     (moveFront ws (if d then 1 else 0) a b ka kb).toFinset =
@@ -2096,14 +1797,12 @@ theorem binary_front {ws : List Decor} (nd : (ws.map Prod.fst).Nodup) {a b : Dec
     kept_value nd ha hb,keep_mem,(nd.erase _).mem_erase_iff,nd.mem_erase_iff,movedDecor,codeDecor,dbin,
     Bool.false_eq_true,Nat.reduceBEq,ite_true,ite_false,false_or]
   all_goals by_cases va : v=a.1 <;> by_cases vb : v=b.1 <;> cases ka <;> cases kb <;> simp_all
-
 theorem childTwo_swap (v : List Sig) (nd : v.Nodup) (a b : Sig) (d ka kb : Bool) :
     (childTwo v a b d ka kb).toFinset = (childTwo v b a d kb ka).toFinset := by
   ext x
   simp only [childTwo,List.toFinset_cons,Finset.mem_insert,List.mem_toFinset,
     keep_mem,(nd.erase _).mem_erase_iff,nd.mem_erase_iff,bin_comm d b a]
   tauto
-
 theorem node_sound {raw T r s ws pools links cap}
     (pairs : properPairs T r s) (faith : ∀ w ∈ ws, faithful r s w)
     (nd : (ws.map Prod.fst).Nodup) (out : T ∉ ws.map Prod.fst)
@@ -2142,8 +1841,6 @@ theorem node_sound {raw T r s ws pools links cap}
     · rw [childTwo_swap _ nd]
       exact one b a hbW haW (Ne.symm ne) kb ka (bin_comm d a.1 b.1 ▸ pro)
         (bin_comm d a.1 b.1 ▸ fresh) hh
-
-
 theorem agree_inputs (r s : Row) (h : ∀ a ∈ inputs, bit r a = bit s a) : r=s := by
   apply Fin.ext
   apply Nat.eq_of_testBit_eq
@@ -2159,7 +1856,6 @@ theorem agree_inputs (r s : Row) (h : ∀ a ∈ inputs, bit r a = bit s a) : r=s
       exact Nat.pow_le_pow_right (by decide) (by omega)
     exact (Nat.testBit_eq_false_of_lt (lt_of_lt_of_le r.isLt le)).trans
       (Nat.testBit_eq_false_of_lt (lt_of_lt_of_le s.isLt le)).symm
-
 def composedOK (p q : List Move) := inputs.all (fun a => movedWord p (movedWord q a) == a)
 theorem composed_id {p q} (h : composedOK p q = true) (r : Row) :
     movedRow q (movedRow p r) = r := by
@@ -2168,7 +1864,6 @@ theorem composed_id {p q} (h : composedOK p q = true) (r : Row) :
   rw [←bit_moved,←bit_moved]
   have eq := beq_iff_eq.mp (List.all_eq_true.mp h a ha)
   rw [eq]
-
 def autoOK (T : Sig) (p : List Move) :=
   (movedWord p T == T) && composedOK p p.reverse && composedOK p.reverse p
 theorem rotate_excluded {T n} {ws : List Sig} (hi : Impossible T n ws.toFinset)
@@ -2193,7 +1888,6 @@ theorem rotate_excluded {T n} {ws : List Sig} (hi : Impossible T n ws.toFinset)
       exact ⟨_,⟨a,ha,rfl⟩,inv a⟩
   rw [goal,back] at run
   exact hi k t hk run
-
 abbrev Packing := Nat × Nat × Nat × Nat × Nat × Nat × Nat × (Nat → Nat)
 def emptyPacking : Packing := (0,0,0,0,0,0,0,fun _ => 0)
 def packedAt (word : Nat → Nat) (pos len : Nat) :=
@@ -2202,8 +1896,6 @@ def packedAt (word : Nat → Nat) (pos len : Nat) :=
   let lo := word i >>> shift
   if shift+len ≤ 8192 then lo &&& ((1 <<< len)-1)
   else (lo ||| (word (i+1) <<< (8192-shift))) &&& ((1 <<< len)-1)
-
-
 def lookupWord (nb slots sw vw iw pw : Nat) (data : Nat → Nat) (h : Nat) : Option (Nat × Nat) :=
   let a := h % nb
   let sh := packedAt data (a*sw) sw
@@ -2212,16 +1904,24 @@ def lookupWord (nb slots sw vw iw pw : Nat) (data : Nat → Nat) (h : Nat) : Opt
   if (word >>> (iw+pw)) == h/(nb*slots)%16 then
     some (word &&& ((1 <<< iw)-1),(word >>> iw) &&& ((1 <<< pw)-1))
   else none
-
-
-def IndexTree (α : Type) := List α
-def IndexTree.leaf {α} (xs : List α) : IndexTree α := xs
-def IndexTree.fork {α} (_ : Nat) (a b : IndexTree α) : IndexTree α := List.append a b
-def IndexTree.read {α} (tree : IndexTree α) (i : Nat) := (show List α from tree)[i]?
-def IndexTree.values {α} (tree : IndexTree α) : List α := tree
-theorem IndexTree.read_mem {α} (tree : IndexTree α) {i x} (e : tree.read i=some x) :
-    x ∈ tree.values := List.mem_of_getElem? e
-
+inductive IndexTree (α : Type) where
+  | leaf (xs : List α)
+  | fork (left : Nat) (a b : IndexTree α)
+def IndexTree.read {α} : IndexTree α → Nat → Option α
+  | .leaf xs, i => xs[i]?
+  | .fork l a b, i => if i < l then a.read i else b.read (i - l)
+def IndexTree.values {α} : IndexTree α → List α
+  | .leaf xs => xs
+  | .fork _ a b => a.values ++ b.values
+theorem IndexTree.read_mem {α} (tree : IndexTree α) {i x} (e : tree.read i = some x) :
+    x ∈ tree.values := by
+  induction tree generalizing i with
+  | leaf xs => exact List.mem_of_getElem? e
+  | fork l a b iha ihb =>
+    unfold IndexTree.read at e
+    split at e
+    · exact List.mem_append_left _ (iha e)
+    · exact List.mem_append_right _ (ihb e)
 def Forest := (Nat) × (Nat) × (Nat → Bits × Bits) × (IndexTree ColumnInfo) × (Array (List Nat)) × (Nat → Packing) × (Nat → Nat → Option (Nat × Nat))
 def Forest.mask (c : Forest) : Nat := c.1
 def Forest.cap (c : Forest) : Nat := c.2.1
@@ -2230,8 +1930,6 @@ def Forest.cols (c : Forest) : IndexTree ColumnInfo := c.2.2.2.1
 def Forest.autos (c : Forest) : Array (List Nat) := c.2.2.2.2.1
 def Forest.levels (c : Forest) : Nat → Packing := c.2.2.2.2.2.1
 def Forest.index (c : Forest) : Nat → Nat → Option (Nat × Nat) := c.2.2.2.2.2.2
-
-
 def wiresOf (g : Forest) :=
   let ws := rawDecor g.mask (fun j => (g.samples j).1) (fun j => (g.samples j).2)
   let nonedge := dneg (dbin false (ws.getD 0 defaultDecor) (ws.getD 1 defaultDecor))
@@ -2246,7 +1944,6 @@ theorem wires_faithful (g : Forest) : ∀ a ∈ wiresOf g,
     exact faithful_bin false (base w hw) (faithful_neg (faithful_bin false
       (faithful_get base 0) (faithful_get base 1)))
   · exact base _ ha
-
 def targetOf (g : Forest) := chartGoal g.mask
 def chartSamples (m : Nat) (v : Nat → Bits) :=
   if m=1023 then liftGoal m v &&& ~~~(v 0 &&& v 1) else liftGoal m v
@@ -2280,7 +1977,6 @@ theorem selectLive_sub {α : Type} (bits : Nat) (ws : List α) : (selectLive bit
     split
     · exact List.Sublist.cons₂ _ (ih _)
     · exact List.Sublist.cons _ (ih _)
-
 def storedDepth (_g : Forest) (depth : Nat) := depth
 def readNode (g : Forest) (k i : Nat) : Nat × List Decor × List Decor :=
   let raw := wiresOf g
@@ -2292,7 +1988,6 @@ def readNode (g : Forest) (k i : Nat) : Nat × List Decor × List Decor :=
   let ops := stored
   let bank := decodeBank depth ops raw
   (ops,bank,selectLive (recp >>> len) bank)
-
 def getFieldV (x pos width : Nat) := (x >>> pos) &&& ((1 <<< width)-1)
 def chosenSteps (bank : List Decor) (ops paid : Nat) : Nat → List Choice
   | 0 => []
@@ -2301,11 +1996,9 @@ def chosenSteps (bank : List Decor) (ops paid : Nat) : Nat → List Choice
     if paid &&& 1 == 0 then more else
       (getFieldV ops 8 2,(bank.getD (ops &&& 15) defaultDecor).1,
         (bank.getD (getFieldV ops 4 4) defaultDecor).1) :: more
-
 def buildRule (g : Forest) (ops d : Nat) (bank : List Decor) (idx paid : Nat) : Option BoundPool :=
   (g.cols.read idx).bind fun ci =>
     materialize (vars g.mask) (chosenSteps bank ops paid d) (subcube ci.1 ci.2.1) ci.2.2.2.2
-
 theorem buildRule_sound (g : Forest)
     (cols : ∀ ci ∈ g.cols.values, Slice (vars g.mask) (targetOf g) (subcube ci.1 ci.2.1) ci.2.2.2.2)
     {i ops depth bank paid c} (h : buildRule g ops depth bank i paid = some c) :
@@ -2317,18 +2010,15 @@ theorem buildRule_sound (g : Forest)
     simp only [e,Option.bind_some] at h
     apply materialize_sound _ h
     exact cols ci (g.cols.read_mem e)
-
 def getPairs (data : Nat → Nat) (w v : Nat) : Nat → Nat → List (Nat × Nat)
   | 0,_ => []
   | n+1,pos =>
     let x := packedAt data pos (w+v)
     (x &&& ((1 <<< w)-1),x >>> w) :: getPairs data w v n (pos+w+v)
-
 def stateSet (g : Forest) (k i : Nat) := (readNode g k i).2.2.map Prod.fst
 def linkedSet (g : Forest) (k : Nat) (pair : Nat × Nat) : Option (List Sig) :=
   if pair.1 ≥ (g.levels k).1 then none else
     (g.autos[pair.2]?).map fun perm => (stateSet g k pair.1).map (movedWord (perm.map swapRows).reverse)
-
 theorem linkedSet_sound (g : Forest) (k : Nat)
     (names : ∀ x ∈ g.autos.toList, autoOK (targetOf g) (x.map swapRows) = true)
     (earlier : ∀ i < (g.levels k).1, Impossible (targetOf g) k (stateSet g k i).toFinset)
@@ -2344,7 +2034,6 @@ theorem linkedSet_sound (g : Forest) (k : Nat)
       simp only [e,Option.map_some,Option.some.injEq] at h
       subst out
       exact rotate_excluded (earlier _ (by omega)) _ (names _ (by simpa using Array.mem_of_getElem? e))
-
 def nodeVerified (g : Forest) (k i : Nat) :=
   let raw := wiresOf g
   let (num,depth,cw,iw,pw,offw,lw,data) := g.levels k
@@ -2359,7 +2048,6 @@ def nodeVerified (g : Forest) (k i : Nat) :=
   let ls := fun tag => ((g.index k tag).bind (linkedSet g (k-1))).toList
   decide values.Nodup && !(values.contains (targetOf g)) &&
     (if k=0 then true else testAll (k,ws.length,ws,preCov ws,rules,ls) ws)
-
 theorem nodeVerified_sound (g : Forest) (k i : Nat)
     (samples : properPairs (targetOf g) (asRow fun j => (g.samples j).1) (asRow fun j => (g.samples j).2))
     (cols : ∀ ci ∈ g.cols.values, Slice (vars g.mask) (targetOf g) (subcube ci.1 ci.2.1) ci.2.2.2.2)
@@ -2388,8 +2076,6 @@ theorem nodeVerified_sound (g : Forest) (k i : Nat)
     have e : ((g.index k tag).bind (linkedSet g (k-1)))=some xs := by simpa using hx
     obtain ⟨pair,_,h⟩ := Option.bind_eq_some_iff.mp e
     exact linkedSet_sound g _ names (prior (by omega)) h
-
-
 def block (g : Forest) (k start : Nat) : Nat → Bool
   | 0 => true
   | n+1 => nodeVerified g k (start+n) && block g k start n
@@ -2410,7 +2096,6 @@ theorem block_merge {g k start a b} (h : block g k start a=true)
     simp only [block,Bool.and_eq_true] at h'
     simp only [Nat.add_succ,block,Bool.and_eq_true]
     exact ⟨by simpa [Nat.add_assoc] using h'.1,ih h'.2⟩
-
 def checkedTables (g : Forest) (top : Nat) :=
   ∀ k ≤ top, block g k 0 (g.levels k).1 = true
 def graphValid (g : Forest) (prior : Nat → Nat) :=
@@ -2418,7 +2103,6 @@ def graphValid (g : Forest) (prior : Nat → Nat) :=
   (chartSamples g.mask (fun j => (g.samples j).2) == 0) &&
   g.cols.values.all (fun c => colCheck g.mask c prior) &&
   g.autos.toList.all (fun p => autoOK (targetOf g) (p.map swapRows))
-
 theorem forest_all (g : Forest) (top : Nat) (prior : Nat → Nat)
     (lower : ∀ q, Lower (vars q) (graphGoal q) (prior q))
     (geometry : graphValid g prior = true) (rows : checkedTables g top) :
@@ -2437,7 +2121,6 @@ theorem forest_all (g : Forest) (top : Nat) (prior : Nat → Nat)
       (fun x hx => col_sound _ prior lower (geometry.1.2 x hx)) geometry.2
       (fun _ => by simpa using ih (by omega))
     exact block_at (rows _ hk) i (by omega) (by omega)
-
 def indexedRoot (g : Forest) (k i : Nat) (ws : List Sig) :=
   decide (i < (g.levels k).1) && sameWords (stateSet g k i) ws
 theorem root_index {g top prior k i ws} (low : ∀ q, Lower (vars q) (graphGoal q) (prior q))
@@ -2446,7 +2129,6 @@ theorem root_index {g top prior k i ws} (low : ∀ q, Lower (vars q) (graphGoal 
   simp only [indexedRoot,Bool.and_eq_true,decide_eq_true_eq] at idx
   rw [←sameWords_sound idx.2]
   exact forest_all g top prior low geom blocks _ le i idx.1
-
 theorem lower_forest {g prior i hints} (low : ∀ q, Lower (vars q) (graphGoal q) (prior q))
     (geom : graphValid g prior = true) (blocks : checkedTables g g.cap)
     (idx : indexedRoot g g.cap i (vars g.mask) = true) (hp : properB (targetOf g) = true)
@@ -2458,7 +2140,6 @@ theorem lower_forest {g prior i hints} (low : ∀ q, Lower (vars q) (graphGoal q
   apply essential_ok ess a
   rw [all]
   exact List.mem_toFinset.mpr ha
-
 theorem lower_discard {g prior ci hints} (low : ∀ q, Lower (vars q) (graphGoal q) (prior q))
     (ok : colCheck g.mask ci prior = true)
     (hp : properB (targetOf g) = true)
@@ -2472,7 +2153,6 @@ theorem lower_discard {g prior ci hints} (low : ∀ q, Lower (vars q) (graphGoal
   apply essential_ok ess a
   rw [all]
   exact List.mem_toFinset.mpr ha
-
 def Known (entries : List (Nat × Nat)) := ∀ e ∈ entries, Lower (vars e.1) (graphGoal e.1) e.2
 def extendKnown (old : List (Nat × Nat)) (L : Nat) (relabels : List (Nat × List Nat)) :=
   relabels.map (fun v => (v.1,L)) ++ old
@@ -2533,7 +2213,6 @@ theorem broadcast {α} (a : Bits) (xs : List α) :
   induction xs with
   | nil => simp [units,combineLanes]
   | cons v xs ih => simp only [List.length_cons,units,combineLanes,lanePlace,Nat.add_mul,Nat.mul_assoc,ih,Nat.one_mul]
-
 def fullMarks (r packed : Nat) := ((packed+r) >>> 768) &&& r
 theorem unit_bit (n i : Nat) (hi : i<n) : (units n).testBit (769*i) = true := by
   induction n generalizing i with
@@ -2561,7 +2240,6 @@ theorem guardBit (a : Bits) : (a.toNat+1).testBit 768 = (a==BitVec.allOnes 768) 
     have lt : a.toNat+1<2^768 := by omega
     rw [Nat.testBit_eq_false_of_lt lt]
     exact (beq_eq_false_iff_ne.mpr h).symm
-
 set_option maxRecDepth 8192 in
 theorem mark_at {α} (f : α → Bits) (xs : List α) (i : Nat) (hi : i<xs.length) :
     (fullMarks (units xs.length) (combineLanes f xs)).testBit (769*i) =
@@ -2581,11 +2259,8 @@ theorem mark_at {α} (f : α → Bits) (xs : List α) (i : Nat) (hi : i<xs.lengt
       have di : 769*(i+1)+768-769=769*i+768 := by omega
       simp only [ge,ite_false,di,List.getElem_cons_succ]
       apply ih i (by omega)
-
-
 abbrev PackedSig := Nat × Nat
 abbrev PackedCov := Nat × Nat × Nat
-
 def packedSig {α} (s : α → Signals) (xs : List α) : PackedSig :=
   (combineLanes (fun x => (s x).1) xs,combineLanes (fun x => (s x).2) xs)
 def packedCov {α} (c : α → Cov) (xs : List α) : PackedCov :=
@@ -2593,17 +2268,14 @@ def packedCov {α} (c : α → Cov) (xs : List α) : PackedCov :=
    combineLanes (fun x => (c x).2.2) xs)
 def packedColumn (d : Bool) (a : PackedSig) :=
   if d then a.1 ^^^ (a.1 &&& a.2) else a.1 ^^^ a.2
-
 theorem xor_meet (a b : Bits) : a ^^^ (a &&& b) = a &&& ~~~b := by
   apply BitVec.eq_of_getLsbD_eq
   intro i hi
   simp only [BitVec.getLsbD_xor,BitVec.getLsbD_and,BitVec.getLsbD_not,hi,decide_true,Bool.true_and]
   cases a.getLsbD i <;> cases b.getLsbD i <;> rfl
-
 theorem packed_column {α} (s : α → Signals) (xs : List α) (d : Bool) :
     packedColumn d (packedSig s xs) = combineLanes (fun x => column d (s x)) xs := by
   cases d <;> simp only [packedColumn,packedSig,column,Bool.false_eq_true,ite_false,ite_true,lanes_and,lanes_xor,xor_meet]
-
 def packedOp (full : Nat) (op : Nat) (a b : PackedSig) : PackedSig :=
   if op=2 then (full ^^^ a.1,full ^^^ a.2) else if op=1 then (a.1 ||| b.1,a.2 ||| b.2)
   else (a.1 &&& b.1,a.2 &&& b.2)
@@ -2615,21 +2287,18 @@ theorem packed_op {α} (a b : α → Decor) (xs : List α) (op : Nat) :
   by_cases un : op=2
   · simp only [packedOp,un,ite_true,packedSig,broadcast,lanes_xor,top_xor,movedDecor,codeDecor,dneg]
   · by_cases one : op=1 <;> simp [packedOp,un,one,packedSig,lanes_or,lanes_and,movedDecor,codeDecor,dbin]
-
 def takePacked (c : PackedCov) (a b : Nat) (un ka kb : Bool) :=
   let without1 := fun w => c.1 ^^^ (c.1 &&& (c.2.1 &&& w))
   let without2 := c.1 ^^^ (c.1 &&& ((c.2.1 &&& (a ||| b)) ||| (c.2.2 &&& (a &&& b))))
   if un then (if ka then c.1 else without1 a)
   else if ka then (if kb then c.1 else without1 b)
   else if kb then without1 a else without2
-
 theorem takePacked_ok {α} (c : α → Cov) (a b : α → Bits) (xs : List α) (un ka kb : Bool) :
     takePacked (packedCov c xs) (combineLanes a xs) (combineLanes b xs) un ka kb =
     combineLanes (fun x => restCov (c x) (a x) (b x) un ka kb) xs := by
   cases un <;> cases ka <;> cases kb <;>
     simp only [takePacked,packedCov,lanes_and,lanes_or,lanes_xor,xor_meet,restCov,takeOne,takeTwo,
       Bool.false_eq_true,ite_false,ite_true]
-
 def contextWire (c : NodeContext) (i : Nat) := c.2.2.1.getD i defaultDecor
 def checkAt (c : NodeContext) (i j op : Nat) (ka kb : Bool) :=
   let a := contextWire c i
@@ -2640,7 +2309,6 @@ def combField (c : NodeContext) (d un ka kb : Bool) (op i j : Nat) :=
   let b := contextWire c j
   restCov (getCov c.2.2.2.1 d) (column d a.2) (column d b.2) un ka kb |||
     column d (movedDecor op a b).2
-
 def onMarks {α : Type} (f : α → Bool) (mask : Nat) : List α → Bool
   | [] => true
   | x::xs => if mask=0 then true else
@@ -2664,7 +2332,6 @@ theorem marked_ok {α} (f : α → Bool) (mask : Nat) (xs : List α) (i : Nat) (
     | succ i =>
       apply ih (mask:=mask >>> 769) (i:=i) (by simpa using hi) _ ok.2
       simpa only [Nat.testBit_shiftRight,Nat.mul_succ,Nat.add_comm] using bitOn
-
 abbrev Batch := Nat × Nat × Nat × List PackedSig × PackedCov × PackedCov
 def makeBatch (k n : Nat) (xs : List NodeContext) : Batch :=
   (k,n,units xs.length,(List.range n).map (fun i => packedSig (fun c => (contextWire c i).2) xs),
@@ -2673,12 +2340,10 @@ def laneWire (b : Batch) (i : Nat) := b.2.2.2.1.getD i (0,0)
 theorem laneWire_at (k n) (xs) {i : Nat} (h : i<n) :
     laneWire (makeBatch k n xs) i = packedSig (fun c => (contextWire c i).2) xs := by
   simp [laneWire,makeBatch,List.getD_eq_getElem?_getD,List.getElem?_map,List.getElem?_range,h]
-
 def availableMasked (p : BoundPool) (m : Sig) :=
   m==zero || m==p.domain || (p.wires.map (masked p.domain)).any (fun v => v==m)
 theorem available_mask (p : BoundPool) (x : Sig) :
     availableB p.domain p.wires x = availableMasked p (masked p.domain x) := rfl
-
 def constantLoss (p : Decor → Bool) (a : Decor) (keep : Bool) :=
   if keep then 0 else (p a).toNat
 theorem lossBound (p : Decor → Bool) (ws : List Decor) (a : Decor) (keep : Bool) :
@@ -2689,7 +2354,6 @@ theorem lossBound (p : Decor → Bool) (ws : List Decor) (a : Decor) (keep : Boo
     next h => simp [h.2]; omega
     next => omega
   · simp [delOne,constantLoss]
-
 theorem keptCount (p : Decor → Bool) (ws : List Decor) (a b : Decor) (un ka kb : Bool) :
     ws.countP p - constantLoss p a ka - constantLoss p b (un || kb) ≤
     (opKeep un ka kb a b ws).countP p := by
@@ -2697,7 +2361,6 @@ theorem keptCount (p : Decor → Bool) (ws : List Decor) (a b : Decor) (un ka kb
   have h2 := lossBound p (delOne ws a ka) b kb
   cases un <;> simp only [opKeep,delTwo,Bool.false_eq_true,ite_false,ite_true,
     Bool.false_or,Bool.true_or] <;> first | omega | simp [constantLoss]; omega
-
 abbrev QuickPool := BoundPool × Nat × Bool
 def summarizePool (ws : List Decor) (p : BoundPool) : QuickPool :=
   (p,ws.countP (fun w => isMaskedConstant p.domain w.1),
@@ -2713,7 +2376,6 @@ def fastCost (s : QuickPool) (k : Nat) (a b : Decor) (op : Nat) (ka kb : Bool) :
   let cm := s.2.1 - constantLoss const a ka - constantLoss const b (un || kb) + zc.toNat
   let free := zc || zm==masked p.domain a.1 || zm==masked p.domain b.1
   decide (k+p.paid+(!free).toNat < p.bound+cm)
-
 theorem fastCost_good {p k ws a b op ka kb} (ha : a∈ws) (hb : b∈ws)
     (h : fastCost (summarizePool ws p) k a b op ka kb=true) :
     scalarPoolCut p k ((opKeep (op==2) ka kb a b ws).map Prod.fst) (movedChoice op a b)=true := by
@@ -2755,12 +2417,10 @@ theorem fastCost_good {p k ws a b op ka kb} (ha : a∈ws) (hb : b∈ws)
       p.bound+(rest.countP const + if isMaskedConstant p.domain z then 1 else 0)
     cases hc : isMaskedConstant p.domain z <;> simp [hc] at h ⊢ <;> omega
   · simp [fastCost,summarizePool,all] at h
-
 def quickAt (c : NodeContext) (i j op : Nat) (ka kb : Bool) :=
   let a := contextWire c i
   let b := contextWire c j
   (c.2.2.2.2.1.map (summarizePool c.2.2.1)).any (fun s => fastCost s (c.1-1) a b op ka kb)
-
 theorem quickAt_good {c i j op ka kb} (hi : i<c.2.2.1.length) (hj : j<c.2.2.1.length)
     (h : quickAt c i j op ka kb=true) : checkAt c i j op ka kb=true := by
   have mem (t) (ht : t<c.2.2.1.length) : contextWire c t ∈ c.2.2.1 := by
@@ -2775,7 +2435,6 @@ theorem quickAt_good {c i j op ka kb} (hi : i<c.2.2.1.length) (hj : j<c.2.2.1.le
   simp only [checkAt,evalMove,closeChild,cut,Bool.or_true]
   repeat' split
   all_goals rfl
-
 def fallbackAt (c : NodeContext) (i j op : Nat) (ka kb : Bool) :=
   (if i<c.2.2.1.length ∧ j<c.2.2.1.length then quickAt c i j op ka kb else false) ||
     checkAt c i j op ka kb
@@ -2799,7 +2458,6 @@ def batchMove (b : Batch) (xs : List NodeContext) (i j op : Nat) (ka kb : Bool) 
     let cov := if d then v else u
     let mask := fullMarks r (takePacked cov (packedColumn d a) (packedColumn d b') un ka kb ||| packedColumn d z)
     onMarks (fun c => fallbackAt c i j op ka kb) mask xs
-
 theorem batchMove_at (k n) (xs : List NodeContext) {i j op : Nat} {ka kb}
     (hi : i<n) (hj : j<n) {q : Nat} (hq : q<xs.length)
     (budget : xs[q].1=k) (arity : xs[q].2.1=n)
@@ -2839,8 +2497,6 @@ theorem batchMove_at (k n) (xs : List NodeContext) {i j op : Nat} {ka kb}
       rw [mark_at _ _ _ hq]
       exact beq_iff_eq.mpr hit
     · rw [eval,if_neg small,if_pos (bne_iff_ne.mpr hit)]
-
-
 def batchPair (b : Batch) (xs : List NodeContext) (i j op : Nat) :=
   let f := batchMove b xs i j op
   f false false && f true false && f false true && f true true
@@ -2850,7 +2506,6 @@ def batchRow (b : Batch) (xs : List NodeContext) (i : Nat) (js : List Nat) :=
 def batchRows (b : Batch) (xs : List NodeContext) : List Nat → Bool
   | [] => true
   | i::js => batchRow b xs i js && batchRows b xs js
-
 theorem batchRows_at (k n) (xs : List NodeContext) {q : Nat} (hq : q<xs.length)
     (budget : xs[q].1=k) (arity : xs[q].2.1=n) (js : List Nat)
     (bounds : ∀ j ∈ js, j<n) (allRows : batchRows (makeBatch k n xs) xs js=true) :
@@ -2874,7 +2529,6 @@ theorem batchRows_at (k n) (xs : List NodeContext) {q : Nat} (hq : q<xs.length)
       exact ⟨⟨⟨check hi hj' hq budget arity pass.1.1.1,check hi hj' hq budget arity pass.1.1.2⟩,
         check hi hj' hq budget arity pass.1.2⟩,check hi hj' hq budget arity pass.2⟩
     exact ⟨opCheck false both.1,opCheck true both.2⟩
-
 def runBatch (k n : Nat) (xs : List NodeContext) :=
     batchRows (makeBatch k n xs) xs (List.range n)
 theorem runBatch_at {k n} {xs : List NodeContext} {q} (hq : q<xs.length)
@@ -2887,7 +2541,6 @@ theorem runBatch_at {k n} {xs : List NodeContext} {q} (hq : q<xs.length)
     · intro i h1 h2
       simp [contextWire,List.getD_eq_getElem?_getD,h2]
   rwa [eq] at all
-
 def contextOf (g : Forest) (k i : Nat) : NodeContext :=
   let raw := wiresOf g
   let (num,depth,cw,iw,pw,offw,lw,data) := g.levels k
@@ -2900,15 +2553,12 @@ def contextOf (g : Forest) (k i : Nat) : NodeContext :=
   let rules := (getPairs data cw depth nr st).filterMap (fun (a,b) => buildRule g ops depth bank a b)
   let ls := fun tag => ((g.index k tag).bind (linkedSet g (k-1))).toList
   (k,ws.length,ws,preCov ws,rules,ls)
-
-
 def prelim (T : Sig) (c : NodeContext) :=
   let ws := c.2.2.1.map Prod.fst
   decide ws.Nodup && !(ws.contains T)
 theorem from_context (g : Forest) (k i : Nat) :
     nodeVerified g k i = (prelim (targetOf g) (contextOf g k i) &&
       (if k=0 then true else testAll (contextOf g k i) (contextOf g k i).2.2.1)) := rfl
-
 theorem makeBlock {g k start n} (h : ∀ (i : Nat), start ≤ i → i < start + n → nodeVerified g k i = true) :
     block g k start n=true := by
   induction n with
@@ -2916,7 +2566,6 @@ theorem makeBlock {g k start n} (h : ∀ (i : Nat), start ≤ i → i < start + 
   | succ n ih =>
     simp only [block,Bool.and_eq_true]
     exact ⟨h _ (by omega) (by omega),ih (fun i le lt => h i le (by omega))⟩
-
 def contexts (g : Forest) (k start n : Nat) :=
   ((List.range n).map (start+·)).map (contextOf g k)
 def header (g : Forest) (k start n ar : Nat) :=
@@ -2933,7 +2582,6 @@ theorem rowCut_at {g k start n ar lo len} (h : rowCut g k start n ar lo len=true
       i (List.range' (i+1) (ar-(i+1)))=true := by
   have ha := List.all_eq_true.mp h (i-lo) (List.mem_range.mpr (by omega))
   simpa only [Nat.add_sub_of_le l] using ha
-
 theorem rowCut_merge {g k start n ar lo a b}
     (h : rowCut g k start n ar lo a=true) (t : rowCut g k start n ar (lo+a) b=true) :
     rowCut g k start n ar lo (a+b)=true := by
@@ -2943,7 +2591,6 @@ theorem rowCut_merge {g k start n ar lo a b}
   by_cases first : j<a
   · exact rowCut_at h (lo+j) (by omega) (by omega)
   · exact rowCut_at t (lo+j) (by omega) (by omega)
-
 theorem cutsRun {g k start n ar} (h : rowCut g k start n ar 0 ar=true) :
     runBatch k ar (contexts g k start n)=true := by
   let xs := contexts g k start n
@@ -2959,7 +2606,6 @@ theorem cutsRun {g k start n ar} (h : rowCut g k start n ar 0 ar=true) :
   unfold runBatch
   rw [List.range_eq_range']
   exact go 0 ar (by omega)
-
 theorem cutsBlock {g k start n ar} (hd : header g k start n ar=true)
     (h : rowCut g k start n ar 0 ar=true) : block g k start n=true := by
   apply makeBlock
@@ -2979,7 +2625,6 @@ theorem cutsBlock {g k start n ar} (hd : header g k start n ar=true)
   split
   · rfl
   · exact e ▸ runBatch_at hq hb ha hn (cutsRun h)
-
 def boxes (g : Forest) (k start n ar lo num : Nat) : Nat → Prop
   | 0 => rowCut g k start n ar lo num=true
   | d+1 => boxes g k start n ar lo (num/2) d ∧ boxes g k start n ar (lo+num/2) (num-num/2) d
@@ -2990,7 +2635,6 @@ theorem boxesCut {g k start n ar lo num d} (h : boxes g k start n ar lo num d) :
   | succ d ih =>
     have v := rowCut_merge (ih h.1) (ih h.2)
     simpa only [Nat.add_sub_of_le (Nat.div_le_self num 2)] using v
-
 def cells (g : Forest) (k start n ar rows : Nat) : Nat → Prop
   | 0 => header g k start n ar=true ∧ boxes g k start n ar 0 ar rows
   | d+1 => cells g k start (n/2) ar rows d ∧ cells g k (start+n/2) (n-n/2) ar rows d
@@ -3001,7 +2645,6 @@ theorem cellsBlock {g k start n ar rows d} (h : cells g k start n ar rows d) :
   | succ d ih =>
     have v := block_merge (ih h.1) (ih h.2)
     simpa only [Nat.add_sub_of_le (Nat.div_le_self n 2)] using v
-
 def listPieces {α} (f : α → Bool) (xs : List α) : Nat → Prop
   | 0 => xs.all f=true
   | d+1 => listPieces f (xs.take (xs.length/2)) d ∧ listPieces f (xs.drop (xs.length/2)) d
@@ -3713,12 +3356,6 @@ def known383 := extendKnown known255 13 maps383
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 theorem valid383 : Known known383 := extendKnown_ok valid255 low383 (by decide +kernel)
-def hashdeadl14 (i : Nat) : Nat := 0x4592c8500000000002800049a6c68a83340e9800000aa00684000000054a001bcc7001e180000682000000000000001d46a1840000003a00000001c
-def hashdeadl13 (i : Nat) : Nat := 0x301a0007b2f00e0aa2992094818000e2e0000000269e056438000000000d33e40e4a200074d00000000000003b10001e0240a9bd45d962582900000000000001430001e1400000fc03b84a000614e69108a1108000810000d04c9d0000000408800000160f24180010b9d040003080001e0c000000000001997f401183740ee12000000000080d312c00102c00000000012070000000001d35000308c000a4c0001b30000000cb3800183000070f0000001abcc008002c8cc133000000000000000000000020b000000064ec0a00000f8000cc5000105d8204160001a38001c1c467309c000000a7700000016de30f80000008380b08e000d3001
-def hashdeadl12 (i : Nat) : Nat := (if i<1 then 0x7b02c3200425d610a000042a0327300000000106b33757005e04600006037d811679d009461963480703e1077f067f2582384275d80a540a20109b59b4006305d00000000ab6dfb0bf59ec084c806986b30597776440b146b100c50a956520000878e0000747c463e108bc029e7600000395ef090d06800000000f0550000d0b1e4af00000000f324d141840ca4380000000051505017000067300000e779907b0000e77730641201ea62a089a48ff0924111e9a7a041b2a180aee462f29d9b47b01eb0427030e02a5973605b9086f08d5081d04bb014363000006038c0b6d110106cc731308e0023a07fb1305601ba1839b4c088a10b88011043e427e75a600831464016903d3ba52b1ec095000ec050b011b0730478f11a0000755e331ef63db004a00a000069a91680e225f60f90092a9d0000764650a40000c591f95ac03baa33c5a1283d11871a6d2772c01c1057280f201f5012328b908232a5505e000fe02b507cf0809817c267c05c9528506d997696872194b206264030ad402d007d586d7228701d30605840f67838625a51443ce034d47ed45f704cb08730a1794e1252000070330000b56f0000b0b4000000000000a842e047609d406ae26b67b08a4de12aa0a34019000000000000b664342c50b50000c0af924dc9aa401870366002b26d00000000841e0000000060986614000000000000783ae10d980ee051d0ab4022a615808f0000a0832619a148d81500007000e007d616b032d01b483f163f00104028276b2015141030631049a027580cd0a7a05ab977802fb09ff07a97899053b0a80816e83be0790a1b809b8b460a4f0000178b0000847be03cf139a1170000b07850b3605408416262696b908af0aa7b1f5b446070d024601a42492101d496f4b4e035922127ab0000e18600008284831c00440000f031500310656013b071b045b25b4113766b5b4c6b0800008291b4888a50000000000000e38b0000225eb04d807230618425c0b097ae226f809e00000000f00d93480485e88728040000b11c3039204e9432711f445c905f004a300b97ada05680211292f09a7b1a696f3106704f19748066703f00000204d074ba20a118f025458794596091a06f000065946020913b783e342dd08c819b5b452076c21dc075e0991a4a183c3b19d7a750a68058c8379643a487b408d0523762d062b422e0b2d47fc0ac224a46231a5dca3b6069a4390000768a5433e07e0000da410b00003102090604000a010a1f88080000080d030b0c310304001300040113030203141f0c0001000232030b0801010a010007110002020208010605020401010119010b0304070203070506000210070d110100150b0a0504051d050002020b05000c0402003d0e1500260200020108040b03090500060204000d0602010100180501000001030f04 else 0xe0a0512830933085c048e216509713746026a02ec09cb040548400000268f701103ac254729fc29e8096145a39ab47552144806e00019612b7b4491ea44bc1)
-def hashdeadl11 (i : Nat) : Nat := 0x5b144463e05aea749a36008e0000f05f008fc82400000000057a08357304bb42c02b0000807cd1701823000007095811411b96631031e07218223334c77b980e8010305dd000180820521064ca3ef0420000409b626cd483a833f03ac022e048a008f80a513f0000db73410f3393ca38834018881012b081c465a02c6142704300002631809700000000715300007115b00dd054b2886014000054161b183099000000000129f0870000a24110110427972915960000477d5b457113518aa01a00007134a023d08a1053002d678ef06b604a6076520f5468b025698fe62d5060c1370000e07eb793c95be02a510198285417000000000000000000005b72220ea00f9098e036e09602120000503908396112556c56084a3a211d0342f0784635707b4293308d0624205556235211962a72516903a0190235010e7765e07d5784f16feb3c248834149073d088b0134091f720f0803275f0052809446ed494b01b1b0305939136b20cf495111aba390000db890950e9807026e609a0205015880ba66b8778d4967988f077f007110cd289d0160000e278401d0000000000000000f032027400000000a08c6209804c4030102eb368a33f3b1d798e0000538a70215061a44e228300000000000000000000d01710838075e4517067406f00000000609a00003253a089a4002093b00a8125000090790000c0599583180c00000000c0411830f1160047224900000000906992725046700b000050511a67544b00000407c35bb06d0000504d3821ca470002762e0000cb1760948827b10a603b4009e06552019464444f9688a0286169097ab82524185057db2feb3d000e6303670ac01e70822426b090d664c05cf764008be03c365d6a2549347068706a71244461f086277c5780380d698dd120b27c20626037d807f403502fe1110000ea6e5071301cb0388044704f411c809595011003b20deb1a98372208b0561092820a91190049704bb03ec070670890335001a03f64504063613c50294b430832441aba46e146c8120193598c103df8314066401fd460e0745084044c100c7760b24b824f4006205b0000563070507a7c9058000000006a440000506e3040e97d006cd027646a6207807fb0450138e56fa018704e8482e0356085662f762c5b3be05eb81f1004f836000000000000000046203a6ac89692730000b034807a613d00008145702433536a79b0407805012a04e80082c50a0c0e782286421a0e4c00400004833a1491a02243880c0851202004211c6408c1835c192e081800c39681005000c04e408002001860c34c8040000000400008087400400100892c38005148410524200800478080001438126000000020022
-def hashdeadl10 (i : Nat) : Nat := 0x1c05302000382d2ecf474c3a08f618409ea54931a0a2272b385214e934380040192451090d15cc0564307983441ce005970002c06068f08a82680cc070001a2c5d4a1440400018207150002808001022205d856c41e1700072d518800084a2900000a334a12801820030b1a27
-def hashdeadl9 (i : Nat) : Nat := 0x202e0
 def deadsamples : Array (Bits × Bits) := Array.mk [(0xf854605d026923a5a16008862c9d18d42fd85e54d221898f1e440284a107a02910c3e03c06c40d2642ca74f54627022c11e389d9b43b30c961ca72386ce81500aa210d1ba1a121108a6c99348979d054ac200727ac054c0970110780155ad581,0x6844620d0040231585204884208800c4270824141201090814040082a10700282003e02402c4084602ca04a440240a1091218919100a2084314a220840a00480aa210819a02120100a4409048968c05484200702a805440920100380144a9480),(0x80b20c31f72bfc4e1481d27000d43c9c5bd438a9c5e0286040f054f111d001ce10920229bde170b8d339029e2bcac4cd494fb74d1052452141a61c5b9ca1e642f40c600258428f0e5c00df481e03202a204cd465e10fe01206e82c7b03150603,0x80100c30e6089040109182600012282018c41889c5e0204002b0604000c009861080028b1c2120a0d12000120908c00d005a724402504200402010501c01c208540860025840090e1400964816012008204cd0254102a00206a0247b01150201),(0x12ce100c308544478a85796a2341d206e4242e31335abb35943abb40be28c8e05c4c115123137950052a02a9ba0d31c096458c656cc338623e92230683d8962194d5145c2aa62229438824d8e06246d0cd124850733918c390189888a426380a,0x10ca0000108540870900790a0240900460282200221a991490081a0028289000cc41010021184410080a0a28a20020c0200184206c0128621092200a03d8103080d5145c02a2022143880090804206d04d100840322918c190088800a4221002),(0x8628ebbd17000228c83c0291b729e17b3643984a392a815889878936d04e41b82b8e28807cc302855ead3105d9868885c748c2b0724ae81086518e259124cd4278a18b4aa01db88524c3a3435a0814469349110c18f0c24c2a8052bd88818268,0xc2206a1d05000020401c0090e509051303449848110100480001811490070429238c000818c508010485900541c68805c240409012420000024186258024450270208b02a00da0842041a3414a08100690490104085040042a8052bc00818028),(0xbc8ccda8781e4d8151cd3cf93a4a0a01509a42078c1bc4a783ea4aec6c7bbbd02ef85be130b1750bcd872a062d01842a34826040203d5b99ac8899721d47b82106b4f88001d04ee6f42e103eb14e0a090b95e84905a08ef7a2230402e2b14bc5,0x148981a0109a5c8210c1a4690a42220050930202c418c4a7837a48680e50b9d00c601bc02020f518c9002a002c1124282402304220255b598c9019921c51b8010494708001d04e62d42a103a30060a090b94e84905a08af280230402e2304b45),(0xd3b19712becef4647857054f8773c68492608a46265cd6cd0106c449284294958830b40e8328a4102841c46a63b66493288c7290c714876750b08cb0eb0a532e014ce7e24f9c08720240400006971f885be46b00080a21145aa7f52cf42a8012,0x92218c003e8654007015040a0c73c50280c0084821449285810a8400004080918c301008002824100801c000230200c0688c40804110046300b00cb28307502a0004c5624f9c086200004000021315805bc46800000a00145205f42ce0200002),(0x3145d24845746a93b60987114c89950ee90ab5809889781e716b0d141d9e036fea797f20c896480c8b565809c5575a81eabcad03980701be24b7e8d7401960b32336416db2f0c4c050f169960250e8b311988b92828b0074bd455ad232c2112c,0x2307720c00346283a400011d4c09950fa108a4001a095004514a0014181e2261ab3d3060c0d6480a2ac41009e4571880ea848181d90321bc24d38a860208103323340169a2b084c040f169960050c8b211800b9082890074b8455a803282012c),(0x49615339cc24bb41a658244591d020101222d0f578b5376254a121290a30cd5c4e2ad1d6dabfa9e032f022500c91031b32331a7a9ace0ca4e96243014a4009cd0d2a3210b66014de852533c420acc80ff443ad9cc5d0f4808cd621151170ac54,0x4900539a4030aa408668006591882010120251355ca1242200a1212102144d6e020a42d6d2878b6832b420400cb9813312321a4a924e408ce04943054c0001c10d2a2200b040149c8425334420acc80fa003859cc5d0e4000cd201111150ac54),(0x2108654280dbc21c532263cad6a2ab60a053058994f658a43b3dd89384745a04932387065124c385d01899e2cc083e3c1e3327061d61ca921a4965c8583262f4485320b5c04953298d1f02098424a39520b6148b236021a80528c3236c545ab4,0xc0001428049001c03a04a4012802a200013019184320c200a34088304a0580410028702010083a440180cc2080827381411260a0400ca0098085048489022c408432094004053098d0e0008842422012032140b21202188052801030c545a90)]
 def deadcolumns : IndexTree ColumnInfo := (.fork 63 (.fork 31 (.fork 15 (.fork 7 (.fork 3 (.leaf [(1,0,510,0,12),(0,1,460,50,8),(2,0,509,0,12)]) (.leaf [(0,2,440,69,8),(3,0,508,0,9),(2,1,460,48,7),(4,0,507,0,12)])) (.fork 4 (.leaf [(0,4,369,138,8),(5,0,506,0,8),(6,0,505,0,9),(4,2,440,65,7)]) (.leaf [(2,4,369,136,7),(7,0,504,0,7),(5,2,440,64,6),(8,0,503,0,12)]))) (.fork 8 (.fork 4 (.leaf [(0,8,227,276,8),(9,0,486,0,8),(10,0,501,0,8),(12,0,499,0,9)]) (.leaf [(8,4,369,130,7),(4,8,227,272,7),(14,0,497,0,7),(10,4,369,128,6)])) (.fork 4 (.leaf [(15,0,480,0,4),(16,0,495,0,13),(0,16,486,9,10),(17,0,494,0,11)]) (.leaf [(16,1,460,34,7),(19,0,492,0,8),(16,4,353,138,7),(21,0,490,0,7)])))) (.fork 16 (.fork 8 (.fork 4 (.leaf [(21,2,424,64,5),(24,0,487,0,11),(8,16,486,1,9),(25,0,486,0,8)]) (.leaf [(9,16,486,0,8),(27,0,484,0,5),(11,16,484,0,5),(24,4,353,130,6)])) (.fork 4 (.leaf [(29,0,482,0,5),(26,4,353,128,5),(32,0,479,0,12),(0,32,94,385,8)]) (.leaf [(32,1,460,18,7),(1,32,94,384,7),(35,0,476,0,7),(34,1,460,16,6)]))) (.fork 8 (.fork 4 (.leaf [(36,0,347,0,8),(39,0,344,0,4),(40,0,471,0,8),(49,0,462,0,8)]) (.leaf [(48,1,460,2,6),(50,1,460,0,5),(56,0,455,0,7),(64,0,447,0,13)])) (.fork 4 (.leaf [(0,64,189,258,10),(66,0,445,0,11),(2,64,189,256,9),(67,0,444,0,8)]) (.leaf [(66,1,396,48,6),(70,0,441,0,8),(69,2,440,0,5),(74,0,437,0,7)]))))) (.fork 31 (.fork 15 (.fork 7 (.fork 3 (.leaf [(74,4,305,128,5),(80,0,431,0,11),(83,0,428,0,7)]) (.leaf [(96,0,415,0,9),(96,1,396,18,6),(98,1,396,16,5),(128,0,383,0,13)])) (.fork 4 (.leaf [(128,1,332,50,7),(3,128,344,36,6),(132,0,379,0,11),(4,128,347,32,9)]) (.leaf [(133,0,378,0,7),(134,0,377,0,8),(132,2,312,65,6),(133,2,312,64,5)]))) (.fork 8 (.fork 4 (.leaf [(136,0,375,0,9),(128,8,99,276,7),(140,0,371,0,8),(132,8,99,272,6)]) (.leaf [(138,4,369,0,5),(144,0,367,0,11),(152,4,353,2,5),(160,0,351,0,11)])) (.fork 4 (.leaf [(160,1,332,18,6),(162,1,332,16,5),(164,0,347,0,8),(36,128,347,0,8)]) (.leaf [(172,0,339,0,5),(176,1,332,2,5),(180,0,331,0,5),(192,0,319,0,11)])))) (.fork 16 (.fork 8 (.fork 4 (.leaf [(198,0,313,0,7),(256,0,255,0,12),(258,0,189,0,8),(260,0,251,0,8)]) (.leaf [(264,0,247,0,9),(256,8,227,20,7),(8,256,151,96,7),(268,0,243,0,7)])) (.fork 4 (.leaf [(260,8,227,16,6),(273,0,238,0,7),(280,0,231,0,8),(276,8,227,0,5)]) (.leaf [(288,0,223,0,9),(256,32,94,129,7),(32,256,151,72,7),(257,32,94,128,6)]))) (.fork 8 (.fork 4 (.leaf [(296,0,215,0,7),(40,256,151,64,6),(304,0,207,0,6),(288,16,198,9,6)]) (.leaf [(273,32,78,128,5),(56,256,135,64,5),(320,0,191,0,11),(256,64,189,2,9)])) (.fork 4 (.leaf [(322,0,189,0,8),(258,64,189,0,8),(324,0,187,0,7),(324,8,163,16,5)]) (.leaf [(321,32,30,128,5),(388,8,99,16,5),(168,256,23,64,5),(224,256,23,8,5)]))))))
 def deadautos : Array (List Nat) := Array.mk [[],[118,130,81],[100,131,82,16],[118,133,100,131,50,33,16],[116,83,32],[118,116,83,130,49,32],[118,133,33,48],[82,129,48],[118,133,116,83,82,81,80],[116,50,129,80],[100,49,128],[118,100,83,130,81,128]]
@@ -3730,13 +3367,10 @@ theorem geomdead : graphValid dead (boundsBefore known383) = true := by
   all_goals simp only [listPieces]
   all_goals repeat' apply And.intro
   all_goals decide +kernel
-
 def ImpossibleU (T : Sig) (cap tm : Nat) (S : Finset Sig) : Prop :=
   ∀ k t, k ≤ cap → (tm = 0 → t = 0) → ¬Live T k t S
-
 theorem imp_to_impU {T cap tm S} (h : Impossible T cap S) : ImpossibleU T cap tm S :=
   fun k t hk _ => h k t hk
-
 theorem rotate_excludedU {T n tm} {ws : List Sig} (hi : ImpossibleU T n tm ws.toFinset)
     (p : List Move) (ok : autoOK T p = true) : ImpossibleU T n tm (ws.map (movedWord p.reverse)).toFinset := by
   simp only [autoOK,Bool.and_eq_true,beq_iff_eq] at ok
@@ -3757,10 +3391,8 @@ theorem rotate_excludedU {T n tm} {ws : List Sig} (hi : ImpossibleU T n tm ws.to
     · intro ha; exact ⟨_,⟨a,ha,rfl⟩,inv a⟩
   rw [goal,back] at run
   exact hi k t hk ht run
-
 def childU (tm cap len : Nat) : Nat :=
   if len == cap || tm == 0 then 0 else 1
-
 theorem enum_stepU {T : Sig} {cap tm : Nat} {ws : List Sig} (hn : ws.Nodup) (out : T ∉ ws)
     (oneStep : tm > 0 → ∀ a ∈ ws, ∀ keep, neg a ∉ ws → proper (neg a) →
       (childOne ws a keep).length ≤ cap →
@@ -3844,7 +3476,6 @@ theorem enum_stepU {T : Sig} {cap tm : Nat} {ws : List Sig} (hn : ws.Nodup) (out
             simp [beq_eq_false_iff_ne.mpr hlen, beq_eq_false_iff_ne.mpr htm0]
           rw [hne] at hcu; cases hcu
     exact twoStep a am b bm d ka kb hab fresh hz len k t (by omega) ht' (eq.symm ▸ tail)
-
 theorem closeChildU_sound {raw T pools links k tm rest op}
     (pValid : ∀ p ∈ pools, ValidPool raw T p)
     (lValid : ∀ tag xs, xs ∈ links tag → ImpossibleU T k tm (List.toFinset xs))
@@ -3855,13 +3486,10 @@ theorem closeChildU_sound {raw T pools links k tm rest op}
   rcases h with ⟨xs,hx,ok⟩ | ⟨p,hp,ok⟩
   · rw [sameWords_sound ok]; exact lValid _ _ hx
   · exact imp_to_impU (scalarPoolCut_sound (pValid _ hp) nd ok)
-
 abbrev LinkFn := Nat → List (List Sig)
 abbrev NodeContextU :=
   Nat × Nat × Nat × List Decor × CovPair × List BoundPool × List QuickPool × LinkFn × LinkFn
-
 def ctxWireU (c : NodeContextU) (i : Nat) : Decor := c.2.2.2.1.getD i defaultDecor
-
 def evalMoveU (c : NodeContextU) (op : Nat) (a b z : Decor) (ka kb : Bool) : Bool :=
   let (cap,tm,n,ws,cov,pools,qpools,l0,l1) := c
   let un := op == 2
@@ -3875,7 +3503,6 @@ def evalMoveU (c : NodeContextU) (op : Nat) (a b z : Decor) (ka kb : Bool) : Boo
       let rest := (opKeep un ka kb a b ws).map Prod.fst
       let links := if d then l0 else l1
       closeChild pools links (cap-1) rest (movedChoice op a b)
-
 theorem evalMoveU_sound {raw T r s ws pools l0 l1 cap tm a b op ka kb}
     (pairs : properPairs T r s) (faith : ∀ w ∈ ws, faithful r s w)
     (nd : (ws.map Prod.fst).Nodup) (ha : a ∈ ws) (hb : b ∈ ws)
@@ -3943,23 +3570,19 @@ theorem evalMoveU_sound {raw T r s ws pools l0 l1 cap tm a b op ka kb}
     · have hdf : d = false := Bool.eq_false_iff.mpr hd
       dsimp only [d, ct] at hdf; rw [hdf] at test; simp only [Bool.false_eq_true, ite_false] at test
       exact closeChildU_sound pv lv1 nd' test k t hk (fun h0 => by cases h0) h'
-
 def testPairU (ctx : NodeContextU) (a b : Decor) (d : Bool) : Bool :=
   let op := if d then 1 else 0
   let z := movedDecor op a b
   evalMoveU ctx op a b z false false && evalMoveU ctx op a b z true false &&
     evalMoveU ctx op a b z false true && evalMoveU ctx op a b z true true
-
 def testRowU (ctx : NodeContextU) (a : Decor) (bs : List Decor) : Bool :=
   let unOk := if ctx.2.1 == 0 then true else
     let n := movedDecor 2 a a
     evalMoveU ctx 2 a a n false false && evalMoveU ctx 2 a a n true true
   unOk && bs.all (fun b => testPairU ctx a b false && testPairU ctx a b true)
-
 def testAllU (ctx : NodeContextU) : List Decor → Bool
   | [] => true
   | a :: ws => testRowU ctx a ws && testAllU ctx ws
-
 theorem all_unaryU {ctx} {ws : List Decor} (h : testAllU ctx ws = true) (ht : ctx.2.1 > 0) {a : Decor} (ha : a ∈ ws) (keep : Bool) :
     evalMoveU ctx 2 a a (movedDecor 2 a a) keep keep = true := by
   induction ws with
@@ -3974,7 +3597,6 @@ theorem all_unaryU {ctx} {ws : List Decor} (h : testAllU ctx ws = true) (ht : ct
       rw [hne] at hu; simp only [Bool.false_eq_true, ite_false, Bool.and_eq_true] at hu
       cases keep <;> [exact hu.1; exact hu.2]
     · exact ih h.2 hm
-
 theorem all_binaryU {ctx} {ws : List Decor} (h : testAllU ctx ws = true) {a b : Decor} (ha : a ∈ ws) (hb : b ∈ ws) (ne : a ≠ b) (d : Bool) :
     testPairU ctx a b d = true ∨ testPairU ctx b a d = true := by
   induction ws with
@@ -3986,12 +3608,10 @@ theorem all_binaryU {ctx} {ws : List Decor} (h : testAllU ctx ws = true) {a b : 
     · left; cases d <;> [exact (h.1.2 b hb').1; exact (h.1.2 b hb').2]
     · right; cases d <;> [exact (h.1.2 a ha').1; exact (h.1.2 a ha').2]
     · exact ih h.2 ha' hb'
-
 theorem testPairU_at {ctx a b d} (h : testPairU ctx a b d = true) (ka kb : Bool) :
     evalMoveU ctx (if d then 1 else 0) a b (movedDecor (if d then 1 else 0) a b) ka kb = true := by
   simp only [testPairU, Bool.and_eq_true] at h
   cases ka <;> cases kb <;> simp [h]
-
 theorem nodeU_sound {raw T r s ws pools l0 l1 cap tm}
     (pairs : properPairs T r s) (faith : ∀ w ∈ ws, faithful r s w)
     (nd : (ws.map Prod.fst).Nodup) (out : T ∉ ws.map Prod.fst)
@@ -4118,10 +3738,8 @@ theorem nodeU_sound {raw T r s ws pools l0 l1 cap tm}
       exact one b a hbW haW (Ne.symm ne) kb ka (bin_comm d a.1 b.1 ▸ pro) (bin_comm d a.1 b.1 ▸ fresh) hh
 abbrev PackingT := Nat × Nat × Nat × Nat × (Nat → Nat)
 def emptyPackingT : PackingT := (0, 0, 0, 0, fun _ => 0)
-
 def deadWires : List Decor := wiresOf dead
 def deadSigs : List Sig := deadWires.map Prod.fst
-
 def decodeSigs (n : Nat) (bits : Nat) (ws : List Sig) : List Sig :=
   match n with
   | 0 => ws
@@ -4130,7 +3748,6 @@ def decodeSigs (n : Nat) (bits : Nat) (ws : List Sig) : List Sig :=
     let b := ws.getD ((bits >>> 4) &&& 15) zero
     let op := (bits >>> 8) &&& 3
     decodeSigs k (bits >>> 10) (ws ++ [if op = 2 then neg a else bin (op == 1) a b])
-
 theorem decodeSigs_eq (n bits : Nat) (ws : List Decor) :
     decodeSigs n bits (ws.map Prod.fst) = (decodeBank n bits ws).map Prod.fst := by
   induction n generalizing bits ws with
@@ -4151,7 +3768,6 @@ theorem decodeSigs_eq (n bits : Nat) (ws : List Decor) :
       · split <;> rfl
     rw [hcode, ← List.map_singleton, ← List.map_append]
     exact ih (bits >>> 10) _
-
 theorem selectLive_map {α β : Type} (f : α → β) (bits : Nat) (ws : List α) :
     selectLive bits (ws.map f) = (selectLive bits ws).map f := by
   induction ws generalizing bits with
@@ -4159,7 +3775,6 @@ theorem selectLive_map {α β : Type} (f : α → β) (bits : Nat) (ws : List α
   | cons x xs ih =>
     simp only [List.map_cons, selectLive]
     split <;> simp [ih]
-
 def readNodeT (levels : Nat → PackingT) (slot i : Nat) : Nat × List Decor × List Decor :=
   let raw := deadWires
   let (_, depth, _, _, data) := levels slot
@@ -4169,7 +3784,6 @@ def readNodeT (levels : Nat → PackingT) (slot i : Nat) : Nat × List Decor × 
   let ops := recp &&& ((1 <<< len) - 1)
   let bank := decodeBank depth ops raw
   (ops, bank, selectLive (recp >>> len) bank)
-
 def stateSetT (levels : Nat → PackingT) (slot i : Nat) : List Sig :=
   let (_, depth, _, _, data) := levels slot
   let len := 10 * depth
@@ -4177,7 +3791,6 @@ def stateSetT (levels : Nat → PackingT) (slot i : Nat) : List Sig :=
   let recp := packedAt data (i * width) width
   let ops := recp &&& ((1 <<< len) - 1)
   selectLive (recp >>> len) (decodeSigs depth ops deadSigs)
-
 theorem stateSetT_eq (levels : Nat → PackingT) (slot i : Nat) :
     stateSetT levels slot i = (readNodeT levels slot i).2.2.map Prod.fst := by
   unfold stateSetT readNodeT
@@ -4187,12 +3800,9 @@ theorem stateSetT_eq (levels : Nat → PackingT) (slot i : Nat) :
   rw [hlen]
   dsimp only [deadSigs]
   rw [decodeSigs_eq, selectLive_map]
-
-
 def linkedSetT (levels : Nat → PackingT) (slot : Nat) (pair : Nat × Nat) : Option (List Sig) :=
   if pair.1 ≥ (levels slot).1 then none else
     (dead.autos[pair.2]?).map fun perm => (stateSetT levels slot pair.1).map (movedWord (perm.map swapRows).reverse)
-
 theorem linkedSetU_sound (levels : Nat → PackingT) (k tm : Nat)
     (names : ∀ x ∈ dead.autos.toList, autoOK (targetOf dead) (x.map swapRows) = true)
     (earlier : ∀ i < (levels (3*k+tm)).1, ImpossibleU (targetOf dead) k tm (stateSetT levels (3*k+tm) i).toFinset)
@@ -4208,7 +3818,6 @@ theorem linkedSetU_sound (levels : Nat → PackingT) (k tm : Nat)
       simp only [e,Option.map_some,Option.some.injEq] at h
       subst out
       exact rotate_excludedU (earlier _ (by omega)) _ (names _ (by simpa using Array.mem_of_getElem? e))
-
 def contextOfU (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat → Option (Nat × Nat)) (k tm i : Nat) : NodeContextU :=
   let slot := 3 * k + tm
   let raw := deadWires
@@ -4222,15 +3831,12 @@ def contextOfU (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat → Option (
   let ls0 := fun tag => ((idx0 slot tag).bind (linkedSetT levels (3*(k-1)))).toList
   let ls1 := fun tag => ((idx1 slot tag).bind (linkedSetT levels (3*(k-1)+1))).toList
   (k, tm, ws.length, ws, preCov ws, rules, rules.map (summarizePool ws), ls0, ls1)
-
 def prelimU (T : Sig) (c : NodeContextU) : Bool :=
   let ws := c.2.2.2.1.map Prod.fst
   decide ws.Nodup && !(ws.contains T)
-
 def nodeVerifiedU (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat → Option (Nat × Nat)) (k tm i : Nat) : Bool :=
   let c := contextOfU levels idx0 idx1 k tm i
   prelimU (targetOf dead) c && (if k = 0 then true else testAllU c c.2.2.2.1)
-
 theorem nodeVerifiedU_sound (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat → Option (Nat × Nat)) (k tm i : Nat)
     (samples : properPairs (targetOf dead) (asRow fun j => (dead.samples j).1) (asRow fun j => (dead.samples j).2))
     (cols : ∀ ci ∈ dead.cols.values, Slice (vars dead.mask) (targetOf dead) (subcube ci.1 ci.2.1) ci.2.2.2.2)
@@ -4270,11 +3876,9 @@ theorem nodeVerifiedU_sound (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat
     have e : ((idx1 (3*k+tm) tag).bind (linkedSetT levels (3*(k-1)+1))) = some xs := by simpa using hx
     obtain ⟨pair,_,h⟩ := Option.bind_eq_some_iff.mp e
     exact linkedSetU_sound levels (k-1) 1 names (prior1 (by omega)) h
-
 def blockU (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat → Option (Nat × Nat)) (k tm start : Nat) : Nat → Bool
   | 0 => true
   | n + 1 => nodeVerifiedU levels idx0 idx1 k tm start && blockU levels idx0 idx1 k tm (start + 1) n
-
 theorem blockU_at {levels idx0 idx1 k tm start n} (h : blockU levels idx0 idx1 k tm start n = true)
     (i : Nat) (lo : start ≤ i) (hi : i < start + n) : nodeVerifiedU levels idx0 idx1 k tm i = true := by
   induction n generalizing start with
@@ -4284,7 +3888,6 @@ theorem blockU_at {levels idx0 idx1 k tm start n} (h : blockU levels idx0 idx1 k
     by_cases eq : i = start
     · exact eq ▸ h.1
     · exact ih h.2 (by omega) (by omega)
-
 theorem blockU_merge {levels idx0 idx1 k tm start a b}
     (ha : blockU levels idx0 idx1 k tm start a = true)
     (hb : blockU levels idx0 idx1 k tm (start + a) b = true) :
@@ -4294,7 +3897,6 @@ theorem blockU_merge {levels idx0 idx1 k tm start a b}
   | succ a ih =>
     simp only [blockU,Nat.succ_add,Bool.and_eq_true] at ha ⊢
     exact ⟨ha.1, ih ha.2 (by simpa [Nat.add_assoc,Nat.add_comm 1] using hb)⟩
-
 theorem makeBlockU {levels idx0 idx1 k tm start n}
     (h : ∀ i, start ≤ i → i < start + n → nodeVerifiedU levels idx0 idx1 k tm i = true) :
     blockU levels idx0 idx1 k tm start n = true := by
@@ -4303,18 +3905,15 @@ theorem makeBlockU {levels idx0 idx1 k tm start n}
   | succ n ih =>
     simp only [blockU, Bool.and_eq_true]
     exact ⟨h _ (by omega) (by omega), ih (fun i lo hi => h i (by omega) (by omega))⟩
-
 def checkAtU (c : NodeContextU) (i j op : Nat) (ka kb : Bool) : Bool :=
   let a := ctxWireU c i
   let b := ctxWireU c j
   evalMoveU c op a b (movedDecor op a b) ka kb
-
 def combFieldU (c : NodeContextU) (d un ka kb : Bool) (op i j : Nat) : Bits :=
   let a := ctxWireU c i
   let b := ctxWireU c j
   restCov (getCov c.2.2.2.2.1 d) (column d a.2) (column d b.2) un ka kb |||
     column d (movedDecor op a b).2
-
 def fallbackFastU (c : NodeContextU) (i j op : Nat) (ka kb : Bool) : Bool :=
   let (cap,tm,n,ws,_,pools,qpools,l0,l1) := c
   let a := ws.getD i defaultDecor
@@ -4328,7 +3927,6 @@ def fallbackFastU (c : NodeContextU) (i j op : Nat) (ka kb : Bool) : Bool :=
     let rest := (opKeep un ka kb a b ws).map Prod.fst
     let links := if ct == 0 then l0 else l1
     closeChild pools links (cap-1) rest (movedChoice op a b)
-
 theorem fallbackFastU_sound {c i j op ka kb}
     (hlen : ¬(1 + (c.2.2.1 - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1)) > c.1))
     (h : fallbackFastU c i j op ka kb = true) :
@@ -4348,196 +3946,6 @@ theorem fallbackFastU_sound {c i j op ka kb}
   · simp only [hcomb, ite_true]
   · simp only [hcomb, ite_false, hz1]
     exact h
-
-def makeBatchU (k n : Nat) (xs : List NodeContextU) : Batch :=
-  (k, n, units xs.length,
-    (List.range n).map (fun i => packedSig (fun c => (ctxWireU c i).2) xs),
-    packedCov (fun c => c.2.2.2.2.1.1) xs,
-    packedCov (fun c => c.2.2.2.2.1.2) xs)
-
-theorem laneWireU_at (k n : Nat) (xs : List NodeContextU) {i : Nat} (h : i < n) :
-    laneWire (makeBatchU k n xs) i = packedSig (fun c => (ctxWireU c i).2) xs := by
-  simp [laneWire, makeBatchU, List.getD_eq_getElem?_getD, h]
-
-def batchMoveU (b : Batch) (tm : Nat) (xs : List NodeContextU) (i j op : Nat) (ka kb : Bool) : Bool :=
-  let (k, n, r, _, u, v) := b
-  let un := op == 2
-  let len := 1 + (n - (if ka then 0 else 1) - (if un || kb then 0 else 1))
-  if len > k then true else
-    let d := childU tm k len == 0
-    let a := laneWire b i
-    let b' := laneWire b j
-    let z := packedOp (r * (BitVec.allOnes 768).toNat) op a b'
-    let cov := if d then v else u
-    let mask := fullMarks r (takePacked cov (packedColumn d a) (packedColumn d b') un ka kb ||| packedColumn d z)
-    onMarks (fun c => fallbackFastU c i j op ka kb) mask xs
-
-theorem batchMoveU_at (k tm n : Nat) (xs : List NodeContextU) {i j op : Nat} {ka kb}
-    (hi : i < n) (hj : j < n) {q : Nat} (hq : q < xs.length)
-    (budget : xs[q].1 = k) (ht : xs[q].2.1 = tm) (arity : xs[q].2.2.1 = n)
-    (pass : batchMoveU (makeBatchU k n xs) tm xs i j op ka kb = true) :
-    checkAtU xs[q] i j op ka kb = true := by
-  let len := 1 + (n - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1))
-  let d := childU tm k len == 0
-  have eval : checkAtU xs[q] i j op ka kb =
-      if len > k then true else if combFieldU xs[q] d (op == 2) ka kb op i j != BitVec.allOnes 768 then true
-      else fallbackFastU xs[q] i j op ka kb := by
-    rcases hxq : xs[q] with ⟨cap, tmm, nn, ws, cov, pools, qpools, l0, l1⟩
-    rw [hxq] at budget ht arity
-    dsimp only at budget ht arity
-    subst budget ht arity
-    unfold checkAtU evalMoveU combFieldU fallbackFastU ctxWireU
-    dsimp only [len, d]
-    have hz1 : (movedDecor op (ws.getD i defaultDecor) (ws.getD j defaultDecor)).1 =
-        choiceVal (movedChoice op (ws.getD i defaultDecor) (ws.getD j defaultDecor)) := moved_full op _ _
-    rw [hz1]
-  by_cases small : len > k
-  · simp [eval, small]
-  · let r := units xs.length
-    let a := laneWire (makeBatchU k n xs) i
-    let b := laneWire (makeBatchU k n xs) j
-    let cov := if d then packedCov (fun c : NodeContextU => c.2.2.2.2.1.2) xs
-               else packedCov (fun c : NodeContextU => c.2.2.2.2.1.1) xs
-    change (if len > k then true else onMarks _ (fullMarks r
-       (takePacked cov (packedColumn d a) (packedColumn d b) (op == 2) ka kb |||
-        packedColumn d (packedOp (r * (BitVec.allOnes 768).toNat) op a b))) xs) = true at pass
-    rw [if_neg small] at pass
-    have chosen : cov = packedCov (fun c => getCov c.2.2.2.2.1 d) xs := by
-      dsimp only [cov]; cases d <;> rfl
-    have ca : a = _ := laneWireU_at k n xs hi
-    have cb : b = _ := laneWireU_at k n xs hj
-    dsimp only [r] at pass
-    rw [ca, cb, packed_op, packed_column, packed_column, packed_column, chosen, takePacked_ok, lanes_or] at pass
-    by_cases hit : combFieldU xs[q] d (op == 2) ka kb op i j = BitVec.allOnes 768
-    · have hlenq : ¬(1 + (xs[q].2.2.1 - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1)) > xs[q].1) := by
-        rw [budget, arity]; exact small
-      apply fallbackFastU_sound hlenq
-      apply marked_ok _ _ _ q hq _ pass
-      rw [mark_at _ _ _ hq]
-      exact beq_iff_eq.mpr hit
-    · rw [eval, if_neg small, if_pos (bne_iff_ne.mpr hit)]
-
-def batchPairU (b : Batch) (tm : Nat) (xs : List NodeContextU) (i j op : Nat) : Bool :=
-  let f := batchMoveU b tm xs i j op
-  f false false && f true false && f false true && f true true
-
-def batchRowU (b : Batch) (tm : Nat) (xs : List NodeContextU) (i : Nat) (js : List Nat) : Bool :=
-  let unOk := if tm == 0 then true else
-    batchMoveU b tm xs i i 2 false false && batchMoveU b tm xs i i 2 true true
-  unOk && js.all (fun j => batchPairU b tm xs i j 0 && batchPairU b tm xs i j 1)
-
-def batchRowsU (b : Batch) (tm : Nat) (xs : List NodeContextU) : List Nat → Bool
-  | [] => true
-  | i :: js => batchRowU b tm xs i js && batchRowsU b tm xs js
-
-theorem batchRowsU_at (k tm n : Nat) (xs : List NodeContextU) {q : Nat} (hq : q < xs.length)
-    (budget : xs[q].1 = k) (ht : xs[q].2.1 = tm) (arity : xs[q].2.2.1 = n) (js : List Nat)
-    (bounds : ∀ j ∈ js, j < n) (allRows : batchRowsU (makeBatchU k n xs) tm xs js = true) :
-    testAllU xs[q] (js.map (ctxWireU xs[q])) = true := by
-  induction js with
-  | nil => rfl
-  | cons i js ih =>
-    simp only [batchRowsU, Bool.and_eq_true, batchRowU, List.all_eq_true] at allRows
-    simp only [List.map_cons, testAllU, testRowU, Bool.and_eq_true, List.all_eq_true, List.mem_map]
-    have hi := bounds i List.mem_cons_self
-    have check := @batchMoveU_at k tm n xs
-    have hun : (if xs[q].2.1 == 0 then true else
-        evalMoveU xs[q] 2 (ctxWireU xs[q] i) (ctxWireU xs[q] i) (movedDecor 2 (ctxWireU xs[q] i) (ctxWireU xs[q] i)) false false &&
-        evalMoveU xs[q] 2 (ctxWireU xs[q] i) (ctxWireU xs[q] i) (movedDecor 2 (ctxWireU xs[q] i) (ctxWireU xs[q] i)) true true) = true := by
-      rw [ht]
-      cases htm : (tm == 0)
-      · simp only [Bool.false_eq_true, ite_false, Bool.and_eq_true]
-        have h1 := allRows.1.1
-        simp only [htm, Bool.false_eq_true, ite_false, Bool.and_eq_true] at h1
-        exact ⟨check hi hi hq budget ht arity h1.1, check hi hi hq budget ht arity h1.2⟩
-      · simp
-    refine ⟨⟨hun, ?_⟩, ih (fun j hj => bounds j (List.mem_cons_of_mem _ hj)) allRows.2⟩
-    rintro _ ⟨j, hj, rfl⟩
-    have hj' := bounds j (List.mem_cons_of_mem _ hj)
-    have both := allRows.1.2 j hj
-    have opCheck (d : Bool) (pass : batchPairU (makeBatchU k n xs) tm xs i j (if d then 1 else 0) = true) :
-        testPairU xs[q] (ctxWireU xs[q] i) (ctxWireU xs[q] j) d = true := by
-      simp only [batchPairU, Bool.and_eq_true] at pass
-      simp only [testPairU, Bool.and_eq_true]
-      exact ⟨⟨⟨check hi hj' hq budget ht arity pass.1.1.1, check hi hj' hq budget ht arity pass.1.1.2⟩,
-        check hi hj' hq budget ht arity pass.1.2⟩, check hi hj' hq budget ht arity pass.2⟩
-    exact ⟨opCheck false both.1, opCheck true both.2⟩
-
-def runBatchU (k tm n : Nat) (xs : List NodeContextU) : Bool :=
-  batchRowsU (makeBatchU k n xs) tm xs (List.range n)
-
-theorem runBatchU_at {k tm n} {xs : List NodeContextU} {q} (hq : q < xs.length)
-    (hb : xs[q].1 = k) (ht : xs[q].2.1 = tm) (ha : xs[q].2.2.1 = n) (hn : xs[q].2.2.2.1.length = n)
-    (pass : runBatchU k tm n xs = true) : testAllU xs[q] xs[q].2.2.2.1 = true := by
-  have all := batchRowsU_at k tm n xs hq hb ht ha (List.range n) (fun _ => List.mem_range.mp) pass
-  have eq : (List.range n).map (ctxWireU xs[q]) = xs[q].2.2.2.1 := by
-    apply List.ext_getElem
-    · simp [hn]
-    · intro i h1 h2
-      simp [ctxWireU, List.getD_eq_getElem?_getD, h2]
-  rwa [eq] at all
-
-def contextsU (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat → Option (Nat × Nat)) (k tm start n : Nat) : List NodeContextU :=
-  ((List.range n).map (start + ·)).map (contextOfU levels idx0 idx1 k tm)
-
-def chunkCheckU (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat → Option (Nat × Nat)) (k tm start n ar : Nat) : Bool :=
-  let xs := contextsU levels idx0 idx1 k tm start n
-  xs.all (fun c => c.2.2.1 == ar && prelimU (targetOf dead) c) &&
-  let b := makeBatchU k ar xs
-  (List.range ar).all (fun i => batchRowU b tm xs i (List.range' (i + 1) (ar - (i + 1))))
-
-theorem chunkBlockU {levels idx0 idx1 k tm start n ar}
-    (h : chunkCheckU levels idx0 idx1 k tm start n ar = true) :
-    blockU levels idx0 idx1 k tm start n = true := by
-  unfold chunkCheckU at h
-  rw [Bool.and_eq_true] at h
-  let xs := contextsU levels idx0 idx1 k tm start n
-  have hrun : runBatchU k tm ar xs = true := by
-    have go (lo num : Nat) (eq : lo + num = ar) :
-        batchRowsU (makeBatchU k ar xs) tm xs (List.range' lo num) = true := by
-      induction num generalizing lo with
-      | zero => rfl
-      | succ num ih =>
-        simp only [List.range'_succ, batchRowsU, Bool.and_eq_true]
-        refine ⟨?_, ih (lo + 1) (by omega)⟩
-        have ok := List.all_eq_true.mp h.2 lo (List.mem_range.mpr (by omega))
-        simpa only [show ar - (lo + 1) = num by omega] using ok
-    unfold runBatchU; rw [List.range_eq_range']; exact go 0 ar (by omega)
-  apply makeBlockU
-  intro i lo hi
-  have hm : contextOfU levels idx0 idx1 k tm i ∈ xs := by
-    apply List.mem_map.mpr
-    exact ⟨i, List.mem_map.mpr ⟨i - start, List.mem_range.mpr (by omega), by omega⟩, rfl⟩
-  obtain ⟨q, hq, e⟩ := List.getElem_of_mem hm
-  have one := List.all_eq_true.mp h.1 _ hm
-  simp only [Bool.and_eq_true, beq_iff_eq] at one
-  have hb : xs[q].1 = k := by rw [e]; rfl
-  have ht : xs[q].2.1 = tm := by rw [e]; rfl
-  have ha : xs[q].2.2.1 = ar := e ▸ one.1
-  have hn : xs[q].2.2.2.1.length = ar := by rw [e]; exact one.1
-  simp only [nodeVerifiedU, Bool.and_eq_true]
-  refine ⟨one.2, ?_⟩
-  split
-  · rfl
-  · exact e ▸ runBatchU_at hq hb ht ha hn hrun
-
-def cellsU (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat → Option (Nat × Nat)) (k tm start n ar : Nat) : Nat → Prop
-  | 0 => chunkCheckU levels idx0 idx1 k tm start n ar = true
-  | d + 1 => cellsU levels idx0 idx1 k tm start (n / 2) ar d ∧ cellsU levels idx0 idx1 k tm (start + n / 2) (n - n / 2) ar d
-
-theorem kU {levels idx0 idx1 k tm start n ar}
-    (h : chunkCheckU levels idx0 idx1 k tm start n ar = true) :
-    cellsU levels idx0 idx1 k tm start n ar 0 := h
-
-theorem cellsBlockU {levels idx0 idx1 k tm start n ar d}
-    (h : cellsU levels idx0 idx1 k tm start n ar d) :
-    blockU levels idx0 idx1 k tm start n = true := by
-  induction d generalizing start n with
-  | zero => exact chunkBlockU h
-  | succ d ih =>
-    have v := blockU_merge (ih h.1) (ih h.2)
-    simpa only [Nat.add_sub_of_le (Nat.div_le_self n 2)] using v
-
 theorem forestU_all (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat → Option (Nat × Nat)) (top : Nat)
     (prior : Nat → Nat)
     (lo : ∀ m, Lower (vars m) (graphGoal m) (prior m))
@@ -4565,6 +3973,1315 @@ theorem forestU_all (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat → Opt
       (fun _ j hj => ih (by omega) 0 (by decide) j hj)
       (fun _ j hj => ih (by omega) 1 (by decide) j hj)
       (blockU_at hb i (Nat.zero_le i) (by simpa using hi))
+def all512 : Nat := (1 <<< 512) - 1
+def all768 : Nat := (1 <<< 768) - 1
+theorem all512_eq : all512 = (BitVec.allOnes 512).toNat := by
+  rw [BitVec.toNat_allOnes]; simp [all512, Nat.shiftLeft_eq]
+theorem all768_eq : all768 = (BitVec.allOnes 768).toNat := by
+  rw [BitVec.toNat_allOnes]; simp [all768, Nat.shiftLeft_eq]
+theorem bv_zero_toNat {w : Nat} : (0 : BitVec w).toNat = 0 := by simp
+theorem bitvec_not_toNat {w : Nat} (a : BitVec w) : (~~~a).toNat = ((1 <<< w) - 1) ^^^ a.toNat := by
+  have hall : (1 <<< w) - 1 = (BitVec.allOnes w).toNat := by rw [BitVec.toNat_allOnes]; simp [Nat.shiftLeft_eq]
+  rw [hall, ← BitVec.toNat_xor]
+  exact congrArg BitVec.toNat (by apply BitVec.eq_of_getLsbD_eq; intro i; simp)
+theorem neg_toNat (a : Sig) : (neg a).toNat = all512 ^^^ a.toNat := by
+  simpa [neg, all512] using bitvec_not_toNat a
+theorem sig_toNat_beq (a b : Sig) : (a.toNat == b.toNat) = (a == b) := by
+  cases h : (a == b)
+  · exact beq_eq_false_iff_ne.mpr (fun e => by rw [BitVec.eq_of_toNat_eq e, beq_self_eq_true] at h; cases h)
+  · rw [beq_iff_eq.mp h, beq_self_eq_true]
+def choiceValN (op a b : Nat) : Nat :=
+  if op == 2 then all512 ^^^ a else if op == 1 then a ||| b else a &&& b
+theorem choiceValN_eq (op : Nat) (a b : Sig) :
+    choiceValN op a.toNat b.toNat = (choiceVal (op, a, b)).toNat := by
+  unfold choiceValN choiceVal
+  by_cases h2 : op = 2
+  · subst h2; simp [neg_toNat]
+  · simp only [beq_eq_false_iff_ne.mpr h2, Bool.false_eq_true, ite_false, h2]
+    by_cases h1 : op = 1
+    · subst h1; simp [bin]
+    · simp [beq_eq_false_iff_ne.mpr h1, bin]
+def properBN (z : Nat) : Bool := z != 0 && z != all512
+theorem properBN_eq (z : Sig) : properBN z.toNat = properB z := by
+  unfold properBN properB zero one
+  have h0 : (z.toNat != 0) = (z != (0 : Sig)) := by
+    simp only [bne]; rw [← bv_zero_toNat (w := 512), sig_toNat_beq z (0 : Sig)]
+  have h1 : (z.toNat != all512) = (z != BitVec.allOnes 512) := by
+    simp only [bne, all512_eq, sig_toNat_beq z (BitVec.allOnes 512)]
+  rw [h0, h1]
+abbrev DecorN := Nat × Nat × Nat
+def toDecorN (d : Decor) : DecorN := (d.1.toNat, d.2.1.toNat, d.2.2.toNat)
+theorem toDecorN_default : toDecorN defaultDecor = (0, 0, 0) := by
+  simp only [toDecorN, defaultDecor, zero, bv_zero_toNat]
+def codeDecorN (op : Nat) (x y : DecorN) : DecorN :=
+  if op == 2 then (all512 ^^^ x.1, all768 ^^^ x.2.1, all768 ^^^ x.2.2)
+  else if op == 1 then (x.1 ||| y.1, x.2.1 ||| y.2.1, x.2.2 ||| y.2.2)
+  else (x.1 &&& y.1, x.2.1 &&& y.2.1, x.2.2 &&& y.2.2)
+theorem codeDecorN_eq (op : Nat) (x y : Decor) :
+    codeDecorN op (toDecorN x) (toDecorN y) = toDecorN (codeDecor op x y) := by
+  unfold codeDecorN codeDecor toDecorN
+  by_cases h2 : op = 2
+  · subst h2
+    simp only [beq_self_eq_true, ite_true, dneg, Prod.mk.injEq]
+    exact ⟨(neg_toNat x.1).symm, (bitvec_not_toNat x.2.1).symm, (bitvec_not_toNat x.2.2).symm⟩
+  · simp only [beq_eq_false_iff_ne.mpr h2, Bool.false_eq_true, ite_false, h2]
+    by_cases h1 : op = 1
+    · subst h1; simp [dbin, bin]
+    · simp [beq_eq_false_iff_ne.mpr h1, dbin, bin]
+def decodeBankN : Nat → Nat → List DecorN → List DecorN
+  | 0, _, ws => ws
+  | k + 1, bits, ws =>
+    let a := ws.getD (bits &&& 15) (0, 0, 0)
+    let b := ws.getD ((bits >>> 4) &&& 15) (0, 0, 0)
+    decodeBankN k (bits >>> 10) (ws ++ [codeDecorN ((bits >>> 8) &&& 3) a b])
+theorem list_getD_map {α β : Type} (f : α → β) (d : α) (xs : List α) (i : Nat) :
+    (xs.map f).getD i (f d) = f (xs.getD i d) := by
+  by_cases hi : i < xs.length
+  · rw [List.getD_eq_getElem _ _ (by simp [hi]), List.getElem_map, List.getD_eq_getElem _ _ hi]
+  · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by omega)]
+theorem decodeBankN_eq : ∀ (n bits : Nat) (ws : List Decor),
+    decodeBankN n bits (ws.map toDecorN) = (decodeBank n bits ws).map toDecorN
+  | 0, _, _ => rfl
+  | k + 1, bits, ws => by
+    unfold decodeBankN decodeBank; dsimp only
+    rw [← toDecorN_default, list_getD_map, list_getD_map, codeDecorN_eq]
+    have happ : ws.map toDecorN ++ [toDecorN (codeDecor (bits >>> 8 &&& 3) (ws.getD (bits &&& 15) defaultDecor) (ws.getD (bits >>> 4 &&& 15) defaultDecor))] =
+        (ws ++ [codeDecor (bits >>> 8 &&& 3) (ws.getD (bits &&& 15) defaultDecor) (ws.getD (bits >>> 4 &&& 15) defaultDecor)]).map toDecorN := by simp
+    rw [happ]; exact decodeBankN_eq k (bits >>> 10) _
+def decodeBankSigN : Nat → Nat → List Nat → List Nat
+  | 0, _, ws => ws
+  | k + 1, bits, ws =>
+    let a := ws.getD (bits &&& 15) 0
+    let b := ws.getD ((bits >>> 4) &&& 15) 0
+    decodeBankSigN k (bits >>> 10) (ws ++ [choiceValN ((bits >>> 8) &&& 3) a b])
+theorem decodeBankSigN_eq : ∀ (n bits : Nat) (ws : List Sig),
+    decodeBankSigN n bits (ws.map BitVec.toNat) = (decodeSigs n bits ws).map BitVec.toNat
+  | 0, _, _ => rfl
+  | k + 1, bits, ws => by
+    unfold decodeBankSigN decodeSigs; dsimp only
+    have hdef : zero.toNat = 0 := bv_zero_toNat
+    rw [← hdef, list_getD_map BitVec.toNat, list_getD_map BitVec.toNat, choiceValN_eq]
+    have hcv : (choiceVal (bits >>> 8 &&& 3, ws.getD (bits &&& 15) zero, ws.getD (bits >>> 4 &&& 15) zero)).toNat =
+        (if (bits >>> 8 &&& 3) = 2 then neg (ws.getD (bits &&& 15) zero)
+         else bin ((bits >>> 8 &&& 3) == 1) (ws.getD (bits &&& 15) zero) (ws.getD (bits >>> 4 &&& 15) zero)).toNat := by
+      unfold choiceVal; rfl
+    rw [hcv]
+    have happ : ws.map BitVec.toNat ++ [(if (bits >>> 8 &&& 3) = 2 then neg (ws.getD (bits &&& 15) zero)
+        else bin ((bits >>> 8 &&& 3) == 1) (ws.getD (bits &&& 15) zero) (ws.getD (bits >>> 4 &&& 15) zero)).toNat] =
+        (ws ++ [if (bits >>> 8 &&& 3) = 2 then neg (ws.getD (bits &&& 15) zero)
+        else bin ((bits >>> 8 &&& 3) == 1) (ws.getD (bits &&& 15) zero) (ws.getD (bits >>> 4 &&& 15) zero)]).map BitVec.toNat := by simp
+    rw [happ]; exact decodeBankSigN_eq k (bits >>> 10) _
+def rotRN (d a : Nat) : Nat :=
+  if d == 0 then a else (a >>> d) ||| ((a <<< (512 - d)) &&& all512)
+theorem bv_rotR_zero (a : Sig) : a.rotateRight 0 = a := by
+  apply BitVec.eq_of_getLsbD_eq; intro i hi; simp [hi]
+theorem rotRN_eq (d : Row) (a : Sig) : rotRN d.val a.toNat = (a.rotateRight d.val).toNat := by
+  unfold rotRN
+  by_cases hd0 : d.val = 0
+  · simp only [hd0, beq_self_eq_true, ite_true, bv_rotR_zero]
+  · simp only [beq_eq_false_iff_ne.mpr hd0, Bool.false_eq_true, ite_false]
+    apply Nat.eq_of_testBit_eq; intro b
+    have hdlt : d.val < 512 := d.isLt
+    have hdmod : d.val % 512 = d.val := Nat.mod_eq_of_lt hdlt
+    simp only [BitVec.testBit_toNat, BitVec.getLsbD_rotateRight, Nat.testBit_or, Nat.testBit_and,
+      Nat.testBit_shiftRight, Nat.testBit_shiftLeft, all512_eq, BitVec.getLsbD_allOnes, hdmod]
+    by_cases hlt : b < 512 - d.val
+    · have hge : ¬(512 - d.val ≤ b) := by omega
+      simp [hlt, hge]
+    · have hge : 512 - d.val ≤ b := by omega
+      have hhi : a.getLsbD (d.val + b) = false := BitVec.getLsbD_of_ge a (d.val + b) (by omega)
+      by_cases hb : b < 512
+      · simp [hlt, hge, hhi, hb]
+      · simp [hlt, hge, hhi, hb]
+abbrev MoveN := Nat × Nat × Nat
+def swapRowsN (v : Nat) : MoveN :=
+  let m := swapRows v
+  (m.1.toNat, m.2.1.toNat, m.2.2.val)
+def wordMoveN (m : MoveN) (a : Nat) : Nat :=
+  let (m1, m2, d) := m
+  let r1 := rotRN d a
+  let r2 := if d == 0 then a else rotRN (512 - d) a
+  let t := (m2 &&& r2) ||| ((all512 ^^^ m2) &&& a)
+  (m1 &&& r1) ||| ((all512 ^^^ m1) &&& t)
+theorem wordMoveN_eq (m : Move) (a : Sig) :
+    wordMoveN (m.1.toNat, m.2.1.toNat, m.2.2.val) a.toNat = (wordMove m a).toNat := by
+  unfold wordMoveN wordMove mux; dsimp only
+  have hbw : (if (m.2.2.val == 0) = true then a.toNat else rotRN (512 - m.2.2.val) a.toNat) =
+      (a.rotateRight (backwards m.2.2).val).toNat := by
+    by_cases h0 : m.2.2.val = 0
+    · have hbv : (backwards m.2.2).val = 0 := by simp [backwards, h0]
+      simp only [h0, hbv, beq_self_eq_true, ite_true, bv_rotR_zero]
+    · simp only [beq_eq_false_iff_ne.mpr h0, Bool.false_eq_true, ite_false]
+      have hdlt : m.2.2.val < 512 := m.2.2.isLt
+      have hbv : (backwards m.2.2).val = 512 - m.2.2.val := by
+        simp [backwards, Fin.ofNat]; omega
+      rw [← hbv, rotRN_eq]
+  rw [rotRN_eq, hbw]
+  have hn1 : all512 ^^^ m.1.toNat = (~~~m.1).toNat := by simpa [all512] using (bitvec_not_toNat m.1).symm
+  have hn2 : all512 ^^^ m.2.1.toNat = (~~~m.2.1).toNat := by simpa [all512] using (bitvec_not_toNat m.2.1).symm
+  rw [hn1, hn2]; simp
+def movedWordN (ms : List MoveN) (a : Nat) : Nat := ms.foldr wordMoveN a
+theorem movedWordN_eq (ms : List Move) (a : Sig) :
+    movedWordN (ms.map fun m => (m.1.toNat, m.2.1.toNat, m.2.2.val)) a.toNat = (movedWord ms a).toNat := by
+  induction ms with
+  | nil => rfl
+  | cons m rest ih =>
+    simp only [List.map_cons, movedWordN, movedWord, List.foldr_cons] at ih ⊢
+    rw [ih, wordMoveN_eq]
+def deadWiresN : List DecorN := deadWires.map toDecorN
+def deadSigsN : List Nat := deadSigs.map BitVec.toNat
+def deadVarsN : List Nat := (vars dead.mask).map BitVec.toNat
+def deadAutosM : Array (List MoveN) := dead.autos.map (fun perm => (perm.map swapRowsN).reverse)
+def deadTargetN : Nat := (targetOf dead).toNat
+def stateSetTN (levels : Nat → PackingT) (slot i : Nat) : List Nat :=
+  let (_, depth, _, _, data) := levels slot
+  let len := 10 * depth
+  let width := len + deadSigsN.length + depth
+  let recp := packedAt data (i * width) width
+  selectLive (recp >>> len) (decodeBankSigN depth (recp &&& ((1 <<< len) - 1)) deadSigsN)
+theorem stateSetTN_eq (levels : Nat → PackingT) (slot i : Nat) :
+    stateSetTN levels slot i = (stateSetT levels slot i).map BitVec.toNat := by
+  unfold stateSetTN stateSetT deadSigsN; dsimp only
+  simp only [List.length_map, decodeBankSigN_eq, selectLive_map]
+def linkedSetTN (levels : Nat → PackingT) (slot : Nat) (pair : Nat × Nat) : Option (List Nat) :=
+  if pair.1 ≥ (levels slot).1 then none else
+    (deadAutosM[pair.2]?).map fun ms => (stateSetTN levels slot pair.1).map (movedWordN ms)
+theorem linkedSetTN_eq (levels : Nat → PackingT) (slot : Nat) (pair : Nat × Nat) :
+    linkedSetTN levels slot pair = (linkedSetT levels slot pair).map (fun xs => xs.map BitVec.toNat) := by
+  unfold linkedSetTN linkedSetT deadAutosM
+  split
+  · rfl
+  · simp only [Array.getElem?_map, Option.map_map]
+    cases h : dead.autos[pair.2]? with
+    | none => rfl
+    | some perm =>
+      simp only [Option.map_some, Option.some.injEq, Function.comp, stateSetTN_eq, List.map_map]
+      have hrev : (perm.map swapRowsN).reverse =
+          (perm.map swapRows).reverse.map (fun m => (m.1.toNat, m.2.1.toNat, m.2.2.val)) := by
+        rw [List.map_reverse, List.map_map]; rfl
+      rw [hrev]
+      congr 1; funext x; exact movedWordN_eq _ x
+def sameWordsN (a b : List Nat) : Bool :=
+  a.all (fun x => b.any (· == x)) && b.all (fun x => a.any (· == x))
+theorem list_any_beq_map_toNat (xs : List Sig) (a : Sig) :
+    (xs.map BitVec.toNat).any (· == a.toNat) = xs.contains a := by
+  induction xs with
+  | nil => rfl
+  | cons x rest ih =>
+    simp only [List.map_cons, List.any_cons, List.contains_cons, ih]
+    rw [sig_toNat_beq x a]
+    have hcomm : (x == a) = (a == x) := by
+      cases h : (a == x)
+      · exact beq_eq_false_iff_ne.mpr (fun e => by rw [e, beq_self_eq_true] at h; cases h)
+      · rw [beq_iff_eq.mp h, beq_self_eq_true]
+    rw [hcomm]
+theorem sameWordsN_eq (a b : List Sig) :
+    sameWordsN (a.map BitVec.toNat) (b.map BitVec.toNat) = sameWords a b := by
+  unfold sameWordsN sameWords
+  simp only [List.all_map]
+  congr 1
+  · congr 1; funext x; exact list_any_beq_map_toNat b x
+  · congr 1; funext x; exact list_any_beq_map_toNat a x
+def keyWordN (n : Nat) : Nat :=
+  let r := n % 2305843009213693951
+  (r * (r + 971)) % 2305843009213693951
+theorem keyWordN_eq (v : Sig) : keyWordN v.toNat = keyWord v := rfl
+theorem foldl_key_shift (f : Sig → Nat) : ∀ (xs : List Sig) (acc : Nat),
+    xs.foldl (fun v x => v + f x) acc = acc + xs.foldl (fun v x => v + f x) 0
+  | [], acc => by simp
+  | x :: xs, acc => by
+    simp only [List.foldl_cons, Nat.zero_add]
+    rw [foldl_key_shift f xs (acc + f x), foldl_key_shift f xs (f x), Nat.add_assoc]
+theorem keySet_cons (z : Sig) (xs : List Sig) : keySet (z :: xs) = keyWord z + keySet xs := by
+  simpa [keySet] using foldl_key_shift keyWord xs (keyWord z)
+theorem keySet_erase (a : Sig) : ∀ (xs : List Sig), a ∈ xs → keyWord a + keySet (xs.erase a) = keySet xs
+  | [], h => by cases h
+  | x :: xs, h => by
+    by_cases hxa : x = a
+    · subst hxa; simp [List.erase_cons_head, keySet_cons]
+    · have hne : (x == a) = false := beq_eq_false_iff_ne.mpr hxa
+      have ha' : a ∈ xs := by rcases List.mem_cons.mp h with rfl | hm; exact (hxa rfl).elim; exact hm
+      simp only [List.erase_cons, hne, Bool.false_eq_true, ite_false, keySet_cons]
+      have ih := keySet_erase a xs ha'
+      omega
+theorem erase_map_fst {ws : List Decor} {a : Decor} (hnd : (ws.map Prod.fst).Nodup) (ha : a ∈ ws) :
+    (ws.erase a).map Prod.fst = (ws.map Prod.fst).erase a.1 := by
+  induction ws with
+  | nil => cases ha
+  | cons w rest ih =>
+    simp only [List.map_cons, List.nodup_cons] at hnd
+    by_cases hwa : w = a
+    · subst hwa; simp [List.erase_cons_head]
+    · have hne1 : (w == a) = false := beq_eq_false_iff_ne.mpr hwa
+      have ha' : a ∈ rest := by rcases List.mem_cons.mp ha with rfl | hm; exact (hwa rfl).elim; exact hm
+      have hne_f : w.1 ≠ a.1 := fun e => hnd.1 (e ▸ List.mem_map.mpr ⟨a, ha', rfl⟩)
+      have hne2 : (w.1 == a.1) = false := beq_eq_false_iff_ne.mpr hne_f
+      simp only [List.erase_cons, hne1, hne2, Bool.false_eq_true, ite_false, List.map_cons]
+      rw [ih hnd.2 ha']
+theorem erase_map_toNat {xs : List Sig} {a : Sig} :
+    (xs.erase a).map BitVec.toNat = (xs.map BitVec.toNat).erase a.toNat := by
+  induction xs with
+  | nil => rfl
+  | cons x rest ih =>
+    by_cases hxa : x = a
+    · subst hxa; simp [List.erase_cons_head]
+    · have hne1 : (x == a) = false := beq_eq_false_iff_ne.mpr hxa
+      have hne2 : (x.toNat == a.toNat) = false := beq_eq_false_iff_ne.mpr (fun e => hxa (BitVec.eq_of_toNat_eq e))
+      simp [List.erase_cons, hne1, hne2, ih]
+def delOneN (xs : List Nat) (a : Nat) (keep : Bool) : List Nat :=
+  if keep then xs else xs.erase a
+def opKeepN (un ka kb : Bool) (a b : Nat) (xs : List Nat) : List Nat :=
+  if un then delOneN xs a ka else delOneN (delOneN xs a ka) b kb
+theorem opKeepN_eq {ws : List Decor} {a b : Decor} (un ka kb : Bool)
+    (hnd : (ws.map Prod.fst).Nodup) (ha : a ∈ ws) (hb : b ∈ ws) (hab : un = false → a ≠ b) :
+    opKeepN un ka kb a.1.toNat b.1.toNat (ws.map (fun d => d.1.toNat)) =
+    ((opKeep un ka kb a b ws).map Prod.fst).map BitVec.toNat := by
+  have hmap : ws.map (fun d => d.1.toNat) = (ws.map Prod.fst).map BitVec.toNat := by rw [List.map_map]; rfl
+  rw [hmap]; unfold opKeepN opKeep delTwo delOneN delOne
+  cases un
+  · simp only [Bool.false_eq_true, ite_false]
+    cases ka <;> cases kb <;> simp only [Bool.false_eq_true, ite_false, ite_true]
+    · have hnd1 : ((ws.erase a).map Prod.fst).Nodup := by
+        rw [erase_map_fst hnd ha]; exact hnd.erase a.1
+      have hb1 : b ∈ ws.erase a := (List.mem_erase_of_ne (Ne.symm (hab rfl))).mpr hb
+      rw [erase_map_fst hnd1 hb1, erase_map_fst hnd ha, erase_map_toNat, erase_map_toNat]
+    · rw [erase_map_fst hnd ha, erase_map_toNat]
+    · rw [erase_map_fst hnd hb, erase_map_toNat]
+  · simp only [ite_true]
+    cases ka <;> simp only [Bool.false_eq_true, ite_false, ite_true]
+    · rw [erase_map_fst hnd ha, erase_map_toNat]
+theorem keySet_opKeep {ws : List Decor} {i j : Nat} (un ka kb : Bool)
+    (hnd : (ws.map Prod.fst).Nodup) (hi : i < ws.length) (hj : j < ws.length) (hij : un = false → i ≠ j) :
+    let a := ws.getD i defaultDecor; let b := ws.getD j defaultDecor
+    keySet ((opKeep un ka kb a b ws).map Prod.fst) =
+    keySet (ws.map Prod.fst) - (if ka then 0 else keyWord a.1) - (if un || kb then 0 else keyWord b.1) := by
+  dsimp only
+  have ha_eq : ws.getD i defaultDecor = ws[i]'hi := List.getD_eq_getElem _ _ hi
+  have hb_eq : ws.getD j defaultDecor = ws[j]'hj := List.getD_eq_getElem _ _ hj
+  have ha_in : ws.getD i defaultDecor ∈ ws := ha_eq ▸ List.getElem_mem hi
+  have hb_in : ws.getD j defaultDecor ∈ ws := hb_eq ▸ List.getElem_mem hj
+  have ha1_in : (ws.getD i defaultDecor).1 ∈ ws.map Prod.fst := List.mem_map.mpr ⟨_, ha_in, rfl⟩
+  have hb1_in : (ws.getD j defaultDecor).1 ∈ ws.map Prod.fst := List.mem_map.mpr ⟨_, hb_in, rfl⟩
+  unfold opKeep delTwo delOne
+  cases un
+  · simp only [Bool.false_eq_true, ite_false, Bool.false_or]
+    cases ka <;> cases kb <;> simp only [Bool.false_eq_true, ite_false, ite_true, Nat.sub_zero]
+    · have hab : ws.getD i defaultDecor ≠ ws.getD j defaultDecor := by
+        rw [ha_eq, hb_eq]; intro heq
+        have hi' : i < (ws.map Prod.fst).length := by simp [hi]
+        have hj' : j < (ws.map Prod.fst).length := by simp [hj]
+        have h1 : (ws.map Prod.fst)[i]'hi' = (ws.map Prod.fst)[j]'hj' := by simp [heq]
+        have hinj := List.nodup_iff_injective_getElem.mp hnd (a₁:=⟨i, hi'⟩) (a₂:=⟨j, hj'⟩) h1
+        exact hij rfl (congrArg Fin.val hinj)
+      have hb1_e : ws.getD j defaultDecor ∈ ws.erase (ws.getD i defaultDecor) :=
+        (List.mem_erase_of_ne (Ne.symm hab)).mpr hb_in
+      have hnd1 : ((ws.erase (ws.getD i defaultDecor)).map Prod.fst).Nodup := by
+        rw [erase_map_fst hnd ha_in]; exact hnd.erase _
+      rw [erase_map_fst hnd1 hb1_e, erase_map_fst hnd ha_in]
+      have h1 := keySet_erase (ws.getD i defaultDecor).1 (ws.map Prod.fst) ha1_in
+      have hb1_e' : (ws.getD j defaultDecor).1 ∈ (ws.map Prod.fst).erase (ws.getD i defaultDecor).1 := by
+        rw [← erase_map_fst hnd ha_in]; exact List.mem_map.mpr ⟨_, hb1_e, rfl⟩
+      have h2 := keySet_erase (ws.getD j defaultDecor).1 ((ws.map Prod.fst).erase (ws.getD i defaultDecor).1) hb1_e'
+      omega
+    · rw [erase_map_fst hnd ha_in]; have h1 := keySet_erase _ _ ha1_in; omega
+    · rw [erase_map_fst hnd hb_in]; have h1 := keySet_erase _ _ hb1_in; omega
+  · simp only [ite_true, Bool.true_or, Nat.sub_zero]
+    cases ka <;> simp only [Bool.false_eq_true, ite_false, ite_true, Nat.sub_zero]
+    · rw [erase_map_fst hnd ha_in]; have h1 := keySet_erase _ _ ha1_in; omega
+def availableMN (d : Nat) (mpool : List Nat) (a : Nat) : Bool :=
+  let m := a &&& d
+  m == 0 || m == d || mpool.any (· == m)
+theorem availableMN_eq (d : Sig) (pool : List Sig) (a : Sig) :
+    availableMN d.toNat (pool.map (fun x => x.toNat &&& d.toNat)) a.toNat = availableB d pool a := by
+  unfold availableMN availableB masked zero
+  simp only [List.any_map]
+  have h1 : (a.toNat &&& d.toNat == 0) = (a &&& d == (0 : Sig)) := by
+    rw [← BitVec.toNat_and, ← bv_zero_toNat (w := 512), sig_toNat_beq]
+  have h2 : (a.toNat &&& d.toNat == d.toNat) = (a &&& d == d) := by
+    rw [← BitVec.toNat_and, sig_toNat_beq]
+  rw [h1, h2]
+  exact congrArg (fun p => ((a &&& d == (0 : Sig)) || (a &&& d == d)) || pool.any p)
+    (funext fun x => by dsimp only [Function.comp]; rw [← BitVec.toNat_and, ← BitVec.toNat_and, sig_toNat_beq])
+def makePoolMN (d : Nat) (mpool : List Nat) : List (Nat × Nat × Nat) → Option (List Nat)
+  | [] => some mpool
+  | (op, a, b) :: cs =>
+    if availableMN d mpool a && (op == 2 || availableMN d mpool b) then
+      makePoolMN d ((choiceValN op a b &&& d) :: mpool) cs
+    else none
+theorem makePoolMN_eq (d : Sig) : ∀ (pool : List Sig) (cs : List Choice),
+    makePoolMN d.toNat (pool.map (fun x => x.toNat &&& d.toNat))
+      (cs.map fun c => (c.1, c.2.1.toNat, c.2.2.toNat)) =
+    (makePool d pool cs).map (fun p => p.map (fun x => x.toNat &&& d.toNat))
+  | _, [] => rfl
+  | pool, (op, a, b) :: cs => by
+    simp only [List.map_cons]; unfold makePoolMN makePool choiceOK; dsimp only
+    rw [availableMN_eq, availableMN_eq]
+    by_cases h : (availableB d pool a && (op == 2 || availableB d pool b)) = true
+    · rw [if_pos h, if_pos h, choiceValN_eq]
+      exact makePoolMN_eq d (choiceVal (op, a, b) :: pool) cs
+    · rw [if_neg h, if_neg h]; rfl
+def chosenStepsN (bank : List DecorN) (ops paid : Nat) : Nat → List (Nat × Nat × Nat)
+  | 0 => []
+  | n + 1 =>
+    let more := chosenStepsN bank (ops >>> 10) (paid >>> 1) n
+    if paid &&& 1 == 0 then more else
+      (getFieldV ops 8 2, (bank.getD (ops &&& 15) (0, 0, 0)).1, (bank.getD (getFieldV ops 4 4) (0, 0, 0)).1) :: more
+theorem chosenStepsN_eq (bank : List Decor) : ∀ (ops paid n : Nat),
+    chosenStepsN (bank.map toDecorN) ops paid n =
+    (chosenSteps bank ops paid n).map (fun c => (c.1, c.2.1.toNat, c.2.2.toNat))
+  | _, _, 0 => rfl
+  | ops, paid, n + 1 => by
+    unfold chosenStepsN chosenSteps; dsimp only
+    rw [chosenStepsN_eq bank (ops >>> 10) (paid >>> 1) n]
+    split
+    · rfl
+    · rw [← toDecorN_default, list_getD_map, list_getD_map]; rfl
+abbrev FastRule4 := Nat × Nat × Nat × List Nat × Nat × Bool
+def buildRule4U (ops d : Nat) (bank : List DecorN) (ws1 : List Nat) (idx paid : Nat) : Option FastRule4 :=
+  (dead.cols.read idx).bind fun ci =>
+    let dom := (subcube ci.1 ci.2.1).toNat
+    let rawM := deadVarsN.map (fun x => x &&& dom)
+    let cs := chosenStepsN bank ops paid d
+    (makePoolMN dom rawM cs).map fun mpool =>
+      let ccnt := ws1.countP (fun w => let m := w &&& dom; m == 0 || m == dom)
+      let allAv := ws1.all (availableMN dom mpool)
+      (dom, ci.2.2.2.2, cs.length, mpool, ccnt, allAv)
+def RuleMatch (ws : List Decor) (r : FastRule4) (p : BoundPool) : Prop :=
+  r.1 = p.domain.toNat ∧ r.2.1 = p.bound ∧ r.2.2.1 = p.paid ∧
+  r.2.2.2.1 = p.wires.map (fun x => x.toNat &&& p.domain.toNat) ∧
+  r.2.2.2.2.1 = ws.countP (fun w => isMaskedConstant p.domain w.1) ∧
+  r.2.2.2.2.2 = ws.all (fun w => availableB p.domain p.wires w.1)
+theorem isMaskedConstant_nat (d a : Sig) :
+    (let m := a.toNat &&& d.toNat; m == 0 || m == d.toNat) = isMaskedConstant d a := by
+  unfold isMaskedConstant masked zero; dsimp only
+  have h1 : (a.toNat &&& d.toNat == 0) = (a &&& d == (0 : Sig)) := by
+    rw [← BitVec.toNat_and, ← bv_zero_toNat (w := 512), sig_toNat_beq]
+  have h2 : (a.toNat &&& d.toNat == d.toNat) = (a &&& d == d) := by
+    rw [← BitVec.toNat_and, sig_toNat_beq]
+  rw [h1, h2]
+theorem buildRule4U_eq (ops d : Nat) (bank ws : List Decor) (idx paid : Nat) :
+    ∀ r, buildRule4U ops d (bank.map toDecorN) (ws.map (fun w => w.1.toNat)) idx paid = some r →
+      ∃ p, buildRule dead ops d bank idx paid = some p ∧ RuleMatch ws r p := by
+  intro r hr
+  unfold buildRule4U deadVarsN at hr; unfold buildRule materialize
+  cases hc : dead.cols.read idx with
+  | none => rw [hc] at hr; cases hr
+  | some ci =>
+    rw [hc] at hr; dsimp only [Option.bind] at hr ⊢
+    rw [List.map_map] at hr
+    have hraw : (List.map ((fun x => x &&& (subcube ci.1 ci.2.1).toNat) ∘ BitVec.toNat) (vars dead.mask)) =
+        (vars dead.mask).map (fun x => x.toNat &&& (subcube ci.1 ci.2.1).toNat) := rfl
+    rw [hraw, chosenStepsN_eq, makePoolMN_eq] at hr
+    cases hm : makePool (subcube ci.1 ci.2.1) (vars dead.mask) (chosenSteps bank ops paid d) with
+    | none => rw [hm] at hr; cases hr
+    | some pool =>
+      rw [hm] at hr; simp only [Option.map_some, Option.some.injEq] at hr; subst hr
+      refine ⟨⟨subcube ci.1 ci.2.1, ci.2.2.2.2, (chosenSteps bank ops paid d).length, pool⟩,
+        by simp only [Option.map_some], ?_⟩
+      refine ⟨rfl, rfl, List.length_map _, rfl, ?_, ?_⟩
+      · dsimp only; rw [List.countP_map]
+        exact congrArg (fun f => List.countP f ws) (funext fun w => isMaskedConstant_nat _ w.1)
+      · dsimp only; rw [List.all_map]
+        exact congrArg (fun f => List.all ws f) (funext fun w => availableMN_eq _ _ w.1)
+def fastCost4 (r : FastRule4) (k a1 b1 z1 : Nat) (op : Nat) (ka kb : Bool) : Bool :=
+  let (d, lb, paid, _, ccnt, allAv) := r
+  if !allAv then false else
+  let zm := z1 &&& d
+  let zc := zm == 0 || zm == d
+  let ac := if ka then 0 else let am := a1 &&& d; if am == 0 || am == d then 1 else 0
+  let bc := if op == 2 || kb then 0 else let bm := b1 &&& d; if bm == 0 || bm == d then 1 else 0
+  let cm := ccnt - ac - bc + zc.toNat
+  let free := zc || zm == (a1 &&& d) || zm == (b1 &&& d)
+  decide (k + paid + (!free).toNat < lb + cm)
+theorem fastCost4_eq {ws : List Decor} {r : FastRule4} {p : BoundPool}
+    (hm : RuleMatch ws r p) (k : Nat) (a b : Decor) (op : Nat) (ka kb : Bool) :
+    fastCost4 r k a.1.toNat b.1.toNat (choiceValN op a.1.toNat b.1.toNat) op ka kb =
+    fastCost (summarizePool ws p) k a b op ka kb := by
+  rcases hm with ⟨hd, hlb, hpd, _, hcc, hav⟩
+  unfold fastCost4 fastCost summarizePool constantLoss; dsimp only
+  rw [hd, hlb, hpd, hcc, hav, choiceValN_eq]
+  cases h : ws.all (fun w => availableB p.domain p.wires w.1)
+  · simp only [Bool.not_false, ite_true]
+  · simp only [Bool.not_true, Bool.false_eq_true, ite_false]
+    have hzc : ((choiceVal (op, a.1, b.1)).toNat &&& p.domain.toNat == 0 || (choiceVal (op, a.1, b.1)).toNat &&& p.domain.toNat == p.domain.toNat) =
+        isMaskedConstant p.domain (choiceVal (op, a.1, b.1)) := isMaskedConstant_nat p.domain _
+    have hac : (if ka = true then 0 else if (a.1.toNat &&& p.domain.toNat == 0 || a.1.toNat &&& p.domain.toNat == p.domain.toNat) = true then 1 else 0) =
+        (if ka = true then 0 else (isMaskedConstant p.domain a.1).toNat) := by
+      rw [isMaskedConstant_nat]; cases ka <;> cases isMaskedConstant p.domain a.1 <;> rfl
+    have hbc : (if (op == 2 || kb) = true then 0 else if (b.1.toNat &&& p.domain.toNat == 0 || b.1.toNat &&& p.domain.toNat == p.domain.toNat) = true then 1 else 0) =
+        (if (op == 2 || kb) = true then 0 else (isMaskedConstant p.domain b.1).toNat) := by
+      rw [isMaskedConstant_nat]; cases (op == 2 || kb) <;> cases isMaskedConstant p.domain b.1 <;> rfl
+    have heqM (u v : Sig) : (u.toNat &&& p.domain.toNat == v.toNat &&& p.domain.toNat) = (masked p.domain u == masked p.domain v) := by
+      unfold masked; rw [← BitVec.toNat_and, ← BitVec.toNat_and, sig_toNat_beq]
+    rw [hzc, hac, hbc, heqM, heqM]; rfl
+def scalarPoolCut4 (r : FastRule4) (k a1 b1 z1 : Nat) (op : Nat) (rest : List Nat) : Bool :=
+  let (d, lb, paid, mpool, _, allAv) := r
+  let extra := !availableMN d mpool z1
+  let availRest := allAv || rest.all (availableMN d mpool)
+  decide (k + paid + extra.toNat < lb + (z1 :: rest).countP (fun w => let m := w &&& d; m == 0 || m == d)) &&
+    availRest && (!extra || (availableMN d mpool a1 && (op == 2 || availableMN d mpool b1)))
+theorem scalarPoolCut4_sound {ws : List Decor} {r : FastRule4} {p : BoundPool}
+    (hm : RuleMatch ws r p) {k : Nat} {a b : Decor} {op : Nat} {rest : List Sig}
+    (hsub : ∀ x ∈ rest, x ∈ ws.map Prod.fst)
+    (h : scalarPoolCut4 r k a.1.toNat b.1.toNat (choiceValN op a.1.toNat b.1.toNat) op (rest.map BitVec.toNat) = true) :
+    scalarPoolCut p k rest (movedChoice op a b) = true := by
+  rcases hm with ⟨hd, hlb, hpd, hmp, _, hav⟩
+  unfold scalarPoolCut4 at h; unfold scalarPoolCut choiceOK movedChoice; dsimp only at h ⊢
+  rw [hd, hlb, hpd, hmp, hav, choiceValN_eq, availableMN_eq, availableMN_eq, availableMN_eq] at h
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h ⊢
+  have hcnt : ((choiceVal (op, a.1, b.1)).toNat :: rest.map BitVec.toNat).countP (fun w => let m := w &&& p.domain.toNat; m == 0 || m == p.domain.toNat) =
+      (choiceVal (op, a.1, b.1) :: rest).countP (isMaskedConstant p.domain) := by
+    have hm' : (choiceVal (op, a.1, b.1)).toNat :: rest.map BitVec.toNat = (choiceVal (op, a.1, b.1) :: rest).map BitVec.toNat := rfl
+    rw [hm', List.countP_map]
+    exact congrArg (fun f => List.countP f (choiceVal (op, a.1, b.1) :: rest)) (funext fun x => isMaskedConstant_nat p.domain x)
+  rw [hcnt] at h
+  have hrest_av : rest.all (availableB p.domain p.wires) = true := by
+    rcases (Bool.or_eq_true _ _).mp h.1.2 with hall | hpart
+    · rw [List.all_eq_true]; intro x hx
+      obtain ⟨w, hw, rfl⟩ := List.mem_map.mp (hsub x hx)
+      exact List.all_eq_true.mp hall w hw
+    · rw [List.all_eq_true]; intro x hx
+      have h1 := List.all_eq_true.mp hpart x.toNat (List.mem_map.mpr ⟨x, hx, rfl⟩)
+      rwa [availableMN_eq] at h1
+  exact ⟨⟨h.1.1, hrest_av⟩, h.2⟩
+theorem opKeep_sub_fst (un ka kb : Bool) (a b : Decor) (ws : List Decor) :
+    ∀ x ∈ (opKeep un ka kb a b ws).map Prod.fst, x ∈ ws.map Prod.fst := by
+  intro x hx
+  obtain ⟨w, hw, rfl⟩ := List.mem_map.mp hx
+  have hw' : w ∈ ws := by
+    unfold opKeep delTwo delOne at hw
+    split at hw
+    · split at hw; exact hw; exact List.mem_of_mem_erase hw
+    · split at hw
+      · split at hw; exact hw; exact List.mem_of_mem_erase hw
+      · have h1 := List.mem_of_mem_erase hw
+        split at h1; exact h1; exact List.mem_of_mem_erase h1
+  exact List.mem_map.mpr ⟨w, hw', rfl⟩
+def addCovN (z : Nat) (c : Nat × Nat × Nat) : Nat × Nat × Nat :=
+  let c1 := c.1; let cu := c.2.1; let cu2 := c.2.2
+  (z ||| c1, (z ^^^ (z &&& c1)) ||| (cu ^^^ (cu &&& z)),
+   (z &&& cu) ||| (cu2 ^^^ (cu2 &&& z)))
+def coverageN (d : Bool) (v : List DecorN) : Nat × Nat × Nat :=
+  v.foldr (fun a c => addCovN (if d then a.2.1 ^^^ (a.2.1 &&& a.2.2) else a.2.1 ^^^ a.2.2) c) (0, 0, 0)
+theorem addCovN_eq (z : Bits) (c : Cov) :
+    addCovN z.toNat (c.1.toNat, c.2.1.toNat, c.2.2.toNat) =
+      ((addCov z c).1.toNat, (addCov z c).2.1.toNat, (addCov z c).2.2.toNat) := by
+  have hsub (a b : Bits) : (a &&& ~~~b).toNat = a.toNat ^^^ (a.toNat &&& b.toNat) := by
+    rw [← xor_meet, BitVec.toNat_xor, BitVec.toNat_and]
+  simp only [addCovN, addCov, BitVec.toNat_or, BitVec.toNat_and, hsub]
+theorem coverageN_eq (d : Bool) (v : List Decor) :
+    coverageN d (v.map toDecorN) =
+      ((coverage d v).1.toNat, (coverage d v).2.1.toNat, (coverage d v).2.2.toNat) := by
+  induction v with
+  | nil => simp [coverageN, coverage]
+  | cons a rest ih =>
+    have hcol : (if d then (toDecorN a).2.1 ^^^ ((toDecorN a).2.1 &&& (toDecorN a).2.2) else (toDecorN a).2.1 ^^^ (toDecorN a).2.2) =
+        (column d a.2).toNat := by
+      cases d
+      · simp [column, toDecorN, BitVec.toNat_xor]
+      · simp only [column, toDecorN, ite_true, ← xor_meet, BitVec.toNat_xor, BitVec.toNat_and]
+    simp only [List.map_cons, coverageN, coverage, List.foldr_cons] at ih ⊢
+    rw [ih, hcol, addCovN_eq]
+def nodupN : List Nat → Bool
+  | [] => true
+  | x :: xs => !(xs.any (· == x)) && nodupN xs
+theorem nodupN_eq (xs : List Sig) : nodupN (xs.map BitVec.toNat) = decide xs.Nodup := by
+  induction xs with
+  | nil => rfl
+  | cons x rest ih =>
+    simp only [List.map_cons, nodupN, ih, List.nodup_cons, Bool.decide_and]
+    congr 1
+    rw [list_any_beq_map_toNat]
+    cases h : rest.contains x
+    · have hnm : x ∉ rest := by simpa [List.contains_iff_mem] using h
+      simp [hnm]
+    · have hm : x ∈ rest := by simpa [List.contains_iff_mem] using h
+      simp [hm]
+def prelimN (targetN : Nat) (ws1 : List Nat) : Bool :=
+  nodupN ws1 && !(ws1.any (· == targetN))
+theorem prelimN_eqU (c : NodeContextU) :
+    prelimN deadTargetN (c.2.2.2.1.map (fun d => d.1.toNat)) = prelimU (targetOf dead) c := by
+  unfold prelimN prelimU deadTargetN
+  have hm : c.2.2.2.1.map (fun d => d.1.toNat) = (c.2.2.2.1.map Prod.fst).map BitVec.toNat := by rw [List.map_map]; rfl
+  rw [hm, nodupN_eq, list_any_beq_map_toNat]
+def units769 : Nat → Nat
+  | 0 => 0
+  | n + 1 => (units769 n <<< 769) + 1
+theorem units769_eq : ∀ n, units769 n = units n
+  | 0 => rfl
+  | n + 1 => by simp only [units769, units, lanePlace, units769_eq n, Nat.shiftLeft_eq, Nat.mul_comm]
+inductive BBatch (α : Type)
+  | empty
+  | leaf (x : α)
+  | node (nl : Nat) (lo hi : BBatch α)
+def BBatch.toList {α : Type} : BBatch α → List α
+  | .empty => []
+  | .leaf x => [x]
+  | .node _ lo hi => lo.toList ++ hi.toList
+def BBatch.Wf {α : Type} : BBatch α → Prop
+  | .empty => True
+  | .leaf _ => True
+  | .node nl lo hi => nl = lo.toList.length ∧ lo.Wf ∧ hi.Wf
+def mkBBatch {α : Type} : Nat → List α → BBatch α
+  | _, [] => .empty
+  | _, [x] => .leaf x
+  | 0, x :: _ => .leaf x
+  | fuel + 1, xs =>
+    let half := xs.length >>> 1
+    .node half (mkBBatch fuel (xs.take half)) (mkBBatch fuel (xs.drop half))
+theorem mkBBatch_ok {α : Type} : ∀ (fuel : Nat) (xs : List α),
+    xs.length ≤ 2 ^ fuel →
+    (mkBBatch fuel xs).toList = xs ∧ (mkBBatch fuel xs).Wf := by
+  intro fuel
+  induction fuel with
+  | zero =>
+    intro xs hlen
+    cases xs with
+    | nil => exact ⟨rfl, trivial⟩
+    | cons a as =>
+      cases as with
+      | nil => exact ⟨rfl, trivial⟩
+      | cons b bs => simp at hlen
+  | succ fuel ih =>
+    intro xs hlen
+    cases xs with
+    | nil => exact ⟨rfl, trivial⟩
+    | cons a as =>
+      cases as with
+      | nil => exact ⟨rfl, trivial⟩
+      | cons b bs =>
+        set xs' := a :: b :: bs
+        have hxs_len : xs'.length ≥ 2 := by simp [xs']
+        set half := xs'.length >>> 1
+        have hhalf : half = xs'.length / 2 := Nat.shiftRight_eq_div_pow _ 1
+        have hpow : 2 ^ (fuel + 1) = 2 * 2 ^ fuel := by rw [Nat.pow_succ, Nat.mul_comm]
+        have hlo_len : (xs'.take half).length = half := by rw [List.length_take]; omega
+        have hhi_len : (xs'.drop half).length = xs'.length - half := List.length_drop
+        have hlo := ih (xs'.take half) (by omega)
+        have hhi := ih (xs'.drop half) (by omega)
+        have hmk : mkBBatch (fuel + 1) xs' = BBatch.node half (mkBBatch fuel (xs'.take half)) (mkBBatch fuel (xs'.drop half)) := rfl
+        rw [hmk]
+        exact ⟨by simp only [BBatch.toList, hlo.1, hhi.1, List.take_append_drop],
+               ⟨by rw [hlo.1, hlo_len], hlo.2, hhi.2⟩⟩
+def packBB769 {α : Type} (f : α → Nat) : BBatch α → Nat
+  | .empty => 0
+  | .leaf x => f x
+  | .node nl lo hi => (packBB769 f hi <<< (nl * 769)) + packBB769 f lo
+theorem combineLanes_append {α : Type} (f : α → Bits) (xs ys : List α) :
+    combineLanes f (xs ++ ys) = (combineLanes f ys <<< (xs.length * 769)) + combineLanes f xs := by
+  induction xs with
+  | nil => simp [combineLanes]
+  | cons x xs ih =>
+    simp only [List.cons_append, List.length_cons, combineLanes, lanePlace, ih, Nat.shiftLeft_eq]
+    have hexp : 2 ^ ((xs.length + 1) * 769) = 2 ^ 769 * 2 ^ (xs.length * 769) := by
+      rw [Nat.add_mul, Nat.one_mul, Nat.pow_add, Nat.mul_comm]
+    rw [hexp, Nat.mul_add, ← Nat.mul_assoc, Nat.mul_comm (2 ^ 769) (combineLanes f ys), Nat.mul_assoc, Nat.add_assoc]
+theorem packBB769_eq {α : Type} (f : α → Nat) (g : α → Bits) :
+    ∀ (bt : BBatch α), bt.Wf → (∀ x ∈ bt.toList, f x = (g x).toNat) →
+      packBB769 f bt = combineLanes g bt.toList
+  | .empty, _, _ => rfl
+  | .leaf x, _, hf => by
+    simp only [packBB769, BBatch.toList, combineLanes, lanePlace, Nat.mul_zero, Nat.zero_add]
+    exact hf x List.mem_cons_self
+  | .node nl lo hi, ⟨hnl, wlo, whi⟩, hall => by
+    subst hnl
+    simp only [packBB769, BBatch.toList, combineLanes_append]
+    rw [packBB769_eq f g lo wlo (fun x hx => hall x (List.mem_append_left _ hx)),
+        packBB769_eq f g hi whi (fun x hx => hall x (List.mem_append_right _ hx))]
+def onMarksBB769 {α : Type} (f : α → Bool) (mask : Nat) : BBatch α → Bool
+  | .empty => true
+  | .leaf x => if mask == 0 then true else f x
+  | .node nl lo hi =>
+    if mask == 0 then true
+    else
+      let sh := nl * 769
+      let hiM := mask >>> sh
+      let loM := mask ^^^ (hiM <<< sh)
+      onMarksBB769 f loM lo && onMarksBB769 f hiM hi
+theorem onMarksBB769_ok {α : Type} (f : α → Bool) :
+    ∀ (bt : BBatch α) (mask q : Nat), bt.Wf → (hq : q < bt.toList.length) →
+      mask.testBit (769 * q) = true → onMarksBB769 f mask bt = true →
+      f (bt.toList[q]'hq) = true
+  | .empty, _, _, _, hq, _, _ => by simp [BBatch.toList] at hq
+  | .leaf x, mask, q, _, hq, hbit, hon => by
+    have hq0 : q = 0 := by simp [BBatch.toList] at hq; omega
+    subst hq0
+    unfold onMarksBB769 at hon
+    have hne : mask ≠ 0 := fun e => by rw [e, Nat.zero_testBit] at hbit; cases hbit
+    rw [beq_eq_false_iff_ne.mpr hne] at hon; simpa [BBatch.toList] using hon
+  | .node nl lo hi, mask, q, ⟨hnl, wlo, whi⟩, hq, hbit, hon => by
+    subst hnl
+    unfold onMarksBB769 at hon; dsimp only at hon
+    have hne : mask ≠ 0 := fun e => by rw [e, Nat.zero_testBit] at hbit; cases hbit
+    rw [beq_eq_false_iff_ne.mpr hne] at hon
+    simp only [Bool.false_eq_true, ite_false, Bool.and_eq_true] at hon
+    by_cases hlt : q < lo.toList.length
+    · have hlo_bit : (mask ^^^ ((mask >>> (lo.toList.length * 769)) <<< (lo.toList.length * 769))).testBit (769 * q) = true := by
+        rw [Nat.testBit_xor, Nat.testBit_shiftLeft]
+        simp [show ¬(lo.toList.length * 769 ≤ 769 * q) by omega, hbit]
+      have hres := onMarksBB769_ok f lo _ q wlo hlt hlo_bit hon.1
+      simpa [BBatch.toList, List.getElem_append_left hlt] using hres
+    · have hhi_lt : q - lo.toList.length < hi.toList.length := by simp [BBatch.toList] at hq; omega
+      have hhi_bit : (mask >>> (lo.toList.length * 769)).testBit (769 * (q - lo.toList.length)) = true := by
+        rw [Nat.testBit_shiftRight]
+        have heq : lo.toList.length * 769 + 769 * (q - lo.toList.length) = 769 * q := by omega
+        rw [heq]; exact hbit
+      have hres := onMarksBB769_ok f hi _ (q - lo.toList.length) whi hhi_lt hhi_bit hon.2
+      have hge : lo.toList.length ≤ q := Nat.le_of_not_lt hlt
+      simpa [BBatch.toList, List.getElem_append_right hge] using hres
+abbrev FastCtx4U :=
+  Nat × Nat × List DecorN × List Nat × List Nat × Nat ×
+  (Nat × Nat × Nat) × (Nat × Nat × Nat) ×
+  List FastRule4 × (Nat → List (List Nat)) × (Nat → List (List Nat))
+def contextOfU4 (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat → Option (Nat × Nat)) (k tm i : Nat) : FastCtx4U :=
+  let slot := 3 * k + tm
+  let (num, depth, cw, offw, data) := levels slot
+  let len := 10 * depth
+  let width := len + deadWiresN.length + depth
+  let recp := packedAt data (i * width) width
+  let ops := recp &&& ((1 <<< len) - 1)
+  let bank := decodeBankN depth ops deadWiresN
+  let ws := selectLive (recp >>> len) bank
+  let ws1 := ws.map Prod.fst
+  let wsKeys := ws1.map keyWordN
+  let totKey := wsKeys.foldl (· + ·) 0
+  let start := num * width
+  let pos := start + num * offw + packedAt data (start + i * offw) offw
+  let nr := packedAt data pos 5
+  let st := pos + 5
+  let rules := (getPairs data cw depth nr st).filterMap (fun (a, b) => buildRule4U ops depth bank ws1 a b)
+  let ls0 := fun tag => ((idx0 slot tag).bind (linkedSetTN levels (3 * (k - 1)))).toList
+  let ls1 := fun tag => ((idx1 slot tag).bind (linkedSetTN levels (3 * (k - 1) + 1))).toList
+  (k, tm, ws, ws1, wsKeys, totKey, coverageN false ws, coverageN true ws, rules, ls0, ls1)
+def CtxMatch4U (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat → Option (Nat × Nat)) (k tm i : Nat) (fc : FastCtx4U) : Prop :=
+  let c := contextOfU levels idx0 idx1 k tm i
+  fc.1 = c.1 ∧
+  fc.2.1 = c.2.1 ∧
+  fc.2.2.1 = c.2.2.2.1.map toDecorN ∧
+  fc.2.2.2.1 = c.2.2.2.1.map (fun d => d.1.toNat) ∧
+  fc.2.2.2.2.1 = (c.2.2.2.1.map Prod.fst).map keyWord ∧
+  fc.2.2.2.2.2.1 = keySet (c.2.2.2.1.map Prod.fst) ∧
+  fc.2.2.2.2.2.2.1 = ((c.2.2.2.2.1.1).1.toNat, (c.2.2.2.2.1.1).2.1.toNat, (c.2.2.2.2.1.1).2.2.toNat) ∧
+  fc.2.2.2.2.2.2.2.1 = ((c.2.2.2.2.1.2).1.toNat, (c.2.2.2.2.1.2).2.1.toNat, (c.2.2.2.2.1.2).2.2.toNat) ∧
+  (∀ r ∈ fc.2.2.2.2.2.2.2.2.1, ∃ p ∈ c.2.2.2.2.2.1, RuleMatch c.2.2.2.1 r p) ∧
+  (∀ tag, fc.2.2.2.2.2.2.2.2.2.1 tag = (c.2.2.2.2.2.2.2.1 tag).map (fun xs => xs.map BitVec.toNat)) ∧
+  (∀ tag, fc.2.2.2.2.2.2.2.2.2.2 tag = (c.2.2.2.2.2.2.2.2 tag).map (fun xs => xs.map BitVec.toNat))
+theorem contextOfU4_match (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat → Option (Nat × Nat)) (k tm i : Nat) :
+    CtxMatch4U levels idx0 idx1 k tm i (contextOfU4 levels idx0 idx1 k tm i) := by
+  dsimp only [CtxMatch4U, contextOfU4, contextOfU, readNodeT, deadWiresN]
+  set lv := levels (3 * k + tm)
+  rcases lv with ⟨num, depth, cw, offw, data⟩
+  dsimp only
+  simp only [List.length_map, decodeBankN_eq, selectLive_map]
+  set bank := decodeBank depth (packedAt data (i * (10 * depth + deadWires.length + depth)) (10 * depth + deadWires.length + depth) &&& ((1 <<< (10 * depth)) - 1)) deadWires
+  set ws := selectLive (packedAt data (i * (10 * depth + deadWires.length + depth)) (10 * depth + deadWires.length + depth) >>> (10 * depth)) bank
+  have hws1 : (ws.map toDecorN).map Prod.fst = ws.map (fun d => d.1.toNat) := by rw [List.map_map]; rfl
+  have hkeys : (ws.map (fun d => d.1.toNat)).map keyWordN = (ws.map Prod.fst).map keyWord := by
+    rw [List.map_map, List.map_map]; rfl
+  have htot : ((ws.map Prod.fst).map keyWord).foldl (· + ·) 0 = keySet (ws.map Prod.fst) := by
+    unfold keySet; generalize (0 : Nat) = acc
+    induction (ws.map Prod.fst) generalizing acc with
+    | nil => rfl
+    | cons x rest ih => simp [ih]
+  refine ⟨trivial, trivial, trivial, hws1, by rw [hws1, hkeys], by rw [hws1, hkeys, htot],
+    coverageN_eq false ws, coverageN_eq true ws, ?_, ?_, ?_⟩
+  · intro r hr
+    rw [List.mem_filterMap] at hr
+    obtain ⟨ab, hab, hbr⟩ := hr
+    rw [hws1] at hbr
+    obtain ⟨p, hp, hrm⟩ := buildRule4U_eq _ depth bank ws ab.1 ab.2 r hbr
+    exact ⟨p, List.mem_filterMap.mpr ⟨ab, hab, hp⟩, hrm⟩
+  · intro tag
+    cases hidx : idx0 (3 * k + tm) tag with
+    | none => rfl
+    | some pair =>
+      simp only [Option.bind_some, linkedSetTN_eq]
+      cases linkedSetT levels (3 * (k - 1)) pair <;> rfl
+  · intro tag
+    cases hidx : idx1 (3 * k + tm) tag with
+    | none => rfl
+    | some pair =>
+      simp only [Option.bind_some, linkedSetTN_eq]
+      cases linkedSetT levels (3 * (k - 1) + 1) pair <;> rfl
+def fastFallbackAt4U (fc : FastCtx4U) (i j op : Nat) (ka kb : Bool) : Bool :=
+  let (cap, tm, _, ws1, wsKeys, totKey, _, _, rules, l0, l1) := fc
+  let a1 := ws1.getD i 0
+  let b1 := ws1.getD j 0
+  let z1 := choiceValN op a1 b1
+  if !properBN z1 || ws1.any (· == z1) then true else
+  if rules.any (fun r => fastCost4 r (cap - 1) a1 b1 z1 op ka kb) then true else
+  let un := op == 2
+  let len := 1 + (ws1.length - (if ka then 0 else 1) - (if un || kb then 0 else 1))
+  let ct := childU tm cap len
+  let rest := opKeepN un ka kb a1 b1 ws1
+  let wsN := z1 :: rest
+  let tag := keyWordN z1 + (totKey - (if ka then 0 else wsKeys.getD i 0) - (if un || kb then 0 else wsKeys.getD j 0))
+  let links := if ct == 0 then l0 else l1
+  if (links tag).any (sameWordsN wsN) then true else
+  rules.any (fun r => scalarPoolCut4 r (cap - 1) a1 b1 z1 op rest)
+theorem fastFallback4U_sound {levels idx0 idx1 k tm idx} {fc : FastCtx4U} {i j op : Nat} {ka kb : Bool}
+    (hm : CtxMatch4U levels idx0 idx1 k tm idx fc)
+    (hnd : ((contextOfU levels idx0 idx1 k tm idx).2.2.2.1.map Prod.fst).Nodup)
+    (hi : i < (contextOfU levels idx0 idx1 k tm idx).2.2.2.1.length)
+    (hj : j < (contextOfU levels idx0 idx1 k tm idx).2.2.2.1.length)
+    (hij : op ≠ 2 → i ≠ j)
+    (hlen : ¬ (1 + ((contextOfU levels idx0 idx1 k tm idx).2.2.1 - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1)) > k))
+    (h : fastFallbackAt4U fc i j op ka kb = true) :
+    checkAtU (contextOfU levels idx0 idx1 k tm idx) i j op ka kb = true := by
+  set c := contextOfU levels idx0 idx1 k tm idx
+  have hcap_c : c.1 = k := rfl
+  have hlen_c : c.2.2.1 = c.2.2.2.1.length := rfl
+  apply fallbackFastU_sound (by rw [hcap_c]; exact hlen)
+  rcases hm with ⟨hcap, htm, _, hws1, hkeys, htot, _, _, hrules, hl0, hl1⟩
+  unfold fastFallbackAt4U at h; unfold fallbackFastU; dsimp only at h ⊢
+  rw [hcap, htm, hws1, hkeys, htot] at h
+  have hdef : defaultDecor.1.toNat = 0 := bv_zero_toNat
+  have ha1 : (c.2.2.2.1.map (fun d => d.1.toNat)).getD i 0 = (c.2.2.2.1.getD i defaultDecor).1.toNat := by
+    rw [← hdef, list_getD_map (fun d : Decor => d.1.toNat)]
+  have hb1 : (c.2.2.2.1.map (fun d => d.1.toNat)).getD j 0 = (c.2.2.2.1.getD j defaultDecor).1.toNat := by
+    rw [← hdef, list_getD_map (fun d : Decor => d.1.toNat)]
+  rw [ha1, hb1, choiceValN_eq, properBN_eq] at h
+  have hdup_eq : (c.2.2.2.1.map (fun d => d.1.toNat)).any (· == (choiceVal (op, (c.2.2.2.1.getD i defaultDecor).1, (c.2.2.2.1.getD j defaultDecor).1)).toNat) =
+      c.2.2.2.1.any (fun v => v.1 == choiceVal (movedChoice op (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor))) := by
+    rw [List.any_map]
+    exact congrArg (fun f => List.any c.2.2.2.1 f) (funext fun v => sig_toNat_beq v.1 _)
+  rw [hdup_eq] at h
+  change (if (!properB (choiceVal (movedChoice op (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor))) ||
+      c.2.2.2.1.any (fun v => v.1 == choiceVal (movedChoice op (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor)))) = true then true else _) = true at h
+  by_cases htriv : (!properB (choiceVal (movedChoice op (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor))) ||
+      c.2.2.2.1.any (fun v => v.1 == choiceVal (movedChoice op (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor)))) = true
+  · rw [if_pos htriv]
+  · rw [if_neg htriv] at h ⊢
+    by_cases hqc : fc.2.2.2.2.2.2.2.2.1.any (fun r => fastCost4 r (c.1 - 1) (c.2.2.2.1.getD i defaultDecor).1.toNat
+        (c.2.2.2.1.getD j defaultDecor).1.toNat (choiceVal (op, (c.2.2.2.1.getD i defaultDecor).1, (c.2.2.2.1.getD j defaultDecor).1)).toNat op ka kb) = true
+    · obtain ⟨r, hr_in, hr_ok⟩ := List.any_eq_true.mp hqc
+      obtain ⟨p, hp_in, hrm⟩ := hrules r hr_in
+      rw [← choiceValN_eq, fastCost4_eq hrm] at hr_ok
+      have hqp : c.2.2.2.2.2.2.1.any (fun qp => fastCost qp (c.1 - 1) (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor) op ka kb) = true :=
+        List.any_eq_true.mpr ⟨summarizePool c.2.2.2.1 p, List.mem_map.mpr ⟨p, hp_in, rfl⟩, hr_ok⟩
+      rw [if_pos hqp]
+    · rw [if_neg hqc] at h
+      by_cases hqp : c.2.2.2.2.2.2.1.any (fun qp => fastCost qp (c.1 - 1) (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor) op ka kb) = true
+      · rw [if_pos hqp]
+      · rw [if_neg hqp]
+        unfold closeChild; rw [Bool.or_eq_true]
+        have ha_in : c.2.2.2.1.getD i defaultDecor ∈ c.2.2.2.1 := by rw [List.getD_eq_getElem _ _ hi]; exact List.getElem_mem hi
+        have hb_in : c.2.2.2.1.getD j defaultDecor ∈ c.2.2.2.1 := by rw [List.getD_eq_getElem _ _ hj]; exact List.getElem_mem hj
+        have hab_ne : (op == 2) = false → c.2.2.2.1.getD i defaultDecor ≠ c.2.2.2.1.getD j defaultDecor := by
+          intro hne heq
+          have hi' : i < (c.2.2.2.1.map Prod.fst).length := by simp [hi]
+          have hj' : j < (c.2.2.2.1.map Prod.fst).length := by simp [hj]
+          have h1 : (c.2.2.2.1.map Prod.fst)[i]'hi' = (c.2.2.2.1.map Prod.fst)[j]'hj' := by
+            simp only [List.getElem_map]; rw [List.getD_eq_getElem _ _ hi, List.getD_eq_getElem _ _ hj] at heq; exact congrArg Prod.fst heq
+          have hinj := List.nodup_iff_injective_getElem.mp hnd (a₁:=⟨i, hi'⟩) (a₂:=⟨j, hj'⟩) h1
+          exact hij (beq_eq_false_iff_ne.mp hne) (congrArg Fin.val hinj)
+        have hrest_eq : opKeepN (op == 2) ka kb (c.2.2.2.1.getD i defaultDecor).1.toNat (c.2.2.2.1.getD j defaultDecor).1.toNat (c.2.2.2.1.map fun d => d.1.toNat) =
+            ((opKeep (op == 2) ka kb (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor) c.2.2.2.1).map Prod.fst).map BitVec.toNat :=
+          opKeepN_eq (op == 2) ka kb hnd ha_in hb_in hab_ne
+        have hki : ((c.2.2.2.1.map Prod.fst).map keyWord).getD i 0 = keyWord (c.2.2.2.1.getD i defaultDecor).1 := by
+          rw [List.getD_eq_getElem _ _ (by simp [hi]), List.getElem_map, List.getElem_map, List.getD_eq_getElem _ _ hi]
+        have hkj : ((c.2.2.2.1.map Prod.fst).map keyWord).getD j 0 = keyWord (c.2.2.2.1.getD j defaultDecor).1 := by
+          rw [List.getD_eq_getElem _ _ (by simp [hj]), List.getElem_map, List.getElem_map, List.getD_eq_getElem _ _ hj]
+        have htag_eq : keyWordN (choiceVal (op, (c.2.2.2.1.getD i defaultDecor).1, (c.2.2.2.1.getD j defaultDecor).1)).toNat +
+            (keySet (c.2.2.2.1.map Prod.fst) -
+              (if ka = true then 0 else ((c.2.2.2.1.map Prod.fst).map keyWord).getD i 0) -
+              (if (op == 2 || kb) = true then 0 else ((c.2.2.2.1.map Prod.fst).map keyWord).getD j 0)) =
+            keySet (choiceVal (movedChoice op (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor)) ::
+              (opKeep (op == 2) ka kb (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor) c.2.2.2.1).map Prod.fst) := by
+          rw [keySet_cons, keyWordN_eq, hki, hkj, keySet_opKeep (op == 2) ka kb hnd hi hj (fun hf => hij (beq_eq_false_iff_ne.mp hf))]
+          rfl
+        have hlm : (c.2.2.2.1.map fun d => d.1.toNat).length = c.2.2.1 := by simp [hlen_c]
+        rw [hlm, hrest_eq, htag_eq] at h
+        have hlk_eq : ∀ tag, (if childU c.2.1 c.1 (1 + (c.2.2.1 - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1))) == 0 then
+            fc.2.2.2.2.2.2.2.2.2.1 else fc.2.2.2.2.2.2.2.2.2.2) tag =
+            ((if childU c.2.1 c.1 (1 + (c.2.2.1 - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1))) == 0 then
+            c.2.2.2.2.2.2.2.1 else c.2.2.2.2.2.2.2.2) tag).map (fun xs => xs.map BitVec.toNat) := by
+          intro tag
+          by_cases hct : (childU c.2.1 c.1 (1 + (c.2.2.1 - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1))) == 0) = true
+          · rw [if_pos hct, if_pos hct]; exact hl0 tag
+          · rw [if_neg hct, if_neg hct]; exact hl1 tag
+        rw [hlk_eq] at h
+        by_cases hlk : (((if childU c.2.1 c.1 (1 + (c.2.2.1 - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1))) == 0 then
+            c.2.2.2.2.2.2.2.1 else c.2.2.2.2.2.2.2.2)
+            (keySet (choiceVal (movedChoice op (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor)) ::
+              (opKeep (op == 2) ka kb (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor) c.2.2.2.1).map Prod.fst))).map
+            (fun xs => xs.map BitVec.toNat)).any
+            (sameWordsN ((choiceVal (op, (c.2.2.2.1.getD i defaultDecor).1, (c.2.2.2.1.getD j defaultDecor).1)).toNat ::
+              ((opKeep (op == 2) ka kb (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor) c.2.2.2.1).map Prod.fst).map BitVec.toNat)) = true
+        · left
+          rw [List.any_map] at hlk
+          obtain ⟨cand, hcand_in, hsw⟩ := List.any_eq_true.mp hlk
+          dsimp only [Function.comp] at hsw
+          have hws_map : (choiceVal (op, (c.2.2.2.1.getD i defaultDecor).1, (c.2.2.2.1.getD j defaultDecor).1)).toNat ::
+              ((opKeep (op == 2) ka kb (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor) c.2.2.2.1).map Prod.fst).map BitVec.toNat =
+              (choiceVal (movedChoice op (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor)) ::
+                (opKeep (op == 2) ka kb (c.2.2.2.1.getD i defaultDecor) (c.2.2.2.1.getD j defaultDecor) c.2.2.2.1).map Prod.fst).map BitVec.toNat := rfl
+          rw [hws_map, sameWordsN_eq] at hsw
+          exact List.any_eq_true.mpr ⟨cand, hcand_in, hsw⟩
+        · rw [if_neg hlk] at h; right
+          obtain ⟨r, hr_in, hr_ok⟩ := List.any_eq_true.mp h
+          obtain ⟨p, hp_in, hrm⟩ := hrules r hr_in
+          rw [← choiceValN_eq] at hr_ok
+          exact List.any_eq_true.mpr ⟨p, hp_in, scalarPoolCut4_sound hrm (opKeep_sub_fst _ _ _ _ _ _) hr_ok⟩
+def fastMove4U (r : Nat) (base cz : Nat) (bt : BBatch FastCtx4U) (i j op : Nat) (ka kb : Bool) : Bool :=
+  let m := fullMarks r (base ||| cz)
+  if m == 0 then true else onMarksBB769 (fun fc => fastFallbackAt4U fc i j op ka kb) m bt
+theorem fastMove4U_at {levels idx0 idx1 k tm n} {bt : BBatch FastCtx4U} {i j op : Nat} {ka kb : Bool}
+    (hbw : bt.Wf)
+    (hmatch : ∀ q (hq : q < bt.toList.length), ∃ idx, CtxMatch4U levels idx0 idx1 k tm idx (bt.toList[q]'hq) ∧
+      ((contextOfU levels idx0 idx1 k tm idx).2.2.2.1.map Prod.fst).Nodup ∧ (contextOfU levels idx0 idx1 k tm idx).2.2.2.1.length = n)
+    {q : Nat} (hq : q < bt.toList.length)
+    (hi : i < n) (hj : j < n) (hij : op ≠ 2 → i ≠ j)
+    (hlen : ¬ (1 + (n - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1)) > k))
+    (idxs : List Nat) (hidxs_len : idxs.length = bt.toList.length)
+    (hidxs_m : ∀ t (ht : t < bt.toList.length), CtxMatch4U levels idx0 idx1 k tm (idxs[t]'(by omega)) (bt.toList[t]'ht))
+    (hpass :
+      let r := units769 bt.toList.length
+      let d := childU tm k (1 + (n - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1))) == 0
+      let a := (packBB769 (fun fc => (fc.2.2.1.getD i (0, 0, 0)).2.1) bt, packBB769 (fun fc => (fc.2.2.1.getD i (0, 0, 0)).2.2) bt)
+      let b := (packBB769 (fun fc => (fc.2.2.1.getD j (0, 0, 0)).2.1) bt, packBB769 (fun fc => (fc.2.2.1.getD j (0, 0, 0)).2.2) bt)
+      let z := packedOp (r * all768) op a b
+      let cov := if d then (packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.2.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.2.2) bt)
+                 else (packBB769 (fun fc => fc.2.2.2.2.2.2.1.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.1.2.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.1.2.2) bt)
+      fastMove4U r (takePacked cov (packedColumn d a) (packedColumn d b) (op == 2) ka kb) (packedColumn d z) bt i j op ka kb = true) :
+    checkAtU (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))) i j op ka kb = true := by
+  dsimp only [fastMove4U] at hpass
+  set xs := idxs.map (contextOfU levels idx0 idx1 k tm)
+  set d := childU tm k (1 + (n - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1))) == 0
+  have hlen_xs : xs.length = bt.toList.length := by simp [xs, hidxs_len]
+  have hq_xs : q < xs.length := by omega
+  have hget : xs[q]'hq_xs = contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega)) := List.getElem_map _
+  have hr_eq : units769 bt.toList.length = units xs.length := by rw [units769_eq, hlen_xs]
+  have hpack_gen (f : FastCtx4U → Nat) (h : NodeContextU → Bits)
+      (heq : ∀ t (ht : t < bt.toList.length), f (bt.toList[t]'ht) = (h (xs[t]'(by omega))).toNat) :
+      packBB769 f bt = combineLanes h xs := by
+    have hcl_eq : ∀ (l1 : List FastCtx4U) (l2 : List NodeContextU) (hl : l1.length = l2.length),
+        (∀ t (ht : t < l1.length), f (l1[t]'ht) = (h (l2[t]'(by omega))).toNat) →
+        combineLanes (fun x => BitVec.ofNat 768 (f x)) l1 = combineLanes h l2 := by
+      intro l1; induction l1 with
+      | nil => intro l2 hl _; cases l2 with | nil => rfl | cons _ _ => simp at hl
+      | cons x1 r1 ih =>
+        intro l2 hl he
+        cases l2 with
+        | nil => simp at hl
+        | cons x2 r2 =>
+          simp only [combineLanes, lanePlace]
+          have h0 : f x1 = (h x2).toNat := he 0 (by simp)
+          have hbv : (BitVec.ofNat 768 (f x1)).toNat = (h x2).toNat := by
+            rw [h0, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (h x2).isLt]
+          rw [hbv, ih r2 (by simp at hl; omega) (fun t ht => he (t + 1) (by simp; omega))]
+    have hp := packBB769_eq f (fun x => BitVec.ofNat 768 (f x)) bt hbw (fun x hx => by
+      obtain ⟨t, ht, rfl⟩ := List.getElem_of_mem hx
+      rw [heq t ht, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (h _).isLt])
+    exact hp.trans (hcl_eq bt.toList xs hlen_xs.symm heq)
+  have hwire1 (idxW : Nat) (t : Nat) (ht : t < bt.toList.length) :
+      ((bt.toList[t]'ht).2.2.1.getD idxW (0, 0, 0)).2.1 = ((ctxWireU (xs[t]'(by omega)) idxW).2.1).toNat ∧
+      ((bt.toList[t]'ht).2.2.1.getD idxW (0, 0, 0)).2.2 = ((ctxWireU (xs[t]'(by omega)) idxW).2.2).toNat := by
+    have hm := (hidxs_m t ht).2.2.1
+    rw [hm, ← toDecorN_default, list_getD_map]
+    simp only [List.getElem_map, xs, toDecorN, ctxWireU]; exact ⟨trivial, trivial⟩
+  have hpA : (packBB769 (fun fc => (fc.2.2.1.getD i (0, 0, 0)).2.1) bt, packBB769 (fun fc => (fc.2.2.1.getD i (0, 0, 0)).2.2) bt) =
+      packedSig (fun c => (ctxWireU c i).2) xs :=
+    Prod.ext (hpack_gen _ _ (fun t ht => (hwire1 i t ht).1)) (hpack_gen _ _ (fun t ht => (hwire1 i t ht).2))
+  have hpB : (packBB769 (fun fc => (fc.2.2.1.getD j (0, 0, 0)).2.1) bt, packBB769 (fun fc => (fc.2.2.1.getD j (0, 0, 0)).2.2) bt) =
+      packedSig (fun c => (ctxWireU c j).2) xs :=
+    Prod.ext (hpack_gen _ _ (fun t ht => (hwire1 j t ht).1)) (hpack_gen _ _ (fun t ht => (hwire1 j t ht).2))
+  have hcov_eq : (if d then (packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.2.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.2.2) bt)
+                  else (packBB769 (fun fc => fc.2.2.2.2.2.2.1.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.1.2.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.1.2.2) bt)) =
+      packedCov (fun c => getCov c.2.2.2.2.1 d) xs := by
+    cases d
+    · simp only [Bool.false_eq_true, ite_false, packedCov, getCov, Prod.mk.injEq]
+      refine ⟨hpack_gen _ _ (fun t ht => ?_), hpack_gen _ _ (fun t ht => ?_), hpack_gen _ _ (fun t ht => ?_)⟩
+      all_goals (have hcm := (hidxs_m t ht).2.2.2.2.2.2.1; simp only [xs, List.getElem_map]; rw [hcm])
+    · simp only [ite_true, packedCov, getCov, Prod.mk.injEq]
+      refine ⟨hpack_gen _ _ (fun t ht => ?_), hpack_gen _ _ (fun t ht => ?_), hpack_gen _ _ (fun t ht => ?_)⟩
+      all_goals (have hcm := (hidxs_m t ht).2.2.2.2.2.2.2.1; simp only [xs, List.getElem_map]; rw [hcm])
+  rw [hr_eq, all768_eq, hpA, hpB, packed_op, packed_column, packed_column, packed_column, hcov_eq, takePacked_ok, lanes_or] at hpass
+  obtain ⟨j0, hm0, hnd0, hlen0⟩ := hmatch q hq
+  have hm_q := hidxs_m q hq
+  have hnd_q : ((contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).2.2.2.1.map Prod.fst).Nodup := by
+    have hws_eq : (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).2.2.2.1.map (fun d => d.1.toNat) =
+        (contextOfU levels idx0 idx1 k tm j0).2.2.2.1.map (fun d => d.1.toNat) := hm_q.2.2.2.1.symm.trans hm0.2.2.2.1
+    have h1 : ((contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).2.2.2.1.map Prod.fst).map BitVec.toNat =
+        ((contextOfU levels idx0 idx1 k tm j0).2.2.2.1.map Prod.fst).map BitVec.toNat := by
+      rw [List.map_map, List.map_map]; exact hws_eq
+    have hndN : (((contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).2.2.2.1.map Prod.fst).map BitVec.toNat).Nodup := by
+      rw [h1]; exact hnd0.map (fun _ _ => BitVec.eq_of_toNat_eq)
+    exact (List.nodup_map_iff (fun _ _ => BitVec.eq_of_toNat_eq)).mp hndN
+  have hlen_q : (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).2.2.2.1.length = n := by
+    have h1 := congrArg List.length (hm_q.2.2.2.1.symm.trans hm0.2.2.2.1)
+    simp only [List.length_map] at h1; exact h1.trans hlen0
+  have hlen_q' : (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).2.2.1 = n := hlen_q
+  by_cases hit : combFieldU (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))) d (op == 2) ka kb op i j = BitVec.allOnes 768
+  · apply fastFallback4U_sound hm_q hnd_q (by omega) (by omega) hij (by rw [hlen_q']; exact hlen)
+    have hmk := mark_at (fun c => combFieldU c d (op == 2) ka kb op i j) xs q hq_xs
+    rw [hget] at hmk
+    have hbit : (fullMarks (units xs.length) (combineLanes (fun c => combFieldU c d (op == 2) ka kb op i j) xs)).testBit (769 * q) = true :=
+      hmk.trans (beq_iff_eq.mpr hit)
+    have hne : fullMarks (units xs.length) (combineLanes (fun c => combFieldU c d (op == 2) ka kb op i j) xs) ≠ 0 :=
+      fun e => by rw [e, Nat.zero_testBit] at hbit; cases hbit
+    have hpass' : (if (fullMarks (units xs.length) (combineLanes (fun c => combFieldU c d (op == 2) ka kb op i j) xs) == 0) = true then true
+        else onMarksBB769 (fun fc => fastFallbackAt4U fc i j op ka kb) (fullMarks (units xs.length) (combineLanes (fun c => combFieldU c d (op == 2) ka kb op i j) xs)) bt) = true := hpass
+    rw [beq_eq_false_iff_ne.mpr hne] at hpass'
+    simp only [Bool.false_eq_true, ite_false] at hpass'
+    exact onMarksBB769_ok _ bt _ q hbw hq hbit hpass'
+  · simp only [checkAtU, evalMoveU]
+    have hcap_q : (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).1 = k := rfl
+    have htm_q : (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).2.1 = tm := rfl
+    rw [hcap_q, htm_q, hlen_q', if_neg hlen]
+    have hne : (combFieldU (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))) d (op == 2) ka kb op i j != BitVec.allOnes 768) = true := bne_iff_ne.mpr hit
+    change (if (combFieldU (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))) d (op == 2) ka kb op i j != BitVec.allOnes 768) = true then true else _) = true
+    rw [if_pos hne]
+abbrev WirePack4U := Nat × PackedSig × Nat × Nat × Nat × Nat
+def mkWirePack4U (k tm n : Nat) (u v : PackedCov) (bt : BBatch FastCtx4U) (i : Nat) : WirePack4U :=
+  let needU := decide (tm ≠ 0) && decide (1 + (n - 1 - 1) < k)
+  let needV := (tm == 0) || (decide (1 + (n - 1 - 1) ≤ k) && decide (k ≤ 1 + n))
+  let a := (packBB769 (fun fc => (fc.2.2.1.getD i (0, 0, 0)).2.1) bt, packBB769 (fun fc => (fc.2.2.1.getD i (0, 0, 0)).2.2) bt)
+  let ca0 := if needU then packedColumn false a else 0
+  let ca1 := if needV then packedColumn true a else 0
+  let wo0 := if needU then u.1 ^^^ (u.1 &&& (u.2.1 &&& ca0)) else 0
+  let wo1 := if needV then v.1 ^^^ (v.1 &&& (v.2.1 &&& ca1)) else 0
+  (i, a, ca0, ca1, wo0, wo1)
+def fastMoveBase4U (k tm n r : Nat) (b0 b1 : Nat) (bt : BBatch FastCtx4U)
+    (i j op : Nat) (cz0 cz1 : Nat) (ka kb : Bool) : Bool :=
+  let len := 1 + (n - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1))
+  if len > k then true
+  else if childU tm k len == 0 then fastMove4U r b1 cz1 bt i j op ka kb
+  else fastMove4U r b0 cz0 bt i j op ka kb
+def fastPairOp4U (k tm n r full : Nat) (u1 v1 : Nat) (bt : BBatch FastCtx4U)
+    (i j op : Nat) (a b : PackedSig) (woA0 woA1 woB0 woB1 wo2_0 wo2_1 : Nat) : Bool :=
+  if 1 + (n - 1 - 1) > k then true else
+  let z := packedOp full op a b
+  let len00 := 1 + (n - 1 - 1); let len10 := 1 + (n - 1); let len11 := 1 + n
+  let cz0 := if tm != 0 && (len00 < k || len10 < k || len11 < k) then packedColumn false z else 0
+  let cz1 := if tm == 0 || len00 == k || len10 == k || len11 == k then packedColumn true z else 0
+  fastMoveBase4U k tm n r wo2_0 wo2_1 bt i j op cz0 cz1 false false &&
+  fastMoveBase4U k tm n r woB0 woB1 bt i j op cz0 cz1 true false &&
+  fastMoveBase4U k tm n r woA0 woA1 bt i j op cz0 cz1 false true &&
+  fastMoveBase4U k tm n r u1 v1 bt i j op cz0 cz1 true true
+def fastRow4U (k tm n r full : Nat) (u v : PackedCov) (bt : BBatch FastCtx4U)
+    (wi : WirePack4U) (wjs : List WirePack4U) : Bool :=
+  let (i, a, ca0, ca1, woA0, woA1) := wi
+  let unOk :=
+    if tm == 0 || 1 + (n - 1) > k then true
+    else
+      let czN1 := if (1 + (n - 1) == k) || (1 + n == k) then packedColumn true (packedOp full 2 a a) else 0
+      fastMoveBase4U k tm n r woA0 woA1 bt i i 2 ca0 czN1 false false &&
+      fastMoveBase4U k tm n r u.1 v.1 bt i i 2 ca0 czN1 true true
+  let need2_0 := decide (tm ≠ 0) && decide (1 + (n - 1 - 1) < k)
+  let need2_1 := (tm == 0) || (1 + (n - 1 - 1) == k)
+  unOk &&
+  wjs.all fun (j, b, cb0, cb1, woB0, woB1) =>
+    let wo2_0 := if need2_0 then u.1 ^^^ (u.1 &&& ((u.2.1 &&& (ca0 ||| cb0)) ||| (u.2.2 &&& (ca0 &&& cb0)))) else 0
+    let wo2_1 := if need2_1 then v.1 ^^^ (v.1 &&& ((v.2.1 &&& (ca1 ||| cb1)) ||| (v.2.2 &&& (ca1 &&& cb1)))) else 0
+    fastPairOp4U k tm n r full u.1 v.1 bt i j 0 a b woA0 woA1 woB0 woB1 wo2_0 wo2_1 &&
+    fastPairOp4U k tm n r full u.1 v.1 bt i j 1 a b woA0 woA1 woB0 woB1 wo2_0 wo2_1
+def fastRows4U (k tm n r full : Nat) (u v : PackedCov) (bt : BBatch FastCtx4U) : List WirePack4U → Bool
+  | [] => true
+  | wi :: wjs => fastRow4U k tm n r full u v bt wi wjs && fastRows4U k tm n r full u v bt wjs
+theorem packedColumn_false_not4 (full : Nat) (a : PackedSig) :
+    packedColumn false (packedOp full 2 a a) = packedColumn false a := by
+  simp only [packedColumn, packedOp, ite_true, Bool.false_eq_true, ite_false]
+  apply Nat.eq_of_testBit_eq; intro m
+  simp only [Nat.testBit_xor]
+  cases full.testBit m <;> cases a.1.testBit m <;> cases a.2.testBit m <;> rfl
+theorem fastMoveBase4U_at {levels idx0 idx1 k tm n} {bt : BBatch FastCtx4U} {i j op : Nat} {ka kb : Bool}
+    (hbw : bt.Wf)
+    (hmatch : ∀ q (hq : q < bt.toList.length), ∃ idx, CtxMatch4U levels idx0 idx1 k tm idx (bt.toList[q]'hq) ∧
+      ((contextOfU levels idx0 idx1 k tm idx).2.2.2.1.map Prod.fst).Nodup ∧ (contextOfU levels idx0 idx1 k tm idx).2.2.2.1.length = n)
+    {q : Nat} (hq : q < bt.toList.length)
+    (hi : i < n) (hj : j < n) (hij : op ≠ 2 → i ≠ j)
+    (idxs : List Nat) (hidxs_len : idxs.length = bt.toList.length)
+    (hidxs_m : ∀ t (ht : t < bt.toList.length), CtxMatch4U levels idx0 idx1 k tm (idxs[t]'(by omega)) (bt.toList[t]'ht))
+    (b0 b1 cz0 cz1 : Nat)
+    (hb0 : 1 + (n - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1)) < k → tm ≠ 0 →
+      let a := (packBB769 (fun fc => (fc.2.2.1.getD i (0, 0, 0)).2.1) bt, packBB769 (fun fc => (fc.2.2.1.getD i (0, 0, 0)).2.2) bt)
+      let b := (packBB769 (fun fc => (fc.2.2.1.getD j (0, 0, 0)).2.1) bt, packBB769 (fun fc => (fc.2.2.1.getD j (0, 0, 0)).2.2) bt)
+      let u := (packBB769 (fun fc => fc.2.2.2.2.2.2.1.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.1.2.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.1.2.2) bt)
+      let z := packedOp (units769 bt.toList.length * all768) op a b
+      b0 = takePacked u (packedColumn false a) (packedColumn false b) (op == 2) ka kb ∧ cz0 = packedColumn false z)
+    (hb1 : (1 + (n - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1)) = k ∨ tm = 0) →
+      let a := (packBB769 (fun fc => (fc.2.2.1.getD i (0, 0, 0)).2.1) bt, packBB769 (fun fc => (fc.2.2.1.getD i (0, 0, 0)).2.2) bt)
+      let b := (packBB769 (fun fc => (fc.2.2.1.getD j (0, 0, 0)).2.1) bt, packBB769 (fun fc => (fc.2.2.1.getD j (0, 0, 0)).2.2) bt)
+      let v := (packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.2.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.2.2) bt)
+      let z := packedOp (units769 bt.toList.length * all768) op a b
+      b1 = takePacked v (packedColumn true a) (packedColumn true b) (op == 2) ka kb ∧ cz1 = packedColumn true z)
+    (hpass : fastMoveBase4U k tm n (units769 bt.toList.length) b0 b1 bt i j op cz0 cz1 ka kb = true) :
+    checkAtU (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))) i j op ka kb = true := by
+  unfold fastMoveBase4U at hpass; dsimp only at hpass
+  set len := 1 + (n - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1))
+  by_cases hgt : len > k
+  · obtain ⟨j0, hm0, _, hlen0⟩ := hmatch q hq
+    have hm_q := hidxs_m q hq
+    have hcap_q : (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).1 = k := rfl
+    have hlen_q : (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).2.2.1 = n := by
+      have h1 := congrArg List.length (hm_q.2.2.2.1.symm.trans hm0.2.2.2.1)
+      simp only [List.length_map] at h1; exact h1.trans hlen0
+    simp only [checkAtU, evalMoveU]; rw [hcap_q, hlen_q]; change (if len > k then true else _) = true; rw [if_pos hgt]
+  · rw [if_neg hgt] at hpass
+    apply fastMove4U_at hbw hmatch hq hi hj hij hgt idxs hidxs_len hidxs_m
+    dsimp only
+    by_cases hct : (childU tm k len == 0) = true
+    · rw [if_pos hct] at hpass
+      have hct' : (childU tm k (1 + (n - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1))) == 0) = true := hct
+      have hor : len = k ∨ tm = 0 := by
+        unfold childU at hct; by_cases h1 : (len == k || tm == 0) = true
+        · rcases (Bool.or_eq_true _ _).mp h1 with ha | hb; exact Or.inl (beq_iff_eq.mp ha); exact Or.inr (beq_iff_eq.mp hb)
+        · rw [if_neg h1] at hct; cases hct
+      obtain ⟨h1, h2⟩ := hb1 hor
+      rw [if_pos hct', hct', ← h1, ← h2]; exact hpass
+    · rw [if_neg hct] at hpass
+      have hct' : (childU tm k (1 + (n - (if ka then 0 else 1) - (if (op == 2) || kb then 0 else 1))) == 0) = false := Bool.eq_false_iff.mpr hct
+      have hne_or : len ≠ k ∧ tm ≠ 0 := by
+        unfold childU at hct
+        constructor
+        · intro heq; apply hct; simp [heq]
+        · intro ht0; apply hct; simp [ht0]
+      have hlt : len < k := by omega
+      obtain ⟨h1, h2⟩ := hb0 hlt hne_or.2
+      rw [if_neg hct, hct', ← h1, ← h2]; exact hpass
+set_option maxRecDepth 16384 in
+theorem fastRows4U_at {levels idx0 idx1 k tm n} {bt : BBatch FastCtx4U}
+    (hbw : bt.Wf)
+    (hmatch : ∀ q (hq : q < bt.toList.length), ∃ idx, CtxMatch4U levels idx0 idx1 k tm idx (bt.toList[q]'hq) ∧
+      ((contextOfU levels idx0 idx1 k tm idx).2.2.2.1.map Prod.fst).Nodup ∧ (contextOfU levels idx0 idx1 k tm idx).2.2.2.1.length = n)
+    {q : Nat} (hq : q < bt.toList.length)
+    (idxs : List Nat) (hidxs_len : idxs.length = bt.toList.length)
+    (hidxs_m : ∀ t (ht : t < bt.toList.length), CtxMatch4U levels idx0 idx1 k tm (idxs[t]'(by omega)) (bt.toList[t]'ht))
+    (u v : PackedCov)
+    (hu : tm ≠ 0 ∧ 1 + (n - 1 - 1) < k → u = (packBB769 (fun fc => fc.2.2.2.2.2.2.1.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.1.2.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.1.2.2) bt))
+    (hv : (tm = 0 ∨ (1 + (n - 1 - 1) ≤ k ∧ k ≤ 1 + n)) → v = (packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.2.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.2.2) bt))
+    (js : List Nat) (hjs_lt : ∀ x ∈ js, x < n) (hjs_nd : js.Nodup)
+    (hpass : fastRows4U k tm n (units769 bt.toList.length) (units769 bt.toList.length * all768) u v bt (js.map (mkWirePack4U k tm n u v bt)) = true) :
+    testAllU (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))) (js.map (ctxWireU (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))))) = true := by
+  induction js with
+  | nil => rfl
+  | cons i js ih =>
+    have hi_lt : i < n := hjs_lt i (List.mem_cons_self ..)
+    obtain ⟨hi_ni, hjs_nd'⟩ := List.nodup_cons.mp hjs_nd
+    simp only [List.map_cons, fastRows4U, Bool.and_eq_true] at hpass
+    have hrow := hpass.1; have htail := hpass.2
+    unfold fastRow4U at hrow
+    simp only [Bool.and_eq_true, List.all_eq_true, List.mem_map] at hrow
+    simp only [List.map_cons, testAllU, testRowU, Bool.and_eq_true, List.all_eq_true, List.mem_map]
+    have hUn : (if (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).2.1 == 0 then true else
+        checkAtU (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))) i i 2 false false &&
+        checkAtU (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))) i i 2 true true) = true := by
+      have htm_q : (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).2.1 = tm := rfl
+      rw [htm_q]
+      by_cases htm0 : tm = 0
+      · simp [htm0]
+      · have htm_ne : (tm == 0) = false := beq_eq_false_iff_ne.mpr htm0
+        rw [htm_ne]; simp only [Bool.false_eq_true, ite_false, Bool.and_eq_true]
+        have hunH := hrow.1
+        rw [htm_ne] at hunH; simp only [Bool.false_or] at hunH
+        by_cases hbig : 1 + (n - 1) > k
+        · obtain ⟨j0, hm0, _, hlen0⟩ := hmatch q hq
+          have hm_q := hidxs_m q hq
+          have hcap_q : (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).1 = k := rfl
+          have hlen_q : (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).2.2.1 = n := by
+            have h1 := congrArg List.length (hm_q.2.2.2.1.symm.trans hm0.2.2.2.1)
+            simp only [List.length_map] at h1; exact h1.trans hlen0
+          constructor <;> (simp only [checkAtU, evalMoveU]; rw [hcap_q, hlen_q]; rw [if_pos (by simp only [beq_self_eq_true, Bool.true_or, Bool.false_eq_true, ite_true, ite_false]; omega)])
+        · rw [if_neg (by simp [hbig])] at hunH; simp only [Bool.and_eq_true] at hunH
+          constructor
+          · apply fastMoveBase4U_at hbw hmatch hq hi_lt hi_lt (fun h => (h rfl).elim) idxs hidxs_len hidxs_m _ _ _ _
+              (fun hlt _ => by
+                have hkl : 1 + (n - 1 - 1) < k := by simp at hlt; omega
+                simp [mkWirePack4U, htm0, hkl, hu ⟨htm0, hkl⟩, takePacked, packedColumn_false_not4])
+              (fun hor => by
+                have heq : 1 + (n - 1) = k := by rcases hor with h1 | h2; simp at h1; omega; exact (htm0 h2).elim
+                have hkr : 1 + (n - 1 - 1) ≤ k ∧ k ≤ 1 + n := by omega
+                have hn1 : ((1 + (n - 1) == k) || (1 + n == k)) = true := by simp [heq]
+                simp [mkWirePack4U, htm_ne, hkr.1, hkr.2, hv (Or.inr hkr), takePacked, hn1])
+              hunH.1
+          · apply fastMoveBase4U_at hbw hmatch hq hi_lt hi_lt (fun h => (h rfl).elim) idxs hidxs_len hidxs_m _ _ _ _
+              (fun hlt _ => by
+                have hkl : 1 + (n - 1 - 1) < k := by simp at hlt; omega
+                simp [mkWirePack4U, htm0, hkl, hu ⟨htm0, hkl⟩, takePacked, packedColumn_false_not4])
+              (fun hor => by
+                have heq : 1 + n = k := by rcases hor with h1 | h2; simp at h1; omega; exact (htm0 h2).elim
+                have hkr : 1 + (n - 1 - 1) ≤ k ∧ k ≤ 1 + n := by omega
+                have hn1 : ((1 + (n - 1) == k) || (1 + n == k)) = true := by simp [heq]
+                simp [mkWirePack4U, htm_ne, hkr.1, hkr.2, hv (Or.inr hkr), takePacked, hn1])
+              hunH.2
+    refine ⟨⟨hUn, ?_⟩, ih (fun x hx => hjs_lt x (List.mem_cons_of_mem i hx)) hjs_nd' htail⟩
+    rintro _ ⟨j, hj, rfl⟩
+    have hj_lt : j < n := hjs_lt j (List.mem_cons_of_mem i hj)
+    have hij_ne : i ≠ j := fun e => hi_ni (e ▸ hj)
+    have hboth := hrow.2 _ ⟨j, hj, rfl⟩
+    have hpair (op : Nat) (hop : op ≠ 2)
+        (hp : fastPairOp4U k tm n (units769 bt.toList.length) (units769 bt.toList.length * all768) u.1 v.1 bt i j op
+          (mkWirePack4U k tm n u v bt i).2.1 (mkWirePack4U k tm n u v bt j).2.1
+          (mkWirePack4U k tm n u v bt i).2.2.2.2.1 (mkWirePack4U k tm n u v bt i).2.2.2.2.2
+          (mkWirePack4U k tm n u v bt j).2.2.2.2.1 (mkWirePack4U k tm n u v bt j).2.2.2.2.2
+          (if decide (tm ≠ 0) = true ∧ decide (1 + (n - 1 - 1) < k) = true then u.1 ^^^ (u.1 &&& ((u.2.1 &&& ((mkWirePack4U k tm n u v bt i).2.2.1 ||| (mkWirePack4U k tm n u v bt j).2.2.1)) ||| (u.2.2 &&& ((mkWirePack4U k tm n u v bt i).2.2.1 &&& (mkWirePack4U k tm n u v bt j).2.2.1)))) else 0)
+          (if ((tm == 0) || (1 + (n - 1 - 1) == k)) = true then v.1 ^^^ (v.1 &&& ((v.2.1 &&& ((mkWirePack4U k tm n u v bt i).2.2.2.1 ||| (mkWirePack4U k tm n u v bt j).2.2.2.1)) ||| (v.2.2 &&& ((mkWirePack4U k tm n u v bt i).2.2.2.1 &&& (mkWirePack4U k tm n u v bt j).2.2.2.1)))) else 0) = true) :
+        ∀ ka kb, checkAtU (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))) i j op ka kb = true := by
+      have hun : (op == 2) = false := beq_false_of_ne hop
+      unfold fastPairOp4U at hp; dsimp only at hp
+      by_cases hbig : 1 + (n - 1 - 1) > k
+      · intro ka kb
+        obtain ⟨j0, hm0, _, hlen0⟩ := hmatch q hq
+        have hm_q := hidxs_m q hq
+        have hcap_q : (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).1 = k := rfl
+        have hlen_q : (contextOfU levels idx0 idx1 k tm (idxs[q]'(by omega))).2.2.1 = n := by
+          have h1 := congrArg List.length (hm_q.2.2.2.1.symm.trans hm0.2.2.2.1)
+          simp only [List.length_map] at h1; exact h1.trans hlen0
+        simp only [checkAtU, evalMoveU]; rw [hcap_q, hlen_q]
+        rw [if_pos (by cases ka <;> cases kb <;> simp only [hun, Bool.false_or, Bool.or_true, Bool.or_false, Bool.false_eq_true, ite_true, ite_false] <;> omega)]
+      · rw [if_neg hbig] at hp; simp only [Bool.and_eq_true] at hp
+        intro ka kb
+        cases ka <;> cases kb
+        · apply fastMoveBase4U_at hbw hmatch hq hi_lt hj_lt (fun _ => hij_ne) idxs hidxs_len hidxs_m _ _ _ _
+            (fun hlt htm0 => by
+              have hkl : 1 + (n - 1 - 1) < k := by simpa [hun] using hlt
+              have htne : (tm != 0) = true := bne_iff_ne.mpr htm0
+              simp [mkWirePack4U, htm0, htne, hkl, hu ⟨htm0, hkl⟩, takePacked, hun])
+            (fun hor => by
+              rcases hor with heq | ht0
+              · have heq' : 1 + (n - 1 - 1) = k := by simpa [hun] using heq
+                have hkr : 1 + (n - 1 - 1) ≤ k ∧ k ≤ 1 + n := by omega
+                simp [mkWirePack4U, heq', hkr.1, hkr.2, hv (Or.inr hkr), takePacked, hun]
+              · simp [mkWirePack4U, ht0, hv (Or.inl ht0), takePacked, hun])
+            hp.1.1.1
+        · apply fastMoveBase4U_at hbw hmatch hq hi_lt hj_lt (fun _ => hij_ne) idxs hidxs_len hidxs_m _ _ _ _
+            (fun hlt htm0 => by
+              have hlt' : 1 + (n - 1) < k := by simpa [hun] using hlt
+              have hkl : 1 + (n - 1 - 1) < k := by omega
+              have htne : (tm != 0) = true := bne_iff_ne.mpr htm0
+              have hn0 : (decide (1 + (n - 1 - 1) < k) || decide (1 + (n - 1) < k) || decide (1 + n < k)) = true := by simp [hkl]
+              simp [mkWirePack4U, htm0, htne, hkl, hn0, hu ⟨htm0, hkl⟩, takePacked, hun])
+            (fun hor => by
+              rcases hor with heq | ht0
+              · have heq' : 1 + (n - 1) = k := by simpa [hun] using heq
+                have hkr : 1 + (n - 1 - 1) ≤ k ∧ k ≤ 1 + n := by omega
+                have hn1 : ((tm == 0) || (1 + (n - 1 - 1) == k) || (1 + (n - 1) == k) || (1 + n == k)) = true := by simp [heq']
+                simp [mkWirePack4U, hn1, hkr.1, hkr.2, hv (Or.inr hkr), takePacked, hun]
+              · simp [mkWirePack4U, ht0, hv (Or.inl ht0), takePacked, hun])
+            hp.1.2
+        · apply fastMoveBase4U_at hbw hmatch hq hi_lt hj_lt (fun _ => hij_ne) idxs hidxs_len hidxs_m _ _ _ _
+            (fun hlt htm0 => by
+              have hlt' : 1 + (n - 1) < k := by simpa [hun] using hlt
+              have hkl : 1 + (n - 1 - 1) < k := by omega
+              have htne : (tm != 0) = true := bne_iff_ne.mpr htm0
+              have hn0 : (decide (1 + (n - 1 - 1) < k) || decide (1 + (n - 1) < k) || decide (1 + n < k)) = true := by simp [hkl]
+              simp [mkWirePack4U, htm0, htne, hkl, hn0, hu ⟨htm0, hkl⟩, takePacked, hun])
+            (fun hor => by
+              rcases hor with heq | ht0
+              · have heq' : 1 + (n - 1) = k := by simpa [hun] using heq
+                have hkr : 1 + (n - 1 - 1) ≤ k ∧ k ≤ 1 + n := by omega
+                have hn1 : ((tm == 0) || (1 + (n - 1 - 1) == k) || (1 + (n - 1) == k) || (1 + n == k)) = true := by simp [heq']
+                simp [mkWirePack4U, hn1, hkr.1, hkr.2, hv (Or.inr hkr), takePacked, hun]
+              · simp [mkWirePack4U, ht0, hv (Or.inl ht0), takePacked, hun])
+            hp.1.1.2
+        · apply fastMoveBase4U_at hbw hmatch hq hi_lt hj_lt (fun _ => hij_ne) idxs hidxs_len hidxs_m _ _ _ _
+            (fun hlt htm0 => by
+              have hlt' : 1 + n < k := by simpa [hun] using hlt
+              have hkl : 1 + (n - 1 - 1) < k := by omega
+              have htne : (tm != 0) = true := bne_iff_ne.mpr htm0
+              have hn0 : (decide (1 + (n - 1 - 1) < k) || decide (1 + (n - 1) < k) || decide (1 + n < k)) = true := by simp [hkl]
+              simp [mkWirePack4U, htm0, htne, hkl, hn0, hu ⟨htm0, hkl⟩, takePacked, hun])
+            (fun hor => by
+              rcases hor with heq | ht0
+              · have heq' : 1 + n = k := by simpa [hun] using heq
+                have hkr : 1 + (n - 1 - 1) ≤ k ∧ k ≤ 1 + n := by omega
+                have hn1 : ((tm == 0) || (1 + (n - 1 - 1) == k) || (1 + (n - 1) == k) || (1 + n == k)) = true := by simp [heq']
+                simp [mkWirePack4U, hn1, hkr.1, hkr.2, hv (Or.inr hkr), takePacked, hun]
+              · simp [mkWirePack4U, ht0, hv (Or.inl ht0), takePacked, hun])
+            hp.2
+    have h0 := hpair 0 (by decide) hboth.1
+    have h1 := hpair 1 (by decide) hboth.2
+    exact ⟨by simp only [testPairU, Bool.and_eq_true]; exact ⟨⟨⟨h0 false false, h0 true false⟩, h0 false true⟩, h0 true true⟩,
+           by simp only [testPairU, Bool.and_eq_true]; exact ⟨⟨⟨h1 false false, h1 true false⟩, h1 false true⟩, h1 true true⟩⟩
+def fastChunk4U (levels : Nat → PackingT) (idx0 idx1 : Nat → Nat → Option (Nat × Nat)) (k tm start n ar : Nat) : Bool :=
+  let fxs := ((List.range n).map (start + ·)).map (contextOfU4 levels idx0 idx1 k tm)
+  let hd := fxs.all (fun fc => fc.2.2.2.1.length == ar && prelimN deadTargetN fc.2.2.2.1)
+  if !hd then false
+  else if k == 0 then true
+  else
+    let bt := mkBBatch 7 fxs
+    let r := units769 fxs.length
+    let full := r * all768
+    let needU := decide (tm ≠ 0) && decide (1 + (ar - 1 - 1) < k)
+    let needV := (tm == 0) || (decide (1 + (ar - 1 - 1) ≤ k) && decide (k ≤ 1 + ar))
+    let u := if needU then (packBB769 (fun fc => fc.2.2.2.2.2.2.1.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.1.2.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.1.2.2) bt) else (0, 0, 0)
+    let v := if needV then (packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.2.1) bt, packBB769 (fun fc => fc.2.2.2.2.2.2.2.1.2.2) bt) else (0, 0, 0)
+    let ws := (List.range ar).map (mkWirePack4U k tm ar u v bt)
+    fastRows4U k tm ar r full u v bt ws
+theorem fastChunk4U_block {levels idx0 idx1 k tm start n ar} (hn : n ≤ 128)
+    (h : fastChunk4U levels idx0 idx1 k tm start n ar = true) :
+    blockU levels idx0 idx1 k tm start n = true := by
+  unfold fastChunk4U at h; dsimp only at h
+  set idxs := (List.range n).map (start + ·)
+  set fxs := idxs.map (contextOfU4 levels idx0 idx1 k tm)
+  have hfxs_len : fxs.length = n := by simp [fxs, idxs]
+  by_cases hhd : fxs.all (fun fc => fc.2.2.2.1.length == ar && prelimN deadTargetN fc.2.2.2.1) = true
+  · rw [if_neg (by simp [hhd])] at h
+    apply makeBlockU; intro i lo hi
+    have hbb := mkBBatch_ok 7 fxs (by rw [hfxs_len]; exact hn)
+    set bt := mkBBatch 7 fxs
+    have hidxs_len : idxs.length = bt.toList.length := by rw [hbb.1]; simp [fxs]
+    have hidxs_m : ∀ t (ht : t < bt.toList.length), CtxMatch4U levels idx0 idx1 k tm (idxs[t]'(by omega)) (bt.toList[t]'ht) := by
+      intro t ht
+      have hget : bt.toList[t]'ht = contextOfU4 levels idx0 idx1 k tm (idxs[t]'(by omega)) := by
+        simp only [hbb.1, fxs, List.getElem_map]
+      rw [hget]; exact contextOfU4_match levels idx0 idx1 k tm _
+    have hmatch : ∀ q (hq : q < bt.toList.length), ∃ idx, CtxMatch4U levels idx0 idx1 k tm idx (bt.toList[q]'hq) ∧
+        ((contextOfU levels idx0 idx1 k tm idx).2.2.2.1.map Prod.fst).Nodup ∧ (contextOfU levels idx0 idx1 k tm idx).2.2.2.1.length = ar := by
+      intro q hq
+      refine ⟨idxs[q]'(by omega), hidxs_m q hq, ?_, ?_⟩
+      · have hmem : bt.toList[q]'hq ∈ fxs := by rw [← hbb.1]; exact List.getElem_mem hq
+        have hone := List.all_eq_true.mp hhd _ hmem
+        simp only [Bool.and_eq_true] at hone
+        have hpr := hone.2
+        rw [(hidxs_m q hq).2.2.2.1, prelimN_eqU] at hpr
+        simp only [prelimU, Bool.and_eq_true, decide_eq_true_eq] at hpr
+        exact hpr.1
+      · have hmem : bt.toList[q]'hq ∈ fxs := by rw [← hbb.1]; exact List.getElem_mem hq
+        have hone := List.all_eq_true.mp hhd _ hmem
+        simp only [Bool.and_eq_true, beq_iff_eq] at hone
+        have hl := hone.1; rw [(hidxs_m q hq).2.2.2.1, List.length_map] at hl; exact hl
+    have hq_lt : i - start < bt.toList.length := by rw [hbb.1, hfxs_len]; omega
+    have hidx_eq : idxs[i - start]'(by omega) = i := by simp [idxs]; omega
+    have hmem_i : contextOfU4 levels idx0 idx1 k tm i ∈ fxs :=
+      List.mem_map.mpr ⟨i, List.mem_map.mpr ⟨i - start, List.mem_range.mpr (by omega), by omega⟩, rfl⟩
+    have hone_i := List.all_eq_true.mp hhd _ hmem_i
+    simp only [Bool.and_eq_true, beq_iff_eq] at hone_i
+    have hcm_i := contextOfU4_match levels idx0 idx1 k tm i
+    have hpr_i : prelimU (targetOf dead) (contextOfU levels idx0 idx1 k tm i) = true := by
+      have hp := hone_i.2; rw [hcm_i.2.2.2.1, prelimN_eqU] at hp; exact hp
+    have har_i : (contextOfU levels idx0 idx1 k tm i).2.2.2.1.length = ar := by
+      have hl := hone_i.1; rw [hcm_i.2.2.2.1, List.length_map] at hl; exact hl
+    unfold nodeVerifiedU; rw [Bool.and_eq_true]
+    refine ⟨hpr_i, ?_⟩
+    by_cases hk0 : k = 0
+    · simp [hk0]
+    · rw [if_neg hk0]
+      rw [if_neg (by simp [hk0] : ¬((k == 0) = true))] at h
+      have hlen_bt : fxs.length = bt.toList.length := hbb.1.symm ▸ rfl
+      rw [hlen_bt] at h
+      have hall := fastRows4U_at hbb.2 hmatch hq_lt idxs hidxs_len hidxs_m _ _
+        (fun hkl => by simp [hkl.1, hkl.2])
+        (fun hkr => Or.elim hkr (fun ht0 => by simp [ht0]) (fun ⟨h1, h2⟩ => by simp [h1, h2]))
+        (List.range ar) (fun x hx => List.mem_range.mp hx) List.nodup_range h
+      rw [hidx_eq] at hall
+      have heqW : (List.range ar).map (ctxWireU (contextOfU levels idx0 idx1 k tm i)) = (contextOfU levels idx0 idx1 k tm i).2.2.2.1 := by
+        apply List.ext_getElem
+        · simp [har_i]
+        · intro t h1 h2; simp [ctxWireU, List.getD_eq_getElem?_getD, h2]
+      rwa [heqW] at hall
+  · have hhdF : fxs.all (fun fc => fc.2.2.2.1.length == ar && prelimN deadTargetN fc.2.2.2.1) = false := Bool.eq_false_iff.mpr hhd
+    simp [hhdF] at h
+theorem fc4U {levels idx0 idx1 k tm start n} (ar : Nat)
+    (h : (decide (n ≤ 128) && fastChunk4U levels idx0 idx1 k tm start n ar) = true) :
+    blockU levels idx0 idx1 k tm start n = true := by
+  simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+  exact fastChunk4U_block h.1 h.2
+theorem bm4U {levels idx0 idx1 k tm s a b}
+    (h1 : blockU levels idx0 idx1 k tm s a = true)
+    (h2 : blockU levels idx0 idx1 k tm (s + a) b = true) :
+    blockU levels idx0 idx1 k tm s (a + b) = true := blockU_merge h1 h2
 def fR1L40F (i : Nat) : Nat := 0x181c18100281ff
 def fR1L40 : PackingT := (1,0,7,6,fR1L40F)
 def fR1Levels : Nat → PackingT
@@ -4575,14 +5292,8 @@ def fR1Idx0 : Nat → Nat → Option (Nat × Nat)
 def fR1Idx1 : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 abbrev bkT := blockU fR1Levels fR1Idx0 fR1Idx1
-abbrev bmT (k tm s a b : Nat) := @blockU_merge fR1Levels fR1Idx0 fR1Idx1 k tm s a b
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem c40_0 : bkT 13 1 0 1=true := by
-  apply cellsBlockU (ar:=9) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem c40_0 : bkT 13 1 0 1=true := fc4U 9 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem a40 : bkT 13 1 0 1 = true := c40_0
 theorem tablesfR1 : ∀ k ≤ 13, ∀ tmax ≤ 1, blockU fR1Levels fR1Idx0 fR1Idx1 k tmax 0 (fR1Levels (3*k+tmax)).1 = true := by
@@ -4651,84 +5362,34 @@ def fR2Idx1 : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 abbrev T2_bkT := blockU fR2Levels fR2Idx0 fR2Idx1
 abbrev T2_bmT (k tm s a b : Nat) := @blockU_merge fR2Levels fR2Idx0 fR2Idx1 k tm s a b
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T2_c28_0 : T2_bkT 9 1 0 6=true := by
-  apply cellsBlockU (ar:=9) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T2_c28_0 : T2_bkT 9 1 0 6=true := fc4U 9 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T2_a28 : T2_bkT 9 1 0 6 = true := T2_c28_0
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T2_c31_0 : T2_bkT 10 1 0 4=true := by
-  apply cellsBlockU (ar:=9) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T2_c31_0 : T2_bkT 10 1 0 4=true := fc4U 9 (by decide +kernel)
 set_option maxHeartbeats 0 in
-theorem T2_c31_4 : T2_bkT 10 1 4 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T2_c31_4 : T2_bkT 10 1 4 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T2_c31_52 : T2_bkT 10 1 52 18=true := by
-  apply cellsBlockU (ar:=10) (d:=1)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T2_c31_52 : T2_bkT 10 1 52 18=true := fc4U 10 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T2_a31 : T2_bkT 10 1 0 70 = true := (T2_bmT 10 1 0 4 66 T2_c31_0 (T2_bmT 10 1 4 48 18 T2_c31_4 T2_c31_52))
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T2_c34_0 : T2_bkT 11 1 0 3=true := by
-  apply cellsBlockU (ar:=9) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T2_c34_0 : T2_bkT 11 1 0 3=true := fc4U 9 (by decide +kernel)
 set_option maxHeartbeats 0 in
-theorem T2_c34_3 : T2_bkT 11 1 3 29=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T2_c34_3 : T2_bkT 11 1 3 29=true := fc4U 10 (by decide +kernel)
 set_option maxHeartbeats 0 in
-theorem T2_c34_32 : T2_bkT 11 1 32 27=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T2_c34_32 : T2_bkT 11 1 32 27=true := fc4U 11 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T2_a34 : T2_bkT 11 1 0 59 = true := (T2_bmT 11 1 0 3 56 T2_c34_0 (T2_bmT 11 1 3 29 27 T2_c34_3 T2_c34_32))
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T2_c37_0 : T2_bkT 12 1 0 3=true := by
-  apply cellsBlockU (ar:=9) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T2_c37_0 : T2_bkT 12 1 0 3=true := fc4U 9 (by decide +kernel)
 set_option maxHeartbeats 0 in
-theorem T2_c37_3 : T2_bkT 12 1 3 6=true := by
-  apply cellsBlockU (ar:=10) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T2_c37_3 : T2_bkT 12 1 3 6=true := fc4U 10 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T2_a37 : T2_bkT 12 1 0 9 = true := (T2_bmT 12 1 0 3 6 T2_c37_0 T2_c37_3)
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T2_c40_0 : T2_bkT 13 1 0 1=true := by
-  apply cellsBlockU (ar:=9) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T2_c40_0 : T2_bkT 13 1 0 1=true := fc4U 9 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T2_a40 : T2_bkT 13 1 0 1 = true := T2_c40_0
 theorem tablesfR2 : ∀ k ≤ 13, ∀ tmax ≤ 1, blockU fR2Levels fR2Idx0 fR2Idx1 k tmax 0 (fR2Levels (3*k+tmax)).1 = true := by
@@ -4772,14 +5433,8 @@ def fR3Idx0 : Nat → Nat → Option (Nat × Nat)
 def fR3Idx1 : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 abbrev T3_bkT := blockU fR3Levels fR3Idx0 fR3Idx1
-abbrev T3_bmT (k tm s a b : Nat) := @blockU_merge fR3Levels fR3Idx0 fR3Idx1 k tm s a b
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T3_c40_0 : T3_bkT 13 1 0 1=true := by
-  apply cellsBlockU (ar:=10) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T3_c40_0 : T3_bkT 13 1 0 1=true := fc4U 10 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T3_a40 : T3_bkT 13 1 0 1 = true := T3_c40_0
 theorem tablesfR3 : ∀ k ≤ 13, ∀ tmax ≤ 1, blockU fR3Levels fR3Idx0 fR3Idx1 k tmax 0 (fR3Levels (3*k+tmax)).1 = true := by
@@ -4878,120 +5533,50 @@ def fR4Idx1 : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 abbrev T4_bkT := blockU fR4Levels fR4Idx0 fR4Idx1
 abbrev T4_bmT (k tm s a b : Nat) := @blockU_merge fR4Levels fR4Idx0 fR4Idx1 k tm s a b
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T4_c24_0 : T4_bkT 8 0 0 1=true := by
-  apply cellsBlockU (ar:=9) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T4_c24_0 : T4_bkT 8 0 0 1=true := fc4U 9 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T4_a24 : T4_bkT 8 0 0 1 = true := T4_c24_0
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T4_c27_0 : T4_bkT 9 0 0 11=true := by
-  apply cellsBlockU (ar:=10) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T4_c27_0 : T4_bkT 9 0 0 11=true := fc4U 10 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T4_a27 : T4_bkT 9 0 0 11 = true := T4_c27_0
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T4_c28_0 : T4_bkT 9 1 0 9=true := by
-  apply cellsBlockU (ar:=9) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T4_c28_0 : T4_bkT 9 1 0 9=true := fc4U 9 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T4_a28 : T4_bkT 9 1 0 9 = true := T4_c28_0
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T4_c30_0 : T4_bkT 10 0 0 42=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T4_c30_0 : T4_bkT 10 0 0 42=true := bm4U (a:=36) (b:=6) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxRecDepth 32768 in
 theorem T4_a30 : T4_bkT 10 0 0 42 = true := T4_c30_0
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T4_c31_0 : T4_bkT 10 1 0 2=true := by
-  apply cellsBlockU (ar:=9) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T4_c31_0 : T4_bkT 10 1 0 2=true := fc4U 9 (by decide +kernel)
 set_option maxHeartbeats 0 in
-theorem T4_c31_2 : T4_bkT 10 1 2 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T4_c31_2 : T4_bkT 10 1 2 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T4_c31_50 : T4_bkT 10 1 50 46=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T4_c31_50 : T4_bkT 10 1 50 46=true := bm4U (a:=36) (b:=10) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxRecDepth 32768 in
 theorem T4_a31 : T4_bkT 10 1 0 96 = true := (T4_bmT 10 1 0 2 94 T4_c31_0 (T4_bmT 10 1 2 48 46 T4_c31_2 T4_c31_50))
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T4_c33_0 : T4_bkT 11 0 0 14=true := by
-  apply cellsBlockU (ar:=12) (d:=1)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T4_c33_0 : T4_bkT 11 0 0 14=true := fc4U 12 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T4_a33 : T4_bkT 11 0 0 14 = true := T4_c33_0
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T4_c34_0 : T4_bkT 11 1 0 41=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T4_c34_0 : T4_bkT 11 1 0 41=true := bm4U (a:=36) (b:=5) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T4_c34_41 : T4_bkT 11 1 41 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T4_c34_41 : T4_bkT 11 1 41 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T4_c34_89 : T4_bkT 11 1 89 21=true := by
-  apply cellsBlockU (ar:=11) (d:=1)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T4_c34_89 : T4_bkT 11 1 89 21=true := fc4U 11 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T4_a34 : T4_bkT 11 1 0 110 = true := (T4_bmT 11 1 0 41 69 T4_c34_0 (T4_bmT 11 1 41 48 21 T4_c34_41 T4_c34_89))
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T4_c37_0 : T4_bkT 12 1 0 9=true := by
-  apply cellsBlockU (ar:=10) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T4_c37_0 : T4_bkT 12 1 0 9=true := fc4U 10 (by decide +kernel)
 set_option maxHeartbeats 0 in
-theorem T4_c37_9 : T4_bkT 12 1 9 8=true := by
-  apply cellsBlockU (ar:=11) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T4_c37_9 : T4_bkT 12 1 9 8=true := fc4U 11 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T4_a37 : T4_bkT 12 1 0 17 = true := (T4_bmT 12 1 0 9 8 T4_c37_0 T4_c37_9)
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T4_c40_0 : T4_bkT 13 1 0 1=true := by
-  apply cellsBlockU (ar:=10) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T4_c40_0 : T4_bkT 13 1 0 1=true := fc4U 10 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T4_a40 : T4_bkT 13 1 0 1 = true := T4_c40_0
 theorem tablesfR4 : ∀ k ≤ 13, ∀ tmax ≤ 1, blockU fR4Levels fR4Idx0 fR4Idx1 k tmax 0 (fR4Levels (3*k+tmax)).1 = true := by
@@ -5060,287 +5645,92 @@ def fR5Idx1 : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 abbrev T5_bkT := blockU fR5Levels fR5Idx0 fR5Idx1
 abbrev T5_bmT (k tm s a b : Nat) := @blockU_merge fR5Levels fR5Idx0 fR5Idx1 k tm s a b
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T5_c28_0 : T5_bkT 9 1 0 48=true := by
-  apply cellsBlockU (ar:=9) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T5_c28_0 : T5_bkT 9 1 0 48=true := bm4U (a:=36) (b:=12) (fc4U 9 (by decide +kernel)) (fc4U 9 (by decide +kernel))
 set_option maxRecDepth 32768 in
 theorem T5_a28 : T5_bkT 9 1 0 48 = true := T5_c28_0
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T5_c31_0 : T5_bkT 10 1 0 8=true := by
-  apply cellsBlockU (ar:=9) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_0 : T5_bkT 10 1 0 8=true := fc4U 9 (by decide +kernel)
 set_option maxHeartbeats 0 in
-theorem T5_c31_8 : T5_bkT 10 1 8 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_8 : T5_bkT 10 1 8 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_56 : T5_bkT 10 1 56 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_56 : T5_bkT 10 1 56 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_104 : T5_bkT 10 1 104 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_104 : T5_bkT 10 1 104 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_152 : T5_bkT 10 1 152 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_152 : T5_bkT 10 1 152 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_200 : T5_bkT 10 1 200 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_200 : T5_bkT 10 1 200 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_248 : T5_bkT 10 1 248 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_248 : T5_bkT 10 1 248 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_296 : T5_bkT 10 1 296 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_296 : T5_bkT 10 1 296 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_344 : T5_bkT 10 1 344 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_344 : T5_bkT 10 1 344 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_392 : T5_bkT 10 1 392 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_392 : T5_bkT 10 1 392 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_440 : T5_bkT 10 1 440 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_440 : T5_bkT 10 1 440 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_488 : T5_bkT 10 1 488 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_488 : T5_bkT 10 1 488 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_536 : T5_bkT 10 1 536 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_536 : T5_bkT 10 1 536 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_584 : T5_bkT 10 1 584 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_584 : T5_bkT 10 1 584 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_632 : T5_bkT 10 1 632 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_632 : T5_bkT 10 1 632 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_680 : T5_bkT 10 1 680 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_680 : T5_bkT 10 1 680 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_728 : T5_bkT 10 1 728 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_728 : T5_bkT 10 1 728 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_776 : T5_bkT 10 1 776 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_776 : T5_bkT 10 1 776 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_824 : T5_bkT 10 1 824 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c31_824 : T5_bkT 10 1 824 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c31_872 : T5_bkT 10 1 872 7=true := by
-  apply cellsBlockU (ar:=10) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T5_c31_872 : T5_bkT 10 1 872 7=true := fc4U 10 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T5_a31 : T5_bkT 10 1 0 879 = true := (T5_bmT 10 1 0 440 439 (T5_bmT 10 1 0 200 240 (T5_bmT 10 1 0 56 144 (T5_bmT 10 1 0 8 48 T5_c31_0 T5_c31_8) (T5_bmT 10 1 56 48 96 T5_c31_56 (T5_bmT 10 1 104 48 48 T5_c31_104 T5_c31_152))) (T5_bmT 10 1 200 96 144 (T5_bmT 10 1 200 48 48 T5_c31_200 T5_c31_248) (T5_bmT 10 1 296 48 96 T5_c31_296 (T5_bmT 10 1 344 48 48 T5_c31_344 T5_c31_392)))) (T5_bmT 10 1 440 240 199 (T5_bmT 10 1 440 96 144 (T5_bmT 10 1 440 48 48 T5_c31_440 T5_c31_488) (T5_bmT 10 1 536 48 96 T5_c31_536 (T5_bmT 10 1 584 48 48 T5_c31_584 T5_c31_632))) (T5_bmT 10 1 680 96 103 (T5_bmT 10 1 680 48 48 T5_c31_680 T5_c31_728) (T5_bmT 10 1 776 48 55 T5_c31_776 (T5_bmT 10 1 824 48 7 T5_c31_824 T5_c31_872)))))
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T5_c34_0 : T5_bkT 11 1 0 1=true := by
-  apply cellsBlockU (ar:=9) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c34_0 : T5_bkT 11 1 0 1=true := fc4U 9 (by decide +kernel)
 set_option maxHeartbeats 0 in
-theorem T5_c34_1 : T5_bkT 11 1 1 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c34_1 : T5_bkT 11 1 1 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c34_49 : T5_bkT 11 1 49 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c34_49 : T5_bkT 11 1 49 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c34_97 : T5_bkT 11 1 97 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c34_97 : T5_bkT 11 1 97 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c34_145 : T5_bkT 11 1 145 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c34_145 : T5_bkT 11 1 145 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c34_193 : T5_bkT 11 1 193 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c34_193 : T5_bkT 11 1 193 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c34_241 : T5_bkT 11 1 241 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c34_241 : T5_bkT 11 1 241 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c34_289 : T5_bkT 11 1 289 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c34_289 : T5_bkT 11 1 289 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c34_337 : T5_bkT 11 1 337 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c34_337 : T5_bkT 11 1 337 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c34_385 : T5_bkT 11 1 385 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c34_385 : T5_bkT 11 1 385 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c34_433 : T5_bkT 11 1 433 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c34_433 : T5_bkT 11 1 433 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c34_481 : T5_bkT 11 1 481 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c34_481 : T5_bkT 11 1 481 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c34_529 : T5_bkT 11 1 529 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c34_529 : T5_bkT 11 1 529 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c34_577 : T5_bkT 11 1 577 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c34_577 : T5_bkT 11 1 577 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T5_c34_625 : T5_bkT 11 1 625 30=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T5_c34_625 : T5_bkT 11 1 625 30=true := fc4U 11 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T5_a34 : T5_bkT 11 1 0 655 = true := (T5_bmT 11 1 0 289 366 (T5_bmT 11 1 0 97 192 (T5_bmT 11 1 0 1 96 T5_c34_0 (T5_bmT 11 1 1 48 48 T5_c34_1 T5_c34_49)) (T5_bmT 11 1 97 96 96 (T5_bmT 11 1 97 48 48 T5_c34_97 T5_c34_145) (T5_bmT 11 1 193 48 48 T5_c34_193 T5_c34_241))) (T5_bmT 11 1 289 192 174 (T5_bmT 11 1 289 96 96 (T5_bmT 11 1 289 48 48 T5_c34_289 T5_c34_337) (T5_bmT 11 1 385 48 48 T5_c34_385 T5_c34_433)) (T5_bmT 11 1 481 96 78 (T5_bmT 11 1 481 48 48 T5_c34_481 T5_c34_529) (T5_bmT 11 1 577 48 30 T5_c34_577 T5_c34_625))))
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T5_c37_0 : T5_bkT 12 1 0 14=true := by
-  apply cellsBlockU (ar:=10) (d:=1)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T5_c37_0 : T5_bkT 12 1 0 14=true := fc4U 10 (by decide +kernel)
 set_option maxHeartbeats 0 in
-theorem T5_c37_14 : T5_bkT 12 1 14 28=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T5_c37_14 : T5_bkT 12 1 14 28=true := fc4U 11 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T5_a37 : T5_bkT 12 1 0 42 = true := (T5_bmT 12 1 0 14 28 T5_c37_0 T5_c37_14)
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T5_c40_0 : T5_bkT 13 1 0 1=true := by
-  apply cellsBlockU (ar:=10) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T5_c40_0 : T5_bkT 13 1 0 1=true := fc4U 10 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T5_a40 : T5_bkT 13 1 0 1 = true := T5_c40_0
 theorem tablesfR5 : ∀ k ≤ 13, ∀ tmax ≤ 1, blockU fR5Levels fR5Idx0 fR5Idx1 k tmax 0 (fR5Levels (3*k+tmax)).1 = true := by
@@ -5439,218 +5829,78 @@ def fR6Idx1 : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 abbrev T6_bkT := blockU fR6Levels fR6Idx0 fR6Idx1
 abbrev T6_bmT (k tm s a b : Nat) := @blockU_merge fR6Levels fR6Idx0 fR6Idx1 k tm s a b
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T6_c24_0 : T6_bkT 8 0 0 1=true := by
-  apply cellsBlockU (ar:=9) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T6_c24_0 : T6_bkT 8 0 0 1=true := fc4U 9 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T6_a24 : T6_bkT 8 0 0 1 = true := T6_c24_0
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T6_c27_0 : T6_bkT 9 0 0 12=true := by
-  apply cellsBlockU (ar:=10) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T6_c27_0 : T6_bkT 9 0 0 12=true := fc4U 10 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T6_a27 : T6_bkT 9 0 0 12 = true := T6_c27_0
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T6_c28_0 : T6_bkT 9 1 0 8=true := by
-  apply cellsBlockU (ar:=9) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T6_c28_0 : T6_bkT 9 1 0 8=true := fc4U 9 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T6_a28 : T6_bkT 9 1 0 8 = true := T6_c28_0
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T6_c30_0 : T6_bkT 10 0 0 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c30_0 : T6_bkT 10 0 0 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c30_48 : T6_bkT 10 0 48 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c30_48 : T6_bkT 10 0 48 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c30_96 : T6_bkT 10 0 96 4=true := by
-  apply cellsBlockU (ar:=11) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T6_c30_96 : T6_bkT 10 0 96 4=true := fc4U 11 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T6_a30 : T6_bkT 10 0 0 100 = true := (T6_bmT 10 0 0 48 52 T6_c30_0 (T6_bmT 10 0 48 48 4 T6_c30_48 T6_c30_96))
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T6_c31_0 : T6_bkT 10 1 0 1=true := by
-  apply cellsBlockU (ar:=9) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c31_0 : T6_bkT 10 1 0 1=true := fc4U 9 (by decide +kernel)
 set_option maxHeartbeats 0 in
-theorem T6_c31_1 : T6_bkT 10 1 1 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c31_1 : T6_bkT 10 1 1 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c31_49 : T6_bkT 10 1 49 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c31_49 : T6_bkT 10 1 49 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c31_97 : T6_bkT 10 1 97 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c31_97 : T6_bkT 10 1 97 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c31_145 : T6_bkT 10 1 145 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c31_145 : T6_bkT 10 1 145 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c31_193 : T6_bkT 10 1 193 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c31_193 : T6_bkT 10 1 193 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c31_241 : T6_bkT 10 1 241 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c31_241 : T6_bkT 10 1 241 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c31_289 : T6_bkT 10 1 289 48=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c31_289 : T6_bkT 10 1 289 48=true := bm4U (a:=36) (b:=12) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c31_337 : T6_bkT 10 1 337 23=true := by
-  apply cellsBlockU (ar:=10) (d:=1)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T6_c31_337 : T6_bkT 10 1 337 23=true := fc4U 10 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T6_a31 : T6_bkT 10 1 0 360 = true := (T6_bmT 10 1 0 145 215 (T6_bmT 10 1 0 49 96 (T6_bmT 10 1 0 1 48 T6_c31_0 T6_c31_1) (T6_bmT 10 1 49 48 48 T6_c31_49 T6_c31_97)) (T6_bmT 10 1 145 96 119 (T6_bmT 10 1 145 48 48 T6_c31_145 T6_c31_193) (T6_bmT 10 1 241 48 71 T6_c31_241 (T6_bmT 10 1 289 48 23 T6_c31_289 T6_c31_337))))
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T6_c33_0 : T6_bkT 11 0 0 48=true := by
-  apply cellsBlockU (ar:=12) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c33_0 : T6_bkT 11 0 0 48=true := bm4U (a:=36) (b:=12) (fc4U 12 (by decide +kernel)) (fc4U 12 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c33_48 : T6_bkT 11 0 48 24=true := by
-  apply cellsBlockU (ar:=12) (d:=1)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T6_c33_48 : T6_bkT 11 0 48 24=true := fc4U 12 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T6_a33 : T6_bkT 11 0 0 72 = true := (T6_bmT 11 0 0 48 24 T6_c33_0 T6_c33_48)
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T6_c34_0 : T6_bkT 11 1 0 45=true := by
-  apply cellsBlockU (ar:=10) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c34_0 : T6_bkT 11 1 0 45=true := bm4U (a:=36) (b:=9) (fc4U 10 (by decide +kernel)) (fc4U 10 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c34_45 : T6_bkT 11 1 45 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c34_45 : T6_bkT 11 1 45 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c34_93 : T6_bkT 11 1 93 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c34_93 : T6_bkT 11 1 93 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c34_141 : T6_bkT 11 1 141 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c34_141 : T6_bkT 11 1 141 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c34_189 : T6_bkT 11 1 189 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c34_189 : T6_bkT 11 1 189 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c34_237 : T6_bkT 11 1 237 48=true := by
-  apply cellsBlockU (ar:=11) (d:=2)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c34_237 : T6_bkT 11 1 237 48=true := bm4U (a:=36) (b:=12) (fc4U 11 (by decide +kernel)) (fc4U 11 (by decide +kernel))
 set_option maxHeartbeats 0 in
-theorem T6_c34_285 : T6_bkT 11 1 285 22=true := by
-  apply cellsBlockU (ar:=11) (d:=1)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T6_c34_285 : T6_bkT 11 1 285 22=true := fc4U 11 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T6_a34 : T6_bkT 11 1 0 307 = true := (T6_bmT 11 1 0 141 166 (T6_bmT 11 1 0 45 96 T6_c34_0 (T6_bmT 11 1 45 48 48 T6_c34_45 T6_c34_93)) (T6_bmT 11 1 141 96 70 (T6_bmT 11 1 141 48 48 T6_c34_141 T6_c34_189) (T6_bmT 11 1 237 48 22 T6_c34_237 T6_c34_285)))
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T6_c37_0 : T6_bkT 12 1 0 3=true := by
-  apply cellsBlockU (ar:=10) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c37_0 : T6_bkT 12 1 0 3=true := fc4U 10 (by decide +kernel)
 set_option maxHeartbeats 0 in
-theorem T6_c37_3 : T6_bkT 12 1 3 16=true := by
-  apply cellsBlockU (ar:=11) (d:=1)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 16384 in
+theorem T6_c37_3 : T6_bkT 12 1 3 16=true := fc4U 11 (by decide +kernel)
 set_option maxHeartbeats 0 in
-theorem T6_c37_19 : T6_bkT 12 1 19 17=true := by
-  apply cellsBlockU (ar:=12) (d:=1)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T6_c37_19 : T6_bkT 12 1 19 17=true := fc4U 12 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T6_a37 : T6_bkT 12 1 0 36 = true := (T6_bmT 12 1 0 3 33 T6_c37_0 (T6_bmT 12 1 3 16 17 T6_c37_3 T6_c37_19))
-set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem T6_c40_0 : T6_bkT 13 1 0 1=true := by
-  apply cellsBlockU (ar:=11) (d:=0)
-  simp only [cellsU,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
-  repeat' apply And.intro
-  all_goals decide +kernel
+theorem T6_c40_0 : T6_bkT 13 1 0 1=true := fc4U 11 (by decide +kernel)
 set_option maxRecDepth 32768 in
 theorem T6_a40 : T6_bkT 13 1 0 1 = true := T6_c40_0
 theorem tablesfR6 : ∀ k ≤ 13, ∀ tmax ≤ 1, blockU fR6Levels fR6Idx0 fR6Idx1 k tmax 0 (fR6Levels (3*k+tmax)).1 = true := by
@@ -5684,7 +5934,6 @@ theorem tablesfR6 : ∀ k ≤ 13, ∀ tmax ≤ 1, blockU fR6Levels fR6Idx0 fR6Id
   · exact T6_a37
   · exact (rfl : blockU fR6Levels fR6Idx0 fR6Idx1 13 0 0 0 = true)
   · exact T6_a40
-
 def s0 : Sig := inputs.getD 0 zero
 def s1 : Sig := inputs.getD 1 zero
 def s2 : Sig := inputs.getD 2 zero
@@ -5697,9 +5946,7 @@ def s8 : Sig := inputs.getD 8 zero
 def nx0 : Sig := neg (inputs.getD 0 zero)
 def w15 : Sig := bin true (inputs.getD 1 zero) (inputs.getD 5 zero)
 def bank (w : Sig) : List Sig := [s0, s1, s2, s3, s4, s5, s6, s7, s8, nx0, w]
-
 def RL1 : List Sig := [s0, s1, s2, s3, s4, s5, s6, s7, s8]
-
 theorem noRoot1 : ImpossibleU graph 13 1 RL1.toFinset := by
   have hall := forestU_all fR1Levels fR1Idx0 fR1Idx1 13 (boundsBefore known383)
     (before_sound known383 valid383) geomdead tablesfR1 13 (by decide) 1 (by decide) 0 (by decide)
@@ -5707,9 +5954,7 @@ theorem noRoot1 : ImpossibleU graph 13 1 RL1.toFinset := by
   have hs : sameWords (stateSetT fR1Levels 40 0) RL1 = true := by decide +kernel
   rw [htgt, sameWords_sound hs] at hall
   exact hall
-
 def RL2 : List Sig := [s1, s2, s3, s4, s5, s6, s7, s8, nx0]
-
 theorem noRoot2 : ImpossibleU graph 13 1 RL2.toFinset := by
   have hall := forestU_all fR2Levels fR2Idx0 fR2Idx1 13 (boundsBefore known383)
     (before_sound known383 valid383) geomdead tablesfR2 13 (by decide) 1 (by decide) 0 (by decide)
@@ -5717,9 +5962,7 @@ theorem noRoot2 : ImpossibleU graph 13 1 RL2.toFinset := by
   have hs : sameWords (stateSetT fR2Levels 40 0) RL2 = true := by decide +kernel
   rw [htgt, sameWords_sound hs] at hall
   exact hall
-
 def RL3 : List Sig := [s0, s1, s2, s3, s4, s5, s6, s7, s8, nx0]
-
 theorem noRoot3 : ImpossibleU graph 13 1 RL3.toFinset := by
   have hall := forestU_all fR3Levels fR3Idx0 fR3Idx1 13 (boundsBefore known383)
     (before_sound known383 valid383) geomdead tablesfR3 13 (by decide) 1 (by decide) 0 (by decide)
@@ -5727,9 +5970,7 @@ theorem noRoot3 : ImpossibleU graph 13 1 RL3.toFinset := by
   have hs : sameWords (stateSetT fR3Levels 40 0) RL3 = true := by decide +kernel
   rw [htgt, sameWords_sound hs] at hall
   exact hall
-
 def RL4 : List Sig := [s0, s1, s2, s3, s4, s5, s6, s7, s8, w15]
-
 theorem noRoot4 : ImpossibleU graph 13 1 RL4.toFinset := by
   have hall := forestU_all fR4Levels fR4Idx0 fR4Idx1 13 (boundsBefore known383)
     (before_sound known383 valid383) geomdead tablesfR4 13 (by decide) 1 (by decide) 0 (by decide)
@@ -5737,9 +5978,7 @@ theorem noRoot4 : ImpossibleU graph 13 1 RL4.toFinset := by
   have hs : sameWords (stateSetT fR4Levels 40 0) RL4 = true := by decide +kernel
   rw [htgt, sameWords_sound hs] at hall
   exact hall
-
 def RL5 : List Sig := [s1, s2, s3, s4, s5, s6, s7, s8, nx0, w15]
-
 theorem noRoot5 : ImpossibleU graph 13 1 RL5.toFinset := by
   have hall := forestU_all fR5Levels fR5Idx0 fR5Idx1 13 (boundsBefore known383)
     (before_sound known383 valid383) geomdead tablesfR5 13 (by decide) 1 (by decide) 0 (by decide)
@@ -5747,9 +5986,7 @@ theorem noRoot5 : ImpossibleU graph 13 1 RL5.toFinset := by
   have hs : sameWords (stateSetT fR5Levels 40 0) RL5 = true := by decide +kernel
   rw [htgt, sameWords_sound hs] at hall
   exact hall
-
 def RL6 : List Sig := [s0, s1, s2, s3, s4, s5, s6, s7, s8, nx0, w15]
-
 theorem noRoot6 : ImpossibleU graph 13 1 RL6.toFinset := by
   have hall := forestU_all fR6Levels fR6Idx0 fR6Idx1 13 (boundsBefore known383)
     (before_sound known383 valid383) geomdead tablesfR6 13 (by decide) 1 (by decide) 0 (by decide)
@@ -5757,7 +5994,6 @@ theorem noRoot6 : ImpossibleU graph 13 1 RL6.toFinset := by
   have hs : sameWords (stateSetT fR6Levels 40 0) RL6 = true := by decide +kernel
   rw [htgt, sameWords_sound hs] at hall
   exact hall
-
 theorem req_of {k t : Nat} {S : Finset Sig} (h : Live graph k t S) (roots : List Sig)
     (sub : ∀ v ∈ S, v ∈ roots) (a : Sig) (r s : Row)
     (chk : ((bit r graph != bit s graph) && roots.all (fun v => v == a || bit r v == bit s v)) = true) :
@@ -5768,7 +6004,6 @@ theorem req_of {k t : Nat} {S : Finset Sig} (h : Live graph k t S) (roots : List
     have ha := h2 v hv
     have hne : (v == a) = false := beq_eq_false_iff_ne.mpr hn
     rw [hne] at ha; simp only [Bool.false_or] at ha; exact beq_iff_eq.mp ha)
-
 theorem one_of {k t : Nat} {S : Finset Sig} (h : Live graph k t S) (roots : List Sig)
     (sub : ∀ v ∈ S, v ∈ roots) (a b : Sig) (r s : Row)
     (chk : ((bit r graph != bit s graph) && roots.all (fun v => v == a || v == b || bit r v == bit s v)) = true) :
@@ -5781,7 +6016,6 @@ theorem one_of {k t : Nat} {S : Finset Sig} (h : Live graph k t S) (roots : List
   · exact Or.inl hv
   · exact Or.inr hv
   · exact absurd he hd
-
 theorem bank_mem {w u : Sig} (hw : w = s1 ∨ w = w15) (h : u ∈ bank w) :
     u = s0 ∨ u = s1 ∨ u = s2 ∨ u = s3 ∨ u = s4 ∨ u = s5 ∨ u = s6 ∨ u = s7 ∨ u = s8 ∨ u = nx0 ∨ u = w15 := by
   simp only [bank, List.mem_cons, List.not_mem_nil, or_false] at h
@@ -5789,7 +6023,6 @@ theorem bank_mem {w u : Sig} (hw : w = s1 ∨ w = w15) (h : u ∈ bank w) :
   all_goals first
     | (subst h; simp)
     | (rcases hw with rfl | rfl <;> subst h <;> simp)
-
 theorem core (w : Sig) (v : (Fin 9 → Bool) → Bool) (hv : ∀ r : Row, bit r w = v (sample r))
     (hw : w = s1 ∨ w = w15) (C : Circuit) (legal : PEqualNP.MetaComplexity.FanInTwo C) (hsz : C.size ≤ 13)
     (hcomp : ∀ x : Fin 9 → Bool, C.eval ((List.ofFn x ++ [!x 0]) ++ [v x]) = edge x) : False := by
@@ -5945,10 +6178,8 @@ theorem core (w : Sig) (v : (Fin 9 → Bool) → Bool) (hv : ∀ r : Row, bit r 
   · rcases f0 with h | h
     · exact absurd h h0
     · exact absurd h hn
-
 theorem gdl (x : Fin 9 → Bool) : List.ofFn x ++ [!x 0] = [x 0, x 1, x 2, x 3, x 4, x 5, x 6, x 7, x 8, !x 0] := by
   simp [List.ofFn_succ]
-
 theorem mainStep : ∀ (x1 : List ℕ),   x1.length = (2 : ℕ) →     (∀ x3 ∈ x1, x3 = (1 : ℕ) ∨ x3 = (2 : ℕ) ∨ x3 = (3 : ℕ) ∨ x3 = (5 : ℕ) ∨ x3 = (8 : ℕ)) →       (∀ x4 ∈ x1, x4 = (1 : ℕ) ∨ x4 = (5 : ℕ)) →         (1 : ℕ) ∈ x1 →           ∀ (x6 : PEqualNP.CircuitLowerBounds.Circuit),             PEqualNP.MetaComplexity.FanInTwo x6 →               x6.size ≤ (13 : ℕ) →                 ∃ (x9 : Fin (9 : ℕ) → Bool),                   have x10 : List Bool := List.ofFn x9 ++ [!x9 (0 : Fin (9 : ℕ))];                   x6.eval (x10 ++ [PEqualNP.CircuitLowerBounds.GateOp.or.eval (List.map (fun (x11 : ℕ) => x10.getD x11 Bool.false) x1)]) ≠ (x9 (0 : Fin (9 : ℕ)) && x9 (1 : Fin (9 : ℕ)) || x9 (1 : Fin (9 : ℕ)) && x9 (2 : Fin (9 : ℕ)) || x9 (2 : Fin (9 : ℕ)) && x9 (3 : Fin (9 : ℕ)) || x9 (3 : Fin (9 : ℕ)) && x9 (4 : Fin (9 : ℕ)) || x9 (4 : Fin (9 : ℕ)) && x9 (0 : Fin (9 : ℕ)) || x9 (0 : Fin (9 : ℕ)) && x9 (5 : Fin (9 : ℕ)) || x9 (1 : Fin (9 : ℕ)) && x9 (6 : Fin (9 : ℕ)) || x9 (2 : Fin (9 : ℕ)) && x9 (7 : Fin (9 : ℕ)) || x9 (3 : Fin (9 : ℕ)) && x9 (8 : Fin (9 : ℕ)) || x9 (5 : Fin (9 : ℕ)) && x9 (7 : Fin (9 : ℕ)) || x9 (6 : Fin (9 : ℕ)) && x9 (8 : Fin (9 : ℕ)) || x9 (8 : Fin (9 : ℕ)) && x9 (5 : Fin (9 : ℕ))) := by
   intro l hlen hA hB h1 C legal hsz
   by_contra hne
