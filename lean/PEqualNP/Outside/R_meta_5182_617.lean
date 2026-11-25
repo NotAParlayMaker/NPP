@@ -24,13 +24,12 @@ theorem PEqualNP.Outside.R_meta_5182_617
         centreless G C = ∅ ∧ readers 11 C g = {h} ∧ readers 11 C h = {m} ∧
         orN G C \ lam G C = {m} →
       (∀ u v : Fin 11, s(u, v) ∈ Ustar G C → gateVal 11 C h (pairInput u v) = true) →
-      let U := Ustar G C
-      let H := G.deleteEdges ↑U
-      let S : Finset (Fin 11) := {3, 8, 9, 10}
-      let M : Finset (Fin 11 × Fin 11) := {(1, 4), (2, 5), (6, 7)}
-      (∀ a ∈ S, ∀ b ∈ S, ¬H.Adj a b) →
-      let N := (Finset.univ \ S).filter fun v => ∃ a ∈ S, H.Adj a v
-      let P := M.filter fun e => H.Adj e.1 e.2 ∧ e.1 ∉ N ∧ e.2 ∉ N
+      have U := Ustar G C
+      have S : Finset (Fin 11) := {3, 8, 9, 10}
+      have M : Finset (Fin 11 × Fin 11) := {(1, 4), (2, 5), (6, 7)}
+      (∀ a ∈ S, ∀ b ∈ S, ¬(G.deleteEdges ↑U).Adj a b) →
+      have N := (Finset.univ \ S).filter fun v => ∃ a ∈ S, (G.deleteEdges ↑U).Adj a v
+      have P := M.filter fun e => (G.deleteEdges ↑U).Adj e.1 e.2 ∧ e.1 ∉ N ∧ e.2 ∉ N
       4 + U.card ≤ N.card + P.card)
     (two : ∀ (G : SimpleGraph (Fin 11)) [DecidableRel G.Adj] (C : Circuit),
       G = edgeGraph 11 ([9,10,15,19,27,32,39,40,52,54,63,64,73,76,86,97].map
@@ -38,13 +37,12 @@ theorem PEqualNP.Outside.R_meta_5182_617
       IsLeastAO G C → TopForm G C → C.size < 22 →
       (∃ g h : ℕ, junk G C = {g, h} ∧ InCone 11 C g h) →
       2 ≤ 2 * (centreless G C).card + (orN G C \ lam G C).card →
-      let U := Ustar G C
-      let H := G.deleteEdges ↑U
-      let S : Finset (Fin 11) := {3, 8, 9, 10}
-      let M : Finset (Fin 11 × Fin 11) := {(1, 4), (2, 5), (6, 7)}
-      (∀ a ∈ S, ∀ b ∈ S, ¬H.Adj a b) →
-      let N := (Finset.univ \ S).filter fun v => ∃ a ∈ S, H.Adj a v
-      let P := M.filter fun e => H.Adj e.1 e.2 ∧ e.1 ∉ N ∧ e.2 ∉ N
+      have U := Ustar G C
+      have S : Finset (Fin 11) := {3, 8, 9, 10}
+      have M : Finset (Fin 11 × Fin 11) := {(1, 4), (2, 5), (6, 7)}
+      (∀ a ∈ S, ∀ b ∈ S, ¬(G.deleteEdges ↑U).Adj a b) →
+      have N := (Finset.univ \ S).filter fun v => ∃ a ∈ S, (G.deleteEdges ↑U).Adj a v
+      have P := M.filter fun e => (G.deleteEdges ↑U).Adj e.1 e.2 ∧ e.1 ∉ N ∧ e.2 ∉ N
       5 + U.card ≤ N.card + P.card + 2 * (centreless G C).card + (orN G C \ lam G C).card) :
     ∀ (x1 : SimpleGraph (Fin (11 : ℕ))) [x2 : DecidableRel x1.Adj] (x3 : PEqualNP.CircuitLowerBounds.Circuit),   x1 = PEqualNP.EdgeOwnership.edgeGraph (11 : ℕ) [((0 : ℕ), (9 : ℕ)), ((0 : ℕ), (10 : ℕ)), ((1 : ℕ), (4 : ℕ)), ((1 : ℕ), (8 : ℕ)), ((2 : ℕ), (5 : ℕ)), ((2 : ℕ), (10 : ℕ)), ((3 : ℕ), (6 : ℕ)), ((3 : ℕ), (7 : ℕ)), ((4 : ℕ), (8 : ℕ)), ((4 : ℕ), (10 : ℕ)), ((5 : ℕ), (8 : ℕ)), ((5 : ℕ), (9 : ℕ)), ((6 : ℕ), (7 : ℕ)), ((6 : ℕ), (10 : ℕ)), ((7 : ℕ), (9 : ℕ)), ((8 : ℕ), (9 : ℕ))] →     PEqualNP.TopForm.IsLeastAO x1 x3 →       PEqualNP.TopForm.TopForm x1 x3 →         x3.size < (22 : ℕ) →           (∃ (x8 : ℕ) (x9 : ℕ), PEqualNP.TopForm.junk x1 x3 = {x8, x9} ∧ PEqualNP.EdgeOwnership.InCone (11 : ℕ) x3 x8 x9) →             have x9 : Finset (Sym2 (Fin (11 : ℕ))) := PEqualNP.TopForm.Ustar x1 x3;             let x10 : SimpleGraph (Fin (11 : ℕ)) := x1.deleteEdges ↑x9;             have x11 : Finset (Fin (11 : ℕ)) := {(3 : Fin (11 : ℕ)), (8 : Fin (11 : ℕ)), (9 : Fin (11 : ℕ)), (10 : Fin (11 : ℕ))};             have x12 : Finset (Fin (11 : ℕ) × Fin (11 : ℕ)) := {((1 : Fin (11 : ℕ)), (4 : Fin (11 : ℕ))), ((2 : Fin (11 : ℕ)), (5 : Fin (11 : ℕ))), ((6 : Fin (11 : ℕ)), (7 : Fin (11 : ℕ)))};             ∀ x13 ⊆ x11,               x13 = ∅ →                 (∀ x16 ∈ x11 \ x13, ∀ x18 ∈ x11 \ x13, ¬x10.Adj x16 x18) →                   have x17 : Finset (Fin (11 : ℕ)) := {x17 ∈ Finset.univ \ x11 | ∃ x18 ∈ x11 \ x13, x10.Adj x18 x17};                   have x18 : Finset (Fin (11 : ℕ) × Fin (11 : ℕ)) := {x18 ∈ x12 | x10.Adj x18.1 x18.2 ∧ x18.1 ∉ x17 ∧ x18.2 ∉ x17};                   (5 : ℕ) + x9.card ≤ x13.card + x17.card + x18.card + (2 : ℕ) * (PEqualNP.TopForm.centreless x1 x3).card + (PEqualNP.TopForm.orN x1 x3 \ PEqualNP.TopForm.lam x1 x3).card := by
   classical
