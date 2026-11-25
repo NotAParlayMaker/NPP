@@ -1083,6 +1083,211 @@ theorem get_build (C : Circuit) (hg : Monotone2 C) (hr : PEqualNP.Represents.Rep
 
 theorem inputs_nodup : inputs.Nodup := by decide +kernel
 
+
+
+def usable (S : Finset W) (x : W) : Prop := x = 0 ∨ x = BitVec.allOnes 62 ∨ x ∈ S
+
+theorem rawOp_iff (a b z : W) : z ∈ basicOps a b ↔
+    (z = a &&& b ∨ z = a ||| b) ∧ z ≠ 0 ∧ z ≠ BitVec.allOnes 62 := by
+  simp [basicOps, ops]
+
+theorem imageOp (t : Finset W) (a b z : W) (ha : usable t a) (hb : usable t b)
+    (hz : z = a &&& b ∨ z = a ||| b) :
+    usable t z ∨ (a ∈ t ∧ b ∈ t ∧ a ≠ b ∧ z ∈ basicOps a b) := by
+  by_cases done_ : usable t z
+  · exact Or.inl done_
+  right
+  have am : a ∈ t := by
+    rcases ha with e | e | v
+    · subst a; rcases hz with rfl | rfl <;> simp_all [usable]
+    · subst a
+      rcases hz with rfl | rfl
+      · rw [BitVec.allOnes_and] at done_
+        exact False.elim (done_ hb)
+      · rw [BitVec.allOnes_or] at done_
+        exact False.elim (done_ (.inr (.inl rfl)))
+    · exact v
+  have bm : b ∈ t := by
+    rcases hb with e | e | v
+    · subst b; rcases hz with rfl | rfl <;> simp_all [usable]
+    · subst b
+      rcases hz with rfl | rfl
+      · rw [BitVec.and_allOnes] at done_
+        exact False.elim (done_ ha)
+      · rw [BitVec.or_allOnes] at done_
+        exact False.elim (done_ (.inr (.inl rfl)))
+    · exact v
+  refine ⟨am,bm,?_, (rawOp_iff a b z).mpr ⟨hz, fun h => done_ (.inl h),
+    fun h => done_ (.inr (.inl h))⟩⟩
+  rintro rfl
+  rcases hz with rfl | rfl <;> simp_all [usable]
+
+theorem transportBuild (f : W → W)
+    (fand : ∀ a b, f (a &&& b) = f a &&& f b) (for_ : ∀ a b, f (a ||| b) = f a ||| f b)
+    (fg : f goal = goal) (k : Nat) (s t : Finset W)
+    (map_ : ∀ x ∈ s, usable t (f x)) (h : build basicOps goal k s) :
+    build basicOps goal k t := by
+  induction k generalizing s t with
+  | zero =>
+    have v := map_ goal h
+    rw [fg] at v
+    rcases v with impossible | impossible | v
+    · exact False.elim ((by decide : goal ≠ 0) impossible)
+    · exact False.elim ((by decide : goal ≠ BitVec.allOnes 62) impossible)
+    · exact v
+  | succ k ih =>
+    rcases h with skip | ⟨a,ha,b,hb,_,z,hz,tail⟩
+    · exact Or.inl (ih s t map_ skip)
+    have im : f z = f a &&& f b ∨ f z = f a ||| f b := by
+      rcases ((rawOp_iff a b z).mp hz).1 with rfl | rfl
+      · exact Or.inl (fand a b)
+      · exact Or.inr (for_ a b)
+    rcases imageOp t _ _ _ (map_ a ha) (map_ b hb) im with known | ⟨hma,hmb,hne,hgate⟩
+    · apply Or.inl
+      apply ih _ t _ tail
+      intro x hx
+      rcases Finset.mem_insert.mp hx with rfl | h
+      · exact known
+      · exact map_ x h
+    · refine Or.inr ⟨f a,hma,f b,hmb,hne,f z,hgate,ih _ _ ?_ tail⟩
+      intro x hx
+      rcases Finset.mem_insert.mp hx with rfl | h
+      · exact .inr (.inr (Finset.mem_insert_self _ _))
+      · exact (map_ x h).imp_right (Or.imp_right Finset.mem_insert_of_mem)
+
+def sampleMap (p : Fin 62 → Fin 62) (w : W) : W :=
+  (BitVec.ofBoolListLE (List.ofFn (fun i : Fin 62 => w[(p i).val]))).cast (by simp)
+
+theorem sampleMap_bit (p : Fin 62 → Fin 62) (w : W) (i : Fin 62) :
+    (sampleMap p w)[i.val] = w[(p i).val] := by
+  rw [← BitVec.getLsbD_eq_getElem i.isLt]
+  simp only [sampleMap, BitVec.getLsbD_cast, BitVec.getLsbD_ofBoolListLE,
+    List.getD_eq_getElem?_getD, List.getElem?_ofFn, dif_pos i.isLt, Option.getD_some]
+
+theorem sampleMap_and (p : Fin 62 → Fin 62) (a b : W) :
+    sampleMap p (a &&& b) = sampleMap p a &&& sampleMap p b := by
+  apply BitVec.eq_of_getElem_eq
+  intro i hi
+  change (sampleMap p (a &&& b))[((⟨i,hi⟩ : Fin 62)).val] = _
+  rw [sampleMap_bit, BitVec.getElem_and, BitVec.getElem_and,
+    sampleMap_bit p a ⟨i,hi⟩, sampleMap_bit p b ⟨i,hi⟩]
+
+theorem sampleMap_or (p : Fin 62 → Fin 62) (a b : W) :
+    sampleMap p (a ||| b) = sampleMap p a ||| sampleMap p b := by
+  apply BitVec.eq_of_getElem_eq
+  intro i hi
+  change (sampleMap p (a ||| b))[((⟨i,hi⟩ : Fin 62)).val] = _
+  rw [sampleMap_bit, BitVec.getElem_or, BitVec.getElem_or,
+    sampleMap_bit p a ⟨i,hi⟩, sampleMap_bit p b ⟨i,hi⟩]
+
+
+def sampleIndex : List (List (Fin 62)) :=
+  [[0, 1, 2, 0, 0, 5, 6, 0, 8, 2, 5, 6, 6, 2, 1, 6, 1, 2, 18, 18, 2, 0, 6, 8, 0, 2, 5, 18, 1, 8, 18, 31, 32, 33, 34, 35, 31, 37, 37, 39, 32, 35, 33, 35, 34, 34, 46, 46, 46, 49, 46, 39, 39, 31, 37, 49, 49, 33, 31, 33, 32, 35],
+   [0, 5, 6, 0, 0, 1, 2, 0, 8, 6, 1, 2, 2, 6, 5, 2, 5, 6, 18, 18, 6, 0, 2, 8, 0, 6, 1, 18, 5, 8, 18, 49, 37, 46, 35, 34, 49, 32, 32, 39, 37, 34, 46, 34, 35, 35, 33, 33, 33, 31, 33, 39, 39, 49, 32, 31, 31, 46, 49, 46, 37, 34],
+   [6, 1, 2, 6, 6, 18, 0, 6, 8, 2, 18, 0, 0, 2, 1, 0, 1, 2, 5, 5, 2, 6, 0, 8, 6, 2, 18, 5, 1, 8, 5, 35, 32, 49, 46, 31, 35, 39, 39, 37, 32, 31, 49, 31, 46, 46, 34, 34, 34, 33, 34, 37, 37, 35, 39, 33, 33, 49, 35, 49, 32, 31],
+   [2, 5, 6, 2, 2, 18, 0, 2, 8, 6, 18, 0, 0, 6, 5, 0, 5, 6, 1, 1, 6, 2, 0, 8, 2, 6, 18, 1, 5, 8, 1, 34, 37, 31, 33, 49, 34, 39, 39, 32, 37, 49, 31, 49, 33, 33, 35, 35, 35, 46, 35, 32, 32, 34, 39, 46, 46, 31, 34, 31, 37, 49],
+   [6, 18, 0, 6, 6, 1, 2, 6, 8, 0, 1, 2, 2, 0, 18, 2, 18, 0, 5, 5, 0, 6, 2, 8, 6, 0, 1, 5, 18, 8, 5, 33, 39, 34, 31, 46, 33, 32, 32, 37, 39, 46, 34, 46, 31, 31, 49, 49, 49, 35, 49, 37, 37, 33, 32, 35, 35, 34, 33, 34, 39, 46],
+   [2, 18, 0, 2, 2, 5, 6, 2, 8, 0, 5, 6, 6, 0, 18, 6, 18, 0, 1, 1, 0, 2, 6, 8, 2, 0, 5, 1, 18, 8, 1, 46, 39, 35, 49, 33, 46, 37, 37, 32, 39, 33, 35, 33, 49, 49, 31, 31, 31, 34, 31, 32, 32, 46, 37, 34, 34, 35, 46, 35, 39, 33]]
+
+def coordMap (p : Fin 6) (j : Fin 62) : Fin 62 := (sampleIndex.getD p.val []).getD j.val 0
+
+def representatives : List W := [0x18008000000000, 0x1200099, 0x20000a0800000000, 0x3b9a3f8f0332229d, 0x30583bed21a00199, 0x25ba3a9cc92c0099, 0x201dfa8c1333629f, 0x3a580feb24c09d60, 0x2a05fe0e1653fe66]
+
+def transfers : List (W × Fin 6 × W) :=
+  [(0x18008000000000, 0, 0x18008000000000),
+   (0x1200099, 0, 0x1200099),
+   (0x20000a0800000000, 0, 0x20000a0800000000),
+   (0x300400000000, 1, 0x20000a0800000000),
+   (0x40006000000000, 2, 0x18008000000000),
+   (0x420001080000000, 2, 0x20000a0800000000),
+   (0x409840, 2, 0x1200099),
+   (0x5c00000000000, 4, 0x20000a0800000000),
+   (0x247dfafc816098d9, 1, 0x3b9a3f8f0332229d),
+   (0x1000010100000000, 3, 0x18008000000000),
+   (0x182000000000000, 3, 0x20000a0800000000),
+   (0xa00040200000000, 5, 0x20000a0800000000),
+   (0x2122204, 3, 0x1200099),
+   (0x3b9a3f8f0332229d, 0, 0x3b9a3f8f0332229d),
+   (0x1fe7c5738252ba44, 2, 0x3b9a3f8f0332229d),
+   (0x30583bed21a00199, 0, 0x30583bed21a00199),
+   (0x147dc1f1a0c09940, 2, 0x30583bed21a00199),
+   (0x1bda05e322922304, 3, 0x30583bed21a00199),
+   (0x25ba3a9cc92c0099, 0, 0x25ba3a9cc92c0099),
+   (0x5e7c070c96c98d9, 4, 0x201dfa8c1333629f),
+   (0x1fa20513cb3e229d, 5, 0x201dfa8c1333629f),
+   (0x15fa01f1e9ac0199, 2, 0x3a580feb24c09d60),
+   (0x2a183e8e05609cf9, 1, 0x201dfa8c1333629f),
+   (0x2e65ce7a84409c60, 2, 0x25ba3a9cc92c0099),
+   (0x3b820f0b0652be64, 3, 0x201dfa8c1333629f),
+   (0x3a580feb24c09d60, 0, 0x3a580feb24c09d60),
+   (0x2fa20e1acd6c9cf9, 3, 0x2a05fe0e1653fe66),
+   (0x201dfa8c1333629f, 0, 0x201dfa8c1333629f),
+   (0x465f0749253fa46, 2, 0x201dfa8c1333629f),
+   (0x1b87f50712136206, 3, 0x25ba3a9cc92c0099),
+   (0x105df1e532936306, 1, 0x3a580feb24c09d60),
+   (0x5a7f014db3f629f, 2, 0x2a05fe0e1653fe66),
+   (0x2a05fe0e1653fe66, 0, 0x2a05fe0e1653fe66)]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem transport_goals : ∀ p : Fin 6, sampleMap (coordMap p) goal = goal := by
+  decide +kernel
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem transport_seeds : ∀ p : Fin 6,
+    inputs.all (fun w => inputs.elem (sampleMap (coordMap p) w)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem transport_results : transfers.all (fun c =>
+    sampleMap (coordMap c.2.1) c.1 == c.2.2 && representatives.elem c.2.2) = true := by
+  decide +kernel
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem cover_first_gate : inputs.all (fun a => inputs.all (fun b =>
+    (ops a b).all fun z => inputs.elem z || transfers.any (fun c => c.1 == z))) = true := by
+  decide +kernel
+
+def starts : List (List W) := inputs :: representatives.map (fun w => w :: inputs)
+
+theorem orbit_roots (h : build basicOps goal 9 inputs.toFinset) :
+    ∃ xs ∈ starts, build basicOps goal 8 xs.toFinset := by
+  have original : inputs ∈ starts := by simp [starts]
+  rcases h with unused | ⟨a,ha,b,hb,_,z,hz,tail⟩
+  · exact ⟨inputs, original, unused⟩
+  have atA := List.all_eq_true.mp cover_first_gate a (List.mem_toFinset.mp ha)
+  have atB := List.all_eq_true.mp atA b (List.mem_toFinset.mp hb)
+  have atZ := List.all_eq_true.mp atB z (List.mem_toFinset.mp hz)
+  simp only [Bool.or_eq_true, List.elem_eq_contains, List.contains_iff_mem,
+    List.any_eq_true, beq_iff_eq] at atZ
+  rcases atZ with old | ⟨c, hc, eq⟩
+  · exact ⟨inputs, original, by
+      simpa only [Finset.insert_eq_of_mem (List.mem_toFinset.mpr old)] using tail⟩
+  obtain ⟨u, p, v⟩ := c
+  change u = z at eq
+  subst u
+  have ok := List.all_eq_true.mp transport_results _ hc
+  change (sampleMap (coordMap p) z == v && representatives.elem v) = true at ok
+  simp only [Bool.and_eq_true, beq_iff_eq, List.elem_eq_contains, List.contains_iff_mem] at ok
+  refine ⟨v :: inputs, List.mem_cons_of_mem _ (List.mem_map.mpr ⟨v,ok.2,rfl⟩), ?_⟩
+  apply transportBuild (sampleMap (coordMap p)) (sampleMap_and _) (sampleMap_or _)
+    (transport_goals p) 8 _ _ _ tail
+  intro x hx
+  rcases Finset.mem_insert.mp hx with rfl | mem
+  · exact Or.inr (Or.inr (List.mem_toFinset.mpr (List.mem_cons.mpr (Or.inl ok.1))))
+  · have stable := List.all_eq_true.mp (transport_seeds p) x (List.mem_toFinset.mp mem)
+    simp only [List.elem_eq_contains, List.contains_iff_mem] at stable
+    exact Or.inr (Or.inr (List.mem_toFinset.mpr (List.mem_cons_of_mem _ stable)))
+
+theorem pad_build {k : Nat} {s : Finset W} (h : build basicOps goal k s)
+    {n : Nat} (hn : k ≤ n) : build basicOps goal n s := by
+  induction hn with
+  | refl => exact h
+  | step _ ih => exact Or.inl ih
+
 def allPairCuts : Nat := 0x7fffffff
 def allWireBits : Nat := 0x3fffffffffffffff
 def targetBits : Nat := 0x3fffffff80000000
@@ -1257,322 +1462,205 @@ theorem batch_clear (xs : List (Nat × Nat × List W))
     simpa only [List.all_cons, evaluateN, asNode, optN_eq, ih h.2, Bool.and_true,
       Bool.not_eq_true'] using h.1
 
-def mask0 : Nat := 0x409840
+def mask0 : Nat := 0x0
 
-def mask1 : Nat := 0x1200099
+def mask1 : Nat := 0x409840
 
-def mask2 : Nat := 0x2122204
+def mask2 : Nat := 0x1200099
 
-def mask3 : Nat := 0x300400000000
+def mask3 : Nat := 0x2122204
 
-def mask4 : Nat := 0x5c00000000000
+def mask4 : Nat := 0x300400000000
 
-def mask5 : Nat := 0x5c00002122204
+def mask5 : Nat := 0x300402122204
 
-def mask6 : Nat := 0x5f00400000000
+def mask6 : Nat := 0x5c00000000000
 
 def mask7 : Nat := 0x5f00412136206
 
 def mask8 : Nat := 0x18008000000000
 
-def mask9 : Nat := 0x18008001200099
+def mask9 : Nat := 0x1df08412136206
 
-def mask10 : Nat := 0x18308400000000
+def mask10 : Nat := 0x40006000000000
 
-def mask11 : Nat := 0x1df08412136206
+def mask11 : Nat := 0x40006000409840
 
-def mask12 : Nat := 0x40006000000000
+def mask12 : Nat := 0x182000000000000
 
-def mask13 : Nat := 0x45c06000000000
+def mask13 : Nat := 0x182000001200099
 
-def mask14 : Nat := 0x45f06412136206
+def mask14 : Nat := 0x182300400000000
 
-def mask15 : Nat := 0x5800e000000000
+def mask15 : Nat := 0x420001080000000
 
-def mask16 : Nat := 0x182000000000000
+def mask16 : Nat := 0x465c07080409840
 
-def mask17 : Nat := 0x182300400000000
+def mask17 : Nat := 0x465f0749253fa46
 
-def mask18 : Nat := 0x187f00412136206
+def mask18 : Nat := 0x47dc0f080409840
 
-def mask19 : Nat := 0x420001080000000
+def mask19 : Nat := 0x5a20010c92c0099
 
-def mask20 : Nat := 0x420001081200099
+def mask20 : Nat := 0x5a7f014db3f629f
 
-def mask21 : Nat := 0x425f01492136206
+def mask21 : Nat := 0x5ba0090c92c0099
 
-def mask22 : Nat := 0x460007080000000
+def mask22 : Nat := 0x5e7c070c96c98d9
 
-def mask23 : Nat := 0x465c07080409840
+def mask23 : Nat := 0xa00040200000000
 
-def mask24 : Nat := 0x465f07480409840
+def mask24 : Nat := 0x1000010100000000
 
-def mask25 : Nat := 0x465f0749253fa46
+def mask25 : Nat := 0x1018018100000000
 
-def mask26 : Nat := 0x47dc0f080409840
+def mask26 : Nat := 0x105801e120800100
 
-def mask27 : Nat := 0x5a2001080000000
+def mask27 : Nat := 0x105df1e532936306
 
-def mask28 : Nat := 0x5a20010c92c0099
+def mask28 : Nat := 0x147dc1f1a0c09940
 
-def mask29 : Nat := 0x5a23014c92c0099
+def mask29 : Nat := 0x15fa01f1e9ac0199
 
-def mask30 : Nat := 0x5a7c010c92c0099
+def mask30 : Nat := 0x1a00050300000000
 
-def mask31 : Nat := 0x5a7f014db3f629f
+def mask31 : Nat := 0x1b82050302122204
 
-def mask32 : Nat := 0x5ba0090c92c0099
+def mask32 : Nat := 0x1b87f50712136206
 
-def mask33 : Nat := 0x5e20070c92c0099
+def mask33 : Nat := 0x1b9a058302122204
 
-def mask34 : Nat := 0x5e7c07080409840
+def mask34 : Nat := 0x1bda05e322922304
 
-def mask35 : Nat := 0x5e7c070c96c98d9
+def mask35 : Nat := 0x1bdff5e732936306
 
-def mask36 : Nat := 0x5e7f074db7ffadf
+def mask36 : Nat := 0x1fa20513cb3e229d
 
-def mask37 : Nat := 0xa00040200000000
+def mask37 : Nat := 0x1fe7c5738252ba44
 
-def mask38 : Nat := 0xa00040200409840
+def mask38 : Nat := 0x1fe7f5779253fa46
 
-def mask39 : Nat := 0xa05f40612136206
+def mask39 : Nat := 0x20000a0800000000
 
-def mask40 : Nat := 0xe65c47280409840
+def mask40 : Nat := 0x2005fa0c12136206
 
-def mask41 : Nat := 0xfa20412c92c0099
+def mask41 : Nat := 0x20180a8800000000
 
-def mask42 : Nat := 0x1000010100000000
+def mask42 : Nat := 0x20183a8c01200099
 
-def mask43 : Nat := 0x1000010102122204
+def mask43 : Nat := 0x201dfa8c1333629f
 
-def mask44 : Nat := 0x1005f10512136206
+def mask44 : Nat := 0x2465ca7880409840
 
-def mask45 : Nat := 0x1040016100000000
+def mask45 : Nat := 0x247dfafc816098d9
 
-def mask46 : Nat := 0x105801e120800100
+def mask46 : Nat := 0x247dfafc9373fadf
 
-def mask47 : Nat := 0x105831e520800100
+def mask47 : Nat := 0x25a20a18c92c0099
 
-def mask48 : Nat := 0x105dc1e120800100
+def mask48 : Nat := 0x25ba3a9cc92c0099
 
-def mask49 : Nat := 0x105df1e532936306
+def mask49 : Nat := 0x25bffa9cdb3f629f
 
-def mask50 : Nat := 0x1182010100000000
+def mask50 : Nat := 0x25fffafcc96c98d9
 
-def mask51 : Nat := 0x11da01e120800100
+def mask51 : Nat := 0x2a000e0a00000000
 
-def mask52 : Nat := 0x1465c17180409840
+def mask52 : Nat := 0x2a000e0a04409c60
 
-def mask53 : Nat := 0x147801f1a0800100
+def mask53 : Nat := 0x2a05fe0e1653fe66
 
-def mask54 : Nat := 0x147dc1f1a0c09940
+def mask54 : Nat := 0x2a180e8a04409c60
 
-def mask55 : Nat := 0x147df1f5b2d3fb46
+def mask55 : Nat := 0x2a183e8e05609cf9
 
-def mask56 : Nat := 0x15a20111c92c0099
+def mask56 : Nat := 0x2a1dfe8e1773feff
 
-def mask57 : Nat := 0x15fa01f1e9ac0199
+def mask57 : Nat := 0x2e65ce7a84409c60
 
-def mask58 : Nat := 0x15ffc1f1e9ec99d9
+def mask58 : Nat := 0x2fa20e1acd6c9cf9
 
-def mask59 : Nat := 0x15fff1f5fbbf639f
+def mask59 : Nat := 0x2fba3e9ecd6c9cf9
 
-def mask60 : Nat := 0x1a5805e320800100
+def mask60 : Nat := 0x30580be920800100
 
-def mask61 : Nat := 0x1b82050302122204
+def mask61 : Nat := 0x30583bed21a00199
 
-def mask62 : Nat := 0x1b82350702122204
+def mask62 : Nat := 0x305dfbed33b3639f
 
-def mask63 : Nat := 0x1b87c50302122204
+def mask63 : Nat := 0x347dfbfda1e099d9
 
-def mask64 : Nat := 0x1b87f50712136206
+def mask64 : Nat := 0x35fa3bfde9ac0199
 
-def mask65 : Nat := 0x1b9a058302122204
+def mask65 : Nat := 0x3a580feb24c09d60
 
-def mask66 : Nat := 0x1bc2056302122204
+def mask66 : Nat := 0x3a583fef25e09df9
 
-def mask67 : Nat := 0x1bda05e322922304
+def mask67 : Nat := 0x3a5dffef36d3ff66
 
-def mask68 : Nat := 0x1bdff5e732936306
+def mask68 : Nat := 0x3b820f0b02122204
 
-def mask69 : Nat := 0x1fa2051382122204
+def mask69 : Nat := 0x3b820f0b0652be64
 
-def mask70 : Nat := 0x1fa20513cb3e229d
+def mask70 : Nat := 0x3b87ff0f1653fe66
 
-def mask71 : Nat := 0x1fa7f517db3f629f
+def mask71 : Nat := 0x3b9a3f8f0332229d
 
-def mask72 : Nat := 0x1fe7c5738252ba44
+def mask72 : Nat := 0x3b9a3f8f0772befd
 
-def mask73 : Nat := 0x1fe7c573cb7ebadd
+def mask73 : Nat := 0x3b9fff8f1333629f
 
-def mask74 : Nat := 0x1fe7f5779253fa46
+def mask74 : Nat := 0x3bda0feb26d2bf64
 
-def mask75 : Nat := 0x1ffa05f3ebbe239d
+def mask75 : Nat := 0x3bda3fef23b2239d
 
-def mask76 : Nat := 0x1fffc5f3a2d2bb44
+def mask76 : Nat := 0x3e7dcffba4c09d60
 
-def mask77 : Nat := 0x20000a0800000000
+def mask77 : Nat := 0x3fba3f9fcb3e229d
 
-def mask78 : Nat := 0x20000a0800409840
+def mask78 : Nat := 0x3fbfff9fdb3f629f
 
-def mask79 : Nat := 0x20183a8c01200099
+def mask79 : Nat := 0x3ffa0ffbedec9df9
 
-def mask80 : Nat := 0x201dfa8c01200099
+def mask80 : Nat := 0x3fffffff8372badd
 
-def mask81 : Nat := 0x201dfa8c1333629f
+def branch0 : SearchNode := (3, mask32, [mask32, mask48, mask16, mask26, mask52])
 
-def mask82 : Nat := 0x20583aec01200099
+def branch1 : SearchNode := (2, mask32, [mask32, mask48, mask42, mask16, mask26, mask52])
 
-def mask83 : Nat := 0x219a3a8c01200099
+def branch2 : SearchNode := (2, mask0, [mask42, mask16, mask31, mask26, mask19, mask52, mask7])
 
-def mask84 : Nat := 0x24383a9c81200099
+def branch3 : SearchNode := (1, mask0, [mask8, mask42, mask16, mask31, mask26, mask19, mask52, mask7])
 
-def mask85 : Nat := 0x247dfafc816098d9
+def branch4 : SearchNode := (1, mask0, [mask39, mask42, mask16, mask31, mask26, mask19, mask52, mask7])
 
-def mask86 : Nat := 0x247dfafc9373fadf
+def branch5 : SearchNode := (1, mask0, [mask71, mask42, mask16, mask31, mask26, mask19, mask52, mask7])
 
-def mask87 : Nat := 0x25ba3a9cc92c0099
+def branch6 : SearchNode := (1, mask0, [mask61, mask42, mask16, mask31, mask26, mask19, mask52, mask7])
 
-def mask88 : Nat := 0x25bffa9cdb3f629f
+def branch7 : SearchNode := (3, mask0, [mask48, mask16, mask31, mask26, mask52, mask7])
 
-def mask89 : Nat := 0x25fffafcc96c98d9
+def branch8 : SearchNode := (2, mask0, [mask48, mask42, mask16, mask31, mask26, mask52, mask7])
 
-def mask90 : Nat := 0x2a000e0a04409c60
+def branch9 : SearchNode := (2, mask0, [mask48, mask16, mask31, mask26, mask19, mask52, mask7])
 
-def mask91 : Nat := 0x2a003e0e04409c60
+def branch10 : SearchNode := (1, mask0, [mask48, mask42, mask16, mask31, mask26, mask19, mask52, mask7])
 
-def mask92 : Nat := 0x2a05ce0a04409c60
+def branch11 : SearchNode := (1, mask0, [mask43, mask42, mask16, mask31, mask26, mask19, mask52, mask7])
 
-def mask93 : Nat := 0x2a05fe0e1653fe66
+def branch12 : SearchNode := (2, mask0, [mask65, mask42, mask16, mask31, mask26, mask19, mask7])
 
-def mask94 : Nat := 0x2a180e8a04409c60
-
-def mask95 : Nat := 0x2a183e8e01200099
-
-def mask96 : Nat := 0x2a183e8e05609cf9
-
-def mask97 : Nat := 0x2a400e6a04409c60
-
-def mask98 : Nat := 0x2b820e0a04409c60
-
-def mask99 : Nat := 0x2e200e1a84409c60
-
-def mask100 : Nat := 0x2e65ce7a84409c60
-
-def mask101 : Nat := 0x2e65fe7e9653fe66
-
-def mask102 : Nat := 0x2e7dfefe85609cf9
-
-def mask103 : Nat := 0x2fa20e1acd6c9cf9
-
-def mask104 : Nat := 0x2fba3e9ecd6c9cf9
-
-def mask105 : Nat := 0x2fe7ce7acd6c9cf9
-
-def mask106 : Nat := 0x30183b8d01200099
-
-def mask107 : Nat := 0x30583bed21a00199
-
-def mask108 : Nat := 0x305dfbed33b3639f
-
-def mask109 : Nat := 0x347dfbfda1e099d9
-
-def mask110 : Nat := 0x35fa3bfde9ac0199
-
-def mask111 : Nat := 0x3a000f0b04409c60
-
-def mask112 : Nat := 0x3a580feb24c09d60
-
-def mask113 : Nat := 0x3a5dffef36d3ff66
-
-def mask114 : Nat := 0x3b820f0b0652be64
-
-def mask115 : Nat := 0x3b87ff0f1653fe66
-
-def mask116 : Nat := 0x3b9a3f8f0332229d
-
-def mask117 : Nat := 0x3b9fff8f1333629f
-
-def mask118 : Nat := 0x3bda0feb26d2bf64
-
-def mask119 : Nat := 0x3bda3fef23b2239d
-
-def mask120 : Nat := 0x3e7dcffba4c09d60
-
-def mask121 : Nat := 0x3fba3f9fcb3e229d
-
-def mask122 : Nat := 0x3fbfff9fdb3f629f
-
-def mask123 : Nat := 0x3fe7cf7b8652be64
-
-def mask124 : Nat := 0x3ffa0ffbedec9df9
-
-def mask125 : Nat := 0x3fffffff8372badd
-
-def branch0 : SearchNode := (3, mask87, [mask87, mask64, mask23, mask46, mask90])
-
-def branch1 : SearchNode := (1, mask85, [mask85, mask79, mask23, mask61, mask46, mask28, mask90, mask7])
-
-def branch2 : SearchNode := (1, mask8, [mask8, mask79, mask46, mask23, mask61, mask28, mask90, mask7])
-
-def branch3 : SearchNode := (3, mask87, [mask87, mask23, mask61, mask46, mask90, mask7])
-
-def branch4 : SearchNode := (2, mask87, [mask87, mask79, mask23, mask61, mask46, mask90, mask7])
-
-def branch5 : SearchNode := (2, mask87, [mask87, mask28, mask23, mask61, mask46, mask90, mask7])
-
-def branch6 : SearchNode := (1, mask3, [mask3, mask79, mask7, mask23, mask61, mask46, mask28, mask90])
-
-def branch7 : SearchNode := (1, mask72, [mask72, mask23, mask61, mask79, mask46, mask28, mask90, mask7])
-
-def branch8 : SearchNode := (1, mask12, [mask12, mask23, mask46, mask79, mask61, mask28, mask90, mask7])
-
-def branch9 : SearchNode := (1, mask54, [mask54, mask23, mask46, mask79, mask61, mask28, mask90, mask7])
-
-def branch10 : SearchNode := (1, mask19, [mask19, mask23, mask28, mask79, mask61, mask46, mask90, mask7])
-
-def branch11 : SearchNode := (1, mask35, [mask35, mask23, mask28, mask79, mask61, mask46, mask90, mask7])
-
-def branch12 : SearchNode := (3, mask100, [mask100, mask79, mask61, mask46, mask28, mask7])
-
-def branch13 : SearchNode := (1, mask4, [mask4, mask23, mask7, mask79, mask61, mask46, mask28, mask90])
-
-def branch14 : SearchNode := (1, mask25, [mask25, mask23, mask7, mask79, mask61, mask46, mask28, mask90])
-
-def branch15 : SearchNode := (1, mask42, [mask42, mask61, mask46, mask79, mask23, mask28, mask90, mask7])
-
-def branch16 : SearchNode := (1, mask67, [mask67, mask61, mask46, mask79, mask23, mask28, mask90, mask7])
-
-def branch17 : SearchNode := (1, mask16, [mask16, mask61, mask28, mask79, mask23, mask46, mask90, mask7])
-
-def branch18 : SearchNode := (1, mask37, [mask37, mask61, mask90, mask79, mask23, mask46, mask28, mask7])
-
-def branch19 : SearchNode := (3, mask64, [mask64, mask79, mask23, mask46, mask28, mask90])
-
-def branch20 : SearchNode := (2, mask64, [mask64, mask61, mask79, mask23, mask46, mask28, mask90])
-
-def branch21 : SearchNode := (2, mask64, [mask64, mask7, mask79, mask23, mask46, mask28, mask90])
-
-def branch22 : SearchNode := (1, mask64, [mask64, mask61, mask7, mask79, mask23, mask46, mask28, mask90])
-
-def branch23 : SearchNode := (2, mask57, [mask57, mask46, mask79, mask23, mask61, mask90, mask7])
-
-def branch24 : SearchNode := (1, mask57, [mask57, mask46, mask28, mask79, mask23, mask61, mask90, mask7])
-
-def branch25 : SearchNode := (2, mask49, [mask49, mask46, mask79, mask23, mask61, mask28, mask90])
-
-def branch26 : SearchNode := (1, mask49, [mask49, mask46, mask7, mask79, mask23, mask61, mask28, mask90])
+def branch13 : SearchNode := (1, mask0, [mask65, mask42, mask16, mask31, mask26, mask19, mask52, mask7])
 
 def branch0Part0 : List SearchNode :=
-  [(1, mask17, [mask17, mask87, mask64, mask23, mask46, mask90]),
-    (1, mask122, [mask122, mask87, mask64, mask23, mask46, mask90]),
-    (1, mask19, [mask19, mask87, mask23, mask64, mask46, mask90]),
-    (1, mask89, [mask89, mask87, mask23, mask64, mask46, mask90]),
-    (1, mask8, [mask8, mask87, mask46, mask64, mask23, mask90]),
-    (1, mask110, [mask110, mask87, mask46, mask64, mask23, mask90]),
-    (1, mask77, [mask77, mask87, mask90, mask64, mask23, mask46]),
-    (1, mask104, [mask104, mask87, mask90, mask64, mask23, mask46]),
-    (1, mask115, [mask115, mask64, mask90, mask87, mask23, mask46])]
+  [(1, mask14, [mask14, mask32, mask48, mask16, mask26, mask52]),
+    (1, mask78, [mask78, mask32, mask48, mask16, mask26, mask52]),
+    (1, mask6, [mask6, mask32, mask16, mask48, mask26, mask52]),
+    (1, mask38, [mask38, mask32, mask16, mask48, mask26, mask52]),
+    (1, mask24, [mask24, mask32, mask26, mask48, mask16, mask52]),
+    (1, mask35, [mask35, mask32, mask26, mask48, mask16, mask52]),
+    (1, mask23, [mask23, mask32, mask52, mask48, mask16, mask26]),
+    (1, mask70, [mask70, mask32, mask52, mask48, mask16, mask26])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1580,25 +1668,36 @@ theorem branch0Part0_dead : branch0Part0.any (evaluateN 6) = false := by
   decide +kernel
 
 def branch0Part1 : List SearchNode :=
-  [(3, mask100, [mask100, mask87, mask64, mask46]),
-    (2, mask100, [mask100, mask23, mask87, mask64, mask46]),
-    (2, mask100, [mask100, mask90, mask87, mask64, mask46]),
-    (1, mask100, [mask100, mask23, mask90, mask87, mask64, mask46]),
-    (2, mask112, [mask112, mask46, mask87, mask64, mask23]),
-    (1, mask112, [mask112, mask46, mask90, mask87, mask64, mask23])]
+  [(1, mask50, [mask50, mask48, mask16, mask32, mask26, mask52]),
+    (1, mask64, [mask64, mask48, mask26, mask32, mask16, mask52]),
+    (1, mask39, [mask39, mask48, mask52, mask32, mask16, mask26]),
+    (1, mask59, [mask59, mask48, mask52, mask32, mask16, mask26]),
+    (3, mask57, [mask57, mask32, mask48, mask26]),
+    (2, mask57, [mask57, mask16, mask32, mask48, mask26]),
+    (2, mask57, [mask57, mask52, mask32, mask48, mask26]),
+    (1, mask57, [mask57, mask16, mask52, mask32, mask48, mask26]),
+    (2, mask65, [mask65, mask26, mask32, mask48, mask16])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch0Part1_dead : branch0Part1.any (evaluateN 6) = false := by
   decide +kernel
 
+def branch0Part2 : List SearchNode :=
+  [(1, mask65, [mask65, mask26, mask52, mask32, mask48, mask16])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch0Part2_dead : branch0Part2.any (evaluateN 6) = false := by
+  decide +kernel
+
 def branch0Next : List SearchNode :=
-  branch0Part0 ++ branch0Part1
+  branch0Part0 ++ branch0Part1 ++ branch0Part2
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch0Next_dead : branch0Next.any (evaluateN 6) = false := by
-  simp only [branch0Next, List.any_append, List.any_cons, List.any_nil, branch0Part0_dead, branch0Part1_dead, Bool.or_false, Bool.false_or]
+  simp only [branch0Next, List.any_append, List.any_cons, List.any_nil, branch0Part0_dead, branch0Part1_dead, branch0Part2_dead, Bool.or_false, Bool.false_or]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1612,37 +1711,48 @@ theorem branch0_dead : evaluateN 7 branch0 = false := by
   rfl
 
 def branch1Part0 : List SearchNode :=
-  [(0, mask125, [mask125, mask61, mask79, mask23, mask46, mask28, mask90, mask7]),
-    (0, mask15, [mask15, mask46, mask79, mask23, mask61, mask28, mask90, mask7]),
-    (0, mask109, [mask109, mask46, mask79, mask23, mask61, mask28, mask90, mask7]),
-    (0, mask20, [mask20, mask28, mask79, mask23, mask61, mask46, mask90, mask7]),
-    (0, mask89, [mask89, mask28, mask79, mask23, mask61, mask46, mask90, mask7]),
-    (0, mask78, [mask78, mask90, mask79, mask23, mask61, mask46, mask28, mask7]),
-    (0, mask102, [mask102, mask90, mask79, mask23, mask61, mask46, mask28, mask7]),
-    (1, mask6, [mask6, mask79, mask23, mask61, mask46, mask28, mask90]),
-    (0, mask6, [mask6, mask85, mask79, mask23, mask61, mask46, mask28, mask90])]
+  [(0, mask14, [mask14, mask32, mask48, mask42, mask16, mask26, mask52]),
+    (0, mask78, [mask78, mask32, mask48, mask42, mask16, mask26, mask52]),
+    (1, mask4, [mask4, mask32, mask48, mask16, mask26, mask52]),
+    (0, mask4, [mask4, mask32, mask42, mask48, mask16, mask26, mask52]),
+    (1, mask73, [mask73, mask32, mask48, mask16, mask26, mask52]),
+    (0, mask73, [mask73, mask32, mask42, mask48, mask16, mask26, mask52]),
+    (0, mask6, [mask6, mask32, mask16, mask48, mask42, mask26, mask52]),
+    (0, mask38, [mask38, mask32, mask16, mask48, mask42, mask26, mask52]),
+    (0, mask24, [mask24, mask32, mask26, mask48, mask42, mask16, mask52]),
+    (0, mask35, [mask35, mask32, mask26, mask48, mask42, mask16, mask52]),
+    (0, mask23, [mask23, mask32, mask52, mask48, mask42, mask16, mask26]),
+    (0, mask70, [mask70, mask32, mask52, mask48, mask42, mask16, mask26]),
+    (0, mask50, [mask50, mask48, mask16, mask32, mask42, mask26, mask52]),
+    (1, mask64, [mask64, mask26, mask32, mask42, mask16, mask52]),
+    (0, mask64, [mask64, mask48, mask26, mask32, mask42, mask16, mask52]),
+    (0, mask39, [mask39, mask48, mask52, mask32, mask42, mask16, mask26]),
+    (0, mask59, [mask59, mask48, mask52, mask32, mask42, mask16, mask26]),
+    (1, mask45, [mask45, mask16, mask32, mask48, mask26, mask52]),
+    (0, mask45, [mask45, mask42, mask16, mask32, mask48, mask26, mask52]),
+    (1, mask61, [mask61, mask26, mask32, mask48, mask16, mask52])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
-theorem branch1Part0_dead : branch1Part0.any (evaluateN 7) = false := by
+theorem branch1Part0_dead : branch1Part0.any (evaluateN 6) = false := by
   decide +kernel
 
 def branch1Part1 : List SearchNode :=
-  [(0, mask6, [mask6, mask7, mask79, mask23, mask61, mask46, mask28, mask90]),
-    (0, mask86, [mask86, mask7, mask79, mask23, mask61, mask46, mask28, mask90]),
-    (0, mask116, [mask116, mask61, mask85, mask23, mask46, mask28, mask90, mask7]),
-    (0, mask107, [mask107, mask46, mask85, mask23, mask61, mask28, mask90, mask7]),
-    (1, mask87, [mask87, mask85, mask23, mask61, mask46, mask90, mask7]),
-    (0, mask87, [mask87, mask79, mask85, mask23, mask61, mask46, mask90, mask7]),
-    (0, mask87, [mask87, mask28, mask85, mask23, mask61, mask46, mask90, mask7]),
-    (1, mask100, [mask100, mask85, mask79, mask61, mask46, mask28, mask7]),
-    (0, mask100, [mask100, mask23, mask85, mask79, mask61, mask46, mask28, mask7]),
-    (0, mask100, [mask100, mask90, mask85, mask79, mask61, mask46, mask28, mask7]),
-    (0, mask112, [mask112, mask46, mask85, mask79, mask23, mask61, mask28, mask7])]
+  [(0, mask61, [mask61, mask42, mask26, mask32, mask48, mask16, mask52]),
+    (1, mask39, [mask39, mask52, mask32, mask48, mask16, mask26]),
+    (0, mask39, [mask39, mask42, mask52, mask32, mask48, mask16, mask26]),
+    (1, mask55, [mask55, mask52, mask32, mask48, mask16, mask26]),
+    (0, mask55, [mask55, mask42, mask52, mask32, mask48, mask16, mask26]),
+    (2, mask57, [mask57, mask32, mask48, mask42, mask26]),
+    (1, mask57, [mask57, mask16, mask32, mask48, mask42, mask26]),
+    (1, mask57, [mask57, mask52, mask32, mask48, mask42, mask26]),
+    (0, mask57, [mask57, mask16, mask52, mask32, mask48, mask42, mask26]),
+    (1, mask65, [mask65, mask26, mask32, mask48, mask42, mask16]),
+    (0, mask65, [mask65, mask26, mask52, mask32, mask48, mask42, mask16])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
-theorem branch1Part1_dead : branch1Part1.any (evaluateN 7) = false := by
+theorem branch1Part1_dead : branch1Part1.any (evaluateN 6) = false := by
   decide +kernel
 
 def branch1Next : List SearchNode :=
@@ -1650,7 +1760,7 @@ def branch1Next : List SearchNode :=
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
-theorem branch1Next_dead : branch1Next.any (evaluateN 7) = false := by
+theorem branch1Next_dead : branch1Next.any (evaluateN 6) = false := by
   simp only [branch1Next, List.any_append, List.any_cons, List.any_nil, branch1Part0_dead, branch1Part1_dead, Bool.or_false, Bool.false_or]
 
 set_option maxRecDepth 8000 in
@@ -1660,17 +1770,22 @@ theorem branch1_front : frontierN branch1 = branch1Next := by
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
-theorem branch1_dead : evaluateN 8 branch1 = false := by
-  rw [evaluateN_step 5, branch1_front, branch1Next_dead, Bool.or_false]
+theorem branch1_dead : evaluateN 7 branch1 = false := by
+  rw [evaluateN_step 4, branch1_front, branch1Next_dead, Bool.or_false]
   rfl
 
 def branch2Part0 : List SearchNode :=
-  [(1, mask26, [mask26, mask79, mask46, mask61, mask28, mask90, mask7]),
-    (0, mask26, [mask26, mask8, mask79, mask46, mask61, mask28, mask90, mask7]),
-    (0, mask26, [mask26, mask23, mask79, mask46, mask61, mask28, mask90, mask7]),
-    (1, mask65, [mask65, mask79, mask46, mask23, mask28, mask90, mask7]),
-    (0, mask65, [mask65, mask8, mask79, mask46, mask23, mask28, mask90, mask7]),
-    (0, mask65, [mask65, mask61, mask79, mask46, mask23, mask28, mask90, mask7])]
+  [(0, mask45, [mask45, mask42, mask16, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask71, [mask71, mask42, mask31, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask8, [mask8, mask42, mask26, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask61, [mask61, mask42, mask26, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask2, [mask2, mask42, mask19, mask16, mask31, mask26, mask52, mask7]),
+    (2, mask48, [mask48, mask16, mask31, mask26, mask52, mask7]),
+    (1, mask48, [mask48, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (1, mask48, [mask48, mask19, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask48, [mask48, mask42, mask19, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask39, [mask39, mask42, mask52, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask55, [mask55, mask42, mask52, mask16, mask31, mask26, mask19, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1678,14 +1793,18 @@ theorem branch2Part0_dead : branch2Part0.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch2Part1 : List SearchNode :=
-  [(1, mask32, [mask32, mask79, mask46, mask23, mask61, mask90, mask7]),
-    (0, mask32, [mask32, mask8, mask79, mask46, mask23, mask61, mask90, mask7]),
-    (0, mask32, [mask32, mask28, mask79, mask46, mask23, mask61, mask90, mask7]),
-    (1, mask94, [mask94, mask79, mask46, mask23, mask61, mask28, mask7]),
-    (0, mask94, [mask94, mask8, mask79, mask46, mask23, mask61, mask28, mask7]),
-    (0, mask94, [mask94, mask90, mask79, mask46, mask23, mask61, mask28, mask7]),
-    (1, mask11, [mask11, mask79, mask46, mask23, mask61, mask28, mask90]),
-    (0, mask11, [mask11, mask8, mask79, mask46, mask23, mask61, mask28, mask90])]
+  [(0, mask4, [mask4, mask42, mask7, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask43, [mask43, mask42, mask7, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask37, [mask37, mask16, mask31, mask42, mask26, mask19, mask52, mask7]),
+    (0, mask10, [mask10, mask16, mask26, mask42, mask31, mask19, mask52, mask7]),
+    (0, mask28, [mask28, mask16, mask26, mask42, mask31, mask19, mask52, mask7]),
+    (0, mask15, [mask15, mask16, mask19, mask42, mask31, mask26, mask52, mask7]),
+    (0, mask22, [mask22, mask16, mask19, mask42, mask31, mask26, mask52, mask7]),
+    (0, mask1, [mask1, mask16, mask52, mask42, mask31, mask26, mask19, mask7]),
+    (2, mask57, [mask57, mask42, mask31, mask26, mask19, mask7]),
+    (1, mask57, [mask57, mask16, mask42, mask31, mask26, mask19, mask7]),
+    (1, mask57, [mask57, mask52, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask16, mask52, mask42, mask31, mask26, mask19, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1693,17 +1812,15 @@ theorem branch2Part1_dead : branch2Part1.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch2Part2 : List SearchNode :=
-  [(0, mask11, [mask11, mask7, mask79, mask46, mask23, mask61, mask28, mask90]),
-    (1, mask107, [mask107, mask8, mask23, mask61, mask28, mask90, mask7]),
-    (0, mask107, [mask107, mask79, mask8, mask23, mask61, mask28, mask90, mask7]),
-    (0, mask107, [mask107, mask46, mask8, mask23, mask61, mask28, mask90, mask7]),
-    (1, mask87, [mask87, mask8, mask46, mask23, mask61, mask90, mask7]),
-    (0, mask87, [mask87, mask79, mask8, mask46, mask23, mask61, mask90, mask7]),
-    (0, mask87, [mask87, mask28, mask8, mask46, mask23, mask61, mask90, mask7]),
-    (1, mask57, [mask57, mask8, mask79, mask23, mask61, mask90, mask7]),
-    (0, mask57, [mask57, mask46, mask8, mask79, mask23, mask61, mask90, mask7]),
-    (0, mask57, [mask57, mask28, mask8, mask79, mask23, mask61, mask90, mask7]),
-    (0, mask112, [mask112, mask46, mask8, mask79, mask23, mask61, mask28, mask7])]
+  [(0, mask6, [mask6, mask16, mask7, mask42, mask31, mask26, mask19, mask52]),
+    (0, mask17, [mask17, mask16, mask7, mask42, mask31, mask26, mask19, mask52]),
+    (0, mask24, [mask24, mask31, mask26, mask42, mask16, mask19, mask52, mask7]),
+    (0, mask34, [mask34, mask31, mask26, mask42, mask16, mask19, mask52, mask7]),
+    (0, mask12, [mask12, mask31, mask19, mask42, mask16, mask26, mask52, mask7]),
+    (0, mask36, [mask36, mask31, mask19, mask42, mask16, mask26, mask52, mask7]),
+    (0, mask23, [mask23, mask31, mask52, mask42, mask16, mask26, mask19, mask7]),
+    (0, mask69, [mask69, mask31, mask52, mask42, mask16, mask26, mask19, mask7]),
+    (0, mask3, [mask3, mask31, mask7, mask42, mask16, mask26, mask19, mask52])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1711,26 +1828,39 @@ theorem branch2Part2_dead : branch2Part2.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch2Part3 : List SearchNode :=
-  [(0, mask49, [mask49, mask46, mask8, mask79, mask23, mask61, mask28, mask90]),
-    (1, mask100, [mask100, mask8, mask79, mask46, mask61, mask28, mask7]),
-    (0, mask100, [mask100, mask23, mask8, mask79, mask46, mask61, mask28, mask7]),
-    (0, mask100, [mask100, mask90, mask8, mask79, mask46, mask61, mask28, mask7]),
-    (1, mask64, [mask64, mask8, mask79, mask46, mask23, mask28, mask90]),
-    (0, mask64, [mask64, mask61, mask8, mask79, mask46, mask23, mask28, mask90]),
-    (0, mask64, [mask64, mask7, mask8, mask79, mask46, mask23, mask28, mask90])]
+  [(2, mask32, [mask32, mask42, mask16, mask26, mask19, mask52]),
+    (1, mask32, [mask32, mask31, mask42, mask16, mask26, mask19, mask52]),
+    (1, mask32, [mask32, mask7, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask32, [mask32, mask31, mask7, mask42, mask16, mask26, mask19, mask52]),
+    (1, mask29, [mask29, mask26, mask42, mask16, mask31, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch2Part3_dead : branch2Part3.any (evaluateN 7) = false := by
   decide +kernel
 
+def branch2Part4 : List SearchNode :=
+  [(0, mask29, [mask29, mask26, mask19, mask42, mask16, mask31, mask52, mask7]),
+    (1, mask65, [mask65, mask26, mask42, mask16, mask31, mask19, mask7]),
+    (0, mask65, [mask65, mask26, mask52, mask42, mask16, mask31, mask19, mask7]),
+    (1, mask27, [mask27, mask26, mask42, mask16, mask31, mask19, mask52]),
+    (0, mask27, [mask27, mask26, mask7, mask42, mask16, mask31, mask19, mask52]),
+    (0, mask58, [mask58, mask19, mask52, mask42, mask16, mask31, mask26, mask7]),
+    (0, mask20, [mask20, mask19, mask7, mask42, mask16, mask31, mask26, mask52]),
+    (0, mask53, [mask53, mask52, mask7, mask42, mask16, mask31, mask26, mask19])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch2Part4_dead : branch2Part4.any (evaluateN 7) = false := by
+  decide +kernel
+
 def branch2Next : List SearchNode :=
-  branch2Part0 ++ branch2Part1 ++ branch2Part2 ++ branch2Part3
+  branch2Part0 ++ branch2Part1 ++ branch2Part2 ++ branch2Part3 ++ branch2Part4
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch2Next_dead : branch2Next.any (evaluateN 7) = false := by
-  simp only [branch2Next, List.any_append, List.any_cons, List.any_nil, branch2Part0_dead, branch2Part1_dead, branch2Part2_dead, branch2Part3_dead, Bool.or_false, Bool.false_or]
+  simp only [branch2Next, List.any_append, List.any_cons, List.any_nil, branch2Part0_dead, branch2Part1_dead, branch2Part2_dead, branch2Part3_dead, branch2Part4_dead, Bool.or_false, Bool.false_or]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1744,8 +1874,12 @@ theorem branch2_dead : evaluateN 8 branch2 = false := by
   rfl
 
 def branch3Part0 : List SearchNode :=
-  [(1, mask19, [mask19, mask87, mask23, mask61, mask46, mask90, mask7]),
-    (1, mask89, [mask89, mask87, mask23, mask61, mask46, mask90, mask7])]
+  [(1, mask18, [mask18, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask18, [mask18, mask8, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask18, [mask18, mask16, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (1, mask33, [mask33, mask42, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask33, [mask33, mask8, mask42, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask33, [mask33, mask31, mask42, mask16, mask26, mask19, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1753,8 +1887,14 @@ theorem branch3Part0_dead : branch3Part0.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch3Part1 : List SearchNode :=
-  [(1, mask16, [mask16, mask87, mask61, mask23, mask46, mask90, mask7]),
-    (1, mask121, [mask121, mask87, mask61, mask23, mask46, mask90, mask7])]
+  [(1, mask21, [mask21, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask21, [mask21, mask8, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask21, [mask21, mask19, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (1, mask54, [mask54, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask54, [mask54, mask8, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask54, [mask54, mask52, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (1, mask9, [mask9, mask42, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask9, [mask9, mask8, mask42, mask16, mask31, mask26, mask19, mask52])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1762,8 +1902,19 @@ theorem branch3Part1_dead : branch3Part1.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch3Part2 : List SearchNode :=
-  [(1, mask8, [mask8, mask87, mask46, mask23, mask61, mask90, mask7]),
-    (1, mask110, [mask110, mask87, mask46, mask23, mask61, mask90, mask7])]
+  [(0, mask9, [mask9, mask7, mask42, mask16, mask31, mask26, mask19, mask52]),
+    (1, mask61, [mask61, mask8, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask61, [mask61, mask42, mask8, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask61, [mask61, mask26, mask8, mask16, mask31, mask19, mask52, mask7]),
+    (1, mask48, [mask48, mask8, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask48, [mask48, mask42, mask8, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask48, [mask48, mask19, mask8, mask16, mask31, mask26, mask52, mask7]),
+    (1, mask57, [mask57, mask8, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask16, mask8, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask52, mask8, mask42, mask31, mask26, mask19, mask7]),
+    (1, mask32, [mask32, mask8, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask32, [mask32, mask31, mask8, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask32, [mask32, mask7, mask8, mask42, mask16, mask26, mask19, mask52])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1771,59 +1922,24 @@ theorem branch3Part2_dead : branch3Part2.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch3Part3 : List SearchNode :=
-  [(1, mask77, [mask77, mask87, mask90, mask23, mask61, mask46, mask7]),
-    (1, mask104, [mask104, mask87, mask90, mask23, mask61, mask46, mask7])]
+  [(1, mask29, [mask29, mask8, mask42, mask16, mask31, mask52, mask7]),
+    (0, mask29, [mask29, mask26, mask8, mask42, mask16, mask31, mask52, mask7]),
+    (0, mask29, [mask29, mask19, mask8, mask42, mask16, mask31, mask52, mask7]),
+    (0, mask65, [mask65, mask26, mask8, mask42, mask16, mask31, mask19, mask7]),
+    (0, mask27, [mask27, mask26, mask8, mask42, mask16, mask31, mask19, mask52])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch3Part3_dead : branch3Part3.any (evaluateN 7) = false := by
   decide +kernel
 
-def branch3Part4 : List SearchNode :=
-  [(1, mask3, [mask3, mask87, mask7, mask23, mask61, mask46, mask90]),
-    (1, mask88, [mask88, mask87, mask7, mask23, mask61, mask46, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch3Part4_dead : branch3Part4.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch3Part5 : List SearchNode :=
-  [(3, mask100, [mask100, mask87, mask61, mask46, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch3Part5_dead : branch3Part5.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch3Part6 : List SearchNode :=
-  [(2, mask100, [mask100, mask23, mask87, mask61, mask46, mask7]),
-    (2, mask100, [mask100, mask90, mask87, mask61, mask46, mask7]),
-    (1, mask100, [mask100, mask23, mask90, mask87, mask61, mask46, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch3Part6_dead : branch3Part6.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch3Part7 : List SearchNode :=
-  [(1, mask114, [mask114, mask61, mask90, mask87, mask23, mask46, mask7]),
-    (2, mask112, [mask112, mask46, mask87, mask23, mask61, mask7]),
-    (1, mask112, [mask112, mask46, mask90, mask87, mask23, mask61, mask7]),
-    (1, mask93, [mask93, mask90, mask7, mask87, mask23, mask61, mask46])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch3Part7_dead : branch3Part7.any (evaluateN 7) = false := by
-  decide +kernel
-
 def branch3Next : List SearchNode :=
-  branch3Part0 ++ branch3Part1 ++ branch3Part2 ++ branch3Part3 ++ branch3Part4 ++ branch3Part5 ++ branch3Part6 ++ branch3Part7
+  branch3Part0 ++ branch3Part1 ++ branch3Part2 ++ branch3Part3
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch3Next_dead : branch3Next.any (evaluateN 7) = false := by
-  simp only [branch3Next, List.any_append, List.any_cons, List.any_nil, branch3Part0_dead, branch3Part1_dead, branch3Part2_dead, branch3Part3_dead, branch3Part4_dead, branch3Part5_dead, branch3Part6_dead, branch3Part7_dead, Bool.or_false, Bool.false_or]
+  simp only [branch3Next, List.any_append, List.any_cons, List.any_nil, branch3Part0_dead, branch3Part1_dead, branch3Part2_dead, branch3Part3_dead, Bool.or_false, Bool.false_or]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1837,19 +1953,26 @@ theorem branch3_dead : evaluateN 8 branch3 = false := by
   rfl
 
 def branch4Part0 : List SearchNode :=
-  [(0, mask19, [mask19, mask87, mask23, mask79, mask61, mask46, mask90, mask7]),
-    (0, mask89, [mask89, mask87, mask23, mask79, mask61, mask46, mask90, mask7]),
-    (0, mask16, [mask16, mask87, mask61, mask79, mask23, mask46, mask90, mask7]),
-    (0, mask121, [mask121, mask87, mask61, mask79, mask23, mask46, mask90, mask7]),
-    (0, mask8, [mask8, mask87, mask46, mask79, mask23, mask61, mask90, mask7]),
-    (1, mask110, [mask110, mask46, mask79, mask23, mask61, mask90, mask7]),
-    (0, mask110, [mask110, mask87, mask46, mask79, mask23, mask61, mask90, mask7]),
-    (0, mask77, [mask77, mask87, mask90, mask79, mask23, mask61, mask46, mask7]),
-    (0, mask104, [mask104, mask87, mask90, mask79, mask23, mask61, mask46, mask7]),
-    (0, mask3, [mask3, mask87, mask7, mask79, mask23, mask61, mask46, mask90]),
-    (0, mask88, [mask88, mask87, mask7, mask79, mask23, mask61, mask46, mask90]),
-    (1, mask116, [mask116, mask61, mask87, mask23, mask46, mask90, mask7]),
-    (0, mask116, [mask116, mask79, mask61, mask87, mask23, mask46, mask90, mask7])]
+  [(1, mask44, [mask44, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask44, [mask44, mask39, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask44, [mask44, mask16, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (1, mask68, [mask68, mask42, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask68, [mask68, mask39, mask42, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask68, [mask68, mask31, mask42, mask16, mask26, mask19, mask52, mask7]),
+    (1, mask60, [mask60, mask42, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask60, [mask60, mask39, mask42, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask60, [mask60, mask26, mask42, mask16, mask31, mask19, mask52, mask7]),
+    (1, mask47, [mask47, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask47, [mask47, mask39, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask47, [mask47, mask19, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (1, mask40, [mask40, mask42, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask40, [mask40, mask39, mask42, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask40, [mask40, mask7, mask42, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask45, [mask45, mask16, mask39, mask31, mask26, mask19, mask52, mask7]),
+    (1, mask48, [mask48, mask39, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask48, [mask48, mask42, mask39, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask48, [mask48, mask19, mask39, mask16, mask31, mask26, mask52, mask7]),
+    (1, mask55, [mask55, mask39, mask16, mask31, mask26, mask19, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1857,10 +1980,14 @@ theorem branch4Part0_dead : branch4Part0.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch4Part1 : List SearchNode :=
-  [(1, mask107, [mask107, mask46, mask87, mask23, mask61, mask90, mask7]),
-    (0, mask107, [mask107, mask79, mask46, mask87, mask23, mask61, mask90, mask7]),
-    (1, mask96, [mask96, mask90, mask87, mask23, mask61, mask46, mask7]),
-    (0, mask96, [mask96, mask79, mask90, mask87, mask23, mask61, mask46, mask7])]
+  [(0, mask55, [mask55, mask42, mask39, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask55, [mask55, mask52, mask39, mask16, mask31, mask26, mask19, mask7]),
+    (1, mask57, [mask57, mask39, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask16, mask39, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask52, mask39, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask23, [mask23, mask31, mask39, mask42, mask16, mask26, mask19, mask7]),
+    (1, mask32, [mask32, mask39, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask32, [mask32, mask31, mask39, mask42, mask16, mask26, mask19, mask52])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1868,34 +1995,24 @@ theorem branch4Part1_dead : branch4Part1.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch4Part2 : List SearchNode :=
-  [(2, mask100, [mask100, mask87, mask79, mask61, mask46, mask7]),
-    (1, mask100, [mask100, mask23, mask87, mask79, mask61, mask46, mask7]),
-    (1, mask100, [mask100, mask90, mask87, mask79, mask61, mask46, mask7]),
-    (0, mask100, [mask100, mask23, mask90, mask87, mask79, mask61, mask46, mask7]),
-    (0, mask114, [mask114, mask61, mask90, mask87, mask79, mask23, mask46, mask7]),
-    (1, mask112, [mask112, mask46, mask87, mask79, mask23, mask61, mask7]),
-    (0, mask112, [mask112, mask46, mask90, mask87, mask79, mask23, mask61, mask7])]
+  [(0, mask32, [mask32, mask7, mask39, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask29, [mask29, mask26, mask39, mask42, mask16, mask31, mask52, mask7]),
+    (0, mask65, [mask65, mask26, mask39, mask42, mask16, mask31, mask19, mask7]),
+    (0, mask27, [mask27, mask26, mask39, mask42, mask16, mask31, mask19, mask52]),
+    (0, mask58, [mask58, mask19, mask39, mask42, mask16, mask31, mask26, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch4Part2_dead : branch4Part2.any (evaluateN 7) = false := by
   decide +kernel
 
-def branch4Part3 : List SearchNode :=
-  [(0, mask93, [mask93, mask90, mask7, mask87, mask79, mask23, mask61, mask46])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch4Part3_dead : branch4Part3.any (evaluateN 7) = false := by
-  decide +kernel
-
 def branch4Next : List SearchNode :=
-  branch4Part0 ++ branch4Part1 ++ branch4Part2 ++ branch4Part3
+  branch4Part0 ++ branch4Part1 ++ branch4Part2
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch4Next_dead : branch4Next.any (evaluateN 7) = false := by
-  simp only [branch4Next, List.any_append, List.any_cons, List.any_nil, branch4Part0_dead, branch4Part1_dead, branch4Part2_dead, branch4Part3_dead, Bool.or_false, Bool.false_or]
+  simp only [branch4Next, List.any_append, List.any_cons, List.any_nil, branch4Part0_dead, branch4Part1_dead, branch4Part2_dead, Bool.or_false, Bool.false_or]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1909,18 +2026,19 @@ theorem branch4_dead : evaluateN 8 branch4 = false := by
   rfl
 
 def branch5Part0 : List SearchNode :=
-  [(0, mask19, [mask19, mask87, mask23, mask28, mask61, mask46, mask90, mask7]),
-    (0, mask89, [mask89, mask87, mask23, mask28, mask61, mask46, mask90, mask7]),
-    (0, mask16, [mask16, mask87, mask61, mask28, mask23, mask46, mask90, mask7]),
-    (0, mask121, [mask121, mask87, mask61, mask28, mask23, mask46, mask90, mask7]),
-    (0, mask8, [mask8, mask87, mask46, mask28, mask23, mask61, mask90, mask7]),
-    (0, mask110, [mask110, mask87, mask46, mask28, mask23, mask61, mask90, mask7]),
-    (0, mask77, [mask77, mask87, mask90, mask28, mask23, mask61, mask46, mask7]),
-    (0, mask104, [mask104, mask87, mask90, mask28, mask23, mask61, mask46, mask7]),
-    (0, mask3, [mask3, mask87, mask7, mask28, mask23, mask61, mask46, mask90]),
-    (0, mask88, [mask88, mask87, mask7, mask28, mask23, mask61, mask46, mask90]),
-    (1, mask103, [mask103, mask90, mask87, mask23, mask61, mask46, mask7]),
-    (0, mask103, [mask103, mask28, mask90, mask87, mask23, mask61, mask46, mask7])]
+  [(0, mask80, [mask80, mask16, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask25, [mask25, mask26, mask42, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask75, [mask75, mask26, mask42, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask13, [mask13, mask19, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask77, [mask77, mask19, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (1, mask51, [mask51, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask51, [mask51, mask71, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask51, [mask51, mask52, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask72, [mask72, mask52, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask5, [mask5, mask7, mask42, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask73, [mask73, mask7, mask42, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask45, [mask45, mask16, mask71, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask61, [mask61, mask26, mask71, mask16, mask31, mask19, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1928,27 +2046,44 @@ theorem branch5Part0_dead : branch5Part0.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch5Part1 : List SearchNode :=
-  [(2, mask100, [mask100, mask87, mask28, mask61, mask46, mask7]),
-    (1, mask100, [mask100, mask23, mask87, mask28, mask61, mask46, mask7]),
-    (1, mask100, [mask100, mask90, mask87, mask28, mask61, mask46, mask7]),
-    (0, mask100, [mask100, mask23, mask90, mask87, mask28, mask61, mask46, mask7]),
-    (0, mask114, [mask114, mask61, mask90, mask87, mask28, mask23, mask46, mask7]),
-    (1, mask112, [mask112, mask46, mask87, mask28, mask23, mask61, mask7]),
-    (0, mask112, [mask112, mask46, mask90, mask87, mask28, mask23, mask61, mask7]),
-    (0, mask93, [mask93, mask90, mask7, mask87, mask28, mask23, mask61, mask46])]
+  [(1, mask48, [mask48, mask71, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask48, [mask48, mask42, mask71, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask48, [mask48, mask19, mask71, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask55, [mask55, mask52, mask71, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask4, [mask4, mask7, mask71, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask37, [mask37, mask16, mask71, mask42, mask26, mask19, mask52, mask7]),
+    (1, mask57, [mask57, mask71, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask16, mask71, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask52, mask71, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask34, [mask34, mask26, mask71, mask42, mask16, mask19, mask52, mask7]),
+    (0, mask12, [mask12, mask19, mask71, mask42, mask16, mask26, mask52, mask7]),
+    (0, mask69, [mask69, mask52, mask71, mask42, mask16, mask26, mask19, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch5Part1_dead : branch5Part1.any (evaluateN 7) = false := by
   decide +kernel
 
+def branch5Part2 : List SearchNode :=
+  [(1, mask32, [mask32, mask71, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask32, [mask32, mask31, mask71, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask32, [mask32, mask7, mask71, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask29, [mask29, mask26, mask71, mask42, mask16, mask31, mask52, mask7]),
+    (0, mask65, [mask65, mask26, mask71, mask42, mask16, mask31, mask19, mask7]),
+    (0, mask27, [mask27, mask26, mask71, mask42, mask16, mask31, mask19, mask52])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch5Part2_dead : branch5Part2.any (evaluateN 7) = false := by
+  decide +kernel
+
 def branch5Next : List SearchNode :=
-  branch5Part0 ++ branch5Part1
+  branch5Part0 ++ branch5Part1 ++ branch5Part2
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch5Next_dead : branch5Next.any (evaluateN 7) = false := by
-  simp only [branch5Next, List.any_append, List.any_cons, List.any_nil, branch5Part0_dead, branch5Part1_dead, Bool.or_false, Bool.false_or]
+  simp only [branch5Next, List.any_append, List.any_cons, List.any_nil, branch5Part0_dead, branch5Part1_dead, branch5Part2_dead, Bool.or_false, Bool.false_or]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1962,14 +2097,19 @@ theorem branch5_dead : evaluateN 8 branch5 = false := by
   rfl
 
 def branch6Part0 : List SearchNode :=
-  [(1, mask24, [mask24, mask79, mask7, mask61, mask46, mask28, mask90]),
-    (0, mask24, [mask24, mask3, mask79, mask7, mask61, mask46, mask28, mask90]),
-    (0, mask24, [mask24, mask23, mask79, mask7, mask61, mask46, mask28, mask90]),
-    (1, mask62, [mask62, mask79, mask7, mask23, mask46, mask28, mask90]),
-    (0, mask62, [mask62, mask3, mask79, mask7, mask23, mask46, mask28, mask90]),
-    (0, mask62, [mask62, mask61, mask79, mask7, mask23, mask46, mask28, mask90]),
-    (1, mask47, [mask47, mask79, mask7, mask23, mask61, mask28, mask90]),
-    (0, mask47, [mask47, mask3, mask79, mask7, mask23, mask61, mask28, mask90])]
+  [(0, mask10, [mask10, mask16, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask63, [mask63, mask16, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask24, [mask24, mask31, mask42, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask75, [mask75, mask31, mask42, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask2, [mask2, mask19, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (1, mask64, [mask64, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask64, [mask64, mask61, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask64, [mask64, mask19, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask39, [mask39, mask52, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask66, [mask66, mask52, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask4, [mask4, mask7, mask42, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask62, [mask62, mask7, mask42, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask45, [mask45, mask16, mask61, mask31, mask26, mask19, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1977,21 +2117,9 @@ theorem branch6Part0_dead : branch6Part0.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch6Part1 : List SearchNode :=
-  [(0, mask47, [mask47, mask46, mask79, mask7, mask23, mask61, mask28, mask90]),
-    (1, mask29, [mask29, mask79, mask7, mask23, mask61, mask46, mask90]),
-    (0, mask29, [mask29, mask3, mask79, mask7, mask23, mask61, mask46, mask90]),
-    (0, mask29, [mask29, mask28, mask79, mask7, mask23, mask61, mask46, mask90]),
-    (1, mask91, [mask91, mask79, mask7, mask23, mask61, mask46, mask28]),
-    (0, mask91, [mask91, mask3, mask79, mask7, mask23, mask61, mask46, mask28]),
-    (0, mask91, [mask91, mask90, mask79, mask7, mask23, mask61, mask46, mask28]),
-    (1, mask81, [mask81, mask3, mask23, mask61, mask46, mask28, mask90]),
-    (0, mask81, [mask81, mask79, mask3, mask23, mask61, mask46, mask28, mask90]),
-    (0, mask81, [mask81, mask7, mask3, mask23, mask61, mask46, mask28, mask90]),
-    (0, mask116, [mask116, mask61, mask3, mask7, mask23, mask46, mask28, mask90]),
-    (1, mask87, [mask87, mask3, mask7, mask23, mask61, mask46, mask90]),
-    (0, mask87, [mask87, mask79, mask3, mask7, mask23, mask61, mask46, mask90]),
-    (0, mask87, [mask87, mask28, mask3, mask7, mask23, mask61, mask46, mask90]),
-    (0, mask4, [mask4, mask23, mask3, mask79, mask61, mask46, mask28, mask90])]
+  [(0, mask71, [mask71, mask31, mask61, mask16, mask26, mask19, mask52, mask7]),
+    (1, mask8, [mask8, mask61, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask8, [mask8, mask42, mask61, mask16, mask31, mask19, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -1999,29 +2127,54 @@ theorem branch6Part1_dead : branch6Part1.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch6Part2 : List SearchNode :=
-  [(1, mask64, [mask64, mask3, mask79, mask23, mask46, mask28, mask90]),
-    (0, mask64, [mask64, mask7, mask3, mask79, mask23, mask46, mask28, mask90]),
-    (0, mask64, [mask64, mask61, mask3, mask79, mask23, mask46, mask28, mask90]),
-    (0, mask49, [mask49, mask46, mask3, mask79, mask23, mask61, mask28, mask90]),
-    (0, mask31, [mask31, mask28, mask3, mask79, mask23, mask61, mask46, mask90]),
-    (1, mask100, [mask100, mask3, mask79, mask7, mask61, mask46, mask28]),
-    (0, mask100, [mask100, mask23, mask3, mask79, mask7, mask61, mask46, mask28]),
-    (0, mask100, [mask100, mask90, mask3, mask79, mask7, mask61, mask46, mask28]),
-    (0, mask57, [mask57, mask46, mask3, mask79, mask7, mask23, mask61, mask90]),
-    (0, mask112, [mask112, mask46, mask3, mask79, mask7, mask23, mask61, mask28])]
+  [(0, mask8, [mask8, mask26, mask61, mask16, mask31, mask19, mask52, mask7]),
+    (1, mask48, [mask48, mask61, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask48, [mask48, mask42, mask61, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask48, [mask48, mask19, mask61, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask55, [mask55, mask52, mask61, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask43, [mask43, mask7, mask61, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask28, [mask28, mask16, mask61, mask42, mask31, mask19, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch6Part2_dead : branch6Part2.any (evaluateN 7) = false := by
   decide +kernel
 
+def branch6Part3 : List SearchNode :=
+  [(1, mask57, [mask57, mask61, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask16, mask61, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask52, mask61, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask34, [mask34, mask31, mask61, mask42, mask16, mask19, mask52, mask7]),
+    (1, mask32, [mask32, mask61, mask42, mask16, mask26, mask19, mask52])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch6Part3_dead : branch6Part3.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch6Part4 : List SearchNode :=
+  [(0, mask32, [mask32, mask31, mask61, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask32, [mask32, mask7, mask61, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask29, [mask29, mask26, mask61, mask42, mask16, mask31, mask52, mask7]),
+    (1, mask65, [mask65, mask61, mask42, mask16, mask31, mask19, mask7]),
+    (0, mask65, [mask65, mask26, mask61, mask42, mask16, mask31, mask19, mask7]),
+    (0, mask65, [mask65, mask52, mask61, mask42, mask16, mask31, mask19, mask7]),
+    (1, mask27, [mask27, mask61, mask42, mask16, mask31, mask19, mask52]),
+    (0, mask27, [mask27, mask26, mask61, mask42, mask16, mask31, mask19, mask52]),
+    (0, mask27, [mask27, mask7, mask61, mask42, mask16, mask31, mask19, mask52])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch6Part4_dead : branch6Part4.any (evaluateN 7) = false := by
+  decide +kernel
+
 def branch6Next : List SearchNode :=
-  branch6Part0 ++ branch6Part1 ++ branch6Part2
+  branch6Part0 ++ branch6Part1 ++ branch6Part2 ++ branch6Part3 ++ branch6Part4
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch6Next_dead : branch6Next.any (evaluateN 7) = false := by
-  simp only [branch6Next, List.any_append, List.any_cons, List.any_nil, branch6Part0_dead, branch6Part1_dead, branch6Part2_dead, Bool.or_false, Bool.false_or]
+  simp only [branch6Next, List.any_append, List.any_cons, List.any_nil, branch6Part0_dead, branch6Part1_dead, branch6Part2_dead, branch6Part3_dead, branch6Part4_dead, Bool.or_false, Bool.false_or]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2035,11 +2188,8 @@ theorem branch6_dead : evaluateN 8 branch6 = false := by
   rfl
 
 def branch7Part0 : List SearchNode :=
-  [(0, mask125, [mask125, mask79, mask23, mask61, mask46, mask28, mask90, mask7]),
-    (0, mask45, [mask45, mask46, mask23, mask61, mask79, mask28, mask90, mask7]),
-    (0, mask76, [mask76, mask46, mask23, mask61, mask79, mask28, mask90, mask7]),
-    (1, mask27, [mask27, mask23, mask61, mask79, mask46, mask90, mask7]),
-    (0, mask27, [mask27, mask72, mask23, mask61, mask79, mask46, mask90, mask7])]
+  [(1, mask15, [mask15, mask48, mask16, mask31, mask26, mask52, mask7]),
+    (1, mask50, [mask50, mask48, mask16, mask31, mask26, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2047,34 +2197,169 @@ theorem branch7Part0_dead : branch7Part0.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch7Part1 : List SearchNode :=
-  [(0, mask27, [mask27, mask28, mask23, mask61, mask79, mask46, mask90, mask7]),
-    (0, mask73, [mask73, mask28, mask23, mask61, mask79, mask46, mask90, mask7]),
-    (0, mask38, [mask38, mask90, mask23, mask61, mask79, mask46, mask28, mask7]),
-    (0, mask123, [mask123, mask90, mask23, mask61, mask79, mask46, mask28, mask7]),
-    (0, mask5, [mask5, mask7, mask23, mask61, mask79, mask46, mask28, mask90]),
-    (0, mask74, [mask74, mask7, mask23, mask61, mask79, mask46, mask28, mask90]),
-    (0, mask85, [mask85, mask79, mask72, mask61, mask46, mask28, mask90, mask7]),
-    (1, mask100, [mask100, mask72, mask61, mask79, mask46, mask28, mask7]),
-    (0, mask100, [mask100, mask23, mask72, mask61, mask79, mask46, mask28, mask7]),
-    (0, mask100, [mask100, mask90, mask72, mask61, mask79, mask46, mask28, mask7]),
-    (0, mask116, [mask116, mask79, mask72, mask23, mask46, mask28, mask90, mask7]),
-    (1, mask87, [mask87, mask72, mask23, mask61, mask46, mask90, mask7]),
-    (0, mask87, [mask87, mask79, mask72, mask23, mask61, mask46, mask90, mask7]),
-    (0, mask87, [mask87, mask28, mask72, mask23, mask61, mask46, mask90, mask7]),
-    (0, mask112, [mask112, mask46, mask72, mask23, mask61, mask79, mask28, mask7])]
+  [(1, mask12, [mask12, mask48, mask31, mask16, mask26, mask52, mask7]),
+    (1, mask77, [mask77, mask48, mask31, mask16, mask26, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Part1_dead : branch7Part1.any (evaluateN 7) = false := by
   decide +kernel
 
+def branch7Part2 : List SearchNode :=
+  [(1, mask8, [mask8, mask48, mask26, mask16, mask31, mask52, mask7]),
+    (1, mask64, [mask64, mask48, mask26, mask16, mask31, mask52, mask7])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part2_dead : branch7Part2.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part3 : List SearchNode :=
+  [(1, mask39, [mask39, mask48, mask52, mask16, mask31, mask26, mask7]),
+    (1, mask59, [mask59, mask48, mask52, mask16, mask31, mask26, mask7])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part3_dead : branch7Part3.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part4 : List SearchNode :=
+  [(1, mask4, [mask4, mask48, mask7, mask16, mask31, mask26, mask52]),
+    (1, mask49, [mask49, mask48, mask7, mask16, mask31, mask26, mask52])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part4_dead : branch7Part4.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part5 : List SearchNode :=
+  [(1, mask37, [mask37, mask16, mask31, mask48, mask26, mask52, mask7])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part5_dead : branch7Part5.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part6 : List SearchNode :=
+  [(1, mask10, [mask10, mask16, mask26, mask48, mask31, mask52, mask7])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part6_dead : branch7Part6.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part7 : List SearchNode :=
+  [(1, mask28, [mask28, mask16, mask26, mask48, mask31, mask52, mask7]),
+    (1, mask1, [mask1, mask16, mask52, mask48, mask31, mask26, mask7])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part7_dead : branch7Part7.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part8 : List SearchNode :=
+  [(3, mask57, [mask57, mask48, mask31, mask26, mask7])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part8_dead : branch7Part8.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part9 : List SearchNode :=
+  [(2, mask57, [mask57, mask16, mask48, mask31, mask26, mask7]),
+    (2, mask57, [mask57, mask52, mask48, mask31, mask26, mask7]),
+    (1, mask57, [mask57, mask16, mask52, mask48, mask31, mask26, mask7])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part9_dead : branch7Part9.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part10 : List SearchNode :=
+  [(1, mask6, [mask6, mask16, mask7, mask48, mask31, mask26, mask52]),
+    (1, mask17, [mask17, mask16, mask7, mask48, mask31, mask26, mask52])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part10_dead : branch7Part10.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part11 : List SearchNode :=
+  [(1, mask24, [mask24, mask31, mask26, mask48, mask16, mask52, mask7])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part11_dead : branch7Part11.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part12 : List SearchNode :=
+  [(1, mask34, [mask34, mask31, mask26, mask48, mask16, mask52, mask7])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part12_dead : branch7Part12.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part13 : List SearchNode :=
+  [(1, mask23, [mask23, mask31, mask52, mask48, mask16, mask26, mask7]),
+    (1, mask69, [mask69, mask31, mask52, mask48, mask16, mask26, mask7]),
+    (1, mask3, [mask3, mask31, mask7, mask48, mask16, mask26, mask52])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part13_dead : branch7Part13.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part14 : List SearchNode :=
+  [(2, mask32, [mask32, mask31, mask48, mask16, mask26, mask52])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part14_dead : branch7Part14.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part15 : List SearchNode :=
+  [(2, mask32, [mask32, mask7, mask48, mask16, mask26, mask52])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part15_dead : branch7Part15.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part16 : List SearchNode :=
+  [(1, mask32, [mask32, mask31, mask7, mask48, mask16, mask26, mask52]),
+    (2, mask65, [mask65, mask26, mask48, mask16, mask31, mask7]),
+    (1, mask65, [mask65, mask26, mask52, mask48, mask16, mask31, mask7])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part16_dead : branch7Part16.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part17 : List SearchNode :=
+  [(2, mask27, [mask27, mask26, mask48, mask16, mask31, mask52])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part17_dead : branch7Part17.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch7Part18 : List SearchNode :=
+  [(1, mask27, [mask27, mask26, mask7, mask48, mask16, mask31, mask52]),
+    (1, mask53, [mask53, mask52, mask7, mask48, mask16, mask31, mask26])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch7Part18_dead : branch7Part18.any (evaluateN 7) = false := by
+  decide +kernel
+
 def branch7Next : List SearchNode :=
-  branch7Part0 ++ branch7Part1
+  branch7Part0 ++ branch7Part1 ++ branch7Part2 ++ branch7Part3 ++ branch7Part4 ++ branch7Part5 ++ branch7Part6 ++ branch7Part7 ++ branch7Part8 ++ branch7Part9 ++ branch7Part10 ++ branch7Part11 ++ branch7Part12 ++ branch7Part13 ++ [branch0] ++ branch7Part14 ++ branch7Part15 ++ branch7Part16 ++ branch7Part17 ++ branch7Part18
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch7Next_dead : branch7Next.any (evaluateN 7) = false := by
-  simp only [branch7Next, List.any_append, List.any_cons, List.any_nil, branch7Part0_dead, branch7Part1_dead, Bool.or_false, Bool.false_or]
+  simp only [branch7Next, List.any_append, List.any_cons, List.any_nil, branch7Part0_dead, branch7Part1_dead, branch7Part2_dead, branch7Part3_dead, branch7Part4_dead, branch7Part5_dead, branch7Part6_dead, branch7Part7_dead, branch7Part8_dead, branch7Part9_dead, branch7Part10_dead, branch7Part11_dead, branch7Part12_dead, branch7Part13_dead, branch0_dead, branch7Part14_dead, branch7Part15_dead, branch7Part16_dead, branch7Part17_dead, branch7Part18_dead, Bool.or_false, Bool.false_or]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2088,13 +2373,17 @@ theorem branch7_dead : evaluateN 8 branch7 = false := by
   rfl
 
 def branch8Part0 : List SearchNode :=
-  [(1, mask82, [mask82, mask23, mask46, mask61, mask28, mask90, mask7]),
-    (0, mask82, [mask82, mask12, mask23, mask46, mask61, mask28, mask90, mask7]),
-    (0, mask82, [mask82, mask79, mask23, mask46, mask61, mask28, mask90, mask7]),
-    (1, mask66, [mask66, mask23, mask46, mask79, mask28, mask90, mask7]),
-    (0, mask66, [mask66, mask12, mask23, mask46, mask79, mask28, mask90, mask7]),
-    (0, mask66, [mask66, mask61, mask23, mask46, mask79, mask28, mask90, mask7]),
-    (1, mask33, [mask33, mask23, mask46, mask79, mask61, mask90, mask7])]
+  [(0, mask15, [mask15, mask48, mask16, mask42, mask31, mask26, mask52, mask7]),
+    (0, mask50, [mask50, mask48, mask16, mask42, mask31, mask26, mask52, mask7]),
+    (0, mask12, [mask12, mask48, mask31, mask42, mask16, mask26, mask52, mask7]),
+    (0, mask77, [mask77, mask48, mask31, mask42, mask16, mask26, mask52, mask7]),
+    (0, mask8, [mask8, mask48, mask26, mask42, mask16, mask31, mask52, mask7]),
+    (1, mask64, [mask64, mask26, mask42, mask16, mask31, mask52, mask7]),
+    (0, mask64, [mask64, mask48, mask26, mask42, mask16, mask31, mask52, mask7]),
+    (0, mask39, [mask39, mask48, mask52, mask42, mask16, mask31, mask26, mask7]),
+    (0, mask59, [mask59, mask48, mask52, mask42, mask16, mask31, mask26, mask7]),
+    (0, mask4, [mask4, mask48, mask7, mask42, mask16, mask31, mask26, mask52]),
+    (0, mask49, [mask49, mask48, mask7, mask42, mask16, mask31, mask26, mask52])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2102,14 +2391,10 @@ theorem branch8Part0_dead : branch8Part0.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch8Part1 : List SearchNode :=
-  [(0, mask33, [mask33, mask12, mask23, mask46, mask79, mask61, mask90, mask7]),
-    (0, mask33, [mask33, mask28, mask23, mask46, mask79, mask61, mask90, mask7]),
-    (1, mask97, [mask97, mask23, mask46, mask79, mask61, mask28, mask7]),
-    (0, mask97, [mask97, mask12, mask23, mask46, mask79, mask61, mask28, mask7]),
-    (0, mask97, [mask97, mask90, mask23, mask46, mask79, mask61, mask28, mask7]),
-    (1, mask14, [mask14, mask23, mask46, mask79, mask61, mask28, mask90]),
-    (0, mask14, [mask14, mask12, mask23, mask46, mask79, mask61, mask28, mask90]),
-    (0, mask14, [mask14, mask7, mask23, mask46, mask79, mask61, mask28, mask90])]
+  [(1, mask45, [mask45, mask16, mask48, mask31, mask26, mask52, mask7]),
+    (0, mask45, [mask45, mask42, mask16, mask48, mask31, mask26, mask52, mask7]),
+    (1, mask71, [mask71, mask31, mask48, mask16, mask26, mask52, mask7]),
+    (0, mask71, [mask71, mask42, mask31, mask48, mask16, mask26, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2117,17 +2402,8 @@ theorem branch8Part1_dead : branch8Part1.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch8Part2 : List SearchNode :=
-  [(1, mask54, [mask54, mask12, mask79, mask61, mask28, mask90, mask7]),
-    (0, mask54, [mask54, mask23, mask12, mask79, mask61, mask28, mask90, mask7]),
-    (0, mask54, [mask54, mask46, mask12, mask79, mask61, mask28, mask90, mask7]),
-    (1, mask100, [mask100, mask12, mask46, mask79, mask61, mask28, mask7]),
-    (0, mask100, [mask100, mask23, mask12, mask46, mask79, mask61, mask28, mask7]),
-    (0, mask100, [mask100, mask90, mask12, mask46, mask79, mask61, mask28, mask7]),
-    (0, mask57, [mask57, mask46, mask12, mask23, mask79, mask61, mask90, mask7]),
-    (1, mask112, [mask112, mask12, mask23, mask79, mask61, mask28, mask7]),
-    (0, mask112, [mask112, mask46, mask12, mask23, mask79, mask61, mask28, mask7]),
-    (0, mask112, [mask112, mask90, mask12, mask23, mask79, mask61, mask28, mask7]),
-    (0, mask49, [mask49, mask46, mask12, mask23, mask79, mask61, mask28, mask90])]
+  [(1, mask8, [mask8, mask26, mask48, mask16, mask31, mask52, mask7]),
+    (0, mask8, [mask8, mask42, mask26, mask48, mask16, mask31, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2135,25 +2411,94 @@ theorem branch8Part2_dead : branch8Part2.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch8Part3 : List SearchNode :=
-  [(1, mask87, [mask87, mask12, mask23, mask46, mask61, mask90, mask7]),
-    (0, mask87, [mask87, mask79, mask12, mask23, mask46, mask61, mask90, mask7]),
-    (0, mask87, [mask87, mask28, mask12, mask23, mask46, mask61, mask90, mask7]),
-    (1, mask64, [mask64, mask12, mask23, mask46, mask79, mask28, mask90]),
-    (0, mask64, [mask64, mask61, mask12, mask23, mask46, mask79, mask28, mask90]),
-    (0, mask64, [mask64, mask7, mask12, mask23, mask46, mask79, mask28, mask90])]
+  [(1, mask61, [mask61, mask26, mask48, mask16, mask31, mask52, mask7]),
+    (0, mask61, [mask61, mask42, mask26, mask48, mask16, mask31, mask52, mask7]),
+    (1, mask39, [mask39, mask52, mask48, mask16, mask31, mask26, mask7]),
+    (0, mask39, [mask39, mask42, mask52, mask48, mask16, mask31, mask26, mask7]),
+    (1, mask55, [mask55, mask52, mask48, mask16, mask31, mask26, mask7]),
+    (0, mask55, [mask55, mask42, mask52, mask48, mask16, mask31, mask26, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch8Part3_dead : branch8Part3.any (evaluateN 7) = false := by
   decide +kernel
 
+def branch8Part4 : List SearchNode :=
+  [(1, mask4, [mask4, mask7, mask48, mask16, mask31, mask26, mask52]),
+    (0, mask4, [mask4, mask42, mask7, mask48, mask16, mask31, mask26, mask52]),
+    (1, mask43, [mask43, mask7, mask48, mask16, mask31, mask26, mask52]),
+    (0, mask43, [mask43, mask42, mask7, mask48, mask16, mask31, mask26, mask52]),
+    (0, mask37, [mask37, mask16, mask31, mask48, mask42, mask26, mask52, mask7])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch8Part4_dead : branch8Part4.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch8Part5 : List SearchNode :=
+  [(0, mask10, [mask10, mask16, mask26, mask48, mask42, mask31, mask52, mask7]),
+    (0, mask28, [mask28, mask16, mask26, mask48, mask42, mask31, mask52, mask7]),
+    (0, mask1, [mask1, mask16, mask52, mask48, mask42, mask31, mask26, mask7]),
+    (2, mask57, [mask57, mask48, mask42, mask31, mask26, mask7])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch8Part5_dead : branch8Part5.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch8Part6 : List SearchNode :=
+  [(1, mask57, [mask57, mask16, mask48, mask42, mask31, mask26, mask7]),
+    (1, mask57, [mask57, mask52, mask48, mask42, mask31, mask26, mask7]),
+    (0, mask57, [mask57, mask16, mask52, mask48, mask42, mask31, mask26, mask7]),
+    (0, mask6, [mask6, mask16, mask7, mask48, mask42, mask31, mask26, mask52]),
+    (0, mask17, [mask17, mask16, mask7, mask48, mask42, mask31, mask26, mask52]),
+    (0, mask24, [mask24, mask31, mask26, mask48, mask42, mask16, mask52, mask7]),
+    (0, mask34, [mask34, mask31, mask26, mask48, mask42, mask16, mask52, mask7]),
+    (0, mask23, [mask23, mask31, mask52, mask48, mask42, mask16, mask26, mask7])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch8Part6_dead : branch8Part6.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch8Part7 : List SearchNode :=
+  [(0, mask69, [mask69, mask31, mask52, mask48, mask42, mask16, mask26, mask7]),
+    (0, mask3, [mask3, mask31, mask7, mask48, mask42, mask16, mask26, mask52])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch8Part7_dead : branch8Part7.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch8Part8 : List SearchNode :=
+  [(1, mask32, [mask32, mask31, mask48, mask42, mask16, mask26, mask52]),
+    (1, mask32, [mask32, mask7, mask48, mask42, mask16, mask26, mask52])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch8Part8_dead : branch8Part8.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch8Part9 : List SearchNode :=
+  [(0, mask32, [mask32, mask31, mask7, mask48, mask42, mask16, mask26, mask52]),
+    (1, mask65, [mask65, mask26, mask48, mask42, mask16, mask31, mask7]),
+    (0, mask65, [mask65, mask26, mask52, mask48, mask42, mask16, mask31, mask7]),
+    (1, mask27, [mask27, mask26, mask48, mask42, mask16, mask31, mask52]),
+    (0, mask27, [mask27, mask26, mask7, mask48, mask42, mask16, mask31, mask52]),
+    (0, mask53, [mask53, mask52, mask7, mask48, mask42, mask16, mask31, mask26])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch8Part9_dead : branch8Part9.any (evaluateN 7) = false := by
+  decide +kernel
+
 def branch8Next : List SearchNode :=
-  branch8Part0 ++ branch8Part1 ++ branch8Part2 ++ branch8Part3
+  branch8Part0 ++ branch8Part1 ++ branch8Part2 ++ branch8Part3 ++ branch8Part4 ++ branch8Part5 ++ branch8Part6 ++ branch8Part7 ++ [branch1] ++ branch8Part8 ++ branch8Part9
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch8Next_dead : branch8Next.any (evaluateN 7) = false := by
-  simp only [branch8Next, List.any_append, List.any_cons, List.any_nil, branch8Part0_dead, branch8Part1_dead, branch8Part2_dead, branch8Part3_dead, Bool.or_false, Bool.false_or]
+  simp only [branch8Next, List.any_append, List.any_cons, List.any_nil, branch8Part0_dead, branch8Part1_dead, branch8Part2_dead, branch8Part3_dead, branch8Part4_dead, branch8Part5_dead, branch8Part6_dead, branch8Part7_dead, branch1_dead, branch8Part8_dead, branch8Part9_dead, Bool.or_false, Bool.false_or]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2167,18 +2512,19 @@ theorem branch8_dead : evaluateN 8 branch8 = false := by
   rfl
 
 def branch9Part0 : List SearchNode :=
-  [(0, mask8, [mask8, mask79, mask23, mask46, mask61, mask28, mask90, mask7]),
-    (0, mask109, [mask109, mask79, mask23, mask46, mask61, mask28, mask90, mask7]),
-    (0, mask42, [mask42, mask61, mask23, mask46, mask79, mask28, mask90, mask7]),
-    (0, mask76, [mask76, mask61, mask23, mask46, mask79, mask28, mask90, mask7]),
-    (0, mask19, [mask19, mask28, mask23, mask46, mask79, mask61, mask90, mask7]),
-    (0, mask58, [mask58, mask28, mask23, mask46, mask79, mask61, mask90, mask7]),
-    (0, mask0, [mask0, mask90, mask23, mask46, mask79, mask61, mask28, mask7]),
-    (1, mask120, [mask120, mask23, mask46, mask79, mask61, mask28, mask7]),
-    (0, mask120, [mask120, mask54, mask23, mask46, mask79, mask61, mask28, mask7]),
-    (0, mask120, [mask120, mask90, mask23, mask46, mask79, mask61, mask28, mask7]),
-    (0, mask4, [mask4, mask7, mask23, mask46, mask79, mask61, mask28, mask90]),
-    (0, mask55, [mask55, mask7, mask23, mask46, mask79, mask61, mask28, mask90])]
+  [(0, mask15, [mask15, mask48, mask16, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask50, [mask50, mask48, mask16, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask12, [mask12, mask48, mask31, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask77, [mask77, mask48, mask31, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask8, [mask8, mask48, mask26, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask64, [mask64, mask48, mask26, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask39, [mask39, mask48, mask52, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask59, [mask59, mask48, mask52, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask4, [mask4, mask48, mask7, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask49, [mask49, mask48, mask7, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask37, [mask37, mask16, mask31, mask48, mask26, mask19, mask52, mask7]),
+    (0, mask10, [mask10, mask16, mask26, mask48, mask31, mask19, mask52, mask7]),
+    (0, mask28, [mask28, mask16, mask26, mask48, mask31, mask19, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2186,15 +2532,11 @@ theorem branch9Part0_dead : branch9Part0.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch9Part1 : List SearchNode :=
-  [(0, mask85, [mask85, mask79, mask54, mask46, mask61, mask28, mask90, mask7]),
-    (0, mask72, [mask72, mask61, mask54, mask46, mask79, mask28, mask90, mask7]),
-    (1, mask100, [mask100, mask54, mask46, mask79, mask61, mask28, mask7]),
-    (0, mask100, [mask100, mask23, mask54, mask46, mask79, mask61, mask28, mask7]),
-    (0, mask100, [mask100, mask90, mask54, mask46, mask79, mask61, mask28, mask7]),
-    (0, mask107, [mask107, mask79, mask54, mask23, mask61, mask28, mask90, mask7]),
-    (0, mask67, [mask67, mask61, mask54, mask23, mask79, mask28, mask90, mask7]),
-    (1, mask57, [mask57, mask54, mask23, mask79, mask61, mask90, mask7]),
-    (0, mask57, [mask57, mask46, mask54, mask23, mask79, mask61, mask90, mask7])]
+  [(1, mask15, [mask15, mask16, mask48, mask31, mask26, mask52, mask7]),
+    (0, mask15, [mask15, mask16, mask19, mask48, mask31, mask26, mask52, mask7]),
+    (1, mask22, [mask22, mask16, mask48, mask31, mask26, mask52, mask7]),
+    (0, mask22, [mask22, mask16, mask19, mask48, mask31, mask26, mask52, mask7]),
+    (0, mask1, [mask1, mask16, mask52, mask48, mask31, mask26, mask19, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2202,12 +2544,13 @@ theorem branch9Part1_dead : branch9Part1.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch9Part2 : List SearchNode :=
-  [(0, mask57, [mask57, mask28, mask54, mask23, mask79, mask61, mask90, mask7]),
-    (0, mask112, [mask112, mask46, mask54, mask23, mask79, mask61, mask28, mask7]),
-    (1, mask87, [mask87, mask54, mask23, mask46, mask61, mask90, mask7]),
-    (0, mask87, [mask87, mask79, mask54, mask23, mask46, mask61, mask90, mask7]),
-    (0, mask87, [mask87, mask28, mask54, mask23, mask46, mask61, mask90, mask7]),
-    (1, mask64, [mask64, mask54, mask23, mask46, mask79, mask28, mask90])]
+  [(2, mask57, [mask57, mask48, mask31, mask26, mask19, mask7]),
+    (1, mask57, [mask57, mask16, mask48, mask31, mask26, mask19, mask7]),
+    (1, mask57, [mask57, mask52, mask48, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask16, mask52, mask48, mask31, mask26, mask19, mask7]),
+    (0, mask6, [mask6, mask16, mask7, mask48, mask31, mask26, mask19, mask52]),
+    (0, mask17, [mask17, mask16, mask7, mask48, mask31, mask26, mask19, mask52]),
+    (0, mask24, [mask24, mask31, mask26, mask48, mask16, mask19, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2215,21 +2558,63 @@ theorem branch9Part2_dead : branch9Part2.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch9Part3 : List SearchNode :=
-  [(0, mask64, [mask64, mask61, mask54, mask23, mask46, mask79, mask28, mask90]),
-    (0, mask64, [mask64, mask7, mask54, mask23, mask46, mask79, mask28, mask90])]
+  [(0, mask34, [mask34, mask31, mask26, mask48, mask16, mask19, mask52, mask7]),
+    (1, mask12, [mask12, mask31, mask48, mask16, mask26, mask52, mask7]),
+    (0, mask12, [mask12, mask31, mask19, mask48, mask16, mask26, mask52, mask7]),
+    (1, mask36, [mask36, mask31, mask48, mask16, mask26, mask52, mask7]),
+    (0, mask36, [mask36, mask31, mask19, mask48, mask16, mask26, mask52, mask7]),
+    (0, mask23, [mask23, mask31, mask52, mask48, mask16, mask26, mask19, mask7]),
+    (0, mask69, [mask69, mask31, mask52, mask48, mask16, mask26, mask19, mask7]),
+    (0, mask3, [mask3, mask31, mask7, mask48, mask16, mask26, mask19, mask52])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch9Part3_dead : branch9Part3.any (evaluateN 7) = false := by
   decide +kernel
 
+def branch9Part4 : List SearchNode :=
+  [(2, mask32, [mask32, mask48, mask16, mask26, mask19, mask52])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch9Part4_dead : branch9Part4.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch9Part5 : List SearchNode :=
+  [(1, mask32, [mask32, mask31, mask48, mask16, mask26, mask19, mask52]),
+    (1, mask32, [mask32, mask7, mask48, mask16, mask26, mask19, mask52]),
+    (0, mask32, [mask32, mask31, mask7, mask48, mask16, mask26, mask19, mask52]),
+    (1, mask29, [mask29, mask26, mask48, mask16, mask31, mask52, mask7]),
+    (0, mask29, [mask29, mask26, mask19, mask48, mask16, mask31, mask52, mask7]),
+    (1, mask65, [mask65, mask26, mask48, mask16, mask31, mask19, mask7]),
+    (0, mask65, [mask65, mask26, mask52, mask48, mask16, mask31, mask19, mask7])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch9Part5_dead : branch9Part5.any (evaluateN 7) = false := by
+  decide +kernel
+
+def branch9Part6 : List SearchNode :=
+  [(1, mask27, [mask27, mask26, mask48, mask16, mask31, mask19, mask52]),
+    (0, mask27, [mask27, mask26, mask7, mask48, mask16, mask31, mask19, mask52]),
+    (1, mask58, [mask58, mask52, mask48, mask16, mask31, mask26, mask7]),
+    (0, mask58, [mask58, mask19, mask52, mask48, mask16, mask31, mask26, mask7]),
+    (1, mask20, [mask20, mask7, mask48, mask16, mask31, mask26, mask52]),
+    (0, mask20, [mask20, mask19, mask7, mask48, mask16, mask31, mask26, mask52]),
+    (0, mask53, [mask53, mask52, mask7, mask48, mask16, mask31, mask26, mask19])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch9Part6_dead : branch9Part6.any (evaluateN 7) = false := by
+  decide +kernel
+
 def branch9Next : List SearchNode :=
-  branch9Part0 ++ branch9Part1 ++ branch9Part2 ++ branch9Part3
+  branch9Part0 ++ branch9Part1 ++ branch9Part2 ++ branch9Part3 ++ branch9Part4 ++ branch9Part5 ++ branch9Part6
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch9Next_dead : branch9Next.any (evaluateN 7) = false := by
-  simp only [branch9Next, List.any_append, List.any_cons, List.any_nil, branch9Part0_dead, branch9Part1_dead, branch9Part2_dead, branch9Part3_dead, Bool.or_false, Bool.false_or]
+  simp only [branch9Next, List.any_append, List.any_cons, List.any_nil, branch9Part0_dead, branch9Part1_dead, branch9Part2_dead, branch9Part3_dead, branch9Part4_dead, branch9Part5_dead, branch9Part6_dead, Bool.or_false, Bool.false_or]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2243,19 +2628,18 @@ theorem branch9_dead : evaluateN 8 branch9 = false := by
   rfl
 
 def branch10Part0 : List SearchNode :=
-  [(1, mask84, [mask84, mask23, mask28, mask61, mask46, mask90, mask7]),
-    (0, mask84, [mask84, mask19, mask23, mask28, mask61, mask46, mask90, mask7]),
-    (0, mask84, [mask84, mask79, mask23, mask28, mask61, mask46, mask90, mask7]),
-    (1, mask69, [mask69, mask23, mask28, mask79, mask46, mask90, mask7]),
-    (0, mask69, [mask69, mask19, mask23, mask28, mask79, mask46, mask90, mask7]),
-    (0, mask69, [mask69, mask61, mask23, mask28, mask79, mask46, mask90, mask7]),
-    (1, mask53, [mask53, mask23, mask28, mask79, mask61, mask90, mask7]),
-    (0, mask53, [mask53, mask19, mask23, mask28, mask79, mask61, mask90, mask7]),
-    (0, mask53, [mask53, mask46, mask23, mask28, mask79, mask61, mask90, mask7]),
-    (1, mask99, [mask99, mask23, mask28, mask79, mask61, mask46, mask7]),
-    (0, mask99, [mask99, mask19, mask23, mask28, mask79, mask61, mask46, mask7]),
-    (0, mask99, [mask99, mask90, mask23, mask28, mask79, mask61, mask46, mask7]),
-    (1, mask21, [mask21, mask23, mask28, mask79, mask61, mask46, mask90])]
+  [(0, mask15, [mask15, mask16, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask50, [mask50, mask16, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask12, [mask12, mask31, mask42, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask77, [mask77, mask31, mask42, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask8, [mask8, mask26, mask42, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask64, [mask64, mask26, mask42, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask39, [mask39, mask52, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask59, [mask59, mask52, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask4, [mask4, mask7, mask42, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask49, [mask49, mask7, mask42, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask45, [mask45, mask16, mask48, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask71, [mask71, mask31, mask48, mask16, mask26, mask19, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2263,21 +2647,20 @@ theorem branch10Part0_dead : branch10Part0.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch10Part1 : List SearchNode :=
-  [(0, mask21, [mask21, mask19, mask23, mask28, mask79, mask61, mask46, mask90]),
-    (0, mask21, [mask21, mask7, mask23, mask28, mask79, mask61, mask46, mask90]),
-    (1, mask35, [mask35, mask19, mask79, mask61, mask46, mask90, mask7]),
-    (0, mask35, [mask35, mask23, mask19, mask79, mask61, mask46, mask90, mask7]),
-    (0, mask35, [mask35, mask28, mask19, mask79, mask61, mask46, mask90, mask7]),
-    (0, mask85, [mask85, mask79, mask19, mask28, mask61, mask46, mask90, mask7]),
-    (1, mask100, [mask100, mask19, mask28, mask79, mask61, mask46, mask7]),
-    (0, mask100, [mask100, mask23, mask19, mask28, mask79, mask61, mask46, mask7]),
-    (0, mask100, [mask100, mask90, mask19, mask28, mask79, mask61, mask46, mask7]),
-    (1, mask87, [mask87, mask19, mask23, mask61, mask46, mask90, mask7]),
-    (0, mask87, [mask87, mask28, mask19, mask23, mask61, mask46, mask90, mask7]),
-    (0, mask87, [mask87, mask79, mask19, mask23, mask61, mask46, mask90, mask7]),
-    (0, mask57, [mask57, mask46, mask19, mask23, mask79, mask61, mask90, mask7]),
-    (0, mask103, [mask103, mask90, mask19, mask23, mask79, mask61, mask46, mask7]),
-    (1, mask64, [mask64, mask19, mask23, mask28, mask79, mask46, mask90])]
+  [(0, mask8, [mask8, mask26, mask48, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask61, [mask61, mask26, mask48, mask16, mask31, mask19, mask52, mask7]),
+    (1, mask2, [mask2, mask48, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask2, [mask2, mask42, mask48, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask2, [mask2, mask19, mask48, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask39, [mask39, mask52, mask48, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask55, [mask55, mask52, mask48, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask4, [mask4, mask7, mask48, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask43, [mask43, mask7, mask48, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask15, [mask15, mask16, mask48, mask42, mask31, mask26, mask52, mask7]),
+    (0, mask22, [mask22, mask16, mask48, mask42, mask31, mask26, mask52, mask7]),
+    (1, mask57, [mask57, mask48, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask16, mask48, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask52, mask48, mask42, mask31, mask26, mask19, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2285,10 +2668,16 @@ theorem branch10Part1_dead : branch10Part1.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch10Part2 : List SearchNode :=
-  [(0, mask64, [mask64, mask61, mask19, mask23, mask28, mask79, mask46, mask90]),
-    (0, mask64, [mask64, mask7, mask19, mask23, mask28, mask79, mask46, mask90]),
-    (0, mask112, [mask112, mask46, mask19, mask23, mask28, mask79, mask61, mask7]),
-    (0, mask49, [mask49, mask46, mask19, mask23, mask28, mask79, mask61, mask90])]
+  [(0, mask12, [mask12, mask31, mask48, mask42, mask16, mask26, mask52, mask7]),
+    (0, mask36, [mask36, mask31, mask48, mask42, mask16, mask26, mask52, mask7]),
+    (1, mask32, [mask32, mask48, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask32, [mask32, mask31, mask48, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask32, [mask32, mask7, mask48, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask29, [mask29, mask26, mask48, mask42, mask16, mask31, mask52, mask7]),
+    (0, mask65, [mask65, mask26, mask48, mask42, mask16, mask31, mask19, mask7]),
+    (0, mask27, [mask27, mask26, mask48, mask42, mask16, mask31, mask19, mask52]),
+    (0, mask58, [mask58, mask52, mask48, mask42, mask16, mask31, mask26, mask7]),
+    (0, mask20, [mask20, mask7, mask48, mask42, mask16, mask31, mask26, mask52])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2315,23 +2704,22 @@ theorem branch10_dead : evaluateN 8 branch10 = false := by
   rfl
 
 def branch11Part0 : List SearchNode :=
-  [(0, mask1, [mask1, mask79, mask23, mask28, mask61, mask46, mask90, mask7]),
-    (0, mask89, [mask89, mask79, mask23, mask28, mask61, mask46, mask90, mask7]),
-    (0, mask16, [mask16, mask61, mask23, mask28, mask79, mask46, mask90, mask7]),
-    (0, mask73, [mask73, mask61, mask23, mask28, mask79, mask46, mask90, mask7]),
-    (0, mask12, [mask12, mask46, mask23, mask28, mask79, mask61, mask90, mask7]),
-    (0, mask58, [mask58, mask46, mask23, mask28, mask79, mask61, mask90, mask7]),
-    (0, mask0, [mask0, mask90, mask23, mask28, mask79, mask61, mask46, mask7]),
-    (0, mask105, [mask105, mask90, mask23, mask28, mask79, mask61, mask46, mask7]),
-    (0, mask4, [mask4, mask7, mask23, mask28, mask79, mask61, mask46, mask90]),
-    (0, mask36, [mask36, mask7, mask23, mask28, mask79, mask61, mask46, mask90]),
-    (0, mask72, [mask72, mask61, mask35, mask28, mask79, mask46, mask90, mask7]),
-    (0, mask54, [mask54, mask46, mask35, mask28, mask79, mask61, mask90, mask7]),
-    (1, mask100, [mask100, mask35, mask28, mask79, mask61, mask46, mask7]),
-    (0, mask100, [mask100, mask23, mask35, mask28, mask79, mask61, mask46, mask7]),
-    (0, mask100, [mask100, mask90, mask35, mask28, mask79, mask61, mask46, mask7]),
-    (1, mask87, [mask87, mask35, mask23, mask61, mask46, mask90, mask7]),
-    (0, mask87, [mask87, mask28, mask35, mask23, mask61, mask46, mask90, mask7])]
+  [(0, mask6, [mask6, mask16, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask46, [mask46, mask16, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask3, [mask3, mask31, mask42, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask73, [mask73, mask31, mask42, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask8, [mask8, mask26, mask42, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask62, [mask62, mask26, mask42, mask16, mask31, mask19, mask52, mask7]),
+    (0, mask2, [mask2, mask19, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask49, [mask49, mask19, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask39, [mask39, mask52, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask56, [mask56, mask52, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask45, [mask45, mask16, mask43, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask61, [mask61, mask26, mask43, mask16, mask31, mask19, mask52, mask7]),
+    (1, mask48, [mask48, mask43, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask48, [mask48, mask42, mask43, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask48, [mask48, mask19, mask43, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask55, [mask55, mask52, mask43, mask16, mask31, mask26, mask19, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2339,27 +2727,40 @@ theorem branch11Part0_dead : branch11Part0.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch11Part1 : List SearchNode :=
-  [(0, mask87, [mask87, mask79, mask35, mask23, mask61, mask46, mask90, mask7]),
-    (0, mask70, [mask70, mask61, mask35, mask23, mask79, mask46, mask90, mask7]),
-    (0, mask57, [mask57, mask46, mask35, mask23, mask79, mask61, mask90, mask7]),
-    (1, mask64, [mask64, mask35, mask23, mask28, mask79, mask46, mask90]),
-    (0, mask64, [mask64, mask61, mask35, mask23, mask28, mask79, mask46, mask90]),
-    (0, mask64, [mask64, mask7, mask35, mask23, mask28, mask79, mask46, mask90]),
-    (0, mask112, [mask112, mask46, mask35, mask23, mask28, mask79, mask61, mask7]),
-    (0, mask49, [mask49, mask46, mask35, mask23, mask28, mask79, mask61, mask90])]
+  [(1, mask4, [mask4, mask43, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask4, [mask4, mask42, mask43, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask4, [mask4, mask7, mask43, mask16, mask31, mask26, mask19, mask52]),
+    (1, mask57, [mask57, mask43, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask16, mask43, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask52, mask43, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask17, [mask17, mask16, mask43, mask42, mask31, mask26, mask19, mask52]),
+    (1, mask32, [mask32, mask43, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask32, [mask32, mask31, mask43, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask32, [mask32, mask7, mask43, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask29, [mask29, mask26, mask43, mask42, mask16, mask31, mask52, mask7]),
+    (0, mask65, [mask65, mask26, mask43, mask42, mask16, mask31, mask19, mask7]),
+    (0, mask27, [mask27, mask26, mask43, mask42, mask16, mask31, mask19, mask52])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch11Part1_dead : branch11Part1.any (evaluateN 7) = false := by
   decide +kernel
 
+def branch11Part2 : List SearchNode :=
+  [(0, mask53, [mask53, mask52, mask43, mask42, mask16, mask31, mask26, mask19])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch11Part2_dead : branch11Part2.any (evaluateN 7) = false := by
+  decide +kernel
+
 def branch11Next : List SearchNode :=
-  branch11Part0 ++ branch11Part1
+  branch11Part0 ++ branch11Part1 ++ branch11Part2
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch11Next_dead : branch11Next.any (evaluateN 7) = false := by
-  simp only [branch11Next, List.any_append, List.any_cons, List.any_nil, branch11Part0_dead, branch11Part1_dead, Bool.or_false, Bool.false_or]
+  simp only [branch11Next, List.any_append, List.any_cons, List.any_nil, branch11Part0_dead, branch11Part1_dead, branch11Part2_dead, Bool.or_false, Bool.false_or]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2373,9 +2774,21 @@ theorem branch11_dead : evaluateN 8 branch11 = false := by
   rfl
 
 def branch12Part0 : List SearchNode :=
-  [(1, mask77, [mask77, mask100, mask79, mask61, mask46, mask28, mask7]),
-    (1, mask102, [mask102, mask100, mask79, mask61, mask46, mask28, mask7]),
-    (1, mask37, [mask37, mask100, mask61, mask79, mask46, mask28, mask7])]
+  [(0, mask41, [mask41, mask65, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask66, [mask66, mask65, mask42, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask11, [mask11, mask65, mask16, mask42, mask31, mask26, mask19, mask7]),
+    (1, mask76, [mask76, mask16, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask76, [mask76, mask65, mask16, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask30, [mask30, mask65, mask31, mask42, mask16, mask26, mask19, mask7]),
+    (0, mask74, [mask74, mask65, mask31, mask42, mask16, mask26, mask19, mask7]),
+    (0, mask79, [mask79, mask65, mask19, mask42, mask16, mask31, mask26, mask7]),
+    (0, mask67, [mask67, mask65, mask7, mask42, mask16, mask31, mask26, mask19]),
+    (0, mask45, [mask45, mask42, mask16, mask65, mask31, mask26, mask19, mask7]),
+    (0, mask71, [mask71, mask42, mask31, mask65, mask16, mask26, mask19, mask7]),
+    (0, mask8, [mask8, mask42, mask26, mask65, mask16, mask31, mask19, mask7]),
+    (1, mask61, [mask61, mask42, mask65, mask16, mask31, mask19, mask7]),
+    (0, mask61, [mask61, mask42, mask26, mask65, mask16, mask31, mask19, mask7]),
+    (0, mask2, [mask2, mask42, mask19, mask65, mask16, mask31, mask26, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2383,7 +2796,13 @@ theorem branch12Part0_dead : branch12Part0.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch12Part1 : List SearchNode :=
-  [(1, mask123, [mask123, mask100, mask61, mask79, mask46, mask28, mask7])]
+  [(2, mask48, [mask48, mask65, mask16, mask31, mask26, mask7]),
+    (1, mask48, [mask48, mask42, mask65, mask16, mask31, mask26, mask7]),
+    (1, mask48, [mask48, mask19, mask65, mask16, mask31, mask26, mask7]),
+    (0, mask48, [mask48, mask42, mask19, mask65, mask16, mask31, mask26, mask7]),
+    (0, mask4, [mask4, mask42, mask7, mask65, mask16, mask31, mask26, mask19]),
+    (0, mask43, [mask43, mask42, mask7, mask65, mask16, mask31, mask26, mask19]),
+    (0, mask37, [mask37, mask16, mask31, mask65, mask42, mask26, mask19, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2391,8 +2810,10 @@ theorem branch12Part1_dead : branch12Part1.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch12Part2 : List SearchNode :=
-  [(1, mask12, [mask12, mask100, mask46, mask79, mask61, mask28, mask7]),
-    (1, mask120, [mask120, mask100, mask46, mask79, mask61, mask28, mask7])]
+  [(1, mask10, [mask10, mask16, mask65, mask42, mask31, mask19, mask7]),
+    (0, mask10, [mask10, mask16, mask26, mask65, mask42, mask31, mask19, mask7]),
+    (0, mask28, [mask28, mask16, mask26, mask65, mask42, mask31, mask19, mask7]),
+    (0, mask15, [mask15, mask16, mask19, mask65, mask42, mask31, mask26, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2400,8 +2821,15 @@ theorem branch12Part2_dead : branch12Part2.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch12Part3 : List SearchNode :=
-  [(1, mask19, [mask19, mask100, mask28, mask79, mask61, mask46, mask7]),
-    (1, mask105, [mask105, mask100, mask28, mask79, mask61, mask46, mask7])]
+  [(0, mask22, [mask22, mask16, mask19, mask65, mask42, mask31, mask26, mask7]),
+    (0, mask6, [mask6, mask16, mask7, mask65, mask42, mask31, mask26, mask19]),
+    (0, mask17, [mask17, mask16, mask7, mask65, mask42, mask31, mask26, mask19]),
+    (0, mask24, [mask24, mask31, mask26, mask65, mask42, mask16, mask19, mask7]),
+    (1, mask34, [mask34, mask31, mask65, mask42, mask16, mask19, mask7]),
+    (0, mask34, [mask34, mask31, mask26, mask65, mask42, mask16, mask19, mask7]),
+    (0, mask12, [mask12, mask31, mask19, mask65, mask42, mask16, mask26, mask7]),
+    (0, mask36, [mask36, mask31, mask19, mask65, mask42, mask16, mask26, mask7]),
+    (0, mask3, [mask3, mask31, mask7, mask65, mask42, mask16, mask26, mask19])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2409,9 +2837,10 @@ theorem branch12Part3_dead : branch12Part3.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch12Part4 : List SearchNode :=
-  [(1, mask4, [mask4, mask100, mask7, mask79, mask61, mask46, mask28]),
-    (1, mask101, [mask101, mask100, mask7, mask79, mask61, mask46, mask28]),
-    (1, mask116, [mask116, mask79, mask61, mask100, mask46, mask28, mask7])]
+  [(2, mask32, [mask32, mask65, mask42, mask16, mask26, mask19]),
+    (1, mask32, [mask32, mask31, mask65, mask42, mask16, mask26, mask19]),
+    (1, mask32, [mask32, mask7, mask65, mask42, mask16, mask26, mask19]),
+    (0, mask32, [mask32, mask31, mask7, mask65, mask42, mask16, mask26, mask19])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2419,20 +2848,35 @@ theorem branch12Part4_dead : branch12Part4.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch12Part5 : List SearchNode :=
-  [(1, mask107, [mask107, mask79, mask46, mask100, mask61, mask28, mask7])]
+  [(2, mask29, [mask29, mask65, mask42, mask16, mask31, mask7]),
+    (1, mask29, [mask29, mask26, mask65, mask42, mask16, mask31, mask7]),
+    (1, mask29, [mask29, mask19, mask65, mask42, mask16, mask31, mask7]),
+    (0, mask29, [mask29, mask26, mask19, mask65, mask42, mask16, mask31, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch12Part5_dead : branch12Part5.any (evaluateN 7) = false := by
   decide +kernel
 
+def branch12Part6 : List SearchNode :=
+  [(2, mask27, [mask27, mask65, mask42, mask16, mask31, mask19]),
+    (1, mask27, [mask27, mask26, mask65, mask42, mask16, mask31, mask19]),
+    (1, mask27, [mask27, mask7, mask65, mask42, mask16, mask31, mask19]),
+    (0, mask27, [mask27, mask26, mask7, mask65, mask42, mask16, mask31, mask19]),
+    (0, mask20, [mask20, mask19, mask7, mask65, mask42, mask16, mask31, mask26])]
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 80000000 in
+theorem branch12Part6_dead : branch12Part6.any (evaluateN 7) = false := by
+  decide +kernel
+
 def branch12Next : List SearchNode :=
-  branch12Part0 ++ branch12Part1 ++ branch12Part2 ++ branch12Part3 ++ branch12Part4 ++ branch12Part5
+  branch12Part0 ++ branch12Part1 ++ branch12Part2 ++ branch12Part3 ++ branch12Part4 ++ branch12Part5 ++ branch12Part6
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem branch12Next_dead : branch12Next.any (evaluateN 7) = false := by
-  simp only [branch12Next, List.any_append, List.any_cons, List.any_nil, branch12Part0_dead, branch12Part1_dead, branch12Part2_dead, branch12Part3_dead, branch12Part4_dead, branch12Part5_dead, Bool.or_false, Bool.false_or]
+  simp only [branch12Next, List.any_append, List.any_cons, List.any_nil, branch12Part0_dead, branch12Part1_dead, branch12Part2_dead, branch12Part3_dead, branch12Part4_dead, branch12Part5_dead, branch12Part6_dead, Bool.or_false, Bool.false_or]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2446,17 +2890,21 @@ theorem branch12_dead : evaluateN 8 branch12 = false := by
   rfl
 
 def branch13Part0 : List SearchNode :=
-  [(1, mask80, [mask80, mask23, mask7, mask61, mask46, mask28, mask90]),
-    (0, mask80, [mask80, mask4, mask23, mask7, mask61, mask46, mask28, mask90]),
-    (0, mask80, [mask80, mask79, mask23, mask7, mask61, mask46, mask28, mask90]),
-    (1, mask63, [mask63, mask23, mask7, mask79, mask46, mask28, mask90]),
-    (0, mask63, [mask63, mask4, mask23, mask7, mask79, mask46, mask28, mask90]),
-    (0, mask63, [mask63, mask61, mask23, mask7, mask79, mask46, mask28, mask90]),
-    (1, mask48, [mask48, mask23, mask7, mask79, mask61, mask28, mask90]),
-    (0, mask48, [mask48, mask4, mask23, mask7, mask79, mask61, mask28, mask90]),
-    (0, mask48, [mask48, mask46, mask23, mask7, mask79, mask61, mask28, mask90]),
-    (1, mask30, [mask30, mask23, mask7, mask79, mask61, mask46, mask90]),
-    (0, mask30, [mask30, mask4, mask23, mask7, mask79, mask61, mask46, mask90])]
+  [(0, mask41, [mask41, mask42, mask16, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask66, [mask66, mask42, mask16, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask11, [mask11, mask16, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask76, [mask76, mask16, mask42, mask31, mask26, mask19, mask52, mask7]),
+    (0, mask30, [mask30, mask31, mask42, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask74, [mask74, mask31, mask42, mask16, mask26, mask19, mask52, mask7]),
+    (0, mask79, [mask79, mask19, mask42, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask67, [mask67, mask7, mask42, mask16, mask31, mask26, mask19, mask52]),
+    (0, mask61, [mask61, mask42, mask65, mask16, mask31, mask19, mask52, mask7]),
+    (1, mask48, [mask48, mask65, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask48, [mask48, mask42, mask65, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask48, [mask48, mask19, mask65, mask16, mask31, mask26, mask52, mask7]),
+    (0, mask39, [mask39, mask42, mask65, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask55, [mask55, mask42, mask65, mask16, mask31, mask26, mask19, mask7]),
+    (0, mask10, [mask10, mask16, mask65, mask42, mask31, mask19, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2464,22 +2912,16 @@ theorem branch13Part0_dead : branch13Part0.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch13Part1 : List SearchNode :=
-  [(0, mask30, [mask30, mask28, mask23, mask7, mask79, mask61, mask46, mask90]),
-    (1, mask92, [mask92, mask23, mask7, mask79, mask61, mask46, mask28]),
-    (0, mask92, [mask92, mask4, mask23, mask7, mask79, mask61, mask46, mask28]),
-    (0, mask92, [mask92, mask90, mask23, mask7, mask79, mask61, mask46, mask28]),
-    (1, mask25, [mask25, mask4, mask79, mask61, mask46, mask28, mask90]),
-    (0, mask25, [mask25, mask23, mask4, mask79, mask61, mask46, mask28, mask90]),
-    (0, mask25, [mask25, mask7, mask4, mask79, mask61, mask46, mask28, mask90]),
-    (0, mask72, [mask72, mask61, mask4, mask7, mask79, mask46, mask28, mask90]),
-    (1, mask100, [mask100, mask4, mask7, mask79, mask61, mask46, mask28]),
-    (0, mask100, [mask100, mask23, mask4, mask7, mask79, mask61, mask46, mask28]),
-    (0, mask100, [mask100, mask90, mask4, mask7, mask79, mask61, mask46, mask28]),
-    (1, mask64, [mask64, mask4, mask23, mask79, mask46, mask28, mask90]),
-    (0, mask64, [mask64, mask7, mask4, mask23, mask79, mask46, mask28, mask90]),
-    (0, mask64, [mask64, mask61, mask4, mask23, mask79, mask46, mask28, mask90]),
-    (0, mask49, [mask49, mask46, mask4, mask23, mask79, mask61, mask28, mask90]),
-    (0, mask93, [mask93, mask90, mask4, mask23, mask79, mask61, mask46, mask28])]
+  [(0, mask1, [mask1, mask16, mask65, mask42, mask31, mask26, mask19, mask7]),
+    (1, mask57, [mask57, mask65, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask16, mask65, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask57, [mask57, mask52, mask65, mask42, mask31, mask26, mask19, mask7]),
+    (0, mask34, [mask34, mask31, mask65, mask42, mask16, mask19, mask52, mask7]),
+    (0, mask23, [mask23, mask31, mask65, mask42, mask16, mask26, mask19, mask7]),
+    (0, mask69, [mask69, mask31, mask65, mask42, mask16, mask26, mask19, mask7]),
+    (1, mask32, [mask32, mask65, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask32, [mask32, mask31, mask65, mask42, mask16, mask26, mask19, mask52]),
+    (0, mask32, [mask32, mask7, mask65, mask42, mask16, mask26, mask19, mask52])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2487,11 +2929,14 @@ theorem branch13Part1_dead : branch13Part1.any (evaluateN 7) = false := by
   decide +kernel
 
 def branch13Part2 : List SearchNode :=
-  [(1, mask87, [mask87, mask4, mask23, mask7, mask61, mask46, mask90]),
-    (0, mask87, [mask87, mask79, mask4, mask23, mask7, mask61, mask46, mask90]),
-    (0, mask87, [mask87, mask28, mask4, mask23, mask7, mask61, mask46, mask90]),
-    (0, mask57, [mask57, mask46, mask4, mask23, mask7, mask79, mask61, mask90]),
-    (0, mask112, [mask112, mask46, mask4, mask23, mask7, mask79, mask61, mask28])]
+  [(1, mask29, [mask29, mask65, mask42, mask16, mask31, mask52, mask7]),
+    (0, mask29, [mask29, mask26, mask65, mask42, mask16, mask31, mask52, mask7]),
+    (0, mask29, [mask29, mask19, mask65, mask42, mask16, mask31, mask52, mask7]),
+    (1, mask27, [mask27, mask65, mask42, mask16, mask31, mask19, mask52]),
+    (0, mask27, [mask27, mask26, mask65, mask42, mask16, mask31, mask19, mask52]),
+    (0, mask27, [mask27, mask7, mask65, mask42, mask16, mask31, mask19, mask52]),
+    (0, mask58, [mask58, mask19, mask65, mask42, mask16, mask31, mask26, mask7]),
+    (0, mask53, [mask53, mask7, mask65, mask42, mask16, mask31, mask26, mask19])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -2517,1099 +2962,28 @@ theorem branch13_dead : evaluateN 8 branch13 = false := by
   rw [evaluateN_step 5, branch13_front, branch13Next_dead, Bool.or_false]
   rfl
 
-def branch14Part0 : List SearchNode :=
-  [(0, mask3, [mask3, mask79, mask23, mask7, mask61, mask46, mask28, mask90]),
-    (0, mask86, [mask86, mask79, mask23, mask7, mask61, mask46, mask28, mask90]),
-    (0, mask2, [mask2, mask61, mask23, mask7, mask79, mask46, mask28, mask90]),
-    (0, mask74, [mask74, mask61, mask23, mask7, mask79, mask46, mask28, mask90]),
-    (0, mask12, [mask12, mask46, mask23, mask7, mask79, mask61, mask28, mask90]),
-    (0, mask55, [mask55, mask46, mask23, mask7, mask79, mask61, mask28, mask90]),
-    (0, mask19, [mask19, mask28, mask23, mask7, mask79, mask61, mask46, mask90]),
-    (0, mask36, [mask36, mask28, mask23, mask7, mask79, mask61, mask46, mask90]),
-    (0, mask0, [mask0, mask90, mask23, mask7, mask79, mask61, mask46, mask28]),
-    (0, mask101, [mask101, mask90, mask23, mask7, mask79, mask61, mask46, mask28]),
-    (0, mask85, [mask85, mask79, mask25, mask7, mask61, mask46, mask28, mask90]),
-    (0, mask54, [mask54, mask46, mask25, mask7, mask79, mask61, mask28, mask90]),
-    (0, mask35, [mask35, mask28, mask25, mask7, mask79, mask61, mask46, mask90]),
-    (1, mask100, [mask100, mask25, mask7, mask79, mask61, mask46, mask28]),
-    (0, mask100, [mask100, mask23, mask25, mask7, mask79, mask61, mask46, mask28]),
-    (0, mask100, [mask100, mask90, mask25, mask7, mask79, mask61, mask46, mask28]),
-    (0, mask81, [mask81, mask79, mask25, mask23, mask61, mask46, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch14Part0_dead : branch14Part0.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch14Part1 : List SearchNode :=
-  [(1, mask64, [mask64, mask25, mask23, mask79, mask46, mask28, mask90]),
-    (0, mask64, [mask64, mask7, mask25, mask23, mask79, mask46, mask28, mask90]),
-    (0, mask64, [mask64, mask61, mask25, mask23, mask79, mask46, mask28, mask90]),
-    (0, mask49, [mask49, mask46, mask25, mask23, mask79, mask61, mask28, mask90]),
-    (0, mask31, [mask31, mask28, mask25, mask23, mask79, mask61, mask46, mask90]),
-    (1, mask87, [mask87, mask25, mask23, mask7, mask61, mask46, mask90]),
-    (0, mask87, [mask87, mask79, mask25, mask23, mask7, mask61, mask46, mask90]),
-    (0, mask87, [mask87, mask28, mask25, mask23, mask7, mask61, mask46, mask90]),
-    (0, mask57, [mask57, mask46, mask25, mask23, mask7, mask79, mask61, mask90]),
-    (0, mask112, [mask112, mask46, mask25, mask23, mask7, mask79, mask61, mask28])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch14Part1_dead : branch14Part1.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch14Next : List SearchNode :=
-  branch14Part0 ++ branch14Part1
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch14Next_dead : branch14Next.any (evaluateN 7) = false := by
-  simp only [branch14Next, List.any_append, List.any_cons, List.any_nil, branch14Part0_dead, branch14Part1_dead, Bool.or_false, Bool.false_or]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch14_front : frontierN branch14 = branch14Next := by
-  decide +kernel
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch14_dead : evaluateN 8 branch14 = false := by
-  rw [evaluateN_step 5, branch14_front, branch14Next_dead, Bool.or_false]
-  rfl
-
-def branch15Part0 : List SearchNode :=
-  [(1, mask106, [mask106, mask61, mask46, mask23, mask28, mask90, mask7]),
-    (0, mask106, [mask106, mask42, mask61, mask46, mask23, mask28, mask90, mask7]),
-    (0, mask106, [mask106, mask79, mask61, mask46, mask23, mask28, mask90, mask7]),
-    (1, mask52, [mask52, mask61, mask46, mask79, mask28, mask90, mask7]),
-    (0, mask52, [mask52, mask42, mask61, mask46, mask79, mask28, mask90, mask7]),
-    (0, mask52, [mask52, mask23, mask61, mask46, mask79, mask28, mask90, mask7]),
-    (1, mask56, [mask56, mask61, mask46, mask79, mask23, mask90, mask7]),
-    (0, mask56, [mask56, mask42, mask61, mask46, mask79, mask23, mask90, mask7]),
-    (0, mask56, [mask56, mask28, mask61, mask46, mask79, mask23, mask90, mask7]),
-    (1, mask111, [mask111, mask61, mask46, mask79, mask23, mask28, mask7]),
-    (0, mask111, [mask111, mask42, mask61, mask46, mask79, mask23, mask28, mask7]),
-    (0, mask111, [mask111, mask90, mask61, mask46, mask79, mask23, mask28, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch15Part0_dead : branch15Part0.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch15Part1 : List SearchNode :=
-  [(1, mask44, [mask44, mask61, mask46, mask79, mask23, mask28, mask90]),
-    (0, mask44, [mask44, mask42, mask61, mask46, mask79, mask23, mask28, mask90]),
-    (0, mask44, [mask44, mask7, mask61, mask46, mask79, mask23, mask28, mask90]),
-    (1, mask67, [mask67, mask42, mask79, mask23, mask28, mask90, mask7]),
-    (0, mask67, [mask67, mask61, mask42, mask79, mask23, mask28, mask90, mask7]),
-    (0, mask67, [mask67, mask46, mask42, mask79, mask23, mask28, mask90, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch15Part1_dead : branch15Part1.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch15Part2 : List SearchNode :=
-  [(1, mask64, [mask64, mask42, mask46, mask79, mask23, mask28, mask90]),
-    (0, mask64, [mask64, mask61, mask42, mask46, mask79, mask23, mask28, mask90]),
-    (0, mask64, [mask64, mask7, mask42, mask46, mask79, mask23, mask28, mask90]),
-    (0, mask57, [mask57, mask46, mask42, mask61, mask79, mask23, mask90, mask7]),
-    (0, mask112, [mask112, mask46, mask42, mask61, mask79, mask23, mask28, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch15Part2_dead : branch15Part2.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch15Part3 : List SearchNode :=
-  [(1, mask49, [mask49, mask42, mask61, mask79, mask23, mask28, mask90]),
-    (0, mask49, [mask49, mask46, mask42, mask61, mask79, mask23, mask28, mask90]),
-    (0, mask49, [mask49, mask7, mask42, mask61, mask79, mask23, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch15Part3_dead : branch15Part3.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch15Part4 : List SearchNode :=
-  [(1, mask87, [mask87, mask42, mask61, mask46, mask23, mask90, mask7]),
-    (0, mask87, [mask87, mask79, mask42, mask61, mask46, mask23, mask90, mask7]),
-    (0, mask87, [mask87, mask28, mask42, mask61, mask46, mask23, mask90, mask7]),
-    (1, mask100, [mask100, mask42, mask61, mask46, mask79, mask28, mask7]),
-    (0, mask100, [mask100, mask23, mask42, mask61, mask46, mask79, mask28, mask7]),
-    (0, mask100, [mask100, mask90, mask42, mask61, mask46, mask79, mask28, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch15Part4_dead : branch15Part4.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch15Next : List SearchNode :=
-  branch15Part0 ++ branch15Part1 ++ branch15Part2 ++ branch15Part3 ++ branch15Part4
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch15Next_dead : branch15Next.any (evaluateN 7) = false := by
-  simp only [branch15Next, List.any_append, List.any_cons, List.any_nil, branch15Part0_dead, branch15Part1_dead, branch15Part2_dead, branch15Part3_dead, branch15Part4_dead, Bool.or_false, Bool.false_or]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch15_front : frontierN branch15 = branch15Next := by
-  decide +kernel
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch15_dead : evaluateN 8 branch15 = false := by
-  rw [evaluateN_step 5, branch15_front, branch15Next_dead, Bool.or_false]
-  rfl
-
-def branch16Part0 : List SearchNode :=
-  [(0, mask8, [mask8, mask79, mask61, mask46, mask23, mask28, mask90, mask7]),
-    (0, mask119, [mask119, mask79, mask61, mask46, mask23, mask28, mask90, mask7]),
-    (0, mask12, [mask12, mask23, mask61, mask46, mask79, mask28, mask90, mask7]),
-    (0, mask76, [mask76, mask23, mask61, mask46, mask79, mask28, mask90, mask7]),
-    (0, mask16, [mask16, mask28, mask61, mask46, mask79, mask23, mask90, mask7]),
-    (0, mask75, [mask75, mask28, mask61, mask46, mask79, mask23, mask90, mask7]),
-    (0, mask37, [mask37, mask90, mask61, mask46, mask79, mask23, mask28, mask7]),
-    (0, mask118, [mask118, mask90, mask61, mask46, mask79, mask23, mask28, mask7]),
-    (0, mask2, [mask2, mask7, mask61, mask46, mask79, mask23, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch16Part0_dead : branch16Part0.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch16Part1 : List SearchNode :=
-  [(1, mask68, [mask68, mask61, mask46, mask79, mask23, mask28, mask90]),
-    (0, mask68, [mask68, mask67, mask61, mask46, mask79, mask23, mask28, mask90]),
-    (0, mask68, [mask68, mask7, mask61, mask46, mask79, mask23, mask28, mask90]),
-    (0, mask116, [mask116, mask79, mask67, mask46, mask23, mask28, mask90, mask7]),
-    (0, mask72, [mask72, mask23, mask67, mask46, mask79, mask28, mask90, mask7]),
-    (0, mask70, [mask70, mask28, mask67, mask46, mask79, mask23, mask90, mask7]),
-    (0, mask114, [mask114, mask90, mask67, mask46, mask79, mask23, mask28, mask7]),
-    (0, mask107, [mask107, mask79, mask67, mask61, mask23, mask28, mask90, mask7]),
-    (1, mask112, [mask112, mask67, mask61, mask79, mask23, mask28, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch16Part1_dead : branch16Part1.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch16Part2 : List SearchNode :=
-  [(0, mask112, [mask112, mask46, mask67, mask61, mask79, mask23, mask28, mask7]),
-    (0, mask112, [mask112, mask90, mask67, mask61, mask79, mask23, mask28, mask7]),
-    (1, mask87, [mask87, mask67, mask61, mask46, mask23, mask90, mask7]),
-    (0, mask87, [mask87, mask79, mask67, mask61, mask46, mask23, mask90, mask7]),
-    (0, mask87, [mask87, mask28, mask67, mask61, mask46, mask23, mask90, mask7]),
-    (1, mask100, [mask100, mask67, mask61, mask46, mask79, mask28, mask7]),
-    (0, mask100, [mask100, mask23, mask67, mask61, mask46, mask79, mask28, mask7]),
-    (0, mask100, [mask100, mask90, mask67, mask61, mask46, mask79, mask28, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch16Part2_dead : branch16Part2.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch16Next : List SearchNode :=
-  branch16Part0 ++ branch16Part1 ++ branch16Part2
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch16Next_dead : branch16Next.any (evaluateN 7) = false := by
-  simp only [branch16Next, List.any_append, List.any_cons, List.any_nil, branch16Part0_dead, branch16Part1_dead, branch16Part2_dead, Bool.or_false, Bool.false_or]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch16_front : frontierN branch16 = branch16Next := by
-  decide +kernel
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch16_dead : evaluateN 8 branch16 = false := by
-  rw [evaluateN_step 5, branch16_front, branch16Next_dead, Bool.or_false]
-  rfl
-
-def branch17Part0 : List SearchNode :=
-  [(1, mask83, [mask83, mask61, mask28, mask23, mask46, mask90, mask7]),
-    (0, mask83, [mask83, mask16, mask61, mask28, mask23, mask46, mask90, mask7]),
-    (0, mask83, [mask83, mask79, mask61, mask28, mask23, mask46, mask90, mask7]),
-    (1, mask34, [mask34, mask61, mask28, mask79, mask46, mask90, mask7]),
-    (0, mask34, [mask34, mask16, mask61, mask28, mask79, mask46, mask90, mask7]),
-    (0, mask34, [mask34, mask23, mask61, mask28, mask79, mask46, mask90, mask7]),
-    (1, mask51, [mask51, mask61, mask28, mask79, mask23, mask90, mask7]),
-    (0, mask51, [mask51, mask16, mask61, mask28, mask79, mask23, mask90, mask7]),
-    (0, mask51, [mask51, mask46, mask61, mask28, mask79, mask23, mask90, mask7]),
-    (1, mask98, [mask98, mask61, mask28, mask79, mask23, mask46, mask7]),
-    (0, mask98, [mask98, mask16, mask61, mask28, mask79, mask23, mask46, mask7]),
-    (0, mask98, [mask98, mask90, mask61, mask28, mask79, mask23, mask46, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch17Part0_dead : branch17Part0.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch17Part1 : List SearchNode :=
-  [(1, mask18, [mask18, mask61, mask28, mask79, mask23, mask46, mask90]),
-    (0, mask18, [mask18, mask16, mask61, mask28, mask79, mask23, mask46, mask90]),
-    (0, mask18, [mask18, mask7, mask61, mask28, mask79, mask23, mask46, mask90]),
-    (1, mask70, [mask70, mask16, mask79, mask23, mask46, mask90, mask7]),
-    (0, mask70, [mask70, mask61, mask16, mask79, mask23, mask46, mask90, mask7]),
-    (0, mask70, [mask70, mask28, mask16, mask79, mask23, mask46, mask90, mask7]),
-    (0, mask116, [mask116, mask79, mask16, mask28, mask23, mask46, mask90, mask7]),
-    (1, mask64, [mask64, mask16, mask28, mask79, mask23, mask46, mask90]),
-    (0, mask64, [mask64, mask61, mask16, mask28, mask79, mask23, mask46, mask90]),
-    (0, mask64, [mask64, mask7, mask16, mask28, mask79, mask23, mask46, mask90]),
-    (1, mask87, [mask87, mask16, mask61, mask23, mask46, mask90, mask7]),
-    (0, mask87, [mask87, mask28, mask16, mask61, mask23, mask46, mask90, mask7]),
-    (0, mask87, [mask87, mask79, mask16, mask61, mask23, mask46, mask90, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch17Part1_dead : branch17Part1.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch17Part2 : List SearchNode :=
-  [(0, mask19, [mask19, mask23, mask16, mask61, mask79, mask46, mask90, mask7]),
-    (0, mask57, [mask57, mask46, mask16, mask61, mask79, mask23, mask90, mask7]),
-    (0, mask31, [mask31, mask7, mask16, mask61, mask79, mask23, mask46, mask90]),
-    (1, mask100, [mask100, mask16, mask61, mask28, mask79, mask46, mask7]),
-    (0, mask100, [mask100, mask23, mask16, mask61, mask28, mask79, mask46, mask7]),
-    (0, mask100, [mask100, mask90, mask16, mask61, mask28, mask79, mask46, mask7]),
-    (0, mask112, [mask112, mask46, mask16, mask61, mask28, mask79, mask23, mask7]),
-    (0, mask49, [mask49, mask46, mask16, mask61, mask28, mask79, mask23, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch17Part2_dead : branch17Part2.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch17Next : List SearchNode :=
-  branch17Part0 ++ branch17Part1 ++ branch17Part2
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch17Next_dead : branch17Next.any (evaluateN 7) = false := by
-  simp only [branch17Next, List.any_append, List.any_cons, List.any_nil, branch17Part0_dead, branch17Part1_dead, branch17Part2_dead, Bool.or_false, Bool.false_or]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch17_front : frontierN branch17 = branch17Next := by
-  decide +kernel
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch17_dead : evaluateN 8 branch17 = false := by
-  rw [evaluateN_step 5, branch17_front, branch17Next_dead, Bool.or_false]
-  rfl
-
-def branch18Part0 : List SearchNode :=
-  [(1, mask95, [mask95, mask61, mask90, mask23, mask46, mask28, mask7]),
-    (0, mask95, [mask95, mask37, mask61, mask90, mask23, mask46, mask28, mask7]),
-    (0, mask95, [mask95, mask79, mask61, mask90, mask23, mask46, mask28, mask7]),
-    (1, mask40, [mask40, mask61, mask90, mask79, mask46, mask28, mask7]),
-    (0, mask40, [mask40, mask37, mask61, mask90, mask79, mask46, mask28, mask7]),
-    (0, mask40, [mask40, mask23, mask61, mask90, mask79, mask46, mask28, mask7]),
-    (1, mask60, [mask60, mask61, mask90, mask79, mask23, mask28, mask7]),
-    (0, mask60, [mask60, mask37, mask61, mask90, mask79, mask23, mask28, mask7]),
-    (0, mask60, [mask60, mask46, mask61, mask90, mask79, mask23, mask28, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch18Part0_dead : branch18Part0.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch18Part1 : List SearchNode :=
-  [(1, mask41, [mask41, mask61, mask90, mask79, mask23, mask46, mask7]),
-    (0, mask41, [mask41, mask37, mask61, mask90, mask79, mask23, mask46, mask7]),
-    (0, mask41, [mask41, mask28, mask61, mask90, mask79, mask23, mask46, mask7]),
-    (1, mask39, [mask39, mask61, mask90, mask79, mask23, mask46, mask28]),
-    (0, mask39, [mask39, mask37, mask61, mask90, mask79, mask23, mask46, mask28]),
-    (0, mask39, [mask39, mask7, mask61, mask90, mask79, mask23, mask46, mask28]),
-    (1, mask114, [mask114, mask37, mask79, mask23, mask46, mask28, mask7]),
-    (0, mask114, [mask114, mask61, mask37, mask79, mask23, mask46, mask28, mask7]),
-    (0, mask114, [mask114, mask90, mask37, mask79, mask23, mask46, mask28, mask7]),
-    (0, mask72, [mask72, mask23, mask37, mask90, mask79, mask46, mask28, mask7]),
-    (1, mask64, [mask64, mask37, mask90, mask79, mask23, mask46, mask28]),
-    (0, mask64, [mask64, mask61, mask37, mask90, mask79, mask23, mask46, mask28]),
-    (0, mask64, [mask64, mask7, mask37, mask90, mask79, mask23, mask46, mask28])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch18Part1_dead : branch18Part1.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch18Part2 : List SearchNode :=
-  [(0, mask77, [mask77, mask79, mask37, mask61, mask23, mask46, mask28, mask7]),
-    (1, mask100, [mask100, mask37, mask61, mask79, mask46, mask28, mask7]),
-    (0, mask100, [mask100, mask90, mask37, mask61, mask79, mask46, mask28, mask7]),
-    (0, mask100, [mask100, mask23, mask37, mask61, mask79, mask46, mask28, mask7]),
-    (0, mask112, [mask112, mask46, mask37, mask61, mask79, mask23, mask28, mask7]),
-    (0, mask93, [mask93, mask7, mask37, mask61, mask79, mask23, mask46, mask28]),
-    (1, mask87, [mask87, mask37, mask61, mask90, mask23, mask46, mask7]),
-    (0, mask87, [mask87, mask79, mask37, mask61, mask90, mask23, mask46, mask7]),
-    (0, mask87, [mask87, mask28, mask37, mask61, mask90, mask23, mask46, mask7]),
-    (0, mask57, [mask57, mask46, mask37, mask61, mask90, mask79, mask23, mask7]),
-    (0, mask49, [mask49, mask46, mask37, mask61, mask90, mask79, mask23, mask28])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch18Part2_dead : branch18Part2.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch18Next : List SearchNode :=
-  branch18Part0 ++ branch18Part1 ++ branch18Part2
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch18Next_dead : branch18Next.any (evaluateN 7) = false := by
-  simp only [branch18Next, List.any_append, List.any_cons, List.any_nil, branch18Part0_dead, branch18Part1_dead, branch18Part2_dead, Bool.or_false, Bool.false_or]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch18_front : frontierN branch18 = branch18Next := by
-  decide +kernel
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch18_dead : evaluateN 8 branch18 = false := by
-  rw [evaluateN_step 5, branch18_front, branch18Next_dead, Bool.or_false]
-  rfl
-
-def branch19Part0 : List SearchNode :=
-  [(1, mask3, [mask3, mask64, mask79, mask23, mask46, mask28, mask90]),
-    (1, mask117, [mask117, mask64, mask79, mask23, mask46, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19Part0_dead : branch19Part0.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch19Part1 : List SearchNode :=
-  [(1, mask4, [mask4, mask64, mask23, mask79, mask46, mask28, mask90]),
-    (1, mask74, [mask74, mask64, mask23, mask79, mask46, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19Part1_dead : branch19Part1.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch19Part2 : List SearchNode :=
-  [(1, mask42, [mask42, mask64, mask46, mask79, mask23, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19Part2_dead : branch19Part2.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch19Part3 : List SearchNode :=
-  [(1, mask68, [mask68, mask64, mask46, mask79, mask23, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19Part3_dead : branch19Part3.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch19Part4 : List SearchNode :=
-  [(1, mask16, [mask16, mask64, mask28, mask79, mask23, mask46, mask90]),
-    (1, mask71, [mask71, mask64, mask28, mask79, mask23, mask46, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19Part4_dead : branch19Part4.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch19Part5 : List SearchNode :=
-  [(1, mask37, [mask37, mask64, mask90, mask79, mask23, mask46, mask28]),
-    (1, mask115, [mask115, mask64, mask90, mask79, mask23, mask46, mask28])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19Part5_dead : branch19Part5.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch19Part6 : List SearchNode :=
-  [(1, mask85, [mask85, mask79, mask23, mask64, mask46, mask28, mask90]),
-    (1, mask107, [mask107, mask79, mask46, mask64, mask23, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19Part6_dead : branch19Part6.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch19Part7 : List SearchNode :=
-  [(2, mask87, [mask87, mask79, mask64, mask23, mask46, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19Part7_dead : branch19Part7.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch19Part8 : List SearchNode :=
-  [(2, mask87, [mask87, mask28, mask64, mask23, mask46, mask90]),
-    (1, mask87, [mask87, mask79, mask28, mask64, mask23, mask46, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19Part8_dead : branch19Part8.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch19Part9 : List SearchNode :=
-  [(1, mask77, [mask77, mask79, mask90, mask64, mask23, mask46, mask28]),
-    (1, mask96, [mask96, mask79, mask90, mask64, mask23, mask46, mask28])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19Part9_dead : branch19Part9.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch19Part10 : List SearchNode :=
-  [(3, mask100, [mask100, mask64, mask79, mask46, mask28])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19Part10_dead : branch19Part10.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch19Part11 : List SearchNode :=
-  [(2, mask100, [mask100, mask23, mask64, mask79, mask46, mask28]),
-    (2, mask100, [mask100, mask90, mask64, mask79, mask46, mask28]),
-    (1, mask100, [mask100, mask23, mask90, mask64, mask79, mask46, mask28])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19Part11_dead : branch19Part11.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch19Part12 : List SearchNode :=
-  [(2, mask112, [mask112, mask46, mask64, mask79, mask23, mask28]),
-    (1, mask112, [mask112, mask46, mask90, mask64, mask79, mask23, mask28]),
-    (1, mask103, [mask103, mask28, mask90, mask64, mask79, mask23, mask46])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19Part12_dead : branch19Part12.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch19Next : List SearchNode :=
-  branch19Part0 ++ branch19Part1 ++ branch19Part2 ++ branch19Part3 ++ branch19Part4 ++ branch19Part5 ++ branch19Part6 ++ [branch0] ++ branch19Part7 ++ branch19Part8 ++ branch19Part9 ++ branch19Part10 ++ branch19Part11 ++ branch19Part12
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19Next_dead : branch19Next.any (evaluateN 7) = false := by
-  simp only [branch19Next, List.any_append, List.any_cons, List.any_nil, branch19Part0_dead, branch19Part1_dead, branch19Part2_dead, branch19Part3_dead, branch19Part4_dead, branch19Part5_dead, branch19Part6_dead, branch0_dead, branch19Part7_dead, branch19Part8_dead, branch19Part9_dead, branch19Part10_dead, branch19Part11_dead, branch19Part12_dead, Bool.or_false, Bool.false_or]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19_front : frontierN branch19 = branch19Next := by
-  decide +kernel
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch19_dead : evaluateN 8 branch19 = false := by
-  rw [evaluateN_step 5, branch19_front, branch19Next_dead, Bool.or_false]
-  rfl
-
-def branch20Part0 : List SearchNode :=
-  [(0, mask3, [mask3, mask64, mask79, mask61, mask23, mask46, mask28, mask90]),
-    (0, mask117, [mask117, mask64, mask79, mask61, mask23, mask46, mask28, mask90]),
-    (0, mask4, [mask4, mask64, mask23, mask61, mask79, mask46, mask28, mask90]),
-    (0, mask74, [mask74, mask64, mask23, mask61, mask79, mask46, mask28, mask90]),
-    (0, mask42, [mask42, mask64, mask46, mask61, mask79, mask23, mask28, mask90]),
-    (1, mask68, [mask68, mask46, mask61, mask79, mask23, mask28, mask90]),
-    (0, mask68, [mask68, mask64, mask46, mask61, mask79, mask23, mask28, mask90]),
-    (0, mask16, [mask16, mask64, mask28, mask61, mask79, mask23, mask46, mask90]),
-    (0, mask71, [mask71, mask64, mask28, mask61, mask79, mask23, mask46, mask90]),
-    (0, mask37, [mask37, mask64, mask90, mask61, mask79, mask23, mask46, mask28]),
-    (0, mask115, [mask115, mask64, mask90, mask61, mask79, mask23, mask46, mask28])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch20Part0_dead : branch20Part0.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch20Part1 : List SearchNode :=
-  [(1, mask116, [mask116, mask79, mask64, mask23, mask46, mask28, mask90]),
-    (0, mask116, [mask116, mask61, mask79, mask64, mask23, mask46, mask28, mask90]),
-    (1, mask72, [mask72, mask23, mask64, mask79, mask46, mask28, mask90]),
-    (0, mask72, [mask72, mask61, mask23, mask64, mask79, mask46, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch20Part1_dead : branch20Part1.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch20Part2 : List SearchNode :=
-  [(1, mask67, [mask67, mask46, mask64, mask79, mask23, mask28, mask90]),
-    (0, mask67, [mask67, mask61, mask46, mask64, mask79, mask23, mask28, mask90]),
-    (1, mask70, [mask70, mask28, mask64, mask79, mask23, mask46, mask90]),
-    (0, mask70, [mask70, mask61, mask28, mask64, mask79, mask23, mask46, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch20Part2_dead : branch20Part2.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch20Part3 : List SearchNode :=
-  [(1, mask114, [mask114, mask90, mask64, mask79, mask23, mask46, mask28]),
-    (0, mask114, [mask114, mask61, mask90, mask64, mask79, mask23, mask46, mask28]),
-    (0, mask85, [mask85, mask79, mask23, mask64, mask61, mask46, mask28, mask90]),
-    (0, mask107, [mask107, mask79, mask46, mask64, mask61, mask23, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch20Part3_dead : branch20Part3.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch20Part4 : List SearchNode :=
-  [(2, mask87, [mask87, mask64, mask61, mask23, mask46, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch20Part4_dead : branch20Part4.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch20Part5 : List SearchNode :=
-  [(1, mask87, [mask87, mask79, mask64, mask61, mask23, mask46, mask90]),
-    (1, mask87, [mask87, mask28, mask64, mask61, mask23, mask46, mask90]),
-    (0, mask87, [mask87, mask79, mask28, mask64, mask61, mask23, mask46, mask90]),
-    (0, mask77, [mask77, mask79, mask90, mask64, mask61, mask23, mask46, mask28]),
-    (0, mask96, [mask96, mask79, mask90, mask64, mask61, mask23, mask46, mask28])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch20Part5_dead : branch20Part5.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch20Part6 : List SearchNode :=
-  [(2, mask100, [mask100, mask64, mask61, mask79, mask46, mask28]),
-    (1, mask100, [mask100, mask23, mask64, mask61, mask79, mask46, mask28]),
-    (1, mask100, [mask100, mask90, mask64, mask61, mask79, mask46, mask28]),
-    (0, mask100, [mask100, mask23, mask90, mask64, mask61, mask79, mask46, mask28]),
-    (1, mask112, [mask112, mask46, mask64, mask61, mask79, mask23, mask28])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch20Part6_dead : branch20Part6.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch20Part7 : List SearchNode :=
-  [(0, mask112, [mask112, mask46, mask90, mask64, mask61, mask79, mask23, mask28]),
-    (0, mask103, [mask103, mask28, mask90, mask64, mask61, mask79, mask23, mask46])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch20Part7_dead : branch20Part7.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch20Next : List SearchNode :=
-  branch20Part0 ++ branch20Part1 ++ branch20Part2 ++ branch20Part3 ++ branch20Part4 ++ branch20Part5 ++ branch20Part6 ++ branch20Part7
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch20Next_dead : branch20Next.any (evaluateN 7) = false := by
-  simp only [branch20Next, List.any_append, List.any_cons, List.any_nil, branch20Part0_dead, branch20Part1_dead, branch20Part2_dead, branch20Part3_dead, branch20Part4_dead, branch20Part5_dead, branch20Part6_dead, branch20Part7_dead, Bool.or_false, Bool.false_or]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch20_front : frontierN branch20 = branch20Next := by
-  decide +kernel
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch20_dead : evaluateN 8 branch20 = false := by
-  rw [evaluateN_step 5, branch20_front, branch20Next_dead, Bool.or_false]
-  rfl
-
-def branch21Part0 : List SearchNode :=
-  [(0, mask3, [mask3, mask64, mask79, mask7, mask23, mask46, mask28, mask90]),
-    (0, mask117, [mask117, mask64, mask79, mask7, mask23, mask46, mask28, mask90]),
-    (0, mask4, [mask4, mask64, mask23, mask7, mask79, mask46, mask28, mask90]),
-    (0, mask74, [mask74, mask64, mask23, mask7, mask79, mask46, mask28, mask90]),
-    (0, mask42, [mask42, mask64, mask46, mask7, mask79, mask23, mask28, mask90]),
-    (0, mask68, [mask68, mask64, mask46, mask7, mask79, mask23, mask28, mask90]),
-    (0, mask16, [mask16, mask64, mask28, mask7, mask79, mask23, mask46, mask90]),
-    (0, mask71, [mask71, mask64, mask28, mask7, mask79, mask23, mask46, mask90]),
-    (0, mask37, [mask37, mask64, mask90, mask7, mask79, mask23, mask46, mask28]),
-    (0, mask115, [mask115, mask64, mask90, mask7, mask79, mask23, mask46, mask28]),
-    (1, mask81, [mask81, mask79, mask64, mask23, mask46, mask28, mask90]),
-    (0, mask81, [mask81, mask7, mask79, mask64, mask23, mask46, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch21Part0_dead : branch21Part0.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch21Part1 : List SearchNode :=
-  [(1, mask93, [mask93, mask90, mask64, mask79, mask23, mask46, mask28]),
-    (0, mask93, [mask93, mask7, mask90, mask64, mask79, mask23, mask46, mask28]),
-    (0, mask85, [mask85, mask79, mask23, mask64, mask7, mask46, mask28, mask90]),
-    (0, mask107, [mask107, mask79, mask46, mask64, mask7, mask23, mask28, mask90]),
-    (2, mask87, [mask87, mask64, mask7, mask23, mask46, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch21Part1_dead : branch21Part1.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch21Part2 : List SearchNode :=
-  [(1, mask87, [mask87, mask79, mask64, mask7, mask23, mask46, mask90]),
-    (1, mask87, [mask87, mask28, mask64, mask7, mask23, mask46, mask90]),
-    (0, mask87, [mask87, mask79, mask28, mask64, mask7, mask23, mask46, mask90]),
-    (0, mask77, [mask77, mask79, mask90, mask64, mask7, mask23, mask46, mask28]),
-    (0, mask96, [mask96, mask79, mask90, mask64, mask7, mask23, mask46, mask28]),
-    (2, mask100, [mask100, mask64, mask7, mask79, mask46, mask28]),
-    (1, mask100, [mask100, mask23, mask64, mask7, mask79, mask46, mask28]),
-    (1, mask100, [mask100, mask90, mask64, mask7, mask79, mask46, mask28]),
-    (0, mask100, [mask100, mask23, mask90, mask64, mask7, mask79, mask46, mask28])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch21Part2_dead : branch21Part2.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch21Part3 : List SearchNode :=
-  [(1, mask112, [mask112, mask46, mask64, mask7, mask79, mask23, mask28]),
-    (0, mask112, [mask112, mask46, mask90, mask64, mask7, mask79, mask23, mask28]),
-    (0, mask103, [mask103, mask28, mask90, mask64, mask7, mask79, mask23, mask46])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch21Part3_dead : branch21Part3.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch21Next : List SearchNode :=
-  branch21Part0 ++ branch21Part1 ++ branch21Part2 ++ branch21Part3
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch21Next_dead : branch21Next.any (evaluateN 7) = false := by
-  simp only [branch21Next, List.any_append, List.any_cons, List.any_nil, branch21Part0_dead, branch21Part1_dead, branch21Part2_dead, branch21Part3_dead, Bool.or_false, Bool.false_or]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch21_front : frontierN branch21 = branch21Next := by
-  decide +kernel
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch21_dead : evaluateN 8 branch21 = false := by
-  rw [evaluateN_step 5, branch21_front, branch21Next_dead, Bool.or_false]
-  rfl
-
-def branch22Part0 : List SearchNode :=
-  [(0, mask3, [mask3, mask79, mask61, mask7, mask23, mask46, mask28, mask90]),
-    (0, mask117, [mask117, mask79, mask61, mask7, mask23, mask46, mask28, mask90]),
-    (0, mask4, [mask4, mask23, mask61, mask7, mask79, mask46, mask28, mask90]),
-    (0, mask74, [mask74, mask23, mask61, mask7, mask79, mask46, mask28, mask90]),
-    (0, mask42, [mask42, mask46, mask61, mask7, mask79, mask23, mask28, mask90]),
-    (0, mask68, [mask68, mask46, mask61, mask7, mask79, mask23, mask28, mask90]),
-    (0, mask16, [mask16, mask28, mask61, mask7, mask79, mask23, mask46, mask90]),
-    (0, mask71, [mask71, mask28, mask61, mask7, mask79, mask23, mask46, mask90]),
-    (0, mask37, [mask37, mask90, mask61, mask7, mask79, mask23, mask46, mask28]),
-    (0, mask115, [mask115, mask90, mask61, mask7, mask79, mask23, mask46, mask28]),
-    (0, mask116, [mask116, mask79, mask64, mask7, mask23, mask46, mask28, mask90]),
-    (0, mask72, [mask72, mask23, mask64, mask7, mask79, mask46, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch22Part0_dead : branch22Part0.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch22Part1 : List SearchNode :=
-  [(0, mask67, [mask67, mask46, mask64, mask7, mask79, mask23, mask28, mask90]),
-    (0, mask70, [mask70, mask28, mask64, mask7, mask79, mask23, mask46, mask90]),
-    (0, mask114, [mask114, mask90, mask64, mask7, mask79, mask23, mask46, mask28]),
-    (0, mask81, [mask81, mask79, mask64, mask61, mask23, mask46, mask28, mask90]),
-    (0, mask93, [mask93, mask90, mask64, mask61, mask79, mask23, mask46, mask28]),
-    (1, mask87, [mask87, mask64, mask61, mask7, mask23, mask46, mask90]),
-    (0, mask87, [mask87, mask79, mask64, mask61, mask7, mask23, mask46, mask90]),
-    (0, mask87, [mask87, mask28, mask64, mask61, mask7, mask23, mask46, mask90]),
-    (1, mask100, [mask100, mask64, mask61, mask7, mask79, mask46, mask28]),
-    (0, mask100, [mask100, mask23, mask64, mask61, mask7, mask79, mask46, mask28]),
-    (0, mask100, [mask100, mask90, mask64, mask61, mask7, mask79, mask46, mask28]),
-    (0, mask112, [mask112, mask46, mask64, mask61, mask7, mask79, mask23, mask28])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch22Part1_dead : branch22Part1.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch22Next : List SearchNode :=
-  branch22Part0 ++ branch22Part1
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch22Next_dead : branch22Next.any (evaluateN 7) = false := by
-  simp only [branch22Next, List.any_append, List.any_cons, List.any_nil, branch22Part0_dead, branch22Part1_dead, Bool.or_false, Bool.false_or]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch22_front : frontierN branch22 = branch22Next := by
-  decide +kernel
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch22_dead : evaluateN 8 branch22 = false := by
-  rw [evaluateN_step 5, branch22_front, branch22Next_dead, Bool.or_false]
-  rfl
-
-def branch23Part0 : List SearchNode :=
-  [(0, mask9, [mask9, mask57, mask79, mask46, mask23, mask61, mask90, mask7]),
-    (1, mask110, [mask110, mask79, mask46, mask23, mask61, mask90, mask7]),
-    (0, mask110, [mask110, mask57, mask79, mask46, mask23, mask61, mask90, mask7]),
-    (0, mask22, [mask22, mask57, mask23, mask46, mask79, mask61, mask90, mask7]),
-    (0, mask58, [mask58, mask57, mask23, mask46, mask79, mask61, mask90, mask7]),
-    (0, mask50, [mask50, mask57, mask61, mask46, mask79, mask23, mask90, mask7]),
-    (0, mask75, [mask75, mask57, mask61, mask46, mask79, mask23, mask90, mask7]),
-    (0, mask124, [mask124, mask57, mask90, mask46, mask79, mask23, mask61, mask7]),
-    (0, mask59, [mask59, mask57, mask7, mask46, mask79, mask23, mask61, mask90]),
-    (0, mask107, [mask107, mask46, mask79, mask57, mask23, mask61, mask90, mask7]),
-    (1, mask67, [mask67, mask61, mask57, mask79, mask23, mask90, mask7]),
-    (0, mask67, [mask67, mask46, mask61, mask57, mask79, mask23, mask90, mask7]),
-    (2, mask112, [mask112, mask57, mask79, mask23, mask61, mask7]),
-    (1, mask112, [mask112, mask46, mask57, mask79, mask23, mask61, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch23Part0_dead : branch23Part0.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch23Part1 : List SearchNode :=
-  [(1, mask112, [mask112, mask90, mask57, mask79, mask23, mask61, mask7]),
-    (0, mask112, [mask112, mask46, mask90, mask57, mask79, mask23, mask61, mask7]),
-    (0, mask85, [mask85, mask79, mask23, mask57, mask46, mask61, mask90, mask7]),
-    (0, mask116, [mask116, mask79, mask61, mask57, mask46, mask23, mask90, mask7]),
-    (0, mask77, [mask77, mask79, mask90, mask57, mask46, mask23, mask61, mask7]),
-    (0, mask96, [mask96, mask79, mask90, mask57, mask46, mask23, mask61, mask7]),
-    (0, mask81, [mask81, mask79, mask7, mask57, mask46, mask23, mask61, mask90]),
-    (0, mask72, [mask72, mask23, mask61, mask57, mask46, mask79, mask90, mask7]),
-    (2, mask100, [mask100, mask57, mask46, mask79, mask61, mask7]),
-    (1, mask100, [mask100, mask23, mask57, mask46, mask79, mask61, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch23Part1_dead : branch23Part1.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch23Part2 : List SearchNode :=
-  [(1, mask100, [mask100, mask90, mask57, mask46, mask79, mask61, mask7]),
-    (0, mask100, [mask100, mask23, mask90, mask57, mask46, mask79, mask61, mask7]),
-    (0, mask114, [mask114, mask61, mask90, mask57, mask46, mask79, mask23, mask7]),
-    (2, mask64, [mask64, mask57, mask46, mask79, mask23, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch23Part2_dead : branch23Part2.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch23Part3 : List SearchNode :=
-  [(1, mask64, [mask64, mask61, mask57, mask46, mask79, mask23, mask90]),
-    (1, mask64, [mask64, mask7, mask57, mask46, mask79, mask23, mask90]),
-    (0, mask64, [mask64, mask61, mask7, mask57, mask46, mask79, mask23, mask90]),
-    (0, mask93, [mask93, mask90, mask7, mask57, mask46, mask79, mask23, mask61])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch23Part3_dead : branch23Part3.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch23Next : List SearchNode :=
-  branch23Part0 ++ branch23Part1 ++ branch23Part2 ++ branch23Part3
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch23Next_dead : branch23Next.any (evaluateN 7) = false := by
-  simp only [branch23Next, List.any_append, List.any_cons, List.any_nil, branch23Part0_dead, branch23Part1_dead, branch23Part2_dead, branch23Part3_dead, Bool.or_false, Bool.false_or]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch23_front : frontierN branch23 = branch23Next := by
-  decide +kernel
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch23_dead : evaluateN 8 branch23 = false := by
-  rw [evaluateN_step 5, branch23_front, branch23Next_dead, Bool.or_false]
-  rfl
-
-def branch24Part0 : List SearchNode :=
-  [(0, mask9, [mask9, mask79, mask46, mask28, mask23, mask61, mask90, mask7]),
-    (0, mask110, [mask110, mask79, mask46, mask28, mask23, mask61, mask90, mask7]),
-    (0, mask22, [mask22, mask23, mask46, mask28, mask79, mask61, mask90, mask7]),
-    (0, mask58, [mask58, mask23, mask46, mask28, mask79, mask61, mask90, mask7]),
-    (0, mask50, [mask50, mask61, mask46, mask28, mask79, mask23, mask90, mask7]),
-    (0, mask75, [mask75, mask61, mask46, mask28, mask79, mask23, mask90, mask7]),
-    (0, mask124, [mask124, mask90, mask46, mask28, mask79, mask23, mask61, mask7]),
-    (0, mask59, [mask59, mask7, mask46, mask28, mask79, mask23, mask61, mask90]),
-    (0, mask67, [mask67, mask61, mask57, mask28, mask79, mask23, mask90, mask7]),
-    (1, mask112, [mask112, mask57, mask28, mask79, mask23, mask61, mask7]),
-    (0, mask112, [mask112, mask46, mask57, mask28, mask79, mask23, mask61, mask7]),
-    (0, mask112, [mask112, mask90, mask57, mask28, mask79, mask23, mask61, mask7]),
-    (1, mask87, [mask87, mask57, mask46, mask23, mask61, mask90, mask7]),
-    (0, mask87, [mask87, mask28, mask57, mask46, mask23, mask61, mask90, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch24Part0_dead : branch24Part0.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch24Part1 : List SearchNode :=
-  [(0, mask87, [mask87, mask79, mask57, mask46, mask23, mask61, mask90, mask7]),
-    (0, mask70, [mask70, mask61, mask57, mask46, mask79, mask23, mask90, mask7]),
-    (0, mask103, [mask103, mask90, mask57, mask46, mask79, mask23, mask61, mask7]),
-    (1, mask100, [mask100, mask57, mask46, mask28, mask79, mask61, mask7]),
-    (0, mask100, [mask100, mask23, mask57, mask46, mask28, mask79, mask61, mask7]),
-    (0, mask100, [mask100, mask90, mask57, mask46, mask28, mask79, mask61, mask7]),
-    (1, mask64, [mask64, mask57, mask46, mask28, mask79, mask23, mask90]),
-    (0, mask64, [mask64, mask61, mask57, mask46, mask28, mask79, mask23, mask90]),
-    (0, mask64, [mask64, mask7, mask57, mask46, mask28, mask79, mask23, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch24Part1_dead : branch24Part1.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch24Next : List SearchNode :=
-  branch24Part0 ++ branch24Part1
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch24Next_dead : branch24Next.any (evaluateN 7) = false := by
-  simp only [branch24Next, List.any_append, List.any_cons, List.any_nil, branch24Part0_dead, branch24Part1_dead, Bool.or_false, Bool.false_or]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch24_front : frontierN branch24 = branch24Next := by
-  decide +kernel
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch24_dead : evaluateN 8 branch24 = false := by
-  rw [evaluateN_step 5, branch24_front, branch24Next_dead, Bool.or_false]
-  rfl
-
-def branch25Part0 : List SearchNode :=
-  [(0, mask10, [mask10, mask49, mask79, mask46, mask23, mask61, mask28, mask90]),
-    (0, mask108, [mask108, mask49, mask79, mask46, mask23, mask61, mask28, mask90]),
-    (0, mask13, [mask13, mask49, mask23, mask46, mask79, mask61, mask28, mask90]),
-    (0, mask55, [mask55, mask49, mask23, mask46, mask79, mask61, mask28, mask90]),
-    (0, mask43, [mask43, mask49, mask61, mask46, mask79, mask23, mask28, mask90]),
-    (1, mask68, [mask68, mask61, mask46, mask79, mask23, mask28, mask90]),
-    (0, mask68, [mask68, mask49, mask61, mask46, mask79, mask23, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch25Part0_dead : branch25Part0.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch25Part1 : List SearchNode :=
-  [(0, mask59, [mask59, mask49, mask28, mask46, mask79, mask23, mask61, mask90]),
-    (0, mask113, [mask113, mask49, mask90, mask46, mask79, mask23, mask61, mask28]),
-    (1, mask107, [mask107, mask79, mask49, mask23, mask61, mask28, mask90]),
-    (0, mask107, [mask107, mask46, mask79, mask49, mask23, mask61, mask28, mask90]),
-    (1, mask54, [mask54, mask23, mask49, mask79, mask61, mask28, mask90]),
-    (0, mask54, [mask54, mask46, mask23, mask49, mask79, mask61, mask28, mask90]),
-    (0, mask67, [mask67, mask46, mask61, mask49, mask79, mask23, mask28, mask90]),
-    (2, mask57, [mask57, mask49, mask79, mask23, mask61, mask90]),
-    (1, mask57, [mask57, mask46, mask49, mask79, mask23, mask61, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch25Part1_dead : branch25Part1.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch25Part2 : List SearchNode :=
-  [(1, mask57, [mask57, mask28, mask49, mask79, mask23, mask61, mask90]),
-    (0, mask57, [mask57, mask46, mask28, mask49, mask79, mask23, mask61, mask90]),
-    (2, mask112, [mask112, mask49, mask79, mask23, mask61, mask28]),
-    (1, mask112, [mask112, mask46, mask49, mask79, mask23, mask61, mask28]),
-    (1, mask112, [mask112, mask90, mask49, mask79, mask23, mask61, mask28]),
-    (0, mask112, [mask112, mask46, mask90, mask49, mask79, mask23, mask61, mask28]),
-    (0, mask85, [mask85, mask79, mask23, mask49, mask46, mask61, mask28, mask90]),
-    (0, mask116, [mask116, mask79, mask61, mask49, mask46, mask23, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch25Part2_dead : branch25Part2.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch25Part3 : List SearchNode :=
-  [(2, mask87, [mask87, mask49, mask46, mask23, mask61, mask90]),
-    (1, mask87, [mask87, mask79, mask49, mask46, mask23, mask61, mask90]),
-    (1, mask87, [mask87, mask28, mask49, mask46, mask23, mask61, mask90]),
-    (0, mask87, [mask87, mask79, mask28, mask49, mask46, mask23, mask61, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch25Part3_dead : branch25Part3.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch25Part4 : List SearchNode :=
-  [(0, mask77, [mask77, mask79, mask90, mask49, mask46, mask23, mask61, mask28]),
-    (0, mask96, [mask96, mask79, mask90, mask49, mask46, mask23, mask61, mask28]),
-    (0, mask72, [mask72, mask23, mask61, mask49, mask46, mask79, mask28, mask90]),
-    (2, mask100, [mask100, mask49, mask46, mask79, mask61, mask28]),
-    (1, mask100, [mask100, mask23, mask49, mask46, mask79, mask61, mask28]),
-    (1, mask100, [mask100, mask90, mask49, mask46, mask79, mask61, mask28]),
-    (0, mask100, [mask100, mask23, mask90, mask49, mask46, mask79, mask61, mask28]),
-    (0, mask70, [mask70, mask61, mask28, mask49, mask46, mask79, mask23, mask90]),
-    (0, mask114, [mask114, mask61, mask90, mask49, mask46, mask79, mask23, mask28]),
-    (0, mask103, [mask103, mask28, mask90, mask49, mask46, mask79, mask23, mask61])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch25Part4_dead : branch25Part4.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch25Next : List SearchNode :=
-  branch25Part0 ++ branch25Part1 ++ branch25Part2 ++ branch25Part3 ++ branch25Part4
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch25Next_dead : branch25Next.any (evaluateN 7) = false := by
-  simp only [branch25Next, List.any_append, List.any_cons, List.any_nil, branch25Part0_dead, branch25Part1_dead, branch25Part2_dead, branch25Part3_dead, branch25Part4_dead, Bool.or_false, Bool.false_or]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch25_front : frontierN branch25 = branch25Next := by
-  decide +kernel
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch25_dead : evaluateN 8 branch25 = false := by
-  rw [evaluateN_step 5, branch25_front, branch25Next_dead, Bool.or_false]
-  rfl
-
-def branch26Part0 : List SearchNode :=
-  [(0, mask10, [mask10, mask79, mask46, mask7, mask23, mask61, mask28, mask90]),
-    (0, mask108, [mask108, mask79, mask46, mask7, mask23, mask61, mask28, mask90]),
-    (0, mask13, [mask13, mask23, mask46, mask7, mask79, mask61, mask28, mask90]),
-    (0, mask55, [mask55, mask23, mask46, mask7, mask79, mask61, mask28, mask90]),
-    (0, mask43, [mask43, mask61, mask46, mask7, mask79, mask23, mask28, mask90]),
-    (0, mask68, [mask68, mask61, mask46, mask7, mask79, mask23, mask28, mask90]),
-    (0, mask59, [mask59, mask28, mask46, mask7, mask79, mask23, mask61, mask90]),
-    (0, mask113, [mask113, mask90, mask46, mask7, mask79, mask23, mask61, mask28]),
-    (0, mask107, [mask107, mask79, mask49, mask7, mask23, mask61, mask28, mask90]),
-    (0, mask54, [mask54, mask23, mask49, mask7, mask79, mask61, mask28, mask90]),
-    (1, mask57, [mask57, mask49, mask7, mask79, mask23, mask61, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch26Part0_dead : branch26Part0.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch26Part1 : List SearchNode :=
-  [(0, mask57, [mask57, mask46, mask49, mask7, mask79, mask23, mask61, mask90]),
-    (0, mask57, [mask57, mask28, mask49, mask7, mask79, mask23, mask61, mask90]),
-    (1, mask112, [mask112, mask49, mask7, mask79, mask23, mask61, mask28]),
-    (0, mask112, [mask112, mask46, mask49, mask7, mask79, mask23, mask61, mask28]),
-    (0, mask112, [mask112, mask90, mask49, mask7, mask79, mask23, mask61, mask28]),
-    (0, mask81, [mask81, mask79, mask49, mask46, mask23, mask61, mask28, mask90]),
-    (1, mask64, [mask64, mask49, mask46, mask79, mask23, mask28, mask90]),
-    (0, mask64, [mask64, mask7, mask49, mask46, mask79, mask23, mask28, mask90]),
-    (0, mask64, [mask64, mask61, mask49, mask46, mask79, mask23, mask28, mask90]),
-    (0, mask93, [mask93, mask90, mask49, mask46, mask79, mask23, mask61, mask28]),
-    (1, mask87, [mask87, mask49, mask46, mask7, mask23, mask61, mask90]),
-    (0, mask87, [mask87, mask79, mask49, mask46, mask7, mask23, mask61, mask90]),
-    (0, mask87, [mask87, mask28, mask49, mask46, mask7, mask23, mask61, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch26Part1_dead : branch26Part1.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch26Part2 : List SearchNode :=
-  [(1, mask100, [mask100, mask49, mask46, mask7, mask79, mask61, mask28]),
-    (0, mask100, [mask100, mask23, mask49, mask46, mask7, mask79, mask61, mask28]),
-    (0, mask100, [mask100, mask90, mask49, mask46, mask7, mask79, mask61, mask28])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch26Part2_dead : branch26Part2.any (evaluateN 7) = false := by
-  decide +kernel
-
-def branch26Next : List SearchNode :=
-  branch26Part0 ++ branch26Part1 ++ branch26Part2
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch26Next_dead : branch26Next.any (evaluateN 7) = false := by
-  simp only [branch26Next, List.any_append, List.any_cons, List.any_nil, branch26Part0_dead, branch26Part1_dead, branch26Part2_dead, Bool.or_false, Bool.false_or]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch26_front : frontierN branch26 = branch26Next := by
-  decide +kernel
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem branch26_dead : evaluateN 8 branch26 = false := by
-  rw [evaluateN_step 5, branch26_front, branch26Next_dead, Bool.or_false]
-  rfl
-
 def tab0 : List (ℕ × ℕ × List W) :=
-  [(1, 0x247dfafc816098d9, [0x247dfafc816098d9, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (1, 0x3b9a3f8f0332229d, [0x3b9a3f8f0332229d, 0x20183a8c01200099, 0x1b82050302122204, 0x465c07080409840, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (1, 0x18008000000000, [0x18008000000000, 0x20183a8c01200099, 0x105801e120800100, 0x465c07080409840, 0x1b82050302122204, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (1, 0x30583bed21a00199, [0x30583bed21a00199, 0x20183a8c01200099, 0x105801e120800100, 0x465c07080409840, 0x1b82050302122204, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (1, 0x1200099, [0x1200099, 0x20183a8c01200099, 0x5a20010c92c0099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (3, 0x25ba3a9cc92c0099, [0x25ba3a9cc92c0099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (2, 0x25ba3a9cc92c0099, [0x25ba3a9cc92c0099, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x2a000e0a04409c60, 0x5f00412136206])]
+  [(2, 0x0, [0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
+   (1, 0x0, [0x18008000000000, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
+   (1, 0x0, [0x1200099, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
+   (1, 0x0, [0x20000a0800000000, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
+   (1, 0x0, [0x3b9a3f8f0332229d, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
+   (1, 0x0, [0x30583bed21a00199, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
+   (3, 0x0, [0x25ba3a9cc92c0099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x2a000e0a04409c60, 0x5f00412136206])]
 
 def tab1 : List (ℕ × ℕ × List W) :=
-  [(2, 0x25ba3a9cc92c0099, [0x25ba3a9cc92c0099, 0x5a20010c92c0099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (1, 0x25ba3a9cc92c0099, [0x25ba3a9cc92c0099, 0x20183a8c01200099, 0x5a20010c92c0099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (1, 0x20000a0800000000, [0x20000a0800000000, 0x20183a8c01200099, 0x2a000e0a04409c60, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x5f00412136206]),
-   (1, 0x2a183e8e05609cf9, [0x2a183e8e05609cf9, 0x20183a8c01200099, 0x2a000e0a04409c60, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x5f00412136206]),
-   (1, 0x300400000000, [0x300400000000, 0x20183a8c01200099, 0x5f00412136206, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60]),
-   (1, 0x201dfa8c1333629f, [0x201dfa8c1333629f, 0x20183a8c01200099, 0x5f00412136206, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60]),
-   (1, 0x1fe7c5738252ba44, [0x1fe7c5738252ba44, 0x465c07080409840, 0x1b82050302122204, 0x20183a8c01200099, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206])]
+  [(2, 0x0, [0x25ba3a9cc92c0099, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x2a000e0a04409c60, 0x5f00412136206]),
+   (2, 0x0, [0x25ba3a9cc92c0099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
+   (1, 0x0, [0x25ba3a9cc92c0099, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
+   (1, 0x0, [0x201dfa8c1333629f, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
+   (2, 0x0, [0x3a580feb24c09d60, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x5f00412136206]),
+   (1, 0x0, [0x3a580feb24c09d60, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
+   (1, 0x0, [0x2a05fe0e1653fe66, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206])]
 
-def tab2 : List (ℕ × ℕ × List W) :=
-  [(1, 0x40006000000000, [0x40006000000000, 0x465c07080409840, 0x105801e120800100, 0x20183a8c01200099, 0x1b82050302122204, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (1, 0x147dc1f1a0c09940, [0x147dc1f1a0c09940, 0x465c07080409840, 0x105801e120800100, 0x20183a8c01200099, 0x1b82050302122204, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (1, 0x420001080000000, [0x420001080000000, 0x465c07080409840, 0x5a20010c92c0099, 0x20183a8c01200099, 0x1b82050302122204, 0x105801e120800100, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (1, 0x5e7c070c96c98d9, [0x5e7c070c96c98d9, 0x465c07080409840, 0x5a20010c92c0099, 0x20183a8c01200099, 0x1b82050302122204, 0x105801e120800100, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (1, 0x409840, [0x409840, 0x465c07080409840, 0x2a000e0a04409c60, 0x20183a8c01200099, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x5f00412136206]),
-   (3, 0x2e65ce7a84409c60, [0x2e65ce7a84409c60, 0x20183a8c01200099, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x5f00412136206]),
-   (2, 0x2e65ce7a84409c60, [0x2e65ce7a84409c60, 0x465c07080409840, 0x20183a8c01200099, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x5f00412136206])]
-
-def tab3 : List (ℕ × ℕ × List W) :=
-  [(2, 0x2e65ce7a84409c60, [0x2e65ce7a84409c60, 0x2a000e0a04409c60, 0x20183a8c01200099, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x5f00412136206]),
-   (1, 0x2e65ce7a84409c60, [0x2e65ce7a84409c60, 0x465c07080409840, 0x2a000e0a04409c60, 0x20183a8c01200099, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x5f00412136206]),
-   (1, 0x5c00000000000, [0x5c00000000000, 0x465c07080409840, 0x5f00412136206, 0x20183a8c01200099, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60]),
-   (1, 0x465f0749253fa46, [0x465f0749253fa46, 0x465c07080409840, 0x5f00412136206, 0x20183a8c01200099, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60]),
-   (1, 0x1000010100000000, [0x1000010100000000, 0x1b82050302122204, 0x105801e120800100, 0x20183a8c01200099, 0x465c07080409840, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (1, 0x1bda05e322922304, [0x1bda05e322922304, 0x1b82050302122204, 0x105801e120800100, 0x20183a8c01200099, 0x465c07080409840, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (1, 0x182000000000000, [0x182000000000000, 0x1b82050302122204, 0x5a20010c92c0099, 0x20183a8c01200099, 0x465c07080409840, 0x105801e120800100, 0x2a000e0a04409c60, 0x5f00412136206])]
-
-def tab4 : List (ℕ × ℕ × List W) :=
-  [(1, 0x1fa20513cb3e229d, [0x1fa20513cb3e229d, 0x1b82050302122204, 0x5a20010c92c0099, 0x20183a8c01200099, 0x465c07080409840, 0x105801e120800100, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (1, 0xa00040200000000, [0xa00040200000000, 0x1b82050302122204, 0x2a000e0a04409c60, 0x20183a8c01200099, 0x465c07080409840, 0x105801e120800100, 0x5a20010c92c0099, 0x5f00412136206]),
-   (1, 0x3b820f0b0652be64, [0x3b820f0b0652be64, 0x1b82050302122204, 0x2a000e0a04409c60, 0x20183a8c01200099, 0x465c07080409840, 0x105801e120800100, 0x5a20010c92c0099, 0x5f00412136206]),
-   (1, 0x2122204, [0x2122204, 0x1b82050302122204, 0x5f00412136206, 0x20183a8c01200099, 0x465c07080409840, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60]),
-   (3, 0x1b87f50712136206, [0x1b87f50712136206, 0x20183a8c01200099, 0x465c07080409840, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60]),
-   (2, 0x1b87f50712136206, [0x1b87f50712136206, 0x1b82050302122204, 0x20183a8c01200099, 0x465c07080409840, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60]),
-   (2, 0x1b87f50712136206, [0x1b87f50712136206, 0x5f00412136206, 0x20183a8c01200099, 0x465c07080409840, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60])]
-
-def tab5 : List (ℕ × ℕ × List W) :=
-  [(1, 0x1b87f50712136206, [0x1b87f50712136206, 0x1b82050302122204, 0x5f00412136206, 0x20183a8c01200099, 0x465c07080409840, 0x105801e120800100, 0x5a20010c92c0099, 0x2a000e0a04409c60]),
-   (2, 0x15fa01f1e9ac0199, [0x15fa01f1e9ac0199, 0x105801e120800100, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (1, 0x15fa01f1e9ac0199, [0x15fa01f1e9ac0199, 0x105801e120800100, 0x5a20010c92c0099, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x2a000e0a04409c60, 0x5f00412136206]),
-   (2, 0x3a580feb24c09d60, [0x3a580feb24c09d60, 0x105801e120800100, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x5a20010c92c0099, 0x5f00412136206]),
-   (1, 0x3a580feb24c09d60, [0x3a580feb24c09d60, 0x105801e120800100, 0x2a000e0a04409c60, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x5a20010c92c0099, 0x5f00412136206]),
-   (2, 0x105df1e532936306, [0x105df1e532936306, 0x105801e120800100, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x5a20010c92c0099, 0x2a000e0a04409c60]),
-   (1, 0x105df1e532936306, [0x105df1e532936306, 0x105801e120800100, 0x5f00412136206, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x5a20010c92c0099, 0x2a000e0a04409c60])]
-
-def tab6 : List (ℕ × ℕ × List W) :=
-  [(1, 0x2fa20e1acd6c9cf9, [0x2fa20e1acd6c9cf9, 0x5a20010c92c0099, 0x2a000e0a04409c60, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5f00412136206]),
-   (1, 0x5a7f014db3f629f, [0x5a7f014db3f629f, 0x5a20010c92c0099, 0x5f00412136206, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x2a000e0a04409c60]),
-   (1, 0x2a05fe0e1653fe66, [0x2a05fe0e1653fe66, 0x2a000e0a04409c60, 0x5f00412136206, 0x20183a8c01200099, 0x465c07080409840, 0x1b82050302122204, 0x105801e120800100, 0x5a20010c92c0099])]
-
-def table : List (ℕ × ℕ × List W) := tab0 ++ tab1 ++ tab2 ++ tab3 ++ tab4 ++ tab5 ++ tab6
+def table : List (ℕ × ℕ × List W) := tab0 ++ tab1
 
 def startPart0 : List SearchNode :=
-  [(1, mask116, [mask116, mask79, mask61, mask23, mask46, mask28, mask90, mask7])]
+  [(1, mask0, [mask2, mask42, mask16, mask31, mask26, mask19, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -3617,142 +2991,20 @@ theorem startPart0_dead : startPart0.any (evaluateN 8) = false := by
   decide +kernel
 
 def startPart1 : List SearchNode :=
-  [(1, mask107, [mask107, mask79, mask46, mask23, mask61, mask28, mask90, mask7])]
+  [(1, mask0, [mask53, mask42, mask16, mask31, mask26, mask19, mask52, mask7])]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem startPart1_dead : startPart1.any (evaluateN 8) = false := by
   decide +kernel
 
-def startPart2 : List SearchNode :=
-  [(1, mask1, [mask1, mask79, mask28, mask23, mask61, mask46, mask90, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart2_dead : startPart2.any (evaluateN 8) = false := by
-  decide +kernel
-
-def startPart3 : List SearchNode :=
-  [(1, mask87, [mask87, mask79, mask28, mask23, mask61, mask46, mask90, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart3_dead : startPart3.any (evaluateN 8) = false := by
-  decide +kernel
-
-def startPart4 : List SearchNode :=
-  [(1, mask77, [mask77, mask79, mask90, mask23, mask61, mask46, mask28, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart4_dead : startPart4.any (evaluateN 8) = false := by
-  decide +kernel
-
-def startPart5 : List SearchNode :=
-  [(1, mask96, [mask96, mask79, mask90, mask23, mask61, mask46, mask28, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart5_dead : startPart5.any (evaluateN 8) = false := by
-  decide +kernel
-
-def startPart6 : List SearchNode :=
-  [(1, mask81, [mask81, mask79, mask7, mask23, mask61, mask46, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart6_dead : startPart6.any (evaluateN 8) = false := by
-  decide +kernel
-
-def startPart7 : List SearchNode :=
-  [(1, mask0, [mask0, mask23, mask90, mask79, mask61, mask46, mask28, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart7_dead : startPart7.any (evaluateN 8) = false := by
-  decide +kernel
-
-def startPart8 : List SearchNode :=
-  [(2, mask100, [mask100, mask23, mask79, mask61, mask46, mask28, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart8_dead : startPart8.any (evaluateN 8) = false := by
-  decide +kernel
-
-def startPart9 : List SearchNode :=
-  [(2, mask100, [mask100, mask90, mask79, mask61, mask46, mask28, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart9_dead : startPart9.any (evaluateN 8) = false := by
-  decide +kernel
-
-def startPart10 : List SearchNode :=
-  [(1, mask100, [mask100, mask23, mask90, mask79, mask61, mask46, mask28, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart10_dead : startPart10.any (evaluateN 8) = false := by
-  decide +kernel
-
-def startPart11 : List SearchNode :=
-  [(1, mask70, [mask70, mask61, mask28, mask79, mask23, mask46, mask90, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart11_dead : startPart11.any (evaluateN 8) = false := by
-  decide +kernel
-
-def startPart12 : List SearchNode :=
-  [(1, mask114, [mask114, mask61, mask90, mask79, mask23, mask46, mask28, mask7]),
-    (1, mask2, [mask2, mask61, mask7, mask79, mask23, mask46, mask28, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart12_dead : startPart12.any (evaluateN 8) = false := by
-  decide +kernel
-
-def startPart13 : List SearchNode :=
-  [(2, mask112, [mask112, mask46, mask79, mask23, mask61, mask28, mask7]),
-    (1, mask112, [mask112, mask46, mask90, mask79, mask23, mask61, mask28, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart13_dead : startPart13.any (evaluateN 8) = false := by
-  decide +kernel
-
-def startPart14 : List SearchNode :=
-  [(1, mask103, [mask103, mask28, mask90, mask79, mask23, mask61, mask46, mask7])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart14_dead : startPart14.any (evaluateN 8) = false := by
-  decide +kernel
-
-def startPart15 : List SearchNode :=
-  [(1, mask31, [mask31, mask28, mask7, mask79, mask23, mask61, mask46, mask90])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart15_dead : startPart15.any (evaluateN 8) = false := by
-  decide +kernel
-
-def startPart16 : List SearchNode :=
-  [(1, mask93, [mask93, mask90, mask7, mask79, mask23, mask61, mask46, mask28])]
-
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 80000000 in
-theorem startPart16_dead : startPart16.any (evaluateN 8) = false := by
-  decide +kernel
-
 def startNext : List SearchNode :=
-  [branch1] ++ startPart0 ++ [branch2] ++ startPart1 ++ startPart2 ++ [branch3] ++ [branch4] ++ [branch5] ++ startPart3 ++ startPart4 ++ startPart5 ++ [branch6] ++ startPart6 ++ [branch7] ++ [branch8] ++ [branch9] ++ [branch10] ++ [branch11] ++ startPart7 ++ [branch12] ++ startPart8 ++ startPart9 ++ startPart10 ++ [branch13] ++ [branch14] ++ [branch15] ++ [branch16] ++ [branch17] ++ startPart11 ++ [branch18] ++ startPart12 ++ [branch19] ++ [branch20] ++ [branch21] ++ [branch22] ++ [branch23] ++ [branch24] ++ startPart13 ++ [branch25] ++ [branch26] ++ startPart14 ++ startPart15 ++ startPart16
+  [branch2] ++ [branch3] ++ startPart0 ++ [branch4] ++ [branch5] ++ [branch6] ++ [branch7] ++ [branch8] ++ [branch9] ++ [branch10] ++ [branch11] ++ [branch12] ++ [branch13] ++ startPart1
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
 theorem startNext_dead : startNext.any (evaluateN 8) = false := by
-  simp only [startNext, List.any_append, List.any_cons, List.any_nil, branch1_dead, startPart0_dead, branch2_dead, startPart1_dead, startPart2_dead, branch3_dead, branch4_dead, branch5_dead, startPart3_dead, startPart4_dead, startPart5_dead, branch6_dead, startPart6_dead, branch7_dead, branch8_dead, branch9_dead, branch10_dead, branch11_dead, startPart7_dead, branch12_dead, startPart8_dead, startPart9_dead, startPart10_dead, branch13_dead, branch14_dead, branch15_dead, branch16_dead, branch17_dead, startPart11_dead, branch18_dead, startPart12_dead, branch19_dead, branch20_dead, branch21_dead, branch22_dead, branch23_dead, branch24_dead, startPart13_dead, branch25_dead, branch26_dead, startPart14_dead, startPart15_dead, startPart16_dead, Bool.or_false, Bool.false_or]
+  simp only [startNext, List.any_append, List.any_cons, List.any_nil, branch2_dead, branch3_dead, startPart0_dead, branch4_dead, branch5_dead, branch6_dead, branch7_dead, branch8_dead, branch9_dead, branch10_dead, branch11_dead, branch12_dead, branch13_dead, startPart1_dead, Bool.or_false, Bool.false_or]
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
@@ -3776,42 +3028,35 @@ theorem optT_eq : optT = optimized 8 := by
     cases optimized 8 e last ws <;> simp
   · rfl
 
-def optRoot (e last : ℕ) (ws : List W) : Bool :=
-  ws == [goal] || (pairs ws).any (fun (a, b, r) => dispatch e last optT a b r)
-
-theorem optRoot_eq : optRoot = optimized 9 := by
-  funext e last ws
-  simp only [optRoot, optT_eq, optimized]
-
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 80000000 in
-theorem all_front : inputs.sublists.all
-    (fun l => decide (10 < l.length) || (cuts l != -1) || !(optRoot (10 - l.length) 0 l)) = true := by
+theorem clear_roots : starts.all (fun pool => pool.sublists.all (fun ws =>
+    decide (9 < ws.length) || (cuts ws != -1) || !(optT (9 - ws.length) 0 ws))) = true := by
   decide +kernel
 
 theorem no_small (C : Circuit) (hm : Monotone2 C) (hs : C.size ≤ 9)
     (hr : PEqualNP.Represents.Represents A C) : False := by
-  obtain ⟨gs, hlen, hord, S, hsub, hl⟩ := normalize_build BitVec.toNat (get_build C hm hr)
-  have hlenk : gs.length ≤ 9 := Nat.le_trans hlen hs
-  let l := inputs.filter (fun w => decide (w ∈ S))
+  obtain ⟨pool,hpool,hb⟩ := orbit_roots (pad_build (get_build C hm hr) hs)
+  obtain ⟨gs,hlen,hord,S,hsub,hl⟩ := normalize_build BitVec.toNat hb
+  let l := pool.filter (fun w => decide (w ∈ S))
+  have hmem : l ∈ pool.sublists := List.mem_sublists.mpr List.filter_sublist
+  have valid := List.all_eq_true.mp (List.all_eq_true.mp clear_roots pool hpool) l hmem
+  have unique : starts.all (fun l => decide l.Nodup) = true := by decide +kernel
+  have hn : pool.Nodup := of_decide_eq_true (List.all_eq_true.mp unique pool hpool)
+  have hnd : l.Nodup := hn.filter _
   have hlS : l.toFinset = S := by
     ext v
     simp only [l, List.mem_toFinset, List.mem_filter, decide_eq_true_eq]
-    constructor
-    · exact fun h => h.2
-    · exact fun h => ⟨List.mem_toFinset.mp (hsub h), h⟩
-  have hnd : l.Nodup := inputs_nodup.filter _
-  have hcard := chain_card hl
-  rw [← hlS, List.toFinset_card_of_nodup hnd] at hcard
-  have hcuts : cuts l = -1 := cuts_full (hlS ▸ hl)
-  have hsearch := optimized_complete 9 l (10 - l.length) 0 gs hnd hlenk (by omega) hord (hlS ▸ hl)
-  rw [← optRoot_eq] at hsearch
-  have hmem : l ∈ inputs.sublists := List.mem_sublists.mpr List.filter_sublist
-  have hrow := List.all_eq_true.mp all_front l hmem
-  have h4 : decide (10 < l.length) = false := by simp; omega
-  have h5 : (cuts l != -1) = false := by simp [hcuts]
-  rw [h4, h5, hsearch] at hrow
-  exact Bool.noConfusion hrow
+    exact ⟨fun h => h.2, fun h => ⟨List.mem_toFinset.mp (hsub h),h⟩⟩
+  have card := chain_card hl
+  rw [← hlS, List.toFinset_card_of_nodup hnd] at card
+  have cov : cuts l = -1 := cuts_full (hlS ▸ hl)
+  have yes := optimized_complete 8 l (9 - l.length) 0 gs hnd hlen (by omega) hord (hlS ▸ hl)
+  rw [← optT_eq] at yes
+  have len : decide (9 < l.length) = false := by simp; omega
+  have cut : (cuts l != -1) = false := by simp [cov]
+  rw [len,cut,yes] at valid
+  exact Bool.noConfusion valid
 
 theorem upper : PEqualNP.Represents.RepSizeAtMost (fun u v : Fin 4 => (1981 : ℕ).testBit (4 * u.val + v.val)) 10 := by
   refine ⟨⟨[⟨GateOp.or, [2, 4]⟩, ⟨GateOp.and, [2, 4]⟩, ⟨GateOp.or, [0, 5]⟩,
