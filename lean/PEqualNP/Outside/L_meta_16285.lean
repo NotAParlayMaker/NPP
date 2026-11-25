@@ -1,3987 +1,4214 @@
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.List.OfFn
-import Mathlib.Data.List.Sublists
-import Mathlib.Data.Nat.Bitwise
-import Mathlib.Tactic.ByContra
-import Mathlib.Tactic.GRewrite
-import Mathlib.Tactic.IntervalCases
-import Mathlib.Tactic.SplitIfs
-import Mathlib.Tactic.Tauto
+import Mathlib
 import PEqualNP.Defs
 
--- The checker of live-state certificates with cofactor cuts (the generic part, up to the data) is the one of the checked
--- V_meta_9945__k9 (same repository, Apache-2.0); the certificates below are new.
+namespace PEqualNP.Outside.L_meta_16285
 
-namespace PEqualNP.Outside.L_meta_16285_aux
+abbrev Forest := Nat → Nat × Nat
 
-open PEqualNP.MetaComplexity PEqualNP.CircuitLowerBounds
+def unpack (packed width index : Nat) : Nat :=
+  (packed >>> (width * index)) &&& ((1 <<< width) - 1)
 
-def mask256 : Nat := 2 ^ 256 - 1
+def decodeNode (parentWidth width packed index : Nat) : Nat × Nat :=
+  let entry := unpack packed width index
+  (entry &&& ((1 <<< parentWidth) - 1), entry >>> parentWidth)
 
-def negD (d w : Nat) : Nat := (w ^^^ mask256) &&& d
-def andD (d a b : Nat) : Nat := (a &&& b) &&& d
-def orD (d a b : Nat) : Nat := (a ||| b) &&& d
-def binD (d : Nat) (isOr : Bool) (a b : Nat) : Nat := if isOr then orD d a b else andD d a b
+def treeBlock (start count : Nat) (check : Nat → Bool) : Bool :=
+  (Nat.rec (motive := fun _ => Nat → Bool) (fun _ => true)
+    (fun _ next i => check i && next (i + 1)) count) start
 
-def kept {α : Type} (b : Bool) (x : α) (xs : List α) : List α :=
-  if b then x :: xs else xs
-
-def RunD (d y : Nat) (t : ℕ) (ws : List Nat) : Prop :=
-  ∀ P : ℕ → List Nat → Prop, P 0 [y] →
-    (∀ {s xs zs}, List.Perm xs zs → P s xs → P s zs) →
-    (∀ {s a r} (save : Bool),
-      negD d a ≠ 0 → negD d a ≠ d → negD d a ∉ (a :: r) →
-      P s (negD d a :: kept save a r) → P (s + 1) (a :: r)) →
-    (∀ {s a b r} (c ka kb : Bool),
-      (if c then andD d a b else orD d a b) ≠ 0 →
-      (if c then andD d a b else orD d a b) ≠ d →
-      (if c then andD d a b else orD d a b) ∉ (a :: b :: r) →
-      P s ((if c then andD d a b else orD d a b) :: kept ka a (kept kb b r)) →
-      P (s + 1) (a :: b :: r)) → P t ws
-
-section
-variable {d y : Nat}
-
-theorem Run.done : RunD d y 0 [y] := fun _ dn _ _ _ => dn
-theorem Run.perm {s xs zs} (p : List.Perm xs zs) (h : RunD d y s xs) :
-    RunD d y s zs := fun P dn q u b => q p (h P dn q u b)
-theorem Run.one {s a r} (save : Bool)
-    (h0 : negD d a ≠ 0) (hd : negD d a ≠ d) (hm : negD d a ∉ (a :: r))
-    (h : RunD d y s (negD d a :: kept save a r)) :
-    RunD d y (s + 1) (a :: r) := fun P dn q u b => u save h0 hd hm (h P dn q u b)
-theorem Run.two {s a b r} (c ka kb : Bool)
-    (h0 : (if c then andD d a b else orD d a b) ≠ 0)
-    (hd : (if c then andD d a b else orD d a b) ≠ d)
-    (hm : (if c then andD d a b else orD d a b) ∉ (a :: b :: r))
-    (h : RunD d y s ((if c then andD d a b else orD d a b) :: kept ka a (kept kb b r))) :
-    RunD d y (s + 1) (a :: b :: r) := fun P dn q u v => v c ka kb h0 hd hm (h P dn q u v)
-
-theorem Run.fold {P : ∀ t ws, RunD d y t ws → Prop}
-    (done : P 0 [y] Run.done)
-    (perm : ∀ {s xs zs} (hp : List.Perm xs zs) (h : RunD d y s xs),
-      P s xs h → P s zs (Run.perm hp h))
-    (one : ∀ {s a r} (save : Bool)
-      (h0 : negD d a ≠ 0) (hd : negD d a ≠ d) (hm : negD d a ∉ (a :: r))
-      (h : RunD d y s (negD d a :: kept save a r)),
-      P _ _ h → P _ _ (Run.one save h0 hd hm h))
-    (two : ∀ {s a b r} (c ka kb : Bool)
-      (h0 : (if c then andD d a b else orD d a b) ≠ 0)
-      (hd : (if c then andD d a b else orD d a b) ≠ d)
-      (hm : (if c then andD d a b else orD d a b) ∉ (a :: b :: r))
-      (h : RunD d y s ((if c then andD d a b else orD d a b) :: kept ka a (kept kb b r))),
-      P _ _ h → P _ _ (Run.two c ka kb h0 hd hm h))
-    {t ws} (h : RunD d y t ws) : P t ws h := by
-  have hex := h (fun s xs => ∃ h' : RunD d y s xs, P s xs h')
-    ⟨Run.done, done⟩
-    (fun hp ⟨h', ih⟩ => ⟨Run.perm hp h', perm hp h' ih⟩)
-    (fun k h0 hd hm ⟨h', ih⟩ => ⟨Run.one k h0 hd hm h', one k h0 hd hm h' ih⟩)
-    (fun c a b h0 hd hm ⟨h', ih⟩ => ⟨Run.two c a b h0 hd hm h', two c a b h0 hd hm h' ih⟩)
-  exact hex.elim fun _ hp => hp
-end
-
-theorem kept_map {α β : Type} (e : α → β) (b : Bool) (x : α) (xs : List α) :
-    (kept b x xs).map e = kept b (e x) (xs.map e) := by cases b <;> simp [kept]
-
-theorem mem_kept {α : Type} (b : Bool) (x a : α) (xs : List α) :
-    a ∈ kept b x xs ↔ (b = true ∧ a = x) ∨ a ∈ xs := by cases b <;> simp [kept]
-
-theorem nodup_kept {α : Type} (b : Bool) (x : α) (xs : List α) (h : xs.Nodup) (hx : x ∉ xs) :
-    (kept b x xs).Nodup := by
-  cases b
-  · simpa [kept] using h
-  · simpa [kept] using And.intro hx h
-
-theorem keep_perm {α : Type} {xs ys : List α} (p : xs.Perm ys) (b : Bool) (a : α) :
-    (kept b a xs).Perm (kept b a ys) := by cases b <;> simpa [kept] using p
-
-theorem run_len {d y s xs} (h : RunD d y s xs) :
-    xs.length ≤ s + 1 := by
-  induction h using Run.fold with
-  | done => simp
-  | perm hp _ ih => rwa [← hp.length_eq]
-  | one save _ _ _ _ ih => cases save <;> simp_all [kept] <;> omega
-  | two conj ka kb _ _ _ _ ih => cases ka <;> cases kb <;> simp_all [kept] <;> omega
-
-theorem zero_done {d y t ws} (h : RunD d y t ws) :
-    t = 0 → ws = [y] := by
-  induction h using Run.fold with
-  | done => simp
-  | perm p _ ih => intro ht; rw [ih ht] at p; exact List.perm_singleton.1 p.symm
-  | one => simp
-  | two => simp
-
-def IsConst (d w : Nat) : Prop := (w &&& d) = 0 ∨ (w &&& d) = d
-def isConstB (d w : Nat) : Bool := (w &&& d == 0) || (w &&& d == d)
-
-theorem isConstB_iff (d w : Nat) : isConstB d w = true ↔ IsConst d w := by
-  simp [isConstB, IsConst]
-
-def Avail (d : Nat) (bank : List Nat) (w : Nat) : Prop :=
-  IsConst d w ∨ ∃ v ∈ bank, (v &&& d) = (w &&& d)
-
-def availB (d : Nat) (bank : List Nat) (w : Nat) : Bool :=
-  let m := w &&& d
-  m == 0 || m == d || bank.any (fun v => (v &&& d) == m)
-
-theorem availB_iff (d : Nat) (bank : List Nat) (w : Nat) :
-    availB d bank w = true ↔ Avail d bank w := by
-  simp [availB, Avail, IsConst, or_assoc]
-
-def NatReach (d : Nat) (roots : List Nat) : Nat → List Nat → Prop
-  | 0, bank => bank = roots
-  | p + 1, bank =>
-    (∃ b a, bank = negD d a :: b ∧ NatReach d roots p b ∧ Avail d b a) ∨
-    (∃ b a c op, bank = binD d op a c :: b ∧ NatReach d roots p b ∧ Avail d b a ∧ Avail d b c)
-
-def Lower (d : Nat) (roots : List Nat) (T : Nat) (L : Nat) : Prop :=
-  ∀ p bank, NatReach d roots p bank → Avail d bank T → L ≤ p
-
-theorem mask256_bit (i : Nat) : mask256.testBit i = decide (i < 256) := by
-  rw [mask256, Nat.testBit_two_pow_sub_one]
-
-theorem negD_and_sub {d d1 : Nat} (hd : d &&& mask256 = d) (hsub : d &&& d1 = d) (a : Nat) :
-    negD d1 a &&& d = negD d a := by
-  apply Nat.eq_of_testBit_eq; intro i
-  have h1 := congrArg (fun v => v.testBit i) hd
-  have h2 := congrArg (fun v => v.testBit i) hsub
-  simp only [negD, Nat.testBit_and, Nat.testBit_xor] at *
-  cases hi : d.testBit i <;> simp_all
-
-theorem andD_and_sub {d d1 : Nat} (hsub : d &&& d1 = d) (a b : Nat) :
-    andD d1 a b &&& d = andD d a b := by
-  apply Nat.eq_of_testBit_eq; intro i
-  have h2 := congrArg (fun v => v.testBit i) hsub
-  simp only [andD, Nat.testBit_and] at *
-  cases hi : d.testBit i <;> simp_all
-
-theorem orD_and_sub {d d1 : Nat} (hsub : d &&& d1 = d) (a b : Nat) :
-    orD d1 a b &&& d = orD d a b := by
-  apply Nat.eq_of_testBit_eq; intro i
-  have h2 := congrArg (fun v => v.testBit i) hsub
-  simp only [orD, Nat.testBit_and, Nat.testBit_or] at *
-  cases hi : d.testBit i <;> simp_all
-
-theorem negD_const {d : Nat} (hd : d &&& mask256 = d) {a : Nat} (hc : IsConst d a) :
-    IsConst d (negD d a) := by
-  rcases hc with h0 | h1
-  · right; apply Nat.eq_of_testBit_eq; intro i
-    have h0i := congrArg (fun v => v.testBit i) h0
-    have hdi := congrArg (fun v => v.testBit i) hd
-    simp only [negD, Nat.testBit_and, Nat.testBit_xor, Nat.zero_testBit] at *
-    cases h1' : d.testBit i <;> cases h2' : a.testBit i <;> simp_all
-  · left; apply Nat.eq_of_testBit_eq; intro i
-    have h1i := congrArg (fun v => v.testBit i) h1
-    have hdi := congrArg (fun v => v.testBit i) hd
-    simp only [negD, Nat.testBit_and, Nat.testBit_xor, Nat.zero_testBit] at *
-    cases h1' : d.testBit i <;> cases h2' : a.testBit i <;> simp_all
-
-theorem binD_const_left {d : Nat} {a b : Nat} (op : Bool) (hc : IsConst d a) :
-    (binD d op a b &&& d = 0) ∨ (binD d op a b &&& d = d) ∨ (binD d op a b &&& d = b &&& d) := by
-  rcases hc with h0 | h1
-  · cases op
-    · left; apply Nat.eq_of_testBit_eq; intro i
-      have h0i := congrArg (fun v => v.testBit i) h0
-      simp only [binD, andD, Nat.testBit_and, Nat.zero_testBit, ite_false] at *
-      cases h1' : d.testBit i <;> cases h2' : a.testBit i <;> simp_all
-    · right; right; apply Nat.eq_of_testBit_eq; intro i
-      have h0i := congrArg (fun v => v.testBit i) h0
-      simp only [binD, orD, Nat.testBit_and, Nat.testBit_or, Nat.zero_testBit, ite_true] at *
-      cases h1' : d.testBit i <;> cases h2' : a.testBit i <;> simp_all
-  · cases op
-    · right; right; apply Nat.eq_of_testBit_eq; intro i
-      have h1i := congrArg (fun v => v.testBit i) h1
-      simp only [binD, andD, Nat.testBit_and, ite_false] at *
-      cases h1' : d.testBit i <;> cases h2' : a.testBit i <;> simp_all
-    · right; left; apply Nat.eq_of_testBit_eq; intro i
-      have h1i := congrArg (fun v => v.testBit i) h1
-      simp only [binD, orD, Nat.testBit_and, Nat.testBit_or, ite_true] at *
-      cases h1' : d.testBit i <;> cases h2' : a.testBit i <;> simp_all
-
-theorem binD_comm (d : Nat) (op : Bool) (a b : Nat) : binD d op a b = binD d op b a := by
-  cases op <;> simp [binD, andD, orD, Nat.and_comm, Nat.or_comm]
-
-theorem avail_cons {d : Nat} {bank : List Nat} (z w : Nat) (h : Avail d bank w) :
-    Avail d (z :: bank) w := by
-  rcases h with hc | ⟨v, hv, he⟩
-  · exact Or.inl hc
-  · exact Or.inr ⟨v, List.mem_cons_of_mem _ hv, he⟩
-
-theorem avail_of_eq {d : Nat} {bank : List Nat} {v w : Nat}
-    (he : v &&& d = w &&& d) (h : Avail d bank v) : Avail d bank w := by
-  rcases h with (h0 | h1) | ⟨u, hu, hue⟩
-  · exact Or.inl (Or.inl (he.symm.trans h0))
-  · exact Or.inl (Or.inr (he.symm.trans h1))
-  · exact Or.inr ⟨u, hu, hue.trans he⟩
-
-theorem countP_kept_ge {α : Type} (p : α → Bool) (b : Bool) (a : α) (xs : List α) :
-    xs.countP p ≤ (kept b a xs).countP p := by
-  cases b <;> simp [kept, List.countP_cons] <;> split <;> omega
-
-theorem contraction {d d1 T : Nat} (hd : d &&& mask256 = d) (hsub : d &&& d1 = d)
-    (hnc : ¬ IsConst d T) {s ws} (h : RunD d1 T s ws) {roots p bank}
-    (hp : NatReach d roots p bank) (hs : ∀ w ∈ ws, Avail d bank w) :
-    ∃ q next, NatReach d roots q next ∧ Avail d next T ∧
-      q + ws.countP (isConstB d) ≤ p + s := by
-  induction h using Run.fold generalizing p bank with
-  | done =>
-    have hfalse : isConstB d T = false := by
-      cases hc : isConstB d T with
-      | false => rfl
-      | true => exact absurd ((isConstB_iff d T).1 hc) hnc
-    exact ⟨p, bank, hp, hs T (by simp), by simp [hfalse]⟩
-  | perm eq _ ih =>
-    obtain ⟨q, next, hq, ht, hle⟩ := ih hp (fun w hw => hs w (eq.mem_iff.1 hw))
-    rw [eq.countP_eq] at hle
-    exact ⟨q, next, hq, ht, hle⟩
-  | @one s a r save _ _ _ _ ih =>
-    have ha := hs a List.mem_cons_self
-    by_cases hca : IsConst d a
-    · have hc_neg : IsConst d (negD d1 a) := by
-        have e := negD_and_sub hd hsub a
-        rcases negD_const hd hca with h0 | h1
-        · exact Or.inl (e.trans (by simpa [negD, Nat.and_assoc, Nat.and_self] using h0))
-        · exact Or.inr (e.trans (by simpa [negD, Nat.and_assoc, Nat.and_self] using h1))
-      have hs' : ∀ w ∈ negD d1 a :: kept save a r, Avail d bank w := by
-        intro w hw; rcases List.mem_cons.1 hw with rfl | hw
-        · exact Or.inl hc_neg
-        · exact hs w (by rw [mem_kept] at hw; rcases hw with ⟨_, rfl⟩ | hw <;> simp [hw])
-      obtain ⟨q, next, hq, ht, hle⟩ := ih hp hs'
-      have h1 : isConstB d (negD d1 a) = true := (isConstB_iff _ _).2 hc_neg
-      have h2 : isConstB d a = true := (isConstB_iff _ _).2 hca
-      have hk := countP_kept_ge (isConstB d) save a r
-      simp only [List.countP_cons, h1, h2, ite_true] at hle ⊢
-      exact ⟨q, next, hq, ht, by omega⟩
-    · have hreach' : NatReach d roots (p + 1) (negD d a :: bank) := Or.inl ⟨bank, a, rfl, hp, ha⟩
-      have hneg_av : Avail d (negD d a :: bank) (negD d1 a) :=
-        Or.inr ⟨negD d a, List.mem_cons_self, by rw [negD_and_sub hd hsub a]; simp [negD, Nat.and_assoc, Nat.and_self]⟩
-      have hs' : ∀ w ∈ negD d1 a :: kept save a r, Avail d (negD d a :: bank) w := by
-        intro w hw; rcases List.mem_cons.1 hw with rfl | hw
-        · exact hneg_av
-        · exact avail_cons _ _ (hs w (by rw [mem_kept] at hw; rcases hw with ⟨_, rfl⟩ | hw <;> simp [hw]))
-      obtain ⟨q, next, hq, ht, hle⟩ := ih hreach' hs'
-      have h2 : isConstB d a = false := by
-        cases h : isConstB d a with | false => rfl | true => exact absurd ((isConstB_iff _ _).1 h) hca
-      have hk := countP_kept_ge (isConstB d) save a r
-      simp only [List.countP_cons, h2, Bool.false_eq_true, ite_false] at hle ⊢
-      exact ⟨q, next, hq, ht, by omega⟩
-  | @two s a b r conj ka kb _ _ _ _ ih =>
-    have ha := hs a List.mem_cons_self
-    have hb := hs b (List.mem_cons_of_mem _ List.mem_cons_self)
-    set z1 := if conj then andD d1 a b else orD d1 a b
-    set z0 := binD d (!conj) a b
-    have hz_eq : z1 &&& d = z0 &&& d := by
-      cases conj
-      · simp only [z1, z0, Bool.false_eq_true, ite_false, Bool.not_false, binD, ite_true]
-        rw [orD_and_sub hsub]; simp [orD, Nat.and_assoc, Nat.and_self]
-      · simp only [z1, z0, ite_true, Bool.not_true, Bool.false_eq_true, binD, ite_false]
-        rw [andD_and_sub hsub]; simp [andD, Nat.and_assoc, Nat.and_self]
-    by_cases hcab : IsConst d a ∨ IsConst d b
-    · have hz_av : Avail d bank z1 := by
-        apply avail_of_eq hz_eq.symm
-        rcases hcab with hca | hcb
-        · rcases binD_const_left (!conj) hca with h0 | h1 | he
-          · exact Or.inl (Or.inl h0)
-          · exact Or.inl (Or.inr h1)
-          · exact avail_of_eq he.symm hb
-        · dsimp only [z0]; rw [binD_comm]
-          rcases binD_const_left (!conj) hcb with h0 | h1 | he
-          · exact Or.inl (Or.inl h0)
-          · exact Or.inl (Or.inr h1)
-          · exact avail_of_eq he.symm ha
-      have hs' : ∀ w ∈ z1 :: kept ka a (kept kb b r), Avail d bank w := by
-        intro w hw; rcases List.mem_cons.1 hw with rfl | hw
-        · exact hz_av
-        · rw [mem_kept, mem_kept] at hw
-          rcases hw with ⟨_, rfl⟩ | ⟨_, rfl⟩ | hw
-          · exact ha
-          · exact hb
-          · exact hs w (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hw))
-      obtain ⟨q, next, hq, ht, hle⟩ := ih hp hs'
-      have hkr : r.countP (isConstB d) ≤ (kept ka a (kept kb b r)).countP (isConstB d) :=
-        le_trans (countP_kept_ge _ kb b r) (countP_kept_ge _ ka a _)
-      have hcost : (if isConstB d a = true then 1 else 0) + (if isConstB d b = true then 1 else 0)
-          ≤ 1 + (if isConstB d z1 = true then 1 else 0) := by
-        rcases hcab with hca | hcb
-        · have ha1 : isConstB d a = true := (isConstB_iff _ _).2 hca
-          rcases binD_const_left (!conj) hca with h0 | h1 | he
-          · have hz1 : isConstB d z1 = true := (isConstB_iff _ _).2 (Or.inl (hz_eq.trans h0))
-            simp [ha1, hz1]; split <;> omega
-          · have hz1 : isConstB d z1 = true := (isConstB_iff _ _).2 (Or.inr (hz_eq.trans h1))
-            simp [ha1, hz1]; split <;> omega
-          · have hzb : isConstB d z1 = isConstB d b := by
-              simp only [isConstB, hz_eq.trans he]
-            simp [ha1, hzb]
-        · have hb1 : isConstB d b = true := (isConstB_iff _ _).2 hcb
-          have hz_eq' : z1 &&& d = binD d (!conj) b a &&& d := by rw [hz_eq, binD_comm]
-          rcases binD_const_left (!conj) hcb with h0 | h1 | he
-          · have hz1 : isConstB d z1 = true := (isConstB_iff _ _).2 (Or.inl (hz_eq'.trans h0))
-            simp [hb1, hz1]; split <;> omega
-          · have hz1 : isConstB d z1 = true := (isConstB_iff _ _).2 (Or.inr (hz_eq'.trans h1))
-            simp [hb1, hz1]; split <;> omega
-          · have hza : isConstB d z1 = isConstB d a := by
-              simp only [isConstB, hz_eq'.trans he]
-            simp [hb1, hza]
-      simp only [List.countP_cons] at hle ⊢
-      exact ⟨q, next, hq, ht, by omega⟩
-    · have hna : isConstB d a = false := by
-        cases h : isConstB d a with | false => rfl | true => exact absurd (Or.inl ((isConstB_iff _ _).1 h)) hcab
-      have hnb : isConstB d b = false := by
-        cases h : isConstB d b with | false => rfl | true => exact absurd (Or.inr ((isConstB_iff _ _).1 h)) hcab
-      have hreach' : NatReach d roots (p + 1) (z0 :: bank) := Or.inr ⟨bank, a, b, !conj, rfl, hp, ha, hb⟩
-      have hz_av : Avail d (z0 :: bank) z1 := Or.inr ⟨z0, List.mem_cons_self, hz_eq.symm⟩
-      have hs' : ∀ w ∈ z1 :: kept ka a (kept kb b r), Avail d (z0 :: bank) w := by
-        intro w hw; rcases List.mem_cons.1 hw with rfl | hw
-        · exact hz_av
-        · rw [mem_kept, mem_kept] at hw
-          rcases hw with ⟨_, rfl⟩ | ⟨_, rfl⟩ | hw
-          · exact avail_cons _ _ ha
-          · exact avail_cons _ _ hb
-          · exact avail_cons _ _ (hs w (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hw)))
-      obtain ⟨q, next, hq, ht, hle⟩ := ih hreach' hs'
-      have hkr : r.countP (isConstB d) ≤ (kept ka a (kept kb b r)).countP (isConstB d) :=
-        le_trans (countP_kept_ge _ kb b r) (countP_kept_ge _ ka a _)
-      simp only [List.countP_cons, hna, hnb, Bool.false_eq_true, ite_false] at hle ⊢
-      exact ⟨q, next, hq, ht, by omega⟩
-
--- Backward extraction: NatReach d roots p bank + Avail d bank T -> RunD d (T &&& d) s ws!
-theorem mask_idemp (d w : Nat) : (w &&& d) &&& d = w &&& d := by
-  simp [Nat.and_assoc, Nat.and_self]
-
-theorem negD_mask (d a : Nat) : negD d (a &&& d) = negD d a := by
-  apply Nat.eq_of_testBit_eq; intro i
-  simp only [negD, Nat.testBit_and, Nat.testBit_xor]
-  cases d.testBit i <;> simp
-
-theorem andD_mask (d a b : Nat) : andD d (a &&& d) (b &&& d) = andD d a b := by
-  apply Nat.eq_of_testBit_eq; intro i
-  simp only [andD, Nat.testBit_and]
-  cases d.testBit i <;> simp
-
-theorem orD_mask (d a b : Nat) : orD d (a &&& d) (b &&& d) = orD d a b := by
-  apply Nat.eq_of_testBit_eq; intro i
-  simp only [orD, Nat.testBit_and, Nat.testBit_or]
-  cases d.testBit i <;> simp
-
-theorem pull_one {d Y k ws} (hd : d &&& mask256 = d) (hnd : ws.Nodup)
-    (hprop : ∀ w ∈ ws, w ≠ 0 ∧ w ≠ d) (h : RunD d Y k ws)
-    {b : List Nat} {a : Nat} (ha : Avail d b a) (hsub : ∀ w ∈ ws, w ∈ negD d a :: b.map (· &&& d)) :
-    ∃ k' ws', k' ≤ k + 1 ∧ ws'.Nodup ∧ (∀ w ∈ ws', w ≠ 0 ∧ w ≠ d) ∧
-      (∀ w ∈ ws', w ∈ b.map (· &&& d)) ∧ RunD d Y k' ws' := by
-  set z := negD d a
-  by_cases hzm : z ∈ ws
-  · by_cases hzb : z ∈ b.map (· &&& d)
-    · exact ⟨k, ws, by omega, hnd, hprop, fun w hw => by
-        rcases List.mem_cons.1 (hsub w hw) with rfl | hm
-        · exact hzb
-        · exact hm, h⟩
-    · have hzp := hprop z hzm
-      have ha_nc : ¬ IsConst d a := by
-        intro hc
-        rcases negD_const hd hc with h0 | h1
-        · exact hzp.1 (by simpa [z, negD, Nat.and_assoc, Nat.and_self] using h0)
-        · exact hzp.2 (by simpa [z, negD, Nat.and_assoc, Nat.and_self] using h1)
-      obtain ⟨v, hv, hve⟩ := ha.resolve_left ha_nc
-      set a' := a &&& d
-      have ha'_mem : a' ∈ b.map (· &&& d) := List.mem_map.2 ⟨v, hv, hve⟩
-      have ha'_prop : a' ≠ 0 ∧ a' ≠ d := ⟨fun e => ha_nc (Or.inl e), fun e => ha_nc (Or.inr e)⟩
-      set rest := ws.erase z
-      have hrest_nd : rest.Nodup := hnd.erase z
-      have hrest_sub : ∀ w ∈ rest, w ∈ b.map (· &&& d) := by
-        intro w hw
-        have ⟨hne, hm⟩ := hnd.mem_erase_iff.1 hw
-        rcases List.mem_cons.1 (hsub w hm) with rfl | hmb
-        · exact absurd rfl hne
-        · exact hmb
-      have hrest_prop : ∀ w ∈ rest, w ≠ 0 ∧ w ≠ d := fun w hw => hprop w (List.mem_of_mem_erase hw)
-      have hp1 : ws.Perm (z :: rest) := List.perm_cons_erase hzm
-      have ez : negD d a' = z := negD_mask d a
-      have h1 : RunD d Y k (negD d a' :: rest) := by
-        rw [ez]; exact Run.perm hp1 h
-      have hne0 : negD d a' ≠ 0 := ez.symm ▸ hzp.1
-      have hned : negD d a' ≠ d := ez.symm ▸ hzp.2
-      by_cases ham : a' ∈ rest
-      · have hp2 : rest.Perm (a' :: rest.erase a') := List.perm_cons_erase ham
-        have h2 : RunD d Y k (negD d a' :: kept true a' (rest.erase a')) :=
-          Run.perm (hp2.cons _) h1
-        have hnm : negD d a' ∉ (a' :: rest.erase a') := by
-          rw [ez, List.mem_cons]; rintro (e | hm)
-          · exact hzb (e ▸ ha'_mem)
-          · exact hnd.not_mem_erase (List.mem_of_mem_erase hm)
-        refine ⟨k + 1, rest, le_rfl, hrest_nd, hrest_prop, hrest_sub, ?_⟩
-        exact Run.perm hp2.symm (Run.one true hne0 hned hnm h2)
-      · have h2 : RunD d Y k (negD d a' :: kept false a' rest) := h1
-        have hnm : negD d a' ∉ (a' :: rest) := by
-          rw [ez, List.mem_cons]; rintro (e | hm)
-          · exact hzb (e ▸ ha'_mem)
-          · exact hnd.not_mem_erase hm
-        refine ⟨k + 1, a' :: rest, le_rfl, List.nodup_cons.2 ⟨ham, hrest_nd⟩, ?_, ?_, Run.one false hne0 hned hnm h2⟩
-        · intro w hw; rcases List.mem_cons.1 hw with rfl | hw
-          · exact ha'_prop
-          · exact hrest_prop w hw
-        · intro w hw; rcases List.mem_cons.1 hw with rfl | hw
-          · exact ha'_mem
-          · exact hrest_sub w hw
-  · exact ⟨k, ws, by omega, hnd, hprop, fun w hw => by
-      rcases List.mem_cons.1 (hsub w hw) with rfl | hm
-      · exact absurd hw hzm
-      · exact hm, h⟩
-
-theorem pull_two {d Y k ws} (hnd : ws.Nodup)
-    (hprop : ∀ w ∈ ws, w ≠ 0 ∧ w ≠ d) (h : RunD d Y k ws)
-    {b : List Nat} {a c : Nat} (op : Bool) (ha : Avail d b a) (hc : Avail d b c)
-    (hsub : ∀ w ∈ ws, w ∈ binD d op a c :: b.map (· &&& d)) :
-    ∃ k' ws', k' ≤ k + 1 ∧ ws'.Nodup ∧ (∀ w ∈ ws', w ≠ 0 ∧ w ≠ d) ∧
-      (∀ w ∈ ws', w ∈ b.map (· &&& d)) ∧ RunD d Y k' ws' := by
-  set z := binD d op a c
-  have hz_mask : z &&& d = z := by cases op <;> simp [z, binD, andD, orD, Nat.and_assoc, Nat.and_self]
-  by_cases hzm : z ∈ ws
-  · by_cases hzb : z ∈ b.map (· &&& d)
-    · exact ⟨k, ws, by omega, hnd, hprop, fun w hw => by
-        rcases List.mem_cons.1 (hsub w hw) with rfl | hm
-        · exact hzb
-        · exact hm, h⟩
-    · have hzp := hprop z hzm
-      have ha_nc : ¬ IsConst d a := by
-        intro hca
-        rcases binD_const_left op hca with h0 | h1 | he
-        · exact hzp.1 (hz_mask.symm.trans h0)
-        · exact hzp.2 (hz_mask.symm.trans h1)
-        · rcases hc with hcc | ⟨v, hv, hve⟩
-          · rcases hcc with h0 | h1
-            · exact hzp.1 (hz_mask.symm.trans (he.trans h0))
-            · exact hzp.2 (hz_mask.symm.trans (he.trans h1))
-          · exact hzb (List.mem_map.2 ⟨v, hv, hve.trans (he.symm.trans hz_mask)⟩)
-      have hc_nc : ¬ IsConst d c := by
-        intro hcc
-        have hz' : z = binD d op c a := binD_comm d op a c
-        rcases binD_const_left op hcc with h0 | h1 | he
-        · exact hzp.1 (hz_mask.symm.trans (by rw [hz']; exact h0))
-        · exact hzp.2 (hz_mask.symm.trans (by rw [hz']; exact h1))
-        · rcases ha with hca | ⟨v, hv, hve⟩
-          · exact absurd hca ha_nc
-          · have he' : z &&& d = a &&& d := hz'.symm ▸ he
-            exact hzb (List.mem_map.2 ⟨v, hv, hve.trans (he'.symm.trans hz_mask)⟩)
-      obtain ⟨va, hva, hvae⟩ := ha.resolve_left ha_nc
-      obtain ⟨vc, hvc, hvce⟩ := hc.resolve_left hc_nc
-      set a' := a &&& d
-      set c' := c &&& d
-      have ha'_mem : a' ∈ b.map (· &&& d) := List.mem_map.2 ⟨va, hva, hvae⟩
-      have hc'_mem : c' ∈ b.map (· &&& d) := List.mem_map.2 ⟨vc, hvc, hvce⟩
-      have ha'_prop : a' ≠ 0 ∧ a' ≠ d := ⟨fun e => ha_nc (Or.inl e), fun e => ha_nc (Or.inr e)⟩
-      have hc'_prop : c' ≠ 0 ∧ c' ≠ d := ⟨fun e => hc_nc (Or.inl e), fun e => hc_nc (Or.inr e)⟩
-      have hne_ac : a' ≠ c' := by
-        intro heq
-        dsimp only [a', c'] at heq
-        have hz_eq : z = a' := by
-          cases op
-          · simp only [z, binD, Bool.false_eq_true, ite_false]; rw [← andD_mask, ← heq]; simp [andD, a', Nat.and_assoc, Nat.and_self]
-          · simp only [z, binD, ite_true]; rw [← orD_mask, ← heq]; simp [orD, a', Nat.and_assoc, Nat.and_self]
-        exact hzb (hz_eq ▸ ha'_mem)
-      set rest := ws.erase z
-      have hrest_nd : rest.Nodup := hnd.erase z
-      have hrest_sub : ∀ w ∈ rest, w ∈ b.map (· &&& d) := by
-        intro w hw
-        have ⟨hne, hm⟩ := hnd.mem_erase_iff.1 hw
-        rcases List.mem_cons.1 (hsub w hm) with rfl | hmb
-        · exact absurd rfl hne
-        · exact hmb
-      have hrest_prop : ∀ w ∈ rest, w ≠ 0 ∧ w ≠ d := fun w hw => hprop w (List.mem_of_mem_erase hw)
-      have hp1 : ws.Perm (z :: rest) := List.perm_cons_erase hzm
-      have ez : (if !op then andD d a' c' else orD d a' c') = z := by
-        cases op
-        · simp [z, binD, a', c', andD_mask]
-        · simp [z, binD, a', c', orD_mask]
-      have h1 : RunD d Y k ((if !op then andD d a' c' else orD d a' c') :: rest) := by
-        rw [ez]; exact Run.perm hp1 h
-      set ka := decide (a' ∈ rest)
-      set kb := decide (c' ∈ rest)
-      set tail := (rest.erase a').erase c'
-      have htail_nd : tail.Nodup := (hrest_nd.erase a').erase c'
-      have hna_tail : a' ∉ tail := by
-        intro hm; exact hrest_nd.not_mem_erase (List.mem_of_mem_erase hm)
-      have hnc_tail : c' ∉ tail := (hrest_nd.erase a').not_mem_erase
-      have hna_mid : a' ∉ kept kb c' tail := by
-        rw [mem_kept]; rintro (⟨_, h⟩ | h)
-        · exact hne_ac h
-        · exact hna_tail h
-      have hrest_perm : rest.Perm (kept ka a' (kept kb c' tail)) := by
-        refine (List.perm_ext_iff_of_nodup hrest_nd (nodup_kept ka a' _ (nodup_kept kb c' _ htail_nd hnc_tail) hna_mid)).2 ?_
-        intro x
-        rw [mem_kept, mem_kept, (hrest_nd.erase a').mem_erase_iff, hrest_nd.mem_erase_iff]
-        by_cases hxa : x = a' <;> by_cases hxc : x = c' <;> by_cases hxr : x ∈ rest <;>
-          simp_all [ka, kb]
-      have h2 := Run.perm (hrest_perm.cons _) h1
-      have hne0 : (if !op then andD d a' c' else orD d a' c') ≠ 0 := ez.symm ▸ hzp.1
-      have hned : (if !op then andD d a' c' else orD d a' c') ≠ d := ez.symm ▸ hzp.2
-      have hnm : (if !op then andD d a' c' else orD d a' c') ∉ (a' :: c' :: tail) := by
-        rw [ez, List.mem_cons, List.mem_cons]; rintro (e | e | hm)
-        · exact hzb (e ▸ ha'_mem)
-        · exact hzb (e ▸ hc'_mem)
-        · exact hnd.not_mem_erase (List.mem_of_mem_erase (List.mem_of_mem_erase hm))
-      have h3 : RunD d Y (k + 1) (a' :: c' :: tail) := Run.two (!op) ka kb hne0 hned hnm h2
-      have hnd3 : (a' :: c' :: tail).Nodup :=
-        List.nodup_cons.2 ⟨by simp [hne_ac, hna_tail], List.nodup_cons.2 ⟨hnc_tail, htail_nd⟩⟩
-      refine ⟨k + 1, a' :: c' :: tail, le_rfl, hnd3, ?_, ?_, h3⟩
-      · intro w hw; rcases List.mem_cons.1 hw with rfl | hw
-        · exact ha'_prop
-        · rcases List.mem_cons.1 hw with rfl | hw
-          · exact hc'_prop
-          · exact hrest_prop w (List.mem_of_mem_erase (List.mem_of_mem_erase hw))
-      · intro w hw; rcases List.mem_cons.1 hw with rfl | hw
-        · exact ha'_mem
-        · rcases List.mem_cons.1 hw with rfl | hw
-          · exact hc'_mem
-          · exact hrest_sub w (List.mem_of_mem_erase (List.mem_of_mem_erase hw))
-  · exact ⟨k, ws, by omega, hnd, hprop, fun w hw => by
-      rcases List.mem_cons.1 (hsub w hw) with rfl | hm
-      · exact absurd hw hzm
-      · exact hm, h⟩
-
-theorem reach_to_run_aux {d : Nat} {roots : List Nat} {p bank} (hd : d &&& mask256 = d)
-    (hr : NatReach d roots p bank) :
-    ∀ {Y k ws}, ws.Nodup → (∀ w ∈ ws, w ≠ 0 ∧ w ≠ d) →
-      (∀ w ∈ ws, w ∈ bank.map (· &&& d)) → RunD d Y k ws →
-      ∃ k' ws', k' ≤ p + k ∧ ws'.Nodup ∧ (∀ w ∈ ws', w ≠ 0 ∧ w ≠ d) ∧
-        (∀ w ∈ ws', w ∈ roots.map (· &&& d)) ∧ RunD d Y k' ws' := by
-  induction p generalizing bank with
-  | zero =>
-    intro Y k ws hnd hprop hsub hrun
-    subst hr
-    exact ⟨k, ws, by omega, hnd, hprop, hsub, hrun⟩
-  | succ p ih =>
-    intro Y k ws hnd hprop hsub hrun
-    rcases hr with ⟨b, a, rfl, hrb, ha⟩ | ⟨b, a, c, op, rfl, hrb, ha, hc⟩
-    · have hsub' : ∀ w ∈ ws, w ∈ negD d a :: b.map (· &&& d) := by
-        intro w hw; have := hsub w hw; simp only [List.map_cons, negD, Nat.and_assoc, Nat.and_self] at this; exact this
-      obtain ⟨k1, ws1, hk1, hnd1, hprop1, hsub1, hrun1⟩ := pull_one hd hnd hprop hrun ha hsub'
-      obtain ⟨k2, ws2, hk2, hnd2, hprop2, hsub2, hrun2⟩ := ih hrb hnd1 hprop1 hsub1 hrun1
-      exact ⟨k2, ws2, by omega, hnd2, hprop2, hsub2, hrun2⟩
-    · have hsub' : ∀ w ∈ ws, w ∈ binD d op a c :: b.map (· &&& d) := by
-        intro w hw; have := hsub w hw
-        have ez : binD d op a c &&& d = binD d op a c := by cases op <;> simp [binD, andD, orD, Nat.and_assoc, Nat.and_self]
-        simpa [List.map_cons, ez] using this
-      obtain ⟨k1, ws1, hk1, hnd1, hprop1, hsub1, hrun1⟩ := pull_two hnd hprop hrun op ha hc hsub'
-      obtain ⟨k2, ws2, hk2, hnd2, hprop2, hsub2, hrun2⟩ := ih hrb hnd1 hprop1 hsub1 hrun1
-      exact ⟨k2, ws2, by omega, hnd2, hprop2, hsub2, hrun2⟩
-
-theorem reach_to_run {d : Nat} {roots : List Nat} {T : Nat} {p bank} (hd : d &&& mask256 = d)
-    (hnc : ¬ IsConst d T) (hr : NatReach d roots p bank) (ha : Avail d bank T) :
-    ∃ s ws, s ≤ p ∧ ws.Nodup ∧ (∀ w ∈ ws, w ∈ roots.map (· &&& d)) ∧ RunD d (T &&& d) s ws := by
-  obtain ⟨v, hv, hve⟩ := ha.resolve_left hnc
-  have hprop : ∀ w ∈ [T &&& d], w ≠ 0 ∧ w ≠ d := by
-    intro w hw; rw [List.mem_singleton.1 hw]
-    exact ⟨fun e => hnc (Or.inl e), fun e => hnc (Or.inr e)⟩
-  have hsub : ∀ w ∈ [T &&& d], w ∈ bank.map (· &&& d) := by
-    intro w hw; rw [List.mem_singleton.1 hw]; exact List.mem_map.2 ⟨v, hv, hve⟩
-  obtain ⟨s, ws, hs, hnd, _, hsub', hrun⟩ := reach_to_run_aux hd hr (List.nodup_singleton _) hprop hsub Run.done
-  exact ⟨s, ws, by omega, hnd, hsub', hrun⟩
-
--- Essential variable lemma + lower_slice + lower_base + lower_iso!
-theorem runD_bits {d y s ws} (hd : d &&& mask256 = d) (h : RunD d y s ws) (i j : Nat)
-    (hi : d.testBit i = true) (hj : d.testBit j = true)
-    (hw : ∀ w ∈ ws, w.testBit i = w.testBit j) : y.testBit i = y.testBit j := by
-  have hmi : mask256.testBit i = true := by
-    have := congrArg (fun v => v.testBit i) hd; simp [Nat.testBit_and, hi] at this; exact this
-  have hmj : mask256.testBit j = true := by
-    have := congrArg (fun v => v.testBit j) hd; simp [Nat.testBit_and, hj] at this; exact this
-  induction h using Run.fold with
-  | done => exact hw _ (by simp)
-  | perm hp _ ih => exact ih (fun w h => hw w (hp.mem_iff.1 h))
-  | one save _ _ _ _ ih =>
-    apply ih; have ha := hw _ List.mem_cons_self
-    intro w hm; cases save <;> simp only [kept, Bool.false_eq_true, ite_false, ite_true, List.mem_cons] at hm
-    · rcases hm with rfl | hr
-      · simp [negD, ha, hi, hj, hmi, hmj]
-      · exact hw _ (by simp [hr])
-    · rcases hm with rfl | rfl | hr
-      · simp [negD, ha, hi, hj, hmi, hmj]
-      · exact ha
-      · exact hw _ (by simp [hr])
-  | two conj ka kb _ _ _ _ ih =>
-    apply ih; have ha := hw _ List.mem_cons_self; have hb := hw _ (List.mem_cons_of_mem _ List.mem_cons_self)
-    intro w hm; cases conj <;> cases ka <;> cases kb <;>
-      simp only [kept, Bool.false_eq_true, ite_false, ite_true, List.mem_cons] at hm <;>
-      rcases hm with rfl | hr <;>
-      first | simp [andD, orD, ha, hb, hi, hj] | exact hw _ (by simp only [List.mem_cons]; tauto)
-
-theorem runD_bits_le {d y s ws} (h : RunD d y s ws) (hl : ws.length = s + 1) (i j : Nat)
-    (hi : d.testBit i = true) (hj : d.testBit j = true)
-    (hw : ∀ w ∈ ws, w.testBit i ≤ w.testBit j) : y.testBit i ≤ y.testBit j := by
-  induction h using Run.fold with
-  | done => exact hw _ (by simp)
-  | perm hp _ ih => exact ih (hp.length_eq.trans hl) (fun w h => hw w (hp.mem_iff.1 h))
-  | one save _ _ _ h _ => have hh := run_len h; cases save <;> simp [kept] at hh hl <;> omega
-  | two conj ka kb _ _ _ h ih =>
-    have hh := run_len h
-    cases ka <;> cases kb <;> simp [kept] at hh hl <;> try omega
-    apply ih (by simp [kept]; omega)
-    have ha := hw _ List.mem_cons_self; have hb := hw _ (List.mem_cons_of_mem _ List.mem_cons_self)
-    intro w hm; simp only [kept, Bool.false_eq_true, ite_false, List.mem_cons] at hm
-    rcases hm with rfl | hr
-    · cases conj <;> simp only [andD, orD, ite_true, Bool.false_eq_true, ite_false, Nat.testBit_and, Nat.testBit_or, hi, hj, Bool.and_true] <;> grind
-    · exact hw _ (by simp [hr])
-
-theorem lower_base {d : Nat} {roots : List Nat} {T : Nat} (h : availB d roots T = false) :
-    Lower d roots T 1 := by
-  intro p bank hr ha
-  cases p with
-  | zero =>
-    dsimp only [NatReach] at hr; rw [hr] at ha
-    have ht := (availB_iff d roots T).2 ha
-    rw [h] at ht; contradiction
-  | succ p => omega
-
--- moveBits & lower_iso!
-def moveBits (tag d w : Nat) : Nat :=
-  ((w &&& tag) <<< d) ||| ((w >>> d) &&& tag) |||
-    (w ^^^ ((w &&& tag) ||| (w &&& (tag <<< d))))
-
-theorem moved (tag d i w : Nat) (h : (tag &&& (tag <<< d)) = 0) :
-    (moveBits tag d w).testBit i =
-      (if tag.testBit i then w.testBit (d + i)
-       else if (tag <<< d).testBit i then w.testBit (i - d) else w.testBit i) := by
-  have ht := congrArg (fun v : Nat => v.testBit i) h
-  simp only [Nat.testBit_and, Nat.zero_testBit] at ht
-  simp only [moveBits, Nat.testBit_or, Nat.testBit_shiftLeft, Nat.testBit_and,
-    Nat.testBit_shiftRight, Nat.testBit_xor] at *
-  by_cases hi : d ≤ i <;> simp [hi] at * <;> grind
-
-theorem move_hom (tag d : Nat) (h : (tag &&& (tag <<< d)) = 0) (a b : Nat) :
-    moveBits tag d (a &&& b) = (moveBits tag d a &&& moveBits tag d b) ∧
-    moveBits tag d (a ||| b) = (moveBits tag d a ||| moveBits tag d b) ∧
-    moveBits tag d (a ^^^ b) = (moveBits tag d a ^^^ moveBits tag d b) := by
-  refine ⟨?_, ?_, ?_⟩ <;> apply Nat.eq_of_testBit_eq <;> intro i <;>
-    simp only [Nat.testBit_and, Nat.testBit_or, Nat.testBit_xor, moved tag d i _ h] <;>
-    split_ifs <;> simp
-
-theorem move_zero (tag d : Nat) (h : (tag &&& (tag <<< d)) = 0) : moveBits tag d 0 = 0 := by
-  apply Nat.eq_of_testBit_eq; intro i; rw [moved tag d i 0 h]; split_ifs <;> simp
-
-def applyMoves (ms : List (Nat × Nat)) (w : Nat) : Nat :=
-  ms.foldl (fun acc p => moveBits p.1 p.2 acc) w
-
-def moveOK256 (p : Nat × Nat) : Bool :=
-  (p.1 &&& (p.1 <<< p.2) == 0) && (moveBits p.1 p.2 mask256 == mask256)
-
-theorem applyMoves_hom (ms : List (Nat × Nat)) (hok : ms.all moveOK256 = true) :
-    (∀ a b, applyMoves ms (a &&& b) = applyMoves ms a &&& applyMoves ms b) ∧
-    (∀ a b, applyMoves ms (a ||| b) = applyMoves ms a ||| applyMoves ms b) ∧
-    (∀ a b, applyMoves ms (a ^^^ b) = applyMoves ms a ^^^ applyMoves ms b) ∧
-    applyMoves ms 0 = 0 ∧ applyMoves ms mask256 = mask256 := by
-  induction ms with
-  | nil => exact ⟨fun _ _ => rfl, fun _ _ => rfl, fun _ _ => rfl, rfl, rfl⟩
-  | cons p ps ih =>
-    simp only [List.all_cons, Bool.and_eq_true, moveOK256, beq_iff_eq] at hok
-    obtain ⟨⟨hz, hm⟩, hps⟩ := hok
-    obtain ⟨hand, hor, hxor, h0, h256⟩ := ih hps
-    refine ⟨?_, ?_, ?_, ?_, ?_⟩
-    · intro a b; simp only [applyMoves, List.foldl_cons, (move_hom p.1 p.2 hz a b).1]; exact hand _ _
-    · intro a b; simp only [applyMoves, List.foldl_cons, (move_hom p.1 p.2 hz a b).2.1]; exact hor _ _
-    · intro a b; simp only [applyMoves, List.foldl_cons, (move_hom p.1 p.2 hz a b).2.2]; exact hxor _ _
-    · simp only [applyMoves, List.foldl_cons, move_zero p.1 p.2 hz]; exact h0
-    · simp only [applyMoves, List.foldl_cons, hm]; exact h256
-
-theorem move_invol (tag d w : Nat) (h : (tag &&& (tag <<< d)) = 0) :
-    moveBits tag d (moveBits tag d w) = w := by
-  apply Nat.eq_of_testBit_eq; intro i
-  have ht := congrArg (fun v : Nat => v.testBit i) h
-  simp only [Nat.testBit_and, Nat.zero_testBit] at ht
-  rw [moved tag d i _ h]
-  by_cases h1 : tag.testBit i = true
-  · simp only [h1, ite_true, moved tag d (d + i) w h]
-    have h2 : tag.testBit (d + i) = false := by
-      have htd := congrArg (fun v : Nat => v.testBit (d + i)) h
-      simp only [Nat.testBit_and, Nat.testBit_shiftLeft, Nat.zero_testBit] at htd
-      have hge : d ≤ d + i := Nat.le_add_right d i
-      have hsub : d + i - d = i := Nat.add_sub_cancel_left d i
-      simp [hge, hsub, h1] at htd; exact htd
-    have h3 : (tag <<< d).testBit (d + i) = true := by
-      simp [Nat.testBit_shiftLeft, Nat.le_add_right, Nat.add_sub_cancel_left, h1]
-    simp [h2, h3, Nat.add_sub_cancel_left]
-  · simp only [h1, ite_false]
-    by_cases h2 : (tag <<< d).testBit i = true
-    · simp only [h2, ite_true, moved tag d (i - d) w h]
-      rw [Nat.testBit_shiftLeft] at h2
-      simp only [Bool.and_eq_true, decide_eq_true_eq] at h2
-      simp [h2.2, Nat.add_sub_of_le h2.1]
-    · simp [h1, h2, moved tag d i w h]
-
-theorem applyMoves_inj (ms : List (Nat × Nat)) (hok : ms.all moveOK256 = true) :
-    Function.Injective (applyMoves ms) := by
-  induction ms with
-  | nil => intro a b h; exact h
-  | cons p ps ih =>
-    simp only [List.all_cons, Bool.and_eq_true, moveOK256, beq_iff_eq] at hok
-    intro a b h
-    simp only [applyMoves, List.foldl_cons] at h
-    have h1 := ih hok.2 h
-    have := congrArg (moveBits p.1 p.2) h1
-    rwa [move_invol p.1 p.2 a hok.1.1, move_invol p.1 p.2 b hok.1.1] at this
-
-theorem applyMoves_runD {d Y s} (ms : List (Nat × Nat)) (hok : ms.all moveOK256 = true)
-    (hd : applyMoves ms d = d) (hY : applyMoves ms Y = Y) {ws} (h : RunD d Y s ws) :
-    RunD d Y s (ws.map (applyMoves ms)) := by
-  obtain ⟨hand, hor, hxor, h0, h256⟩ := applyMoves_hom ms hok
-  have hinj := applyMoves_inj ms hok
-  have hneg : ∀ a, applyMoves ms (negD d a) = negD d (applyMoves ms a) := fun a => by
-    simp only [negD, hand, hxor, h256, hd]
-  have hand' : ∀ a b, applyMoves ms (andD d a b) = andD d (applyMoves ms a) (applyMoves ms b) := fun a b => by
-    simp only [andD, hand, hd]
-  have hor' : ∀ a b, applyMoves ms (orD d a b) = orD d (applyMoves ms a) (applyMoves ms b) := fun a b => by
-    simp only [orD, hand, hor, hd]
-  rw [← hY]
-  induction h using Run.fold with
-  | done => exact Run.done
-  | perm hp _ ih => exact Run.perm (hp.map _) ih
-  | @one s a r save hne0 hned hnm _ ih =>
-    have e1 : (negD d a :: kept save a r).map (applyMoves ms) =
-        negD d (applyMoves ms a) :: kept save (applyMoves ms a) (r.map (applyMoves ms)) := by
-      simp [kept_map, hneg]
-    rw [e1] at ih
-    refine Run.one save ?_ ?_ ?_ ih
-    · intro e; rw [← hneg] at e; exact hne0 (hinj (e.trans h0.symm))
-    · intro e; rw [← hneg] at e; exact hned (hinj (e.trans hd.symm))
-    · rw [← hneg, ← List.map_cons, List.mem_map]; rintro ⟨x, hx, he⟩; exact hnm (hinj he ▸ hx)
-  | @two s a b r conj ka kb hne0 hned hnm _ ih =>
-    have eop : applyMoves ms (if conj then andD d a b else orD d a b) =
-        (if conj then andD d (applyMoves ms a) (applyMoves ms b) else orD d (applyMoves ms a) (applyMoves ms b)) := by
-      cases conj <;> simp [hand', hor']
-    have e1 : ((if conj then andD d a b else orD d a b) :: kept ka a (kept kb b r)).map (applyMoves ms) =
-        (if conj then andD d (applyMoves ms a) (applyMoves ms b) else orD d (applyMoves ms a) (applyMoves ms b)) ::
-          kept ka (applyMoves ms a) (kept kb (applyMoves ms b) (r.map (applyMoves ms))) := by
-      simp [kept_map, eop]
-    rw [e1] at ih
-    refine Run.two conj ka kb ?_ ?_ ?_ ih
-    · intro e; rw [← eop] at e; exact hne0 (hinj (e.trans h0.symm))
-    · intro e; rw [← eop] at e; exact hned (hinj (e.trans hd.symm))
-    · rw [← eop, ← List.map_cons, ← List.map_cons, List.mem_map]; rintro ⟨x, hx, he⟩; exact hnm (hinj he ▸ hx)
-
-theorem reach_map_moves (ms : List (Nat × Nat)) (hok : ms.all moveOK256 = true)
-    {d1 d2 : Nat} (hd : applyMoves ms d2 = d1)
-    {roots1 roots2 : List Nat} (hroots : ∀ r ∈ roots2, Avail d1 roots1 (applyMoves ms r)) :
-    ∀ {p bank}, NatReach d2 roots2 p bank →
-      ∃ bank', NatReach d1 roots1 p bank' ∧ ∀ v ∈ bank, Avail d1 bank' (applyMoves ms v) := by
-  obtain ⟨hand, hor, hxor, h0, h256⟩ := applyMoves_hom ms hok
-  have hav : ∀ {b b' w}, (∀ v ∈ b, Avail d1 b' (applyMoves ms v)) →
-      Avail d2 b w → Avail d1 b' (applyMoves ms w) := by
-    intro b b' w hbb hw
-    rcases hw with (hz | h1) | ⟨v, hv, he⟩
-    · exact Or.inl (Or.inl (by rw [← hd, ← hand, hz, h0]))
-    · exact Or.inl (Or.inr (by rw [← hd, ← hand, h1]))
-    · have hve : applyMoves ms v &&& d1 = applyMoves ms w &&& d1 := by rw [← hd, ← hand, ← hand, he]
-      exact avail_of_eq hve (hbb v hv)
-  intro p
-  induction p with
-  | zero =>
-    intro bank hr; subst hr
-    exact ⟨roots1, rfl, hroots⟩
-  | succ p ih =>
-    intro bank hr
-    rcases hr with ⟨b, a, rfl, hrb, ha⟩ | ⟨b, a, c, op, rfl, hrb, ha, hc⟩
-    · obtain ⟨b', hrb', hbb⟩ := ih hrb
-      have ha' := hav hbb ha
-      refine ⟨negD d1 (applyMoves ms a) :: b', Or.inl ⟨b', applyMoves ms a, rfl, hrb', ha'⟩, ?_⟩
-      intro v hv; rcases List.mem_cons.1 hv with rfl | hv
-      · exact Or.inr ⟨negD d1 (applyMoves ms a), List.mem_cons_self, by simp only [negD, hand, hxor, h256, hd]⟩
-      · exact avail_cons _ _ (hbb v hv)
-    · obtain ⟨b', hrb', hbb⟩ := ih hrb
-      have ha' := hav hbb ha; have hc' := hav hbb hc
-      refine ⟨binD d1 op (applyMoves ms a) (applyMoves ms c) :: b',
-        Or.inr ⟨b', applyMoves ms a, applyMoves ms c, op, rfl, hrb', ha', hc'⟩, ?_⟩
-      intro v hv; rcases List.mem_cons.1 hv with rfl | hv
-      · exact Or.inr ⟨binD d1 op (applyMoves ms a) (applyMoves ms c), List.mem_cons_self, by
-          cases op <;> simp only [binD, andD, orD, hand, hor, hd, ite_true, ite_false, Bool.false_eq_true]⟩
-      · exact avail_cons _ _ (hbb v hv)
-
-theorem lower_iso {d1 d2 T1 T2 L : Nat} {roots1 roots2 : List Nat}
-    (ms : List (Nat × Nat)) (hok : ms.all moveOK256 = true)
-    (hd : applyMoves ms d2 = d1) (hT : applyMoves ms T2 = T1)
-    (hroots : roots2.all (fun r => availB d1 roots1 (applyMoves ms r)) = true)
-    (h1 : Lower d1 roots1 T1 L) : Lower d2 roots2 T2 L := by
-  obtain ⟨hand, _, _, h0, _⟩ := applyMoves_hom ms hok
-  have hr : ∀ r ∈ roots2, Avail d1 roots1 (applyMoves ms r) := fun r hr =>
-    (availB_iff _ _ _).1 (List.all_eq_true.1 hroots r hr)
-  intro p bank hreach ha
-  obtain ⟨bank', hrb', hbb⟩ := reach_map_moves ms hok hd hr hreach
-  apply h1 p bank' hrb'
-  rcases ha with (hz | ho) | ⟨v, hv, he⟩
-  · exact Or.inl (Or.inl (by rw [← hT, ← hd, ← hand, hz, h0]))
-  · exact Or.inl (Or.inr (by rw [← hT, ← hd, ← hand, ho]))
-  · have hve : applyMoves ms v &&& d1 = T1 &&& d1 := by rw [← hT, ← hd, ← hand, ← hand, he]
-    exact avail_of_eq hve (hbb v hv)
-
--- lower_slice!
-def pairOK (d T : Nat) (p : Nat × Nat) : Bool :=
-  d.testBit p.1 && d.testBit p.2 && (T.testBit p.1 != T.testBit p.2)
-
-def essOK (d T : Nat) (roots : List Nat) (a : Nat) (p : Nat × Nat) : Bool :=
-  pairOK d T p && roots.all (fun v => (v == a) || (v.testBit p.1 == v.testBit p.2))
-
-theorem countP_ge_sublist (p : Nat → Bool) {xs ys : List Nat}
-    (hnd : xs.Nodup) (hsub : ∀ a ∈ xs, a ∈ ys) (hall : ∀ a ∈ xs, p a = true) :
-    xs.length ≤ ys.countP p := by
-  induction xs generalizing ys with
-  | nil => simp
-  | cons a xs ih =>
-    have ⟨hna, hnd'⟩ := List.nodup_cons.1 hnd
-    have ham : a ∈ ys := hsub a List.mem_cons_self
-    have hperm : ys.Perm (a :: ys.erase a) := List.perm_cons_erase ham
-    rw [hperm.countP_eq, List.countP_cons, hall a List.mem_cons_self]
-    have ih' := ih hnd' (fun x hx => by
-      have hne : x ≠ a := fun e => hna (e ▸ hx)
-      exact (List.mem_erase_of_ne hne).2 (hsub x (List.mem_cons_of_mem _ hx)))
-      (fun x hx => hall x (List.mem_cons_of_mem _ hx))
-    simp only [ite_true, List.length_cons]
-    omega
-
-theorem lower_slice {d dSub T TSub L : Nat} {roots rootsSub : List Nat}
-    (hd : d &&& mask256 = d) (hdSub : dSub &&& mask256 = dSub) (hsub : dSub &&& d = dSub)
-    (hT : T &&& dSub = TSub &&& dSub)
-    (hnc : isConstB d T = false) (hncSub : isConstB dSub TSub = false)
-    (hcov : roots.all (availB dSub rootsSub) = true)
-    (singles : List (Nat × Nat × Nat))
-    (hs_nd : (singles.map Prod.fst).Nodup)
-    (hs_ok : singles.all (fun e => isConstB dSub e.1 && essOK d (T &&& d) (roots.map (· &&& d)) e.1 e.2) = true)
-    (hprior : Lower dSub rootsSub TSub L) :
-    Lower d roots T (L + singles.length) := by
-  have hnc' : ¬ IsConst d T := fun h => by rw [(isConstB_iff _ _).2 h] at hnc; contradiction
-  have hncSub' : ¬ IsConst dSub (T &&& d) := by
-    intro h
-    have e : (T &&& d) &&& dSub = TSub &&& dSub := by
-      rw [Nat.and_assoc, Nat.and_comm d dSub, hsub, hT]
-    rcases h with h0 | h1
-    · exact absurd ((isConstB_iff _ _).2 (Or.inl (e.symm.trans h0))) (by simp [hncSub])
-    · exact absurd ((isConstB_iff _ _).2 (Or.inr (e.symm.trans h1))) (by simp [hncSub])
-  intro p bank hr ha
-  obtain ⟨s, ws, hs_le, hnd, hws_sub, hrun⟩ := reach_to_run hd hnc' hr ha
-  have hws_av : ∀ w ∈ ws, Avail dSub rootsSub w := by
-    intro w hw
-    obtain ⟨r, hr_m, rfl⟩ := List.mem_map.1 (hws_sub w hw)
-    have hav := (availB_iff _ _ _).1 (List.all_eq_true.1 hcov r hr_m)
-    exact avail_of_eq (by rw [Nat.and_assoc, Nat.and_comm d dSub, hsub]) hav
-  obtain ⟨q, next, hq, ht, hle⟩ := contraction hdSub hsub hncSub' hrun (p := 0) (bank := rootsSub) rfl hws_av
-  have hTSub_av : Avail dSub next TSub := avail_of_eq (by
-    rw [Nat.and_assoc, Nat.and_comm d dSub, hsub, hT]) ht
-  have hL : L ≤ q := hprior q next hq hTSub_av
-  have hsin_mem : ∀ a ∈ singles.map Prod.fst, a ∈ ws := by
-    intro a ha
-    obtain ⟨⟨a', r1, r2⟩, hm, rfl⟩ := List.mem_map.1 ha
-    have hok := List.all_eq_true.1 hs_ok (a', r1, r2) hm
-    simp only [Bool.and_eq_true, essOK, pairOK, bne_iff_ne, List.all_eq_true, Bool.or_eq_true, beq_iff_eq] at hok
-    obtain ⟨_, ⟨⟨hr1, hr2⟩, hdiff⟩, hiso⟩ := hok
-    by_contra hnot
-    apply hdiff
-    apply runD_bits hd hrun r1 r2 hr1 hr2
-    intro w hw
-    rcases hiso w (hws_sub w hw) with rfl | heq
-    · exact absurd hw hnot
-    · exact heq
-  have hsin_const : ∀ a ∈ singles.map Prod.fst, isConstB dSub a = true := by
-    intro a ha
-    obtain ⟨⟨a', r1, r2⟩, hm, rfl⟩ := List.mem_map.1 ha
-    have hok := List.all_eq_true.1 hs_ok _ hm
-    simp only [Bool.and_eq_true] at hok
-    exact hok.1
-  have hcnt := countP_ge_sublist (isConstB dSub) hs_nd hsin_mem hsin_const
-  simp only [List.length_map] at hcnt
-  omega
-
--- poolCut (compact 52-bit hint!) + covers + eval6 + bar!
-def runChoices (d : Nat) (pool : List Nat) : Nat → Nat → Option (List Nat)
-  | 0, _ => some pool
-  | p + 1, bits =>
-    let code := bits &&& 1023
-    let op := code &&& 3
-    let ia := (code >>> 2) &&& 15
-    let ib := (code >>> 6) &&& 15
-    if ia < pool.length && (op == 2 || ib < pool.length) then
-      let a := pool.getD ia 0
-      let b := pool.getD ib 0
-      let w := if op == 2 then negD d a else binD d (op == 1) a b
-      runChoices d (pool ++ [w]) p (bits >>> 10)
-    else none
-
-theorem getD_mem {xs : List Nat} {i : Nat} (hi : i < xs.length) : xs.getD i 0 ∈ xs := by
-  rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi, Option.getD_some]
-  exact List.getElem_mem hi
-
-theorem runChoices_sound {d : Nat} {roots : List Nat} :
-    ∀ (p bits q : Nat) (bank pool result : List Nat),
-      NatReach d roots q bank →
-      (∀ v ∈ pool, Avail d bank v) →
-      runChoices d pool p bits = some result →
-      ∃ bank', NatReach d roots (q + p) bank' ∧ ∀ v ∈ result, Avail d bank' v
-  | 0, _, q, bank, pool, result, hr, hsup, hok => by
-    simp only [runChoices, Option.some.injEq] at hok; subst hok; exact ⟨bank, hr, hsup⟩
-  | p + 1, bits, q, bank, pool, result, hr, hsup, hok => by
-    simp only [runChoices] at hok
-    split at hok
-    · rename_i hcond
-      simp only [Bool.and_eq_true, decide_eq_true_eq, Bool.or_eq_true, beq_iff_eq] at hcond
-      obtain ⟨hia, hopb⟩ := hcond
-      set code := bits &&& 1023
-      set op := code &&& 3
-      set ia := (code >>> 2) &&& 15
-      set ib := (code >>> 6) &&& 15
-      set a := pool.getD ia 0
-      set b := pool.getD ib 0
-      set w := if op == 2 then negD d a else binD d (op == 1) a b
-      have ha : Avail d bank a := hsup a (getD_mem hia)
-      have hr1 : NatReach d roots (q + 1) (w :: bank) := by
-        by_cases h2 : op = 2
-        · simp only [w, h2, beq_self_eq_true, ite_true]
-          exact Or.inl ⟨bank, a, rfl, hr, ha⟩
-        · have hib : ib < pool.length := hopb.resolve_left h2
-          have hb : Avail d bank b := hsup b (getD_mem hib)
-          simp only [w, h2, beq_iff_eq, ite_false]
-          exact Or.inr ⟨bank, a, b, (op == 1), rfl, hr, ha, hb⟩
-      have hsup1 : ∀ v ∈ pool ++ [w], Avail d (w :: bank) v := by
-        intro v hv; rcases List.mem_append.1 hv with hv | hv
-        · exact avail_cons _ _ (hsup v hv)
-        · rw [List.mem_singleton.1 hv]; exact Or.inr ⟨w, List.mem_cons_self, rfl⟩
-      obtain ⟨bank', hrb', hsb'⟩ := runChoices_sound p (bits >>> 10) (q + 1) (w :: bank) (pool ++ [w]) result hr1 hsup1 hok
-      exact ⟨bank', by simpa [Nat.add_assoc, Nat.add_comm 1] using hrb', hsb'⟩
-    · contradiction
-
-def checkCutEntry (dSub : Nat) (rootsSub : List Nat) (LSub s : Nat) (ws : List Nat) (hint : Nat) : Bool :=
-  let p := (hint >>> 8) &&& 15
-  decide (s + p < LSub + ws.countP (isConstB dSub)) &&
-  match runChoices dSub rootsSub p (hint >>> 12) with
-  | none => false
-  | some pool => ws.all (availB dSub pool)
-
-theorem checkCutEntry_sound {d dSub T TSub LSub s : Nat} {rootsSub ws : List Nat}
-    (hdSub : dSub &&& mask256 = dSub) (hsub : dSub &&& d = dSub)
-    (hT : T &&& dSub = TSub &&& dSub) (hncSub : isConstB dSub TSub = false)
-    (hprior : Lower dSub rootsSub TSub LSub) (hint : Nat)
-    (hchk : checkCutEntry dSub rootsSub LSub s ws hint = true) :
-    ¬ RunD d (T &&& d) s ws := by
-  intro hrun
-  simp only [checkCutEntry, Bool.and_eq_true, decide_eq_true_eq] at hchk
-  obtain ⟨hineq, hmatch⟩ := hchk
-  cases hrc : runChoices dSub rootsSub ((hint >>> 8) &&& 15) (hint >>> 12) with
-  | none => rw [hrc] at hmatch; contradiction
-  | some pool =>
-    rw [hrc] at hmatch
-    have hsup0 : ∀ v ∈ rootsSub, Avail dSub rootsSub v := fun v hv => Or.inr ⟨v, hv, rfl⟩
-    obtain ⟨bank, hrb, hsb⟩ := runChoices_sound _ _ 0 rootsSub rootsSub pool rfl hsup0 hrc
-    simp only [Nat.zero_add] at hrb
-    have hws_av : ∀ w ∈ ws, Avail dSub bank w := by
-      intro w hw
-      have hav := (availB_iff _ _ _).1 (List.all_eq_true.1 hmatch w hw)
-      rcases hav with hc | ⟨v, hv, he⟩
-      · exact Or.inl hc
-      · exact avail_of_eq he (hsb v hv)
-    have hnc' : ¬ IsConst dSub (T &&& d) := by
-      intro h; have e : (T &&& d) &&& dSub = TSub &&& dSub := by rw [Nat.and_assoc, Nat.and_comm d dSub, hsub, hT]
-      rcases h with h0 | h1
-      · exact absurd ((isConstB_iff _ _).2 (Or.inl (e.symm.trans h0))) (by simp [hncSub])
-      · exact absurd ((isConstB_iff _ _).2 (Or.inr (e.symm.trans h1))) (by simp [hncSub])
-    obtain ⟨q, next, hq, ht, hle⟩ := contraction hdSub hsub hnc' hrun hrb hws_av
-    have hL := hprior q next hq (avail_of_eq (by rw [Nat.and_assoc, Nat.and_comm d dSub, hsub, hT]) ht)
-    omega
-
--- covers, eval6, hw256, hk, bsr, bar, bar_all!
-def coversP (pairs : List (Nat × Nat)) (s : Nat) (ws : List Nat) : Bool :=
-  if ws.length == s + 1 then
-    pairs.all (fun p => ws.any (fun w => !w.testBit p.1 && w.testBit p.2))
-  else
-    pairs.all (fun p => ws.any (fun w => w.testBit p.1 != w.testBit p.2))
-
-theorem coversP_ok {d T s : Nat} (hd : d &&& mask256 = d)
-    (pairs : List (Nat × Nat))
-    (hpairs : pairs.all (fun p => d.testBit p.1 && d.testBit p.2 && !(T &&& d).testBit p.1 && (T &&& d).testBit p.2) = true)
-    {ws : List Nat} (h : RunD d (T &&& d) s ws) : coversP pairs s ws = true := by
-  unfold coversP
-  by_cases hl : ws.length = s + 1
-  · simp only [hl, beq_self_eq_true, ite_true, List.all_eq_true, List.any_eq_true]
-    intro ⟨u, v⟩ hm
-    have hp := List.all_eq_true.1 hpairs (u, v) hm
-    simp only [Bool.and_eq_true, Bool.not_eq_true'] at hp
-    by_contra! hall
-    have hle := runD_bits_le h hl v u hp.1.1.2 hp.1.1.1 (fun w hw => by
-      have hbad := hall w hw
-      cases hu : w.testBit u <;> cases hv : w.testBit v <;> simp_all)
-    rw [hp.1.2, hp.2] at hle; contradiction
-  · simp only [hl, beq_iff_eq, ite_false, List.all_eq_true, List.any_eq_true, bne_iff_ne]
-    intro ⟨u, v⟩ hm
-    have hp := List.all_eq_true.1 hpairs (u, v) hm
-    simp only [Bool.and_eq_true, Bool.not_eq_true'] at hp
-    by_contra! hall
-    have heq := runD_bits hd h u v hp.1.1.1 hp.1.1.2 hall
-    rw [hp.1.2, hp.2] at heq; contradiction
-
-def unorientedCov (pairs : List (Nat × Nat)) (ws : List Nat) : Bool :=
-  pairs.all (fun p => ws.any (fun w => w.testBit p.1 != w.testBit p.2))
-
-theorem unorientedCov_ok {d T s : Nat} (hd : d &&& mask256 = d)
-    (pairs : List (Nat × Nat))
-    (hpairs : pairs.all (fun p => d.testBit p.1 && d.testBit p.2 && !(T &&& d).testBit p.1 && (T &&& d).testBit p.2) = true)
-    {ws : List Nat} (h : RunD d (T &&& d) s ws) : unorientedCov pairs ws = true := by
-  simp only [unorientedCov, List.all_eq_true, List.any_eq_true, bne_iff_ne]
-  intro ⟨u, v⟩ hm
-  have hp := List.all_eq_true.1 hpairs (u, v) hm
-  simp only [Bool.and_eq_true, Bool.not_eq_true'] at hp
-  by_contra! hall
-  have heq := runD_bits hd h u v hp.1.1.1 hp.1.1.2 hall
-  rw [hp.1.2, hp.2] at heq; contradiction
-
--- Fast bitmask-decorated covers (150x faster than per-pair testBit!)
-def maskP (m : Nat) : Nat := 2 ^ m - 1
-
-def projBit (rs : List Nat) (w : Nat) : Nat :=
-  rs.foldr (fun r acc => (acc <<< 1) ||| (if w.testBit r then 1 else 0)) 0
-
-theorem projBit_testBit (rs : List Nat) (w : Nat) (i : Nat) :
-    (projBit rs w).testBit i = if h : i < rs.length then w.testBit rs[i] else false := by
-  induction rs generalizing i with
-  | nil => simp [projBit]
-  | cons r rs ih =>
-    cases i with
-    | zero =>
-      simp only [projBit, List.foldr_cons, Nat.testBit_or, Nat.testBit_shiftLeft,
-        Nat.not_le.2 Nat.zero_lt_one, decide_false, Bool.false_and, Bool.false_or,
-        List.length_cons, Nat.zero_lt_succ, dite_true, List.getElem_cons_zero]
-      cases w.testBit r <;> simp
-    | succ i =>
-      simp only [projBit, List.foldr_cons, Nat.testBit_or, Nat.testBit_shiftLeft,
-        Nat.succ_le_succ (Nat.zero_le i), decide_true, Bool.true_and, Nat.add_sub_cancel,
-        List.length_cons, Nat.succ_lt_succ_iff, List.getElem_cons_succ]
-      have h1 : (if w.testBit r = true then 1 else 0).testBit (i + 1) = false := by
-        cases w.testBit r <;> simp [Nat.testBit_succ]
-      rw [h1, Bool.or_false]; exact ih i
-
-theorem projBit_negD {dm : Nat} (hd : dm &&& mask256 = dm) {rs : List Nat}
-    (hrs : ∀ r ∈ rs, dm.testBit r = true) (w : Nat) :
-    projBit rs (negD dm w) = projBit rs w ^^^ maskP rs.length := by
-  apply Nat.eq_of_testBit_eq; intro i
-  rw [projBit_testBit, Nat.testBit_xor, projBit_testBit, maskP, Nat.testBit_two_pow_sub_one]
-  by_cases hi : i < rs.length
-  · have hdr := hrs rs[i] (List.getElem_mem hi)
-    have hmr : mask256.testBit rs[i] = true := by
-      have := congrArg (fun v => v.testBit rs[i]) hd; simp [Nat.testBit_and, hdr] at this; exact this
-    simp [hi, negD, hdr, hmr]
-  · simp [hi]
-
-theorem projBit_andD {dm : Nat} {rs : List Nat} (hrs : ∀ r ∈ rs, dm.testBit r = true) (a b : Nat) :
-    projBit rs (andD dm a b) = projBit rs a &&& projBit rs b := by
-  apply Nat.eq_of_testBit_eq; intro i
-  rw [projBit_testBit, Nat.testBit_and, projBit_testBit, projBit_testBit]
-  by_cases hi : i < rs.length
-  · simp [hi, andD, hrs rs[i] (List.getElem_mem hi)]
-  · simp [hi]
-
-theorem projBit_orD {dm : Nat} {rs : List Nat} (hrs : ∀ r ∈ rs, dm.testBit r = true) (a b : Nat) :
-    projBit rs (orD dm a b) = projBit rs a ||| projBit rs b := by
-  apply Nat.eq_of_testBit_eq; intro i
-  rw [projBit_testBit, Nat.testBit_or, projBit_testBit, projBit_testBit]
-  by_cases hi : i < rs.length
-  · simp [hi, orD, hrs rs[i] (List.getElem_mem hi)]
-  · simp [hi]
-
-theorem foldl_or_testBit {α : Type} (g : α → Nat) (xs : List α) (acc i : Nat) :
-    (xs.foldl (fun a x => a ||| g x) acc).testBit i = (acc.testBit i || xs.any (fun x => (g x).testBit i)) := by
-  induction xs generalizing acc with
-  | nil => simp
-  | cons x xs ih =>
-    simp only [List.foldl_cons, ih, Nat.testBit_or, List.any_cons, Bool.or_assoc]
-
-def coversD (mp s : Nat) (dws : List (Nat × Nat × Nat)) : Bool :=
-  if dws.length == s + 1 then
-    dws.foldl (fun acc d => acc ||| ((d.2.1 ^^^ mp) &&& d.2.2)) 0 == mp
-  else
-    dws.foldl (fun acc d => acc ||| (d.2.1 ^^^ d.2.2)) 0 == mp
-
-theorem coversD_eq (pairs : List (Nat × Nat)) (s : Nat) (ws : List Nat) :
-    coversD (maskP pairs.length) s (ws.map (fun w => (w, projBit (pairs.map Prod.fst) w, projBit (pairs.map Prod.snd) w))) =
-      coversP pairs s ws := by
-  set r1s := pairs.map Prod.fst
-  set r2s := pairs.map Prod.snd
-  set mp := maskP pairs.length
-  have hr1 : r1s.length = pairs.length := List.length_map _
-  have hr2 : r2s.length = pairs.length := List.length_map _
-  unfold coversD coversP
-  simp only [List.length_map]
-  split
-  · apply Bool.eq_iff_iff.2
-    rw [beq_iff_eq, List.all_eq_true]
-    constructor
-    · intro heq pr hpr
-      obtain ⟨i, hi, rfl⟩ := List.mem_iff_getElem.1 hpr
-      have hb := congrArg (fun v => v.testBit i) heq
-      rw [foldl_or_testBit, Nat.zero_testBit, Bool.false_or, List.any_map] at hb
-      simp only [mp, maskP, Nat.testBit_two_pow_sub_one, hi, decide_true] at hb
-      obtain ⟨w, hw, hwt⟩ := List.any_eq_true.1 hb
-      simp only [Function.comp_def, Nat.testBit_and, Nat.testBit_xor, projBit_testBit, hr1, hr2, hi, dite_true,
-        Nat.testBit_two_pow_sub_one, decide_true, Bool.xor_true] at hwt
-      exact List.any_eq_true.2 ⟨w, hw, by simpa [r1s, r2s] using hwt⟩
-    · intro hall
-      apply Nat.eq_of_testBit_eq; intro i
-      rw [foldl_or_testBit, Nat.zero_testBit, Bool.false_or, List.any_map]
-      simp only [mp, maskP, Nat.testBit_two_pow_sub_one]
-      by_cases hi : i < pairs.length
-      · simp only [hi, decide_true]
-        obtain ⟨w, hw, hwt⟩ := List.any_eq_true.1 (hall pairs[i] (List.getElem_mem hi))
-        exact List.any_eq_true.2 ⟨w, hw, by
-          simp only [Function.comp_def, Nat.testBit_and, Nat.testBit_xor, projBit_testBit, hr1, hr2, hi, dite_true,
-            Nat.testBit_two_pow_sub_one, decide_true, Bool.xor_true, r1s, r2s, List.getElem_map]
-          exact hwt⟩
-      · simp only [hi, decide_false, List.any_eq_false]
-        intro w _
-        simp only [Function.comp_def, Nat.testBit_and, Nat.testBit_xor, projBit_testBit, hr1, hr2, hi, dite_false,
-          Nat.testBit_two_pow_sub_one, decide_false, Bool.xor_false, Bool.and_false, not_false_eq_true, Bool.false_eq_true]
-  · apply Bool.eq_iff_iff.2
-    rw [beq_iff_eq, List.all_eq_true]
-    constructor
-    · intro heq pr hpr
-      obtain ⟨i, hi, rfl⟩ := List.mem_iff_getElem.1 hpr
-      have hb := congrArg (fun v => v.testBit i) heq
-      rw [foldl_or_testBit, Nat.zero_testBit, Bool.false_or, List.any_map] at hb
-      simp only [mp, maskP, Nat.testBit_two_pow_sub_one, hi, decide_true] at hb
-      obtain ⟨w, hw, hwt⟩ := List.any_eq_true.1 hb
-      simp only [Function.comp_def, Nat.testBit_xor, projBit_testBit, hr1, hr2, hi, dite_true] at hwt
-      exact List.any_eq_true.2 ⟨w, hw, by simpa [r1s, r2s, bne] using hwt⟩
-    · intro hall
-      apply Nat.eq_of_testBit_eq; intro i
-      rw [foldl_or_testBit, Nat.zero_testBit, Bool.false_or, List.any_map]
-      simp only [mp, maskP, Nat.testBit_two_pow_sub_one]
-      by_cases hi : i < pairs.length
-      · simp only [hi, decide_true]
-        obtain ⟨w, hw, hwt⟩ := List.any_eq_true.1 (hall pairs[i] (List.getElem_mem hi))
-        exact List.any_eq_true.2 ⟨w, hw, by
-          simp only [Function.comp_def, Nat.testBit_xor, projBit_testBit, hr1, hr2, hi, dite_true, r1s, r2s, List.getElem_map]
-          simpa [bne] using hwt⟩
-      · simp only [hi, decide_false, List.any_eq_false]
-        intro w _
-        simp only [Function.comp_def, Nat.testBit_xor, projBit_testBit, hr1, hr2, hi, dite_false,
-          Bool.xor_false, Bool.false_eq_true, not_false_eq_true]
-
-theorem erase_map_inj {α β : Type} [BEq α] [LawfulBEq α] [BEq β] [LawfulBEq β]
-    (f : α → β) (hinj : Function.Injective f) (xs : List α) (a : α) :
-    (xs.map f).erase (f a) = (xs.erase a).map f := by
-  induction xs with
-  | nil => rfl
-  | cons x xs ih =>
-    simp only [List.map_cons, List.erase_cons]
-    by_cases h : x = a
-    · subst h; simp
-    · have hf : (f x == f a) = false := beq_false_of_ne (fun e => h (hinj e))
-      have hx : (x == a) = false := beq_false_of_ne h
-      simp [hf, hx, ih]
-
-def value6 (a b c d e f : Bool) : Nat :=
-  let x := b.toNat + c.toNat
-  let y := (!e).toNat + (!f).toNat
-  if a then (if d then y else max x (max y (x + y - 1))) else (if d then 0 else x)
-
-theorem value6_and : ∀ a b c d e f g h i j l m : Bool,
-    value6 (a && g) (b && h) (c && i) (d && j) (e && l) (f && m)
-      ≤ value6 a b c d e f + value6 g h i j l m := by decide +kernel
-
-theorem value6_or : ∀ a b c d e f g h i j l m : Bool,
-    value6 (a || g) (b || h) (c || i) (d || j) (e || l) (f || m)
-      ≤ value6 a b c d e f + value6 g h i j l m := by decide +kernel
-
-theorem score_bound {d y s ws} (h : RunD d y s ws) (hl : ws.length = s + 1)
-    (v : Nat → Nat) (hand : ∀ a b, v (andD d a b) ≤ v a + v b)
-    (hor : ∀ a b, v (orD d a b) ≤ v a + v b) : v y ≤ (ws.map v).sum := by
-  induction h using Run.fold with
-  | done => simp
-  | perm p _ ih => rw [← (p.map v).sum_eq]; exact ih (p.length_eq.trans hl)
-  | one save _ _ _ h _ => have hh := run_len h; cases save <;> simp [kept] at hh hl <;> omega
-  | two conj ka kb _ _ _ h ih =>
-    have hh := run_len h; cases ka <;> cases kb <;> simp [kept] at hh hl <;> try omega
-    have ih' := ih (by simp [kept]; omega)
-    cases conj <;> simp [kept] at ih' ⊢ <;>
-      first | grw [← Nat.add_assoc, ← hand]; exact ih' | grw [← Nat.add_assoc, ← hor]; exact ih'
-
-def eval6 (a b c d e f v : Nat) := value6 (v.testBit a) (v.testBit b) (v.testBit c)
-    (v.testBit d) (v.testBit e) (v.testBit f)
-
-theorem eval6_bound {dm y s ws} (h : RunD dm y s ws) (hl : ws.length = s + 1)
-    (a b c d e f : Nat)
-    (ha : dm.testBit a = true) (hb : dm.testBit b = true) (hc : dm.testBit c = true)
-    (hd : dm.testBit d = true) (he : dm.testBit e = true) (hf : dm.testBit f = true) :
-    eval6 a b c d e f y ≤ (ws.map (eval6 a b c d e f)).sum := by
-  apply score_bound h hl
-  · intro v w
-    simpa only [eval6, andD, Nat.testBit_and, ha, hb, hc, hd, he, hf, Bool.and_true] using value6_and
-      (v.testBit a) (v.testBit b) (v.testBit c) (v.testBit d) (v.testBit e) (v.testBit f)
-      (w.testBit a) (w.testBit b) (w.testBit c) (w.testBit d) (w.testBit e) (w.testBit f)
-  · intro v w
-    simpa only [eval6, orD, Nat.testBit_and, Nat.testBit_or, ha, hb, hc, hd, he, hf, Bool.and_true] using value6_or
-      (v.testBit a) (v.testBit b) (v.testBit c) (v.testBit d) (v.testBit e) (v.testBit f)
-      (w.testBit a) (w.testBit b) (w.testBit c) (w.testBit d) (w.testBit e) (w.testBit f)
-
-def sumBelow (v : Nat → Nat) : List Nat → Nat → Bool
-  | [], n => n != 0
-  | w :: ws, n => decide (v w < n) && sumBelow v ws (n - v w)
-
-theorem sumBelow_iff (v : Nat → Nat) (ws : List Nat) (n : Nat) :
-    sumBelow v ws n = true ↔ (ws.map v).sum < n := by
-  induction ws generalizing n with
-  | nil => simp [sumBelow]
-  | cons w ws ih => rw [sumBelow, Bool.and_eq_true, decide_eq_true_eq, ih, List.map_cons, List.sum_cons]; omega
-
-def scoreCheck (dm y s : Nat) (ws : List Nat) (code : Nat) : Bool :=
-  let a := code &&& 255
-  let b := (code >>> 8) &&& 255
-  let c := (code >>> 16) &&& 255
-  let d := (code >>> 24) &&& 255
-  let e := (code >>> 32) &&& 255
-  let f := (code >>> 40) &&& 255
-  dm.testBit a && dm.testBit b && dm.testBit c && dm.testBit d && dm.testBit e && dm.testBit f &&
-    ws.length == s + 1 && sumBelow (eval6 a b c d e f) ws (eval6 a b c d e f y)
-
-theorem scoreCheck_no {dm y s ws} (h : RunD dm y s ws) (code : Nat) :
-    scoreCheck dm y s ws code = false := by
-  unfold scoreCheck
-  by_cases hok : dm.testBit (code &&& 255) = true ∧ dm.testBit ((code >>> 8) &&& 255) = true ∧
-      dm.testBit ((code >>> 16) &&& 255) = true ∧ dm.testBit ((code >>> 24) &&& 255) = true ∧
-      dm.testBit ((code >>> 32) &&& 255) = true ∧ dm.testBit ((code >>> 40) &&& 255) = true ∧
-      ws.length = s + 1
-  · obtain ⟨ha, hb, hc, hd, he, hf, hl⟩ := hok
-    simp only [ha, hb, hc, hd, he, hf, hl, beq_self_eq_true, Bool.true_and]
-    by_contra hbad
-    have hsum := (sumBelow_iff _ _ _).1 (Bool.eq_true_of_not_eq_false hbad)
-    exact (Nat.not_lt_of_ge (eval6_bound h hl _ _ _ _ _ _ ha hb hc hd he hf)) hsum
-  · by_contra hbad
-    have ht := Bool.eq_true_of_not_eq_false hbad
-    simp only [Bool.and_eq_true, beq_iff_eq] at ht
-    exact hok ⟨ht.1.1.1.1.1.1.1, ht.1.1.1.1.1.1.2, ht.1.1.1.1.1.2, ht.1.1.1.1.2, ht.1.1.1.2, ht.1.1.2, ht.1.2⟩
-
-def scr (dm y s : Nat) (pool : List Nat) (zs : List Nat) : Bool :=
-  zs.length == s + 1 && pool.any (scoreCheck dm y s zs)
-
-theorem scr_no {dm y s : Nat} (pool : List Nat) {zs : List Nat}
-    (h : RunD dm y s zs) : scr dm y s pool zs = false := by
-  unfold scr; rw [Bool.and_eq_false_iff]; right; rw [List.any_eq_false]
-  intro x _; rw [scoreCheck_no h x]; simp
-
-def nextD (dm : Nat) (slack : Nat) (ws : List Nat) (f : List Nat → Bool) : Bool :=
-  ws.any fun a =>
-    let ra := ws.erase a
-    (slack ≥ 1 &&
-      (let w := negD dm a
-       w != 0 && w != dm && !(ws.contains w) &&
-         (f (w :: ra) || (slack ≥ 2 && f (w :: a :: ra))))) ||
-    ra.any fun b =>
-      a ≤ b && (let r := ra.erase b
-        [false, true].any fun conj =>
-          let w := if conj then andD dm a b else orD dm a b
-          w != 0 && w != dm && !(ws.contains w) &&
-            (f (w :: r) || (slack ≥ 1 && (f (w :: a :: r) || f (w :: b :: r))) ||
-              (slack ≥ 2 && f (w :: a :: b :: r))))
-
-theorem nextD_one {dm y a rest} {save : Bool} {s ws} (p : (a :: rest).Perm ws)
-    (h0 : negD dm a ≠ 0) (hd : negD dm a ≠ dm) (hnm : negD dm a ∉ (a :: rest))
-    (h : RunD dm y s (negD dm a :: kept save a rest))
-    (f : List Nat → Bool) (hf : ∀ ys, RunD dm y s ys → f ys = true) :
-    nextD dm (s + 2 - ws.length) ws f = true := by
-  have ha := p.mem_iff.1 List.mem_cons_self
-  have pr : rest.Perm (ws.erase a) := (p.trans (List.perm_cons_erase ha)).cons_inv
-  have hh := run_len h; have hl := p.length_eq; simp only [List.length_cons] at hl hh
-  have hsl : 1 ≤ s + 2 - ws.length := by cases save <;> simp [kept] at hh <;> omega
-  have hnc : ws.contains (negD dm a) = false := by
-    cases h : ws.contains (negD dm a) with
-    | false => rfl
-    | true => exact absurd (p.mem_iff.2 (by simpa using h)) hnm
-  have h0b : (negD dm a != 0) = true := bne_iff_ne.2 h0
-  have hdb : (negD dm a != dm) = true := bne_iff_ne.2 hd
-  apply List.any_eq_true.2 ⟨a, ha, ?_⟩
-  rw [Bool.or_eq_true]; left; rw [Bool.and_eq_true]; refine ⟨decide_eq_true hsl, ?_⟩
-  simp only [h0b, hdb, hnc, Bool.not_false, Bool.true_and]
-  have ht := hf _ (Run.perm ((keep_perm pr save a).cons _) h)
-  cases save with
-  | false => simp [kept] at ht; simp [ht]
-  | true => simp [kept] at ht hh; simp [ht, show 2 ≤ s + 2 - ws.length by omega]
-
-theorem nextD_two_sorted {dm y a b rest} {conj ka kb : Bool} {s ws} (hab : a ≤ b)
-    (p : (a :: b :: rest).Perm ws)
-    (h0 : (if conj then andD dm a b else orD dm a b) ≠ 0)
-    (hd : (if conj then andD dm a b else orD dm a b) ≠ dm)
-    (hnm : (if conj then andD dm a b else orD dm a b) ∉ (a :: b :: rest))
-    (h : RunD dm y s ((if conj then andD dm a b else orD dm a b) :: kept ka a (kept kb b rest)))
-    (f : List Nat → Bool) (hf : ∀ ys, RunD dm y s ys → f ys = true) :
-    nextD dm (s + 2 - ws.length) ws f = true := by
-  have ha := p.mem_iff.1 List.mem_cons_self
-  have pp := (p.trans (List.perm_cons_erase ha)).cons_inv
-  have hb := pp.mem_iff.1 List.mem_cons_self
-  have pr := (pp.trans (List.perm_cons_erase hb)).cons_inv
-  have hh := run_len h; have hl := p.length_eq; simp only [List.length_cons] at hl hh
-  have hnc : ws.contains (if conj then andD dm a b else orD dm a b) = false := by
-    cases h : ws.contains (if conj then andD dm a b else orD dm a b) with
-    | false => rfl
-    | true => exact absurd (p.mem_iff.2 (by simpa using h)) hnm
-  have h0b : ((if conj then andD dm a b else orD dm a b) != 0) = true := bne_iff_ne.2 h0
-  have hdb : ((if conj then andD dm a b else orD dm a b) != dm) = true := bne_iff_ne.2 hd
-  apply List.any_eq_true.2 ⟨a, ha, ?_⟩
-  rw [Bool.or_eq_true]; right; apply List.any_eq_true.2 ⟨b, hb, ?_⟩
-  rw [Bool.and_eq_true]; refine ⟨decide_eq_true hab, ?_⟩
-  apply List.any_eq_true.2 ⟨conj, by cases conj <;> simp, ?_⟩
-  simp only [h0b, hdb, hnc, Bool.not_false, Bool.true_and]
-  have ht := hf _ (Run.perm ((keep_perm (keep_perm pr kb b) ka a).cons _) h)
-  cases ka <;> cases kb <;> simp [kept] at ht hh <;>
-    simp only [ht, Bool.true_or, Bool.or_true, Bool.and_true] <;>
-    first | (simp [show 2 ≤ s + 2 - ws.length by omega]) | (simp [show 1 ≤ s + 2 - ws.length by omega])
-
-theorem nextD_two {dm y a b rest} {conj ka kb : Bool} {s ws} (p : (a :: b :: rest).Perm ws)
-    (h0 : (if conj then andD dm a b else orD dm a b) ≠ 0)
-    (hd : (if conj then andD dm a b else orD dm a b) ≠ dm)
-    (hnm : (if conj then andD dm a b else orD dm a b) ∉ (a :: b :: rest))
-    (h : RunD dm y s ((if conj then andD dm a b else orD dm a b) :: kept ka a (kept kb b rest)))
-    (f : List Nat → Bool) (hf : ∀ ys, RunD dm y s ys → f ys = true) :
-    nextD dm (s + 2 - ws.length) ws f = true := by
-  rcases le_total a b with hab | hba
-  · exact nextD_two_sorted hab p h0 hd hnm h f hf
-  · have he : (if conj then andD dm a b else orD dm a b) = (if conj then andD dm b a else orD dm b a) := by
-      cases conj <;> simp [andD, orD, Nat.and_comm, Nat.or_comm]
-    have hnm' : (if conj then andD dm b a else orD dm b a) ∉ (b :: a :: rest) := by
-      rw [← he]; intro hm; exact hnm ((List.Perm.swap _ _ _).mem_iff.1 hm)
-    apply nextD_two_sorted (conj := conj) (ka := kb) (kb := ka) hba ((List.Perm.swap _ _ _).trans p)
-      (he ▸ h0) (he ▸ hd) hnm' _ f hf
-    rw [he] at h; apply Run.perm (List.Perm.cons _ ?_) h
-    cases ka <;> cases kb <;> simp [kept]; exact List.Perm.swap _ _ _
-
-theorem nextD_complete {dm y t ws} (h : RunD dm y t ws) :
-    ∀ s, t = s + 1 → ∀ zs, ws.Perm zs → ∀ f : List Nat → Bool,
-      (∀ ys, RunD dm y s ys → f ys = true) →
-      nextD dm (s + 2 - zs.length) zs f = true := by
-  induction h using Run.fold with
-  | done => simp
-  | perm p _ ih => intro s he zs q; exact ih s he zs (p.trans q)
-  | one save h0 hd hnm h _ => intro s he zs p f hf; cases he; exact nextD_one p h0 hd hnm h f hf
-  | two conj ka kb h0 hd hnm h _ => intro s he zs p f hf; cases he; exact nextD_two p h0 hd hnm h f hf
-
-def span (f : Nat → Bool) : Nat → Nat → Bool
-  | 0, _ => true
-  | n + 1, i => f i && span f n (i + 1)
-
-theorem span_ok {f n o} (h : span f n o = true) : ∀ i, o ≤ i → i < o + n → f i = true := by
-  induction n generalizing o with
+theorem treeBlock_at {start count i : Nat} {check : Nat → Bool}
+    (h : treeBlock start count check = true) (lo : start ≤ i) (hi : i < start + count) :
+    check i = true := by
+  induction count generalizing start with
   | zero => omega
-  | succ n ih =>
-    simp only [span, Bool.and_eq_true] at h; intro i hi hj
-    rcases Nat.eq_or_lt_of_le hi with rfl | hi
-    · exact h.1
-    · exact ih h.2 i (by omega) (by omega)
+  | succ count ih =>
+    change (check start && treeBlock (start + 1) count check) = true at h
+    rcases Bool.and_eq_true_iff.mp h with ⟨here, rest⟩
+    by_cases eq : i = start
+    · simpa [eq] using here
+    · exact ih rest (by omega) (by omega)
 
-theorem range_split {P : Nat → Prop} {lo mid hi : Nat}
-    (h1 : ∀ i, lo ≤ i → i < mid → P i) (h2 : ∀ i, mid ≤ i → i < hi → P i) :
-    ∀ i, lo ≤ i → i < hi → P i := fun i hlo hhi =>
-  if h : i < mid then h1 i hlo h else h2 i (Nat.le_of_not_lt h) hhi
+theorem treeBlock_merge {start left right : Nat} {check : Nat → Bool}
+    (a : treeBlock start left check = true)
+    (b : treeBlock (start + left) right check = true) :
+    treeBlock start (left + right) check = true := by
+  induction left generalizing start with
+  | zero => simpa using b
+  | succ left ih =>
+    rw [Nat.succ_add]
+    change (check start && treeBlock (start + 1) (left + right) check) = true
+    change (check start && treeBlock (start + 1) left check) = true at a
+    rcases Bool.and_eq_true_iff.mp a with ⟨here, rest⟩
+    exact Bool.and_eq_true_iff.mpr ⟨here, ih rest (by
+      simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using b)⟩
 
-def fld (T w i : Nat) : Nat :=
-  (T >>> (w * i)) &&& (if w == 32 then 4294967295 else if w == 52 then 4503599627370495 else if w == 256 then mask256 else 2 ^ w - 1)
+abbrev Word := Nat
+abbrev RowState := Nat × List Word × List (Word × Word × Word)
+abbrev CutCheck := RowState → Bool
 
-def bsr (read : Nat → Nat) (h : Nat) : Nat → Nat → Nat → Nat
-  | 0, lo, _ => lo
-  | f + 1, lo, hi =>
-    if lo + 1 < hi then
-      (if read ((lo + hi) / 2) ≤ h then bsr read h f ((lo + hi) / 2) hi
-       else bsr read h f lo ((lo + hi) / 2))
-    else lo
+def rootWords (base : List Word) (token : Nat) : List Word :=
+  List.rec (motive := fun _ => Nat → List Word) (fun _ => [])
+    (fun word _ next bits =>
+      let tail := next (bits >>> 1)
+      if bits &&& 1 == 0 then tail else word :: tail) base token
 
-def hw256 (seed w : Nat) : Nat :=
-  let x := (((w % 170141183460469231731687303715884105727) ^^^ seed) * 0x9e3779b97f4a7c15f39cc0605cedc835) &&& 0xffffffffffffffffffffffffffffffff
-  let y := ((x ^^^ (x >>> 61)) * 0xc2b2ae3d27d4eb4f165667b19e3779f9) &&& 0xffffffffffffffffffffffffffffffff
-  y >>> 96
+def rootState (base : List Word) (fuel token : Nat) : RowState :=
+  (fuel, rootWords base token, [])
 
-def hz (seed : Nat) : List Nat → Nat
-  | [] => 0
-  | w :: t => hw256 seed w + hz seed t
+def insertWord (w : Word) (ws : List Word) : List Word :=
+  List.rec [w] (fun a tail next => if w ≤ a then w :: a :: tail else a :: next) ws
 
-def hk (seed : Nat) (zs : List Nat) : Nat := hz seed zs &&& 4294967295
+def childState (mask token : Nat) (state : RowState) : Option RowState :=
+  let (fuel, ws, history) := state
+  let keep := token % 4
+  let op := (token / 4) % 3
+  let a := token / (4 * 3 * 64)
+  let b := (token / (4 * 3)) % 64
+  if fuel == 0 || b ≥ ws.length || (if op == 2 then a != b || keep ≥ 2 else a ≥ b) then none
+  else
+    let x := ws.getD a 0
+    let y := ws.getD b 0
+    let w := if op == 0 then x &&& y else if op == 1 then x ||| y else mask ^^^ x
+    if w == 0 || w == mask || ws.contains w then none
+    else
+      let rest := if keep.testBit 0 then ws else ws.erase x
+      let rest := if op == 2 || keep.testBit 1 then rest else rest.erase y
+      some (fuel - 1, insertWord w rest, (w, x, y) :: history)
 
-def found (S : Nat → Nat → List Nat) (N : Nat → Nat) (idx : Nat → List Nat → Nat)
-    (s : Nat) (zs : List Nat) : Bool :=
-  decide (idx s zs < N s) && zs.isPerm (S s (idx s zs))
+def gateToken (a b op keep : Nat) : Nat := ((a * 64 + b) * 3 + op) * 4 + keep
 
-def foundH (S : Nat → Nat → List Nat) (N : Nat → Nat) (htAt : Nat → Nat → Nat)
-    (idxH : Nat → Nat → Nat) (s h : Nat) (zs : List Nat) : Bool :=
-  let i := idxH s h
-  decide (i < N s) && (htAt s i == h) && zs.isPerm (S s i)
+abbrev Bound := Nat × List Word × Nat × Word
 
-def nextD_decor (dm mp : Nat) (slack : Nat) (dws : List (Nat × Nat × Nat))
-    (f : List (Nat × Nat × Nat) → Bool) : Bool :=
-  dws.any fun da =>
-    let a := da.1
-    let ra := dws.erase da
-    (slack ≥ 1 &&
-      (let w := negD dm a
-       w != 0 && w != dm && !(dws.any (fun x => x.1 == w)) &&
-         let dw := (w, da.2.1 ^^^ mp, da.2.2 ^^^ mp)
-         (f (dw :: ra) || (slack ≥ 2 && f (dw :: da :: ra))))) ||
-    ra.any fun db =>
-      let b := db.1
-      a ≤ b && (let r := ra.erase db
-        [false, true].any fun conj =>
-          let w := if conj then andD dm a b else orD dm a b
-          w != 0 && w != dm && !(dws.any (fun x => x.1 == w)) &&
-            let dw := if conj then (w, da.2.1 &&& db.2.1, da.2.2 &&& db.2.2)
-                      else (w, da.2.1 ||| db.2.1, da.2.2 ||| db.2.2)
-            (f (dw :: r) || (slack ≥ 1 && (f (dw :: da :: r) || f (dw :: db :: r))) ||
-              (slack ≥ 2 && f (dw :: da :: db :: r))))
+def stockWord (mask : Nat) (stock : List Word) (needed : List Word) (word : Word) : List Word :=
+  let v := word &&& mask
+  if v == 0 || v == mask || stock.contains v || needed.contains v then needed
+  else v :: needed
 
-theorem nextD_decor_gen (dm mp : Nat) (dec : Nat → Nat × Nat × Nat)
-    (hfst : ∀ w, (dec w).1 = w)
-    (hneg : ∀ a, (negD dm a, (dec a).2.1 ^^^ mp, (dec a).2.2 ^^^ mp) = dec (negD dm a))
-    (hbin : ∀ (c : Bool) a b,
-      (if c then (if c then andD dm a b else orD dm a b, (dec a).2.1 &&& (dec b).2.1, (dec a).2.2 &&& (dec b).2.2)
-       else (if c then andD dm a b else orD dm a b, (dec a).2.1 ||| (dec b).2.1, (dec a).2.2 ||| (dec b).2.2)) =
-      dec (if c then andD dm a b else orD dm a b))
-    (slack : Nat) (ws : List Nat) (g : List (Nat × Nat × Nat) → Bool) :
-    nextD_decor dm mp slack (ws.map dec) g = nextD dm slack ws (fun zs => g (zs.map dec)) := by
-  have hinj : Function.Injective dec := fun x y h => by rw [← hfst x, ← hfst y, h]
-  have herase : ∀ (l : List Nat) x, (l.map dec).erase (dec x) = (l.erase x).map dec :=
-    fun l x => erase_map_inj dec hinj l x
-  have hcont : ∀ (l : List Nat) w, (l.map dec).any (fun x => x.1 == w) = l.contains w := by
-    intro l w; apply Bool.eq_iff_iff.2; simp [hfst]
-  unfold nextD_decor nextD
-  simp only [List.any_map, Function.comp_def, hfst, herase, hcont, hneg, hbin, List.map_cons]
+def recipeStart (mask : Nat) (stock words : List Word) : List Word :=
+  (List.rec (motive := fun _ => List Word → List Word) id
+    (fun word _ next seen => next (stockWord mask stock seen word)) words) []
 
-theorem nextD_decor_eq {dm : Nat} (hd : dm &&& mask256 = dm)
-    (pairs : List (Nat × Nat))
-    (hr1 : ∀ r ∈ pairs.map Prod.fst, dm.testBit r = true)
-    (hr2 : ∀ r ∈ pairs.map Prod.snd, dm.testBit r = true)
-    (slack : Nat) (ws : List Nat) (g : List (Nat × Nat × Nat) → Bool) :
-    let dec := fun w => (w, projBit (pairs.map Prod.fst) w, projBit (pairs.map Prod.snd) w)
-    nextD_decor dm (maskP pairs.length) slack (ws.map dec) g =
-      nextD dm slack ws (fun zs => g (zs.map dec)) := by
-  intro dec
-  apply nextD_decor_gen
-  · intro w; rfl
-  · intro a
-    simp only [dec, projBit_negD hd hr1, projBit_negD hd hr2, List.length_map]
-  · intro c a b
-    cases c <;> simp only [dec, ↓reduceIte, Bool.false_eq_true, projBit_andD hr1, projBit_andD hr2,
-      projBit_orD hr1, projBit_orD hr2]
+def recipeClosure (mask : Nat) (stock : List Word) (history : List (Word × Word × Word))
+    (start : List Word) : List Word :=
+  List.rec (motive := fun _ => List Word → List Word) id
+    (fun (out, a, b) _ next seen =>
+      next (if seen.contains (out &&& mask) then stockWord mask stock (stockWord mask stock seen a) b else seen))
+    history start
 
-def colB (mp : Nat) (d : Bool) (p : Nat × Nat) : Nat :=
-  if d then (p.1 ^^^ mp) &&& p.2 else p.1 ^^^ p.2
+def recipeNeeded (mask : Nat) (stock words : List Word) (history : List (Word × Word × Word)) :
+    List Word :=
+  recipeClosure mask stock history (recipeStart mask stock words)
 
-def addC (x : Nat) (c : Nat × Nat × Nat) : Nat × Nat × Nat :=
-  (c.1 ||| x, c.2.1 ||| (c.1 &&& x), c.2.2 ||| (c.2.1 &&& x))
+def maskFlat (mask word : Nat) : Bool :=
+  let v := word &&& mask
+  v == 0 || v == mask
 
-def cov3 (mp : Nat) (d : Bool) (dws : List (Nat × Nat × Nat)) : Nat × Nat × Nat :=
-  dws.foldl (fun c dw => addC (colB mp d dw.2) c) (0, 0, 0)
+def flatCount (mask : Nat) (words : List Word) : Nat :=
+  List.rec 0 (fun word _ count => if maskFlat mask word then count + 1 else count) words
 
-def takeOne (c : Nat × Nat × Nat) (x : Nat) : Nat := (c.1 ^^^ x) ||| c.2.1
-def takeTwo (c : Nat × Nat × Nat) (x y : Nat) : Nat :=
-  (c.1 ^^^ (x ||| y)) ||| (c.2.1 &&& (x ^^^ y)) ||| c.2.2
+def availableB (mask : Nat) (bank : List Word) (w : Word) : Bool :=
+  w == 0 || w == mask || bank.contains w
 
-theorem cov3_bit (mp : Nat) (d : Bool) (dws : List (Nat × Nat × Nat)) (i : Nat) :
-    let k := dws.countP (fun dw => (colB mp d dw.2).testBit i)
-    (cov3 mp d dws).1.testBit i = decide (1 ≤ k) ∧
-    (cov3 mp d dws).2.1.testBit i = decide (2 ≤ k) ∧
-    (cov3 mp d dws).2.2.testBit i = decide (3 ≤ k) := by
-  have hgen : ∀ (xs : List (Nat × Nat × Nat)) (c : Nat × Nat × Nat) (k0 : Nat),
-      (c.1.testBit i = decide (1 ≤ k0) ∧ c.2.1.testBit i = decide (2 ≤ k0) ∧ c.2.2.testBit i = decide (3 ≤ k0)) →
-      let k := k0 + xs.countP (fun dw => (colB mp d dw.2).testBit i)
-      (xs.foldl (fun acc dw => addC (colB mp d dw.2) acc) c).1.testBit i = decide (1 ≤ k) ∧
-      (xs.foldl (fun acc dw => addC (colB mp d dw.2) acc) c).2.1.testBit i = decide (2 ≤ k) ∧
-      (xs.foldl (fun acc dw => addC (colB mp d dw.2) acc) c).2.2.testBit i = decide (3 ≤ k) := by
-    intro xs
-    induction xs with
-    | nil => intro c k0 ⟨h1, h2, h3⟩; simp [h1, h2, h3]
-    | cons dw xs ih =>
-      intro c k0 ⟨h1, h2, h3⟩
-      simp only [List.foldl_cons, List.countP_cons]
-      have hc : (addC (colB mp d dw.2) c).1.testBit i =
-            decide (1 ≤ k0 + (if (colB mp d dw.2).testBit i then 1 else 0)) ∧
-          (addC (colB mp d dw.2) c).2.1.testBit i =
-            decide (2 ≤ k0 + (if (colB mp d dw.2).testBit i then 1 else 0)) ∧
-          (addC (colB mp d dw.2) c).2.2.testBit i =
-            decide (3 ≤ k0 + (if (colB mp d dw.2).testBit i then 1 else 0)) := by
-        simp only [addC, Nat.testBit_or, Nat.testBit_and, h1, h2, h3]
-        cases hb : (colB mp d dw.2).testBit i <;>
-          rcases k0 with _ | _ | _ | k0 <;>
-          simp [hb, Nat.le_add_left]
-      have ih' := ih (addC (colB mp d dw.2) c) (k0 + (if (colB mp d dw.2).testBit i then 1 else 0)) hc
-      cases hb : (colB mp d dw.2).testBit i <;> simp only [hb, ↓reduceIte, Bool.false_eq_true, Nat.add_zero] at ih' ⊢
-      · exact ih'
-      · simpa only [Nat.add_assoc, Nat.add_comm 1] using ih'
-  simpa only [cov3, Nat.zero_testBit, Nat.zero_add] using hgen dws (0, 0, 0) 0 (by simp)
+def recipeGate (mask : Nat) (bank : List Word) (w a b : Word) : Bool :=
+  availableB mask bank a &&
+    ((w == mask ^^^ a) || (availableB mask bank b && (w == a &&& b || w == a ||| b)))
 
-theorem cov3_perm (mp : Nat) (d : Bool) {xs ys : List (Nat × Nat × Nat)} (p : xs.Perm ys) :
-    cov3 mp d xs = cov3 mp d ys := by
-  have heq : ∀ i, (cov3 mp d xs).1.testBit i = (cov3 mp d ys).1.testBit i ∧
-      (cov3 mp d xs).2.1.testBit i = (cov3 mp d ys).2.1.testBit i ∧
-      (cov3 mp d xs).2.2.testBit i = (cov3 mp d ys).2.2.testBit i := by
+def replayRecipes (mask : Nat) (needed : List Word) (recipes : List (Word × Word × Word))
+    (bank : List Word) : List Word :=
+  List.rec (motive := fun _ => List Word → List Word) (fun _ => [])
+    (fun (w, a, b) _ next bank =>
+      let v := w &&& mask
+      if needed.contains v && !availableB mask bank v &&
+          recipeGate mask bank v (a &&& mask) (b &&& mask) then
+        v :: next (v :: bank)
+      else next bank) recipes bank
+
+def boundCloses (target : Word) (state : RowState) (bound : Bound) : Bool :=
+  let (mask, stock, lower, goal) := bound
+  let (fuel, ws, history) := state
+  (target &&& mask) == goal && goal != 0 && goal != mask &&
+    (let remaining := fuel - flatCount mask ws
+     if remaining < lower then
+       let start := recipeStart mask stock ws
+       if start.length + remaining < lower then
+         let needed := recipeClosure mask stock history start
+         if needed.length + remaining < lower then
+           let replay := replayRecipes mask needed history.reverse stock
+           (replay.length + remaining < lower) &&
+             ws.all (fun w => availableB mask (replay ++ stock) (w &&& mask))
+         else false
+       else false
+     else false)
+
+def knownCloses (target : Word) (bounds : List Bound) (state : RowState) : Bool :=
+  List.rec false (fun bound _ later => boundCloses target state bound || later) bounds
+
+def AvailableWord (mask : Nat) (bank : List Word) (word : Word) : Prop :=
+  word = 0 ∨ word = mask ∨ word ∈ bank
+
+def GateWord (mask : Nat) (bank : List Word) (out : Word) : Prop :=
+  (∃ a, AvailableWord mask bank a ∧ out = mask ^^^ a) ∨
+  (∃ a b, AvailableWord mask bank a ∧ AvailableWord mask bank b ∧
+    (out = a &&& b ∨ out = a ||| b))
+
+def WordBuilds (mask : Nat) (roots : List Word) : List Word → Prop
+  | [] => True
+  | w :: ws => GateWord mask roots w ∧ WordBuilds mask (w :: roots) ws
+
+def Lower (mask : Nat) (roots : List Word) (target : Word) (minimum : Nat) : Prop :=
+  ∀ values, WordBuilds mask roots values →
+    AvailableWord mask (values ++ roots) target → minimum ≤ values.length
+
+def Known (bounds : List Bound) : Prop :=
+  ∀ bound ∈ bounds, Lower bound.1 bound.2.1 bound.2.2.2 bound.2.2.1
+
+theorem restrictWord (mask : Nat) (word : Word) : word &&& mask &&& mask = word &&& mask := by
+  simp
+
+theorem projectGate {mask cut : Nat} (submask : mask &&& cut = cut)
+    {roots : List Word} {out : Word} (gate : GateWord mask roots out) :
+    GateWord cut (roots.map (· &&& cut)) (out &&& cut) := by
+  have av {word : Word} (ha : AvailableWord mask roots word) :
+      AvailableWord cut (roots.map (· &&& cut)) (word &&& cut) := by
+    rcases ha with rfl | rfl | hm
+    · exact Or.inl (by simp)
+    · exact Or.inr (Or.inl submask)
+    · exact Or.inr (Or.inr (List.mem_map_of_mem hm))
+  rcases gate with ⟨a, ha, rfl⟩ | ⟨a, b, ha, hb, eq | eq⟩
+  · refine Or.inl ⟨a &&& cut, av ha, ?_⟩
+    apply Nat.eq_of_testBit_eq
     intro i
-    obtain ⟨a1, a2, a3⟩ := cov3_bit mp d xs i
-    obtain ⟨b1, b2, b3⟩ := cov3_bit mp d ys i
-    rw [p.countP_eq] at a1 a2 a3
-    exact ⟨a1.trans b1.symm, a2.trans b2.symm, a3.trans b3.symm⟩
-  apply Prod.ext
-  · exact Nat.eq_of_testBit_eq (fun i => (heq i).1)
-  · apply Prod.ext
-    · exact Nat.eq_of_testBit_eq (fun i => (heq i).2.1)
-    · exact Nat.eq_of_testBit_eq (fun i => (heq i).2.2)
+    have cutAt := congrArg (fun n : Nat => n.testBit i) submask
+    simp only [Nat.testBit_and, Nat.testBit_xor] at cutAt ⊢
+    cases h : cut.testBit i
+    · simp
+    · simp [h] at cutAt
+      simp [cutAt]
+  · subst out
+    refine Or.inr ⟨a &&& cut, b &&& cut, av ha, av hb, Or.inl ?_⟩
+    apply Nat.eq_of_testBit_eq
+    intro i
+    simp only [Nat.testBit_and]
+    cases cut.testBit i <;> simp
+  · subst out
+    refine Or.inr ⟨a &&& cut, b &&& cut, av ha, av hb, Or.inr ?_⟩
+    apply Nat.eq_of_testBit_eq
+    intro i
+    simp only [Nat.testBit_and, Nat.testBit_or]
+    cases cut.testBit i <;> simp
 
-theorem takeOne_eq (mp : Nat) (d : Bool) (a : Nat × Nat × Nat) (rest : List (Nat × Nat × Nat)) :
-    takeOne (cov3 mp d (a :: rest)) (colB mp d a.2) = (cov3 mp d rest).1 := by
-  apply Nat.eq_of_testBit_eq; intro i
-  obtain ⟨h1, h2, _⟩ := cov3_bit mp d (a :: rest) i
-  obtain ⟨r1, _, _⟩ := cov3_bit mp d rest i
-  simp only [takeOne, Nat.testBit_or, Nat.testBit_xor, h1, h2, r1, List.countP_cons]
-  set k := rest.countP (fun dw => (colB mp d dw.2).testBit i)
-  cases ha : (colB mp d a.2).testBit i <;> simp only [ha, Bool.false_eq_true, ↓reduceIte] <;>
-    rcases k with _ | _ | _ | k
-  · decide
-  · decide
-  · decide
-  · simp only [show 1 ≤ k + 3 by omega, show 2 ≤ k + 3 by omega, decide_true, Bool.xor_false, Bool.or_true]
-  · decide
-  · decide
-  · decide
-  · simp only [show 1 ≤ k + 3 + 1 by omega, show 2 ≤ k + 3 + 1 by omega, show 1 ≤ k + 3 by omega,
-      decide_true, Bool.xor_true, Bool.or_true, Bool.or_false]
+theorem projectBuilds {mask cut : Nat} (submask : mask &&& cut = cut)
+    {roots values : List Word} (builds : WordBuilds mask roots values) :
+    WordBuilds cut (roots.map (· &&& cut)) (values.map (· &&& cut)) := by
+  induction values generalizing roots with
+  | nil => trivial
+  | cons w ws ih =>
+    exact ⟨projectGate submask builds.1, ih builds.2⟩
 
-theorem takeTwo_eq (mp : Nat) (d : Bool) (a b : Nat × Nat × Nat) (rest : List (Nat × Nat × Nat)) :
-    takeTwo (cov3 mp d (a :: b :: rest)) (colB mp d a.2) (colB mp d b.2) = (cov3 mp d rest).1 := by
-  apply Nat.eq_of_testBit_eq; intro i
-  obtain ⟨h1, h2, h3⟩ := cov3_bit mp d (a :: b :: rest) i
-  obtain ⟨r1, _, _⟩ := cov3_bit mp d rest i
-  simp only [takeTwo, Nat.testBit_or, Nat.testBit_and, Nat.testBit_xor, h1, h2, h3, r1, List.countP_cons]
-  set k := rest.countP (fun dw => (colB mp d dw.2).testBit i)
-  cases ha : (colB mp d a.2).testBit i <;> cases hb : (colB mp d b.2).testBit i <;>
-    simp only [ha, hb, Bool.false_eq_true, ↓reduceIte] <;>
-    rcases k with _ | _ | _ | k <;>
-    (first | decide | simp only [
-      show 1 ≤ k + 3 by omega, show 2 ≤ k + 3 by omega, show 3 ≤ k + 3 by omega,
-      show 1 ≤ k + 3 + 1 by omega, show 2 ≤ k + 3 + 1 by omega, show 3 ≤ k + 3 + 1 by omega,
-      show 1 ≤ k + 3 + 1 + 1 by omega, show 2 ≤ k + 3 + 1 + 1 by omega, show 3 ≤ k + 3 + 1 + 1 by omega,
-      decide_true, Bool.xor_true, Bool.xor_false, Bool.or_true, Bool.or_false, Bool.and_true, Bool.and_false])
+theorem availableWeaken {mask : Nat} {small big : List Word} {w : Word}
+    (sub : ∀ x ∈ small, AvailableWord mask big x)
+    (av : AvailableWord mask small w) : AvailableWord mask big w := by
+  rcases av with rfl | rfl | h
+  · exact Or.inl rfl
+  · exact Or.inr (Or.inl rfl)
+  · exact sub w h
 
-theorem cov3_coversD (mp s : Nat) (dw : Nat × Nat × Nat) (rest : List (Nat × Nat × Nat)) :
-    let d := (dw :: rest).length == s + 1
-    ((cov3 mp d rest).1 ||| colB mp d dw.2 == mp) = coversD mp s (dw :: rest) := by
-  intro d
-  have e : ∀ b : Bool, ((cov3 mp b rest).1 ||| colB mp b dw.2) =
-      (dw :: rest).foldl (fun acc x => acc ||| colB mp b x.2) 0 := by
-    intro b; apply Nat.eq_of_testBit_eq; intro i
-    obtain ⟨h1, _, _⟩ := cov3_bit mp b rest i
-    rw [foldl_or_testBit, Nat.zero_testBit, Bool.false_or, Nat.testBit_or, h1, List.any_cons]
-    have hp : decide (1 ≤ rest.countP (fun dw => (colB mp b dw.2).testBit i)) =
-        rest.any (fun x => (colB mp b x.2).testBit i) := by
-      rw [Bool.eq_iff_iff, decide_eq_true_eq, Nat.succ_le_iff, List.countP_pos_iff, List.any_eq_true]
-    rw [hp, Bool.or_comm]
-  have hf : ∀ b : Bool, (cov3 mp b rest).1 ||| colB mp b dw.2 =
-      (dw :: rest).foldl (fun acc x => acc ||| (if b then (x.2.1 ^^^ mp) &&& x.2.2 else x.2.1 ^^^ x.2.2)) 0 := by
-    intro b; simpa only [colB] using e b
-  unfold coversD
-  dsimp only [d]
-  cases (dw :: rest).length == s + 1
-  · simpa only [Bool.false_eq_true, ↓reduceIte] using congrArg (· == mp) (hf false)
-  · simpa only [↓reduceIte] using congrArg (· == mp) (hf true)
+theorem gateWeaken {mask : Nat} {small big : List Word} {out : Word}
+    (sub : ∀ x ∈ small, AvailableWord mask big x)
+    (gate : GateWord mask small out) : GateWord mask big out := by
+  rcases gate with ⟨a, ha, rfl⟩ | ⟨a, b, ha, hb, eq⟩
+  · exact Or.inl ⟨a, availableWeaken sub ha, rfl⟩
+  · exact Or.inr ⟨a, b, availableWeaken sub ha, availableWeaken sub hb, eq⟩
 
-def nextD_cov (dm mp s slack : Nat) (dws : List (Nat × Nat × Nat))
-    (f : List (Nat × Nat × Nat) → Bool) : Bool :=
-  let len := dws.length
-  let covF := cov3 mp false dws
-  let covT := cov3 mp true dws
-  let du0 := len == s + 1
-  let du1 := len + 1 == s + 1
-  let db0 := len - 1 == s + 1
-  let db1 := len == s + 1
-  let db2 := len + 1 == s + 1
-  dws.any fun da =>
-    let a := da.1
-    (slack ≥ 1 &&
-      (let pneg := (da.2.1 ^^^ mp, da.2.2 ^^^ mp)
-       let uok0 := (takeOne (if du0 then covT else covF) (colB mp du0 da.2) ||| colB mp du0 pneg) == mp
-       let uok1 := slack ≥ 2 && (((if du1 then covT.1 else covF.1) ||| colB mp du1 pneg) == mp)
-       (uok0 || uok1) &&
-       (let w := negD dm a
-        w != 0 && w != dm && !(dws.any (fun x => x.1 == w)) &&
-          let dw := (w, pneg)
-          let ra := dws.erase da
-          ((uok0 && f (dw :: ra)) || (uok1 && f (dw :: da :: ra)))))) ||
-    (dws.erase da).any fun db =>
-      let b := db.1
-      a ≤ b &&
-        [false, true].any fun conj =>
-          let pz := if conj then (da.2.1 &&& db.2.1, da.2.2 &&& db.2.2)
-                    else (da.2.1 ||| db.2.1, da.2.2 ||| db.2.2)
-          let ok0 := (takeTwo (if db0 then covT else covF) (colB mp db0 da.2) (colB mp db0 db.2) ||| colB mp db0 pz) == mp
-          let ok1a := slack ≥ 1 && ((takeOne (if db1 then covT else covF) (colB mp db1 db.2) ||| colB mp db1 pz) == mp)
-          let ok1b := slack ≥ 1 && ((takeOne (if db1 then covT else covF) (colB mp db1 da.2) ||| colB mp db1 pz) == mp)
-          let ok2 := slack ≥ 2 && (((if db2 then covT.1 else covF.1) ||| colB mp db2 pz) == mp)
-          (ok0 || ok1a || ok1b || ok2) &&
-          (let w := if conj then andD dm a b else orD dm a b
-           w != 0 && w != dm && !(dws.any (fun x => x.1 == w)) &&
-             let dw := (w, pz)
-             let r := (dws.erase da).erase db
-             ((ok0 && f (dw :: r)) || (ok1a && f (dw :: da :: r)) || (ok1b && f (dw :: db :: r)) || (ok2 && f (dw :: da :: db :: r))))
+theorem extendKnown {bound : Bound} {bounds : List Bound}
+    (old : Known bounds)
+    (new : Lower bound.1 bound.2.1 bound.2.2.2 bound.2.2.1) :
+    Known (bound :: bounds) := by
+  intro x h
+  rcases List.mem_cons.mp h with rfl | h
+  · exact new
+  · exact old _ h
 
-theorem nextD_cov_eq (dm mp s slack : Nat) (dws : List (Nat × Nat × Nat))
-    (g : List (Nat × Nat × Nat) → Bool) :
-    nextD_cov dm mp s slack dws g =
-      nextD_decor dm mp slack dws (fun dzs => coversD mp s dzs && g dzs) := by
-  unfold nextD_cov nextD_decor
-  dsimp only
-  apply Bool.eq_iff_iff.2; simp only [List.any_eq_true, Bool.or_eq_true, Bool.and_eq_true]
+def AgreesAt (i j : Nat) (word : Word) : Prop :=
+  word.testBit i = word.testBit j
+
+theorem agreesAvailable {i j mask : Nat} {bank : List Word} {word : Word}
+    (m : AgreesAt i j mask) (all : ∀ w ∈ bank, AgreesAt i j w)
+    (av : AvailableWord mask bank word) : AgreesAt i j word := by
+  rcases av with rfl | rfl | h
+  · simp [AgreesAt]
+  · exact m
+  · exact all _ h
+
+theorem agreesGate {i j mask : Nat} {bank : List Word} {word : Word}
+    (m : AgreesAt i j mask) (all : ∀ w ∈ bank, AgreesAt i j w)
+    (gate : GateWord mask bank word) : AgreesAt i j word := by
+  rcases gate with ⟨a, ha, rfl⟩ | ⟨a, b, ha, hb, eq | eq⟩
+  · simp only [AgreesAt, Nat.testBit_xor] at m ⊢
+    rw [m, show a.testBit i = a.testBit j from agreesAvailable m all ha]
+  · subst word
+    simp only [AgreesAt, Nat.testBit_and]
+    rw [show a.testBit i = a.testBit j from agreesAvailable m all ha,
+      show b.testBit i = b.testBit j from agreesAvailable m all hb]
+  · subst word
+    simp only [AgreesAt, Nat.testBit_or]
+    rw [show a.testBit i = a.testBit j from agreesAvailable m all ha,
+      show b.testBit i = b.testBit j from agreesAvailable m all hb]
+
+theorem agreesBuilds {i j mask : Nat} {roots values : List Word} {word : Word}
+    (m : AgreesAt i j mask) (all : ∀ w ∈ roots, AgreesAt i j w)
+    (builds : WordBuilds mask roots values)
+    (av : AvailableWord mask (values ++ roots) word) : AgreesAt i j word := by
+  induction values generalizing roots with
+  | nil => exact agreesAvailable m all av
+  | cons v vs ih =>
+    have vg := agreesGate m all builds.1
+    have hc : ∀ w ∈ v :: roots, AgreesAt i j w := by
+      intro w h
+      rcases List.mem_cons.mp h with rfl | mem
+      · exact vg
+      · exact all _ mem
+    apply ih hc builds.2
+    rcases av with h | h | h
+    · exact Or.inl h
+    · exact Or.inr (Or.inl h)
+    · exact Or.inr (Or.inr (by
+        simpa [List.mem_append, List.mem_cons, or_assoc, or_left_comm] using h))
+
+theorem buildsMap {m n : Nat} (f : Word → Word)
+    (zero : f 0 = 0) (ones : f m = n)
+    (invert : ∀ a, f (m ^^^ a) = n ^^^ f a)
+    (meet : ∀ a b, f (a &&& b) = f a &&& f b)
+    (join : ∀ a b, f (a ||| b) = f a ||| f b)
+    {roots : List Word} {bank : List Word}
+    (supply : ∀ v ∈ roots, AvailableWord n bank (f v))
+    {values : List Word} (h : WordBuilds m roots values) :
+    WordBuilds n bank (values.map f) := by
+  have av {bank roots : List Word} {v : Word}
+      (src : ∀ v ∈ roots, AvailableWord n bank (f v))
+      (h : AvailableWord m roots v) : AvailableWord n bank (f v) := by
+    rcases h with rfl | rfl | hv
+    · exact Or.inl zero
+    · exact Or.inr (Or.inl ones)
+    · exact src _ hv
+  induction values generalizing roots bank with
+  | nil => trivial
+  | cons v vs ih =>
+    refine ⟨?_, ih ?_ h.2⟩
+    · rcases h.1 with ⟨a, ha, eq⟩ | ⟨a, b, ha, hb, eq | eq⟩
+      · exact Or.inl ⟨f a, av supply ha, eq ▸ invert a⟩
+      · exact Or.inr ⟨f a, f b, av supply ha, av supply hb, Or.inl (eq ▸ meet a b)⟩
+      · exact Or.inr ⟨f a, f b, av supply ha, av supply hb, Or.inr (eq ▸ join a b)⟩
+    · intro w hw
+      rcases List.mem_cons.mp hw with rfl | hw
+      · exact Or.inr (Or.inr List.mem_cons_self)
+      · exact availableWeaken (fun x hx => Or.inr (Or.inr (List.mem_cons_of_mem _ hx))) (supply _ hw)
+
+theorem lowerMap {m n : Nat} (f : Word → Word)
+    (zero : f 0 = 0) (ones : f m = n)
+    (invert : ∀ a, f (m ^^^ a) = n ^^^ f a)
+    (meet : ∀ a b, f (a &&& b) = f a &&& f b)
+    (join : ∀ a b, f (a ||| b) = f a ||| f b)
+    {roots bank : List Word} {goal : Word} {minimum : Nat}
+    (supply : ∀ v ∈ roots, AvailableWord n bank (f v))
+    (bound : Lower n bank (f goal) minimum) :
+    Lower m roots goal minimum := by
+  intro values build hit
+  suffices AvailableWord n (values.map f ++ bank) (f goal) by
+    simpa using bound (values.map f) (buildsMap f zero ones invert meet join supply build) this
+  rcases hit with rfl | rfl | mem
+  · exact Or.inl zero
+  · exact Or.inr (Or.inl ones)
+  · rcases List.mem_append.mp mem with hv | hr
+    · exact Or.inr (Or.inr (List.mem_append_left _ (List.mem_map_of_mem hv)))
+    · exact availableWeaken (fun w hw => Or.inr (Or.inr (List.mem_append_right _ hw))) (supply _ hr)
+
+theorem buildsWeaken {mask : Nat} {small big values : List Word}
+    (supply : ∀ w ∈ small, AvailableWord mask big w) (build : WordBuilds mask small values) :
+    WordBuilds mask big values := by
+  induction values generalizing small big with
+  | nil => trivial
+  | cons v vs ih =>
+    refine ⟨gateWeaken supply build.1, ih ?_ build.2⟩
+    intro w hw
+    rcases List.mem_cons.mp hw with rfl | hw
+    · exact Or.inr (Or.inr List.mem_cons_self)
+    · exact availableWeaken (fun x hx => Or.inr (Or.inr (List.mem_cons_of_mem _ hx))) (supply _ hw)
+
+theorem gateBuildsIndex {mask : Nat} (bank values : List Word)
+    (legal : ∀ i, i < values.length →
+      GateWord mask (bank ++ values.take i) (values.getD i 0)) :
+    WordBuilds mask bank values := by
+  induction values generalizing bank with
+  | nil => trivial
+  | cons v vs ih =>
+    have first := legal 0 (by simp)
+    have tail : ∀ i, i < vs.length →
+        GateWord mask ((bank ++ [v]) ++ vs.take i) (vs.getD i 0) := by
+      intro i hi
+      simpa [List.take_succ_cons, List.append_assoc] using
+        legal (i + 1) (by simpa using hi)
+    refine ⟨by simpa using first, buildsWeaken ?_ (ih (bank ++ [v]) tail)⟩
+    intro w mem
+    exact Or.inr (Or.inr (by simpa [or_comm] using mem))
+
+theorem lowerWeaken {mask goal minimum : Nat} {old new : List Word}
+    (lower : Lower mask old goal minimum) (supply : ∀ w ∈ new, AvailableWord mask old w) :
+    Lower mask new goal minimum := by
+  apply lowerMap id rfl rfl (fun _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl) supply
+  exact lower
+
+def properWord (mask word : Word) : Prop := word ≠ 0 ∧ word ≠ mask
+
+def binWord (isOr : Bool) (a b : Word) : Word :=
+  if isOr then a ||| b else a &&& b
+
+theorem binWord_comm (d : Bool) (a b : Word) : binWord d a b = binWord d b a := by
+  cases d <;> simp [binWord, Nat.land_comm, Nat.lor_comm]
+
+variable {mask : Nat} {target : Word}
+
+def LiveWord (mask : Nat) (target : Word) : Nat → Nat → Finset (Word) → Prop
+  | 0,t,S => t=0 ∧ S={target} ∧ properWord mask target
+  | k+1,t,S =>
+    (∃ (u : Nat) (U : Finset (Word)) (a : Word), t=u+1 ∧ S=insert a U ∧ properWord mask a ∧
+      (mask ^^^ a) ∉ insert a U ∧ LiveWord mask target k u (insert ((mask ^^^ a)) U)) ∨
+    (∃ (U : Finset (Word)) (a b : Word) (d : Bool), S=insert a (insert b U) ∧ properWord mask a ∧ properWord mask b ∧ a ≠ b ∧
+      binWord d a b ∉ insert a (insert b U) ∧ LiveWord mask target k t (insert (binWord d a b) U))
+theorem LiveWord.stop {target : Word} (hp : properWord mask target) : LiveWord mask target 0 0 {target} := ⟨rfl,rfl,hp⟩
+theorem LiveWord.unary {target : Word} {k t : Nat} {U : Finset (Word)} {a : Word} (ha : properWord mask a)
+    (hfresh : (mask ^^^ a) ∉ insert a U) (tail : LiveWord mask target k t (insert ((mask ^^^ a)) U)) :
+    LiveWord mask target (k+1) (t+1) (insert a U) :=
+  Or.inl ⟨t,U,a,rfl,rfl,ha,hfresh,tail⟩
+theorem LiveWord.binary {target : Word} {k t : Nat} {U : Finset (Word)} {a b : Word} {d : Bool}
+    (ha : properWord mask a) (hb : properWord mask b) (hab : a ≠ b)
+    (hfresh : binWord d a b ∉ insert a (insert b U)) (tail : LiveWord mask target k t (insert (binWord d a b) U)) :
+    LiveWord mask target (k+1) t (insert a (insert b U)) :=
+  Or.inr ⟨U,a,b,d,rfl,ha,hb,hab,hfresh,tail⟩
+theorem LiveWord.ind {target : Word} {motive : ∀ (k t : Nat) (S : Finset (Word)), LiveWord mask target k t S → Prop}
+    (stop : ∀ (hp : properWord mask target), motive 0 0 {target} (LiveWord.stop hp))
+    (unary : ∀ {k t : Nat} {U : Finset (Word)} {a : Word} (ha : properWord mask a)
+      (hfresh : (mask ^^^ a) ∉ insert a U) (tail : LiveWord mask target k t (insert ((mask ^^^ a)) U)),
+      motive k t (insert ((mask ^^^ a)) U) tail → motive (k+1) (t+1) (insert a U) (LiveWord.unary ha hfresh tail))
+    (binary : ∀ {k t : Nat} {U : Finset (Word)} {a b : Word} {d : Bool}
+      (ha : properWord mask a) (hb : properWord mask b) (hab : a ≠ b)
+      (hfresh : binWord d a b ∉ insert a (insert b U)) (tail : LiveWord mask target k t (insert (binWord d a b) U)),
+      motive k t (insert (binWord d a b) U) tail →
+      motive (k+1) t (insert a (insert b U)) (LiveWord.binary ha hb hab hfresh tail))
+    {k t : Nat} {S : Finset (Word)} (h : LiveWord mask target k t S) : motive k t S h := by
+  induction k generalizing t S with
+  | zero =>
+    obtain ⟨rfl,rfl,hp⟩ := h
+    exact stop hp
+  | succ k ih =>
+    rcases h with ⟨u,U,a,rfl,rfl,ha,hf,tail⟩ | ⟨U,a,b,d,rfl,ha,hb,hab,hf,tail⟩
+    · exact unary ha hf tail (ih tail)
+    · exact binary ha hb hab hf tail (ih tail)
+
+theorem liveWordProper {k t S} (h : LiveWord mask target k t S) : ∀ a ∈ S, properWord mask a := by
+  induction h using LiveWord.ind with
+  | stop hp => simpa using hp
+  | unary ha hf _ ih => simpa using And.intro ha (fun a h => ih a (Finset.mem_insert_of_mem h))
+  | binary ha hb hab hf _ ih =>
+    simp only [Finset.forall_mem_insert]
+    exact ⟨ha,hb,fun a h => ih a (Finset.mem_insert_of_mem h)⟩
+
+theorem liveWordSize {k t S} (h : LiveWord mask target k t S) : t ≤ k ∧ S.card+t ≤ k+1 := by
+  induction h using LiveWord.ind with
+  | stop hp => simp
+  | @unary k t U a ha hf _ ih =>
+    have hu : (mask ^^^ a) ∉ U := fun hm => hf (Finset.mem_insert_of_mem hm)
+    rw [Finset.card_insert_of_notMem hu] at ih
+    have hc := Finset.card_insert_le a U
+    exact ⟨by omega,by omega⟩
+  | @binary k t U a b d ha hb hab hf _ ih =>
+    have hu : binWord d a b ∉ U := fun hm => hf (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hm))
+    rw [Finset.card_insert_of_notMem hu] at ih
+    have h1 := Finset.card_insert_le (a := a) (s := insert b U)
+    have h2 := Finset.card_insert_le (a := b) (s := U)
+    exact ⟨by omega,by omega⟩
+
+def wordRep (mask : Nat) (ws : List Word) (w : Word) : Prop :=
+  w ∈ ws ∨ ¬properWord mask w
+
+def wordWitness (mask : Nat) (ws : List Word) (w : Word) : Prop :=
+  (∃ a ∈ ws, properWord mask a ∧ w = mask ^^^ a) ∨
+  ∃ d a b, a ∈ ws ∧ b ∈ ws ∧ properWord mask a ∧ properWord mask b ∧
+    a ≠ b ∧ w = binWord d a b
+
+theorem pullWord {w : List (Word)} {z : Word} {k t S} (h : LiveWord mask target k t S)
+    (hz : wordRep mask w z ∨ wordWitness mask w z) (sub : ∀ a ∈ S, a ∈ w++[z]) :
+    ∃ k' t' S', k' ≤ k+1 ∧ LiveWord mask target k' t' S' ∧ ∀ a ∈ S', a ∈ w := by
+  by_cases hm : z ∈ S
+  · by_cases hw : z ∈ w
+    · refine ⟨k,t,S,by omega,h,?_⟩
+      intro a ha
+      have hu : a ∈ w ∨ a = z := by simpa using sub a ha
+      rcases hu with hu | rfl
+      · exact hu
+      · exact hw
+    · have hp := liveWordProper h z hm
+      rcases hz with hr | (⟨a,ha,hp',eq⟩ | ⟨d,a,b,ha,hb,pa,pb,hab,eq⟩)
+      · exact False.elim ((hr.resolve_left hw) hp)
+      · subst z
+        let U := S.erase ((mask ^^^ a))
+        have ht : LiveWord mask target k t (insert ((mask ^^^ a)) U) := by simpa [U,Finset.insert_erase hm] using h
+        have hu : ∀ v ∈ U, v ∈ w := by
+          intro v hv
+          obtain ⟨hne,hm⟩ := Finset.mem_erase.mp hv
+          simpa [hne] using sub v hm
+        have hf : (mask ^^^ a) ∉ insert a U := by
+          intro hh
+          rcases Finset.mem_insert.mp hh with eq | u
+          · exact hw (eq.symm ▸ ha)
+          · exact hw (hu _ u)
+        exact ⟨_,_,_,Nat.le_refl _,LiveWord.unary hp' hf ht,by simpa using And.intro ha hu⟩
+      · subst z
+        let U := S.erase (binWord d a b)
+        have ht : LiveWord mask target k t (insert (binWord d a b) U) := by simpa [U,Finset.insert_erase hm] using h
+        have hu : ∀ v ∈ U, v ∈ w := by
+          intro v hv
+          obtain ⟨hne,hm⟩ := Finset.mem_erase.mp hv
+          simpa [hne] using sub v hm
+        have hf : binWord d a b ∉ insert a (insert b U) := by
+          intro hh
+          rcases Finset.mem_insert.mp hh with eq | u
+          · exact hw (eq.symm ▸ ha)
+          rcases Finset.mem_insert.mp u with eq | u
+          · exact hw (eq.symm ▸ hb)
+          · exact hw (hu _ u)
+        exact ⟨_,_,_,Nat.le_refl _,LiveWord.binary pa pb hab hf ht,by simpa using And.intro ha (And.intro hb hu)⟩
+  · refine ⟨k,t,S,by omega,h,?_⟩
+    intro a ha
+    have hn : a ≠ z := fun hh => hm (hh ▸ ha)
+    simpa [hn] using sub a ha
+
+
+
+def Masked (mask word : Nat) : Prop := word &&& mask = word
+
+theorem maskedAvailable {bank : List Word} {word : Word}
+    (all : ∀ w ∈ bank, Masked mask w) (aw : AvailableWord mask bank word) :
+    Masked mask word := by
+  rcases aw with rfl | rfl | hw
+  · simp [Masked]
+  · simp [Masked]
+  · exact all _ hw
+
+theorem maskedGate {bank : List Word} {out : Word}
+    (all : ∀ w ∈ bank, Masked mask w) (g : GateWord mask bank out) :
+    Masked mask out := by
+  rcases g with ⟨a, ha, rfl⟩ | ⟨a, b, ha, hb, ea | ea⟩
+  · have h := projectGate (mask := mask) (cut := mask) (by simp)
+      (roots := bank) (out := mask ^^^ a) (Or.inl ⟨a, ha, rfl⟩)
+    have ma := maskedAvailable all ha
+    unfold Masked at ma ⊢
+    apply Nat.eq_of_testBit_eq
+    intro i
+    have bit := congrArg (fun n : Nat => n.testBit i) ma
+    simp only [Nat.testBit_and, Nat.testBit_xor] at bit ⊢
+    cases hm : mask.testBit i <;> simp_all
+  · subst out
+    have ma := maskedAvailable all ha
+    have mb := maskedAvailable all hb
+    simp only [Masked] at ma mb ⊢
+    rw [Nat.land_assoc, mb]
+  · subst out
+    have ma := maskedAvailable all ha
+    have mb := maskedAvailable all hb
+    unfold Masked at ma mb ⊢
+    apply Nat.eq_of_testBit_eq
+    intro i
+    have bitA := congrArg (fun n : Nat => n.testBit i) ma
+    have bitB := congrArg (fun n : Nat => n.testBit i) mb
+    simp only [Nat.testBit_and, Nat.testBit_or] at bitA bitB ⊢
+    cases hm : mask.testBit i <;> simp_all
+
+def binaryWitness (mask : Nat) (bank : List Word) (out : Word) : Prop :=
+  ∃ d a b, a ∈ bank ∧ b ∈ bank ∧ properWord mask a ∧ properWord mask b ∧
+    a ≠ b ∧ out = binWord d a b
+
+theorem classifyBinary {bank : List Word}
+    (all : ∀ w ∈ bank, Masked mask w) (d : Bool) {a b : Word}
+    (ha : AvailableWord mask bank a) (hb : AvailableWord mask bank b) :
+    wordRep mask bank (binWord d a b) ∨ binaryWitness mask bank (binWord d a b) := by
+  have c0 : wordRep mask bank 0 := Or.inr fun h => h.1 rfl
+  have cm : wordRep mask bank mask := Or.inr fun h => h.2 rfl
+  have classify {w : Word} (hw : AvailableWord mask bank w) :
+      w = 0 ∨ w = mask ∨ w ∈ bank ∧ properWord mask w := by
+    by_cases zh : w = 0
+    · exact Or.inl zh
+    by_cases mh : w = mask
+    · exact Or.inr (Or.inl mh)
+    exact Or.inr (Or.inr ⟨(hw.resolve_left zh).resolve_left mh, zh, mh⟩)
+  have ma : a &&& mask = a := maskedAvailable all ha
+  have mb : b &&& mask = b := maskedAvailable all hb
+  have absorbA : a ||| mask = mask := by
+    apply Nat.eq_of_testBit_eq
+    intro i
+    have h := congrArg (fun n : Nat => n.testBit i) ma
+    simp only [Nat.testBit_and, Nat.testBit_or] at h ⊢
+    cases hm : mask.testBit i <;> simp_all
+  have absorbB : b ||| mask = mask := by
+    apply Nat.eq_of_testBit_eq
+    intro i
+    have h := congrArg (fun n : Nat => n.testBit i) mb
+    simp only [Nat.testBit_and, Nat.testBit_or] at h ⊢
+    cases hm : mask.testBit i <;> simp_all
+  rcases classify ha with rfl | hma | ⟨ha', pa⟩
+  · rw [binWord_comm]
+    cases d
+    · exact Or.inl (by simpa [binWord] using c0)
+    · rcases hb with hz | hm | hv
+      · exact Or.inl (by simpa [binWord, hz] using c0)
+      · exact Or.inl (by simpa [binWord, hm] using cm)
+      · exact Or.inl (by simpa [binWord, wordRep] using
+          (Or.inl hv : wordRep mask bank b))
+  · rw [hma, binWord_comm]
+    cases d
+    · rcases hb with hz | hm | hv
+      · exact Or.inl (by simpa [binWord, hz] using c0)
+      · exact Or.inl (by simpa [binWord, hm] using cm)
+      · exact Or.inl (by simpa [binWord, mb, wordRep] using
+          (Or.inl hv : wordRep mask bank b))
+    · exact Or.inl (by simpa [binWord, absorbB] using cm)
+  rcases classify hb with rfl | hmb | ⟨hb', pb⟩
+  · cases d
+    · exact Or.inl (by simpa [binWord] using c0)
+    · exact Or.inl (by simpa [binWord, wordRep] using
+        (Or.inl ha' : wordRep mask bank a))
+  · rw [hmb]
+    cases d
+    · exact Or.inl (by simpa [binWord, ma, wordRep] using
+        (Or.inl ha' : wordRep mask bank a))
+    · exact Or.inl (by simpa [binWord, absorbA] using cm)
+  by_cases eq : a = b
+  · subst b
+    cases d <;> exact Or.inl (by simpa [binWord, wordRep] using
+      (Or.inl ha' : wordRep mask bank a))
+  exact Or.inr ⟨d, a, b, ha', hb', pa, pb, eq, rfl⟩
+
+theorem classifyWord {bank : List Word} {out : Word}
+    (all : ∀ w ∈ bank, Masked mask w) (gate : GateWord mask bank out) :
+    wordRep mask bank out ∨ wordWitness mask bank out := by
+  have c0 : wordRep mask bank 0 := Or.inr fun h => h.1 rfl
+  have cm : wordRep mask bank mask := Or.inr fun h => h.2 rfl
+  have classify {w : Word} (hw : AvailableWord mask bank w) :
+      w = 0 ∨ w = mask ∨ w ∈ bank ∧ properWord mask w := by
+    by_cases zh : w = 0
+    · exact Or.inl zh
+    by_cases mh : w = mask
+    · exact Or.inr (Or.inl mh)
+    exact Or.inr (Or.inr ⟨(hw.resolve_left zh).resolve_left mh, zh, mh⟩)
+  rcases gate with ⟨a, ha, rfl⟩ | ⟨a, b, ha, hb, h | h⟩
+  · rcases classify ha with rfl | hma | ⟨hm, hp⟩
+    · exact Or.inl (by simpa using cm)
+    · exact Or.inl (by simpa [hma] using c0)
+    · exact Or.inr (Or.inl ⟨a, hm, hp, rfl⟩)
+  · subst out; exact (classifyBinary all false ha hb).imp id Or.inr
+  · subst out; exact (classifyBinary all true ha hb).imp id Or.inr
+
+theorem extractWordLive {roots values : List Word}
+    (all : ∀ w ∈ roots, Masked mask w) (builds : WordBuilds mask roots values)
+    (hit : AvailableWord mask (values ++ roots) target) (p : properWord mask target) :
+    ∃ k t S, k ≤ values.length ∧ LiveWord mask target k t S ∧ ∀ w ∈ S, w ∈ roots := by
+  have hm := (hit.resolve_left p.1).resolve_left p.2
+  induction values generalizing roots with
+  | nil =>
+    exact ⟨0, 0, {target}, Nat.zero_le _, LiveWord.stop p, by simpa using hm⟩
+  | cons w ws ih =>
+    have next : ∀ v ∈ w :: roots, Masked mask v := by
+      intro v hv
+      rcases List.mem_cons.mp hv with rfl | hv
+      · exact maskedGate all builds.1
+      · exact all _ hv
+    have ht : AvailableWord mask (ws ++ w :: roots) target := by
+      exact Or.inr (Or.inr (by simpa [List.mem_append, List.mem_cons, or_assoc, or_left_comm] using hm))
+    obtain ⟨k, t, S, hk, live, sub⟩ :=
+      ih next builds.2 ht ((ht.resolve_left p.1).resolve_left p.2)
+    have available : ∀ v ∈ S, v ∈ roots ++ [w] := by
+      intro v h
+      simpa [or_comm] using sub v h
+    obtain ⟨k', t', S', hk', hl, hsub⟩ := pullWord live (classifyWord all builds.1) available
+    exact ⟨k', t', S', by simp only [List.length_cons]; omega, hl, hsub⟩
+
+theorem insertWordMem {x w : Word} {ws : List Word} :
+    x ∈ insertWord w ws ↔ x = w ∨ x ∈ ws := by
+  induction ws with
+  | nil => simp [insertWord]
+  | cons a tail ih =>
+    change x ∈ (if w ≤ a then w :: a :: tail else a :: insertWord w tail) ↔ _
+    split <;> simp [ih, or_assoc, or_left_comm]
+
+theorem insertWordNodup {w : Word} {ws : List Word} (nd : ws.Nodup) (fresh : w ∉ ws) :
+    (insertWord w ws).Nodup := by
+  induction ws with
+  | nil => simp [insertWord]
+  | cons a tail ih =>
+    change (if w ≤ a then w :: a :: tail else a :: insertWord w tail).Nodup
+    split
+    · exact List.nodup_cons.mpr ⟨fresh, nd⟩
+    have hn := List.nodup_cons.mp nd
+    have hnot : w ≠ a ∧ w ∉ tail := by simpa using fresh
+    exact List.nodup_cons.mpr ⟨by simp [insertWordMem, hnot.1.symm, hn.1], ih hn.2 hnot.2⟩
+
+theorem insertWordSet (w : Word) (ws : List Word) :
+    (insertWord w ws).toFinset = insert w ws.toFinset := by
+  ext x
+  simp [insertWordMem]
+
+theorem eraseWordSet {ws : List Word} (nd : ws.Nodup) (w : Word) :
+    (ws.erase w).toFinset = ws.toFinset.erase w := by
+  ext x
+  simp [nd.mem_erase_iff, and_comm]
+
+theorem gateTokenFields {a b op keep : Nat} (hb : b < 64) (ho : op < 3) (hk : keep < 4) :
+    gateToken a b op keep % 4 = keep ∧
+    gateToken a b op keep / 4 % 3 = op ∧
+    gateToken a b op keep / (4 * 3 * 64) = a ∧
+    gateToken a b op keep / (4 * 3) % 64 = b := by
+  unfold gateToken
+  omega
+
+def keepWord (save : Bool) (w : Word) (ws : List Word) : List Word :=
+  if save then ws else ws.erase w
+
+theorem keepNodup {ws : List Word} (nd : ws.Nodup) (save : Bool) (w : Word) :
+    (keepWord save w ws).Nodup := by
+  cases save
+  · exact nd.erase _
+  · exact nd
+
+theorem keepSubset (save : Bool) (w : Word) (ws : List Word) :
+    ∀ v ∈ keepWord save w ws, v ∈ ws := by
+  cases save
+  · exact fun _ h => List.mem_of_mem_erase h
+  · exact fun _ h => h
+
+theorem keepSet {ws : List Word} (nd : ws.Nodup) {w : Word} {U : Finset Word}
+    (eq : ws.toFinset = insert w U) :
+    (keepWord (decide (w ∈ U)) w ws).toFinset = U := by
+  by_cases hw : w ∈ U
+  · simp [keepWord, hw, eq, Finset.insert_eq_of_mem hw]
+  · simp [keepWord, hw, eraseWordSet nd, eq]
+
+theorem keepPairSet {ws : List Word} (nd : ws.Nodup) {a b : Word} {U : Finset Word}
+    (ab : a ≠ b) (eq : ws.toFinset = insert a (insert b U)) :
+    (keepWord (decide (b ∈ U)) b (keepWord (decide (a ∈ U)) a ws)).toFinset = U := by
+  have x : decide (a ∈ insert b U) = decide (a ∈ U) := by simp [ab]
+  have h := keepSet nd eq
+  rw [x] at h
+  exact keepSet (keepNodup nd _ _) h
+
+theorem getWord {ws : List Word} {x : Word} (h : x ∈ ws) :
+    ws.getD (ws.idxOf x) 0 = x := by
+  have inb := List.idxOf_lt_length_iff.mpr h
+  simpa [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem inb] using
+    List.getElem_idxOf inb
+
+theorem unaryChild {mask fuel a : Nat} {ws : List Word}
+    {history : List (Word × Word × Word)} {x : Word} {keep : Nat}
+    (ha : a < ws.length) (ha64 : a < 64) (hf : fuel ≠ 0) (hk : keep < 2)
+    (hx : ws.getD a 0 = x) (p : properWord mask (mask ^^^ x)) (fresh : mask ^^^ x ∉ ws) :
+    childState mask (gateToken a a 2 keep) (fuel, ws, history) =
+      some (fuel - 1, insertWord (mask ^^^ x) (keepWord (keep.testBit 0) x ws),
+        (mask ^^^ x, x, x) :: history) := by
+  obtain ⟨ke, op, aa, bb⟩ := gateTokenFields (a := a) ha64 (by decide : 2 < 3) (by omega : keep < 4)
+  simp only [childState, ke, op, aa, bb, hx]
+  simp [hf, Nat.not_le_of_lt ha, Nat.not_le_of_lt hk, p.1, p.2, fresh, keepWord]
+
+theorem binaryChild {mask fuel a b : Nat} {ws : List Word}
+    {history : List (Word × Word × Word)} {x y : Word} {keep : Nat}
+    (d : Bool) (hab : a < b) (hb : b < ws.length) (hb64 : b < 64)
+    (hf : fuel ≠ 0) (hk : keep < 4)
+    (hx : ws.getD a 0 = x) (hy : ws.getD b 0 = y)
+    (p : properWord mask (binWord d x y)) (fresh : binWord d x y ∉ ws) :
+    childState mask (gateToken a b (if d then 1 else 0) keep) (fuel, ws, history) =
+      some (fuel - 1, insertWord (binWord d x y)
+        (keepWord (keep.testBit 1) y (keepWord (keep.testBit 0) x ws)),
+        (binWord d x y, x, y) :: history) := by
+  have oh : (if d then 1 else 0) < 3 := by cases d <;> decide
+  obtain ⟨ke, op, aa, bb⟩ := gateTokenFields (a := a) hb64 oh hk
+  simp only [childState, ke, op, aa, bb, hx, hy]
+  cases d <;>
+    simp_all [Nat.not_le_of_lt hab, Nat.not_le_of_lt hb, keepWord, binWord, properWord]
+
+def WordViable (mask : Nat) (target : Word) (state : RowState) : Prop :=
+  state.2.1.Nodup ∧ ∃ k t, k ≤ state.1 ∧ LiveWord mask target k t state.2.1.toFinset
+
+def HasChild (mask : Nat) (state child : RowState) : Prop :=
+  ∃ a b op keep, a < state.2.1.length ∧
+    ((a = b ∧ op = 2 ∧ keep < 2) ∨
+      (a < b ∧ b < state.2.1.length ∧ op < 2 ∧ keep < 4)) ∧
+    childState mask (gateToken a b op keep) state = some child
+
+theorem unaryProgress {mask fuel k t : Nat} {x target : Word} {U : Finset Word} {ws : List Word}
+    {history : List (Word × Word × Word)}
+    (nd : ws.Nodup) (wide : ws.length ≤ 64) (hk : k + 1 ≤ fuel)
+    (he : ws.toFinset = insert x U) (fresh : mask ^^^ x ∉ insert x U)
+    (tail : LiveWord mask target k t (insert (mask ^^^ x) U)) :
+    ∃ child, HasChild mask (fuel, ws, history) child ∧ WordViable mask target child := by
+  let a := ws.idxOf x
+  have xm : x ∈ ws := by
+    rw [← List.mem_toFinset, he]
+    simp
+  have ha : a < ws.length := List.idxOf_lt_length_iff.mpr xm
+  have hx : ws.getD a 0 = x := getWord xm
+  have p := liveWordProper tail (mask ^^^ x) (Finset.mem_insert_self _ _)
+  let save := decide (x ∈ U)
+  let keep := if save then 1 else 0
+  have keepLt : keep < 2 := by dsimp [keep]; split <;> decide
+  have keepBit : keep.testBit 0 = save := by
+    unfold keep
+    cases save <;> decide
+  have fn : mask ^^^ x ∉ ws := by simpa [← List.mem_toFinset, he] using fresh
+  let rest := keepWord save x ws
+  let child : RowState := (fuel - 1, insertWord (mask ^^^ x) rest, (mask ^^^ x, x, x) :: history)
+  refine ⟨child, ⟨a, a, 2, keep, ha, Or.inl ⟨rfl, rfl, keepLt⟩, ?_⟩, ?_⟩
+  · have eq := unaryChild (fuel := fuel) (history := history) ha (by omega) (by omega) keepLt hx p fn
+    rw [keepBit] at eq
+    exact eq
+  · refine ⟨insertWordNodup (keepNodup nd save x) (fun h => fn (keepSubset save x ws _ h)),
+      k, t, by change k ≤ fuel - 1; omega, ?_⟩
+    change LiveWord mask target k t (insertWord (mask ^^^ x) rest).toFinset
+    rw [insertWordSet, keepSet nd he]
+    exact tail
+
+theorem binaryProgress {mask fuel k t : Nat} {x y target : Word} {d : Bool} {U : Finset Word}
+    {ws : List Word} {history : List (Word × Word × Word)}
+    (nd : ws.Nodup) (wide : ws.length ≤ 64) (hk : k + 1 ≤ fuel)
+    (he : ws.toFinset = insert x (insert y U)) (xy : x ≠ y)
+    (ordered : ws.idxOf x < ws.idxOf y) (fresh : binWord d x y ∉ insert x (insert y U))
+    (tail : LiveWord mask target k t (insert (binWord d x y) U)) :
+    ∃ child, HasChild mask (fuel, ws, history) child ∧ WordViable mask target child := by
+  let a := ws.idxOf x
+  let b := ws.idxOf y
+  have xm : x ∈ ws := by rw [← List.mem_toFinset, he]; simp
+  have ym : y ∈ ws := by rw [← List.mem_toFinset, he]; simp
+  have ha : a < ws.length := List.idxOf_lt_length_iff.mpr xm
+  have hb : b < ws.length := List.idxOf_lt_length_iff.mpr ym
+  have hab : a < b := ordered
+  have hx : ws.getD a 0 = x := getWord xm
+  have hy : ws.getD b 0 = y := getWord ym
+  let v := binWord d x y
+  have p := liveWordProper tail v (Finset.mem_insert_self _ _)
+  let saveX := decide (x ∈ U)
+  let saveY := decide (y ∈ U)
+  let keep := (if saveX then 1 else 0) + (if saveY then 2 else 0)
+  have fields : keep < 4 ∧ keep.testBit 0 = saveX ∧ keep.testBit 1 = saveY := by
+    unfold keep
+    cases saveX <;> cases saveY <;> decide
+  obtain ⟨keepLt, bx, by'⟩ := fields
+  have fn : v ∉ ws := by simpa [← List.mem_toFinset, he] using fresh
+  let rest := keepWord saveY y (keepWord saveX x ws)
+  let child : RowState := (fuel - 1, insertWord v rest, (v, x, y) :: history)
+  refine ⟨child, ⟨a, b, if d then 1 else 0, keep, ha, Or.inr ⟨hab, hb, ?_, keepLt⟩, ?_⟩, ?_⟩
+  · cases d <;> decide
+  · have eq := binaryChild (fuel := fuel) (history := history) d hab hb (by omega) (by omega) keepLt hx hy p fn
+    rw [bx, by'] at eq
+    exact eq
+  · refine ⟨insertWordNodup (keepNodup (keepNodup nd saveX x) saveY y)
+      (fun h => fn (keepSubset saveX x ws _ (keepSubset saveY y _ _ h))), k, t, by change k ≤ fuel - 1; omega, ?_⟩
+    change LiveWord mask target k t (insertWord v rest).toFinset
+    rw [insertWordSet, keepPairSet nd xy he]
+    exact tail
+
+theorem wordProgress {mask : Nat} {target : Word} {state : RowState}
+    (width : state.2.1.length ≤ 64) (h : WordViable mask target state) :
+    target ∈ state.2.1 ∨ ∃ child, HasChild mask state child ∧ WordViable mask target child := by
+  obtain ⟨fuel, ws, history⟩ := state
+  obtain ⟨nd, k, t, cap, live⟩ := h
+  cases k with
+  | zero =>
+    obtain ⟨_, eq, _⟩ := live
+    left
+    change ws.toFinset = {target} at eq
+    rw [← List.mem_toFinset, eq]
+    simp
+  | succ k =>
+    right
+    rcases live with ⟨u,U,x,_,eq,px,fresh,tail⟩ | ⟨U,x,y,d,eq,px,py,xy,fresh,tail⟩
+    · exact unaryProgress nd width cap eq fresh tail
+    have xm : x ∈ ws := by rw [← List.mem_toFinset, eq]; simp
+    have ym : y ∈ ws := by rw [← List.mem_toFinset, eq]; simp
+    have diff : ws.idxOf x ≠ ws.idxOf y := by
+      intro same
+      apply xy
+      rw [← getWord xm, same, getWord ym]
+    by_cases h : ws.idxOf x < ws.idxOf y
+    · exact binaryProgress nd width cap eq xy h fresh tail
+    · have eq' : ws.toFinset = insert y (insert x U) := by rw [eq, Finset.insert_comm]
+      have fresh' : binWord d y x ∉ insert y (insert x U) := by
+        rw [binWord_comm d y x, Finset.insert_comm]; exact fresh
+      have tail' : LiveWord mask target k t (insert (binWord d y x) U) := by
+        rw [binWord_comm d y x]; exact tail
+      exact binaryProgress nd width cap eq' xy.symm (by omega) fresh' tail'
+
+theorem rootWordSublist (base : List Word) (token : Nat) : (rootWords base token).Sublist base := by
+  induction base generalizing token with
+  | nil => exact List.Sublist.slnil
+  | cons w ws ih =>
+    change (if token &&& 1 == 0 then rootWords ws (token >>> 1)
+      else w :: rootWords ws (token >>> 1)).Sublist (w :: ws)
+    split
+    · exact (ih _).cons _
+    · exact (ih _).cons₂ _
+
+theorem rootToken (base : List Word) (S : Finset Word) :
+    ∃ token < 2 ^ base.length, (rootWords base token).toFinset = base.toFinset ∩ S := by
+  induction base with
+  | nil => exact ⟨0, by simp, by simp [rootWords]⟩
+  | cons w ws ih =>
+    obtain ⟨token, htoken, ih⟩ := ih
+    let bit : Nat := if w ∈ S then 1 else 0
+    have hbit : bit < 2 := by dsimp [bit]; split <;> decide
+    let code := 2 * token + bit
+    have low : code &&& 1 = bit := by
+      rw [show (1 : Nat) = 2 ^ 1 - 1 from rfl, Nat.and_two_pow_sub_one_eq_mod]
+      dsimp [code]
+      omega
+    have high : code >>> 1 = token := by
+      rw [Nat.shiftRight_eq_div_pow]
+      change code / 2 = token
+      dsimp [code]
+      omega
+    refine ⟨code, ?_, ?_⟩
+    · simp only [List.length_cons, pow_succ]
+      dsimp [code]
+      omega
+    · change (if code &&& 1 == 0 then rootWords ws (code >>> 1)
+        else w :: rootWords ws (code >>> 1)).toFinset = _
+      rw [low, high]
+      by_cases hw : w ∈ S
+      · simp [bit, hw, ih]
+      · simp [bit, hw, ih]
+
+theorem liveAgrees {i j k t : Nat} {S : Finset Word}
+    (h : LiveWord mask target k t S) (m : AgreesAt i j mask)
+    (all : ∀ w ∈ S, AgreesAt i j w) : AgreesAt i j target := by
+  induction h using LiveWord.ind with
+  | stop => exact all _ (Finset.mem_singleton_self _)
+  | @unary k t U a pa fresh tail ih =>
+    apply ih
+    intro w hw
+    rcases Finset.mem_insert.mp hw with rfl | hw
+    · simp only [AgreesAt, Nat.testBit_xor]
+      rw [show mask.testBit i = mask.testBit j from m,
+        show a.testBit i = a.testBit j from all a (Finset.mem_insert_self _ _)]
+    · exact all _ (Finset.mem_insert_of_mem hw)
+  | @binary k t U a b d pa pb ab fresh tail ih =>
+    apply ih
+    intro w hw
+    rcases Finset.mem_insert.mp hw with rfl | hw
+    · have aa : a.testBit i = a.testBit j := all a (Finset.mem_insert_self _ _)
+      have bb : b.testBit i = b.testBit j := all b (Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
+      cases d <;> simp [AgreesAt, binWord, Nat.testBit_and, Nat.testBit_or, aa, bb]
+    · exact all _ (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hw))
+
+theorem positiveInMask {i : Nat} (mt : Masked mask target) (ht : target.testBit i = true) :
+    mask.testBit i = true := by
+  have h := congrArg (fun n : Nat => n.testBit i) mt
+  simpa [Nat.testBit_and, ht] using h
+
+variable {rows : Nat}
+
+def fullMask (rows : Nat) : Nat := 2 ^ rows - 1
+
+theorem toNatMasked (v : BitVec rows) : Masked (fullMask rows) v.toNat := by
+  unfold Masked fullMask
+  rw [Nat.and_two_pow_sub_one_eq_mod, Nat.mod_eq_of_lt v.isLt]
+
+theorem notNat (v : BitVec rows) : (~~~v).toNat = fullMask rows ^^^ v.toNat := by
+  rw [← BitVec.xor_allOnes, BitVec.toNat_xor, Nat.xor_comm, BitVec.toNat_allOnes]
+  rfl
+
+theorem gateOfAvailable {bank : List Word} {w : Word}
+    (av : AvailableWord mask bank w) : GateWord mask bank w :=
+  Or.inr ⟨w, 0, av, Or.inl rfl, Or.inr (by simp)⟩
+
+theorem toNatAvailable (bank : List (BitVec rows)) (i : Nat) :
+    AvailableWord (fullMask rows) (bank.map BitVec.toNat) (bank.getD i 0).toNat := by
+  rw [List.getD_eq_getElem?_getD]
+  cases h : bank[i]? with
+  | none => exact Or.inl rfl
+  | some a => exact Or.inr (Or.inr (List.mem_map_of_mem (List.mem_of_getElem? h)))
+
+def buildable (m g : Word) : Nat → Finset (Word) → Prop
+  | 0, s => g ∈ s
+  | n+1, s => buildable m g n s ∨
+    (∃ a ∈ s, buildable m g n (insert (m ^^^ a) s)) ∨
+    (∃ a ∈ s, ∃ b ∈ s, ∃ d, buildable m g n (insert (binWord d a b) s))
+
+theorem supplyPool {m g : Word} {n s q} (sub : s ⊆ q) (h : buildable m g n s) : buildable m g n q := by
+  induction n generalizing s q with
+  | zero => exact sub h
+  | succ n ih =>
+    rcases h with h | ⟨a,ha,h⟩ | ⟨a,ha,b,hb,d,h⟩
+    · exact Or.inl (ih sub h)
+    · exact Or.inr (Or.inl ⟨a,sub ha,ih (Finset.insert_subset_insert _ sub) h⟩)
+    · exact Or.inr (Or.inr ⟨a,sub ha,b,sub hb,d,ih (Finset.insert_subset_insert _ sub) h⟩)
+
+theorem supplyMore {m g : Word} {n l s} (le : n ≤ l) (h : buildable m g n s) : buildable m g l s := by
+  induction le with
+  | refl => exact h
+  | step _ ih => exact Or.inl ih
+
+abbrev maskedFlat (m a : Word) : Prop := a &&& m = 0 ∨ a &&& m = m
+
+
+def flatSet (m : Word) (s : Finset (Word)) := s.filter (maskedFlat m)
+def visibleWords (m : Word) (s : Finset (Word)) := s.image fun w => w &&& m
+
+theorem flIns {m a : Word} {s : Finset (Word)} (ha : a ∉ s) :
+    (flatSet m (insert a s)).card = (flatSet m s).card + (if maskedFlat m a then 1 else 0) := by
+  by_cases f : maskedFlat m a <;> simp [flatSet,Finset.filter_insert,f,ha]
+
+theorem flLe (m a : Word) (s : Finset (Word)) :
+    (flatSet m (insert a s)).card ≤ (flatSet m s).card + (if maskedFlat m a then 1 else 0) := by
+  by_cases old : a ∈ s
+  · rw [Finset.insert_eq_of_mem old]
+    omega
+  · rw [flIns old]
+
+theorem prIns (m a : Word) (s : Finset (Word)) :
+    visibleWords m (insert a s) = insert (a &&& m) (visibleWords m s) := Finset.image_insert ..
+
+theorem cofNot {mask m : Nat} (sub : mask &&& m = m) (a : Word) :
+    (mask ^^^ a) &&& m = m ^^^ (a &&& m) := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  have h := congrArg (fun w : Nat => w.testBit i) sub
+  simp only [Nat.testBit_and, Nat.testBit_xor] at h ⊢
+  cases he : m.testBit i
+  · simp
+  · have hm : mask.testBit i = true := by simpa [he] using h
+    simp [hm]
+
+theorem cofBinary (m a b : Word) (d : Bool) :
+    binWord d a b &&& m = binWord d (a &&& m) (b &&& m) := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  cases d <;> simp only [binWord, Bool.false_eq_true, ite_false, ite_true, Nat.testBit_and, Nat.testBit_or] <;>
+    cases m.testBit i <;> simp
+
+theorem flNot {mask m : Nat} (sub : mask &&& m = m) (a : Word) :
+    maskedFlat m (mask ^^^ a) ↔ maskedFlat m a := by
+  unfold maskedFlat
+  rw [cofNot sub]
+  constructor <;> intro h
+  · rcases h with h | h
+    · right
+      have hh := congrArg (fun v => m ^^^ v) h
+      simpa [← Nat.xor_assoc] using hh
+    · left
+      have hh := congrArg (fun v => m ^^^ v) h
+      simpa [← Nat.xor_assoc] using hh
+  · rcases h with h | h <;> simp [h]
+
+theorem flBoth {m a b : Word} {d : Bool} (ha : maskedFlat m a) (hb : maskedFlat m b) :
+    maskedFlat m (binWord d a b) := by
+  unfold maskedFlat at *
+  rw [cofBinary]
+  rcases ha with ha | ha <;> rcases hb with hb | hb <;> cases d <;>
+    simp [binWord, ha, hb]
+
+theorem simpleBin {m a b : Word} {d : Bool} (h : maskedFlat m a ∨ maskedFlat m b) :
+    binWord d a b &&& m = 0 ∨ binWord d a b &&& m = m ∨
+      binWord d a b &&& m = a &&& m ∨ binWord d a b &&& m = b &&& m := by
+  rw [cofBinary]
+  have top1 (x : Word) : m &&& (x &&& m) = x &&& m := by
+    rw [Nat.land_comm x m, ← Nat.land_assoc]
+    simp
+  have top2 (x : Word) : m ||| (x &&& m) = m := by
+    apply Nat.eq_of_testBit_eq
+    intro i
+    simp only [Nat.testBit_or, Nat.testBit_and]
+    cases x.testBit i <;> cases m.testBit i <;> rfl
+  have right1 (x : Word) : (x &&& m) &&& m = x &&& m := restrictWord m x
+  have right2 (x : Word) : (x &&& m) ||| m = m := by rw [Nat.lor_comm, top2]
+  rcases h with (ha|ha)|(hb|hb) <;> cases d <;>
+    simp [binWord, *, top1, top2, right1, right2]
+
+def projectedStock (m : Word) (s : Finset (Word)) := insert 0 (insert m (visibleWords m s))
+
+theorem maskedBuild {goal : Word} {k t s} (run : LiveWord mask goal k t s) (m : Word) (submask : mask &&& m = m) (properGoal : ¬ maskedFlat m goal) :
+    ∃ n, n+(flatSet m s).card ≤ k ∧ buildable m (goal &&& m) n (projectedStock m s) := by
+  induction run using LiveWord.ind with
+  | stop =>
+    refine ⟨0,?_,?_⟩
+    · simp only [flatSet, Finset.filter_singleton, properGoal, ite_false, Finset.card_empty,
+        Nat.add_zero, Nat.le_refl]
+    · change goal &&& m ∈ projectedStock m {goal}
+      simp [projectedStock,visibleWords]
+  | @unary k t u a pa fresh tail ih =>
+    obtain ⟨n,cap,built⟩ := ih
+    have nn : (mask ^^^ a) ∉ u := fun h => fresh (Finset.mem_insert_of_mem h)
+    rw [flIns nn] at cap
+    have card := flLe m a u
+    have old : a &&& m ∈ projectedStock m (insert a u) := by simp [projectedStock,prIns]
+    have sub : projectedStock m u ⊆ projectedStock m (insert a u) := by
+      exact Finset.insert_subset_insert _ (Finset.insert_subset_insert _ (Finset.image_subset_image (Finset.subset_insert ..)))
+    by_cases f : maskedFlat m a
+    · have ff := (flNot submask a).mpr f
+      simp only [f,ff,ite_true] at cap card
+      refine ⟨n,by omega,supplyPool ?_ built⟩
+      intro w hw
+      simp only [projectedStock,prIns,Finset.mem_insert] at hw ⊢
+      rcases hw with rfl|rfl|rfl|h
+      · exact Or.inl rfl
+      · exact Or.inr (Or.inl rfl)
+      · rcases ff with e|e
+        · exact Or.inl e
+        · exact Or.inr (Or.inl e)
+      · exact Or.inr (Or.inr (Or.inr h))
+    · have nf := mt (flNot submask a).mp f
+      simp only [f,nf,ite_false] at cap card
+      refine ⟨n+1,by omega,Or.inr (Or.inl ⟨_,old,supplyPool ?_ built⟩)⟩
+      intro w hw
+      simp only [projectedStock,prIns,Finset.mem_insert] at hw ⊢
+      rw [cofNot submask] at hw
+      tauto
+  | @binary k t u a b d pa pb ab fresh tail ih =>
+    let v := binWord d a b
+    obtain ⟨n,cap,built⟩ := ih
+    have nn : v ∉ u := fun h => fresh (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem h))
+    change n+(flatSet m (insert v u)).card ≤ k at cap
+    rw [flIns nn] at cap
+    have ca := flLe m a (insert b u)
+    have cb := flLe m b u
+    by_cases simple : maskedFlat m a ∨ maskedFlat m b
+    · have budget : n + (flatSet m (insert a (insert b u))).card ≤ k+1 := by
+        by_cases fa : maskedFlat m a <;> by_cases fb : maskedFlat m b <;>
+          simp only [fa,fb,ite_true,ite_false] at ca cb simple
+        all_goals first | have vf : maskedFlat m v := flBoth fa fb; simp only [vf,ite_true] at cap; omega | omega | tauto
+      refine ⟨n,budget,supplyPool ?_ built⟩
+      intro w hw
+      simp only [projectedStock,prIns,Finset.mem_insert] at hw ⊢
+      rcases hw with e|e|e|e
+      · exact Or.inl e
+      · exact Or.inr (Or.inl e)
+      · subst w
+        have cases := simpleBin (d := d) simple
+        tauto
+      · tauto
+    · have fa : ¬maskedFlat m a := fun h => simple (Or.inl h)
+      have fb : ¬maskedFlat m b := fun h => simple (Or.inr h)
+      simp only [fa,fb,ite_false] at ca cb
+      refine ⟨n+1,by omega,Or.inr (Or.inr ⟨a &&& m,?_,b &&& m,?_,d,supplyPool ?_ built⟩)⟩
+      · simp [projectedStock,prIns]
+      · simp [projectedStock,prIns]
+      · intro w hw
+        simp only [projectedStock,prIns,Finset.mem_insert] at hw ⊢
+        rw [cofBinary] at hw
+        tauto
+
+theorem availableB_spec {mask : Nat} {bank : List Word} {v : Word} :
+    availableB mask bank v = true ↔ AvailableWord mask bank v := by
+  simp [availableB, AvailableWord, or_assoc]
+
+theorem recipeGate_spec {mask : Nat} {bank : List Word} {v a b : Word}
+    (h : recipeGate mask bank v a b = true) : GateWord mask bank v := by
+  simp only [recipeGate, Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq, availableB_spec] at h
+  rcases h with ⟨ha, first | ⟨hb, second⟩⟩
+  · exact Or.inl ⟨a, ha, first⟩
+  · exact Or.inr ⟨a, b, ha, hb, second⟩
+
+theorem replayRecipesBuilds (mask : Nat) (needed : List Word) (recipes : List (Word × Word × Word))
+    (bank : List Word) : WordBuilds mask bank (replayRecipes mask needed recipes bank) := by
+  induction recipes generalizing bank with
+  | nil => trivial
+  | cons recipe recipes ih =>
+    obtain ⟨w, a, b⟩ := recipe
+    change WordBuilds mask bank
+      (if needed.contains (w &&& mask) && !availableB mask bank (w &&& mask) &&
+          recipeGate mask bank (w &&& mask) (a &&& mask) (b &&& mask) then
+        (w &&& mask) :: replayRecipes mask needed recipes ((w &&& mask) :: bank)
+      else replayRecipes mask needed recipes bank)
+    split
+    · rename_i yes
+      exact ⟨recipeGate_spec (Bool.and_eq_true_iff.mp yes).2, ih _⟩
+    · exact ih _
+
+theorem flatCountCard (mask : Nat) {words : List Word} (nodup : words.Nodup) :
+    flatCount mask words = (flatSet mask words.toFinset).card := by
+  induction words with
+  | nil => rfl
+  | cons w ws ih =>
+    have nd := List.nodup_cons.mp nodup
+    have fresh : w ∉ ws.toFinset := by simpa using nd.1
+    have bool : maskFlat mask w = true ↔ maskedFlat mask w := by
+      simp [maskFlat, maskedFlat]
+    change (if maskFlat mask w then flatCount mask ws + 1 else flatCount mask ws) = _
+    rw [List.toFinset_cons, flIns fresh, ih nd.2]
+    by_cases h : maskedFlat mask w
+    · simp [h, bool.mpr h]
+    · have no : maskFlat mask w = false := Bool.eq_false_iff.mpr (fun ht => h (bool.mp ht))
+      simp [h, no]
+
+theorem buildsAppend {mask : Nat} {roots first second : List Word}
+    (left : WordBuilds mask roots first)
+    (right : WordBuilds mask (first ++ roots) second) :
+    WordBuilds mask roots (first ++ second) := by
+  induction first generalizing roots with
+  | nil => exact right
+  | cons w ws ih =>
+    refine ⟨left.1, ih left.2 ?_⟩
+    have same (bank other vals : List Word) (perm : bank.Perm other)
+        (h : WordBuilds mask bank vals) : WordBuilds mask other vals := by
+      induction vals generalizing bank other with
+      | nil => trivial
+      | cons v vs ih =>
+        exact ⟨gateWeaken (fun x hx => Or.inr (Or.inr (perm.mem_iff.mp hx))) h.1,
+          ih _ _ (perm.cons v) h.2⟩
+    exact same _ _ _ (List.perm_middle (a := w) (l₁ := ws) (l₂ := roots)).symm right
+
+theorem buildableWords {mask goal n : Nat} {pool : Finset Word} {bank : List Word}
+    (h : buildable mask goal n pool) (supply : ∀ w ∈ pool, AvailableWord mask bank w) :
+    ∃ values, values.length ≤ n ∧ WordBuilds mask bank values ∧
+      AvailableWord mask (values ++ bank) goal := by
+  induction n generalizing pool bank with
+  | zero => exact ⟨[], Nat.le_refl _, trivial, supply _ h⟩
+  | succ n ih =>
+    have add {w : Word} (g : GateWord mask bank w)
+        (tail : buildable mask goal n (insert w pool)) :
+        ∃ values, values.length ≤ n+1 ∧ WordBuilds mask bank values ∧
+          AvailableWord mask (values ++ bank) goal := by
+      have growing : ∀ v ∈ insert w pool, AvailableWord mask (w :: bank) v := by
+        intro v hv
+        rcases Finset.mem_insert.mp hv with rfl | hv
+        · exact Or.inr (Or.inr List.mem_cons_self)
+        · exact availableWeaken (fun _ hh => Or.inr (Or.inr (List.mem_cons_of_mem _ hh))) (supply _ hv)
+      obtain ⟨values, budget, build, hit⟩ := ih tail growing
+      refine ⟨w :: values, by simp only [List.length_cons]; omega, ⟨g, build⟩, ?_⟩
+      rcases hit with h | h | h
+      · exact Or.inl h
+      · exact Or.inr (Or.inl h)
+      · exact Or.inr (Or.inr (by simp only [List.mem_append, List.mem_cons] at *; tauto))
+    rcases h with h | ⟨a, ha, h⟩ | ⟨a, ha, b, hb, d, h⟩
+    · obtain ⟨values, cap, build, hit⟩ := ih h supply
+      exact ⟨values, by omega, build, hit⟩
+    · exact add (Or.inl ⟨a, supply a ha, rfl⟩) h
+    · apply add (w := binWord d a b) ?_ h
+      exact Or.inr ⟨a, b, supply a ha, supply b hb, by cases d <;> simp [binWord]⟩
+
+theorem boundClosesSound {state : RowState} {bound : Bound}
+    (known : Lower bound.1 bound.2.1 bound.2.2.2 bound.2.2.1)
+    (submask : mask &&& bound.1 = bound.1)
+    (viable : WordViable mask target state) :
+    boundCloses target state bound = false := by
+  obtain ⟨fuel, ws, history⟩ := state
+  obtain ⟨cut, stock, minimum, goal⟩ := bound
+  obtain ⟨nd, k, t, steps, live⟩ := viable
+  change k ≤ fuel at steps
+  change LiveWord mask target k t ws.toFinset at live
+  apply Bool.eq_false_iff.mpr
+  intro hc
+  let replay := replayRecipes cut (recipeNeeded cut stock ws history) history.reverse stock
+  change ((target &&& cut) == goal && goal != 0 && goal != cut &&
+    (if fuel - flatCount cut ws < minimum then
+      if (recipeStart cut stock ws).length + (fuel - flatCount cut ws) < minimum then
+        if (recipeNeeded cut stock ws history).length + (fuel - flatCount cut ws) < minimum then
+          (replay.length + (fuel - flatCount cut ws) < minimum) &&
+            ws.all (fun w => availableB cut (replay ++ stock) (w &&& cut))
+        else false
+      else false
+    else false)) = true at hc
+  simp only [Bool.and_eq_true, beq_iff_eq, bne_iff_ne] at hc
+  obtain ⟨⟨⟨goalEq, nonzero⟩, nonflat⟩, scan⟩ := hc
+  split at scan <;> try contradiction
+  split at scan <;> try contradiction
+  split at scan <;> try contradiction
+  rcases Bool.and_eq_true_iff.mp scan with ⟨length, sources⟩
+  simp only [decide_eq_true_eq] at length
+  have pn : ¬maskedFlat cut target := by simpa [maskedFlat, goalEq] using And.intro nonzero nonflat
+  obtain ⟨n, hn, build⟩ := maskedBuild live cut submask pn
+  rw [← flatCountCard cut nd] at hn
+  change n + flatCount cut ws ≤ k at hn
+  have supply : ∀ w ∈ projectedStock cut ws.toFinset, AvailableWord cut (replay ++ stock) w := by
+    intro w hw
+    simp only [projectedStock, visibleWords, Finset.mem_insert, Finset.mem_image,
+      List.mem_toFinset] at hw
+    rcases hw with rfl | rfl | ⟨v, hv, rfl⟩
+    · exact Or.inl rfl
+    · exact Or.inr (Or.inl rfl)
+    · exact availableB_spec.mp (List.all_eq_true.mp sources v hv)
+  obtain ⟨ys, hy, built, avail⟩ := buildableWords build supply
+  have both := buildsAppend (replayRecipesBuilds cut _ history.reverse stock) built
+  have hit : AvailableWord cut ((replay ++ ys) ++ stock) goal := by
+    rw [← goalEq]
+    exact availableWeaken (fun v hv => Or.inr (Or.inr (by
+      simpa [List.mem_append, or_assoc, or_left_comm, or_comm] using hv))) avail
+  have enough := known (replay ++ ys) both hit
+  simp only [List.length_append] at enough
+  omega
+
+theorem knownClosesSound {bounds : List Bound} {state : RowState}
+    (known : Known bounds) (submask : ∀ b ∈ bounds, mask &&& b.1 = b.1)
+    (viable : WordViable mask target state) :
+    knownCloses target bounds state = false := by
+  induction bounds with
+  | nil => rfl
+  | cons bound bounds ih =>
+    change (boundCloses target state bound || knownCloses target bounds state) = false
+    rw [boundClosesSound (known _ List.mem_cons_self) (submask _ List.mem_cons_self) viable]
+    exact ih (fun b hb => known b (List.mem_cons_of_mem _ hb))
+      (fun b hb => submask b (List.mem_cons_of_mem _ hb))
+
+abbrev PointWire (rows : Nat) := Fin rows → Bool
+
+def encodePoint (f : PointWire rows) : BitVec rows :=
+  (BitVec.ofBoolListLE (List.ofFn f)).cast List.length_ofFn
+
+theorem encodeBit (f : PointWire rows) (i : Fin rows) :
+    (encodePoint f).getLsbD i.val = f i := by
+  simp only [encodePoint, BitVec.getLsbD_cast, BitVec.getLsbD_ofBoolListLE,
+    List.getD_eq_getElem?_getD, List.getElem?_ofFn]
+  simp [i.isLt]
+
+theorem encodeNot (f : PointWire rows) : encodePoint (fun j => !f j) = ~~~encodePoint f := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  rw [BitVec.getLsbD_not, encodeBit f ⟨i, hi⟩, encodeBit _ ⟨i, hi⟩]
+  simp [hi]
+
+theorem encodeAnd (a b : PointWire rows) :
+    encodePoint (fun i => a i && b i) = encodePoint a &&& encodePoint b := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  rw [BitVec.getLsbD_and, encodeBit a ⟨i, hi⟩, encodeBit b ⟨i, hi⟩, encodeBit _ ⟨i, hi⟩]
+
+theorem encodeOr (a b : PointWire rows) :
+    encodePoint (fun i => a i || b i) = encodePoint a ||| encodePoint b := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  rw [BitVec.getLsbD_or, encodeBit a ⟨i, hi⟩, encodeBit b ⟨i, hi⟩, encodeBit _ ⟨i, hi⟩]
+
+def pointWord (f : PointWire rows) : Word := (encodePoint f).toNat
+
+def relabel (sourceIndex : Fin rows → Fin rows) (word : Word) : Word :=
+  pointWord fun i => word.testBit (sourceIndex i).val
+
+theorem maskBit {i : Nat} (hi : i < rows) : (fullMask rows).testBit i = true := by
+  simp [fullMask, Nat.testBit_two_pow_sub_one, hi]
+
+theorem pointZero : pointWord (fun _ : Fin rows => false) = 0 := by
+  have eq : encodePoint (fun _ : Fin rows => false) = 0 := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro i hi
+    rw [encodeBit _ ⟨i, hi⟩]
+    simp
+  simp [pointWord, eq]
+
+theorem relabelZero (sourceIndex : Fin rows → Fin rows) : relabel sourceIndex 0 = 0 := by
+  simpa [relabel] using (pointZero (rows := rows))
+
+theorem relabelMask (sourceIndex : Fin rows → Fin rows) : relabel sourceIndex (fullMask rows) = fullMask rows := by
+  have all : (fun i => (fullMask rows).testBit (sourceIndex i).val) = fun _ => true := by
+    funext i
+    exact maskBit (sourceIndex i).isLt
+  have bits : encodePoint (fun _ : Fin rows => true) = BitVec.allOnes rows := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro i hi
+    rw [encodeBit _ ⟨i, hi⟩]
+    simp [hi]
+  simp [relabel, all, pointWord, bits, fullMask]
+
+theorem relabelNot (sourceIndex : Fin rows → Fin rows) (a : Word) :
+    relabel sourceIndex (fullMask rows ^^^ a) = fullMask rows ^^^ relabel sourceIndex a := by
+  have eq : (fun i => (fullMask rows ^^^ a).testBit (sourceIndex i).val) =
+      fun i => !a.testBit (sourceIndex i).val := by
+    funext i
+    simp [Nat.testBit_xor, maskBit (sourceIndex i).isLt]
+  simp only [relabel, eq, pointWord, encodeNot, notNat]
+
+theorem relabelAnd (sourceIndex : Fin rows → Fin rows) (a b : Word) :
+    relabel sourceIndex (a &&& b) = relabel sourceIndex a &&& relabel sourceIndex b := by
+  simp only [relabel, Nat.testBit_and, pointWord, encodeAnd, BitVec.toNat_and]
+
+theorem relabelOr (sourceIndex : Fin rows → Fin rows) (a b : Word) :
+    relabel sourceIndex (a ||| b) = relabel sourceIndex a ||| relabel sourceIndex b := by
+  simp only [relabel, Nat.testBit_or, pointWord, encodeOr, BitVec.toNat_or]
+
+theorem lowerRelabel (sourceIndex : Fin rows → Fin rows) {bank roots : List Word}
+    {src dst : Word} {minimum : Nat}
+    (old : Lower (fullMask rows) bank src minimum)
+    (goal : relabel sourceIndex dst = src)
+    (supply : ∀ w ∈ roots, AvailableWord (fullMask rows) bank (relabel sourceIndex w)) :
+    Lower (fullMask rows) roots dst minimum := by
+  apply lowerMap (relabel sourceIndex) (relabelZero sourceIndex) (relabelMask sourceIndex)
+    (relabelNot sourceIndex) (relabelAnd sourceIndex) (relabelOr sourceIndex) supply
+  rw [goal]
+  exact old
+
+theorem relabelXor (sourceIndex : Fin rows → Fin rows) (a b : Word) :
+    relabel sourceIndex (a ^^^ b) = relabel sourceIndex a ^^^ relabel sourceIndex b := by
+  have eq : encodePoint (fun i => (a ^^^ b).testBit (sourceIndex i).val) =
+      encodePoint (fun i => a.testBit (sourceIndex i).val) ^^^
+      encodePoint (fun i => b.testBit (sourceIndex i).val) := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro i hi
+    rw [BitVec.getLsbD_xor, encodeBit _ ⟨i, hi⟩, encodeBit _ ⟨i, hi⟩, encodeBit _ ⟨i, hi⟩]
+    exact Nat.testBit_xor ..
+  simpa only [relabel, pointWord, BitVec.toNat_xor] using congrArg BitVec.toNat eq
+
+theorem lowerRelabelMasked (sourceIndex : Fin rows → Fin rows)
+    {oldMask newMask : Nat} {bank roots : List Word} {src dst : Word} {minimum : Nat}
+    (old : Lower oldMask bank src minimum)
+    (masks : relabel sourceIndex newMask = oldMask)
+    (goal : relabel sourceIndex dst = src)
+    (supply : ∀ w ∈ roots, AvailableWord oldMask bank (relabel sourceIndex w)) :
+    Lower newMask roots dst minimum := by
+  apply lowerMap (relabel sourceIndex) (relabelZero sourceIndex) masks
+    (fun w => by rw [relabelXor, masks]) (relabelAnd sourceIndex) (relabelOr sourceIndex) supply
+  rwa [goal]
+
+theorem extendKnownRelabel (sourceIndex : Fin rows → Fin rows) {bounds : List Bound}
+    {source destination : Bound} (old : Known bounds) (mem : source ∈ bounds)
+    (budget : destination.2.2.1 = source.2.2.1)
+    (masks : relabel sourceIndex destination.1 = source.1)
+    (goal : relabel sourceIndex destination.2.2.2 = source.2.2.2)
+    (supply : ∀ w ∈ destination.2.1,
+      AvailableWord source.1 source.2.1 (relabel sourceIndex w)) :
+    Known (destination :: bounds) := by
+  apply extendKnown old
+  rw [budget]
+  exact lowerRelabelMasked sourceIndex (old _ mem) masks goal supply
+
+theorem relabelToNatBound (sourceIndex : Fin rows → Fin rows) (word : Word) :
+    Masked (fullMask rows) (relabel sourceIndex word) := toNatMasked _
+
+theorem relabelBit (sourceIndex : Fin rows → Fin rows) (word : Word) (i : Fin rows) :
+    (relabel sourceIndex word).testBit i.val = word.testBit (sourceIndex i).val :=
+  encodeBit _ i
+
+theorem relabelOutside (sourceIndex : Fin rows → Fin rows) (word i : Word) (h : rows ≤ i) :
+    (relabel sourceIndex word).testBit i = false := by
+  apply Nat.testBit_lt_two_pow
+  exact Nat.lt_of_lt_of_le (show (encodePoint _).toNat < 2 ^ rows from BitVec.isLt _)
+    (Nat.pow_le_pow_right (by decide) h)
+
+theorem relabelInj (sourceIndex : Fin rows → Fin rows) (onto : Function.Surjective sourceIndex)
+    {a b : Word} (ba : Masked (fullMask rows) a) (bb : Masked (fullMask rows) b)
+    (eq : relabel sourceIndex a = relabel sourceIndex b) : a = b := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  by_cases inside : i < rows
+  · obtain ⟨j, h⟩ := onto ⟨i, inside⟩
+    have bit := congrArg (fun w : Nat => w.testBit j.val) eq
+    simpa only [relabelBit, h] using bit
+  · have ea := congrArg (fun w : Nat => w.testBit i) ba
+    have eb := congrArg (fun w : Nat => w.testBit i) bb
+    simp only [Nat.testBit_and, fullMask, Nat.testBit_two_pow_sub_one, inside, decide_false,
+      Bool.and_false] at ea eb
+    rw [← ea, ← eb]
+
+theorem kw_step (goal : Word) (D D' : Finset Word) (u v w : ℕ) (c : ℕ → ℕ → Bool) (f : ℕ → ℕ → ℕ)
+    (hu : u ∈ D) (hv : v ∈ D) (huv : u ≠ v) (huD : u ∉ D') (hvD : v ∉ D')
+    (hsub : ∀ x ∈ D', x ≠ w → x ∈ D)
+    (hf : ∀ e i, goal.testBit e = true → goal.testBit i = false →
+      f e i ∈ D' ∧ (f e i).testBit e = true ∧ (f e i).testBit i = false)
+    (hr : ∀ e i e' i', goal.testBit e = true → goal.testBit e' = true → goal.testBit i = false → goal.testBit i' = false → f e i = f e' i' → f e i' = f e i)
+    (hcu : ∀ e i, w.testBit e = true → w.testBit i = false → c e i = true →
+      u.testBit e = true ∧ u.testBit i = false)
+    (hcv : ∀ e i, w.testBit e = true → w.testBit i = false → c e i = false →
+      v.testBit e = true ∧ v.testBit i = false)
+    (hc : ∀ e i e' i', c e i = c e' i' → c e i' = c e i) :
+    ∃ g : ℕ → ℕ → ℕ,
+      (∀ e i, goal.testBit e = true → goal.testBit i = false →
+        g e i ∈ D ∧ (g e i).testBit e = true ∧ (g e i).testBit i = false) ∧
+      (∀ e i e' i', goal.testBit e = true → goal.testBit e' = true → goal.testBit i = false → goal.testBit i' = false → g e i = g e' i' → g e i' = g e i) := by
+  have hg : ∀ e i, goal.testBit e = true → goal.testBit i = false → f e i = w →
+      ((if f e i = w then (cond (c e i) u v) else f e i) = u ∧ c e i = true) ∨
+      ((if f e i = w then (cond (c e i) u v) else f e i) = v ∧ c e i = false) := by
+    intro e i _ _ h
+    rw [ite_eq_left (h)]
+    cases c e i
+    · exact Or.inr ⟨rfl, rfl⟩
+    · exact Or.inl ⟨rfl, rfl⟩
+  refine ⟨fun e i => if f e i = w then (cond (c e i) u v) else f e i, ?_, ?_⟩
+  · intro e i he hi
+    obtain ⟨h1, h2, h3⟩ := hf e i he hi
+    show (if f e i = w then (cond (c e i) u v) else f e i) ∈ D ∧
+      (if f e i = w then (cond (c e i) u v) else f e i).testBit e = true ∧
+      (if f e i = w then (cond (c e i) u v) else f e i).testBit i = false
+    by_cases hw : f e i = w
+    · rw [hw] at h2 h3
+      rcases hg e i he hi hw with ⟨hx, hcc⟩ | ⟨hx, hcc⟩
+      · rw [hx]; exact ⟨hu, hcu e i h2 h3 hcc⟩
+      · rw [hx]; exact ⟨hv, hcv e i h2 h3 hcc⟩
+    · rw [ite_eq_right (hw)]; exact ⟨hsub _ h1 hw, h2, h3⟩
+  · intro e i e' i' he he' hi hi' heq
+    show (if f e i' = w then (cond (c e i') u v) else f e i') =
+      (if f e i = w then (cond (c e i) u v) else f e i)
+    have heq' : (if f e i = w then (cond (c e i) u v) else f e i) =
+      (if f e' i' = w then (cond (c e' i') u v) else f e' i') := heq
+    by_cases h1 : f e i = w
+    · by_cases h2 : f e' i' = w
+      · have h3 : f e i' = w := (hr e i e' i' he he' hi hi' (h1.trans h2.symm)).trans h1
+        have hcc : c e i = c e' i' := by
+          rcases hg e i he hi h1 with ⟨hx, hx'⟩ | ⟨hx, hx'⟩ <;>
+            rcases hg e' i' he' hi' h2 with ⟨hy, hy'⟩ | ⟨hy, hy'⟩
+          · rw [hx', hy']
+          · exact absurd (hx.symm.trans (heq'.trans hy)) huv
+          · exact absurd (hy.symm.trans (heq'.symm.trans hx)) huv
+          · rw [hx', hy']
+        rw [ite_eq_left (h3), ite_eq_left (h1), hc e i e' i' hcc]
+      · exfalso
+        rw [ite_eq_right (h2)] at heq'
+        have hm := (hf e' i' he' hi').1
+        rcases hg e i he hi h1 with ⟨hx, _⟩ | ⟨hx, _⟩
+        · exact huD (by rw [← hx, heq']; exact hm)
+        · exact hvD (by rw [← hx, heq']; exact hm)
+    · by_cases h2 : f e' i' = w
+      · exfalso
+        rw [ite_eq_right (h1)] at heq'
+        have hm := (hf e i he hi).1
+        rcases hg e' i' he' hi' h2 with ⟨hx, _⟩ | ⟨hx, _⟩
+        · exact huD (by rw [← hx, ← heq']; exact hm)
+        · exact hvD (by rw [← hx, ← heq']; exact hm)
+      · have h1n : (if f e i = w then (cond (c e i) u v) else f e i) = f e i := ite_eq_right h1
+        have h2n : (if f e' i' = w then (cond (c e' i') u v) else f e' i') = f e' i' := ite_eq_right h2
+        rw [h1n, h2n] at heq'
+        have h3 := hr e i e' i' he he' hi hi' heq'
+        have h3n : ¬ f e i' = w := by rw [h3]; exact h1
+        rw [h1n, ite_eq_right (h3n)]
+        exact h3
+
+theorem and_cu (u v e i : ℕ) (h1 : (u &&& v).testBit e = true) (_h2 : (u &&& v).testBit i = false)
+    (h3 : (!(u.testBit i)) = true) : u.testBit e = true ∧ u.testBit i = false := by
+  rw [Nat.testBit_and] at h1
+  cases hue : u.testBit e <;> cases hui : u.testBit i <;> simp_all
+
+theorem and_cv (u v e i : ℕ) (h1 : (u &&& v).testBit e = true) (h2 : (u &&& v).testBit i = false)
+    (h3 : (!(u.testBit i)) = false) : v.testBit e = true ∧ v.testBit i = false := by
+  rw [Nat.testBit_and] at h1 h2
+  cases hue : u.testBit e <;> cases hui : u.testBit i <;> simp_all
+
+theorem or_cu (u v e i : ℕ) (_h1 : (u ||| v).testBit e = true) (h2 : (u ||| v).testBit i = false)
+    (h3 : u.testBit e = true) : u.testBit e = true ∧ u.testBit i = false := by
+  rw [Nat.testBit_or] at h2
+  cases hue : u.testBit e <;> cases hui : u.testBit i <;> simp_all
+
+theorem or_cv (u v e i : ℕ) (h1 : (u ||| v).testBit e = true) (h2 : (u ||| v).testBit i = false)
+    (h3 : u.testBit e = false) : v.testBit e = true ∧ v.testBit i = false := by
+  rw [Nat.testBit_or] at h1 h2
+  cases hue : u.testBit e <;> cases hui : u.testBit i <;> simp_all
+
+def KWPartition (goal : Word) (ws : Finset Word) : Prop :=
+  ∃ f : Nat → Nat → Word,
+    (∀ e i, goal.testBit e = true → goal.testBit i = false →
+      f e i ∈ ws ∧ (f e i).testBit e = true ∧ (f e i).testBit i = false) ∧
+    (∀ e i e' i', goal.testBit e = true → goal.testBit e' = true →
+      goal.testBit i = false → goal.testBit i' = false → f e i = f e' i' → f e i' = f e i)
+
+theorem kwFromLive {mask goal : Word} {k : Nat} {S : Finset Word}
+    (live : LiveWord mask goal k 0 S) (tight : S.card = k + 1) : KWPartition goal S := by
+  induction k generalizing S with
+  | zero =>
+    obtain ⟨_, eq, _⟩ := live
+    subst S
+    exact ⟨fun _ _ => goal, fun _ _ hp hn => ⟨by simp, hp, hn⟩, fun _ _ _ _ _ _ _ _ _ => rfl⟩
+  | succ k ih =>
+    rcases live with ⟨u, U, a, eq, _⟩ | ⟨U, a, b, op, rfl, pa, pb, ab, fresh, tail⟩
+    · omega
+    let w := binWord op a b
+    have wU : w ∉ U := fun h => fresh (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem h))
+    have wA : w ≠ a := fun eq => fresh (Finset.mem_insert.mpr (Or.inl eq))
+    have wB : w ≠ b := fun eq => fresh (Finset.mem_insert_of_mem (Finset.mem_insert.mpr (Or.inl eq)))
+    have tailSize := (liveWordSize tail).2
+    change (insert w U).card + 0 ≤ k + 1 at tailSize
+    rw [Finset.card_insert_of_notMem wU] at tailSize
+    have paCard := Finset.card_insert_le a (insert b U)
+    have pbCard := Finset.card_insert_le b U
+    have aU : a ∉ U := by
+      intro h
+      rw [Finset.insert_eq_of_mem (Finset.mem_insert_of_mem h)] at tight
+      omega
+    have bU : b ∉ U := by
+      intro h
+      rw [Finset.insert_eq_of_mem h] at tight
+      have := Finset.card_insert_le a U
+      omega
+    obtain ⟨f, hf, hr⟩ := ih tail (by
+      change (insert w U).card = k + 1
+      rw [Finset.card_insert_of_notMem wU]
+      omega)
+    have keepA : a ∉ insert w U := by simp [wA.symm, aU]
+    have keepB : b ∉ insert w U := by simp [wB.symm, bU]
+    have other : ∀ x ∈ insert w U, x ≠ w → x ∈ insert a (insert b U) := by
+      intro x hx hn
+      exact Finset.mem_insert_of_mem (Finset.mem_insert_of_mem ((Finset.mem_insert.mp hx).resolve_left hn))
+    have ha : a ∈ insert a (insert b U) := Finset.mem_insert_self ..
+    have hb : b ∈ insert a (insert b U) := Finset.mem_insert_of_mem (Finset.mem_insert_self ..)
+    cases op
+    · exact kw_step goal _ _ a b w (fun _ i => !(a.testBit i)) f ha hb ab keepA keepB other hf hr
+        (fun e i h1 h2 h3 => and_cu a b e i h1 h2 h3) (fun e i h1 h2 h3 => and_cv a b e i h1 h2 h3)
+        (fun _ _ _ _ h => h.symm)
+    · exact kw_step goal _ _ a b w (fun e _ => a.testBit e) f ha hb ab keepA keepB other hf hr
+        (fun e i h1 h2 h3 => or_cu a b e i h1 h2 h3) (fun e i h1 h2 h3 => or_cv a b e i h1 h2 h3)
+        (fun _ _ _ _ _ => rfl)
+
+theorem liveDirected {mask goal : Word} {k : Nat} {S : Finset Word}
+    (live : LiveWord mask goal k 0 S) {p n : Nat}
+    (hp : goal.testBit p = true) (hn : goal.testBit n = false) :
+    ∃ w ∈ S, w.testBit p = true ∧ w.testBit n = false := by
+  induction k generalizing S with
+  | zero =>
+    obtain ⟨_,rfl,_⟩ := live
+    exact ⟨goal, by simp, hp, hn⟩
+  | succ k ih =>
+    rcases live with ⟨u, U, a, ueq, _⟩ | ⟨U,a,b,op,rfl,pa,pb,ab,fresh,tail⟩
+    · omega
+    obtain ⟨w, hw, wp, wn⟩ := ih tail
+    rcases Finset.mem_insert.mp hw with eq | hU
+    · subst w
+      cases op
+      · by_cases ha : a.testBit n = false
+        · exact ⟨a, Finset.mem_insert_self .., and_cu a b p n wp wn (by simp [ha])⟩
+        · exact ⟨b, Finset.mem_insert_of_mem (Finset.mem_insert_self ..),
+            and_cv a b p n wp wn (by cases h : a.testBit n <;> simp_all)⟩
+      · by_cases ha : a.testBit p = true
+        · exact ⟨a, Finset.mem_insert_self .., or_cu a b p n wp wn ha⟩
+        · exact ⟨b, Finset.mem_insert_of_mem (Finset.mem_insert_self ..),
+            or_cv a b p n wp wn (by cases h : a.testBit p <;> simp_all)⟩
+    · exact ⟨w, Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hU),wp,wn⟩
+
+namespace PackedRect
+
+theorem tb4095 (i : ℕ) : (4095 : ℕ).testBit i = decide (i < 12) := by
+  have e : (4095 : ℕ) = 2 ^ 12 - 1 := by norm_num
+  rw [e, Nat.testBit_two_pow_sub_one]
+
+def tb (w e : ℕ) : Bool := !(Nat.beq (Nat.land (Nat.shiftRight w e) 1) 0)
+
+theorem tb_eq (w e : ℕ) : tb w e = w.testBit e := by
+  have h : Nat.land (Nat.shiftRight w e) 1 = 1 &&& (w >>> e) := Nat.and_comm _ _
+  unfold tb Nat.testBit
+  rw [h]
+  generalize (1 &&& w >>> e) = X
+  cases X <;> rfl
+
+def rect (x J : ℕ) : ℕ → ℕ
+  | 0 => 0
+  | e + 1 => Nat.lor (cond (tb x e) (Nat.shiftLeft J (Nat.mul 12 e)) 0) (rect x J e)
+
+def rectW (x : ℕ) : ℕ := rect x (Nat.xor (Nat.shiftRight x 12) 4095) 12
+
+theorem rect_tb (x J i : ℕ) (hJ : J.testBit i = true) : ∀ n e : ℕ, e < n → x.testBit e = true →
+    (rect x J n).testBit (12 * e + i) = true := by
+  intro n
+  induction n with
+  | zero => intro e he; omega
+  | succ n ih =>
+    intro e he hx
+    show ((cond (tb x n) (J <<< (12 * n)) 0) ||| rect x J n).testBit (12 * e + i) = true
+    rw [Nat.testBit_or]
+    by_cases hen : e = n
+    · subst hen
+      rw [tb_eq, hx]
+      simp [Nat.testBit_shiftLeft, hJ]
+    · rw [ih e (by omega) hx]
+      simp
+
+theorem rectW_tb (x e i : ℕ) (he : e < 12) (hi : i < 12) (h1 : x.testBit e = true)
+    (h2 : x.testBit (12 + i) = false) : (rectW x).testBit (12 * e + i) = true := by
+  apply rect_tb _ _ _ _ 12 e he h1
+  show ((x >>> 12) ^^^ 4095).testBit i = true
+  rw [Nat.testBit_xor, Nat.testBit_shiftRight, h2, tb4095]
+  simp [hi]
+
+def full : ℕ := 22300745198530623141535718272648361505980415
+
+theorem full_eq : full = 2 ^ 144 - 1 := by norm_num [full]
+
+theorem tb_land (a b q : ℕ) : (Nat.land a b).testBit q = (a.testBit q && b.testBit q) :=
+  Nat.testBit_and a b q
+
+theorem tb_lor (a b q : ℕ) : (Nat.lor a b).testBit q = (a.testBit q || b.testBit q) :=
+  Nat.testBit_or a b q
+
+theorem tb_xor (a b q : ℕ) : (Nat.xor a b).testBit q = Bool.xor (a.testBit q) (b.testBit q) :=
+  Nat.testBit_xor a b q
+
+theorem full_tb (q : ℕ) : full.testBit q = decide (q < 144) := by
+  rw [full_eq, Nat.testBit_two_pow_sub_one]
+
+theorem land_sub (h a : ℕ) (H : ∀ q, h.testBit q = true → a.testBit q = true) :
+    Nat.land h a = h := by
+  apply Nat.eq_of_testBit_eq
+  intro q
+  rw [tb_land]
+  cases hh : h.testBit q
+  · rfl
+  · rw [H q hh]; rfl
+
+theorem land_disj (a h : ℕ) (H : ∀ q, a.testBit q = true → h.testBit q = true → False) :
+    Nat.land a h = 0 := by
+  apply Nat.eq_of_testBit_eq
+  intro q
+  rw [tb_land, Nat.zero_testBit]
+  cases ha : a.testBit q
+  · rfl
+  · cases hh : h.testBit q
+    · rfl
+    · exact (H q ha hh).elim
+
+def orS (x s : ℕ) : ℕ := Nat.lor x (Nat.shiftRight x s)
+
+def orSL (x s : ℕ) : ℕ := Nat.lor x (Nat.shiftLeft x s)
+
+theorem orS_tb (x s q : ℕ) : (orS x s).testBit q = (x.testBit q || x.testBit (s + q)) := by
+  show (x ||| x >>> s).testBit q = _
+  rw [Nat.testBit_or, Nat.testBit_shiftRight]
+
+theorem orSL_tb (x s q : ℕ) :
+    (orSL x s).testBit q = (x.testBit q || (decide (s ≤ q) && x.testBit (q - s))) := by
+  show (x ||| x <<< s).testBit q = _
+  simp only [Nat.testBit_or, Nat.testBit_shiftLeft, ge_iff_le]
+
+theorem orS_ex (k p x n s : ℕ)
+    (hx : ∀ q, x.testBit q = true → ∃ j, j < n ∧ p.testBit (k * j + q) = true) (q : ℕ)
+    (h : (orS x (k * s)).testBit q = true) : ∃ j, j < n + s ∧ p.testBit (k * j + q) = true := by
+  rw [orS_tb, Bool.or_eq_true] at h
+  rcases h with h | h
+  · obtain ⟨j, hj, hp⟩ := hx q h
+    exact ⟨j, by omega, hp⟩
+  · obtain ⟨j, hj, hp⟩ := hx _ h
+    refine ⟨j + s, by omega, ?_⟩
+    rw [Nat.mul_add, Nat.add_assoc]; exact hp
+
+theorem orSL_ex (k p x n s : ℕ)
+    (hx : ∀ q, x.testBit q = true → ∃ j, j < n ∧ k * j ≤ q ∧ p.testBit (q - k * j) = true)
+    (q : ℕ) (h : (orSL x (k * s)).testBit q = true) :
+    ∃ j, j < n + s ∧ k * j ≤ q ∧ p.testBit (q - k * j) = true := by
+  rw [orSL_tb, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
+  rcases h with h | ⟨hs, h⟩
+  · obtain ⟨j, hj, hq, hp⟩ := hx q h
+    exact ⟨j, by omega, hq, hp⟩
+  · obtain ⟨j, hj, hq, hp⟩ := hx _ h
+    have e : q - k * (j + s) = q - k * s - k * j := by rw [Nat.mul_add]; omega
+    refine ⟨j + s, by omega, ?_, ?_⟩
+    · rw [Nat.mul_add]; omega
+    · rw [e]; exact hp
+
+def rowM : ℕ := 5445847423328601499764522166702896582657
+
+theorem rowM_tb (q : ℕ) (h : rowM.testBit q = true) : q < 144 ∧ q % 12 = 0 := by
+  have hlt : q < 144 := by
+    by_contra hq
+    have h0 : rowM.testBit q = false := by
+      apply Nat.testBit_lt_two_pow
+      have h1 : rowM < 2 ^ 144 := by norm_num [rowM]
+      have h2 : (2 : ℕ) ^ 144 ≤ 2 ^ q := Nat.pow_le_pow_right (by norm_num) (by omega)
+      omega
+    rw [h0] at h
+    exact Bool.noConfusion h
+  have hall : ∀ q : ℕ, q < 144 → rowM.testBit q = true → q % 12 = 0 := by decide +kernel
+  exact ⟨hlt, hall q hlt h⟩
+
+def rowsOf (p : ℕ) : ℕ := Nat.land (orS (orS (orS (orS p 6) 3) 1) 1) rowM
+
+def colsOf (p : ℕ) : ℕ := Nat.land (orS (orS (orS (orS p 96) 48) 24) 12) 4095
+
+def hullC (p : ℕ) : ℕ :=
+  Nat.land (orSL (orSL (orSL (orSL (rowsOf p) 6) 3) 1) 1)
+    (orSL (orSL (orSL (orSL (colsOf p) 96) 48) 24) 12)
+
+def hull (p : ℕ) : ℕ := hullC (Nat.land p full)
+
+theorem rowsOf_tb (p q : ℕ) (h : (rowsOf p).testBit q = true) :
+    (q < 144 ∧ q % 12 = 0) ∧ ∃ j, j < 12 ∧ p.testBit (j + q) = true := by
+  unfold rowsOf at h
+  rw [tb_land, Bool.and_eq_true] at h
+  refine ⟨rowM_tb q h.2, ?_⟩
+  have h0 : ∀ q, p.testBit q = true → ∃ j, j < 1 ∧ p.testBit (1 * j + q) = true :=
+    fun q hq => ⟨0, by norm_num, by simpa using hq⟩
+  have h1 := orS_ex 1 p _ 1 6 h0
+  have h2 := orS_ex 1 p _ _ 3 h1
+  have h3 := orS_ex 1 p _ _ 1 h2
+  have h4 := orS_ex 1 p _ _ 1 h3
+  obtain ⟨j, hj, hp⟩ := h4 q h.1
+  exact ⟨j, by omega, by simpa using hp⟩
+
+theorem colsOf_tb (p q : ℕ) (h : (colsOf p).testBit q = true) :
+    q < 12 ∧ ∃ j, j < 16 ∧ p.testBit (12 * j + q) = true := by
+  unfold colsOf at h
+  rw [tb_land, Bool.and_eq_true, tb4095, decide_eq_true_eq] at h
+  refine ⟨h.2, ?_⟩
+  have h0 : ∀ q, p.testBit q = true → ∃ j, j < 1 ∧ p.testBit (12 * j + q) = true :=
+    fun q hq => ⟨0, by norm_num, by simpa using hq⟩
+  have h1 := orS_ex 12 p _ 1 8 h0
+  have h2 := orS_ex 12 p _ _ 4 h1
+  have h3 := orS_ex 12 p _ _ 2 h2
+  have h4 := orS_ex 12 p _ _ 1 h3
+  obtain ⟨j, hj, hp⟩ := h4 q h.1
+  exact ⟨j, by omega, hp⟩
+
+theorem hullC_spec (p : ℕ) (hp : ∀ q, p.testBit q = true → q < 144) (q : ℕ)
+    (h : (hullC p).testBit q = true) :
+    q < 144 ∧ ∃ i e', i < 12 ∧ e' < 12 ∧ p.testBit (12 * (q / 12) + i) = true ∧
+      p.testBit (12 * e' + q % 12) = true := by
+  unfold hullC at h
+  rw [tb_land, Bool.and_eq_true] at h
+  obtain ⟨hR, hC⟩ := h
+  have r0 : ∀ q, (rowsOf p).testBit q = true →
+      ∃ j, j < 1 ∧ 1 * j ≤ q ∧ (rowsOf p).testBit (q - 1 * j) = true :=
+    fun q hq => ⟨0, by norm_num, by omega, by simpa using hq⟩
+  have r1 := orSL_ex 1 (rowsOf p) _ 1 6 r0
+  have r2 := orSL_ex 1 (rowsOf p) _ _ 3 r1
+  have r3 := orSL_ex 1 (rowsOf p) _ _ 1 r2
+  have r4 := orSL_ex 1 (rowsOf p) _ _ 1 r3
+  obtain ⟨j, hj, hjq, hr⟩ := r4 q hR
+  obtain ⟨⟨hb, hm⟩, i, hi, hpi⟩ := rowsOf_tb p _ hr
+  have c0 : ∀ q, (colsOf p).testBit q = true →
+      ∃ j, j < 1 ∧ 12 * j ≤ q ∧ (colsOf p).testBit (q - 12 * j) = true :=
+    fun q hq => ⟨0, by norm_num, by omega, by simpa using hq⟩
+  have c1 := orSL_ex 12 (colsOf p) _ 1 8 c0
+  have c2 := orSL_ex 12 (colsOf p) _ _ 4 c1
+  have c3 := orSL_ex 12 (colsOf p) _ _ 2 c2
+  have c4 := orSL_ex 12 (colsOf p) _ _ 1 c3
+  obtain ⟨j', hj', hjq', hc⟩ := c4 q hC
+  obtain ⟨hlt, e', he', hpe⟩ := colsOf_tb p _ hc
+  have e1 : i + (q - 1 * j) = 12 * (q / 12) + i := by omega
+  have e2 : q - 12 * j' = q % 12 := by omega
+  rw [e1] at hpi
+  rw [e2] at hpe
+  have hb' := hp _ hpe
+  exact ⟨by omega, i, e', hi, by omega, hpi, hpe⟩
+
+theorem hull_spec (p q : ℕ) (h : (hull p).testBit q = true) :
+    q < 144 ∧ ∃ i e', i < 12 ∧ e' < 12 ∧ p.testBit (12 * (q / 12) + i) = true ∧
+      p.testBit (12 * e' + q % 12) = true := by
+  have hp : ∀ q, (Nat.land p full).testBit q = true → q < 144 := by
+    intro q hq
+    rw [tb_land, full_tb, Bool.and_eq_true, decide_eq_true_eq] at hq
+    exact hq.2
+  obtain ⟨h1, i, e', hi, he, ha, hb⟩ := hullC_spec _ hp q h
+  rw [tb_land, Bool.and_eq_true] at ha hb
+  exact ⟨h1, i, e', hi, he, ha.1, hb.1⟩
+
+def tw : List ℕ → ℕ → ℕ → ℕ
+  | [], _, t => t
+  | a :: l, o, t => tw l (Nat.lor o a) (Nat.lor t (Nat.land o a))
+
+def priv (t a : ℕ) : ℕ := hull (Nat.land a (Nat.xor t full))
+
+def hullsOK (t : ℕ) : List ℕ → ℕ → Bool
+  | [], _ => true
+  | a :: l, acc => Nat.beq (Nat.land (priv t a) a) (priv t a) &&
+      (Nat.beq (Nat.land acc (priv t a)) 0 && hullsOK t l (Nat.lor acc (priv t a)))
+
+def avOK1 (as : List ℕ) : Bool := hullsOK (tw as 0 0) as 0
+
+def orL : List ℕ → ℕ
+  | [] => 0
+  | a :: l => Nat.lor a (orL l)
+
+def rectOK1 (l : List ℕ) : Bool := avOK1 (l.map rectW)
+
+def IsRect (R : ℕ → Prop) : Prop :=
+  ∀ e i e' i' : ℕ, e < 12 → i < 12 → e' < 12 → i' < 12 →
+    R (12 * e + i) → R (12 * e' + i') → R (12 * e + i')
+
+def Part (zs : List ((ℕ → Prop) × ℕ)) : Prop :=
+  (∀ z ∈ zs, IsRect z.1) ∧
+  (∀ z ∈ zs, ∀ q, z.1 q → q < 144) ∧
+  (zs.Pairwise (fun z z' => ∀ q, z.1 q → z'.1 q → False)) ∧
+  (∀ q, q < 144 → ∃ z ∈ zs, z.1 q) ∧
+  (∀ z ∈ zs, ∀ q, z.1 q → z.2.testBit q = true)
+
+theorem Part.rect {zs : List ((ℕ → Prop) × ℕ)} (h : Part zs) :
+    ∀ z ∈ zs, IsRect z.1 := h.1
+
+theorem Part.bnd {zs : List ((ℕ → Prop) × ℕ)} (h : Part zs) :
+    ∀ z ∈ zs, ∀ q, z.1 q → q < 144 := h.2.1
+
+theorem Part.disj {zs : List ((ℕ → Prop) × ℕ)} (h : Part zs) :
+    zs.Pairwise (fun z z' => ∀ q, z.1 q → z'.1 q → False) := h.2.2.1
+
+theorem Part.cov {zs : List ((ℕ → Prop) × ℕ)} (h : Part zs) :
+    ∀ q, q < 144 → ∃ z ∈ zs, z.1 q := h.2.2.2.1
+
+theorem Part.sub {zs : List ((ℕ → Prop) × ℕ)} (h : Part zs) :
+    ∀ z ∈ zs, ∀ q, z.1 q → z.2.testBit q = true := h.2.2.2.2
+
+
+theorem pw_forall {α : Type} {R : α → α → Prop} (hs : ∀ a b, R a b → R b a) :
+    ∀ l : List α, l.Pairwise R → ∀ a ∈ l, ∀ b ∈ l, a ≠ b → R a b := by
+  intro l
+  induction l with
+  | nil => intro _ a ha; simp at ha
+  | cons x l ih =>
+    intro h a ha b hb hab
+    rw [List.pairwise_cons] at h
+    rcases List.mem_cons.mp ha with ha' | ha'
+    · rcases List.mem_cons.mp hb with hb' | hb'
+      · exact absurd (ha'.trans hb'.symm) hab
+      · rw [ha']; exact h.1 b hb'
+    · rcases List.mem_cons.mp hb with hb' | hb'
+      · rw [hb']; exact hs _ _ (h.1 a ha')
+      · exact ih h.2 a ha' b hb' hab
+
+theorem tw_spec (q : ℕ) : ∀ (as : List ℕ) (o t : ℕ), (tw as o t).testBit q = false →
+    t.testBit q = false ∧ (o.testBit q = true → ∀ a ∈ as, a.testBit q = false) ∧
+    as.Pairwise (fun a b => ¬ (a.testBit q = true ∧ b.testBit q = true)) := by
+  intro as
+  induction as with
+  | nil => intro o t h; exact ⟨h, fun _ a ha => by simp at ha, List.Pairwise.nil⟩
+  | cons a l ih =>
+    intro o t h
+    obtain ⟨h1, h2, h3⟩ := ih (Nat.lor o a) (Nat.lor t (Nat.land o a)) h
+    rw [tb_lor, Bool.or_eq_false_iff, tb_land] at h1
+    refine ⟨h1.1, ?_, ?_⟩
+    · intro ho b hb
+      rcases List.mem_cons.mp hb with rfl | hb
+      · have h4 := h1.2
+        rw [ho] at h4
+        simpa using h4
+      · exact h2 (by rw [tb_lor, ho]; rfl) b hb
+    · refine List.pairwise_cons.mpr ⟨?_, h3⟩
+      intro b hb hab
+      have h4 := h2 (by rw [tb_lor, hab.1]; simp) b hb
+      rw [h4] at hab
+      exact Bool.noConfusion hab.2
+
+theorem priv_in {zs : List ((ℕ → Prop) × ℕ)} (hP : Part zs) : ∀ z ∈ zs, ∀ q,
+    (priv (tw (zs.map Prod.snd) 0 0) z.2).testBit q = true → z.1 q := by
+  intro z hz q hq
+  obtain ⟨hq144, i, e', hi, he', ha, hb⟩ := hull_spec _ q hq
+  have key : ∀ x, x < 144 →
+      (Nat.land z.2 (Nat.xor (tw (zs.map Prod.snd) 0 0) full)).testBit x = true → z.1 x := by
+    intro x hx hbit
+    rw [tb_land, tb_xor, full_tb, Bool.and_eq_true] at hbit
+    obtain ⟨hzx, ht⟩ := hbit
+    have ht' : (tw (zs.map Prod.snd) 0 0).testBit x = false := by simpa [hx] using ht
+    obtain ⟨_, _, hpw⟩ := tw_spec x _ 0 0 ht'
+    rw [List.pairwise_map] at hpw
+    obtain ⟨z', hz', hzq⟩ := hP.cov x hx
+    by_cases hzz : z' = z
+    · rw [← hzz]; exact hzq
+    · exfalso
+      exact pw_forall (fun a b h h' => h ⟨h'.2, h'.1⟩) zs hpw z' hz' z hz hzz
+        ⟨hP.sub z' hz' x hzq, hzx⟩
+  have h1 := key _ (by omega) ha
+  have h2 := key _ (by omega) hb
+  have h3 := hP.rect z hz (q / 12) i e' (q % 12) (by omega) hi he' (Nat.mod_lt _ (by norm_num))
+    h1 h2
+  rwa [Nat.div_add_mod] at h3
+
+theorem hullsOK_sound (t : ℕ) : ∀ (zs : List ((ℕ → Prop) × ℕ)) (acc : ℕ),
+    (∀ z ∈ zs, ∀ q, (priv t z.2).testBit q = true → z.1 q) →
+    (∀ z ∈ zs, ∀ q, z.1 q → z.2.testBit q = true) →
+    zs.Pairwise (fun z z' => ∀ q, z.1 q → z'.1 q → False) →
+    (∀ q, acc.testBit q = true → ∀ z ∈ zs, ¬ z.1 q) →
+    hullsOK t (zs.map Prod.snd) acc = true := by
+  intro zs
+  induction zs with
+  | nil => intros; rfl
+  | cons z zs ih =>
+    intro acc hh hs hd ha
+    rw [List.pairwise_cons] at hd
+    have hz := hh z List.mem_cons_self
+    have e1 := land_sub _ _ (fun q hq => hs z List.mem_cons_self q (hz q hq))
+    have e2 := land_disj acc (priv t z.2) (fun q h1 h2 => ha q h1 z List.mem_cons_self (hz q h2))
+    have e3 := ih (Nat.lor acc (priv t z.2)) (fun z' hz' => hh z' (List.mem_cons_of_mem _ hz'))
+      (fun z' hz' => hs z' (List.mem_cons_of_mem _ hz')) hd.2 (fun q hq z' hz' hz'q => by
+        rw [tb_lor, Bool.or_eq_true] at hq
+        rcases hq with hq | hq
+        · exact ha q hq z' (List.mem_cons_of_mem _ hz') hz'q
+        · exact hd.1 z' hz' q (hz q hq) hz'q)
+    show (Nat.beq (Nat.land (priv t z.2) z.2) (priv t z.2) &&
+      (Nat.beq (Nat.land acc (priv t z.2)) 0 &&
+        hullsOK t (zs.map Prod.snd) (Nat.lor acc (priv t z.2)))) = true
+    rw [e1, e2, e3, Nat.beq_refl]
+    rfl
+
+theorem avOK1_sound {zs : List ((ℕ → Prop) × ℕ)} (hP : Part zs) :
+    avOK1 (zs.map Prod.snd) = true :=
+  hullsOK_sound _ zs 0 (priv_in hP) hP.sub hP.disj (fun q hq => by simp at hq)
+
+end PackedRect
+
+abbrev Witness := Word × Nat × Nat
+
+def witnessWord (w : Witness) : Word := w.1
+
+def essentialB (mask target : Word) (stock : List Word) (entry : Witness) : Bool :=
+  let (w,p,n) := entry
+  mask.testBit p && mask.testBit n && target.testBit p && !target.testBit n &&
+    (w.testBit p != w.testBit n) &&
+    stock.all (fun x => x == w || x.testBit p == x.testBit n)
+
+theorem essentialRequired {stock : List Word} {entry : Witness} {S : Finset Word} {k t : Nat}
+    (ok : essentialB mask target stock entry = true)
+    (sub : ∀ w ∈ S, w ∈ stock) (live : LiveWord mask target k t S) :
+    witnessWord entry ∈ S := by
+  obtain ⟨w,p,n⟩ := entry
+  simp only [essentialB, Bool.and_eq_true] at ok
+  obtain ⟨⟨⟨⟨⟨mp,mn⟩,tp⟩,tn⟩,unequal⟩,rest⟩ := ok
+  by_contra no
+  have all : ∀ x ∈ S, AgreesAt p n x := by
+    intro x hx
+    have h := List.all_eq_true.mp rest x (sub x hx)
+    have hw : x ≠ w := fun e => no (by simpa [witnessWord, e] using hx)
+    simpa [hw, AgreesAt] using h
+  have agree := liveAgrees live (mp.trans mn.symm) all
+  have falseBit : target.testBit n = false := by simpa using tn
+  simp [AgreesAt, tp, falseBit] at agree
+
+theorem essentialWordsIn {stock : List Word} {witnesses : List Witness} {S : Finset Word} {k t : Nat}
+    (ok : witnesses.all (essentialB mask target stock) = true)
+    (sub : ∀ w ∈ S, w ∈ stock) (live : LiveWord mask target k t S) :
+    (witnesses.map witnessWord).toFinset ⊆ S := by
+  intro w hw
+  obtain ⟨entry, mem, rfl⟩ := List.mem_map.mp (List.mem_toFinset.mp hw)
+  exact essentialRequired (List.all_eq_true.mp ok entry mem) sub live
+
+theorem essentialLower {stock : List Word} {witnesses : List Witness} {minimum : Nat}
+    (proper : properWord mask target)
+    (masked : ∀ w ∈ stock, Masked mask w)
+    (ok : witnesses.all (essentialB mask target stock) = true)
+    (bound : minimum ≤ (witnesses.map witnessWord).toFinset.card - 1) :
+    Lower mask stock target minimum := by
+  intro values build hit
+  obtain ⟨k,t,S,hk,live,sub⟩ := extractWordLive masked build hit proper
+  have card := Finset.card_le_card (essentialWordsIn ok sub live)
+  have size := (liveWordSize live).2
+  omega
+
+theorem essentialLift {stock cutStock : List Word} {witnesses : List Witness} {minimum cut prior : Nat}
+    (proper : properWord mask target)
+    (masked : ∀ w ∈ stock, Masked mask w)
+    (ok : witnesses.all (essentialB mask target stock) = true)
+    (submask : mask &&& cut = cut)
+    (cutProper : properWord cut (target &&& cut))
+    (supplies : ∀ w ∈ stock, AvailableWord cut cutStock (w &&& cut))
+    (known : Lower cut cutStock (target &&& cut) prior)
+    (bound : minimum ≤ prior + (flatSet cut (witnesses.map witnessWord).toFinset).card) :
+    Lower mask stock target minimum := by
+  intro values build hit
+  obtain ⟨k,t,S,hk,live,sub⟩ := extractWordLive masked build hit proper
+  have subW := essentialWordsIn ok sub live
+  have subFlat : flatSet cut (witnesses.map witnessWord).toFinset ⊆ flatSet cut S :=
+    Finset.filter_subset_filter _ subW
+  have card := Finset.card_le_card subFlat
+  have pf : ¬maskedFlat cut target := by simpa [maskedFlat, properWord] using cutProper
+  obtain ⟨n, budget, built⟩ := maskedBuild live cut submask pf
+  have starts : ∀ w ∈ projectedStock cut S, AvailableWord cut cutStock w := by
+    intro w hw
+    simp only [projectedStock, visibleWords, Finset.mem_insert, Finset.mem_image] at hw
+    rcases hw with rfl | rfl | ⟨x,hx,rfl⟩
+    · exact Or.inl rfl
+    · exact Or.inr (Or.inl rfl)
+    · exact supplies _ (sub _ hx)
+  obtain ⟨ys,len,built',out⟩ := buildableWords built starts
+  have lower := known ys built' out
+  omega
+
+def unpackWitnesses (stock : List Word) (codes : List Nat) : List Witness :=
+  List.rec [] (fun code _ rest =>
+    (stock.getD (code >>> 18) 0, (code >>> 9) &&& 511, code &&& 511) :: rest) codes
+
+def DagAuto (mask goal : Word) (select : Fin rows → Fin rows) : Prop :=
+  Function.Surjective select ∧ relabel select mask = mask ∧ relabel select goal = goal
+
+abbrev WordMoveStep := List (Word × Nat) × List (Word × Nat)
+abbrev WordMove := List WordMoveStep
+
+def mixStep (m : WordMoveStep) (w : Word) : Word :=
+  let left := List.rec 0 (fun (part,n) _ acc => ((w &&& part) <<< n) ||| acc) m.1
+  let right := List.rec 0 (fun (part,n) _ acc => ((w &&& part) >>> n) ||| acc) m.2
+  left ||| right
+
+def BitLinear (f : Word → Word) : Prop :=
+  ∀ w i, (f w).testBit i = true ↔ ∃ j, w.testBit j = true ∧ (f (2 ^ j)).testBit i = true
+
+theorem bitLinearZero : BitLinear (fun _ => 0) := by
+  simp [BitLinear]
+
+theorem bitLinearOr {f g : Word → Word} (hf : BitLinear f) (hg : BitLinear g) :
+    BitLinear (fun w => f w ||| g w) := by
+  intro w i
+  change ((f w ||| g w).testBit i = true) ↔ _
+  simp only [Nat.testBit_or, Bool.or_eq_true]
+  rw [hf w i, hg w i]
   constructor
-  · rintro ⟨da, hda, hrest⟩
-    refine ⟨da, hda, ?_⟩
-    rcases hrest with ⟨hsl, _, ⟨⟨hw0, hwdm⟩, hnw⟩, hfx⟩ | ⟨db, hdb, hab, conj, hcj, _, ⟨⟨hw0, hwdm⟩, hnw⟩, hfx⟩
-    · left
-      refine ⟨hsl, ⟨⟨hw0, hwdm⟩, hnw⟩, ?_⟩
-      set dw := (negD dm da.1, da.2.1 ^^^ mp, da.2.2 ^^^ mp)
-      set ra := dws.erase da
-      have hp : dws.Perm (da :: ra) := List.perm_cons_erase hda
-      have hcov0 : ((takeOne (if dws.length == s + 1 then cov3 mp true dws else cov3 mp false dws)
-          (colB mp (dws.length == s + 1) da.2) ||| colB mp (dws.length == s + 1) (da.2.1 ^^^ mp, da.2.2 ^^^ mp)) == mp) =
-          coversD mp s (dw :: ra) := by
-        have hl : (dw :: ra).length = dws.length := by simp [hp.length_eq]
-        have hc : ∀ d, cov3 mp d dws = cov3 mp d (da :: ra) := fun d => cov3_perm mp d hp
-        have hc0 := cov3_coversD mp s dw ra
-        rw [hl] at hc0
-        cases hd : (dws.length == s + 1) <;> simp only [hd, Bool.false_eq_true, ↓reduceIte] at hc0 ⊢
-        · rw [hc false, takeOne_eq, hc0]
-        · rw [hc true, takeOne_eq, hc0]
-      have hcov1 :
-          (((if dws.length + 1 == s + 1 then (cov3 mp true dws).1 else (cov3 mp false dws).1) |||
-            colB mp (dws.length + 1 == s + 1) (da.2.1 ^^^ mp, da.2.2 ^^^ mp)) == mp) =
-          coversD mp s (dw :: da :: ra) := by
-        have hl : (dw :: da :: ra).length = dws.length + 1 := by simp [hp.length_eq]
-        have hc : ∀ d, cov3 mp d dws = cov3 mp d (da :: ra) := fun d => cov3_perm mp d hp
-        have hc1 := cov3_coversD mp s dw (da :: ra)
-        rw [hl] at hc1
-        cases hd : (dws.length + 1 == s + 1) <;> simp only [hd, Bool.false_eq_true, ↓reduceIte] at hc1 ⊢
-        · rw [hc false, hc1]
-        · rw [hc true, hc1]
-      rcases hfx with ⟨hu0, hf0⟩ | ⟨⟨hsl2, hu1⟩, hf1⟩
-      · left; exact ⟨hcov0 ▸ hu0, hf0⟩
-      · right; exact ⟨hsl2, hcov1 ▸ hu1, hf1⟩
-    · right
-      refine ⟨db, hdb, hab, conj, hcj, ⟨⟨hw0, hwdm⟩, hnw⟩, ?_⟩
-      set pz := if conj then (da.2.1 &&& db.2.1, da.2.2 &&& db.2.2) else (da.2.1 ||| db.2.1, da.2.2 ||| db.2.2)
-      set w := if conj then andD dm da.1 db.1 else orD dm da.1 db.1
-      set dw := (w, pz)
-      have hdw : (if conj = true then (w, da.2.1 &&& db.2.1, da.2.2 &&& db.2.2)
-                  else (w, da.2.1 ||| db.2.1, da.2.2 ||| db.2.2)) = dw := by cases conj <;> rfl
-      simp only [hdw]
-      set ra := dws.erase da
-      set r := ra.erase db
-      have hp : dws.Perm (da :: db :: r) := (List.perm_cons_erase hda).trans (List.Perm.cons _ (List.perm_cons_erase hdb))
-      have hlen_r : (dw :: r).length = dws.length - 1 := by
-        have := hp.length_eq; simp only [List.length_cons] at this ⊢; omega
-      have hlen_a : (dw :: da :: r).length = dws.length := by
-        have := hp.length_eq; simp only [List.length_cons] at this ⊢; omega
-      have hlen_b : (dw :: db :: r).length = dws.length := by
-        have := hp.length_eq; simp only [List.length_cons] at this ⊢; omega
-      have hlen_ab : (dw :: da :: db :: r).length = dws.length + 1 := by
-        have := hp.length_eq; simp only [List.length_cons] at this ⊢; omega
-      have hc2 : ∀ d, cov3 mp d dws = cov3 mp d (da :: db :: r) := fun d => cov3_perm mp d hp
-      have hcov0 := cov3_coversD mp s dw r
-      rw [hlen_r] at hcov0
-      have hcov0' : ((takeTwo (if dws.length - 1 == s + 1 then cov3 mp true dws else cov3 mp false dws)
-          (colB mp (dws.length - 1 == s + 1) da.2) (colB mp (dws.length - 1 == s + 1) db.2) |||
-          colB mp (dws.length - 1 == s + 1) pz) == mp) = coversD mp s (dw :: r) := by
-        cases hd : (dws.length - 1 == s + 1) <;> simp only [hd, Bool.false_eq_true, ↓reduceIte] at hcov0 ⊢
-        · rw [hc2 false, takeTwo_eq, hcov0]
-        · rw [hc2 true, takeTwo_eq, hcov0]
-      have hc_a : ∀ d, cov3 mp d dws = cov3 mp d (db :: da :: r) :=
-        fun d => cov3_perm mp d (hp.trans (List.Perm.swap _ _ _))
-      have hcov1a := cov3_coversD mp s dw (da :: r)
-      rw [hlen_a] at hcov1a
-      have hcov1a' : ((takeOne (if dws.length == s + 1 then cov3 mp true dws else cov3 mp false dws)
-          (colB mp (dws.length == s + 1) db.2) ||| colB mp (dws.length == s + 1) pz) == mp) = coversD mp s (dw :: da :: r) := by
-        cases hd : (dws.length == s + 1) <;> simp only [hd, Bool.false_eq_true, ↓reduceIte] at hcov1a ⊢
-        · rw [hc_a false, takeOne_eq, hcov1a]
-        · rw [hc_a true, takeOne_eq, hcov1a]
-      have hcov1b := cov3_coversD mp s dw (db :: r)
-      rw [hlen_b] at hcov1b
-      have hcov1b' : ((takeOne (if dws.length == s + 1 then cov3 mp true dws else cov3 mp false dws)
-          (colB mp (dws.length == s + 1) da.2) ||| colB mp (dws.length == s + 1) pz) == mp) = coversD mp s (dw :: db :: r) := by
-        cases hd : (dws.length == s + 1) <;> simp only [hd, Bool.false_eq_true, ↓reduceIte] at hcov1b ⊢
-        · rw [hc2 false, takeOne_eq, hcov1b]
-        · rw [hc2 true, takeOne_eq, hcov1b]
-      have hcov2 := cov3_coversD mp s dw (da :: db :: r)
-      rw [hlen_ab] at hcov2
-      have hcov2' : (((if dws.length + 1 == s + 1 then (cov3 mp true dws).1 else (cov3 mp false dws).1) |||
-          colB mp (dws.length + 1 == s + 1) pz) == mp) = coversD mp s (dw :: da :: db :: r) := by
-        cases hd : (dws.length + 1 == s + 1) <;> simp only [hd, Bool.false_eq_true, ↓reduceIte] at hcov2 ⊢
-        · rw [hc2 false, hcov2]
-        · rw [hc2 true, hcov2]
-      rcases hfx with ((⟨hu0, hf0⟩ | ⟨⟨hsl1, hu1a⟩, hf1a⟩) | ⟨⟨hsl1, hu1b⟩, hf1b⟩) | ⟨⟨hsl2, hu2⟩, hf2⟩
-      · left; left; exact ⟨hcov0' ▸ hu0, hf0⟩
-      · left; right; exact ⟨hsl1, Or.inl ⟨hcov1a' ▸ hu1a, hf1a⟩⟩
-      · left; right; exact ⟨hsl1, Or.inr ⟨hcov1b' ▸ hu1b, hf1b⟩⟩
-      · right; exact ⟨hsl2, hcov2' ▸ hu2, hf2⟩
-  · rintro ⟨da, hda, hrest⟩
-    refine ⟨da, hda, ?_⟩
-    rcases hrest with ⟨hsl, ⟨⟨hw0, hwdm⟩, hnw⟩, hfx⟩ | ⟨db, hdb, hab, conj, hcj, ⟨⟨hw0, hwdm⟩, hnw⟩, hfx⟩
-    · left
-      set dw := (negD dm da.1, da.2.1 ^^^ mp, da.2.2 ^^^ mp)
-      set ra := dws.erase da
-      have hp : dws.Perm (da :: ra) := List.perm_cons_erase hda
-      have hcov0 : ((takeOne (if dws.length == s + 1 then cov3 mp true dws else cov3 mp false dws)
-          (colB mp (dws.length == s + 1) da.2) ||| colB mp (dws.length == s + 1) (da.2.1 ^^^ mp, da.2.2 ^^^ mp)) == mp) =
-          coversD mp s (dw :: ra) := by
-        have hl : (dw :: ra).length = dws.length := by simp [hp.length_eq]
-        have hc : ∀ d, cov3 mp d dws = cov3 mp d (da :: ra) := fun d => cov3_perm mp d hp
-        have hc0 := cov3_coversD mp s dw ra; rw [hl] at hc0
-        cases hd : (dws.length == s + 1) <;> simp only [hd, Bool.false_eq_true, ↓reduceIte] at hc0 ⊢
-        · rw [hc false, takeOne_eq, hc0]
-        · rw [hc true, takeOne_eq, hc0]
-      have hcov1 : (((if dws.length + 1 == s + 1 then (cov3 mp true dws).1 else (cov3 mp false dws).1) |||
-            colB mp (dws.length + 1 == s + 1) (da.2.1 ^^^ mp, da.2.2 ^^^ mp)) == mp) =
-          coversD mp s (dw :: da :: ra) := by
-        have hl : (dw :: da :: ra).length = dws.length + 1 := by simp [hp.length_eq]
-        have hc : ∀ d, cov3 mp d dws = cov3 mp d (da :: ra) := fun d => cov3_perm mp d hp
-        have hc1 := cov3_coversD mp s dw (da :: ra); rw [hl] at hc1
-        cases hd : (dws.length + 1 == s + 1) <;> simp only [hd, Bool.false_eq_true, ↓reduceIte] at hc1 ⊢
-        · rw [hc false, hc1]
-        · rw [hc true, hc1]
-      rcases hfx with ⟨hc0, hg0⟩ | ⟨hsl2, hc1, hg1⟩
-      · have hu0 : ((takeOne _ _ ||| _) == mp) = true := hcov0.symm ▸ hc0
-        exact ⟨hsl, Or.inl hu0, ⟨⟨hw0, hwdm⟩, hnw⟩, Or.inl ⟨hu0, hg0⟩⟩
-      · have hu1 : ((_ ||| _) == mp) = true := hcov1.symm ▸ hc1
-        exact ⟨hsl, Or.inr ⟨hsl2, hu1⟩, ⟨⟨hw0, hwdm⟩, hnw⟩, Or.inr ⟨⟨hsl2, hu1⟩, hg1⟩⟩
-    · right
-      refine ⟨db, hdb, hab, conj, hcj, ?_⟩
-      set pz := if conj then (da.2.1 &&& db.2.1, da.2.2 &&& db.2.2) else (da.2.1 ||| db.2.1, da.2.2 ||| db.2.2)
-      set w := if conj then andD dm da.1 db.1 else orD dm da.1 db.1
-      set dw := (w, pz)
-      have hdw : (if conj = true then (w, da.2.1 &&& db.2.1, da.2.2 &&& db.2.2)
-                  else (w, da.2.1 ||| db.2.1, da.2.2 ||| db.2.2)) = dw := by cases conj <;> rfl
-      simp only [hdw] at hfx
-      set ra := dws.erase da
-      set r := ra.erase db
-      have hp : dws.Perm (da :: db :: r) := (List.perm_cons_erase hda).trans (List.Perm.cons _ (List.perm_cons_erase hdb))
-      have hlen_r : (dw :: r).length = dws.length - 1 := by
-        have := hp.length_eq; simp only [List.length_cons] at this ⊢; omega
-      have hlen_a : (dw :: da :: r).length = dws.length := by
-        have := hp.length_eq; simp only [List.length_cons] at this ⊢; omega
-      have hlen_b : (dw :: db :: r).length = dws.length := by
-        have := hp.length_eq; simp only [List.length_cons] at this ⊢; omega
-      have hlen_ab : (dw :: da :: db :: r).length = dws.length + 1 := by
-        have := hp.length_eq; simp only [List.length_cons] at this ⊢; omega
-      have hc2 : ∀ d, cov3 mp d dws = cov3 mp d (da :: db :: r) := fun d => cov3_perm mp d hp
-      have hcov0 := cov3_coversD mp s dw r; rw [hlen_r] at hcov0
-      have hcov0' : ((takeTwo (if dws.length - 1 == s + 1 then cov3 mp true dws else cov3 mp false dws)
-          (colB mp (dws.length - 1 == s + 1) da.2) (colB mp (dws.length - 1 == s + 1) db.2) |||
-          colB mp (dws.length - 1 == s + 1) pz) == mp) = coversD mp s (dw :: r) := by
-        cases hd : (dws.length - 1 == s + 1) <;> simp only [hd, Bool.false_eq_true, ↓reduceIte] at hcov0 ⊢
-        · rw [hc2 false, takeTwo_eq, hcov0]
-        · rw [hc2 true, takeTwo_eq, hcov0]
-      have hc_a : ∀ d, cov3 mp d dws = cov3 mp d (db :: da :: r) :=
-        fun d => cov3_perm mp d (hp.trans (List.Perm.swap _ _ _))
-      have hcov1a := cov3_coversD mp s dw (da :: r); rw [hlen_a] at hcov1a
-      have hcov1a' : ((takeOne (if dws.length == s + 1 then cov3 mp true dws else cov3 mp false dws)
-          (colB mp (dws.length == s + 1) db.2) ||| colB mp (dws.length == s + 1) pz) == mp) = coversD mp s (dw :: da :: r) := by
-        cases hd : (dws.length == s + 1) <;> simp only [hd, Bool.false_eq_true, ↓reduceIte] at hcov1a ⊢
-        · rw [hc_a false, takeOne_eq, hcov1a]
-        · rw [hc_a true, takeOne_eq, hcov1a]
-      have hcov1b := cov3_coversD mp s dw (db :: r); rw [hlen_b] at hcov1b
-      have hcov1b' : ((takeOne (if dws.length == s + 1 then cov3 mp true dws else cov3 mp false dws)
-          (colB mp (dws.length == s + 1) da.2) ||| colB mp (dws.length == s + 1) pz) == mp) = coversD mp s (dw :: db :: r) := by
-        cases hd : (dws.length == s + 1) <;> simp only [hd, Bool.false_eq_true, ↓reduceIte] at hcov1b ⊢
-        · rw [hc2 false, takeOne_eq, hcov1b]
-        · rw [hc2 true, takeOne_eq, hcov1b]
-      have hcov2 := cov3_coversD mp s dw (da :: db :: r); rw [hlen_ab] at hcov2
-      have hcov2' : (((if dws.length + 1 == s + 1 then (cov3 mp true dws).1 else (cov3 mp false dws).1) |||
-          colB mp (dws.length + 1 == s + 1) pz) == mp) = coversD mp s (dw :: da :: db :: r) := by
-        cases hd : (dws.length + 1 == s + 1) <;> simp only [hd, Bool.false_eq_true, ↓reduceIte] at hcov2 ⊢
-        · rw [hc2 false, hcov2]
-        · rw [hc2 true, hcov2]
-      rcases hfx with (⟨hc0, hg0⟩ | ⟨hsl1, ⟨hc1a, hg1a⟩ | ⟨hc1b, hg1b⟩⟩) | ⟨hsl2, hc2', hg2⟩
-      · have u0 : ((takeTwo _ _ _ ||| _) == mp) = true := hcov0'.symm ▸ hc0
-        exact ⟨Or.inl (Or.inl (Or.inl u0)), ⟨⟨hw0, hwdm⟩, hnw⟩, Or.inl (Or.inl (Or.inl ⟨u0, hg0⟩))⟩
-      · have u1a : ((takeOne _ _ ||| _) == mp) = true := hcov1a'.symm ▸ hc1a
-        exact ⟨Or.inl (Or.inl (Or.inr ⟨hsl1, u1a⟩)), ⟨⟨hw0, hwdm⟩, hnw⟩, Or.inl (Or.inl (Or.inr ⟨⟨hsl1, u1a⟩, hg1a⟩))⟩
-      · have u1b : ((takeOne _ _ ||| _) == mp) = true := hcov1b'.symm ▸ hc1b
-        exact ⟨Or.inl (Or.inr ⟨hsl1, u1b⟩), ⟨⟨hw0, hwdm⟩, hnw⟩, Or.inl (Or.inr ⟨⟨hsl1, u1b⟩, hg1b⟩)⟩
-      · have u2 : ((_ ||| _) == mp) = true := hcov2'.symm ▸ hc2'
-        exact ⟨Or.inr ⟨hsl2, u2⟩, ⟨⟨hw0, hwdm⟩, hnw⟩, Or.inr ⟨⟨hsl2, u2⟩, hg2⟩⟩
+  · rintro (⟨j,hw,hj⟩ | ⟨j,hw,hj⟩)
+    · exact ⟨j,hw,Or.inl hj⟩
+    · exact ⟨j,hw,Or.inr hj⟩
+  · rintro ⟨j,hw,hj | hj⟩
+    · exact Or.inl ⟨j,hw,hj⟩
+    · exact Or.inr ⟨j,hw,hj⟩
 
-def bar (dm Y : Nat) (pairs : List (Nat × Nat)) (r1s r2s : List Nat) (mp : Nat)
-    (SD : Nat → Nat → List (Nat × Nat × Nat)) (S : Nat → Nat → List Nat)
-    (N : Nat → Nat) (htAt idxH : Nat → Nat → Nat)
-    (ori : List Nat → List Nat) (seed : Nat) (pool : List Nat) (cutHitH : Nat → Nat → List Nat → Bool) : Nat → Nat → Bool
-  | 0, i => !(S 0 i == [Y])
-  | s + 1, i =>
-    let dws := SD (s + 1) i
-    !(nextD_cov dm mp s (s + 2 - dws.length) dws fun dzs =>
-        let zs := dzs.map Prod.fst
-        !(scr dm Y s pool zs) &&
-        (let cz := ori zs
-         let h := hk seed cz
-         !(cutHitH s h cz) && !(foundH S N htAt idxH s h cz)))
+theorem bitLinearLeft (mask n : Nat) : BitLinear (fun w => (w &&& mask) <<< n) := by
+  intro w i
+  simp only [Nat.testBit_shiftLeft, Nat.testBit_and, Nat.testBit_two_pow,
+    Bool.and_eq_true, decide_eq_true_eq]
+  constructor
+  · rintro ⟨h, hw, hm⟩
+    exact ⟨i-n,hw,h,rfl,hm⟩
+  · rintro ⟨j,hw,h,rfl,hm⟩
+    exact ⟨h,hw,hm⟩
 
-theorem bar_all {dm T : Nat} {pairs r1s r2s mp SD S N htAt idxH ori seed pool cutHitH cap}
-    (hd : dm &&& mask256 = dm)
-    (hr1_eq : r1s = pairs.map Prod.fst) (hr2_eq : r2s = pairs.map Prod.snd) (hmp_eq : mp = maskP pairs.length)
-    (hSD : ∀ s j, SD s j = (S s j).map (fun w => (w, projBit r1s w, projBit r2s w)))
-    (hpairs : pairs.all (fun p => dm.testBit p.1 && dm.testBit p.2 && !(T &&& dm).testBit p.1 && (T &&& dm).testBit p.2) = true)
-    (hr : ∀ {u ys}, RunD dm (T &&& dm) u ys → RunD dm (T &&& dm) u (ori ys))
-    (hcut : ∀ {u ys}, cutHitH u (hk seed ys) ys = true → ¬ RunD dm (T &&& dm) u ys)
-    (hc : ∀ s ≤ cap, ∀ i < N s, bar dm (T &&& dm) pairs r1s r2s mp SD S N htAt idxH ori seed pool cutHitH s i = true) :
-    ∀ s ≤ cap, ∀ i < N s, ¬ RunD dm (T &&& dm) s (S s i) := by
-  subst hr1_eq hr2_eq hmp_eq
-  have hr1 : ∀ r ∈ pairs.map Prod.fst, dm.testBit r = true := by
-    intro r hr'; obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr'
-    have h := List.all_eq_true.1 hpairs p hp; simp only [Bool.and_eq_true] at h; exact h.1.1.1
-  have hr2 : ∀ r ∈ pairs.map Prod.snd, dm.testBit r = true := by
-    intro r hr'; obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hr'
-    have h := List.all_eq_true.1 hpairs p hp; simp only [Bool.and_eq_true] at h; exact h.1.1.2
-  intro s
-  induction s using Nat.strong_induction_on with
-  | ind s ih =>
-    intro hs i hi hh
-    have hb := hc s hs i hi
-    cases s with
-    | zero => simp [bar, zero_done hh rfl] at hb
-    | succ s =>
-      by_contra! hn
-      let F (zs : List Nat) :=
-        coversP pairs s zs && !(scr dm (T &&& dm) s pool zs) &&
-        (let cz := ori zs
-         let h := hk seed cz
-         !(cutHitH s h cz) && !(foundH S N htAt idxH s h cz))
-      have hF (zs) (hz : RunD dm (T &&& dm) s zs) : F zs = true := by
-        have hcz := hr hz
-        have hcutf : cutHitH s (hk seed (ori zs)) (ori zs) = false := by
-          cases h : cutHitH s (hk seed (ori zs)) (ori zs) with
-          | false => rfl
-          | true => exact absurd hcz (hcut h)
-        simp only [F, coversP_ok hd pairs hpairs hz, scr_no pool hz, hcutf, Bool.not_false, Bool.true_and, foundH]
-        simp only [Bool.not_eq_true', Bool.and_eq_false_imp, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq]
-        rintro ⟨hj, _⟩
-        by_contra! hp
-        have p := List.isPerm_iff.1 (Bool.eq_true_of_not_eq_false hp)
-        exact ih s (by omega) (by omega) _ hj (Run.perm p hcz)
-      have hN := nextD_complete hh s rfl _ (List.Perm.refl _) F hF
-      dsimp only [bar] at hb
-      rw [hSD, List.length_map, nextD_cov_eq, nextD_decor_eq hd pairs hr1 hr2] at hb
-      have hFeq : (fun zs => coversD (maskP pairs.length) s (zs.map (fun w => (w, projBit (pairs.map Prod.fst) w, projBit (pairs.map Prod.snd) w))) &&
-          (let zs' := (zs.map (fun w => (w, projBit (pairs.map Prod.fst) w, projBit (pairs.map Prod.snd) w))).map Prod.fst
-           !(scr dm (T &&& dm) s pool zs') &&
-           (let cz := ori zs'
-            let h := hk seed cz
-            !(cutHitH s h cz) && !(foundH S N htAt idxH s h cz)))) = F := by
-        funext zs
-        have hfst : (zs.map (fun w => (w, projBit (pairs.map Prod.fst) w, projBit (pairs.map Prod.snd) w))).map Prod.fst = zs := by
-          simp [List.map_map, Function.comp_def]
-        rw [coversD_eq, hfst]
-        simp only [F, Bool.and_assoc]
-      rw [hFeq, hN] at hb
-      contradiction
+theorem bitLinearRight (mask n : Nat) : BitLinear (fun w => (w &&& mask) >>> n) := by
+  intro w i
+  simp only [Nat.testBit_shiftRight, Nat.testBit_and, Nat.testBit_two_pow,
+    Bool.and_eq_true, decide_eq_true_eq]
+  constructor
+  · rintro ⟨hw,hm⟩
+    exact ⟨n+i,hw,rfl,hm⟩
+  · rintro ⟨j,hw,rfl,hm⟩
+    exact ⟨hw,hm⟩
 
-def pickMin (seed : Nat) (orig : List Nat) : List (List (Nat × Nat)) → List Nat → Nat → List Nat
-  | [], best, _ => best
-  | ms :: rest, best, bestH =>
-    let img := orig.map (applyMoves ms)
-    let h := hk seed img
-    if h < bestH then pickMin seed orig rest img h else pickMin seed orig rest best bestH
+theorem mixStepLinear (move : WordMoveStep) : BitLinear (mixStep move) := by
+  obtain ⟨left, right⟩ := move
+  unfold mixStep
+  apply bitLinearOr
+  · induction left with
+    | nil => exact bitLinearZero
+    | cons entry rest ih =>
+      obtain ⟨part, count⟩ := entry
+      exact bitLinearOr (bitLinearLeft part count) ih
+  · induction right with
+    | nil => exact bitLinearZero
+    | cons entry rest ih =>
+      obtain ⟨part, count⟩ := entry
+      exact bitLinearOr (bitLinearRight part count) ih
 
-theorem pickMin_runD {dm Y u} (seed : Nat) (orig : List Nat) (h0 : RunD dm Y u orig) :
-    ∀ (syms : List (List (Nat × Nat))) (best : List Nat) (bestH : Nat),
-      syms.all (fun ms => ms.all moveOK256 && (applyMoves ms dm == dm) && (applyMoves ms Y == Y)) = true →
-      RunD dm Y u best →
-      RunD dm Y u (pickMin seed orig syms best bestH)
-  | [], _, _, _, hb => hb
-  | ms :: rest, best, bestH, hok, hb => by
-    simp only [List.all_cons, Bool.and_eq_true, beq_iff_eq] at hok
-    unfold pickMin; dsimp only; split
-    · exact pickMin_runD seed orig h0 rest _ _ hok.2 (applyMoves_runD ms hok.1.1.1 hok.1.1.2 hok.1.2 h0)
-    · exact pickMin_runD seed orig h0 rest best bestH hok.2 hb
+def mixMove (move : WordMove) (w : Word) : Word :=
+  (List.rec (motive := fun _ => Word → Word) id
+    (fun step _ next w => next (mixStep step w)) move) w
 
--- Bridge: HasCircuitSize 8 fG s -> Lower mask256 xs256 (enc256 fG) lb -> lb <= s!
-def gvN (w : List Nat) (g : Gate) : Nat :=
+theorem bitLinearId : BitLinear id := by
+  intro w i
+  change w.testBit i = true ↔ ∃ j, w.testBit j = true ∧ (2 ^ j).testBit i = true
+  simp [Nat.testBit_two_pow]
+
+theorem bitLinearComp {f g : Word → Word} (hf : BitLinear f) (hg : BitLinear g) :
+    BitLinear (fun w => f (g w)) := by
+  intro w i
+  change (f (g w)).testBit i = true ↔ ∃ j, w.testBit j = true ∧ (f (g (2 ^ j))).testBit i = true
+  rw [hf]
+  constructor
+  · rintro ⟨j,gj,fj⟩
+    obtain ⟨k,wk,gk⟩ := (hg w j).mp gj
+    exact ⟨k,wk,(hf (g (2^k)) i).mpr ⟨j,gk,fj⟩⟩
+  · rintro ⟨j,wj,h⟩
+    obtain ⟨k,gk,fk⟩ := (hf (g (2^j)) i).mp h
+    exact ⟨k,(hg w k).mpr ⟨j,wj,gk⟩,fk⟩
+
+theorem mixMoveLinear (move : WordMove) : BitLinear (mixMove move) := by
+  induction move with
+  | nil => exact bitLinearId
+  | cons op ops ih =>
+    change BitLinear (fun w => mixMove ops (mixStep op w))
+    exact bitLinearComp ih (mixStepLinear op)
+
+def permuteAxes (axes : List Nat) (offset row : Nat) : Nat :=
+  offset ^^^ (List.rec (motive := fun _ => Nat → Nat) (fun _ => 0)
+    (fun j _ next i => (if row.testBit i then 1 <<< j else 0) ||| next (i + 1)) axes) 0
+
+theorem relabelLinear (select : Fin rows → Fin rows) : BitLinear (relabel select) := by
+  intro w i
+  by_cases inside : i < rows
+  · let ii : Fin rows := ⟨i,inside⟩
+    change (relabel select w).testBit ii.val = true ↔ _
+    rw [relabelBit]
+    constructor
+    · intro h
+      refine ⟨(select ii).val,h,?_⟩
+      change (relabel select (2 ^ (select ii).val)).testBit ii.val = true
+      rw [relabelBit, Nat.testBit_two_pow]
+      simp
+    · rintro ⟨j,h,bit⟩
+      change (relabel select (2^j)).testBit ii.val = true at bit
+      rw [relabelBit, Nat.testBit_two_pow, decide_eq_true_eq] at bit
+      exact bit ▸ h
+  · rw [relabelOutside _ _ _ (Nat.le_of_not_gt inside)]
+    simp [relabelOutside _ _ _ (Nat.le_of_not_gt inside)]
+
+theorem wordMoveAgreement {select : Fin rows → Fin rows} {mask : Word} {move : WordMove}
+    (bounded : Masked (fullMask rows) mask)
+    (basis : ∀ i : Fin rows, mask.testBit i.val = true →
+      mixMove move (2 ^ i.val) = relabel select (2 ^ i.val))
+    {w : Word} (masked : Masked mask w) : mixMove move w = relabel select w := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  apply Bool.eq_iff_iff.mpr
+  rw [mixMoveLinear, relabelLinear]
+  have source {j : Nat} (bit : w.testBit j = true) :
+      mixMove move (2^j) = relabel select (2^j) := by
+    have m : mask.testBit j = true := by
+      have eq := congrArg (fun x : Nat => x.testBit j) masked
+      simpa [Nat.testBit_and, bit] using eq
+    have within : j < rows := by
+      have eq := congrArg (fun x : Nat => x.testBit j) bounded
+      simpa [Nat.testBit_and, fullMask, Nat.testBit_two_pow_sub_one, m] using eq
+    exact basis ⟨j,within⟩ m
+  constructor <;> rintro ⟨j,hj,hi⟩
+  · exact ⟨j,hj,by rwa [← source hj]⟩
+  · exact ⟨j,hj,by rwa [source hj]⟩
+
+theorem relabelBasis {select inverse : Fin rows → Fin rows}
+    (left : ∀ i, inverse (select i) = i) :
+    ∀ j : Fin rows, select (inverse j) = j →
+      relabel select (2 ^ j.val) = 2 ^ (inverse j).val := by
+  intro j right
+  apply Nat.eq_of_testBit_eq
+  intro i
+  by_cases inside : i < rows
+  · let pos : Fin rows := ⟨i,inside⟩
+    change (relabel select (2 ^ j.val)).testBit pos.val = _
+    rw [relabelBit, Nat.testBit_two_pow, Nat.testBit_two_pow]
+    apply (Bool.eq_iff_iff).mpr
+    simp only [decide_eq_true_eq]
+    constructor
+    · intro eq
+      have e : j = select pos := Fin.ext eq
+      rw [e,left]
+    · intro eq
+      have hp : inverse j = pos := Fin.ext eq
+      rw [← hp, right]
+  · rw [relabelOutside _ _ _ (Nat.le_of_not_gt inside), Nat.testBit_two_pow]
+    have ne : (inverse j).val ≠ i := by have := (inverse j).isLt; omega
+    simp [ne]
+
+theorem dagAutoFromMove {select inverse : Fin rows → Fin rows} {mask goal : Word} {move : WordMove}
+    (left : ∀ i, inverse (select i) = i)
+    (right : ∀ i, select (inverse i) = i)
+    (bm : Masked (fullMask rows) mask)
+    (gm : Masked mask goal)
+    (basis : ∀ i : Fin rows, mask.testBit i.val = true →
+      mixMove move (2 ^ i.val) = 2 ^ (inverse i).val)
+    (sameMask : mixMove move mask = mask) (sameGoal : mixMove move goal = goal) :
+    DagAuto mask goal select ∧ ∀ w, Masked mask w → mixMove move w = relabel select w := by
+  have agree {w : Word} (hw : Masked mask w) : mixMove move w = relabel select w :=
+    wordMoveAgreement bm (fun i h => (basis i h).trans (relabelBasis left i (right i)).symm) hw
+  exact ⟨⟨fun i => ⟨inverse i,right i⟩,(agree (by simp [Masked])).symm.trans sameMask,
+    (agree gm).symm.trans sameGoal⟩,fun _ h => agree h⟩
+
+theorem maskedBelow {mask w : Word} (bm : Masked (fullMask rows) mask)
+    (bw : Masked mask w) : Masked (fullMask rows) w := by
+  unfold Masked at *
+  rw [← bw, Nat.land_assoc, bm, bw]
+
+theorem maskedTransfer {mask w : Word} {select : Fin rows → Fin rows}
+    (same : relabel select mask = mask) (hw : Masked mask w) :
+    Masked mask (relabel select w) := by
+  unfold Masked at *
+  rw [← same, ← relabelAnd, hw]
+
+theorem liveMaskedImage {mask goal : Word} {select : Fin rows → Fin rows}
+    (auto : DagAuto mask goal select) (maskBounds : Masked (fullMask rows) mask)
+    {k t : Nat} {S : Finset Word} (live : LiveWord mask goal k t S)
+    (masked : ∀ w ∈ S, Masked mask w) :
+    LiveWord mask goal k t (S.image (relabel select)) := by
+  let f := relabel select
+  have hmask : f mask = mask := auto.2.1
+  have inj {a b : Word} (ma : Masked mask a) (mb : Masked mask b) :
+      f a = f b → a = b :=
+    relabelInj select auto.1 (maskedBelow maskBounds ma) (maskedBelow maskBounds mb)
+  have proper {a : Word} (ma : Masked mask a) (ha : properWord mask a) :
+      properWord mask (f a) := by
+    exact ⟨fun eq => ha.1 (inj ma (by simp [Masked]) (eq.trans (relabelZero select).symm)),
+      fun eq => ha.2 (inj ma (by simp [Masked]) (eq.trans hmask.symm))⟩
+  have freshImage {S : Finset Word} {v : Word} (hv : v ∉ S) (mv : Masked mask v)
+      (ms : ∀ w ∈ S, Masked mask w) : f v ∉ S.image f := by
+    intro hw
+    obtain ⟨w,hs,eq⟩ := Finset.mem_image.mp hw
+    exact hv (inj (ms w hs) mv eq ▸ hs)
+  induction live using LiveWord.ind with
+  | stop hp =>
+    rw [Finset.image_singleton, auto.2.2]
+    exact LiveWord.stop hp
+  | @unary k t U a ha fresh tail ih =>
+    let v := mask ^^^ a
+    have ma := masked a (Finset.mem_insert_self ..)
+    have mv : Masked mask v := by
+      apply maskedGate (bank := [a]) (by simpa using ma)
+      exact Or.inl ⟨a, Or.inr (Or.inr (by simp)), rfl⟩
+    have hnew : ∀ w ∈ insert v U, Masked mask w := by
+      intro w h
+      rcases Finset.mem_insert.mp h with rfl | hU
+      · exact mv
+      · exact masked _ (Finset.mem_insert_of_mem hU)
+    have fve : f v = mask ^^^ f a := by
+      change relabel select (mask ^^^ a) = _
+      rw [relabelXor, auto.2.1]
+    have ht := ih hnew
+    have hf := freshImage fresh mv masked
+    change LiveWord mask goal (k+1) (t+1) ((insert a U).image f)
+    rw [Finset.image_insert] at ht hf
+    change LiveWord mask goal k t (insert (f v) (U.image f)) at ht
+    rw [fve] at ht hf
+    rw [Finset.image_insert]
+    exact LiveWord.unary (proper ma ha) hf ht
+  | @binary k t U a b op pa pb ab fresh tail ih =>
+    let v := binWord op a b
+    have ma := masked a (Finset.mem_insert_self ..)
+    have mb := masked b (Finset.mem_insert_of_mem (Finset.mem_insert_self ..))
+    have mv : Masked mask v := by
+      apply maskedGate (bank := [a,b]) (by simpa using And.intro ma mb)
+      exact Or.inr ⟨a,b,Or.inr (Or.inr (by simp)),Or.inr (Or.inr (by simp)),by
+        cases op <;> simp [v, binWord]⟩
+    have hnew : ∀ w ∈ insert v U, Masked mask w := by
+      intro w h
+      rcases Finset.mem_insert.mp h with rfl | hU
+      · exact mv
+      · exact masked _ (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hU))
+    have fve : f v = binWord op (f a) (f b) := by
+      cases op
+      · exact relabelAnd ..
+      · exact relabelOr ..
+    have ht := ih hnew
+    have hf := freshImage fresh mv masked
+    change LiveWord mask goal (k+1) t ((insert a (insert b U)).image f)
+    rw [Finset.image_insert] at ht
+    change LiveWord mask goal k t (insert (f v) (U.image f)) at ht
+    rw [fve] at ht
+    rw [Finset.image_insert, Finset.image_insert, fve] at hf
+    rw [Finset.image_insert, Finset.image_insert]
+    exact LiveWord.binary (proper ma pa) (proper mb pb) (fun h => ab (inj ma mb h)) hf ht
+
+def dagMoveWords (m : WordMove) (ws : List Word) : List Word :=
+  List.rec [] (fun w _ next => insertWord (mixMove m w) next) ws
+
+theorem dagMoveSet {m : WordMove} {ws : List Word} {select : Fin rows → Fin rows}
+    (agree : ∀ w ∈ ws, mixMove m w = relabel select w) :
+    (dagMoveWords m ws).toFinset = ws.toFinset.image (relabel select) := by
+  induction ws with
+  | nil => simp [dagMoveWords]
+  | cons w ws ih =>
+    change (insertWord (mixMove m w) (dagMoveWords m ws)).toFinset = _
+    rw [insertWordSet, ih (fun w hw => agree _ (List.mem_cons_of_mem _ hw)),
+      agree _ List.mem_cons_self, List.toFinset_cons, Finset.image_insert]
+
+abbrev RowChart := { rows : List Nat // rows.length = 24 }
+
+def chartRow (chart : RowChart) (i : Nat) : Nat :=
+  chart.val.getD i 0
+
+def chartBits (w : Word) (rows : List Nat) : Word :=
+  List.rec 0 (fun r _ packed => ((w >>> r) &&& 1) ||| (packed <<< 1)) rows
+
+theorem chartBitsBit (w : Word) (rows : List Nat) (i : Nat) (hi : i < rows.length) :
+    (chartBits w rows).testBit i = w.testBit (rows.getD i 0) := by
+  induction rows generalizing i with
+  | nil => simp at hi
+  | cons row rows ih =>
+    change (((w >>> row) &&& 1) ||| (chartBits w rows <<< 1)).testBit i = _
+    rw [Nat.testBit_or, Nat.testBit_and, Nat.testBit_shiftRight, Nat.testBit_shiftLeft]
+    cases i with
+    | zero => simp
+    | succ i =>
+      have lt : i < rows.length := by simpa using hi
+      simp [ih i lt, Nat.testBit_succ]
+
+def chartWord (chart : RowChart) (w : Word) : Word := chartBits w chart.val
+
+def ChartOK (goal : Word) (chart : RowChart) : Prop :=
+  (∀ i : Fin 12, goal.testBit (chartRow chart i.val) = true) ∧
+  (∀ i : Fin 12, goal.testBit (chartRow chart (12+i.val)) = false)
+
+def chartCheck (goal : Word) (chart : Option RowChart) : Bool :=
+  chart.all fun c => @decide (ChartOK goal c) (by unfold ChartOK; infer_instance)
+
+theorem chartOfCheck {goal : Word} {chart : Option RowChart}
+    (ok : chartCheck goal chart = true) (c : RowChart) (eq : chart = some c) :
+    ChartOK goal c := by
+  subst chart
+  unfold ChartOK
+  exact of_decide_eq_true ok
+
+theorem chartWordBit (chart : RowChart) (w : Word) {i : Nat} (hi : i < 24) :
+    (chartWord chart w).testBit i = w.testBit (chartRow chart i) := by
+  exact chartBitsBit w chart.val i (by rw [chart.property]; exact hi)
+
+theorem chartPos {goal : Word} {chart : RowChart} (ok : ChartOK goal chart) {i : Nat} (hi : i < 12) :
+    goal.testBit (chartRow chart i) = true := ok.1 ⟨i,hi⟩
+
+theorem chartNeg {goal : Word} {chart : RowChart} (ok : ChartOK goal chart) {i : Nat} (hi : i < 12) :
+    goal.testBit (chartRow chart (12+i)) = false := ok.2 ⟨i,hi⟩
+
+theorem chartRectangles {goal : Word} {chart : RowChart} {ws : List Word}
+    (ok : ChartOK goal chart) (nd : ws.Nodup) (kw : KWPartition goal ws.toFinset) :
+    PackedRect.rectOK1 (ws.map (chartWord chart)) = true := by
+  obtain ⟨f, good, rectangle⟩ := kw
+  let label := fun p n => f (chartRow chart p) (chartRow chart (12+n))
+  let part := fun w => ((fun q : Nat => q < 144 ∧ label (q/12) (q % 12) = w),
+    PackedRect.rectW (chartWord chart w))
+  have partition : PackedRect.Part (ws.map part) := by
+    refine ⟨?_,?_,?_,?_,?_⟩
+    · intro z hz
+      obtain ⟨w,_,rfl⟩ := List.mem_map.mp hz
+      intro p n p' n' hp hn hp' hn' h h'
+      have divmod (a b : Nat) (lt : b < 12) :
+          (12*a+b)/12 = a ∧ (12*a+b)%12 = b := by omega
+      have h1 := h.2
+      have h2 := h'.2
+      rw [(divmod p n hn).1, (divmod p n hn).2] at h1
+      rw [(divmod p' n' hn').1, (divmod p' n' hn').2] at h2
+      refine ⟨by omega,?_⟩
+      rw [(divmod p n' hn').1, (divmod p n' hn').2]
+      exact (rectangle _ _ _ _ (chartPos ok hp) (chartPos ok hp') (chartNeg ok hn)
+        (chartNeg ok hn') (h1.trans h2.symm)).trans h1
+    · intro z hz q hq
+      obtain ⟨w,_,rfl⟩ := List.mem_map.mp hz
+      exact hq.1
+    · rw [List.pairwise_map]
+      exact List.Pairwise.imp (fun hne q h1 h2 => hne (h1.2.symm.trans h2.2)) nd
+    · intro q hq
+      have member := (good _ _ (chartPos ok (show q/12 < 12 by omega))
+        (chartNeg ok (Nat.mod_lt q (by decide : 0 < 12)))).1
+      exact ⟨_, List.mem_map.mpr ⟨_,List.mem_toFinset.mp member,rfl⟩,hq,rfl⟩
+    · intro z hz q hq
+      obtain ⟨w,_,rfl⟩ := List.mem_map.mp hz
+      obtain ⟨bound, same⟩ := hq
+      have hp : q/12 < 12 := by omega
+      have hn : q % 12 < 12 := Nat.mod_lt _ (by decide)
+      have h := (good _ _ (chartPos ok hp) (chartNeg ok hn)).2
+      change (label (q/12) (q % 12)).testBit (chartRow chart (q/12)) = true ∧
+        (label (q/12) (q % 12)).testBit (chartRow chart (12+q % 12)) = false at h
+      rw [same] at h
+      have bit := PackedRect.rectW_tb (chartWord chart w) (q/12) (q % 12) hp hn
+        ((chartWordBit chart w (by omega)).trans h.1)
+        ((chartWordBit chart w (by omega)).trans h.2)
+      rwa [Nat.div_add_mod] at bit
+  have hw := PackedRect.avOK1_sound partition
+  simpa only [PackedRect.rectOK1, List.map_map, Function.comp_def, part] using hw
+
+theorem tightChart {goal mask : Word} {chart : RowChart} {ws : List Word} {fuel : Nat}
+    (ok : ChartOK goal chart) (tight : ws.length = fuel + 1)
+    (viable : WordViable mask goal (fuel,ws,[])) : PackedRect.rectOK1 (ws.map (chartWord chart)) = true := by
+  obtain ⟨nd,k,t,cap,live⟩ := viable
+  change k ≤ fuel at cap
+  have card := (liveWordSize live).2
+  rw [List.toFinset_card_of_nodup nd] at card
+  change (ws : List Word).length + t ≤ k + 1 at card
+  have ht : t = 0 := by omega
+  have hk : ws.toFinset.card = k + 1 := by
+    have q : ws.toFinset.card = ws.length := List.toFinset_card_of_nodup nd
+    omega
+  subst t
+  exact chartRectangles ok nd (kwFromLive live hk)
+
+def dagForceWord {α : Type} (word : Word) (cont : Word → α) : α :=
+  Nat.rec (cont 0) (fun k _ => cont (k + 1)) word
+
+theorem dagForceWordEq {α : Type} (word : Word) (cont : Word → α) :
+    dagForceWord word cont = cont word := by cases word <;> rfl
+
+def dagForceWords (words : List Word) (cont : List Word → Bool) : Bool :=
+  (List.rec (motive := fun _ => (List Word → Bool) → Bool) (fun k => k [])
+    (fun w _ next k => dagForceWord w (fun v => next (fun rest => k (v :: rest)))) words) cont
+
+theorem dagForceWordsEq (words : List Word) (cont : List Word → Bool) :
+    dagForceWords words cont = cont words := by
+  induction words generalizing cont with
+  | nil => rfl
+  | cons w ws ih =>
+    change dagForceWord w (fun v => dagForceWords ws (fun rest => cont (v :: rest))) = _
+    rw [dagForceWordEq, ih]
+
+def dagBoundCloses (target : Word) (state : RowState) (bound : Bound) : Bool :=
+  let (mask, stock, lower, goal) := bound
+  let (fuel, ws, history) := state
+  (target &&& mask) == goal && goal != 0 && goal != mask &&
+    dagForceWord (fuel - flatCount mask ws) (fun remaining =>
+      if Nat.blt remaining lower then
+        dagForceWords (recipeStart mask stock ws) (fun start =>
+          if Nat.blt (start.length + remaining) lower then
+            dagForceWords (recipeClosure mask stock history start) (fun needed =>
+              if Nat.blt (needed.length + remaining) lower then
+                dagForceWords (replayRecipes mask needed history.reverse stock) (fun replay =>
+                  decide (replay.length + remaining < lower) &&
+                    ws.all (fun w => availableB mask (replay ++ stock) (w &&& mask)))
+              else false)
+          else false)
+      else false)
+
+theorem dagBoundClosesEq (target : Word) (state : RowState) (bound : Bound) :
+    dagBoundCloses target state bound = boundCloses target state bound := by
+  obtain ⟨fuel, ws, history⟩ := state
+  obtain ⟨mask, stock, lower, goal⟩ := bound
+  simp [dagBoundCloses, boundCloses, dagForceWordsEq, dagForceWordEq, Nat.blt_eq]
+
+def dagKnownCloses (target : Word) (bounds : List Bound) (state : RowState) : Bool :=
+  List.rec false (fun bound _ later => dagBoundCloses target state bound || later) bounds
+
+theorem dagKnownClosesEq (target : Word) (bounds : List Bound) (state : RowState) :
+    dagKnownCloses target bounds state = knownCloses target bounds state := by
+  induction bounds with
+  | nil => rfl
+  | cons bound bounds ih =>
+    change (dagBoundCloses target state bound || dagKnownCloses target bounds state) =
+      (boundCloses target state bound || knownCloses target bounds state)
+    rw [dagBoundClosesEq, ih]
+
+abbrev DagLink := Nat × Nat
+abbrev DagLinks := Nat → Nat → Option DagLink
+
+def dagAllowedRoot (witnesses : List Witness) (ws : List Word) : Bool :=
+  witnesses.all (fun entry => ws.contains (witnessWord entry))
+
+def dagTrace (mask : Word) (stock : List Word) (fuel : Nat) (forest : Forest)
+    (i : Nat) : Option RowState :=
+  (Nat.rec (motive := fun _ => Nat → Option RowState) (fun _ => none)
+    (fun _ previous j =>
+      let (parent, token) := forest j
+      if parent == 0 then
+        if token < 2 ^ stock.length then some (rootState stock fuel token) else none
+      else (previous (parent - 1)).bind (childState mask token)) (fuel + 1)) i
+
+def dagRef (count : Nat) (states : Nat → Option RowState)
+    (moves : Array WordMove) (links : DagLinks) (parent token : Nat) (state : RowState) : Bool :=
+  match links parent token with
+  | none => false
+  | some (destination, auto) =>
+    Nat.blt destination count &&
+      match states destination with
+      | none => false
+      | some saved =>
+        saved.1 == state.1 &&
+          if auto == 0 then saved.2.1 == state.2.1
+          else match moves[auto-1]? with
+               | none => false
+               | some m => saved.2.1 == dagMoveWords m state.2.1
+
+def dagPartition (directed : Bool) (ws : List Word) : Word → Word → Bool :=
+  List.rec
+    (fun p n => Nat.beq p 0 || Nat.beq n 0)
+    (fun w _ rest p n =>
+      Nat.beq p 0 || Nat.beq n 0 ||
+      dagForceWord (p &&& w) (fun up =>
+        dagForceWord (n &&& w) (fun down =>
+          rest up down &&
+            dagForceWord (p ^^^ up) (fun offP =>
+              dagForceWord (if directed then n else n ^^^ down) (rest offP))))) ws
+
+theorem dagOffBits {v w : Word} {i : Nat} (bit : (v ^^^ (v &&& w)).testBit i = true) :
+    v.testBit i = true ∧ w.testBit i = false := by
+  rw [Nat.testBit_xor, Nat.testBit_and] at bit
+  cases hv : v.testBit i <;> cases hw : w.testBit i <;> simp [hv, hw] at bit ⊢
+
+theorem dagPartitionSound {directed : Bool} {ws : List Word} {positive negative : Word}
+    (fail : dagPartition directed ws positive negative = false) :
+    ∃ p n, positive.testBit p = true ∧ negative.testBit n = true ∧
+      ∀ w ∈ ws, if directed then w.testBit p = true → w.testBit n = true
+                  else w.testBit p = w.testBit n := by
+  have nonempty {w : Word} (hn : w ≠ 0) : ∃ j, w.testBit j = true := by
+    by_contra! all
+    apply hn
+    apply Nat.eq_of_testBit_eq
+    intro i
+    simp [all i]
+  induction ws generalizing positive negative with
+  | nil =>
+    change (Nat.beq positive 0 || Nat.beq negative 0) = false at fail
+    simp only [Bool.or_eq_false_iff] at fail
+    obtain ⟨p,hp⟩ := nonempty (w := positive) (fun eq => by simp [eq] at fail)
+    obtain ⟨n,hn⟩ := nonempty (w := negative) (fun eq => by simp [eq] at fail)
+    exact ⟨p,n,hp,hn,by simp⟩
+  | cons w ws ih =>
+    change (Nat.beq positive 0 || Nat.beq negative 0 ||
+      dagForceWord (positive &&& w) (fun up =>
+        dagForceWord (negative &&& w) (fun down =>
+          dagPartition directed ws up down &&
+            dagForceWord (positive ^^^ up) (fun offP =>
+              dagForceWord (if directed then negative else negative ^^^ down)
+                (dagPartition directed ws offP))))) = false at fail
+    simp only [dagForceWordEq, Bool.or_eq_false_iff, Bool.and_eq_false_iff] at fail
+    rcases fail.2 with on | off
+    · obtain ⟨p,n,hp,hn,agree⟩ := ih on
+      rw [Nat.testBit_and, Bool.and_eq_true] at hp hn
+      refine ⟨p,n,hp.1,hn.1,?_⟩
+      intro a ha
+      rcases List.mem_cons.mp ha with rfl | tail
+      · simp [hp.2, hn.2]
+      · exact agree _ tail
+    · obtain ⟨p,n,hp,hn,agree⟩ := ih off
+      have hp' := dagOffBits hp
+      cases mode : directed
+      · have hn' : negative.testBit n = true ∧ w.testBit n = false := by
+          apply dagOffBits
+          simpa [mode] using hn
+        refine ⟨p,n,hp'.1,hn'.1,?_⟩
+        intro a ha
+        rcases List.mem_cons.mp ha with rfl | tail
+        · simp [hp'.2, hn'.2]
+        · simpa [mode] using agree _ tail
+      · have hn' : negative.testBit n = true := by simpa [mode] using hn
+        refine ⟨p,n,hp'.1,hn',?_⟩
+        intro a ha
+        rcases List.mem_cons.mp ha with rfl | tail
+        · simp [hp'.2]
+        · simpa [mode] using agree _ tail
+
+theorem dagPartitionLive {mask goal : Word} {ws : List Word} {k t : Nat} {directed : Bool}
+    (goalMask : Masked mask goal) (live : LiveWord mask goal k t ws.toFinset)
+    (noNot : directed = true → t = 0) :
+    dagPartition directed ws goal (mask ^^^ goal) = true := by
+  by_contra fail
+  have openPair : dagPartition directed ws goal (mask ^^^ goal) = false := by
+    cases h : dagPartition directed ws goal (mask ^^^ goal) <;> simp_all
+  obtain ⟨p,n,hp,hn,agree⟩ := dagPartitionSound openPair
+  have pm := positiveInMask goalMask hp
+  have nm : mask.testBit n = true ∧ goal.testBit n = false := by
+    rw [Nat.testBit_xor] at hn
+    have implied := fun ht : goal.testBit n = true => positiveInMask goalMask ht
+    cases hm : mask.testBit n <;> cases ht : goal.testBit n <;> simp_all
+  cases mode : directed with
+  | false =>
+    have same := liveAgrees live (pm.trans nm.1.symm) (fun w hw => by
+      simpa [mode,AgreesAt] using agree w (List.mem_toFinset.mp hw))
+    simp [AgreesAt, hp, nm.2] at same
+  | true =>
+    have ht := noNot mode
+    subst t
+    obtain ⟨w,hw,a,b⟩ := liveDirected live hp nm.2
+    have same := agree w (List.mem_toFinset.mp hw)
+    simp [mode, a, b] at same
+
+abbrev DagSample := Nat × Nat
+abbrev DagSignals := Word × Word
+abbrev DagCounts := Word × Word × Word
+
+def dagForceCache (tags : List DagSignals) (use : List DagSignals → Bool) : Bool :=
+  (List.rec (motive := fun _ => (List DagSignals → Bool) → Bool) (fun k => k [])
+    (fun tag _ next k =>
+      dagForceWord tag.1 (fun up => dagForceWord tag.2 (fun down =>
+        next (fun tail => k ((up,down)::tail))))) tags) use
+
+theorem dagForceCacheEq (tags : List DagSignals) (use : List DagSignals → Bool) :
+    dagForceCache tags use = use tags := by
+  induction tags generalizing use with
+  | nil => rfl
+  | cons tag rest ih =>
+    obtain ⟨a,b⟩ := tag
+    change dagForceWord a (fun up => dagForceWord b (fun down =>
+      dagForceCache rest (fun tail => use ((up,down)::tail)))) = _
+    simp only [dagForceWordEq, ih]
+
+def dagSignalContrast (directed : Bool) (full : Word) (tag : DagSignals) : Word :=
+  if directed then tag.1 &&& (tag.2 ^^^ full) else tag.1 ^^^ tag.2
+
+def dagCountStep (acc : DagCounts) (column : Word) : DagCounts :=
+  (acc.1 ||| column, acc.2.1 ||| (acc.1 &&& column), acc.2.2 ||| (acc.2.1 &&& column))
+
+def dagCountSigns (directed : Bool) (full : Word) (tags : List DagSignals)
+    (use : DagCounts → Bool) : Bool :=
+  (List.rec (motive := fun _ => (DagCounts → Bool) → Bool) (fun k => k (0,0,0))
+    (fun tag _ more k =>
+      dagForceWord (dagSignalContrast directed full tag) (fun column =>
+        more (fun acc =>
+          dagForceWord (acc.1 ||| column) (fun once =>
+            dagForceWord (acc.2.1 ||| (acc.1 &&& column)) (fun twice =>
+              dagForceWord (acc.2.2 ||| (acc.2.1 &&& column)) (fun thrice => k (once,twice,thrice)))))))
+    tags) use
+
+theorem dagCountSignsEq (directed : Bool) (full : Word) (tags : List DagSignals)
+    (use : DagCounts → Bool) : dagCountSigns directed full tags use =
+    use (tags.foldr (fun tag acc => dagCountStep acc (dagSignalContrast directed full tag)) (0,0,0)) := by
+  induction tags generalizing use with
+  | nil => rfl
+  | cons tag tags ih =>
+    change dagForceWord (dagSignalContrast directed full tag) (fun column =>
+      dagCountSigns directed full tags (fun acc =>
+        dagForceWord (acc.1 ||| column) (fun once =>
+          dagForceWord (acc.2.1 ||| (acc.1 &&& column)) (fun twice =>
+            dagForceWord (acc.2.2 ||| (acc.2.1 &&& column)) (fun thrice => use (once,twice,thrice)))))) = _
+    simp only [dagForceWordEq, ih]
+    rfl
+
+def dagHighest (value : Word) : Nat :=
+  (Nat.rec (motive := fun _ => Word → Nat → Nat) (fun _ offset => offset)
+    (fun i next w offset =>
+      let shift := 1 <<< i
+      dagForceWord (w >>> shift) (fun upper =>
+        if Nat.beq upper 0 then next w offset else next upper (offset+shift))) 8) value 0
+
+def dagSampleMiss (sample : DagSample) (full : Word) (normal tight : DagCounts)
+    (x y out : DagSignals) (directed : Bool) (op keep : Nat) : List Nat :=
+  let counts := if directed then tight else normal
+  let dx := if keep.testBit 0 then 0 else dagSignalContrast directed full x
+  let dy := if op == 2 || keep.testBit 1 then 0 else dagSignalContrast directed full y
+  let rest := counts.2.2 ||| (counts.2.1 ^^^ (counts.2.1 &&& dx &&& dy)) |||
+    (counts.1 ^^^ (counts.1 &&& (dx ||| dy)))
+  dagForceWord ((rest ||| dagSignalContrast directed full out) ^^^ full) (fun missing =>
+    if Nat.beq missing 0 then [] else [unpack sample.1 18 (dagHighest missing)])
+
+def dagPairReject (mask goal : Word) (directed : Bool) (ws : List Word) (pairs : List Nat) : Bool :=
+  pairs.any fun code =>
+    let p := code &&& 511
+    let n := code >>> 9
+    goal.testBit p && mask.testBit n && !goal.testBit n &&
+      ws.all (fun w => if directed then !(w.testBit p) || w.testBit n
+                       else w.testBit p == w.testBit n)
+
+theorem dagPairsOpen {mask goal : Word} {ws : List Word} {pairs : List Nat} {k t : Nat} {directed : Bool}
+    (masked : Masked mask goal) (live : LiveWord mask goal k t ws.toFinset)
+    (noNot : directed = true → t = 0) : dagPairReject mask goal directed ws pairs = false := by
+  apply Bool.eq_false_iff.mpr
+  intro close
+  obtain ⟨code,_,check⟩ := List.any_eq_true.mp close
+  simp only [Bool.and_eq_true, Bool.not_eq_true, List.all_eq_true] at check
+  obtain ⟨⟨⟨hp, mn⟩, hn⟩, bank⟩ := check
+  have neg : goal.testBit (code >>> 9) = false := by simpa using hn
+  cases mode : directed
+  · have h := liveAgrees live ((positiveInMask masked hp).trans mn.symm) (fun w hw => by
+      have pair := bank _ (List.mem_toFinset.mp hw)
+      simpa [mode, AgreesAt] using pair)
+    simp [AgreesAt, hp, neg] at h
+  · have ht := noNot mode
+    subst t
+    obtain ⟨word,mem,on,off⟩ := liveDirected live hp neg
+    have pair := bank _ (List.mem_toFinset.mp mem)
+    simp [mode,on,off] at pair
+
+def dagLocal (mask goal : Word) (chart : Option RowChart)
+    (cut : CutCheck) (state : RowState) : Bool :=
+  let (fuel,ws,_) := state
+  ws.length > fuel + 1 ||
+    (!ws.contains goal &&
+      (fuel == 0 ||
+        (if ws.length == fuel + 1 then
+           chart.any (fun c => !PackedRect.rectOK1 (ws.map (chartWord c)))
+         else false) ||
+        cut state ||
+        (if ws.length == fuel + 1 then !dagPartition true ws goal (mask ^^^ goal)
+         else !dagPartition false ws goal (mask ^^^ goal))))
+
+def dagSizeFloor (n op keep : Nat) : Nat :=
+  (n - (if keep.testBit 0 then 0 else 1) -
+    (if op == 2 || keep.testBit 1 then 0 else 1)) + 1
+
+def dagTooWide (n fuel token : Nat) : Bool :=
+  dagSizeFloor n (token / 4 % 3) (token % 4) > (fuel-1) + 1
+
+def dagKept (ws : List Word) (op keep x y : Nat) : List Word :=
+  keepWord (op == 2 || keep.testBit 1) y (keepWord (keep.testBit 0) x ws)
+
+def dagGateWord (mask op x y : Word) : Word :=
+  if Nat.beq op 0 then x &&& y else if Nat.beq op 1 then x ||| y else mask ^^^ x
+
+def dagDirectChild (mask : Word) (state : RowState) (a b op keep x y out : Nat) : Option RowState :=
+  let (fuel, ws, history) := state
+  if fuel == 0 || b ≥ ws.length || (if op == 2 then a != b || keep ≥ 2 else a ≥ b) then none
+  else if out == 0 || out == mask || ws.contains out then none
+  else
+    some (fuel-1, insertWord out (dagKept ws op keep x y), (out,x,y) :: history)
+
+theorem dagDirectChildEq {mask a b op keep : Nat} {state : RowState}
+    (hb : b < 64) (hop : op < 3) (hk : keep < 4) :
+    let x := state.2.1.getD a 0
+    let y := state.2.1.getD b 0
+    dagDirectChild mask state a b op keep x y (dagGateWord mask op x y) =
+      childState mask (gateToken a b op keep) state := by
+  obtain ⟨fuel,ws,history⟩ := state
+  obtain ⟨keepEq,opEq,aEq,bEq⟩ := gateTokenFields (a := a) hb hop hk
+  simp only [childState, keepEq, opEq, aEq, bEq]
+  rfl
+
+abbrev DagTagged := Word × DagSignals
+
+def dagTagBases (stock : List Word) (positive negative width : Nat) : List DagTagged :=
+  (List.rec (motive := fun _ => Nat → List DagTagged) (fun _ => [])
+    (fun w _ next i => (w, unpack positive width i, unpack negative width i) :: next (i+1)) stock) 0
+
+def dagTagRoot (bank : List DagTagged) (token : Nat) : List DagTagged :=
+  (List.rec (motive := fun _ => Nat → List DagTagged) (fun _ => [])
+    (fun tag _ next k =>
+      if Nat.beq (k &&& 1) 0 then next (k >>> 1) else tag :: next (k >>> 1)) bank) token
+
+def dagTagKeep (keep : Bool) (w : Word) (bank : List DagTagged) : List DagTagged :=
+  if keep then bank
+  else List.rec [] (fun tag tail next => if Nat.beq tag.1 w then tail else tag :: next) bank
+
+def dagTagInsert (tag : DagTagged) (bank : List DagTagged) : List DagTagged :=
+  List.rec [tag] (fun old tail next => if Nat.ble tag.1 old.1 then tag :: old :: tail else old :: next) bank
+
+def dagTagStep (mask full token : Word) (bank : List DagTagged) : List DagTagged :=
+  let keep := token % 4
+  let op := token / 4 % 3
+  let x := bank.getD (token / (4*3*64)) (0,0,0)
+  let y := bank.getD (token / (4*3) % 64) (0,0,0)
+  let tag := (dagGateWord mask op x.1 y.1, dagGateWord full op x.2.1 y.2.1, dagGateWord full op x.2.2 y.2.2)
+  dagTagInsert tag (dagTagKeep (op == 2 || keep.testBit 1) y.1 (dagTagKeep (keep.testBit 0) x.1 bank))
+
+def dagTraceTags (mask width : Word) (root : List DagTagged) (fuel : Nat) (forest : Forest)
+    (i : Nat) : List DagSignals :=
+  let tags := (Nat.rec (motive := fun _ => Nat → List DagTagged) (fun _ => [])
+    (fun _ previous j =>
+      let (parent, token) := forest j
+      if Nat.beq parent 0 then dagTagRoot root token
+      else dagTagStep mask (fullMask width) token (previous (parent-1))) (fuel+1)) i
+  List.rec [] (fun tag _ rest => tag.2 :: rest) tags
+
+def dagPackWords (ws : List Word) : Word :=
+  List.rec 0 (fun w _ tail => (w &&& fullMask 512) ||| (tail <<< 512)) ws
+
+def dagLaneMarks (n : Nat) : Word :=
+  Nat.rec 0 (fun _ more => 1 ||| (more <<< 512)) n
+
+def dagOmitted (a b : Nat) (left right : Bool) : Word :=
+  (if left then 0 else 1 <<< (512*a)) ||| (if right then 0 else 1 <<< (512*b))
+
+def dagPackedPair (mask goal packed marks erased out : Word) (directed : Bool) (pairs : List Nat) : Bool :=
+  pairs.any fun code =>
+    dagForceWord code (fun code =>
+      dagForceWord (code &&& 511) (fun p =>
+        dagForceWord (code >>> 9) (fun n =>
+          let up := (packed >>> p) &&& marks
+          let down := (packed >>> n) &&& marks
+          let contrast := if directed then up &&& (down ^^^ marks) else up ^^^ down
+          let gateOK := if directed then !out.testBit p || out.testBit n else out.testBit p == out.testBit n
+          goal.testBit p && mask.testBit n && !goal.testBit n && Nat.blt p 512 && Nat.blt n 512 &&
+            gateOK && Nat.beq (contrast &&& (marks ^^^ erased)) 0)))
+
+theorem dagPackBits {ws : List Word} {i row : Nat} (inside : i < ws.length) (width : row < 512) :
+    (dagPackWords ws).testBit (512*i+row) = (ws.getD i 0).testBit row := by
+  induction ws generalizing i with
+  | nil => simp at inside
+  | cons w ws ih =>
+    change ((w &&& fullMask 512) ||| (dagPackWords ws <<< 512)).testBit (512*i+row) = _
+    rw [Nat.testBit_or, Nat.testBit_and, Nat.testBit_shiftLeft]
+    cases i with
+    | zero => simp [fullMask, Nat.testBit_two_pow_sub_one, width, Nat.not_le.mpr width]
+    | succ i =>
+      have hi : i < ws.length := by simpa using inside
+      have crossed : 512 ≤ 512*i.succ+row := by omega
+      have offset : 512*i.succ+row-512 = 512*i+row := by omega
+      have past : ¬ 512*i.succ+row < 512 := by omega
+      simp [crossed, offset, fullMask, Nat.testBit_two_pow_sub_one, past, ih hi]
+
+theorem dagMarkBits {length i : Nat} (inside : i < length) :
+    (dagLaneMarks length).testBit (512*i) = true := by
+  induction length generalizing i with
+  | zero => omega
+  | succ length ih =>
+    change (1 ||| (dagLaneMarks length <<< 512)).testBit (512*i) = true
+    rw [Nat.testBit_or, Nat.testBit_shiftLeft]
+    cases i with
+    | zero => simp
+    | succ i =>
+      have hi : i < length := by omega
+      have crossed : 512 ≤ 512*i.succ := by omega
+      have offset : 512*i.succ-512 = 512*i := by omega
+      simp [crossed, offset, ih hi]
+
+def dagCheckChildren (mask goal : Word) (chart : Option RowChart) (cut : CutCheck)
+    (reference : Nat → RowState → Bool) (state : RowState) (sample : DagSample) (tags : List DagSignals) : Bool :=
+  let n := state.2.1.length
+  (n ≤ 64) && !state.2.1.contains goal &&
+  dagForceWord (dagPackWords state.2.1) (fun packed =>
+    dagForceWord (dagLaneMarks n) (fun marks =>
+      dagForceCache tags (fun tags =>
+    dagForceWord (fullMask sample.2) (fun full =>
+      dagCountSigns false full tags (fun normal =>
+        dagCountSigns true full tags (fun tight =>
+          let visit := fun a b op retains =>
+            dagForceWord (state.2.1.getD a 0) (fun x =>
+              dagForceWord (state.2.1.getD b 0) (fun y =>
+                dagForceWord (dagGateWord mask op x y) (fun out =>
+                  let xs := tags.getD a (0,0)
+                  let ys := tags.getD b (0,0)
+                  dagForceWord (dagGateWord full op xs.1 ys.1) (fun up =>
+                    dagForceWord (dagGateWord full op xs.2 ys.2) (fun down =>
+                      treeBlock 0 retains (fun keep =>
+                        let token := gateToken a b op keep
+                        if dagTooWide n state.1 token then true else
+                          let directed := dagSizeFloor n op keep == (state.1-1)+1
+                          let pairs := dagSampleMiss sample full normal tight xs ys (up,down) directed op keep
+                          let erased := dagOmitted a b (keep.testBit 0) (op == 2 || keep.testBit 1)
+                          if dagPackedPair mask goal packed marks erased out directed pairs then true
+                          else match dagDirectChild mask state a b op keep x y out with
+                          | none => true
+                          | some (fuel, ws, history) => dagForceWords ws (fun forced =>
+                            let child := (fuel, forced, history)
+                            reference token child || dagLocal mask goal chart cut child)))))))
+          treeBlock 0 n (fun a =>
+            visit a a 2 2 && treeBlock (a+1) (n-(a+1)) (fun b =>
+              treeBlock 0 2 (fun op => visit a b op 4)))))))))
+
+def dagStateOK (mask : Word) (ws : List Word) : Bool :=
+  (ws.dedup.length == ws.length) && ws.all (fun w => w &&& mask == w)
+
+theorem dagStateOKSpec {mask : Word} {ws : List Word} (ok : dagStateOK mask ws = true) :
+    ws.Nodup ∧ ∀ w ∈ ws, Masked mask w := by
+  simp only [dagStateOK, Bool.and_eq_true, beq_iff_eq, List.all_eq_true] at ok
+  exact ⟨List.nodup_iff_length_dedup_eq.mpr ok.1, ok.2⟩
+
+def dagCheckNode (mask goal : Word) (chart : Option RowChart) (cut : CutCheck)
+    (count : Nat) (states : Nat → Option RowState) (moves : Array WordMove) (links : DagLinks)
+    (sample : DagSample) (tags : Nat → List DagSignals) (i : Nat) : Bool :=
+  match states i with
+  | none => false
+  | some (fuel, ws, history) => dagForceWords ws (fun forced =>
+      dagStateOK mask forced && dagCheckChildren mask goal chart cut
+        (dagRef count states moves links (i+1)) (fuel, forced, history) sample (tags i))
+
+def dagCheckRoots (mask goal : Word) (chart : Option RowChart) (cut : CutCheck)
+    (witnesses : List Witness) (reference : Nat → RowState → Bool) (stock : List Word)
+    (fuel : Nat) : Bool :=
+  treeBlock 0 (2^stock.length) fun token =>
+    let state := rootState stock fuel token
+    !dagAllowedRoot witnesses state.2.1 || dagLocal mask goal chart cut state || reference token state
+
+theorem dagLocalOpen {mask goal : Word} {chart : Option RowChart}
+    {cut : CutCheck} {state : RowState}
+    (masked : Masked mask goal) (chartOK : ∀ c, chart = some c → ChartOK goal c)
+    (viable : WordViable mask goal state) (noCut : cut state = false) :
+    dagLocal mask goal chart cut state = false := by
+  obtain ⟨fuel,ws,history⟩ := state
+  have ⟨nd,k,t,cap,live⟩ := viable
+  change k ≤ fuel at cap
+  have card := (liveWordSize live).2
+  rw [List.toFinset_card_of_nodup nd] at card
+  change ws.length + t ≤ k + 1 at card
+  have fit : ¬ ws.length > fuel + 1 := by omega
+  by_cases hz : fuel = 0
+  · have kz : k = 0 := by omega
+    subst k
+    obtain ⟨_,eq,_⟩ := live
+    have hm : goal ∈ ws := List.mem_toFinset.mp (by rw [eq]; simp)
+    simp [dagLocal, fit, hm]
+  by_cases tight : ws.length = fuel + 1
+  · have ht : t = 0 := by omega
+    subst t
+    have dir := dagPartitionLive (directed := true) masked live (fun _ => rfl)
+    have noChart : chart.any (fun c => !PackedRect.rectOK1 (ws.map (chartWord c))) = false := by
+      cases opt : chart with
+      | none => rfl
+      | some c =>
+        have vt : WordViable mask goal (fuel,ws,[]) := viable
+        have ok := tightChart (chartOK c opt) tight vt
+        simp [ok]
+    simp [dagLocal, fit, hz, tight, dir, noCut, noChart]
+  · have sep := dagPartitionLive (directed := false) masked live (by simp)
+    simp [dagLocal, fit, hz, tight, sep, noCut]
+
+theorem dagInsertLength (w : Word) (ws : List Word) :
+    (insertWord w ws).length = ws.length + 1 := by
+  induction ws with
+  | nil => rfl
+  | cons a ws ih =>
+    change (if w ≤ a then w :: a :: ws else a :: insertWord w ws).length = _
+    split <;> simp [ih]
+
+theorem dagKeepLength (keep : Bool) (w : Word) (ws : List Word) :
+    ws.length - (if keep then 0 else 1) ≤ (keepWord keep w ws).length := by
+  cases keep
+  · exact List.le_length_erase
+  · simp [keepWord]
+
+theorem dagWideChild {mask token : Nat} {state child : RowState}
+    (eval : childState mask token state = some child)
+    (wide : dagTooWide state.2.1.length state.1 token = true) :
+    child.2.1.length > child.1 + 1 := by
+  obtain ⟨fuel,ws,history⟩ := state
+  let keep := token % 4
+  let op := token / 4 % 3
+  let i := token / (4 * 3 * 64)
+  let j := token / (4 * 3) % 64
+  let x := ws.getD i 0
+  let y := ws.getD j 0
+  let z := if op == 0 then x &&& y else if op == 1 then x ||| y else mask ^^^ x
+  let a := keep.testBit 0
+  let b := op == 2 || keep.testBit 1
+  let rest := keepWord b y (keepWord a x ws)
+  let bad : Bool := fuel == 0 || j ≥ ws.length || (if op == 2 then i != j || keep ≥ 2 else i ≥ j)
+  let stale : Bool := z == 0 || z == mask || ws.contains z
+  change (if bad then none else if stale then none else
+    some (fuel - 1, insertWord z rest, (z,x,y) :: history)) = some child at eval
+  by_cases hb : bad = true
+  · simp [hb] at eval
+  by_cases hs : stale = true
+  · simp [hb,hs] at eval
+  have eq : (fuel-1, insertWord z rest, (z,x,y) :: history) = child := by simpa [hb,hs] using eval
+  rw [← eq]
+  change (insertWord z rest).length > fuel - 1 + 1
+  rw [dagInsertLength]
+  have h1 := dagKeepLength a x ws
+  have h2 := dagKeepLength b y (keepWord a x ws)
+  have h : ws.length - (if a then 0 else 1) - (if b then 0 else 1) + 1 > fuel - 1 + 1 :=
+    of_decide_eq_true wide
+  dsimp only [rest]
+  omega
+
+theorem dagKeepMem {ws : List Word} {x w : Word} {keep : Bool}
+    (nd : ws.Nodup) (h : w ∈ keepWord keep x ws) : w ∈ ws ∧ (keep = true ∨ w ≠ x) := by
+  cases keep
+  · simpa [keepWord, nd.mem_erase_iff, and_comm] using h
+  · simpa [keepWord] using h
+
+theorem dagKeepNodup {ws : List Word} (nd : ws.Nodup) (keep : Bool) (x : Word) :
+    (keepWord keep x ws).Nodup := by
+  cases keep
+  · exact nd.erase x
+  · exact nd
+
+theorem dagPackedPairSound {mask goal out : Word} {ws : List Word} {directed : Bool}
+    {pairs : List Nat} {a b : Nat} {left right : Bool}
+    (nd : ws.Nodup)
+    (checked : dagPackedPair mask goal (dagPackWords ws) (dagLaneMarks ws.length)
+      (dagOmitted a b left right) out directed pairs = true) :
+    dagPairReject mask goal directed
+      (out :: keepWord right (ws.getD b 0) (keepWord left (ws.getD a 0) ws)) pairs = true := by
+  obtain ⟨code,mem,verdict⟩ := List.any_eq_true.mp checked
+  apply List.any_eq_true.mpr
+  refine ⟨code,mem,?_⟩
+  simp only [dagForceWordEq, Bool.and_eq_true, Nat.blt_eq] at verdict
+  obtain ⟨⟨⟨⟨⟨⟨hp, hn⟩, neg⟩, wp⟩, wn⟩, output⟩, closure⟩ := verdict
+  refine Bool.and_eq_true_iff.mpr ⟨Bool.and_eq_true_iff.mpr ⟨
+    Bool.and_eq_true_iff.mpr ⟨hp,hn⟩,neg⟩,List.all_eq_true.mpr ?_⟩
+  intro w hw
+  rcases List.mem_cons.mp hw with rfl | later
+  · exact output
+  have rightMem := dagKeepMem (dagKeepNodup nd left (ws.getD a 0)) later
+  have leftMem := dagKeepMem nd rightMem.1
+  obtain ⟨i,inside,eq⟩ := List.mem_iff_getElem.mp leftMem.1
+  have atIndex : ws.getD i 0 = w := by
+    simpa [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem inside] using eq
+  have omitted : (dagOmitted a b left right).testBit (512*i) = false := by
+    have cleared (j : Nat) (keep : Bool) (h : keep = true ∨ w ≠ ws.getD j 0) :
+        (if keep then 0 else 1 <<< (512*j)).testBit (512*i) = false := by
+      rcases h with yes | diff
+      · simp [yes]
+      · have ne : i ≠ j := fun same => diff (same ▸ atIndex).symm
+        cases keep <;> simp [Nat.shiftLeft_eq, Nat.testBit_two_pow, show 512*j ≠ 512*i by omega]
+    simp [dagOmitted, Nat.testBit_or, cleared a left leftMem.2, cleared b right rightMem.2]
+  let p := code &&& 511
+  let n := code >>> 9
+  let marks := dagLaneMarks ws.length
+  let signal := dagPackWords ws
+  have mark : marks.testBit (512*i) = true := dagMarkBits inside
+  have test {j : Nat} (within : j < 512) :
+      ((signal >>> j) &&& marks).testBit (512*i) = w.testBit j := by
+    rw [Nat.testBit_and, Nat.testBit_shiftRight, mark, Bool.and_true,
+      Nat.add_comm j, dagPackBits inside within, atIndex]
+  have h := congrArg (fun word => Nat.testBit word (512*i)) (Nat.beq_eq.mp closure)
+  simp only [Nat.zero_testBit] at h
+  change (((if directed then (signal >>> p &&& marks) &&& ((signal >>> n &&& marks) ^^^ marks)
+      else (signal >>> p &&& marks) ^^^ (signal >>> n &&& marks)) &&&
+    (marks ^^^ dagOmitted a b left right)).testBit (512*i)) = false at h
+  have pt := test (j := p) wp
+  have nt := test (j := n) wn
+  cases directed <;> cases px : w.testBit p <;> cases nx : w.testBit n <;>
+    simp [px,nx,pt,nt,Nat.testBit_and,Nat.testBit_xor,mark,omitted,p,n] at h ⊢
+
+theorem dagEarlyOpen {mask goal a b op keep out : Nat} {state child : RowState}
+    (masked : Masked mask goal) (viable : WordViable mask goal child)
+    (parent : state.2.1.Nodup) (eval : dagDirectChild mask state a b op keep
+      (state.2.1.getD a 0) (state.2.1.getD b 0) out = some child) (pairs : List Nat) :
+    dagPackedPair mask goal (dagPackWords state.2.1) (dagLaneMarks state.2.1.length)
+      (dagOmitted a b (keep.testBit 0) (op == 2 || keep.testBit 1)) out
+      (dagSizeFloor state.2.1.length op keep == (state.1-1)+1) pairs = false := by
+  obtain ⟨fuel,ws,history⟩ := state
+  let x := ws.getD a 0
+  let y := ws.getD b 0
+  apply Bool.eq_false_iff.mpr
+  intro closed
+  have closed := dagPackedPairSound parent closed
+  let bad : Bool := fuel == 0 || b ≥ ws.length || (if op == 2 then a != b || keep ≥ 2 else a ≥ b)
+  let stale : Bool := out == 0 || out == mask || ws.contains out
+  let bank := dagKept ws op keep x y
+  change (if bad then none else if stale then none else
+    some (fuel-1, insertWord out bank, (out,x,y)::history)) = some child at eval
+  by_cases h : bad = true
+  · simp [h] at eval
+  by_cases h' : stale = true
+  · simp [h,h'] at eval
+  have eq : (fuel-1,insertWord out bank,(out,x,y)::history) = child := by simpa [h,h'] using eval
+  subst child
+  obtain ⟨nd,k,t,cap,live⟩ := viable
+  change k ≤ fuel-1 at cap
+  have size := (liveWordSize live).2
+  change (insertWord out bank : List Word).toFinset.card + t ≤ k+1 at size
+  rw [List.toFinset_card_of_nodup nd, dagInsertLength] at size
+  have same : (out::bank).toFinset = (insertWord out bank).toFinset := by
+    ext w
+    simp only [List.mem_toFinset, List.mem_cons, insertWordMem]
+  have openBank := dagPairsOpen (pairs := pairs)
+    (directed := dagSizeFloor ws.length op keep == (fuel-1)+1) masked (show LiveWord mask goal k t (out::bank).toFinset by rwa [same])
+  have available : (dagSizeFloor ws.length op keep == (fuel-1)+1) = true → t = 0 := by
+    intro directed
+    have exactBudget := beq_iff_eq.mp directed
+    have first := dagKeepLength (keep.testBit 0) x ws
+    have second := dagKeepLength (op == 2 || keep.testBit 1) y (keepWord (keep.testBit 0) x ws)
+    change dagSizeFloor ws.length op keep = (fuel-1)+1 at exactBudget
+    unfold dagSizeFloor at exactBudget
+    dsimp only [bank, dagKept] at size
+    omega
+  have refuses := openBank available
+  exact Bool.noConfusion (closed.symm.trans refuses)
+
+theorem dagChildAt {mask goal : Word} {chart : Option RowChart}
+    {cut : CutCheck} {ref : Nat → RowState → Bool} {state child : RowState} {sample : DagSample} {tags : List DagSignals} {a b op keep : Nat}
+    (checked : dagCheckChildren mask goal chart cut ref state sample tags = true)
+    (ha : a < state.2.1.length)
+    (legal : (a = b ∧ op = 2 ∧ keep < 2) ∨ (a < b ∧ b < state.2.1.length ∧ op < 2 ∧ keep < 4))
+    (eval : childState mask (gateToken a b op keep) state = some child)
+    (masked : Masked mask goal) (viable : WordViable mask goal child) (nd : state.2.1.Nodup)
+    (openChild : dagLocal mask goal chart cut child = false) :
+    ref (gateToken a b op keep) child = true := by
+  have narrow : dagTooWide state.2.1.length state.1 (gateToken a b op keep) = false := by
+    apply Bool.eq_false_iff.mpr
+    intro h
+    have tooMany := dagWideChild eval h
+    obtain ⟨f,w,path⟩ := child
+    simp [dagLocal, tooMany] at openChild
+  simp only [dagCheckChildren, dagForceCacheEq, dagForceWordEq, dagCountSignsEq,
+    Bool.and_eq_true, decide_eq_true_eq] at checked
+  have width := checked.1.1
+  have atA := treeBlock_at checked.2 (i := a) (Nat.zero_le _) (by simpa using ha)
+  rcases Bool.and_eq_true_iff.mp atA with ⟨unary,binary⟩
+  rcases legal with ⟨rfl,rfl,hk⟩ | ⟨ab,hb,hop,hk⟩
+  · have atKeep := treeBlock_at unary (i := keep) (Nat.zero_le _) (by simpa using hk)
+    have fields := dagDirectChildEq (mask := mask) (state := state) (a := a) (b := a) (op := 2)
+      (keep := keep) (by omega) (by decide) (by omega)
+    have direct := fields.trans eval
+    have early := dagEarlyOpen masked viable nd direct
+    rcases child with ⟨fuel,ws,history⟩
+    simpa only [narrow,Bool.false_eq_true,ite_false,fields,eval,dagForceWordsEq,early,openChild,Bool.or_false] using atKeep
+  · have atB := treeBlock_at binary (i := b) (by omega) (by omega)
+    have atOp := treeBlock_at atB (i := op) (Nat.zero_le _) (by simpa using hop)
+    have atKeep := treeBlock_at atOp (i := keep) (Nat.zero_le _) (by simpa using hk)
+    have fields := dagDirectChildEq (mask := mask) (state := state) (a := a) (b := b) (op := op)
+      (keep := keep) (by omega) (by omega) hk
+    have direct := fields.trans eval
+    have early := dagEarlyOpen masked viable nd direct
+    rcases child with ⟨fuel,ws,history⟩
+    simpa only [narrow,Bool.false_eq_true,ite_false,fields,eval,dagForceWordsEq,early,openChild,Bool.or_false] using atKeep
+
+theorem readWordMasked {mask : Word} {ws : List Word}
+    (all : ∀ w ∈ ws, Masked mask w) (i : Nat) : Masked mask (ws.getD i 0) := by
+  simp only [List.getD_eq_getElem?_getD]
+  cases h : ws[i]? with
+  | none => simp [Masked]
+  | some w => exact all w (List.mem_of_getElem? h)
+
+theorem childStateData {mask token : Nat} {state child : RowState}
+    (eval : childState mask token state = some child)
+    (masked : ∀ w ∈ state.2.1, Masked mask w) :
+    child.1 < state.1 ∧ ∀ w ∈ child.2.1, Masked mask w := by
+  obtain ⟨fuel,ws,history⟩ := state
+  let keep := token % 4
+  let op := token / 4 % 3
+  let a := token / (4 * 3 * 64)
+  let b := token / (4 * 3) % 64
+  let x := ws.getD a 0
+  let y := ws.getD b 0
+  let z := if op == 0 then x &&& y else if op == 1 then x ||| y else mask ^^^ x
+  let rest := keepWord (op == 2 || keep.testBit 1) y (keepWord (keep.testBit 0) x ws)
+  let bad : Bool := fuel == 0 || b ≥ ws.length || (if op == 2 then a != b || keep ≥ 2 else a ≥ b)
+  let stale : Bool := z == 0 || z == mask || ws.contains z
+  change (if bad then none else if stale then none else
+    some (fuel - 1, insertWord z rest, (z,x,y) :: history)) = some child at eval
+  by_cases hb : bad = true
+  · simp [hb] at eval
+  by_cases hs : stale = true
+  · simp [hb,hs] at eval
+  have eq : (fuel-1, insertWord z rest, (z,x,y) :: history) = child := by simpa [hb,hs] using eval
+  subst child
+  have pos : 0 < fuel := by
+    by_contra! h
+    have he : fuel = 0 := by omega
+    simp [bad, he] at hb
+  refine ⟨by dsimp; omega,?_⟩
+  have read (i : Nat) : AvailableWord mask ws (ws.getD i 0) := by
+    simp only [List.getD_eq_getElem?_getD]
+    cases h : ws[i]? with
+    | none => exact Or.inl rfl
+    | some a => exact Or.inr (Or.inr (List.mem_of_getElem? h))
+  have hm : Masked mask z := by
+    apply maskedGate masked
+    unfold z
+    split
+    · exact Or.inr ⟨x,y,read _,read _,Or.inl rfl⟩
+    split
+    · exact Or.inr ⟨x,y,read _,read _,Or.inr rfl⟩
+    · exact Or.inl ⟨x,read _,rfl⟩
+  intro w hw
+  rcases insertWordMem.mp hw with rfl | other
+  · exact hm
+  · apply masked w
+    apply keepSubset (keep.testBit 0) x ws w
+    exact keepSubset (op == 2 || keep.testBit 1) y _ w other
+
+def DagMovesOK (mask goal : Word) (width : Nat) (moves : Array WordMove) : Prop :=
+  ∀ (i : Nat) (m : WordMove), moves[i]? = some m →
+    ∃ select : Fin width → Fin width, DagAuto mask goal select ∧
+      ∀ w, Masked mask w → mixMove m w = relabel select w
+
+abbrev DagMoveRecord (width : Nat) := WordMove × (Fin width → Fin width) × (Fin width → Fin width)
+
+def dagMoves (cert : List (DagMoveRecord width)) : Array WordMove := (cert.map Prod.fst).toArray
+
+def dagMoveRecordProps {width : Nat} (mask goal : Word) (entry : DagMoveRecord width) : Prop :=
+  let (move, select, inverse) := entry
+  (∀ i, inverse (select i) = i) ∧ (∀ i, select (inverse i) = i) ∧
+    (mask &&& fullMask width = mask) ∧ (goal &&& mask = goal) ∧
+    (∀ i : Fin width, mask.testBit i.val = true →
+      mixMove move (2 ^ i.val) = 2 ^ (inverse i).val) ∧
+    mixMove move mask = mask ∧ mixMove move goal = goal
+
+def dagMoveRecordOK {width : Nat} (mask goal : Word) (entry : DagMoveRecord width) : Bool :=
+  let (move, select, inverse) := entry
+  decide ((∀ i, inverse (select i) = i) ∧ (∀ i, select (inverse i) = i) ∧
+    (mask &&& fullMask width = mask) ∧ (goal &&& mask = goal) ∧
+    (∀ i : Fin width, mask.testBit i.val = true →
+      mixMove move (2 ^ i.val) = 2 ^ (inverse i).val) ∧
+    mixMove move mask = mask ∧ mixMove move goal = goal)
+
+theorem dagMoveRecordSpec {width : Nat} {mask goal : Word} {entry : DagMoveRecord width}
+    (ok : dagMoveRecordOK mask goal entry = true) : dagMoveRecordProps mask goal entry := by
+  rcases entry with ⟨move,select,inverse⟩
+  unfold dagMoveRecordProps
+  exact of_decide_eq_true ok
+
+theorem dagMovesOfCheck {width : Nat} {mask goal : Word} {cert : List (DagMoveRecord width)}
+    (ok : cert.all (dagMoveRecordOK mask goal) = true) :
+    DagMovesOK mask goal width (dagMoves cert) := by
+  intro i m get
+  simp only [dagMoves, List.getElem?_toArray, List.getElem?_map] at get
+  cases e : cert[i]? with
+  | none => simp [e] at get
+  | some entry =>
+    have eq : entry.1 = m := by simpa [e] using get
+    rcases entry with ⟨move,select,inverse⟩
+    obtain ⟨left,right,bm,gm,basis,mm,mg⟩ :=
+      dagMoveRecordSpec (List.all_eq_true.mp ok _ (List.mem_of_getElem? e))
+    subst m
+    exact ⟨select, dagAutoFromMove left right bm gm basis mm mg⟩
+
+theorem dagLinked {mask goal : Word} {width count : Nat} {states : Nat → Option RowState}
+    {moves : Array WordMove} {links : DagLinks} {parent token : Nat} {state : RowState}
+    (bounds : Masked (fullMask width) mask)
+    (valid : DagMovesOK mask goal width moves)
+    (masked : ∀ w ∈ state.2.1, Masked mask w)
+    (ok : dagRef count states moves links parent token state = true)
+    {k t : Nat} (live : LiveWord mask goal k t state.2.1.toFinset) :
+    ∃ i saved, i < count ∧ states i = some saved ∧ saved.1 = state.1 ∧
+      LiveWord mask goal k t saved.2.1.toFinset := by
+  unfold dagRef at ok
+  split at ok
+  · contradiction
+  next destination auto h =>
+    have hd := Nat.blt_eq.mp (Bool.and_eq_true_iff.mp ok).1
+    have finish := (Bool.and_eq_true_iff.mp ok).2
+    cases eq : states destination with
+    | none => simp [eq] at finish
+    | some saved =>
+      simp only [eq, Bool.and_eq_true, beq_iff_eq] at finish
+      refine ⟨destination,saved,hd,eq,finish.1,?_⟩
+      have last := finish.2
+      split at last
+      · have same : saved.2.1 = state.2.1 := beq_iff_eq.mp last
+        rwa [same]
+      · split at last
+        · contradiction
+        next m hm =>
+          obtain ⟨select,auto,agree⟩ := valid _ _ hm
+          have same : saved.2.1 = dagMoveWords m state.2.1 := beq_iff_eq.mp last
+          rw [same, dagMoveSet (fun w hw => agree w (masked w hw))]
+          exact liveMaskedImage auto bounds live (fun w hw => masked _ (List.mem_toFinset.mp hw))
+
+theorem dagAllNodes {mask goal : Word} {width fuel count : Nat}
+    {stock : List Word} {chart : Option RowChart}
+    {cut : CutCheck} {forest : Forest} {moves : Array WordMove} {links : DagLinks} {sample : DagSample}
+    {tags : Nat → List DagSignals}
+    (maskBounds : Masked (fullMask width) mask)
+    (goalMask : Masked mask goal)
+    (chartOK : ∀ c, chart = some c → ChartOK goal c)
+    (cutSound : ∀ s, WordViable mask goal s → cut s = false)
+    (autos : DagMovesOK mask goal width moves)
+    (verified : treeBlock 0 count (dagCheckNode mask goal chart cut count
+      (dagTrace mask stock fuel forest) moves links sample tags) = true):
+    ∀ cap i saved, i < count → dagTrace mask stock fuel forest i = some saved →
+      saved.1 = cap → ∀ k t, k ≤ cap → ¬LiveWord mask goal k t saved.2.1.toFinset := by
+  intro cap
+  induction cap using Nat.strong_induction_on with
+  | ind cap ih =>
+    intro i s iBound stateEq sFuel k t kBound live
+    rcases s with ⟨remaining, words, history⟩
+    let s : RowState := (remaining, words, history)
+    let states := dagTrace mask stock fuel forest
+    change states i = some s at stateEq
+    have checked := treeBlock_at verified (Nat.zero_le i) (by simpa using iBound)
+    change dagCheckNode mask goal chart cut count states moves links sample tags i = true at checked
+    simp only [dagCheckNode, stateEq, dagForceWordsEq, Bool.and_eq_true] at checked
+    obtain ⟨nd,masked⟩ := dagStateOKSpec checked.1
+    have ok := checked.2
+    have viable : WordViable mask goal s := ⟨nd,k,t,sFuel ▸ kBound,live⟩
+    have scanned := ok
+    simp only [dagCheckChildren, Bool.and_eq_true, decide_eq_true_eq] at scanned
+    have wide := scanned.1.1
+    have absent := scanned.1.2
+    rcases wordProgress wide viable with hit | ⟨child, possible, cv⟩
+    · simpa [hit] using absent
+    obtain ⟨a,b,op,keep,ha,legal,eval⟩ := possible
+    have r := dagChildAt ok ha legal eval goalMask cv nd (dagLocalOpen goalMask chartOK cv (cutSound _ cv))
+    have ⟨less,cm⟩ := childStateData eval masked
+    have below : child.1 < cap := sFuel ▸ less
+    obtain ⟨_,k',t',fits,clive⟩ := cv
+    obtain ⟨j,dest,bound,restore,fuelEq,tail⟩ :=
+      dagLinked maskBounds autos cm r clive
+    exact ih child.1 below j dest bound restore fuelEq k' t' fits tail
+
+theorem lowerDag {mask goal : Word} {width fuel count : Nat}
+    {stock : List Word} {chart : Option RowChart}
+    {forest : Forest} {moves : Array WordMove} {links : DagLinks} {sample : DagSample}
+    {tags : Nat → List DagSignals}
+    {bounds : List Bound} {witnesses : List Witness}
+    (maskBounds : Masked (fullMask width) mask)
+    (goalMask : Masked mask goal) (proper : properWord mask goal)
+    (chartOK : ∀ c, chart = some c → ChartOK goal c)
+    (autos : DagMovesOK mask goal width moves)
+    (stockMasked : ∀ w ∈ stock, Masked mask w) (stockNd : stock.Nodup)
+    (essential : witnesses.all (essentialB mask goal stock) = true)
+    (known : Known bounds) (submasks : ∀ b ∈ bounds, mask &&& b.1 = b.1)
+    (rootCheck : dagCheckRoots mask goal chart (dagKnownCloses goal bounds) witnesses
+      (dagRef count (dagTrace mask stock fuel forest) moves links 0)
+      stock fuel = true)
+    (nodeCheck : treeBlock 0 count (dagCheckNode mask goal chart (dagKnownCloses goal bounds)
+      count (dagTrace mask stock fuel forest) moves links sample tags) = true) :
+    Lower mask stock goal (fuel+1) := by
+  intro values build hit
+  by_contra! small
+  obtain ⟨k,t,S,hk,live,sub⟩ := extractWordLive stockMasked build hit proper
+  have included : S ⊆ stock.toFinset := fun w hw => List.mem_toFinset.mpr (sub w hw)
+  obtain ⟨token,tokenBound,eq⟩ := rootToken stock S
+  rw [Finset.inter_eq_right.mpr included] at eq
+  let state := rootState stock fuel token
+  have eq' : state.2.1.toFinset = S := eq
+  have v : WordViable mask goal state := by
+    refine ⟨(rootWordSublist stock token).nodup stockNd,k,t,?_,?_⟩
+    · change k ≤ fuel
+      omega
+    · rwa [eq']
+  have cutOpen (s : RowState) (h : WordViable mask goal s) : dagKnownCloses goal bounds s = false := by
+    rw [dagKnownClosesEq]
+    exact knownClosesSound known submasks h
+  have openRoot := dagLocalOpen goalMask chartOK v (cutOpen _ v)
+  have allowed : dagAllowedRoot witnesses state.2.1 = true := by
+    apply List.all_eq_true.mpr
+    intro entry mem
+    apply List.contains_iff_mem.mpr
+    rw [← List.mem_toFinset, eq']
+    exact essentialRequired (List.all_eq_true.mp essential entry mem) sub live
+  have checked := treeBlock_at rootCheck (Nat.zero_le token) (by simpa using tokenBound)
+  change (!dagAllowedRoot witnesses state.2.1 || dagLocal mask goal chart (dagKnownCloses goal bounds) state ||
+    dagRef count (dagTrace mask stock fuel forest) moves links 0 token state) = true at checked
+  simp only [allowed,openRoot,Bool.not_true,Bool.false_or] at checked
+  have finish := dagAllNodes maskBounds goalMask chartOK cutOpen autos nodeCheck
+  have fits : k ≤ fuel := by omega
+  have still : LiveWord mask goal k t state.2.1.toFinset := by rwa [eq']
+  have stateMask : ∀ w ∈ state.2.1, Masked mask w := by
+    intro w hw
+    exact stockMasked _ ((rootWordSublist stock token).subset hw)
+  obtain ⟨i,s,hi,restore,cap,plan⟩ := dagLinked maskBounds autos stateMask checked still
+  exact finish fuel i s hi restore cap k t fits plan
+
+def dagLookupLinks (index data indexWidth sizeBits tokenBits destinationBits autoBits trials : Nat) :
+    DagLinks := fun parent token =>
+  let entry := unpack index indexWidth parent
+  let size := entry &&& ((1 <<< sizeBits) - 1)
+  let offset := entry >>> sizeBits
+  let width := tokenBits + destinationBits + autoBits
+  (Nat.rec (motive := fun _ => Nat → Nat → Option DagLink) (fun _ _ => none)
+    (fun _ next lo hi =>
+      if Nat.blt lo hi then
+        let mid := (lo+hi)/2
+        let code := unpack data width mid
+        let key := code &&& ((1 <<< tokenBits) - 1)
+        if Nat.beq token key then
+          some ((code >>> tokenBits) &&& ((1 <<< destinationBits) - 1),
+            code >>> (tokenBits + destinationBits))
+        else if Nat.blt token key then next lo mid else next (mid+1) hi
+      else none) trials) offset (offset+size)
+
+def projectDAGStock (mask : Word) (source : List Word) (indices : List Nat) : List Word :=
+  List.rec [] (fun i _ rest => (mask &&& source.getD i 0) :: rest) indices
+
+theorem stockMaskedOfCheck {mask : Word} {stock : List Word}
+    (h : stock.all (fun w => w &&& mask == w) = true) :
+    ∀ w ∈ stock, Masked mask w := by
+  intro w hw
+  exact beq_iff_eq.mp (List.all_eq_true.mp h w hw)
+
+theorem suppliesOfCheck {oldMask : Word} {old new : List Word} {rename : Word → Word}
+    (h : new.all (fun w => availableB oldMask old (rename w)) = true) :
+    ∀ w ∈ new, AvailableWord oldMask old (rename w) := by
+  intro w hw
+  exact availableB_spec.mp (List.all_eq_true.mp h w hw)
+
+def dagShift (mask : Word) (move : WordMove) (word : Word) : Word :=
+  mixMove move (word &&& mask)
+
+def dagShiftUnique (mask : Word) (move : WordMove) : Nat → Word → Bool :=
+  Nat.rec (fun _ => true) (fun i next occupied =>
+    if mask.testBit i then
+      dagForceWord (mixMove move (2^i)) (fun col =>
+        Nat.beq (col &&& occupied) 0 && dagForceWord (occupied ||| col) next)
+    else next occupied)
+
+theorem dagShiftLinear (mask : Word) (move : WordMove) : BitLinear (dagShift mask move) := by
+  apply bitLinearComp (mixMoveLinear move)
+  simpa using bitLinearRight mask 0
+
+theorem dagShiftBasis (mask : Word) (move : WordMove) (i : Nat) :
+    dagShift mask move (2 ^ i) = if mask.testBit i then mixMove move (2^i) else 0 := by
+  have select : 2 ^ i &&& mask = if mask.testBit i then 2^i else 0 := by
+    apply Nat.eq_of_testBit_eq
+    intro j
+    by_cases same : i = j
+    · subst j
+      simp only [Nat.testBit_and, Nat.testBit_two_pow, decide_true, Bool.true_and]
+      cases mask.testBit i <;> simp
+    · cases h : mask.testBit i <;> simp [Nat.testBit_and, Nat.testBit_two_pow, same, h]
+  rw [dagShift, select]
+  split
+  · rfl
+  · apply Nat.eq_of_testBit_eq
+    intro j
+    apply Bool.eq_iff_iff.mpr
+    rw [mixMoveLinear]
+    simp
+
+theorem dagShiftUniqueSpec {mask : Word} {move : WordMove} {n : Nat} {occupied : Word}
+    (ok : dagShiftUnique mask move n occupied = true) :
+    (∀ j < n, ∀ b, (dagShift mask move (2^j)).testBit b = true → occupied.testBit b = false) ∧
+    (∀ j < n, ∀ k < n, ∀ b, (dagShift mask move (2^j)).testBit b = true →
+      (dagShift mask move (2^k)).testBit b = true → j = k) := by
+  induction n generalizing occupied with
+  | zero => simp
+  | succ n ih =>
+    let col := mixMove move (2^n)
+    change (if mask.testBit n then dagForceWord col (fun w =>
+      Nat.beq (w &&& occupied) 0 && dagForceWord (occupied ||| w) (dagShiftUnique mask move n))
+      else dagShiftUnique mask move n occupied) = true at ok
+    cases active : mask.testBit n
+    · simp [active,dagForceWordEq] at ok
+      obtain ⟨existing,unique⟩ := ih ok
+      have dead : dagShift mask move (2^n) = 0 := by simp [dagShiftBasis,active]
+      refine ⟨?_,?_⟩
+      · intro j hj b h
+        by_cases same : j = n
+        · simp [same,dead] at h
+        · exact existing j (by omega) b h
+      · intro j hj k hk b a c
+        by_cases e : j = n
+        · simp [e,dead] at a
+        by_cases e' : k = n
+        · simp [e',dead] at c
+        exact unique j (by omega) k (by omega) b a c
+    · simp only [active,ite_true,dagForceWordEq,Bool.and_eq_true] at ok
+      have disjoint := Nat.beq_eq.mp ok.1
+      obtain ⟨existing,unique⟩ := ih ok.2
+      have colEq : dagShift mask move (2^n) = col := by simp [dagShiftBasis,active,col]
+      have old {j b : Nat} (hj : j < n) (h : (dagShift mask move (2^j)).testBit b = true) :
+          occupied.testBit b = false ∧ col.testBit b = false := by
+        simpa [Nat.testBit_or, Bool.or_eq_false_iff] using existing j hj b h
+      refine ⟨?_,?_⟩
+      · intro j hj b h
+        by_cases same : j = n
+        · rw [same,colEq] at h
+          have bit := congrArg (fun w => Nat.testBit w b) disjoint
+          simpa [Nat.testBit_and,h] using bit
+        · exact (old (by omega) h).1
+      · intro j hj k hk b a c
+        by_cases e : j = n
+        · by_cases e' : k = n
+          · exact e.trans e'.symm
+          · rw [e,colEq,(old (by omega) c).2] at a
+            contradiction
+        by_cases e' : k = n
+        · rw [e',colEq,(old (by omega) a).2] at c
+          contradiction
+        exact unique j (by omega) k (by omega) b a c
+
+theorem dagShiftGates {mask : Word} {move : WordMove} {width : Nat}
+    (bounded : Masked (fullMask width) mask) (checked : dagShiftUnique mask move width 0 = true) :
+    (∀ a b, dagShift mask move (a &&& b) = dagShift mask move a &&& dagShift mask move b) ∧
+    (∀ a b, dagShift mask move (a ||| b) = dagShift mask move a ||| dagShift mask move b) ∧
+    (∀ a b, dagShift mask move (a ^^^ b) = dagShift mask move a ^^^ dagShift mask move b) := by
+  let f := dagShift mask move
+  have lin := dagShiftLinear mask move
+  have uniq {j k i : Nat} (hj : (f (2^j)).testBit i = true) (hk : (f (2^k)).testBit i = true) : j = k := by
+    have within {m : Nat} (a : (f (2^m)).testBit i = true) : m < width := by
+      by_contra! big
+      have eq := congrArg (fun w => Nat.testBit w m) bounded
+      have zero : mask.testBit m = false := by
+        simpa [Masked,fullMask,Nat.testBit_and,Nat.testBit_two_pow_sub_one,show ¬m < width by omega] using eq.symm
+      simp [f,dagShiftBasis,zero] at a
+    exact (dagShiftUniqueSpec checked).2 j (within hj) k (within hk) i hj hk
+  refine ⟨?_,?_,?_⟩
+  · intro a b
+    apply Nat.eq_of_testBit_eq; intro i
+    apply Bool.eq_iff_iff.mpr
+    rw [Nat.testBit_and, Bool.and_eq_true, lin, lin, lin]
+    constructor
+    · rintro ⟨j,hj,h⟩
+      rw [Nat.testBit_and, Bool.and_eq_true] at hj
+      exact ⟨⟨j,hj.1,h⟩,⟨j,hj.2,h⟩⟩
+    · rintro ⟨⟨j,hj,q⟩,⟨k,hk,r⟩⟩
+      have same := uniq q r
+      subst k
+      exact ⟨j,by simp [Nat.testBit_and,hj,hk],q⟩
+  · intro a b
+    apply Nat.eq_of_testBit_eq; intro i
+    apply Bool.eq_iff_iff.mpr
+    rw [lin (a ||| b) i, Nat.testBit_or, Bool.or_eq_true, lin a i, lin b i]
+    simp only [Nat.testBit_or, Bool.or_eq_true]
+    constructor
+    · rintro ⟨j,(left | right),same⟩
+      · exact Or.inl ⟨j,left,same⟩
+      · exact Or.inr ⟨j,right,same⟩
+    · rintro (⟨j,left,same⟩ | ⟨j,right,same⟩)
+      · exact ⟨j,Or.inl left,same⟩
+      · exact ⟨j,Or.inr right,same⟩
+  · intro a b
+    apply Nat.eq_of_testBit_eq; intro i
+    have l := lin a i
+    have r := lin b i
+    have v := lin (a ^^^ b) i
+    cases pa : (f a).testBit i <;> cases pb : (f b).testBit i
+    · rw [Nat.testBit_xor,pa,pb]
+      apply Bool.eq_false_iff.mpr
+      intro yes
+      obtain ⟨j,hj,h⟩ := v.mp yes
+      have disj : a.testBit j = true ∨ b.testBit j = true := by
+        rw [Nat.testBit_xor] at hj
+        cases aj : a.testBit j <;> cases bj : b.testBit j <;> simp [aj,bj] at hj ⊢
+      rcases disj with da | db
+      · have := l.mpr ⟨j,da,h⟩
+        change (f a).testBit i = true at this
+        simp [pa] at this
+      · have := r.mpr ⟨j,db,h⟩
+        change (f b).testBit i = true at this
+        simp [pb] at this
+    · rw [Nat.testBit_xor,pa,pb]
+      apply v.mpr
+      obtain ⟨j,hj,h⟩ := r.mp pb
+      have notA : a.testBit j = false := Bool.eq_false_iff.mpr (fun yes => by
+        have := l.mpr ⟨j,yes,h⟩
+        change (f a).testBit i = true at this
+        simp [pa] at this)
+      exact ⟨j,by simp [Nat.testBit_xor,notA,hj],h⟩
+    · rw [Nat.testBit_xor,pa,pb]
+      apply v.mpr
+      obtain ⟨j,hj,h⟩ := l.mp pa
+      have notB : b.testBit j = false := Bool.eq_false_iff.mpr (fun yes => by
+        have := r.mpr ⟨j,yes,h⟩
+        change (f b).testBit i = true at this
+        simp [pb] at this)
+      exact ⟨j,by simp [Nat.testBit_xor,hj,notB],h⟩
+    · rw [Nat.testBit_xor,pa,pb]
+      apply Bool.eq_false_iff.mpr
+      intro yes
+      obtain ⟨j,hj,h⟩ := v.mp yes
+      obtain ⟨a',ha,q⟩ := l.mp pa
+      obtain ⟨b',hb,r⟩ := r.mp pb
+      have ea := uniq h q
+      have eb := uniq h r
+      rw [← ea] at ha
+      rw [← eb] at hb
+      simp [Nat.testBit_xor,ha,hb] at hj
+
+def dagShiftCheck (width mask goal oldMask oldGoal : Word) (stock old : List Word) (move : WordMove) : Bool :=
+  Nat.beq (mask &&& fullMask width) mask && dagShiftUnique mask move width 0 &&
+    Nat.beq (dagShift mask move mask) oldMask && Nat.beq (dagShift mask move goal) oldGoal &&
+    stock.all (fun w => availableB oldMask old (dagShift mask move w))
+
+theorem dagShiftLower {width mask goal oldMask oldGoal : Word} {stock old : List Word} {min : Nat}
+    (move : WordMove) (origin : Lower oldMask old oldGoal min)
+    (ok : dagShiftCheck width mask goal oldMask oldGoal stock old move = true) :
+    Lower mask stock goal min := by
+  simp only [dagShiftCheck,Bool.and_eq_true,Nat.beq_eq] at ok
+  obtain ⟨⟨⟨⟨bounded,unique⟩,masks⟩,goals⟩,supply⟩ := ok
+  obtain ⟨andG,orG,xorG⟩ := dagShiftGates bounded unique
+  have zero : dagShift mask move 0 = 0 := by
+    apply Nat.eq_of_testBit_eq
+    intro i
+    apply Bool.eq_iff_iff.mpr
+    rw [dagShiftLinear]
+    simp
+  apply lowerMap (dagShift mask move) zero masks (fun w => by rw [xorG,masks]) andG orG (suppliesOfCheck supply)
+  rwa [goals]
+
+def moveSchedule (stages : Array WordMoveStep) (indices : List Nat) : WordMove :=
+  List.rec [] (fun i _ rest => stages[i]?.getD ([],[]) :: rest) indices
+
+def hcsGateVal {rows : Nat} (bank : List (BitVec rows)) (g : PEqualNP.CircuitLowerBounds.Gate) :
+    BitVec rows :=
+  let args := g.inputs.map fun i => bank.getD i 0
   match g.op with
-  | .and => g.inputs.foldr (fun i acc => andD mask256 (w.getD i 0) acc) mask256
-  | .or  => g.inputs.foldr (fun i acc => orD mask256 (w.getD i 0) acc) 0
-  | .not => match g.inputs with | [] => mask256 | i :: _ => negD mask256 (w.getD i 0)
+  | PEqualNP.CircuitLowerBounds.GateOp.and => args.foldr (· &&& ·) (BitVec.allOnes rows)
+  | PEqualNP.CircuitLowerBounds.GateOp.or => args.foldr (· ||| ·) 0
+  | PEqualNP.CircuitLowerBounds.GateOp.not => ~~~(args.headD 0)
   | _ => 0
 
-def execN (gs : List Gate) (w : List Nat) : List Nat :=
-  gs.foldl (fun l g => l ++ [gvN l g]) w
+def hcsStep {rows : Nat} (bank : List (BitVec rows)) (g : PEqualNP.CircuitLowerBounds.Gate) :
+    List (BitVec rows) :=
+  bank ++ [hcsGateVal bank g]
 
-theorem gvN_bit (w : List Nat) (g : Gate) (r : Nat) (hr : r < 256)
-    (hop : g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp)) :
-    (gvN w g).testBit r = g.op.eval (g.inputs.map fun i => (w.map (·.testBit r)).getD i false) := by
-  have hm : mask256.testBit r = true := by simp [mask256_bit, hr]
-  have hgd : ∀ i, (w.map (·.testBit r)).getD i false = (w.getD i 0).testBit r := by
-    intro i; simp only [List.getD_eq_getElem?_getD, List.getElem?_map]
-    cases w[i]? with | none => simp | some v => rfl
+theorem hcsGetDBit {rows : Nat} (bank : List (BitVec rows)) (i : Nat) (k : Nat) :
+    (bank.getD k 0).getLsbD i = (bank.map fun w => w.getLsbD i).getD k false := by
+  simp only [List.getD_eq_getElem?_getD, List.getElem?_map]
+  cases bank[k]? <;> simp
+
+theorem hcsAndBit {rows : Nat} (xs : List (BitVec rows)) (i : Fin rows) :
+    (xs.foldr (· &&& ·) (BitVec.allOnes rows)).getLsbD i.val = (xs.map fun w => w.getLsbD i.val).all id := by
+  induction xs with
+  | nil => simp [i.isLt]
+  | cons a t ih => simp only [List.foldr_cons, BitVec.getLsbD_and, List.map_cons, List.all_cons, id_eq, ih]
+
+theorem hcsOrBit {rows : Nat} (xs : List (BitVec rows)) (i : Fin rows) :
+    (xs.foldr (· ||| ·) 0).getLsbD i.val = (xs.map fun w => w.getLsbD i.val).any id := by
+  induction xs with
+  | nil => simp
+  | cons a t ih => simp only [List.foldr_cons, BitVec.getLsbD_or, List.map_cons, List.any_cons, id_eq, ih]
+
+theorem hcsGateBit {rows : Nat} (bank : List (BitVec rows)) (i : Fin rows)
+    (g : PEqualNP.CircuitLowerBounds.Gate)
+    (hop : g.op ∈ ({PEqualNP.CircuitLowerBounds.GateOp.and,
+      PEqualNP.CircuitLowerBounds.GateOp.or,
+      PEqualNP.CircuitLowerBounds.GateOp.not} : Set PEqualNP.CircuitLowerBounds.GateOp)) :
+    (hcsGateVal bank g).getLsbD i.val =
+      g.op.eval (g.inputs.map fun k => (bank.map fun w => w.getLsbD i.val).getD k false) := by
+  obtain ⟨op, ins⟩ := g
   simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hop
-  rcases hop with h | h | h
-  · simp only [gvN, GateOp.eval, h]
-    induction g.inputs with
-    | nil => simp [hm]
-    | cons i l ih =>
-      rw [List.foldr_cons, List.map_cons, List.all_cons, id_eq, andD, Nat.testBit_and, Nat.testBit_and, hm, Bool.and_true, hgd, ih]
-  · simp only [gvN, GateOp.eval, h]
-    induction g.inputs with
+  rcases hop with rfl | rfl | rfl
+  · simp only [hcsGateVal, PEqualNP.CircuitLowerBounds.GateOp.eval, hcsAndBit, List.map_map]
+    congr 1
+    apply List.map_congr_left
+    intro k _
+    exact hcsGetDBit bank i.val k
+  · simp only [hcsGateVal, PEqualNP.CircuitLowerBounds.GateOp.eval, hcsOrBit, List.map_map]
+    congr 1
+    apply List.map_congr_left
+    intro k _
+    exact hcsGetDBit bank i.val k
+  · simp only [hcsGateVal, PEqualNP.CircuitLowerBounds.GateOp.eval, BitVec.getLsbD_not, i.isLt,
+      decide_true, Bool.true_and]
+    cases ins with
     | nil => simp
-    | cons i l ih =>
-      rw [List.foldr_cons, List.map_cons, List.any_cons, id_eq, orD, Nat.testBit_and, Nat.testBit_or, hm, Bool.and_true, hgd, ih]
-  · simp only [gvN, GateOp.eval, h]
-    cases g.inputs with
-    | nil => simp [hm]
-    | cons i l => simp only [List.map_cons, List.headD_cons, negD, Nat.testBit_and, Nat.testBit_xor, hm, Bool.and_true, Bool.xor_true, hgd]
+    | cons k _ => simp only [List.map_cons, List.headD_cons, hcsGetDBit]
 
-theorem execN_bit (gs : List Gate) (w : List Nat) (r : Nat) (hr : r < 256)
-    (hfan : ∀ g ∈ gs, g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp)) :
-    (execN gs w).map (·.testBit r) =
-      gs.foldl (fun l g => l ++ [g.op.eval (g.inputs.map fun i => l.getD i false)]) (w.map (·.testBit r)) := by
-  induction gs generalizing w with
+theorem hcsFoldBits {rows : Nat} (bank : List (BitVec rows)) (i : Fin rows)
+    (gs : List PEqualNP.CircuitLowerBounds.Gate)
+    (hfan : ∀ g ∈ gs, g.op ∈ ({PEqualNP.CircuitLowerBounds.GateOp.and,
+      PEqualNP.CircuitLowerBounds.GateOp.or,
+      PEqualNP.CircuitLowerBounds.GateOp.not} : Set PEqualNP.CircuitLowerBounds.GateOp) ∧
+      g.inputs.length ≤ 2) :
+    (gs.foldl hcsStep bank).map (fun w => w.getLsbD i.val) =
+      gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun k => w.getD k false)])
+        (bank.map fun w => w.getLsbD i.val) := by
+  induction gs generalizing bank with
   | nil => rfl
   | cons g gs ih =>
-    simp only [execN, List.foldl_cons] at ih ⊢
-    rw [ih _ (fun g' hg' => hfan g' (List.mem_cons_of_mem _ hg'))]
-    simp [gvN_bit w g r hr (hfan g List.mem_cons_self)]
+    simp only [List.foldl_cons]
+    have hstep : (hcsStep bank g).map (fun w => w.getLsbD i.val) =
+        (bank.map fun w => w.getLsbD i.val) ++
+          [g.op.eval (g.inputs.map fun k => (bank.map fun w => w.getLsbD i.val).getD k false)] := by
+      simp only [hcsStep, List.map_append, List.map_cons, List.map_nil,
+        hcsGateBit bank i g (hfan g List.mem_cons_self).1]
+    rw [ih (hcsStep bank g) (fun g' hg' => hfan g' (List.mem_cons_of_mem _ hg')), hstep]
 
-theorem execN_reach (gs : List Gate) (roots : List Nat)
-    (hfan : ∀ g ∈ gs, g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) ∧ g.inputs.length ≤ 2) :
-    ∀ (p : Nat) (w bank : List Nat), NatReach mask256 roots p bank →
-      (∀ v ∈ w, Avail mask256 bank v) →
-      ∃ p' bank', p' ≤ p + gs.length ∧ NatReach mask256 roots p' bank' ∧
-        ∀ v ∈ execN gs w, Avail mask256 bank' v := by
-  induction gs with
-  | nil => intro p w bank hr hsup; exact ⟨p, bank, by omega, hr, hsup⟩
+theorem hcsGateWord {rows : Nat} (bank : List (BitVec rows))
+    (g : PEqualNP.CircuitLowerBounds.Gate)
+    (hop : g.op ∈ ({PEqualNP.CircuitLowerBounds.GateOp.and,
+      PEqualNP.CircuitLowerBounds.GateOp.or,
+      PEqualNP.CircuitLowerBounds.GateOp.not} : Set PEqualNP.CircuitLowerBounds.GateOp))
+    (hlen : g.inputs.length ≤ 2) :
+    GateWord (fullMask rows) (bank.map BitVec.toNat) (hcsGateVal bank g).toNat := by
+  obtain ⟨op, ins⟩ := g
+  simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hop
+  have zeroAv : AvailableWord (fullMask rows) (bank.map BitVec.toNat) 0 := Or.inl rfl
+  have maskAv : AvailableWord (fullMask rows) (bank.map BitVec.toNat) (fullMask rows) :=
+    Or.inr (Or.inl rfl)
+  rcases hop with rfl | rfl | rfl
+  · cases ins with
+    | nil => exact gateOfAvailable (by simpa [hcsGateVal, fullMask] using maskAv)
+    | cons a t =>
+      cases t with
+      | nil => exact gateOfAvailable (by simpa [hcsGateVal] using toNatAvailable bank a)
+      | cons b t =>
+        cases t with
+        | nil =>
+          exact Or.inr ⟨_, _, toNatAvailable bank a, toNatAvailable bank b,
+            Or.inl (by simp [hcsGateVal, BitVec.toNat_and])⟩
+        | cons c t => simp at hlen
+  · cases ins with
+    | nil => exact gateOfAvailable (by simpa [hcsGateVal] using zeroAv)
+    | cons a t =>
+      cases t with
+      | nil => exact gateOfAvailable (by simpa [hcsGateVal] using toNatAvailable bank a)
+      | cons b t =>
+        cases t with
+        | nil =>
+          exact Or.inr ⟨_, _, toNatAvailable bank a, toNatAvailable bank b,
+            Or.inr (by simp [hcsGateVal, BitVec.toNat_or])⟩
+        | cons c t => simp at hlen
+  · cases ins with
+    | nil => exact Or.inl ⟨0, zeroAv, by simpa [hcsGateVal] using notNat (0 : BitVec rows)⟩
+    | cons a _ => exact Or.inl ⟨_, toNatAvailable bank a, by simpa [hcsGateVal] using notNat (bank.getD a 0)⟩
+
+theorem hcsBuilds {rows : Nat} (bank : List (BitVec rows))
+    (gs : List PEqualNP.CircuitLowerBounds.Gate)
+    (hfan : ∀ g ∈ gs, g.op ∈ ({PEqualNP.CircuitLowerBounds.GateOp.and,
+      PEqualNP.CircuitLowerBounds.GateOp.or,
+      PEqualNP.CircuitLowerBounds.GateOp.not} : Set PEqualNP.CircuitLowerBounds.GateOp) ∧
+      g.inputs.length ≤ 2) :
+    ∃ vs, vs.length = gs.length ∧ WordBuilds (fullMask rows) (bank.map BitVec.toNat) vs ∧
+      ∀ v ∈ gs.foldl hcsStep bank, v.toNat ∈ vs ++ bank.map BitVec.toNat := by
+  induction gs generalizing bank with
+  | nil => exact ⟨[], rfl, trivial, fun _ h => List.mem_map_of_mem h⟩
   | cons g gs ih =>
-    intro p w bank hr hsup
-    have hav_gd : ∀ i, Avail mask256 bank (w.getD i 0) := by
-      intro i; by_cases hi : i < w.length
-      · exact hsup _ (getD_mem hi)
-      · rw [List.getD_eq_default _ _ (by omega)]; exact Or.inl (Or.inl (by simp))
-    -- Use gvN_step directly on roots=roots:
-    have hstep : ∃ p1 bank1, p1 ≤ p + 1 ∧ NatReach mask256 roots p1 bank1 ∧
-        (∀ v ∈ w ++ [gvN w g], Avail mask256 bank1 v) := by
-      have hg := hfan g List.mem_cons_self
-      simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hg
-      obtain ⟨hop, hlen⟩ := hg
-      have hand_m : ∀ a, andD mask256 a mask256 &&& mask256 = a &&& mask256 := fun a => by
-        simp [andD, Nat.and_assoc, Nat.and_self]
-      have hor_0 : ∀ a, orD mask256 a 0 &&& mask256 = a &&& mask256 := fun a => by
-        simp [orD, Nat.and_assoc, Nat.and_self]
-      have lift_w : ∀ z, (∀ v ∈ w, Avail mask256 (z :: bank) v) := fun z v hv => avail_cons z v (hsup v hv)
-      rcases hop with h | h | h
-      · rcases hgi : g.inputs with _ | ⟨i, _ | ⟨j, _ | ⟨k, l⟩⟩⟩
-        · exact ⟨p, bank, by omega, hr, fun v hv => by
-            rcases List.mem_append.1 hv with hv | hv; · exact hsup v hv
-            · rw [List.mem_singleton.1 hv]; exact Or.inl (Or.inr (by simp [gvN, h, hgi]))⟩
-        · exact ⟨p, bank, by omega, hr, fun v hv => by
-            rcases List.mem_append.1 hv with hv | hv; · exact hsup v hv
-            · rw [List.mem_singleton.1 hv]; simp only [gvN, h, hgi, List.foldr_cons, List.foldr_nil]
-              exact avail_of_eq (hand_m _).symm (hav_gd i)⟩
-        · refine ⟨p + 1, binD mask256 false (w.getD i 0) (w.getD j 0) :: bank, le_rfl,
-            Or.inr ⟨bank, _, _, false, rfl, hr, hav_gd i, hav_gd j⟩, fun v hv => ?_⟩
-          rcases List.mem_append.1 hv with hv | hv; · exact lift_w _ v hv
-          · rw [List.mem_singleton.1 hv]; simp only [gvN, h, hgi, List.foldr_cons, List.foldr_nil]
-            exact Or.inr ⟨_, List.mem_cons_self, by simp [binD, andD, Nat.and_assoc, Nat.and_self]⟩
-        · rw [hgi] at hlen; simp at hlen
-      · rcases hgi : g.inputs with _ | ⟨i, _ | ⟨j, _ | ⟨k, l⟩⟩⟩
-        · exact ⟨p, bank, by omega, hr, fun v hv => by
-            rcases List.mem_append.1 hv with hv | hv; · exact hsup v hv
-            · rw [List.mem_singleton.1 hv]; exact Or.inl (Or.inl (by simp [gvN, h, hgi]))⟩
-        · exact ⟨p, bank, by omega, hr, fun v hv => by
-            rcases List.mem_append.1 hv with hv | hv; · exact hsup v hv
-            · rw [List.mem_singleton.1 hv]; simp only [gvN, h, hgi, List.foldr_cons, List.foldr_nil]
-              exact avail_of_eq (hor_0 _).symm (hav_gd i)⟩
-        · refine ⟨p + 1, binD mask256 true (w.getD i 0) (w.getD j 0) :: bank, le_rfl,
-            Or.inr ⟨bank, _, _, true, rfl, hr, hav_gd i, hav_gd j⟩, fun v hv => ?_⟩
-          rcases List.mem_append.1 hv with hv | hv; · exact lift_w _ v hv
-          · rw [List.mem_singleton.1 hv]; simp only [gvN, h, hgi, List.foldr_cons, List.foldr_nil]
-            exact Or.inr ⟨_, List.mem_cons_self, by apply Nat.eq_of_testBit_eq; intro r; simp [binD, orD]; cases mask256.testBit r <;> simp⟩
-        · rw [hgi] at hlen; simp at hlen
-      · rcases hgi : g.inputs with _ | ⟨i, l⟩
-        · exact ⟨p, bank, by omega, hr, fun v hv => by
-            rcases List.mem_append.1 hv with hv | hv; · exact hsup v hv
-            · rw [List.mem_singleton.1 hv]; exact Or.inl (Or.inr (by simp [gvN, h, hgi]))⟩
-        · refine ⟨p + 1, negD mask256 (w.getD i 0) :: bank, le_rfl,
-            Or.inl ⟨bank, _, rfl, hr, hav_gd i⟩, fun v hv => ?_⟩
-          rcases List.mem_append.1 hv with hv | hv; · exact lift_w _ v hv
-          · rw [List.mem_singleton.1 hv]; simp only [gvN, h, hgi]; exact Or.inr ⟨_, List.mem_cons_self, rfl⟩
-    obtain ⟨p1, bank1, hp1, hr1, hsup1⟩ := hstep
-    obtain ⟨p2, bank2, hp2, hr2, hsup2⟩ := ih (fun g' hg' => hfan g' (List.mem_cons_of_mem _ hg')) p1 _ bank1 hr1 hsup1
-    exact ⟨p2, bank2, by simp; omega, hr2, hsup2⟩
+    let v := hcsGateVal bank g
+    have hg := hfan g List.mem_cons_self
+    obtain ⟨xs, len, build, sub⟩ := ih (hcsStep bank g) (fun g' hg' => hfan g' (List.mem_cons_of_mem _ hg'))
+    have eq : (hcsStep bank g).map BitVec.toNat = bank.map BitVec.toNat ++ [v.toNat] := by
+      simp [hcsStep, v]
+    rw [eq] at build
+    refine ⟨v.toNat :: xs, by simp [len], ⟨hcsGateWord bank g hg.1 hg.2, buildsWeaken ?_ build⟩, ?_⟩
+    · intro u hu; exact Or.inr (Or.inr (by simpa [or_comm] using hu))
+    · intro u hu; have m := sub u hu; rw [eq] at m
+      simpa [List.mem_append, or_assoc, or_left_comm, or_comm] using m
 
-def xs256 : List Nat :=
-  [0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
-   0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc,
-   0xf0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0,
-   0xff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00,
-   0xffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000,
-   0xffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000,
-   0xffffffffffffffff0000000000000000ffffffffffffffff0000000000000000,
-   0xffffffffffffffffffffffffffffffff00000000000000000000000000000000]
+def hcsCheckPow (p : Nat → Bool) : Nat → Nat → Bool
+  | 0, s => p s
+  | k + 1, s => hcsCheckPow p k s && hcsCheckPow p k (s + 2 ^ k)
 
-def pt8 (r : Nat) : Fin 8 → Bool := fun i => r.testBit i.val
+theorem hcsCheckPow_spec {p : Nat → Bool} {k s i : Nat}
+    (h : hcsCheckPow p k s = true) (lo : s ≤ i) (hi : i < s + 2 ^ k) : p i = true := by
+  induction k generalizing s with
+  | zero =>
+    have e : i = s := by omega
+    simpa [hcsCheckPow, e] using h
+  | succ k ih =>
+    simp only [hcsCheckPow, Bool.and_eq_true] at h
+    by_cases hlt : i < s + 2 ^ k
+    · exact ih h.1 lo hlt
+    · exact ih h.2 (by omega) (by rw [Nat.pow_succ] at hi; omega)
 
-theorem xs256_bits : ∀ r : Fin 256, xs256.map (·.testBit r.val) = List.ofFn (pt8 r.val) := by
-  decide +kernel
+theorem hcsLowerEq {m1 m2 g1 g2 min : Nat} {b1 b2 : List Word}
+    (hm : m1 = m2) (hb : b1 = b2) (hg : g1 = g2)
+    (h : Lower m1 b1 g1 min) : Lower m2 b2 g2 min := by
+  subst hm; subst hb; subst hg; exact h
 
-theorem lower_to_circuit (f : (Fin 8 → Bool) → Bool) (T lb : Nat)
-    (hT : ∀ r : Fin 256, T.testBit r.val = f (pt8 r.val))
-    (hlow : Lower mask256 xs256 T lb) :
-    ∀ t : ℕ, HasCircuitSize 8 f t → lb ≤ t := by
-  rintro t ⟨C, hfan, hsz, hev⟩
-  have hsup0 : ∀ v ∈ xs256, Avail mask256 xs256 v := fun v hv => Or.inr ⟨v, hv, rfl⟩
-  obtain ⟨p, bank, hp, hr, hsup⟩ := execN_reach C.gates xs256 hfan 0 xs256 xs256 rfl hsup0
-  have hout : (execN C.gates xs256).getD C.output 0 &&& mask256 = T &&& mask256 := by
-    apply Nat.eq_of_testBit_eq; intro r
-    rw [Nat.testBit_and, Nat.testBit_and, mask256_bit]
-    by_cases hlt : r < 256
-    · simp only [hlt, decide_true, Bool.and_true]
-      have h1 := execN_bit C.gates xs256 r hlt (fun g hg => (hfan g hg).1)
-      have h2 := congrArg (fun l => l.getD C.output false) h1
-      rw [xs256_bits ⟨r, hlt⟩] at h2
-      have hgd : ((execN C.gates xs256).map (·.testBit r)).getD C.output false =
-          ((execN C.gates xs256).getD C.output 0).testBit r := by
-        simp only [List.getD_eq_getElem?_getD, List.getElem?_map]
-        cases (execN C.gates xs256)[C.output]? with | none => simp | some v => rfl
-      rw [hgd] at h2
-      have h3 : (C.wires (List.ofFn (pt8 r))).getD C.output false = f (pt8 r) := hev (pt8 r)
-      exact h2.trans (h3.trans (hT ⟨r, hlt⟩).symm)
-    · simp [hlt]
-  have hav_out : Avail mask256 bank ((execN C.gates xs256).getD C.output 0) := by
-    by_cases hi : C.output < (execN C.gates xs256).length
-    · exact hsup _ (getD_mem hi)
-    · rw [List.getD_eq_default _ _ (by omega)]; exact Or.inl (Or.inl (by simp))
-  have hL := hlow p bank hr (avail_of_eq hout hav_out)
-  show lb ≤ t
-  have : C.gates.length ≤ t := hsz
+theorem hcsEvalWord {n : Nat} (raw : List (BitVec (2 ^ n))) (goal : BitVec (2 ^ n)) 
+    (f : (Fin n → Bool) → Bool)
+    (hRaw : hcsCheckPow (fun r => (raw.map fun v => v.getLsbD r) == List.ofFn fun j : Fin n => r.testBit j.val) n 0 = true)
+    (hGoal : hcsCheckPow (fun r => goal.getLsbD r == f (fun j : Fin n => r.testBit j.val)) n 0 = true)
+    (C : PEqualNP.CircuitLowerBounds.Circuit)
+    (hfan : PEqualNP.MetaComplexity.FanInTwo C)
+    (hev : ∀ x, C.eval (List.ofFn x) = f x) :
+    (C.gates.foldl hcsStep raw).getD C.output 0 = goal := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro j hj
+  let y : Fin n → Bool := fun k => j.testBit k.val
+  have hbank : raw.map (fun v => v.getLsbD j) = List.ofFn y :=
+    beq_iff_eq.mp (hcsCheckPow_spec hRaw (Nat.zero_le j) (Nat.zero_add _ ▸ hj))
+  have hfg : goal.getLsbD j = f y :=
+    beq_iff_eq.mp (hcsCheckPow_spec hGoal (Nat.zero_le j) (Nat.zero_add _ ▸ hj))
+  have hbits := hcsFoldBits raw ⟨j, hj⟩ C.gates hfan
+  have hevj : (C.wires (List.ofFn y)).getD C.output false = f y := hev y
+  change (C.gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun k => w.getD k false)])
+    (List.ofFn y)).getD C.output false = f y at hevj
+  rw [← hbank, ← hbits] at hevj
+  rw [hfg, ← hevj, ← hcsGetDBit]
+
+theorem hcsLower {n : Nat} (raw : List (BitVec (2 ^ n))) (goal : BitVec (2 ^ n)) (min : Nat)
+    (f : (Fin n → Bool) → Bool)
+    (hRaw : hcsCheckPow (fun r => (raw.map fun v => v.getLsbD r) == List.ofFn fun j : Fin n => r.testBit j.val) n 0 = true)
+    (hGoal : hcsCheckPow (fun r => goal.getLsbD r == f (fun j : Fin n => r.testBit j.val)) n 0 = true)
+    (claim : Lower (fullMask (2 ^ n)) (raw.map BitVec.toNat) goal.toNat min)
+    (t : Nat) (h : PEqualNP.MetaComplexity.HasCircuitSize n f t) : min ≤ t := by
+  obtain ⟨C, hfan, hsz, hev⟩ := h
+  obtain ⟨vs, len, built, sub⟩ := hcsBuilds raw C.gates hfan
+  let eb := C.gates.foldl hcsStep raw
+  have same : eb.getD C.output 0 = goal := hcsEvalWord raw goal f hRaw hGoal C hfan hev
+  have av : AvailableWord (fullMask (2 ^ n)) (vs ++ raw.map BitVec.toNat) goal.toNat := by
+    rw [← same, List.getD_eq_getElem?_getD]
+    cases h : eb[C.output]? with
+    | none => exact Or.inl rfl
+    | some v => exact Or.inr (Or.inr (sub v (List.mem_of_getElem? h)))
+  have lb := claim vs built av
+  have hs : C.gates.length ≤ t := hsz
   omega
 
-def dom_0 : Nat := 0x44444444
-def goal_0 : Nat := 0x44404000
-def roots_0 : List Nat := [0x40404040, 0x44004400, 0x44440000]
+def moveStage0 : WordMoveStep := ([(0xff0000ffff0000ff, 0), (0xff000000ff00, 8)], [(0xff000000ff0000, 8)])
+def moveStage1 : WordMoveStep := ([(0xffffffff, 32)], [(0xffffffff00000000, 32)])
+def moveStage2 : WordMoveStep := ([(0xf00ff00ff00ff00f, 0), (0xf000f000f000f0, 4)], [(0xf000f000f000f00, 4)])
+def moveStage3 : WordMoveStep := ([(0xc3c3c3c3c3c3c3c3, 0), (0xc0c0c0c0c0c0c0c, 2)], [(0x3030303030303030, 2)])
+def moveStages : Array WordMoveStep := #[moveStage0, moveStage1, moveStage2, moveStage3]
+def sBase : List Word := [0xaaaaaaaaaaaaaaaa, 0xcccccccccccccccc, 0xf0f0f0f0f0f0f0f0, 0xff00ff00ff00ff00, 0xffff0000ffff0000, 0xffffffff00000000]
+def sGoal : Word := 0xeee8eaa8eee8e8a8
+def s0Mask : Word := 0xffff
+abbrev s0Goal : Word := sGoal &&& s0Mask
+abbrev s0StockWords : List Word := projectDAGStock s0Mask sBase [0, 1, 2, 3]
+def s0Fact : Bound := (s0Mask, s0StockWords, 5, s0Goal)
+def s0Cuts : List Bound := []
+def s0Chart : Option RowChart := some ⟨[3, 5, 14, 3, 3, 3, 3, 3, 3, 3, 3, 3, 6, 9, 10, 12, 6, 6, 6, 6, 6, 6, 6, 6], rfl⟩
+def s0Sample : DagSample := (0x180e050380c0e0603402050100c0203, 7)
+def s0Witnesses := unpackWitnesses s0StockWords [6668, 269324, 531466, 793606]
+def s0Links : DagLinks := 
+  dagLookupLinks 0x1 0xf 2 1 4 1 1 1
+def s0Data : Forest := fun i => decodeNode 1 5 0x1e i
+def s0Tags := dagTraceTags s0Mask 7 (dagTagBases s0StockWords 0xf1f398f 0xd161905 7) 4 s0Data
+def s0States := dagTrace s0Mask s0StockWords 4 s0Data
+def s0MoveCert : List (DagMoveRecord 64) := []
+def s0Moves := dagMoves s0MoveCert
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s0Autos : DagMovesOK s0Mask s0Goal 64 s0Moves := dagMovesOfCheck (by decide +kernel)
+def s0Check := dagCheckNode s0Mask s0Goal s0Chart (dagKnownCloses s0Goal s0Cuts) 1 s0States s0Moves s0Links s0Sample s0Tags
+def s0RootAt (token : Nat) : Bool :=
+  let s := rootState s0StockWords 4 token
+  !dagAllowedRoot s0Witnesses s.2.1 || dagLocal s0Mask s0Goal s0Chart (dagKnownCloses s0Goal s0Cuts) s ||
+  dagRef 1 s0States s0Moves s0Links 0 token s
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s0RootBlock0 : treeBlock 0 16 s0RootAt = true := by decide +kernel
+theorem s0Roots : dagCheckRoots s0Mask s0Goal s0Chart (dagKnownCloses s0Goal s0Cuts) s0Witnesses (dagRef 1 s0States s0Moves s0Links 0) s0StockWords 4 = true := s0RootBlock0
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s0Block0 : treeBlock 0 1 s0Check = true := by decide +kernel
+theorem s0Blocks : treeBlock 0 1 s0Check = true := s0Block0
+theorem s0Known : Known s0Cuts := show Known [] from fun _ h => False.elim (List.not_mem_nil h)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s0Stock : Lower s0Mask s0StockWords s0Goal 5 := by
+  apply lowerDag _ _ _ _ s0Autos _ _ _ s0Known _ s0Roots s0Blocks
+  · unfold Masked; decide +kernel
+  · unfold Masked; decide +kernel
+  · unfold properWord; decide +kernel
+  · exact chartOfCheck (by decide +kernel)
+  · exact stockMaskedOfCheck (by decide +kernel)
+  · unfold s0StockWords; decide +kernel
+  · decide +kernel
+  · simp only [s0Cuts, List.mem_cons, List.not_mem_nil, or_false]
+    intro b h
+    exact False.elim h
+def s1Mask : Word := 0xff00ff
+abbrev s1Goal : Word := sGoal &&& s1Mask
+abbrev s1StockWords : List Word := projectDAGStock s1Mask sBase [0, 1, 2, 4]
+def s1Fact : Bound := (s1Mask, s1StockWords, 5, s1Goal)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s1Stock : Lower s1Mask s1StockWords s1Goal 5 := dagShiftLower (width := 64) (moveSchedule moveStages [0]) s0Stock (by decide +kernel)
+def s2Mask : Word := 0xf0f0f0f
+abbrev s2Goal : Word := sGoal &&& s2Mask
+abbrev s2StockWords : List Word := projectDAGStock s2Mask sBase [0, 1, 3, 4]
+def s2Fact : Bound := (s2Mask, s2StockWords, 5, s2Goal)
+def s2Cuts : List Bound := []
+def s2Chart : Option RowChart := some ⟨[3, 25, 26, 3, 3, 3, 3, 3, 3, 3, 3, 3, 9, 10, 17, 18, 24, 9, 9, 9, 9, 9, 9, 9], rfl⟩
+def s2Sample : DagSample := (0xc068241a0506830190886412190100c0203, 8)
+def s2Witnesses := unpackWitnesses s2StockWords [12824, 275480, 537618, 799754]
+def s2Links : DagLinks := 
+  dagLookupLinks 0x19 0x1c4800f 3 1 11 1 1 1
+def s2Data : Forest := fun i => decodeNode 2 13 0x312203c i
+def s2Tags := dagTraceTags s2Mask 8 (dagTagBases s2StockWords 0xfcfce31f 0xd8b4620d 8) 4 s2Data
+def s2States := dagTrace s2Mask s2StockWords 4 s2Data
+def s2MoveCert : List (DagMoveRecord 64) := []
+def s2Moves := dagMoves s2MoveCert
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s2Autos : DagMovesOK s2Mask s2Goal 64 s2Moves := dagMovesOfCheck (by decide +kernel)
+def s2Check := dagCheckNode s2Mask s2Goal s2Chart (dagKnownCloses s2Goal s2Cuts) 2 s2States s2Moves s2Links s2Sample s2Tags
+def s2RootAt (token : Nat) : Bool :=
+  let s := rootState s2StockWords 4 token
+  !dagAllowedRoot s2Witnesses s.2.1 || dagLocal s2Mask s2Goal s2Chart (dagKnownCloses s2Goal s2Cuts) s ||
+  dagRef 2 s2States s2Moves s2Links 0 token s
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s2RootBlock0 : treeBlock 0 16 s2RootAt = true := by decide +kernel
+theorem s2Roots : dagCheckRoots s2Mask s2Goal s2Chart (dagKnownCloses s2Goal s2Cuts) s2Witnesses (dagRef 2 s2States s2Moves s2Links 0) s2StockWords 4 = true := s2RootBlock0
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s2Block0 : treeBlock 0 2 s2Check = true := by decide +kernel
+theorem s2Blocks : treeBlock 0 2 s2Check = true := s2Block0
+theorem s2Known : Known s2Cuts := show Known [] from fun _ h => False.elim (List.not_mem_nil h)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s2Stock : Lower s2Mask s2StockWords s2Goal 5 := by
+  apply lowerDag _ _ _ _ s2Autos _ _ _ s2Known _ s2Roots s2Blocks
+  · unfold Masked; decide +kernel
+  · unfold Masked; decide +kernel
+  · unfold properWord; decide +kernel
+  · exact chartOfCheck (by decide +kernel)
+  · exact stockMaskedOfCheck (by decide +kernel)
+  · unfold s2StockWords; decide +kernel
+  · decide +kernel
+  · simp only [s2Cuts, List.mem_cons, List.not_mem_nil, or_false]
+    intro b h
+    exact False.elim h
+def s3Mask : Word := 0x55555555
+abbrev s3Goal : Word := sGoal &&& s3Mask
+abbrev s3StockWords : List Word := projectDAGStock s3Mask sBase [1, 2, 3, 4]
+def s3Fact : Bound := (s3Mask, s3StockWords, 5, s3Goal)
+def s3Cuts : List Bound := []
+def s3Chart : Option RowChart := some ⟨[14, 22, 26, 14, 14, 14, 14, 14, 14, 14, 14, 14, 28, 6, 10, 18, 28, 28, 28, 28, 28, 28, 28, 28], rfl⟩
+def s3Sample : DagSample := (0x381a09068141a0e058241603058180e050380c0e, 9)
+def s3Witnesses := unpackWitnesses s3StockWords [15388, 273426, 537618, 799754]
+def s3Links : DagLinks := 
+  dagLookupLinks 0x1 0xf 2 1 4 1 1 1
+def s3Data : Forest := fun i => decodeNode 1 5 0x1e i
+def s3Tags := dagTraceTags s3Mask 9 (dagTagBases s3StockWords 0xfc71c7fff 0xd859a5adb 9) 4 s3Data
+def s3States := dagTrace s3Mask s3StockWords 4 s3Data
+def s3MoveCert : List (DagMoveRecord 64) := []
+def s3Moves := dagMoves s3MoveCert
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s3Autos : DagMovesOK s3Mask s3Goal 64 s3Moves := dagMovesOfCheck (by decide +kernel)
+def s3Check := dagCheckNode s3Mask s3Goal s3Chart (dagKnownCloses s3Goal s3Cuts) 1 s3States s3Moves s3Links s3Sample s3Tags
+def s3RootAt (token : Nat) : Bool :=
+  let s := rootState s3StockWords 4 token
+  !dagAllowedRoot s3Witnesses s.2.1 || dagLocal s3Mask s3Goal s3Chart (dagKnownCloses s3Goal s3Cuts) s ||
+  dagRef 1 s3States s3Moves s3Links 0 token s
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s3RootBlock0 : treeBlock 0 16 s3RootAt = true := by decide +kernel
+theorem s3Roots : dagCheckRoots s3Mask s3Goal s3Chart (dagKnownCloses s3Goal s3Cuts) s3Witnesses (dagRef 1 s3States s3Moves s3Links 0) s3StockWords 4 = true := s3RootBlock0
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s3Block0 : treeBlock 0 1 s3Check = true := by decide +kernel
+theorem s3Blocks : treeBlock 0 1 s3Check = true := s3Block0
+theorem s3Known : Known s3Cuts := show Known [] from fun _ h => False.elim (List.not_mem_nil h)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s3Stock : Lower s3Mask s3StockWords s3Goal 5 := by
+  apply lowerDag _ _ _ _ s3Autos _ _ _ s3Known _ s3Roots s3Blocks
+  · unfold Masked; decide +kernel
+  · unfold Masked; decide +kernel
+  · unfold properWord; decide +kernel
+  · exact chartOfCheck (by decide +kernel)
+  · exact stockMaskedOfCheck (by decide +kernel)
+  · unfold s3StockWords; decide +kernel
+  · decide +kernel
+  · simp only [s3Cuts, List.mem_cons, List.not_mem_nil, or_false]
+    intro b h
+    exact False.elim h
+def s4Mask : Word := 0xff00ff00000000
+abbrev s4Goal : Word := sGoal &&& s4Mask
+abbrev s4StockWords : List Word := projectDAGStock s4Mask sBase [0, 1, 2, 4]
+def s4Fact : Bound := (s4Mask, s4StockWords, 5, s4Goal)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s4Stock : Lower s4Mask s4StockWords s4Goal 5 := dagShiftLower (width := 64) (moveSchedule moveStages [0, 1]) s0Stock (by decide +kernel)
+def s5Mask : Word := 0xf0f0f0f00000000
+abbrev s5Goal : Word := sGoal &&& s5Mask
+abbrev s5StockWords : List Word := projectDAGStock s5Mask sBase [0, 1, 3, 4]
+def s5Fact : Bound := (s5Mask, s5StockWords, 5, s5Goal)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s5Stock : Lower s5Mask s5StockWords s5Goal 5 := dagShiftLower (width := 64) (moveSchedule moveStages [2, 0, 1]) s0Stock (by decide +kernel)
+def s6Mask : Word := 0x5555555500000000
+abbrev s6Goal : Word := sGoal &&& s6Mask
+abbrev s6StockWords : List Word := projectDAGStock s6Mask sBase [1, 2, 3, 4]
+def s6Fact : Bound := (s6Mask, s6StockWords, 5, s6Goal)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s6Stock : Lower s6Mask s6StockWords s6Goal 5 := dagShiftLower (width := 64) (moveSchedule moveStages [1]) s3Stock (by decide +kernel)
+def s7Mask : Word := 0xffffffff
+abbrev s7Goal : Word := sGoal &&& s7Mask
+abbrev s7StockWords : List Word := projectDAGStock s7Mask sBase [0, 1, 2, 3, 4]
+def s7Fact : Bound := (s7Mask, s7StockWords, 8, s7Goal)
+def s7Cuts : List Bound := [s0Fact, s1Fact, s2Fact, s3Fact]
+def s7Chart : Option RowChart := some ⟨[3, 5, 14, 22, 25, 26, 3, 3, 3, 3, 3, 3, 28, 6, 9, 10, 17, 18, 28, 28, 28, 28, 28, 28], rfl⟩
+def s7Sample : DagSample := (0xe078381d0e068301a09068141a0e06430190886412190e0582816090580c160e05428150885424130884c380e050380c0e04834140b0482c12050301402050100c0203, 30)
+def s7Witnesses := unpackWitnesses s7StockWords [14876, 277532, 535570, 799762, 1061898]
+def s7Links : DagLinks := 
+  dagLookupLinks 0xe900000064800000000000001520000000000000000089018001 0x12c383e4b0a62010c52fc383e4b096200cc52ac382a4b0962008c524c38124b0362008c531c384e4dd192cc18dd062b39882d33734cacc31f2cc5483149c0dc702b1807c501304020001f 11 5 12 5 1 5
+def s7Data : Forest := fun i => decodeNode 5 17 0x9370e1c4a4b02c56192c7b1004cac263e13150c96258812628102b080f8404c32582620118a08020203e0 i
+def s7Tags := dagTraceTags s7Mask 30 (dagTagBases s7StockWords 0x3ffff800ffc01f8300fe79cbc3c7d8d0f0f8ff 0x3eeefc00f7621bc388dc5080c0c4d2803028b5 30) 7 s7Data
+def s7States := dagTrace s7Mask s7StockWords 7 s7Data
+def s7Move0Map (i : Fin 64) : Fin 64 := Fin.ofNat 64 (permuteAxes [0, 1, 2, 4, 3, 5] 0 i.val)
+def s7Move0Inverse (i : Fin 64) : Fin 64 := Fin.ofNat 64 (permuteAxes [0, 1, 2, 4, 3, 5] 0 i.val)
+def s7MoveCert : List (DagMoveRecord 64) := [((moveSchedule moveStages [0]), s7Move0Map, s7Move0Inverse)]
+def s7Moves := dagMoves s7MoveCert
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s7Autos : DagMovesOK s7Mask s7Goal 64 s7Moves := dagMovesOfCheck (by decide +kernel)
+def s7Check := dagCheckNode s7Mask s7Goal s7Chart (dagKnownCloses s7Goal s7Cuts) 20 s7States s7Moves s7Links s7Sample s7Tags
+def s7RootAt (token : Nat) : Bool :=
+  let s := rootState s7StockWords 7 token
+  !dagAllowedRoot s7Witnesses s.2.1 || dagLocal s7Mask s7Goal s7Chart (dagKnownCloses s7Goal s7Cuts) s ||
+  dagRef 20 s7States s7Moves s7Links 0 token s
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s7RootBlock0 : treeBlock 0 32 s7RootAt = true := by decide +kernel
+theorem s7Roots : dagCheckRoots s7Mask s7Goal s7Chart (dagKnownCloses s7Goal s7Cuts) s7Witnesses (dagRef 20 s7States s7Moves s7Links 0) s7StockWords 7 = true := s7RootBlock0
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s7Block0 : treeBlock 0 16 s7Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s7Block16 : treeBlock 16 4 s7Check = true := by decide +kernel
+theorem s7Verified : treeBlock 0 20 s7Check = true := (@treeBlock_merge 0 16 4 s7Check s7Block0 s7Block16)
+theorem s7Blocks : treeBlock 0 20 s7Check = true := s7Verified
+theorem s7Known : Known s7Cuts := extendKnown (extendKnown (extendKnown (extendKnown (show Known [] from fun _ h => False.elim (List.not_mem_nil h)) s3Stock) s2Stock) s1Stock) s0Stock
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s7Stock : Lower s7Mask s7StockWords s7Goal 8 := by
+  apply lowerDag _ _ _ _ s7Autos _ _ _ s7Known _ s7Roots s7Blocks
+  · unfold Masked; decide +kernel
+  · unfold Masked; decide +kernel
+  · unfold properWord; decide +kernel
+  · exact chartOfCheck (by decide +kernel)
+  · exact stockMaskedOfCheck (by decide +kernel)
+  · unfold s7StockWords; decide +kernel
+  · decide +kernel
+  · simp only [s7Cuts, List.mem_cons, List.not_mem_nil, or_false]
+    intro b h
+    rcases h with rfl | rfl | rfl | rfl <;> decide +kernel
+def s8Mask : Word := 0xffff0000ffff
+abbrev s8Goal : Word := sGoal &&& s8Mask
+abbrev s8StockWords : List Word := projectDAGStock s8Mask sBase [0, 1, 2, 3, 5]
+def s8Fact : Bound := (s8Mask, s8StockWords, 7, s8Goal)
+def s8Cuts : List Bound := [s0Fact]
+def s8Chart : Option RowChart := some ⟨[3, 5, 14, 41, 3, 3, 3, 3, 3, 3, 3, 3, 38, 42, 44, 9, 33, 38, 38, 38, 38, 38, 38, 38], rfl⟩
+def s8Sample : DagSample := (0x582e150b8582d108a412291088c0c0e1603402050100c0203, 11)
+def s8Witnesses := unpackWitnesses s8StockWords [23084, 285740, 547882, 810022, 1069577]
+def s8Links : DagLinks := 
+  dagLookupLinks 0x390000701 0x4930592cb635a620333523141008001f 7 3 12 3 1 3
+def s8Data : Forest := fun i => decodeNode 3 15 0x24b0c9843352628402080f8 i
+def s8Tags := dagTraceTags s8Mask 11 (dagTagBases s8StockWords 0x7e0fb1c73199ef 0x7a8e91461090e5 11) 6 s8Data
+def s8States := dagTrace s8Mask s8StockWords 6 s8Data
+def s8Move0Map (i : Fin 64) : Fin 64 := Fin.ofNat 64 (permuteAxes [0, 2, 1, 3, 4, 5] 0 i.val)
+def s8Move0Inverse (i : Fin 64) : Fin 64 := Fin.ofNat 64 (permuteAxes [0, 2, 1, 3, 4, 5] 0 i.val)
+def s8MoveCert : List (DagMoveRecord 64) := [((moveSchedule moveStages [3]), s8Move0Map, s8Move0Inverse)]
+def s8Moves := dagMoves s8MoveCert
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s8Autos : DagMovesOK s8Mask s8Goal 64 s8Moves := dagMovesOfCheck (by decide +kernel)
+def s8Check := dagCheckNode s8Mask s8Goal s8Chart (dagKnownCloses s8Goal s8Cuts) 6 s8States s8Moves s8Links s8Sample s8Tags
+def s8RootAt (token : Nat) : Bool :=
+  let s := rootState s8StockWords 6 token
+  !dagAllowedRoot s8Witnesses s.2.1 || dagLocal s8Mask s8Goal s8Chart (dagKnownCloses s8Goal s8Cuts) s ||
+  dagRef 6 s8States s8Moves s8Links 0 token s
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s8RootBlock0 : treeBlock 0 32 s8RootAt = true := by decide +kernel
+theorem s8Roots : dagCheckRoots s8Mask s8Goal s8Chart (dagKnownCloses s8Goal s8Cuts) s8Witnesses (dagRef 6 s8States s8Moves s8Links 0) s8StockWords 6 = true := s8RootBlock0
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s8Block0 : treeBlock 0 6 s8Check = true := by decide +kernel
+theorem s8Blocks : treeBlock 0 6 s8Check = true := s8Block0
+theorem s8Known : Known s8Cuts := extendKnown (show Known [] from fun _ h => False.elim (List.not_mem_nil h)) s0Stock
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s8Stock : Lower s8Mask s8StockWords s8Goal 7 := by
+  apply lowerDag _ _ _ _ s8Autos _ _ _ s8Known _ s8Roots s8Blocks
+  · unfold Masked; decide +kernel
+  · unfold Masked; decide +kernel
+  · unfold properWord; decide +kernel
+  · exact chartOfCheck (by decide +kernel)
+  · exact stockMaskedOfCheck (by decide +kernel)
+  · unfold s8StockWords; decide +kernel
+  · decide +kernel
+  · simp only [s8Cuts, List.mem_cons, List.not_mem_nil, or_false]
+    intro b h
+    rcases h with rfl <;> decide +kernel
+def s9Mask : Word := 0xf0f0f0f0f0f0f0f
+abbrev s9Goal : Word := sGoal &&& s9Mask
+abbrev s9StockWords : List Word := projectDAGStock s9Mask sBase [0, 1, 3, 4, 5]
+def s9Fact : Bound := (s9Mask, s9StockWords, 7, s9Goal)
+def s9Cuts : List Bound := [s2Fact, s5Fact]
+def s9Chart : Option RowChart := some ⟨[3, 25, 26, 41, 3, 3, 3, 3, 3, 3, 3, 3, 42, 49, 50, 56, 9, 42, 42, 42, 42, 42, 42, 42], rfl⟩
+def s9Sample : DagSample := (0x1c0e8643a150e87039108a412290886412190100c0203, 10)
+def s9Witnesses := unpackWitnesses s9StockWords [29240, 291896, 554034, 816170, 1069577]
+def s9Links : DagLinks := 
+  dagLookupLinks 0x341 0x592c4625362023141008001f 6 3 12 3 1 3
+def s9Data : Forest := fun i => decodeNode 3 15 0x24b0b1296202628402080f8 i
+def s9Tags := dagTraceTags s9Mask 10 (dagTagBases s9StockWords 0x3f0f33fce0c7f 0x3e0d22d46083d 10) 6 s9Data
+def s9States := dagTrace s9Mask s9StockWords 6 s9Data
+def s9MoveCert : List (DagMoveRecord 64) := []
+def s9Moves := dagMoves s9MoveCert
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s9Autos : DagMovesOK s9Mask s9Goal 64 s9Moves := dagMovesOfCheck (by decide +kernel)
+def s9Check := dagCheckNode s9Mask s9Goal s9Chart (dagKnownCloses s9Goal s9Cuts) 6 s9States s9Moves s9Links s9Sample s9Tags
+def s9RootAt (token : Nat) : Bool :=
+  let s := rootState s9StockWords 6 token
+  !dagAllowedRoot s9Witnesses s.2.1 || dagLocal s9Mask s9Goal s9Chart (dagKnownCloses s9Goal s9Cuts) s ||
+  dagRef 6 s9States s9Moves s9Links 0 token s
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s9RootBlock0 : treeBlock 0 32 s9RootAt = true := by decide +kernel
+theorem s9Roots : dagCheckRoots s9Mask s9Goal s9Chart (dagKnownCloses s9Goal s9Cuts) s9Witnesses (dagRef 6 s9States s9Moves s9Links 0) s9StockWords 6 = true := s9RootBlock0
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s9Block0 : treeBlock 0 6 s9Check = true := by decide +kernel
+theorem s9Blocks : treeBlock 0 6 s9Check = true := s9Block0
+theorem s9Known : Known s9Cuts := extendKnown (extendKnown (show Known [] from fun _ h => False.elim (List.not_mem_nil h)) s5Stock) s2Stock
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s9Stock : Lower s9Mask s9StockWords s9Goal 7 := by
+  apply lowerDag _ _ _ _ s9Autos _ _ _ s9Known _ s9Roots s9Blocks
+  · unfold Masked; decide +kernel
+  · unfold Masked; decide +kernel
+  · unfold properWord; decide +kernel
+  · exact chartOfCheck (by decide +kernel)
+  · exact stockMaskedOfCheck (by decide +kernel)
+  · unfold s9StockWords; decide +kernel
+  · decide +kernel
+  · simp only [s9Cuts, List.mem_cons, List.not_mem_nil, or_false]
+    intro b h
+    rcases h with rfl | rfl <;> decide +kernel
+def s10Mask : Word := 0xffffffff00000000
+abbrev s10Goal : Word := sGoal &&& s10Mask
+abbrev s10StockWords : List Word := projectDAGStock s10Mask sBase [0, 1, 2, 3, 4]
+def s10Fact : Bound := (s10Mask, s10StockWords, 6, s10Goal)
+def s10Witnesses := unpackWitnesses s10StockWords [31292, 293948, 551986, 816178, 1078314]
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s10Stock : Lower s10Mask s10StockWords s10Goal 6 := by
+  apply essentialLift (witnesses := s10Witnesses) (cut := s6Mask)
+  · unfold properWord; decide +kernel
+  · exact stockMaskedOfCheck (by decide +kernel)
+  · decide +kernel
+  · decide +kernel
+  · unfold properWord; decide +kernel
+  · exact suppliesOfCheck (old := s6StockWords) (by decide +kernel)
+  · exact s6Stock
+  · decide +kernel
+def s11Mask : Word := 0xffffffffffffffff
+abbrev s11Goal : Word := sGoal &&& s11Mask
+abbrev s11StockWords : List Word := projectDAGStock s11Mask sBase [0, 1, 2, 3, 4, 5]
+def s11Cuts : List Bound := [s7Fact, s8Fact, s9Fact, s10Fact, s0Fact, s2Fact, s4Fact, s5Fact, s6Fact]
+def s11Chart : Option RowChart := some ⟨[3, 5, 14, 22, 25, 26, 41, 3, 3, 3, 3, 3, 60, 38, 42, 49, 50, 9, 60, 60, 60, 60, 60, 60], rfl⟩
+def s11Sample : DagSample := (0x783f1e0f8703e1a0f8583e060f8783d1a0f4783a1c0e8643a150e878391c0e462391e0d86836190d84c361e0d46835188d46433188cc782e160b8542e130b8782d160b4542b188a45429140a44229048a44c271889442251888c54231088c04230e078381d1e068641a15068141a1e06470191886430190886412191e05864161305824160305862151e038540e03038780d16034120d1502c120b1301412050201402050900c12030100c0203, 77)
+def s11Witnesses := unpackWitnesses s11StockWords [31292, 293948, 551986, 816178, 1078314, 1331721]
+def s11Links : DagLinks := 
+  dagLookupLinks 0x2bc0800000015a9c0000000ac0b4fc68d90000000140367f0800000013e880004e6a000137166830000000133866228000000130864e9c9820001229c00000000001201400000008f0800023b080000000000238180008c8d1140000442188030f0800043a1000000020f70000000107040000000000106860c08000000105840003f7000000001f533e240000000000000000000f599d99000075c40001cf4000000000001c74000071820001c12800000000001bf1000000000001b9300006e02db84000000000000001b3200006ad0cb5400032a16502c90800000000000000000030ad0000000184080000000000183080000000000000030415cdeb904000000000000001701000000000001665000059420000000000058c4000000000000000aab95312a415442a8054f080000000000000000000000a70546400005142a204000000050c2000142080005042000000000004be400000000000000092a9212000000009004000000000008d18000000000000000000232100008c05104000043c287040000000000000010a2000042420000000000000000000f4a9e6100000000ed300003b02000000000003ac20000ea080003a4200000001d01369c0000d90800000006c04000000000000000000000035c200000000000321e0000000000000000000000184600000000000000030420000c00800000005f840000000000059b000000002c440000b00800000005708000158200000000aa100000000531000000000000520800000000000508c0001401000000009f091b222864408861104400000000000100200000000000000000003e100000000000000000000f0400000000000000000003a106860ce1000000006608000000000000000ca10000000063100001654000055209e6000000000000000000023a000000000000219000000000000000000007a60000000000000000e0a000000000000000000037080000000000000000000c4c00000000000000000002c2800000000ccc01c0001 0xd162061d8a542620618ca4d03142a4104990350b402176c385064b0cf6206100a98301e623d118593d5d64b15564153d8ad40620454d050e32b3dcc7cec315334c518203d2a00d49802b20807c740130b00217cc395d30e1699415364dd3f92c4d19050c6374058ccf662b3ad884cc62025ccdc89333204cac7231f158c6c3b3150acc517ff445ee4b16464d531905536355218a53e6204b8d350b3415f8cf4cb3142541042a0085e8d317ac38328c517cf445ef109479354f64b107635325880933350a4c517904c5e00693c92c3218817633d29ccd42831458f1053bc384b6504c792c09d881733415c8d0173c384ea4b0c66205c4cf4263145b810175c415d30e16294154a4dd3992c4b1905136373d58acea621315880a6337200cac7031f154c6c3a315094c51700415bc06d6d00f5abd10c46205abd1168c3d58f0e0f364130d8816133d090c5168f4459e50966329308c502300858f0e0c1620580cf422314574d015ec385764b0c0314587d1160c382fd8815f0425701015b01e5afd1155c415a70e16593d5924dd6292c3c8d0512337418cace93152f0c515a03d2940dc9202b1bc04c21008562520bb31455a4f0ba3145198a157f4d557d3154f445325055393554a4b14562a4acd34f1341544cf4b93141f8104a40350800214e03c528101466345198d14ff4d537d114cc4252f0f549c385225094792c5159092834d3c0cd544331400c94b83141f00d49102907c0214293d4f24b0b7620504cf4a3335078c513bc3849e504b692c0758813cc414ef0e1259412d64b01c6204e810540c414ff0e13e9374f64b53992c491905116374158acff6273a1884b4620288cdc9032b220c9c6d31f150c6c3931506cc5135f444dc10935f444cf0f52dc383ce5052792c3998812333d068c5133f444ca509296354c58a526620410cd4e53140640212ff484b70e12592c3918812233d060c512ac484a652127c3849a4f52592c38d8812133d05cc511e340474d011fc3847a4b11d620388c5123f4448b0e12192c3858805c31e4801091c04046c0a936f4445710534c384c24f52e9374b24b0f26414ad8dd2862b4918811033740ccacee31f39cc54e03144680f4a00372380ac7901f16c04c16008462520df31445a4f0de31445fd3515f4c453d110b94144e4b11264d3c590511620440d34dd3141b01049d0350540210d03c4241010494843bd350cf4442f1090ac3d4230e10792c419934f06354158810334d3f8c94dc3141a80d48c029050020fd64c3f70e0db314407d11009353fe4b0fe635369880fc34c3ecd08fa32a3e4044130083cf130f3c38364c50f7f4d3dbd10f5c383d2534f294c3c6508f09363be4b0ee34d360c50640291dc0745a011048020de64c35c100e694c392530d964c38e530e234037b104e6c383964f4e492c365904e3620384cf41131437e4f0def4c36d930d994c35f130ecf4d3afd10eac383a6534e892c39d934e064c375908dc6363698c8d862a160c7453319040c50d60423540d8d402a34c048d1f443424f4c892c2e9904b762033ccf49c33503cc50ce03d2cc0d4c7c3830e504b692c039880ca04c323104c7c38306504b592c035880c6041300d00be040313d10bac4130f0e0c293d3064b0bf33d030c50bd03d2ee4f0baf4c2df104b6c382d64b00b6202cf130cdc413330e0cb9373264b4c592c2f1904b96372e18acb462026ccdc8b32b21cc9c7631f0e0c540a3142c80dcb102b2c009caf01f2b804cad00f2abd30aac382a64f4a792c28d8809f331270c50a7c4c28f130a1f4827fd309cc4c2afd10a8c4c256504a692c2959347e6412918d4a2620280d346c341278cf49d33526cc50370082665209633c23f12098f4d25fd1095c422530e09392c2499347c6352458a490620238d346a335234cc48c32922cc5036008227d108892c21d880860422140a88401e1fccf07d3301ea52082f4d207d1080c381fa5087c9361ee4b07934d190ca4783251dcc74763140d40206793c1cc0907102419a4c06e0241a64f0639301a64f06293019f0e06692c164c503400818e4f0629301801005f0341780a05c0481658c074f4d1cbd1070c381be5346d92c1b19086b63d1a98d8686311958c06462a1858945d62016cd345a32a160c505200e0cc0205134c11cd0041334130d004033412cd0045334140d304a340110cd03e3281470e0503141370e04c92c12d8804a31411f0e04692c115880443141070e04092c0fd8803e31415bd1055c381524b053620148c784f04c138108490401200d8430341080a83d0280c8d303134c0d18c032c380c4c503bf440eb0e03992c0e1880373420d8cd83532a0ccc783004c0bc0682d93d0a24b01e62003cc5027c380925041d92c0699040e620024d0428c4109f0e0229410724b0186410358800734109810424c3808e4f42292c030c501ec410770e01c92c05d9040b620018d041ac380664f41892c05d880113140459300fc4103b0e00d92c0319040b620014d0409c380224f40792c019880053140b31042bc380aa4dc2992d0964b0216410818dc1f62b06d88016341054cdc1432b04cc9c1231f040c540a3140101040302700803d81c416030e17d9375de4b56c92c5659055063750d8ad38620464d050f337408cacf83273b4c7cd23152b0c509a0372280ac830271d407c570130f003c2e0090040200003f 15 5 12 9 1 5
+def s11Data : Forest := fun i => decodeNode 9 21 0x1e8982629c3194e1a4f7040558301ec181ee0b1040387001f44bf19edfa4dc03e8978c42bc61c5e8132f00357892d0099eddb106db8716dc38b89a05c8cf6e20836d01bb68205b803edb25801f44ad7a25ab0e2b5e8966942b3194d9a4f6b526f5ac38b1c9656bd12b78715b042ade1c5764b2ba0815b01ead81ed699040329158f4da8c9e55bd32a3e8951935a8c96544cf6a2c6e01f4da201e53bd128988544c3da202052b0e2892854492ca231a51990a886634462b00c9ed04cf68388339c389cc9bce64b6738833ac389d020cea4b272c40010429bfa246bd126b8711af4498ca14c58a66327b1af4897c9bc6b0e25b2591a6378d6244a652252c571ac3892c9ec964b24ac411af448de1c46e4b2360851bc388ec964758823a0811b02a8d81ec68d040329118f4d8849e45bd3221e891092c88326c418822069b1033700fa6c0c0f21be8903c4281e1ec0c102138710392c81b26c0d882072910434d81995807d11f326af992c7cb1abe70e1fa698f93427c9953e4045f264e01f4d777a23bb0e1dd29aeec3879ca63ba509dd26cee92c771a6bb8c7c03e9ad3f4469e1c34e535a7258d364d69e1c3864f5c3258e1620709a0388cf5c2c98d393c6ffa6379909a6c6cd364c6db1934e531b2c54d3c4c6b82134c0d9a6054d30126998a807d119d27ace33d6701eb3b1055b870ad9375682632a4b55b882c6c3863020b1a4b15be88bdc385ec9eaf64b17a680c033d5e8202f80f57ac82ad93c5dfa62e98dd5ac56adc415ae1c2d64b16ac40adc4c5981bab40ad5a04ead01f56809ab403d5a62801f444de1c2a64f5538989bc4c53c9626d93536c6a9bc4c51b1026fd214269a9bf4c4f99ea6ccd5378989c3144d81b80652133e9a8bf444599e25b109178708b92c45b26a2d8a516c408bc48479a6a2ccc5166528b31445815807d110925884620420212100a90803c8402700fa69dbd10ed8707633c3fca11d8cc0fb26c7692c3b4a41e8d34ec64a7631d3b18a1d807c03e9a5802439fa2160090e38705894d2c0121ba4b0b0c845863d2c31b1624f0d2c6258c38334961998c0b0c545893c31498189894b00805e0342f014179880b00905c34d2c1951618c0b26285801300fa20f70e07b2583d6201e98f0f70e0a06285004c1e8210f70e0952584a6202518a1281007a06c3dc382249611188088628440341e8150f70e07d2583e6201f18a0f80a07a01e01f4417e1c0be4b05ec402f3421799b0bcca85ec603431e17e1c0c4c50620982f01a178048064f45b88202c380149b80a4b40588226c381302089a4b0058702293d1149608990404c6e0262b016208730e0392581c6200161c05e4f42f258176200b9a0808cdc04656023270118f8099302262a02c4105e1c02e4b016c820b6200598a00b0e00b27a0592c02b10014c500a08202027010078080200207e00 i
+def s11Tags := dagTraceTags s11Mask 77 (dagTagBases s11StockWords 0x3ffffffffff800000001fffffe00003ffff0000fffe00fff01ffe07f807f80fe7e070c00fff3c3f3c78fc827de07dc61f061c3e1fffd0fc11fff 0x3efffffffbf1dc73b501e7dfbf120a3cfb59008eedd10eed09deb06fa26fc4dc6e040e20aae28000c188ca228e03cc51400040a026e802c10555 77) 9 s11Data
+def s11States := dagTrace s11Mask s11StockWords 9 s11Data
+def s11MoveCert : List (DagMoveRecord 64) := []
+def s11Moves := dagMoves s11MoveCert
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Autos : DagMovesOK s11Mask s11Goal 64 s11Moves := dagMovesOfCheck (by decide +kernel)
+def s11Check := dagCheckNode s11Mask s11Goal s11Chart (dagKnownCloses s11Goal s11Cuts) 393 s11States s11Moves s11Links s11Sample s11Tags
+def s11RootAt (token : Nat) : Bool :=
+  let s := rootState s11StockWords 9 token
+  !dagAllowedRoot s11Witnesses s.2.1 || dagLocal s11Mask s11Goal s11Chart (dagKnownCloses s11Goal s11Cuts) s ||
+  dagRef 393 s11States s11Moves s11Links 0 token s
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11RootBlock0 : treeBlock 0 64 s11RootAt = true := by decide +kernel
+theorem s11Roots : dagCheckRoots s11Mask s11Goal s11Chart (dagKnownCloses s11Goal s11Cuts) s11Witnesses (dagRef 393 s11States s11Moves s11Links 0) s11StockWords 9 = true := s11RootBlock0
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block0 : treeBlock 0 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block16 : treeBlock 16 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block32 : treeBlock 32 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block48 : treeBlock 48 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block64 : treeBlock 64 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block80 : treeBlock 80 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block96 : treeBlock 96 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block112 : treeBlock 112 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block128 : treeBlock 128 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block144 : treeBlock 144 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block160 : treeBlock 160 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block176 : treeBlock 176 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block192 : treeBlock 192 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block208 : treeBlock 208 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block224 : treeBlock 224 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block240 : treeBlock 240 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block256 : treeBlock 256 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block272 : treeBlock 272 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block288 : treeBlock 288 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block304 : treeBlock 304 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block320 : treeBlock 320 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block336 : treeBlock 336 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block352 : treeBlock 352 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block368 : treeBlock 368 16 s11Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Block384 : treeBlock 384 9 s11Check = true := by decide +kernel
+theorem s11Verified : treeBlock 0 393 s11Check = true := (@treeBlock_merge 0 192 201 s11Check (@treeBlock_merge 0 96 96 s11Check (@treeBlock_merge 0 48 48 s11Check (@treeBlock_merge 0 16 32 s11Check s11Block0 (@treeBlock_merge 16 16 16 s11Check s11Block16 s11Block32)) (@treeBlock_merge 48 16 32 s11Check s11Block48 (@treeBlock_merge 64 16 16 s11Check s11Block64 s11Block80))) (@treeBlock_merge 96 48 48 s11Check (@treeBlock_merge 96 16 32 s11Check s11Block96 (@treeBlock_merge 112 16 16 s11Check s11Block112 s11Block128)) (@treeBlock_merge 144 16 32 s11Check s11Block144 (@treeBlock_merge 160 16 16 s11Check s11Block160 s11Block176)))) (@treeBlock_merge 192 96 105 s11Check (@treeBlock_merge 192 48 48 s11Check (@treeBlock_merge 192 16 32 s11Check s11Block192 (@treeBlock_merge 208 16 16 s11Check s11Block208 s11Block224)) (@treeBlock_merge 240 16 32 s11Check s11Block240 (@treeBlock_merge 256 16 16 s11Check s11Block256 s11Block272))) (@treeBlock_merge 288 48 57 s11Check (@treeBlock_merge 288 16 32 s11Check s11Block288 (@treeBlock_merge 304 16 16 s11Check s11Block304 s11Block320)) (@treeBlock_merge 336 32 25 s11Check (@treeBlock_merge 336 16 16 s11Check s11Block336 s11Block352) (@treeBlock_merge 368 16 9 s11Check s11Block368 s11Block384)))))
+theorem s11Blocks : treeBlock 0 393 s11Check = true := s11Verified
+theorem s11Known : Known s11Cuts := extendKnown (extendKnown (extendKnown (extendKnown (extendKnown (extendKnown (extendKnown (extendKnown (extendKnown (show Known [] from fun _ h => False.elim (List.not_mem_nil h)) s6Stock) s5Stock) s4Stock) s2Stock) s0Stock) s10Stock) s9Stock) s8Stock) s7Stock
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem s11Stock : Lower s11Mask s11StockWords s11Goal 10 := by
+  apply lowerDag _ _ _ _ s11Autos _ _ _ s11Known _ s11Roots s11Blocks
+  · unfold Masked; decide +kernel
+  · unfold Masked; decide +kernel
+  · unfold properWord; decide +kernel
+  · exact chartOfCheck (by decide +kernel)
+  · exact stockMaskedOfCheck (by decide +kernel)
+  · unfold s11StockWords; decide +kernel
+  · decide +kernel
+  · simp only [s11Cuts, List.mem_cons, List.not_mem_nil, or_false]
+    intro b h
+    rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> decide +kernel
+
+end PEqualNP.Outside.L_meta_16285
+
+open PEqualNP.Outside.L_meta_16285 in
+theorem PEqualNP.Outside.L_meta_16285 : ∀ s : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 6 (fun x : Fin 6 → Bool => Nat.testBit (4008241832 * 2 ^ 32 + 4008241320) (∑ i : Fin 6, if x i then 2 ^ (i : ℕ) else 0)) s → ∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 C ∧ C.size ≤ s ∧ ∀ x : Fin 6 → Bool, C.eval (List.ofFn x) = Nat.testBit (4008241832 * 2 ^ 32 + 4008241320) (∑ i : Fin 6, if x i then 2 ^ (i : ℕ) else 0) := by
+  intro t h
+  let raw : List (BitVec 64) := [0xaaaaaaaaaaaaaaaa, 0xcccccccccccccccc, 0xf0f0f0f0f0f0f0f0, 0xff00ff00ff00ff00, 0xffff0000ffff0000, 0xffffffff00000000]
+  let goal : BitVec 64 := 0xeee8eaa8eee8e8a8
+  have root : Lower (fullMask 64) (raw.map BitVec.toNat) goal.toNat 10 :=
+    hcsLowerEq (by decide +kernel) (by decide +kernel) (by decide +kernel) s11Stock
+  have size : 10 ≤ t :=
+    hcsLower (n := 6) raw goal 10 _ (by decide +kernel) (by decide +kernel) root t h
+  let circuit : PEqualNP.CircuitLowerBounds.Circuit :=
+    ⟨[⟨.and, [0, 1]⟩, ⟨.and, [0, 5]⟩, ⟨.or, [2, 6]⟩, ⟨.or, [4, 7]⟩, ⟨.and, [3, 9]⟩, ⟨.or, [3, 9]⟩, ⟨.or, [8, 10]⟩, ⟨.and, [1, 11]⟩, ⟨.or, [0, 13]⟩, ⟨.and, [12, 14]⟩], 15⟩
+  refine ⟨circuit, ?_, ?_, by decide +kernel⟩
+  · intro gate member
+    simp only [circuit, List.mem_cons, List.not_mem_nil, or_false] at member
+    rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp
+  · exact Nat.le_trans (by decide +kernel : circuit.size ≤ 10) size
 
-namespace S_0
-def pairsG : List (Nat × Nat) := [(6, 14), (6, 22), (10, 14), (10, 26), (18, 22), (18, 26)]
-def r1sG : List Nat := [6, 6, 10, 10, 18, 18]
-def r2sG : List Nat := [14, 22, 14, 26, 22, 26]
-def mpG : Nat := 0x3f
-def pool6G : List Nat := []
-def xsM : List Nat := roots_0.map (· &&& dom_0)
-def goalM : Nat := goal_0 &&& dom_0
-def NN : Nat → Nat
-  | 2 => 1
-  | 3 => 1
-  | _ => 0
-def HT : Nat → Nat → Nat
-  | 2, 0 => 0x990a015a
-  | 3, 0 => 0x990a015a
-  | _, _ => 0
-def dictB : Nat → Nat → Nat
-  | 0, 0 => 0x4444000000000000440044000000000040404040
-  | _, _ => 0
-def stateB : Nat → Nat → Nat → Nat
-  | 2, 0, 0 => 0x243
-  | 3, 0, 0 => 0x243
-  | _, _, _ => 0
-def stateW : Nat → Nat
-  | 2 => 10
-  | 3 => 10
-  | _ => 0
-def wireAt (i : Nat) : Nat := fld (dictB (i / 128) (i / 8 % 16)) 64 (i % 8)
-def dictP1B : Nat → Nat → Nat
-  | 0, 0 => 0x30303
-  | _, _ => 0
-def dictP2B : Nat → Nat → Nat
-  | 0, 0 => 0x3ab57
-  | _, _ => 0
-def p1At (i : Nat) : Nat := fld (dictP1B (i / 128) (i / 8 % 16)) 6 (i % 8)
-def p2At (i : Nat) : Nat := fld (dictP2B (i / 128) (i / 8 % 16)) 6 (i % 8)
-def wireDAt (i : Nat) : Nat × Nat × Nat :=
-  if i < 3 then (wireAt i, p1At i, p2At i) else (0, 0, 0)
-def wireDOK (i : Nat) : Bool :=
-  (p1At i == projBit r1sG (wireAt i)) && (p2At i == projBit r2sG (wireAt i))
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem wireD_ok_all : span wireDOK 3 0 = true := by decide +kernel
-theorem projBit_zero (rs : List Nat) : projBit rs 0 = 0 := by
-  induction rs with
-  | nil => rfl
-  | cons r rs ih => simp only [projBit, List.foldr_cons, Nat.zero_testBit, Bool.false_eq_true, ite_false] at ih ⊢; rw [ih]; rfl
-theorem wireDAt_eq (i : Nat) :
-    wireDAt i = (let w := if i < 3 then wireAt i else 0; (w, projBit r1sG w, projBit r2sG w)) := by
-  unfold wireDAt
-  split
-  · next hi =>
-    have h := span_ok wireD_ok_all i (Nat.zero_le i) (by omega)
-    simp only [wireDOK, Bool.and_eq_true, beq_iff_eq] at h
-    simp [h.1, h.2]
-  · simp [projBit_zero]
-def wireSAt (i : Nat) : Nat := if i < 3 then wireAt i else 0
-def stateWiresD : Nat → Nat → List (Nat × Nat × Nat)
-  | 0, _ => []
-  | n + 1, ids => wireDAt (fld ids 2 0) :: stateWiresD n (ids >>> 2)
-def stateWiresS : Nat → Nat → List Nat
-  | 0, _ => []
-  | n + 1, ids => wireSAt (fld ids 2 0) :: stateWiresS n (ids >>> 2)
-def SD (s j : Nat) : List (Nat × Nat × Nat) :=
-  let packed := fld (stateB s (j / 256) (j / 16 % 16)) (stateW s) (j % 16)
-  stateWiresD (packed &&& 15) (packed >>> 4)
-def SS (s j : Nat) : List Nat :=
-  let packed := fld (stateB s (j / 256) (j / 16 % 16)) (stateW s) (j % 16)
-  stateWiresS (packed &&& 15) (packed >>> 4)
-theorem stateWiresD_eq (n ids : Nat) :
-    stateWiresD n ids = (stateWiresS n ids).map (fun w => (w, projBit r1sG w, projBit r2sG w)) := by
-  induction n generalizing ids with
-  | zero => rfl
-  | succ n ih => simp [stateWiresD, stateWiresS, wireSAt, wireDAt_eq, ih]
-theorem SD_eq (s j : Nat) :
-    SD s j = (SS s j).map (fun w => (w, projBit r1sG w, projBit r2sG w)) :=
-  stateWiresD_eq _ _
-
-def htAt (s i : Nat) : Nat := fld (HT s (i / 64)) 32 (i % 64)
-def idxH (s h : Nat) : Nat := bsr (htAt s) h 2 0 (NN s)
-def idx (s : Nat) (zs : List Nat) : Nat := idxH s (hk 0 zs)
-def CN : Nat → Nat
-  | _ => 0
-def CH : Nat → Nat → Nat
-  | _, _ => 0
-def CV : Nat → Nat → Nat
-  | _, _ => 0
-def chAt (s i : Nat) : Nat := fld (CH s (i / 64)) 32 (i % 64)
-def cidxH (s h : Nat) : Nat := bsr (chAt s) h 2 0 (CN s)
-def checkCutByIdx (s : Nat) (ws : List Nat) (hint : Nat) : Bool :=
-  match hint &&& 255 with
-  | _ => false
-def cutHitH (s h : Nat) (ws : List Nat) : Bool :=
-  let i := cidxH s h
-  decide (i < CN s) && (chAt s i == h) && checkCutByIdx s ws (fld (CV s (i / 32)) 22 (i % 32))
-
-def cutHit (s : Nat) (ws : List Nat) : Bool := cutHitH s (hk 0 ws) ws
-
-theorem cutHitH_sound {u ys} (h : cutHitH u (hk 0 ys) ys = true) : ¬ RunD dom_0 goalM u ys := by
-  unfold cutHitH at h
-  simp only [Bool.and_eq_true] at h
-  have hc := h.2
-  unfold checkCutByIdx at hc
-  split at hc
-  · contradiction
-theorem cutHit_sound {u ys} (h : cutHit u ys = true) : ¬ RunD dom_0 goalM u ys := cutHitH_sound h
-
-def symsG : List (List (Nat × Nat)) := [[(0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)], [(0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4)], [(0xf0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f0, 12), (0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)], [(0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4), (0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)], [(0xf0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f0, 12)], [(0xaaaaaaaa00000000aaaaaaaa00000000aaaaaaaa00000000aaaaaaaa, 31)], [(0xaaaaaaaa00000000aaaaaaaa00000000aaaaaaaa00000000aaaaaaaa, 31), (0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)], [(0xaaaaaaaa00000000aaaaaaaa00000000aaaaaaaa00000000aaaaaaaa, 31), (0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4)], [(0xaaaaaaaa00000000aaaaaaaa00000000aaaaaaaa00000000aaaaaaaa, 31), (0xf0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f0, 12), (0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)], [(0xaaaaaaaa00000000aaaaaaaa00000000aaaaaaaa00000000aaaaaaaa, 31), (0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4), (0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)], [(0xaaaaaaaa00000000aaaaaaaa00000000aaaaaaaa00000000aaaaaaaa, 31), (0xf0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f0, 12)]]
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem symsG_ok : symsG.all (fun ms => ms.all moveOK256 && (applyMoves ms dom_0 == dom_0) && (applyMoves ms goalM == goalM)) = true := by decide +kernel
-def ori (zs : List Nat) : List Nat := pickMin 0 zs symsG zs (hk 0 zs)
-theorem ori_ok {u ys} (h : RunD dom_0 goalM u ys) : RunD dom_0 goalM u (ori ys) :=
-  pickMin_runD 0 ys h symsG ys (hk 0 ys) symsG_ok h
-
-def Z (s : Nat) := bar dom_0 goalM pairsG r1sG r2sG mpG SD SS NN htAt idxH ori 0 pool6G cutHitH s
-theorem z0 : ∀ i, 0 ≤ i → i < 0 → Z 0 i = true := by omega
-theorem z1 : ∀ i, 0 ≤ i → i < 0 → Z 1 i = true := by omega
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z2_0 : ∀ i, 0 ≤ i → i < 1 → Z 2 i = true := span_ok (by decide +kernel : span (Z 2) 1 0 = true)
-theorem z2 : ∀ i, 0 ≤ i → i < 1 → Z 2 i = true := z2_0
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z3_0 : ∀ i, 0 ≤ i → i < 1 → Z 3 i = true := span_ok (by decide +kernel : span (Z 3) 1 0 = true)
-theorem z3 : ∀ i, 0 ≤ i → i < 1 → Z 3 i = true := z3_0
-theorem checked (s : Nat) (hs : s ≤ 3) : ∀ i < NN s, Z s i = true := by
-  interval_cases s
-  · exact fun i hi => z0 i (Nat.zero_le i) hi
-  · exact fun i hi => z1 i (Nat.zero_le i) hi
-  · exact fun i hi => z2 i (Nat.zero_le i) hi
-  · exact fun i hi => z3 i (Nat.zero_le i) hi
-def RootG (s : Nat) : Bool :=
-  scr dom_0 goalM s pool6G xsM || cutHit s (ori xsM) || found SS NN idx s (ori xsM)
-
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem rootChecked : span RootG 2 2 = true := by decide +kernel
-
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem proper_failG : ∀ zs ∈ xsM.sublists, zs ≠ xsM → unorientedCov pairsG zs = false := by decide +kernel
-
-theorem noRunFull (s : Nat) (hs : s ≤ 3) (h : RunD dom_0 goalM s xsM) : False := by
-  have hmin : 2 ≤ s := by
-    have hl := run_len h; change 3 ≤ s + 1 at hl; omega
-  have hr := span_ok rootChecked s hmin (by omega)
-  unfold RootG at hr
-  rw [scr_no pool6G h, Bool.false_or, Bool.or_eq_true] at hr
-  rcases hr with hcut | hf
-  · exact cutHit_sound hcut (ori_ok h)
-  · rw [found, Bool.and_eq_true, decide_eq_true_eq, List.isPerm_iff] at hf
-    exact bar_all (by decide +kernel) rfl rfl (by decide +kernel) SD_eq (by decide +kernel) ori_ok cutHitH_sound checked s hs _ hf.1 (Run.perm hf.2 (ori_ok h))
-
-theorem noCircuit : Lower dom_0 roots_0 goal_0 4 := by
-  intro p bank hr ha
-  by_contra! hsmall
-  have hnc : ¬ IsConst dom_0 goal_0 := by
-    have h0 : isConstB dom_0 goal_0 = false := by decide +kernel
-    intro h; rw [(isConstB_iff _ _).2 h] at h0; contradiction
-  obtain ⟨s, ws, hs_le, hnd, hws_sub, hrun⟩ := reach_to_run (by decide +kernel) hnc hr ha
-  have hperm_sub : ∃ zs, zs.Sublist xsM ∧ ws.Perm zs := by
-    refine ⟨xsM.filter (fun x => decide (x ∈ ws)), List.filter_sublist, ?_⟩
-    refine (List.perm_ext_iff_of_nodup hnd (List.Nodup.filter _ (by decide +kernel : xsM.Nodup))).2 ?_
-    intro x; simp only [List.mem_filter, decide_eq_true_eq]
-    exact ⟨fun hx => ⟨hws_sub x hx, hx⟩, fun h => h.2⟩
-  obtain ⟨zs, hsub, hpz⟩ := hperm_sub
-  have hrun' := Run.perm hpz hrun
-  by_cases heq : zs = xsM
-  · subst heq; exact noRunFull s (by omega) hrun'
-  · have hcov := unorientedCov_ok (by decide +kernel) pairsG (by decide +kernel) hrun'
-    have hbad := proper_failG zs (List.mem_sublists.2 hsub) heq
-    rw [hcov] at hbad; contradiction
-
-end S_0
-
-theorem low_0 : Lower dom_0 roots_0 goal_0 4 := S_0.noCircuit
-
-def dom_1 : Nat := 0x55555555
-def goal_1 : Nat := 0x44404000
-def roots_1 : List Nat := [0x44444444, 0x50505050, 0x55005500, 0x55550000]
-
-theorem low_1 : Lower dom_1 roots_1 goal_1 5 :=
-  lower_slice (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    [(0x44444444, 12, 14)] (by decide +kernel) (by decide +kernel) low_0
-
-def dom_2 : Nat := 0xcccccccc
-def goal_2 : Nat := 0xccc8c888
-def roots_2 : List Nat := [0x88888888, 0xc0c0c0c0, 0xcc00cc00, 0xcccc0000]
-
-theorem low_2 : Lower dom_2 roots_2 goal_2 5 :=
-  lower_slice (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    [(0x88888888, 2, 3)] (by decide +kernel) (by decide +kernel) low_0
-
-def dom_3 : Nat := 0xf000f00
-def goal_3 : Nat := 0xe000800
-def roots_3 : List Nat := [0xa000a00, 0xc000c00, 0xf000000]
-
-theorem low_3 : Lower dom_3 roots_3 goal_3 4 :=
-  lower_iso [(0xa0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a, 3), (0xcc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc, 6)] (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_0
-
-def dom_4 : Nat := 0xf0f0f0f
-def goal_4 : Nat := 0xe080808
-def roots_4 : List Nat := [0xa0a0a0a, 0xc0c0c0c, 0xf000f00, 0xf0f0000]
-
-theorem low_4 : Lower dom_4 roots_4 goal_4 5 :=
-  lower_slice (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    [(0xf000f00, 17, 25)] (by decide +kernel) (by decide +kernel) low_3
-
-def dom_5 : Nat := 0xff0000
-def goal_5 : Nat := 0xe80000
-def roots_5 : List Nat := [0xaa0000, 0xcc0000, 0xf00000]
-
-theorem low_5 : Lower dom_5 roots_5 goal_5 4 :=
-  lower_iso [(0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4), (0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)] (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_3
-
-def dom_6 : Nat := 0xff00ff
-def goal_6 : Nat := 0xe800a8
-def roots_6 : List Nat := [0xaa00aa, 0xcc00cc, 0xf000f0, 0xff0000]
-
-theorem low_6 : Lower dom_6 roots_6 goal_6 5 :=
-  lower_slice (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    [(0xff0000, 6, 22)] (by decide +kernel) (by decide +kernel) low_5
-
-def dom_7 : Nat := 0xff00ff00
-def goal_7 : Nat := 0xee00e800
-def roots_7 : List Nat := [0xaa00aa00, 0xcc00cc00, 0xf000f000, 0xff000000]
-
-theorem low_7 : Lower dom_7 roots_7 goal_7 5 :=
-  lower_slice (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    [(0xf000f000, 9, 13)] (by decide +kernel) (by decide +kernel) low_3
-
-def dom_8 : Nat := 0xffff
-def goal_8 : Nat := 0xe8a8
-def roots_8 : List Nat := [0xaaaa, 0xcccc, 0xf0f0, 0xff00]
-
-theorem low_8 : Lower dom_8 roots_8 goal_8 5 :=
-  lower_iso [(0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)] (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_6
-
-def dom_9 : Nat := 0xffff0000
-def goal_9 : Nat := 0xeee80000
-def roots_9 : List Nat := [0xaaaa0000, 0xcccc0000, 0xf0f00000, 0xff000000]
-
-theorem low_9 : Lower dom_9 roots_9 goal_9 5 :=
-  lower_iso [(0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)] (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_7
-
-def dom_10 : Nat := 0xff00
-def goal_10 : Nat := 0xe800
-def roots_10 : List Nat := [0xaa00, 0xcc00, 0xf000]
-
-theorem low_10 : Lower dom_10 roots_10 goal_10 4 :=
-  lower_iso [(0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)] (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_5
-
-def dom_11 : Nat := 0xffffffff
-def goal_11 : Nat := 0xeee8e8a8
-def roots_11 : List Nat := [0xaaaaaaaa, 0xcccccccc, 0xf0f0f0f0, 0xff00ff00, 0xffff0000]
-
-namespace S_11
-def pairsG : List (Nat × Nat) := [(1, 3), (1, 5), (2, 3), (4, 5), (6, 7), (6, 14), (6, 22), (9, 11), (9, 13), (9, 25), (10, 11), (10, 14), (10, 26), (12, 13), (12, 14), (17, 19), (17, 21), (17, 25), (18, 19), (18, 22), (18, 26), (20, 21), (20, 22), (24, 25), (24, 26), (28, 29), (28, 30)]
-def r1sG : List Nat := [1, 1, 2, 4, 6, 6, 6, 9, 9, 9, 10, 10, 10, 12, 12, 17, 17, 17, 18, 18, 18, 20, 20, 24, 24, 28, 28]
-def r2sG : List Nat := [3, 5, 3, 5, 7, 14, 22, 11, 13, 25, 11, 14, 26, 13, 14, 19, 21, 25, 19, 22, 26, 21, 22, 25, 26, 29, 30]
-def mpG : Nat := 0x7ffffff
-def pool6G : List Nat := []
-def xsM : List Nat := roots_11.map (· &&& dom_11)
-def goalM : Nat := goal_11 &&& dom_11
-def NN : Nat → Nat
-  | 5 => 5
-  | 6 => 6
-  | 7 => 1
-  | _ => 0
-def HT : Nat → Nat → Nat
-  | 5, 0 => 0xe1005450b2878a8a9e9c03b264d480331ac7d7cf
-  | 6, 0 => 0xbe3fb924ac05225e8c616cec5299e96d3a6b8d41206585ea
-  | 7, 0 => 0xac05225e
-  | _, _ => 0
-def dictB : Nat → Nat → Nat
-  | 0, 0 => 0xf0f0f0f000000000cccccccc00000000aaaaaaaa00000000555555550000000033333333000000000f0f0f0f00000000050505050000000000ff00ff
-  | 0, 1 => 0xffff000000000000ff00ff0000000000fafafafa
-  | _, _ => 0
-def stateB : Nat → Nat → Nat → Nat
-  | 5, 0, 0 => 0xa96425a9765160a753050a953250a76405
-  | 6, 0, 0 => 0xa975350a976550a765050a965250a97645a987656
-  | 7, 0, 0 => 0xa97655
-  | _, _, _ => 0
-def stateW : Nat → Nat
-  | 5 => 28
-  | 6 => 28
-  | 7 => 24
-  | _ => 0
-def wireAt (i : Nat) : Nat := fld (dictB (i / 128) (i / 8 % 16)) 64 (i % 8)
-def dictP1B : Nat → Nat → Nat
-  | 0, 0 => 0xcc0c0f007071d001c1c1ffc7c7cfc7c71667e7e1cce0e0207f807f
-  | 0, 1 => 0x1ffe0003c03fc0663e3fb
-  | _, _ => 0
-def dictP2B : Nat → Nat → Nat
-  | 0, 0 => 0xcd2d2f557373d553d3cfd585860546461465a5a1488080006d805f
-  | 0, 1 => 0x1ffe4903c93fd06efefff
-  | _, _ => 0
-def p1At (i : Nat) : Nat := fld (dictP1B (i / 128) (i / 8 % 16)) 27 (i % 8)
-def p2At (i : Nat) : Nat := fld (dictP2B (i / 128) (i / 8 % 16)) 27 (i % 8)
-def wireDAt (i : Nat) : Nat × Nat × Nat :=
-  if i < 11 then (wireAt i, p1At i, p2At i) else (0, 0, 0)
-def wireDOK (i : Nat) : Bool :=
-  (p1At i == projBit r1sG (wireAt i)) && (p2At i == projBit r2sG (wireAt i))
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem wireD_ok_all : span wireDOK 11 0 = true := by decide +kernel
-theorem projBit_zero (rs : List Nat) : projBit rs 0 = 0 := by
-  induction rs with
-  | nil => rfl
-  | cons r rs ih => simp only [projBit, List.foldr_cons, Nat.zero_testBit, Bool.false_eq_true, ite_false] at ih ⊢; rw [ih]; rfl
-theorem wireDAt_eq (i : Nat) :
-    wireDAt i = (let w := if i < 11 then wireAt i else 0; (w, projBit r1sG w, projBit r2sG w)) := by
-  unfold wireDAt
-  split
-  · next hi =>
-    have h := span_ok wireD_ok_all i (Nat.zero_le i) (by omega)
-    simp only [wireDOK, Bool.and_eq_true, beq_iff_eq] at h
-    simp [h.1, h.2]
-  · simp [projBit_zero]
-def wireSAt (i : Nat) : Nat := if i < 11 then wireAt i else 0
-def stateWiresD : Nat → Nat → List (Nat × Nat × Nat)
-  | 0, _ => []
-  | n + 1, ids => wireDAt (fld ids 4 0) :: stateWiresD n (ids >>> 4)
-def stateWiresS : Nat → Nat → List Nat
-  | 0, _ => []
-  | n + 1, ids => wireSAt (fld ids 4 0) :: stateWiresS n (ids >>> 4)
-def SD (s j : Nat) : List (Nat × Nat × Nat) :=
-  let packed := fld (stateB s (j / 256) (j / 16 % 16)) (stateW s) (j % 16)
-  stateWiresD (packed &&& 15) (packed >>> 4)
-def SS (s j : Nat) : List Nat :=
-  let packed := fld (stateB s (j / 256) (j / 16 % 16)) (stateW s) (j % 16)
-  stateWiresS (packed &&& 15) (packed >>> 4)
-theorem stateWiresD_eq (n ids : Nat) :
-    stateWiresD n ids = (stateWiresS n ids).map (fun w => (w, projBit r1sG w, projBit r2sG w)) := by
-  induction n generalizing ids with
-  | zero => rfl
-  | succ n ih => simp [stateWiresD, stateWiresS, wireSAt, wireDAt_eq, ih]
-theorem SD_eq (s j : Nat) :
-    SD s j = (SS s j).map (fun w => (w, projBit r1sG w, projBit r2sG w)) :=
-  stateWiresD_eq _ _
-
-def htAt (s i : Nat) : Nat := fld (HT s (i / 64)) 32 (i % 64)
-def idxH (s h : Nat) : Nat := bsr (htAt s) h 4 0 (NN s)
-def idx (s : Nat) (zs : List Nat) : Nat := idxH s (hk 0 zs)
-def CN : Nat → Nat
-  | 4 => 1
-  | 5 => 34
-  | 6 => 17
-  | _ => 0
-def CH : Nat → Nat → Nat
-  | 4, 0 => 0xac05225e
-  | 5, 0 => 0xfd575aabf27aa6a5ddc4e51ed0f4a26bd051f507be3fb924be3a6442bc1d98f3b4992a82ac05225ea571db92a0508cfd9e9267f793c0f7228c616cec818360617ecfa1837a3d42747702c5a9744473ec5d63e970554c825e5299e96d4ca624073a6b8d4132f633fb30706e42276bea432637312d206585ea1b8a7ef1126b25b7034963b10241d3e1
-  | 6, 0 => 0xfd575aabf27aa6a5d051f507be3a6442b4992a82a0508cfd93c0f722818360617ecfa1837702c5a9744473ec554c825e30706e42276bea431b8a7ef1126b25b70241d3e1
-  | _, _ => 0
-def CV : Nat → Nat → Nat
-  | 4, 0 => 0x0
-  | 5, 0 => 0x20000000000000000100000c0000000000000000000024000000000040000100000c000020000040000300000c0000110440400000000008000080000000000700000400000000000000000000140000100001000002
-  | 5, 1 => 0x800000
-  | 6, 0 => 0x20000000000000000c00001000000000010000180000100001000002000000000010000180000500000c00002
-  | _, _ => 0
-def chAt (s i : Nat) : Nat := fld (CH s (i / 64)) 32 (i % 64)
-def cidxH (s h : Nat) : Nat := bsr (chAt s) h 7 0 (CN s)
-def checkCutByIdx (s : Nat) (ws : List Nat) (hint : Nat) : Bool :=
-  match hint &&& 255 with
-  | 0 => checkCutEntry dom_1 roots_1 5 s ws hint
-  | 1 => checkCutEntry dom_2 roots_2 5 s ws hint
-  | 2 => checkCutEntry dom_4 roots_4 5 s ws hint
-  | 3 => checkCutEntry dom_6 roots_6 5 s ws hint
-  | 4 => checkCutEntry dom_7 roots_7 5 s ws hint
-  | 5 => checkCutEntry dom_8 roots_8 5 s ws hint
-  | 6 => checkCutEntry dom_9 roots_9 5 s ws hint
-  | 7 => checkCutEntry dom_3 roots_3 4 s ws hint
-  | 8 => checkCutEntry dom_0 roots_0 4 s ws hint
-  | 9 => checkCutEntry dom_10 roots_10 4 s ws hint
-  | _ => false
-def cutHitH (s h : Nat) (ws : List Nat) : Bool :=
-  let i := cidxH s h
-  decide (i < CN s) && (chAt s i == h) && checkCutByIdx s ws (fld (CV s (i / 32)) 22 (i % 32))
-
-def cutHit (s : Nat) (ws : List Nat) : Bool := cutHitH s (hk 0 ws) ws
-
-theorem cutHitH_sound {u ys} (h : cutHitH u (hk 0 ys) ys = true) : ¬ RunD dom_11 goalM u ys := by
-  unfold cutHitH at h
-  simp only [Bool.and_eq_true] at h
-  have hc := h.2
-  unfold checkCutByIdx at hc
-  split at hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_1 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_2 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_4 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_6 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_7 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_8 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_9 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_3 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_0 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_10 _ hc
-  · contradiction
-theorem cutHit_sound {u ys} (h : cutHit u ys = true) : ¬ RunD dom_11 goalM u ys := cutHitH_sound h
-
-def symsG : List (List (Nat × Nat)) := [[(0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)]]
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem symsG_ok : symsG.all (fun ms => ms.all moveOK256 && (applyMoves ms dom_11 == dom_11) && (applyMoves ms goalM == goalM)) = true := by decide +kernel
-def ori (zs : List Nat) : List Nat := pickMin 0 zs symsG zs (hk 0 zs)
-theorem ori_ok {u ys} (h : RunD dom_11 goalM u ys) : RunD dom_11 goalM u (ori ys) :=
-  pickMin_runD 0 ys h symsG ys (hk 0 ys) symsG_ok h
-
-def Z (s : Nat) := bar dom_11 goalM pairsG r1sG r2sG mpG SD SS NN htAt idxH ori 0 pool6G cutHitH s
-theorem z0 : ∀ i, 0 ≤ i → i < 0 → Z 0 i = true := by omega
-theorem z1 : ∀ i, 0 ≤ i → i < 0 → Z 1 i = true := by omega
-theorem z2 : ∀ i, 0 ≤ i → i < 0 → Z 2 i = true := by omega
-theorem z3 : ∀ i, 0 ≤ i → i < 0 → Z 3 i = true := by omega
-theorem z4 : ∀ i, 0 ≤ i → i < 0 → Z 4 i = true := by omega
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z5_0 : ∀ i, 0 ≤ i → i < 5 → Z 5 i = true := span_ok (by decide +kernel : span (Z 5) 5 0 = true)
-theorem z5 : ∀ i, 0 ≤ i → i < 5 → Z 5 i = true := z5_0
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z6_0 : ∀ i, 0 ≤ i → i < 6 → Z 6 i = true := span_ok (by decide +kernel : span (Z 6) 6 0 = true)
-theorem z6 : ∀ i, 0 ≤ i → i < 6 → Z 6 i = true := z6_0
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z7_0 : ∀ i, 0 ≤ i → i < 1 → Z 7 i = true := span_ok (by decide +kernel : span (Z 7) 1 0 = true)
-theorem z7 : ∀ i, 0 ≤ i → i < 1 → Z 7 i = true := z7_0
-theorem checked (s : Nat) (hs : s ≤ 7) : ∀ i < NN s, Z s i = true := by
-  interval_cases s
-  · exact fun i hi => z0 i (Nat.zero_le i) hi
-  · exact fun i hi => z1 i (Nat.zero_le i) hi
-  · exact fun i hi => z2 i (Nat.zero_le i) hi
-  · exact fun i hi => z3 i (Nat.zero_le i) hi
-  · exact fun i hi => z4 i (Nat.zero_le i) hi
-  · exact fun i hi => z5 i (Nat.zero_le i) hi
-  · exact fun i hi => z6 i (Nat.zero_le i) hi
-  · exact fun i hi => z7 i (Nat.zero_le i) hi
-def RootG (s : Nat) : Bool :=
-  scr dom_11 goalM s pool6G xsM || cutHit s (ori xsM) || found SS NN idx s (ori xsM)
-
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem rootChecked : span RootG 4 4 = true := by decide +kernel
-
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem proper_failG : ∀ zs ∈ xsM.sublists, zs ≠ xsM → unorientedCov pairsG zs = false := by decide +kernel
-
-theorem noRunFull (s : Nat) (hs : s ≤ 7) (h : RunD dom_11 goalM s xsM) : False := by
-  have hmin : 4 ≤ s := by
-    have hl := run_len h; change 5 ≤ s + 1 at hl; omega
-  have hr := span_ok rootChecked s hmin (by omega)
-  unfold RootG at hr
-  rw [scr_no pool6G h, Bool.false_or, Bool.or_eq_true] at hr
-  rcases hr with hcut | hf
-  · exact cutHit_sound hcut (ori_ok h)
-  · rw [found, Bool.and_eq_true, decide_eq_true_eq, List.isPerm_iff] at hf
-    exact bar_all (by decide +kernel) rfl rfl (by decide +kernel) SD_eq (by decide +kernel) ori_ok cutHitH_sound checked s hs _ hf.1 (Run.perm hf.2 (ori_ok h))
-
-theorem noCircuit : Lower dom_11 roots_11 goal_11 8 := by
-  intro p bank hr ha
-  by_contra! hsmall
-  have hnc : ¬ IsConst dom_11 goal_11 := by
-    have h0 : isConstB dom_11 goal_11 = false := by decide +kernel
-    intro h; rw [(isConstB_iff _ _).2 h] at h0; contradiction
-  obtain ⟨s, ws, hs_le, hnd, hws_sub, hrun⟩ := reach_to_run (by decide +kernel) hnc hr ha
-  have hperm_sub : ∃ zs, zs.Sublist xsM ∧ ws.Perm zs := by
-    refine ⟨xsM.filter (fun x => decide (x ∈ ws)), List.filter_sublist, ?_⟩
-    refine (List.perm_ext_iff_of_nodup hnd (List.Nodup.filter _ (by decide +kernel : xsM.Nodup))).2 ?_
-    intro x; simp only [List.mem_filter, decide_eq_true_eq]
-    exact ⟨fun hx => ⟨hws_sub x hx, hx⟩, fun h => h.2⟩
-  obtain ⟨zs, hsub, hpz⟩ := hperm_sub
-  have hrun' := Run.perm hpz hrun
-  by_cases heq : zs = xsM
-  · subst heq; exact noRunFull s (by omega) hrun'
-  · have hcov := unorientedCov_ok (by decide +kernel) pairsG (by decide +kernel) hrun'
-    have hbad := proper_failG zs (List.mem_sublists.2 hsub) heq
-    rw [hcov] at hbad; contradiction
-
-end S_11
-
-theorem low_11 : Lower dom_11 roots_11 goal_11 8 := S_11.noCircuit
-
-def dom_12 : Nat := 0xffff00000000
-def goal_12 : Nat := 0xeaa800000000
-def roots_12 : List Nat := [0xaaaa00000000, 0xcccc00000000, 0xf0f000000000, 0xff0000000000]
-
-namespace S_12
-def pairsG : List (Nat × Nat) := [(33, 35), (33, 37), (33, 41), (34, 35), (36, 37), (38, 39), (38, 46), (40, 41), (42, 43), (42, 46), (44, 45), (44, 46)]
-def r1sG : List Nat := [33, 33, 33, 34, 36, 38, 38, 40, 42, 42, 44, 44]
-def r2sG : List Nat := [35, 37, 41, 35, 37, 39, 46, 41, 43, 46, 45, 46]
-def mpG : Nat := 0xfff
-def pool6G : List Nat := []
-def xsM : List Nat := roots_12.map (· &&& dom_12)
-def goalM : Nat := goal_12 &&& dom_12
-def NN : Nat → Nat
-  | 3 => 5
-  | 4 => 9
-  | 5 => 1
-  | _ => 0
-def HT : Nat → Nat → Nat
-  | 3, 0 => 0x6d751cde5e2aba2c5454674e1b1f7bc40e88ccf1
-  | 4, 0 => 0xf6237b2895a9eb4b78e536bd5e2aba2c5d5304c72ff9f6242b88ef700d9e44ad0bf6c491
-  | 5, 0 => 0x5e2aba2c
-  | _, _ => 0
-def dictB : Nat → Nat → Nat
-  | 0, 0 => 0xeeee000000000000e0e0000000000000cccc000000000000aaaa0000000000008888000000000000555500000000000033330000000000000f0f00000000
-  | 0, 1 => 0xfff0000000000000ff88000000000000ff00000000000000fcfc000000000000fafa000000000000f0f0000000000000f00000000000
-  | _, _ => 0
-def stateB : Nat → Nat → Nat → Nat
-  | 3, 0, 0 => 0xe8544c9544c9734c6544d9544
-  | 4, 0, 0 => 0xc95425c985450c95240c95440c9414c95435c95405ca9545cb9545
-  | 5, 0, 0 => 0xc9544
-  | _, _, _ => 0
-def stateW : Nat → Nat
-  | 3 => 20
-  | 4 => 24
-  | 5 => 20
-  | _ => 0
-def wireAt (i : Nat) : Nat := fld (dictB (i / 128) (i / 8 % 16)) 64 (i % 8)
-def dictP1B : Nat → Nat → Nat
-  | 0, 0 => 0x36f060368007000ff8c9738f
-  | 0, 1 => 0xff0f80f80f78c77c70c00
-  | _, _ => 0
-def dictP2B : Nat → Nat → Nat
-  | 0, 0 => 0xfffe72b695bf129a4049618d
-  | 0, 1 => 0xff6fedfc4f7bfffe72e40
-  | _, _ => 0
-def p1At (i : Nat) : Nat := fld (dictP1B (i / 128) (i / 8 % 16)) 12 (i % 8)
-def p2At (i : Nat) : Nat := fld (dictP2B (i / 128) (i / 8 % 16)) 12 (i % 8)
-def wireDAt (i : Nat) : Nat × Nat × Nat :=
-  if i < 15 then (wireAt i, p1At i, p2At i) else (0, 0, 0)
-def wireDOK (i : Nat) : Bool :=
-  (p1At i == projBit r1sG (wireAt i)) && (p2At i == projBit r2sG (wireAt i))
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem wireD_ok_all : span wireDOK 15 0 = true := by decide +kernel
-theorem projBit_zero (rs : List Nat) : projBit rs 0 = 0 := by
-  induction rs with
-  | nil => rfl
-  | cons r rs ih => simp only [projBit, List.foldr_cons, Nat.zero_testBit, Bool.false_eq_true, ite_false] at ih ⊢; rw [ih]; rfl
-theorem wireDAt_eq (i : Nat) :
-    wireDAt i = (let w := if i < 15 then wireAt i else 0; (w, projBit r1sG w, projBit r2sG w)) := by
-  unfold wireDAt
-  split
-  · next hi =>
-    have h := span_ok wireD_ok_all i (Nat.zero_le i) (by omega)
-    simp only [wireDOK, Bool.and_eq_true, beq_iff_eq] at h
-    simp [h.1, h.2]
-  · simp [projBit_zero]
-def wireSAt (i : Nat) : Nat := if i < 15 then wireAt i else 0
-def stateWiresD : Nat → Nat → List (Nat × Nat × Nat)
-  | 0, _ => []
-  | n + 1, ids => wireDAt (fld ids 4 0) :: stateWiresD n (ids >>> 4)
-def stateWiresS : Nat → Nat → List Nat
-  | 0, _ => []
-  | n + 1, ids => wireSAt (fld ids 4 0) :: stateWiresS n (ids >>> 4)
-def SD (s j : Nat) : List (Nat × Nat × Nat) :=
-  let packed := fld (stateB s (j / 256) (j / 16 % 16)) (stateW s) (j % 16)
-  stateWiresD (packed &&& 15) (packed >>> 4)
-def SS (s j : Nat) : List Nat :=
-  let packed := fld (stateB s (j / 256) (j / 16 % 16)) (stateW s) (j % 16)
-  stateWiresS (packed &&& 15) (packed >>> 4)
-theorem stateWiresD_eq (n ids : Nat) :
-    stateWiresD n ids = (stateWiresS n ids).map (fun w => (w, projBit r1sG w, projBit r2sG w)) := by
-  induction n generalizing ids with
-  | zero => rfl
-  | succ n ih => simp [stateWiresD, stateWiresS, wireSAt, wireDAt_eq, ih]
-theorem SD_eq (s j : Nat) :
-    SD s j = (SS s j).map (fun w => (w, projBit r1sG w, projBit r2sG w)) :=
-  stateWiresD_eq _ _
-
-def htAt (s i : Nat) : Nat := fld (HT s (i / 64)) 32 (i % 64)
-def idxH (s h : Nat) : Nat := bsr (htAt s) h 5 0 (NN s)
-def idx (s : Nat) (zs : List Nat) : Nat := idxH s (hk 0 zs)
-def CN : Nat → Nat
-  | _ => 0
-def CH : Nat → Nat → Nat
-  | _, _ => 0
-def CV : Nat → Nat → Nat
-  | _, _ => 0
-def chAt (s i : Nat) : Nat := fld (CH s (i / 64)) 32 (i % 64)
-def cidxH (s h : Nat) : Nat := bsr (chAt s) h 2 0 (CN s)
-def checkCutByIdx (s : Nat) (ws : List Nat) (hint : Nat) : Bool :=
-  match hint &&& 255 with
-  | _ => false
-def cutHitH (s h : Nat) (ws : List Nat) : Bool :=
-  let i := cidxH s h
-  decide (i < CN s) && (chAt s i == h) && checkCutByIdx s ws (fld (CV s (i / 32)) 22 (i % 32))
-
-def cutHit (s : Nat) (ws : List Nat) : Bool := cutHitH s (hk 0 ws) ws
-
-theorem cutHitH_sound {u ys} (h : cutHitH u (hk 0 ys) ys = true) : ¬ RunD dom_12 goalM u ys := by
-  unfold cutHitH at h
-  simp only [Bool.and_eq_true] at h
-  have hc := h.2
-  unfold checkCutByIdx at hc
-  split at hc
-  · contradiction
-theorem cutHit_sound {u ys} (h : cutHit u ys = true) : ¬ RunD dom_12 goalM u ys := cutHitH_sound h
-
-def symsG : List (List (Nat × Nat)) := [[(0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4)], [(0xc0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c, 2)], [(0xcc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc, 6), (0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4)], [(0xc0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c, 2), (0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4)], [(0xcc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc00cc, 6)]]
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem symsG_ok : symsG.all (fun ms => ms.all moveOK256 && (applyMoves ms dom_12 == dom_12) && (applyMoves ms goalM == goalM)) = true := by decide +kernel
-def ori (zs : List Nat) : List Nat := pickMin 0 zs symsG zs (hk 0 zs)
-theorem ori_ok {u ys} (h : RunD dom_12 goalM u ys) : RunD dom_12 goalM u (ori ys) :=
-  pickMin_runD 0 ys h symsG ys (hk 0 ys) symsG_ok h
-
-def Z (s : Nat) := bar dom_12 goalM pairsG r1sG r2sG mpG SD SS NN htAt idxH ori 0 pool6G cutHitH s
-theorem z0 : ∀ i, 0 ≤ i → i < 0 → Z 0 i = true := by omega
-theorem z1 : ∀ i, 0 ≤ i → i < 0 → Z 1 i = true := by omega
-theorem z2 : ∀ i, 0 ≤ i → i < 0 → Z 2 i = true := by omega
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z3_0 : ∀ i, 0 ≤ i → i < 5 → Z 3 i = true := span_ok (by decide +kernel : span (Z 3) 5 0 = true)
-theorem z3 : ∀ i, 0 ≤ i → i < 5 → Z 3 i = true := z3_0
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z4_0 : ∀ i, 0 ≤ i → i < 8 → Z 4 i = true := span_ok (by decide +kernel : span (Z 4) 8 0 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z4_8 : ∀ i, 8 ≤ i → i < 9 → Z 4 i = true := span_ok (by decide +kernel : span (Z 4) 1 8 = true)
-theorem z4 : ∀ i, 0 ≤ i → i < 9 → Z 4 i = true := range_split z4_0 (z4_8)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z5_0 : ∀ i, 0 ≤ i → i < 1 → Z 5 i = true := span_ok (by decide +kernel : span (Z 5) 1 0 = true)
-theorem z5 : ∀ i, 0 ≤ i → i < 1 → Z 5 i = true := z5_0
-theorem checked (s : Nat) (hs : s ≤ 5) : ∀ i < NN s, Z s i = true := by
-  interval_cases s
-  · exact fun i hi => z0 i (Nat.zero_le i) hi
-  · exact fun i hi => z1 i (Nat.zero_le i) hi
-  · exact fun i hi => z2 i (Nat.zero_le i) hi
-  · exact fun i hi => z3 i (Nat.zero_le i) hi
-  · exact fun i hi => z4 i (Nat.zero_le i) hi
-  · exact fun i hi => z5 i (Nat.zero_le i) hi
-def RootG (s : Nat) : Bool :=
-  scr dom_12 goalM s pool6G xsM || cutHit s (ori xsM) || found SS NN idx s (ori xsM)
-
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem rootChecked : span RootG 3 3 = true := by decide +kernel
-
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem proper_failG : ∀ zs ∈ xsM.sublists, zs ≠ xsM → unorientedCov pairsG zs = false := by decide +kernel
-
-theorem noRunFull (s : Nat) (hs : s ≤ 5) (h : RunD dom_12 goalM s xsM) : False := by
-  have hmin : 3 ≤ s := by
-    have hl := run_len h; change 4 ≤ s + 1 at hl; omega
-  have hr := span_ok rootChecked s hmin (by omega)
-  unfold RootG at hr
-  rw [scr_no pool6G h, Bool.false_or, Bool.or_eq_true] at hr
-  rcases hr with hcut | hf
-  · exact cutHit_sound hcut (ori_ok h)
-  · rw [found, Bool.and_eq_true, decide_eq_true_eq, List.isPerm_iff] at hf
-    exact bar_all (by decide +kernel) rfl rfl (by decide +kernel) SD_eq (by decide +kernel) ori_ok cutHitH_sound checked s hs _ hf.1 (Run.perm hf.2 (ori_ok h))
-
-theorem noCircuit : Lower dom_12 roots_12 goal_12 6 := by
-  intro p bank hr ha
-  by_contra! hsmall
-  have hnc : ¬ IsConst dom_12 goal_12 := by
-    have h0 : isConstB dom_12 goal_12 = false := by decide +kernel
-    intro h; rw [(isConstB_iff _ _).2 h] at h0; contradiction
-  obtain ⟨s, ws, hs_le, hnd, hws_sub, hrun⟩ := reach_to_run (by decide +kernel) hnc hr ha
-  have hperm_sub : ∃ zs, zs.Sublist xsM ∧ ws.Perm zs := by
-    refine ⟨xsM.filter (fun x => decide (x ∈ ws)), List.filter_sublist, ?_⟩
-    refine (List.perm_ext_iff_of_nodup hnd (List.Nodup.filter _ (by decide +kernel : xsM.Nodup))).2 ?_
-    intro x; simp only [List.mem_filter, decide_eq_true_eq]
-    exact ⟨fun hx => ⟨hws_sub x hx, hx⟩, fun h => h.2⟩
-  obtain ⟨zs, hsub, hpz⟩ := hperm_sub
-  have hrun' := Run.perm hpz hrun
-  by_cases heq : zs = xsM
-  · subst heq; exact noRunFull s (by omega) hrun'
-  · have hcov := unorientedCov_ok (by decide +kernel) pairsG (by decide +kernel) hrun'
-    have hbad := proper_failG zs (List.mem_sublists.2 hsub) heq
-    rw [hcov] at hbad; contradiction
-
-end S_12
-
-theorem low_12 : Lower dom_12 roots_12 goal_12 6 := S_12.noCircuit
-
-def dom_13 : Nat := 0x4444444400000000
-def goal_13 : Nat := 0x4440400000000000
-def roots_13 : List Nat := [0x4040404000000000, 0x4400440000000000, 0x4444000000000000]
-
-namespace S_13
-def pairsG : List (Nat × Nat) := [(38, 46), (38, 54), (42, 46), (42, 58), (50, 54), (50, 58)]
-def r1sG : List Nat := [38, 38, 42, 42, 50, 50]
-def r2sG : List Nat := [46, 54, 46, 58, 54, 58]
-def mpG : Nat := 0x3f
-def pool6G : List Nat := []
-def xsM : List Nat := roots_13.map (· &&& dom_13)
-def goalM : Nat := goal_13 &&& dom_13
-def NN : Nat → Nat
-  | 2 => 1
-  | 3 => 1
-  | _ => 0
-def HT : Nat → Nat → Nat
-  | 2, 0 => 0xfae8b559
-  | 3, 0 => 0xfae8b559
-  | _, _ => 0
-def dictB : Nat → Nat → Nat
-  | 0, 0 => 0x444400000000000044004400000000004040404000000000
-  | _, _ => 0
-def stateB : Nat → Nat → Nat → Nat
-  | 2, 0, 0 => 0x243
-  | 3, 0, 0 => 0x243
-  | _, _, _ => 0
-def stateW : Nat → Nat
-  | 2 => 10
-  | 3 => 10
-  | _ => 0
-def wireAt (i : Nat) : Nat := fld (dictB (i / 128) (i / 8 % 16)) 64 (i % 8)
-def dictP1B : Nat → Nat → Nat
-  | 0, 0 => 0x30303
-  | _, _ => 0
-def dictP2B : Nat → Nat → Nat
-  | 0, 0 => 0x3ab57
-  | _, _ => 0
-def p1At (i : Nat) : Nat := fld (dictP1B (i / 128) (i / 8 % 16)) 6 (i % 8)
-def p2At (i : Nat) : Nat := fld (dictP2B (i / 128) (i / 8 % 16)) 6 (i % 8)
-def wireDAt (i : Nat) : Nat × Nat × Nat :=
-  if i < 3 then (wireAt i, p1At i, p2At i) else (0, 0, 0)
-def wireDOK (i : Nat) : Bool :=
-  (p1At i == projBit r1sG (wireAt i)) && (p2At i == projBit r2sG (wireAt i))
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem wireD_ok_all : span wireDOK 3 0 = true := by decide +kernel
-theorem projBit_zero (rs : List Nat) : projBit rs 0 = 0 := by
-  induction rs with
-  | nil => rfl
-  | cons r rs ih => simp only [projBit, List.foldr_cons, Nat.zero_testBit, Bool.false_eq_true, ite_false] at ih ⊢; rw [ih]; rfl
-theorem wireDAt_eq (i : Nat) :
-    wireDAt i = (let w := if i < 3 then wireAt i else 0; (w, projBit r1sG w, projBit r2sG w)) := by
-  unfold wireDAt
-  split
-  · next hi =>
-    have h := span_ok wireD_ok_all i (Nat.zero_le i) (by omega)
-    simp only [wireDOK, Bool.and_eq_true, beq_iff_eq] at h
-    simp [h.1, h.2]
-  · simp [projBit_zero]
-def wireSAt (i : Nat) : Nat := if i < 3 then wireAt i else 0
-def stateWiresD : Nat → Nat → List (Nat × Nat × Nat)
-  | 0, _ => []
-  | n + 1, ids => wireDAt (fld ids 2 0) :: stateWiresD n (ids >>> 2)
-def stateWiresS : Nat → Nat → List Nat
-  | 0, _ => []
-  | n + 1, ids => wireSAt (fld ids 2 0) :: stateWiresS n (ids >>> 2)
-def SD (s j : Nat) : List (Nat × Nat × Nat) :=
-  let packed := fld (stateB s (j / 256) (j / 16 % 16)) (stateW s) (j % 16)
-  stateWiresD (packed &&& 15) (packed >>> 4)
-def SS (s j : Nat) : List Nat :=
-  let packed := fld (stateB s (j / 256) (j / 16 % 16)) (stateW s) (j % 16)
-  stateWiresS (packed &&& 15) (packed >>> 4)
-theorem stateWiresD_eq (n ids : Nat) :
-    stateWiresD n ids = (stateWiresS n ids).map (fun w => (w, projBit r1sG w, projBit r2sG w)) := by
-  induction n generalizing ids with
-  | zero => rfl
-  | succ n ih => simp [stateWiresD, stateWiresS, wireSAt, wireDAt_eq, ih]
-theorem SD_eq (s j : Nat) :
-    SD s j = (SS s j).map (fun w => (w, projBit r1sG w, projBit r2sG w)) :=
-  stateWiresD_eq _ _
-
-def htAt (s i : Nat) : Nat := fld (HT s (i / 64)) 32 (i % 64)
-def idxH (s h : Nat) : Nat := bsr (htAt s) h 2 0 (NN s)
-def idx (s : Nat) (zs : List Nat) : Nat := idxH s (hk 0 zs)
-def CN : Nat → Nat
-  | _ => 0
-def CH : Nat → Nat → Nat
-  | _, _ => 0
-def CV : Nat → Nat → Nat
-  | _, _ => 0
-def chAt (s i : Nat) : Nat := fld (CH s (i / 64)) 32 (i % 64)
-def cidxH (s h : Nat) : Nat := bsr (chAt s) h 2 0 (CN s)
-def checkCutByIdx (s : Nat) (ws : List Nat) (hint : Nat) : Bool :=
-  match hint &&& 255 with
-  | _ => false
-def cutHitH (s h : Nat) (ws : List Nat) : Bool :=
-  let i := cidxH s h
-  decide (i < CN s) && (chAt s i == h) && checkCutByIdx s ws (fld (CV s (i / 32)) 22 (i % 32))
-
-def cutHit (s : Nat) (ws : List Nat) : Bool := cutHitH s (hk 0 ws) ws
-
-theorem cutHitH_sound {u ys} (h : cutHitH u (hk 0 ys) ys = true) : ¬ RunD dom_13 goalM u ys := by
-  unfold cutHitH at h
-  simp only [Bool.and_eq_true] at h
-  have hc := h.2
-  unfold checkCutByIdx at hc
-  split at hc
-  · contradiction
-theorem cutHit_sound {u ys} (h : cutHit u ys = true) : ¬ RunD dom_13 goalM u ys := cutHitH_sound h
-
-def symsG : List (List (Nat × Nat)) := [[(0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)], [(0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4)], [(0xf0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f0, 12), (0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)], [(0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4), (0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)], [(0xf0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f0, 12)], [(0xcccccccc00000000cccccccc00000000cccccccc00000000cccccccc, 30)], [(0xcccccccc00000000cccccccc00000000cccccccc00000000cccccccc, 30), (0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)], [(0xcccccccc00000000cccccccc00000000cccccccc00000000cccccccc, 30), (0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4)], [(0xcccccccc00000000cccccccc00000000cccccccc00000000cccccccc, 30), (0xf0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f0, 12), (0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)], [(0xcccccccc00000000cccccccc00000000cccccccc00000000cccccccc, 30), (0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4), (0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)], [(0xcccccccc00000000cccccccc00000000cccccccc00000000cccccccc, 30), (0xf0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f0, 12)]]
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem symsG_ok : symsG.all (fun ms => ms.all moveOK256 && (applyMoves ms dom_13 == dom_13) && (applyMoves ms goalM == goalM)) = true := by decide +kernel
-def ori (zs : List Nat) : List Nat := pickMin 0 zs symsG zs (hk 0 zs)
-theorem ori_ok {u ys} (h : RunD dom_13 goalM u ys) : RunD dom_13 goalM u (ori ys) :=
-  pickMin_runD 0 ys h symsG ys (hk 0 ys) symsG_ok h
-
-def Z (s : Nat) := bar dom_13 goalM pairsG r1sG r2sG mpG SD SS NN htAt idxH ori 0 pool6G cutHitH s
-theorem z0 : ∀ i, 0 ≤ i → i < 0 → Z 0 i = true := by omega
-theorem z1 : ∀ i, 0 ≤ i → i < 0 → Z 1 i = true := by omega
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z2_0 : ∀ i, 0 ≤ i → i < 1 → Z 2 i = true := span_ok (by decide +kernel : span (Z 2) 1 0 = true)
-theorem z2 : ∀ i, 0 ≤ i → i < 1 → Z 2 i = true := z2_0
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z3_0 : ∀ i, 0 ≤ i → i < 1 → Z 3 i = true := span_ok (by decide +kernel : span (Z 3) 1 0 = true)
-theorem z3 : ∀ i, 0 ≤ i → i < 1 → Z 3 i = true := z3_0
-theorem checked (s : Nat) (hs : s ≤ 3) : ∀ i < NN s, Z s i = true := by
-  interval_cases s
-  · exact fun i hi => z0 i (Nat.zero_le i) hi
-  · exact fun i hi => z1 i (Nat.zero_le i) hi
-  · exact fun i hi => z2 i (Nat.zero_le i) hi
-  · exact fun i hi => z3 i (Nat.zero_le i) hi
-def RootG (s : Nat) : Bool :=
-  scr dom_13 goalM s pool6G xsM || cutHit s (ori xsM) || found SS NN idx s (ori xsM)
-
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem rootChecked : span RootG 2 2 = true := by decide +kernel
-
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem proper_failG : ∀ zs ∈ xsM.sublists, zs ≠ xsM → unorientedCov pairsG zs = false := by decide +kernel
-
-theorem noRunFull (s : Nat) (hs : s ≤ 3) (h : RunD dom_13 goalM s xsM) : False := by
-  have hmin : 2 ≤ s := by
-    have hl := run_len h; change 3 ≤ s + 1 at hl; omega
-  have hr := span_ok rootChecked s hmin (by omega)
-  unfold RootG at hr
-  rw [scr_no pool6G h, Bool.false_or, Bool.or_eq_true] at hr
-  rcases hr with hcut | hf
-  · exact cutHit_sound hcut (ori_ok h)
-  · rw [found, Bool.and_eq_true, decide_eq_true_eq, List.isPerm_iff] at hf
-    exact bar_all (by decide +kernel) rfl rfl (by decide +kernel) SD_eq (by decide +kernel) ori_ok cutHitH_sound checked s hs _ hf.1 (Run.perm hf.2 (ori_ok h))
-
-theorem noCircuit : Lower dom_13 roots_13 goal_13 4 := by
-  intro p bank hr ha
-  by_contra! hsmall
-  have hnc : ¬ IsConst dom_13 goal_13 := by
-    have h0 : isConstB dom_13 goal_13 = false := by decide +kernel
-    intro h; rw [(isConstB_iff _ _).2 h] at h0; contradiction
-  obtain ⟨s, ws, hs_le, hnd, hws_sub, hrun⟩ := reach_to_run (by decide +kernel) hnc hr ha
-  have hperm_sub : ∃ zs, zs.Sublist xsM ∧ ws.Perm zs := by
-    refine ⟨xsM.filter (fun x => decide (x ∈ ws)), List.filter_sublist, ?_⟩
-    refine (List.perm_ext_iff_of_nodup hnd (List.Nodup.filter _ (by decide +kernel : xsM.Nodup))).2 ?_
-    intro x; simp only [List.mem_filter, decide_eq_true_eq]
-    exact ⟨fun hx => ⟨hws_sub x hx, hx⟩, fun h => h.2⟩
-  obtain ⟨zs, hsub, hpz⟩ := hperm_sub
-  have hrun' := Run.perm hpz hrun
-  by_cases heq : zs = xsM
-  · subst heq; exact noRunFull s (by omega) hrun'
-  · have hcov := unorientedCov_ok (by decide +kernel) pairsG (by decide +kernel) hrun'
-    have hbad := proper_failG zs (List.mem_sublists.2 hsub) heq
-    rw [hcov] at hbad; contradiction
-
-end S_13
-
-theorem low_13 : Lower dom_13 roots_13 goal_13 4 := S_13.noCircuit
-
-def dom_14 : Nat := 0xcccccccc00000000
-def goal_14 : Nat := 0xccc8c88800000000
-def roots_14 : List Nat := [0x8888888800000000, 0xc0c0c0c000000000, 0xcc00cc0000000000, 0xcccc000000000000]
-
-theorem low_14 : Lower dom_14 roots_14 goal_14 5 :=
-  lower_slice (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    [(0x8888888800000000, 34, 35)] (by decide +kernel) (by decide +kernel) low_13
-
-def dom_15 : Nat := 0xf0f000000000000
-def goal_15 : Nat := 0xe08000000000000
-def roots_15 : List Nat := [0xa0a000000000000, 0xc0c000000000000, 0xf00000000000000]
-
-theorem low_15 : Lower dom_15 roots_15 goal_15 4 :=
-  lower_iso [(0xa0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a, 3), (0xcccc0000cccc0000cccc0000cccc0000cccc0000cccc0000cccc0000cccc, 14), (0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)] (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_13
-
-def dom_16 : Nat := 0xf0f0f0f00000000
-def goal_16 : Nat := 0xe080a0800000000
-def roots_16 : List Nat := [0xa0a0a0a00000000, 0xc0c0c0c00000000, 0xf000f0000000000, 0xf0f000000000000]
-
-theorem low_16 : Lower dom_16 roots_16 goal_16 5 :=
-  lower_slice (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    [(0xf0f000000000000, 42, 58)] (by decide +kernel) (by decide +kernel) low_15
-
-def dom_17 : Nat := 0xff00ff00000000
-def goal_17 : Nat := 0xe800a800000000
-def roots_17 : List Nat := [0xaa00aa00000000, 0xcc00cc00000000, 0xf000f000000000, 0xff000000000000]
-
-theorem low_17 : Lower dom_17 roots_17 goal_17 5 :=
-  lower_iso [(0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4)] (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_16
-
-def dom_18 : Nat := 0xffff000000000000
-def goal_18 : Nat := 0xeee8000000000000
-def roots_18 : List Nat := [0xaaaa000000000000, 0xcccc000000000000, 0xf0f0000000000000, 0xff00000000000000]
-
-theorem low_18 : Lower dom_18 roots_18 goal_18 5 :=
-  lower_slice (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    [(0xf0f0000000000000, 49, 53)] (by decide +kernel) (by decide +kernel) low_15
-
-def dom_19 : Nat := 0x5555555500000000
-def goal_19 : Nat := 0x4440400000000000
-def roots_19 : List Nat := [0x4444444400000000, 0x5050505000000000, 0x5500550000000000, 0x5555000000000000]
-
-theorem low_19 : Lower dom_19 roots_19 goal_19 5 :=
-  lower_slice (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    [(0x4444444400000000, 44, 46)] (by decide +kernel) (by decide +kernel) low_13
-
-def dom_20 : Nat := 0xff000000000000
-def goal_20 : Nat := 0xe8000000000000
-def roots_20 : List Nat := [0xaa000000000000, 0xcc000000000000, 0xf0000000000000]
-
-theorem low_20 : Lower dom_20 roots_20 goal_20 4 :=
-  lower_iso [(0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4)] (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_15
-
-def dom_21 : Nat := 0xffffffff00000000
-def goal_21 : Nat := 0xeee8eaa800000000
-def roots_21 : List Nat := [0xaaaaaaaa00000000, 0xcccccccc00000000, 0xf0f0f0f000000000, 0xff00ff0000000000, 0xffff000000000000]
-
-namespace S_21
-def pairsG : List (Nat × Nat) := [(33, 35), (33, 37), (33, 41), (34, 35), (36, 37), (38, 39), (38, 46), (38, 54), (40, 41), (42, 43), (42, 46), (42, 58), (44, 45), (44, 46), (49, 51), (49, 53), (49, 57), (50, 51), (50, 54), (50, 58), (52, 53), (52, 54), (56, 57), (56, 58), (60, 61), (60, 62)]
-def r1sG : List Nat := [33, 33, 33, 34, 36, 38, 38, 38, 40, 42, 42, 42, 44, 44, 49, 49, 49, 50, 50, 50, 52, 52, 56, 56, 60, 60]
-def r2sG : List Nat := [35, 37, 41, 35, 37, 39, 46, 54, 41, 43, 46, 58, 45, 46, 51, 53, 57, 51, 54, 58, 53, 54, 57, 58, 61, 62]
-def mpG : Nat := 0x3ffffff
-def pool6G : List Nat := []
-def xsM : List Nat := roots_21.map (· &&& dom_21)
-def goalM : Nat := goal_21 &&& dom_21
-def NN : Nat → Nat
-  | 4 => 1
-  | 5 => 8
-  | 6 => 6
-  | 7 => 1
-  | _ => 0
-def HT : Nat → Nat → Nat
-  | 4, 0 => 0x41e35c63
-  | 5, 0 => 0x9b7a7da18e73a8eb8157a8bc5afe272755f47dce45c2944c239e6b930467640c
-  | 6, 0 => 0xf10bf213cbba9a76b740b46ea3321dd27523d75b531e2a99
-  | 7, 0 => 0x5f5ce351
-  | _, _ => 0
-def dictB : Nat → Nat → Nat
-  | 0, 0 => 0xccc0ccc000000000aaaaaaaa00000000555555550000000033333333000000000f0f0f0f00000000050505050000000000ff00ff00000000000f000f00000000
-  | 0, 1 => 0xfffafffa00000000fff0fff000000000ffaaffaa00000000ff00ff0000000000fafafafa00000000f0f0f0f000000000cccccccc00000000ccc8ccc800000000
-  | 0, 2 => 0xffffaaaa00000000ffff000000000000
-  | _, _ => 0
-def stateB : Nat → Nat → Nat → Nat
-  | 4, 0, 0 => 0x10629065
-  | 5, 0, 0 => 0x83149399a0e62d2668314930181049861583149309a0f62926604146205410624a35
-  | 6, 0, 0 => 0x458a499410524c150418a31160e6292660418a49560d629266
-  | 7, 0, 0 => 0x10629265
-  | _, _, _ => 0
-def stateW : Nat → Nat
-  | 4 => 29
-  | 5 => 34
-  | 6 => 34
-  | 7 => 29
-  | _ => 0
-def wireAt (i : Nat) : Nat := fld (dictB (i / 128) (i / 8 % 16)) 64 (i % 8)
-def dictP1B : Nat → Nat → Nat
-  | 0, 0 => 0x3b8001c007ff8ffe3f1f11733f3c3cce0f080ff03fc0fc00f
-  | 0, 1 => 0xfc7ffdff03ff0f07fc1fc03f00cc7c3df3030f00383ba0000ee0
-  | 0, 2 => 0xfff001fffc000
-  | _, _ => 0
-def dictP2B : Nat → Nat → Nat
-  | 0, 0 => 0xab0bb8153d33fab0b30151911632d2c348808000db02ec024009
-  | 0, 1 => 0xffffffffdbff6f6ffdffc93f44ddfdfff34b4f2ab9bba6ae6ee9
-  | 0, 2 => 0xfff6effffc880
-  | _, _ => 0
-def p1At (i : Nat) : Nat := fld (dictP1B (i / 128) (i / 8 % 16)) 26 (i % 8)
-def p2At (i : Nat) : Nat := fld (dictP2B (i / 128) (i / 8 % 16)) 26 (i % 8)
-def wireDAt (i : Nat) : Nat × Nat × Nat :=
-  if i < 18 then (wireAt i, p1At i, p2At i) else (0, 0, 0)
-def wireDOK (i : Nat) : Bool :=
-  (p1At i == projBit r1sG (wireAt i)) && (p2At i == projBit r2sG (wireAt i))
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem wireD_ok_all : span wireDOK 18 0 = true := by decide +kernel
-theorem projBit_zero (rs : List Nat) : projBit rs 0 = 0 := by
-  induction rs with
-  | nil => rfl
-  | cons r rs ih => simp only [projBit, List.foldr_cons, Nat.zero_testBit, Bool.false_eq_true, ite_false] at ih ⊢; rw [ih]; rfl
-theorem wireDAt_eq (i : Nat) :
-    wireDAt i = (let w := if i < 18 then wireAt i else 0; (w, projBit r1sG w, projBit r2sG w)) := by
-  unfold wireDAt
-  split
-  · next hi =>
-    have h := span_ok wireD_ok_all i (Nat.zero_le i) (by omega)
-    simp only [wireDOK, Bool.and_eq_true, beq_iff_eq] at h
-    simp [h.1, h.2]
-  · simp [projBit_zero]
-def wireSAt (i : Nat) : Nat := if i < 18 then wireAt i else 0
-def stateWiresD : Nat → Nat → List (Nat × Nat × Nat)
-  | 0, _ => []
-  | n + 1, ids => wireDAt (fld ids 5 0) :: stateWiresD n (ids >>> 5)
-def stateWiresS : Nat → Nat → List Nat
-  | 0, _ => []
-  | n + 1, ids => wireSAt (fld ids 5 0) :: stateWiresS n (ids >>> 5)
-def SD (s j : Nat) : List (Nat × Nat × Nat) :=
-  let packed := fld (stateB s (j / 256) (j / 16 % 16)) (stateW s) (j % 16)
-  stateWiresD (packed &&& 15) (packed >>> 4)
-def SS (s j : Nat) : List Nat :=
-  let packed := fld (stateB s (j / 256) (j / 16 % 16)) (stateW s) (j % 16)
-  stateWiresS (packed &&& 15) (packed >>> 4)
-theorem stateWiresD_eq (n ids : Nat) :
-    stateWiresD n ids = (stateWiresS n ids).map (fun w => (w, projBit r1sG w, projBit r2sG w)) := by
-  induction n generalizing ids with
-  | zero => rfl
-  | succ n ih => simp [stateWiresD, stateWiresS, wireSAt, wireDAt_eq, ih]
-theorem SD_eq (s j : Nat) :
-    SD s j = (SS s j).map (fun w => (w, projBit r1sG w, projBit r2sG w)) :=
-  stateWiresD_eq _ _
-
-def htAt (s i : Nat) : Nat := fld (HT s (i / 64)) 32 (i % 64)
-def idxH (s h : Nat) : Nat := bsr (htAt s) h 4 0 (NN s)
-def idx (s : Nat) (zs : List Nat) : Nat := idxH s (hk 0 zs)
-def CN : Nat → Nat
-  | 4 => 7
-  | 5 => 54
-  | 6 => 19
-  | _ => 0
-def CH : Nat → Nat → Nat
-  | 4, 0 => 0xad22cee488f039675f5ce351493113f224dd624b1f8aeefa0e094e0c
-  | 5, 0 => 0xfcc79fa2f6231615e42d131ae3f30ce8e139fe35db44fe09dab593dbcd07a878cce3300ec738737ac60d055dc10d23b1bfaeed32b8694a06b72fa6d6a486bc5d94bf3d339346a38b8904b30f7c2c89807a5a941b77dc40c77733e6ff764c6cf3749cf53f7150910167e5bb3d6259fa145f5ce3515d69a9385831b4675786533a563e80144995ef4748efc3303bab490a34e12c942f5e14ef2efdd696292f032628ce4bfb27c84769250f99ad249a95e220c817c41b99c4031b35e8971b0eb1c912c2aa9a0f148eb509f3bf1208c77dbd06d2e61d00ef901f
-  | 6, 0 => 0xeb289c15db85cf97ccc7d25dc6e47c5f8f19090277186efb6b1890e067e5bb3d608578e95f5ce351527e04584fbea8484995ef473c415933358964b82f5e14ef273b926c1dcf2103059706fd
-  | _, _ => 0
-def CV : Nat → Nat → Nat
-  | 4, 0 => 0x8000000000140000000001000003
-  | 5, 0 => 0x14021002344008110003840000002000000000080000100e1000000040210000001c0000000001806100324400c1102000008c910000000c0000430440400004304408c1100000008c110300000cc110200001402100
-  | 5, 1 => 0x3044080210030440400000000004000053044040000703840000005000014c11010000000610000001cc910000001c000010000100000210440400002
-  | 6, 0 => 0x10000080000200000c000000000000000100000000005000000000050000040000000000800000
-  | _, _ => 0
-def chAt (s i : Nat) : Nat := fld (CH s (i / 64)) 32 (i % 64)
-def cidxH (s h : Nat) : Nat := bsr (chAt s) h 7 0 (CN s)
-def checkCutByIdx (s : Nat) (ws : List Nat) (hint : Nat) : Bool :=
-  match hint &&& 255 with
-  | 0 => checkCutEntry dom_12 roots_12 6 s ws hint
-  | 1 => checkCutEntry dom_14 roots_14 5 s ws hint
-  | 2 => checkCutEntry dom_16 roots_16 5 s ws hint
-  | 3 => checkCutEntry dom_17 roots_17 5 s ws hint
-  | 4 => checkCutEntry dom_18 roots_18 5 s ws hint
-  | 5 => checkCutEntry dom_19 roots_19 5 s ws hint
-  | 6 => checkCutEntry dom_15 roots_15 4 s ws hint
-  | 7 => checkCutEntry dom_13 roots_13 4 s ws hint
-  | 8 => checkCutEntry dom_20 roots_20 4 s ws hint
-  | _ => false
-def cutHitH (s h : Nat) (ws : List Nat) : Bool :=
-  let i := cidxH s h
-  decide (i < CN s) && (chAt s i == h) && checkCutByIdx s ws (fld (CV s (i / 32)) 22 (i % 32))
-
-def cutHit (s : Nat) (ws : List Nat) : Bool := cutHitH s (hk 0 ws) ws
-
-theorem cutHitH_sound {u ys} (h : cutHitH u (hk 0 ys) ys = true) : ¬ RunD dom_21 goalM u ys := by
-  unfold cutHitH at h
-  simp only [Bool.and_eq_true] at h
-  have hc := h.2
-  unfold checkCutByIdx at hc
-  split at hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_12 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_14 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_16 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_17 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_18 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_19 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_15 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_13 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_20 _ hc
-  · contradiction
-theorem cutHit_sound {u ys} (h : cutHit u ys = true) : ¬ RunD dom_21 goalM u ys := cutHitH_sound h
-
-def symsG : List (List (Nat × Nat)) := [[(0xf000f000f000f000f000f000f000f000f000f000f000f000f000f000f000f0, 4)]]
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem symsG_ok : symsG.all (fun ms => ms.all moveOK256 && (applyMoves ms dom_21 == dom_21) && (applyMoves ms goalM == goalM)) = true := by decide +kernel
-def ori (zs : List Nat) : List Nat := pickMin 0 zs symsG zs (hk 0 zs)
-theorem ori_ok {u ys} (h : RunD dom_21 goalM u ys) : RunD dom_21 goalM u (ori ys) :=
-  pickMin_runD 0 ys h symsG ys (hk 0 ys) symsG_ok h
-
-def Z (s : Nat) := bar dom_21 goalM pairsG r1sG r2sG mpG SD SS NN htAt idxH ori 0 pool6G cutHitH s
-theorem z0 : ∀ i, 0 ≤ i → i < 0 → Z 0 i = true := by omega
-theorem z1 : ∀ i, 0 ≤ i → i < 0 → Z 1 i = true := by omega
-theorem z2 : ∀ i, 0 ≤ i → i < 0 → Z 2 i = true := by omega
-theorem z3 : ∀ i, 0 ≤ i → i < 0 → Z 3 i = true := by omega
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z4_0 : ∀ i, 0 ≤ i → i < 1 → Z 4 i = true := span_ok (by decide +kernel : span (Z 4) 1 0 = true)
-theorem z4 : ∀ i, 0 ≤ i → i < 1 → Z 4 i = true := z4_0
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z5_0 : ∀ i, 0 ≤ i → i < 8 → Z 5 i = true := span_ok (by decide +kernel : span (Z 5) 8 0 = true)
-theorem z5 : ∀ i, 0 ≤ i → i < 8 → Z 5 i = true := z5_0
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z6_0 : ∀ i, 0 ≤ i → i < 6 → Z 6 i = true := span_ok (by decide +kernel : span (Z 6) 6 0 = true)
-theorem z6 : ∀ i, 0 ≤ i → i < 6 → Z 6 i = true := z6_0
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z7_0 : ∀ i, 0 ≤ i → i < 1 → Z 7 i = true := span_ok (by decide +kernel : span (Z 7) 1 0 = true)
-theorem z7 : ∀ i, 0 ≤ i → i < 1 → Z 7 i = true := z7_0
-theorem checked (s : Nat) (hs : s ≤ 7) : ∀ i < NN s, Z s i = true := by
-  interval_cases s
-  · exact fun i hi => z0 i (Nat.zero_le i) hi
-  · exact fun i hi => z1 i (Nat.zero_le i) hi
-  · exact fun i hi => z2 i (Nat.zero_le i) hi
-  · exact fun i hi => z3 i (Nat.zero_le i) hi
-  · exact fun i hi => z4 i (Nat.zero_le i) hi
-  · exact fun i hi => z5 i (Nat.zero_le i) hi
-  · exact fun i hi => z6 i (Nat.zero_le i) hi
-  · exact fun i hi => z7 i (Nat.zero_le i) hi
-def RootG (s : Nat) : Bool :=
-  scr dom_21 goalM s pool6G xsM || cutHit s (ori xsM) || found SS NN idx s (ori xsM)
-
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem rootChecked : span RootG 4 4 = true := by decide +kernel
-
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem proper_failG : ∀ zs ∈ xsM.sublists, zs ≠ xsM → unorientedCov pairsG zs = false := by decide +kernel
-
-theorem noRunFull (s : Nat) (hs : s ≤ 7) (h : RunD dom_21 goalM s xsM) : False := by
-  have hmin : 4 ≤ s := by
-    have hl := run_len h; change 5 ≤ s + 1 at hl; omega
-  have hr := span_ok rootChecked s hmin (by omega)
-  unfold RootG at hr
-  rw [scr_no pool6G h, Bool.false_or, Bool.or_eq_true] at hr
-  rcases hr with hcut | hf
-  · exact cutHit_sound hcut (ori_ok h)
-  · rw [found, Bool.and_eq_true, decide_eq_true_eq, List.isPerm_iff] at hf
-    exact bar_all (by decide +kernel) rfl rfl (by decide +kernel) SD_eq (by decide +kernel) ori_ok cutHitH_sound checked s hs _ hf.1 (Run.perm hf.2 (ori_ok h))
-
-theorem noCircuit : Lower dom_21 roots_21 goal_21 8 := by
-  intro p bank hr ha
-  by_contra! hsmall
-  have hnc : ¬ IsConst dom_21 goal_21 := by
-    have h0 : isConstB dom_21 goal_21 = false := by decide +kernel
-    intro h; rw [(isConstB_iff _ _).2 h] at h0; contradiction
-  obtain ⟨s, ws, hs_le, hnd, hws_sub, hrun⟩ := reach_to_run (by decide +kernel) hnc hr ha
-  have hperm_sub : ∃ zs, zs.Sublist xsM ∧ ws.Perm zs := by
-    refine ⟨xsM.filter (fun x => decide (x ∈ ws)), List.filter_sublist, ?_⟩
-    refine (List.perm_ext_iff_of_nodup hnd (List.Nodup.filter _ (by decide +kernel : xsM.Nodup))).2 ?_
-    intro x; simp only [List.mem_filter, decide_eq_true_eq]
-    exact ⟨fun hx => ⟨hws_sub x hx, hx⟩, fun h => h.2⟩
-  obtain ⟨zs, hsub, hpz⟩ := hperm_sub
-  have hrun' := Run.perm hpz hrun
-  by_cases heq : zs = xsM
-  · subst heq; exact noRunFull s (by omega) hrun'
-  · have hcov := unorientedCov_ok (by decide +kernel) pairsG (by decide +kernel) hrun'
-    have hbad := proper_failG zs (List.mem_sublists.2 hsub) heq
-    rw [hcov] at hbad; contradiction
-
-end S_21
-
-theorem low_21 : Lower dom_21 roots_21 goal_21 8 := S_21.noCircuit
-
-def dom_22 : Nat := 0xf000f000f000f00
-def goal_22 : Nat := 0xe000a000e000800
-def roots_22 : List Nat := [0xa000a000a000a00, 0xc000c000c000c00, 0xf0000000f000000, 0xf000f0000000000]
-
-theorem low_22 : Lower dom_22 roots_22 goal_22 5 :=
-  lower_slice (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    [(0xf000f0000000000, 9, 41)] (by decide +kernel) (by decide +kernel) low_3
-
-def dom_23 : Nat := 0xf0f0f0f0f0f0f0f
-def goal_23 : Nat := 0xe080a080e080808
-def roots_23 : List Nat := [0xa0a0a0a0a0a0a0a, 0xc0c0c0c0c0c0c0c, 0xf000f000f000f00, 0xf0f00000f0f0000, 0xf0f0f0f00000000]
-
-namespace S_23
-def pairsG : List (Nat × Nat) := [(1, 3), (2, 3), (9, 11), (9, 25), (9, 41), (10, 11), (10, 26), (17, 19), (17, 25), (18, 19), (18, 26), (24, 25), (24, 26), (33, 35), (33, 41), (34, 35), (40, 41), (42, 43), (42, 58), (49, 51), (49, 57), (50, 51), (50, 58), (56, 57), (56, 58)]
-def r1sG : List Nat := [1, 2, 9, 9, 9, 10, 10, 17, 17, 18, 18, 24, 24, 33, 33, 34, 40, 42, 42, 49, 49, 50, 50, 56, 56]
-def r2sG : List Nat := [3, 3, 11, 25, 41, 11, 26, 19, 25, 19, 26, 25, 26, 35, 41, 35, 41, 43, 58, 51, 57, 51, 58, 57, 58]
-def mpG : Nat := 0x1ffffff
-def pool6G : List Nat := []
-def xsM : List Nat := roots_23.map (· &&& dom_23)
-def goalM : Nat := goal_23 &&& dom_23
-def NN : Nat → Nat
-  | 3 => 1
-  | 4 => 3
-  | 5 => 6
-  | 6 => 1
-  | _ => 0
-def HT : Nat → Nat → Nat
-  | 3, 0 => 0x36049d5a
-  | 4, 0 => 0xf9baf07993b906c569369245
-  | 5, 0 => 0xc6eafbb092fd4275925f5c686e9b733a4cac355d2a5942f4
-  | 6, 0 => 0xc3827481
-  | _, _ => 0
-def dictB : Nat → Nat → Nat
-  | 0, 0 => 0xe0e0e0e0e0e0e0e0e0e00000e0e00000e000e000e000e000c0c0c0c0c0c0c0c0a0a0a0a0a0a0a0a080808080808080805050505050505050303030303030303
-  | 0, 1 => 0xf0f0f0f000000000f0f00000f0f00000f000f000f000f00
-  | _, _ => 0
-def stateB : Nat → Nat → Nat → Nat
-  | 3, 0, 0 => 0xa9524
-  | 4, 0, 0 => 0xa86435a98725a95435
-  | 5, 0, 0 => 0xa987436a9843060a98305a9843260a98415a984316
-  | 6, 0, 0 => 0xa98435
-  | _, _, _ => 0
-def stateW : Nat → Nat
-  | 3 => 20
-  | 4 => 24
-  | 5 => 28
-  | 6 => 24
-  | _ => 0
-def wireAt (i : Nat) : Nat := fld (dictB (i / 128) (i / 8 % 16)) 64 (i % 8)
-def dictP1B : Nat → Nat → Nat
-  | 0, 0 => 0x3f73ff9e01e000c00f86686620c30ce8000003cf3cc599799d
-  | 0, 1 => 0x7ff8003f03f0187187c
-  | _, _ => 0
-def dictP2B : Nat → Nat → Nat
-  | 0, 0 => 0xffffffff07f23aebaf96eb6e75df5df8aa8a9e882880914918
-  | 0, 1 => 0x7ff8043f83f91d75d7c
-  | _, _ => 0
-def p1At (i : Nat) : Nat := fld (dictP1B (i / 128) (i / 8 % 16)) 25 (i % 8)
-def p2At (i : Nat) : Nat := fld (dictP2B (i / 128) (i / 8 % 16)) 25 (i % 8)
-def wireDAt (i : Nat) : Nat × Nat × Nat :=
-  if i < 11 then (wireAt i, p1At i, p2At i) else (0, 0, 0)
-def wireDOK (i : Nat) : Bool :=
-  (p1At i == projBit r1sG (wireAt i)) && (p2At i == projBit r2sG (wireAt i))
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem wireD_ok_all : span wireDOK 11 0 = true := by decide +kernel
-theorem projBit_zero (rs : List Nat) : projBit rs 0 = 0 := by
-  induction rs with
-  | nil => rfl
-  | cons r rs ih => simp only [projBit, List.foldr_cons, Nat.zero_testBit, Bool.false_eq_true, ite_false] at ih ⊢; rw [ih]; rfl
-theorem wireDAt_eq (i : Nat) :
-    wireDAt i = (let w := if i < 11 then wireAt i else 0; (w, projBit r1sG w, projBit r2sG w)) := by
-  unfold wireDAt
-  split
-  · next hi =>
-    have h := span_ok wireD_ok_all i (Nat.zero_le i) (by omega)
-    simp only [wireDOK, Bool.and_eq_true, beq_iff_eq] at h
-    simp [h.1, h.2]
-  · simp [projBit_zero]
-def wireSAt (i : Nat) : Nat := if i < 11 then wireAt i else 0
-def stateWiresD : Nat → Nat → List (Nat × Nat × Nat)
-  | 0, _ => []
-  | n + 1, ids => wireDAt (fld ids 4 0) :: stateWiresD n (ids >>> 4)
-def stateWiresS : Nat → Nat → List Nat
-  | 0, _ => []
-  | n + 1, ids => wireSAt (fld ids 4 0) :: stateWiresS n (ids >>> 4)
-def SD (s j : Nat) : List (Nat × Nat × Nat) :=
-  let packed := fld (stateB s (j / 256) (j / 16 % 16)) (stateW s) (j % 16)
-  stateWiresD (packed &&& 15) (packed >>> 4)
-def SS (s j : Nat) : List Nat :=
-  let packed := fld (stateB s (j / 256) (j / 16 % 16)) (stateW s) (j % 16)
-  stateWiresS (packed &&& 15) (packed >>> 4)
-theorem stateWiresD_eq (n ids : Nat) :
-    stateWiresD n ids = (stateWiresS n ids).map (fun w => (w, projBit r1sG w, projBit r2sG w)) := by
-  induction n generalizing ids with
-  | zero => rfl
-  | succ n ih => simp [stateWiresD, stateWiresS, wireSAt, wireDAt_eq, ih]
-theorem SD_eq (s j : Nat) :
-    SD s j = (SS s j).map (fun w => (w, projBit r1sG w, projBit r2sG w)) :=
-  stateWiresD_eq _ _
-
-def htAt (s i : Nat) : Nat := fld (HT s (i / 64)) 32 (i % 64)
-def idxH (s h : Nat) : Nat := bsr (htAt s) h 4 0 (NN s)
-def idx (s : Nat) (zs : List Nat) : Nat := idxH s (hk 0 zs)
-def CN : Nat → Nat
-  | 4 => 7
-  | 5 => 30
-  | _ => 0
-def CH : Nat → Nat → Nat
-  | 4, 0 => 0xc54abd37c38274819a288980622bdb261ba5db2b165cd17c0f49a64c
-  | 5, 0 => 0xfdfe6beeeaaab64ae017dec6d3d4756acd1774a2ccdc9e5ec3827481b3e17d52afe09bc3a4e07297a48636c1a17346f2a052ac9e8ea8457e89b786ce87084d027628b61a75bef6de72783b7e6c35459f6b87e637652e56205a3c9a365878c3dd4b95005a4599038c418db97037f8ccf414d4acce006bb7a1
-  | _, _ => 0
-def CV : Nat → Nat → Nat
-  | 4, 0 => 0x2000000000000000040000100000000003
-  | 5, 0 => 0x8000010000080000200000000000000008000020000080000300000000003000004000000000000000000000c0000000000c0000000000c00002000000000020000000000300000000002
-  | _, _ => 0
-def chAt (s i : Nat) : Nat := fld (CH s (i / 64)) 32 (i % 64)
-def cidxH (s h : Nat) : Nat := bsr (chAt s) h 6 0 (CN s)
-def checkCutByIdx (s : Nat) (ws : List Nat) (hint : Nat) : Bool :=
-  match hint &&& 255 with
-  | 0 => checkCutEntry dom_16 roots_16 5 s ws hint
-  | 1 => checkCutEntry dom_4 roots_4 5 s ws hint
-  | 2 => checkCutEntry dom_22 roots_22 5 s ws hint
-  | 3 => checkCutEntry dom_15 roots_15 4 s ws hint
-  | _ => false
-def cutHitH (s h : Nat) (ws : List Nat) : Bool :=
-  let i := cidxH s h
-  decide (i < CN s) && (chAt s i == h) && checkCutByIdx s ws (fld (CV s (i / 32)) 22 (i % 32))
-
-def cutHit (s : Nat) (ws : List Nat) : Bool := cutHitH s (hk 0 ws) ws
-
-theorem cutHitH_sound {u ys} (h : cutHitH u (hk 0 ys) ys = true) : ¬ RunD dom_23 goalM u ys := by
-  unfold cutHitH at h
-  simp only [Bool.and_eq_true] at h
-  have hc := h.2
-  unfold checkCutByIdx at hc
-  split at hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_16 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_4 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_22 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_15 _ hc
-  · contradiction
-theorem cutHit_sound {u ys} (h : cutHit u ys = true) : ¬ RunD dom_23 goalM u ys := cutHitH_sound h
-
-def symsG : List (List (Nat × Nat)) := []
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem symsG_ok : symsG.all (fun ms => ms.all moveOK256 && (applyMoves ms dom_23 == dom_23) && (applyMoves ms goalM == goalM)) = true := by decide +kernel
-def ori (zs : List Nat) : List Nat := pickMin 0 zs symsG zs (hk 0 zs)
-theorem ori_ok {u ys} (h : RunD dom_23 goalM u ys) : RunD dom_23 goalM u (ori ys) :=
-  pickMin_runD 0 ys h symsG ys (hk 0 ys) symsG_ok h
-
-def Z (s : Nat) := bar dom_23 goalM pairsG r1sG r2sG mpG SD SS NN htAt idxH ori 0 pool6G cutHitH s
-theorem z0 : ∀ i, 0 ≤ i → i < 0 → Z 0 i = true := by omega
-theorem z1 : ∀ i, 0 ≤ i → i < 0 → Z 1 i = true := by omega
-theorem z2 : ∀ i, 0 ≤ i → i < 0 → Z 2 i = true := by omega
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z3_0 : ∀ i, 0 ≤ i → i < 1 → Z 3 i = true := span_ok (by decide +kernel : span (Z 3) 1 0 = true)
-theorem z3 : ∀ i, 0 ≤ i → i < 1 → Z 3 i = true := z3_0
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z4_0 : ∀ i, 0 ≤ i → i < 3 → Z 4 i = true := span_ok (by decide +kernel : span (Z 4) 3 0 = true)
-theorem z4 : ∀ i, 0 ≤ i → i < 3 → Z 4 i = true := z4_0
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z5_0 : ∀ i, 0 ≤ i → i < 6 → Z 5 i = true := span_ok (by decide +kernel : span (Z 5) 6 0 = true)
-theorem z5 : ∀ i, 0 ≤ i → i < 6 → Z 5 i = true := z5_0
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z6_0 : ∀ i, 0 ≤ i → i < 1 → Z 6 i = true := span_ok (by decide +kernel : span (Z 6) 1 0 = true)
-theorem z6 : ∀ i, 0 ≤ i → i < 1 → Z 6 i = true := z6_0
-theorem checked (s : Nat) (hs : s ≤ 6) : ∀ i < NN s, Z s i = true := by
-  interval_cases s
-  · exact fun i hi => z0 i (Nat.zero_le i) hi
-  · exact fun i hi => z1 i (Nat.zero_le i) hi
-  · exact fun i hi => z2 i (Nat.zero_le i) hi
-  · exact fun i hi => z3 i (Nat.zero_le i) hi
-  · exact fun i hi => z4 i (Nat.zero_le i) hi
-  · exact fun i hi => z5 i (Nat.zero_le i) hi
-  · exact fun i hi => z6 i (Nat.zero_le i) hi
-def RootG (s : Nat) : Bool :=
-  scr dom_23 goalM s pool6G xsM || cutHit s (ori xsM) || found SS NN idx s (ori xsM)
-
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem rootChecked : span RootG 3 4 = true := by decide +kernel
-
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem proper_failG : ∀ zs ∈ xsM.sublists, zs ≠ xsM → unorientedCov pairsG zs = false := by decide +kernel
-
-theorem noRunFull (s : Nat) (hs : s ≤ 6) (h : RunD dom_23 goalM s xsM) : False := by
-  have hmin : 4 ≤ s := by
-    have hl := run_len h; change 5 ≤ s + 1 at hl; omega
-  have hr := span_ok rootChecked s hmin (by omega)
-  unfold RootG at hr
-  rw [scr_no pool6G h, Bool.false_or, Bool.or_eq_true] at hr
-  rcases hr with hcut | hf
-  · exact cutHit_sound hcut (ori_ok h)
-  · rw [found, Bool.and_eq_true, decide_eq_true_eq, List.isPerm_iff] at hf
-    exact bar_all (by decide +kernel) rfl rfl (by decide +kernel) SD_eq (by decide +kernel) ori_ok cutHitH_sound checked s hs _ hf.1 (Run.perm hf.2 (ori_ok h))
-
-theorem noCircuit : Lower dom_23 roots_23 goal_23 7 := by
-  intro p bank hr ha
-  by_contra! hsmall
-  have hnc : ¬ IsConst dom_23 goal_23 := by
-    have h0 : isConstB dom_23 goal_23 = false := by decide +kernel
-    intro h; rw [(isConstB_iff _ _).2 h] at h0; contradiction
-  obtain ⟨s, ws, hs_le, hnd, hws_sub, hrun⟩ := reach_to_run (by decide +kernel) hnc hr ha
-  have hperm_sub : ∃ zs, zs.Sublist xsM ∧ ws.Perm zs := by
-    refine ⟨xsM.filter (fun x => decide (x ∈ ws)), List.filter_sublist, ?_⟩
-    refine (List.perm_ext_iff_of_nodup hnd (List.Nodup.filter _ (by decide +kernel : xsM.Nodup))).2 ?_
-    intro x; simp only [List.mem_filter, decide_eq_true_eq]
-    exact ⟨fun hx => ⟨hws_sub x hx, hx⟩, fun h => h.2⟩
-  obtain ⟨zs, hsub, hpz⟩ := hperm_sub
-  have hrun' := Run.perm hpz hrun
-  by_cases heq : zs = xsM
-  · subst heq; exact noRunFull s (by omega) hrun'
-  · have hcov := unorientedCov_ok (by decide +kernel) pairsG (by decide +kernel) hrun'
-    have hbad := proper_failG zs (List.mem_sublists.2 hsub) heq
-    rw [hcov] at hbad; contradiction
-
-end S_23
-
-theorem low_23 : Lower dom_23 roots_23 goal_23 7 := S_23.noCircuit
-
-def dom_24 : Nat := 0xffff0000ffff
-def goal_24 : Nat := 0xeaa80000e8a8
-def roots_24 : List Nat := [0xaaaa0000aaaa, 0xcccc0000cccc, 0xf0f00000f0f0, 0xff000000ff00, 0xffff00000000]
-
-theorem low_24 : Lower dom_24 roots_24 goal_24 7 :=
-  lower_slice (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    [(0xffff00000000, 9, 41)] (by decide +kernel) (by decide +kernel) low_12
-
-def dom_25 : Nat := 0xff00ff00ff00ff00
-def goal_25 : Nat := 0xee00ea00ee00e800
-def roots_25 : List Nat := [0xaa00aa00aa00aa00, 0xcc00cc00cc00cc00, 0xf000f000f000f000, 0xff000000ff000000, 0xff00ff0000000000]
-
-theorem low_25 : Lower dom_25 roots_25 goal_25 6 :=
-  lower_slice (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
-    [(0xf000f000f000f000, 9, 13)] (by decide +kernel) (by decide +kernel) low_22
-
-def dom_26 : Nat := 0xff000000ff00
-def goal_26 : Nat := 0xea000000e800
-def roots_26 : List Nat := [0xaa000000aa00, 0xcc000000cc00, 0xf0000000f000, 0xff0000000000]
-
-theorem low_26 : Lower dom_26 roots_26 goal_26 5 :=
-  lower_iso [(0xf0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f00000f0f0, 12)] (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_22
-
-def dom_27 : Nat := 0xf0f0000
-def goal_27 : Nat := 0xe080000
-def roots_27 : List Nat := [0xa0a0000, 0xc0c0000, 0xf000000]
-
-theorem low_27 : Lower dom_27 roots_27 goal_27 4 :=
-  lower_iso [(0xff000000ff000000ff000000ff000000ff000000ff000000ff000000ff00, 8)] (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_3
-
-def dom_28 : Nat := 0xffffffffffffffff
-def goal_28 : Nat := 0xeee8eaa8eee8e8a8
-def roots_28 : List Nat := [0xaaaaaaaaaaaaaaaa, 0xcccccccccccccccc, 0xf0f0f0f0f0f0f0f0, 0xff00ff00ff00ff00, 0xffff0000ffff0000, 0xffffffff00000000]
-
-namespace S_28
-def pairsG : List (Nat × Nat) := [(1, 3), (1, 5), (2, 3), (4, 5), (6, 7), (6, 14), (6, 22), (9, 11), (9, 13), (9, 25), (9, 41), (10, 11), (10, 14), (10, 26), (12, 13), (12, 14), (17, 19), (17, 21), (17, 25), (18, 19), (18, 22), (18, 26), (20, 21), (20, 22), (24, 25), (24, 26), (28, 29), (28, 30), (33, 35), (33, 37), (33, 41), (34, 35), (36, 37), (38, 39), (38, 46), (38, 54), (40, 41), (42, 43), (42, 46), (42, 58), (44, 45), (44, 46), (49, 51), (49, 53), (49, 57), (50, 51), (50, 54), (50, 58), (52, 53), (52, 54), (56, 57), (56, 58), (60, 61), (60, 62)]
-def r1sG : List Nat := [1, 1, 2, 4, 6, 6, 6, 9, 9, 9, 9, 10, 10, 10, 12, 12, 17, 17, 17, 18, 18, 18, 20, 20, 24, 24, 28, 28, 33, 33, 33, 34, 36, 38, 38, 38, 40, 42, 42, 42, 44, 44, 49, 49, 49, 50, 50, 50, 52, 52, 56, 56, 60, 60]
-def r2sG : List Nat := [3, 5, 3, 5, 7, 14, 22, 11, 13, 25, 41, 11, 14, 26, 13, 14, 19, 21, 25, 19, 22, 26, 21, 22, 25, 26, 29, 30, 35, 37, 41, 35, 37, 39, 46, 54, 41, 43, 46, 58, 45, 46, 51, 53, 57, 51, 54, 58, 53, 54, 57, 58, 61, 62]
-def mpG : Nat := 0x3fffffffffffff
-def pool6G : List Nat := []
-def xsM : List Nat := roots_28.map (· &&& dom_28)
-def goalM : Nat := goal_28 &&& dom_28
-def NN : Nat → Nat
-  | 4 => 2
-  | 5 => 13
-  | 6 => 58
-  | 7 => 88
-  | 8 => 21
-  | 9 => 1
-  | _ => 0
-def HT : Nat → Nat → Nat
-  | 4, 0 => 0x432ff1a50778d229
-  | 5, 0 => 0xf7fa745bf37843e1ed38ee7fc775bacaac9841fda79986aea0b7fc5792e957ae833a36087594f423732cd8d958e66ead3ec44bf3
-  | 6, 0 => 0xfcd91be7f66bd375ef885172eb121e74e9e0e609dd2c37d2d97fc822d79dcf25d1581d0ecb5a385fcad25745ca14a60bc46ac8f7c42e642ac22701b7c111313ebeea5a39be4769d9bab9a1bdb7dce78eb66e795fb4b954c9a7853e24a43fb4319aca79e397a53cfb8e3f8c778d9c69668cc6a3578c51c7138b4b712b8adfa09e8436e17f77e0dac777abf41374cf39e46d31fd9d64c8c42e5c97debb5925466958817b3f56488c3a4c8a818c45a7f5983a822ece39de4fb63808c782328e8708324417602df741622c42325c1c96ea4919ba301a17b77a520f8e38f60ee7b93a0b2c8ce609199978
-  | 7, 0 => 0xaa87c3f1aa07d0ffa98e4816a3f2435da02ef21b9db654639c48de2399ed5e8797a5128c9710a458944ede0093f42b8d9117715e90061e318f6e24048d5eaaf98b8fda438a81f0ca827639727f1797dc7e22428f7db173387b2b17a179e15a28721cd8336db8095f6bed6d236b6909ce679d352a673394255c9fbd605aa8a6b951099cc6505beeb35038abd64f0fba7a4e2ce2974e1717654a3f78dc49226c8f43a9f848434ac0324214fad13c21f90f387c2216359f67e732ba82ac2d90db782d6df75a2b81626d28a4a83e2774c460275958f22705880d233e51982219ec0a20df43cc1fb72b911e7c63c9175a929b0e7dd0190c22507d0754ea1506291d83
-  | 7, 1 => 0xff939ceffc3650befac274d4f15afe71eef3064deec76f65ec164c1ee606f433e48a3599e1ccafbce088d44dda8fa153d9b9b7a8d3fa20bfd0dd3a20cf9551ebcea2794ccdd2d617cbfcbae9c33e8ebcbf01fb40b702d21ab080f6ebaab1140c
-  | 8, 0 => 0xf33b5fd0d1efb8f3b47be621a6563cc3a1f16def7f4590c97e1a8a567cea112d76f0de33764e5f61705b5d9f61ca40085fbac6fd5cde0cce5059633d34064f6c2efbd9641b78d4bc1606144c0e7e151305169eb0
-  | 9, 0 => 0x42b779a3
-  | _, _ => 0
-def dictB : Nat → Nat → Nat
-  | 0, 0 => 0xe0e0e0e0e0e0e0e0707070707070707050f050f050f050f05050505050505050404040404040404030f030f030f030f00ff00ff00ff00ff0000ffff0000ffff
-  | 0, 1 => 0x3377337733773377333f333f333f333f333377773333777733333f3f33333f3f333333ff333333ff333333333333333311551155115511550f0f0f0f0f0f0f0f
-  | 0, 2 => 0xaa00aa00aa00aa008888888888888888555555555555555555555500555555005555505055555050555055505550555055005500550055003737373737373737
-  | 0, 3 => 0xccccc0c0ccccc0c0cccc8888cccc8888ccc8ccc8ccc8ccc8ccc0ccc0ccc0ccc0cc88cc88cc88cc88cc00cc00cc00cc00c8c8c8c8c8c8c8c8aaaaaaaaaaaaaaaa
-  | 0, 4 => 0xeeeee0e0eeeee0e0eeeaeeeaeeeaeeeaeee0eee0eee0eee0eeaaeeaaeeaaeeaaee00ee00ee00ee00cccccccccccccccccccccc00cccccc00ccccc8c8ccccc8c8
-  | 0, 5 => 0xf8f8f8f8f8f8f8f8f800f800f800f800f3f3f3f3f3f3f3f3f0f0f0f0f0f0f0f0eeeeeeeeeeeeeeeeeeeeeeaaeeeeeeaaeeeeee00eeeeee00eeeeeaeaeeeeeaea
-  | 0, 6 => 0xff33ff33ff33ff33ff00ff00ff00ff00fefafefafefafefafcfcfcfcfcfcfcfcfcf0fcf0fcf0fcf0fafafafafafafafafaf0faf0faf0faf0fa00fa00fa00fa00
-  | 0, 7 => 0xffff8888ffff8888ffff3333ffff3333ffff0000ffff0000fff8fff8fff8fff8fff0fff0fff0fff0ffccffccffccffccffaaffaaffaaffaaff88ff88ff88ff88
-  | 0, 8 => 0xffffffff00000000ffffff00ffffff00fffff8f8fffff8f8fffff800fffff800fffff0f0fffff0f0ffffccccffffccccffffaaaaffffaaaa
-  | _, _ => 0
-def stateB : Nat → Nat → Nat → Nat
-  | 4, 0, 0 => 0x233d6cbd52c686f11185
-  | 5, 0, 0 => 0x233d6cb141668cf5b333261a33d6cbce9868cf5b2f4261a33d78b911868cf5b2f4061a33d6cbce1868d0db2f4461a33d6cb129668cf5b2f3e61a33d6cb131668cf5b2c5459a33d6cb12196
-  | 6, 0, 0 => 0x8cf5b2c4c88c3808cd91151001a33d6cbd11802f19eb65888c0b78cf5b2f5c88c3808cf5b223019a33d6cb152230f19eb658acb0178cf5b2c446093808cb0c0a020180467a6050802d1a2bd6cbd11878cf5b2f446033c67ad96223035e3457ad962b2ce0232230200806
-  | 6, 0, 1 => 0x8cf5db658acb3808cf5b22301da33d6cb11180af19eb666c911878cf5b2c3e60b3c67ad96223039c0466cbd11800d19eb65888c0270119b2c565803008cf5b2b2c21a33d76b122230f19eb65888c0c78cf5b2c4a88c3808cd96151401a33d6cb0d1930e0233d6c545086
-  | 6, 0, 2 => 0x8d09eb65e88c3c67ad96294461e33d6cb111820e0233d4688c0868d11eb65e88c3c67ad96223051e33d6cb111806f1a13d6cb1596701196222a0403008cf51151005a33d6cb0e182cf19eb65888c1370119b18142003467ad96274461e33d76d97a230f19eb65888c0f7
-  | 6, 0, 3 => 0x233d78d97a230e0233d5e88c0168cf5b355888c3c67ad96223019c0467ab159602d19eb65884c1678cf5b2c44604bc67ad992c4889e33d6cb142230e0233d58545016
-  | 7, 0, 0 => 0x8d15eb65888c16800023365888a806000233d6c88a8868d15eb65888c1580119eb65888e187000233d72b111760119eb662b111870119b325888c007011a2bd6cb0c0a70119eb65eb111870119ebb5888d1870119eb65888c9870119eb45888c0170119eac4460b0178cf5b2c5688c0180119eac4460a817
-  | 7, 0, 1 => 0x119b2c5688c0070119eb65888f1878cf5b2c4460b0188cf5db65888c0a80119eb65688c0870119eb6588909878cf5b2c4460a8180119eb64468c0870119eb658605017000233f6cb111860119ebb6cb11157000233d6cb0a8a60119b2c446050070119eb6446050870119eb664b0c0a70119eb96cb11157
-  | 7, 0, 2 => 0x119f3d6cb0c0a7000233d6c6050860119eb666b111878d09eb65888c0a80119eb65888d9870119eb658911187000233d74b0d186000233644604006011a13d6cb11157011a03d6cb111578cf5b325888c0488cf5b3260b111888cf5db658ad1188000233d6cbd11860119eb65868c0a7000233d6cb15966
-  | 7, 0, 3 => 0x8cf5db65888c158000233d588d11860119eb65888c0470119ebb6cb0c0a70119eb65ab11187000233d5888a8160119b345888c0070119b2c4460b0078d09eb658ad11880119eb64460b0870119eb25888c0170119b2c4460a8070119eb64460a8870119eb76cb0c0a70119eb96cb0c0a7000233658605006
-  | 7, 0, 4 => 0x8d15eb658ad11880119eb65888a8178d09eb65888c1688d09eb65888c1588cf5b325888c988011a13d6cb0c0a70119eb664b11157011a03d6cb0c0a70119eb64460b8870119eb65ab0c0a78d15eb65888c0a80119eac5688c017011a2bd6cb11157000233d70b111868cf5db65888c1680119eac44605017
-  | 7, 0, 5 => 0x233d586050160119eb65888f9870119eb65888d1578cf5b325888d188000232c446008068cf5b2c44605018000233d446040160119eb65888a917
-  | 8, 0, 0 => 0x8cf5b345888c3c67ae9b2c4461e33d6cb11182cf19eb65888c1578cf5db65888c3808cf5b2c3029a33d72d962230e023365888c0060119eb64460434682f5b2c4461e33d6cb15a230f19eb65888d1878cf5b2c446053c67ad96223005c0467ad96222ad19eb664b11187
-  | 8, 0, 1 => 0x11a2bd6cb111870119eac44600b467ad9622305de3427ad962230f1a03d6cb11187
-  | 9, 0, 0 => 0x233d6cb11186
-  | _, _, _ => 0
-def stateW : Nat → Nat
-  | 4 => 39
-  | 5 => 46
-  | 6 => 53
-  | 7 => 60
-  | 8 => 53
-  | 9 => 46
-  | _ => 0
-def wireAt (i : Nat) : Nat := fld (dictB (i / 128) (i / 8 % 16)) 64 (i % 8)
-def dictP1B : Nat → Nat → Nat
-  | 0, 0 => 0x3f383c0fcfe1ccfcf0f33f3f8733f3c3ccfce01cce0f08338380403838200e0e010cfc10f33f07870ff03fc3fc01fc003fff000ffff
-  | 0, 1 => 0xfffc7fffff1ffffff11ffffc78ffc7fffff1ffffff1ff1ffc7ff8ffc7c7fff1f1ffff1f117fc7c78bff8c7e3fe301f0cfcf0f33f3f87
-  | 0, 2 => 0x1e000000000000000ff8ffe3fe3e1f3fe3f00ff8f800ff8c3c3fe301e3f03ff0fc0f878f00fc03c03e003ffff1ffffff8f
-  | 0, 3 => 0x3803800e001c00e000003800000003b80000e1c0000ee000038700003800000e000000e000003800000038000001c001c0070070783
-  | 0, 4 => 0x3f03800fc01c001cee70073ff30003b80000ffc001ce070073f830003800000fe000e0ee8038387403838000e0e0000e00e00380070
-  | 0, 5 => 0xcc0c3c330301e3003000c00c000fc7c7dff1f1fef3030f0cc0c07803f3bbc0fcffdc0fce0703f3f8303f38000fcfe000fc0e703f07f3
-  | 0, 6 => 0xfc7fc5ff1ffe2fc03f00f00ff80cc7fbdf31fffef3e3ef8cf8f87ccc0fbc3303e1e331f0f7cc7c7fbcc0c3c33031fe3003000c00c780
-  | 0, 7 => 0xfff0003ffc0003fff117fffc78bfff0003ffc0003f03ff0fc0fff8fc0ffc3f03ffe3ce3fe8f38fff4f07fc1fc1ffe0fc03f00f00ff80
-  | 0, 8 => 0x3ffffff0000000ffffc03ffffe03fff0f0fffc078fffc003fff0003fff0f0fffc078fff3ba3ffce1d3ffc007fff0783
-  | _, _ => 0
-def dictP2B : Nat → Nat → Nat
-  | 0, 0 => 0x32d2c34cb4ba14c90904324260022920248a4801488080022020002202000880800043410d10d06050db02ec36c017c00377f000ddbf
-  | 0, 1 => 0x5d646597591d2953d11f54f470f546d55951b5ca951931f5464f8f54644fd5191c7d519116546470a09002002400100cb4b0d32d2e85
-  | 0, 2 => 0x5044c114113e000242290090895ab0b302ac2c182ac2cc0ab0b060ab0b302ac2c182ac2cc0ab0b060a20b102882c081d99916766670a
-  | 0, 3 => 0xab9b382ae6c1c2ae4aa9ab928d5ab9bba6ae6e3d6ac2ee0ab0b8f0a29b9a68a6e2d6882e40a20b8a08999ba626663d553d33f54f4f9f
-  | 0, 4 => 0xffff3cbfffcdebfffffffffffffff6ffdbfdbffebdbff7ff6fffbff24fd13c93fe82ae6ee9ab9b8f5ab9bb02ae6e382ae6ee9ab9b8f5
-  | 0, 5 => 0xcdbdbef36f67ff003640c00d9a0dd6d7db75b5deb34b4f2cd2d17affffffffffffffffffffffffffffffff13fffff83fffffffffffff
-  | 0, 6 => 0xf66fd5bd9bfeabc93f44f24ffa0ffffffffffffffbefefbefbf9ffef2fbcbbcbe7eb77f7ffddfdfffdd6dfdb75b7feb413744d04dfa0
-  | 0, 7 => 0xfff2aa7ffcab57ffd996fff674afff2203ffc8903fffffffffffffff6ffdbfdbffebef7fedfbdfff5f6ffdffdbffeffcb7f6df2dffb5
-  | 0, 8 => 0x3ffffff0000400fffff13fffff83fffefbffffbffffffb03fffef83fffcf2ffff37afffbba7ffeebd7ffdbbffff6fdf
-  | _, _ => 0
-def p1At (i : Nat) : Nat := fld (dictP1B (i / 128) (i / 8 % 16)) 54 (i % 8)
-def p2At (i : Nat) : Nat := fld (dictP2B (i / 128) (i / 8 % 16)) 54 (i % 8)
-def wireDAt (i : Nat) : Nat × Nat × Nat :=
-  if i < 71 then (wireAt i, p1At i, p2At i) else (0, 0, 0)
-def wireDOK (i : Nat) : Bool :=
-  (p1At i == projBit r1sG (wireAt i)) && (p2At i == projBit r2sG (wireAt i))
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem wireD_ok_all : span wireDOK 71 0 = true := by decide +kernel
-theorem projBit_zero (rs : List Nat) : projBit rs 0 = 0 := by
-  induction rs with
-  | nil => rfl
-  | cons r rs ih => simp only [projBit, List.foldr_cons, Nat.zero_testBit, Bool.false_eq_true, ite_false] at ih ⊢; rw [ih]; rfl
-theorem wireDAt_eq (i : Nat) :
-    wireDAt i = (let w := if i < 71 then wireAt i else 0; (w, projBit r1sG w, projBit r2sG w)) := by
-  unfold wireDAt
-  split
-  · next hi =>
-    have h := span_ok wireD_ok_all i (Nat.zero_le i) (by omega)
-    simp only [wireDOK, Bool.and_eq_true, beq_iff_eq] at h
-    simp [h.1, h.2]
-  · simp [projBit_zero]
-def wireSAt (i : Nat) : Nat := if i < 71 then wireAt i else 0
-def stateWiresD : Nat → Nat → List (Nat × Nat × Nat)
-  | 0, _ => []
-  | n + 1, ids => wireDAt (fld ids 7 0) :: stateWiresD n (ids >>> 7)
-def stateWiresS : Nat → Nat → List Nat
-  | 0, _ => []
-  | n + 1, ids => wireSAt (fld ids 7 0) :: stateWiresS n (ids >>> 7)
-def SD (s j : Nat) : List (Nat × Nat × Nat) :=
-  let packed := fld (stateB s (j / 256) (j / 16 % 16)) (stateW s) (j % 16)
-  stateWiresD (packed &&& 15) (packed >>> 4)
-def SS (s j : Nat) : List Nat :=
-  let packed := fld (stateB s (j / 256) (j / 16 % 16)) (stateW s) (j % 16)
-  stateWiresS (packed &&& 15) (packed >>> 4)
-theorem stateWiresD_eq (n ids : Nat) :
-    stateWiresD n ids = (stateWiresS n ids).map (fun w => (w, projBit r1sG w, projBit r2sG w)) := by
-  induction n generalizing ids with
-  | zero => rfl
-  | succ n ih => simp [stateWiresD, stateWiresS, wireSAt, wireDAt_eq, ih]
-theorem SD_eq (s j : Nat) :
-    SD s j = (SS s j).map (fun w => (w, projBit r1sG w, projBit r2sG w)) :=
-  stateWiresD_eq _ _
-
-def htAt (s i : Nat) : Nat := fld (HT s (i / 64)) 32 (i % 64)
-def idxH (s h : Nat) : Nat := bsr (htAt s) h 8 0 (NN s)
-def idx (s : Nat) (zs : List Nat) : Nat := idxH s (hk 0 zs)
-def CN : Nat → Nat
-  | 4 => 1
-  | 5 => 79
-  | 6 => 839
-  | 7 => 1075
-  | 8 => 27
-  | _ => 0
-def CH : Nat → Nat → Nat
-  | 4, 0 => 0x698a7a1
-  | 5, 0 => 0xc4230668c0bd7c18c0a23cfdbca7146dbb2b2073b61ed14eb596b4c7b13e9d31acf58600aa07d0ffa40c4045a38ce6d7a23277999e6b99699ba6873a9860dcb39510a09f9488eab4939a9e61909c45b8909259cb8cc282af8bd5ef478a80a9f985f132d4831d6c2c8175276a7a4fa2ce715fe4556ea01f006bcf90f36733942566f06e6e65c54c6d64d81704621531945d8630e25aa8a6b95aa68a95593a5f015296979051ac20304a899ff942b779a3377ab9dd2f734f292d2049c62b06dce5257d59b8217c18ce1dd9df221d7194aa1c0112191bf750b418f26c4c1744f8bf16ecceb916716f5b119dfe1010e6a73e0e41792b0bd5dce90308ef0f00e30216
-  | 5, 1 => 0xff7c7227fd5d1682f9e10570f8028b6df0873a4cec2eb1cbebb11d4aeb2066bbdff65054de95794fde2abc10dd302338d7da8571c8bcd3fdc4f7a12b
-  | 6, 0 => 0x164f38e0163cc666162baad5161181741606144c15f4eac915ea9fee15e5c0f815badb7e13e0e2a713967e2f138cad00133c08ef13347fe7130a5a8912baa677120fa59311eac26e11b4bd5b1187183a1161181a11408e9a1106ad570fcb33c20f8009980f115ba20ea800b80e9765830e7e15130e67dc250da6941f0d0fcd5b0b88cc090a7677f50a46134309e6e15909c0e328098e4e720950b9370941c54b092be94c07d530e907a72649078c60020772bb3e0715437d065bd6fd060f596e0608061805e77d7105a9e53f05169eb00479bbe1035eb4ec02c16857029aef9e0285087d0240cfa3022ee8080219fdf800d6e3c3006fb9d3006c268400296567
-  | 6, 1 => 0x2d2edeb82d1995702d06d0c22b26d94b2b09ceab2af8e8dd2af68de12a95810c2a222ab32a14d0f729e188d329af2b642992b9322934275728e1d56328b1318527b3f541275958f22750b4f626995e2425e8eea42568133f243971d52325c90b22f6ef7922e55f9722d2ddb122c73513228b591022253180213bddeb20f72cf120dff92e20d5617920b2182b1fb72b911fa432931e1a72c21e0ecd901c5377201c397d011c0c1b4b1bcc3d7d1baefe391b8548e61b78d4bc1b62a5db1b24771a1ac6e6c71ac6cf551aa1953a1a7fa1b81a5d20641a4058c31a0dc40d1a0a8d041921f28d18eed24c17bcd81e175a929b1701656116995adb1673385e1665ef1c
-  | 6, 2 => 0x3d97a1ca3d8a3cae3d2c7c353bd6ad1d3ba5ac113b72da473b33d6c03a4fc2063a4df0a53a2d6c6239eebebb39ddbebc39ce94eb39ab24c4396f572d394f14203939d5c3390153ab38da452b38385a613821da6637a858a736de7a87366487033609387935f2a55735bfbca935bf14c335916670353aa3c635169f3a34a771a7349995fb34886bc3344f47aa343eb05734064f6c33df688433da662c33d93c6b33a95ef3339be830332811b232fa2f95329807b431f5eab331ae08453115c93030d52820306f6ccb306cb522306876802f8f1ff32f8141142f5e6cbe2f20329b2efbd9642ea523322df877932df23de92de6358a2dda71352d9165262d52d150
-  | 6, 3 => 0x5281620b524e709e51e93bed51e2c49a516084435137e92950ef354250eca9cc50bd4355504c73fe4fe19e8b4f9d2f8d4f8c57c24f7141a24f0c3a604ebf453b4e7855394dd542384dc9c7c04d84259f4ca859dc4ca61d4a4c7c5aee4beb8c424b81ba084b77d19c4b2e44754b21fba149eb066449e579ed49e3bfbd49b6983f498effba47e82a544760868246f1b31146df279b4636123044ee3ad24449f595441e848e4408d56743db6ae443c469ce43555fb0434ac03243110caa42ef746f42ecbb3d42b779a34270b5be421139454197b05c412c1b38410d769640eca964406a83da403631d44028922d3ff4ef3e3fab5da13f8054793f1e2b9c3ebac68e
-  | 6, 4 => 0x6786b8476761988367339425671ea51e66e9390a66d0a35665e88a3d65e76cd565883aeb653397fa64ea33b664a0c73f646d8437643609f5640f62e363fb6a7f63939f336332bc6f6330b2ce62a39a81627050f962623a35625d869761f69bd461f63a0061ca40086178b77d6119d7e15ff9abbf5fbac6fd5f57a7bd5f560e105ebac33b5e13ada65debf6475d8bf1475d7d6e2d5d71535d5d24c09a5d1cf1905d0eae245cde0cce5cb3f1435c1f443a5c10eb415bf8c1df5b3bed485a8bb72c5a2d95ac59d5a23b59a0c2fc588269ee583d5a5956e6f7eb5695f06f567c7f515618ad1555113a3854f251df54a96c095458332453eff8a95377f3e6536a1507
-  | 6, 5 => 0x7b7bc9757a5b787a79e555047961f7277911f99d78bb1eaa7893519d784337a87819d38577c7e87a77ae3ab0778424c2771d03bc76fcecf676f0de3376e1a5f0765bdd32764e5f6176461d72763744917613d46a75ce6c6f75b5a08b75a285697582967b756ef7e97508aada74fe289274d57dbf74789e64746dc15374087244734eaa0d72c9f2e1727718da71fa161671d8f93471c4843570eea42e709738ae7083b44a705b5d9f705155297037bb13700aec186f6a8dfb6eed15e76ec7a3626dd08b0e6da2ccf46d7e78d66d547e0c6c80921c6c66f60c6c4b6e046c0fb1986bbbe0b36b9318dc6a41599e6a08291469846ed567f4aa3e67d9415267a2a106
-  | 6, 6 => 0x89b9a4c589acfcb1899dd2e0890a4f0a88e0387f88dbccf288a938b688a82a548890c6218867195f884052b7880118d8873313b2871bca138703169686fe088a86fc6e9386d3e1c8868f8bfa8672548286465a8a85f6241e85c3b149858e52b8857f1b6684569c08841fb46483f7115a83c0be09836211778300c2b982c96d8a82c92c18829ec1d6827639728257f5cf8123ee8880d851b580ad9dba8069eaef7fd8d7587f799cb27f78c21c7f4590c97f3170267f24c13b7ed513f37eadd0e57e79e8eb7e5d690e7e28295a7e22428f7e05acff7db173387d7d57bc7d566ba87d44009e7cea112d7cb8d26e7cb1fb967ca2d1c57c69c65e7c2948dc7bd7ac61
-  | 6, 7 => 0x9ff352249f6676b19f65a7529f5eff5f9f22e88e9efaea139ec0d7899ebfb44d9e93ebe99e3e2dc49daae7359d72dd149d42c3eb9c480cab9be46a309be41d5a9bc7f7b09b6cf8b59b6512559b56a6c89a0d459599f80ac69933b44398de87359882e2ec982e64fb979d053596e4918296964552968d4d5f964c30c0963e51e1960a5d049605502595ddc41b9551aacc9512475994d77821943fb904932c1ee79314eb2492d5a09492cd700b92beb264926ae7a992002a6a9190d39c9182d75790c788868fc42d338f6ecc898e52fbf68da6f0c78d88441d8c4a4e318bf5595f8b74ea068b43d38e8b0cdb878aa44b2d8aa3b04f8a7994f88a516cc389efee91
-  | 6, 8 => 0xb50f2cb0b47be621b432738eb2e06130b2a6c045b23ecad5b21e5031b09debbbb09b89e2b01e5fd4af7112d2af647c31af63fae1af616e2baf3465dfaef5af7aaeac59e9ae1759bbadd98886ad9c65faad9683faad64f2d1acec63f0aca9b064abe9eccbabdd680fabd053b4ab8bcb77ab5f845daafef900aa3f67bcaa07d0ffa9fdc82ea9f3d131a99e9644a97a0c43a9789f6da909e4c1a8cb32a4a851a7e3a8249059a81e26c1a7fbc882a748d152a6e98352a6d41051a6563cc3a3c1ab4ba3744415a33952fca30d3153a2efe0c0a2a97873a296a4d8a284b47ea269365fa2382972a22b6a16a1f16defa188a62da1662bafa15d9d05a099d7c2a02ef21b
-  | 6, 9 => 0xc63e6ab8c6068286c5d6acb5c5736c6ac572feb0c4bc1598c4a4bbb4c469c87ec453a13bc4070a2dc3d7b039c391afb2c38acab3c3432490c337f1aac2d89b35c278c27bc267cbdec1f8fe15c1ebf1e0c18e0713c0d8bcdac0ae1084c05fc100bfe17047bfb0cba3bf79164fbf62c138bf39cbf0bec0a575beb14ce4be3add0dbdeb6445bde1cfb5bdd61ad8bd2fb554bccd4b3fbcbbca35bc9c5c20bb91438abb6820b3bb47b9debae9d770ba6b17daba1aa2e5b932cbabb90b816bb8c9f8fbb8a185a6b87338fbb8405c07b7f32202b7c093d7b7a9ba99b79ef288b78864c3b75432adb751909cb72f93ffb702d21ab6dcaf1eb685cc0fb6251136b5f06ca0
-  | 6, 10 => 0xdb3a90b6db38cec9daa10b17da650bedd9d792fcd9c29a4fd9ad9916d9a3cb49d8f800a3d87f9952d872797ad85d0165d7c43538d7abb4fbd7783301d740303ad6d35949d615987fd5ce88c2d5bfd6fdd445852fd4061f74d3a84f1fd34d4128d2cc6b2ad282ff82d26e2c13d26dffcbd26d319fd2370a95d22e9db5d215039fd20d1552d1efb8f3d1de8b17d1b6d541d1296545d019acf1cfba7b07cf6e5413cf66a7efcef3ff30ced15184ce597d4cce3e5449cdf98342ccc7daa6ccbe85adcbfd28a9cbd5b4f2cb6c5600cb66226ccb18ca29ca5180ccca2ab66fc9978f7dc88fa312c85e0905c73369bbc731841fc72c9218c70b1e59c6f60546c66d8871
-  | 6, 11 => 0xee1e2c58ee02495bed84be95ed211c1aed0092ebec2d7d95ec0c1396ebf03b1eebefca4bebd9c278eb3c36aaeafba6c3eabd810beab31e8aeaa80466ea99b7d8ea4461ebea444ff1e9f59361e9375f3ce86556f9e8529c71e8027d18e72bf883e6ad2c24e695e825e6207fabe5e14f13e504ee61e501ca94e4e54ac1e4a6b616e43a6889e3ef42d0e358b1ffe33cbff7e2f6af66e2ef9098e26cad09e2433ca3e238aa93e1151f08dfd9a991df87b76edf75e0f9df66edf2df50f4a6df204264dec9dac1de9d2c44de961afade5e1fafde5cb0fbde41358fde312a05dde4b3b0dd9eb6bddd73e459dcaf7ec7dc8a5345dbe6b227dbc7af05db542878db4f33a9
-  | 6, 12 => 0xfe255537fe1c6333fd7ee1d4fd78c584fc719585fc4a1fedfc0c146cfbb92ac0fb3fa904fb192d73fb07d043faec6079faddb0c9fa72f38af9f459b8f9afb2a4f9a088d3f867a20ff7396181f6d3c780f65d10a6f650f9aaf5e5463cf5d9525ef59108abf58f108cf58d3b0df5311401f4535bf8f4483035f3dd72f6f3cea65ff3b27adff390e940f35348f5f34d8d5cf33b5fd0f31deba9f318916ef2c92a07f2b97b7df29edce5f26d9b06f265e2cdf2522c57f25014fff249a559f1ed8e22f1c9ec54f171c893f13569a4f117648ff0e8b557f0d5c0b0f0768ec6f0556ec8f0479b38f0010e1beff3c368ef5b4d9fef321432eebe29a5eea98865ee44a0bc
-  | 6, 13 => 0xfff1633cffc6e326ff98826cff3cfc6bfec4ed6ffeb9a99cfe3abca4
-  | 7, 0 => 0xf8898390f6b9a140f5c5cfb0efa46790ea68d810e8414b20e783ebe0e57c7a70dfe576f0dfb96ef0db675560d9cbe430d61f2fb0d52c9a60d4d98860cf91d9f0cea20e10cc7aa850cabde0a0c867e660c2cfbb60c167f100bb2ffb10b41c7720ae892150acf09dd0ab7b9ae0a9628be09ee1b6f08d6f026087867580864c5e507bd347d07af559e06ecbabd06b07a0306a1503206634425065223ce0618ade405c61dd6059e8b170590310f05869eb1040745c603f3df9703e3645403dcabd4036df150033a727c0291d00a024a740d023f103c023c952e01b3df1001a603fb0196da2a01013f3600dd496a0086a50c0064991500368d390027347900103def
-  | 7, 1 => 0x1e8eec381e739d441e3d0e221e08e1531d81c57f1d73f5661d094b741c1ffead1bea35011bde45011b78d4bc1b70b1901b61a0cd1b52f3321b325a461a5d39541a45ab1d1a4058c31a2bfa9c1a0ece701a0dc40d19f08aad19b1d448196672e11922d7aa191531f41900f42918e3fb0a183e8305181aa94117d07b00174ef90f16e8db1816b50ee916a611991623f29c1606144c15f86a801561a43a14f379731497cc94143e5742141a4f1c1415063f14121a0c13b5da6d131bfefa1317dd2b1308cd7712baa67712b8ab4112b8884a12ae5da312798028124e26351232479711eb7ccf11d74806119811441187183a11761aa81134c934103ead2a0fc22fb6
-  | 7, 2 => 0x2fc976f62fa1c82a2f790d942f7655c82f5be1482f1362052ea0b9112e9e70832de85b922de672622dc197292d014b912cf3c0ef2cf085992cb7e2692c9946a22c1543872baacaed2ba0a43a2af4104e2a7c85282a6cf0712a6bdfc029e942c42964176b292df8a1291abe562882e2b2284db2db2775450f2727707326d2458e26beaf6f26bb2fef265363bb264ea12126488ebe26396ad4261c309d25bece64258a6ea42509c4b824cb7b292468a85e2429651523afce9223a7fde62310763b23038dd422f4640322daf26b22c7351321e9d24d21a5f96821698b152081cc61204aaf2d203e530f203cd04e20292edb1fd3d3851f3d31db1ee4e3db1eb3facb
-  | 7, 3 => 0x3e1c8eb63dff89d03dc32c533d8620523d6d0b963d18fbc93d0124c93cedcf813cd7d7c23c9f3cdf3c9dc2fe3c9d75a23c8fe41f3c3d49423c39fd5e3be08ad93bd0b7833b885bfc3b5624293b3c318a3b23954e3afd7b253a8b9b213a8b1a653a67daad3a305add39fad635396f572d3950034038ad846e3899ed1837f1b8763732d33a36f4981f36e4026d36c744ae36ad51603678c0eb366fa272363c57f436224d1b35d89aaa359aee6d358e7c13357bcd57355e29ce354bc4fd3518dab134746a9f34744a7f346540ce342cdee933d93c6b33193e9a330961a63264f1943255c7c331b22a14317141fd315024ba31381b073129ad3f3055c0a6302ca777
-  | 7, 4 => 0x4c4c79c44c1e35cd4c173de94bff26be4bf147df4bc969994bb8974e4bb13b214b83735c4b7591cb4b62f61f4b40518f4b0c2c394ac0774d4a9f53ac4a6707154a24047e4a0d197449e125c649ccf756499cfa0a499b08ca498bdef949148db048f889f848e9602748b0ac9d484e6acf475141bb472e33c146e149a24609964845f6b58445c07cca457c5ed145179a8f44d9dfff44cd758b43b42571433f660a4309ffd84305883642f65e6542b779a342815d8a4223bdb941d9fb7841d622d341a8390641a4b5d6414931eb413f306a413ca69640db2d8b40ccbe1340bb28344079af63406ac2fa405c8f3d40455b7a3f49363a3f086e6d3ee6de3d3e5fa509
-  | 7, 5 => 0x581fb8f65806ebe256dbe56f56da22f0568ff7f1567ee6cd5640306856240dff55f35c3e55df5df855ab6c46558b87505550dd6c54ed1c7554c1de1054b47b9853b7a8b55342fdb753346db9531915d153169294530ec13f52fdd0f152acbe7d52942b72528ca2425275541c523dc211520a3fab51efbb6051e81d5151e0918f51d2062b51bf3f2b516924ff515c2919514aca6d51007c3a50c4b4ed50b58b1c50a706e8500139404fb2394c4f9b055d4f943bc44f8511f34f717d1d4f624ff44f5ddbaa4ed5e3f64ec05ebd4e79bd534e5bae794e1db72a4e0e9fc94e00c0ea4dd111674dc27b5b4d17706a4d0476064cfd734b4cd8ba054ca60af44c854e67
-  | 7, 6 => 0x67f1c0d367425c616709aa6166fb4c916554bad1651506a464ffcc4e64d90fd164cf00c564789948645092fc6449b75d64015902638147926379a67663669d95633af0116336351163353df463275f156292bf226284e04362623a3561f427ee61aa33686129ea2960d1580460c0164560b58bf5602f2d625fd513de5f5d13a95f492eb65ec2fe405e480ed45e06e6065debf6475dc82fa15d93d62e5d7bf2db5d3a46645d2e415c5d1e66bc5d1d08615ca9ea895c943d485c91de815c0095e65bff541c5bec8f385ba915895b4388f85b2acd595b0171135af03eb05abc6cf259e9c31b59d66aa0596bf2065923c1c65916f56258a5f17758905d13584e132a
-  | 7, 7 => 0x76f0de3376db0b2e76bdf4b9766385db75c8856d7540089874f2245d74e1bd61749b9886748c6eb5745a681c73f60c3a73e4c23173b9b90973b2320a73a1eeb77341d2fd7333c42e72b2833972739f547260e48f71be65bd70cdf07470946692707cee8d706753917005f1236f6c29a26f69601f6ebe77696eba99336e9f1e276e834bca6e4086346e38e6f66e34ebde6e1ad9ba6d5cb0976d483b2f6cd622c66c4b6e046be1bd3a6bcf90f36bcb63fb6bc490ee6b89f08a6b7c11ab6b58c0516b46b4d16b1be3666a7ff6686a5eea176a510b386a4fc62d6a4f22086a2a46cf6a0139de69f9213969f5d2f969b2eaed692e70ee6920920f68b561d0683fb3fc
-  | 7, 8 => 0x85210b03850f030e84e9742a8492c7cd83f048fb83d9bb2c83c5bc52838341f4833df90383233d80830766bf82d3eb99828511a482739f2082121d0d81bd8a2f8110235580f3ebfa806266ad804281917fe35f827fc0036d7f5f0e0b7f27d8097ecd8d627ebd26667ebbf6017e8559377dfd47397dd5c4a57dbaea3c7db1e1917dad4e397d7d57bc7d776c2f7d356db97d33ff317d303bbe7cd372a07c0721267bf0d3337bc86ac17b4614867b3b45dd7ac854af7ab597257ab2c9087aa157477a2bf43679a4d76c798a90b2791d9b417900675a78f13d8978f04d3478bca81278925775785a178978493a7f77f10ba277d135d07733bc5377211a3f76fcab1e
-  | 7, 9 => 0x929a9c84928df768928cbda59272b1cc926d751e925c0be491b98d1291426eab9074f28c906d26119037c66b9011f5828f9d1d5f8f7fd14d8f78512d8f6680978ebe4a858e7679718e4941358e35cdb08e27eed18e2374cd8e21c9a38d3d413a8d1e3ac28ce77a638c8386ea8c76bee98c1a6ee88bedc1998bc68b508bbc73f08b44c8168b3e939c8aef68758acf54ff8a8bfac78a59f30f8a18c2888a0d10dd89f226db89beef4c897643b68958e8bc89211e6a88edfe0d88ede02887ec230287cdddd087ca80ca877c8a9f877910e2872610b88716e6e78708035286e6840f869b7594868cb424867726a18651842c8635a6fc85f48e9f8558bace85520fcd
-  | 7, 10 => 0xa68098aea661d0dfa5cabbeaa5103ec2a4dede88a499e38aa494c22fa48ab9b9a4711fa3a35f8a0fa309310ca302d5f5a275c8f5a1c6431fa1662bafa141bf77a0c045e2a0b26703a07b39919ffd08839f8603a79eab30d29e58572e9d61744b9d3508f49d2d50bb9d2006f69c97dd089c36144f9c27c3cd9bfcd7929b71391a9b56a6c89b1dd7b09aec1f2b9ab0be7a9a36658d9985b807996c23f498fcecee98d83969985a34f798553ede98411d81981b7e9297251c9897012b8496fad25696e3fc359603a49895fe78aa95a996be956125c6950fbbe39502be1694b8834e94331b6593c8c08d939a9e619396353d937e642c93602c469351acbb934043b8
-  | 7, 11 => 0xb5195244b511b645b4e46fecb4d0d4a4b3feb3cab3f8265db3823d02b37ef559b32b1ae2b2dc7687b272f2abb253eee6b2313513b2306866b210ca3fb1b17014b12375bdb0f51e5bb0f236feb0ec7e1fb0e1dcffb07bc511b04d71d7b02268afb01bd45eb01ae1b0afebec7daf95e2ffaf935789af1156b4af01b67aaef43dc2aec64c0eaebd223cae8d3699ae0f7c92ae064aa9adab993dada32de2ad85a160ad1a90a7ace974c5acac34b6ac23afedabbe6e52ab94b348ab681b8eaabfa2cbaaa935daaa8df529aa2867c5aa21bb6da9cb11c2a98c5b5da9647ee6a95dfcd0a909e4c1a8e78fc4a8d9852aa8d69abba80d4bfda77ce252a71939e5a6877d59
-  | 7, 12 => 0xc4605fcec3fbe96fc398766ec37f968dc3598a1dc34f33b5c31b6fd9c2d0e2fcc278c27bc21dcfbbc1c6e06ec1c5a5bec1c16a74c1a069d3c18cb129c150c440c1043454c07ccfeebf8705ebbf7d381ebf4172fabef4bb49bef1afedbeb2f988be4f311bbe4be64fbe3418b4be2639d5be107ab6bddd5bacbd5c9ba0bd2744b8bd199d0fbd0683e7bcc8e334bcb2dff7bca07defbc5e25f5bc545819bc18011abbec3344bba736d9bb3f92c0bb04b807bab08b31baa8a17cba477786ba45dd7fba2399e2ba1f06b4b97e2118b9782853b96ec08eb85c2f59b84d21e0b837fe7bb81d78f4b7a3f583b7610a65b65f3e8fb5c9ec3db59a84ddb559ed2fb52557b8
-  | 7, 13 => 0xd64ffb9bd62ad27fd610d082d5d13c99d58853add56748abd4fb6d4fd4f736c8d3a21f4ed38eac86d355d4ffd3152e0bd2f3ad55d23ddddbd1d3f658d17f337bd1786b89d0e5095fd0a7e5c1d081713bd051c79bd0317033d01dcec0d010ef66cfe713d2cf6e15b1cef7401aceecb93fceeb1ad8cecb96dfce8cc780cd73df73cd5fbf4fcc0fb7b2cb46a5f8cb26fa2bc9e24337c9a019fdc8e779a6c8df6e8fc8d8951dc876c3bec7ad77bcc7a3ca76c7554d2ec7466283c73804a5c707ac1ec70541aac6ea46f2c6a44c39c689fa79c6398efac61b5c10c5e58a67c5dca5abc5d66096c5d3e588c5899ec0c576ef75c5690328c4eae2e7c4ac2c82c483e9fe
-  | 7, 14 => 0xe5c6ac76e575a6eae5179d48e49194eae4625a30e45c7de4e4402e8ee4191cbbe3d420a8e2f02cffe2e94854e2e453e9e2bbea35e21fca1de1c2a466e1b94d76e1283faae11915d9e0f3695fe0d9cf49e0d27efae07b344ee04a17a1dfdba1afdfb32b5bdf91a28ddf7fbf91df71e0b2df6d0221df0801eadede789bdec9aaa0dec49712de7f8515dddcfb77ddd7f9c9dd547ea2dd4db3aadd0995b1dcac824edc240579dbeeb34dda8008d2da7890dfda26b2c9d9ed2281d9eccea3d9e7a089d988b69cd96359b3d958a3e4d8f62b1fd8e7dfa1d87f9952d8653959d7d8277ed7c2c847d7c0c947d7b19f76d7661623d6b34f54d6af2d85d697c1d4d6890d25
-  | 7, 15 => 0xf62cba88f5a8ee32f5493ef0f5210d0ef5089257f50771aef4e77514f3cda8aef39bac49f34c8d5af22186e7f1c7ebb4f1c31697f1c1f496f17a65ebf171c893f15a4793f14d1f92f13569a4f109fd47f1027f58f0f10dbef0c2900ff05fc8f2f053c1fdf03d9387efeaeca8efdef6d4ef0e3eb4eeae7dabeeab662cee6bbfe2ee570e7dee22ff53ee1e2c58ee185818ee13d582ed80931eed71b5aeed5ae6a4ec848404ebc28ee5eb7a065aeb3fcd10eb0c9569eaf7dac4eabec0cdeabceb59ea782c38ea555bf2ea39f55dea04555ae9f23fa9e9b38944e8b54ab1e8b03ee3e8a11512e878be20e862cb83e812cbdfe7a75556e73f702ce7283c3de6a7c695
-  | 7, 16 => 0xffcceadcffabe638ffa13466ff3df527ff3992a2fefc312dfefb8721fef2bd64fed37441fe9afd92fe12eeb4fe091979fdf560cffd875a02fce2758bfcb0a9dbfc7cb7dbfc3e0176fbefb591fbe5e7c4fb7259a6fb192d73fab495f5faa130d0fa7b52c7fa6ea56dfa3b31f7fa101145f9d3a84ef9b99d75f9acd0faf9824cb5f96feb04f9323ec7f9092d95f8f57a28f8b72109f80ff336f80fe67ff7fbcecdf7e68aa8f7c42f43f76d67adf762f14af734b506f725d631f6e94291f6657479f6655c2cf646c3bff637ead7
-  | 8, 0 => 0xf2854adfdee29a6add9de376dac0e1e9c3d681efc2afde01bad4da24b6be7634a279eac49b34b1218ab84b5d8a7994f8876dd2495e22a75455df5df851bb2a0f4f8c57c24aee737942b779a33e277fff2eedfa8521b9f7ae1e7359ed1729918f1561a43a15527a691142fa41
-  | _, _ => 0
-def CV : Nat → Nat → Nat
-  | 4, 0 => 0x9810440302
-  | 5, 0 => 0x20041c00254402010009510080c00104402000000000000c001044020000000000000001044020100095100804000000000a0000000002000000000000000000002000000000000000000000000000000010009510080c00000000020000000000000254402010000000000800000000000004110080c00000000040000000000c00000000070004110080800104402010009510080c0000000007000000000040000000003
-  | 5, 1 => 0xd4104808000000000100000000010000000000100000000004000000000000000000000002544020000000000000003504120000000000000000000000a00000000000000000000300095100804002544020000000000008000000000700000000008000000000000000104414000000000000041100800000000000400000000020000000000a0000000000000000000010000020041c0025440200000d41048080025440200
-  | 5, 2 => 0x20000000000000000000010000000000c00000000040000000002000000000050009510080c00250412020004110080c0010440202000951008000035041203000000000100000000005
-  | 6, 0 => 0x1000104402000000032440400000c910000000000020000000000900016204800000000000b0000000001000000000040000a0088040000000006000000000000000000004001443248040000000005000c130080400000000040000000001c0000081100000000000080025440200000c130080000000000020009410480800254c02010000000000800254402000000010040c005110d200000001004080000000003
-  | 6, 1 => 0x2000000000070014430480000314c4200000000384000035440202000000084000045440201001413108000010440200000000284000000000008000c130080000314c42000000000001c0000000004000c1300800000480a2000000021040800000021020004110080000000041020009510080800000000040009510080800000000070000000002000000000080000000840000000000040000000002c0000002101
-  | 6, 2 => 0x484040000000005001444348040000004102000c13008000002806200000d410480c00000000030000000001400000c11050000020041c000000e1000000000000800000061000000000001c00018022010014420480800304c02000000000001800254c42000001202880000350022000000031040c000000610100000000010000000000400115100800000004010200095100800000000000b000000484000002802200
-  | 6, 3 => 0x8404005110d201000003244000035041200000d510080c00314c420000000000028000000000a00000000000000000000400000000010000480a2000000000001c0010440202000002104080021484202000000184000000084102000000184080000006101000c931080000048062000000000001400001091010014440480400000061000000002840800000000040000a0188000035041200000000000100004806200
-  | 6, 4 => 0x304414000000000a0000000001c000000000a000001044000000040102000c130080c00000841020001203880400000000020000010040400000000070000010440400314c42000000e00880400000000010004110080000314c42030000000002000254c02000000000002c00454402000014440480400354402000000031040000000061030000000000800000811010000000840800048062000000000002c0010440202
-  | 6, 5 => 0x10000000000600012018800000000000d0009510080000000411000000010040c00028062000000042440400304c02030000042440000000401020009510080400104402010000001040c0000000000001444048040000000000001444248000025406200000d51008000000000007000d51008000010440200000c130080000000000030000e0088000000040102001151008040000002103000000184000000000009
-  | 6, 6 => 0x10000000a10000000000010000000000d000411008000025440201000d41048000003806201000003244080000000009000000000000000000004000000000080000000007000c130080c0025440200000000000200000000000000c130080000350412000001620480000000000060000000000c00511092010000000001400510812010000001840800000411050000000840000000021000000003840c0045440200
-  | 6, 7 => 0x200045440200000d510080000000000040000000001c00000000080000000002800000c11050014430480400504c42010000000000000314c42000000000000c000000000d000d5100800000000e101000c13008000021484202000411008000003802200000000000100000006100000120288040000000004001151008000000000006000000000100021484202000002104080000000000000000000280021484202
-  | 6, 8 => 0x21040c000000000200115018800000000000d00095100800000000000c00144304804000280620100000424400000000a1000014131080400000000040014420480400511092000000000001c0000000008000c531080400350412000000003840800000411050000000840000314c42000010100880400000000040004110080000254c42010004110080c000000000d000000000200000081101000000000340025440200
-  | 6, 9 => 0x1000314c42000000000001c00000061020000002840800354402000000000001c000000e1010000003840000000411000009501880000000000040009510080400000000050004110080800000000070000000001800324c42010000000002000254402000000000001000354062000000000001c00000061000000000000c00000c1100000953108040051081200000120188040000012100000951008040003806200
-  | 6, 10 => 0x1000254062010000000001c00454402000000001840c00000000030000000003400510c92010000000000400000061000000e00880400048022010000043440400254402000000001840400204802020004110080c000000000400144304800000000000c00144304804000000000d0000010040800510c9201000c130080400000000010000001840800000000070000a01880400254c020100000304414000480a200
-  | 6, 11 => 0x10040400254402030004110080c00000000060014420480c00000c410000094104808000280620000000000000000000610000081200808000000000700144204800000000000300000008400000000000b0000000000c00000c910000000000000002544020000041100800000000000d000d410480000511012000000000840400000000040000000001c000008110500000104414000000000b001150188040025440203
-  | 6, 12 => 0x140025440200000002104080000000001000d510080c00018022010000020041c000000e1020000030441400254402000000020440400000000020009501880400000000070000000000000000c1105000d410480000000021000014440480400000000040000031040800000000080011510080000000000080000000002000000401000000e0088040025041202000d41048040010440202000162048040035440200
-  | 6, 13 => 0x100025440202000d5100804003504120100000008404000000000300000000010000000e1000001620480400028022000014131080000454402010000043440400510c920000000000020000000000800012038800000010d1000000000002800254402030000000001c000000a103000d410480000254402020000000002800000401000000e02880000314c42000000000001400314c4200000953008000000000007
-  | 6, 14 => 0xd410480c00354402010000000001c000000000600144404804000000000d00144424800000380620000000038404000000e1010014443480400354402000000000840c000000210200000000004000000000b0000000001c00000811050001203880000314c4203000003104080000000002000000000000000000001000d51008000004802200000d51008080000000006000411008000000000002000000000100000000004
-  | 6, 15 => 0x31040c00000c91030000001840c0010440201000c1300800000000610200012038800002540620000000000010000000000a00000000028000000000200095300800000380220100006008800000380a200000d5100808000000000700000104414003504120000000000018000000000a000c531080000324c42010000000000800000000090000e0188000000000000000c5310800000000000d000000000140035041200
-  | 6, 16 => 0x38404000010d100000000384000000012100000000000040000080102000000104080000081105000c1300800000000210000144204800000000000d0000000002800254402010000042440000000411050000000840800354402000011510080000000801020004110080c00000411050000000001c00000000040000001040c0000000007000004044000000006100000951008000000006100000000000340025406200
-  | 6, 17 => 0x1c00000c01000000000000c0000004103000000000340035041200000d4104800000000e1020000031040c005110120000095300804000000000d0014420480000038062000009510080c00000401020000001840000000401000014443480000000000090000000001c00000000070014440480000000000070009510080400000000080000020041c00000000050000020041c00350412000000000001c0000000005
-  | 6, 18 => 0x3400000000020000000002800350412030000000000c000000000a0000a00880400000000060011510080000254c0200000000000180010440200000000184000000000007000d41048000000084102000000084040001901201000d51008000000041103000951008000000000005000000000100000041102000000104080000000005000c53108000000000004000d410480c00324c4200000000000200051109201
-  | 6, 19 => 0x100035440200000000084000000002102000d41048000000002101000002044140045440200000000000340000000001000d510080c00000000040001200880000354402020000020040800510c12010000000002000504c42010000000001400304c02000001203880400000000050000a00880000314c4200000c531080400000401020001200880400510c9200000d510080000254402000000e0288040020480202
-  | 6, 20 => 0xe10000141310800000000610100000000018000180220100006008800000000000300144434804000000000700144424804000000000b0000001040c00058812000000000840c000000e10000012008800000000a10200000000020000000000a0000e0288040000000004000d510080c00000000090009410480800510c920000000000014000000000200095310804000000000b000951008000000000007
-  | 6, 21 => 0x9510080c00511092010004110080800000000090000e028800000000610300000028404000480a2000000000001c00000801020000a008800000000000400000000014000000000500041100804000000a101000c130080000000000040000000001c000000000700000000014000000000900085210808000000000000000000024000000000b0000001840800354402000000000003400000000050000e0188040004806201
-  | 6, 22 => 0x1400304c02000000000002000254402000000000001400000000070000e00880400000000040009531080000000021020014430480c000000000600115100800000000000500095100800000000000000000000018000000000a0000e01880400304c02000000000001000000801070011510080000510c12000000000002000504c42000011510080000000121010000000000c0010440200001151008000004802200
-  | 6, 23 => 0x1400000000070001203880400048062000014430480800000000060000000002800000000080000600880000254c02000000000001c00000411020000001840400000801020000e02880400000000040000a01880000000411010014420480400254c42010014440480000254402000000000001000000401020000000001000000000050014443480000254c42000000001840c000000000800095018804000000000d
-  | 6, 24 => 0x4840400000811050000004840000058812000000043440000000c910100115100800003508120000000000010000000a1020000000001000000000040009510080400000411030000000001c0000000007000941048080000000007000d510080000324c420100000000028000000a1010000002840000000000040000000003400304c0203000000000200000000003000c531080c0035041201000d51008080005881201
-  | 6, 25 => 0xe0188040004802201000c931080400038022000000000000400314c4200000c531080c00354402010000a00880400000000040000003840c00000000080000000840c0000002102001443248040020480202000c130080400058812010000000000800104402000014420480400000000080000000001400254c0201000812008080010440200000c531080400000811000000000000c000000610300000018408000000000a
-  | 6, 26 => 0x25406200000000000340000000005000951008000025440202000951008040000000006
-  | 7, 0 => 0x1400000061000000000001000000411020000010440400000000030000000002000001091000000000001400000811030000000000c000000000400000000014000000610000000000014000000000100000310400000000000600000104408000000000400000434400000000e1000000040440000000841020000031040400000000030000000000c0000081100000002144000000012100000004144000000000003
-  | 7, 1 => 0x48400000000000a0000040440000000021000000043440000000000020000000001000000c910000000310404000000000a0000000001000000000020000000001800000000040000020440000000801020000003840000000000050000002840000000061000000032440800000000040000000000c0000006100000000084040000000007000003104000000000000000000084000000000004000001044000000006100
-  | 7, 2 => 0x1840000000021000000003840400000c51000000003840000000000030000002840000000401000000003840400000c010000000204400000000000700000000010000000000700000008400000000210000000104404000000000400000000000000000000c0000000000800000c91000000000001000000000050000020440c00000021000000030440000000000070000003840000000c91000000000000c0000041100
-  | 7, 3 => 0x38400000010910000000038400000000000400000008400000000000300000000014000000000d0000000000800000000040000001840000000851000000000000c000000210300000310400000000000300000314400000000000800000214400000010110000000000028000000e1030000002840800000000050000030440000000401000000031440000000000000000020440c000000000b000001004000000085100
-  | 7, 4 => 0x8400000000000700000000020000000000200000000014000000a1020000032440000000061000000001840c000000e10000000414400000010d1000000000001800000061000000000002400001011000000031440800001051010000003840c00000000040000030440800000021030000000002400000811000000000001400000000030000010440000000061000000000000c00000000020000031440800000c1100
-  | 7, 5 => 0x1800000000070000002840400000411000000041440400000851000000001840c00000000040000031440000000000010000000000000000000030000000000c00000000000000010040000000c010000000414400000000000500000214408000000000a00000018400000000a10200000310400000000210000000000008000000e1030000000001400000c01030000001840c0000109100000001044000000000004
-  | 7, 6 => 0x31040000000000060000001840000000000020000000001400000000000000000000800000c110000000100400000000000000000300400000000000b0000000000c00001091000000000001c000000000400000204408000008010200000304404000001210000000000020000000000000000000024000000e10200000048404000000e10000000038400000000a10000000324400000000000b000002044080000000006
-  | 7, 7 => 0x40440000000c41000000000000800000c11000000010440800000000030000000000c00000000040000040440000000121000000000001400000000020000041440000000411000000021440c000000a1010000031040c00001051010000030040000000000030000000001400000c910200000000034000000000200000000014000000000600000404400000000000a0000000001c000000000200000028400000010d101
-  | 7, 8 => 0x3840c00000000070000000840800000000030000000000800000061000000000002000000000030000010440000000061020000001840400000000000000042440000000c41030000000001000000021020000000001400000000020000000000400000000040000042440000000411030000030440400001051000000000001800000851010000001840000000851000000000001c0000000004000000184080000109100
-  | 7, 9 => 0x10000000000200000018400000000000b0000004840000001051000000032440800000801020000000000000000401020000000840000000000000000000003400000c91000000002840000000c410000000000000000000e10000000000034000008110100000000010000000210200000008404000000a1000000000000800000c91010000000001c0000000007000000084000000041103000000000280000006102
-  | 7, 10 => 0xc000010110000000000010000004010000000000010000000e1000000021440800000c51010000030040000000000050000000003400000021030000010040800000401010000010440000000c01000000001840400000811000000000001400000000070000000002800000000040000000001000000c11000000000000800000000020000020440c00000c41000000001840000000000020000021440800000c0100
-  | 7, 11 => 0x2000000000050000000001400000000030000040440000000021030000000840800001091000000000840400000121000000000001400000c110000000324404000000000c00000000010000000000700000214400000004110300000008404000000000d00000100400000000e1000000043440000000021000000000001800000c51000000000000c000000000d000003244000000000002000000284080000085101
-  | 7, 12 => 0x10000000000300000214404000000e10300000000028000000a1020000000000800000000020000030440000000000030000000001400000c510100000000020000010910100000018400000000000400000000014000004010100000000008000010d10000000048400000008510000000000010000000e1010000000001c00000c510000000000010000000000500000000010000004010000000414400000000a100
-  | 7, 13 => 0x4840000000000030000000000c000000210200000000010000000a1000000000001000000811000000032440000000000020000000003000000c01000000010440000000000030000001840c00000000020000001840800000000070000000003400000021000000000001000000c9100000000000100000000003000000000140000002100000004344000000000000000000000180000006101000000000280000105100
-  | 7, 14 => 0x28408000000210000000000014000010910000000038400000000000300000000008000000e1000000000001c000000a1000000000000c000000610000000414400000000000500000214400000010d10000000000034000000000400000000030000000000400000314400000000a10200000414400000000000000000304400000000e10000000000020000000a103000000000340000040100000000000080000000007
-  | 7, 15 => 0x840000000000070000021040800001011000000003840000000000090000030440c00000000020000030440800001011010000043440000000061020000000000000000000000000031040400000000070000000001c00000c91020000010440000000000000000000840000000c91000000030440000000000050000030440800000000050000002840c00000000090000000001400000121000000000002000000c1103
-  | 7, 16 => 0x40440000000000070000030040c00000c11000000020440000000061030000021440000000411030000000001800000411020000000002000000061000000042440000000851000000000003400000061000000000000800000000060000031440000000811030000000000800001091010000000001400000411010000001840000000401000000002840000001051000000000001000000401030000000000c00000c4103
-  | 7, 17 => 0x100400000000000200000000014000000000d0000000002400000000040000000840c00000061030000000001400000c91030000020040800000000080000000840c000000000400000424400000000e1000000000002800001011010000000003400000000070000000001000000000070000001840000000021000000000002400000000020000031440000000c91000000000001400000c110300000324400000000e100
-  | 7, 18 => 0x43440000000811000000031440c000010110100000000014000000000a0000000840c000000e1030000000002800000401030000032440c00000000050000000003400000c01000000000001400000000000000031440800000000040000021440000000841020000020040800000c01010000002840000000c51000000000840000000000000000000003400000c51000000020440000000021000000042440400000c9100
-  | 7, 19 => 0x2c000000000a0000042440000000000060000021440c00000021000000032440000000c51030000000000800000000020000030040000000401030000000840000000061030000000001c000010d10000000310400000000210200000214400000000000b00000404400000000e10000000434400000000000d0000031440000000000050000010440800000000000000021440c0000040100000000184000000000005
-  | 7, 20 => 0x1400000000090000001840800000851000000000001400000c510000000000008000010910000000000010000000000300000100400000000000600000314408000000e1000000000000800000000050000000001000000000070000002840800000c11020000000001000001051010000000001c000000000700000204400000004110000000000008000000610000000300404000000000200000000024000000000d
-  | 7, 21 => 0x304404000000e1000000000001c00000000020000002840c000000a10200000000034000000e1010000004840400000000040000043440000000c41030000000840400001091000000000001c00000811000000000002000000c01000000002840800000811000000030040000000401020000000001800001011000000000001000000000040000020440000000061000000000001000000000090000000001c0000006102
-  | 7, 22 => 0xc000000000800000424400000000e10000000000034000000e1000000000001400000000030000030040000000000050000003840c000004110000000000014000000000500000000010000010d10000000008400000000000d0000040440000000000080000030440c00000811020000000840000000c41010000000002000000000050000000001400000c51020000010440c000000e102000003104000000002100
-  | 7, 23 => 0xc000000610100000204400000000000700000104408000000000300000018400000000000d0000000000c000000000200000204408000000000d0000003840000000000020000000000c00000000040000000001c000010110000000038404000000e1000000000001400000000020000000000000000000000000041440000000c410000000300400000000000a0000000000c0000006100000002144000000084102
-  | 7, 24 => 0x400000000030000000000c00000c010000000028400000000000200000000014000000000c0000000000c00000021010000003840800000c91010000000001c00000000050000020440800000000040000032440000000c51000000000000c000000000500000000028000000610300000000014000000e1020000001840800000061000000000000c0000006100000004044000000000006000004244000000041100
-  | 7, 25 => 0xc00000851010000000000c00000c01000000000000c00000c51000000000001c00000c510100000000020000000000b0000032440800000000070000042440000000401010000030440000000c01030000000002400000000020000000000400000121000000000001000000000030000000840c00000021020000032440c000000210000000000020000000e100000000000080000000007000004044000000000007
-  | 7, 26 => 0x3840000000411000000001840000000c41000000031040000000000080000000002000000000000000001840800001051000000043440000000c01030000000001400000851030000040440000000000020000031040000000000040000000000c00000000040000000000800000c510300000324408000008510200000434404000000e100000000000100000000005000000000180000040103000001004080000000005
-  | 7, 27 => 0x70000032440000000c110300000000024000004010200000028400000000000500000000008000000000400000000010000000000700000404400000010d10100000204400000000000b00000414400000000a1030000001840c000000e1010000031440800000411000000001840000000000040000030040000000021020000043440000000411000000000001c0000000002000000000100000000003
-  | 7, 28 => 0x3840c000000000c00000314400000000000d0000000002400000000070000000840800000401000000000001c00000c010000000000028000000e1000000003840000000000020000000000800000c110000000204400000000210200000000010000000000500000048400000000000700000000018000001210000000000008000000000200000204404000000a100000000084000000000001000002144080000000004
-  | 7, 29 => 0x31040000000000050000003840c000000a1020000001840c00000000020000031040c000008110100000104400000000210000000304400000000000200000000010000000000d00000204408000000000600000008408000000210100000038400000001210000000204400000000000400000000028000000000700000038408000000000b00000000010000010d1000000000001400000851000000000840000000c4100
-  | 7, 30 => 0xc000000610200000000020000000000200000018404000000210100000000010000000e10000000414400000000000500000018400000010510000000424404000000210300000104400000000000a0000003840000000c91030000000840000000061020000000000c00000c11020000000001c000000a10200000038404000000610000000414400000000000400000000014000000000d0000000840c0000101101
-  | 7, 31 => 0x2800000000040000000001400000000020000003840400000401000000002840000000000030000000002000000851030000031440c000000000a00000000010000000e1000000001840000000000070000000001c00000811000000000001c000000000d0000000001000000401030000003840c00000c91030000001840800000000020000001840000000000040000000840000000000070000043440000000c9100
-  | 7, 32 => 0x48400000010d1000000000001000000021000000004840000000061010000030440800000000040000000000000000c110000000100404000000000200000310400000000000000000300404000000a1000000000000400000021000000000001c00000021000000000000c00000000030000004840000000c91000000021440000000061000000000000c00000021020000000003400000000080000000000800000c5100
-  | 7, 33 => 0xd0000000000c00000c11000000000000800000c51000000000001400000c51030000021040800000000020000000001000000851020000010040000000c11000000021040800000401020000030440000000c0103000002004080000040100
-  | 8, 0 => 0x800000000000000000000c0000000000000000000080000000003000000000080000000001000000000000000000003000000000000000000003000000000000000000000000000000000000000000000000000040000000000000000000000000000002000000000040000000002
-  | _, _ => 0
-def chAt (s i : Nat) : Nat := fld (CH s (i / 64)) 32 (i % 64)
-def cidxH (s h : Nat) : Nat := bsr (chAt s) h 12 0 (CN s)
-def checkCutByIdx (s : Nat) (ws : List Nat) (hint : Nat) : Bool :=
-  match hint &&& 255 with
-  | 0 => checkCutEntry dom_11 roots_11 8 s ws hint
-  | 1 => checkCutEntry dom_21 roots_21 8 s ws hint
-  | 2 => checkCutEntry dom_23 roots_23 7 s ws hint
-  | 3 => checkCutEntry dom_24 roots_24 7 s ws hint
-  | 4 => checkCutEntry dom_25 roots_25 6 s ws hint
-  | 5 => checkCutEntry dom_14 roots_14 5 s ws hint
-  | 6 => checkCutEntry dom_22 roots_22 5 s ws hint
-  | 7 => checkCutEntry dom_19 roots_19 5 s ws hint
-  | 8 => checkCutEntry dom_17 roots_17 5 s ws hint
-  | 9 => checkCutEntry dom_26 roots_26 5 s ws hint
-  | 10 => checkCutEntry dom_9 roots_9 5 s ws hint
-  | 11 => checkCutEntry dom_5 roots_5 4 s ws hint
-  | 12 => checkCutEntry dom_27 roots_27 4 s ws hint
-  | 13 => checkCutEntry dom_0 roots_0 4 s ws hint
-  | _ => false
-def cutHitH (s h : Nat) (ws : List Nat) : Bool :=
-  let i := cidxH s h
-  decide (i < CN s) && (chAt s i == h) && checkCutByIdx s ws (fld (CV s (i / 32)) 42 (i % 32))
-
-def cutHit (s : Nat) (ws : List Nat) : Bool := cutHitH s (hk 0 ws) ws
-
-theorem cutHitH_sound {u ys} (h : cutHitH u (hk 0 ys) ys = true) : ¬ RunD dom_28 goalM u ys := by
-  unfold cutHitH at h
-  simp only [Bool.and_eq_true] at h
-  have hc := h.2
-  unfold checkCutByIdx at hc
-  split at hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_11 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_21 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_23 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_24 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_25 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_14 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_22 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_19 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_17 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_26 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_9 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_5 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_27 _ hc
-  · exact checkCutEntry_sound (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel) low_0 _ hc
-  · contradiction
-theorem cutHit_sound {u ys} (h : cutHit u ys = true) : ¬ RunD dom_28 goalM u ys := cutHitH_sound h
-
-def symsG : List (List (Nat × Nat)) := []
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem symsG_ok : symsG.all (fun ms => ms.all moveOK256 && (applyMoves ms dom_28 == dom_28) && (applyMoves ms goalM == goalM)) = true := by decide +kernel
-def ori (zs : List Nat) : List Nat := pickMin 0 zs symsG zs (hk 0 zs)
-theorem ori_ok {u ys} (h : RunD dom_28 goalM u ys) : RunD dom_28 goalM u (ori ys) :=
-  pickMin_runD 0 ys h symsG ys (hk 0 ys) symsG_ok h
-
-def Z (s : Nat) := bar dom_28 goalM pairsG r1sG r2sG mpG SD SS NN htAt idxH ori 0 pool6G cutHitH s
-theorem z0 : ∀ i, 0 ≤ i → i < 0 → Z 0 i = true := by omega
-theorem z1 : ∀ i, 0 ≤ i → i < 0 → Z 1 i = true := by omega
-theorem z2 : ∀ i, 0 ≤ i → i < 0 → Z 2 i = true := by omega
-theorem z3 : ∀ i, 0 ≤ i → i < 0 → Z 3 i = true := by omega
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z4_0 : ∀ i, 0 ≤ i → i < 2 → Z 4 i = true := span_ok (by decide +kernel : span (Z 4) 2 0 = true)
-theorem z4 : ∀ i, 0 ≤ i → i < 2 → Z 4 i = true := z4_0
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z5_0 : ∀ i, 0 ≤ i → i < 8 → Z 5 i = true := span_ok (by decide +kernel : span (Z 5) 8 0 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z5_8 : ∀ i, 8 ≤ i → i < 13 → Z 5 i = true := span_ok (by decide +kernel : span (Z 5) 5 8 = true)
-theorem z5 : ∀ i, 0 ≤ i → i < 13 → Z 5 i = true := range_split z5_0 (z5_8)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z6_0 : ∀ i, 0 ≤ i → i < 8 → Z 6 i = true := span_ok (by decide +kernel : span (Z 6) 8 0 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z6_8 : ∀ i, 8 ≤ i → i < 16 → Z 6 i = true := span_ok (by decide +kernel : span (Z 6) 8 8 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z6_16 : ∀ i, 16 ≤ i → i < 24 → Z 6 i = true := span_ok (by decide +kernel : span (Z 6) 8 16 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z6_24 : ∀ i, 24 ≤ i → i < 32 → Z 6 i = true := span_ok (by decide +kernel : span (Z 6) 8 24 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z6_32 : ∀ i, 32 ≤ i → i < 40 → Z 6 i = true := span_ok (by decide +kernel : span (Z 6) 8 32 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z6_40 : ∀ i, 40 ≤ i → i < 48 → Z 6 i = true := span_ok (by decide +kernel : span (Z 6) 8 40 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z6_48 : ∀ i, 48 ≤ i → i < 56 → Z 6 i = true := span_ok (by decide +kernel : span (Z 6) 8 48 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z6_56 : ∀ i, 56 ≤ i → i < 58 → Z 6 i = true := span_ok (by decide +kernel : span (Z 6) 2 56 = true)
-theorem z6 : ∀ i, 0 ≤ i → i < 58 → Z 6 i = true := range_split z6_0 (range_split z6_8 (range_split z6_16 (range_split z6_24 (range_split z6_32 (range_split z6_40 (range_split z6_48 (z6_56)))))))
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z7_0 : ∀ i, 0 ≤ i → i < 8 → Z 7 i = true := span_ok (by decide +kernel : span (Z 7) 8 0 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z7_8 : ∀ i, 8 ≤ i → i < 16 → Z 7 i = true := span_ok (by decide +kernel : span (Z 7) 8 8 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z7_16 : ∀ i, 16 ≤ i → i < 24 → Z 7 i = true := span_ok (by decide +kernel : span (Z 7) 8 16 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z7_24 : ∀ i, 24 ≤ i → i < 32 → Z 7 i = true := span_ok (by decide +kernel : span (Z 7) 8 24 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z7_32 : ∀ i, 32 ≤ i → i < 40 → Z 7 i = true := span_ok (by decide +kernel : span (Z 7) 8 32 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z7_40 : ∀ i, 40 ≤ i → i < 48 → Z 7 i = true := span_ok (by decide +kernel : span (Z 7) 8 40 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z7_48 : ∀ i, 48 ≤ i → i < 56 → Z 7 i = true := span_ok (by decide +kernel : span (Z 7) 8 48 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z7_56 : ∀ i, 56 ≤ i → i < 64 → Z 7 i = true := span_ok (by decide +kernel : span (Z 7) 8 56 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z7_64 : ∀ i, 64 ≤ i → i < 72 → Z 7 i = true := span_ok (by decide +kernel : span (Z 7) 8 64 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z7_72 : ∀ i, 72 ≤ i → i < 80 → Z 7 i = true := span_ok (by decide +kernel : span (Z 7) 8 72 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z7_80 : ∀ i, 80 ≤ i → i < 88 → Z 7 i = true := span_ok (by decide +kernel : span (Z 7) 8 80 = true)
-theorem z7 : ∀ i, 0 ≤ i → i < 88 → Z 7 i = true := range_split z7_0 (range_split z7_8 (range_split z7_16 (range_split z7_24 (range_split z7_32 (range_split z7_40 (range_split z7_48 (range_split z7_56 (range_split z7_64 (range_split z7_72 (z7_80))))))))))
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z8_0 : ∀ i, 0 ≤ i → i < 8 → Z 8 i = true := span_ok (by decide +kernel : span (Z 8) 8 0 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z8_8 : ∀ i, 8 ≤ i → i < 16 → Z 8 i = true := span_ok (by decide +kernel : span (Z 8) 8 8 = true)
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z8_16 : ∀ i, 16 ≤ i → i < 21 → Z 8 i = true := span_ok (by decide +kernel : span (Z 8) 5 16 = true)
-theorem z8 : ∀ i, 0 ≤ i → i < 21 → Z 8 i = true := range_split z8_0 (range_split z8_8 (z8_16))
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem z9_0 : ∀ i, 0 ≤ i → i < 1 → Z 9 i = true := span_ok (by decide +kernel : span (Z 9) 1 0 = true)
-theorem z9 : ∀ i, 0 ≤ i → i < 1 → Z 9 i = true := z9_0
-theorem checked (s : Nat) (hs : s ≤ 9) : ∀ i < NN s, Z s i = true := by
-  interval_cases s
-  · exact fun i hi => z0 i (Nat.zero_le i) hi
-  · exact fun i hi => z1 i (Nat.zero_le i) hi
-  · exact fun i hi => z2 i (Nat.zero_le i) hi
-  · exact fun i hi => z3 i (Nat.zero_le i) hi
-  · exact fun i hi => z4 i (Nat.zero_le i) hi
-  · exact fun i hi => z5 i (Nat.zero_le i) hi
-  · exact fun i hi => z6 i (Nat.zero_le i) hi
-  · exact fun i hi => z7 i (Nat.zero_le i) hi
-  · exact fun i hi => z8 i (Nat.zero_le i) hi
-  · exact fun i hi => z9 i (Nat.zero_le i) hi
-def RootG (s : Nat) : Bool :=
-  scr dom_28 goalM s pool6G xsM || cutHit s (ori xsM) || found SS NN idx s (ori xsM)
-
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem rootChecked : span RootG 5 5 = true := by decide +kernel
-
-set_option maxRecDepth 40000 in
-set_option maxHeartbeats 0 in
-theorem proper_failG : ∀ zs ∈ xsM.sublists, zs ≠ xsM → unorientedCov pairsG zs = false := by decide +kernel
-
-theorem noRunFull (s : Nat) (hs : s ≤ 9) (h : RunD dom_28 goalM s xsM) : False := by
-  have hmin : 5 ≤ s := by
-    have hl := run_len h; change 6 ≤ s + 1 at hl; omega
-  have hr := span_ok rootChecked s hmin (by omega)
-  unfold RootG at hr
-  rw [scr_no pool6G h, Bool.false_or, Bool.or_eq_true] at hr
-  rcases hr with hcut | hf
-  · exact cutHit_sound hcut (ori_ok h)
-  · rw [found, Bool.and_eq_true, decide_eq_true_eq, List.isPerm_iff] at hf
-    exact bar_all (by decide +kernel) rfl rfl (by decide +kernel) SD_eq (by decide +kernel) ori_ok cutHitH_sound checked s hs _ hf.1 (Run.perm hf.2 (ori_ok h))
-
-theorem noCircuit : Lower dom_28 roots_28 goal_28 10 := by
-  intro p bank hr ha
-  by_contra! hsmall
-  have hnc : ¬ IsConst dom_28 goal_28 := by
-    have h0 : isConstB dom_28 goal_28 = false := by decide +kernel
-    intro h; rw [(isConstB_iff _ _).2 h] at h0; contradiction
-  obtain ⟨s, ws, hs_le, hnd, hws_sub, hrun⟩ := reach_to_run (by decide +kernel) hnc hr ha
-  have hperm_sub : ∃ zs, zs.Sublist xsM ∧ ws.Perm zs := by
-    refine ⟨xsM.filter (fun x => decide (x ∈ ws)), List.filter_sublist, ?_⟩
-    refine (List.perm_ext_iff_of_nodup hnd (List.Nodup.filter _ (by decide +kernel : xsM.Nodup))).2 ?_
-    intro x; simp only [List.mem_filter, decide_eq_true_eq]
-    exact ⟨fun hx => ⟨hws_sub x hx, hx⟩, fun h => h.2⟩
-  obtain ⟨zs, hsub, hpz⟩ := hperm_sub
-  have hrun' := Run.perm hpz hrun
-  by_cases heq : zs = xsM
-  · subst heq; exact noRunFull s (by omega) hrun'
-  · have hcov := unorientedCov_ok (by decide +kernel) pairsG (by decide +kernel) hrun'
-    have hbad := proper_failG zs (List.mem_sublists.2 hsub) heq
-    rw [hcov] at hbad; contradiction
-
-end S_28
-
-theorem low_28 : Lower dom_28 roots_28 goal_28 10 := S_28.noCircuit
-
-def pt6 (r : Nat) : Fin 6 → Bool := fun i => r.testBit i.val
-theorem roots_28_bits : ∀ r : Fin 64, roots_28.map (·.testBit r.val) = List.ofFn (pt6 r.val) := by decide +kernel
-theorem dom_28_lt : ∀ r : Fin 64, dom_28.testBit r.val = true := by decide +kernel
-theorem lower_to_circuit6 (f : (Fin 6 → Bool) → Bool) (T lb : Nat)
-    (hT : ∀ r : Fin 64, T.testBit r.val = f (pt6 r.val))
-    (hncT : ¬ IsConst dom_28 T)
-    (hlow : Lower dom_28 roots_28 T lb) :
-    ∀ t : ℕ, HasCircuitSize 6 f t → lb ≤ t := by
-  rintro t ⟨C, hfan, hsz, hev⟩
-  have hsup0 : ∀ v ∈ roots_28, Avail mask256 roots_28 v := fun v hv => Or.inr ⟨v, hv, rfl⟩
-  obtain ⟨p, bank, hp, hr, hsup⟩ := execN_reach C.gates roots_28 hfan 0 roots_28 roots_28 rfl hsup0
-  set out := (execN C.gates roots_28).getD C.output 0
-  have hout : out &&& dom_28 = T &&& dom_28 := by
-    apply Nat.eq_of_testBit_eq; intro r
-    rw [Nat.testBit_and, Nat.testBit_and]
-    by_cases hlt : r < 64
-    · rw [dom_28_lt ⟨r, hlt⟩, Bool.and_true, Bool.and_true]
-      have h1 := execN_bit C.gates roots_28 r (by omega) (fun g hg => (hfan g hg).1)
-      have h2 := congrArg (fun l => l.getD C.output false) h1
-      rw [roots_28_bits ⟨r, hlt⟩] at h2
-      have hgd : ((execN C.gates roots_28).map (·.testBit r)).getD C.output false =
-          out.testBit r := by
-        simp only [out, List.getD_eq_getElem?_getD, List.getElem?_map]
-        cases (execN C.gates roots_28)[C.output]? with | none => simp | some v => rfl
-      rw [hgd] at h2
-      exact h2.trans ((hev (pt6 r)).trans (hT ⟨r, hlt⟩).symm)
-    · have hd : dom_28.testBit r = false := by
-        apply Nat.testBit_lt_two_pow
-        have h64 : dom_28 < 2 ^ 64 := by decide
-        exact lt_of_lt_of_le h64 (Nat.pow_le_pow_right (by omega) (by omega))
-      rw [hd, Bool.and_false, Bool.and_false]
-  have hav_out : Avail mask256 bank out := by
-    by_cases hi : C.output < (execN C.gates roots_28).length
-    · exact hsup _ (getD_mem hi)
-    · rw [show out = 0 from List.getD_eq_default _ _ (by omega)]; exact Or.inl (Or.inl (by simp))
-  have hd63 : dom_28 &&& mask256 = dom_28 := by decide
-  have hm256 : mask256 &&& mask256 = mask256 := by decide
-  have houtm : (out &&& mask256) &&& dom_28 = T &&& dom_28 := by
-    rw [Nat.and_assoc, Nat.and_comm mask256 dom_28, hd63, hout]
-  have hnc_m : ¬ IsConst dom_28 (out &&& mask256) := fun hc => hncT (by rcases hc with h0 | h1; exact Or.inl (houtm.symm.trans h0); exact Or.inr (houtm.symm.trans h1))
-  have hnc_256 : ¬ IsConst mask256 out := fun hc => hnc_m (by
-    rcases hc with h0 | h1
-    · exact Or.inl (by rw [h0]; simp)
-    · exact Or.inr (by rw [h1, Nat.and_comm, hd63]))
-  obtain ⟨s, ws, hs, _, hws, hrun⟩ := reach_to_run hm256 hnc_256 hr hav_out
-  have hws63 : ∀ w ∈ ws, Avail dom_28 roots_28 w := fun w hw => by
-    obtain ⟨u, hu, rfl⟩ := List.mem_map.1 (hws w hw)
-    exact Or.inr ⟨u, hu, by rw [Nat.and_assoc, Nat.and_comm mask256 dom_28, hd63]⟩
-  obtain ⟨q, next, hq, hav_q, hqp⟩ := contraction hd63 hd63 hnc_m hrun (show NatReach dom_28 roots_28 0 roots_28 from rfl) hws63
-  have hL := hlow q next hq (avail_of_eq houtm hav_q)
-  show lb ≤ t
-  have : C.gates.length ≤ t := hsz
-  omega
-
-def fG : (Fin 6 → Bool) → Bool := fun x : Fin 6 → Bool => Nat.testBit (4008241832 * 2 ^ 32 + 4008241320) (∑ i : Fin 6, if x i then 2 ^ (i : ℕ) else 0)
-set_option maxRecDepth 40000 in
-theorem hT6 : ∀ r : Fin 64, goal_28.testBit r.val = fG (pt6 r.val) := by decide +kernel
-theorem lower : ∀ t : ℕ, HasCircuitSize 6 fG t → 10 ≤ t :=
-  lower_to_circuit6 fG goal_28 10 hT6 (by unfold IsConst; decide) low_28
-
-def wit : Circuit := ⟨[⟨GateOp.and, [0, 1]⟩, ⟨GateOp.or, [6, 2]⟩, ⟨GateOp.and, [0, 5]⟩, ⟨GateOp.or, [8, 4]⟩, ⟨GateOp.and, [3, 9]⟩, ⟨GateOp.or, [7, 10]⟩, ⟨GateOp.or, [3, 9]⟩, ⟨GateOp.and, [1, 12]⟩, ⟨GateOp.or, [0, 13]⟩, ⟨GateOp.and, [14, 11]⟩], 15⟩
-theorem wmono : Monotone2 wit := by simp [wit, Monotone2]
-theorem wsize : wit.size ≤ 10 := by decide
-set_option maxRecDepth 40000 in
-theorem weval : ∀ x : Fin 6 → Bool, wit.eval (List.ofFn x) = fG x := by decide +kernel
-
-end PEqualNP.Outside.L_meta_16285_aux
-
-theorem PEqualNP.Outside.L_meta_16285 : ∀ s : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 6 (fun x : Fin 6 → Bool => Nat.testBit (4008241832 * 2 ^ 32 + 4008241320) (∑ i : Fin 6, if x i then 2 ^ (i : ℕ) else 0)) s → ∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 C ∧ C.size ≤ s ∧ ∀ x : Fin 6 → Bool, C.eval (List.ofFn x) = Nat.testBit (4008241832 * 2 ^ 32 + 4008241320) (∑ i : Fin 6, if x i then 2 ^ (i : ℕ) else 0) :=
-  fun s hs => ⟨PEqualNP.Outside.L_meta_16285_aux.wit, PEqualNP.Outside.L_meta_16285_aux.wmono, le_trans PEqualNP.Outside.L_meta_16285_aux.wsize (PEqualNP.Outside.L_meta_16285_aux.lower s hs), PEqualNP.Outside.L_meta_16285_aux.weval⟩
