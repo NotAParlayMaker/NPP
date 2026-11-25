@@ -81,7 +81,7 @@ theorem edgeF_eq (f : Fin 10 → Bool) :
 
 end PEqualNP.Outside.L_meta_6081
 
-theorem L_meta_6081 : ∀ (x1 x2 x3 : Fin (10 : ℕ)) (x4 x5 : Bool), x1 ≠ x2 → x1 ≠ x3 → x2 ≠ x3 → ¬(x4 = Bool.true ∧ x5 = Bool.true ∧ ([(50 : ℕ), (69 : ℕ), (138 : ℕ), (276 : ℕ), (521 : ℕ), (385 : ℕ), (770 : ℕ), (548 : ℕ), (104 : ℕ), (208 : ℕ)].getD ↑x2 (0 : ℕ)).testBit ↑x3 = Bool.true) → ∃ (x10 : Fin (10 : ℕ) → Bool), x10 x2 = x4 ∧ x10 x3 = x5 ∧ ∀ (x11 : Bool), Decidable.decide (∃ (x12 : Fin (10 : ℕ)) (x13 : Fin (10 : ℕ)), Function.update x10 x1 x11 x12 = Bool.true ∧ Function.update x10 x1 x11 x13 = Bool.true ∧ ([(50 : ℕ), (69 : ℕ), (138 : ℕ), (276 : ℕ), (521 : ℕ), (385 : ℕ), (770 : ℕ), (548 : ℕ), (104 : ℕ), (208 : ℕ)].getD ↑x12 (0 : ℕ)).testBit ↑x13 = Bool.true) = x11 := by
+theorem PEqualNP.Outside.L_meta_6081 : ∀ (x1 x2 x3 : Fin (10 : ℕ)) (x4 x5 : Bool), x1 ≠ x2 → x1 ≠ x3 → x2 ≠ x3 → ¬(x4 = Bool.true ∧ x5 = Bool.true ∧ ([(50 : ℕ), (69 : ℕ), (138 : ℕ), (276 : ℕ), (521 : ℕ), (385 : ℕ), (770 : ℕ), (548 : ℕ), (104 : ℕ), (208 : ℕ)].getD ↑x2 (0 : ℕ)).testBit ↑x3 = Bool.true) → ∃ (x10 : Fin (10 : ℕ) → Bool), x10 x2 = x4 ∧ x10 x3 = x5 ∧ ∀ (x11 : Bool), Decidable.decide (∃ (x12 : Fin (10 : ℕ)) (x13 : Fin (10 : ℕ)), Function.update x10 x1 x11 x12 = Bool.true ∧ Function.update x10 x1 x11 x13 = Bool.true ∧ ([(50 : ℕ), (69 : ℕ), (138 : ℕ), (276 : ℕ), (521 : ℕ), (385 : ℕ), (770 : ℕ), (548 : ℕ), (104 : ℕ), (208 : ℕ)].getD ↑x12 (0 : ℕ)).testBit ↑x13 = Bool.true) = x11 := by
   intro x1 x2 x3 x4 x5 h12 h13 h23 hn
   have hg := PEqualNP.Outside.L_meta_6081.good_of x1 x2 x3 x4 x5 h12 h13 h23 hn
   simp only [PEqualNP.Outside.L_meta_6081.good, Bool.and_eq_true, beq_iff_eq,
