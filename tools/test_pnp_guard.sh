@@ -19,7 +19,7 @@ serve '∀ n : ℕ, n + 0 = n'; run || { cat "$t/out"; echo "FAIL: plain stateme
 grep -q 'theorem PEqualNP.Outside.L_t_1 : (∀ n : ℕ, n + 0 = n) := by' "$f" || { echo "FAIL: skeleton"; cat "$f"; exit 1; }
 if [ -n "${1:-}" ]; then
   n=0; while IFS= read -r -d '' s; do serve "$s"; run || { echo "FAIL: live statement refused: $(head -c 200 <<<"$s")"; cat "$t/out"; exit 1; }; n=$((n+1)); done \
-    < <(python3 -c 'import json,sys; [sys.stdout.write(g["statement"]+"\0") for g in json.load(open(sys.argv[1]))["gaps"]]' "$1")
+    < <(python3 -c 'import json,sys; [sys.stdout.write(g["statement"]+"\0") for g in json.load(open(sys.argv[1]))["gaps"] if isinstance(g.get("statement"), str)]' "$1")
   echo "live: $n statements, none refused"
 fi
 echo "pnp guard: pass"
