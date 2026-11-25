@@ -356,16 +356,10 @@ theorem PEqualNP.Outside.R_meta_972_427
     have hLineSingleEq : ∀ (mark : ℕ → Bool), (∀ i < 26, mark (collin e.1 e.2 i) = mark i) →
         lineSingle D' 26 mark 0 13 = lineSingle D 26 mark e.1 e.2 := by
       intro mark hMark
-      let lpEval : GateOp → List (Bool × Bool) → Bool × Bool := fun op ins =>
-        match op with
-        | GateOp.or => (ins.any (·.1), ins.any (·.2))
-        | GateOp.and => ins.foldl (fun (acc : Bool × Bool) p =>
-            (acc.1 && p.1, (acc.1 && p.2) || (acc.2 && p.1))) (true, false)
-        | _ => (false, false)
       let bitsD : List Bool := (List.range 26).map fun i => i == e.1 || i == e.2
       let bitsD' : List Bool := (List.range 26).map fun i => i == 0 || i == 13
-      let initD : List (Bool × Bool) := bitsD.zipIdx.map fun (b, i) => if mark i then (false, b) else (b, false)
-      let initD' : List (Bool × Bool) := bitsD'.zipIdx.map fun (b, i) => if mark i then (false, b) else (b, false)
+      let initD : List (Bool × Bool) := bitsD.zipIdx.map fun p => if mark p.2 then (false, p.1) else (p.1, false)
+      let initD' : List (Bool × Bool) := bitsD'.zipIdx.map fun p => if mark p.2 then (false, p.1) else (p.1, false)
       have hInitLen : initD.length = 26 := by simp [initD, bitsD]
       have hInitLen' : initD'.length = 26 := by simp [initD', bitsD']
       have hBaseLP : ∀ i, initD.getD i (false, false) = initD'.getD (mapW i) (false, false) := by
@@ -390,10 +384,33 @@ theorem PEqualNP.Outside.R_meta_972_427
           rw [hbit]
         · simp only [mapW, hlt, ite_false]
           rw [List.getD_eq_default _ _ (by omega), List.getD_eq_default _ _ (by omega)]
+      let lpEval : GateOp → List (Bool × Bool) → Bool × Bool := fun op ins =>
+        GateOp.casesOn op
+          (ins.foldl (fun (acc : Bool × Bool) p => (acc.1 && p.1, (acc.1 && p.2) || (acc.2 && p.1))) (true, false))
+          (ins.any (·.1), ins.any (·.2))
+          (false, false)
+          (fun _ => (false, false))
+          (false, false)
+      have hFoldEq : ∀ (f1 f2 : List (Bool × Bool) → Gate → List (Bool × Bool)),
+          (∀ w g, f1 w g = f2 w g) → ∀ (ls : List Gate) (u : List (Bool × Bool)),
+            ls.foldl f1 u = ls.foldl f2 u := by
+        intro f1 f2 hf ls
+        induction ls with
+        | nil => intro u; rfl
+        | cons g rest ih => intro u; rw [List.foldl_cons, List.foldl_cons, hf, ih]
       have hSimLP := simFold (false, false) lpEval D.gates initD initD'
         (by omega) (by omega) hBaseLP D.output
       unfold lineSingle linearParts
-      exact congrArg Prod.snd hSimLP.symm
+      apply congrArg Prod.snd
+      have hListEq : ∀ (f1 f2 : Bool × ℕ → Bool × Bool),
+          (∀ p, f1 p = f2 p) → ∀ l : List (Bool × ℕ), l.map f1 = l.map f2 :=
+        fun _ _ hf _ => List.map_congr_left fun p _ => hf p
+      dsimp only [D']
+      conv_lhs => rw [hFoldEq _ (fun w g => w ++ [lpEval g.op (g.inputs.map fun j => w.getD j (false, false))]) (fun w g => by cases g.op <;> rfl)]
+      conv_rhs => rw [hFoldEq _ (fun w g => w ++ [lpEval g.op (g.inputs.map fun j => w.getD j (false, false))]) (fun w g => by cases g.op <;> rfl)]
+      conv_lhs => rw [hListEq _ (fun p => if mark p.2 then (false, p.1) else (p.1, false)) (fun p => by cases p; rfl)]
+      conv_rhs => rw [hListEq _ (fun p => if mark p.2 then (false, p.1) else (p.1, false)) (fun p => by cases p; rfl)]
+      exact hSimLP.symm
     have hL0 : lineSingle D' 26 isL 0 13 = false :=
       (hLineSingleEq isL hIsL).trans heL
     have hP0 : lineSingle D' 26 (fun i => !isL i) 0 13 = false :=
