@@ -308,7 +308,7 @@ theorem lower_of_search (n B : ℕ) (f : (Fin n → Bool) → Bool) (T0 : List �
 
 end Search
 namespace Majority
-open PEqualNP.MetaComplexity _root_.PEqualNP.Outside.L_meta_11944_aux.Search
+open PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_11944_aux.Search
 /-- Majority of three inputs. -/
 def maj3 : (Fin 3 → Bool) → Bool :=
   fun x : Fin 3 → Bool => (x 0 && x 1) || (x 1 && x 2) || (x 0 && x 2)
