@@ -1,15 +1,10 @@
+import Mathlib
 import PEqualNP.Defs
 
--- The signed Petersen witness argument uses the seeded certificate adapted by JLDC in project PR 7546.
--- The graph bounds and restriction checker are adapted from PressF10's L-meta-1667.
--- Each wire carries a 512-row truth table. We supply the extra input as x₀ ∨ x₆.
--- The finite certificate excludes those circuits by restriction and by counting live wires.
--- A suffix with one more wire than gates partitions separating row pairs into rectangles.
--- With one wire reused, splitting at that wire gives two classes and a shared separator.
--- The final six layers test every remaining gate choice. Hash lookups are checked by
--- comparing the actual wire tables before using the next layer's lower bound.
+-- The checker and the plain bound certificates are adapted from PEqualNP/Outside/L_meta_1667.lean (Apache-2.0).
+-- Certificate and masking argument by dsgallups in PR 8990.
+-- The batch proof below checks headers and rows together.
 namespace PEqualNP.Outside.L_meta_3951.Certificate
-
 open PEqualNP.CircuitLowerBounds
 abbrev Sig := BitVec 512
 def zero : Sig := 0
@@ -20,26 +15,53 @@ def proper (a : Sig) : Prop := a ≠ zero ∧ a ≠ one
 private theorem bin_comm (d : Bool) (a b : Sig) : bin d a b = bin d b a := by
   cases d <;> simp [bin,BitVec.and_comm,BitVec.or_comm]
 
-inductive Live (target : Sig) : Nat → Nat → Finset Sig → Prop
-  | stop (hp : proper target) : Live target 0 0 {target}
-  | unary {k t : Nat} {U : Finset Sig} {a : Sig} (ha : proper a)
-      (hfresh : neg a ∉ insert a U) (tail : Live target k t (insert (neg a) U)) :
-      Live target (k+1) (t+1) (insert a U)
-  | binary {k t : Nat} {U : Finset Sig} {a b : Sig} {d : Bool}
+def Live (target : Sig) : Nat → Nat → Finset Sig → Prop
+  | 0,t,S => t=0 ∧ S={target} ∧ proper target
+  | k+1,t,S =>
+    (∃ (u : Nat) (U : Finset Sig) (a : Sig), t=u+1 ∧ S=insert a U ∧ proper a ∧
+      neg a ∉ insert a U ∧ Live target k u (insert (neg a) U)) ∨
+    (∃ (U : Finset Sig) (a b : Sig) (d : Bool), S=insert a (insert b U) ∧ proper a ∧ proper b ∧ a ≠ b ∧
+      bin d a b ∉ insert a (insert b U) ∧ Live target k t (insert (bin d a b) U))
+theorem Live.stop {target : Sig} (hp : proper target) : Live target 0 0 {target} := ⟨rfl,rfl,hp⟩
+theorem Live.unary {target : Sig} {k t : Nat} {U : Finset Sig} {a : Sig} (ha : proper a)
+    (hfresh : neg a ∉ insert a U) (tail : Live target k t (insert (neg a) U)) :
+    Live target (k+1) (t+1) (insert a U) :=
+  Or.inl ⟨t,U,a,rfl,rfl,ha,hfresh,tail⟩
+theorem Live.binary {target : Sig} {k t : Nat} {U : Finset Sig} {a b : Sig} {d : Bool}
+    (ha : proper a) (hb : proper b) (hab : a ≠ b)
+    (hfresh : bin d a b ∉ insert a (insert b U)) (tail : Live target k t (insert (bin d a b) U)) :
+    Live target (k+1) t (insert a (insert b U)) :=
+  Or.inr ⟨U,a,b,d,rfl,ha,hb,hab,hfresh,tail⟩
+theorem Live.ind {target : Sig} {motive : ∀ (k t : Nat) (S : Finset Sig), Live target k t S → Prop}
+    (stop : ∀ (hp : proper target), motive 0 0 {target} (Live.stop hp))
+    (unary : ∀ {k t : Nat} {U : Finset Sig} {a : Sig} (ha : proper a)
+      (hfresh : neg a ∉ insert a U) (tail : Live target k t (insert (neg a) U)),
+      motive k t (insert (neg a) U) tail → motive (k+1) (t+1) (insert a U) (Live.unary ha hfresh tail))
+    (binary : ∀ {k t : Nat} {U : Finset Sig} {a b : Sig} {d : Bool}
       (ha : proper a) (hb : proper b) (hab : a ≠ b)
-      (hfresh : bin d a b ∉ insert a (insert b U)) (tail : Live target k t (insert (bin d a b) U)) :
-      Live target (k+1) t (insert a (insert b U))
+      (hfresh : bin d a b ∉ insert a (insert b U)) (tail : Live target k t (insert (bin d a b) U)),
+      motive k t (insert (bin d a b) U) tail →
+      motive (k+1) t (insert a (insert b U)) (Live.binary ha hb hab hfresh tail))
+    {k t : Nat} {S : Finset Sig} (h : Live target k t S) : motive k t S h := by
+  induction k generalizing t S with
+  | zero =>
+    obtain ⟨rfl,rfl,hp⟩ := h
+    exact stop hp
+  | succ k ih =>
+    rcases h with ⟨u,U,a,rfl,rfl,ha,hf,tail⟩ | ⟨U,a,b,d,rfl,ha,hb,hab,hf,tail⟩
+    · exact unary ha hf tail (ih tail)
+    · exact binary ha hb hab hf tail (ih tail)
 
 private lemma live_proper {k t S} (h : Live target k t S) : ∀ a ∈ S, proper a := by
-  induction h with
+  induction h using Live.ind with
   | stop hp => simpa using hp
   | unary ha hf _ ih => simpa using And.intro ha (fun a h => ih a (Finset.mem_insert_of_mem h))
   | binary ha hb hab hf _ ih =>
     simp only [Finset.forall_mem_insert]
     exact ⟨ha,hb,fun a h => ih a (Finset.mem_insert_of_mem h)⟩
 
-lemma live_size {k t S} (h : Live target k t S) : t ≤ k ∧ S.card+t ≤ k+1 := by
-  induction h with
+private lemma live_size {k t S} (h : Live target k t S) : t ≤ k ∧ S.card+t ≤ k+1 := by
+  induction h using Live.ind with
   | stop hp => simp
   | @unary k t U a ha hf _ ih =>
     have hu : neg a ∉ U := fun hm => hf (Finset.mem_insert_of_mem hm)
@@ -52,6 +74,7 @@ lemma live_size {k t S} (h : Live target k t S) : t ≤ k ∧ S.card+t ≤ k+1 :
     have h1 := Finset.card_insert_le (a := a) (s := insert b U)
     have h2 := Finset.card_insert_le (a := b) (s := U)
     exact ⟨by omega,by omega⟩
+
 
 def gv (w : List Sig) (g : Gate) : Sig :=
   let xs := g.inputs.map (fun i => w.getD i zero)
@@ -66,7 +89,7 @@ def execute (gs : List Gate) (w : List Sig) : List Sig :=
 
 def represented (w : List Sig) (v : Sig) : Prop := v ∈ w ∨ ¬proper v
 
-lemma get_rep (w : List Sig) (i : Nat) : represented w (w.getD i zero) := by
+private lemma get_rep (w : List Sig) (i : Nat) : represented w (w.getD i zero) := by
   simp only [List.getD_eq_getElem?_getD]
   cases h : w[i]? with
   | none => exact Or.inr (fun h => h.1 rfl)
@@ -92,7 +115,7 @@ def witness (w : List Sig) (z : Sig) : Prop :=
   (∃ a ∈ w, proper a ∧ z = neg a) ∨
   (∃ d a b, a ∈ w ∧ b ∈ w ∧ proper a ∧ proper b ∧ a ≠ b ∧ z = bin d a b)
 
-lemma bin_rep {w a b} (d : Bool) (ha : represented w a) (hb : represented w b) :
+private lemma bin_rep {w a b} (d : Bool) (ha : represented w a) (hb : represented w b) :
     represented w (bin d a b) ∨ witness w (bin d a b) := by
   have rz : represented w zero := Or.inr (fun h => h.1 rfl)
   have ro : represented w one := Or.inr (fun h => h.2 rfl)
@@ -108,7 +131,7 @@ lemma bin_rep {w a b} (d : Bool) (ha : represented w a) (hb : represented w b) :
   · subst b; cases d <;> simp_all
   exact Or.inr (Or.inr ⟨d,a,b,ham,hbm,hap,hbp,he,rfl⟩)
 
-lemma gate_rep (w : List Sig) (g : Gate)
+private lemma gate_rep (w : List Sig) (g : Gate)
     (h : g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp) ∧ g.inputs.length≤2) :
     represented w (gv w g) ∨ witness w (gv w g) := by
   obtain ⟨o,l⟩ := g
@@ -145,7 +168,7 @@ lemma gate_rep (w : List Sig) (g : Gate)
 
 -- Remove a last computed signal from a backward derivation. A gate whose value
 -- is already available, or is unused by the suffix, needs no entry in the plan.
-lemma pull_gate {w : List Sig} {z : Sig} {k t S} (h : Live target k t S)
+private lemma pull_gate {w : List Sig} {z : Sig} {k t S} (h : Live target k t S)
     (hz : represented w z ∨ witness w z) (sub : ∀ a ∈ S, a ∈ w++[z]) :
     ∃ k' t' S', k' ≤ k+1 ∧ Live target k' t' S' ∧ ∀ a ∈ S', a ∈ w := by
   by_cases hm : z ∈ S
@@ -192,7 +215,7 @@ lemma pull_gate {w : List Sig} {z : Sig} {k t S} (h : Live target k t S)
     have hn : a ≠ z := fun hh => hm (hh ▸ ha)
     simpa [hn] using sub a ha
 
-lemma extract (gs : List Gate) (w : List Sig)
+private lemma extract (gs : List Gate) (w : List Sig)
     (legal : ∀ g ∈ gs, g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp) ∧ g.inputs.length≤2)
     (hp : proper target) (hout : target ∈ execute gs w) :
     ∃ k t S, k ≤ gs.length ∧ Live target k t S ∧ ∀ a ∈ S, a ∈ w := by
@@ -206,11 +229,11 @@ lemma extract (gs : List Gate) (w : List Sig)
 def bit (i : Fin 512) (a : Sig) : Bool := a.getLsbD i.val
 private lemma bit_zero (i) : bit i zero = false := by simp [bit,zero]
 private lemma bit_one (i) : bit i one = true := by unfold bit one; rw [BitVec.getLsbD_allOnes]; simp
-lemma bit_neg (i) (a : Sig) : bit i (neg a) = !(bit i a) := by simp [bit,neg,i.isLt]
-lemma bit_bin (i d) (a b : Sig) : bit i (bin d a b) =
+private lemma bit_neg (i) (a : Sig) : bit i (neg a) = !(bit i a) := by simp [bit,neg,i.isLt]
+private lemma bit_bin (i d) (a b : Sig) : bit i (bin d a b) =
     (if d then bit i a || bit i b else bit i a && bit i b) := by cases d <;> simp [bit,bin]
 
-lemma b_read (i) (w : List Sig) (j : Nat) :
+private lemma b_read (i) (w : List Sig) (j : Nat) :
     (w.map (bit i)).getD j false = bit i (w.getD j zero) := by
   simp only [List.getD_eq_getElem?_getD,List.getElem?_map]
   cases w[j]? with
@@ -240,7 +263,7 @@ private lemma run_bit (i) (g : Gate) (w : List Sig)
       rw [bit_neg,bit_zero]
     | cons a l => exact bit_neg _ _
 
-lemma execute_bits (gs : List Gate) (i) (w : List Sig)
+private lemma execute_bits (gs : List Gate) (i) (w : List Sig)
     (hg : ∀ g ∈ gs, g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp)) :
     (execute gs w).map (bit i) =
     gs.foldl (fun (l : List Bool) g => l++[g.op.eval (g.inputs.map fun j => l.getD j false)]) (w.map (bit i)) := by
@@ -250,6 +273,9 @@ lemma execute_bits (gs : List Gate) (i) (w : List Sig)
     change (execute gs (w++[gv w g])).map _ = _
     rw [ih _ (fun a ha => hg a (by simp [ha]))]
     simp only [List.foldl_cons,List.map_append,List.map_singleton,run_bit i g w (hg g (by simp))]
+
+
+
 
 abbrev Wire (R : Type) := R → Bool
 
@@ -269,23 +295,71 @@ def Available {R} (pool : List (Wire R)) (v : Wire R) : Prop := v ∈ pool ∨ C
 
 def supply {R} (pool xs : List (Wire R)) := ∀ a ∈ xs, Available pool a
 
-inductive Reach {R} (roots : List (Wire R)) : Nat → List (Wire R) → Prop
-  | start : Reach roots 0 roots
-  | one {p bank a} : Reach roots p bank → Available bank a →
-      Reach roots (p+1) (inv a :: bank)
-  | two {p bank a b} (op : Bool) : Reach roots p bank → Available bank a →
-      Available bank b → Reach roots (p+1) (combine op a b :: bank)
+def Reach {R} (roots : List (Wire R)) : Nat → List (Wire R) → Prop
+  | 0,b => b=roots
+  | p+1,c => (∃ bank a, Reach roots p bank ∧ Available bank a ∧ c=inv a :: bank) ∨
+    (∃ (op : Bool) (bank : List (Wire R)) (a b : Wire R), Reach roots p bank ∧ Available bank a ∧
+      Available bank b ∧ c=combine op a b :: bank)
+theorem Reach.start {R} {roots : List (Wire R)} : Reach roots 0 roots := rfl
+theorem Reach.one {R} {roots : List (Wire R)} {p bank a} (h : Reach roots p bank)
+    (ha : Available bank a) : Reach roots (p+1) (inv a :: bank) := Or.inl ⟨bank,a,h,ha,rfl⟩
+theorem Reach.two {R} {roots : List (Wire R)} {p bank a b} (op : Bool) (h : Reach roots p bank)
+    (ha : Available bank a) (hb : Available bank b) : Reach roots (p+1) (combine op a b :: bank) :=
+  Or.inr ⟨op,bank,a,b,h,ha,hb,rfl⟩
+theorem Reach.ind {R} {roots : List (Wire R)} {motive : ∀ p bank, Reach roots p bank → Prop}
+    (start : motive 0 roots Reach.start)
+    (one : ∀ {p bank a} (h : Reach roots p bank) (ha : Available bank a), motive p bank h →
+      motive (p+1) (inv a :: bank) (Reach.one h ha))
+    (two : ∀ {p bank a b} (op : Bool) (h : Reach roots p bank) (ha : Available bank a)
+      (hb : Available bank b), motive p bank h →
+      motive (p+1) (combine op a b :: bank) (Reach.two op h ha hb))
+    {p bank} (h : Reach roots p bank) : motive p bank h := by
+  induction p generalizing bank with
+  | zero =>
+    obtain rfl := h
+    exact start
+  | succ p ih =>
+    rcases h with ⟨bank,a,h,ha,rfl⟩ | ⟨op,bank,a,b,h,ha,hb,rfl⟩
+    · exact one h ha (ih h)
+    · exact two op h ha hb (ih h)
 
 def kept {α : Type} (save : Bool) (x : α) (xs : List α) := if save then x::xs else xs
 
-inductive Run {R} (goal : Wire R) : Nat → List (Wire R) → Prop
-  | stop : Run goal 0 [goal]
-  | perm {s xs zs} : xs.Perm zs → Run goal s xs → Run goal s zs
-  | one {s a rest} (save : Bool) : Run goal s (inv a :: kept save a rest) →
-      Run goal (s+1) (a::rest)
-  | two {s a b rest} (op ka kb : Bool) :
-      Run goal s (combine op a b :: kept ka a (kept kb b rest)) →
-      Run goal (s+1) (a::b::rest)
+def Run {R} (goal : Wire R) : Nat → List (Wire R) → Prop
+  | 0,zs => List.Perm [goal] zs
+  | s+1,zs => (∃ (save : Bool) (a : Wire R) (rest : List (Wire R)), (a::rest).Perm zs ∧
+      Run goal s (inv a :: kept save a rest)) ∨
+    (∃ (op ka kb : Bool) (a b : Wire R) (rest : List (Wire R)), (a::b::rest).Perm zs ∧
+      Run goal s (combine op a b :: kept ka a (kept kb b rest)))
+theorem Run.stop {R} {goal : Wire R} : Run goal 0 [goal] := List.Perm.refl _
+theorem Run.perm {R} {goal : Wire R} {s : Nat} {xs zs : List (Wire R)} (p : xs.Perm zs)
+    (h : Run goal s xs) : Run goal s zs := by
+  cases s with
+  | zero => exact List.Perm.trans h p
+  | succ s =>
+    rcases h with ⟨save,a,rest,q,h⟩ | ⟨op,ka,kb,a,b,rest,q,h⟩
+    · exact Or.inl ⟨save,a,rest,q.trans p,h⟩
+    · exact Or.inr ⟨op,ka,kb,a,b,rest,q.trans p,h⟩
+theorem Run.one {R} {goal : Wire R} {s : Nat} {a : Wire R} {rest : List (Wire R)} (save : Bool)
+    (h : Run goal s (inv a :: kept save a rest)) : Run goal (s+1) (a::rest) :=
+  Or.inl ⟨save,a,rest,List.Perm.refl _,h⟩
+theorem Run.two {R} {goal : Wire R} {s : Nat} {a b : Wire R} {rest : List (Wire R)} (op ka kb : Bool)
+    (h : Run goal s (combine op a b :: kept ka a (kept kb b rest))) : Run goal (s+1) (a::b::rest) :=
+  Or.inr ⟨op,ka,kb,a,b,rest,List.Perm.refl _,h⟩
+theorem Run.ind {R} {goal : Wire R} {motive : ∀ s ws, Run goal s ws → Prop}
+    (stop : motive 0 [goal] Run.stop)
+    (perm : ∀ {s xs zs} (p : List.Perm xs zs) (h : Run goal s xs), motive s xs h → motive s zs (Run.perm p h))
+    (one : ∀ {s a rest} (save : Bool) (h : Run goal s (inv a :: kept save a rest)),
+      motive s _ h → motive (s+1) (a::rest) (Run.one save h))
+    (two : ∀ {s a b rest} (op ka kb : Bool) (h : Run goal s (combine op a b :: kept ka a (kept kb b rest))),
+      motive s _ h → motive (s+1) (a::b::rest) (Run.two op ka kb h))
+    {s ws} (h : Run goal s ws) : motive s ws h := by
+  induction s generalizing ws with
+  | zero => exact perm h Run.stop stop
+  | succ s ih =>
+    rcases h with ⟨save,a,rest,p,h⟩ | ⟨op,ka,kb,a,b,rest,p,h⟩
+    · exact perm p (Run.one save h) (one save h (ih h))
+    · exact perm p (Run.two op ka kb h) (two op ka kb h (ih h))
 
 theorem mass_cons {R} (a : Wire R) (xs) : mass (a::xs)=cost a + mass xs := by
   simp [mass]
@@ -357,7 +431,7 @@ theorem contraction {R} {goal : Wire R} (nc : ¬Constant goal) {s ws}
     (hp : Reach roots p bank) (hs : supply bank ws) :
     ∃ q next, Reach roots q next ∧ Available next goal ∧ q+mass ws ≤ p+s := by
   classical
-  induction h generalizing p bank with
+  induction h using Run.ind generalizing p bank with
   | stop =>
     exact ⟨p,bank,hp,hs _ (by simp),by simp [mass,cost,nc]⟩
   | perm eq _ ih =>
@@ -404,7 +478,7 @@ theorem restrict_kept {R S : Type} (rows : S → R) (k : Bool) (a : Wire R) (ws)
 
 theorem restrict_run {R S : Type} (rows : S → R) {goal s ws} (h : Run goal s ws) :
     Run (restrictRows rows goal) s (ws.map (restrictRows rows)) := by
-  induction h with
+  induction h using Run.ind with
   | stop => exact Run.stop
   | perm p _ ih => exact Run.perm (p.map _) ih
   | one save _ ih =>
@@ -424,6 +498,7 @@ theorem projected_bound {R S : Type} (rows : S → R) {goal s ws} (h : Run goal 
   obtain ⟨q,bs,hq,ht,hle⟩ := contraction nc (restrict_run rows h) roots hp hs
   have hqle := hl q bs hq ht
   omega
+
 
 abbrev Row := Fin 512
 def observe (a : Sig) : Wire Row := fun r => bit r a
@@ -464,7 +539,7 @@ theorem kept_fin (k : Bool) (a : Sig) (l : List Sig) :
 theorem list_run {T : Sig} {k u S} (h : Live T k u S) (v : List Sig)
     (hv : v.Nodup) (eqv : v.toFinset = S) : Run (observe T) k (v.map observe) := by
   classical
-  induction h generalizing v with
+  induction h using Live.ind generalizing v with
   | stop hp =>
     have eq : [T].Perm v := by
       apply List.perm_of_nodup_nodup_toFinset_eq (by simp) hv
@@ -521,6 +596,7 @@ theorem list_run {T : Sig} {k u S} (h : Live T k u S) (v : List Sig)
       by_cases ja : j=a <;> by_cases jb : j=b <;> simp_all [er]
     exact Run.perm (perm.map _) (Run.two d ka kb progress)
 
+
 theorem table_inv (f : Wire Row) : table (inv f) = neg (table f) := by
   rw [←table_observe (neg (table f)),obs_neg,observe_table]
 
@@ -563,7 +639,7 @@ theorem reach_live_sub {roots : List (Wire Row)} {p bank}
     (h : Reach roots p bank) {T k t S} (run : Live T k t S)
     (sub : ∀ a ∈ S, a ∈ bank.map table) :
     ∃ l v U, l ≤ p+k ∧ Live T l v U ∧ ∀ a ∈ U, a ∈ roots.map table := by
-  induction h generalizing k t S with
+  induction h using Reach.ind generalizing k t S with
   | start => exact ⟨k,t,S,by omega,run,sub⟩
   | @one p bank a h ha ih =>
     rw [List.map_cons,table_inv] at sub
@@ -588,7 +664,7 @@ theorem reach_live {roots : List Sig} {p bank T} (hp : proper T)
 
 theorem live_row_difference {T k t S} (h : Live T k t S) {r s : Row}
     (diff : bit r T ≠ bit s T) : ∃ a ∈ S, bit r a ≠ bit s a := by
-  induction h with
+  induction h using Live.ind with
   | stop hp => exact ⟨_,by simp,diff⟩
   | @unary k t U a hp hf _ ih =>
     obtain ⟨v,hv,hd⟩ := ih
@@ -616,7 +692,7 @@ theorem raw_required {T k t S} (h : Live T k t S) (roots : List Sig) (a : Sig)
 
 def inputs : List Sig := [0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc,0xf0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0,0xff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00,0xffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000,0xffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff00000000,0xffffffffffffffff0000000000000000ffffffffffffffff0000000000000000ffffffffffffffff0000000000000000ffffffffffffffff0000000000000000,0xffffffffffffffffffffffffffffffff00000000000000000000000000000000ffffffffffffffffffffffffffffffff00000000000000000000000000000000,0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000000000000]
 def graph : Sig := 0xfffffffffffffffffffffffffffafff8ffffffffffffffffffffffffffeaffc8fffffffffffefcfcfffffffffffaf8f8ffeefeeeffeefcccffeafaeaffeaf8c8
-def seed : Sig := 0x88888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888888
+def seed : Sig := bin true (inputs.getD 0 zero) (inputs.getD 6 zero)
 
 def sample (r : Row) (j : Fin 9) := bit r (inputs.getD j.val zero)
 def edge (x : Fin 9 → Bool) : Bool :=
@@ -624,12 +700,72 @@ def edge (x : Fin 9 → Bool) : Bool :=
   (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) ||
   (x 6 && x 8) || (x 8 && x 5)
 theorem edge_table : ∀ r : Row, bit r graph = edge (sample r) := by decide +kernel
+theorem seed_table : ∀ r : Row, bit r seed = (sample r 0 || sample r 6) := by decide +kernel
 theorem graph_proper : proper graph := by unfold proper; decide +kernel
+theorem seed_nonzero : seed ≠ zero := by decide +kernel
 theorem input_list : List.ofFn (fun j : Fin 9 => inputs.getD j.val zero) = inputs := rfl
 theorem sampled (r : Row) : List.ofFn (sample r) = inputs.map (bit r) := by
   rw [←input_list]
   rw [List.map_ofFn]
   rfl
+
+theorem table_eval (C : Circuit) (h : PEqualNP.MetaComplexity.FanInTwo C)
+    (i : Nat) (r : Row) : bit r ((execute C.gates inputs).getD i zero) =
+      (C.wires (List.ofFn (sample r))).getD i false := by
+  rw [←b_read,execute_bits _ _ _ (fun g hg => (h g hg).1),sampled]
+  rfl
+
+theorem exec_extends (gs : List Gate) (ws : List Sig) : ∃ l, execute gs ws = ws ++ l := by
+  induction gs generalizing ws with
+  | nil => exact ⟨[],by simp [execute]⟩
+  | cons g gs ih =>
+    obtain ⟨l,hl⟩ := ih (ws++[gv ws g])
+    exact ⟨gv ws g::l,by simpa [execute,List.append_assoc] using hl⟩
+
+def neighbor (i : Fin 9) : Nat := [4,2,1,2,3,0,1,2,3].getD i.val 0
+def absentRow (i : Fin 9) : Row := Fin.ofNat 512 (1 <<< neighbor i)
+def presentRow (i : Fin 9) : Row := Fin.ofNat 512 ((1 <<< i.val) ||| (1 <<< neighbor i))
+
+theorem initial_live (C : Circuit) (legal : PEqualNP.MetaComplexity.FanInTwo C)
+    (first : ∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = (y 0 || y 6))
+    (computes : PEqualNP.MetaComplexity.circuitFun 9 C = edge) (small : C.size ≤ 15) :
+    ∃ k t S, k ≤ 14 ∧ Live graph k t S ∧ ∀ a ∈ S, a ∈ inputs++[seed] := by
+  have headEq : (execute C.gates inputs).getD 9 zero = seed := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro j hj
+    let r : Row := ⟨j,hj⟩
+    exact (table_eval C legal 9 r).trans ((first (sample r)).trans (seed_table r).symm)
+  have goalEq : (execute C.gates inputs).getD C.output zero = graph := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro j hj
+    let r : Row := ⟨j,hj⟩
+    exact (table_eval C legal C.output r).trans ((congrFun computes (sample r)).trans (edge_table r).symm)
+  have out := get_rep (execute C.gates inputs) C.output
+  rw [goalEq] at out
+  have targetIn := out.resolve_right (fun hn => hn graph_proper)
+  cases hgs : C.gates with
+  | nil =>
+    rw [hgs] at headEq
+    exact False.elim (seed_nonzero headEq.symm)
+  | cons g gs =>
+    have eq0 : gv inputs g = seed := by
+      rw [hgs] at headEq
+      change (execute gs (inputs++[gv inputs g])).getD 9 zero = seed at headEq
+      obtain ⟨l,hl⟩ := exec_extends gs (inputs++[gv inputs g])
+      rw [hl] at headEq
+      exact headEq
+    rw [hgs] at targetIn
+    change graph ∈ execute gs (inputs++[gv inputs g]) at targetIn
+    rw [eq0] at targetIn
+    have tailLegal : ∀ gate ∈ gs, gate.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp) ∧ gate.inputs.length≤2 := by
+      intro gate hg
+      apply legal
+      rw [hgs]
+      exact List.mem_cons_of_mem _ hg
+    obtain ⟨k,t,S,hk,run,hs⟩ := extract gs _ tailLegal graph_proper targetIn
+    have len : gs.length+1 ≤ 15 := by simpa [Circuit.size,hgs] using small
+    exact ⟨k,t,S,by omega,run,hs⟩
+
 
 def rename (f : Row → Row) (a : Sig) := table fun r => bit (f r) a
 theorem bit_rename (f : Row → Row) (a : Sig) (r : Row) :
@@ -667,7 +803,7 @@ theorem live_rename {T k t S} (h : Live T k t S) (f : Row → Row) (onto : Funct
   obtain ⟨fz,fo⟩ := rename_constants f
   have pp (v) (p : proper v) : proper (rename f v) :=
     ⟨fun e => p.1 (inj (e.trans fz.symm)),fun e => p.2 (inj (e.trans fo.symm))⟩
-  induction h with
+  induction h using Live.ind with
   | stop hp => simpa using Live.stop (pp _ hp)
   | @unary k t U a hp hf _ ih =>
     have fresh : rename f (neg a) ∉ (insert a U).image (rename f) := by
@@ -687,7 +823,7 @@ theorem live_rename {T k t S} (h : Live T k t S) (f : Row → Row) (onto : Funct
 theorem mono_row_difference {T k t S} (h : Live T k t S) (none : t=0) {r s : Row}
     (pos : bit r T = true) (negRow : bit s T = false) :
     ∃ a ∈ S, bit r a = true ∧ bit s a = false := by
-  induction h with
+  induction h using Live.ind with
   | stop hp => exact ⟨_,by simp,pos,negRow⟩
   | unary _ _ _ _ => omega
   | @binary k t U a b d ha hb hab hf _ ih =>
@@ -786,6 +922,8 @@ theorem lower_slice {roots other : List Sig} {T G : Sig} (pT : proper T) (pG : p
     omega
   omega
 
+
+
 def childOne (ws : List Sig) (a : Sig) (keep : Bool) : List Sig :=
   neg a :: kept keep a (ws.erase a)
 def childTwo (ws : List Sig) (a b : Sig) (d ka kb : Bool) : List Sig :=
@@ -806,11 +944,11 @@ theorem enum_step {T : Sig} {cap : Nat} {ws : List Sig} (hn : ws.Nodup) (out : T
   classical
   intro k t hk h
   generalize he : ws.toFinset = S at h
-  cases h with
+  induction h using Live.ind with
   | stop hp =>
     have mem : T ∈ ws.toFinset := he.symm ▸ Finset.mem_singleton_self _
     exact out (List.mem_toFinset.mp mem)
-  | @unary k t U a ha hf tail =>
+  | @unary k t U a ha hf tail _ =>
     have am : a ∈ ws := List.mem_toFinset.mp (he.symm ▸ Finset.mem_insert_self _ _)
     have fresh : neg a ∉ ws := fun h => hf (he ▸ List.mem_toFinset.mpr h)
     have hz := live_proper tail _ (Finset.mem_insert_self _ _)
@@ -831,7 +969,7 @@ theorem enum_step {T : Sig} {cap : Nat} {ws : List Sig} (hn : ws.Nodup) (out : T
       rw [←List.toFinset_card_of_nodup nd,eq]
       omega
     exact oneStep a am keep fresh hz len k t (by omega) (eq.symm ▸ tail)
-  | @binary k t U a b d ha hb hab hf tail =>
+  | @binary k t U a b d ha hb hab hf tail _ =>
     have am : a ∈ ws := List.mem_toFinset.mp (he.symm ▸ Finset.mem_insert_self _ _)
     have bm : b ∈ ws := List.mem_toFinset.mp (he.symm ▸ Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
     have fresh : bin d a b ∉ ws := fun h => hf (he ▸ List.mem_toFinset.mpr h)
@@ -919,6 +1057,8 @@ theorem cover_required {T cap ws k t} (h : Live T k t (List.toFinset ws))
   have bound := (live_size h).2
   rw [List.toFinset_card_of_nodup hn] at bound
   omega
+
+
 
 def Slice (raw : List Sig) (T d : Sig) (L : Nat) : Prop :=
   ∃ (f : Row → Row) (roots : List Sig), (∀ r, bit (f r) d = true) ∧
@@ -1060,6 +1200,8 @@ theorem poolCut_sound {raw T d L} (slice : Slice raw T d L) (cs : List Choice)
   simp only [Nat.zero_add] at b
   omega
 
+
+
 abbrev Move := Sig × Sig × Row
 def shifted (d r : Row) : Row :=
   if h : r.val < 512-d.val then ⟨d.val+r.val,by omega⟩ else ⟨r.val-(512-d.val),by omega⟩
@@ -1188,9 +1330,15 @@ theorem lift_ok {ms T raw base G xs L} (ok : checkLift ms T raw base G xs = true
   · rw [h]
     exact ⟨true,funext bit_one⟩
 
+
+
 def selected (m : Nat) : List (Nat × Sig) :=
   (List.range 9).filterMap fun i => if m.testBit i then some (i,inputs.getD i zero) else none
 def vars (m : Nat) := (selected m).map Prod.snd
+def typeWord (t : Nat) : Sig :=
+  if t/81==2 then neg (inputs.getD (t/9 % 9) zero)
+  else bin (t/81==1) (inputs.getD (t/9 % 9) zero) (inputs.getD (t % 9) zero)
+def varsX (m : Nat) : List Sig := if m<512 then vars m else vars m ++ [typeWord (m/512-1)]
 def vertex (m j : Nat) := if m.testBit j then inputs.getD j zero else zero
 def graphGoal (m : Nat) : Sig :=
   let x := vertex m
@@ -1265,55 +1413,60 @@ theorem size_of {m hints L} (h : assertSize m hints L = true) :
 
 abbrev ColumnInfo := Nat × Nat × Nat × Nat × Nat
 def colFree (m z o : Nat) := m ^^^ (m &&& (z ||| o))
-def chartGoal (m : Nat) : Sig :=
-  if m=1023 then graphGoal m &&& ~~~seed else graphGoal m
+def chartGoal (m : Nat) : Sig := graphGoal m
+def rawMask (m : Nat) (c : ColumnInfo) : Nat := m % 512+512*(c.2.2.1/512)
 def colCheck (m : Nat) (c : ColumnInfo) (prior : Nat → Nat) : Bool :=
   let (z,o,q,s,L) := c
   let ms := fixRows z o
-  let free := colFree m z o
+  let raw := rawMask m c
+  let free := colFree raw z o
   let G := movedWord ms (chartGoal m)
   let xs := supportPairs s
   let count := (xs.map Prod.fst).toFinset.card
-  properB G && checkMap ms (vars m) (chartGoal m) (vars free) G &&
+  properB G && checkMap ms (varsX raw) (chartGoal m) (varsX free) G &&
     (movedWord ms (subcube z o)==one) &&
-    (if q=0 then checkEssential G (vars free) xs && decide (L ≤ count-1)
+    (if q=0 then checkEssential G (varsX free) xs && decide (L ≤ count-1)
      else properB (graphGoal q) &&
-       checkLift (fixRows (colFree free q 0) 0) G (vars free) (vars q) (graphGoal q) xs &&
+       checkLift (fixRows (colFree free q 0) 0) G (varsX free) (varsX q) (graphGoal q) xs &&
        decide (L ≤ prior q+count))
 
 theorem col_sound {m : Nat} (c : ColumnInfo) (prior : Nat → Nat)
-    (valid : ∀ q, Lower (vars q) (graphGoal q) (prior q))
-    (ok : colCheck m c prior = true) : Slice (vars m) (chartGoal m) (subcube c.1 c.2.1) c.2.2.2.2 := by
+    (valid : ∀ q, Lower (varsX q) (graphGoal q) (prior q))
+    (ok : colCheck m c prior = true) : Slice (varsX (rawMask m c)) (chartGoal m) (subcube c.1 c.2.1) c.2.2.2.2 := by
+  revert ok
   obtain ⟨z,o,q,s,L⟩ := c
+  intro ok
   let ms := fixRows z o
-  let free := colFree m z o
+  let raw := rawMask m (z,o,q,s,L)
+  let free := colFree raw z o
   let G := movedWord ms (chartGoal m)
   let xs := supportPairs s
-  change (((properB G && checkMap ms (vars m) (chartGoal m) (vars free) G) &&
+  change (((properB G && checkMap ms (varsX raw) (chartGoal m) (varsX free) G) &&
     (movedWord ms (subcube z o)==one)) && _) = true at ok
   simp only [Bool.and_eq_true,beq_iff_eq] at ok
   apply slice_correct ok.1.1.2 ok.1.2 (proper_of _ ok.1.1.1)
   intro p bank hr ha
   have hh := ok.2
   by_cases hq : q=0
-  · simp only [colCheck,hq,if_true,Bool.and_eq_true,decide_eq_true_eq] at hh
+  · subst hq
+    simp only [colCheck,if_true,Bool.and_eq_true,decide_eq_true_eq] at hh
     exact hh.2.trans (lower_count (proper_of _ ok.1.1.1) xs hh.1 p bank hr ha)
   · simp only [colCheck,hq,if_false,Bool.and_eq_true,decide_eq_true_eq] at hh
     exact hh.2.trans (lift_ok hh.1.2 (proper_of _ ok.1.1.1) (proper_of _ hh.1.1) (valid q) p bank hr ha)
 
 def relabelOK (old rep : Nat) (swaps : List Nat) :=
   properB (graphGoal old) && properB (graphGoal rep) &&
-    checkMap (swaps.map swapRows) (vars old) (graphGoal old) (vars rep) (graphGoal rep)
+    checkMap (swaps.map swapRows) (varsX old) (graphGoal old) (varsX rep) (graphGoal rep)
 theorem relabel_of {old rep L swaps} (ok : relabelOK old rep swaps = true)
-    (h : Lower (vars rep) (graphGoal rep) L) : Lower (vars old) (graphGoal old) L := by
+    (h : Lower (varsX rep) (graphGoal rep) L) : Lower (varsX old) (graphGoal old) L := by
   simp only [relabelOK,Bool.and_eq_true] at ok
   exact lower_map ok.2 (proper_of _ ok.1.1) (proper_of _ ok.1.2) h
 
 def boundsBefore (entries : List (Nat × Nat)) (q : Nat) :=
   ((entries.find? (fun a => a.1 == q)).map Prod.snd).getD 0
 theorem before_sound (entries : List (Nat × Nat))
-    (sound : ∀ e ∈ entries, Lower (vars e.1) (graphGoal e.1) e.2) (q : Nat) :
-    Lower (vars q) (graphGoal q) (boundsBefore entries q) := by
+    (sound : ∀ e ∈ entries, Lower (varsX e.1) (graphGoal e.1) e.2) (q : Nat) :
+    Lower (varsX q) (graphGoal q) (boundsBefore entries q) := by
   unfold boundsBefore
   cases h : entries.find? (fun a => a.1 == q) with
   | none => exact fun _ _ _ _ => Nat.zero_le _
@@ -1323,11 +1476,12 @@ theorem before_sound (entries : List (Nat × Nat))
     have eq : e.1=q := beq_iff_eq.mp hit
     simpa only [Option.map_some,Option.getD_some,eq] using sound e he
 
-structure BoundPool where
-  domain : Sig
-  bound : Nat
-  paid : Nat
-  wires : List Sig
+
+abbrev BoundPool := Sig × Nat × Nat × List Sig
+def BoundPool.domain (c : BoundPool) : Sig := c.1
+def BoundPool.bound (c : BoundPool) : Nat := c.2.1
+def BoundPool.paid (c : BoundPool) : Nat := c.2.2.1
+def BoundPool.wires (c : BoundPool) : List Sig := c.2.2.2
 
 def ValidPool (raw : List Sig) (T : Sig) (c : BoundPool) :=
   ∃ (f : Row → Row) (roots : List Sig) (bank : List (Wire Row)),
@@ -1339,7 +1493,7 @@ theorem build_valid {raw T d lb} (h : Slice raw T d lb) (cs : List Choice) {ws}
     (build : makePool d raw cs = some ws) : ValidPool raw T ⟨d,lb,cs.length,ws⟩ := by
   obtain ⟨f,roots,dom,sup,nc,prior⟩ := h
   obtain ⟨bank,hr,hs⟩ := makePool_sound dom (Reach.start (roots:=roots.map observe)) sup cs build
-  exact ⟨f,roots,bank,dom,nc,prior,by simpa using hr,hs,trivial⟩
+  exact ⟨f,roots,bank,dom,nc,prior,by simpa [BoundPool.paid] using hr,hs,trivial⟩
 
 theorem valid_exclude {raw T c} (valid : ValidPool raw T c) (k : Nat) (rest : List Sig)
     (choice : Choice) (paid : Bool)
@@ -1415,7 +1569,10 @@ theorem materialize_sound {raw T d L cs c} (slice : Slice raw T d L)
     subst c
     exact build_valid slice cs he
 
-abbrev Bits := BitVec 768
+
+-- Each forest uses a projection of its original separating row pairs.
+-- Repeating a chosen pair pads shorter lists to the common lane width.
+abbrev Bits := BitVec 255
 abbrev Signals := Bits × Bits
 abbrev Decor := Sig × Signals
 
@@ -1425,24 +1582,24 @@ theorem ofRows_bit {n : Nat} (r : Fin n → Row) (v : Sig) (i : Fin n) :
     (ofRows r v).getLsbD i.val = bit (r i) v := by
   simp only [ofRows,BitVec.getLsbD_cast,BitVec.getLsbD_ofBoolListLE,List.getD_eq_getElem?_getD,List.getElem?_ofFn]
   simp [i.isLt]
-def pairSig (r s : Fin 768 → Row) (a : Sig) : Signals := (ofRows r a,ofRows s a)
-def properPairs (T : Sig) (r s : Fin 768 → Row) :=
+def pairSig (r s : Fin 255 → Row) (a : Sig) : Signals := (ofRows r a,ofRows s a)
+def properPairs (T : Sig) (r s : Fin 255 → Row) :=
   ∀ i, bit (r i) T = true ∧ bit (s i) T = false
-theorem pair_sep {T r s} (h : properPairs T r s) : Sep T 768 r s (pairSig r s) := by
+theorem pair_sep {T r s} (h : properPairs T r s) : Sep T 255 r s (pairSig r s) := by
   exact ⟨h,fun a i => ⟨ofRows_bit _ _ _,ofRows_bit _ _ _⟩⟩
-def faithful (r s : Fin 768 → Row) (x : Decor) := x.2 = pairSig r s x.1
+def faithful (r s : Fin 255 → Row) (x : Decor) := x.2 = pairSig r s x.1
 def dneg (x : Decor) : Decor := (neg x.1,~~~x.2.1,~~~x.2.2)
 def dbin (d : Bool) (x y : Decor) : Decor :=
   if d then (bin d x.1 y.1,x.2.1 ||| y.2.1,x.2.2 ||| y.2.2)
   else (bin d x.1 y.1,x.2.1 &&& y.2.1,x.2.2 &&& y.2.2)
 
-theorem ofRows_neg (r : Fin 768 → Row) (a : Sig) : ofRows r (neg a) = ~~~ofRows r a := by
+theorem ofRows_neg (r : Fin 255 → Row) (a : Sig) : ofRows r (neg a) = ~~~ofRows r a := by
   apply BitVec.eq_of_getLsbD_eq
   intro j hj
   have h := ofRows_bit r (neg a) ⟨j,hj⟩
   rw [bit_neg,←ofRows_bit r a ⟨j,hj⟩] at h
   simpa only [BitVec.getLsbD_not,hj,decide_true,Bool.true_and] using h
-theorem ofRows_bin (r : Fin 768 → Row) (d : Bool) (a b : Sig) :
+theorem ofRows_bin (r : Fin 255 → Row) (d : Bool) (a b : Sig) :
     ofRows r (bin d a b) = if d then ofRows r a ||| ofRows r b else ofRows r a &&& ofRows r b := by
   apply BitVec.eq_of_getLsbD_eq
   intro j hj
@@ -1496,7 +1653,7 @@ theorem decode_faithful (n bits) (ws) (r s) (base : ∀ v ∈ ws, faithful r s v
       · exact faithful_neg (faithful_get base _)
       · exact faithful_bin _ (faithful_get base _) (faithful_get base _)
 
-def asRow (cols : Nat → Bits) (i : Fin 768) : Row :=
+def asRow (cols : Nat → Bits) (i : Fin 255) : Row :=
   (BitVec.ofBoolListLE (List.ofFn (fun j : Fin 9 => (cols j.val).getLsbD i.val))).toFin.cast
     (by simp [List.length_ofFn])
 theorem coordinate0 : ∀ r : Row, bit r (inputs.getD 0 zero) = r.val.testBit 0 := by decide +kernel
@@ -1521,7 +1678,7 @@ theorem input_coords : ∀ (j : Fin 9) (r : Row),
   · exact coordinate6 r
   · exact coordinate7 r
   · exact coordinate8 r
-theorem asRow_bit (cols : Nat → Bits) (i : Fin 768) (j : Fin 9) :
+theorem asRow_bit (cols : Nat → Bits) (i : Fin 255) (j : Fin 9) :
     bit (asRow cols i) (inputs.getD j.val zero) = (cols j.val).getLsbD i.val := by
   rw [input_coords]
   change (BitVec.ofBoolListLE (List.ofFn (fun h : Fin 9 => (cols h.val).getLsbD i.val))).getLsbD j.val = _
@@ -1552,13 +1709,13 @@ def liftGoal (m : Nat) (v : Nat → Bits) : Bits :=
   (x 0 &&& x 1) ||| (x 1 &&& x 2) ||| (x 2 &&& x 3) ||| (x 3 &&& x 4) |||
     (x 4 &&& x 0) ||| (x 0 &&& x 5) ||| (x 1 &&& x 6) ||| (x 2 &&& x 7) |||
     (x 3 &&& x 8) ||| (x 5 &&& x 7) ||| (x 6 &&& x 8) ||| (x 8 &&& x 5)
-theorem bit_vertex (m : Nat) (v : Nat → Bits) (i : Fin 768) (j : Fin 9) :
+theorem bit_vertex (m : Nat) (v : Nat → Bits) (i : Fin 255) (j : Fin 9) :
     bit (asRow v i) (vertex m j.val) =
     ((if m.testBit j.val then v j.val else 0) : Bits).getLsbD i.val := by
   by_cases hh : m.testBit j.val = true
   · simpa [vertex,hh] using asRow_bit v i j
   · simp [vertex,hh,bit_zero]
-theorem bit_liftGoal (m : Nat) (v : Nat → Bits) (i : Fin 768) :
+theorem bit_liftGoal (m : Nat) (v : Nat → Bits) (i : Fin 255) :
     bit (asRow v i) (graphGoal m) = (liftGoal m v).getLsbD i.val := by
   have pos (j : Nat) (hj : j<9) : (vertex m j).getLsbD (asRow v i).val = ((if m.testBit j then v j else 0) : Bits).getLsbD i.val := bit_vertex m v i ⟨j,hj⟩
   simp only [bit,graphGoal,liftGoal,BitVec.getLsbD_and,BitVec.getLsbD_or]
@@ -1606,6 +1763,8 @@ private theorem cov_perm (d : Bool) {l r : List Decor} (h : l.Perm r) : coverage
   | cons a _ ih => exact congrArg (addCov (column d a.2)) ih
   | swap a b t => exact add_swap _ _ _
   | trans _ _ h1 h2 => exact h1.trans h2
+
+
 
 theorem cov_word (d : Bool) (v : List Decor) {r s} (good : ∀ a ∈ v, faithful r s a) :
     (coverage d v).1 = covered d (pairSig r s) (v.map Prod.fst) := by
@@ -1656,6 +1815,7 @@ theorem sameWords_sound {xs ys} (h : sameWords xs ys = true) : xs.toFinset=ys.to
   ext a
   simp only [List.mem_toFinset]
   exact ⟨h.1 a,h.2 a⟩
+
 
 def keyWord (v : Sig) :=
   let n := v.toNat % 2305843009213693951
@@ -1739,7 +1899,7 @@ def evalMove (c : NodeContext) (op : Nat) (a b z : Decor) (ka kb : Bool) :=
   if len>cap then true else
     let d := len==cap
     let rs := restCov (getCov cov d) (column d a.2) (column d b.2) un ka kb
-    if (rs ||| column d z.2) != BitVec.allOnes 768 then true else
+    if (rs ||| column d z.2) != BitVec.allOnes 255 then true else
     if !properB z.1 || ws.any (fun v => v.1==z.1) then true else
       let rest := (opKeep un ka kb a b ws).map Prod.fst
       closeChild pools links (cap-1) rest (movedChoice op a b)
@@ -1787,12 +1947,12 @@ theorem evalMove_sound {raw T r s ws pools links cap a b op ka kb}
   have rz := rest_coverage ha hb (op==2) ka kb d ne
   have hf := moved_faithful (faith _ ha) (faith _ hb) op
   have deq : decide (child.length=cap) = (child.length==cap) := by by_cases he : child.length=cap <;> simp [he]
-  change covered (decide (child.length = cap)) (pairSig r s) child = BitVec.allOnes 768 at sep
+  change covered (decide (child.length = cap)) (pairSig r s) child = BitVec.allOnes 255 at sep
   rw [deq] at sep
   change column d (pairSig r s z.1) ||| covered d (pairSig r s) (rest.map Prod.fst) = _ at sep
   change z.2 = pairSig r s z.1 at hf
   rw [←hf,←g,rz,BitVec.or_comm] at sep
-  have be : ((restCov (getCov (preCov ws) d) (column d a.2) (column d b.2) (op==2) ka kb ||| column d z.2) != BitVec.allOnes 768) = false := by simp [sep]
+  have be : ((restCov (getCov (preCov ws) d) (column d a.2) (column d b.2) (op==2) ka kb ||| column d z.2) != BitVec.allOnes 255) = false := by simp [sep]
   change (if (_ != _) then true else if !properB z.1 || ws.any (fun v => v.1==z.1) then true else _) = true at test
   rw [be,pp,fr] at test
   have val := moved_full op a b
@@ -1803,6 +1963,7 @@ theorem evalMove_sound {raw T r s ws pools links cap a b op ka kb}
   change Live T k t (z.1::rest.map Prod.fst).toFinset at h
   rw [val] at nd' h
   exact closeChild_sound pv lv nd' test k t hk h
+
 
 def testPair (ctx : NodeContext) (a b : Decor) (d : Bool) :=
   let op := if d then 1 else 0
@@ -1929,8 +2090,8 @@ theorem node_sound {raw T r s ws pools links cap}
     have ke : k=0 := by omega
     subst k
     generalize he : (ws.map Prod.fst).toFinset = S at h
-    cases h
-    exact out (List.mem_toFinset.mp (he.symm ▸ Finset.mem_singleton_self _))
+    obtain ⟨_,hS,_⟩ := h
+    exact out (List.mem_toFinset.mp (by rw [he,hS]; exact Finset.mem_singleton_self _))
   have hc' : 0<cap := by omega
   apply enum_step nd out
   · intro v hv keep fresh pro len
@@ -1955,6 +2116,7 @@ theorem node_sound {raw T r s ws pools links cap}
     · rw [childTwo_swap _ nd]
       exact one b a hbW haW (Ne.symm ne) kb ka (bin_comm d a.1 b.1 ▸ pro)
         (bin_comm d a.1 b.1 ▸ fresh) hh
+
 
 theorem agree_inputs (r s : Row) (h : ∀ a ∈ inputs, bit r a = bit s a) : r=s := by
   apply Fin.ext
@@ -2015,76 +2177,42 @@ def packedAt (word : Nat → Nat) (pos len : Nat) :=
   if shift+len ≤ 8192 then lo &&& ((1 <<< len)-1)
   else (lo ||| (word (i+1) <<< (8192-shift))) &&& ((1 <<< len)-1)
 
+
 def lookupWord (nb slots sw vw iw pw : Nat) (data : Nat → Nat) (h : Nat) : Option (Nat × Nat) :=
   let a := h % nb
   let sh := packedAt data (a*sw) sw
-  let row := (h/nb+sh)%slots
+  let row := (h/nb+sh) % slots
   let word := packedAt data (nb*sw+row*vw) vw
-  if (word >>> (iw+pw)) == h/(nb*slots)%16 then
+  if (word >>> (iw+pw)) == h/(nb*slots) % 16 then
     some (word &&& ((1 <<< iw)-1),(word >>> iw) &&& ((1 <<< pw)-1))
   else none
 
-inductive IndexTree (α : Type) where
-  | leaf (items : List α)
-  | fork (pivot : Nat) (left right : IndexTree α)
-def IndexTree.read {α} : IndexTree α → Nat → Option α
-  | .leaf xs,i => xs[i]?
-  | .fork pivot a b,i => if i<pivot then a.read i else b.read (i-pivot)
-def IndexTree.values {α} : IndexTree α → List α
-  | .leaf xs => xs
-  | .fork _ a b => a.values ++ b.values
-theorem IndexTree.read_mem {α} (tree : IndexTree α) {i x} (e : tree.read i=some x) :
-    x ∈ tree.values := by
-  induction tree generalizing i with
-  | leaf xs => exact List.mem_of_getElem? e
-  | fork pivot a b ia ib =>
-    simp only [IndexTree.read] at e
-    split at e
-    · exact List.mem_append_left _ (ia e)
-    · exact List.mem_append_right _ (ib e)
 
-structure Forest where
-  mask : Nat
-  cap : Nat
-  samples : Nat → Bits × Bits
-  cols : IndexTree ColumnInfo
-  autos : Array (List Nat)
-  levels : Nat → Packing
-  index : Nat → Nat → Option (Nat × Nat)
+abbrev Forest := Nat × Nat × (Nat → Bits × Bits) × List ColumnInfo × List (List Nat) ×
+  (Nat → Packing) × (Nat → Nat → Option (Nat × Nat))
+def Forest.mask (g : Forest) : Nat := g.1
+def Forest.cap (g : Forest) : Nat := g.2.1
+def Forest.samples (g : Forest) : Nat → Bits × Bits := g.2.2.1
+def Forest.cols (g : Forest) : List ColumnInfo := g.2.2.2.1
+def Forest.autos (g : Forest) : List (List Nat) := g.2.2.2.2.1
+def Forest.levels (g : Forest) : Nat → Packing := g.2.2.2.2.2.1
+def Forest.index (g : Forest) : Nat → Nat → Option (Nat × Nat) := g.2.2.2.2.2.2
 
 def wiresOf (g : Forest) :=
   let ws := rawDecor g.mask (fun j => (g.samples j).1) (fun j => (g.samples j).2)
-  let nonedge := dneg (dbin false (ws.getD 0 defaultDecor) (ws.getD 1 defaultDecor))
-  if g.mask=1023 then ws.map (fun w => dbin false w nonedge) else ws
+  ws
 theorem wires_faithful (g : Forest) : ∀ a ∈ wiresOf g,
     faithful (asRow fun j => (g.samples j).1) (asRow fun j => (g.samples j).2) a := by
-  have base := raw_faithful g.mask (fun j => (g.samples j).1) (fun j => (g.samples j).2)
-  intro a ha
-  unfold wiresOf at ha
-  split at ha
-  · obtain ⟨w,hw,rfl⟩ := List.mem_map.mp ha
-    exact faithful_bin false (base w hw) (faithful_neg (faithful_bin false
-      (faithful_get base 0) (faithful_get base 1)))
-  · exact base _ ha
+  exact raw_faithful g.mask (fun j => (g.samples j).1) (fun j => (g.samples j).2)
 
 def targetOf (g : Forest) := chartGoal g.mask
 def chartSamples (m : Nat) (v : Nat → Bits) :=
-  if m=1023 then liftGoal m v &&& ~~~(v 0 &&& v 1) else liftGoal m v
-theorem chart_bit (m : Nat) (v : Nat → Bits) (i : Fin 768) :
+  liftGoal m v
+theorem chart_bit (m : Nat) (v : Nat → Bits) (i : Fin 255) :
     bit (asRow v i) (chartGoal m) = (chartSamples m v).getLsbD i.val := by
-  by_cases e : m=1023
-  · have u := asRow_bit v i (0 : Fin 9)
-    have w := asRow_bit v i (1 : Fin 9)
-    have h := bit_liftGoal m v i
-    change (inputs.getD 0 zero).getLsbD (asRow v i).val = (v 0).getLsbD i.val at u
-    change (inputs.getD 1 zero).getLsbD (asRow v i).val = (v 1).getLsbD i.val at w
-    have seedEq : seed = inputs.getD 0 zero &&& inputs.getD 1 zero := by decide +kernel
-    simp only [chartGoal,chartSamples,e,ite_true,bit,seedEq,BitVec.getLsbD_and,
-      BitVec.getLsbD_not,(asRow v i).isLt,i.isLt,decide_true,Bool.true_and,u,w] at h ⊢
-    rw [h]
-  · simpa only [chartGoal,chartSamples,e,ite_false] using bit_liftGoal m v i
+  exact bit_liftGoal m v i
 theorem chart_pairs {m : Nat} {p q : Nat → Bits}
-    (hp : chartSamples m p = BitVec.allOnes 768) (hq : chartSamples m q = 0) :
+    (hp : chartSamples m p = BitVec.allOnes 255) (hq : chartSamples m q = 0) :
     properPairs (chartGoal m) (asRow p) (asRow q) := by
   intro i
   simp only [chart_bit,hp,hq,BitVec.getLsbD_allOnes,i.isLt,decide_true,BitVec.getLsbD_zero]
@@ -2123,20 +2251,20 @@ def chosenSteps (bank : List Decor) (ops paid : Nat) : Nat → List Choice
         (bank.getD (getFieldV ops 4 4) defaultDecor).1) :: more
 
 def buildRule (g : Forest) (ops d : Nat) (bank : List Decor) (idx paid : Nat) : Option BoundPool :=
-  (g.cols.read idx).bind fun ci =>
-    materialize (vars g.mask) (chosenSteps bank ops paid d) (subcube ci.1 ci.2.1) ci.2.2.2.2
+  (g.cols[idx]?).bind fun ci =>
+    materialize (varsX (rawMask g.mask ci)) (chosenSteps bank ops paid d) (subcube ci.1 ci.2.1) ci.2.2.2.2
 
 theorem buildRule_sound (g : Forest)
-    (cols : ∀ ci ∈ g.cols.values, Slice (vars g.mask) (targetOf g) (subcube ci.1 ci.2.1) ci.2.2.2.2)
+    (cols : ∀ ci ∈ g.cols, Slice (varsX (rawMask g.mask ci)) (targetOf g) (subcube ci.1 ci.2.1) ci.2.2.2.2)
     {i ops depth bank paid c} (h : buildRule g ops depth bank i paid = some c) :
     ValidPool (vars g.mask) (targetOf g) c := by
   unfold buildRule at h
-  cases e : g.cols.read i with
+  cases e : g.cols[i]? with
   | none => simp [e] at h
   | some ci =>
     simp only [e,Option.bind_some] at h
     apply materialize_sound _ h
-    exact cols ci (g.cols.read_mem e)
+    exact cols ci (List.mem_of_getElem? e)
 
 def getPairs (data : Nat → Nat) (w v : Nat) : Nat → Nat → List (Nat × Nat)
   | 0,_ => []
@@ -2150,7 +2278,7 @@ def linkedSet (g : Forest) (k : Nat) (pair : Nat × Nat) : Option (List Sig) :=
     (g.autos[pair.2]?).map fun perm => (stateSet g k pair.1).map (movedWord (perm.map swapRows).reverse)
 
 theorem linkedSet_sound (g : Forest) (k : Nat)
-    (names : ∀ x ∈ g.autos.toList, autoOK (targetOf g) (x.map swapRows) = true)
+    (names : ∀ x ∈ g.autos, autoOK (targetOf g) (x.map swapRows) = true)
     (earlier : ∀ i < (g.levels k).1, Impossible (targetOf g) k (stateSet g k i).toFinset)
     {pair out} (h : linkedSet g k pair = some out) :
     Impossible (targetOf g) k out.toFinset := by
@@ -2163,7 +2291,7 @@ theorem linkedSet_sound (g : Forest) (k : Nat)
     | some perm =>
       simp only [e,Option.map_some,Option.some.injEq] at h
       subst out
-      exact rotate_excluded (earlier _ (by omega)) _ (names _ (by simpa using Array.mem_of_getElem? e))
+      exact rotate_excluded (earlier _ (by omega)) _ (names _ (List.mem_of_getElem? e))
 
 def nodeVerified (g : Forest) (k i : Nat) :=
   let raw := wiresOf g
@@ -2172,7 +2300,7 @@ def nodeVerified (g : Forest) (k i : Nat) :=
   let values := ws.map Prod.fst
   let start := num*(10*storedDepth g depth+raw.length+depth)
   let pos := start+num*offw+packedAt data (start+i*offw) offw
-  let nr := packedAt data pos 5
+  let nr := packedAt data pos 5+32*packedAt data (pos+5) lw
   let nl := packedAt data (pos+5) lw
   let st := pos+5+lw
   let rules := (getPairs data cw depth nr st).filterMap (fun (a,b) => buildRule g ops depth bank a b)
@@ -2182,8 +2310,8 @@ def nodeVerified (g : Forest) (k i : Nat) :=
 
 theorem nodeVerified_sound (g : Forest) (k i : Nat)
     (samples : properPairs (targetOf g) (asRow fun j => (g.samples j).1) (asRow fun j => (g.samples j).2))
-    (cols : ∀ ci ∈ g.cols.values, Slice (vars g.mask) (targetOf g) (subcube ci.1 ci.2.1) ci.2.2.2.2)
-    (names : ∀ x ∈ g.autos.toList, autoOK (targetOf g) (x.map swapRows) = true)
+    (cols : ∀ ci ∈ g.cols, Slice (varsX (rawMask g.mask ci)) (targetOf g) (subcube ci.1 ci.2.1) ci.2.2.2.2)
+    (names : ∀ x ∈ g.autos, autoOK (targetOf g) (x.map swapRows) = true)
     (prior : k>0 → ∀ j < (g.levels (k-1)).1, Impossible (targetOf g) (k-1) (stateSet g (k-1) j).toFinset)
     (checked : nodeVerified g k i = true) : Impossible (targetOf g) k (stateSet g k i).toFinset := by
   simp only [nodeVerified,Bool.and_eq_true,decide_eq_true_eq,Bool.not_eq_true',List.contains_eq_mem] at checked
@@ -2195,8 +2323,8 @@ theorem nodeVerified_sound (g : Forest) (k i : Nat)
     have ht : t=0 := by omega
     subst t
     generalize he : (stateSet g 0 i).toFinset = S at h
-    cases h
-    exact hT (List.mem_toFinset.mp (he.symm ▸ Finset.mem_singleton_self _))
+    obtain ⟨_,hS,_⟩ := h
+    exact hT (List.mem_toFinset.mp (by rw [he,hS]; exact Finset.mem_singleton_self _))
   apply node_sound (raw:=vars g.mask) samples _ hN hT _ _ (by simpa only [h0,if_false] using checked.2)
   · intro v hv
     apply decode_faithful _ _ _ _ _ (wires_faithful g) v
@@ -2208,6 +2336,7 @@ theorem nodeVerified_sound (g : Forest) (k i : Nat)
     have e : ((g.index k tag).bind (linkedSet g (k-1)))=some xs := by simpa using hx
     obtain ⟨pair,_,h⟩ := Option.bind_eq_some_iff.mp e
     exact linkedSet_sound g _ names (prior (by omega)) h
+
 
 def block (g : Forest) (k start : Nat) : Nat → Bool
   | 0 => true
@@ -2233,13 +2362,13 @@ theorem block_merge {g k start a b} (h : block g k start a=true)
 def checkedTables (g : Forest) (top : Nat) :=
   ∀ k ≤ top, block g k 0 (g.levels k).1 = true
 def graphValid (g : Forest) (prior : Nat → Nat) :=
-  (chartSamples g.mask (fun j => (g.samples j).1) == BitVec.allOnes 768) &&
+  (chartSamples g.mask (fun j => (g.samples j).1) == BitVec.allOnes 255) &&
   (chartSamples g.mask (fun j => (g.samples j).2) == 0) &&
-  g.cols.values.all (fun c => colCheck g.mask c prior) &&
-  g.autos.toList.all (fun p => autoOK (targetOf g) (p.map swapRows))
+  g.cols.all (fun c => colCheck g.mask c prior) &&
+  g.autos.all (fun p => autoOK (targetOf g) (p.map swapRows))
 
 theorem forest_all (g : Forest) (top : Nat) (prior : Nat → Nat)
-    (lower : ∀ q, Lower (vars q) (graphGoal q) (prior q))
+    (lower : ∀ q, Lower (varsX q) (graphGoal q) (prior q))
     (geometry : graphValid g prior = true) (rows : checkedTables g top) :
     ∀ k ≤ top, ∀ i < (g.levels k).1, Impossible (targetOf g) k (stateSet g k i).toFinset := by
   simp only [graphValid,Bool.and_eq_true,List.all_eq_true,beq_iff_eq] at geometry
@@ -2259,14 +2388,14 @@ theorem forest_all (g : Forest) (top : Nat) (prior : Nat → Nat)
 
 def indexedRoot (g : Forest) (k i : Nat) (ws : List Sig) :=
   decide (i < (g.levels k).1) && sameWords (stateSet g k i) ws
-theorem root_index {g top prior k i ws} (low : ∀ q, Lower (vars q) (graphGoal q) (prior q))
+theorem root_index {g top prior k i ws} (low : ∀ q, Lower (varsX q) (graphGoal q) (prior q))
     (geom : graphValid g prior = true) (blocks : checkedTables g top) (le : k ≤ top)
     (idx : indexedRoot g k i ws = true) : Impossible (targetOf g) k ws.toFinset := by
   simp only [indexedRoot,Bool.and_eq_true,decide_eq_true_eq] at idx
   rw [←sameWords_sound idx.2]
   exact forest_all g top prior low geom blocks _ le i idx.1
 
-theorem lower_forest {g prior i hints} (low : ∀ q, Lower (vars q) (graphGoal q) (prior q))
+theorem lower_forest {g prior i hints} (low : ∀ q, Lower (varsX q) (graphGoal q) (prior q))
     (geom : graphValid g prior = true) (blocks : checkedTables g g.cap)
     (idx : indexedRoot g g.cap i (vars g.mask) = true) (hp : properB (targetOf g) = true)
     (ess : checkEssential (targetOf g) (vars g.mask) (graphPairs g.mask hints) = true)
@@ -2278,13 +2407,13 @@ theorem lower_forest {g prior i hints} (low : ∀ q, Lower (vars q) (graphGoal q
   rw [all]
   exact List.mem_toFinset.mpr ha
 
-theorem lower_discard {g prior ci hints} (low : ∀ q, Lower (vars q) (graphGoal q) (prior q))
+theorem lower_discard {g prior ci hints} (low : ∀ q, Lower (varsX q) (graphGoal q) (prior q))
     (ok : colCheck g.mask ci prior = true)
     (hp : properB (targetOf g) = true)
     (ess : checkEssential (targetOf g) (vars g.mask) (graphPairs g.mask hints) = true)
     (all : (graphPairs g.mask hints).map Prod.fst = vars g.mask)
     (nd : (vars g.mask).Nodup)
-    (cut : poolCut (subcube ci.1 ci.2.1) ci.2.2.2.2 g.cap 0 (vars g.mask) (vars g.mask)=true) :
+    (cut : poolCut (subcube ci.1 ci.2.1) ci.2.2.2.2 g.cap 0 (varsX (rawMask g.mask ci)) (vars g.mask)=true) :
     Lower (vars g.mask) (targetOf g) (g.cap+1) := by
   apply lower_impossible (proper_of _ hp) _ (poolCut_sound (col_sound ci prior low ok) [] rfl nd cut)
   intro a ha
@@ -2292,11 +2421,11 @@ theorem lower_discard {g prior ci hints} (low : ∀ q, Lower (vars q) (graphGoal
   rw [all]
   exact List.mem_toFinset.mpr ha
 
-def Known (entries : List (Nat × Nat)) := ∀ e ∈ entries, Lower (vars e.1) (graphGoal e.1) e.2
+def Known (entries : List (Nat × Nat)) := ∀ e ∈ entries, Lower (varsX e.1) (graphGoal e.1) e.2
 def extendKnown (old : List (Nat × Nat)) (L : Nat) (relabels : List (Nat × List Nat)) :=
   relabels.map (fun v => (v.1,L)) ++ old
 theorem extendKnown_ok {old L m relabels} (previous : Known old)
-    (main : Lower (vars m) (graphGoal m) L)
+    (main : Lower (varsX m) (graphGoal m) L)
     (ok : relabels.all (fun v => relabelOK v.1 m v.2) = true) :
     Known (extendKnown old L relabels) := by
   intro e he
@@ -2305,33 +2434,33 @@ theorem extendKnown_ok {old L m relabels} (previous : Known old)
     exact relabel_of (List.all_eq_true.mp ok _ hv) main
   · exact previous e h
 theorem baseKnown : Known [] := by simp [Known]
-def lanePlace (v : Nat) (upper : Nat) := 2^769*upper+v
+def lanePlace (v : Nat) (upper : Nat) := 2^256*upper+v
 def combineLanes {α : Type} (f : α → Bits) : List α → Nat
   | [] => 0
   | x::xs => lanePlace (f x).toNat (combineLanes f xs)
 def units : Nat → Nat
   | 0 => 0
   | n+1 => lanePlace 1 (units n)
-theorem laneSmall (x : Bits) : x.toNat < 2^769 :=
+theorem laneSmall (x : Bits) : x.toNat < 2^256 :=
   lt_trans x.isLt (by decide +kernel)
 theorem place_and (a b : Bits) (u v : Nat) :
     lanePlace a.toNat u &&& lanePlace b.toNat v = lanePlace (a &&& b).toNat (u &&& v) := by
   apply Nat.eq_of_testBit_eq
   intro i
   simp only [lanePlace,Nat.testBit_and,Nat.testBit_two_pow_mul_add _ (laneSmall _)]
-  by_cases h : i<769 <;> simp only [h,ite_true,ite_false,BitVec.toNat_and,Nat.testBit_and]
+  by_cases h : i<256 <;> simp only [h,ite_true,ite_false,BitVec.toNat_and,Nat.testBit_and]
 theorem place_or (a b : Bits) (u v : Nat) :
     lanePlace a.toNat u ||| lanePlace b.toNat v = lanePlace (a ||| b).toNat (u ||| v) := by
   apply Nat.eq_of_testBit_eq
   intro i
   simp only [lanePlace,Nat.testBit_or,Nat.testBit_two_pow_mul_add _ (laneSmall _)]
-  by_cases h : i<769 <;> simp only [h,ite_true,ite_false,BitVec.toNat_or,Nat.testBit_or]
+  by_cases h : i<256 <;> simp only [h,ite_true,ite_false,BitVec.toNat_or,Nat.testBit_or]
 theorem place_xor (a b : Bits) (u v : Nat) :
     lanePlace a.toNat u ^^^ lanePlace b.toNat v = lanePlace (a ^^^ b).toNat (u ^^^ v) := by
   apply Nat.eq_of_testBit_eq
   intro i
   simp only [lanePlace,Nat.testBit_xor,Nat.testBit_two_pow_mul_add _ (laneSmall _)]
-  by_cases h : i<769 <;> simp only [h,ite_true,ite_false,BitVec.toNat_xor,Nat.testBit_xor]
+  by_cases h : i<256 <;> simp only [h,ite_true,ite_false,BitVec.toNat_xor,Nat.testBit_xor]
 theorem lanes_and {α} (f g : α → Bits) (xs) :
     combineLanes f xs &&& combineLanes g xs = combineLanes (fun x => f x &&& g x) xs := by
   induction xs with
@@ -2353,53 +2482,54 @@ theorem broadcast {α} (a : Bits) (xs : List α) :
   | nil => simp [units,combineLanes]
   | cons v xs ih => simp only [List.length_cons,units,combineLanes,lanePlace,Nat.add_mul,Nat.mul_assoc,ih,Nat.one_mul]
 
-def fullMarks (r packed : Nat) := ((packed+r) >>> 768) &&& r
-theorem unit_bit (n i : Nat) (hi : i<n) : (units n).testBit (769*i) = true := by
+def fullMarks (r packed : Nat) := ((packed+r) >>> 255) &&& r
+theorem unit_bit (n i : Nat) (hi : i<n) : (units n).testBit (256*i) = true := by
   induction n generalizing i with
   | zero => omega
   | succ n ih =>
-    rw [units,lanePlace,Nat.testBit_two_pow_mul_add _ (by decide +kernel : 1 < 2^769)]
+    rw [units,lanePlace,Nat.testBit_two_pow_mul_add _ (by decide +kernel : 1 < 2^256)]
     cases i with
     | zero => simp
     | succ i =>
-      have di : 769*(i+1)-769=769*i := by omega
-      have ge : ¬769*(i+1)<769 := by omega
+      have di : 256*(i+1)-256=256*i := by omega
+      have ge : ¬256*(i+1)<256 := by omega
       simp only [ge,ite_false,di]
       exact ih _ (by omega)
 set_option maxRecDepth 8192 in
-theorem guardBit (a : Bits) : (a.toNat+1).testBit 768 = (a==BitVec.allOnes 768) := by
-  by_cases h : a=BitVec.allOnes 768
+theorem guardBit (a : Bits) : (a.toNat+1).testBit 255 = (a==BitVec.allOnes 255) := by
+  by_cases h : a=BitVec.allOnes 255
   · subst a
     decide +kernel
   · have lim := a.isLt
-    have ne : a.toNat ≠ 2^768-1 := by
+    have ne : a.toNat ≠ 2^255-1 := by
       intro eq
       apply h
       apply BitVec.eq_of_toNat_eq
       simpa only [BitVec.toNat_allOnes] using eq
-    have lt : a.toNat+1<2^768 := by omega
+    have lt : a.toNat+1<2^255 := by omega
     rw [Nat.testBit_eq_false_of_lt lt]
     exact (beq_eq_false_iff_ne.mpr h).symm
 
 set_option maxRecDepth 8192 in
 theorem mark_at {α} (f : α → Bits) (xs : List α) (i : Nat) (hi : i<xs.length) :
-    (fullMarks (units xs.length) (combineLanes f xs)).testBit (769*i) =
-      (f xs[i]==BitVec.allOnes 768) := by
+    (fullMarks (units xs.length) (combineLanes f xs)).testBit (256*i) =
+      (f xs[i]==BitVec.allOnes 255) := by
   simp only [fullMarks,Nat.testBit_and,Nat.testBit_shiftRight,unit_bit _ _ hi,Bool.and_true]
   induction xs generalizing i with
   | nil => simp at hi
   | cons a xs ih =>
     simp only [combineLanes,List.length_cons,units,lanePlace]
-    have sum (u v x : Nat) : 2^769*u+x+(2^769*v+1)=2^769*(u+v)+(x+1) := by omega
-    rw [sum,Nat.testBit_two_pow_mul_add _ (show (f a).toNat+1<2^769 from by have := (f a).isLt; omega)]
+    have sum (u v x : Nat) : 2^256*u+x+(2^256*v+1)=2^256*(u+v)+(x+1) := by omega
+    rw [sum,Nat.testBit_two_pow_mul_add _ (show (f a).toNat+1<2^256 from by have := (f a).isLt; omega)]
     have hi' : i < xs.length+1 := hi
     cases i with
     | zero => simpa using guardBit (f a)
     | succ i =>
-      have ge : ¬769*(i+1)+768<769 := by omega
-      have di : 769*(i+1)+768-769=769*i+768 := by omega
+      have ge : ¬256*(i+1)+255<256 := by omega
+      have di : 256*(i+1)+255-256=256*i+255 := by omega
       simp only [ge,ite_false,di,List.getElem_cons_succ]
       apply ih i (by omega)
+
 
 abbrev PackedSig := Nat × Nat
 abbrev PackedCov := Nat × Nat × Nat
@@ -2425,9 +2555,9 @@ theorem packed_column {α} (s : α → Signals) (xs : List α) (d : Bool) :
 def packedOp (full : Nat) (op : Nat) (a b : PackedSig) : PackedSig :=
   if op=2 then (full ^^^ a.1,full ^^^ a.2) else if op=1 then (a.1 ||| b.1,a.2 ||| b.2)
   else (a.1 &&& b.1,a.2 &&& b.2)
-theorem top_xor (a : Bits) : BitVec.allOnes 768 ^^^ a = ~~~a := BitVec.allOnes_xor
+theorem top_xor (a : Bits) : BitVec.allOnes 255 ^^^ a = ~~~a := BitVec.allOnes_xor
 theorem packed_op {α} (a b : α → Decor) (xs : List α) (op : Nat) :
-    packedOp (units xs.length*(BitVec.allOnes 768).toNat) op
+    packedOp (units xs.length*(BitVec.allOnes 255).toNat) op
       (packedSig (fun x => (a x).2) xs) (packedSig (fun x => (b x).2) xs) =
     packedSig (fun x => (movedDecor op (a x) (b x)).2) xs := by
   by_cases un : op=2
@@ -2462,9 +2592,9 @@ def combField (c : NodeContext) (d un ka kb : Bool) (op i j : Nat) :=
 def onMarks {α : Type} (f : α → Bool) (mask : Nat) : List α → Bool
   | [] => true
   | x::xs => if mask=0 then true else
-    ((mask &&& 1 == 0) || f x) && onMarks f (mask >>> 769) xs
+    ((mask &&& 1 == 0) || f x) && onMarks f (mask >>> 256) xs
 theorem marked_ok {α} (f : α → Bool) (mask : Nat) (xs : List α) (i : Nat) (hi : i<xs.length)
-    (bitOn : mask.testBit (769*i)=true) (ok : onMarks f mask xs=true) : f xs[i]=true := by
+    (bitOn : mask.testBit (256*i)=true) (ok : onMarks f mask xs=true) : f xs[i]=true := by
   induction xs generalizing mask i with
   | nil => simp at hi
   | cons x xs ih =>
@@ -2480,7 +2610,7 @@ theorem marked_ok {α} (f : α → Bool) (mask : Nat) (xs : List α) (i : Nat) (
         simp [bitOn] at at0
       exact ok.1.resolve_left nonzero
     | succ i =>
-      apply ih (mask:=mask >>> 769) (i:=i) (by simpa using hi) _ ok.2
+      apply ih (mask:=mask >>> 256) (i:=i) (by simpa using hi) _ ok.2
       simpa only [Nat.testBit_shiftRight,Nat.mul_succ,Nat.add_comm] using bitOn
 
 abbrev Batch := Nat × Nat × Nat × List PackedSig × PackedCov × PackedCov
@@ -2613,7 +2743,7 @@ def batchMove (b : Batch) (xs : List NodeContext) (i j op : Nat) (ka kb : Bool) 
     let d := len==k
     let a := laneWire b i
     let b' := laneWire b j
-    let z := packedOp (r*(BitVec.allOnes 768).toNat) op a b'
+    let z := packedOp (r*(BitVec.allOnes 255).toNat) op a b'
     let cov := if d then v else u
     let mask := fullMarks r (takePacked cov (packedColumn d a) (packedColumn d b') un ka kb ||| packedColumn d z)
     onMarks (fun c => fallbackAt c i j op ka kb) mask xs
@@ -2626,7 +2756,7 @@ theorem batchMove_at (k n) (xs : List NodeContext) {i j op : Nat} {ka kb}
   let len := 1+(n-(if ka then 0 else 1)-(if (op==2) || kb then 0 else 1))
   let d := len==k
   have eval : checkAt xs[q] i j op ka kb =
-      if len>k then true else if combField xs[q] d (op==2) ka kb op i j != BitVec.allOnes 768 then true
+      if len>k then true else if combField xs[q] d (op==2) ka kb op i j != BitVec.allOnes 255 then true
       else if !properB (movedDecor op (contextWire xs[q] i) (contextWire xs[q] j)).1 ||
         xs[q].2.2.1.any (fun v => v.1==(movedDecor op (contextWire xs[q] i) (contextWire xs[q] j)).1)
       then true else closeChild xs[q].2.2.2.2.1 xs[q].2.2.2.2.2 (k-1)
@@ -2642,7 +2772,7 @@ theorem batchMove_at (k n) (xs : List NodeContext) {i j op : Nat} {ka kb}
             else packedCov (fun c : NodeContext => c.2.2.2.1.1) xs
     change (if len>k then true else onMarks _ (fullMarks r
        (takePacked cov (packedColumn d a) (packedColumn d b) (op==2) ka kb |||
-        packedColumn d (packedOp (r*(BitVec.allOnes 768).toNat) op a b))) xs) = true at pass
+        packedColumn d (packedOp (r*(BitVec.allOnes 255).toNat) op a b))) xs) = true at pass
     rw [if_neg small] at pass
     have chosen : cov = packedCov (fun c => getCov c.2.2.2.1 d) xs := by
       dsimp only [cov]
@@ -2651,12 +2781,13 @@ theorem batchMove_at (k n) (xs : List NodeContext) {i j op : Nat} {ka kb}
     have cb : b = _ := laneWire_at k n xs hj
     dsimp only [r] at pass
     rw [ca,cb,packed_op,packed_column,packed_column,packed_column,chosen,takePacked_ok,lanes_or] at pass
-    by_cases hit : combField xs[q] d (op==2) ka kb op i j = BitVec.allOnes 768
+    by_cases hit : combField xs[q] d (op==2) ka kb op i j = BitVec.allOnes 255
     · apply fallback_sound
       apply marked_ok _ _ _ q hq _ pass
       rw [mark_at _ _ _ hq]
       exact beq_iff_eq.mpr hit
     · rw [eval,if_neg small,if_pos (bne_iff_ne.mpr hit)]
+
 
 def batchPair (b : Batch) (xs : List NodeContext) (i j op : Nat) :=
   let f := batchMove b xs i j op
@@ -2711,12 +2842,13 @@ def contextOf (g : Forest) (k i : Nat) : NodeContext :=
   let (ops,bank,ws) := readNode g k i
   let start := num*(10*storedDepth g depth+raw.length+depth)
   let pos := start+num*offw+packedAt data (start+i*offw) offw
-  let nr := packedAt data pos 5
+  let nr := packedAt data pos 5+32*packedAt data (pos+5) lw
   let nl := packedAt data (pos+5) lw
   let st := pos+5+lw
   let rules := (getPairs data cw depth nr st).filterMap (fun (a,b) => buildRule g ops depth bank a b)
   let ls := fun tag => ((g.index k tag).bind (linkedSet g (k-1))).toList
   (k,ws.length,ws,preCov ws,rules,ls)
+
 
 def prelim (T : Sig) (c : NodeContext) :=
   let ws := c.2.2.1.map Prod.fst
@@ -2737,47 +2869,8 @@ def contexts (g : Forest) (k start n : Nat) :=
   ((List.range n).map (start+·)).map (contextOf g k)
 def header (g : Forest) (k start n ar : Nat) :=
   (contexts g k start n).all (fun c => c.2.1==ar && prelim (targetOf g) c)
-def rowCut (g : Forest) (k start n ar lo len : Nat) :=
-  let xs := contexts g k start n
-  let b := makeBatch k ar xs
-  (List.range len).all (fun d =>
-    let i := lo+d
-    batchRow b xs i (List.range' (i+1) (ar-(i+1))))
-theorem rowCut_at {g k start n ar lo len} (h : rowCut g k start n ar lo len=true)
-    (i : Nat) (l : lo ≤ i) (r : i < lo+len) :
-    batchRow (makeBatch k ar (contexts g k start n)) (contexts g k start n)
-      i (List.range' (i+1) (ar-(i+1)))=true := by
-  have ha := List.all_eq_true.mp h (i-lo) (List.mem_range.mpr (by omega))
-  simpa only [Nat.add_sub_of_le l] using ha
-
-theorem rowCut_merge {g k start n ar lo a b}
-    (h : rowCut g k start n ar lo a=true) (t : rowCut g k start n ar (lo+a) b=true) :
-    rowCut g k start n ar lo (a+b)=true := by
-  apply List.all_eq_true.mpr
-  intro j hj
-  have jlt := List.mem_range.mp hj
-  by_cases first : j<a
-  · exact rowCut_at h (lo+j) (by omega) (by omega)
-  · exact rowCut_at t (lo+j) (by omega) (by omega)
-
-theorem cutsRun {g k start n ar} (h : rowCut g k start n ar 0 ar=true) :
-    runBatch k ar (contexts g k start n)=true := by
-  let xs := contexts g k start n
-  have go (lo num : Nat) (eq : lo+num=ar) :
-      batchRows (makeBatch k ar xs) xs (List.range' lo num)=true := by
-    induction num generalizing lo with
-    | zero => rfl
-    | succ num ih =>
-      simp only [List.range'_succ,batchRows,Bool.and_eq_true]
-      refine ⟨?_,ih (lo+1) (by omega)⟩
-      have ok := rowCut_at h lo (by omega) (by omega)
-      simpa only [show ar-(lo+1)=num by omega] using ok
-  unfold runBatch
-  rw [List.range_eq_range']
-  exact go 0 ar (by omega)
-
-theorem cutsBlock {g k start n ar} (hd : header g k start n ar=true)
-    (h : rowCut g k start n ar 0 ar=true) : block g k start n=true := by
+theorem batchBlock {g k start n ar} (hd : header g k start n ar=true)
+    (h : runBatch k ar (contexts g k start n)=true) : block g k start n=true := by
   apply makeBlock
   intro i lo hi
   let xs := contexts g k start n
@@ -2794,26 +2887,24 @@ theorem cutsBlock {g k start n ar} (hd : header g k start n ar=true)
   refine ⟨one.2,?_⟩
   split
   · rfl
-  · exact e ▸ runBatch_at hq hb ha hn (cutsRun h)
+  · exact e ▸ runBatch_at hq hb ha hn h
 
-def boxes (g : Forest) (k start n ar lo num : Nat) : Nat → Prop
-  | 0 => rowCut g k start n ar lo num=true
-  | d+1 => boxes g k start n ar lo (num/2) d ∧ boxes g k start n ar (lo+num/2) (num-num/2) d
-theorem boxesCut {g k start n ar lo num d} (h : boxes g k start n ar lo num d) :
-    rowCut g k start n ar lo num=true := by
-  induction d generalizing lo num with
-  | zero => exact h
-  | succ d ih =>
-    have v := rowCut_merge (ih h.1) (ih h.2)
-    simpa only [Nat.add_sub_of_le (Nat.div_le_self num 2)] using v
 
-def cells (g : Forest) (k start n ar rows : Nat) : Nat → Prop
-  | 0 => header g k start n ar=true ∧ boxes g k start n ar 0 ar rows
-  | d+1 => cells g k start (n/2) ar rows d ∧ cells g k (start+n/2) (n-n/2) ar rows d
-theorem cellsBlock {g k start n ar rows d} (h : cells g k start n ar rows d) :
+def joint (g : Forest) (k start n ar : Nat) :=
+  let xs := contexts g k start n
+  xs.all (fun c => c.2.1==ar && prelim (targetOf g) c) && runBatch k ar xs
+
+def grouped (g : Forest) (k start n ar : Nat) : Nat → Prop
+  | 0 => joint g k start n ar = true
+  | d+1 => grouped g k start (n/2) ar d ∧ grouped g k (start+n/2) (n-n/2) ar d
+
+theorem groupedBlock {g k start n ar d} (h : grouped g k start n ar d) :
     block g k start n=true := by
   induction d generalizing start n with
-  | zero => exact cutsBlock h.1 (boxesCut h.2)
+  | zero =>
+    change (_ && _) = true at h
+    simp only [Bool.and_eq_true] at h
+    exact batchBlock h.1 h.2
   | succ d ih =>
     have v := block_merge (ih h.1) (ih h.2)
     simpa only [Nat.add_sub_of_le (Nat.div_le_self n 2)] using v
@@ -2830,10 +2921,9 @@ theorem listPieces_all {α f xs d} (h : @listPieces α f xs d) : xs.all f=true :
     simpa only [List.take_append_drop] using ap
 def g15d3 (i : Nat) : Nat := 0xf
 def g15l3 : Packing := (1,0,0,0,1,0,0,g15d3)
-def repeated (w x : Nat) : Bits := BitVec.ofNat 768 (x*(((1 <<< 768)-1)/((1 <<< w)-1)))
-def g15samples : Array (Bits × Bits) := #[(repeated 12 0x99d,repeated 12 0x919),(repeated 12 0xed5,repeated 12 0x4c4),(repeated 12 0xf6a,repeated 12 0xa0a),(repeated 12 0x5ba,repeated 12 0x5b0),(0,0),(0,0),(0,0),(0,0),(0,0)]
-def g15columns : IndexTree ColumnInfo := (.leaf [])
-def g15autos : Array (List Nat) := #[[],[33,48]]
+def g15samples : Array (Bits × Bits) := #[(0x16,0x16),(0x2c,0x8),(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffb,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe3),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd7,0x14),(0,0),(0,0),(0,0),(0,0),(0,0)]
+def g15columns : List ColumnInfo := []
+def g15autos : List (List Nat) := [[],[33,48]]
 def g15levels : Nat → Packing
   | 3 => g15l3
   | _ => emptyPacking
@@ -2846,9 +2936,9 @@ def g31d5 (i : Nat) : Nat := 0x84001e90fd02fd01fa00
 def g31l5 : Packing := (3,1,3,0,4,4,0,g31d5)
 def g31d6 (i : Nat) : Nat := 0x11a20bf
 def g31l6 : Packing := (1,0,3,2,4,0,0,g31d6)
-def g31samples : Array (Bits × Bits) := #[(repeated 96 0xf9ce2bb554a3bac97b2a9d65,repeated 96 0x60e048740030a88143281c44),(repeated 96 0x97ad1ab5bd2d547d6793334b,repeated 96 0x10183680184d04682483210b),(repeated 96 0x65219778a6bd6e36bfd946ac,repeated 96 0x4d60802686b04210115006a4),(repeated 96 0xc213c5eb8bdea95bf6ee7492,repeated 96 0x12934541000824c322ae5002),(repeated 96 0x6a5ee88a4d6be3f71c64aa3f,repeated 96 0xc04308a174300141c40a239),(0,0),(0,0),(0,0),(0,0)]
-def g31columns : IndexTree ColumnInfo := (.fork 2 (.leaf [(1,0,30,0,4),(2,0,29,0,4)]) (.leaf [(4,0,27,0,4),(8,0,23,0,4),(16,0,15,0,4)]))
-def g31autos : Array (List Nat) := #[[],[50,65],[66,16],[67,50,33,16],[67,32],[67,66,49,32],[33,48],[67,50,65,48],[67,66,65,64],[49,64]]
+def g31samples : Array (Bits × Bits) := #[(0x54d2,0x30c2),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff85a5,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc505),(0x3276,0x72),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbfc9,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbe81),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc93f,0x413c),(0,0),(0,0),(0,0),(0,0)]
+def g31columns : List ColumnInfo := [(1,0,30,0,4),(2,0,29,0,4),(4,0,27,0,4),(8,0,23,0,4),(16,0,15,0,4)]
+def g31autos : List (List Nat) := [[],[50,65],[66,16],[67,50,33,16],[67,32],[67,66,49,32],[33,48],[67,50,65,48],[67,66,65,64],[49,64]]
 def g31levels : Nat → Packing
   | 5 => g31l5
   | 6 => g31l6
@@ -2858,25 +2948,25 @@ def g31index : Nat → Nat → Option (Nat × Nat)
   | 6 => lookupWord 5 25 2 10 2 4 (key31l6)
   | _ => fun _ => none
 def g31 : Forest := ⟨31,6,fun j => g31samples[j]?.getD (0,0),g31columns,g31autos,g31levels,g31index⟩
-def g47samples : Array (Bits × Bits) := #[(repeated 6 0x35,repeated 6 0x4),(repeated 6 0x19,repeated 6 0x19),(repeated 6 0x2e,repeated 6 0x24),(repeated 6 0x12,repeated 6 0x12),(0,0),(repeated 6 0x3f,repeated 6 0x3b),(0,0),(0,0),(0,0)]
-def g47columns : IndexTree ColumnInfo := (.leaf [(8,0,39,0,4)])
-def g47autos : Array (List Nat) := #[[],[83,32]]
+def g47samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),(0,0),(0,0),(0,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),(0,0),(0,0),(0,0)]
+def g47columns : List ColumnInfo := [(8,0,39,0,4)]
+def g47autos : List (List Nat) := [[],[83,32]]
 def g47levels : Nat → Packing
   | _ => emptyPacking
 def g47index : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 def g47 : Forest := ⟨47,4,fun j => g47samples[j]?.getD (0,0),g47columns,g47autos,g47levels,g47index⟩
-def g55samples : Array (Bits × Bits) := #[(repeated 6 0x2b,repeated 6 0x8),(repeated 6 0x35,repeated 6 0x31),(repeated 6 0x1e,repeated 6 0xe),(0,0),(repeated 6 0x26,repeated 6 0x26),(repeated 6 0x39,repeated 6 0x31),(0,0),(0,0),(0,0)]
-def g55columns : IndexTree ColumnInfo := (.leaf [(16,0,39,0,4)])
-def g55autos : Array (List Nat) := #[[],[84]]
+def g55samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),(0,0),(0,0),(0,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),(0,0),(0,0),(0,0)]
+def g55columns : List ColumnInfo := [(16,0,39,0,4)]
+def g55autos : List (List Nat) := [[],[84]]
 def g55levels : Nat → Packing
   | _ => emptyPacking
 def g55index : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 def g55 : Forest := ⟨55,4,fun j => g55samples[j]?.getD (0,0),g55columns,g55autos,g55levels,g55index⟩
-def g63samples : Array (Bits × Bits) := #[(repeated 6 0x9,repeated 6 0x8),(repeated 6 0x27,repeated 6 0x25),(repeated 6 0x32,repeated 6 0x12),(repeated 6 0x34,repeated 6 0x24),(repeated 6 0x15,repeated 6 0x11),(repeated 6 0x3a,repeated 6 0x32),(0,0),(0,0),(0,0)]
-def g63columns : IndexTree ColumnInfo := (.leaf [(32,0,31,0,7)])
-def g63autos : Array (List Nat) := #[[],[50,65]]
+def g63samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),(0,0),(0,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),(0,0),(0,0),(0,0),(0,0)]
+def g63columns : List ColumnInfo := [(32,0,31,0,7)]
+def g63autos : List (List Nat) := [[],[50,65]]
 def g63levels : Nat → Packing
   | _ => emptyPacking
 def g63index : Nat → Nat → Option (Nat × Nat)
@@ -2884,9 +2974,9 @@ def g63index : Nat → Nat → Option (Nat × Nat)
 def g63 : Forest := ⟨63,7,fun j => g63samples[j]?.getD (0,0),g63columns,g63autos,g63levels,g63index⟩
 def g111d6 (i : Nat) : Nat := 0x120ff
 def g111l6 : Packing := (1,0,2,0,1,0,0,g111d6)
-def g111samples : Array (Bits × Bits) := #[(repeated 24 0x727465,repeated 24 0x504444),(repeated 24 0xc6d9cb,repeated 24 0x821909),(repeated 24 0x3d2e52,repeated 24 0x352452),(repeated 24 0x8912bc,repeated 24 0x8812ac),(0,0),(repeated 24 0x3c3ebd,repeated 24 0x2c3ab9),(repeated 24 0xf881fe,repeated 24 0x7880f6),(0,0),(0,0)]
-def g111columns : IndexTree ColumnInfo := (.leaf [(4,8,99,0,4),(1,32,78,0,4),(64,0,47,0,5)])
-def g111autos : Array (List Nat) := #[[],[83,32]]
+def g111samples : Array (Bits × Bits) := #[(0x6e92,0x6482),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8d65,0x944),(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff389,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa289),(0x703e,0x5036),(0,0),(0x13be,0x133c),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff907f,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff903b),(0,0),(0,0)]
+def g111columns : List ColumnInfo := [(4,8,99,0,4),(1,32,78,0,4),(64,0,47,0,5)]
+def g111autos : List (List Nat) := [[],[83,32]]
 def g111levels : Nat → Packing
   | 6 => g111l6
   | _ => emptyPacking
@@ -2894,9 +2984,9 @@ def g111index : Nat → Nat → Option (Nat × Nat)
   | 6 => fun _ => none
   | _ => fun _ => none
 def g111 : Forest := ⟨111,6,fun j => g111samples[j]?.getD (0,0),g111columns,g111autos,g111levels,g111index⟩
-def g119samples : Array (Bits × Bits) := #[(repeated 6 0xd,repeated 6 0x8),(repeated 6 0x33,repeated 6 0x21),(repeated 6 0x16,repeated 6 0x16),(0,0),(repeated 6 0x3c,repeated 6 0x34),(repeated 6 0x21,repeated 6 0x21),(repeated 6 0x2a,repeated 6 0xa),(0,0),(0,0)]
-def g119columns : IndexTree ColumnInfo := (.leaf [(4,0,115,0,5)])
-def g119autos : Array (List Nat) := #[[],[84],[98],[84,98],[101,66,16],[101,100,66,16],[101,84,82,16],[100,82,16]]
+def g119samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),(0,0),(0,0),(0,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),(0,0),(0,0),(0,0)]
+def g119columns : List ColumnInfo := [(4,0,115,0,5)]
+def g119autos : List (List Nat) := [[],[84],[98],[84,98],[101,66,16],[101,100,66,16],[101,84,82,16],[100,82,16]]
 def g119levels : Nat → Packing
   | _ => emptyPacking
 def g119index : Nat → Nat → Option (Nat × Nat)
@@ -2907,9 +2997,9 @@ def g189d6 (i : Nat) : Nat := 0x82000f487f40bfa03fa00
 def g189l6 : Packing := (3,1,3,0,4,4,0,g189d6)
 def g189d7 (i : Nat) : Nat := 0x1f5859bf
 def g189l7 : Packing := (1,0,3,2,4,0,0,g189d7)
-def g189samples : Array (Bits × Bits) := #[(repeated 192 0x1cb4e6d84ab365f9722155b0decf672135d0ab0e8aab3265,repeated 192 0xb4701a401901a06a801c60d40e430038408b0c08aa0264),(0,0),(repeated 192 0xd370dbbd59357a0ab5d8c2e2b4913d9ddc0ac963246654eb,repeated 192 0x5548f0845c253042044cc0e02091152804424943044214c9),(repeated 192 0xe10ddd388a5d8a2fef454b2f6c5cd8cb4dafd1a5458caf32,repeated 192 0x201609100358082de8010e0a0c4e080169249024018caa32),(repeated 192 0xb88d0790fae9d8d74f74351d5187af7a955e769667c1914c,repeated 192 0xd049060038a0e052051c011422a1a0780618649266411108),(repeated 192 0x662220c7ec1235aaa52f7b260bfdf8f023b73c589c1c3f19,repeated 192 0x550300819c02301e012cc3000b90a8a80382305084143519),(0,0),(repeated 192 0x2d24b67373e9182d29baedd99bcc115aa3d04dc337a48be,repeated 192 0x214036203d800a092812c0514244211e81d048c33284826),(0,0)]
-def g189columns : IndexTree ColumnInfo := (.fork 4 (.leaf [(1,0,188,0,5),(12,0,177,0,4),(16,0,173,0,5),(17,0,172,0,4)]) (.leaf [(24,0,165,0,4),(33,0,156,0,4),(132,0,57,0,4),(160,0,29,0,4)]))
-def g189autos : Array (List Nat) := #[[],[84,115],[117,67,32],[116,83,32],[82,48],[84,115,82,48],[117,116,115,114,64],[83,114,64],[116,50,80],[117,84,67,50,80],[84,115,66,112],[66,112]]
+def g189samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff14bb3,0xd42b2),(0,0),(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffd5635,0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff94225),(0xe65d8,0x60598),(0x2b866,0xb844),(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff385cd,0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2054d),(0,0),(0x4ba1e,0x4b812),(0,0)]
+def g189columns : List ColumnInfo := [(1,0,188,0,5),(12,0,177,0,4),(16,0,173,0,5),(17,0,172,0,4),(24,0,165,0,4),(33,0,156,0,4),(132,0,57,0,4),(160,0,29,0,4)]
+def g189autos : List (List Nat) := [[],[84,115],[117,67,32],[116,83,32],[82,48],[84,115,82,48],[117,116,115,114,64],[83,114,64],[116,50,80],[117,84,67,50,80],[84,115,66,112],[66,112]]
 def g189levels : Nat → Packing
   | 6 => g189l6
   | 7 => g189l7
@@ -2919,9 +3009,9 @@ def g189index : Nat → Nat → Option (Nat × Nat)
   | 7 => lookupWord 5 18 5 10 2 4 (key189l7)
   | _ => fun _ => none
 def g189 : Forest := ⟨189,7,fun j => g189samples[j]?.getD (0,0),g189columns,g189autos,g189levels,g189index⟩
-def g127samples : Array (Bits × Bits) := #[(repeated 6 0x29,repeated 6 0x20),(repeated 6 0x13,repeated 6 0x11),(repeated 6 0x26,repeated 6 0x22),(repeated 6 0x14,repeated 6 0x14),(repeated 6 0x19,repeated 6 0x9),(repeated 6 0x22,repeated 6 0x2),(repeated 6 0x2c,repeated 6 0x2c),(0,0),(0,0)]
-def g127columns : IndexTree ColumnInfo := (.leaf [(32,0,95,0,8)])
-def g127autos : Array (List Nat) := #[[],[101,66,16]]
+def g127samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),(0,0),(0,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),(0,0),(0,0),(0,0),(0,0)]
+def g127columns : List ColumnInfo := [(32,0,95,0,8)]
+def g127autos : List (List Nat) := [[],[101,66,16]]
 def g127levels : Nat → Packing
   | _ => emptyPacking
 def g127index : Nat → Nat → Option (Nat × Nat)
@@ -2941,9 +3031,9 @@ def g191d9 (i : Nat) : Nat := 0x180327c7c11a70600f8f1304b1c05f0c3c541303017c38f1
 def g191l9 : Packing := (12,1,6,7,2,9,0,g191d9)
 def g191d10 (i : Nat) : Nat := 0x1f3c11ff
 def g191l10 : Packing := (1,0,6,4,2,0,0,g191d10)
-def g191samples : Array (Bits × Bits) := #[(0x6acfda3c2cb83a92b793db4cbe83faea9cb2634793e21db352fb83fe8df2bc07a86d83614e9e1d6652f73c866931a299021d0d35cea03b8bca899a3ae9b0852968ae39aed598c502d3cc66c95e3918558ba9636cd1546c95b4522b12e41c6251,0x8027018c1220821109402382a0c04040242201142810004800310a01021028020024504420900008134444101889108100844480011218a0808a088000429588a002494484002118004005c4110108908c2000154441190520210a0142200),(0x7913ceb593e8bd03514889e55f4c93639759259376fb3230720c9a865196f27cc74c193b9b758265cc3f7b6a39d891145642471fe1a3e402ed12036d66f3fc532a7d00122732be1cd6f8a0d631223ddb153772d463789a2c383ce02e7842d163,0x88036081c60419a2c82401d04754b2b302101402821d5c654204040641a4c69d42c491108805a675482c4b1a3210132646402113b58224122512010966d1b044833550122312b410427aa086012a6ec1101538c042289a0c282ca02a5842d161),(0x557693cafd0fd9424efb95e75ddf8ed5bd78c8ecb52fa208a8d45cb3574ccaab77d93b1e650b4399e9518160864e914bee471a4d6078d8cd3710b8c5462d299957d5836e24a95a7b253cdb2e6196070b78eaa32a2b4a267149c447650cd138a6,0x10c082401088400012d0c4008000004018ca8080142020182010002082500860100b028600824082a011044180428040210612040030c884904098c2002801191040822880a108c8040449084010010648220108084220210140474504110882),(0x9c642d62a2f2f7ba22bc048df67d49f5212576be5994f8cdc5e270babb8959b792802cb3e87f90d4054ae918d4ab1ce241d9cf541d5d16b72277276810cef58c9e0f2a3137066d66292bcd81a96583d025d9fd03afbb585aa2b81e898b063d44,0x8024093988519a8e002822a41919198600217873085849c0c483198871885081c08060615e498874054ab3104029780240914c50140c132321226228088464808a9608100702c12708ba84812c642a102598ac01a5195852a098180889063544),(0xd23eefb5d75806b89dcda38864b64661c9f5e2babc176a70b2d3a56f26f32e727e31fe7789e6e58a36284c9dbcb30e74d59821a10b67441120e71511dbf31ab50b42210b3baf1a3e4c47734dcff8958cfd1109f7ce27c18a062741ac46d7cd91,0x7413208444084451d48501104604c068b3980408840422121160844600658c78341c18180024668a9220480b8c940760b50821038273441010c51501633a18440140258228a50a1044455344031a81ae1001013e42228188062541a446c1c891),(0x44ee3263ec00331534507b30f50239085a477dc26fc97fafdd3677e1adedabf5a6627a917685fed951e16b05c441608531a6eebab7bf0ffa2c9d6923c000425ae070ded9cbf43ff0702d561449016826463c1cddf881bbc98109fdb0912bda0a,0x5c9601812402000310c10a308504200a188ca4d220b13a418220c4ac1700cc49329049900289169c4a408a09044020043184b638a739649c2011540242004250a0701ac901871eb02048c310010048264632184cec01aac801096da0110b580a),(0,0),(0x3ab08ab4b6d74c50e56bc9651caf5894b179e03465572acbdca5615696769c27053d6dc580568c9318a62a712d4d06df8fcf0933a8a96615b24c8891d85dee28deccf746ecda09546a23c7138dbf2215a9d969340b49504d34d905859a5a4fc,0x8020482e4971b288ed202044508b9ca5050108094844412451461041282e3192c9648008d0242841110660a6538444294c484083188002614b0e00011891a8820d8e45006648e00548a230c32acf32918089829300b41504d204901848a4a474),(0,0)]
-def g191columns : IndexTree ColumnInfo := (.fork 19 (.fork 9 (.fork 4 (.leaf [(1,0,190,0,7),(2,0,189,0,8),(3,0,188,0,5),(4,0,187,0,7)]) (.fork 2 (.leaf [(6,0,185,0,5),(8,0,183,0,8)]) (.leaf [(0,8,163,20,6),(10,0,181,0,5),(12,0,179,0,5)]))) (.fork 5 (.fork 2 (.leaf [(4,8,163,16,5),(14,0,177,0,4)]) (.leaf [(16,0,175,0,8),(0,16,166,9,6),(1,16,166,8,5)])) (.fork 2 (.leaf [(19,0,172,0,4),(24,0,167,0,7)]) (.leaf [(16,8,163,4,5),(8,16,166,1,5),(25,0,166,0,4)])))) (.fork 9 (.fork 4 (.leaf [(9,16,166,0,4),(20,8,163,0,4),(32,0,159,0,8),(1,32,30,128,5)]) (.fork 2 (.leaf [(35,0,156,0,4),(40,0,151,0,5)]) (.leaf [(48,0,143,0,5),(56,0,135,0,4),(128,0,63,0,8)]))) (.fork 5 (.fork 2 (.leaf [(130,0,61,0,5),(4,128,27,32,5)]) (.leaf [(136,0,55,0,5),(160,0,31,0,7),(128,32,30,1,5)])) (.fork 2 (.leaf [(32,128,27,4,5),(161,0,30,0,4)]) (.leaf [(129,32,30,0,4),(164,0,27,0,4),(36,128,27,0,4)])))))
-def g191autos : Array (List Nat) := #[[],[84,115],[117,67,32],[116,83,32]]
+def g191samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffa814818a955a51a09131,0x59488102855a11808100),(0x7fffffffffffffffffffffffffffffffffffffffffffc804ef63a88d0ec278a3,0x7fffffffffffffffffffffffffffffffffffffffffff80b46e1128840c4278a1),(0x5141786a15513a268c46,0x4d4210e2105132208442),(0x4c03315c9acf5184ea4,0x2205e514c90cc5084aa4),(0x7fffffffffffffffffffffffffffffffffffffffffff8480129d62a30e36f6d1,0x7fffffffffffffffffffffffffffffffffffffffffff84801ac922a10a363451),(0x223a04d07ac5e9497d0a,0x221230f4708568485c0a),(0,0),(0x132f8c01ae34844d227c,0x102d8f018e2084052234),(0,0)]
+def g191columns : List ColumnInfo := [(1,0,190,0,7),(2,0,189,0,8),(3,0,188,0,5),(4,0,187,0,7),(6,0,185,0,5),(8,0,183,0,8),(0,8,163,20,6),(10,0,181,0,5),(12,0,179,0,5),(4,8,163,16,5),(14,0,177,0,4),(16,0,175,0,8),(0,16,166,9,6),(1,16,166,8,5),(19,0,172,0,4),(24,0,167,0,7),(16,8,163,4,5),(8,16,166,1,5),(25,0,166,0,4),(9,16,166,0,4),(20,8,163,0,4),(32,0,159,0,8),(1,32,30,128,5),(35,0,156,0,4),(40,0,151,0,5),(48,0,143,0,5),(56,0,135,0,4),(128,0,63,0,8),(130,0,61,0,5),(4,128,27,32,5),(136,0,55,0,5),(160,0,31,0,7),(128,32,30,1,5),(32,128,27,4,5),(161,0,30,0,4),(129,32,30,0,4),(164,0,27,0,4),(36,128,27,0,4)]
+def g191autos : List (List Nat) := [[],[84,115],[117,67,32],[116,83,32]]
 def g191levels : Nat → Packing
   | 6 => g191l6
   | 7 => g191l7
@@ -2959,17 +3049,17 @@ def g191index : Nat → Nat → Option (Nat × Nat)
   | 10 => lookupWord 9 46 4 10 4 2 (key191l10)
   | _ => fun _ => none
 def g191 : Forest := ⟨191,10,fun j => g191samples[j]?.getD (0,0),g191columns,g191autos,g191levels,g191index⟩
-def g251samples : Array (Bits × Bits) := #[(repeated 6 0x21,0),(repeated 6 0x3b,repeated 6 0x39),(0,0),(repeated 6 0x16,repeated 6 0x12),(repeated 6 0x3c,repeated 6 0x2c),(repeated 6 0x9,repeated 6 0x9),(repeated 6 0x2,repeated 6 0x2),(repeated 6 0x3c,repeated 6 0x34),(0,0)]
-def g251columns : IndexTree ColumnInfo := (.leaf [(8,0,243,0,7)])
-def g251autos : Array (List Nat) := #[[],[84,115],[99,65],[118,84,115,65],[118,81],[118,84,99,81]]
+def g251samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),(0,0),(0,0),(0,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),(0,0),(0,0),(0,0)]
+def g251columns : List ColumnInfo := [(8,0,243,0,7)]
+def g251autos : List (List Nat) := [[],[84,115],[99,65],[118,84,115,65],[118,81],[118,84,99,81]]
 def g251levels : Nat → Packing
   | _ => emptyPacking
 def g251index : Nat → Nat → Option (Nat × Nat)
   | _ => fun _ => none
 def g251 : Forest := ⟨251,7,fun j => g251samples[j]?.getD (0,0),g251columns,g251autos,g251levels,g251index⟩
-def g255samples : Array (Bits × Bits) := #[(repeated 6 0x31,repeated 6 0x20),(repeated 6 0x23,repeated 6 0x1),(repeated 6 0x6,repeated 6 0x2),(repeated 6 0xc,repeated 6 0x4),(repeated 6 0x19,repeated 6 0x19),(repeated 6 0x2,repeated 6 0x2),(repeated 6 0x14,repeated 6 0x14),(repeated 6 0x28,repeated 6 0x28),(0,0)]
-def g255columns : IndexTree ColumnInfo := (.leaf [(64,0,191,0,11)])
-def g255autos : Array (List Nat) := #[[],[84,115],[117,67,32],[116,83,32]]
+def g255samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),(0,0),(0,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff),(0,0),(0,0),(0,0),(0,0)]
+def g255columns : List ColumnInfo := [(64,0,191,0,11)]
+def g255autos : List (List Nat) := [[],[84,115],[117,67,32],[116,83,32]]
 def g255levels : Nat → Packing
   | _ => emptyPacking
 def g255index : Nat → Nat → Option (Nat × Nat)
@@ -2989,9 +3079,9 @@ def g383d11 (i : Nat) : Nat := 0x540b1d9a02e3804632e686a85e3b342382008507c4a8582
 def g383l11 : Packing := (6,1,6,6,3,8,0,g383d11)
 def g383d12 (i : Nat) : Nat := 0x11b280e4ff
 def g383l12 : Packing := (1,0,6,3,3,0,0,g383d12)
-def g383samples : Array (Bits × Bits) := #[(0x22c0d3a3723e453b61b292904161c19166ba4156452239cb2ce776d1285888036922ca069735ba1c39466bb49cb80c880d6801ee650cd2ea8938a452f08d3169a1612a59384753bad95626662c63076161205bac29b905015369815a61884cb1,0x22a042a308281022412222104041018102a0455c0820218028210490004898014122a802062510400900403480940c80084001804506910881200012c0203148e041211030641239500420000c630440212052a0291101014268811220880c80),(0x3e4782180591e1e8ca415c93fb0e30440ddb7b080a80044a5e58703417b0ed0da2975b6df4e0151155ba1024096257dc7280e61c3739c9924483ab0a0d0a407f268250f5cf15b48886f76ba0ccf46838068d8de07060e07838bc1a040b61c283,0x9028018810161088ac0504223081040850928000290004c425070241b00400822080144b0c0241004a20000482053184202c40808184882448102000d0800b3040a404084018c8080110220c214483800898940502040781814120409604201),(0xc3b0d0243e2c92704a6d0bb89a642e3e324709614c855ba1b03c2574c53f0c84bca3b709607618aaaaca1686a79e094292d1a5b2e1a729d1ef4c761d2455891cd68664af136132ce19aaa19e6c55a2caed1460758145348a6cc923aa16a49516,0xc22070243c088a32102908b09820ae3610c20125cc051d809026055084360c62d8a3320940364922a8484682858e00c384d420b061233141a94434152055010c599024a50348105611a2a11e2441a2c2e41460350145348264c921aa12049512),(0x4138264952b1d12493a4452d72585b389605825093cff11edb60090262cf75191c382db2876b8a708e04945dba40fc5c0117030382d504a579e551698e39d387601c521a9a75d96750089c8958b895e01b82b803f01d0be08606741604bc230c,0x1080c0b03b031008084040c42504188060180103100c00a0a40008040890111041009902b010250040410442a404c140103030210c08ca050a00048c0a8c022200c1018d83149210000148108b815200b021800b00809600202141404b82204),(0x7a0c641d50044e150338db871c0d9c6d8b49b017941b1c71c485efc79a14e6ae159b09d8c200cd085276a758cd18f3623c4db7d00870524c281de7f5fe3e2adc1756b294808a0882ea6a1f2df107bc01d0df010f4d40469e2105ef94c107b239,0xd004201450464809021899a3188eb82288483003841b1c31c500f247991664ae92090048c000c90e723223084509b040f48cd45008304046281cf3843e140e8407928284000804822b6a8b24f004a801d0dd010f4440469e21056a80c1079039),(0xcc62da0a5fa8f5e2c996caf343c42faac6de9a345ff56a94813a6425060416282f4d23c281526277465dd835f65817a533b901ad51024edaaa84a94a69219208d911c25be8aad34a7f39eda22807bafd8e8540012ec5ecf42900c6dcd341c02,0x8452d0021128d5c8c9144a91d1c007ab845a00141d69e1982122246c02041428290423d28902225305595421e41c17a5023985a908040a15a0c4800269208200d9018058b1aa90485c38f99a2803baf58c8040010ec1ece00900c4d4d341002),(0xdaef1c77688221978d1e0c4ad4cf460c43747468370c9781a044ccfb808507cfc7550e6f05834be93d3c1e4e94918217a4e0da637baa95002472c84f89f63e421033ad28de7ab208228bfb0281a229d272553696158289b300da2c9976c32464,0x92e959624882001701040c005417432c02544069252c9701a0048cc280a00e56d4150e31071309c931151f4c9213080304e00a4233c09500a002c04d90b29c403071012c5a3a310c128ab91220a221c27244349605808983008a2c9966812464),(0,0),(0x941a1aee99450a81362f36506691ad42486aa7b56b55a36c2710c35afdccd2f0604110c2892f54d343a9228b60c516b3ea6e18394813263b179331842a516d8adc29c7c000c846f164b52014130d4016a078833106127956c94690a3b81ad1d8,0x4120210904c02803268a2402080b401402a07040a01006405204110294490a020401002d0205402c22800a1400c2280a20c04a14813021a0411310009012188c000460020c0069060300020050540108030832102126010c94480229002c198)]
-def g383columns : IndexTree ColumnInfo := (.fork 29 (.fork 14 (.fork 7 (.fork 3 (.leaf [(1,0,382,0,9),(0,1,332,50,7),(2,0,381,0,9)]) (.leaf [(0,2,312,69,7),(3,0,380,0,6),(2,1,332,48,6),(1,2,312,68,6)])) (.fork 3 (.leaf [(4,0,379,0,11),(5,0,378,0,7),(7,0,376,0,5)]) (.leaf [(5,2,312,64,5),(8,0,375,0,9),(0,8,99,276,7),(12,0,371,0,8)]))) (.fork 7 (.fork 3 (.leaf [(13,0,354,0,4),(14,0,369,0,5),(16,0,367,0,11)]) (.leaf [(17,0,366,0,8),(18,0,365,0,7),(19,0,364,0,5),(18,1,332,32,5)])) (.fork 4 (.leaf [(24,0,359,0,8),(25,0,358,0,5),(28,0,355,0,7),(20,8,99,256,5)]) (.leaf [(32,0,351,0,11),(33,0,350,0,8),(32,1,332,18,6),(35,0,348,0,5)])))) (.fork 15 (.fork 7 (.fork 3 (.leaf [(34,1,332,16,5),(44,0,339,0,5),(49,0,334,0,7)]) (.leaf [(48,1,332,2,5),(33,16,326,8,5),(56,0,327,0,5),(64,0,319,0,11)])) (.fork 4 (.leaf [(65,0,318,0,7),(66,0,317,0,8),(67,0,316,0,5),(65,2,312,4,5)]) (.leaf [(70,0,313,0,7),(34,64,29,256,5),(256,0,127,0,9),(0,256,23,104,7)]))) (.fork 7 (.fork 3 (.leaf [(264,0,119,0,6),(256,8,99,20,6),(8,256,23,96,6)]) (.leaf [(268,0,115,0,5),(260,8,99,16,5),(280,0,103,0,5),(272,8,99,4,5)])) (.fork 4 (.leaf [(288,0,95,0,8),(289,0,94,0,5),(40,256,23,64,5),(304,0,79,0,5)]) (.leaf [(320,0,63,0,8),(322,0,61,0,5),(258,64,61,0,5),(352,0,31,0,7)])))))
-def g383autos : Array (List Nat) := #[[],[84,131,98],[101,66,16],[100,131,82,16],[82,129,48],[101,100,131,98,129,48],[100,49,128],[101,84,131,66,49,128]]
+def g383samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffffffffffffffff4962a78b4b51cb21271,0x119125834b518920240),(0x7ffffffffffffffffffffffffffffffffffffffffffff81acec7ab4c62687143,0x7ffffffffffffffffffffffffffffffffffffffffffffe2201078b4862681101),(0x188aa1840d4b4192696,0x188aa18009494012692),(0x74034f5f622ca1f098c,0xc1650e0e6224a1e0904),(0x7ffffffffffffffffffffffffffffffffffffffffffff2e0ac060901bb21ed39,0x7ffffffffffffffffffffffffffffffffffffffffffff2e0ac060900a121e439),(0xc068da608a8076d0602,0xc068da60008066d0402),(0x3d4cf8071e8c90ca24,0x1dccf804068c904a24),(0,0),(0x821110b1dd341c6b4d8,0xe0020119d10100b0d8)]
+def g383columns : List ColumnInfo := [(1,0,382,0,9),(0,1,332,50,7),(2,0,381,0,9),(0,2,312,69,7),(3,0,380,0,6),(2,1,332,48,6),(1,2,312,68,6),(4,0,379,0,11),(5,0,378,0,7),(7,0,376,0,5),(5,2,312,64,5),(8,0,375,0,9),(0,8,99,276,7),(12,0,371,0,8),(13,0,354,0,4),(14,0,369,0,5),(16,0,367,0,11),(17,0,366,0,8),(18,0,365,0,7),(19,0,364,0,5),(18,1,332,32,5),(24,0,359,0,8),(25,0,358,0,5),(28,0,355,0,7),(20,8,99,256,5),(32,0,351,0,11),(33,0,350,0,8),(32,1,332,18,6),(35,0,348,0,5),(34,1,332,16,5),(44,0,339,0,5),(49,0,334,0,7),(48,1,332,2,5),(33,16,326,8,5),(56,0,327,0,5),(64,0,319,0,11),(65,0,318,0,7),(66,0,317,0,8),(67,0,316,0,5),(65,2,312,4,5),(70,0,313,0,7),(34,64,29,256,5),(256,0,127,0,9),(0,256,23,104,7),(264,0,119,0,6),(256,8,99,20,6),(8,256,23,96,6),(268,0,115,0,5),(260,8,99,16,5),(280,0,103,0,5),(272,8,99,4,5),(288,0,95,0,8),(289,0,94,0,5),(40,256,23,64,5),(304,0,79,0,5),(320,0,63,0,8),(322,0,61,0,5),(258,64,61,0,5),(352,0,31,0,7)]
+def g383autos : List (List Nat) := [[],[84,131,98],[101,66,16],[100,131,82,16],[82,129,48],[101,100,131,98,129,48],[100,49,128],[101,84,131,66,49,128]]
 def g383levels : Nat → Packing
   | 8 => g383l8
   | 9 => g383l9
@@ -3014,7 +3104,7 @@ def maps3 : List (Nat × List Nat) := []
 def known3 := extendKnown [] 1 maps3
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid3 : Known known3 := extendKnown_ok baseKnown low3 (by decide +kernel)
+theorem valid3 : Known known3 := extendKnown_ok (m:=3) baseKnown low3 (by decide +kernel)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 theorem low7 : Lower (vars 7) (graphGoal 7) 2 := size_of (hints:=257) (by decide +kernel)
@@ -3022,7 +3112,7 @@ def maps7 : List (Nat × List Nat) := []
 def known7 := extendKnown known3 2 maps7
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid7 : Known known7 := extendKnown_ok valid3 low7 (by decide +kernel)
+theorem valid7 : Known known7 := extendKnown_ok (m:=7) valid3 low7 (by decide +kernel)
 set_option maxHeartbeats 0 in
 theorem geom15 : graphValid g15 (boundsBefore known7) = true := by
   simp only [graphValid,Bool.and_eq_true]
@@ -3032,9 +3122,11 @@ theorem geom15 : graphValid g15 (boundsBefore known7) = true := by
   all_goals decide +kernel
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s15_3_0 : block g15 3 0 1=true := by
-  apply cellsBlock (ar:=4) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=4) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl15_3 : block g15 3 0 1 = true := s15_3_0
@@ -3055,7 +3147,7 @@ def maps15 : List (Nat × List Nat) := [(15,[]),(23,[32,67]),(27,[16,66]),(29,[6
 def known15 := extendKnown known7 4 maps15
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid15 : Known known15 := extendKnown_ok valid7 low15 (by decide +kernel)
+theorem valid15 : Known known15 := extendKnown_ok (m:=15) valid7 low15 (by decide +kernel)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 theorem low45 : Lower (vars 45) (graphGoal 45) 3 := size_of (hints:=8965) (by decide +kernel)
@@ -3063,7 +3155,7 @@ def maps45 : List (Nat × List Nat) := []
 def known45 := extendKnown known15 3 maps45
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid45 : Known known45 := extendKnown_ok valid15 low45 (by decide +kernel)
+theorem valid45 : Known known45 := extendKnown_ok (m:=45) valid15 low45 (by decide +kernel)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 theorem low51 : Lower (vars 51) (graphGoal 51) 3 := size_of (hints:=1) (by decide +kernel)
@@ -3071,7 +3163,7 @@ def maps51 : List (Nat × List Nat) := []
 def known51 := extendKnown known45 3 maps51
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid51 : Known known51 := extendKnown_ok valid45 low51 (by decide +kernel)
+theorem valid51 : Known known51 := extendKnown_ok (m:=51) valid45 low51 (by decide +kernel)
 set_option maxHeartbeats 0 in
 theorem geom31 : graphValid g31 (boundsBefore known51) = true := by
   simp only [graphValid,Bool.and_eq_true]
@@ -3081,24 +3173,28 @@ theorem geom31 : graphValid g31 (boundsBefore known51) = true := by
   all_goals decide +kernel
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s31_5_0 : block g31 5 0 1=true := by
-  apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=5) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s31_5_1 : block g31 5 1 2=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl31_5 : block g31 5 0 3 = true := (@block_merge g31 5 0 1 2 s31_5_0 s31_5_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s31_6_0 : block g31 6 0 1=true := by
-  apply cellsBlock (ar:=5) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=5) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl31_6 : block g31 6 0 1 = true := s31_6_0
@@ -3122,7 +3218,7 @@ def maps31 : List (Nat × List Nat) := [(31,[]),(167,[83,100,101,118]),(313,[81,
 def known31 := extendKnown known51 7 maps31
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid31 : Known known31 := extendKnown_ok valid51 low31 (by decide +kernel)
+theorem valid31 : Known known31 := extendKnown_ok (m:=31) valid51 low31 (by decide +kernel)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 theorem low47 : Lower (vars 47) (graphGoal 47) 5 :=
@@ -3131,7 +3227,7 @@ def maps47 : List (Nat × List Nat) := [(47,[]),(61,[65,50]),(94,[64,65,66,67,10
 def known47 := extendKnown known31 5 maps47
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid47 : Known known47 := extendKnown_ok valid31 low47 (by decide +kernel)
+theorem valid47 : Known known47 := extendKnown_ok (m:=47) valid31 low47 (by decide +kernel)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 theorem low55 : Lower (vars 55) (graphGoal 55) 5 :=
@@ -3140,7 +3236,7 @@ def maps55 : List (Nat × List Nat) := [(55,[]),(79,[64,65,66,67,101]),(103,[16,
 def known55 := extendKnown known47 5 maps55
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid55 : Known known55 := extendKnown_ok valid47 low55 (by decide +kernel)
+theorem valid55 : Known known55 := extendKnown_ok (m:=55) valid47 low55 (by decide +kernel)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 theorem low63 : Lower (vars 63) (graphGoal 63) 8 :=
@@ -3149,7 +3245,7 @@ def maps63 : List (Nat × List Nat) := [(63,[]),(95,[16,66,101]),(159,[32,67,101
 def known63 := extendKnown known55 8 maps63
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid63 : Known known63 := extendKnown_ok valid55 low63 (by decide +kernel)
+theorem valid63 : Known known63 := extendKnown_ok (m:=63) valid55 low63 (by decide +kernel)
 set_option maxHeartbeats 0 in
 theorem geom111 : graphValid g111 (boundsBefore known63) = true := by
   simp only [graphValid,Bool.and_eq_true]
@@ -3159,9 +3255,11 @@ theorem geom111 : graphValid g111 (boundsBefore known63) = true := by
   all_goals decide +kernel
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s111_6_0 : block g111 6 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl111_6 : block g111 6 0 1 = true := s111_6_0
@@ -3185,7 +3283,7 @@ def maps111 : List (Nat × List Nat) := [(187,[16,97,66,83,100,101,118]),(190,[6
 def known111 := extendKnown known63 7 maps111
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid111 : Known known111 := extendKnown_ok valid63 low111 (by decide +kernel)
+theorem valid111 : Known known111 := extendKnown_ok (m:=111) valid63 low111 (by decide +kernel)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 theorem low119 : Lower (vars 119) (graphGoal 119) 6 :=
@@ -3194,7 +3292,7 @@ def maps119 : List (Nat × List Nat) := [(119,[]),(207,[64,65,66,67,117,118]),(3
 def known119 := extendKnown known111 6 maps119
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid119 : Known known119 := extendKnown_ok valid111 low119 (by decide +kernel)
+theorem valid119 : Known known119 := extendKnown_ok (m:=119) valid111 low119 (by decide +kernel)
 set_option maxHeartbeats 0 in
 theorem geom189 : graphValid g189 (boundsBefore known119) = true := by
   simp only [graphValid,Bool.and_eq_true]
@@ -3204,24 +3302,28 @@ theorem geom189 : graphValid g189 (boundsBefore known119) = true := by
   all_goals decide +kernel
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s189_6_0 : block g189 6 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s189_6_1 : block g189 6 1 2=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=7) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl189_6 : block g189 6 0 3 = true := (@block_merge g189 6 0 1 2 s189_6_0 s189_6_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s189_7_0 : block g189 7 0 1=true := by
-  apply cellsBlock (ar:=6) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl189_7 : block g189 7 0 1 = true := s189_7_0
@@ -3246,7 +3348,7 @@ def maps189 : List (Nat × List Nat) := [(189,[]),(347,[65,66,115,84,101,118,135
 def known189 := extendKnown known119 8 maps189
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid189 : Known known189 := extendKnown_ok valid119 low189 (by decide +kernel)
+theorem valid189 : Known known189 := extendKnown_ok (m:=189) valid119 low189 (by decide +kernel)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 theorem low250 : Lower (vars 250) (graphGoal 250) 5 := size_of (hints:=1366507616) (by decide +kernel)
@@ -3254,7 +3356,7 @@ def maps250 : List (Nat × List Nat) := []
 def known250 := extendKnown known189 5 maps250
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid250 : Known known250 := extendKnown_ok valid189 low250 (by decide +kernel)
+theorem valid250 : Known known250 := extendKnown_ok (m:=250) valid189 low250 (by decide +kernel)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 theorem low127 : Lower (vars 127) (graphGoal 127) 9 :=
@@ -3263,7 +3365,7 @@ def maps127 : List (Nat × List Nat) := [(127,[]),(223,[64,65,66,67,117,118]),(2
 def known127 := extendKnown known250 9 maps127
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid127 : Known known127 := extendKnown_ok valid250 low127 (by decide +kernel)
+theorem valid127 : Known known127 := extendKnown_ok (m:=127) valid250 low127 (by decide +kernel)
 set_option maxHeartbeats 0 in
 theorem geom191 : graphValid g191 (boundsBefore known127) = true := by
   simp only [graphValid,Bool.and_eq_true]
@@ -3273,69 +3375,79 @@ theorem geom191 : graphValid g191 (boundsBefore known127) = true := by
   all_goals decide +kernel
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s191_6_0 : block g191 6 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=7) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_6 : block g191 6 0 1 = true := s191_6_0
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s191_7_0 : block g191 7 0 13=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=7) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_7_1 : block g191 7 13 15=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=8) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_7 : block g191 7 0 28 = true := (@block_merge g191 7 0 13 15 s191_7_0 s191_7_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s191_8_0 : block g191 8 0 7=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=7) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_8_1 : block g191 8 7 61=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_8_2 : block g191 8 68 32=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=9) (d:=1)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_8 : block g191 8 0 100 = true := (@block_merge g191 8 0 68 32 (@block_merge g191 8 0 7 61 s191_8_0 s191_8_1) s191_8_2)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s191_9_0 : block g191 9 0 3=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=7) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s191_9_1 : block g191 9 3 9=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=8) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_9 : block g191 9 0 12 = true := (@block_merge g191 9 0 3 9 s191_9_0 s191_9_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s191_10_0 : block g191 10 0 1=true := by
-  apply cellsBlock (ar:=7) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=7) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl191_10 : block g191 10 0 1 = true := s191_10_0
@@ -3363,7 +3475,7 @@ def maps191 : List (Nat × List Nat) := [(191,[]),(319,[65,50,135]),(351,[64,65,
 def known191 := extendKnown known127 11 maps191
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid191 : Known known191 := extendKnown_ok valid127 low191 (by decide +kernel)
+theorem valid191 : Known known191 := extendKnown_ok (m:=191) valid127 low191 (by decide +kernel)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 theorem low251 : Lower (vars 251) (graphGoal 251) 8 :=
@@ -3372,7 +3484,7 @@ def maps251 : List (Nat × List Nat) := [(251,[]),(254,[32,67,117]),(471,[16,66,
 def known251 := extendKnown known191 8 maps251
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid251 : Known known251 := extendKnown_ok valid191 low251 (by decide +kernel)
+theorem valid251 : Known known251 := extendKnown_ok (m:=251) valid191 low251 (by decide +kernel)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
 theorem low255 : Lower (vars 255) (graphGoal 255) 12 :=
@@ -3381,7 +3493,7 @@ def maps255 : List (Nat × List Nat) := [(255,[]),(479,[64,65,66,67,133,134,135]
 def known255 := extendKnown known251 12 maps255
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid255 : Known known255 := extendKnown_ok valid251 low255 (by decide +kernel)
+theorem valid255 : Known known255 := extendKnown_ok (m:=255) valid251 low255 (by decide +kernel)
 set_option maxHeartbeats 0 in
 theorem geom383 : graphValid g383 (boundsBefore known255) = true := by
   simp only [graphValid,Bool.and_eq_true]
@@ -3391,83 +3503,93 @@ theorem geom383 : graphValid g383 (boundsBefore known255) = true := by
   all_goals decide +kernel
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s383_8_0 : block g383 8 0 23=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=8) (d:=1)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_8_1 : block g383 8 23 2=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=9) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_8 : block g383 8 0 25 = true := (@block_merge g383 8 0 23 2 s383_8_0 s383_8_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s383_9_0 : block g383 9 0 9=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=8) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_9_1 : block g383 9 9 75=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=4)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=9) (d:=3)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_9_2 : block g383 9 84 7=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=10) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_9 : block g383 9 0 91 = true := (@block_merge g383 9 0 84 7 (@block_merge g383 9 0 9 75 s383_9_0 s383_9_1) s383_9_2)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s383_10_0 : block g383 10 0 5=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=8) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_10_1 : block g383 10 5 16=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=9) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_10_2 : block g383 10 21 20=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=10) (d:=1)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_10 : block g383 10 0 41 = true := (@block_merge g383 10 0 21 20 (@block_merge g383 10 0 5 16 s383_10_0 s383_10_1) s383_10_2)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s383_11_0 : block g383 11 0 1=true := by
-  apply cellsBlock (ar:=8) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=8) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem s383_11_1 : block g383 11 1 5=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=9) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_11 : block g383 11 0 6 = true := (@block_merge g383 11 0 1 5 s383_11_0 s383_11_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
 theorem s383_12_0 : block g383 12 0 1=true := by
-  apply cellsBlock (ar:=8) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=8) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem bl383_12 : block g383 12 0 1 = true := s383_12_0
@@ -3497,7 +3619,7 @@ def maps383 : List (Nat × List Nat) := [(383,[]),(447,[65,50,131,84,118,135]),(
 def known383 := extendKnown known255 13 maps383
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem valid383 : Known known383 := extendKnown_ok valid255 low383 (by decide +kernel)
+theorem valid383 : Known known383 := extendKnown_ok (m:=383) valid255 low383 (by decide +kernel)
 def hashdeadl14 (i : Nat) : Nat := 0x4592c8500000000002800049a6c68a83340e9800000aa00684000000054a001bcc7001e180000682000000000000001d46a1840000003a00000001c
 def hashdeadl13 (i : Nat) : Nat := 0x301a0007b2f00e0aa2992094818000e2e0000000269e056438000000000d33e40e4a200074d00000000000003b10001e0240a9bd45d962582900000000000001430001e1400000fc03b84a000614e69108a1108000810000d04c9d0000000408800000160f24180010b9d040003080001e0c000000000001997f401183740ee12000000000080d312c00102c00000000012070000000001d35000308c000a4c0001b30000000cb3800183000070f0000001abcc008002c8cc133000000000000000000000020b000000064ec0a00000f8000cc5000105d8204160001a38001c1c467309c000000a7700000016de30f80000008380b08e000d3001
 def hashdeadl12 (i : Nat) : Nat := (if i<1 then 0x7b02c3200425d610a000042a0327300000000106b33757005e04600006037d811679d009461963480703e1077f067f2582384275d80a540a20109b59b4006305d00000000ab6dfb0bf59ec084c806986b30597776440b146b100c50a956520000878e0000747c463e108bc029e7600000395ef090d06800000000f0550000d0b1e4af00000000f324d141840ca4380000000051505017000067300000e779907b0000e77730641201ea62a089a48ff0924111e9a7a041b2a180aee462f29d9b47b01eb0427030e02a5973605b9086f08d5081d04bb014363000006038c0b6d110106cc731308e0023a07fb1305601ba1839b4c088a10b88011043e427e75a600831464016903d3ba52b1ec095000ec050b011b0730478f11a0000755e331ef63db004a00a000069a91680e225f60f90092a9d0000764650a40000c591f95ac03baa33c5a1283d11871a6d2772c01c1057280f201f5012328b908232a5505e000fe02b507cf0809817c267c05c9528506d997696872194b206264030ad402d007d586d7228701d30605840f67838625a51443ce034d47ed45f704cb08730a1794e1252000070330000b56f0000b0b4000000000000a842e047609d406ae26b67b08a4de12aa0a34019000000000000b664342c50b50000c0af924dc9aa401870366002b26d00000000841e0000000060986614000000000000783ae10d980ee051d0ab4022a615808f0000a0832619a148d81500007000e007d616b032d01b483f163f00104028276b2015141030631049a027580cd0a7a05ab977802fb09ff07a97899053b0a80816e83be0790a1b809b8b460a4f0000178b0000847be03cf139a1170000b07850b3605408416262696b908af0aa7b1f5b446070d024601a42492101d496f4b4e035922127ab0000e18600008284831c00440000f031500310656013b071b045b25b4113766b5b4c6b0800008291b4888a50000000000000e38b0000225eb04d807230618425c0b097ae226f809e00000000f00d93480485e88728040000b11c3039204e9432711f445c905f004a300b97ada05680211292f09a7b1a696f3106704f19748066703f00000204d074ba20a118f025458794596091a06f000065946020913b783e342dd08c819b5b452076c21dc075e0991a4a183c3b19d7a750a68058c8379643a487b408d0523762d062b422e0b2d47fc0ac224a46231a5dca3b6069a4390000768a5433e07e0000da410b00003102090604000a010a1f88080000080d030b0c310304001300040113030203141f0c0001000232030b0801010a010007110002020208010605020401010119010b0304070203070506000210070d110100150b0a0504051d050002020b05000c0402003d0e1500260200020108040b03090500060204000d0602010100180501000001030f04 else 0xe0a0512830933085c048e216509713746026a02ec09cb040548400000268f701103ac254729fc29e8096145a39ab47552144806e00019612b7b4491ea44bc1)
@@ -3518,9 +3640,9 @@ def deadd13 (i : Nat) : Nat := 0x22dfc5b6a90e86821a4efdb54c724410d1f7f16a63a18e0
 def deadl13 : Packing := (4,1,7,5,4,8,0,deadd13)
 def deadd14 (i : Nat) : Nat := 0x17e2b6526070604013ff
 def deadl14 : Packing := (1,0,7,2,4,0,0,deadd14)
-def deadsamples : Array (Bits × Bits) := #[(0xf854605d026923a5a16008862c9d18d42fd85e54d221898f1e440284a107a02910c3e03c06c40d2642ca74f54627022c11e389d9b43b30c961ca72386ce81500aa210d1ba1a121108a6c99348979d054ac200727ac054c0970110780155ad581,0x6844620d0040231585204884208800c4270824141201090814040082a10700282003e02402c4084602ca04a440240a1091218919100a2084314a220840a00480aa210819a02120100a4409048968c05484200702a805440920100380144a9480),(0x80b20c31f72bfc4e1481d27000d43c9c5bd438a9c5e0286040f054f111d001ce10920229bde170b8d339029e2bcac4cd494fb74d1052452141a61c5b9ca1e642f40c600258428f0e5c00df481e03202a204cd465e10fe01206e82c7b03150603,0x80100c30e6089040109182600012282018c41889c5e0204002b0604000c009861080028b1c2120a0d12000120908c00d005a724402504200402010501c01c208540860025840090e1400964816012008204cd0254102a00206a0247b01150201),(0x12ce100c308544478a85796a2341d206e4242e31335abb35943abb40be28c8e05c4c115123137950052a02a9ba0d31c096458c656cc338623e92230683d8962194d5145c2aa62229438824d8e06246d0cd124850733918c390189888a426380a,0x10ca0000108540870900790a0240900460282200221a991490081a0028289000cc41010021184410080a0a28a20020c0200184206c0128621092200a03d8103080d5145c02a2022143880090804206d04d100840322918c190088800a4221002),(0x8628ebbd17000228c83c0291b729e17b3643984a392a815889878936d04e41b82b8e28807cc302855ead3105d9868885c748c2b0724ae81086518e259124cd4278a18b4aa01db88524c3a3435a0814469349110c18f0c24c2a8052bd88818268,0xc2206a1d05000020401c0090e509051303449848110100480001811490070429238c000818c508010485900541c68805c240409012420000024186258024450270208b02a00da0842041a3414a08100690490104085040042a8052bc00818028),(0xbc8ccda8781e4d8151cd3cf93a4a0a01509a42078c1bc4a783ea4aec6c7bbbd02ef85be130b1750bcd872a062d01842a34826040203d5b99ac8899721d47b82106b4f88001d04ee6f42e103eb14e0a090b95e84905a08ef7a2230402e2b14bc5,0x148981a0109a5c8210c1a4690a42220050930202c418c4a7837a48680e50b9d00c601bc02020f518c9002a002c1124282402304220255b598c9019921c51b8010494708001d04e62d42a103a30060a090b94e84905a08af280230402e2304b45),(0xd3b19712becef4647857054f8773c68492608a46265cd6cd0106c449284294958830b40e8328a4102841c46a63b66493288c7290c714876750b08cb0eb0a532e014ce7e24f9c08720240400006971f885be46b00080a21145aa7f52cf42a8012,0x92218c003e8654007015040a0c73c50280c0084821449285810a8400004080918c301008002824100801c000230200c0688c40804110046300b00cb28307502a0004c5624f9c086200004000021315805bc46800000a00145205f42ce0200002),(0x3145d24845746a93b60987114c89950ee90ab5809889781e716b0d141d9e036fea797f20c896480c8b565809c5575a81eabcad03980701be24b7e8d7401960b32336416db2f0c4c050f169960250e8b311988b92828b0074bd455ad232c2112c,0x2307720c00346283a400011d4c09950fa108a4001a095004514a0014181e2261ab3d3060c0d6480a2ac41009e4571880ea848181d90321bc24d38a860208103323340169a2b084c040f169960050c8b211800b9082890074b8455a803282012c),(0x49615339cc24bb41a658244591d020101222d0f578b5376254a121290a30cd5c4e2ad1d6dabfa9e032f022500c91031b32331a7a9ace0ca4e96243014a4009cd0d2a3210b66014de852533c420acc80ff443ad9cc5d0f4808cd621151170ac54,0x4900539a4030aa408668006591882010120251355ca1242200a1212102144d6e020a42d6d2878b6832b420400cb9813312321a4a924e408ce04943054c0001c10d2a2200b040149c8425334420acc80fa003859cc5d0e4000cd201111150ac54),(0x2108654280dbc21c532263cad6a2ab60a053058994f658a43b3dd89384745a04932387065124c385d01899e2cc083e3c1e3327061d61ca921a4965c8583262f4485320b5c04953298d1f02098424a39520b6148b236021a80528c3236c545ab4,0xc0001428049001c03a04a4012802a200013019184320c200a34088304a0580410028702010083a440180cc2080827381411260a0400ca0098085048489022c408432094004053098d0e0008842422012032140b21202188052801030c545a90)]
-def deadcolumns : IndexTree ColumnInfo := (.fork 63 (.fork 31 (.fork 15 (.fork 7 (.fork 3 (.leaf [(1,0,510,0,12),(0,1,460,50,8),(2,0,509,0,12)]) (.leaf [(0,2,440,69,8),(3,0,508,0,9),(2,1,460,48,7),(4,0,507,0,12)])) (.fork 4 (.leaf [(0,4,369,138,8),(5,0,506,0,8),(6,0,505,0,9),(4,2,440,65,7)]) (.leaf [(2,4,369,136,7),(7,0,504,0,7),(5,2,440,64,6),(8,0,503,0,12)]))) (.fork 8 (.fork 4 (.leaf [(0,8,227,276,8),(9,0,486,0,8),(10,0,501,0,8),(12,0,499,0,9)]) (.leaf [(8,4,369,130,7),(4,8,227,272,7),(14,0,497,0,7),(10,4,369,128,6)])) (.fork 4 (.leaf [(15,0,480,0,4),(16,0,495,0,13),(0,16,486,9,10),(17,0,494,0,11)]) (.leaf [(16,1,460,34,7),(19,0,492,0,8),(16,4,353,138,7),(21,0,490,0,7)])))) (.fork 16 (.fork 8 (.fork 4 (.leaf [(21,2,424,64,5),(24,0,487,0,11),(8,16,486,1,9),(25,0,486,0,8)]) (.leaf [(9,16,486,0,8),(27,0,484,0,5),(11,16,484,0,5),(24,4,353,130,6)])) (.fork 4 (.leaf [(29,0,482,0,5),(26,4,353,128,5),(32,0,479,0,12),(0,32,94,385,8)]) (.leaf [(32,1,460,18,7),(1,32,94,384,7),(35,0,476,0,7),(34,1,460,16,6)]))) (.fork 8 (.fork 4 (.leaf [(36,0,347,0,8),(39,0,344,0,4),(40,0,471,0,8),(49,0,462,0,8)]) (.leaf [(48,1,460,2,6),(50,1,460,0,5),(56,0,455,0,7),(64,0,447,0,13)])) (.fork 4 (.leaf [(0,64,189,258,10),(66,0,445,0,11),(2,64,189,256,9),(67,0,444,0,8)]) (.leaf [(66,1,396,48,6),(70,0,441,0,8),(69,2,440,0,5),(74,0,437,0,7)]))))) (.fork 31 (.fork 15 (.fork 7 (.fork 3 (.leaf [(74,4,305,128,5),(80,0,431,0,11),(83,0,428,0,7)]) (.leaf [(96,0,415,0,9),(96,1,396,18,6),(98,1,396,16,5),(128,0,383,0,13)])) (.fork 4 (.leaf [(128,1,332,50,7),(3,128,344,36,6),(132,0,379,0,11),(4,128,347,32,9)]) (.leaf [(133,0,378,0,7),(134,0,377,0,8),(132,2,312,65,6),(133,2,312,64,5)]))) (.fork 8 (.fork 4 (.leaf [(136,0,375,0,9),(128,8,99,276,7),(140,0,371,0,8),(132,8,99,272,6)]) (.leaf [(138,4,369,0,5),(144,0,367,0,11),(152,4,353,2,5),(160,0,351,0,11)])) (.fork 4 (.leaf [(160,1,332,18,6),(162,1,332,16,5),(164,0,347,0,8),(36,128,347,0,8)]) (.leaf [(172,0,339,0,5),(176,1,332,2,5),(180,0,331,0,5),(192,0,319,0,11)])))) (.fork 16 (.fork 8 (.fork 4 (.leaf [(198,0,313,0,7),(256,0,255,0,12),(258,0,189,0,8),(260,0,251,0,8)]) (.leaf [(264,0,247,0,9),(256,8,227,20,7),(8,256,151,96,7),(268,0,243,0,7)])) (.fork 4 (.leaf [(260,8,227,16,6),(273,0,238,0,7),(280,0,231,0,8),(276,8,227,0,5)]) (.leaf [(288,0,223,0,9),(256,32,94,129,7),(32,256,151,72,7),(257,32,94,128,6)]))) (.fork 8 (.fork 4 (.leaf [(296,0,215,0,7),(40,256,151,64,6),(304,0,207,0,6),(288,16,198,9,6)]) (.leaf [(273,32,78,128,5),(56,256,135,64,5),(320,0,191,0,11),(256,64,189,2,9)])) (.fork 4 (.leaf [(322,0,189,0,8),(258,64,189,0,8),(324,0,187,0,7),(324,8,163,16,5)]) (.leaf [(321,32,30,128,5),(388,8,99,16,5),(168,256,23,64,5),(224,256,23,8,5)]))))))
-def deadautos : Array (List Nat) := #[[],[118,130,81],[100,131,82,16],[118,133,100,131,50,33,16],[116,83,32],[118,116,83,130,49,32],[118,133,33,48],[82,129,48],[118,133,116,83,82,81,80],[116,50,129,80],[100,49,128],[118,100,83,130,81,128]]
+def deadsamples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffffa242e20e34e50b85c1e38103000a4c1,0xd11052a044a10a8481a301010002440),(0x7ffffffffffffffffffffffffffffffff130081103d1a851d238c2e16f60d103,0x7ffffffffffffffffffffffffffffffff0a4580011012051922042a12f60d101),(0x5a4506a6c2db8aa2d56812d1096e02,0x21a828086e2cb8a0095280240092402),(0x449108b881f222619c8168097a61130,0xc402c5b001420201848168097821010),(0x7ffffffffffffffffffffffffffffffff2aed280fb81cd478787f224205b93e5,0x7ffffffffffffffffffffffffffffffff2aed280fb81cd478785c024205983a5),(0xc80aae016150f4788208eafa599200a,0xea2ac102950a0780208a0ba5990002),(0x752249b02b6048221309d48da4a2494,0x752249b02b6048221109c48d00a2094),(0xd00550408083478774b04dd02a18a2c,0xd00550408083470774a04d402208a2c),(0x87c0485428f1b142810122047cc75c,0x5c0241d48d110428101200064c748)]
+def deadcolumns : List ColumnInfo := [(1,0,510,0,12),(0,1,460,50,8),(2,0,509,0,12),(0,2,440,69,8),(3,0,508,0,9),(2,1,460,48,7),(4,0,507,0,12),(0,4,369,138,8),(5,0,506,0,8),(6,0,505,0,9),(4,2,440,65,7),(2,4,369,136,7),(7,0,504,0,7),(5,2,440,64,6),(8,0,503,0,12),(0,8,227,276,8),(9,0,486,0,8),(10,0,501,0,8),(12,0,499,0,9),(8,4,369,130,7),(4,8,227,272,7),(14,0,497,0,7),(10,4,369,128,6),(15,0,480,0,4),(16,0,495,0,13),(0,16,486,9,10),(17,0,494,0,11),(16,1,460,34,7),(19,0,492,0,8),(16,4,353,138,7),(21,0,490,0,7),(21,2,424,64,5),(24,0,487,0,11),(8,16,486,1,9),(25,0,486,0,8),(9,16,486,0,8),(27,0,484,0,5),(11,16,484,0,5),(24,4,353,130,6),(29,0,482,0,5),(26,4,353,128,5),(32,0,479,0,12),(0,32,94,385,8),(32,1,460,18,7),(1,32,94,384,7),(35,0,476,0,7),(34,1,460,16,6),(36,0,347,0,8),(39,0,344,0,4),(40,0,471,0,8),(49,0,462,0,8),(48,1,460,2,6),(50,1,460,0,5),(56,0,455,0,7),(64,0,447,0,13),(0,64,189,258,10),(66,0,445,0,11),(2,64,189,256,9),(67,0,444,0,8),(66,1,396,48,6),(70,0,441,0,8),(69,2,440,0,5),(74,0,437,0,7),(74,4,305,128,5),(80,0,431,0,11),(83,0,428,0,7),(96,0,415,0,9),(96,1,396,18,6),(98,1,396,16,5),(128,0,383,0,13),(128,1,332,50,7),(3,128,344,36,6),(132,0,379,0,11),(4,128,347,32,9),(133,0,378,0,7),(134,0,377,0,8),(132,2,312,65,6),(133,2,312,64,5),(136,0,375,0,9),(128,8,99,276,7),(140,0,371,0,8),(132,8,99,272,6),(138,4,369,0,5),(144,0,367,0,11),(152,4,353,2,5),(160,0,351,0,11),(160,1,332,18,6),(162,1,332,16,5),(164,0,347,0,8),(36,128,347,0,8),(172,0,339,0,5),(176,1,332,2,5),(180,0,331,0,5),(192,0,319,0,11),(198,0,313,0,7),(256,0,255,0,12),(258,0,189,0,8),(260,0,251,0,8),(264,0,247,0,9),(256,8,227,20,7),(8,256,151,96,7),(268,0,243,0,7),(260,8,227,16,6),(273,0,238,0,7),(280,0,231,0,8),(276,8,227,0,5),(288,0,223,0,9),(256,32,94,129,7),(32,256,151,72,7),(257,32,94,128,6),(296,0,215,0,7),(40,256,151,64,6),(304,0,207,0,6),(288,16,198,9,6),(273,32,78,128,5),(56,256,135,64,5),(320,0,191,0,11),(256,64,189,2,9),(322,0,189,0,8),(258,64,189,0,8),(324,0,187,0,7),(324,8,163,16,5),(321,32,30,128,5),(388,8,99,16,5),(168,256,23,64,5),(224,256,23,8,5)]
+def deadautos : List (List Nat) := [[],[118,130,81],[100,131,82,16],[118,133,100,131,50,33,16],[116,83,32],[118,116,83,130,49,32],[118,133,33,48],[82,129,48],[118,133,116,83,82,81,80],[116,50,129,80],[100,49,128],[118,100,83,130,81,128]]
 def deadlevels : Nat → Packing
   | 8 => deadl8
   | 9 => deadl9
@@ -3550,161 +3672,161 @@ theorem geomdead : graphValid dead (boundsBefore known383) = true := by
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead8_0 : block dead 8 0 2=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=9) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead8 : block dead 8 0 2=true := sdead8_0
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead9_0 : block dead 9 0 12=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=9) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead9_12 : block dead 9 12 13=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=10) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead9 : block dead 9 0 25=true := (@block_merge dead 9 0 12 13 sdead9_0 sdead9_12)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_0 : block dead 10 0 6=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=9) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_6 : block dead 10 6 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=10) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_42 : block dead 10 42 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=10) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_78 : block dead 10 78 35=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=10) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_113 : block dead 10 113 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead10_149 : block dead 10 149 7=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=11) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead10 : block dead 10 0 156=true := (@block_merge dead 10 0 149 7 (@block_merge dead 10 0 113 36 (@block_merge dead 10 0 78 35 (@block_merge dead 10 0 42 36 (@block_merge dead 10 0 6 36 sdead10_0 sdead10_6) sdead10_42) sdead10_78) sdead10_113) sdead10_149)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_0 : block dead 11 0 4=true := by
-  apply cellsBlock (ar:=9) (rows:=0) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=9) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_4 : block dead 11 4 36=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=10) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_40 : block dead 11 40 15=true := by
-  apply cellsBlock (ar:=10) (rows:=0) (d:=1)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=10) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_55 : block dead 11 55 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_91 : block dead 11 91 36=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=3)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_127 : block dead 11 127 29=true := by
-  apply cellsBlock (ar:=11) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=11) (d:=1)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead11_156 : block dead 11 156 27=true := by
-  apply cellsBlock (ar:=12) (rows:=0) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=12) (d:=1)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead11 : block dead 11 0 183=true := (@block_merge dead 11 0 156 27 (@block_merge dead 11 0 127 29 (@block_merge dead 11 0 91 36 (@block_merge dead 11 0 55 36 (@block_merge dead 11 0 40 15 (@block_merge dead 11 0 4 36 sdead11_0 sdead11_4) sdead11_40) sdead11_55) sdead11_91) sdead11_127) sdead11_156)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead12_0 : block dead 12 0 3=true := by
-  apply cellsBlock (ar:=9) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=9) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead12_3 : block dead 12 3 14=true := by
-  apply cellsBlock (ar:=10) (rows:=1) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=10) (d:=1)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead12_17 : block dead 12 17 15=true := by
-  apply cellsBlock (ar:=11) (rows:=1) (d:=2)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=11) (d:=1)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead12 : block dead 12 0 32=true := (@block_merge dead 12 0 17 15 (@block_merge dead 12 0 3 14 sdead12_0 sdead12_3) sdead12_17)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead13_0 : block dead 13 0 1=true := by
-  apply cellsBlock (ar:=9) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=9) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead13_1 : block dead 13 1 3=true := by
-  apply cellsBlock (ar:=10) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=10) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead13 : block dead 13 0 4=true := (@block_merge dead 13 0 1 3 sdead13_0 sdead13_1)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
 theorem sdead14_0 : block dead 14 0 1=true := by
-  apply cellsBlock (ar:=9) (rows:=1) (d:=0)
-  simp only [cells,boxes,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  apply groupedBlock (ar:=9) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
   repeat' apply And.intro
   all_goals decide +kernel
 theorem alldead14 : block dead 14 0 1=true := sdead14_0
@@ -3726,2355 +3848,2007 @@ theorem tablesdead : checkedTables dead 14 := by
   · exact alldead12
   · exact alldead13
   · exact alldead14
-theorem dead_start {prior : Nat → Nat}
-    (low : ∀ q, Lower (vars q) (graphGoal q) (prior q))
-    (geometry : graphValid dead prior=true) (checks : checkedTables dead 14) :
-    Impossible graph 14 inputs.toFinset := by
-  have noRun := root_index (g:=dead) low geometry checks (k:=14) (by decide)
-    (i:=0) (ws:=inputs) (by decide +kernel)
-  have tgt : targetOf dead=graph := by decide +kernel
-  exact tgt ▸ noRun
-
-def initialRows (sampled : Nat → Signals) : List Decor :=
-  let v := fun (i : Nat) => (inputs.getD i zero,sampled i)
-  [v 0,v 1,v 2,v 3,v 4,v 5,v 6,v 7,v 8,dbin true (v 0) (v 6)]
-def appendUnion (l : List Decor) := l ++ [dbin true (l.getD 0 defaultDecor) (l.getD 6 defaultDecor)]
-lemma appendUnion_faith {l r n} (h : ∀ w∈l, faithful r n w) :
-    ∀ w∈appendUnion l, faithful r n w := by
-  intro w mem
-  rcases List.mem_append.mp mem with old | last
-  · exact h w old
-  · obtain rfl := List.mem_singleton.mp last
-    exact faithful_bin true (faithful_get h _) (faithful_get h _)
-
-def base2303 := initialRows dead.samples
-lemma base_faith : ∀ w∈base2303, faithful (asRow fun i => (dead.samples i).1)
-    (asRow fun i => (dead.samples i).2) w := by
-  have e : base2303=appendUnion (wiresOf dead) := by decide +kernel
-  rw [e]
-  exact appendUnion_faith (wires_faithful dead)
-
-def ordinaryCut (i : Nat) : Option (Sig × Nat) :=
-  if i=0 then some (one,15) else (dead.cols.read (i-1)).map fun c =>
-    (subcube c.1 c.2.1,c.2.2.2.2)
-
-theorem ordinaryLower : Lower inputs graph 15 := by
-  apply lower_impossible graph_proper _ (dead_start (before_sound known383 valid383) geomdead tablesdead)
-  have es : checkEssential graph inputs (graphPairs 511 13438558465)=true := by decide +kernel
-  have eq : (graphPairs 511 13438558465).map Prod.fst=inputs := by decide +kernel
-  intro a ha
-  apply essential_ok es
-  rw [eq]
-  exact List.mem_toFinset.mpr ha
-
-theorem ordinaryCut_ok {i d lb} (h : ordinaryCut i=some (d,lb)) : Slice inputs graph d lb := by
-  have valid := geomdead
-  simp only [graphValid,Bool.and_eq_true,List.all_eq_true] at valid
-  unfold ordinaryCut at h
-  split at h
-  · obtain ⟨rfl,rfl⟩ := Prod.mk.inj (Option.some.inj h)
-    refine ⟨id,inputs,?_,?_,observe_proper graph_proper,ordinaryLower⟩
-    · exact (by decide +kernel : ∀ r : Row, bit r one = true)
-    · exact fun w hw => Or.inl (List.mem_map_of_mem hw)
-  · obtain ⟨c,e,eq⟩ := Option.map_eq_some_iff.mp h
-    obtain ⟨rfl,rfl⟩ := Prod.mk.inj eq
-    have col := col_sound c (boundsBefore known383) (before_sound known383 valid383)
-      (valid.1.2 c (dead.cols.read_mem e))
-    have inEq : vars dead.mask = inputs := by decide +kernel
-    have tgtEq : chartGoal dead.mask = graph := by decide +kernel
-    rw [inEq,tgtEq] at col
-    exact col
-
-def pool2303 (bank : List Decor) (depth ops : Nat) (r : Nat × Nat) :=
-  (ordinaryCut r.1).bind fun (d,lb) =>
-    materialize inputs (chosenSteps bank ops r.2 depth) d lb
-
-theorem pool2303_ok {bank depth ops r p} (h : pool2303 bank depth ops r=some p) :
-    ValidPool inputs graph p := by
-  obtain ⟨⟨d,lb⟩,hc,hm⟩ := Option.bind_eq_some_iff.mp h
-  exact materialize_sound (ordinaryCut_ok hc) hm
-
-abbrev Prefix := Nat × Nat
-abbrev Layer := Nat × (Nat → Prefix)
-def live2303 (depth : Nat) (s : Prefix) :=
-  selectLive s.2 (decodeBank (depth-1) (s.1 >>> 10) base2303)
-def bank2303 (depth : Nat) (s : Prefix) := (live2303 depth s).map Prod.fst
-def excluded (k depth : Nat) (l : Layer) :=
-  ∀ i, i<l.1 → Impossible graph k (bank2303 depth (l.2 i)).toFinset
-
-abbrev Hints := Nat → List (Nat × Nat)
-abbrev Index := Nat → Option Nat
-def links2303 (depth : Nat) (next : Layer) (idx : Index) (tag : Nat) :=
-  ((idx tag).bind fun i => if i<next.1 then some (bank2303 (depth+1) (next.2 i)) else none).toList
-def ctx2303 (l next : Layer) (hs : Hints) (idx : Index) (k depth i : Nat) : NodeContext :=
-  let s := l.2 i
-  let bank := decodeBank (depth-1) (s.1 >>> 10) base2303
-  let ws := selectLive s.2 bank
-  let pools := (hs i).filterMap (pool2303 bank depth s.1)
-  (k,ws.length,ws,preCov ws,pools,links2303 depth next idx)
-
-theorem ctx2303_ok {l next hs idx k depth i} (prior : excluded (k-1) (depth+1) next)
-    (h : let c := ctx2303 l next hs idx k depth i
-      prelim graph c && testAll c c.2.2.1 = true) :
-    Impossible graph k (bank2303 depth (l.2 i)).toFinset := by
-  let bank := decodeBank (depth-1) ((l.2 i).1 >>> 10) base2303
-  let ws := selectLive (l.2 i).2 bank
-  let pools := (hs i).filterMap (pool2303 bank depth (l.2 i).1)
-  let ctx := ctx2303 l next hs idx k depth i
-  change (prelim graph ctx && testAll ctx ws)=true at h
-  simp only [Bool.and_eq_true] at h
-  obtain ⟨a,b⟩ := h
-  change (decide (ws.map Prod.fst).Nodup && !((ws.map Prod.fst).contains graph)) = true at a
-  simp only [Bool.and_eq_true,decide_eq_true_eq,Bool.not_eq_true',List.contains_eq_mem] at a
-  have geom := geomdead
-  simp only [graphValid,Bool.and_eq_true,beq_iff_eq] at geom
-  have prs := chart_pairs geom.1.1.1 geom.1.1.2
-  have tgtEq : chartGoal dead.mask = graph := by decide +kernel
-  rw [tgtEq] at prs
-  apply node_sound (raw:=inputs) (ws:=ws) (pools:=pools) (links:=links2303 depth next idx)
-    (T:=graph) (r:=asRow fun j => (dead.samples j).1) (s:=asRow fun j => (dead.samples j).2) prs _ a.1 (by simpa using a.2) _ _ b
-  · intro v hv
-    exact decode_faithful _ _ _ _ _ base_faith v ((selectLive_sub _ _).subset hv)
-  · intro p hp
-    obtain ⟨r,_,e⟩ := List.mem_filterMap.mp hp
-    exact pool2303_ok e
-  · intro tag xs hx
-    have e : ((idx tag).bind fun j => if j<next.1 then some (bank2303 (depth+1) (next.2 j)) else none)=some xs := by
-      simpa [links2303] using hx
-    obtain ⟨j,_,e⟩ := Option.bind_eq_some_iff.mp e
-    split at e
-    next hj => exact Option.some.inj e ▸ prior j hj
-    next => cases e
-
-def span (p : Nat → Bool) : Nat → Nat → Bool
-  | 0,_ => true
-  | n+1,i => p i && span p n (i+1)
-theorem span2303_at {p n i} (h : span p n i=true) (j : Nat) (l : i ≤ j) (u : j < i+n) :
-    p j=true := by
-  induction n generalizing i with
-  | zero => omega
-  | succ n ih =>
-    simp only [span,Bool.and_eq_true] at h
-    by_cases e : j=i
-    · simpa [e] using h.1
-    · exact ih h.2 (by omega) (by omega)
-
-def check2303 (l next : Layer) (hs : Hints) (idx : Index) (k depth i : Nat) :=
-  let c := ctx2303 l next hs idx k depth i
-  prelim graph c && testAll c c.2.2.1
-
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-
-def unionSeed := bin true (inputs.getD 0 zero) (inputs.getD 6 zero)
-def start2303 := inputs ++ [unionSeed]
-
-def probes : List (Sig × Row × Row) := List.ofFn (fun i : Fin 9 =>
-  let r : Row := [80,4,2,4,8,1,257,4,8].getD i.val 0
-  (inputs.getD i.val zero, r, Fin.ofNat 512 (r.val ||| (1 <<< i.val))))
-
-theorem rootCases {k t S} (run : Live graph k t S) (sub : ∀ v ∈ S, v ∈ start2303) :
-    S = inputs.toFinset ∨ S = start2303.toFinset := by
-  have checks : checkEssential graph start2303 probes=true := by decide +kernel
-  have eq : probes.map Prod.fst=inputs := rfl
-  have needed : inputs.toFinset ⊆ S := by
-    intro w hw
-    rw [←eq] at hw
-    obtain ⟨r,s,h,hs⟩ := essential_ok checks w hw
-    exact raw_required run start2303 w sub r s h hs
-  by_cases use : unionSeed ∈ S
-  · right
-    apply Finset.Subset.antisymm (fun a h => List.mem_toFinset.mpr (sub a h))
-    intro a h
-    rcases List.mem_append.mp (List.mem_toFinset.mp h) with old | last
-    · exact needed (List.mem_toFinset.mpr old)
-    · exact List.mem_singleton.mp last ▸ use
-  · left
-    refine Finset.Subset.antisymm ?_ needed
-    intro a h
-    rcases List.mem_append.mp (sub a h) with old | last
-    · exact List.mem_toFinset.mpr old
-    · exact False.elim (use (List.mem_singleton.mp last ▸ h))
-
-
-
-def separates (w : Sig) (p q : Row) := bit p w = true ∧ bit q w = false
-
-def rectProtocol (T : Sig) (S : Finset Sig) : Prop :=
-  ∃ f : Row → Row → Sig, (∀ p q, f p q ∈ S) ∧
-    (∀ p q, separates T p q → separates (f p q) p q) ∧
-    ∀ p q r s, f p q = f r s → f p s = f p q
-
-def forkPick (d : Bool) (a b : Sig) (p q : Row) :=
-  if (if d then bit p a else !(bit q a)) then a else b
-
-lemma forkPick_mem (d a b p q) : forkPick d a b p q=a ∨ forkPick d a b p q=b := by
-  cases d <;> cases hp : bit p a <;> cases hq : bit q a <;> simp [forkPick,hp,hq]
-
-lemma forkPick_sep {d a b p q} (h : separates (bin d a b) p q) :
-    separates (forkPick d a b p q) p q := by
-  simp only [separates,bit_bin] at h
-  cases d <;> cases hp : bit p a <;> cases hq : bit q a <;>
-    simp_all [forkPick,separates]
-
-lemma refine_protocol {T U a b d} (an : a ∉ U) (bn : b ∉ U)
-    (h : rectProtocol T (insert (bin d a b) U)) :
-    rectProtocol T (insert a (insert b U)) := by
-  obtain ⟨f,mem,sep,rect⟩ := h
-  let z := bin d a b
-  let g := fun p q => if f p q=z then forkPick d a b p q else f p q
-  have undo (p q) : (if g p q=a ∨ g p q=b then z else g p q) = f p q := by
-    by_cases hz : f p q=z
-    · simp only [g,hz,ite_true,if_pos (forkPick_mem d a b p q)]
-    · have hu := (Finset.mem_insert.mp (mem p q)).resolve_left hz
-      have ha : f p q ≠ a := fun e => an (e ▸ hu)
-      have hb : f p q ≠ b := fun e => bn (e ▸ hu)
-      simp [g,hz,ha,hb]
-  refine ⟨g,?_,?_,?_⟩
-  · intro p q
-    by_cases hz : f p q=z
-    · rcases forkPick_mem d a b p q with e|e <;> simp [g,hz,e]
-    · have hu := (Finset.mem_insert.mp (mem p q)).resolve_left hz
-      simp only [g,if_neg hz]
-      exact Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hu)
-  · intro p q st
-    by_cases hz : f p q=z
-    · have hh : separates z p q := by rw [←hz]; exact sep p q st
-      simpa [g,hz] using forkPick_sep (d:=d) (a:=a) (b:=b) hh
-    · simpa [g,hz] using sep p q st
-  · intro p q r s e
-    have eo : f p q=f r s := by rw [← undo p q,← undo r s,e]
-    have ec := rect p q r s eo
-    by_cases hz : f p q=z
-    · have ht : f r s=z := eo.symm.trans hz
-      have ep : forkPick d a b p q=forkPick d a b r s := by simpa only [g,hz,ht,ite_true] using e
-      simp only [g,ec,hz,ite_true]
-      cases d
-      · exact ep.symm
-      · rfl
-    · simp [g,ec,hz]
-
-theorem tight_protocol {T k t S} (h : Live T k t S) (tight : k+1 ≤ S.card) :
-    rectProtocol T S := by
-  induction h with
-  | stop hp => exact ⟨fun _ _ => T,fun _ _ => Finset.mem_singleton_self _,fun _ _ => id,fun _ _ _ _ _ => rfl⟩
-  | @unary k t U a hp hf tail ih =>
-    have sz := (live_size (Live.unary hp hf tail)).2
-    omega
-  | @binary k t U a b d ha hb hab hf tail ih =>
-    have zu : bin d a b ∉ U := fun m => hf (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem m))
-    have sz := (live_size tail).2
-    rw [Finset.card_insert_of_notMem zu] at sz
-    have x := Finset.card_insert_le (a:=a) (s:=insert b U)
-    have y := Finset.card_insert_le (a:=b) (s:=U)
-    have an : a ∉ U := by
-      intro am
-      rw [Finset.insert_eq_of_mem (Finset.mem_insert_of_mem am)] at tight
-      omega
-    have bn : b ∉ U := by
-      intro bm
-      rw [Finset.insert_eq_of_mem bm] at tight x
-      omega
-    apply refine_protocol an bn
-    apply ih
-    rw [Finset.card_insert_of_notMem zu]
-    omega
-
-def forcedPick (T : Sig) (S : Finset Sig) (w : Sig) (p q : Row) :=
-  separates T p q ∧ ∀ v ∈ S, separates v p q → v=w
-
-
-def orient (s : Bool) (a : Sig) := if s then neg a else a
-
-def directedSelection (T : Sig) (S : Finset Sig) (sg : Sig → Bool) :=
-  ∃ f : Row → Row → Sig, (∀ p q, f p q ∈ S) ∧
-    (∀ p q, separates T p q → separates (orient (sg (f p q)) (f p q)) p q) ∧
-    ∀ p q r s, f p q=f r s → f p s=f p q
-
-lemma orient_neg (sg : Bool) (a : Sig) : orient sg (neg a) = orient (!sg) a := by
-  cases sg <;> simp [orient,neg]
-
-lemma oriented_join (sg d : Bool) (a b : Sig) :
-    orient sg (bin d a b) = bin (d != sg) (orient sg a) (orient sg b) := by
-  cases sg <;> cases d <;> simp [orient,bin,neg,BitVec.not_or,BitVec.not_and]
-
-def chooseLeft (d : Bool) (a : Sig) (p q : Row) := if d then bit p a else !(bit q a)
-
-lemma split_rect {f : Row → Row → Sig} {U : Finset Sig} {a b z : Sig}
-    (an : a∉U) (bn : b∉U) (d : Bool) (w : Sig)
-    (mem : ∀ p q, f p q ∈ insert z U)
-    (rect : ∀ p q r s, f p q=f r s → f p s=f p q) :
-    let g := fun p q => if f p q=z then if chooseLeft d w p q then a else b else f p q
-    (∀ p q, g p q ∈ insert a (insert b U)) ∧
-    ∀ p q r s, g p q=g r s → g p s=g p q := by
-  let g := fun p q => if f p q=z then if chooseLeft d w p q then a else b else f p q
-  change (∀ p q, g p q ∈ _) ∧ _
-  have undo (p q) : (if g p q=a ∨ g p q=b then z else g p q)=f p q := by
-    by_cases hz : f p q=z
-    · cases ht : chooseLeft d w p q <;> simp [g,hz,ht]
-    · have hu := (Finset.mem_insert.mp (mem p q)).resolve_left hz
-      have ha : f p q ≠ a := fun e => an (e ▸ hu)
-      have hb : f p q ≠ b := fun e => bn (e ▸ hu)
-      simp [g,hz,ha,hb]
-  constructor
-  · intro p q
-    by_cases hz : f p q=z
-    · cases ht : chooseLeft d w p q <;> simp [g,hz,ht]
-    · have hu := (Finset.mem_insert.mp (mem p q)).resolve_left hz
-      simp only [g,if_neg hz]
-      exact Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hu)
-  · intro p q r s e
-    change g p q=g r s at e
-    change g p s=g p q
-    have eo : f p q=f r s := by rw [← undo p q,← undo r s,e]
-    have ec := rect p q r s eo
-    by_cases hz : f p q=z
-    · have ht : f r s=z := eo.symm.trans hz
-      simp only [g,hz,ht,ite_true] at e
-      simp only [g,ec,hz,ite_true]
-      cases d
-      · exact e.symm
-      · rfl
-    · simp [g,ec,hz]
-
-theorem signed_formula {T k t S} (h : Live T k t S) (linear : k+1≤S.card+t) :
-    ∃ sg : Sig → Bool, directedSelection T S sg := by
-  induction h with
-  | stop hp => exact ⟨fun _ => false,fun _ _ => T,fun _ _ => Finset.mem_singleton_self _,fun _ _ => id,fun _ _ _ _ _ => rfl⟩
-  | @unary k t U a hp hf tail ih =>
-    let z := neg a
-    have zu : z ∉ U := fun m => hf (Finset.mem_insert_of_mem m)
-    have sz := (live_size tail).2
-    rw [Finset.card_insert_of_notMem zu] at sz
-    have xu := Finset.card_insert_le (a:=a) (s:=U)
-    have an : a ∉ U := by
-      intro am
-      rw [Finset.insert_eq_of_mem am] at linear
-      omega
-    have st : k+1 ≤ (insert z U).card+t := by rw [Finset.card_insert_of_notMem zu]; omega
-    obtain ⟨sg,f,mem,sep,rect⟩ := ih st
-    let g := fun p q => if f p q=z then a else f p q
-    let sg' := fun x => if x=a then !(sg z) else sg x
-    have sm := split_rect an an false a mem rect
-    simp only [ite_self,Finset.insert_idem] at sm
-    refine ⟨sg',g,sm.1,?_,sm.2⟩
-    intro p q hT
-    have hit := sep p q hT
-    by_cases hz : f p q=z
-    · simp only [hz] at hit
-      simpa [g,hz,sg',z,orient_neg] using hit
-    · have hu := (Finset.mem_insert.mp (mem p q)).resolve_left hz
-      have ha : f p q ≠ a := fun e => an (e ▸ hu)
-      simpa [g,hz,sg',ha] using hit
-  | @binary k t U a b d ha hb hab hf tail ih =>
-    let z := bin d a b
-    have zu : z ∉ U := fun m => hf (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem m))
-    have sz := (live_size tail).2
-    rw [Finset.card_insert_of_notMem zu] at sz
-    have x := Finset.card_insert_le (a:=a) (s:=insert b U)
-    have y := Finset.card_insert_le (a:=b) (s:=U)
-    have an : a ∉ U := by
-      intro am
-      rw [Finset.insert_eq_of_mem (Finset.mem_insert_of_mem am)] at linear
-      omega
-    have bn : b ∉ U := by
-      intro bm
-      rw [Finset.insert_eq_of_mem bm] at linear x
-      omega
-    have st : k+1 ≤ (insert z U).card+t := by rw [Finset.card_insert_of_notMem zu]; omega
-    obtain ⟨sg,f,mem,sep,rect⟩ := ih st
-    let e := d != sg z
-    let x' := orient (sg z) a
-    let g := fun p q => if f p q=z then if chooseLeft e x' p q then a else b else f p q
-    let sg' := fun x => if x=a ∨ x=b then sg z else sg x
-    have sm := split_rect an bn e x' mem rect
-    refine ⟨sg',g,sm.1,?_,sm.2⟩
-    intro p q hT
-    have hit := sep p q hT
-    by_cases hz : f p q=z
-    · have hgate : separates (bin e x' (orient (sg z) b)) p q := by
-        rw [hz] at hit
-        exact (oriented_join (sg z) d a b) ▸ hit
-      have yes := forkPick_sep hgate
-      change separates (if chooseLeft e x' p q then x' else orient (sg z) b) p q at yes
-      cases hsel : chooseLeft e x' p q <;> simpa [g,hz,hsel,sg',x',hab,Ne.symm hab] using yes
-    · have hu := (Finset.mem_insert.mp (mem p q)).resolve_left hz
-      have neA : f p q≠a := fun e => an (e ▸ hu)
-      have neB : f p q≠b := fun e => bn (e ▸ hu)
-      simpa [g,hz,sg',neA,neB] using hit
-
-def clash (T : Sig) (S : Finset Sig) (a b : Sig) : Prop :=
-  a∈S ∧ b∈S ∧ a≠b ∧ ∃ p u v q r s,
-    forcedPick T S a p u ∧ forcedPick T S b p v ∧ forcedPick T S a r q ∧ forcedPick T S b s q
-
-lemma protocol_consistent {T S a b} (h : rectProtocol T S) (c : clash T S a b) : False := by
-  obtain ⟨f,mem,sep,rect⟩ := h
-  obtain ⟨_,_,ne,p,u,v,q,r,s,w₁,w₂,w₃,w₄⟩ := c
-  have pick {z x y} (w : forcedPick T S z x y) := w.2 _ (mem x y) (sep x y w.1)
-  have A := rect p u r q ((pick w₁).trans (pick w₃).symm)
-  have B := rect p v s q ((pick w₂).trans (pick w₄).symm)
-  exact ne ((A.trans (pick w₁)).symm.trans (B.trans (pick w₂)))
-
-lemma join_separates {a b d p q} (h : separates (bin d a b) p q) :
-    separates a p q ∨ separates b p q := by
-  rcases forkPick_mem d a b p q with e | e
-  · exact Or.inl (e ▸ forkPick_sep h)
-  · exact Or.inr (e ▸ forkPick_sep h)
-
-def carrier (a b z w : Sig) := if w=a ∨ w=b then z else w
-
-lemma transfer_forced {T U a b d w p q}
-    (safe : w∈U → w≠a ∧ w≠b) (h : forcedPick T (insert a (insert b U)) w p q) :
-    forcedPick T (insert (bin d a b) U) (carrier a b (bin d a b) w) p q := by
-  refine ⟨h.1,?_⟩
-  intro x hx sp
-  rcases Finset.mem_insert.mp hx with rfl | hu
-  · rcases join_separates sp with x | x
-    · have eq := h.2 a (by simp) x
-      simp [carrier,eq.symm]
-    · have eq := h.2 b (by simp) x
-      simp [carrier,eq.symm]
-  · have eq := h.2 x (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hu)) sp
-    subst x
-    simp [carrier,(safe hu).1,(safe hu).2]
-
-lemma forced_on_run {T k t S w p q} (run : Live T k t S) (m : t=0) (h : forcedPick T S w p q) :
-    w∈S ∧ separates w p q := by
-  obtain ⟨v,hv,sp⟩ := mono_row_difference run m h.1.1 h.1.2
-  exact h.2 v hv sp ▸ And.intro hv sp
-
-lemma gate_protocol (d : Bool) (a b : Sig) : rectProtocol (bin d a b) {a,b} := by
-  refine ⟨forkPick d a b,?_,fun _ _ => forkPick_sep,?_⟩
-  · intro p q
-    rcases forkPick_mem d a b p q with e | e <;> simp [e]
-  · intro p q r s eq
-    cases d
-    · exact eq.symm
-    · rfl
-
-lemma transfer_clash {T k t U a b d i j}
-    (fresh : bin d a b∉insert a (insert b U)) (tail : Live T k t (insert (bin d a b) U)) (m : t=0)
-    (si : i∈U → i≠a ∧ i≠b) (sj : j∈U → j≠a ∧ j≠b)
-    (c : clash T (insert a (insert b U)) i j) :
-    clash T (insert (bin d a b) U) (carrier a b (bin d a b) i) (carrier a b (bin d a b) j) := by
-  let z := bin d a b
-  obtain ⟨im,jm,ne,p,u,v,q,r,s,w₁,w₂,w₃,w₄⟩ := c
-  have a₁ := transfer_forced (d:=d) si w₁
-  have a₂ := transfer_forced (d:=d) sj w₂
-  have a₃ := transfer_forced (d:=d) si w₃
-  have a₄ := transfer_forced (d:=d) sj w₄
-  refine ⟨(forced_on_run tail m a₁).1,(forced_on_run tail m a₂).1,?_,p,u,v,q,r,s,a₁,a₂,a₃,a₄⟩
-  intro same
-  by_cases hI : i=a ∨ i=b <;> by_cases hJ : j=a ∨ j=b
-  · have gateForced {w x y} (sw : w∈U → w≠a ∧ w≠b) (old : forcedPick T (insert a (insert b U)) w x y)
-        (ab : w=a ∨ w=b) : forcedPick z {a,b} w x y := by
-      have sp := (forced_on_run tail m (transfer_forced (d:=d) sw old)).2
-      refine ⟨by simpa [carrier,ab,z] using sp,?_⟩
-      intro v hv sv
-      apply old.2 v _ sv
-      rcases Finset.mem_insert.mp hv with rfl | hv
-      · simp
-      · simp [Finset.mem_singleton.mp hv]
-    apply protocol_consistent (gate_protocol d a b) (a:=i) (b:=j)
-    exact ⟨by simpa using hI,by simpa using hJ,ne,p,u,v,q,r,s,
-      gateForced si w₁ hI,gateForced sj w₂ hJ,gateForced si w₃ hI,gateForced sj w₄ hJ⟩
-  · simp only [carrier,if_pos hI,if_neg hJ] at same
-    exact fresh (same ▸ jm)
-  · simp only [carrier,if_neg hI,if_pos hJ] at same
-    exact fresh (same ▸ im)
-  · exact ne (by simpa [carrier,hI,hJ] using same)
-
-def divides (T : Sig) (S : Finset Sig) :=
-  ∃ (color : Sig → Bool) (h : Sig),
-    (∀ p q, separates h p q → ∃ v∈S, color v=true ∧ separates v p q) ∧
-    (∀ p q, separates T p q → separates h p q ∨ ∃ v∈S, color v=false ∧ separates v p q) ∧
-    ∀ i j, clash T S i j → color i≠color j
-
-lemma divides_gate {T k t U a b d}
-    (an : a∉U) (bn : b∉U) (fresh : bin d a b∉insert a (insert b U))
-    (tail : Live T k t (insert (bin d a b) U)) (m : t=0)
-    (rest : divides T (insert (bin d a b) U)) : divides T (insert a (insert b U)) := by
-  obtain ⟨c,h,inside,outside,ok⟩ := rest
-  let f := carrier a b (bin d a b)
-  refine ⟨fun w => c (f w),h,?_,?_,?_⟩
-  · intro p q hit
-    obtain ⟨v,mem,clr,sp⟩ := inside p q hit
-    rcases Finset.mem_insert.mp mem with rfl | hu
-    · rcases join_separates sp with left | right
-      · exact ⟨a,by simp,by simpa [f,carrier] using clr,left⟩
-      · exact ⟨b,by simp,by simpa [f,carrier] using clr,right⟩
-    · have na : v≠a := fun e => an (e ▸ hu)
-      have nb : v≠b := fun e => bn (e ▸ hu)
-      exact ⟨v,Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hu),by simpa [f,carrier,na,nb] using clr,sp⟩
-  · intro p q hit
-    rcases outside p q hit with sp | ⟨v,mem,clr,sp⟩
-    · exact Or.inl sp
-    · right
-      rcases Finset.mem_insert.mp mem with rfl | hu
-      · rcases join_separates sp with left | right
-        · exact ⟨a,by simp,by simpa [f,carrier] using clr,left⟩
-        · exact ⟨b,by simp,by simpa [f,carrier] using clr,right⟩
-      · have na : v≠a := fun e => an (e ▸ hu)
-        have nb : v≠b := fun e => bn (e ▸ hu)
-        exact ⟨v,Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hu),by simpa [f,carrier,na,nb] using clr,sp⟩
-  · intro i j bad
-    apply ok _ _ (transfer_clash fresh tail m _ _ bad)
-    all_goals intro hu; exact ⟨fun e => an (e ▸ hu),fun e => bn (e ▸ hu)⟩
-
-lemma divides_retained {T k t U a b d}
-    (ha : proper a) (hb : proper b) (hab : a≠b) (fresh : bin d a b∉insert a (insert b U))
-    (tail : Live T k t (insert (bin d a b) U)) (m : t=0) (prot : rectProtocol T (insert (bin d a b) U))
-    (shared : Sig) (ha' : a∈U → a=shared) (hb' : b∈U → b=shared) (mem : shared∈insert a (insert b U)) :
-    divides T (insert a (insert b U)) := by
-  refine ⟨fun w => decide (w=shared),shared,?_,?_,?_⟩
-  · intro p q h
-    exact ⟨shared,mem,by simp,h⟩
-  · intro p q h
-    obtain ⟨v,hv,sp⟩ := mono_row_difference (Live.binary ha hb hab fresh tail) m h.1 h.2
-    by_cases eq : v=shared
-    · exact Or.inl (eq ▸ sp)
-    · exact Or.inr ⟨v,hv,by simpa using eq,sp⟩
-  · intro i j c same
-    by_cases iS : i=shared <;> by_cases jS : j=shared
-    · exact c.2.2.1 (iS.trans jS.symm)
-    · simp [iS,jS] at same
-    · simp [iS,jS] at same
-    · have safe (v) (ns : v≠shared) (hu : v∈U) : v≠a ∧ v≠b :=
-        ⟨fun e => ns (e.trans (ha' (e ▸ hu))),fun e => ns (e.trans (hb' (e ▸ hu)))⟩
-      exact protocol_consistent prot (transfer_clash fresh tail m (safe i iS) (safe j jS) c)
-
-theorem one_fork {T k t S} (run : Live T k t S) (m : t=0) (budget : k≤S.card) : divides T S := by
-  induction run with
-  | stop hp =>
-    exact ⟨fun _ => true,T,fun p q h => ⟨T,by simp,rfl,h⟩,fun _ _ h => Or.inl h,
-      fun _ _ c => False.elim (c.2.2.1 ((Finset.mem_singleton.mp c.1).trans (Finset.mem_singleton.mp c.2.1).symm))⟩
-  | unary _ _ _ _ => omega
-  | @binary k t U a b d ha hb hab hf tail ih =>
-    have zu : bin d a b ∉ U := fun hm => hf (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hm))
-    have sz := (live_size tail).2
-    rw [Finset.card_insert_of_notMem zu] at sz
-    have x := Finset.card_insert_le (a:=a) (s:=insert b U)
-    have y := Finset.card_insert_le (a:=b) (s:=U)
-    by_cases am : a∈U
-    · rw [Finset.insert_eq_of_mem (Finset.mem_insert_of_mem am)] at budget
-      have tight : k+1≤(insert (bin d a b) U).card := by rw [Finset.card_insert_of_notMem zu]; omega
-      apply divides_retained ha hb hab hf tail m (tight_protocol tail tight) a (fun _ => rfl) _ (by simp)
-      intro bm
-      rw [Finset.insert_eq_of_mem bm] at budget
-      omega
-    · by_cases bm : b∈U
-      · rw [Finset.insert_eq_of_mem bm] at budget x
-        have tight : k+1≤(insert (bin d a b) U).card := by rw [Finset.card_insert_of_notMem zu]; omega
-        exact divides_retained ha hb hab hf tail m (tight_protocol tail tight) b (fun hm => False.elim (am hm)) (fun _ => rfl) (by simp)
-      · apply divides_gate am bm hf tail m (ih m ?_)
-        rw [Finset.card_insert_of_notMem zu]
-        omega
-
-abbrev Cell := BitVec 768
-abbrev Square := Fin 27
-def pRow (j : Nat) : Row := (#[3,6,12,24,17,33,66,132,264,160,320,288,41,394,21,11,292,44,265,152,77,74,212,105,101,262,38] : Array Row)[j]?.getD 0
-def nRow (j : Nat) : Row := (#[42,50,69,104,116,138,201,208,261,276,385,402,10,84,73,5,200,400,258,100,146,274,112,386,260,137,36] : Array Row)[j]?.getD 0
-def gridP (i : Fin 768) := pRow (i.val/27 % 27)
-def gridN (i : Fin 768) := nRow (i.val % 27)
-
-lemma gridYes : ∀ i : Square, bit (pRow i.val) graph=true := by decide +kernel
-lemma gridNo : ∀ i : Square, bit (nRow i.val) graph=false := by decide +kernel
-
-def uniq2303 {α : Type} (c : α → Cell) : List α → Cell × Cell
-  | [] => (0,0)
-  | a::l => let u := uniq2303 c l
-            (c a ||| u.1,(c a &&& ~~~u.1) ||| (u.2 &&& ~~~(c a)))
-
-lemma marked {α : Type} (c : α → Cell) (xs : List α) (i : Fin 768) :
-    ((uniq2303 c xs).1.getLsbD i.val=true ↔ ∃ a∈xs, (c a).getLsbD i.val=true) ∧
-    ((uniq2303 c xs).2.getLsbD i.val=true → ∀ a∈xs, ∀ b∈xs,
-      (c a).getLsbD i.val=true → (c b).getLsbD i.val=true → a=b) := by
-  induction xs with
-  | nil => simp [uniq2303]
-  | cons x xs ih =>
-    obtain ⟨exist,uniq⟩ := ih
-    simp only [uniq2303,BitVec.getLsbD_or,BitVec.getLsbD_and,BitVec.getLsbD_not,
-      i.isLt,decide_true,Bool.true_and,Bool.or_eq_true,Bool.and_eq_true,Bool.not_eq_true',
-      List.mem_cons,exists_eq_or_imp]
-    refine ⟨by rw [exist],?_⟩
-    rintro (first|later) a (rfl|am) b (rfl|bm) aa bb
-    all_goals first | rfl | exact uniq later.1 _ am _ bm aa bb |
-      exact False.elim (Bool.noConfusion (later.2.symm.trans aa)) |
-      exact False.elim (Bool.noConfusion (later.2.symm.trans bb)) |
-      exact False.elim (Bool.noConfusion (first.2.symm.trans (exist.mpr ⟨_,am,aa⟩))) |
-      exact False.elim (Bool.noConfusion (first.2.symm.trans (exist.mpr ⟨_,bm,bb⟩)))
-
-lemma nonzero_cell {b : Cell} (h : b≠0) : ∃ i : Fin 768, b.getLsbD i.val=true := by
-  by_contra! hh
-  apply h
-  apply BitVec.eq_of_getLsbD_eq
-  intro i hi
-  simpa using hh ⟨i,hi⟩
-
-abbrev View := Sig × Signals × Signals
-def views (ws gs : List Decor) : List View :=
-  ws.zipWith (fun w g => (w.1,w.2,g.2)) gs
-def validViews (r s : Fin 768 → Row) (xs : List View) :=
-  ∀ x∈xs, x.2.1=pairSig r s x.1 ∧ x.2.2=pairSig gridP gridN x.1
-def cellDiff (v : View) := v.2.1.1 ^^^ v.2.1.2
-def marks (xs : List View) := (uniq2303 cellDiff xs).2
-def req2303 (u : Cell) (v : View) (rev : Bool) :=
-  let (p,n) := v.2.1
-  if rev then (u &&& n &&& ~~~p)!=0 else (u &&& p &&& ~~~n)!=0
-
-lemma selected_sign {r s xs sg} (ok : validViews r s xs) (good : properPairs graph r s)
-    (sel : directedSelection graph (xs.map Prod.fst).toFinset sg)
-    {v} (mem : v∈xs) (rev : Bool) (req : req2303 (marks xs) v rev=true) : sg v.1=rev := by
-  obtain ⟨f,fm,sep,rect⟩ := sel
-  have locate (i : Fin 768) (u : (marks xs).getLsbD i.val=true)
-      (different : (cellDiff v).getLsbD i.val=true) :
-      separates (orient (sg v.1) v.1) (r i) (s i) := by
-    have yes := sep (r i) (s i) (good i)
-    obtain ⟨w,wm,eq⟩ := List.mem_map.mp (List.mem_toFinset.mp (fm (r i) (s i)))
-    rw [←eq] at yes
-    have wn : (cellDiff w).getLsbD i.val=true := by
-      simp only [cellDiff,(ok w wm).1,pairSig,BitVec.getLsbD_xor,ofRows_bit]
-      cases hm : sg w.1 <;> cases hp : bit (r i) w.1 <;> cases hq : bit (s i) w.1 <;>
-        simp_all [separates,orient,bit_neg]
-    have e := (marked cellDiff xs i).2 u w wm v mem wn different
-    simpa [e] using yes
-  have vals (i : Fin 768) : v.2.1.1.getLsbD i.val=bit (r i) v.1 ∧ v.2.1.2.getLsbD i.val=bit (s i) v.1 := by
-    rw [(ok v mem).1]
-    exact ⟨ofRows_bit _ _ _,ofRows_bit _ _ _⟩
-  cases rev
-  · have hn : marks xs &&& v.2.1.1 &&& ~~~v.2.1.2 ≠ 0 := by simpa [req2303] using req
-    obtain ⟨i,hb⟩ := nonzero_cell hn
-    simp only [BitVec.getLsbD_and,BitVec.getLsbD_not,i.isLt,decide_true,Bool.true_and,
-      Bool.and_eq_true,Bool.not_eq_true'] at hb
-    have ht := locate i hb.1.1 (by simp only [cellDiff,BitVec.getLsbD_xor,hb.1.2,hb.2]; rfl)
-    have p := (vals i).1.symm.trans hb.1.2
-    cases hh : sg v.1 <;> simp_all [separates,orient,bit_neg]
-  · have hn : marks xs &&& v.2.1.2 &&& ~~~v.2.1.1 ≠ 0 := by simpa [req2303] using req
-    obtain ⟨i,hb⟩ := nonzero_cell hn
-    simp only [BitVec.getLsbD_and,BitVec.getLsbD_not,i.isLt,decide_true,Bool.true_and,
-      Bool.and_eq_true,Bool.not_eq_true'] at hb
-    have ht := locate i hb.1.1 (by simp only [cellDiff,BitVec.getLsbD_xor,hb.1.2,hb.2]; rfl)
-    have p := (vals i).1.symm.trans hb.2
-    cases hh : sg v.1 <;> simp_all [separates,orient,bit_neg]
-
-def monoCell (v : View) := v.2.2.1 &&& ~~~v.2.2.2
-def revCell (v : View) := ~~~v.2.2.1 &&& v.2.2.2
-def withSigns (u : Cell) (v : View) :=
-  if req2303 u v false then monoCell v else if req2303 u v true then revCell v else
-    v.2.2.1 ^^^ v.2.2.2
-
-def gridSound (xs : List View) (col : View → Cell) (val : Sig → Sig) :=
-  ∀ w ∈ xs, ∀ p q : Square, separates (val w.1) (pRow p.val) (nRow q.val) →
-     (col w).getLsbD (27*p.val+q.val)=true
-
-lemma grid_vals {r s xs} (ok : validViews r s xs) {w} (mem : w∈xs) (p q : Square) :
-    w.2.2.1.getLsbD (27*p.val+q.val)=bit (pRow p.val) w.1 ∧
-    w.2.2.2.getLsbD (27*p.val+q.val)=bit (nRow q.val) w.1 := by
-  let i : Fin 768 := ⟨27*p.val+q.val,by omega⟩
-  have hP : gridP i=pRow p.val := by simp only [gridP,i]; congr 1; omega
-  have hN : gridN i=nRow q.val := by simp only [gridN,i]; congr 1; omega
-  rw [(ok w mem).2]
-  exact ⟨(ofRows_bit _ _ i).trans (hP ▸ rfl),(ofRows_bit _ _ i).trans (hN ▸ rfl)⟩
-
-lemma mono_grid {r s xs} (ok : validViews r s xs) : gridSound xs monoCell id := by
-  intro w mem p q h
-  obtain ⟨hp,hn⟩ := grid_vals ok mem p q
-  have lt : 27*p.val+q.val<768 := by omega
-  change separates w.1 (pRow p.val) (nRow q.val) at h
-  simp only [monoCell,BitVec.getLsbD_and,BitVec.getLsbD_not,lt,decide_true,Bool.true_and,hp,hn,h.1,h.2,Bool.not_false,Bool.and_self]
-
-lemma signed_grid {r s xs sg} (ok : validViews r s xs) (good : properPairs graph r s)
-    (sel : directedSelection graph (xs.map Prod.fst).toFinset sg) :
-    gridSound xs (withSigns (marks xs)) (fun a => orient (sg a) a) := by
-  intro w mem p q h
-  obtain ⟨hp,hn⟩ := grid_vals ok mem p q
-  have lt : 27*p.val+q.val<768 := by omega
-  have determine := selected_sign ok good sel mem
-  unfold withSigns
-  split
-  next eq =>
-    have hh := determine false eq
-    simpa [hh,orient] using (mono_grid ok w mem p q (by simpa [hh,orient] using h))
-  next eq =>
-    split
-    next ei =>
-      have hh := determine true ei
-      simp only [hh,orient,ite_true,separates,bit_neg,Bool.not_eq_true',Bool.not_eq_false'] at h
-      simp only [revCell,BitVec.getLsbD_and,BitVec.getLsbD_not,lt,decide_true,Bool.true_and,hp,hn,h.1,h.2,Bool.not_false,Bool.and_self]
-    next ei =>
-      cases hh : sg w.1 <;> cases a : bit (pRow p.val) w.1 <;> cases b : bit (nRow q.val) w.1 <;>
-        simp_all [separates,orient,bit_neg]
-
-def marg (v : Nat) : Nat × Nat :=
-  let rows := ((1 <<< 729)-1)/134217727
-  let x := v &&& ((1 <<< 729)-1)
-  let high := (x ||| ((x &&& (rows*67108863))+rows*67108863)) &&& (rows <<< 26)
-  let occupied := (((high >>> 26)*(((1 <<< 702)-1)/67108863)) >>> 676) &&& 134217727
-  let cols := x
-  let cols := cols ||| (cols >>> 27)
-  let cols := cols ||| (cols >>> 54)
-  let cols := cols ||| (cols >>> 108)
-  let cols := cols ||| (cols >>> 216)
-  let cols := cols ||| (cols >>> 432)
-  (occupied,cols &&& 134217727)
-
-abbrev Info := Sig × Cell × Cell × Nat × Nat
-def infos2303 (xs : List View) (c : View → Cell) : List Info :=
-  let all := (uniq2303 c xs).2
-  xs.map fun w =>
-    let u := all &&& c w
-    let pq := marg u.toNat
-    (w.1,c w,u,pq)
-def validXY (v : Cell) (p q : Nat) :=
-  decide (p<27 ∧ q<27) && v.getLsbD (27*p+q)
-
-def inRow (v : Cell) (p : Nat) := ((v.toNat >>> (27*p))%134217728).log2
-def gridUnit := ((1 <<< 729)-1)/134217727
-def inCol (v : Cell) (q : Nat) := (v.toNat &&& (gridUnit <<< q)).log2/27
-
-def edgeGrid (a b : Info) :=
-  let mp := a.2.2.2.1 &&& b.2.2.2.1
-  let mq := a.2.2.2.2 &&& b.2.2.2.2
-  if mp==0 || mq==0 || a.1==b.1 then false else
-    let p := mp.log2
-    let q := mq.log2
-    let x := a.2.2.1
-    let y := b.2.2.1
-    validXY x p (inRow x p) && validXY y p (inRow y p) &&
-      validXY x (inCol x q) q && validXY y (inCol y q) q
-
-def forcedValue (S : Finset Sig) (val : Sig → Sig) (w : Sig) (p q : Row) :=
-  separates graph p q ∧ ∀ v∈S, separates (val v) p q → v=w
-def valueClash (S : Finset Sig) (val : Sig → Sig) (a b : Sig) :=
-  a∈S ∧ b∈S ∧ a≠b ∧ ∃ p u v q r s, forcedValue S val a p u ∧ forcedValue S val b p v ∧
-    forcedValue S val a r q ∧ forcedValue S val b s q
-
-lemma forced_cell {xs c val} (h : gridSound xs c val) {a p q}
-    (mem : a∈infos2303 xs c) (test : validXY a.2.2.1 p q=true) :
-    forcedValue (xs.map Prod.fst).toFinset val a.1 (pRow p) (nRow q) := by
-  obtain ⟨w,wm,rfl⟩ := List.mem_map.mp mem
-  simp only [validXY,Bool.and_eq_true,decide_eq_true_eq] at test
-  obtain ⟨⟨hp,hq⟩,v⟩ := test
-  let i : Fin 768 := ⟨27*p+q,by omega⟩
-  change (((uniq2303 c xs).2 &&& c w).getLsbD i.val)=true at v
-  simp only [BitVec.getLsbD_and,Bool.and_eq_true] at v
-  refine ⟨⟨gridYes ⟨p,hp⟩,gridNo ⟨q,hq⟩⟩,?_⟩
-  intro a am sp
-  obtain ⟨b,bm,rfl⟩ := List.mem_map.mp (List.mem_toFinset.mp am)
-  exact congrArg Prod.fst ((marked c xs i).2 v.1 b bm w wm (h b bm ⟨p,hp⟩ ⟨q,hq⟩ sp) v.2)
-
-lemma info_mem {xs c a} (h : a∈infos2303 xs c) : a.1∈(xs.map Prod.fst).toFinset := by
-  obtain ⟨w,wm,rfl⟩ := List.mem_map.mp h
-  exact List.mem_toFinset.mpr (List.mem_map_of_mem wm)
-
-lemma edge_grid_sound {xs c val} (h : gridSound xs c val) {a b}
-    (am : a∈infos2303 xs c) (bm : b∈infos2303 xs c) (test : edgeGrid a b=true) :
-    valueClash (xs.map Prod.fst).toFinset val a.1 b.1 := by
-  simp only [edgeGrid] at test
-  split at test
-  next => contradiction
-  next ok =>
-    have ne : a.1≠b.1 := fun e => ok (by simp [e])
-    simp only [Bool.and_eq_true] at test
-    exact ⟨info_mem am,info_mem bm,ne,_,_,_,_,_,_,forced_cell h am test.1.1.1,
-      forced_cell h bm test.1.1.2,forced_cell h am test.1.2,forced_cell h bm test.2⟩
-
-lemma signed_edge_bad {S sg a b} (h : directedSelection graph S sg)
-    (e : valueClash S (fun w => orient (sg w) w) a b) : False := by
-  obtain ⟨f,mem,sep,rect⟩ := h
-  obtain ⟨_,_,ne,p,u,v,q,r,s,w₁,w₂,w₃,w₄⟩ := e
-  have pick {z x y} (w : forcedValue S (fun w => orient (sg w) w) z x y) :=
-    w.2 _ (mem x y) (sep x y w.1)
-  have A := rect p u r q ((pick w₁).trans (pick w₃).symm)
-  have B := rect p v s q ((pick w₂).trans (pick w₄).symm)
-  exact ne ((A.trans (pick w₁)).symm.trans (B.trans (pick w₂)))
-
-def allGrid : Cell := BitVec.ofNat 768 ((1 <<< 729)-1)
-def missingGrid (seen : Cell) :=
-  let j := (allGrid &&& ~~~seen).toNat.log2
-  decide (j<729) && !(seen.getLsbD j)
-def miss2303 (xs : List View) (c : View → Cell) :=
-  missingGrid (uniq2303 c xs).1
-
-lemma seen_of_cell {xs : List View} {c j} (lt : j<768)
-    {b} (mem : b∈xs) (hit : (c b : Cell).getLsbD j=true) :
-    (uniq2303 c xs).1.getLsbD j=true :=
-  (marked c xs ⟨j,lt⟩).1.mpr ⟨b,mem,hit⟩
-
-lemma grid_total {xs c val} (gd : gridSound xs c val)
-    (complete : ∀ p q, separates graph p q → ∃ w ∈ (xs.map Prod.fst).toFinset, separates (val w) p q)
-    (h : miss2303 xs c=true) : False := by
-  let seen := (uniq2303 c xs).1
-  let j := (allGrid &&& ~~~seen).toNat.log2
-  change (decide (j<729) && !(seen.getLsbD j))=true at h
-  simp only [Bool.and_eq_true,decide_eq_true_eq,Bool.not_eq_true'] at h
-  let p : Square := ⟨j/27,by omega⟩
-  let q : Square := ⟨j % 27,by omega⟩
-  obtain ⟨a,am,sp⟩ := complete (pRow p.val) (nRow q.val) ⟨gridYes p,gridNo q⟩
-  obtain ⟨b,bm,rfl⟩ := List.mem_map.mp (List.mem_toFinset.mp am)
-  have idx : 27*p.val+q.val=j := by dsimp [p,q]; omega
-  have hit := gd b bm p q sp
-  rw [idx] at hit
-  have jl : j<768 := Nat.lt_trans h.1 (by decide : 729<768)
-  have reached : seen.getLsbD j=true := seen_of_cell (c:=c) jl bm hit
-  exact Bool.noConfusion (h.2.symm.trans reached)
-
-def findEdge : List Info → Bool
-  | [] => false
-  | a::l => l.any (edgeGrid a) || findEdge l
-lemma findEdge_found {l : List Info} (h : findEdge l=true) :
-    ∃ a∈l, ∃ b∈l, edgeGrid a b=true := by
-  induction l with
-  | nil => contradiction
-  | cons a l ih =>
-    simp only [findEdge,Bool.or_eq_true,List.any_eq_true] at h
-    rcases h with ⟨b,bm,e⟩ | tail
-    · exact ⟨a,by simp,b,List.mem_cons_of_mem _ bm,e⟩
-    · obtain ⟨x,xm,y,ym,e⟩ := ih tail
-      exact ⟨x,List.mem_cons_of_mem _ xm,y,List.mem_cons_of_mem _ ym,e⟩
-
-def rectCut (xs : List View) (c : View → Cell) :=
-  miss2303 xs c || findEdge (infos2303 xs c)
-
-lemma rectCut_bad {xs c sg} (sel : directedSelection graph (xs.map Prod.fst).toFinset sg)
-    (gd : gridSound xs c (fun w => orient (sg w) w)) (h : rectCut xs c=true) : False := by
-  simp only [rectCut,Bool.or_eq_true] at h
-  rcases h with miss | hit
-  · apply grid_total gd _ miss
-    obtain ⟨f,fm,sep,rect⟩ := sel
-    exact fun p q h => ⟨f p q,fm p q,sep p q h⟩
-  · obtain ⟨a,am,b,bm,e⟩ := findEdge_found hit
-    exact signed_edge_bad sel (edge_grid_sound gd am bm e)
-
-def cols2303 : List Info → Cell
-  | [] => 0
-  | v::l => v.2.1 ||| cols2303 l
-lemma cols_hit {xs : List Info} {v j} (mem : v∈xs) (hit : v.2.1.getLsbD j=true) :
-    (cols2303 xs).getLsbD j=true := by
-  induction xs with
-  | nil => contradiction
-  | cons a l ih =>
-    simp only [cols2303,BitVec.getLsbD_or,Bool.or_eq_true]
-    rcases List.mem_cons.mp mem with rfl | hm
-    · exact Or.inl hit
-    · exact Or.inr (ih hm)
-
-def lacks (v : Cell) (p q : Nat) :=
-  decide (p<27 ∧ q<27) && !(v.getLsbD (27*p+q))
-def noPart (within outside : Cell) :=
-  let need := allGrid &&& ~~~outside
-  let x := need.toNat
-  let units := gridUnit
-  let low := units*67108863
-  let rows := ((x ||| ((x &&& low)+low)) &&& (units <<< 26)) >>> 26
-  let cols := (marg x).2
-  let missing := (rows*cols) &&& (~~~within).toNat
-  if missing==0 then false else
-    let j := missing.log2
-    let p := j/27
-    let q := j % 27
-    lacks outside p (inRow need p) && lacks outside (inCol need q) q &&
-      lacks within p q
-
-lemma noPart_witness {within outside} (h : noPart within outside=true) :
-    ∃ p u v q : Square, outside.getLsbD (27*p.val+u.val)=false ∧
-      outside.getLsbD (27*v.val+q.val)=false ∧ within.getLsbD (27*p.val+q.val)=false := by
-  unfold noPart at h
-  dsimp only at h
-  split at h
-  next => contradiction
-  next =>
-    simp only [lacks,Bool.and_eq_true,decide_eq_true_eq,Bool.not_eq_true'] at h
-    exact ⟨⟨_,h.1.1.1.1⟩,⟨_,h.1.1.1.2⟩,⟨_,h.1.2.1.1⟩,⟨_,h.2.1.2⟩,h.1.1.2,h.1.2.2,h.2.2⟩
-
-lemma joint_hit {a b : List Info} {v j} (mem : v∈a ∨ v∈b) (hit : v.2.1.getLsbD j=true) :
-    (cols2303 a ||| cols2303 b).getLsbD j=true := by
-  rw [BitVec.getLsbD_or,Bool.or_eq_true]
-  exact mem.imp (fun h => cols_hit h hit) (fun h => cols_hit h hit)
-
-def area (v : Info) :=
-  let count := fun (x : Nat) =>
-    let x := x - ((x >>> 1) &&& 1431655765)
-    let x := (x &&& 858993459) + ((x >>> 2) &&& 858993459)
-    ((((x+(x >>> 4)) &&& 252645135)*16843009) >>> 24) % 256
-  count v.2.2.2.1 * count v.2.2.2.2
-def order (l : List Info) := l.insertionSort (fun a b => area b≤area a)
-
-def scanPart (inside outside : List Info) : List Info → Bool
-  | [] => noPart (cols2303 inside ||| cols2303 []) (cols2303 outside ||| cols2303 [])
-  | v::l =>
-    let free := cols2303 (v::l)
-    (decide (l.length<4) && noPart (cols2303 inside ||| free) (cols2303 outside ||| free)) ||
-    ((inside.any (edgeGrid v) || scanPart (v::inside) outside l) &&
-    (outside.any (edgeGrid v) || scanPart inside (v::outside) l))
-
-lemma scanPart_bad {xs} (g : gridSound xs monoCell id)
-    (D : divides graph (xs.map Prod.fst).toFinset)
-    (pass : scanPart [] [] (order (infos2303 xs monoCell))=true) : False := by
-  obtain ⟨color,h,inner,outer,proper⟩ := D
-  let infos := infos2303 xs monoCell
-  have close (l inside outside : List Info) (covered : ∀ a∈infos, a∈l ∨ a∈inside ∨ a∈outside)
-      (inOK : ∀ a∈inside, a∈infos ∧ color a.1=true)
-      (outOK : ∀ a∈outside, a∈infos ∧ color a.1=false)
-      (test : noPart (cols2303 inside ||| cols2303 l) (cols2303 outside ||| cols2303 l)=true) : False := by
-    obtain ⟨p,u,v,q,pu,vq,pq⟩ := noPart_witness test
-    have force (p q : Square) (missing : (cols2303 outside ||| cols2303 l).getLsbD (27*p.val+q.val)=false) :
-        separates h (pRow p.val) (nRow q.val) := by
-      rcases outer _ _ ⟨gridYes p,gridNo q⟩ with hit | ⟨a,am,clr,sp⟩
-      · exact hit
-      · obtain ⟨w,wm,rfl⟩ := List.mem_map.mp (List.mem_toFinset.mp am)
-        let z : Info := (w.1,monoCell w,(uniq2303 monoCell xs).2 &&& monoCell w,
-          marg ((uniq2303 monoCell xs).2 &&& monoCell w).toNat)
-        have zm : z∈infos := List.mem_map_of_mem wm
-        rcases covered z zm with bad | ins | outs
-        · exact False.elim (Bool.noConfusion (missing.symm.trans (joint_hit (Or.inr bad) (g w wm p q sp))))
-        · exact False.elim (Bool.noConfusion (clr.symm.trans (inOK z ins).2))
-        · exact False.elim (Bool.noConfusion (missing.symm.trans (joint_hit (Or.inl outs) (g w wm p q sp))))
-    have x := force p u pu
-    have y := force v q vq
-    obtain ⟨a,am,clr,sp⟩ := inner _ _ ⟨x.1,y.2⟩
-    obtain ⟨w,wm,rfl⟩ := List.mem_map.mp (List.mem_toFinset.mp am)
-    let z : Info := (w.1,monoCell w,(uniq2303 monoCell xs).2 &&& monoCell w,
-      marg ((uniq2303 monoCell xs).2 &&& monoCell w).toNat)
-    have zm : z∈infos := List.mem_map_of_mem wm
-    rcases covered z zm with bad | ins | outs
-    · exact Bool.noConfusion (pq.symm.trans (joint_hit (Or.inr bad) (g w wm p q sp)))
-    · exact Bool.noConfusion (pq.symm.trans (joint_hit (Or.inl ins) (g w wm p q sp)))
-    · exact Bool.noConfusion (clr.symm.trans (outOK z outs).2)
-  have go (l inside outside : List Info) (covered : ∀ a∈infos, a∈l ∨ a∈inside ∨ a∈outside)
-      (sub : ∀ a∈l, a∈infos)
-      (inOK : ∀ a∈inside, a∈infos ∧ color a.1=true)
-      (outOK : ∀ a∈outside, a∈infos ∧ color a.1=false)
-      (test : scanPart inside outside l=true) : False := by
-    induction l generalizing inside outside with
-    | nil =>
-      apply close [] inside outside covered inOK outOK
-      exact test
-    | cons x l ih =>
-      have xm := sub x (by simp)
-      have sm (a) (am : a∈l) := sub a (List.mem_cons_of_mem _ am)
-      have dis (v) (vm : v∈infos) (e : edgeGrid x v=true) : color x.1≠color v.1 :=
-        proper _ _ (edge_grid_sound g xm vm e)
-      simp only [scanPart,Bool.and_eq_true,Bool.or_eq_true,List.any_eq_true] at test
-      rcases test with stop | test
-      · exact close (x::l) inside outside covered inOK outOK stop.2
-      cases cx : color x.1
-      · rcases test.2 with ⟨v,vm,e⟩ | tail
-        · exact dis v (outOK v vm).1 e (cx.trans (outOK v vm).2.symm)
-        · apply ih inside (x::outside) _ sm inOK _ tail
-          · intro a am
-            rcases covered a am with first | si | so
-            · rcases List.mem_cons.mp first with rfl | mem
-              · exact Or.inr (Or.inr (by simp))
-              · exact Or.inl mem
-            · exact Or.inr (Or.inl si)
-            · exact Or.inr (Or.inr (List.mem_cons_of_mem _ so))
-          · intro a am
-            rcases List.mem_cons.mp am with rfl | mem
-            · exact ⟨xm,cx⟩
-            · exact outOK a mem
-      · rcases test.1 with ⟨v,vm,e⟩ | tail
-        · exact dis v (inOK v vm).1 e (cx.trans (inOK v vm).2.symm)
-        · apply ih (x::inside) outside _ sm _ outOK tail
-          · intro a am
-            rcases covered a am with first | si | so
-            · rcases List.mem_cons.mp first with rfl | mem
-              · exact Or.inr (Or.inl (by simp))
-              · exact Or.inl mem
-            · exact Or.inr (Or.inl (List.mem_cons_of_mem _ si))
-            · exact Or.inr (Or.inr so)
-          · intro a am
-            rcases List.mem_cons.mp am with rfl | mem
-            · exact ⟨xm,cx⟩
-            · exact inOK a mem
-  exact go (order infos) [] [] (fun _ hm => Or.inl ((List.mem_insertionSort _).mpr hm))
-    (fun _ hm => (List.mem_insertionSort _).mp hm) (by simp) (by simp) pass
-
-def terminal (cap : Nat) (xs : List View) :=
-  if xs.length>cap then rectCut xs monoCell else
-    decide (cap≤xs.length) && rectCut xs (withSigns (marks xs)) &&
-    (miss2303 xs monoCell || scanPart [] [] (order (infos2303 xs monoCell)))
-
-theorem terminal_ok {r s xs cap} (ok : validViews r s xs) (pairs : properPairs graph r s)
-    (nd : (xs.map Prod.fst).Nodup) (test : terminal cap xs=true) :
-    Impossible graph cap (xs.map Prod.fst).toFinset := by
-  intro k t bound run
-  have len : (xs.map Prod.fst).toFinset.card=xs.length := by
-    rw [List.toFinset_card_of_nodup nd,List.length_map]
-  have g := mono_grid ok
-  have sz := (live_size run).2
-  unfold terminal at test
-  split at test
-  next hi =>
-    obtain ⟨f,mem,sep,rect⟩ := tight_protocol run (by omega)
-    exact rectCut_bad (sg:=fun _ => false) ⟨f,mem,sep,rect⟩ g test
-  next le =>
-    simp only [Bool.and_eq_true,decide_eq_true_eq,Bool.or_eq_true] at test
-    by_cases m : t=0
-    · rcases test.2 with miss | part
-      · apply grid_total g _ miss
-        exact fun p q hit => mono_row_difference run m hit.1 hit.2
-      · exact scanPart_bad g (one_fork run m (by omega)) part
-    · obtain ⟨sg,sel⟩ := signed_formula run (by omega)
-      exact rectCut_bad sel (signed_grid ok pairs sel) test.1.2
-
-def pCols (j : Nat) : Bits := (#[0xffffffe00000000000007ffffffffffffe00000000000007ffffff0000001ffffffc0000000000000fffffffffffffc0000007ffffff00000000000000000000000000000000000000003fffffffffffff000000000000000000007ffffff,0xfffffffffffffffffffffff800000000000000000003ffffff8000000000000000000000000000000000ffffffe0000003ffffff80000000000000000000000000000000000000001ffffffc000000000000000000000000003fffffffffffff,0xfff0000001ffffffffffffffffffff0000001ffffffc0000007ffffff00000000000003fffffffffffff0000001ffffffc0000000000000000000000000000000000000000ffffffe000000000000000000000000001fffffffffffff8000000,0xffffffe0000003fffffffffffffffffffffffffffffffff8000000ffffffe0000003fffffffffffff000000000000000000007ffffff000000000000000000000000000fffffffffffffc0000000000000,0x1ffffffc0000000000000ffffffe000000000000000000000000001ffffffc0000000000000000000000000000000000000000000000000000000000007ffffffffffffe00000000000000000000,0x1ffffffc0000007ffffffffffffe0000000000000000000000000000000003fffffffffffff000000000000000000007ffffffffffffe0000003ffffff800000000000000000003ffffff8000000000000000000000000000000000,0x7fffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000000001ffffffc00000000000000000001ffffffc0000000000000000000000000000000000000000,0x1ffffffc0000000000000ffffffe0000000000000000000000000000000003ffffff800000000000000000003ffffff8000000ffffffe00000000000000000000000000000000000000000000000,0x3ffffff80000000000000000000000000000000000000001ffffffc0000007ffffff00000000000003ffffff8000000fffffffffffffc0000007ffffff000000000000000000000000000000000000000000000000000000] : Array Bits)[j]?.getD 0
-def nCols (j : Nat) : Bits := (#[0x5444018a8880315110062a2200c5444018a8880315110062a2200c5444018a8880315110062a2200c5444018a8880315110062a2200c5444018a8880315110062a2200c5444018a8880315110062a2200c5444018a8880315110062a2200c544,0x82316830462d0608c5a0c118b4182316830462d0608c5a0c118b4182316830462d0608c5a0c118b4182316830462d0608c5a0c118b4182316830462d0608c5a0c118b4182316830462d0608c5a0c118b4182316830462d0608c5a0c118b41823,0x314a1146294228c5284518a508a314a1146294228c5284518a508a314a1146294228c5284518a508a314a1146294228c5284518a508a314a1146294228c5284518a508a314a1146294228c5284518a508a314a1146294228c5284518a508a314,0x69402a0d280541a500a834a015069402a0d280541a500a834a015069402a0d280541a500a834a015069402a0d280541a500a834a015069402a0d280541a500a834a015069402a0d280541a500a834a015069402a0d280541a500a834a015069,0xa920e455241c8aa483915490722a920e455241c8aa483915490722a920e455241c8aa483915490722a920e455241c8aa483915490722a920e455241c8aa483915490722a920e455241c8aa483915490722a920e455241c8aa483915490722a92,0x1b8900037120006e24000dc48001b8900037120006e24000dc48001b8900037120006e24000dc48001b8900037120006e24000dc48001b8900037120006e24000dc48001b8900037120006e24000dc48001b8900037120006e24000dc48001b,0xdc092c1b8125837024b06e04960dc092c1b8125837024b06e04960dc092c1b8125837024b06e04960dc092c1b8125837024b06e04960dc092c1b8125837024b06e04960dc092c1b8125837024b06e04960dc092c1b8125837024b06e04960dc,0xce052619c0a4c33814986702930ce052619c0a4c33814986702930ce052619c0a4c33814986702930ce052619c0a4c33814986702930ce052619c0a4c33814986702930ce052619c0a4c33814986702930ce052619c0a4c33814986702930ce0,0xf0034c1e006983c00d307801a60f0034c1e006983c00d307801a60f0034c1e006983c00d307801a60f0034c1e006983c00d307801a60f0034c1e006983c00d307801a60f0034c1e006983c00d307801a60f0034c1e006983c00d307801a60f00] : Array Bits)[j]?.getD 0
-def gridBase := initialRows (fun i => (pCols i,nCols i))
-lemma gridBaseFaith : ∀ v∈gridBase, faithful gridP gridN v := by
-  have hp : asRow pCols=gridP := by funext i; revert i; decide +kernel
-  have hn : asRow nCols=gridN := by funext i; revert i; decide +kernel
-  have e : gridBase=appendUnion (rawDecor 511 pCols nCols) := by decide +kernel
-  rw [e,←hp,←hn]
-  exact appendUnion_faith (raw_faithful _ _ _)
-
-lemma zip_cert {r s : Fin 768 → Row} {ws gs : List Decor}
-    (same : ws.map Prod.fst = gs.map Prod.fst)
-    (aw : ∀ w∈ws, faithful r s w) (ag : ∀ w∈gs, faithful gridP gridN w) :
-    (views ws gs).map Prod.fst = ws.map Prod.fst ∧ validViews r s (views ws gs) := by
-  induction ws generalizing gs with
-  | nil => cases gs <;> simp_all [views,validViews]
-  | cons w ws ih =>
-    cases gs with
-    | nil => simp at same
-    | cons g gs =>
-      simp only [List.map_cons,List.cons.injEq] at same
-      have past := ih same.2 (fun _ hm => aw _ (List.mem_cons_of_mem _ hm))
-        (fun _ hm => ag _ (List.mem_cons_of_mem _ hm))
+def hashrestrictedl13 (i : Nat) : Nat := 0x3266d629c3000cc09800002c5a916a703a921aa561d5132e8d2800000381db0ef80ad078788712ce0036333c001b9c02082090848
+def hashrestrictedl12 (i : Nat) : Nat := 0x62203295be14261132f30f3f1b40f70c8570ea66463a299d46c1ba2855693691546f740aeb454505f848713832723d0330abaef704500000000000000000002246c7f88ca8ddb1706419d9dfb457c0dd31f15082e0960004df3cf70400398003d17a2e309f11f451c7ee3c12b621bf3c50e3a1244b5ac092482789280c6564dc983c8302b1b20b118a5000015fc042239f2935ba13ff30f307a60f4e277ab838768f4897601ade5b3cc02721800000040b41f3cd8ce1d764963e1314d739b00162400126810b794f6be00053524d7cba0002ad8002c0325551ae8fc431233c90982be9e00000000034280009902110cb80007548254000000f1d800124d8a5e47463801066bfc798d0000b73042ca022e292214900000004943bd408c0000000005cc584c000c8b8002534e7c000622267486115380024940580007aa1947a4c4a8696fd33d25c0d7104063e0ecbc168c6eab8544eeabead2c83731524e6b306c0d0e1c4a7181079a312f870459c1949b742b43a40fe50dc8574d5a519b98ac54ed289cdc149c2f696baac46c504797113ed0d22df2d4cbc0010484160000231227702a9c9c08c67c09295f541c2a112421e513a8f00011e703768da14b1f5e046066c37470001c9cc81a1a4000000510127b5220000000000d36c76a3a000140e000bcd80000011496038b063a005800610001005489e36724000a60786185c2900f1439b5a08b00124c018022858000b4043180008626004825c0c3870a0401806148870c0c2800a1c3000204301042c184
+theorem slice_self {raw : List Sig} {T : Sig} {L : Nat} (pT : proper T) (h : Lower raw T L) :
+    Slice raw T one L := by
+  refine ⟨id,raw,fun r => bit_one r,fun a ha => ?_,observe_proper pT,h⟩
+  exact Or.inl (List.mem_map_of_mem ha)
+
+theorem plainA {m q cap : Nat} {prior : Nat → Nat} (low : ∀ q, Lower (varsX q) (graphGoal q) (prior q))
+    (e : (graphGoal q == graphGoal m && (varsX q == vars m) && (prior q == cap+1) && properB (graphGoal m) &&
+      decide (vars m).Nodup && poolCut one (cap+1) cap 0 (vars m) (vars m)) = true) :
+    Impossible (graphGoal m) cap (vars m).toFinset := by
+  simp only [Bool.and_eq_true,beq_iff_eq,decide_eq_true_eq] at e
+  obtain ⟨⟨⟨⟨⟨e1,e2⟩,e3⟩,e4⟩,e5⟩,e6⟩ := e
+  have h := low q
+  rw [e1,e2,e3] at h
+  exact poolCut_sound (slice_self (proper_of _ e4) h) [] rfl e5 e6
+
+theorem cut_root {m cap : Nat} {prior : Nat → Nat} {ws : List Sig}
+    (low : ∀ q, Lower (varsX q) (graphGoal q) (prior q)) (ci : ColumnInfo)
+    (ok : colCheck m ci prior = true)
+    (cut : (decide ws.Nodup && poolCut (subcube ci.1 ci.2.1) ci.2.2.2.2 cap 0 (varsX (rawMask m ci)) ws)=true) :
+    Impossible (graphGoal m) cap ws.toFinset := by
+  simp only [Bool.and_eq_true,decide_eq_true_eq] at cut
+  exact poolCut_sound (col_sound ci prior low ok) [] rfl cut.1 cut.2
+
+theorem index_root {g : Forest} {m cap i : Nat} {prior : Nat → Nat} {ws : List Sig}
+    (hm : g.mask=m) (low : ∀ q, Lower (varsX q) (graphGoal q) (prior q))
+    (geom : graphValid g prior = true) (blocks : checkedTables g cap)
+    (idx : indexedRoot g cap i ws = true) : Impossible (graphGoal m) cap ws.toFinset := by
+  subst hm
+  exact root_index low geom blocks (Nat.le_refl _) idx
+
+
+def witPairs (m : Nat) (rs : List Nat) : List (Sig × Row × Row) :=
+  ((selected m).zip rs).map fun x => (x.1.2,Fin.ofNat 512 x.2,Fin.ofNat 512 (x.2 ||| (1 <<< x.1.1)))
+def fullOK (m : Nat) (rs : List Nat) : Bool :=
+  let xs := witPairs m rs
+  checkEssential (graphGoal m) (varsX m) xs && (xs.map Prod.fst == vars m) &&
+    properB (graphGoal m) && decide (varsX m = vars m ++ [typeWord (m/512-1)])
+theorem full_split {m : Nat} {rs : List Nat} (ok : fullOK m rs = true) {k t : Nat} {S : Finset Sig}
+    (h : Live (graphGoal m) k t S) (sub : ∀ v ∈ S, v ∈ varsX m) :
+    S=(vars m).toFinset ∨ S=(varsX m).toFinset := by
+  simp only [fullOK,Bool.and_eq_true,beq_iff_eq,decide_eq_true_eq] at ok
+  obtain ⟨⟨⟨ess,alls⟩,_⟩,hX⟩ := ok
+  have rest : ∀ v ∈ vars m, v ∈ S := by
+    intro v hv
+    rw [←alls] at hv
+    obtain ⟨r,s,hd,hi⟩ := essential_ok ess v (List.mem_toFinset.mpr hv)
+    exact raw_required h (varsX m) v sub r s hd hi
+  have mem : ∀ v, v ∈ varsX m ↔ v ∈ vars m ∨ v=typeWord (m/512-1) := by
+    intro v; rw [hX]; simp
+  by_cases hs : typeWord (m/512-1) ∈ S
+  · refine Or.inr ?_
+    ext v
+    rw [List.mem_toFinset]
+    refine ⟨sub v,fun hv => ?_⟩
+    rcases (mem v).mp hv with hv | rfl
+    · exact rest v hv
+    · exact hs
+  · refine Or.inl ?_
+    ext v
+    rw [List.mem_toFinset]
+    refine ⟨fun hv => ?_,rest v⟩
+    rcases (mem v).mp (sub v hv) with hv | rfl
+    · exact hv
+    · exact absurd hv hs
+theorem strong_full {m q cap : Nat} {rs : List Nat} (ok : fullOK m rs = true)
+    (e : graphGoal m = graphGoal q) (ev : vars m = vars q)
+    (a : Impossible (graphGoal q) cap (vars q).toFinset)
+    (b : Impossible (graphGoal q) cap (varsX m).toFinset) :
+    Lower (varsX m) (graphGoal m) (cap+1) := by
+  have ok' := ok
+  simp only [fullOK,Bool.and_eq_true] at ok'
+  intro p bank hr ha
+  obtain ⟨k,t,S,hk,run,hs⟩ := reach_live (proper_of _ ok'.1.2) hr ha
+  by_contra! small
+  rcases full_split ok run hs with h | h
+  · rw [ev] at h; rw [e,h] at run; exact a k t (by omega) run
+  · rw [e,h] at run; exact b k t (by omega) run
+
+def dropOK (m : Nat) (hd : Sig) (rs : List Nat) (u v : Nat) : Bool :=
+  let xs := (witPairs m rs).filter (fun x => x.1 != hd)
+  checkEssential (graphGoal m) (varsX m) xs &&
+    (vars m).all (fun w => w == hd || (xs.map Prod.fst).contains w) &&
+    (vars m).contains hd &&
+    properB (graphGoal m) && decide (varsX m = vars m ++ [typeWord (m/512-1)]) &&
+    (bit (Fin.ofNat 512 u) (graphGoal m) != bit (Fin.ofNat 512 v) (graphGoal m)) &&
+    (varsX m).all (fun w => w == hd || w == typeWord (m/512-1) ||
+      bit (Fin.ofNat 512 u) w == bit (Fin.ofNat 512 v) w)
+def varsD (m : Nat) (hd : Sig) : List Sig := (vars m).filter (fun w => w != hd) ++ [typeWord (m/512-1)]
+theorem drop_split {m : Nat} {hd : Sig} {rs : List Nat} {u v : Nat} (ok : dropOK m hd rs u v = true)
+    {k t : Nat} {S : Finset Sig}
+    (h : Live (graphGoal m) k t S) (sub : ∀ v ∈ S, v ∈ varsX m) :
+    S=(vars m).toFinset ∨ S=(varsX m).toFinset ∨ S=(varsD m hd).toFinset := by
+  simp only [dropOK,Bool.and_eq_true,decide_eq_true_eq] at ok
+  obtain ⟨⟨⟨⟨⟨⟨ess,alls⟩,hc⟩,_⟩,hX⟩,diff⟩,iso⟩ := ok
+  have hm : hd ∈ vars m := by simpa using hc
+  have rest : ∀ v ∈ vars m, v ≠ hd → v ∈ S := by
+    intro v hv hne
+    have hx := List.all_eq_true.mp alls v hv
+    simp only [Bool.or_eq_true,beq_iff_eq,hne,false_or,List.contains_eq_mem,decide_eq_true_eq] at hx
+    obtain ⟨r,s,hd,hi⟩ := essential_ok ess v (List.mem_toFinset.mpr hx)
+    exact raw_required h (varsX m) v sub r s hd hi
+  have mem : ∀ v, v ∈ varsX m ↔ v ∈ vars m ∨ v=typeWord (m/512-1) := by
+    intro v; rw [hX]; simp
+  have memD : ∀ v, v ∈ varsD m hd ↔ (v ∈ vars m ∧ v ≠ hd) ∨ v=typeWord (m/512-1) := by
+    intro v; simp [varsD]
+  have one : hd ∈ S ∨ typeWord (m/512-1) ∈ S := by
+    obtain ⟨w,hw,hne⟩ := live_row_difference h (bne_iff_ne.mp diff)
+    have hc := List.all_eq_true.mp iso w (sub w hw)
+    simp only [Bool.or_eq_true,beq_iff_eq] at hc
+    rcases hc with (rfl | rfl) | hc
+    · exact Or.inl hw
+    · exact Or.inr hw
+    · exact False.elim (hne hc)
+  by_cases hs : typeWord (m/512-1) ∈ S
+  · refine Or.inr ?_
+    by_cases hh : hd ∈ S
+    · refine Or.inl ?_
+      ext v
+      rw [List.mem_toFinset]
+      refine ⟨sub v,fun hv => ?_⟩
+      rcases (mem v).mp hv with hv | rfl
+      · by_cases e : v=hd
+        · exact e ▸ hh
+        · exact rest v hv e
+      · exact hs
+    · refine Or.inr ?_
+      ext v
+      rw [List.mem_toFinset,memD]
       constructor
-      · simp only [views,List.zipWith_cons_cons,List.map_cons,List.cons.injEq,true_and]
-        exact past.1
-      · intro v vm
-        rcases List.mem_cons.mp vm with rfl | hm
-        · exact ⟨aw w (by simp),by rw [same.1]; exact ag g (by simp)⟩
-        · exact past.2 v hm
-
-def gridLive (depth : Nat) (s : Prefix) :=
-  selectLive s.2 (decodeBank (depth-1) (s.1 >>> 10) gridBase)
-def verifiedTerminal (cap depth : Nat) (s : Prefix) :=
-  let ws := live2303 depth s
-  let gs := gridLive depth s
-  ws.map Prod.fst == gs.map Prod.fst && decide (ws.map Prod.fst).Nodup &&
-    terminal cap (views ws gs)
-
-lemma verifiedTerminal_ok {cap depth s} (pass : verifiedTerminal cap depth s=true) :
-    Impossible graph cap (bank2303 depth s).toFinset := by
-  simp only [verifiedTerminal,Bool.and_eq_true,beq_iff_eq,decide_eq_true_eq] at pass
-  let r := asRow fun j => (dead.samples j).1
-  let n := asRow fun j => (dead.samples j).2
-  have ow (v) (hm : v∈live2303 depth s) : faithful r n v :=
-    decode_faithful _ _ _ _ _ base_faith v ((selectLive_sub _ _).subset hm)
-  have og (v) (hm : v∈gridLive depth s) : faithful gridP gridN v :=
-    decode_faithful _ _ _ _ _ gridBaseFaith v ((selectLive_sub _ _).subset hm)
-  obtain ⟨eq,ok⟩ := zip_cert pass.1.1 ow og
-  have geom := geomdead
-  simp only [graphValid,Bool.and_eq_true,beq_iff_eq] at geom
-  have prs := chart_pairs geom.1.1.1 geom.1.1.2
-  have tgtEq : chartGoal dead.mask=graph := by decide +kernel
-  rw [tgtEq] at prs
-  have ans := terminal_ok ok prs (eq ▸ pass.1.2) pass.2
-  rwa [eq] at ans
-
-def pc (x : Nat) : Nat := let x := x - ((x >>> 1) &&& 1431655765); let x := (x &&& 858993459) + ((x >>> 2) &&& 858993459); let x := (x+(x >>> 4)) &&& 252645135; ((x*16843009) >>> 24)%256
-def selectedRules (w : Nat) : Nat → Nat → Nat → List (Nat × Nat)
-  | 0,_,_ => []
-  | n+1,x,m => if m==0 then [] else let tail := selectedRules w n (x >>> w) (m >>> 1); if m.testBit 0 then let a := x &&& ((1 <<< w)-1); (a % 128,a/128)::tail else tail
-def a0shiftb0 : Array Nat := #[0x0]
-def a0shift (i : Nat) : Nat := a0shiftb0[i % 16]?.getD 0
-def a0idx : Index := fun x => let v := x*(x+701)%618970019642690137449562111; let h := v ^^^ (v >>> 37); let j := (h/1+packedAt a0shift ((h % 1)*1) 1)%1; some j
-def a0book0 : Array Nat := #[0x1,0x12a0f07c675371b39]
-def a0book (i : Nat) : Nat := a0book0[i % 8]?.getD 1
-def a0ranksb0 : Array Nat := #[0x0]
-def a0ranks (i : Nat) : Nat := a0ranksb0[i % 16]?.getD 0
-def a0tbitsb0 : Array Nat := #[0x1]
-def a0tbits (i : Nat) : Nat := a0tbitsb0[i % 16]?.getD 0
-def a0expanded (i : Nat) := packedAt a0tbits i 1==1
-def a0rank (i : Nat) := packedAt a0ranks (i/32*1) 1 + pc (packedAt a0tbits (i/32*32) (i % 32))
-def a0gidb0 : Array Nat := #[0x1]
-def a0gid (i : Nat) : Nat := a0gidb0[i % 16]?.getD 0
-def a0pickb0 : Array Nat := #[0xff]
-def a0pick (i : Nat) : Nat := a0pickb0[i % 16]?.getD 0
-def a0hints : Hints := fun i => let g := packedAt a0gid ((a0rank i)*1) 1; selectedRules 8 8 (a0book g) (packedAt a0pick ((a0rank i)*8) 8)
-def a0layer : Layer := (1,fun _ => (352,1023))
-def a1shiftb0 : Array Nat := #[0x802d60c08ef203081010200082281182]
-def a1shift (i : Nat) : Nat := a1shiftb0[i % 16]?.getD 0
-def a1idx : Index := fun x => let v := x*(x+701)%618970019642690137449562111; let h := v ^^^ (v >>> 37); let j := (h/22+packedAt a1shift ((h % 22)*6) 6)%71; some j
-def a1book0 : Array Nat := #[0x1,0x1348a81e3380a3c470f6b2aa5487839da722450dd4ea3be34dc841b,0x12513cc65a35a8654c61c21f8c8f838ed547687dd5ac7564ce63737,0x1250e0260743a858d07554a91fc687b5993379c8eaea5f1d86e3639,0x15541c3301634a81e389c9684860038a80775e306e36c99ba84f042,0x15521dac996489054a10781c761b9ccdeea766a0e0ebc61d46c8439,0x1302aa0e381523c0f01ba80d93c69c83cea013b0e66e3a6b2863678,0x1952aa1ec69b8920e391b86eeac943a3c027520b5b8c788d9d8843a]
-def a1book8 : Array Nat := #[0x201cc9daebc69ca84ea3b]
-def a1book (i : Nat) : Nat := (if i<8 then a1book0 else a1book8)[i % 8]?.getD 1
-def a1ranksb0 : Array Nat := #[0xf8f80]
-def a1ranks (i : Nat) : Nat := a1ranksb0[i % 16]?.getD 0
-def a1tbitsb0 : Array Nat := #[0x7f7ffffffffffffffe]
-def a1tbits (i : Nat) : Nat := a1tbitsb0[i % 16]?.getD 0
-def a1expanded (i : Nat) := packedAt a1tbits i 1==1
-def a1rank (i : Nat) := packedAt a1ranks (i/32*7) 7 + pc (packedAt a1tbits (i/32*32) (i % 32))
-def a1gidb0 : Array Nat := #[0x132111713645127812421364245416825322416432331352147224551752223717726]
-def a1gid (i : Nat) : Nat := a1gidb0[i % 16]?.getD 0
-def a1pickb0 : Array Nat := #[0x807fab092c6b002ac7559a55012a5d012a5da3003800014a64c3aa4420f2001ecf00207500050bc5846f0440b2000135012a5d266f160001110216cf002acf00102d08034b02163a02179e4581cd2c1ec285a15d227a5d82442b0000da005ce70001130dd06b0080ef085db60a5e2a087adc001747021eab822e7b0260c701586b10ebac012a5d022facd1051c1194ef012a5d15811c400d2904cc67023847201eae02e25500021b057e3900822602c8740082cf0229960080ef00ea7b002242012a5d10144d080c4d0100ef31882c]
-def a1pick (i : Nat) : Nat := a1pickb0[i % 16]?.getD 0
-def a1hints : Hints := fun i => let g := packedAt a1gid ((a1rank i)*4) 4; selectedRules 9 24 (a1book g) (packedAt a1pick ((a1rank i)*24) 24)
-def a1codesb0 : Array Nat := #[0xe99e88e77e55e44e33e22e11e00995994993992991965964963961589580579510299255233222195194193192191189187185184183182181180179175174173172171170154153152151150143142141132131130121120110095093092053052032]
-def a1codes (i : Nat) : Nat := a1codesb0[i % 16]?.getD 0
-def a1rowsb0 : Array Nat := #[0x1f103e0f39391c130c0b24373026173204391e03283d0633351d0e180d09382e2a230a19202d293141153b3a0739142511390022123c36342c1b2b2f0140160805391a273f0221]
-def a1rows (i : Nat) : Nat := a1rowsb0[i % 16]?.getD 0
-def a1layer : Layer := (71,fun i => let v := packedAt a1rows (i*8) 8; let p := a0layer.2 (v/128); let v := packedAt a1codes (v % 128*12) 12; let op := v % 1024; let a := op % 16; let b := op/16 % 16; let mask := if v.testBit 10 then p.2 ^^^ (1 <<< a) else p.2; let mask := if v.testBit 11 && a != b then mask ^^^ (1 <<< b) else mask; (p.1+(op <<< 10),mask+(1 <<< 10)))
-def a2shiftb0 : Array Nat := #[0x19014010bc012643622c410080001c265500011c03010010e4020340314c4d00007000550103500091120040c40f3717802e3820c10254000400c0bc087d8020001103c041840232c020981f0c43e0042f0c40629801aec2d00c760340b2d8b5008591b8010b80900c0103a33208000040000003030050000e0011f47dd9020060040367de02516b01434044010107c020101e808050240ec9508c5c0008a0386419c07000071385f1e93c18c1302c7a24c250140012007014031ac051e48a0140607c58018001a80c054853ec010005f2b84d02800018000109244c360642509026000bf0001a09c0401c03068a44940d2180738413004590fc1900800000020102204c070040413c0f19c1c0e402008170180003c003280000c023300006c0b00000158000740302c08024060fc0f00c2502453010990f8160dc0402004000850000100400178ee0606401c020102702c530183c02c3d000250003803832044030b037044000e0120001305c0c30c090340f18c03000151444214c1d0a46301c0d09c010081e0740000004000030440000c0002816098060442e00404000050080207c0f0240b0000d00027008070241303403014660105c010000006700002040020d005000030204b0043303c000d8040002003803088160400100c0e004030740100c000bc1301846000150f83b00014018000d8010ac3409023024353f4010000c01807008230380401c0302c260100a000000700803001000250040000040048040104307c1c0105a01c060280500c060385108804078000300303c280000d008000240d0000300c250740003c1307426004040600800000040590a8000286e010080000002c020040110c0300804008030140001000008640d0080200c000010000000c040000101402068040040e040000981c00000004000081900006]
-def a2shift (i : Nat) : Nat := a2shiftb0[i % 16]?.getD 0
-def a2idx : Index := fun x => let v := x*(x+701)%618970019642690137449562111; let h := v ^^^ (v >>> 37); let j := (h/539+packedAt a2shift ((h % 539)*10) 10)%1661; some j
-def a2book0 : Array Nat := #[0x1,0x18e2998ef2a0918f021e02a999c3f60367191648f04c7bc0d384edaacdcc9,0x136a9921c24c3f607818f0ff19665878e9aa3655a0f9c60e8170ec7b56639,0x1781c66672ab80aad83460eeaa0f7198eec616a990e90f0fa0a8e87b09239,0x136b035a53b4e11a969c61da870f98f366c69642e1a073090785d47b46c42,0x1d1ac6718740d18fc0d3b168790cd9961da14cc761edd60912446c3510a75,0x5c66645ab1a871e746c1c24a653bc6476c0e381c12a2a86798c7b8ee75,0x1b82c6a1c12d83467823ac0caa0b3070e8100c83b71987cdca108e1b8e63b]
-def a2book8 : Array Nat := #[0x1d1ac6568da43caad820f23de081f0308e837185a564d90f8020ec7bcde1b,0x1a3eaa464931a855518224a90f5804a36a87f19031f073c6d78cdd4214c29,0x163cca4e21a6a81faaa8f0217612b07ca86a8ec24c3f0332476b504286d75,0x1369c6a665ad18e3b198758d99c1e3bc647683f034e0d95ae594ec7b09175,0x171b60666e083f465acebb1a3bc66990fa2ac1e870fd0f0ee3a1ec241e239,0x1d82c6caa997830fa3f466aa01c645a719871e5990e98f0bd131ec3b1e239,0x1d82c6ca9e0aab1966476d19c618c106ab038ed3863c8704c5a5d7372853b,0x1b82991ede06648f0930f2a852057604e3198e3038ec5a16d3b0f8d6cdec9]
-def a2book16 : Array Nat := #[0x1aaa8f665c6c6468d186a63c3e6ab2a46842c0d6321d3881d694eec946d75,0x1d81e071b19a674607d388e036c0ca184caa1aae0b1a8f8ec5aa1c24cdc42,0x1b1aaaa1e0118f6004b2a8e513d1b074e303285e0719aa61c78cdd8f0ee1b,0x1d81e0aaa8332a0f1f15aca80263c23c3daa529874e159c0f370edc65d61b,0x1a3e870c83013f01aa84a08838a850f0eec658103b5b1b16b37b25781ed42,0x1c64daa670f4e07b09d0fa1f608ef0396ae08e024aaa8fb19a19651bcdc42,0x1aab2ac1de066760b824a61e9983c3bc650f9303fa1e3a0bc248eec675a39,0x1ca9aac3d8fc1c5c2a987c0c8f1d8878ec38e67398046886fc60d47b16275]
-def a2book24 : Array Nat := #[0x1d82e0d19e096a8fa1f0786814c0ec64ed2a8e2592aa693663b9d7376861b,0x1ca9aa3182e2a85ac3f07f18870fed6b2438a8424dd71b0ee3a0f8351ee39,0x1c052a467c6a3c38aa85a0edd6129031f16004c221bb1ba8737b246a50978,0x1464300ec381644243c4a5d6c64e56006903407370911bb59a1c6d42b2578,0x1caaaaa1e4fd1a1a92887d822a2ab0fb828f8e042c0ec68eca11691b86f37,0x1ca92ac1d754e4aaa3c5a21c430e3c6406a109276b243b75b393a71b5e275,0x1cab0f23e0712a3b0377501caaa3daa5810f0e10315f1bcdd781603e86ec9,0x18292ad1ac6c0c598e087d820fc1caac3e87b8319a3e9916b378ea3b35a39]
-def a2book32 : Array Nat := #[0x1d831963ee012a99528303283b0903e7183a0e05883f758ee38c6dd672639,0x1aaa834e12aa3c7b583c643f01a1c740bf1b0e33741c3540d785d53ba86d6,0x1b8360cab034e04b52aaa53c4e1ec027803fb183e6a9871e3377193986c3b,0x1aaa87a0d2aa3d601eed67244a63d0f0e0071682ab2633cdd035e17586c58,0x1d8346ca92aa3ee043ec640c384e3030f907dd6aa21e3bc6e0f4ef37b261b,0x171b2ad1aaa6671943d8f81f0f0ef754e16bb270308d3b06c8716b375d458,0x1781c6c1d874e32ad82e02aa1321ec6d1a3b0caaa46e381093b04f03cdca1,0x1c3e8f2aa38ca812d1b6016aaa8ab07a1ee02860743c8fc0ec68e63b86f37]
-def a2book40 : Array Nat := #[0x1d8346c64360ca99b8238aa86fb1a39a3f07c0e3ba1f375d4a146c7635842,0x1a671986ac69a74681d87c3e63a3e87aa8a1c1f2a10a3846f038edc686e75,0x1d1b6096b2ab830fa1ec6c6459146138e2aaa3e991da59c0cd6cdcc98ed75,0x1a3d875d432c6f03088090e043113754de3816ac98edd66843b86c588e578,0x1c3c6f0ca768e9763add6dd70721f3709339c6e755d6390e03bb583ea847b,0x1d831bd1b2a09038c66e0b1aaaa64aa8eea1dd5c621ca105a3a3683e0ee39,0x1b82aaa654ad1a8753e0f63d998ede0cab60c67076a9878e83a0eda171a39,0x1d1ae08e2aa0ba0fd830716b2ab1a8fa663b80719a1e4cc3e3a17cd61e239]
-def a2book48 : Array Nat := #[0x1f1b2aaab1b0598fa1d9923ec6cdf750b2c9e643b0f4d90e8245d9a10f93a,0x1b18321f45904c2216a8ff184a4aaa1a1ed60e10faa8744e3391ef1bb2575,0x1128c6aa8aa168e3092c90e32ac3d760ef0136775c6f3735975ce4a13247b,0x1ca9aa8a8aa0584f091d60ec137184a8e822c6ec90e238dd63b685c90fa39,0x16a975ca999c0539c64ca0c94a8e6aa0f9011ed4ff18240eea15e1c69e073,0x141c2213c3b0b301aa8244646a368525813b40c350e31bb5b3735aa15e2c9,0x1a3e8312e87727c610c38aa90f4a96041c0f759750bd0388f373257886c58,0x19805a0c82280c38b271ba0f600ef2ab81d6c3eaaa3e3b687039e33786cc9]
-def a2book56 : Array Nat := #[0x1c65991ad6318d076a842cab467198fc3d6b358a161d3bc1f030ed3886d75,0x163d87d8138a3ee052b0fd184281ec6caaaac1daaa1dc683f038ef375d61b,0x1ca9aac6699aaad6f1a8f8e033c3c7b9ac238ec3bc1e87c0cd606e7516175,0x1d1ac60da4fa6719d8307b80aac3e8f10a877521b8e30316a3bcde75090d6,0x1cab0fa1d75c1caa10c8f12c448ee2308f03dd47b5e03b75b370bcc986c58,0x13185a6a999c647b1884a23caadd72a4e18f8ef0fc0d3bcdec93261b5d458,0x1d1aaaa6719c0e382a8878ef0f8e466b183bcab0736aa19d71b0fbc609078,0x112b2ac3c872a87932a7616239093750e2a1b243bce7371ee75358d10fb1b]
-def a2book64 : Array Nat := #[0x18e20f81f1bdd5aacab467196b58e3b41c35c3d9963f07c658775a390ec78,0x1d82c6aa9e0a1f2a5283fc663a28599c3d1b6a82463d877183b8e5c910878,0x1d19c631b0fc659916b079d6aa0fb750e2a11c31bce4243683bcdec99e07b,0x12aa8f10fc6ca90f19b014a8246aaaace4386843b4e5764071ba85785d6c9,0x16a90f9812a8abc6c6d3aa1e0340c38aab010ec53dd6780d43ecdea1686c9,0x1c1e8721d0746458dd4e30b976cdc240e2d624c3b687010d739358785d4a1,0x1d1ac6c66990fd38c3eaaa3f074ab398e507f187d14a2aa1d7528701a8478,0x1d1b2a4a8b0c66c60ec38aa8d6a670fdd430c6e8fcdf012860ace4c91e07b]
-def a2book72 : Array Nat := #[0x14a88714c4b048075828f189030083eaa90f0a61b00d78cdfc650b1b1e05a,0x1aa842049c60c803a1ea1b59604a97556a8f40d0746fc6c6d420eb3708978,0x14640f88c1ac044a7182f46fc66871b41d60a1d2a40f375794256a1ba8578,0x10ed191081a04d8f15d0f1a8386852aaa960c6d1b40cd6b5822cdd7850ac9,0x1a1d878e027a86608ab3781e03069aa46e4275a398ee1b9e03bf1b7568442,0x1c3d8fc1f0323c871e4638eed66a87b6860f0a61b8aa03160c9b271b5d478,0x1d82e075aaaa1c7b0bf2af18aac1dc65d4da21f03dd68f8ec23a873786c58,0x1ca9e0d8187aaae08ab0fd1a8f63daac1ec6c0f37a1d7575aa18ec3b9d61b]
-def a2book80 : Array Nat := #[0x1c3ec6aab468e18f5d83bc1f607823b4edaa71b2aa1d75c0dc96861bcdea1,0x183c3bdd7607272a08f0f5d98fb82aac65aa06e8fc0d7571a998ec2fcdec9,0x16aa99666e063c620ec428ee8fc6760aab2ac0f37c3c789d6383243d46ec9,0x1c0c8f2a85a0b824f185921f75c1e39c3f37c6ed61ec3386c3e0ee3b16078,0x1cab1b0b82f1bc38dd43ec1caa35aa1ce57621d754e7c61ee421d8242843b,0x1caaaaa1d2a41c6603c5af188f0931b1da2321f7515f3986da11eec90ef37,0x1465031483ba1d2a0ba8f1d107b587d1a85543e750d7c61ed751683ac6c78,0x1b82c6c3dc6c0c3e63c3fd823a0cf071ee8f7813b4e79961e39cde1b0edd6]
-def a2book88 : Array Nat := #[0x1caaaac3c384a91923ceb8e61b02a42ce5a10ed76b24aa97cc9c6c7809175,0x16aa8fb258f43ed61284c0efc6b1a2a83e5f5d5878e3751623bc6dc90ea39,0x1d1b3935b2a3270f13daadd719cdc24665c61ed5944d8f36a390ee3b86e78,0x16872a129768ec9332ad60f838cddd61630f0ec242aa3add575ce71b3245f,0x14a90f10c33b258f8ce80891a116ad6a850110bc64e6875d5d6c6c3b5e21b,0x1b26758e42486439806d6981a183e03b1901a873717dc975a4271b1b1e278,0x19812a41e030e01ab243b0b2240516035903c0678f1a1b75b375e2d4684a1,0x171a8fa1c5a0b939dd5aa759a163d870087bb59c96658386c5c1603b9d435]
-def a2book96 : Array Nat := #[0x10685af1924cab6012b0f98303719aa80ea13253846dd6cde7886dd472642,0x1c3d87a8799d1a87ca9e01093b0ee0763f074e11b21f60c0c2386da1cddd6,0x1d186ba3c3ba1d7675b0fd83998e07b8ef074a975b24aac0e1b162d6cdea1,0x13832a63f0fc0c4b31b372a88f0b81b8e487dd4787582f15c3e1ecc986c3b,0x1a3e8743c8fb1976b5b398e7371edc641caa5d63386f7510887908da0ec24,0x1aa84d4a86818c22a3e750ace90be8743e391bbc60811b41c58c6dd686c78,0x1d1b2a8ab0771a0718c3f4a9074646a0ec4e6a9879e242687c6c6e391d878,0x18a822a1e070ef990902c0e187dd63a6a98f75a76f1a758ee387271b68639]
-def a2book104 : Array Nat := #[0x1c1c4ace6c90da7546fc6cde23036c650939a3f75aaa871ec760921b15c3b,0x1519390253741d8f0282cc6e5ea3f75aaa5f4a90f5d457b25780f83a86c3b,0x143ceb16a2a0ae0f18b759d47d8ea3b63daa1d03bf1b990fb1b726391e076,0x1718aa0585a0918fb243add5aacab99c3e3a0ee76ce6758e71b0f87b1e1c9,0x1c3f1b61c4a4ec1a0e0190d0206a8aa75a390e835490c96843d72424dd442,0x1a86d64a90f0901f40c4cb181a467750d4385d624aa8741625f68478b2442,0x10918fa860f0bb390fc2d0be3b0e501719d60804e68638f1a757271b8e478,0x16a9600a81940c2e00f01dd4380098f61d78cdc1b75a39c6ec90ec3aa8476]
-def a2book112 : Array Nat := #[0x10484a0f41300d5e34687725c64aaa143d6041dd6cdd031695ac6c785e21b,0x108a07c1fc66858fc672aaa8a198238d822a43e037531bc0c24cde7846ec9,0x5e010c428e04a8931983c5a324245e0d6c3f6052938c0ed40ce1bcddd6,0x1719466a8380890f61c7406d8fa3e39c6c574a93841fc6ce6a11e03b86d75,0x16aa0f9d85a8ea381ac3e0edc66647bdd63bc6d8f61c2c9d4351da39109d6,0x17832ac3f391794a4e7375d83edd58f8e5aa15dc6f19870ed3a8ee1b1e042,0x11a1c6cab0f08f0715d998ec1b6858f6a9879d4580ee3af184290b1bdd639,0x1cab0f168705d438dd5aac6d1b61e76a1dd6f1942ce6a1cdc769d47b6843b]
-def a2book120 : Array Nat := #[0x10883ba86756aaaac3d8fca91bc1f75a1ca11e3398efc65db37c6e1b5d542,0x11286f0683b0872a6ab37c1f755db39c6ed6a861b1ec3a5d424f187690842,0x12a88f36810023390b3c66aa1b63f991683a035c672639dd4571ec3e06c3b,0x10e37515c4cce5390b2aa1f4dab190f03a8f3584eb2575c6e1b16078b583b,0x1169398e0570e1870b20f0ee3bdd7c663cc96a8d6c6f37759c9e66395d93a,0x1aaa4c5d458b18da0be99b273771b1b0e5c913a8fe661b359d69d83b8e878,0x1b829961c15092a105b0fce71b0e9a1cde3b6a9c60fb7575a3a86dc98e642,0x13584fdd4430f53846c4a893390ed4286ed6b241acdd7536b1b1dad40903a]
-def a2book128 : Array Nat := #[0x10cf2ace5240c3750b11b50aa186c38cdf1b0d6aa75978504760ea42b2424,0x1ca84a170aa00c6b727c6e64011dac9a84d60ef3975a42dd4c907542cdc24,0x116ac90c803053750feaaa1d011d83ec6c39c045f0b8a10903a687c61e042,0x1aab07c052aa1f030e00300b3909870f1b375d53b08878b277535823a8442,0x160dc94a9aa4658f43d07e65c6667c65da754ed03dd4d6325424e83528737,0x14df0f9803503dd6c6c06b25c950b0380dd40f9a1dd7379e0763243a0cc24,0x1d183edd58fc67070bcaac3cc9d821bca8764e1d608ca1b27035d737a85c9,0x1b1aaa0642aa868fdd40fa1d390b97501807f1ad60fb1b160388e61b1d83b]
-def a2book136 : Array Nat := #[0x14ee878ec590485771b99a848f568874a907359d67250f8e61b1ef1b0ec78,0x16645a1ac7210d7671aa11ee75170356a93963c3b75a1b61fc65d7994e878,0x17818f7183b0b87b6a9760f824cdc782861b61da1f1b7575a390ea3b4e842,0x1b82a181c3b06a4ab269906c58b1aaaa3f998e624a1f371d975f1a7610a3a,0x14dc2f092235d43a63c7b5e3c6b82d6686aa0f858b1a8f4e6871e21b1083b,0x1d832a43e395d9c90b80a759aac3fc6dd43bc1e5fa3f391e1750ccd6cdf1b,0x17822a71a3a6640b9d4388ec3b4691b6a80d63c57dd43a9e239724420f9a1,0x10f7394e7753271ba3daa57c3be657663dd686dc68eb377253a8e4789da42]
-def a2book144 : Array Nat := #[0x1168d6b1b19a3c4a3243b8e7031da7517f395daaab58dac3c7bc6ec91e175,0x14e03204c7046c200edc666457490241edaae67c60e9d6ce6766844272675,0x1b192a1883889175758d668539b585f10aaa86ed4a8524505425e11b1e2c9,0x14dc325d53904c430b1aa1623b0ec300e07b1d02f5e275c6e3986dc97583a,0x11504a4e85cc0401759c9f18384ec03b2739ca8d605b37dd4c90f4a110824,0x11292ae642a41c0f1eda1a1d011bea19d42400435b5bc60e5d6c6c7610878,0x1b190118c5aaa82316c3e00b2a0da1bc053b0ec59dd737ce5781bc42324a1,0x1c672ac3c0f86e4ad802ac1f1b00cd6b24c94e337c0c7608aa1b59750e9a1]
-def a2book152 : Array Nat := #[0x1d18c6ca83ec6575c3caa3442a8e42401c872861bdd4769e3c60e83b08842,0x1780e06a8871c1d67192a1ed2463d07b5bc60e93828575dd5870e03ba8442,0x171aaa8aa0fa1daa0520761e758e5a172642c6fc68907b0ee781da1b75a41,0x1b1b2a4df0f09b46aa8e92ab194eb0749142a1c7b5e23946fc69e14109078,0x1ca92a03775c670f405d60f827c1e8f7193943c5a86e39c6e781603b1e05f,0x1aab2ae658f1edd68f5750fb60a3dc60e319c3daa1e2750eac98ea39109c9,0x11a84ac6413aaaa1c3f071754acdf6007c190931b1d85a724428e5a17583a,0x15d4694e73706a1b0ed99dd476285789d639491d6f19c99e02346dd409042]
-def a2book160 : Array Nat := #[0x10cc220e3378df0f03fc6ce42cdd42f092a19d4aac6dd68e43a8ecc968476,0x1dd4e04e12a8923b367c62a85c0a43a1e2396a8241ec76326750d5d472442,0x17823a0b901724430045735a4212bc65e239286d6058037584c0cc3bdd442,0x1ca8878045e61c380a80763cc9dd799c045af1a7635b39684a10e8429d476,0x163e41dd4eb8e53921c760f9c66a82490aa1687c6891d65d8d686d871e042,0x10e62a5083581d414918fa85a1286c6f1aaa5e11ba1ed686e760ec2410878,0x1128aa9788ff181524c2a0687b9d5c9325aa63e3903f75c6c3ab245a1d842,0x1d805a75833f1a37ca868b59c62847ba871bce6768e51b9d43b0e9c91d9a1]
-def a2book168 : Array Nat := #[0x1b584a03c030046fb24071983a8901ba1f7518ed408bc6a3c78091d61d842,0x12aa1b067750d5879d73771a765082212876f1a39b243a1e05a1982490842,0x112ac91bec6719aaa3ed69d46b80424a1da14de787593ba85015da3b10942,0x11d44a10487806376a8aac6f9963e761a4d96847b0ed39093c6b24781da42,0x1dd466b59463185190842]
-def a2book (i : Nat) : Nat := (if i<88 then (if i<40 then (if i<16 then (if i<8 then a2book0 else a2book8) else (if i<24 then a2book16 else (if i<32 then a2book24 else a2book32))) else (if i<64 then (if i<48 then a2book40 else (if i<56 then a2book48 else a2book56)) else (if i<72 then a2book64 else (if i<80 then a2book72 else a2book80)))) else (if i<128 then (if i<104 then (if i<96 then a2book88 else a2book96) else (if i<112 then a2book104 else (if i<120 then a2book112 else a2book120))) else (if i<152 then (if i<136 then a2book128 else (if i<144 then a2book136 else a2book144)) else (if i<160 then a2book152 else (if i<168 then a2book160 else a2book168)))))[i % 8]?.getD 1
-def a2ranksb0 : Array Nat := #[0xf0faee7b8bddf62d3b3cca314c12f0b8ad0afaaaa668a9e66292e3a89e13815f0775ca6d5a264d7f5b15a50d2b455023ccde338b72989721c701704a0dc2704000]
-def a2ranks (i : Nat) : Nat := a2ranksb0[i % 16]?.getD 0
-def a2tbitsb0 : Array Nat := #[0x4e4472bb33fef25eb6221cded8bb33ae40ffd75f39a7e791733cdfdaccf8d4bfc7e26b35b7ee5e120568fed1f75fbc28846eb4631ff2a27f2ff450ab376a7ec8be8b71602db2b5a0d6ef61c5f6a75ffff87d7b68b4b20ff7bba543d9d9baafa21e20cfa7fd5b0ee54cadf3eff44635dfafb1739c659fdc9bc1e3151c33b0fef0afdecb3cddaca47f197fdddef67fd5779afdf274e7ec9ce7be24a06f5af35b96ab363a43fdfe68f2fe1743c41fe18ac5633c4b3bc7bdf374fdc957e86cfadccd4bbd62de98d05cbfa373bfb2f361e49]
-def a2tbits (i : Nat) : Nat := a2tbitsb0[i % 16]?.getD 0
-def a2expanded (i : Nat) := packedAt a2tbits i 1==1
-def a2rank (i : Nat) := packedAt a2ranks (i/32*10) 10 + pc (packedAt a2tbits (i/32*32) (i % 32))
-def a2gidb0 : Array Nat := #[0x9e7a36811b806e61583b4a4cac4c92744c4c7d124c4c4c3aa38c3357a767a6539f1b8c639139847e7097399244723c0949a761a9a7a112911050469b5097776394915f8f75987678508f48879f803f7ea954609961516216827248918f9141a1328ca4955c409d945ca66c5ba94e9da68f0f799e0e8d69291f4b110f9b8f365f3d4b57aa93a35fa84b389a5a517b2b718f5913733e048a486830226175126779774c7ca32a4c494c915c896e2a4f674a4c725635a0ab932d4e5a9c7c23aa2f159aa3225836799527836728420d5f2c29ab8953a83751147e1a21aa513d9c05157e27476a7ba2aa5baa0a6e87208f99a69790647e49713ea9309488028da86e66273841564dab77109b2c559843a7018277a96ca29c32647d52a3770f6b1432374c921c90111b761f094b8ea59095944c6845611a8eab8952864c4c525c75318a8e812998674c6b2ea525a48744a47d470b9599855b4c4f4ca11c8532226c87922e924c4c4c79a84c280a72934c7239ab4c754c3b79674c1e4c4c37954c70794c4caa4ba298968648a03a74983d8e846a9daa9a99801b4778079d6b4c1d568ca5704c4c12aa43699ba2218895979688404c9ba2ab675b7f7c0e4a093f16ac44547a794c84a4815b4c4c5e3a4c966223074c4c4c4c864c4c4c7f248b31a67a7e6e4ca3294c602ea89213a0067141434e866053958f70048e5a4c5e77775e76999f6c25a057a98201aba875968baa8929a468274a750320a15d4c66535c66126c237631a93e12547c75816e862d99aa28a42f6343420c89227c2c7782a68c928e234d4c6e38719e530a91688b8a32a36a644e54457c4b6d15a5338c919f38349a96a205275a1fa9a175371f415b80959f1f8b42075378316265569054116c6f149eaa646a2f2e814b736f885d6c7ca8749b7d480820678448a39b015d8778a641794aa74c28754f0e10666b678d7e6b199c89a894a36a2b4c8c7d7a399d982aa6769a794c67786e011352606582a64054764f774c9c17782870a49586561a1b9f6da69b1f8a961467209a88693f8b39323d8378ab2360580ca249848674938f3d874f0b618921314d65853524283852716d184a3c34a014a3593b733e3688985295667e7ea08a7643850a467a759f8c672f64a48f934c2f637183158f26a5468c6f06ab6a734008ac73055c746f07264390a772868c1768695083663e94a1928f4c825d761c9b1973a060a57c8718294f6562453374898f81708d643e54693b6d9e898f1e3297917b6967354d912655a1026556490d35787b6678703f82558d7f6a56752d4e03a09197828a2c792a89319a596ba38c217f1d38787d637c66312b80a13c76895da6989c4c198b606e1e8b36]
-def a2gid (i : Nat) : Nat := a2gidb0[i % 16]?.getD 0
-def a2pickb0 : Array Nat := #[0x4b6777b7208e270018e10013740425c1042024e229c200001d6b1da5081def9013278306af082be132023700057308936d00022104124b82250152038d14d0480045aa018407335edf294aff2d1d81211383024c7d0813420a02331155bf00b17d11165802896a5208410006e304b32a8477c1204816000021000007861564249f9869ff6bc5fe5f26033e8453c5d024b582260e0145760453c189e7f900148f020b6a000827110563024819e8c2925a96f262919e41125a000091119465d3495382a0920000532787e300440b00106b000c9700040600000d00027d000421140c5c00343700afaf00179300ac7bac516100002720803601c3f7489d6c24906788ae8b00349f00200f8c2850aadc7706216a00000720acc3229011000843000c3a0b62b63b1dd5455d7700854749a03e0001a60008310ae7564882710440e364ebb700807b0002ff000897022c5302afa4123de94811aa009ebb00454ec4a3b532522202a1e600804a452b7b028c7b825bc354f755022143106f2714b809002a558149c600c87600357000d39704b90501de8bb6dddf0012e700083e9363b60007370128cf000c2d8a89149c0eb61aeb2ed326d912e0bf00349c031a39a45583d87bb604e7d1080f73b369664904910da79d0108990259d9cc70f40403e300431554ad6348852500005340eeb800d03900033e04896d001257000409a4061c1488678a4d5b4112ca000034f2c06500a2f300857408834525289202087f956b8300147513101100000b0814654dc661429df500209b84254d44851ca1ffaa815b10fa8a178108290537360004dd04b9c87b7fb7400890160d1d40568ef8149ecef73f00001a1102f3ffe3bb000ab30425b5c946120eb7ec0759e760a1b70d110e82008d05236309a2150024b55523df50278700001b7291e18928c100001e00035f4490a20081e100046700020300000f28a21c000426308467f28bd5000eb41355ff0003f320126a609c394888210b6294026a8527b6d9c05b5d712b25031a3780a6735c94e49a8bab20b1b10040850002030003f3410dca4812d11094d6036c9b80cf558803c71e84f900009fc08e10002e3521a824f742a782abeb42078100941f432591017b230204f5602adf4226d702043b073d4f01735d00025a0f756b12121719212b0063c7a9add5019af30040211056ac00e03d00f5511214ea483fc50386467a85a23181a1e250a2013d6c449743007f414c179f01e3b5e7b7ff90a90400110d11680600040f025391926f3900000d9397a380d2a19143bf80c06c6d262a4a2a3a100c290024e56cb4e904cf44a6b35d007cbf0a31d45499215d124500095b0000550121b7a56b1d64380784160ac5a61e00223100041562226d00460b004b5800032300005c660dfb010ccd908af4004c5e003d71843a8209b477,0x1d7700086bb09bed00f73c081d9d00003b0034928006b9220b1420623c00005cab8928022b5961846bc2b73ba03a4480021400023eae24cc04235400005c00005c115f8328aab300008300e935132a82000f9c04e38200bb1f04491a0078a300005c118c3de52f23005412ad4d5a00018ac48027423ab9880846000855105e8d496bab0002ac011423244c618463ae00010f0c448500005c0000d30cbeeb1030cb6bb8990137ef1560ab38064a80207d08d7db164a8800005c00005c00005c00000d44824100005c64efa48bcef7720c2cb4208a00005c08473609bc1b20003400005c00008300005c238ecb03d30a02c27700005c08ef3b00005c00005c00fb9700126c00005c88721cb10a4c00005c00005c001502106d8f0032064186840009e3088c3800009604019531aaf400106b1114910076b54580990b01d1000c1d190912a1400231230801142b11136302a2bbccb15201b1d400004740462521a43900005c594ee6a4d94300465a1201c10017c300005c00005c0535ef0008910413b7003b6b0004961010c3004aab0408f301c4890928628992100008e507a17700005c0302170000d30020090008f513471e092399a1728496cdd5120dcfbdb7bbb0f90bc74edd00004511369d37a28302a1e30cb03900005c2a01b104230649482a4807e500005c00005c065c5c0571eb00005c20486300a2e3946cbb00008700005c00005c00005c00005c841c1a00005c00005c00005c112599e515d500012a670e5d88a0302d39080011770000b100005c00032716a9f100005c0d412a125edb00082700047dc12dfd0012430dab6b08250f069af90456b72423e76248940f43a404bb99480543000d2d042e53fe9eef0a4a2a915c9900000f98a33200021f824ba26116994a4c83082859000f4500000f52b3b5020195089769900085945085ebdffb0c1001210405001d0e000184000ecd020091000a1e145ff10064250012d7095cf7020dcf0895741b5d5b0008ff4281a1954c8600005c01f41db14caa4145ea0003750001a700242fb8549700046b0281b5401450fc9a220001c700004b000c6b005f43000014404c5e103a150013ca82621151800202b0914000ce107be3228e331a485a221dddafbbaf0e03627a88db408e4b20fe3b638aa000000f0101aa0020f50d43091004db0c9b7bbcd12297682a002025017cb7029a3922500b00003b7f2bf70007310055c732d8100001d914dc5e0093420005e60008180257e600426ba1495b1960b4203d8f122ec210deef2402c405367d8ac02500811d002ca90ae1f54c96d9040595522448000153003de70b45f700005670f74d04c1021928097120cc005bd7318bed69236b218f65008163942282000d6600afcf0016cdcda253ff5fd34aec46f40a480c72b72d4d2440ada90000531061250000,0x1100fc042f1a0f0de22076322e2bb8a4499099325954863310b5b03b559610dad00005c0000a500005c001447082d9500005c00005caa8344043def00005c00005c00005cca05eb44a0840013da6056fdd528a644840a080c7d04060b0010255140839955bb00191a806c9b804a632493bdd4c404000177006a1c0080dc240efd00206dacc54a0191e3325ce3426f7ba7316818204a0a247a088026011324001005056def0002733a33e9856536092ead44504a08c3270293811d224502c533000e670c240f8150db100da9000d4eaa2420c12f10019958106faa560560e81a9601054aa610900000166d2b91018d6c01288800001405512a2201530a13e6112d9b53143a3ef9ab41492a0003e717656103007b00000b01027300000f2041170023eb1805950044250000331610e7078ba700472508027c0001250110c1ca115600342e000b2101eb6324304900020b01082d01174700000d1821a1000003005ac37408b315a91b0f8bd60000420001c9dcbdbb00001700000b111e7700b4db391dca0146cd22d27300021942126303a2040121db1010d0449e8de01af54a11286aa06eea06a6a890e200001950650e0a24ca9098dd3ed72fa2d40c03275f0175b70020690000870412f7a74b59855f87000e6b000083fbb2f20040f540bca401328b00005c04894b2013424ccb3e00005c00677700005c7009898124fa0004150010a558ad2e03cec911a2230a0dcb0011c00003e703028b07cb9300607a020009014974b3e8b1d9312c044f79404263001a4b6b13570820240241384e5f3f0084978048190008cf4ca4ae025a560040190005431f5e1c0000190048f3af0fc21059fd577b6f7e0a24446ebb283b5f1105007100e1002b9108404a005bd714789b001bdd2030730477790aa7f5000c500599d93a1dca30848c000c770004e1da2284e38537230ced0000c6050cd949442200120900d5650002190018db804cde0240a5d6b5a500000b54808c0000c5a400cc2006ad0d061f0000774ac3872108b800000720064458b5b6820473b15208f6ebff042847000027223325d80ba4033cf706f81f94da9c0442560004cf00405200129e12bafba0270209ea77847a5500489601a4af00032705f63b000027000455020889000043a4880c03102300454e01545f01659a001b930008990024553a5f7700283b935f5f0023eaff042c00005c608c0709dceb42886a9cadfa00]
-def a2pick (i : Nat) : Nat := a2pickb0[i % 16]?.getD 0
-def a2hints : Hints := fun i => let g := packedAt a2gid ((a2rank i)*8) 8; selectedRules 10 24 (a2book g) (packedAt a2pick ((a2rank i)*24) 24)
-def a2codesb0 : Array Nat := #[0xeaae99e88e77e55e44e33e22e11da1da0d9ad95d94d93d92d8ad89d7ad79d6ad65d64d63d5ad4aca9c9a9a39a29a19a099a99599499399299198798598498398298197597497397297196a96596496396195495395295194394293293192189a89589387a5a959559359258a58958758558458358258158057a57957557457357257157055a55455355255155054a54254153a53253153052a52051a4a94a44a14a04954932aa2992552332221a91a71a51a41a31a21a11a019a19519419319218a18918718518418318218117a17917517417317217115a15415315215114a14314214113a13213112a1210a90a50a30a209a09509309205a05305203a03202a]
-def a2codes (i : Nat) : Nat := a2codesb0[i % 16]?.getD 0
-def a2parentsb0 : Array Nat := #[0x8d1624380fdf3d78edd3970ddb3568cd93160bd72d58ad529509d325488d121407cf1d386cd182e58a13244480f1c3460b14203860608080]
-def a2parents (i : Nat) : Nat := a2parentsb0[i % 16]?.getD 0
-def a2rowsb0 : Array Nat := #[0x551c28c5f198012432e09fcaabea786286a3e8a66a07a8e49e589b4b319c9467996a080b1a342b5275d64d5ac69bca9d61bea658e784cc21dea9398b89f909eb89369d6159564e2e9aa4c27ee9bc330e9e8599060c185c7b71939af81af0a7da98a8df77b5219a7318d7a8b925626f046ca8f08978760e715948a3ba5a8fb01cec0dba6e096d263095a28a03221832939a6f299a5e5a9e2387ea8a1cc0a776aa0c7a57467dd673064c39fc2a90cfaa7329a98a2787c6ec2850c85a9f05e586e67d2a8b9e281f969cba4ca9c4a82eab51d38b7e01229d70548bca3cc0a371ef8a06a5da9ef88147d5392dddcaa589fc1dc4a0f605a90aa48865a0c3057ba72aabda81279b2e3ca5320c21b91ef08448d549daaa8aa733546a14629cbb73a9478f2c2a1be623e2a8844a20b1f621cc5ac481677a21cfa72c6d21e4683c243ea75013077220f0c6038ad6456254b0f5ae0c3fa992a1aa64661552458bd59e4e30a89ca2940f21d22dd880d63958d4a8fa92d07fa3ce591458a325cb0e00bc68b22d482129e0b4f1a3885563f1d4f2e2a98f0aac75225144652c48aea3f5c10e296ea4662a495689a5d81a97e72da93e97025168c6a496a52395e2280da966450ec7a5526aa5f1e14e5127cea419f328e8a6bc2b377c18be305aa24627e276aaa29df78d497b3ae4e9a3a18eeca7e158b11c6a2b19ac9d6a618a6d27d0e943ce18c78bba6fea88e9e421e07ab443c9d222946241c606302c307fe15d445fa8e5684638290f899042a28b4e480ad8ebe95509f330629ad2dad3867ca69018b30a382e69892a490bb02b48a9b50addb82850b953a6d88aa2dce7e9ead36819fe40c24a89ee04e016b873cc9b7830e9f1d54679a72828d259d8a81ab1e291ed4e918990678a5f0679a8f0aed78a2a56015c83f59f4024a288f1585e5495236ea1f88d6a1f5c60a945b7e3ee6318ba877d298ca5b89690b90a7e1959e16a3ce95777faaac6294af504da9b6a851e9f28300da20b89fc716067fa6ac82fa734eb03a2a267a6fa1c54988ebc1c8a2662e78a7b20a56b4a7956a0395e24ea8e88513aad698639d8eb62ce9b3a81621d0b95ae231a82e20e56a925a50e6a605c0a214e08795f52154a9bc375a4cc6b38968ff82fa493c3888478a449ccd27880d61829e1da9e480e88f0a16111a1fc27cde28155cb6d9b6225687ccd0ea5e1678aa7dd952292a7325a0cc589cdf640ef0e4d202ce2867285cb1244ec61a74c5a885411f5a7c524aa1464791ec77a5fd45550ea58cb762c99daa32ab8a8885d42a498be39bcc462d28658625094563702d5a21c57886858a662beaa804c09f0a661e1553f484ba8b58a42455e25aadc107072c0cf31556b5a58a89aa77c44f78ba2679fbc30559c28853a28d6aa8a49c5524e9a91fd69db89bd66d891455a1a6295e63949e486,0x91865f22ee033374aa64389ce9255a4670a2a223ca36184527e298688689732d2e9a505bcd583316994a65ea7888ec053a54974625883283ae08ad044631a0ac288f74954418db0eb8a978ecda81411614f88a276f4a58159480a1e5408f2abc8181a149067838170a2e0830a2b69473b95e16a9bcd91295d8a83c6d9733c2c3e2833c78aa751e36632ce5224c28b8266ca3918e58cc26f9c9fa794bb7a52875727caa1d3029d47a92c9db20ade1268389fe964c7eca9347ff20e62732a54807492e954a2280e417ac7b085dc7e206969874c498ca10fe24c147e7fe1149ddb3b5867c0ea02e778c28b0a2f0630a228e5963be430a23ea2524e9e3078c28a6a656a325fc288ba9c288f1fb29b519c289d841ce79787c69589c28b0a2568df96a4eb0a21c95f5936ab0a2c289517ec547883d59b8fc637361464a88948b95181aa3e38ee647969691da7549732688212317d315494c6ba293006b018d8fc1ee025a27f5af524b989d9032a27a91ddc6767d285a8c292ba35876f827dbb0a2e1e0f96bd9dfa9f9de35ab22460754f30a23c970a2908b039b4a73885487c255c22d7656a4e77a0d5f6b058912ea022b86f9da59f95da4235a1a420e06d625c289209bddc58fba9391dd69b808198eb11a6a855432997199d6788af96baa86293f783e1eb04e23d71a9c82425f0b11a90632b539d7e839e16951ec288f096222d2e8c9ef305dae210bce8e28e63c5aac28b0a29a24a38f16ee3a50630a246691a6561eba7c28b0a2c28b0a2306a7a87c170a2eaa70a2c28b13a8eaa4a36e4e75274d187bcaa4f6222a8a0c48ccb1e8a1f715ccef0a2906e21572a28a5e98c639c28b01dec50a5958794244dab925b5df018f87e204be9a9a558a0776518eb28914918b5c7fe63e61d4332ca3059489bb38ec456a5a4122077ce17a5800771af875b9c29da629ea9ab461189d0abc22928d47f96f6d59546f89479f38e854ce053e6be0609a7654ab244a3f127de9a42a3821729be96c212a14f2f5292c59e21e13be56702150a45a4329ee522883e1861db0a27e2872dea2554f5dd8b25609ce8980770172c50d1af08d5626878ba3f58a19550d765aa29300e68f57212ca97097cf3518c00715aac6221c58694194a240907e96b03c89d8a8ad2785d50b05283c8b83c14978527c9f02ec07a92018b382bb590faa4421f2490c57a64c79688f89c59fe0e8da6a49bca299e0b01e4a3e33fce9886f21bc63689b420a45755cb09fe541e916207c7f327f007e7829fe5288a9a485556cb15458fc328a91f2ae68e45a9485aa81448a0ec58d20b058ca873082d881d892a53ddcc1e74f30768a95aa56d798773de72a604a79193dad431624221a80e8a015692ba47e9a0193ca152ee61b0a348ed5a7fa8df26f4a18aae1df6283e3f831687fea754a5d36de92f1fec6,0x3b04ccc5604508e978ad15486e96be0b90ad27650aef7854c4d0c28da5a8d4a3e795ce87631c9aaa7f29fa9f9165b27c28b390c28a01815dcb3a5491811c28b0a234a381f51d7019c28b0a2c28a45b12398a93047faaf042aa9d4e2e87521e003aea39626052282189d287fa22b52888201e929852688d8ba700c965906a330da0c382a929fe346c229a619dfa62e12e41194969393882478546e9a74a29f62146cd419293924882b876587f011e44621d5c959283cc2d1ac0e332e7e1fba49e9e727f40b162cd8d40bad8e570a1e1826d4522332c6051eac94729ee8e2345e9152854a9739f82bc2a3e7e52994ea30b3a9df86fa7e476baa28aac29e842e6930035226c295039715b698a83a469f3a48d0576b081559887a0a64a185188a9cb86887d824b42125891d6f3cb0bb3321cb0b78f1d9624580d1a1c1d6627e0919451e317a7ee41b294a7e463b8e583079850a7ea5ae762c906a63899b3ad6a630ad498f2d3824ea655d8aa3282ff0c4a9bd094887ea5b466277829e48988d5728ec7c68958ebe1af4ef82c2031949349b82988cb99d166f83bb61e160dda547c914f2287e4c520798b023628cda59e277a79588a1830e151190a2b5b7d8fe262d398972aa522cace15103c99410c0119437c975a33d7a8763cf062688e5835907b0a2859921f8aa8a114a9f0a2aceb9033aa70a248c080b504577889fc13b59db8a77437ca83011b59ae9b020f967c531e1cb04ba9ad25be275034ce9fa36e9fb18162b3aa867947eb4ed72e3cd1417f18aa0a1855834718ce1aace71a7961c5a75449215c8ea403465ad4b6c87e3cc040587c224b4a884dfa4863ed3ad4e4fa628cd2aa1618a041453e24f214f63fe9d23c8083627f9727969c854a3a0dada41aa4b19e2261a95c1cf21b6a2d5d55b351aa07ba2ebccbe861695d597c0e729489e3a8569be32fa254aa74c915249e1d3339e0b6355d78192c80e3b15694765cefaa79aa351e486a46daaa8f76a0d1f20828df30347b720c54995a48a68076095ea80aa26632c74f88387f99435dc5479075f16955e3284867c5a7c615057c2af34f69f362e89da087de7b39f29302458e1662b866011a6a3c5989d620b5c98f3b7d4a88165311783d66201e967e2a7ccad4f963f97628e9207146a43ac5e052aa242d15b63fb1af1e0578f878530464675af8513a71e94196e05b18]
-def a2rows (i : Nat) : Nat := a2rowsb0[i % 16]?.getD 0
-def a2layer : Layer := (1661,fun i => let v := packedAt a2rows (i*14) 14; let p := a1layer.2 (packedAt a2parents (v/256*7) 7); let v := packedAt a2codes (v % 256*12) 12; let op := v % 1024; let a := op % 16; let b := op/16 % 16; let mask := if v.testBit 10 then p.2 ^^^ (1 <<< a) else p.2; let mask := if v.testBit 11 && a != b then mask ^^^ (1 <<< b) else mask; (p.1+(op <<< 20),mask+(1 <<< 11)))
-def a3shiftb0 : Array Nat := #[0x2202400000400800700900903100b00006600101000200300001600000200400300000000e00000100000107d02103c00c00000100104000b00200003400f00100600001101401400401400004000002f00200302300400600800700d00100000000600400001200100200000200f00002f02d00300c01000000600400900803600600100100f03500400001b00006300000900000900101c00600a00100401500004c00d00000300e01700b00305b01101a00402100000000f00000900a09300002100100000400000700203d00000301d00a00200900001103a00400002300401800300000000e00602f00100d00000000400d00100303b00000801500800a00c00201a00001900000701f01700c00600500002200001500e01300a00604600404d00300d00204b00000004200800100101600200700600100500100101a00200102800c00500000100000801401301300800203400200200001e02001900501e00600600900400506300200a00000000300502201200400300000a00a00400001501a00300100500100e02b00e04301d00000400000e00001c01200700000100400200100000500000000d00201000600000500301400400100200003a00205200a00f02b00500202901300300900300e00500b02900800202300000200201800002000100404f00b00d00d00500100000201c00d03301800800400000100001700502004100200100e00100101900102c00000100000401f00600e00101900c02e00000600000000f00a00600505002800300200c00b01900201800300901a00e00000000100000c01501300000e00001a00600c00200000000105200100100400300900001202800000400700000100000003d00000000800100005f09100600100a00b00100301a02a00001400300300600500000000000200501201a01c00000000801300a00100300401600900f00102f05101100400102900602500100100500600000000200901a00200000000e00301a00e07400200401600601a02700000000002701500400607300500201500600800001400301e00300100800703f01000200001102e01e00000e00901500300300201700301900201a00600400a01504800f01b00000200f00200300205e00600000300000000100200000f02e00000001f00101b00200500500f02e00800303606a00100300000a00000900100000701400400000000000b00000500301d00e00a00403b00800000701100000c00701a00001600c00300600600000400702000102200001a00600400200300000000000700000601600100e01300000000000c00300300800100d00300500000603200404501e00200406a00000000500400001200200102801900800c00000000500f01000a00000100802e00000300000f01500002a00400300800a004,0xa07300003a00201400c09500000b00000400400000917401f00000100a01000000001100100500001400000600200100000901416004f00503400000200201f00000100600000b00c01801500000600d00500504301200200000100500500f02302200000000000800300500000301900d1120020020b502a00104100406e01601c12e00100201400001f00002000900900600403901200300e00100002700001800000401300000001f00a01e00000000200401300a00c04500f00801901205100400201a00000000000002600c00103900000201204400200300400b00002e00300000e00300000b03900c03b00200100000009205901206c00600402600400601700014400000501800500a00000603200600c0020200830120180a702500003200101a00200702004a00a00000200003000801100500102600000000302400004500100200f04b00400c00000c00101802e00600c00d00200400100200000000000000000500b03101200d01700001200000101600302000006401100000200a00206d00806d00200f00100300100200202d00003300000000402000600102604a00000600300200200304300001701000402000400800100200100401100201600c00300000000f00b00501400103700502c01401400100501200001500100200300400600500300400301000100200b00200009505200901b00100501a00a00d00200000100000507100f02a00002f0030230070020030bb02902d00800b00100000400000200400005a0010a000804203b00403000200f00000601c02d00200b00302f05a03300b00e01700100000000202000100700200003500900001a00b00000c03f00a00200400102703a05900300f03300200000200001d00501400000900201400c00100c00501802e03203e01900200900000500601d02900a01f00100700303200000100100001100200000000300b00b00507804102300300500200201b00000001303f00401101200600000001b01602900900800000101301200e00002400000f00100701700000b00000c02900404600e00101500400b00100700601a08201c00900000b00400a00400300a00b00000400000200700100000801000401304500d00701903100600200000003100001800102100000e00100000100800101300000500200301800004100000000a00000601a01600a00c01f02100500d00603d02b00600301e06700000801200000d00702701400200305900a00906700300100008e00401900f00a02200000000c00700300100a00104d00000704f00901700100100000300503b00400600300300700302003a0ec01a00800701f00300501501d00001600200000300500200000201500b00500106600a00000f04000100f00100600403000104708100200700900200f0020200100,0xe00b06d00902301107900100c00400501310c00601200b06d02501100100100001205800100c0540020520050000030841a209a00000c00101a00400402600000202800300401403c00001302000000400805c00100000600500000f0010120120630000010190110200000070380480060000300630070030000010180020070031260110000040020020003af00c0bf00501b00000b03302e04900100308f00502c00a01c1ae00000001100005700201501100e01200401602701602a02101000700706202e00000a1c200026022300400100000000204012700000000105301600800001610500a00509f00201302100b00000b02300c0100a401f00d00200004303400d00c00201100606300402000102a0010a40080080020010050003b302700000701301b00000400201002400200500400006801800101001d00001201e1b400001f00400800504501102200a00f13800018600a01c00100e01702b02202004903d06a0ed00800f00f00d0ef01d04c14f01600100000000800000000603c01d07e00a00600500100301a00000007f00900100000003700002400904600d01c0000750080070090000040bf00000200300100900a00405e06b01b00002104b00e00100e01102101003000100800302900b04403800d02800002201203000100500200a00f01203b00e0000130000020040a500700900204d0000000200b710500000100301700000003200900700300000001600004000000402900100000000e00d03e00100004e00905e01500c01800008b01100001900403903700600100c03f02900002807400501204802a00002b01b00103a01000002100000300100202e0550040620030000000010560000080000000000141be01100000000505902a02902c01000000f00000200001201c00a04a00600902100200701400003900604500200900d00100101603b00500f00100600900f00000300009200301b00a00501d01600200000701901d00300300001400200500000900300c00a04204200006300000001900000200000a0b301004200001903500a00100904003804c00103b02a00f00e00700000000000000a00100300400901203f01602d00100701809300400b00600302900c03900101701000000002c00006200000103101308902f00900000000f00000e0040ed05600000003d00800100000302200000000c00800002500600415f00000100d00300800000704900d05700400000500c00201b08702401005c02e01300100901f00201d00800501400002000400502004300a03502c01501000b04300300a00601003e00100b05a00400500201400400100600000700300000600700600a00000200600000000900200100b00001c00301900500200500001800400300601000702c00c01304a04100700702d00500,0x705a02f01100023600300e03001d0010a200004a03400b00b0031b200010700d07101900600780a00102200904d00305501300301510c00000149d05a80900100303f0a60c002f01c04600805903901a03f04c03302500001000600001901000102c03600000503d00b00000102a00004100000000202800000903201b0000300000710780070270000001b800502e0006aa06100100b00c00001400200001500673212100100900207501e0b801602701c02502100302f0312ff46900a00800108800202404b1cd00f07a0c001200e02002800500100702200600800002001000916a00a01202800404d01407102801101700300401c00d03a0000000c500501b00008001f03300201b01b00500501100007000d09300c0040150000000000280033b100000601c0130b500001801101d06501c00200302601201301d00b01c00403900500b04d0450040120200dd00f0a001000c00602106701708428d01501f01800c0030040030070200240570e909c00900000000f02300500400102500001400000601a00f01b55000000700e0030001840130a303c01902b00e00207802d00000800c0b915700102310100301200e02e00400000006605a00001100000005f00f00007f0890570080050ba00a01024500c00002100301200200200000003000504f02400900102b1b500100000000005802503800701c00b00103600600f2c506200f00f0020460000c900e00208d00c0e800105104b00000207e06b00000d0040c300700800000201503000e05200409000c00107500c00700000e00100902300505f03409500e02700a05a00001102500000201d00901700903500906800100502202e02902501300004a0fd04a02f02400000902300300200600116101507b00204f00802c06a00700f08a0520000050370a307b0270030160000030900000d400102700400c04801f00900000200702200200800701600000000500008300102701400105f00100307701001600502301b00100102c01400400800500700703f00400b02b01900400102a02f02600100400a0020040e000003402c03f03200200900600d1bc02d00701102000000800000100001000002101a0020d400200002d09702f04000300304600000202501200001c00e00300a00001600100002000500600001e00000006700b06a00600e03100300600103508a13502100d00203500200a07600000201400003101101600e00601f02600104000101807300500f09401905901000a00402301f00003400000001300302e00000400000101702b0000210ad01008400601201709805005500001f02f00200300000700f0f700101700200300400200900001d00000f00700400d00c00102c01600006c01f00100000300201301f02e02900f0061ea00103900000b08200701a00d015,0x200013725a03b11a00a7a700801300300a0420020090800000cc05e0330001ef00100009516201c0000110a60db0090001e80781a019000000001a00200400e01f07600002302705c02300602421d0420170fb00000f00200001809003a01502000305b0e50011571f607914e00101001507600100300500405d00803600e05000000e00124e00200203900f02300e01400000005b00816912a02b08601e06401200000001c0370040000000cf03a00000701504901300501706e01815804413a1e904006400100801600104102c00100800800001700400700200607e00900700c09c02000000102200b00000400a00000304300f00e06e00004000e01b00101900103003d0780000560530393f100a00607500701100220103900501301803f0c902700501000a0000010000010f013700400000004801126a00b02400904f0540040b50090008aa0040c800c00b01000900d0840010b90291080b800901509100a02302106c00101111d3440df1370070060000f00000120cb00900005100002d00d00000201100300103339005801f00900804d02408401800005400500002700500401d03100000003d02c00001900600000200800c0990b002200100c01b01e00600700000a13d00d0050000000f018d01a00000005f00300b09600200008c05100902701e00802f03203200500301702301c00000e02d0400031450140060050060190250080c200008c00c00600701401801a0100e706b09502804100300000005c00900203509007d05100d0a412a00f25501d03801e00100601a05100000500900700406c03a01a00200700000e08400d07a02200400400205302301707b02401a56f02c02f01e0ea00700702600001c08701108600800403b00002c04700501411100004c07901600002800c00000702c0d31f501001501e00311a00000e02c03000300f01400200602607103e00c00000002f05e0cd00600b00605b71800002205d01f00001600005a0ad00f00a0480010050000b80160e705708703602d00c00401a00f05e0120120450030020000051f502b00000006a00000000500602d06a00004301c01701600100005501700531a00000400200e01c0a889f00b00900b00000208900001400504c00900006900900803400100d02109402d0380140010211b000352407300000a0140db0110260010030d302906100c03d00d00002f00d0d300600102801501700b00700300709d08200204b0000eb00601001e0020001180123e803a01117119101a11100400b0000bb00501605a01702302f00017f00900200303000500000000500500607806e01400800100200e1100020000a200900500100000300600100714a00002102302681a00801b00300606900000700000000301a03207900000f0010ce00e0000120390060010040160,0x200000706501700000338605806f00e0040600dd00d00011c0160e50020000050cb1b908b0000d709700407e0010090000bb01b12000201701700a02a11100002200000e00a01202309909f01503e00005100a17a05a00101006200657201305400500000e0140840d200902601200c2540894db17702303b00f0120180980430b10e403205271b05834500006002500005201b00000066c0000c200224500302a0020d90010611281dc0d11ed00003ec8809800114201f02a01900d00205200004507001101500500406402b00200002506b01802505e0001880230aa00d14d00003d00001007201903804c02406f03700d02000f00201f00215900000500003208a02707c20d02320e00000612e00200500d0ea02106504d48201000400e02902456407800102906a00201a01500600004d00100300a03202100000003e08000c08000000100000004200001700f2341f601400700202b02004401334020e09b05809103100200800508a06907601b0fd02803102002700001b05406200700f11000006f7413370420180430050470ed01e0320010001e802202704f06902e0ac0120db03700001901c03319b05b0000080010a300b0210100230eb00316d00c00013d00800012901507b00000a05502500100000f08c00909001908801500102902d00800c07015c05301105a10001505e00807a0c801001020e01410e00000900300004a03401033f03500400002100803600900400d00003032908601000658500300400508400004e01702704500500400a00a00400100300300900000109700810a03500300100300201100302e0270132d80f10054d500304400704b05c14200003d01f0240870012ad0290880da13a00a03f00000c07200500003900200a00e12a00504c01102400005502500a0300d50000020280100490003d90150012e201400c01500600200b00b00d00]
-def a3shift (i : Nat) : Nat := a3shiftb0[i % 16]?.getD 0
-def a3idx : Index := fun x => let v := x*(x+701)%618970019642690137449562111; let h := v ^^^ (v >>> 37); let j := (h/3873+packedAt a3shift ((h % 3873)*12) 12)%11943; some j
-def a3book0 : Array Nat := #[0x1,0x13c071a2d1aa33260c6507005602315124021918016604b40cb0c83ec0708964f37,0x1b8d66643d01495c0dbaa1a20210d1e82b846ca80a02f058de0084c94749da50a3b,0x1532a3f00aaae035e2231d608e0f4160731954a8bb2d6ac143c14806a3340f9bac9,0x131ee1c2183f07a61f64846e6e03c1504a0d5b580a83b0341543df1b0ec0e814e75,0x135417015007f8c1289c03a03400c1c02b01e1f41487be375d43a6755ac0d564c42,0x10c063c328030a41180b84ae6e0691c0380f85e01571b07c0e81486a0f6b24d0e75,0x1270ea81c2870cac079cd7508c051c782acea0b3e307b0dfe64252a10a54e421476]
-def a3book8 : Array Nat := #[0x168cce431307602d801f83beeace8c7b38754de181b75655c070df3707b3241f4a1,0x17c0ce46cb3887ac07ba85961eca89570168cd818cb780dcc0c1f12249532650f37,0x16c01281c0300ea0fa8785be7346664d2aac0b581b422e0341de35030f61be50f37,0x103f08da303d65410e5530f4860be1277560ed80eb1c994243c1dcc9e6ec0c1f61b,0x1095d1b8df2a05423e1e80fe0ff1812703c7602b6486aeea16029f3707c1e00e811,0x178d6a9c7b9901e0f81c375e6e1281d17804c093e301a053c6c3d878aeab240b02e,0x1d540e077ec90864e2eb539e360ec0d036d420f79b84af8c7801f0260f61e037816,0x16ea1aec3f75e721803b2750109d81482af8d6842304ae6f0ee5087b0481f00e83b]
-def a3book16 : Array Nat := #[0x17c17181c703d0160033f012f04ec9222268cc65b032a2b492950b0160696b9b9a1,0x1792f19d502e6c000d9c02feea0ed8383e87ac0f80b2a0b9ce68d86de6e1e264ca1,0x168c0ce552a1806de121c0788dcde1530f6c052a64b1b60656a1d02403586e3b639,0x134310c951c987a43ceb44a6374aa87d4678d5d683d602b508a8df379430ee81e1b,0x1cc18a98db0fc06caa83dc6a55d8287e07343c3de3746e55c1e50d1be07cdf0db75,0x1ec011b8cf0f081c0c36057160dd43806519201e6b4c9e6ec6c1500f1ac0fc3b042,0x178d5d52342a45506507903c7303d03d1b80e4a8a310f6ea41e1c2382704ea9ce1b,0x1e6e23d2521a07a8ef64a3d08c0ab8d87b09414c0783e0fa0591d7c60489d83c042]
-def a3book24 : Array Nat := #[0x1b8dc3cc7f75b555d72f1c60ec12b9c8240d5cdd0e81a0742c38d8780f60b81485a,0x103e09075f3905c4907182f06a6a81d82c3ac0371d737041dd43f1c93429d81f639,0x187b4e41f5d6e1e0ef9cf01655c1c3dcaa0e1d81ba87806bc0ceb737c3728664824,0x14020ef8096319a013ba82dc020b81018fe54cabb0078343c0ce4f3707b86e64ca1,0x1ec1f1b9cf1beea17ba301200700b8087405c1f437e07e6e1681f07806c0be0d83b,0x1b8cd199514a60ec0fe361baeab5a50aa120fcdc95160234dd4879199ad32564903,0x14c083c87a2ae6ed812324a65586d01b4640ed78d0b19606c3d83a223ad46dbaa3a,0x18672aa123606f052b9b92a632c1d8db0f27586da302f494caa8d922992c0e50b75]
-def a3book32 : Array Nat := #[0x1ac0aaa150ca8071d8953c607f41e8cd2aa073240350f5930ef0df378450eaba978,0x1c8d5189531bc0e48b1560fcc1581bac4aa5586e87d193ac68681e0359346e64f37,0x17c0752c3e034a836819746e540d816e07e0f7181dc38a55c6687e0fe0649011b75,0x12b210c1ff077c056b07f46e540ecc7d0fe327259bf0f4b5d81649d6a37c0f0df37,0x1c54013ba94f2152a99530f31e568a53e0e07cdfb0337e5490c1ee393928ecd0e1b,0x16c15d65088700dcdde341b6eb0ab1cc761948ab0da4680e83d0c82c84481e1d238,0x1cc141fb0646b8ccaa1130fc0783e87f0fe8cf1b9562ac0f86783f196ea9db1ca78,0x10940c0068624740280467507cb2407e2a0f814c05ed6eea0f71c820c76108e49a1]
-def a3book40 : Array Nat := #[0x1cc0b5830646755864098590b1f1b0786c0a60ad1500fdad9d42644a0958e437842,0x1ceb9802543bc8d0e80d03bc55e65e4e198950e41afc6444076d087b07d8e417078,0x13c0f24343c6e3210c374339540cdeb073837006508349930e8bc078a375063b424,0x1060ea83286035412892375f8c1b264e76c718ec1dca105fce41007b3939d71c9a1,0x10d78ec156750e28ec1f7750a60b0127c63540d76482b0947241e83bc7219821069,0x10e81ef4007d701f18172c906ac0da35e061fc0c1f15aa6f43c1dd016ea1e21de1b,0x107b20c2c23a049a3c1df01bac13006c030eddd4018027420fbe34d6e6e0583c042,0x120e43eba80fe6edd52502a2c04a950a0328c528819c92ed9d650e1b2b44e93c242]
-def a3book48 : Array Nat := #[0x168c91a15360454c6601ac995486587a22407cdcad4c9a36c0e0ca5a4751da1d375,0x15550aa03c03a3232a235759ad4aaa350f5ac0be83d03c371da50b758450ee1d178,0x1e8d91b154631c783f83f2ac06f822d25ae33cdf87b2a9adc0d3c4a1992dd68d942,0x18674dc181aa8872ab83de0e33c3fb072ae6e7241202384875b0df03992dd71cca1,0x1cc058003ed6c3383f6360731e19f1caa121e5189513b20e4ea9c842cea75b0d976,0x185503db03c65ad2850cc0748d06507a07c72d1a8db2a60e9e23b30f4ed86ca1178,0x190f580258da0890a9e31a180f51a8782f8374668db1ba551821dc22a0e5e221478,0x1ec171806f75d8d8a99568fc1e02e05058e6f81f4384dc361e26483e07b28421278]
-def a3book56 : Array Nat := #[0x1094ea88d04605757b6482a2ed9d42986002c1e035ad69924e83806c2b403c26042,0x1cc1ca895446c550ab0cf0fc1e464c7c0f8746a887caac733258de1b2747263b176,0x1ec0182253d6095d1b0c87bf8dc660b016e1f9183c06c2b586f07c5a4f09db1c842,0x1cc0183e3799b9391b9b82ab8c06b0c8170c86aa110a1cea96a6491b4f010b1c835,0x1f8c928a371b0f050c9992a0b446a5081aabc9d98d84a0cc96a8da3a3424ecbb13a,0x16ea174b051b543687e314607c1d89531b0745289d83b0f17249c824c36488bb13a,0x11c60cf153aaeebce71c337355cdc160244958e417cc907c0f650e753928ec3f1a1,0x1ec016819fc66724ce551246f19d4d537505e170eb4c93920fb1c87b04810817078]
-def a3book64 : Array Nat := #[0x1bac4e66b03e94243cd512af334a825537c373243c1010f79d4d09d606a4e8a1176,0x1b3300e0090108c0d80794a4953581241d02c12a50a034d61bc9da1d4028ed21737,0x189521e81e014940ec9161b80351b1b82aa030e887c030054dc6d4222745da3b442,0x17c0b258dc59c367589512220fc0e81b7502703f01f379ac4ea3b4c93432861d176,0x16c0181e30070ceb589db2a9acc3d64b4648410895319244c1c879072c05193c142,0x1e55467bad0f81405283cd601f03e154606eb11a50c193ad32603c760858e621478,0x16ea52a235398544690790f0cb86e8dc0f2ec1daba859c7203cad0422749d92d442,0x18c01281742a249287baa4c07703e879c967363f6b537f8d86e2107802c5d89d042]
-def a3book72 : Array Nat := #[0x1295518a34160f65812352a2348a81551902d5d50c919c731e03c2762ed1302113a,0x14950691d82974386c2c04605d46d8dfc64ec138120780768ea9cc3943b0ee1d476,0x1cedd809c72a0f658c2d959f8c0f89e87e0f80d6508783921bf1c824cea0ec211a1,0x1a54eab3ab750e61afe31240f61baeb53705c5da64f370ec890160352741e0eb042,0x15adf181d9386eaf58360530814e43e0760a3324326d60c0128378660980d40b042,0x10ec1fac007b0de75a1d836064c65c046961f80c21238b329e081e1b871cdcad178,0x13c080c2322401e1bd2612420312a0193a66e0b100ad605b0e4bb4018ed1093b242,0x1bc106c07f03a06930a1be0a369d81544c84468601c78444c6d01a5a99310921278]
-def a3book80 : Array Nat := #[0x1dc161e4383be6e0aa5090fe0603c03dc680a1b81ae1ba360551dd753ad0e4a1478,0x1c734648ca1903343e0790f01e9d8bb57529586dba96b2ea96a211422491689d178,0x14764e50d11a8329a4257c608d0ea3b575f32e650d83f0f08eb9b9768498049d675,0x12c67811c9395421a2e492a04013b8dc1b6370e63b1750770ec9d1768eb86cbc078,0x1eea170a083b1d61a0303c9f8d0e4150293ad12a1d1a10f12863af3704810a1dc78,0x12ec0d81746bac135815a694c61441df370590ec150664941ec378424770e4eb242,0x10da9ae6b04a08c8ef1b87e0d61452603b0cc7581f0784eb10821278c734e521478,0x10c01902cc4c89510687e3740a0ba80b016548073c0780849d81f4244731e221278]
-def a3book88 : Array Nat := #[0x1392c3f43b07a02804bc4753ac0ef0d806a0700d80e804f050a1df3766f8049c478,0x128c0b9951a163766407a592944900b2392f09d834242a37906a0e75c370ed3c478,0x12ed9d6648c6283284bc4514a34e45802a0f71e13b1226820922124228410892278,0x10c6582649370ec5ae349690cc58cad03608d1ac3404a0de4ee3ac428779d421142,0x62544608d18e2ccd68a2d192340fa0f004304782f0dd71ca244c09093c442]
-def a3book (i : Nat) : Nat := (if i<48 then (if i<24 then (if i<8 then a3book0 else (if i<16 then a3book8 else a3book16)) else (if i<32 then a3book24 else (if i<40 then a3book32 else a3book40))) else (if i<72 then (if i<56 then a3book48 else (if i<64 then a3book56 else a3book64)) else (if i<80 then a3book72 else (if i<88 then a3book80 else a3book88))))[i % 8]?.getD 1
-def a3ranksb0 : Array Nat := #[0xf83def6fd9f5bd4f47cff27c6f13c4f0fc1f03bfefbbbeebb8ed7b4ed3b0ec3aeeafa9ea3a5e879be5f97e5b95e4b8ee2b86e0b81df77bde377dd370db76cdaf66d8f60d7b5cd6f5bd5f54d5352d474ed374ad1f45d0f40cfb3cceb36ccf32ccb31cbf2dcb328c9723c8f1fc731bc6317c4f0fc3b0cc1f03bfefebf2f9bdaf1bc6efbaae9ba2e6b86ddb66d8b56d3b46ceb2ac8b1ec2af2b8ad6b5abaadaa6a6a92a3a7696a468ea368aa2684a02789d26f9ba6c99e639865c96659962559524f93a4d936499063e8ea378d6318ba2c89e248821d8621283e0c82a0681a02805fe7e9f57cdef7b1eb7a9e5791e477ddb761d6745ce731ca715c1701be6edb86ddb56c9af6b5ad6a9a668da0681a0669976559263d8e62d8a625846057f5ed7a5e1775c96e5b56b599645855f56958559535494f5354a52546509404e9374d12d4ad294912147d1b46d174551343d0b41d04411003f4fb3e4f83d0f33c0ec3ace9390e1378dc364d7350d0338cd328c8320c8320c6314c5310c2300b92e0b62ccaf2b0a7294a12749a25c93240902308720c822007b1ec7a1dc761c86e1a46418c5e1685915c541484c12c491144410c410f83c0f0370d42f0b42a0a027090220841f0701a0601704c1103409024070180400400]
-def a3ranks (i : Nat) : Nat := a3ranksb0[i % 16]?.getD 0
-def a3tbitsb0 : Array Nat := #[0x1000000094300008340440040102100800000210000000000260922400000000042140000030100080000010200000010e100041a10060130880020040000810800000000510000004000000883200000140021cc10110202800810860800020000008000000028001004458100000c00408000044680000c008000000000008000000000102400080000000004105400000040000004000000000030040200010a009e02008010100204010220000880000200010320000000200300000240054001040800080800400a0401020002108c0020460001030081000100800a00044000000000421100000000641000000800000004020100080080410120202408000100010130000100101000000400000100008003040120000000000000002008050182800004200004018000010012000c08010050000040040000080100100a41000000443000020000100800000200208000800022080000000800400048000100010401000002800000000000011400000102140020208000500000020000000000000000000a82810004104000010040000840010000049020000000400800042000000000008000810004124004040000000003c00081001000000080040000000000805008000c080808020000000100001200220000940008004000010041402000000082a0040010004000002080200002020008000000090002000401001a000000000040000040402040009020002010000020334001002400000500202409000e000280000a00000000c808100012000240002000040040600000000001018800201000002000040004018004000840a040400240040002020000000000a0080200042080000020108008000000000002600000500002000002020020002420020000000401000080400112021000004408004002020800000000100341000000040000880010c08008000040000000080808020010008000000000000000000000000000008000100000200000000000000004000000900000400400ca08100200080000000880000000084100440280a00100000800004e8000000404c0004000158000000404010a004000c12000000d000000000000000800220424120001280200020000010000240000050090010000000000200000200080080010000000230020800011045030000400310180002000001a000011040c0400000020000010000240040002000420000a400508800000000040010000000e01000000010000010000002100400010041000020000000000c4000402010000202004201900020002002060000410000000000004000020c000000030010000000000480010000084000100802800000001000000140002108000200080010220008000c1000000000000440000000400001020000040401000000200,0x100002200000200408000082000002600002001000204040000000080800d002140002044000420000000000001000000000002002000000040000002000800000000000a24000000020002000000441000080000000000000800402080000000000200080010010040000804000000002020200400002108420440c0210211000000000004000000010000000000400a00000321000604200088000c000088c00200000000300008800002004048100000000400006400000000020850080020401000000400000000d04020021010000020040010000001400000104000008000000000000500050810100000000000000200001002000000040000904000000000a00020014020002040000040000100100000500048000001100000000002402030004000041080400000000000000000000020040000200010010000000208000a001200000c0400010000000000000238000200042000000008000110004100000004012000200a400200800000000040010900042802200400204c00008200000000001800002000c0000000448100a110000000000004000020092004800000200000000800810000050100880600040200120c000001000000200044080000040200000020000a0204008800100012000]
-def a3tbits (i : Nat) : Nat := a3tbitsb0[i % 16]?.getD 0
-def a3expanded (i : Nat) := packedAt a3tbits i 1==1
-def a3rank (i : Nat) := packedAt a3ranks (i/32*10) 10 + pc (packedAt a3tbits (i/32*32) (i % 32))
-def a3gidb0 : Array Nat := #[0x7551dd2e0d382d66b6acc45ea89442650b533b466c1276a2089abcccb32bc2443f1568c56da0458b557d1395c22f80b2794b8259992e1e9ab5f0ded07ab56b2724884e755914d2ee5bb55f52bb4b3693129cbcc2b330a0b348ac70e4508bcb1af278f6570f8aa94aa568d661207f357bdb95a6999c11b4f4d398d074be23699308b4ae9d52491652af5e84c9e94589ce7f308d71301c4e47360047900a314705895070272eaa98624347aab42f5e8564852c3d6d5e736b7215c7b26db068d107b58b69c2d3a5e2b78d4558ba760db67124d9eb8667d7955d6330281c1391401460aaa793296ed1aa8be28466497969cfeb4112bd78b5f6ae12692a2a46a49aa681520208651a049cc9a59b4f6794a54e4d63902b523e58526470c92c6a525db5884935ab36c4d4d55197076e93d82f6824b2417b3a9727dc9506db14ede3c55b361035ca154142b5eb6694691db511bd92ec4ecb9a8e8045ea2dce3cd272a4c649a6404ccc59044a2db4c8432a94ca1a4a2c91e8f30d3ca11552f8a6ee236c12d269d6cbb04d49f4b6a661539e4e5b21ecdb06b102bb680d9ca07e4ac468f02cc4ae0cfa69b0a22fa04275a76109a3284092e84097a3ac92b5876f00dc956554b893928762a53ab6a1ebd6653a7854c4a7565ad9c94349dccf8d71b271056ac7b674c5240a9c312b5db85ace5244534e256a3667d46f5a6cd4cbdfa46cf50087306196ad1641e541a4d023403cc92f1b40266a9d70e9a398b912107a13da4cac5e4b32e1ed28a04cec65f0a0a7b86e93cb01a884835e2d08a71ec4953d9a31476a3579041b63b610940b0845032f842b8ac5ace272131c9cd178fb2ee5264919640815cacc58fae566aac4910b06bb7524d8d80214b0e36662b670d0cdcb302ad21d01726653d516aede75888d951e4ac1b1a1b4cd2f0b14c0fa81cd846664a2b665e49212c57b69ee0dbbb741e26a5609b366a5804647599f8a7aab26c862871b0a78960ada1e8955e57b2f91d9167842d2659e27a701f457d6db439288d591514cd0a8e662e8692d9464a212b811ea855f1529d5e16e1d4495eb05cae81f6e09ab4b242bba7298ba486d602640fee15b4a854062983af3ca22d2821299a9e5abba62e4bc4115d6db3f02b13866ec35193e8bca4dc423215e1b11eb4ac52701051b316e1784dadd5aed62a19e36a9240bd09daeb839f5a88c9f3f457b2b10589d8a2dada]
-def a3gid (i : Nat) : Nat := a3gidb0[i % 16]?.getD 0
-def a3pickb0 : Array Nat := #[0x4002009c4100a10000a300101d0098656982856d00600024421003d000347000208d0804cf0002010002f5000005004a2d00854b000001000005480dc50000050000054092180819cd000c0f004c2200633000010504401400137200082600000348482300000340178000010104338e00800c188481802089001839142e021148204168480000030000d8022004025613400071081191282409008201000090914820a12150e5018600035b12f8ec68100100800900001948988404000500006640028000212f0000132ab090505722008af08450d100000602048924804c8d200400061b0020010840020080d8008281000312a588c820012500102300000100504304202251024a0007cb01022001034200000300000504003942208a8648210d10c400a165230026010101038a0600634900c4011420910043a40000010005345124688213350204420000aa000a0b00000100008200065b20598c00105584009c00d8c3060580644a900005c7840505044e2000002120120490220510187441182400042800080500020b00000384042001000542231349007002e04223012384124102801c0001220082b300f40200014f0000060c09c8010288648022000003928051000052000002006b6a000003900440005e5948480900008f32401824c4a001110202411000410700044800020200080500816d00004819052d0091430009070014c300119ad4c82000000f84258400008608011584412200000602005d02080800000320022a0000250190690844780000a1001873000009000011480201000a120109620021c1040263812810088689000c1000854b00008108454900000300008d00001308210688084000000100000300000500a561000795088228cd9cb41000420005b5a2220a00a52500051b1024d052210800105d00080d0012e50000030000010006d0000ca34008089c2114022004000478004649610a1200003c00029a0001361001950080d80841c60039820000070202010061330000c1000028024cd1000135091b0008123900000500000300906703088b00804220804102810a00000110008674218100003100000301022048910162001c01041d00005300020d00110f010220281450000214005e410000130000050000051050140006538004010005855098d100320444000521002b00000530003c2042d7286206000b4b0000144006221200ca000260002003490466000005006e0300052500102102022400001100000500000a000013000013000003004101442020e00080200512000009002b220004024a91c4000181000001508a41004a9403801d0005b30080090890830000030042670602250108d9000005122254e0010d904040030041802a4408800180008d00006600c8b100000982701e000495004440,0xe0041000700000582018700001300000a0000051a010e00000394a08b0000030101cd0080c900000190038600051504614e08082604010122909109849100000100ba08000003208500000005004842242832000003120855b502240100cf20800108600800002a00400a21320400501202194500001100060e000101102e1000002100000a0b000800400108080d00050a0800220071810012ab000003048098002c220114500048424440a000048f2006519422142039111102606051210014c30680b0b8180000000c00891012100200079340020400020d448481000021009a830000640005b920402300003305014704101200000100000300008b800006000a8000116300002300000300002900000300065b00119e2026320001210223130000050050a2240109228a0bc8123400000e20010800415300c2d70904581800280101240001f9038a0622528248509e11a10b0c01b890502024500408447804410700000500000500000c000003880a400006530010040085470062841533de8001081001c60000580101400000430085261081490000051101a200205524058200000510241204104801000c006e030200d1010a4c04992520281906804297ba820001020058050080090000030000130061811410a2017106500047000003000902000005010611000003001480588400001801f26a5c0082d58205c200003108084c00001d000042000805011e8a20201410280022411824d5de81d11280244704417c6380a218a12a8108a4000003f932ad001002000975804820e0002e00000504400884224200000fffdf7d0c00010051120402020006c281140800001d0000589d08100000050000668003714002ab000c0f00001500000208010200000a0000094a000100004100000100000100000100000320212000080300000300061d02058b0044710010bb40201d0000050220860000120008012880c39722b00000130000030021461010801227012289a100001a2c00ac0029150a4105006281b4888800080200000300000140110400430d00029a00222914641880010600510200000a20200a20000c0040822080880000030000050000310000310000030000038520a0005945068070024810822d1000c2d78a8084000d0a0041880006c504848025800818002652200700000500d73408302100012800035b00000500b82a8208811013081898800141890205050c5113818a06000089000448ab91380000014200898c52122000c000114221020c546645000005400b0000000c00020b000005004f13a0484000391800000d000005000082609121008520004b1e801f0180815000000300001304404c03690400000a26040b41088000010c1020206d435900058100000100008d0018010000060030125200811194304858,0x50884c22008c402043600460500000300011422ebc200005849482000901000004a0020010001010004430058c42101422131320062ce0107850000540008f9000205012408000519186113011020008081040e5502108400004200065b0401a200001100000300000100002d01928500000500690926270c00104d000041d002880010810000091014020000030104822422c808010200000100009c00000300028600802112418e000500000e5900101d0010594a214a0002454000340a00ae206e0004804500002a82808000050b060225006909100558001962000103004b4b80902084488200000a5c410408240800001b20201d08524202a80800009c81000c1001020000230030020a000210414600000100211480889400013554c30003292800000300a01100101d00000600104d00a5950a6315008c59809101000003508201b5043182020b00408230298a0000090008040416450059f100410500031000021a00000544024800002102084c000061204a18d4020012104391200500003010001a02108408394a10020300000100000300000500000300400100001931004031220100000380584000002100038918840148252900001100044810122b00000500000d4110c080000c42428a40029c03104304492360e1300248131400a1000003083193000003001c510100719550840400141a50270000d8401095000e804842160000310521020000014024300000350015990893100118c5008a0c0032810000230491ef005805000158000013000003000a398940ba0000050014539b220020040600804700001b04001400200a0302100119050104cb00101100060b00000310010201902000429c00020680a401000c2f00061110001100065300440900000300008500002d4b4c18000003000009000081001813d28204000d99000003000005822824281401081802000c0b050e2d222001220040001a74000041010427008216c9610000912300000a12213c008031004480008512000089052c600100700005ad000054010c2300008502429000400a06cd5200000300000100000c000300004b720104cb402001040204001453040121088e200025144570f70000820000010001010003c50000030a910808004901022000be49000012400a94208c4d000042000051010201000001000e2322024400005200029a029808825c84000003001a1901042540108400000301780a0a20410042fc0006a38939de000003020ac40080c703010000006000050b00200c0021cb00000508]
-def a3pick (i : Nat) : Nat := a3pickb0[i % 16]?.getD 0
-def a3hints : Hints := fun i => let g := packedAt a3gid ((a3rank i)*7) 7; selectedRules 11 24 (a3book g) (packedAt a3pick ((a3rank i)*24) 24)
-def a3codesb0 : Array Nat := #[0xebbeaae99e88e77e55e44e33e22e11dbadb4db3db2db1db0dabda9da3d9bd9ad95d94d93d92d8bd8ad89d87d85d84d83d82d81d7bd7ad79d75d73d72d6bd6ad65d64d63d5bd5ad53d52d51d4bd42d3bd3ad32d31d2bd1bd0bcbacb9cb5cabca9ca4c9bc9ac8bc7a9ba9b59b49b39b29b19b09ab9a79a59a49a39a299b99a99599499399299198b98998798598498398298197b97597497397297196b96a9659649639619549539529519439429329319218ba8ab8a58a38a289b89a89589388b87b87a85b85a83b83a82b5ba5b95b45b05ab5a95a75a55a45a35a25a159559359258b58a58958758558458358258157b57a57957557457357257155b55a55455355255154b54a54254153b53a53253152b52a51b50b4ba4b94b74b54b44b34b24b14b04ab4a94a54a34a249a4954932bb2aa2992552332221ba1b91b71b51b41b31b21b11b01ab1a71a51a41a31a219b19a19519419318b18a18918718518418318218117b17a17917517417317215b15a15415315214b14a14314213b13a13213112b12a12111b0ba0b90b50b30b20ab0a90a50a30a209b09a09509305b05a05305203b03a03202b]
-def a3codes (i : Nat) : Nat := a3codesb0[i % 16]?.getD 0
-def a3rowsb0 : Array Nat := #[0xc843e4b153c84104b151628c3a69714c88f02abfd1837b146540e5b3155c84b1dc2991b1650f1283518c64b000cdf848c8821025407ac209f15c82377162a0c5844825008459edb514615a91558913b9684302821d2f16fe83866019aab6c0b152171709116aa68237879a64f23831a8263577f1951022b80b1bab0d8c0844e5194e4845fe8453f18206b1627196c2b159d1a7f23448cb29d0449671a822c600a82aec83b05073f11551cde97aaf2c318b4c4f29516c04b04291819c3045081524af60caf77f030a02292eb1bba44ca0ba81f18548283d4cd3fb194de4d64a8477eb159c7378c45c35078660d655169a8833c2c57a032a60695c84ba9d186e8d9a1cb3145133731784633c5f055c84b144c63fa795b22a12ea4690b128118a951704c6f5a8af5e3159a02a0ecb106429afaaf3d07ecaa2f912336242ab4f189411859e8eb4c4dc5ed151b0aa542425ec6308c67be36baf191cd0383c0496f146951577233664b6158c44a71591e47b20c6c34b12dc23ae71937a3375083674bf0c082876b09a05b9a0326d4be5c84b86ca45c84b5c84bbbb1a876b26ef17b81156b6615847e20af0600d1a1e83c802c650314d07eb1512b6117655150d47610116ae5178f682158271582f5c84b87edec3a73684479a0c7524abcb71883c23c3ac65c84bbfac5c0aa95c84b91a33cc684823179e6320cb1517c730af18772311b68448c8309517070794522a08c823ee7a5c84b1102a178f1c5d1999ec6280db5744221e725c84b82c3260479b600ba3d015851a084c4502af5aeff70314c5633b5484c86a9b2f1a5c84b1901e520821581b937191e0c6c06ac8f7182060e5c84b5a6111d306a1caf35d1a5c84bae29243036903153eb175c84bac4d851028ae1191103d1a6812062a1d884703184f50699a34b711748d1881c82551175271837a246c5191771621e79c30238ea50c7f1522b1420aabc4c336547a9324d1e24c8c44d6822883873077140c318849173d24463317776b106082565164af1457a505c84b38d16b48616ceb17a7198931a0d5185c84b4debe1986f5c84b5946974d19c0718604330644cb8ab0670832a313682bdcd043aeca7b8ac5a17158871583eb114484c39163baf28904559b155c84b16313669197b8ac96e3ec064c5a6a4c304c5fed27803277e225e716588225c84b3e31761c8324605a0119158b35c84b57a114302828a82a6a335c84b464116544dcef17094b0529143891896e405c84b7b01f670c65d0af4c11608d18110740503308ec8964b1626c5839134d69b10515ac7055c8c6496a37db193a4321b515547056aa847731a4d660b5cc64d611c4e8177ec719c6f53d15190a7a39197342ac8eb69c679a3632ac6f01b8320ea43236832c2c517d16ab7138926813239a3492ccd17b1e2319516bce730bc734bf16,0x891a7389a120321e5c84ba61070bd1650c338d443416325c84b23c325c84b86245c3516c0f1962b0122a233e46b91b17090e8721151f916b04820aec646317032299cc2f6569f78082cd008c92329123169023c59162a6c63e265ba6c3036b67ccf057519bcd0787cd843b169df1720a1b887187224d5771593683bb31958c32a0b019dac64f91996b18480616987021e73b9490626836748e59ec6a5e4d7722982c843431a0a07b10ec6792b1bceb15b916041155de83849130bb15ace0700d1a6bb189ccb3a6e796ba50a7d075c84b5587b278f1754ee5c84bb5e32422296ab16a0c3399e7016917557051100e1b917bfa9f2ee9f1e0fb14305b94349a516cb46d04cb60731a59045c031a19d1261d12114cb2af16735150e0afcb8807c516092c6070822f2798be827f11699eb10a115ae2441741fbe11a0e6555b515afa304b6285c916af4990320ec54c3b722860d1174033bc8567b482b446019d17464503e3180d2b6b5682ce4997d2621f51509481121162464d39c62922f45c11533e7a4bd1a22a211cc849e5152e2a425cb051ae88e0cfb06309c48227b16106f2091175c84b144315c84babab15c84b8c42aafe4d4c4ed42c9fc12276ba495c84b4729da3f1582719964b021e7b80517232825c84b70c76bb0050fe329b9170a032b12c65c84bb6f18576b10a7135c84b5c84b0862a21e7a4be8262c32bc812010840e676b262497c92503173e4c6ab81223d159a0316c518a38df2ae2a126c3a944c50313698c66f4795c84bb511646c4d2a2c5a5212ca072126827791603713b18824ef17a24b6bf4822a118314823f8df97e799c7180e6830331502f06690b0b9860be01107c699bf197deaf6cc82a62804542b61c84311190e0ac9a1025c31a26a504702a9a07b10eb162517bb11596e3f7db175b484af2823768a422c6ab6de3fc79a3ac42aa295120bcecaf2f71739cb05628142a3678e199ab175502bbe515c9707aead0376115547a8ef0ba911319b159e4454c07941e7385c82ca0c26f47a2eec551a822ab160d25d5ee8402e7d3b71638716cef1319c68c471a6ce329a82c5061053cb1485180762786c92574bfc2edea503096a7987c84cf90c0f5192ed0d1e51948c7e04cc4b9439bc115038b0abcd1458f18769e50eba1cb1876f1a0324fb46cdb9a82594afc4717aa717190bb1e0c5710c4c3e7a0bc2a24a509db1353c7314c826ff169ecf0ce478522b081c114b672b8e72ab62402cd83f6506d4045f6d250624a20b1574460ac706f8841e21ba94302911596e4d286695747259622106821742962d185c84b2f3185c84b5c84b5c84b309175c84b43046cbc9a5c84b675197cd07576235688253d183451696684c904d4e4836f682ab7141a0826243275479bd2836d71720b13015195588215683ae41f0c85ace46118a3333,0xd7165ea792c6822d11a05c7242a4da361b33229b011371cf1776840ea29b5c798760d568c6760b1a5c82bb4af828820bc32b102a04479cba4d7af1617518b2f188e71900c32b07193b8a99e22f1901ba50270cd184331a7e43315f17ad6b129c82a367a4f242372842ce3063482c7f160a0234a2d1584f8701162c4bdcecb8a10b03e22a0ad190f51a114a10fe1b32ec393f137722f6471850b183ac29c57162ce4c72e282b67bbfa0bc468442209234af9da4c5ca3d258af3231339f1926a243c279c7717600d2bf4ee3cf1844516c36845902315ecf9e6801d6b0ab64dc7c302eed81cb075a83339083c2e79423137085a46e7e6f8821e8be31116ba67abf4769e716c8015828b04b44d59046ce47e7805126a48b1e70bb51aa56ee8f6a3077012dc300a07a702f65101b5b3131803255c6c9e44d22cb125d1712e324fac403d0359612b93134447b8eee8c7c2f674b1838be1fd1718a736ba1446b18992d896317b8a4c0ea0eb47194ec32b50b10c0346511a2a8638eb18afe130c91a594733a0f823706ae02911633b46123a1017df1346ed8ce5155a6126f91622a8476e59a946d934af4ed170320516b19c30bd0e71712316b2ec4b00284de0e8eac61842a5c84b5d082bd4f25c84bcee824327d97cb13e408a0c779b473966b124a1429ceb02e720e319780b6b1a9e0e2af5c84ba4f13ab622922c50182971473b8f1a48cf1b4eb0ce4598764ca0e73714825c84b9827a5771a2df180bc09312c611516a4c720b2c51a1139bb162ce7abfa2a9a0228f269b94b38eeed30ac6c7c84b4e8462f02b1e72760f8884de5c84b5bf15a1c335c84b1fc7a195154204da3860c9e362ae29c3f17bcf02511199091ab9a3353c4d52f165c84bb51054cf169a0c6328afaef1806adc5c84bb007a1102821e7cbb4b1654b197b17a0adb1107b4df194c2a3ce51a4a63223e84c9a2a3e4af9751a5c84bb9b175c84b5c84b5c84b05c6194a775011532a3615f130bc3182a4d5588459a2a22f15574795c8825c84b5c84b957069e080388c6220847a118aa08358480144075831733e83a10c5333199669f8e91a25ec5379187662c8bd180323f9bab152a33b266141515ad6c69e65208ead084b136e7b7a117ab71227c8322a328491a7667ac091a37d1a3e9145971aca0aeb93128867e88eb291e4c3d07010e4c822b1a41162bacf5c84b2484c9e44b159178a318506295570dc3114422237bf173c4fd6988243f17a6b166d2d914d176367346f077808330b1590d19b04845e61b8b27274716bb11624a791a0837191029117a1863c0630710b061c73bb02a294c6090820a64d60d1a694b1b511590c9f81d1764ac65c8c4c571725d1337a291cac692318a9c847a50662c2a0a632a0e820031a71484c80848d6b1710820502b91e42931150a66bca1163f0bece42,0x3d58f171840e4c31534316c3282216807f51923c2f2d028a49052a68242a7bc96ee68a73798b16ef1ac86af779135003251030ace00ce4c541d1705c23576c66d673b7250468b10709e3f11631282c7c283091a144c51dc28ae2112eec71b6ee4bc76648c6c111534919c351765ab245b15a94315d11a124122eeb03862aa48f0502c638a824a233268dbca0270284da47169640ec9a7310407037158762857d0b9a9169927b5bafe2a718c1a8205d1427d1890e0e9de845c84b3722a2aa255ee82574280ac724e6333ee8350ebe044928430a0847da37190321b5a8235761b0ee2315e694f648041160d4c6626841106d03632c0482772b0773175f2a358919432ebc502a4531a42203698a3178d868481b111558e829cc7c1dcbf7f02dca119cd516bb65ab8aaf62c79a10bcb8b144828f076ab912420d473983154e9162dcb1ada403f11a23c2325c6b3266369716ab63e3e44c5482359cc805c84a4d064e8c6bdc63918b19e909c0b1695ced65c780f829afe241e0d992e7bba632065169a6c61cd18248c412460c9a2db08af5df153d23332e1b0f82a5b31603c84218690423229d031631a10d175c04cab6044151a43114c0a222db17b9d162c47ab72461be3262c823a6c3209181224d7c8845ccc5776c6142f050e7ab3b16a389eb9432bfe9f992df3ed17c5a7fc2eb06ce33634c6174309ab156908495cc69a1164ec848ae651e0af168d12ca799cd165027f1b517110731e07b9644d5c84b772325b5075c84b2b633738235b4f04344f7e916c3882018b08c8a9bfab140c241102332f13ab31553e82167175102f67919a2d1a848af914af3f03d39d0717513044c6c22761c057a4cf1532b162af831eaf02d191f5162e68232e7b0ed02936c56be7d50c7f9a0230f481b1058a0e796d64d9407351eb114084521180011734284376409aaafbe07ec3ab11a90b3d7153623003684a76b15c87954ad86ec2f00a84bd469aff150eb132dd178e70c5d317926795c84b5160d574af376b06c4c697b15b50834f91a8391550b1a9db18036236b5170ae34c1316b5f1a89b16c65185c84b5c84b5c84b39082156c55c84b7111522083372337a4af50e285c84bb06245c84b5c84b036b15c84b7362826abd822c8876c70dc735c84bcd4d85f7175323093e84b2b149f3197204d232845c84b5c84b5311a5c84b93a8022c835911acb6c697cc69fee65b4b139ad699b189c3130a6055ff1a506b05c84b3b0c682c23171175c84b5c84b22a501b8845c84b425168d833a0d15892326c2c30eac43727f2baf25a716c0a32b3cf09e41b04c6805caf19d1682c733e717b724ac3917c0612bf6af33f159c079a284d9a11590d18ada7687d1aca07a714790970d862bfaa0afcac8292e7aad7180802857713a1cad91e1f03b188267aa52118ab185111596f159,0x41b16232b0a542a605155be309b50ab5e131144ba5682c55077aac6b94092a09f001198d4827aeb15e3195124fa64b1273163d9184ed155191960c7a92a822caa35063e91e13827175be51a351ab4c2a842afa7c84c06785d0b125c2a2ead103a6d58a9ab927c8aef20e0753f1199143d1fc821804dc5473b2e0da3893b4084c311899f19a46335e64cab83323c286ba90798733e44f061192cf1522a1e110240ea73aa6790323d7a23277e32a91155964c85319ce40ac0632be013035158487e3250c95d191df1654d1644c4d04d13892737b4eace43158a7d586772d11522c7f5027257712144af7610a9cc221549f6a6ecc30b1632d029a32bf4b121e8294efd2c2c4ca884666c520a27954c85c1192af14018c4ced195411521ef220633a7b1ac86c496f195a80304c300d4820f48472e4c2ab15ce4350ea500e2c4bfb176b63232e7a278af83c327f31657633335154471759cc361f0685118145183d9178c8715c0afaf08220a7942b167811a2b673844b65c8321dd136f9186d51a09c837f506b5cbe548050e883a3ac6a0b18bb1145a916545194c8fc1141269309115145888da4062ad672afb16302f142eb152a4d3471904661737190a4cd914b670cc642a328e084540afb0f1746e7bcb668021055744d85a921902a51b19c071a21f1aa362fa2c45c2f147b1142ead219c7a190dea502a65c7b820b1964483e232b921b02f185582dcf8dba991ac9b166d61f1551844d15730ff822b002e79951169cd15586c63268f650512b8a480433703158d2f0ca11809319960329a0791111ac32c690718afcdf5762f0ea400e314aecc3040840fe2f20a903a633b07146446025c321a2631a1179e082c38099187237c5c9d918c971a2a2af9c31581d183222475b18bf518a0ab76d6af11f199e3126cc2365d1a1e2b1b811a558631042214c800f4a3cf5185868283c4c58f0ca7cf2590acae3197891611e830ea26b9b1950f1632d0646f1a7f3171dc4665718145147ab1878e63546d905c5cb86d4c3c724f4d690cc4605167b883811169407f4411695d0a584835745090f193a10b28c8419024568b15282a914c78ea489e084c1d1853261cc5184ae98a648374b058c119258765bf1a59f1550e23158790e88297d130169f6ed155751520610b000184107a51165b5161141e7f4c71ca610eb19b922a53118884c52a516b5f151262383c2f018c60ea21ae31625518574c796b1a9ea836f9175b284c1223a7f065c03025c2d4da798d08f9643ebcc7b9a02f70c80198682dc8417f1a3271697e7a3f8de606f02f719a364b9e51381e793d4bf16e796588f05d154307d5871aaff1a1587ca1e6d04caf762328be84aed1a60680532334b62a95d1528283778c678c1f6d66951713af47820a4c28cc697e9f4ced1400b18e2c510916090c69a1140ea,0x4113b8af634b15151a1b482110bd8291915680679158621133e32806833d22db571866a7363b1a3a0f0a81166f07337a008c45889aa4328b170a84071036ab172c30691484c80831e22fbf5173088426482b4f073c43f6cf15506091e31750a4762eb1b046f0402a7f11535c361751697a6b38903658d082c83711138864d1591a3f71a6f7188b71937a076ccc5282280c9133027f3a0c62fc2977222b2f164224d46e615c71419d1367318a186d89043954b0bcb187071ab4ec6036300ac738b4825d51545716376ad4d0d8b471a036c470813ba6237ead9854333f1181704d2f3163fc9f07c7b376af808bca3aaf2a1145b4c6912b36044d18cc63ac071fd15bc028ca1110eabe78c4d6d62440ab1c10391a07932a824308365a82c351ac3a6d19c3371f15abed692ec4bceb60569f8e2c674915bb66106919b2492808723d211c56c6094b14b4330ea6d5e6284224f45228a56a7a0ab00351693b1a3d0325509f3c2b09ba8259623b227b2fc24b1b198e51898e82568c85328473318caab630a4d9aa8470681b004c4e0133f07835b1a524824d433154db2deb1be08259ea366715678fcaa0c442cadbb9161fcc75bc47bb6af655176ccaf37cc7ab64f809195e713ace1d185165de137be504969d54d152071477224b411a247150f824afb19c26b165af008f183a515a2b16c44df01515b96b05b2229eb1787b1604f1907b163b85a8e4d90e682157199e4245c08285c839a515457034c29f5bf14aa111714c4844c452481a1d148d31833e84c062f2a28242228cee235161b41ec6bfb18cb6c443e83c36828fe337990b4b117a511545c333a0d8c467aba8c7a4ea8a3623aef199e0f203a84a4082be07a5c0975a84d5171928ac6822adc36b1646b14dc82bfa07056731aa6d50d177911a206836ec30c5c03b001b3250b29a4d0d28399f183b8b18c879a7a5e7091679a73a70823a6274e447656795751314b16a50286671412630b5cb1880c60671a0ea236311593e4d678c62947a2e6af10c846d318a6482743092511891e602c28286cbf7c717580d296e4b4543373b193a0e877a795271a2c6af56c828211a820af174c4a1d1a34b1820ac623c3054c4d7c433c5484c8683a90b16fa73b1a2950c4d9f69f40d1ac36c626a112b2bd02c830a4bf6ff1a3d31462e824aef10e0b1aceb3019134128404318698afb104db06052a0c63eea3630be62d16b064c4e5146d4419d0321111510684cb6bc10e63c23160802a78d16cb4c64d5166ba3909279afa12c30b0c30af84884c66bc0bd152231587caf3f64d0dcbf808b19bb15289186cc4c890126c24c0642451aedc270252f154931a28d197091aae229105132271742240b4eaf7627b65a83a0eb19e1061144c50640a0d1a2f91992eaf8ea784848217482ca01702e70b94364e11642b1558c84,0x13fd186be823e40e8d03308d1750a43afa1f528015eac69cc2723cc42371a2751a953151263256d189228018a840feb665b065a832610c62c28446e844c87b866f97a113696098130388d19956b108cc422715607171ca9f8d879138ff843012bb177a918379167362cb21179aa4c5c116250de70b1a6367b23cafbca829926c6807bc2ea4428b1866be492db26a47521177b882232c5c9b133ee0093b18590281e0b078c42bba149e31566cafa18847bec88ea4581d1a104be142582e0621140c221195e282bc918226321628342a846f4729e51a55d19a1e84595133d2300802972113432831f5181743262c348271867515a4c795be7e8d11702eb17a0c66d4588fe000322413317a0e331c51a492761cc82430451aa8f8d918c4f1791e4879901845138325f4eb1a6d422788d16d424619184e515156c8bc6778dec6afa1b1dc4da251394a7b5871735a92bacfe57516997059a0b061c229feaf58f0111632b7eb18d11693e691462815e31502b14af13162b13e46f806822a51a59cc67344dc725ea5d159930600717891190dc6925f176eac610b18081165bec5728bdc1a62ceeb14871a9369e174075a917106b140c13684501a3174af19a251725884822af188bc9db1470cad422bd0a6309f4f1bfd1a57f161e3152a2c4c42c4aaacfbcb172fa5e432825341f20915c9f1ab2f1923f066241143030866282c6c68c5192fc28a0f1ab708259f187402a3b87d8d4c8464420e71a416b198229bf2afa209fa3e6cb7e82666b7b1a25b97186cc31cab12346230c42a467148d8b21a2829b50d8484259c698b51999cc664b16510836fa32b722aa531619c3223eb153423584b6bbe8422a2f3e2c580516a90af3911761115a3716114cdae11665e7f25516890111f4f219c84a9cd1776afa1c2d23c7bce8f15f29f146dfbfa347e6b1a8c78b3f18ca8b3c5719b0875b3e80b271aa3d0b709152da84b6082cdcd103ad5178b075ab21cadf54083018c86d4a7468771c316632845b230712e111058173174be9f524c444e11594c61ccf14687b0aaee0f8336270623c7a205185c62920a8383c1b5d0c4a34796fe80302af4e882b5e2a69883b943b89a13a9119b34336ce84974735902d5df178d3051fc982e1187851672ac591438af2b180918982246f51a5d4b18c8c49a917686d9014b14de3f26a4218cae5500b19e6958ac6576af2ec735b2a982d13955143e458beb18922f219c4c8264fc9b1a7a116bb71a5c81b992b12d02322a076511732084568c55bc48be115258c4c93141f4b35be31bfa0937628686c596118018285325ac9e82cb518591178cb10bbb147ed1927411666b0b8eb0cb4840dedc1f4848307b302e71a68203ab011f17c811ab1e22730bb84519040635bc4465d173331664b1a01917464456cd152cb1860c8410c8222f1711,0x249eafaf0312793d27bafa3328230588be71023afa3574a8459e79ace636c31a93c7b4302f97a825fec6a8d1ac227246b19cd045767196611ac80353c71660c3362cb1178c4772264567e4e90620edbb50c762705b1317a371501830c411641715c9a28450690ea093ee2a884af25c1e684b7cd114162afa1cb0070c7afe295ef17060af2f8995a83025c3376b193c06085a7983c28362325f8900dc8f83c8445e7921ad9cc0844a716294114c9199642442f148eef83724d03ed119e7b07119768e1bc2d674032777176c2c48811878d152ca9fa56c49502a0c0c60e117ae518c3c93294b19a030a48d928665a50232ef143e2735bf1724ab09f7176aa32027095b47c9e413954af60cb1c5b17bd4af0e7161b6b15df165b2b1aa113876c3454b10ecaf6c25ec2f1abd8d0092f1524846171940a82b14bb4451761c64555002b663a2b13500c6052791e2304aec66ea790bc4e2a2b0aec735744813f19c0d198ae80a18ed8551655b14568319a02446edf2aa2a96e1fa387a16f1760c799cd174f0be119182fc1fad68490f1500ac6b208334317822c5001135ff071101f088b1b991a62cc68e457920b0b4c0e55010b8e6c9db1714716622be60d19686b035c8205518459184305039d18416736a6835742c70e835d5149e428376bd57caf424333a518144c4528220f807b966d2dc4c9b2db158af0f5171104d6ba4ea1a32ba917adb15c103222c799a87a2db1844d165b2070867ba451896e0c65c7574c920107bab314372321fcc62c27238a84b5d1610e28abe75308c42e29dc2114636bb93282a76f21471500a7951b185de72af0e528681aecee2c8b20ea24bb6233f114cb7192a47910eaf344df992f118033528bb0d479430241990025f184c901accc87171ab5f160846811022cf4cf9ecb33df16b4edf15919b40832e107076580e1149c91562682b9228584b30eab039d1360caeaf103128f00e318b42ffb3f0520b1733e337483077a2b966315691667479648b1aab19678b15c822308124c88f4223dcec32b485c3a712159165b27b376c88eab1ab832ab63d22a73664bc8904082b1568224c61068ae849e4503ec820a0304ee842a6f14b4033fa7a66c847a23377e2f72b0700318ceec6a40f85745c45a4d8c316638fa1a1120e07876916147197c4841911525c26558167323391a8f8e8de9a22a40c841fc78c3a1f2c8c504470816c37c5177df15076289dd16788d2be47a91284b951a66518955130ff1724a4dc805d294821043f5071621e701e0bc6bf1828c830f91632a4d453165ab151271a92ef12a1156824d58d15064238784d984d2aa119b00278664c87cc459f19236c4c5e84b483356d060322353ced323198904681c79bfb14b100e0a084610329e26f3f0b12348496cf8308335064d967180e6280606fbcec62a6b22063,0x199d08180ed4c222a2201109684bb468097076d42185abf0cc79c303da16738631ac11180d82a1802a08e9f1ded463b1971cc679b0ba2118bb71551af27c22aada0e18d15cee793a084b56c722a293bd164b437b4ef250e0232f166fb171e27982c7b422af83c2a3f9184ed1a39c846244d18d12bff152ce1b1488242f159e4126ccc44b4230911574a820011682b168e318592b1a041f32a34c402a77f127a0331dc428e918a90c6138dbc7d1aa4e8bb63160344d524c5379191dc4c7be822a7158bd19c3284876305b2236cc24678be24623b627b87116a2aab7beb377e2a37715ba7175df1acba2acf482a3e686ba9205adf8e6d2cb71a35b18a5717c2f182e084574243e24da8cbb1c08bc9a332ce014a71736e733ee33cf2b665f15844af1b518cb9172648044b18848310df19ba3161d428258b1ae114cbc7b9c0af25c843c2d832a265b4c42c90655472a90826d40c1ccb138c40ad083820c39da24234816cf16332bcb1f124db18b72129fee80ea4d376b15a8b18ef0c4ce7a1c1199e448283133622f69917b9233a364c5feb10cc732f878a24b10ea223d8822c4df8eb1491a6d83d131c31ab261350ac68a6c61dc4861f1833f19a610a4711622c82992b03c2f10ec8273070360d857f15c387eadb194c2c674115a0ec64fab12e6c4c121266d179e4272a0b04327899ac602f1958d17174afa0e3092ef09df18bc4dcc96a737c790a6248ca841fd194c877a167b96e23bb6830ea6b5a4822fa834e424992c620716c3f1839c8217c2a1043dae248528055c7151ca8415e1f0bc7b6c2c2065130ea4f9645b5251a943162f24d69117a0f161cf1760cc26e9191ba80bf2f17af1518083912dc5fec46366b2c28360f181fcb0c76960324da05190e31340a8366abb63b1858ee84220bc7b18aa482149166b91710e84c5d172a6c70ea2da6eee5f8bc96429aecafb264d15ee8adef1bd8d4bba1008c3784716828b26c27abd31aa5906a5cb1a20c60c51660c832e91a6f4c61e1199ba843ee24a4e1b2331870f1612e15c0918b48118eabcb5e4dc82de6bec453d01cd0af0eebc8d063c107963f1a05e842dc325888fb8b13325184e718954c5181169ec8025c6d37ab08922358cc615d18512032b412a462ac08bd584848bcbeafa1e3427a8e6f8c76a3a56799b3190e638bfcbeab859217190debe77518a4c8302e841ca80b1e83a2d161c516590c3656dbb62b12cf133a41f091185c0b1bad006e918230df6342a1ca8268d1a3ee0708eaf1bd173f0c61b6c677a396ea2a5e7129648e5eb18a8c9a7088444e13ae2bd6eb16be423a56c88f69f9d042a3d0ac303fc2685af0af0a64c95cb12dcc32891a0e28f82082610c33a4248206650a4d5ca245586548cb17083220f174d6d719c23c1af2b5ca330d1656838c02932911660ca63763eaf0b15,0xa2f932eb1832920d517a46703620597cbc90e4dc54c650e22114bea06b01944d77a822588095c8f7c6b2bb47dbb6aca4f16a5033000af42ec67c5159f506ca0b1087158de8240c28af47a829067362426b1623c794304c63479b107aabec4506be8c9131b71850e798d28060d167a3162c4de57eb16eab12dc2f04d1759114b1e328ea99ae1158863222a332c27382284c2e9232e231b4c67b884b92042ab1977715965191323472023b801137d18056623f075604324221f1a1153a0b11b51690716114a0a567b158338f3163151759024828c41dc13156ad9a117a8cacbc892c3b18c930269717bdc0b3fe6d4aef098d0907716a65074a64d77a2ac065004d19a1f178c8af335161048f0ea1e52823c2715ba68307688a1c366d68404612b62823a601ca8c8b54826d44fbd4c4c391968319ae6d8697188f5175c82347c7a3a62329b16a4715c504dc8f1ac9a2f96e4f33314c26c476083bdcb37c69eb8ebc8a282b11173dcd20511770d1a8f7173a7169e718ada0913282b1033be5137307a85517ab63f2ae4d7e5160907958ac46ec4c5767917318bdc9f302b10a30187c75a0b19bc518c287f932b1778af70cc4cee1b6071873315954c423c4c3311752912388b17f0324e030a9f1403a4c4f86618cc332cb0c2682876330447a5742053223940b1684315f91a7369ea211549d176d428afa3265d16013178bac60ea101271777a3221b188b31a702c50e2e8b94b1718d17f046324ed5fb17828c742b1728a7951ad0a8f172f31596c7340c32b1eb45683399a32c9a21a24826b71704c325c8b175b1922a4d1ff1633cb12a317ab64b16633767154e02a45f164a317c54723f1130d915b507a0ed192ce4bb4eb35be24400af1489f0c805a1a33ad0826c71a52ab1c2f165d08444c24ca879996c42a6b1ca04b83318a6d172b2463fd17720af0e9183ad1771c840eb144e4428c873495198c91a820c461c1b4b42b7384c1e2e91a119050003c4588928408e612df1952a2a71b18a8c754969f2b6e6064122c4c7cf4d1be117b2a230707a1749f1c08f964506ced232e4c4a07d58ec650c2a18a325a8280bc4d421152ae248d8c79db15ccede83d12c72dd95d0c90c827990c6343257e824e71519e6d5b5136a70622c7b2a0836eeb3ace2670cc8b2e1f93e3025517afe2ac1af809482b72139568296492c803e590361aa73aec8448c768eac726a299e0830ba2ab9a32a0ac6422058af17c111791f1383c7b3621203ae8b1f1a6343318d18772079a83546d154d08060c7b10e3025eb00431657c8419d195c11a08e7e58679bf515c7c1b66cc624b1a88a8376e32a1a843e43f432af776b020629bb0249f6947a22ab4c4009d183e4b0ac2848e70e7a084912b1ab3169a033bb714589120ea76867138f5188c082a4a8465cc37c64e9f6a35891a173,0x884c8031926b18791551cdb4308432b1ac3e838969d626af66717bba2450a9057c698ecdc698729131545233cb483a90a31dc12ba633315185871696f168b481c84138931343113c2ad80f4835d4c5b4e805c09a996d9c5518845126c279076beb451a0641f6d44b602820871648c84c531836e69c0a2f39660bb4b055917a6b1aa46321ccb030a4e32e841fd14bfab002e8259030690c477ea729d061f47940c2923c6f91e23c2ebd9c8835fe6c094c6884b0325150c0391583005665b02614cad477eb27dc29294b3aca5810e6919e65822800e67b400b527a13c451664b17baf180e6c86251659cb16f518828ab2e8a489315afa111a0c321519a98c5376be6820e7b8c640c151a91748265c531a00a73258b3742db8eb13a64845f68410e7ba44f13ad183f02827116780c5600849a028554bc3d28488079b2b16964794de4062eb0b4718bbe824a07945083a44d8a409f88ed89e405cef1258cb1718825b4824c082c34c36c2171744d1ac59580d1af716bf4860d4b03a4840e115c3115b171ab1b1696633b2a05826838462a912ce2c51a0bcb09651ac511997f1505316c9a6d1904d506c6ae44c20ac32e8840d46d126c46d63076e33613151f228b94c8b15135b1190c04d524b21551696ef907629bf4d93f012c9a31c0713454340ad1a994825fe82a50225c91220632b686d2187348d065107aac4ef15e305451649f1848517bba412d118a1d168c2a4007153268495c0e1dc050bc0722d06105182ce2778e3692718caab87f080914344302d7463368a69915170bc3871d04c9a6b78c4880480964c5507158c917422be5ad1648cd80d2310d224871150e633522827811832cc50402b174b15b512a11156c319627185d4c6b5d1832e279c6db08e7b1151a65c82c46998924c84715b724565cac76284b00231e9198384c32432aa884b0f1a4c0b17d6c5762114327bb44de781156084c6ecb62808e094313fa72376c44c91559084ce44fa0282afa445b47416e69538b0a20b08c44025c21626d80eac6b96c497b186d411912762b116438afc3e8250f117f0368eac4190ff2d0afc32d882918c811792f19914b05ac1233224c9f17466da4e51a6911524ac660c2f4d082204829a11958e842c2c6a3713611179927d2822a59716a98c642f189fec51428cc67184246dc04c5682be1fcc5baa8448d1a59f144ae9e1a8ed53228494c60ea07828f05aebbbce690c4285267940c3383805aba822dc124d9195030422e8340c319cd19772060acc8accb1071060ee4da5429a3e72b724742c7b144c8ae433ca91a48cee0d3159605251b0b01b164f1197b8b1ada2aba71576b1670ca421e847364f0531a992c40c81f32b17208c645d16bfb164d9157c42a8a28019b169a0af4b4390945b862500a117456824aec70a7024c31850a4268cdf55a9d,0xccd2874a62a82c7766a77014830a0af6df15a7718720b172a8220a7a654834e68311513745152ea330d4c897f16c7cc37722a12e84b26df8e8c63ac32b2632455188de4da501bc3482c347b9b31a0e69f0bc396822a584f4378c611b15922d983c053fee84851627f097caff17405b9713813192d04c6ef187371604282a1c7e04cc22fd14a4d15c0628378b11bcb7bb518966c82c684709172367d8646d0509f9043299ab1b627994905a4c822c4780e07b0d48450118490815cb154220e3551833e7882884ae71a50aff934c4b1eaeb911a0c88452916bceaf1100532118beaf0541125120096e24ca89fcee7bb5e15724d68eaac4221028b18912436787b0ec8300292b1e304927b34ac610663baeb199707600334e444560835171253d174bf18156c4776c40aa836eec810458cf71872240b63179e3174a1189e31322b1a378a305ef28e6d0b86d2380820ea28168cf4e02806aaf8ea608aa822e3154801389050494b16422a5bc4d96e4c3dabccc0d4b265d772b15c8309208291e2442882950d84543985315ae2796331940af69a6b16fe7a8f8821e2825c0c862aed53e80b2d15434dcb511738084c35133f7142fa300c514a6b1530a0939cf2c9a76b411736313b9b16258820ed1825cb177f175bcbd3624d2da81a504b69d05b222ab948200084c31135d1175431593705c3c7a2a49289118b50b2c300d33b142b66599e721891521ec6964136d62618cba7c91ab5079798e8c8ce8506bd650c5840f221a82a1d174d653b271583716bb484cbb16ba61bca0be996b05a84c0bc24a90794c858a251511e826d43e8904f052bf88e80040c63768f036c62eef11eadf506b118ad1966c678024c02906e6b13c2b16ec68b5f1788e83cb4738971571cef2cf171ad175b277c3cd8b26847a4c4976af78d1418316503158f3178127950279914ac866234d11a089185281e95c4f25c7d3f0894ae8337ac6b924d8624a416235ccb0b4e82bba8d28224a10c68e08251af8076745c0020d47d7c71972e4d39c63c1b18104234307b9cd1abb01f1bc3074117966b3c9a24c591a9b50145432362af87c7f14b197f200ca05c5c716151190bf17b06320764cc96b36cf17c267d2fc231571a658d18be819e2729ed173e40940081a4063c8681632d15767358ed06cc4d21300acc790404d8ba825e7195c801b1e8446e821451587c8228683b491669b16a1b1ac96af7087a1ccf7798f84c1156671809282a2a0d0ba7a5e2c68483b887171e2af5bc13c7c4c52915a91161be82bb029234f6ca9160f84dc3e721f315b2d16ce1195129f73ad14aeb1c9a7bb8f19a76c64dc4d145172c4b072069ac4af9d0368b268040340c81257d10b7316a504d104c4104714e67a126c67d6b024913c08b1ab716b86d1b0e8409515be0338d5182d113ae4076551960f1556,0x2a1e94ced78d1a0a027032be912805d4b063073884ac91f15a0316ae2c7b2b1351e8246a577be3425c2861317ba91895c4d20ab1992847a0796ce4d0ab037dc2aab61f1a3071bb181a8e81c11a8791659713295187724dbad1acee2f91431549153e44d4f87419c72afa24216831491891a6925879b99163f6461fc83b2eafb5e613d31507c655740ac7cafa0513a567cb401275515a05144c91a886b114abec768241f1a96679bcd15671189aa24a24b80371a37a2a0dd166fc84947166344dc308f25d1a23c820a7171f480c7679c840e2a8e2bdc7b002bf02ec6afaab66cb14e07e224459a24d99706aa0c3382bf4771ac468339c6d95f17c926732d183d3165c0c4afa23c7a8f50e68c227a2a8695b2280411838c2aca8b15e3183f62abb4ac174c6548292823197a7db5683a391a5b2c3ae514b54696c3168289e7f48340cb0019145c9157dec68c8b1a8517a768350e1ba0f152e9174da920771577714b9232c3ad0167199303950eaecd30505a6100033322b67c2c6b4cfc6ff17b9a7e5c84b5c84b965163a6af0560701484492ff5c84b5631765b0506072a3a6890ca3524b0a7cf82809f772366170e7084d9e24c03313b0631b14ffa647f71cafc81152a716904834b4c4674c676e800ef146d631bcec4a97163e2b0122b1a1c50294806ab152820709424bccc65e2b896443695181ab195c84b5c84ba57037491720607936b25c84bce5199e446c3d1a22a7645b16887165c84b90717432759f4c45c84b34a8140082a5c84940825c84b780305c84b05c83b1e1a3a42308ec55c84b1040e0711854079a10929551a6f084ae67a9a915c34c822d1922a6b9d8b679a32b6d18430ac20517ae428648323f0402ce3370e0018845632cf51b0141ec588f06bba3fbdc62b607942e840aa8216918b6f150943228203a7c7c3b62aab9163d228772b25d4a3c9313a1c322e6b11c0c6a6eb18922883c4dcef1ac491743aff33f165a8b0154a3b96e81447b9048497e826f87fb224d4b4b1a7673963168ea5e9ff0a6780ea02b15eab1c04c67d2e816c1161c82400844c91825d14ce514bc1169e423b9b156c68338d159c917a507f6d7152ef1843c1122a31c3abdc2af130b18b551796e3da91176ec23c9a262831651627128d92f87a10e2359715960821aa4f45a05807186a6f1b1e828771423682b128187b152e0820451928d06af0f25c84bc3ec6a90d80e67e46e765c84baf06f1be11702c65c84b22cc63e279c1ae05c84b5feb0c06c3876c88c43f9611a48d03156846e4b160a7a1e24bb04c41e0bfca8af0a67d626b04fb0602ef1452845c1172b316a0515a4517142fda65064e436bc04d377145feaf61d13bb71705d1760a9e6c2273a5179aab17ccafa4a651104f03aaf767168761fa861173b0d82a2a86ebe88670892af2a7179a0c8cee4,0x328771310e73174b02d4f061c2fc28c6aa8615c827cd04cc769f2fa11ae243c96843a71558ac3c7d161a2626488229e335a80703227b006eb1f17422b12b22aae5158c0b16c31854316baf155e317456c64b4079d51776082b04c655b152d0b16ec8444e159cef2b92236170a7c279adcde992833d5190f9183a10c3e262a8684a98b00607a524c7646823f05861c322ce2f24b1804edb9fe82ca0280e26d0ff12690827948271614636dbc511671072433074704d83c3366cb68c43d2a4c60ac7b7722d4163687d067c2368b0835c913b7f031251a6e6844bc7b21ac640115045182c91830c0b5691a8a116c9205cee3303b174c50b626f12ae2886f1991246a1c29918af37d16bd5072faca9644fae0246fd1059d122d4f1c80b04e5174b517702b18aee8bce66be51679ae8ce4244ec4d4f8be6ba470bcc658ef24811a8eeff174233f6bd0a6679d11845670562b11fc99506079b47b50a0943033610b12a8732431767840caa4c7c6b762c4d37629ae6728fe03ab61b10f1863517b1b146ba4227d171807a6a718650595c0786d623502efb4d193d2adae3182beacacb17c927da4882cec23a04296823e6e7159a0b160d1273f1a9bb1a22a7b070d85008238d1953d0c8c4290c7199e2326c2016104dc51175825b76e826947932e3004d1573ad222a7d3d04d61232798ed79716ca880b98bc2c4b1755033e41fb211a59118accc69ccb1b81189c0b1c327928e65964421fd169891a1702aa05165d49f96e2a98e6f5b271ba622104a9bba4fbfa39265180a7150007bb8a31710b1706822ce23ca0c61d082454792c4c602c827f29f1dcbc3a61ba042311512c1c7902f1a3f8b19128363a998ea28b65194e11a6844a65f17a448233a3d7de724d6d850e6f751156b6309e429733161a3185be590a1161ad180bcc552505568b04fac50e08441f1842a653222371316c3a053ee31c19163b8847de68c9a840e51a14c87cad1840b199d0310ad02ace19550334f318384690322296cd05e64b745189122d0b318248af5504e91e4d735164c8b148692c9a506070575eaf1e28408483bcd1757d0c844b85e2b1638ffc9a4d5231863e4a42c7632a43c9317c04b13971a8286d7d71a29c78095183b82311e813a6289121062eafb96cf25c29b4cbea1c4460d18432b19929acb47d62ee48af18c0a710e09aa4f12bfcc628c72580d4a9072914c5738285b8849e07b25ec72fa28ab882ada4d2a6801e11a4e716050798b7181c917453177c6c7c8032acadcc2eb1b05190a718b4c3fcd47a3ac4d0b51a7c6b0290b110a82378be15874a5caf9ec8241eafcacb1bfa293f03e63515ba62859c82b271418a4dbc71910f15445159131605f0787d041dc50444b19ef0976d168229fb50f00ac839a832454c6912504224ca51129c0825751a106627ae798769aa,0x642a97d15326730a03358eeda9a82ab64c3e29f48cc649e8294a8287716cb6af406de08e7610715aecb6684464a082c9a7dc9a36a4d18a60f20c115bf4790bc298eab016e6504117ca8c6be51977519afa2c85232000706b715710819e268ce517aa8df3864d4524d6d6056b62867082313180ef1544d146c4bea6a132fca1b6b16292b704c727c7186e4c662ec50761e449162587bbe44d9ed053e43d760c60ea7b680730764b65b19430ce7404da2a299131983c4b7aa928291ac7c799e07e39d1493e4c3d116156dbbcaa370914bfeff132b1b0623254000e91608f1a0771abcf07551161100d0761b92282c3b143d2321104c58914c0717c3aafc1312b724da50326ccb0b67150c44db711860283be0836cc05040324c50a3271779b199ff0c82c286fa846f063ae2420423323c73191140da822f681cee304e919aa11832633ce43e464bfc1a658483660f17376b320914a3f143146058ac8ada4f1b4796ecc3ae0fb79b0c432848f117314815fa3337915ba6309ec52c843f90515abab6992ee22b16caac3c9d19c06b157443033167be4ec0a7376acdc34793d31a8e6d1508af144339324e25c508d51a32f177b4b01caaf3ef1596e290407b9e0b329cee9da32a1703444c64d659b011a383167ccea7442aa0d173b7157b4b19131a9f4d80cc7b80f16cd0464826961c303f61397c6050e4cb2eb1a8b14bc0295c033020f03c2c6c30c6983160ea41a4084292db97cc48660c3e2c6748596eb1551023328bc70e0350ec210440b067da691742d1aafd1abfa4e2d1169143529cdc226c6a40b957b16b2082850dba1d152a86d748242ba8464918cf2bbbbab1a50b17547e53515b2e287e6c67a2c6b12c52a6834b42a656a3a3a727551750e729f4b0a4e4b3a513a4f01b90920bc638ed15a991852827abeafc5b1841319602c64deb16f8b199a39c30084551599484b20322a4b118d11a5f15ca113ab91ace4325884c27c32610229ab1406718936c7ac2737dd163f8c6a9eb05e715a07097028304c846241396f12775167371590517506008488241eb082c33084c60f8320a073b722491e295ff0682a29ab24d0acafbfa24af0794b6235ccc447115056632ef1510f1778c2aa4ed99e3192a2b174809b98bfa551459eb0b9b1a59116c27138a31a6b9187c2b163e50c091605d134751acd0c4ce47a79aed27a1161e825241f3ac31666815451705c5a956af28717324f85c8af40a8118440294c8a5713965188d44e5d482bf470cec12a951385b1abbb196247b2b25091f1609cf229cc64d633c3f15c56b19dac429a33afb149e27a1a9185909a63e46c731a0dc653e27bc56c719d151844f190272eb17a5d13b1e173ad147727aa951824a245f31656cc6a1b179fe8472f1578c055a829964468e718c29186d714702db7f04444c295322fa52,0x84b0c11819c280e07d5c84bbcc7f583195c84b71b17cee32c97195c84b7b5059127bc061f4e8c78b082c4d1620f181ccc55c84b3a43060c325c84b28f1652b195c84bc571562eeec85195c84b2131aa3b1a75a7a93f171d052468336d42a16d1696ebdc3b155d115876823f0bd1891a5c67aaea84322837a8c64de4f8c42458a84b89177be4370c7b158280fe233d516166007c465cf8d1394b7830be7bf1ab351602718114225b51780082a906c040b123d16a411841713b391923cc6094842fd1563e459348220917c50dc77f1696c4096e280fe8450f134691a72e238051a232afa7b168231443d1a60d130bc84736298a2333acb11487959cc4a10c4248821aa651e9157f91604073b2f1500719c844f5b4af51d1ab9a3564717cd318ca0797b8c46026f9e44ca38bc886ee5ef057483102eb211116c7d12a4f1971ec6adb16662d172f149c518286849667b71660308306d64c731194c1175c84ba8482084af549141a8b19791602eee5c84bba713b48844d682594b114e8383c27cd092750323e2316d43c72e24a2c442149e922b05c84bb831645b136c21b1b6839822a8ea1252a0eca87b75b1a6d512992eca4483bfa32b21155ac5b6d4295c84b2ef052a2c6ab6275c84ba25180e11640c2a3ff0c19c1b97b130e2b05231462b0c0d5155c84b5c84b7c9175ad1a6ec6e45717157189a84f6bac665a8436223a0279772c370319b80c618117884c40ea3e127155c84b5cadbcab1352b16808c642484bc8905c84b2a3141ac32038c53f31866a7b99518cec30c15185c84ba9514ba1185c84b0b2b04d07b624337f0849f6825c84b10718bd116a56b3c547d4af0596b16996f20324ba7cb6cea82832121168460682b50f1a4a69184bfabd1637ab1821195d5162fa7a840ab51715cec83b60346571609460a4cb2c3abeb38720df16ba64bada8a1462902e7a0dd195e60c5ccf15bc116366d6d427c931532c82bb4c6c5a32b001295cbe20ab3bfa8296ab1451179cd1223c692b224535133e0b5c42b1b63158fb09c81144b4305411690a603a64cb331644a9219c8396cb16e6825f8bfab6290529291e4692b18b8ec523c1b32e280011a1c5151a0af3eb183ef16b00229e10796d184f482a90b2156b3b389d4f7165b50553c3285d176ec831f4c865af1574bccacc619116ab9184301f4011a5284d4e6809a7157aab1ce518c96c3b944e646c62251a4db1642469cd118996afb066bbb0237b868bd4d0502825063f992b2032016ec72507185bc245e1176c2ba686d6a5684776c5c967a3084c081153291828119018123030232f12b61183244da1a1584105964445111378c47c548318b167b4c4a6ec6a30f83e4bd61f17684326543358eb12ec8296e0eb10dc60c6fbe4294e4b741e827e41243a9f1102169a6570c7e0ab1840d14a4cc6574b1]
-def a3rowsb16 : Array Nat := #[0xb1ccee43032b011269118258c65c84bc303e432c6636ff3e4bea06c51eb16569145c84b59d15569151b67e3f0b04e87a7df17432c837b164e1174b715aab1703b1320624b2034a1c8025caf8ae62036af763162b21320b123fd16525146e6c6a9b170acc6bc8790f9177748e574b040adb5c083714c64c31787cf15b31a26a1397d1aced15400c455916920b177f1502d185fb165eb154af1710b032d07970d077bd19b94c669a69b3cf182c4da18690e63199d06533161d11667316b11166c2bea2a9eafb176d66d0c0b193318c968390c8397b0265f18bd8d3b0290964156bb1a2b91670cb132a394d718bfa3887cac0e26959115cab198911a5ccaf72c8453e83866270867333e357df1825d18cb672afa2d80482c085d2fc4d5411960c820e0c482716a80a40c1173c2821884cced176451a3b1187f076ced1a281165b51a2dd1230a8297d16a1b165c84b22a2d47d160bc34029165c84bc13153f644886766081f5c80493706376589608032b1809d078483784838563155c84ba2a4c82b145c84b0e714bfa2bb609f156b010e33779175c84b8a232c8c69b0b1a7af185c84bc86c65c84b5c84b58a78b1f150651a5c84b30918b8d16a651912684c7cc496ebe74d1a98f06a4918ab62a4a0b1777130183308ab65c84bc7b196b65bb9a83b2e23636765e6011e08c46c2a596289ba80702a35c84b051168851a0dc6d1ccc6170329143e6ec3222d05690c510e324e45072030ce1165c84b3e5192951962ae812f1a996c56ecb10eb185c84b954c65c84b52913bb1135b22f5c82817116574475b4c839cc52c492a44b2ac506156815c84b2a884576823e9155c84ba610b5c84b74083a3683a44c7a3a825c84b46444a5cc45fe7d7111719c225c84b72b065c84b5c84b7c6823ac33c4e848ff18bbabe6a6825a83146e8020e81000234c0c6aaad1954829ed189d117b951793315129055011ab602bc06364590618d1311069a907a77e826307bbe42a5ff181b6f2bc4825ed161744c58c819623370c9f54483ae4055af193ef149a42a1dc244b5169cc79c271723d12c34af3fac68862a25c734171aa4e28b9a288926929b17b00be7d2655c21129b1aa363065cc47be0bb0064b2e08c391882f16919028d0733a315c4c326cd181909e3ef171e3126031872ab13f03c9aab07dd1550b150e8798d065b061f566df99a8296ade1742a5c84b70cafcecb14aeb25064f3e4245feac0ea585c84b5c84b740845c84b1ab1695484982d897ac45c84b450658d43484843c97039ba33609135c84bb04afca87e23719541135b9175eca4162c3bb04d29cd87028206a79207177b4d84dab132eafb8c33ceec42c26d0fe30930325c84b2fa6142319b8f186ba436d41e9323481707c1b17144b1126afafab00191abba8f14473309167ab1a4aec5099155c84b5c,0xdc1bcd28268436540c3c7d17840849e447c84b1a0c321f4d96d4443f04c55c9daf0ee19e733464c5742ab9b1824a42ca0a66a3173228471a332cf1240d1591e2ab7248682401dc477d273ab9171e0dc8d6335bd1a4e115a91140640550f186d4f99ff036507e7031704cb11a2695131685ade4c2827ccec0e906c288233b15a24c689b1aaa0aecbd1a1bd15c9a071aa40a5d172a706a7ef11ce801e27b69879111128311a08eb17a6d1c465a861182a2680ecc46fe8440ca44df18362330f800ba882c30c40324058ab10a66f5b24d58284b6f1617033ac26587c9a723198ea1f4127db064d6b68438f17533176f9153f01f9d046c1033380c44329a8091a12712c9a229a919c96f2a371211041104af8d9170bd1450c847f030ae2adb4d1548240aee7a57abf2ea8486d1a82d1a5c64d59b1678e65c9b14142d99127ea608471884684b18767d07c6325f193731603228018afc34c6a33194f243c851a9b5192c6c4840f083ec686d18400f64b515bf5169c4842bf1908c34a3cd126a4d1e516319168fb186d5194aadeb9714930349e0d97a0827f233400c6b1ec60a7146d3194223f2f684772507da835102751a830a6b0aa1121227943c48144b052b174d7178ee73848c440b031d11800916caa32af083140812cb166f87787c7d25c361dd16ae42a41eb116e9f3a10623e8328057c3ac497ab01e20132e220c8b10282a423160b717754c61907243119a7cab830f9c5b1522cb29aa1f964c62cf1951ec608916687078eaaf690c696aa4c551a20a309ecc8b570662b0b1e0ad2a3067f07b33f1743012ae2c61c07b0eaaf4c8be8ea924dc0ea0e2394d0ac842a0189a554d8c102acc9166db1a20a825a9181be80c3c91bcd187791599e82a1a614a28422e327727d35669afa2965ac7c77187f480c507a4b67a828af72c810802478c50011173e22429517b4f1a1cab30aa79c3ab03e4236431570824c50324fa82b0e1163040042802e6c672f16b2e1297b141568291f14c3a89cb8f06ba4d08eb0a406971c825be33c04b7c547950eb1ab60d5907b604b15ff1923f18922b3065155c84bcc51ace9061bd19afc7a40aeeb47162548229c83444797b91a8de32b7205b92c364715afa461102607f159dab170f190a91774517abac6c20ffa1c282aa4d8369f0461341f1728cd835640baebe9feb05c84b0cd193a0f123c834bf179bf153b8305c84b5c84bb04b14e8b1a467ea17165c84b018315c84b90c7a2947953ce823ec67b91933e2c104734571800115122c630306c9b1522b1345a1f70d14574068386983c220e11a4ee8333d15a527bbe514c0675000724ae8298ef19e23006a760771362515772795c83310f160a883b8a30a1c849051a1f91333d170c8af5c84b0ae325c84bb8b17c347db6e79093065ea8e5c84b72316162825c84b5c84,0x931eb1a5a517ba71971b16050032c4930a5199144c82883942d45c8c3c06af77b154c2b164b186b633808d8afab155862c96c40fd17490afab628699150b8af532af8e10d86cde1ded125c2fb2eb0133187a4d6a24832c27d4c4f82ce83167167f4f150f158ff16b5106964146991846917c8682166a3440a49ccc3bf306c5070a60af9e07a0320d1bf17a523391230ac233569186c312ced131e3137dc4d604823c51961c6e99c82b07156751665cc83d22941282afa1c3af176ec12254790c02a62f0668c61956c657622514df3e5130fe4c63e47ab22a6ecaf1db1abe02a57f17b731325c7b46f181a0c637b1522cc7ae2505284c906a3bb0289231a2549f0320cc8292ad68100d17b61168b6db587159504d48c829a01b6d47bb36d39d0243151a93118c9b19ae2c5086331a8846531abaec6468329ba79a711645a2a00ab16ee82955171e0a3cd28050e1a50ec67485145517268ff1aabf28aeec38834f87bcbc781a07220719a071812f1692eabca0239a113a10de20aaf5bc4ac9a326e6c5bce821731501b1a72b18a871785d183771a8b483b96af5bd156668468d16cf90a7548608eb321eb12ee8376f1890e4fb1e1b6783f9a3164827b785170c915a47175be155b3175b4ab9fe69510729831457476a0e4cbef1615e4c78c230551914e80bf47e0b4c6ae314ad106af06846adb7222a8cb185bc465b4f28b2bc77ed90fe83458d81b71a22a6d8087148c7b4ae7a8f26d6d0de2186d876af77ab118c1ab7caf28d185103251d18c5c834e011c0629be0761dc45ab61e1591330d181dc2324a0990b196911363a7a59d16b1ec3aa0c2c131a17c7b547183571631484bfa7991228820848eac552512bf4c603432afe600768f83c01360c6a9096b2ecdae49f2651729d18a5d18a2915bd4e88c516422c4c8440c89166d6b1635160928359c663a10504033226b1adad962484ae2461e223c26c68e0f22f22a96e3c4aed8a57124e89915f19c851859ebf2e0b11e11845f175be130bb16363170c84c5763004d1a009181a71854c2a3247379af8c96c83a6b148ad1559182ab141bc842e815092729feeea047aaff169fef1b46110bad8772540188251117830a7b1f134948eb3517877180d5142c87e723155bf162ee9ea909f8e6d30feb81747904c23054cf8661b41630804795d47940d16040793a64d6d515cec4cc08be2948359e9f776b65c624b7eee7a0af158c3c2907ae0bc1d079b50824c8c6524d80e0c5c9a833221fc071604cb859a4d5325e0e629c4f1825e725164c7bd16413187c23382633b2e4cc304f1b91a13232c069ac469ab2316a8a4d5107078c292831529cd95ab18c54b1772c50bd1742eb04aeafbc811775156d42d9643f0d84d64412be46cb12b153313b3e822822310f13ce429940f2bd513c721261e8316aa9828c52,0x45a244aea38e8c55d1135c84b0d46b61c27513188782a6042a94ab15d0305c84bce5165b273377194f7155c84b5744f1902325c233767b5be0982c3043c461e2837a11a5901225c4a2dcafb92055c84b5c84bbb631bccb197ea33acb03a5146e903a4b17a3f133ad1606413c301f43c507151a59d079c8d803a30b3d06926826568e45a28302c60a0b10d4af8fd1861d15b9227992acb922263a7870883302ef24713bc6b1af1073fc8204c4c577161a8f82ef068c07f4b4c643c44a0e32827150a02f09033a36280ee2442463c9ace9651420a2f17517798c6c92243e467bc0244b4050323c7988287cef1d2c5b7ec69e41f107072d2a4114ca5e6275c84b5c84b32f15b4ec539c692a67aa50c3ba9195c84b52a325e60d20a33cf484171185c84b82279060799a0a744f1674b17ca882c081151622110be5880d2ee826d44d362b1918836c2288e8b0a4e2a842e8cb4afa168219022b731a89044bd8cd9e21b20b1a4567974882afa4b4f244a502f32231b8116c13130e208b7315532c9495180c11641e8470c8453f1761d16a57075c84b88f195c84b4447f7b4c5258c85c84b5c84baecf25c84b163155c84b1c0d99dac596e055284b70cb320a28017168e118807175c84b71eb15c84b533196d513c067d5b47b232f31740358283b5e308b26c7a279aa917308b1bc9196b89f41f146ec22a24c41cac471269ae2b26542a4d51898b174be79baa8276e154d68364316aeb0737a31937181fcd88ef0a3fab1a5113cd01f8f71603204a531a0e8b14571593f150c91771f17574133c4be5b4c34351921aee00f1991e4560c959f7181a9150d2b02824c28b03caa3039cac710c6149172ecb15671abb67d174310a919006818671224ac5cd11306ac4132c66ce735907d2a5155de6150c32936f110717c2315538f177b1748d1932e2f45882b5465513193f64294ac6cd2f0c9e507dd14231157d3167c2269a11815e84a651838ac66102f548247a11530ab10867fc091919112cec5a23e725611725eb17f1140a1131942a835175fec5532120e63060b1aab71560c705281b20b15a282a0a0280d3171ccd844473ab852aecb8a6478a19179eb19bc91a19a821f5075df193e4c443075aba84453155a91460ad89c88277a003fe69ca11a51a847f0ce0ff13b21187391358261b4eadb22738482158a7b1a8736d4507f0ad5687bb2c4d832bf7dec4a0d16a35189824d07c6250719a4e22c34763622a07e11bbe81a8a2332ac62c2b05be4d7a0731e0b1c5083920c529c9990cafae4322e063c7e7a6851a780595327a546f0914379c48122c7a114c97068470e330191699b1545a233ff011101da1c461cb1ab9316956b08a7159a71797eb17bf188ff1762d154fab07b04cb744d8bcc6c1b07127134e4465b4795bc2992e845060e8d0695a82a867195f8,0x11617d1532f1a96c8a7c24d33e994521383e823e518208832fb15ae2b171cc40bcb11103e1442403b0c6751877ec35e084c266f30c003f056b1f191d718b971730d1762ec660c178901465030054d1992822571a21ab160abd61033a4e73070832f51621516a3b0612e12a2a1b18d1a8287a23d139b4d185317af49e1bf166c0f04d4007e484812b1c8030114289e118bb24fbac60b9a2cae43020715b51192ed030f3165c84bc3cbf3f09aafb1269114c8078b6cd98e2b1c80994e878104c6864698ea4cc924d32314828c8c3a3d02e7396059a1865096d11be796d6360321f52a8472084992c583d1590a125ccd85742972ab07f27958aacbff16a91063071abba50a5516a8cdb9e0c6603195849f41682606d942e81996f05484d32ab187c781d51624a43c52b186463739163ff0a006c6181153a7130ba761e2281844d156af42eb787675a25196c2aa32a32a38d81442a3727a57a455c84b1711522a363e314b0f163d119bc02a7f0423fb1abfd157b3165282453012115193429baf0c6a4f150bc9f5c84b8a3176d43dae2b0584c80d916bcc844f6442611762c3301918caa222c8806c2aeac27b4dd18a2cbf9a08348c80145166f8f2191132327d918c6ac4847371426f19c0b1a6068765e325c84b51b07903161f91560d15a7707c967950eafb3f1771a006269e08d139c0c66007aa2b141dc1f5c84b866229da821fca31e3167407a4e88358a821042aa9e845c84d5c0ac3ac2424b15492ad590784f2927f0119311728232c9a1e50c7b8c514412c45c84b9da311ac12cc117254030005c006824c27977318a571a016a3185195c84b42a7309c82ab1175269254913c07141051a664920003250ea557a4868a65bbf175c84ba0317c92233e2336ccc63d2ce021185768425c245c84b30a3976233966821111365c845c84b6c24b9ba7bbb46c433183fedbb1eb85c84b0f91529cb15c84bc0a339227ebff139511550e5b9c3163ad152587e5c84b1ea11232ac48c7a2c499936d8a7caf78c247aa79666b150d167a07b5c84bb12af42116c0a4d4130760117965152c31ab08c44051643116ab6051e2c310d1a5a89f532326a316a76827e6823d3175c84b9323949f1723c331a1168deb19a00790f1697a672dd1561c4b2a082a528405d193ef19941077407b4448452517bba3d8927a572b608caf405151ac809ba1190e2ac968243117b8716b924b412c8c2ec68383d4b44c1ac523baafc56795e2a314f1742a63a9f1a93b17a2a1f55118104772fb16ba88194ef0aa91a5c84b5c84b1ca7e5c84b5bb1965cb1010118a21587c833ab17b99158d82b41717c9e448eedb40d1783316b664d5682b96e1e85b160ace36c2af1b6b308aff65d0782905c30b677ac6adac63c440528297da800d51a9a718a341157409a6318670d9c86842eea34c4d0,0x391244954ac18c232244450cb1a90c441ec474d1856cb0c7cb142208b21192908221eb3ca0225b87b7c31a66affa2b1948116adabe91870bbb15c062473b0ac64c62464c0d47b9e2331ea613f08f34ab1324e8523173b91a3a622a1e6978cbc22682a1d18588bd9a3150342a5bd1621b0391a84736d8bd6c678e1d8d317842696831494f051728232b15892338bab110e82ce483b99140951a6027d69482b1eb11fd061e08f66b1acb4b10c5150bc0b2b7179cc823223250714822b3035173e3153089aafa270ea0b55821706606d46d8e2823e5158f2731cc830403956282376fdcee2806692b5d135331a9d03016f183ee4dc43068c4be2c8f1ac263cecb6be1180aeb10006100c610189f0c83004cc6828f1ae4315742504d180331453283772213a630236849a6821569f422b0679167a6d272073a2aff7b4af6beac876c42c51870d183a31682c71992750644da8cff59c841cac8897164309a50c73917182864f9cc3278e6996b151631723718773166102aafb186ed139ff069ed1a595155c1180d4c3cee732fc2a30517bea82bb4c55de7a82699993195951791224b72bf6cd14844b156cc5416c63425dcbcac0d513106736c315536db83717ce2b677eee1101bc06b0aead19ecb1772c620e830bb19469163b919808a918cbebb483cab15044b19e516b951568518b2ebe52513104103d231323159671616884cee8486eb19125803a1fa711763adebfd19886332ce7c9191926a469d11a2f2c6b8d177484d060c4912ad92f06c3e798c87b0a631b0a13caa836c4af840af91e121102916d1a3250104c835691734713b33152d0c652a7391882bcc799ed1589222324cf1e076c667999303b2ec659e94863168a6b19a44da1e73a16b1a5004930b18331ac4d17cf2ffcc479a1c24144799c0f1ae42314d05b92010725eb231572edf79116bacbc8f263172b164a113d242bba58430786991658ef8bb71960c1ac11160767b6e48233a24aa481c4c8068316275164ca848ea290c8317a475bcc82afb1a5be8299cf1a5cc6afab38407c03a314d0b358684848c5980db8ea4328cb16cc1f3591638ab1287198c0834a0b093232037189a01e1e227729140ac822cf166ea4d0431a0af190e2d024b1690d13a21171d882772c7c831a1cd067f0280bc82bae8f6788f98d18730720184c5ca3e302c4686c47eaee064605881f4651a8a7186824fc311937a8221e7ead1183a632c4d1a81f09b966920f19ab2243e282cc717c1034070b21141b8c40e783171b4b133b1922061b2ebd65c7d4dec607601c231996e220ba7290b1a42e828dd14862464644895d01381193487a006f6070ee7dc24afa9f72ac609032b8ec678cbf2fb1903b1410d180e7184ae9f6e6b0a4efc50ac0616d1846b1a1c315851808adb40ac66c311c12225482a7fc4d82a24c2,0x5e825c84b9e1198ea0d208b07f0337029f5271662d177b8af4e03269cf0c8318cd11a4f11522a220d31a4e03335d1777e79ce43324b14844c657a440a01b1467aaaa840ea3c5c84b2b314592f15be29538c5845156aa83a2a27a4718154799c70978f17916f0a0ec40b30997caf060b1bfb155c84b1c211a1cb10cb160364ca3516044bf2b7165c84b966c5b9682ab6013d02a30a32b3ef0a4cd8cb4b0a53178df17a851859c790bc33a5d070c8231261b3224cafa22c5d168041254082c946503906c967bc46d6716127a0289c918ceb179ab1303682a4676a70799e411c7319ba6724d0843d2363d224b96c5c844d099168928302e8322a26c967c1bf1a859165901fc547057628388ee038d8236af0e0c3518d864a7b05501588247951910ec4a111442ec5c803357ce8aba7d0eab19da301d68289230291189a0b31a8c670ea33a4b63c306302d8b0473967172d0c4038f191513b5e33575188d9191047b2ef177c6adc64b186f18a544db15153a10a0560b8ae82c500e303043767639118922af96d16bab057c2824220d64a82c0a2a5961b594847c6c50e6b02ad1786d1634283a0c845242f1ccafb36d13a4312af156328301432aecc6562841262f2c2af8d916be1163f0ac37b17c224d16e624c9166ced177a9f08d1a6df19b5e7e37c1178c464d0c8c3a4c25433006b126a2a6ecb83e316772c8a20c50e7194c8dc04cb478318206a31c0bf9e679346be5c11378117a4e0ca5073592c6cd0bcb62736cd17afa45cb4c477718afb1546ec6864842ac635c82aaeaf2c331a23e82c7716c93185d5180e24c22e8493a82a647a22a4220b16c4e829bab3520844ef19848b386ec6bfcb126b146d4260f718abaf47ae82accbe6fe6145230a56af280946ff1516e8227f1896cc6684b0a50ef3d07663c848f483bc4f082c2a6ccb13d64d4c88b1d706590420c0321c0b1533159f4af24a2a14430abb186d4bd7fd1624a461caf21f22acd2d948718ace2d1f51ac2f1594cd11567eb0115526bf4dd17280a3b5c9f25092abb1a8ef0165d1528ab107316591135867b4b4af308afafa363f624c7f19c547ab13151b67a0927ab9a7a8c0c63a64bb5caf69919a9719816c44e62cad682c0b1320ac8b13185027a848b0c647966d15c1a639dab09e3167607364917bdb17c42c51a07037c9260ca54011741f15890484c4e8c35156d44066cc47363e7631a5060b8eb19540b1373150d516c9a30c50ee2b244538c41d117a4d167443384483c50b18cad1ae916b8b18b724c4d71a208821851566c824e9158430b8210772117b604ebccf2600839d0500d91750ec40fe2296714b8ac41444d5be2a1171698ec6b0483c327d2ba827082a35673213185689ac0a779f7164de2aa0c7f62a73a90837147d5a71a2b229b1282934c61ce830c02b9d0471ad1a5028,0x4d40b18718d20e0c651210645161a8cf7a0305c84b37cb22fc054a633ceeaf83d1606116015175c84bb57178267f4222a88916af07a5c84bc3b199e2835c84b5c84b93e235a8249e404480154687fca011c9230610795589f7f0242fa325c84b1ca7b6f4b177319126b1391153627b748616030659ec5aa51791e50740b1a0abcbdc69584827f03159279390c616e8413e403a60543cbf12918bd9167a24d5c84b0642843adb50d15bbf18a8b15876125c84b2949f59029b19180ac69328607b4f06d7135c84b5c84b133153f309adaee57717795180ac845c84b5c84b66d1359f160550da3ab130828249183baf05c0285c84b58aaf5c84b0e30188b1816683caa1b5c84bcb4c53a0ed7af17456b1a9484afa4c7807e62f035587936e633624c1a901c4aaf8e107b931592ea9b13144a7186fd0b9e42acdeafa9cd570d16754705904ca4e7b1e26e1c1188664b90d1607f1ac08a2be03259482328c4b2a1f70cb011f18c66db6f117312b1363157f4b2388825cb142831941f130187b6251a2ee798c428ae403656966989f4a0c689317ce45192516c50582fa3371905c9a429aa3032517ca0705ff108d2824f31aa56c3a3e2308472990af114bda310616e7b82d162ce22474339e444a1c4a8c88410115497163f07b3127db487bc28f2ccb17afa837487e4fac680ed113ebe53cd51dd1a2eef062319bca9f29a2a6ed12afac352a7f232c482282a542850117ba6704c5017fd15b951882c2fb1e5c48cb370c824e71932e326c717b20b132a0927d1523c841101eb12c48e70d3c44f0e5169ea82cc65c433197c68406117574c43f7160e8722e0738d51765c9a1cd1969516c7c82bbd17c81192ef1993e73c3f166c4c4549165c84b25d151cab11042870718ae424bc30614cf04e43095c096b88278c4c79a4d7e46125d167f11a59d02801171fd186d410490f76b71a74cb123c68b2b150bc6256119bc50508ec44ced063119c7c27c5076178c561c7aaed033a0825251943c429a833aff14a511741684044bc430235c84b44482593065c84b5c84b3a44c920c6a044c5c84b2a2725c84b3b119aea8246ef21b3079aa3194d037ccf2c42afbd5176231637cbf4c4c626a4420ac41f4b13d3194dc3390d159e6828cacf6bef5c9a29458c73b91578433054d021ec350f1a0b71606514c102b9de81b1313820694ee810e2bd626c41ed0509710cb91876e5244a7993cff49e320bc794a9172c51942a2a5c84b70cd9c9eb35c84b1264c9ccc652a7b8bcb15c84b5c84b5c84b8d2874231459cafba7168041179483a6e823c51648c793b9139551577a3399e83654325c84b1c077adb184e431b92300e8c75c84b5c84bb11198f033bd8bf9e2285c84b55819a711892b1774318b36d2674575c84b649155243190e406e7171bb172bb07a98bdb5d15922842,0x7483229c7a3471619872208c58e2b0638db1fc9f96e275be32b1eaf697151e912605177085d2ee7ab62656027222a30538af54117a21142211abfa310ad07bb713a0e66ae51351ab1bfedbb922f7a282cbc75914306fd0c21eee6aa77a3627412b1a407b456763d2506f907b2039522c51044f1d2d82e1158227b8c5155c84b696827726b862125c84bc85160a6afc0a7bcb6b1af2c653718a9d0c2111867103018b1b271760c285fe83a4cb1cd0b05763216f1697f195c84b33a3e5c84b5c84b5b91a7fc2a7c4325c84b27a12b491a3d117502f17a2b134a845c84b7491a72e29aecc45c84b28cb2497155c84b5c84b23c6e0868484517497145c84b5c84b82083612845c84b25890b4eb15c84b744323622861c285c84b60d17588235903292e834f5083f0c45689f07f162866363d17a0f19ceb18afa1802e7e8c91571e826cc309143a8f4823b057aed0757627c871a616d270d17423159aa323871523e7e16e33711188464d38c3f236a9bd484cee22934b132a4e5ca3f71114b0e7b3a71797ac6c711722b17ab640660d879b1728314a16c683260018c560c2e92e770002fac3170bc2b0970ba20827444dbbac625eb74bade60c2391e28cb4822a26c77879b94263763dcd0c559d1357b1a95c734acdf922ad144284b428a56730e6c7b1e2e3ed16c404d000837b4c6acd1804c1a528045c07aa2a281dd150ab19111190ea8f46eb33b883666c687629876c53ac2a0b2795a805c63177c44daf072acd1952828c0646bd715a1717ab2284c50c9ec87b1032602b16b716699138eb1632e33094c5172c623d1718ab1114a2a36335b2323d03334715c9a235c84b6784f50316159126e8fb0af17c926f4542a93c7799cb1cd317a94cf6bf07a368437b186ce2ac64c55c84b588b55c84b7731543c4561c236987a5c84b7f318844c33342a9931a8287d5c84b56cb151460c067b5c84bb751568424bc7173211753514a5ca976f1628205c807a992af5c84bbfd16cf8ff96d196d4735c84b2ce285c84b4faaf22b15c327303319837185c84b7b918a4e8f5c84b2eec625c4d50f195c84ba1c7654682948f06e7185c84b0804daec7c7811473e114cad25c84b6511493eaf8f04d1b70755034b5e285c84b0c079a38bf5c84bb0b163feff5b1162cec32a3158eb1a95d1805c301e0b343d160e6995c84bbbabdbc114a9118c064a510849a0c4b73143789fa16791631297ab158b1a690af65caf06083b9913aaa836231578031c12282b247984d138879c96b11bf1815519a90f1b004b5229fb4ed912f1714f19a90c71900660e8241e6d179060ac79687060d232836826468479b014223eaf3022cb19b5cc4754b1b071396c7b4164d4f116b12b029d1903717745169c9164b49f51b0c04082a8a247827fc063314319bba3e956c572f13778b12511a098,0x820e6c46371a6784dafa2892f1ab1eb6aa71638c4d5c84b5c84b5c84b08e825c84b5c84b914085c84b6c105b1f18231165c84b5c84b5c84b7eb030567b0d4c4b72bc05c7d23d1a5c84b594c41103f7c4736590141f07c3b1391a6537283574c556829a76846cc325c84b17c4da6317100d89ec84822762dc223f64868f16c0631c0f160bd18bd6d896cd15c84b430425e6228927b1e2329d0b78921b2fb175c84b5c84b05f1810519ab63cac504a9d1719b17455168f0321b67624a4730b17a5c730e0b01f47ba0e28b6033a37175cb196ed1ab9a30b944237a9f29f1659c7418a2acd04264a79a941f0ea2a95ce82e316bb630be4df610826668261116c42c6aec904aeb0272dfb2f14c5115892b1ba67c5c84b486de6d41b1be333087b4220722a28c921f954b128cf15c84b95233964091e69d1451a530117a4b06190978c28190299a0c583482bff145badb754767eb188d084c5f0e11715be71711a4d93209c3cbcca11208316006831e31a116735bd149a0c3aa01a9141f0e62b64a338c91696d1587631c10c6808af18b15032bd90cb11880593eb15c84bb9a117ca735c84b5c84b1cc6cc54825c84b1f482c507eb5d19664603f0291a6845c84b322304bea3b9a61324842a0b10e915555190e11893916bbb18a56c693682cbb1508e80087172b6844c4beb67167cd055d0ac422245c84b6671a5c84b5c84bafa311f517afa508cb0c60116b628440c5da1e6346915cef16a4cc7503063e91a610d842a198ae633ee323ea830f83133e4f5b4b30e20d6d663144231044d5be28502c45104b714b1922834e4815e623114ccaeb17862482fd16175147f0505c84c0acb1657195583359c7b4b48208c30af2c45c84bc9e113a62f4d7163f611684305c84bac316823161f316c0a308c44f40112906820864d0e65b71a0337d19309159da8425c30a571638118670eece430143180f410574145c84b4dac6a1c306be8482d1508114077195c84b5c84bc37178b117812be25c7658a7512612bba43350123d24683e841b2af3ee29590319031a5c84b5c84b5c84b5c84b46412af2afbd716cf517c80280ccb13d0838ca8215d170005a3dadbb5918105164e061afb13b9118033123f91aa90c5bfa4dc121b0560044f1a9d1145551ab8a820a08356b1a4b4349640f15e6db4d16282295c84b57423c9b175c84b3e2b17be3b0a6b1c8061971176d43f5bf180b518926c6114235c84b5c9176ba09236b142a3348479aa0aa11114604c68e70f8ea465c84b341195c84b3e40dc1a8499e8493a830d4b1115151e27ac08cd1e9163e229698b17b5065c84b5c84bbd68225cc3761035e6be7a7017223f4d67a5903372032ab8804c4b15c84b876545c84bc3715c20db96447912af29515739154e7171091a2eeb1a3a831e0db6d91807e1391519524f029a84,0xbb944da1c7b6591977e4d11909a0f136e714a0ac5c5a833f71520e8262ef14506d538d8454820eabd1bc834b513a3a8459050292ffa3aa9ae315198ff376c6ab719c08b08922f0c429636ce3e829966b075482bfac695c3f9a880a90b0940c6aecdc0a51696cbe685159c87a8ed1693317cb481651183d27e7721eb6000a571501915992c7b2f132745c1a26d80432652606fcd11103caa0b6afa2f74918a767fb50c653d103fb18bdc73914c403a699a0ee60c30b1b151a0b11b6802fd13b0011b071705d1a12315ca8f2bce8404c82828c69cef0a94e8c7d13ace033e4051231893e0522a2444ea4456ee7731450e178af073ac00c7c7b710c56d40e39d17714afa56f24dd161f24d2dd13044725b2afadd1888f182ac84812c63631aa464d9a02990d178483020b053b91760ec6afd190ac66ace165928205082b066f0eb152c4d81e2336bb150d31461d178624460914a4e235d5170323e2fc4c24a9263adf0471a44c2a7c31789312ce4158eabfb72233d2802b31ac10b19ecc64dc2a6d5162a917923079daaf5cd0619119c2ec5c4716538797728222ac304cae1222a19a7997ac519028763170e21f432c3bcd16c3872c09152eeb23e5140a61f710af0d83245b146ecc68a717b48321a28400c12967154e9188231a1140dba7120e0c86823f04d118d7188071a86716468842a28361c7b0defdb5e829951742a2d19e637127383119865170aab122c84b1a2ac26af00a7b8227ebf5031843f8207ba8b139ab18401135c84b1ecf05831a57514b8eb1092b1b1f11a1c112f2b16f8c645063b068326d1682ca95c84b77a079e11a7491424ab1c8411a64995c84b5a615bbab70e6af2a719c08c6abb079927891518ada3fbc30742f1743029144322c6b170cf21b2c46eb1865d138762fa55153e48984914bd6b12e11724a4817515ad6830f91481d167de838d436aa117875179c8808851900a7faba73586b16d63224a290ef1acb51a8771778c134af1823cb1c34c4c0684286357291510af49122991317828b14e64fa50af89316c0b178c0814dd1558f077c315afa01c124ccab1712e3329433b6010bdc0301884412af5767b000c965e4dc9ce14af069cf07be4720e917483197d4df5867f4527b50ab15c84b62c2bba627a50a8a2abbc571870717459175c84b3d07a3f0af8df186851460c2245e8278d13000284cb17c06238c4bdb7083b9317556846782a33f1a25f1558e7365082a3622af51938083cec84b5edfb051823c225881bccf18a90ee1707f9a11aae44dab2292064d930c68eb15ca9178f233b10834aec44824f70d156bab1a9469428c61ac82596279d08428317c30241e222778825a913c0ac38df15ca8762eb16ca907823154202aa7115162c62bb181ca76372735546c3f62941516aa0825c84baa2dfa74827a0c48771a02,0x9f196c4b1ada588e4db0d833c84c682c22ae516b647a110407b4f14b43291f1ac802457ec699c797e45b5324c63e44c56820a0c3174c58ea4228c82a98b11d6c599b172ec8424a1332669a60e61584cadcc653f1a5c62a11401ca8c4174244b713a24af6ec1b820c83344d1f0de40c4d0761f3ea825eb1608ec661cc3090b11043c60c1b1aa6997f176e51870b17adb0389a154f869390b10a623076c15c84bbfa33400c34a0c50eb1691a634df1580118424650324c25c073289255082566bf7a3179e5121a07a5c84b5c84b0111a8c8c37a0b1b77166ba1384632af4df65918caa7c7c232ae4295d04cc926b539065c84b8c0f679acf4588318cb6c30be86eaf5c0c61a8820e8c6b4e61c08cb07e4d249178d4427f2827f11837a4d5eed110e798c8c697e830af15c0518884bcc4d184c316b686911a2abe4247f4829a1030e1131b6825c84b5c84b4544d5c84bb80795c84b0007a66aa96f87b174287b90761c33b1ea65b832a70b1b2ecac42825c84b5c84bbcc732dd1a61ef160b190611395cf881c33597128b1186831551240ace215582b5c84b02f03076f99cc3305b1a17281172835c84b380af61d1abc9160e6c5c7a8d084825c84b5c84b40c30a9f17b2c2a13f162c8ad85f1621e834af15c32b16d46a92e82852834e9172823352b156aa7b49f1582678ac469ca01b1cf19b8a1f78c12890158c877b7229aed1958f1519c2f25c220ba25162c48483483c302c2b12c8b06ff192824d99eafc104d4e04d64ab15c84b06068ab81584f160e0825c84b5c84b9662937718be04d5c84babc73936b7c802911717bc6835c84b9e51444abf52a83c42b009514bbab0b1283914825c84b826325b2337be42b4e7e8911680083828d81dd143a62a5631a96e045c84b2e0c637ac546d1657e7955c726beaf4f5184e08204ca5936b07c316248303e2848f1157f0299a11258d1a32c830e87a2931a7291aa1118740736d61da871abd67957492ca0c372e055281f0ae82a56b11d515517160311798eb142a267ad193f6473d2767f5189642a4a106bba478a68277682510336fa4d9e41e0b1167a3159a0820ef1395edf280bf816af30c826c684076bd43c12c804fb047225c31a0eaf2a318c4c821448218b175de84ae31a22cf085b185c8050ea3fc3473682297f22bbd4824b71697cbf7c7140eb1a4df16a10afbe07276084b2b19bb04cbb5060a11a6d407c0a2854400940845e11a4131a7a4c56c31395cd0061128851829f1779a83b06678f284a02c697f1804317c28849123686715c81169e22371d060181f8f116a9e5d07c9f45d171cc722b24d8262c95679942d26cd1337a321fcb1072617d71890ebfa20a317433404ff2ce32cf8cf7e6791b679a4d171142736e6551116ab623212924e63264b150c914042df7de823d115c9115178af96e1,0x73a8cfa702815069f7367a86ec4589152067a41ec861cb163116c34848bf1871cd8c7c33029152ac65077122b51ab924c68444a450696ac64a316702b005c6c4f71a778c448433046df0451a87c7b7e51718cb10c033ca1155b81181c3287719912323cb1662c398c43e2a11744b1ac266702d17c1f17c387a050346ec649e27cb2030847178e68cc4c79be31611edbb26b02dc8306afd2951a9c919c0715a0c7b63c122ef161dc2aa91033a60479a84aec8222a2ac60f1686af9069f0e6b34d5170e6370ba4da3601530791141f19ab115882452323e91626b1a6e87976f1729aa45481f7291661caf922b695507c3eb1432ac03433aecf8ca915aecb1ba62f22cf196e0d282a32a6799f4c55bc50aa08458c82a4c7aa29165107b329197e4327f1177a0231f4c6a03154b4794e6354311a39caf4508491514189136651a2c4c560e8442ca3c28b1c0a8432665c2115b1e2f755160ac7a0acc32fa845eb1974ad2830dc0a112748c56fe5e9a04d3727bada709da1fae25ebd7175062a576c3a30d937a7950e12caa2353116323174dd19c411542cdc29b15b1a4d46516c108259d17061152e314a2b125bb1a7deb1980ff3e43e77b16362846791883d17cc71ab007279910c091413e4f6848426b15b5f180cf18c064578e845902f79884a0e74ca01a42517bba46913142fb1a464463291ab2055a16844c518096f2acd1a961172b24836213836a38a316309130322a4af16502d80591aa10b1412c3a4e2782d177f07e363160fc8377ec6147146fb15a30d652081b011677a4d1987ab031a714c350a927c680ab60e3b0b19e401c7d150ba2c2231678e6d90e3fb2a4cce4825c012932c68391955003483163d2830d4c515f143c11aa64c6562c6320816c21a9e7172bad015e8300c846951746eb1236ac9d115060c675117500b19da239551851112416af000b15881ec3915956f1a6f034162618cb40b6334db1552a7a412839e0b1c1d1a2b2420ff157e51a80680011169aa23baad233c321a7172591aa66afbb68430882c8515bb4829308211b1681318106c62821fadf068484eb006891e058c882286739bb1708c4e927067481345a4c32e839645594c79bdc07ab60c30a34bfa101bd143511abb4c49931860cc6772422d0120d2841e913221174e432b721f5a81f0550a0863255a9c1d2b07ca7b9cc7393e325e2834dc32423186ed17a0f179eb188d8822ecc64c519c9516ac4f139cc41108f9144e53cf8516235e29fadab10982a140af07e2a22b18c0a2397a6f431158767ac923125f1416c1305e7f8e5199e2229644052518aa48485aa4c5033a4117a2c4870cc5ca0afce42c333155a518c924c89056678735c82f97c7959eb108e8443031abac8a8c7b044af2fca26d4232b315540c465cc6c86b150abe77a3463e121b67b0c4243fca34,0xabc7ba2b1596f1359075070f1b2a2929033bc67b14429458b2636fa8491861c70b662a5bc2a741160003096e0155b1379b158d43b7b113a11136d48f747173625ab2518a58f10ae393b64d822c4cef15b62c668517cee690ff192e70672e2aa4ebe72e1f8309091918574c6630d15484cb151611066880b16d51470f171b2f235c4505cb12f683c062db051a81c80823189e422af0c49a0d804c2eb491745a29482]
-def a3rows (i : Nat) : Nat := (if i<16 then a3rowsb0 else a3rowsb16)[i % 16]?.getD 0
-def a3layer : Layer := (11943,fun i => let v := packedAt a3rows (i*20) 20; let p := a2layer.2 (v/512); let v := packedAt a3codes (v % 512*12) 12; let op := v % 1024; let a := op % 16; let b := op/16 % 16; let mask := if v.testBit 10 then p.2 ^^^ (1 <<< a) else p.2; let mask := if v.testBit 11 && a != b then mask ^^^ (1 <<< b) else mask; (p.1+(op <<< 30),mask+(1 <<< 12)))
-def a4shiftb0 : Array Nat := #[0x700010800030050f60f600100800002c01500200000100306000803801800001600101300000500601600600e12700f0680200020000d80160030d903000100b00702b00006e04d00901202200516300f16001f00102505808006000f00005003513a09e00400000000006800100500000623900419200000900001201200000100000d0030000070720db00501200c09900400c00113600001202f00601b01e01700600201100200d00006800100b00500000702000500300f0030000a200a00101300419500c03300600200700003b00305900105300009301400300c0050000000010131990b102c05a0000c800f13700922008600000600201a02b00600a00101700803b00500200505600000c02a00100500200500100000101c0000ea01600000000a0260000000ba00300001002804700700c00500004000000000d02f0080380070a000000400600b01700000105a00900100200000a01100b04c02700c02700401624b02600403805100300001b00000000100011600805f01d00101b00202b02300c04f00000700600d00300102400000000c02a00000100301e00000301500000800000300500000000301400400402500002101c02b0090000280040a000000a00600903e00901505701500501000200e02101405e00300100200c0100000000a804d1f702400200000200a00100001b00400000400f00000002c00100001301a00f00006300000e00f02a00002500003200000200800000500000802100000001000000301a01700008400600700604b00200100602b00601e00001700019200901600601f00b00f04300000000602900104b00502400d01500000000400900001600400801803d01f00000200006600801100800001700006200000000501300f00001103300201401210700300100400000500000800701500d00009d00e04b04300300100200000501d00e01900700100a0000050000000cc00600003702400100100002e00001202901d00c00500200000011a00100000400001f00900702700500c00f00204f00100600c00300401f00a00700103e02901403700400000200100000c01400c00a00003901400506906b00501d04900000000601600200101700005a00000801a02f00300200106901000400400409103800207207f01302500000f05604b00200900000900000200004a00500201f00203300a00000100f0010040fa00800000000104000c00c01800000000000701500000300904700700000500603900001200000901700000201b00801300600500100100103a0000a800a04300002200000000e00402600000102800500701100600000d00100002e00003b00900001f04800600300500000500003804601e00701400302905101a00000000000400000e00000600200401000008000001204400e,0x651700500104e1162a20c602406067601000b00101d0940ec19802817e01a02703100000079515802a00c00400156605e00b1c100304000900145a00800100c00000f3ba00000204c1490031cc0280000000000022ad4a735106300400108e00903e0c90ef18400100a04800d04000400702500c05019301953f46301e00204301400500902a0020386e01c607c00000048d0b002e01000808c0b107b00400901101202e0910200190090530202b803802200215200006200000801060200501406c09800109d14676400000000c47e0210020150010020d10810050580c202300002a20b0364d300c1cf03d0210850020021e026e14501736411514e0ec2db03700500000100200400600603600000701300007e08007c0260b000b05614301100e00000a00000107905613301209409500f0040000071ad0160e51f304e07a0680002da18a0240021490d800364600013500c09801401401910800b00003107901a1e001600000d00100000a00000202f33904402201d07b00401800300000201c00206a06401100928700003406300900b0040aa0c400210744600500005e0060e501d29100400100004400e00200e08200000200900702407a0350171c600a00703c0000040cf20c00800000302c00b0030c64d100100000b00402f23c01e00002502500502101600400207500500001400046505a0000020980460ba0e800000002401302b00600d06800000000500005200700700000000500004922d03b08b0500750270080940094820770120111211e000000f0e801208c00000200705202501700a0cb01100400403a00600036404c0740090023da00f00002500d0050190cf00101500100108300001700000e0090060220191d417208f1c600100725a00404400034603204000000006400100201704900003000400f02d00400600100700b00200d00200a00d04700600142b0500000040a004900100f00000300b0000540000420070041300010070ae03a04100600300200d02200602602100102200002403100402300200101800a00200a00600b00200902c00101d00501a07644b00001c0000000110020000000070012bd00534203800601100403e15f0000100010030b80e100500203700000900500b02602500009a04c00200c00b00217d0150000030080930023c801a06301e00208a0050030051e301a00e0780000f200639d01000a13b00801100c0120640150e207e00000200105f01000c31d14801e00409804600d02600006b00123c0070c301708e06f01406b08100000a00300b04a04700900200e01a01c00000500301800900d00b0230ba01400001616d0a900100104a03200000000000200100d02101a03202805706901500000200000000600501700123b00f00200001900000002c0060040010270ea0130010000,0xe3e0003e60d3037012001008007de71983e700a1a20340014220a202201166700f0010060010040070070a405800000100101166706801504000112d0000b203700303607a14339b00c46d04803e0004760130be09c00500070c0220061f40090025d809001903147a00005600201300105c00219701106001600400701f00701600a00010001d4990283ee00351904d0040280080110ac04505600306600003200446902318930116900205b00009200905900800100201906e7ce32f05e00301]
-def a4shift (i : Nat) : Nat := a4shiftb0[i % 16]?.getD 0
-def a4idx : Index := fun x => let v := x*(x+701)%618970019642690137449562111; let h := v ^^^ (v >>> 37); let j := (h/1494+packedAt a4shift ((h % 1494)*12) 12)%4580; some j
-def a4book0 : Array Nat := #[0x1,0x107b068d8ff0307da3b01dd8707402fe1b06e3e000603efc6f3702d024c7803507804202e,0x11d684cb3726b02c8a101607806b06891b9411a1c0327831b81a11a405f37042824878478,0x1876341b37e1bd1b2780ef06883a13a42440122412417633982484227693902d478442878,0x102ee1b71b40117803b878]
-def a4book (i : Nat) : Nat := a4book0[i % 8]?.getD 1
-def a4ranksb0 : Array Nat := #[0xbefbeeb6cb2cae9a279e69a69a69a69a69249238e28a28a186186181f7df7df79e79e75d75c71c6db6db69a69a6586185d75d659659659655555551451245145145145041041041041041040f3cf38e38e34d34d34d34d30c30c2cb2cb2892492082071c71860c30c1040000]
-def a4ranks (i : Nat) : Nat := a4ranksb0[i % 16]?.getD 0
-def a4tbitsb0 : Array Nat := #[0x10000000000000000002000000000000180000000000000000000000000000020000008010000000200100000000000000000002000000000000000000000000000000000000000000000000000000000000000000040800000000000000000000000080000000000000000040000000000000000000000000000000800000000000000000000000000000000040000000000020000000000000000000000000000000000200000000000000000000000000000000000200000000000000000000001000000000000000000000100000000000000000000000000000000100000000000000000000000000000800000000000000100000000000000000040000000000000000000000000008000000000000000000000000000000000000000000000000001000000000000000000000000000000200000000000000000000000001400000000010000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000800000000000000000000100000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000080000000000000000000000000000040000000000001000000000000000000200000000000000000000000040000000000000000000008000000000000009000004000000000000000000400400000000000000000040000000000000000]
-def a4tbits (i : Nat) : Nat := a4tbitsb0[i % 16]?.getD 0
-def a4expanded (i : Nat) := packedAt a4tbits i 1==1
-def a4rank (i : Nat) := packedAt a4ranks (i/32*6) 6 + pc (packedAt a4tbits (i/32*32) (i % 32))
-def a4gidb0 : Array Nat := #[0x6cb68b4da49a4d16a365c28a6ca31b713491]
-def a4gid (i : Nat) : Nat := a4gidb0[i % 16]?.getD 0
-def a4pickb0 : Array Nat := #[0x200622000801009844080000001100000220030600000600042108012000100800000688801000100600012000000a4300080000060010068201ac0000c100000900000a808080000041142840004600000041000007000002000007000950000011010041405102000009088205000024000011000006100300000011304200000011042090000901000421000490]
-def a4pick (i : Nat) : Nat := a4pickb0[i % 16]?.getD 0
-def a4hints : Hints := fun i => let g := packedAt a4gid ((a4rank i)*3) 3; selectedRules 12 24 (a4book g) (packedAt a4pick ((a4rank i)*24) 24)
-def a4codesb0 : Array Nat := #[0xeccebbeaae99e88e77e55e44e33e22dcbdcadc5dc4dc3dc2dc1dc0dbcdb9dacd9cd9bd9ad95d93d92d8cd8bd8ad89d85d84d83d82d81d7cd79d6cd6bd6ad65d64d63d5cd5bd53d52d4cd42d3cd2cd1cd0cccbccacc9cc5cbccbacb9cb4cb3cacca9ca4c9cc9bc9ac8cc8bc7bc7a9c59c39c29c19b59b19ac99c99b99599499399298c98798598498398296c96b96596496395c95495395294c93291c8cb8ca8bc8b98b38ac8a589c89b89a87c85c84c80c5ca5c95c15c05bc5b95a758c58b58a58958758558458358257c57b57a57957357255c55b54c53c52c51c50c4cb4ca4c94c54c34c14c04bc4b24ac4ab4a549b4952cc2bb2aa2992552332221c71c51c41c31c21c11c01b41ac1a71a51a41a31a219518c18918718518418318217b17517417317215c15415315214314213211c0ca0c50c30c20b30ab0a50a30a209509305b053052032]
-def a4codes (i : Nat) : Nat := a4codesb0[i % 16]?.getD 0
-def a4rowsb0 : Array Nat := #[0xbb9c81ee80168441b665d4d51af2665a511a4e820ec1d951d3510afd686df5ced0d33b92a6570b500f68dd91d5b7f5354d8d47ca355f4ec197cb666a0b56b8964a9fc270eb54292d62d56e90c4b547c93e98da37dde750add90b2ab446dd3b4352aa27d67d3e597d0d47299ceb11700641ed472d9025294d535a5ebad62e479196b55075a02d1888000958aea0594834b9ab4e1546691b6c174f81889b48183c565f1d27f8c516c34657da91ce23a229c97a676543a707e96cd636d4229e58d4ed55f605a32ca24a63508d984a16b517fb89b0bb50b47ba5446e4e762c9996960b3a472993073ad984df54d26d4a36e88a9fb1aaf3528f6d5aac178c8dd4579d3457ed4105b465a51053967e033d30c7f5125d5984c23ebd2d70ad30e0aad9980b48bd5d43bea8ee95c94eca68d3fa50fa6647429d0be354c73d43cb0e4675d45bcee986cae8928ad0e0d059f674a59a6108afa032a9b956f6e6a1f9695d6cc98f60817006a3bb782eee20bc40075075fd34355669e9d400b970984484c2eecb39b09d2f0580dd4000255d39d314134c8677b6442a63f67b5349ee39c4575a7268a9d45ebf3e948a1069f4da7f2f588b29802d807e242783790c7c7de35a339d3619a21b4e312292ace574716086d69a312466fc160c6a4b428748fb52d20a54355eea5cd3b2a6d48d975127b548acd4a7a74e20cd63b0f4648fd58e7350555d638fb5ce3ed3490125ce6c569fce1d80d497ca1ec13b17a8120f55591f5f51b8cd36008fe0a6d43045c40009556c7580c67143804e671899667509a9c553a351ace95847969d4cd511b61e80ed49bd28ce228f889b512849f1633504059651d1e42927b8ec1288c1597dc68d770d5b0ca06765a3869b4e154b06c1b2d972d90687067ced7aec926770b06b3d21c984d903f59b67a33b9761917d4b0a1d43e0d4a169e8bd238684a8c1d7a32e1d10b32a72c64cc000952307625015c2d6ec0000686b8f4cb46384f0356113ca81f756914c7627b50639d41af750f6cd55fa1642d2d577b6ec4438f137ed4ba2d3a50972746beac85646cdc143561cf8ba9813751ca603629dc6a2fc3b64536596a31bb5f5272d9a2a61e039c0438064f844d2a8cd1056ae57c754227810e0752e95c50abf2ee916f09a688be5d9505b56081bb7dc2882d4cb95b8ce374a00b77546bd4d49fb610418974e4d119bd475534eab06a8b92c22e9d356fa8c216ba954295ed0a26b7a896bd4d2c4d1849ed4466d29ae2576bcdc17506c8a8f569b6a2546ce2af4a6a973519721a7c8afa8524919cb4d9c3d252be1cea59161ef52dcb71601751fb9d56f671d3b1d463417c45bd328735285880035f52a54a66a81707c68b2cb1ed6e0d48fc6594c0d4743315fa5c45fa359946a08e8a6685bd4b61e789844a46cc7cf292b5079aa5bba3072f65284d4,0x17a32cecb482db0b24f52b32c1121ef806ad63882590f0d767625a20bd49f0b64b69d56bc7569abd5892b4c124d22c4d729aad4b38b60abad910b58926ad8a7674ec28177c19241ccbea6f2884749d23b646582d7605e8a75fd3abb0656d7d76881a8ef2343b0604b5bc10f8356189d206f3543626a5a807d441bd9fde0467fbb1b682d593d47ee5640d77033fe8dd8aa519016d63990374eb9aa4a9757b525a5d1358965d018e99a74c5d4d9a4e81685881a3007d0e5bb19227c0e8d41472380e85a3c29be599d183bf552a18100b9216aad944cb2a00d5383516454f8f969748962a936eaf82d2d4206f4cc8b4d5438318f6d3ab574d2757939db655ee342bb365041d93c1a510e6d320ff5249f590b94de7e5ae7d42dd324d58fbb5639c559e3ae85197951e72cf6b49889b4ce27ae32cb52061d3ba56a5e5ba37298a2cc7d79a074c7c6d3053255937d4568626613d475428d479b58d1750f489f2d0942c9ea3b5f328b63a38502e63fdd3b7f744e93d4a3006ad6fc49cee8cc51a315d1e8975be67e3527abd4466d34b2c5c8ba758e0e402acdf13e5cb889865d69ad7b45a9697c46e4b503ecc07f474e9c7d369a755679d3596356b92d4193344036d486a2c0ad8d34380495b11f8976a50e0d40012b9945808e870cec10576423a484b0558352134d3b17764ba2d599cb4e2bad72dfb520b9d75eb1c4ee51d5f1af4b90d44526586ddd53b5765181d70be34e8524d4bcd720a66f2b8351ca63c346b5ac28d18bfe045a6d6b2df4e4bca980bf5037fb6089f5c2e54d51d0fa5a5d05ebf2df257bba9204504d40d36c64f1a372168e9638e856db130d5c720f49bb9b96ac7645825979ab30d52943e934a13e7f5e06d4bd20c505971e775f5d035c17dd41102b68a7ae88476521646a1275d0e60d41cf2ab39d89e0ec0c8ba6002675353d41e32b5645c49679a23767b10206adc3d44c7b51fb8d4035f566021215d21d3fcb57fe3527e2d457f344b19d121491db0eb0a6668e1271f03f6bac2833290f56aec030f56a4362d55c8a8249fd6164e5550ad42a3b4c492d551e35464cd275ba54dcb5a4a634d160d62cee1ce3e80abb3625f6a37a7ef65822c2a8f4daf1d9868f51854941f2ea56d7d38fc6c27e4d33646059e2d47801242f87b069f50ec116237b4ce511f35be34b19d3727e38a177ba5e35c8f6d43b9540081d6425351d0f9f7edb50c75d5287365c9fd42f48c43ead54e335681793b21da9f94d120ff4dba09d0aa68942fd492a6ecbd2d147c94cee57d755206b3d9d1aee89622cf5a8355dd09041e6c202f483ca4e2ac1a5781f5ac9fbd51d0487c6232871c5b96a548f9ec4049d5d7f5cd53d9b5c7647b4d4584e1dfec9d7b475c560b0765d707859f16c34caa3d947ff4e6724a84d3529c6d473268e2ddd4389e58b26a781176643a,0x587b71849f655ee5aa06765416d499c9e6b11d43cb75e8a9d58b75c293ad7892b58b3b386b564c3e9bb362b54db9a2943a8ac7ed1b1fb52e02b24d2ae8b3b81200e1dca608288298d1c750bb354f2c408b91e85e5a05fef5417bd68b4351b66d52c1729d8dd97b4752681d93d334d3afd14380cd12b94688358f25a39e7f04eafd9543b65dd2ae7dbefec87d78ddb58e762d0d8b598266f02da54ee55901f2f430ad39cab26d91d3b7bb54505b560bd362cf949d863875fd44ca30555ea6821b52aec1551d139b4ad50b52d527ed450bf4e2b6d469c2a443dcc0d370ac28d36f3752dc6d46f9f45815c219d5c5851d8a50e1e130cf44e535e9fb9a8975656e0c23c751e42d6464dec036d3829b4d7bb92110f4eaecd31f5f41065ca133751f94d391a2ed212d6a23e92d01d588a6b679fb08871ed5795c4a7f541871f5af75d90bd4438ec0bcdd45419c22f2d42f074e11ed4601f14b1914110f55d37d473c65ccad5c781d426f8ae56c4d1d8dd5992de6d47a6534f02602d779aad5b10b08a0b3585ad5923deec3208593355ca6278898d29afd3635698dcbd58192748f68e715b64856d5ab3b32750b372984595a6aa300d05baa9529b500009832bb51bffd7232b15802d42d875c02ed544e7540f595a6e578c6cb036f74edc36f754f50d9dd31b474ec32d61aeeea55ad1ac8750a4f9a608356561be729b4086a8111b752b6c4a668b608d97b19335410dd3739f5d4d397000255ca618ab77596ea6fa6bdea3f6d5acce06e8dd3b23284a0cc584775400095a17e6d31d15ac8754f8bad0b3f5cf2c1f603b28d22b50643501295c1d02d50e0329d4288878b0ab5935a7f3b3b77500f0d84c752000095b5c47cdd8d582e60692c7e5d4169d1db15a22c1e075961c27cf8349b215c25d45b9809e95bd9f433756d017b03092a2d928a81758090a5437b4dcafd43838e9cb4d88fbb590d5d43d54e57405c3b4de6659d584f16dbd3d4a4ea1d98a91524eedf25d48adf5490c4b2d1b645dad35bfe5886071603b30233495d0654dcbd4966749f6fb05d4350408d41777650a1b263db5285bd38b4364e77d48c1a89820d48c4294afbcf974e50518d46bc5729e91f681b551ba9550eb6411f371175f6154d519c9713ffa93eae894647a9d2ecd4afd577ea38054d488a6a5d02bd59af4e21bb548bd3649fd57af16d635b196945d69fd4a50925d395a3471eda2059374a5c922a25fedf4459d9720f4e25e7e927da97a2bdae56362a29d8c82ed6c0c20b957d067d4575e80aa77b7892c1d5e81487352261ce37435006ad45c3752183c96e2ac96bdd30c05f4c6f5ca9ce48432c22f4808672d115574c2b4b26842b923f3d257f5495fd8555f52189d166d729f25d5aabe7d8204849d6feb197251e7282d2488ada89a7f0e0002561893375335248fd484ad718,0x245d72d5125ea4997d46f2b500b4b4a7b6eee39c4b83171386d56b8570a8ed4309365ae2d97647524f67b9043514741905d6b4ee51811f3527f9ca9ce2a5ca6152a7e55f4eb0546cec8c4d46b135045bd853d6c297920b636e457e6f54165cf0ad59ae970c21b55fed65cc5d7835358b3b0d9fa52526ad401d3050018d7eff4e7ced42b434eb237b5d4354b19107e2e8ca947d15d74411fd3a81752e22d251d2113705c969761f9ed32d0b597d84870eb525a5437a81f5fd6d58b6766dc35bab0752c93d77dbdea20b70b7f755287c351296551b2d3fa356a47b341e9e57f28f4105f57e8d522cd34fb4953e3b461c18172f67d2569348f87c242d4008929401d3b86a51e995c1f02f9d5ed7a30081bc97c7d975493ea73daaf8e7689980b450d679428274e51d99127296aa8a0faf54ed0344d9b645b1d436775222ad97f4744ebab00c29c1557d3672f4e445940fa8d0582403b6b55047d46b8b51449a31020d15f2991551bdf1ed599cb450e00843834e5b9a3b086a66cba399c7581257697bf55c9cd46e1b51cc38e9d2ae8ec1d73b074d948d54c75720f0b67c974e15b5a0be130ab37575a6a4c21cb577ae9049d5a4df52c4dd8b636f61891d93f68c462c14ea565d978e45834db8ab075027ee02c35bf74e68163a2e2d5b6634ba920031f501f3ed56aa3887debae0cd3714755119a00b97628007004cd3590bd384ad25c2f8e917e890e61f93853547433b0a3405e79a49d6a0f29d551d150fd9d6a80aa5d54d7236754e0e593025f9d8dd447daf4dbd5b28a63a5991269ff5e1b7d312b2beab2c7150aea7b24939d9f5451d37875e444ad56b5e5818722b78264226d7acce01a70b511f3597fbd98ff7565f8b02f48b811fd880f6fd14cd52caf2151bd42cc3241a7d76bcf50714a031b2c494fa25fa350ed34d74e7567abd38ff534dcbd22caea4a249696417e602d6b925342426a584f547d77e308728d1c84992ecdd5ed335025861571b1346610ed634d836ad648720d211a2d40f83622a36500d281987a524d2a4795c17876c1ec4b549dec189fa328cf54ed0d59a04e25905c5332ecd94b5428b51dbd94475f14e06d93fbe5147418534b510e63411b74a85ad282e74e0d1bba16349f1ad77ebb5151b2e44dec1d65d572a966e95b5a97171458d443806113949a80b1c2d25ca0675e7d5d4a2ead655ad8435615cc5d40fa87ce50a65a2355b8dc950d46831f7b3b4d725f3ae36f75595e343b945c0d7d3ab7476978d60852eccfda917f525e4ad499a750f2dd99e7eb1b4a5b1608e63f17a0002d6391bf10c965d084c82e7516aad539e204b39c110b70ab32d67667529bab29d7d68f7ed5047f515b1d389528caa3d1781f54c21c9089a422e896abb3524105c890e8e151a717e16a85a7c0dfb52226145f7ec05f8d4200e84c16b5a23ed,0x8134cd70d49a0436086d59c8225ca63639474d451d5b9ab54b3b0b869868aa3d59aeb660c5b09412d4e762f969448ec187a3d83213cd4694e8ac5d7151d3582cac55133523ac9d6d2b60443d9923d35d1dae57c3019ab48907f5019cd1237b52599d3af41726f5d50135245746aa1634c3c0487a968e691d3399351d9bd47bff5256ca32c675ca0fd44abf52dfd4a2d6b5464c5cb207656e8d46786eccdec056734d7e7a3756f55724b55a2362c4dd44379729b2be7b85642d4cc924eb602f5c8722d4fa06887075e6c0d357bb4d998d52cef58866717b3ededa9d93b4364f129d670dbc8d3d468274d2988ea26354849d44f3b59366d68723269957c38f8f62d5a5ba56b5c82d4a4eb4dc2f8fa5e750867b060df65851d4977b31055bb425355d48d48dc526830d9a01e55688d4951a8a9e9d5ab92958029f74076159c532afd8a937d3ad1b5081b7b72d354bba81a3d95d921d4753171af8d51fde8c898b35ba128183be6947522d9d6507b4a5d46f0db6ea2a3d9869b520a6d232cb592fed30b0f5166ad512d351a83d53e2ed4866d53b075aae76c7635c4388d32fc750d91ba7dff51d03a2152366491d634d9ed0e006047caa5cd49973288cd3d57c852601b90977ad6cd7ba6c86065f2d36a55254d27951d03107ebd2cef5ea276a3589ed5f0ae3daf52aceb5b13748e99799c57502dd596b8f5564ed46269c6618d35f75f45d0c5b5eab569fd3b30e81d5ed254be8db661f3b4f54574d291f56eae7d2293a529e92084d1c56aa5aa1fb51a7f2d1d751c2262805d6a4fc1a96ee2e8fd9d995bb658d0d84286c159c5c0437507dad5781da93af790be07e8b7d172ab562b7d18c1239451d46e6e522b7d9464f4d87b702b79ca154d48bf35ad6fb5800d35f35d4073b60ee5d160635446d7ba3728e4f0d7a91f10b6ebd2a9d88b7ed33926ee4879f4dc3565904d5d0b51d65d12e8b508aaca15d35a39f9ab5eb254350882ab50ee5d03a675506ba33e3b4c90cd565be885aad76e3344175b5226750ad87b6c4b54ebab204934d6e0d5b4892a309d495b8759481a1bb564c7fd408b75195ad6047f49091d44e3172855b08551f2ae4a79a04c075d49a16b4d2afd9600b4e49fd48fdb5215bd7aac362c7ed81c7b59ca6d8af274cc299f0d2750009d23b04a411f188ba606b9ea21bef4ca7bd7257f4e6725c69ff658f6d26031d90add60f81be4111f485a82261ca3e3b4a0d4d51bded6520d49f935a5a5d42cd251065cf257dbc588d41f1b65ec1d41db289b7ba0676e42c28127635411f29a2ef68a886ad2f4861b4ad411b5ea1a8c5a4dc69998d49f9348c755c3f675ee2271739d69079c1b0ca1c088ba18be390e0245f354cbd2d47242510af6aa03a40c65bb5aa88983bd4490350ebac1af7f4e830d6765f54432b165212066fb09d4739041d53b6,0x223674c852a923c75ca249456d32cb264978df552e7cc437ef4e0fbb1872fe2ffd4534eba9bdd40e235ea7ed40c7f5461cbf1872fe93a346b7b468c0d31872fc61cbf14674de774859e750cdeae349b4c562d495569a8c0d5a58d3461cbfb8b75461cbf1872fd1309cac475461cbf1872fe1b7d64bcf55474d860c6d430148a809ec61cbface56c6d1875d02697a4d54bcd245d0caa71f49bc395b287399404a3fbe55aa04db5eaa57f99d89c36018b9aaa9699fb671a163464111a15068c951a69608e1392d501bf5086bd965234e374a369474d8d4b0608124bcdd725223a858d47ccb50b191397ce7eea4d736f750434a59d872cb7dbb34074d7703486a2c4141ba08a68e21c5927bf66c26ad573358b2c5653ef56493c79b007d66bd5421a3e600d42a9f4d1b295148a5600d7195bb447c67b0056ec009d7147352af1d59bcad455587499e7e8a9597298d042db139d8e2e6381332f61d5fd765cf61004d1090b5d9a9871205283e0592e89e5e00d541cd713a9d59a3b28f43a3ad6e6a12759496e1c2b380b8cef204fd455834e39cd533b2985bac7061d718d54ab886a6602d942b4ee8cdd937e6fa24b49904482bc3d49a32a615469739f5045cb5756b567c27db68526d7ccb843b55c37b5609b522bad32365e6b2150657b56978d91a234ae8dd460374edbcbbb31f527ad49a655e86dad45faa951938721eae92e2d80732a624a304c77499a2d404f352755a2880b2e691d249a935a7f316d5ad4b21d4527a8ea09d4a5df4a85a7b6825458025bb1e6885fa8eb64752312d3ac4a8ec28108b675cdd3c28b07510497019334e1c8cc80cf5222a5c394ed50e01457a34e2c1d7ba45a8bd214158b4dad96a2b83656887b84774e2089699d356226d117535d0afd4ba474a8a9d36392752981a7aef4c388d27ef28a9d9d79f235c640598e2296db7d55673502b1d5b951352e7cb729840b6959270a524a1b852bd64d91805bcf515919a3cb359f88d85b5655004d2500761fb97b0093526727b0faf51b4bbd4ecf50731a53fc9c5ae2d644cad4ccb69160b50e1ad95dc34c7b21f66a686b32b0676f51e65a7634a94f51ada58f514afd6230754e0aa603ff648937197c988ee5204dc34e940bf321266acbd3342752addd94a60d0ec134118ac2d3c6aaa0e560e9d4a28758867592d7354c88b2224f50d68ba79ab2a93a7b6034d1d01d53aeb0d78ad3b5becd27ed3571750b2bad72a9bc11f19471f529afd58ced26714cb7c9eedf06a9849f5892ad969ee766c0d985534d1138e9b01565822e7801288d9d09753521f9d65446596fdd7a1fb4c6fbd52cc331ed06aab2f518fad4b1db5a0819923c759d34d4692250867873e2f24213c211b6048b34845336526a4a8b77566186f48f869660a27f4351e61b348fb4e11dd492234c50eb552bdee3fd48a,0xfd97ee74e4f6d4374f02e05ae00b929972d70f1aee033d53fa352483d57b415ee16c99926a6ea5bb27cf50fd93b735a8ec4d037e5351ae250969430cb259913126410536c86e5c5ad731be9a22fa2031f66649c95cb241f944c6df136e2d5ca656c031f20a301367766a5f56cd6d7819b03561891e1bb74c61cbfb86a591b35ca30b519d4be75a6d4898a98ba251e5cd46521714c0d30c7f58226d438152a1c0a96034816aad765930cee551803766b39d57aedee6ab7b3c6352411d96e3ed461cbf1872fc61cbf956b4cd62872e1f56ab5d41872fedfe811872fd0e0173b97665820c1872fc83dd51872fed7c9da4e8d861cbf1521f61c0be60375405fd31872fedd2ba01d2c0803bb442304d29d595bb5461cbf2bb1728c07b84fb64c3ed52e89ec61cbf1872fdb2fa51d76a53af851872fca7b878551e5393d411b601eca5c8e736645bbeb2fa8a9afd638c7129424d7bbb5a2d0d7374ec683dd4508f14928a21609c6bdfd483bdc2d7ccc1c3ec0b8fc410f726c2e6f7562fdb667b04ca515eed7153e385197b00275075cd618bf3461cbf1872fc61cbf2caed461cbf1872fdcb46f6f672aa02b55ec6ba9437b2f4864f369f07e352e0c4ab17751b82d40962564939d1872fd993b5452650e37bb1872fd4d24c273a9626fd6b5eaf9e5bd323e288c755348ff5ddb3d8a5e570d36d3a30b4d89ad471f68061cbf3b956895fd21872fe6028521834861cbf047da57b8c7a4e89e8a97b956b51807be206d7061cbf1872fe2261a84666461cbf716b513a9d9b0cb5d5d09db38b5e5a2d411031debbd417daeebbbae11b5a855559b38b59d87d44ebf556d7d11872fd9484d1872fc187481872fd6ea6a2b834c61cbf1872fc61cbf81f75a99d8f617a944344a1872fcf2d851e4b50074c23b97505f8d5b16f04688d8797366355d3b87e8e229b51872fc62f8f0be085e75d4b43752915bb861712e1bc5803572aec34657868d01d403268aa27d511675decf7e00b574a1779ac85ee3ee7c51d19c61cbf1872fcf77a31872fc495b53b9440959979d2f10856d3a4dd35ad96472612861cbf9ddb50b98d442870def17d145ac061cbf2f4b4a8a7c01872fd64eba56369a064c765035220cd402baec7f2a92a7f05fb8711872fc61cbf1a875224a0d2882a55d1b51872fd663d353a16461cbf72ab529790b889848a7bd30682957d85c1872fc948c75b5f51ebcd51872fe2ffd7b4f35861cbf06beb919359919d2861cbf1872fe855c148be0861cbf98af2461cbf5c56385f3a91872fc61cbf1872fc61cbf15d1eed879f530349086901872fc61cbf215971ce6a682be9446dd71872fcb3b2c649eb4081b01872fee22d36051ec2afcc26edb5e59503932d4891b564ddc48e1b220fd24856d93f4b393e5b5512942ae7d4a4c350b6cd49a47508016f348b1569bb,0xa7f0c11643031f5926113437ed10e23517b9bb15576602f4a70e9648ded50daf5d0f0711b36c02d1adb9a9eeca9a9752361d2b341f6b6507a7a102146776d6a8cb505626b88721dd2b1a44e57027db58185ee9e9840df2516c0b12f484888fd35ae27e06179764240860d3489e8da8e4d3abf5a3c7d4724752751cb5916ce189d599cb54e76d6752f00e515a00025444ad4a5e75582fd478dd71a7f0b908e54f2cd55f61368f6d9106f2644c5c0c8d802d1c5a2828d18bd33e3b65501d52a8d355cdd440def811f1b904135caad88e3ea656ed39d7f528a950939e9d6bd8f206d063c71a70e9aa21cd36ad694548833d334882cb9a5e74d04ea2490121d91702fd600ad0d48c4b58b697b3b6b50ee3c49c0352c93d3804350867c21872fde775c2cb2c274b591872fc852d41122ed2d6b9b38a3d6d7d2584d4047cd30a5750ee5845a834d375a9507b5049e203b43519e26f53ee26a7ed304eb566717b8fc5e658d94b1fb4a410d565207c4aab511c9721b39546f35c367c52d1b5a1b787682568795b0763564672d920075088fd975c9c53a4b51ed354b3bd380375064057b9a8d11ecbe5dc07d340d5a71f52a57b473f67eb37a303832de374a4c9f5169797437b503c4d46eca81d4bb2219ec62828e1872fc472d51872fc61cbfb0a3608d9b01b7316676b51872fe154d61d735c61cbf474d6461cbf6034691dfb593da060168143809dc56d42a8c7c61cbf1d77526c6bb82ab569e91c06f3503ecae8b3b502c36f169714d531d28ef55b1dd58bf35556dd43abf5647dd5b2ee7de5bd465067dfd0d81872fc141b02e8b448c1d61872fd13dd51872fd3e1b51872fc1905961ef6461cbf381524570d372d16e774d498923c61cbf1872feab0d675535061cbf53236461cbfb1fb4edfeb50d89662ee6f020706c28d71872fe3c7341872fc61cbf1872fcaecd58b64f2c32346eea8cb467d856f5404d4a22cf516aa2b979b126c01d061f541294aaa5274e991d110d5c582d93b975461cbf1872fdc76d46c1a406cdc2b4f35ead6d4882351557d55e16ec44320372f5dbaca31872fd7cd1a0898da039ae1872fc61cbf7466ccb13d9792764d62d303c350141c179d759ca6d19d42b94741d28329c7b2d3352d24542815d435d964b2a31f4c4814989fe58124d48625e88f1d31bed55b949984a6594e8508475eeb4fd44a2f526724d1ecb5857450013520c059013eb5505dd386824156d4d10f6d483fd54c9359eca7bb04f0817bd504cf1658ca39a3971a72baab8b51464b097c9ede6ac917520d435365bfee64847904a7554c8d7ba5605831be859f54b60b27b75b6cb7d488d1e5f4f947ed97041bcb42b75e7f8a67edb653a0d4855360a9478713f5db66d634d8c2c87d64d996506ed7a16b55e209268b750ccb37811566bc9d450b28cc245c206f653a,0x52649be6b875626fd58aeb514d25638c6cd99bd419f56ec81d4960b59474d153a355049d426fee922fc73af689a70ad2ba2eaaec1a52e65d8dcb92e1f5830ad451e7253c970223f56e95be2cc2d668134546c2caa7d94380687d7d38ba752db6d425db5131d4d2df674b42d5752f0ddd6d47965aa963d58551aa5f8ae31d7529e97b484965d391f804a50f551f2c6740c08a928a751d69be51828a41049860f2cf83d4739f55ede9d63867e501d465c82e942d5ac874ee63d401fee8ef2d36277558fa8e6a0ad6599330b775202aa741eac16c09530171c2ddd3223f591b3d38adc74e379926b654f55404e3135554be2ddb50504817b4674db3a2160b590c4c95fa1417df790fab4c90c5ca4523c0c2a579f3569637b568565241d43b406a6696f6f26c0d9dd25f635471f99381b6174d944ebd65ae2d51f18d5f941457df0ebcca923ff5a4e14972734e7e28f0daf52304d42f48ad464793a6744f4cd49b00d2618d5a6ea5a979d96a83556a03439475e762a041075a9af7b335f52963d32acded160d5538d2a113c7775935b927141f2d5160d42c6752a94bbb0a0f13e5c9ab05288c3d3ac4764959c12bef3659ca6975361f86a37d8350b2bc720c3540096a374d65fdbd350075121c7108968927e5b2acec268a9d765e3ce99d69861ec11f15ab3b29f6f7bb0c89c70f7908a2e8ec10830dee57705a13cb61eecd360347c249a30c7b55ca6132ce6ea2e97b8311e6411d5559f52a0b958e734d7f2ca51d354b427ba1635c548d78b650a54fa2a815664847a2da61d3afd6938750367492e72764117b7e375224b4a7987124f687682751a20d5439b556fdd46a57562d9d868275520abaa34afab62d46d29be312d51520b9fd1d43b06282f8232cedee4f6d350d750f789f656b5644c4a1b46046fda79f128c588d816c7659a97b645a94d62d5381522761c772835ccbbb546571d0e6d95b5e011dfa978f351edebb227ec0bbb948dc75141ed77c852ad01d3089f52e4fd56ea35a183b5200dec792d38ec172c5bb00a374ea02b06b7b481a4a3588a42234af437b56c85d40fa96e7c2d546ccd2d918f69434cf292237e6a4bd21a00567647dd816c350df9b56032ac5557b017f5eaf1d68873567e5c033b316c10a22caef9474d9ab5924e9fbe8c48d166a5caa2a75cc3d4729b488665c0b95227c8d81ecb550e0115507514352812b676d3cd43b95e48ded73b4f448c3d43fb67de4a8f0ea352e16b51081ed4747ab887261a69697e1eeb8eb5243122bda813cb16437ed50c5f1473ad5538e952bfa5629f508b35ca7a4d1ee1d69697648767c622a7a9c6d30b4935e77d55161c6e0cd5b98f5e1b18e65cb4e8b7d3257d6e824a06d6b0d4c83ba03a38c3781404354a8e709bd751e37491bef4888f1f989239127d99ddb5ec4d345059c56b59f120535,0x46c1a99d44dc1edb5ab22acde5033d4116f50162d4435755435d3237969a50d41bef65474209203508d9d42b2ae43e85c80bf54b986fa16b602bea2a462ed74ad459aa413926f713d28bf1d3401a8ed82b0203282c28d4579f16590d5ac7ed50e001b39126187a2ba35b5a584aac85a882c8117f5357d0d32f48cc5a5be09db240ffd403023e8c0d41bb61e914be3d5e96e49485f37515d9a20fa356c2ed758d709d5e800dfb4c41bb569434a189d607eef6b01c47dbde4d48a244cb24d53d7546f66d013446f12872ad48187541874a3b0d6d275af49f28df77bb3d33445d4899a04ad6137b12b6eea02ce8ba75d34ed697cb595ead6892986af11f2b2af925ea215d7490b182332c6cb27b543c676501d57bb3526c3d99d2ec2ca19042c7654a5979a568e18979043605e005ca34ae518bd4781f510de4d51d1f03c29050f75224a6001d2c473ad4b0c814ec3d3657b50dcbd305d7251c5d43212ee59918030352a25d3600b568b7d5a89d6626f59160b56493c5775a96addd53cb75a805cf8551e8c11d442c752293a359aded0473b4287061be811a3241ebacb3b060eaf17b3953668fad5ac45729dfab3cb15c295d8755134e3ed424f2e8c6cc266368eaddd1b6f67e1be80798ea69bac37d834e411d38dab52dfdd321aa02adabe36f548b69d6a5094c535d879d565d9f8fa55676ab57172c680806d4b05f5c672d5603b2c2a5a51b4766d915c8453586b1d565cb50db6b5237946d224965787d108b030f7547c68c6d0348cceba383b65bc95c715a0813cd35eb352dc3d84c747dd2bd46afa6ad71d549fb54ab3842b6354574d5493ab8e228eb70f56d01d6ba9352411d426e6965635929ef58f2d7986c548555d53091c15f1d632f68e6a9a59c5328ee51c48fb569c7d7505b4cec3d53b0b5d6135959c752e6a5c20fd71033d33e39e6aa54db62b555c6b390bad4b2c7c4ba2660aad37e5060ca3be8928e2714b53d31a9948d43b05ec6d17bb69eee10ed46ad52868cca97bf5065ca25b81c04baa23ebb550e65c7af3621b77b8dda1d0e0d251d072e9a7d237f5129fd92c4f545b1704380092e7c93472c131d34720d369b9d6913355480c17c8aa6624d450eeda1547b0be35881bd12a5362d76d55b7a8a213d78b40ec8c1d34ea55eb1171546cc5ae148b5be91a7f2e2871c1ce0954c774dc835c3b94ce9f6d7410564574d4a50b50860d45f3534b3bd98b074e74b87b435346724db9aab88d9d866335e8a2712566c1f6faa3b4d2abd2d83c2b52942d372986857459512b51132cca7a44cad0d2b0c9ece51d50a4966061d119cb49921d3346b5c64051892d3523e2081175a9f5d4729825a7fd45e8ed6c28194ec74cec17d49013449ed97aef56563d5464f58b4661b83134813a043912417d909a075d31dd5373e650add49fde0031f874dc3,0x57b87ddd4d566d5710d550af32f836bd9aaf361362926d3e8a93734729b5c4ac7996974d59cd5a50d66a5cd999c5650f5a7635304190d3b7f571e59d5ab053607dd45fcb396a0d6b4f360f8bbeb0a044443d4546f5c8d9d1534b54d3ed5559f617dd9f689eb8cb2d97ae310b3997146745aa048acd255a51d286a2b5472d3ab9dac59fd4507a04806715af605281d114135dae14d977b2969bc384f354f9ab557174d25d872f4835d1fd52f5638b191811226525bd74f398a830d742bf5de49d48b642dbb9812a8d710f5a50a8e8c7da209c81f5241714a52944a1d4110d728fad43d575626f6a496f52ca9ad8bff4dd58aeb04e5624ad99a4f52045d5af433e12bd5383b59d60598112ed945819b0f54e4cc993db5a467d4964752e16be548e94bcdd68adddac817132b754022a51ce3510e03675323c7e2d3923d706d1d623870c2afca2f563cec3d47fe129688d39212101c2ba88980a8f9d41bb7548de7b81967e18912756302a5c7051d348ed01f880a400006815d34cd36d983bb525a518243129ccba30c1ac2e494a34263958dc54a0749bd9be923f4e1c0b543801dca6d38bf1a964e3d7c6b66a5cd5b63659959d5116510f55d65aba7caa29eb21f519a9c611cb50d53d5b1374c06ad72d0b51ee1d534d8d29635c39332a12739a824d0c24d479d754bf5812d1b550e000b645ed7cd34b4047d1ffd49664518ce9f411f5d840a324b6651b3d5888f502f8d98bae8d2d6be50d4d0e76d704a52296cd4739db1a955c261751ed07d8ced294e4b040f5a12f34a5752c1bd4d450d75ea02be9f71308f17b60edc23fd5c3471e5eba8e9d7f5483f4d875b508c1d4372db20b3b517535907fba7af352355d488a6f927e7b1de7504927b4bf9ad472d45a5ecd158767b293624a34a0aed69cfb5980810459d472985d679d56df1ec959ba86c7511f26c6a5521d54288dc529435274b8b641a1b056c755193d50d274c2c0d59801c48d97c5bcf5c5fdd48ad65622633729898b69d31def55e756a63ae84e99d9477eb5eb5bb6c4306493b5b5eb1d480b0185750580ba4d9b552dbbe0c7f4caa7874b9ed62fc591f1b5941ed33ac9eed715c045eea0e8bb2746d4b42d37b41150e02844dde5284d374e75ccb2575f603e5d0d4234d36d91d533fb15770d734d98c64052a9d6d611c9571d9c2a27d4b38b2e613d753c68c6edd9b0465c548d67147665f87caaaeea9afd286df668c7d461235127e6f064142dc5d4400638a7bd4b134684728eb49a75ca624869b5df285c2c068aaf1d398081e7e29001ab65b66d3073a38d3638645f4e15bd4477ef9a4dd577d5759a2d3b0c8da8f9d338396d5eed5793e748524da817565e6b3847b55d13d5a8274ed3c6f574ee9161c2496dedd998e39e2e5fdbd47298514afd3b0cb4ed7cb5aeef007e2d479035441bca74,0x81112b4dd8049729894ccbd48fdee40fdc0435abeea4d2b205c27e4d5312eee8559767db50b190710234e076cb6f9f4861cbf99a748758a08aeae5ef1482a7ec19caa35963525a1d94642562d97c51d02ae57d4541b51d01588a5e89980a599c5f6805cd5af7511a2d91ec8d0afb8ea8246aaf1d94abc356f38190728cf55d9206f551fcc466e72e29dd49608bd0e026435745416d9243f54ec136960b669d9d4ade35cb21d9b88b513a4c94355e6e16a9084ec4bfca288ab54e3e8190d2e82d2d38898553a9d49c533125bd67986d4afbcb1f6b50bd215924f261c1d4354f469afd48ec354d36d6b6ce9c867c17f423a7319484ea3c10dd72f4b66cc5d5849f54190d532cb55047d9512b5613ed19809e40e090abb34acc9cd38fb4a2b75ca3e75de5959903d641779496875d7b17b2f9eed324d4a169a4b870c11b758712a37edb563121f534b4ce0ed54975ee411345f374c5482da4df49ff29a93db5e3fdd495b9717d849903f55d5b576bc47c981a28898602f8341dbb560aa5c124b4c8c9a374769e26c95438344ab37a895b5d5dea944432538d941197550e02578c2d6d86d51b71707c6d8758354d6fd4ac861dca619630350f29d9532351ca25748fe05d8d5748f8d12fed451d07a1c8ca43835dd1dc516ea753c9d5507a0096dd519336574ad3551e862c1819f9351ca6a1b98d3523fba1b6831a10c07ee758b21d31bb626ad5d46e82d525bd366adf595ed389135e6bad53b049e134d2796f462b7d3415b007c687282e8ac281815c352d82c10b9a989379448fdc5f51be0c271d80eb50e22742e3a3b98f4cdf9c9584f4db8cd43b4decf649d7a647e618d21751f45dad431fb0e85ab01bb5ec755d5534b4693a813d555dbd94d756f653704d3cb366d904a9541283cfd41d7352d7ab52de2407c66ea4eb5941cd4a00350000688ba61cc09b71b6b649c0c1b1345620cd5202ad48b3d572d351f81a2a7a469bfcbb3b4f4c0e8d71b36c62d9d4593b5cb30cb0c2729911ae683350d1c5c7c8752bdfd88b552a5dec9468f5d4d8d79c821e74b7bb37e7c388d1a32ec8ff2d440134ce760b9fe641831c59f0b5a16ebb617a9e00dd52e3ecdd5da06b9f55328b005ef51a70c954df665a5467953606adb255e5242afb50fadc0c24d544da8e2eed4466e963c7d3725ad527e52598f51cc5d80fab588acd5881650c304da0eaea6023384c32a1d67190434eae7d31792d4bac9a7222468a2d4593351dfbd580bd2e0f8d546cd36a1eb5449352154d254eaf410ea9696350cad8f1d7b556797b277ad983bd5974a8e45e8e3abd66154d18e7164bd23451334d5a17d6a674e1275713375debac78115556c2d49737515794a224690688d347c9dca36a02f48c2720d659f6ed3a4ca75974c9a9a9559e38bd22f06421d5d4c1672f52acad557c564c75d9,0x83a274a7b7b56c5ed4d2af3ca75a85ad674af4c05fd417bf5564cd647cb64b875951d1a4898c4555f6481b799341c134ed7752eb8009d3391688f8e7b03268d9d695839a8c2a1d42f4b4c6405a373eed511bd29ef640eabb48bf297b8a51a2350fd9d4572694fa4d19694cd3a7d52d0964f298a3ded245f8d7b7b2d595a5960c6b5e59d416095ce54d41f5f4564e81b0a3481cbd555e756493a9729b52631a3758750802d500025613ed3438054f2dd106734a3f6d343574e9f57148ff50801d5a89751c83d5528ac2e8dd1567364e7aa071db569b9d86eee5042d607a0765e47b978f755e99d50f835a2d98843c35182bc3b217540e8d586c7568f9d997c9810e0105a21f20c5c1a033617e86a44e521e62d5966760fb6b92aeb50306c14380d057486584f51fb987ba934d9fd961d71ed0f0]
-def a4rows (i : Nat) : Nat := a4rowsb0[i % 16]?.getD 0
-def a4layer : Layer := (4580,fun i => if i==116 then (169708707202400,15775) else if i==120 then (169723521486176,14775) else if i==170 then (169722462422368,14717) else if i==229 then (169708471272800,14751) else if i==322 then (169653742945632,14845) else if i==749 then (169929694594400,14845) else if i==892 then (169740716033376,14845) else if i==912 then (169708555158880,14751) else if i==923 then (169708707202400,14783) else if i==956 then (180692665650528,12783) else if i==1151 then (417998654966112,9087) else if i==2927 then (169708472321376,14751) else if i==3960 then (169708504827232,15775) else if i==4224 then (169708505875808,15775) else if i==4519 then (169708556207456,14751) else let v := packedAt a4rows (i*22) 22; let p := a3layer.2 (v/256); let v := packedAt a4codes (v % 256*12) 12; let op := v % 1024; let a := op % 16; let b := op/16 % 16; let mask := if v.testBit 10 then p.2 ^^^ (1 <<< a) else p.2; let mask := if v.testBit 11 && a != b then mask ^^^ (1 <<< b) else mask; (p.1+(op <<< 40),mask+(1 <<< 13)))
-def a5shiftb0 : Array Nat := #[0x45801930b4e0013382f5d0411130507063b020305070424053b062d00000401111505020000020803190218111c00000c03041700090117021a02]
-def a5shift (i : Nat) : Nat := a5shiftb0[i % 16]?.getD 0
-def a5idx : Index := fun x => let v := x*(x+701)%618970019642690137449562111; let h := v ^^^ (v >>> 37); let j := (h/59+packedAt a5shift ((h % 59)*8) 8)%185; some j
-def a5book0 : Array Nat := #[0x1,0x41de02d]
-def a5book (i : Nat) : Nat := a5book0[i % 8]?.getD 1
-def a5ranksb0 : Array Nat := #[0x3c]
-def a5ranks (i : Nat) : Nat := a5ranksb0[i % 16]?.getD 0
-def a5tbitsb0 : Array Nat := #[0x80000000000000]
-def a5tbits (i : Nat) : Nat := a5tbitsb0[i % 16]?.getD 0
-def a5expanded (i : Nat) := packedAt a5tbits i 1==1
-def a5rank (i : Nat) := packedAt a5ranks (i/32*1) 1 + pc (packedAt a5tbits (i/32*32) (i % 32))
-def a5gidb0 : Array Nat := #[0x1]
-def a5gid (i : Nat) : Nat := a5gidb0[i % 16]?.getD 0
-def a5pickb0 : Array Nat := #[0x3]
-def a5pick (i : Nat) : Nat := a5pickb0[i % 16]?.getD 0
-def a5hints : Hints := fun i => let g := packedAt a5gid ((a5rank i)*1) 1; selectedRules 13 2 (a5book g) (packedAt a5pick ((a5rank i)*2) 2)
-def a5codesb0 : Array Nat := #[0xeddebbeaae99e88e77e55e44e33dd5dd3d85d6cd65d63d4dd1dcdbcdacd5ccdcc9cb9c9bc8d9d59d299d96d89b55d2aa2551a70d30d2]
-def a5codes (i : Nat) : Nat := a5codesb0[i % 16]?.getD 0
-def a5rowsb0 : Array Nat := #[0x11ac0872bd0c008de8520f5e6a4babd07525284180d675ac19f462e273b2c78b1243835597b08e0196bc16f6839d26709d9e07fc28084612910399f8b1250e57614250170e36a3b09478d60687d614fb4261c3a054b0dd5e741425b76612832761a850c246430734707e137413cd7a84f50480cdc235c6eb6392c0535e9d01fa6e1931a921c285e5e80a08e78382612b968b12516249764c9e18b410b209a784ecea5c4f8f03acbd79170f3a9d08b1251624a3a06823a207fbc0fc6cf50f3b2e17f02c809781f8e3b757616c29c1788d60a944c07e3cd3f385def416118b1250e57218109a2cb13aa11624a2c491efce6bd3d16248c5262f41e8b1242408411c341c938afbc0336e2d289f49e0c93cbda4d8b470be938223c5c26066e5b4b4e07fc6ecb89c06f1f49d3b42cbc02d08273c3ce79b1715f84276ec781e3e69498a286eb111ae1872c2444381f8e89d9b8603cbd084798712b115401c8b0441f90b161843e1412530c1aa83c990fabc6d478334d4300404d3a3a5395e9111ade310262cc68972887d4a822bc13b78a96f1f49c1b228c794dd4253b2e30a69d01e58fa8f2bd1e36a3e54b84b6263b2e08afbaa2f4d7388bb2c8]
-def a5rows (i : Nat) : Nat := a5rowsb0[i % 16]?.getD 0
-def a5layer : Layer := (185,fun i => let v := packedAt a5rows (i*19) 19; let p := a4layer.2 (v/64); let v := packedAt a5codes (v % 64*12) 12; let op := v % 1024; let a := op % 16; let b := op/16 % 16; let mask := if v.testBit 10 then p.2 ^^^ (1 <<< a) else p.2; let mask := if v.testBit 11 && a != b then mask ^^^ (1 <<< b) else mask; (p.1+(op <<< 50),mask+(1 <<< 14)))
-def symmetry (i : Fin 12) := ((#[[],[48,129,82],[81,130,118],[48,33,133,118],[16,82,131,100],[128,49,100],[16,33,50,131,100,133,118],[128,81,130,83,100,118],[32,49,130,83,116,118],[80,81,82,83,116,133,118],[32,83,116],[80,129,50,116]] : Array (List Nat))[i.val]?.getD []).map swapRows
-def a0alias (_ : Nat) := 0
-def a1symb0 : Array Nat := #[0x6000000000000000000000000000000000000000000000000000000000000008]
-def a1sym (i : Nat) : Nat := a1symb0[i % 16]?.getD 0
-def a1alias (i : Nat) := packedAt a1sym (i*4) 4
-def a2symb0 : Array Nat := #[0x300a0000000b000780000b0600000000090010000000000500002004000000000000000000000a067070000a0000000100000806000000003000b000000000080000170b000000000020000060000000a0000000000300000000000000a0008060005000500000000000000000000600001000a0000008100090b07000000000000050000001000000000000000000000000000000020000b0000003b200000b0086007000000700000000000000a0700000000000000000000000360a02000b00b200b0b0000002060060b10000300000900000000000080200000360000000000200000000206000700000000006000000000000000000000000000010000002000000000001006000010000000000060b000000000000030030b000058045000000000000000000004300000000000000b00000000000000000000000000000000804600000a00000000030080b000000700500006600b00100000000400005000100020000000003000000000000007000000000000000090000060b100600000000300090b000080000000020000000006000600000160900000000000020600072000000000000200000020000000000060010600008003000007000000000000000001040200000000060000b000600300b0000000000000902b0000000000000000a000000000000015000400a0010000900000b000000000000010000010000000000090004000000000080000000800800000000000000000000004b00040010000000001000000070000000003000000000000000000000000000010004010000000000000a03b000000a00007000000000000080000000008000010000000000000100020030a00800000010030000000000000001000200800001020000000060000600000000000b000000001000000000200603000000030000000000410030000000000000b0300070000000000b08000b23000300801000000020000b0000b0000b0000010003000004000005000040000002000000000000000000009801009000100000000000a00000600000030000b0000b0004000060100000010000400000b00a00300000030000010000060100000006000000000200000020000a00000000000000000000000b0000000ba0000b20060870]
-def a2sym (i : Nat) : Nat := a2symb0[i % 16]?.getD 0
-def a2alias (i : Nat) := packedAt a2sym (i*4) 4
-def a3symb0 : Array Nat := #[0x10000000000720b060b000000000020000000000000000b0000800000000000040000000000001000100000010000000b00100000000008000000b011000000000010600600000000006081000000015000000003a00003b000b70b00000000000004000000000000100000601000b00b004000000000000000010000000600300000000700000000008000370000000a0400000500200030b0000000000000002000000000000000000000b00005b600000200300000000b0000000a000000b800000000000000000b000000040000b0000000000010a00000000000000307000a00000b400001000000000800a0000010308000000000a00008003000000000001008000a000000000000000010000a1b000000000000b000001800000b100000070000b0035000b20000040040009000010200003000008000410006000b0000100000301000b000a02008000600000001000000000000000000010000000000000000000009b0000600003500000000ab090000b0000000000000b70000b00660015000600a060010000100302008200000000000000200a001000020b070001007000b07000000000000000002b52000b0000000070000000000000000100000b0000008000760003b00001002000000000000b0b0000000b00000000000b01000a00a1000001060000000005000b00000000000b0000300000000010000000060000000000000b00a20000000000000a000010b000500000ba0000010300000000a0000500100000000b0220b001003000008000060000800000100000000b000000000000b007000710000000000600900b000b00bb0700000000070169000700300000000000000b00700000b0000100596b00000000000000008000000000b00000000b010100000020000000600000b000b00900000000000000000000010003000000000000030000000030000000000000000000000000000a00000030000905000003000b3600000000a00002004000000000000020001900030000000a60090100a0000027100000000000009006000000001000000004000000800540b0b000000b000b0000000093000001b10b60000000000600600000000000000000000000000000102000080a000000000000a000000000a0010020070004010000002000400050000b0000000b00000000006089140b00030000400000000000000000000009000020000008100000003000100600000200008800000000000000200801400a3400000000090000000820b0005000000000ba00000000020000707000000b00000000000100001080000000b000000000000a000300000000000000400000000000008050000000100000200000014000000000000700a0000000b000900b0000b00a00b600008400000200bb07000000b20000,0x30a04030000030060000000000000005000201000000000100000000000b0000000010600b0a100b000000000007000000000000010012000000200100030b100000b00100001000000000030600100700000000002308000000000300000000000000000000000108702000001000800000000000600a800000621b000000000000000000000b006000000001a0060000000000660000000000000080000000000000000300010b0070000202004400300000000002bb0000000060000b00a03020003003001b000080000000000400a000200000000000000000120003000000000a0140000000009000000000000000400100a0000000060060000000000105000010000000000000a000100000b0006000000b60206000000b006000000000010000000000000000b0002000000a7b06b000a0000000000090090000007001703000a00700000000a00100000000000220700000006000000000201a0705000000000000100052000000000b0b5000201a0b0000800000013bb050000005500000000000000a00060b00000010060009000000900000600b0100001b00100a00b90000000010000000000000020000000300063000000000000000b000b000400100600000000b102a700000900000000220b500000000005071090000003002000a000000007000000000000000050801000000b00b0070300000000200b00000000000000108000a00200000060300800000000800010000000b00b08100000000000000000bb00200000040810300400000a0000000000700110000a000000000020000000030011000000000000070000000201040b000003020502000000b00707000020040700011000400600000020000300000b000000000000000000b0000b204000000000000000001000000700300060000000000006000000080b00100b00300090b00007000035000500000000000001006000000000000a3003100003000070000000a0010000006000060000000ba28000104001000100000000000007000000000000000000000309000010000000021000000084001b0000000000000a0020000007000b0000a0b001800100050300000000000009b007000020000010000000007070000000b0065b00010b816a8100010040000000007100900000003a0b0000700600000b00600640000080000017700002003000600000000000000b0a00707000000030b000000610000700080000980b10052000000000700010000000000b0000a00b400a000000410020290000000000080000400000051000000060010000100a00010a00006002000000b200000080000008300700000000000000000001000005b81000b0000010b0000000000010000000000000008b00000000103000401200100000000000000,0xb1000030300000000000700001009010000000a00700023000000b00060000000000000000000000002000000000000400007107000000000004800280800303a00000100088000003100000000000000000000000010000000004b00300000000000b00000000005000000000000040020006000040a06490007000000000000007060070202000100700000b0000000500000000000a000600000000000080000000000a0100069001a030000b0000000001006b00700000000007000070030600b0a00006000000000b06000000000000800020a0005020060000006000000000b009000000000290000900000000000b00030000010000000300000010100600000000600000000500000000000b003000000010000000006000002a03000000200000040bb20000000b00b00000000000030a0000000010009000b7bb000a020b0030000000003107010009000000a05070010000a08000000a00000000b00000020000300000000780000000000900000030000b333b00002040310b0000033b20070100000000600a000001000070000007000000a000000a0000000000410000060000900a09000000000000000a000a00b00000020000000000020008000001b2840020300000300000000000000000000000002800200000000b0030011000005000b0709200000000501081bba02b0b006000206000010000003a0000007070010a00000020003000700000300000000300230050004b00000060000a00050000600600000b000000000008014000500000000000000b00602079400300000300b00b0000000b100000800001000a00a00010aa0000000000b0000000000000000000000000000b0b01000000000200000000000000000000030000700000b0000000000000000a0000b0000000000000020000b00a00010000000000000000300100000b00000000066001200b10000b400000107003b00000400800000005b90000000000020000510000000000006002300030020000b60300039000b0010100002000460000000000006b000003a000000300660704000002000400008000000a000820000270480b000000000320000000b0000000b00b00010000000a004000000000b01000030100000000000000a090000008000080000002000070000000070000000094b2000517000000004000000300000000000000b000000000000500b000003005a200000800000000000000000000018a000000000000008000b000060900000500020000001000100000000000000000000000007000000001608003000000000000000000b00008b000001000001600000000000000030000010000100010009b04000000000b30000310000000b0b00321020000500000a0a0000011b0a0000000001a030000b41000000a0000,0x600007000000000000000000000000000a000010a000000006003401000000000600000050000000600000000000000000000000000000000000000000000000000000100000000100000000a0000b0003000000002060000000b0b0000090b1702000002000a0020b0000000b00000b00a00b00120000001009000a0100001040010001000000006b000000000760b00003a3000000000000101000000b0411000100100000200b60000063480000000000800010b0000000000b00008800000000000b0000010000000000000b0000000000000000002000000000000000001000000000000030b00800000000000000070000000700000010000000000000003b00640000000000000006a00000000708110000007000000320a0b0080000000000000000a000000030100010b0a0000000420007390000020000a0010001000900020000803009b000040001071000040070b0401000000000008b00010a0060000000013001a000000000000000000020000020000000000010061206000000100030b0080007000000003000300500000900000000600000000000000000000006080000001b08000000110000000160202030071000000b0000010000000000b500000000006007007000000060006005800000000000000300005050000000000000b0000000080200080a000250000011b6000060000000300000a10000020000b0060195000b06a000b616000000076000b0000000000000a01000b00002004000b0b0a00000b000413000000000000301000000000000001020010000000000003a000b00000020300000b000000000002000000000000100000a0300050000200100900000000000000000004006000000000930020000000400020004b000100b0b600500b6000000000a000000b00040000008000000000a000000002003000000b0000000030000b0600000000000000b007000002000000000000000300000300400000000000b9000b000000000b000000000000800010000007007090000030800007800000000b000b2034000100008010004600000b00000000060000001ba00b00000b000000000000120000000000000000000000070b00000200b08070000000000000000000010000005b00000b300b000000000071000730b000000000000b0000030200000000000000000000a0030400200000000000802010000000000000207001050000000000000000020000100000100300a0000a0000000000002000b000000000000000000000b800a0001000000b0000b00000000000410000000b01026000008000020000000000000300b07003b00000b000690000000001000300000000010000100000000000000000000000000000017000400000020000000000a000000000000006080000000000000000b,0x1000300001010000070000b50a00000000016000306000000101700000000001b100000000000b0000000070002000000000000000b00000000000000206000000202000000038900700000920000000000000000000030039700000000630000410b00000000007000000000000403001000000000000000000003076000200400000000000000000001060a7b00100000000000000000b00000b3000000000010000800060000a0000500001000000900000100000050000b10037b0010000a000000090001000000000000100b0000000000000000000000000000000060000000007000030250000080000300000000000b00000100000000000b00000000090700011200000009000000000060000100a000000000000101000001000000000000a0000000800040002600100b00b00000500300000000000b200009001b0030100000060000000a0000000000000000000000b0a0ab100030020908040000000000a000007b0000008000b010b0200a8000000090800b00b2610000000000300000000000b07000a0600000000800060000009030050030003800000b0000000410200000000000600200b0000000000000000000b0900200aa000a00000083160032000406001000000000107a000000031000000600000000000006006b0000000000100000000300000900010a20016000100000010040800000006000820010400000100b00000300000b00000000000063701000100000322b0000000b00000000000000000081000000000000060390000000b00370990000000000000000000000000000100b080b000003000000000000000000000000000000000009000000a020011000026002000000000b00000000a00040010010040000b30000100762b00000000000000000000000000000000010000b000a20000000070000000020000600000000000000700000000a0a2003000600000000000704000b0810a720200000905000000060000000b00060000000000000001060000030100004000b0022000000000190b000000a070060b0000a00010700040000001000000700005030000000000000000011000000000000000020000000b0000101030000000100b0b80000030000020000a060a000000030b0000004801000010001000050001b7002900100b000100000000010800910b00000000000002005000000020000000b00003ba0400b00000030013000000000000b00000000000000b0000500000000080006090400000001000200000000000000000010000600000000000030000000000600000000000000000000008000000700200b000040000000000000000090000000000000060000010000000000a0000900000b0000000b000072100b00008b0000000b0400000010000000000b00000a000000900,0xa8600000000000000000000041000020a0000b0000b00b0a000b00000000000000a0000000100000bb00a0000000280bb0a000000b010003002000000100000100200100001020600100b00003a0000000000200203000b00b0000000000300000000a000000100000000000200110010700000000000000000000b00009000000000000b000000000b0000024000000000030b000000a1000000008b080b00b6b700300000a01010200a0b0020bb000000a00000000000000000000000000320000010b000000000021000b600b400000001000700003050009008000001b00000b00001a0a000000000100085700000060000070003b0700000bb00000000001000b000000021000000000000000000800000ba060000000070000020000b0000000000003000000000000070200760a00b600006060008000000010008300000000011406000000100a61000000000000002000010070b00040000010000060080000900000008000000b04002000000000003300000b000003000100003000000000000a0801b000000000010b000000000300110a0a0001500000007000000600000000000a00000b008000000200000000ab00010000400338000007530700700b000001000000000001009007000000000002005b0000000100000a5000b6000000001000009000000000000000000073000000000000000000000000180007b10010b00000a05403b0001000090020b00000000006b0000b0000a00b010000000000bb0b000b600070000b0000010020000300001000000400030b00201002600a900000000300b00000100000800000000006000200b000007000000000030058000030100021000000000ab0001000b06b0000000a00000062006000200000010000200000000000000001010a000000a00000500a04030000b00000000000000000047030070308000100000020000a04000000000000080000b3000000000000000000000000a0000a200000077000000060000000000800000b0000000000000000000000000000600010000050000003000800000a000008000000000000000000000000000110000b02000000b000000001000000000003b00100000000500000000000000000000000200000000b8020000080000b0000000000400000000b00000001000bb70000b0]
-def a3sym (i : Nat) : Nat := a3symb0[i % 16]?.getD 0
-def a3alias (i : Nat) := packedAt a3sym (i*4) 4
-def a4symb0 : Array Nat := #[0xa001a000000000000b0000001000000000000000050000000000000000000a000000000b00b0000b0000001000000000000000060000000010000000000000010000000000000001000000510001000000000000a000000000000000000000000000001000001a000000000000400a0000000010b00100b0000b000000000000000000000000000b000000000000a000000a1001000000000000000a000002000000000000010100000000060000b0100100000000000000006000000000000b010000000000000000000a00000000000a00400000000000000b0010b000010000000b0b000100004000b00000000000a000001000000b0000a001000020000100000b01000000000000000000000000000000b000000b0000001000000400b0000080050000b000100000001100000000000001010000000000000b00000000000000000000000000000000000000b000000000000001000000004000000001000000000b000050000000000a00a010007000000000000000000b00000000001000000000000000000400000000000000000000001000000b000400000000300000000b0000001000000600050000000000000000000001b00a00000b004b00000000001000100001000000000b0000000000000b000000b000000000000000000000a00000000000000000000001000000b001a000002000500000010004000000003000b0bb000000000000001000000000a0000000000000a0a0000020bb00100000000000000000000000040000000000b0000000000000000400000001000010a01001000000000b00000001000000000100000000a00ab000b00000000001060a000000000000000000000b000000000040000000000010aa000000a00000000000001b00000100b000100000500000000000000010000000000000001000000000000a0a000000020000b0a0001000000000000000005ba40000050000010000000000040000000000000000010001000100b0000000000000000000000100a00000000000000000000400b000a0000b00a00000000000000a000000b000b0000000000900100000000b10000040051000000000000000000000000000000b00000000000000a00000000000000000000000000b0000000000401000000000000400000b0000b0000000000000000b00000000000000b0000000000b0000200000000000002000000000000000000000000000000001000000000000000000000b0000000400000000000000a000000000000100044000000000010b0b00000000000000000000a00000010000000000bb0000000000000000000000b0000a0000000000000000b000000000010b100000000000100000000000a0a0000b0000001000000000b000b0000000000a00000000000000,0xb000b0000000101002000000050000000001000000000000000000000000100050000000000000000b050000001000000000b0000000a00010000000000000b00000000000000000000000000010000000000100b000000000000000000000000000400000000b00005000000000001000000a010000000000000000000000000000000000000000b00000000000b000000000b00000000000001000000000000010000000000000000aa00000000001101450b540000001000b000000b000000b00b00000000000b000000b0000001000000000000b00500000000000001000000000000000000000007000000000000000000000000000b00001000b0000000000000000000b0b0001000000b04100000000000000000000400a00b00a0000000000b00001000000b0000000000010000a00000000000000000000000000000000000001000000b0b000000000000000000000000000000000000a0b00000000001000001000000000000000b0000000000000000000100000000000000000200000000004000000001b0000000000001000000000000000000010000000010000020000a0400000020000b00000010b00000000000000004000000000000010b000000000000200000000000000000100000040000000000100000040000000000000010000000010000000b000000000000b000000000010b00a00000000000000000005000000000000002050000000001a00000000000b000a0b00b000000000000a00000000000000000000000000000b00000000000010020000b0000002000100000000000000b20000000020100000000000400000000000100000100000000000001000000000a000000000000000000000000000000100000000a00000000000000000010000000100000000000000000000b00010000000110000000000000b0040000002000001000000b0000000000000000000000000b000000000000400510000040000000000000b0000000000000b000b00000000000000000000000100b00001000000a00004000020b0000020000000000000000000000000a000010000a000000000000000000000000001500b0b0000000000010050450000000b00000b000000000000000000000010000000000000b0000a000020a0000000a0000000000000a000000000001000a000000000000000a000001b00000000000a000000000000000000000000000000000000b000000b000000000000000020400000000000b000000000000a0000000000b0100020a0000000000000000500000000011000000a40000000000000000b000000000a00000100000000000000000400000004000000a00000000b00000000000000b000000000000000a0b01000000005000000000000000001000000000000000001050000000,0x500000500000000000000000000005000000a0000010000b00b000000100000a600000100000b00000000000a000000000005000000000b010b010000000010a00000b0000001b0a0000000000b0000000000000500100010b000a00500000000000b00000000b0000010000000b0000000000000a00000000b000000000000a000b0000000000000b000000002000000000b01000105000200001b001b000000000000000001000000b000000b000000000000000000000a0000011000000b000000a0000000001000b000000b000400050400000000000000000000b0000000000000000000101000a0000000000b010b]
-def a4sym (i : Nat) : Nat := a4symb0[i % 16]?.getD 0
-def a4alias (i : Nat) := packedAt a4sym (i*4) 4
-def a5symb0 : Array Nat := #[0xb0010000000000000000000a000a0000000000000000000000000000b000010001000000000000000000000a0a00000a4b00b000000000a0000000000000000b000000000000000000000000000010000000]
-def a5sym (i : Nat) : Nat := a5symb0[i % 16]?.getD 0
-def a5alias (i : Nat) := packedAt a5sym (i*4) 4
-
-abbrev Memo := Sig × Nat × Nat × List Sig × List Sig
-
-def memo (ws : List Decor) (k : Nat) (p : BoundPool) : Memo :=
-  let d := p.domain
-  let av := p.wires.map (masked d)
-  let clean := fun (w : Sig) => let y := masked d w
-                                y==zero || y==d || av.contains y
-  (d,k+p.paid,p.bound+ws.countP (fun w => isMaskedConstant d w.1),
-    av,(ws.map Prod.fst).filter (fun w => !(clean w)))
-
-def worth2303 (cap n : Nat) (cov : CovPair) (op : Nat) (a b z : Decor) (ka kb : Bool) :=
-  let un := op==2
-  let len := 1+(n-(if ka then 0 else 1)-(if un || kb then 0 else 1))
-  if len>cap then false else
-  let d := len==cap
-  (restCov (getCov cov d) (column d a.2) (column d b.2) un ka kb ||| column d z.2) == BitVec.allOnes 768
-
-abbrev Ax := Decor × Decor
-
-abbrev Four := Nat × Nat × Nat × Nat
-
-def couples : List Decor → List Ax
-  | [] => []
-  | a::l => l.map (fun b => (a,b)) ++ couples l
-
-def liftSig (w : Sig) : Bits := BitVec.ofNat 768 w.toNat
-
-def laneEq (r full a b : Nat) := fullMarks r (full ^^^ (a ^^^ b))
-
-def zeroFour (x : Four) := (x.1 ||| x.2.1 ||| x.2.2.1 ||| x.2.2.2)==0
-
-def wideWorth (n cap op r full : Nat) (v : CovPair) (a b : PackedSig) (ka kb : Bool) :=
-  let un := op==2
-  let len := 1+(n-(if ka then 0 else 1)-(if un || kb then 0 else 1))
-  if len>cap then 0 else
-  let d := len==cap
-  let c := getCov v d
-  let cover : PackedCov := (r*c.1.toNat,r*c.2.1.toNat,r*c.2.2.toNat)
-  fullMarks r (takePacked cover (packedColumn d a) (packedColumn d b) un ka kb |||
-    packedColumn d (packedOp full op a b))
-
-def includeWires (r full z : Nat) (wires : List Sig) (seen : Nat) :=
-  wires.foldl (fun m w => m ||| laneEq r full z (r*w.toNat)) seen
-
-def maskKeep (r full a b : Nat) (un ka kb : Bool) (miss : List Sig) :=
-  miss.foldl (fun m w =>
-    let target := r*w.toNat
-    m &&& ((if ka then 0 else laneEq r full a target) |||
-      (if un || kb then 0 else laneEq r full b target))) r
-
-def shade2303 (r cost top cv free : Nat) (ready : Bool) (loss : Nat) :=
-  if ready && cost+loss+1<top then r else
-  if cost+loss<top then free else if cost+loss==top then cv else 0
-
-def wideRule (r full a b z : Nat) (un : Bool) (ps : Memo) (todo : Four) : Four :=
-  let (dom,cost,top,av,miss) := ps
-  if cost>=top+1 || miss.length>(if un then 1 else 2) then todo else
-  let d := r*dom.toNat
-  let cm := fun m => laneEq r full m 0 ||| laneEq r full m d
-  let zm := z &&& d
-  let cz := cm zm
-  let free := includeWires r full zm av cz
-  let shade := shade2303 r cost top cz free miss.isEmpty
-  let ca := cm (a &&& d)
-  let cb := cm (b &&& d)
-  let step := fun (t : Nat) (ka kb : Bool) =>
-    if t==0 then 0 else
-    let ca := if ka then 0 else ca
-    let cb := if un || kb then 0 else cb
-    let kill := (((r ^^^ (ca ||| cb)) &&& shade 0) |||
-      ((ca ^^^ cb) &&& shade 1) ||| ((ca &&& cb) &&& shade 2)) &&&
-      maskKeep r full a b un ka kb miss
-    t ^^^ (t &&& kill)
-  (step todo.1 false false,step todo.2.1 true false,step todo.2.2.1 false true,step todo.2.2.2 true true)
-
-def wideRules (r full a b z : Nat) (un : Bool) (todo : Four) : List Memo → Four
-  | [] => todo
-  | p::ps => if zeroFour todo then todo else wideRules r full a b z un (wideRule r full a b z un p todo) ps
-
-lemma keyFold (ws : List Sig) (c : Nat) :
-    ws.foldl (fun v w => v+keyWord w) c=c+(ws.map keyWord).sum := by
-  induction ws generalizing c with
-  | nil => simp
-  | cons w l ih => simp [ih,Nat.add_assoc]
-lemma keySum (ws : List Sig) : keySet ws=(ws.map keyWord).sum := by
-  simp [keySet,keyFold]
-lemma keyPerm {ws vs : List Decor} (h : ws.Perm vs) :
-    keySet (ws.map Prod.fst)=keySet (vs.map Prod.fst) := by
-  rw [keySum,keySum]
-  exact ((h.map Prod.fst).map keyWord).sum_eq
-lemma keyCons (a : Sig) (ws : List Sig) : keySet (a::ws)=keyWord a+keySet ws := by
-  simp [keySum]
-def deltaKey (total : Nat) (a b z : Sig) (un ka kb : Bool) :=
-  total+keyWord z-(if ka then 0 else keyWord a)-(if un || kb then 0 else keyWord b)
-lemma deltaKey_ok {ws : List Decor} {a b : Decor} (ha : a∈ws) (hb : b∈ws)
-    (un ka kb : Bool) (ne : un=false → a≠b) (z : Sig) :
-    deltaKey (keySet (ws.map Prod.fst)) a.1 b.1 z un ka kb =
-      keySet (z::(opKeep un ka kb a b ws).map Prod.fst) := by
-  have first := keyPerm (delOne_perm a ha)
-  have second := keyPerm (delOne_perm b hb)
-  simp only [List.map_cons,keyCons] at first second
-  cases un
-  · have both := keyPerm (delTwo_perm a b ha hb (ne rfl))
-    simp only [List.map_cons,keyCons] at both
-    cases ka <;> cases kb <;>
-      simp only [deltaKey,opKeep,delOne,delTwo,Bool.false_or,Bool.false_eq_true,
-        ite_false,ite_true,keyCons] <;> omega
-  · cases ka <;> cases kb <;>
-      simp only [deltaKey,opKeep,delOne,Bool.true_or,Bool.false_eq_true,ite_false,
-        ite_true,keyCons] <;> omega
-
-def linked (ws : List Decor) (links : Nat → List (List Sig)) (a b : Decor) (w : Sig)
-    (un ka kb : Bool) :=
-  let other := (opKeep un ka kb a b ws).map Prod.fst
-  let st := w::other
-  let tag := if un || a.1!=b.1 then deltaKey (keySet (ws.map Prod.fst)) a.1 b.1 w un ka kb else keySet st
-  (links tag).any (fun v => v==other++[w] || sameWords st v)
-
-lemma linked_ok {ws links a b w un ka kb} (ha : a∈ws) (hb : b∈ws)
-    (ok : linked ws links a b w un ka kb=true) :
-    let st := w::(opKeep un ka kb a b ws).map Prod.fst
-    (links (keySet st)).any (sameWords st)=true := by
-  let rest := (opKeep un ka kb a b ws).map Prod.fst
-  have key : (if un || a.1!=b.1 then deltaKey (keySet (ws.map Prod.fst)) a.1 b.1 w un ka kb
-        else keySet (w::rest))=keySet (w::rest) := by
-    split
-    next h =>
-      apply deltaKey_ok ha hb
-      intro hu eq
-      simp [hu,eq] at h
-    next => rfl
-  change (links _).any (fun v => v==rest++[w] || sameWords (w::rest) v)=true at ok
-  rw [key] at ok
-  obtain ⟨v,vm,hit⟩ := List.any_eq_true.mp ok
-  refine List.any_eq_true.mpr ⟨v,vm,?_⟩
-  simp only [Bool.or_eq_true] at hit
-  rcases hit with eq | yes
-  · rw [beq_iff_eq.mp eq]
-    simp only [sameWords,Bool.and_eq_true,List.all_eq_true,List.contains_eq_mem,decide_eq_true_eq,
-      List.mem_cons,List.mem_append,List.not_mem_nil,or_false]
-    exact ⟨fun _ e => e.symm,fun _ e => e.symm⟩
-  · exact yes
-
-def wideFamily (c : NodeContext) (ps : List Memo) (op : Nat) (ops : List Ax) :=
-  let (cap,n,ws,cov,_,links) := c
-  let r := units ops.length
-  let full := r*(BitVec.allOnes 768).toNat
-  let sa := packedSig (fun e : Ax => e.1.2) ops
-  let sb := packedSig (fun e : Ax => e.2.2) ops
-  let a := combineLanes (fun e : Ax => liftSig e.1.1) ops
-  let b := combineLanes (fun e : Ax => liftSig e.2.1) ops
-  let un := op==2
-  let z := if un then (r*one.toNat) ^^^ a else if op==1 then a ||| b else a &&& b
-  let worth := wideWorth n cap op r full cov sa sb
-  let todo : Four := (worth false false,if un then 0 else worth true false,
-                       if un then 0 else worth false true,worth true true)
-  let left := wideRules r full a b z un todo ps
-  let verify := fun (ka kb : Bool) (t : Nat) => if t==0 then true else
-    onMarks (fun e : Ax =>
-      let w := (movedDecor op e.1 e.2).1
-      if !properB w || ws.any (fun v => v.1==w) then true else
-      linked ws links e.1 e.2 w un ka kb) t ops
-  verify false false left.1 && verify true false left.2.1 &&
-    verify false true left.2.2.1 && verify true true left.2.2.2
-
-def wideNode (c : NodeContext) :=
-  let ws := c.2.2.1
-  let ss := c.2.2.2.2.1.map (memo ws (c.1-1))
-  let bs := couples ws
-  prelim graph c && wideFamily c ss 2 (ws.map fun a => (a,a)) &&
-    wideFamily c ss 0 bs && wideFamily c ss 1 bs
-
-lemma xorHit (a b : Bits) :
-    (BitVec.allOnes 768 ^^^ (a ^^^ b) == BitVec.allOnes 768) = (a==b) := by
-  by_cases eq : a=b
-  · simp [eq]
-  · rw [beq_eq_false_iff_ne.mpr eq]
-    apply beq_eq_false_iff_ne.mpr
-    intro h
-    apply eq
-    apply BitVec.eq_of_getLsbD_eq
-    intro j hj
-    have v := congrArg (fun x : Bits => x.getLsbD j) h
-    simp only [BitVec.getLsbD_xor,BitVec.getLsbD_allOnes,hj,decide_true] at v
-    cases ha : a.getLsbD j <;> cases hb : b.getLsbD j <;> simp_all
-
-lemma eqLanes {α} (a b : α → Bits) (xs : List α) (i : Nat) (hi : i<xs.length) :
-    (laneEq (units xs.length) (units xs.length*(BitVec.allOnes 768).toNat)
-      (combineLanes a xs) (combineLanes b xs)).testBit (769*i) = (a xs[i] == b xs[i]) := by
-  simp only [laneEq,broadcast,lanes_xor,mark_at _ _ _ hi,xorHit]
-
-lemma liftEq (a b : Sig) : (liftSig a==liftSig b)=(a==b) := by
-  by_cases e : a=b
-  · simp [e]
-  · have neq : liftSig a≠liftSig b := by
-      intro h
-      have H := congrArg BitVec.toNat h
-      have la : a.toNat<2^768 := lt_trans a.isLt (by decide +kernel)
-      have lb : b.toNat<2^768 := lt_trans b.isLt (by decide +kernel)
-      apply e
-      apply BitVec.eq_of_toNat_eq
-      simpa [liftSig,Nat.mod_eq_of_lt la,Nat.mod_eq_of_lt lb] using H
-    simp [neq,e]
-
-lemma lift_toNat (a : Sig) : (liftSig a).toNat=a.toNat := by
-  have lt : a.toNat<2^768 := lt_trans a.isLt (by decide +kernel)
-  simp [liftSig,Nat.mod_eq_of_lt lt]
-
-lemma bitEqConst {α} (a : α → Sig) (v : Sig) (xs : List α) (i : Nat) (hi : i<xs.length) :
-    (laneEq (units xs.length) (units xs.length*(BitVec.allOnes 768).toNat)
-      (combineLanes (fun x => liftSig (a x)) xs) (units xs.length*v.toNat)).testBit (769*i) =
-      (a xs[i]==v) := by
-  rw [←lift_toNat v,broadcast (liftSig v) xs,eqLanes _ _ _ _ hi,liftEq]
-
-lemma worthAt (n cap op : Nat) (v : CovPair) (xs : List Ax) (i : Nat) (hi : i<xs.length)
-    (ka kb : Bool) :
-    (wideWorth n cap op (units xs.length) (units xs.length*(BitVec.allOnes 768).toNat) v
-      (packedSig (fun e : Ax => e.1.2) xs) (packedSig (fun e : Ax => e.2.2) xs)
-      ka kb).testBit (769*i) =
-      worth2303 cap n v op xs[i].1 xs[i].2 (movedDecor op xs[i].1 xs[i].2) ka kb := by
-  let len := 1+(n-(if ka then 0 else 1)-(if (op==2) || kb then 0 else 1))
-  by_cases big : len>cap
-  · simp only [wideWorth,worth2303,show 1+(n-(if ka then 0 else 1)-
-        (if (op==2) || kb then 0 else 1))>cap from big,ite_true,Nat.zero_testBit]
-  · let d := len==cap
-    simp only [wideWorth,worth2303,show ¬1+(n-(if ka then 0 else 1)-
-        (if (op==2) || kb then 0 else 1))>cap from big,ite_false]
-    have cp : (units xs.length*(getCov v d).1.toNat,units xs.length*(getCov v d).2.1.toNat,
-        units xs.length*(getCov v d).2.2.toNat) =
-        packedCov (fun _ : Ax => getCov v d) xs := by simp only [packedCov,broadcast]
-    rw [cp,packed_op (fun e : Ax => e.1) (fun e : Ax => e.2),packed_column,
-        packed_column,packed_column,takePacked_ok,lanes_or,mark_at _ _ _ hi]
-
-lemma includeBit {α} (f : α → Sig) (vs : List Sig) (xs : List α) (i) (hi : i<xs.length)
-    (seen : Nat) :
-    (includeWires (units xs.length) (units xs.length*(BitVec.allOnes 768).toNat)
-      (combineLanes (fun x => liftSig (f x)) xs) vs seen).testBit (769*i) =
-    (seen.testBit (769*i) || vs.any (fun w => f xs[i]==w)) := by
-  induction vs generalizing seen with
-  | nil => simp [includeWires]
-  | cons w l ih =>
-    change (includeWires _ _ _ l _).testBit _ = _
-    rw [ih,Nat.testBit_or,bitEqConst _ _ _ _ hi,List.any_cons,Bool.or_assoc]
-
-lemma keepBit (xs : List Ax) (i) (hi : i<xs.length) (miss : List Sig) (un ka kb : Bool) :
-    (maskKeep (units xs.length) (units xs.length*(BitVec.allOnes 768).toNat)
-      (combineLanes (fun e : Ax => liftSig e.1.1) xs)
-      (combineLanes (fun e : Ax => liftSig e.2.1) xs) un ka kb miss).testBit (769*i) =
-      miss.all (fun w => (!ka && (xs[i].1.1==w)) || (!(un || kb) && (xs[i].2.1==w))) := by
-  let r := units xs.length
-  let full := r*(BitVec.allOnes 768).toNat
-  let a := combineLanes (fun e : Ax => liftSig e.1.1) xs
-  let b := combineLanes (fun e : Ax => liftSig e.2.1) xs
-  let f := fun (w : Sig) => (if ka then 0 else laneEq r full a (r*w.toNat)) |||
-       (if un || kb then 0 else laneEq r full b (r*w.toNat))
-  have get (w) : (f w).testBit (769*i)=
-      ((!ka && (xs[i].1.1==w)) || (!(un || kb) && (xs[i].2.1==w))) := by
-    cases ka <;> cases un <;> cases kb <;>
-      simp only [f,r,full,a,b,Nat.testBit_or,bitEqConst _ _ _ _ hi,
-        Bool.false_eq_true,ite_false,ite_true,Bool.false_or,Bool.true_or,
-        Nat.zero_testBit,Bool.not_true,Bool.not_false,Bool.false_and,Bool.true_and]
-  have aux (l : List Sig) (m : Nat) : (l.foldl (fun q w => q &&& f w) m).testBit (769*i)=
-      (m.testBit (769*i) && l.all fun w => (!ka && (xs[i].1.1==w)) || (!(un || kb) && (xs[i].2.1==w))) := by
-    induction l generalizing m with
-    | nil => simp
-    | cons w l ih => rw [List.foldl_cons,ih,Nat.testBit_and,get,List.all_cons,Bool.and_assoc]
-  exact (aux miss r).trans (by simp [r,unit_bit _ _ hi])
-
-lemma liftedAnd (a b : Sig) : liftSig (a &&& b) = liftSig a &&& liftSig b := by
-  apply BitVec.eq_of_toNat_eq
-  simp only [lift_toNat,BitVec.toNat_and]
-
-lemma liftedOr (a b : Sig) : liftSig (a ||| b) = liftSig a ||| liftSig b := by
-  apply BitVec.eq_of_toNat_eq
-  simp only [lift_toNat,BitVec.toNat_or]
-
-lemma liftedNeg (a : Sig) : liftSig (neg a) = liftSig one ^^^ liftSig a := by
-  have eq : neg a=one ^^^ a := BitVec.allOnes_xor.symm
-  apply BitVec.eq_of_toNat_eq
-  simp only [eq,lift_toNat,BitVec.toNat_xor]
-
-lemma maskedLanes {α} (a : α → Sig) (xs : List α) (d : Sig) :
-    combineLanes (fun x => liftSig (a x)) xs &&& (units xs.length*d.toNat) =
-      combineLanes (fun x => liftSig (masked d (a x))) xs := by
-  rw [←lift_toNat d,broadcast (liftSig d) xs,lanes_and]
-  simp only [masked,liftedAnd,BitVec.and_comm]
-
-lemma opLanes (xs : List Ax) (op : Nat) :
-    let a := combineLanes (fun e : Ax => liftSig e.1.1) xs
-    let b := combineLanes (fun e : Ax => liftSig e.2.1) xs
-    (if op==2 then (units xs.length*one.toNat) ^^^ a else if op==1 then a ||| b else a &&& b) =
-      combineLanes (fun e : Ax => liftSig (movedDecor op e.1 e.2).1) xs := by
-  by_cases un : op=2
-  · simp only [un,beq_self_eq_true,ite_true,movedDecor,codeDecor,dneg,liftedNeg]
-    rw [←lift_toNat one,broadcast (liftSig one) xs,lanes_xor]
-  · have ne : (op==2)=false := beq_eq_false_iff_ne.mpr un
-    cases b : op==1 <;>
-      simp only [ne,Bool.false_eq_true,ite_false,b,ite_true,movedDecor,codeDecor,un,dbin,bin,
-        liftedOr,liftedAnd,lanes_or,lanes_and]
-
-def absent (p : BoundPool) (ws : List Decor) :=
-  (ws.map Prod.fst).filter (fun w => !availableB p.domain p.wires w)
-
-def payable (cost top : Nat) (zc free ready : Bool) (loss : Nat) :=
-  if ready && cost+loss+1<top then true else
-  if cost+loss<top then free else if cost+loss==top then zc else false
-
-lemma scalar_fast {p : BoundPool} {ws : List Decor} {k op a b ka kb}
-    (nd : (ws.map Prod.fst).Nodup) (ha : a∈ws) (hb : b∈ws)
-    (keep : (absent p ws).all (fun w =>
-      (!ka && (a.1==w)) || (!((op==2) || kb) && (b.1==w)))=true)
-    (test : let const := fun w : Decor => isMaskedConstant p.domain w.1
-      let z := choiceVal (movedChoice op a b)
-      payable (k+p.paid) (p.bound+ws.countP const) (isMaskedConstant p.domain z)
-        (availableB p.domain p.wires z) (absent p ws).isEmpty
-        (constantLoss const a ka+constantLoss const b ((op==2)||kb))=true) :
-    scalarPoolCut p k ((opKeep (op==2) ka kb a b ws).map Prod.fst) (movedChoice op a b)=true := by
-  let z := choiceVal (movedChoice op a b)
-  let const := fun w : Decor => isMaskedConstant p.domain w.1
-  let rest := opKeep (op==2) ka kb a b ws
-  let miss := absent p ws
-  let loss := constantLoss const a ka+constantLoss const b ((op==2)||kb)
-  have failed {v} (hm : v∈ws.map Prod.fst) (no : availableB p.domain p.wires v=false) : v∈miss := by
-    simpa [miss,absent,List.mem_filter,hm,no]
-  have known : (rest.map Prod.fst).all (availableB p.domain p.wires)=true := by
-    apply List.all_eq_true.mpr
-    intro v vm
-    obtain ⟨member,ia,ib⟩ := (kept_value nd ha hb (op==2) ka kb v).mp vm
-    cases ev : availableB p.domain p.wires v
-    · have bad := List.all_eq_true.mp keep v (failed member ev)
-      simp only [Bool.or_eq_true,Bool.and_eq_true] at bad
-      rcases bad with ⟨no,eq⟩ | ⟨no,eq⟩
-      ·
-        have vv : v=a.1 := (beq_iff_eq.mp eq).symm
-        exact False.elim (by rcases ia with noeq|on <;> simp_all)
-      ·
-        have vv : v=b.1 := (beq_iff_eq.mp eq).symm
-        exact False.elim (by rcases ib with on|noeq|on <;> simp_all)
-    · rfl
-  have all_of_empty (empty : miss.isEmpty=true) (w) (hm : w∈ws) :
-      availableB p.domain p.wires w.1=true := by
-    cases ev : availableB p.domain p.wires w.1
-    · have bad := failed (List.mem_map_of_mem (f:=Prod.fst) hm) ev
-      have nil : miss=[] := List.isEmpty_iff.mp empty
-      rw [nil] at bad
-      contradiction
-    · rfl
-  have counts := keptCount const ws a b (op==2) ka kb
-  change ws.countP const - constantLoss const a ka - constantLoss const b ((op==2)||kb)
-        ≤ rest.countP const at counts
-  have mass : ws.countP const ≤ rest.countP const+loss := by dsimp [loss]; omega
-  change payable (k+p.paid) (p.bound+ws.countP const) (isMaskedConstant p.domain z)
-    (availableB p.domain p.wires z) miss.isEmpty loss=true at test
-  unfold payable at test
-  have cheap : k+p.paid+(!availableB p.domain p.wires z).toNat <
-      p.bound+rest.countP const+(isMaskedConstant p.domain z).toNat := by
-    split at test
-    next h =>
-      simp only [Bool.and_eq_true,decide_eq_true_eq] at h
-      have le := h.2
-      cases availableB p.domain p.wires z <;> cases isMaskedConstant p.domain z <;> simp <;> omega
-    next =>
-      split at test
-      next le => simp [test]; omega
-      next =>
-        split at test
-        next eq =>
-          have e := beq_iff_eq.mp eq
-          have av : availableB p.domain p.wires z=true :=
-            by simp only [availableB,isMaskedConstant,Bool.or_eq_true] at test ⊢; tauto
-          simp [av,test]; omega
-        next => contradiction
-  have buy : (!(!availableB p.domain p.wires z) || choiceOK p.domain p.wires (movedChoice op a b))=true := by
-    cases az : availableB p.domain p.wires z
-    · have zc : isMaskedConstant p.domain z=false := by
-        have ac := az
-        change (isMaskedConstant p.domain z || _) = false at ac
-        simp only [Bool.or_eq_false_iff] at ac
-        exact ac.1
-      have empty : miss.isEmpty=true := by
-        cases m : miss.isEmpty
-        · simp [payable,az,zc,m] at test
-        · rfl
-      have all := all_of_empty empty
-      simp [choiceOK,movedChoice,all _ ha,all _ hb]
-    · simp
-  simpa only [scalarPoolCut,z,rest,known,Bool.and_true,Bool.true_and,Bool.and_eq_true,
-    decide_eq_true_eq,List.countP_cons,List.countP_map,Function.comp_def,
-    show (if isMaskedConstant p.domain z then 1 else 0)=(isMaskedConstant p.domain z).toNat by cases isMaskedConstant p.domain z <;> rfl,
-    Nat.add_assoc] using And.intro cheap buy
-
-def partFour (x : Four) (ka kb : Bool) :=
-  if ka then (if kb then x.2.2.2 else x.2.1) else (if kb then x.2.2.1 else x.1)
-
-lemma shadeAt {r i cost top cz free ready loss} (unit : r.testBit i=true) :
-    (shade2303 r cost top cz free ready loss).testBit i =
-      payable cost top (cz.testBit i) (free.testBit i) ready loss := by
-  simp only [shade2303,payable]
-  repeat' split
-  all_goals first | assumption | rfl | exact Nat.zero_testBit _
-
-lemma chosenShade {r i a b s t u : Nat} (unit : r.testBit i=true) :
-    ((((r ^^^ (a ||| b)) &&& s) ||| ((a ^^^ b) &&& t) ||| ((a &&& b) &&& u)).testBit i) =
-    (if a.testBit i then (if b.testBit i then u.testBit i else t.testBit i)
-     else if b.testBit i then t.testBit i else s.testBit i) := by
-  simp only [Nat.testBit_or,Nat.testBit_and,Nat.testBit_xor,unit]
-  cases a.testBit i <;> cases b.testBit i <;> simp
-
-lemma killedBit {t k i : Nat} (start : t.testBit i=true)
-    (finish : (t ^^^ (t &&& k)).testBit i=false) : k.testBit i=true := by
-  simpa [Nat.testBit_xor,Nat.testBit_and,start] using finish
-
-lemma dropLoss (const : Decor → Bool) (w : Decor) (keep : Bool) :
-    constantLoss const w keep = (if keep then false else const w).toNat := by
-  cases keep <;> rfl
-
-abbrev lanes {α} (f : α → Sig) (xs : List α) := combineLanes (fun x => liftSig (f x)) xs
-
-def constantMask (r full x d : Nat) := laneEq r full x 0 ||| laneEq r full x d
-
-lemma wireEqSym (a b : Sig) : (a==b)=(b==a) := by
-  by_cases h : a=b
-  · simp [h]
-  · simp [h,Ne.symm h]
-
-lemma constantAt {α} (f : α → Sig) (xs : List α) (i : Nat) (hi : i<xs.length) (d : Sig) :
-    let r := units xs.length
-    (constantMask r (r*(BitVec.allOnes 768).toNat) (lanes f xs &&& (r*d.toNat))
-        (r*d.toNat)).testBit (769*i) = isMaskedConstant d (f xs[i]) := by
-  dsimp only
-  have z : units xs.length*zero.toNat=0 := by simp [zero]
-  simp only [constantMask,Nat.testBit_or,maskedLanes,←z,bitEqConst _ _ _ _ hi,isMaskedConstant]
-
-lemma freeAt {α} (f : α → Sig) (xs : List α) (i : Nat) (hi : i<xs.length)
-    (d : Sig) (vs : List Sig) :
-    let r := units xs.length
-    let full := r*(BitVec.allOnes 768).toNat
-    let zm := lanes f xs &&& (r*d.toNat)
-    (includeWires r full zm (vs.map (masked d)) (constantMask r full zm (r*d.toNat))).testBit (769*i) =
-      availableB d vs (f xs[i]) := by
-  dsimp only
-  let r := units xs.length
-  let full := r*(BitVec.allOnes 768).toNat
-  let zm := lanes f xs &&& (r*d.toNat)
-  have I := includeBit (fun x => masked d (f x)) (vs.map (masked d)) xs i hi
-    (constantMask r full zm (r*d.toNat))
-  rw [←maskedLanes] at I
-  refine I.trans ?_
-  rw [show (constantMask r full zm (r*d.toNat)).testBit (769*i)=isMaskedConstant d (f xs[i]) from constantAt f xs i hi d]
-  simp only [isMaskedConstant,availableB,List.any_map,Function.comp_def]
-  congr 1
-  congr 1
-  funext v
-  exact wireEqSym _ _
-
-lemma memoAbsent (ws : List Decor) (k : Nat) (p : BoundPool) :
-    (memo ws k p).2.2.2.2=absent p ws := by
-  simp only [memo,absent,availableB]
-  congr 1
-  funext w
-  congr 1
-  have same (l : List Sig) (w : Sig) : l.contains w=l.any (fun v => v==w) := by
-    induction l with
-    | nil => rfl
-    | cons a l ih => simp only [List.contains_cons,List.any_cons,ih,wireEqSym w a]
-  simp only [same]
-
-lemma partStep (todo : Four) (step : Nat → Bool → Bool → Nat) (ka kb : Bool) :
-    partFour (step todo.1 false false,step todo.2.1 true false,
-      step todo.2.2.1 false true,step todo.2.2.2 true true) ka kb =
-      step (partFour todo ka kb) ka kb := by cases ka <;> cases kb <;> rfl
-
-lemma killedRule {p : BoundPool} {ws : List Decor} {k op : Nat} (xs : List Ax)
-    (i : Nat) (hi : i<xs.length) (ka kb : Bool) (todo : Four)
-    (nd : (ws.map Prod.fst).Nodup) (ha : xs[i].1∈ws) (hb : xs[i].2∈ws)
-    (beginning : (partFour todo ka kb).testBit (769*i)=true) :
-    let r := units xs.length
-    let full := r*(BitVec.allOnes 768).toNat
-    let a := lanes (fun e : Ax => e.1.1) xs
-    let b := lanes (fun e : Ax => e.2.1) xs
-    let z := lanes (fun e : Ax => (movedDecor op e.1 e.2).1) xs
-    let cut := wideRule r full a b z (op==2) (memo ws k p) todo
-    (partFour cut ka kb).testBit (769*i)=false →
-      scalarPoolCut p k ((opKeep (op==2) ka kb xs[i].1 xs[i].2 ws).map Prod.fst)
-        (movedChoice op xs[i].1 xs[i].2)=true := by
-  let r := units xs.length
-  let full := r*(BitVec.allOnes 768).toNat
-  let a := lanes (fun e : Ax => e.1.1) xs
-  let b := lanes (fun e : Ax => e.2.1) xs
-  let z := lanes (fun e : Ax => (movedDecor op e.1 e.2).1) xs
-  let const := fun v : Decor => isMaskedConstant p.domain v.1
-  let dom := r*p.domain.toNat
-  let am := constantMask r full (a &&& dom) dom
-  let bm := constantMask r full (b &&& dom) dom
-  let zm := constantMask r full (z &&& dom) dom
-  let av := p.wires.map (masked p.domain)
-  let fm := includeWires r full (z &&& dom) av zm
-  let miss := absent p ws
-  let sel := maskKeep r full a b (op==2) ka kb miss
-  let sh := shade2303 r (k+p.paid) (p.bound+ws.countP const) zm fm miss.isEmpty
-  let aa := if ka then 0 else am
-  let bb := if (op==2)||kb then 0 else bm
-  let kill := ((((r ^^^ (aa ||| bb)) &&& sh 0) ||| ((aa ^^^ bb) &&& sh 1) ||| ((aa &&& bb) &&& sh 2)) &&& sel)
-  let step := fun (v : Nat) (x y : Bool) =>
-    if v==0 then 0 else
-      let ax := if x then 0 else am
-      let bx := if (op==2)||y then 0 else bm
-      let kx := ((((r ^^^ (ax ||| bx)) &&& sh 0) ||| ((ax ^^^ bx) &&& sh 1) ||| ((ax &&& bx) &&& sh 2)) &&&
-        maskKeep r full a b (op==2) x y miss)
-      v ^^^ (v &&& kx)
-  let t := partFour todo ka kb
-  have unit : r.testBit (769*i)=true := unit_bit xs.length i hi
-  have ca : am.testBit (769*i)=const xs[i].1 := constantAt (fun e : Ax => e.1.1) xs i hi _
-  have cb : bm.testBit (769*i)=const xs[i].2 := constantAt (fun e : Ax => e.2.1) xs i hi _
-  have cz : zm.testBit (769*i)=isMaskedConstant p.domain (choiceVal (movedChoice op xs[i].1 xs[i].2)) :=
-    (constantAt (fun e : Ax => (movedDecor op e.1 e.2).1) xs i hi _).trans (by rw [moved_full])
-  have free : fm.testBit (769*i)=availableB p.domain p.wires (choiceVal (movedChoice op xs[i].1 xs[i].2)) :=
-    (freeAt (fun e : Ax => (movedDecor op e.1 e.2).1) xs i hi _ _).trans (by rw [moved_full])
-  have lose (n) : (sh n).testBit (769*i)=payable (k+p.paid) (p.bound+ws.countP const)
-      (isMaskedConstant p.domain (choiceVal (movedChoice op xs[i].1 xs[i].2)))
-      (availableB p.domain p.wires (choiceVal (movedChoice op xs[i].1 xs[i].2))) miss.isEmpty n := by
-    rw [show (sh n).testBit (769*i)=_ from shadeAt unit,cz,free]
-  have amount (w sw : Nat) (flag : Bool) (prop : Bool) (e : sw.testBit (769*i)=prop) :
-      (if flag then 0 else sw).testBit (769*i)=(if flag then false else prop) := by
-    cases flag <;> simp [e]
-  have notzero : t≠0 := by intro h; have := beginning; change t.testBit _=true at this; simp [h] at this
-  dsimp only
-  have memoE : memo ws k p=(p.domain,k+p.paid,p.bound+ws.countP const,av,miss) :=
-    congrArg (fun v => (p.domain,k+p.paid,p.bound+ws.countP const,av,v)) (memoAbsent ws k p)
-  rw [memoE]
-  dsimp only [wideRule]
-  by_cases skip : (decide (k+p.paid≥p.bound+ws.countP const+1) || decide (miss.length>(if op==2 then 1 else 2)))=true
-  · rw [if_pos skip]
-    intro f; exact False.elim (Bool.noConfusion (beginning.symm.trans f))
-  · rw [if_neg skip]
-    change (partFour (step todo.1 false false,step todo.2.1 true false,
-      step todo.2.2.1 false true,step todo.2.2.2 true true) ka kb).testBit (769*i)=false → _
-    rw [partStep todo step ka kb]
-    change (if t==0 then 0 else t ^^^ (t &&& kill)).testBit (769*i)=false → _
-    simp only [beq_eq_false_iff_ne.mpr notzero,Bool.false_eq_true,ite_false]
-    intro h
-    have v := killedBit beginning h
-    change ( _ &&& sel).testBit (769*i)=true at v
-    simp only [Nat.testBit_and,Bool.and_eq_true] at v
-    have yes : sel.testBit (769*i)=true := v.2
-    rw [show sel.testBit (769*i)=_ from keepBit xs i hi miss (op==2) ka kb] at yes
-    apply scalar_fast nd ha hb yes
-    have pick := v.1
-    rw [chosenShade unit,amount 0 am ka _ ca,amount 0 bm ((op==2)||kb) _ cb] at pick
-    simp only [lose] at pick
-    have clear (f : Nat → Bool) (u v : Bool)
-        (eq : (if u then (if v then f 2 else f 1) else if v then f 1 else f 0)=true) :
-        f (u.toNat+v.toNat)=true := by cases u <;> cases v <;> exact eq
-    dsimp only
-    simp only [dropLoss]
-    exact clear _ (if ka then false else const xs[i].1) (if (op==2)||kb then false else const xs[i].2) pick
-
-abbrev wideArgs (xs : List Ax) (op : Nat) :=
-  (units xs.length,units xs.length*(BitVec.allOnes 768).toNat,
-    lanes (fun e : Ax => e.1.1) xs,lanes (fun e : Ax => e.2.1) xs,
-    lanes (fun e : Ax => (movedDecor op e.1 e.2).1) xs)
-
-def runRules (xs : List Ax) (op : Nat) (todo : Four) (ps : List Memo) :=
-  let (r,full,a,b,z) := wideArgs xs op
-  wideRules r full a b z (op==2) todo ps
-
-def runRule (xs : List Ax) (op : Nat) (todo : Four) (p : Memo) :=
-  let (r,full,a,b,z) := wideArgs xs op
-  wideRule r full a b z (op==2) p todo
-
-lemma finishedRule {ps : List BoundPool} {ws : List Decor} {k op : Nat}
-    (xs : List Ax) (i : Nat) (hi : i<xs.length) (ka kb : Bool) (todo : Four)
-    (nd : (ws.map Prod.fst).Nodup) (ha : xs[i].1∈ws) (hb : xs[i].2∈ws)
-    (beginning : (partFour todo ka kb).testBit (769*i)=true)
-    (done : (partFour (runRules xs op todo (ps.map (memo ws k))) ka kb).testBit (769*i)=false) :
-    ∃ p∈ps, scalarPoolCut p k ((opKeep (op==2) ka kb xs[i].1 xs[i].2 ws).map Prod.fst)
-      (movedChoice op xs[i].1 xs[i].2)=true := by
-  induction ps generalizing todo with
-  | nil => exact False.elim (Bool.noConfusion (beginning.symm.trans done))
-  | cons p ps ih =>
-    let next := runRule xs op todo (memo ws k p)
-    change (partFour (if zeroFour todo then todo else runRules xs op next (ps.map (memo ws k))) ka kb).testBit (769*i)=false at done
-    split at done
-    next => exact False.elim (Bool.noConfusion (beginning.symm.trans done))
-    next =>
-      cases he : (partFour next ka kb).testBit (769*i)
-      · exact ⟨p,by simp,killedRule xs i hi ka kb todo nd ha hb beginning he⟩
-      · obtain ⟨v,vm,cut⟩ := ih next he done
-        exact ⟨v,List.mem_cons_of_mem _ vm,cut⟩
-
-def familyCheck (c : NodeContext) (op : Nat) (e : Ax) (ka kb : Bool) :=
-  let w := (movedDecor op e.1 e.2).1
-  if !properB w || c.2.2.1.any (fun v => v.1==w) then true else
-  linked c.2.2.1 c.2.2.2.2.2 e.1 e.2 w (op==2) ka kb
-
-def todo2303 (c : NodeContext) (op : Nat) (xs : List Ax) : Four :=
-  let r := units xs.length
-  let f := wideWorth c.2.1 c.1 op r (r*(BitVec.allOnes 768).toNat) c.2.2.2.1
-    (packedSig (fun e : Ax => e.1.2) xs) (packedSig (fun e : Ax => e.2.2) xs)
-  (f false false,if op==2 then 0 else f true false,if op==2 then 0 else f false true,f true true)
-
-def testMarks (c : NodeContext) (op : Nat) (xs : List Ax) (ka kb : Bool) (m : Nat) :=
-  if m==0 then true else onMarks (fun e => familyCheck c op e ka kb) m xs
-
-lemma todoAt (c : NodeContext) {op} (xs : List Ax) (i : Nat) (hi : i<xs.length)
-    (ka kb : Bool) (same : (op==2)=true → ka=kb) :
-    (partFour (todo2303 c op xs) ka kb).testBit (769*i)=
-      worth2303 c.1 c.2.1 c.2.2.2.1 op xs[i].1 xs[i].2 (movedDecor op xs[i].1 xs[i].2) ka kb := by
-  cases ka <;> cases kb <;> cases un : op==2 <;>
-    first | exact False.elim (Bool.noConfusion (same un)) |
-      simpa only [todo2303,partFour,un,Bool.false_eq_true,ite_false,ite_true] using
-        (worthAt c.2.1 c.1 op c.2.2.2.1 xs i hi _ _)
-
-lemma familyBranch {c : NodeContext} {op} (xs : List Ax)
-    (pass : wideFamily c (c.2.2.2.2.1.map (memo c.2.2.1 (c.1-1))) op xs=true)
-    (ka kb : Bool) :
-    let done := runRules xs op (todo2303 c op xs) (c.2.2.2.2.1.map (memo c.2.2.1 (c.1-1)))
-    testMarks c op xs ka kb (partFour done ka kb)=true := by
-  obtain ⟨cap,n,ws,cov,ps,links⟩ := c
-  simp only [wideFamily] at pass
-  rw [opLanes] at pass
-  let c : NodeContext := (cap,n,ws,cov,ps,links)
-  let done := runRules xs op (todo2303 c op xs) (ps.map (memo ws (cap-1)))
-  change (testMarks c op xs false false done.1 && testMarks c op xs true false done.2.1 &&
-    testMarks c op xs false true done.2.2.1 && testMarks c op xs true true done.2.2.2)=true at pass
-  simp only [Bool.and_eq_true] at pass
-  cases ka <;> cases kb
-  · exact pass.1.1.1
-  · exact pass.1.2
-  · exact pass.1.1.2
-  · exact pass.2
-
-lemma evalDone (c : NodeContext) (op : Nat) (a b : Decor) (ka kb : Bool)
-    (ha : a∈c.2.2.1) (hb : b∈c.2.2.1)
-    (checked : worth2303 c.1 c.2.1 c.2.2.2.1 op a b (movedDecor op a b) ka kb=true →
-      familyCheck c op (a,b) ka kb=true ∨ ∃ p∈c.2.2.2.2.1,
-        scalarPoolCut p (c.1-1) ((opKeep (op==2) ka kb a b c.2.2.1).map Prod.fst)
-          (movedChoice op a b)=true) :
-    evalMove c op a b (movedDecor op a b) ka kb=true := by
-  obtain ⟨cap,n,ws,cov,ps,links⟩ := c
-  let z := movedDecor op a b
-  let len := 1+(n-(if ka then 0 else 1)-(if (op==2)||kb then 0 else 1))
-  let d := len==cap
-  let bits := restCov (getCov cov d) (column d a.2) (column d b.2) (op==2) ka kb ||| column d z.2
-  let skip := !properB z.1 || ws.any (fun v => v.1==z.1)
-  let st := (opKeep (op==2) ka kb a b ws).map Prod.fst
-  change (if len>cap then true else if bits != BitVec.allOnes 768 then true else
-    if skip then true else closeChild ps links (cap-1) st (movedChoice op a b))=true
-  by_cases long : len>cap
-  · rw [if_pos long]
-  rw [if_neg long]
-  by_cases notfull : (bits != BitVec.allOnes 768)=true
-  · rw [if_pos notfull]
-  rw [if_neg notfull]
-  by_cases short : skip=true
-  · rw [if_pos short]
-  rw [if_neg short]
-  have w : worth2303 cap n cov op a b z ka kb=true := by
-    change (if len>cap then false else bits==BitVec.allOnes 768)=true
-    rw [if_neg long,beq_iff_eq]
-    exact Classical.byContradiction (fun e => notfull (bne_iff_ne.mpr e))
-  rcases checked w with link | cut
-  · change (if skip then true else linked ws links a b z.1 (op==2) ka kb)=true at link
-    rw [if_neg short] at link
-    have link := linked_ok ha hb link
-    simp only [closeChild,Bool.or_eq_true]
-    left
-    simpa only [z,moved_full] using link
-  · simp only [closeChild,Bool.or_eq_true,List.any_eq_true]
-    exact Or.inr cut
-
-lemma wideFamily_pass {c : NodeContext} {op : Nat} (xs : List Ax)
-    (nd : (c.2.2.1.map Prod.fst).Nodup)
-    (pass : wideFamily c (c.2.2.2.2.1.map (memo c.2.2.1 (c.1-1))) op xs=true)
-    {e : Ax} (em : e∈xs) (ha : e.1∈c.2.2.1) (hb : e.2∈c.2.2.1)
-    (ka kb : Bool) (same : (op==2)=true → ka=kb) :
-    evalMove c op e.1 e.2 (movedDecor op e.1 e.2) ka kb=true := by
-  obtain ⟨i,hi,eq⟩ := List.mem_iff_getElem.mp em
-  subst e
-  apply evalDone _ _ _ _ _ _ ha hb
-  intro w
-  let before := todo2303 c op xs
-  let ps := c.2.2.2.2.1
-  let done := runRules xs op before (ps.map (memo c.2.2.1 (c.1-1)))
-  let last := partFour done ka kb
-  have first : (partFour before ka kb).testBit (769*i)=true := (todoAt c xs i hi ka kb same).trans w
-  cases h : last.testBit (769*i)
-  · exact Or.inr (finishedRule xs i hi ka kb before nd ha hb first h)
-  · left
-    have run := familyBranch xs pass ka kb
-    change testMarks c op xs ka kb last=true at run
-    have nz : last≠0 := by intro e; simp [e] at h
-    simp only [testMarks,beq_eq_false_iff_ne.mpr nz,Bool.false_eq_true,ite_false] at run
-    exact marked_ok _ _ _ i hi h run
-
-lemma wideNode_sound {c : NodeContext} (h : wideNode c=true) :
-    (prelim graph c && testAll c c.2.2.1)=true := by
-  simp only [wideNode,Bool.and_eq_true] at h
-  have good := h.1.1.1
-  simp only [prelim,Bool.and_eq_true,decide_eq_true_eq] at good
-  let ws := c.2.2.1
-  have unary {a : Decor} (am : a∈ws) (keep : Bool) : evalMove c 2 a a (movedDecor 2 a a) keep keep=true :=
-    wideFamily_pass _ good.1 h.1.1.2 (e:=(a,a)) (List.mem_map_of_mem am) am am _ _ (fun _ => rfl)
-  have binary {a b : Decor} (am : a∈ws) (bm : b∈ws) (inPairs : (a,b)∈couples ws) (d ka kb : Bool) :
-      let op := if d then 1 else 0
-      evalMove c op a b (movedDecor op a b) ka kb=true := by
-    cases d
-    · exact wideFamily_pass _ good.1 h.1.2 inPairs am bm ka kb (by simp)
-    · exact wideFamily_pass _ good.1 h.2 inPairs am bm ka kb (by simp)
-  have all (l : List Decor) (sub : ∀ w∈l, w∈ws) (prs : ∀ e∈couples l, e∈couples ws) : testAll c l=true := by
-    induction l with
-    | nil => rfl
-    | cons a bs ih =>
-      have am := sub a (by simp)
-      have rest (b) (bm : b∈bs) := sub b (List.mem_cons_of_mem a bm)
-      have subP (e) (em : e∈couples bs) := prs e (List.mem_append_right _ em)
-      simp only [testAll,testRow,Bool.and_eq_true,List.all_eq_true]
-      refine ⟨⟨⟨unary am false,unary am true⟩,?_⟩,ih rest subP⟩
-      intro b bm
-      have im : (a,b)∈couples ws := prs _ (List.mem_append_left _ (List.mem_map_of_mem bm))
-      have p (d : Bool) : testPair c a b d=true := by
-        simp only [testPair,Bool.and_eq_true]
-        exact ⟨⟨⟨binary am (rest b bm) im d false false,binary am (rest b bm) im d true false⟩,
-          binary am (rest b bm) im d false true⟩,binary am (rest b bm) im d true true⟩
-      exact ⟨p false,p true⟩
-  simp only [Bool.and_eq_true]
-  exact ⟨h.1.1.1,all ws (fun _ => id) (fun _ => id)⟩
-
-def triangle (f : Decor → Bits) : List Decor → Nat × Nat × Nat
-  | [] => (0,0,0)
-  | x::xs =>
-    let (suffix,left,right) := triangle f xs
-    let m := xs.length
-    let v := (f x).toNat
-    ((suffix <<< 769)+v,(left <<< (769*m))+units m*v,(right <<< (769*m))+suffix)
-
-lemma lanesAppend {α} (f : α → Bits) (xs ys) :
-    combineLanes f (xs++ys)=(combineLanes f ys <<< (769*xs.length))+combineLanes f xs := by
-  induction xs with
-  | nil => simp [combineLanes]
-  | cons x l ih =>
-    simp only [List.cons_append,List.length_cons,combineLanes,lanePlace,ih,Nat.shiftLeft_eq,
-      Nat.mul_succ,Nat.pow_add]
-    ring
-
-lemma lanesMap {α β : Type} (f : β → Bits) (g : α → β) (xs) :
-    combineLanes f (xs.map g)=combineLanes (fun x => f (g x)) xs := by
-  induction xs with
+      · intro hv
+        rcases (mem v).mp (sub v hv) with h1 | h1
+        · exact Or.inl ⟨h1,fun e => hh (e ▸ hv)⟩
+        · exact Or.inr h1
+      · rintro (⟨h1,h2⟩ | rfl)
+        · exact rest v h1 h2
+        · exact hs
+  · have hh := one.resolve_right hs
+    refine Or.inl ?_
+    ext v
+    rw [List.mem_toFinset]
+    constructor
+    · intro hv
+      rcases (mem v).mp (sub v hv) with h1 | rfl
+      · exact h1
+      · exact absurd hv hs
+    · intro hv
+      by_cases e : v=hd
+      · exact e ▸ hh
+      · exact rest v hv e
+theorem strong_drop {m q cap : Nat} {hd : Sig} {rs : List Nat} {u v : Nat} (ok : dropOK m hd rs u v = true)
+    (e : graphGoal m = graphGoal q) (ev : vars m = vars q)
+    (a : Impossible (graphGoal q) cap (vars q).toFinset)
+    (b : Impossible (graphGoal q) cap (varsX m).toFinset)
+    (c : Impossible (graphGoal q) cap (varsD m hd).toFinset) :
+    Lower (varsX m) (graphGoal m) (cap+1) := by
+  have ok' := ok
+  simp only [dropOK,Bool.and_eq_true] at ok'
+  intro p bank hr ha
+  obtain ⟨k,t,S,hk,run,hs⟩ := reach_live (proper_of _ ok'.1.1.1.2) hr ha
+  by_contra! small
+  rcases drop_split ok run hs with h | h | h
+  · rw [ev] at h; rw [e,h] at run; exact a k t (by omega) run
+  · rw [e,h] at run; exact b k t (by omega) run
+  · rw [e,h] at run; exact c k t (by omega) run
+
+def sh (i : Nat) : Nat := if i<8 then ([1,0,5,8,2,4,7,3] : List Nat).getD i 0 else i+1
+def shG (g : Gate) : Gate := ⟨g.op,g.inputs.map sh⟩
+def stepW (w : List Bool) (g : Gate) : List Bool := w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
+def RelW (w v : List Bool) : Prop :=
+  9 ≤ w.length ∧ v.length = w.length+1 ∧ ∀ i, v.getD (sh i) false = w.getD i false
+theorem getD_push (l : List Bool) (a : Bool) (i : Nat) :
+    (l++[a]).getD i false = if i<l.length then l.getD i false else if i=l.length then a else false := by
+  simp only [List.getD_eq_getElem?_getD]
+  by_cases h : i<l.length
+  · simp [h,List.getElem?_append_left h]
+  · by_cases e : i=l.length
+    · subst e; simp
+    · have : l.length+1 ≤ i := by omega
+      simp [h,e,List.getElem?_eq_none_iff.mpr (show (l++[a]).length ≤ i by simpa using this)]
+theorem sh_lt {i n : Nat} (hn : 9 ≤ n) : sh i < n+1 ↔ i<n := by
+  unfold sh
+  split
+  next h => interval_cases i <;> simp <;> omega
+  next h => omega
+theorem sh_eq {i n : Nat} (hn : 9 ≤ n) : sh i = n+1 ↔ i=n := by
+  unfold sh
+  split
+  next h => interval_cases i <;> simp <;> omega
+  next h => omega
+theorem rel_push {w v : List Bool} (h : RelW w v) (a : Bool) : RelW (w++[a]) (v++[a]) := by
+  obtain ⟨h1,h2,h3⟩ := h
+  refine ⟨by simp; omega,by simp [h2],fun i => ?_⟩
+  rw [getD_push,getD_push,h2,h3]
+  simp only [sh_lt h1,sh_eq h1]
+theorem rel_fold (gs : List Gate) {w v : List Bool} (h : RelW w v) :
+    RelW (gs.foldl stepW w) ((gs.map shG).foldl stepW v) := by
+  induction gs generalizing w v with
+  | nil => exact h
+  | cons g gs ih =>
+    simp only [List.map_cons,List.foldl_cons]
+    apply ih
+    have e : (shG g).op.eval ((shG g).inputs.map fun i => v.getD i false) =
+        g.op.eval (g.inputs.map fun i => w.getD i false) := by
+      simp only [shG,List.map_map]
+      congr 1
+      apply List.map_congr_left
+      intro i _
+      exact h.2.2 i
+    unfold stepW
+    rw [e]
+    exact rel_push h _
+theorem fold_prefix (gs : List Gate) (w : List Bool) (i : Nat) (hi : i<w.length) :
+    (gs.foldl stepW w).getD i false = w.getD i false := by
+  induction gs generalizing w with
   | nil => rfl
-  | cons a l ih => simp only [List.map_cons,combineLanes,ih]
-
-lemma triangle_eq (f : Decor → Bits) (xs) :
-    triangle f xs=(combineLanes f xs,combineLanes (fun e : Ax => f e.1) (couples xs),
-      combineLanes (fun e : Ax => f e.2) (couples xs)) := by
-  induction xs with
+  | cons g gs ih =>
+    rw [List.foldl_cons,ih _ (by simp [stepW]; omega)]
+    unfold stepW
+    rw [getD_push,if_pos hi]
+theorem wires_fold (C : Circuit) (x : List Bool) : C.wires x = C.gates.foldl stepW x := rfl
+def joined (x2 x3 : Circuit) (x4 : Nat) : Circuit :=
+  ⟨⟨GateOp.or,[0,6]⟩ :: (x2.gates.map shG ++ ⟨GateOp.or,[sh x4,6]⟩ :: x3.gates.map shG),sh x3.output⟩
+def pull (y : Fin 9 → Bool) (j : Fin 8) : Bool := y (([1,0,5,8,2,4,7,3] : List (Fin 9)).getD j.val 0)
+theorem rel_start (y : Fin 9 → Bool) :
+    RelW (List.ofFn (pull y) ++ [pull y 1 || y 6]) (List.ofFn y ++ [y 0 || y 6]) := by
+  refine ⟨by simp,by simp,fun i => ?_⟩
+  by_cases h : i<9
+  · interval_cases i <;> simp [sh,List.ofFn_succ,pull]
+  · have hs : sh i = i+1 := by unfold sh; rw [if_neg (by omega)]
+    rw [hs,getD_push,getD_push]
+    simp only [List.length_ofFn]
+    rw [if_neg (by omega),if_neg (by omega),if_neg (by omega),if_neg (by omega)]
+theorem joined_value (x2 x3 : Circuit) (x4 : Nat) (y : Fin 9 → Bool) :
+    ((joined x2 x3 x4).wires (List.ofFn y)).getD 9 false = (y 0 || y 6) ∧
+    (joined x2 x3 x4).eval (List.ofFn y) =
+      x3.eval (x2.wires (List.ofFn (pull y) ++ [pull y 1 || y 6]) ++
+        [(x2.wires (List.ofFn (pull y) ++ [pull y 1 || y 6])).getD x4 false || y 6]) := by
+  have g0 : stepW (List.ofFn y) ⟨GateOp.or,[0,6]⟩ = List.ofFn y ++ [y 0 || y 6] := by
+    simp [stepW,GateOp.eval,List.ofFn_succ]
+  have e : (joined x2 x3 x4).wires (List.ofFn y) = (x3.gates.map shG).foldl stepW
+      (stepW ((x2.gates.map shG).foldl stepW (List.ofFn y ++ [y 0 || y 6])) ⟨GateOp.or,[sh x4,6]⟩) := by
+    rw [wires_fold]
+    simp only [joined,List.foldl_cons,List.foldl_append,g0]
+  have r2 := rel_fold x2.gates (rel_start y)
+  rw [←wires_fold] at r2
+  have six : ((x2.gates.map shG).foldl stepW (List.ofFn y ++ [y 0 || y 6])).getD 6 false = y 6 := by
+    rw [fold_prefix _ _ _ (by simp)]
+    simp [List.ofFn_succ]
+  have ga : stepW ((x2.gates.map shG).foldl stepW (List.ofFn y ++ [y 0 || y 6])) ⟨GateOp.or,[sh x4,6]⟩ =
+      (x2.gates.map shG).foldl stepW (List.ofFn y ++ [y 0 || y 6]) ++
+        [(x2.wires (List.ofFn (pull y) ++ [pull y 1 || y 6])).getD x4 false || y 6] := by
+    simp only [stepW,GateOp.eval,List.map_cons,List.map_nil,List.any_cons,List.any_nil,r2.2.2,six,id,Bool.or_false]
+  rw [ga] at e
+  have r3 := rel_fold x3.gates (rel_push r2 ((x2.wires (List.ofFn (pull y) ++ [pull y 1 || y 6])).getD x4 false || y 6))
+  refine ⟨?_,?_⟩
+  · have len : 9 < ((x2.gates.map shG).foldl stepW (List.ofFn y ++ [y 0 || y 6])).length := by
+      have := r2.1; have := r2.2.1; omega
+    rw [e,fold_prefix _ _ _ (by rw [List.length_append]; omega),getD_push,if_pos len,fold_prefix _ _ _ (by simp)]
+    simp [List.ofFn_succ]
+  · unfold Circuit.eval
+    rw [e]
+    exact r3.2.2 _
+theorem joined_legal {x2 x3 : Circuit} {x4 : Nat} (h2 : PEqualNP.MetaComplexity.FanInTwo x2)
+    (h3 : PEqualNP.MetaComplexity.FanInTwo x3) : PEqualNP.MetaComplexity.FanInTwo (joined x2 x3 x4) := by
+  intro g hg
+  simp only [joined,List.mem_cons,List.mem_append,List.mem_map] at hg
+  rcases hg with rfl | ⟨a,ha,rfl⟩ | rfl | ⟨a,ha,rfl⟩
+  · simp
+  · exact ⟨(h2 a ha).1,by simpa [shG] using (h2 a ha).2⟩
+  · simp
+  · exact ⟨(h3 a ha).1,by simpa [shG] using (h3 a ha).2⟩
+def small8 (x1 : Fin 8 → Bool) : Bool := x1 0 && x1 1 || x1 1 && x1 2 || x1 2 && x1 3 || x1 0 && x1 4 || x1 1 && x1 5 || x1 2 && x1 6 || x1 3 && x1 7 || x1 4 && x1 6 || x1 5 && x1 7 || x1 7 && x1 4
+theorem match0 (y : Fin 9 → Bool) (h : y 6 = false) : small8 (pull y) = edge y := by
+  simp only [small8,pull,edge,h]
+  simp
+  generalize y 0 = a0; generalize y 1 = a1; generalize y 2 = a2; generalize y 3 = a3
+  generalize y 4 = a4; generalize y 5 = a5; generalize y 7 = a7; generalize y 8 = a8
+  revert a0 a1 a2 a3 a4 a5 a7 a8
+  decide +kernel
+theorem match1 (y : Fin 9 → Bool) (h : y 6 = true) : (small8 (pull y) || pull y 0 || pull y 3) = edge y := by
+  simp only [small8,pull,edge,h]
+  simp
+  generalize y 0 = a0; generalize y 1 = a1; generalize y 2 = a2; generalize y 3 = a3
+  generalize y 4 = a4; generalize y 5 = a5; generalize y 7 = a7; generalize y 8 = a8
+  revert a0 a1 a2 a3 a4 a5 a7 a8
+  decide +kernel
+theorem glue (bound : ∀ C : Circuit, PEqualNP.MetaComplexity.FanInTwo C →
+      (∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = (y 0 || y 6)) →
+      PEqualNP.MetaComplexity.circuitFun 9 C = edge → 16 ≤ C.size)
+    (x2 x3 : Circuit) (x4 : Nat) (h2 : PEqualNP.MetaComplexity.FanInTwo x2)
+    (h3 : PEqualNP.MetaComplexity.FanInTwo x3) (hs : x2.size+x3.size ≤ 13)
+    (h0 : ∀ x9 : Fin 8 → Bool, x3.eval (x2.wires (List.ofFn x9 ++ [x9 1 || false]) ++
+      [(x2.wires (List.ofFn x9 ++ [x9 1 || false])).getD x4 false]) = small8 x9) :
+    ∃ x10 : Fin 8 → Bool, x3.eval (x2.wires (List.ofFn x10 ++ [x10 1 || true]) ++ [true]) ≠
+      (small8 x10 || x10 0 || x10 3) := by
+  by_contra! h1
+  have big := bound (joined x2 x3 x4) (joined_legal h2 h3) (fun y => (joined_value x2 x3 x4 y).1) (by
+    funext y
+    change (joined x2 x3 x4).eval (List.ofFn y) = _
+    rw [(joined_value x2 x3 x4 y).2]
+    cases h : y 6 with
+    | false => rw [Bool.or_false (List.getD _ _ _),h0,match0 y h]
+    | true => rw [Bool.or_true (List.getD _ _ _),h1,match1 y h])
+  have sz : (joined x2 x3 x4).size = x2.size+x3.size+2 := by
+    simp only [Circuit.size,joined,List.length_cons,List.length_append,List.length_map]; omega
+  omega
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low511 : Lower (vars 511) (graphGoal 511) 15 :=
+  lower_forest (g:=dead) (i:=0) (hints:=13438558465) (before_sound known383 valid383) geomdead tablesdead (by decide +kernel) (by decide +kernel) (by decide +kernel) (by decide +kernel)
+def maps511 : List (Nat × List Nat) := [(511,[])]
+def known511 := extendKnown known383 15 maps511
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid511 : Known known511 := extendKnown_ok (m:=511) valid383 low511 (by decide +kernel)
+def x31d6 (i : Nat) : Nat := 0x4321029908c02a029d6340fe00fd10fc20fa00
+def x31l6 : Packing := (4,1,3,0,0,6,0,x31d6)
+def x31h6 (i : Nat) : Nat := 0x300a0420400003e8661061400000000a0000000f12e4d81f1604918
+def x31d5 (i : Nat) : Nat := 0x611844000000ca86543ca140bf2aa21f920442faa6885f54c20bea92217d51083e423007a88a00
+def x31l5 : Packing := (8,2,3,0,0,6,0,x31d5)
+def x31samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff5ce83,0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4e80b),(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe10c9,0x812c0),(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaed0d,0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff38c0d),(0x4f1f4,0x461e2),(0xb1e72,0xb1610),(0,0),(0,0),(0,0),(0,0)]
+def x31columns : List ColumnInfo := [(1,0,30,0,4),(16,0,15,0,4),(8,0,23,0,4),(4,0,27,0,4),(2,0,29,0,4),(0,0,31,0,7)]
+def x31autos : List (List Nat) := [[],[65,50],[16,66],[16,32,48,64],[32,67],[32,49,64,16],[48,33],[48,65,32,33],[64,16,33,50],[64,49]]
+def x31levels : Nat → Packing
+  | 6 => x31l6
+  | 5 => x31l5
+  | _ => emptyPacking
+def x31index : Nat → Nat → Option (Nat × Nat)
+  | 6 => lookupWord 3 19 3 11 3 4 x31h6
+  | _ => fun _ => none
+def x31 : Forest := ⟨31,6,fun j => x31samples[j]?.getD (0,0),x31columns,x31autos,x31levels,x31index⟩
+set_option maxHeartbeats 0 in
+theorem geomx31 : graphValid x31 (boundsBefore known511) = true := by
+  simp only [graphValid,Bool.and_eq_true]
+  refine ⟨⟨⟨by decide +kernel,by decide +kernel⟩,listPieces_all (d:=1) ?_⟩,listPieces_all (d:=1) ?_⟩
+  all_goals simp only [listPieces]
+  all_goals repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx31_6_0 : block x31 6 0 1=true := by
+  apply groupedBlock (ar:=5) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx31_6_1 : block x31 6 1 3=true := by
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx31_6 : block x31 6 0 4=true := (@block_merge x31 6 0 1 3 sx31_6_0 sx31_6_1)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx31_5_0 : block x31 5 0 2=true := by
+  apply groupedBlock (ar:=5) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx31_5_2 : block x31 5 2 6=true := by
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx31_5 : block x31 5 0 8=true := (@block_merge x31 5 0 2 6 sx31_5_0 sx31_5_2)
+theorem tablesx31 : checkedTables x31 6 := by
+  intro k hk
+  interval_cases k
+  · exact (rfl : block x31 0 0 0 = true)
+  · exact (rfl : block x31 1 0 0 = true)
+  · exact (rfl : block x31 2 0 0 = true)
+  · exact (rfl : block x31 3 0 0 = true)
+  · exact (rfl : block x31 4 0 0 = true)
+  · exact allx31_5
+  · exact allx31_6
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem plx31 : Impossible (graphGoal 31) 6 (vars 31).toFinset := plainA (q:=31) (prior:=boundsBefore known511) (before_sound known511 valid511) (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low1567 : Lower (varsX 1567) (graphGoal 1567) 7 :=
+  strong_full (q:=31) (rs:=[2, 1, 2, 4, 1]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx31
+    (index_root (g:=x31) (i:=1) rfl (before_sound known511 valid511) geomx31 tablesx31 (by decide +kernel))
+def maps1567 : List (Nat × List Nat) := [(1567,[]),(2079,[50,65]),(6687,[50,33,16,64]),(1703,[115,67,100,83]),(4263,[114,33,97,82,50,65]),(7847,[115,50,98,83,66,16]),(12455,[113,97,82,32,65,48]),(12716,[49,129,115,67,32,97,80]),(17324,[129,50,114,48,66,97,80])]
+def known1567 := extendKnown known511 7 maps1567
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid1567 : Known known1567 := extendKnown_ok (m:=1567) valid511 low1567 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low42527 : Lower (varsX 42527) (graphGoal 42527) 7 :=
+  strong_full (q:=31) (rs:=[2, 1, 2, 4, 1]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx31
+    (index_root (g:=x31) (i:=2) rfl (before_sound known511 valid511) geomx31 tablesx31 (by decide +kernel))
+def maps42527 : List (Nat × List Nat) := [(42527,[]),(44063,[50,65]),(47647,[50,33,16,64]),(52767,[33,32,65,48]),(57887,[16,64,49,32]),(42663,[115,67,100,83]),(44711,[114,33,97,82,50,65]),(47783,[114,98,83,33,16,64]),(54951,[113,97,82,32,65,48]),(68775,[113,16,96,81,49,64]),(44857,[130,114,98,81]),(53164,[130,50,116,49,32,97,80]),(55212,[49,129,115,67,32,97,80]),(60332,[129,50,114,48,66,97,80])]
+def known42527 := extendKnown known1567 7 maps42527
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid42527 : Known known42527 := extendKnown_ok (m:=42527) valid1567 low42527 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low83487 : Lower (varsX 83487) (graphGoal 83487) 7 :=
+  strong_drop (q:=31) (hd:=inputs.getD 0 zero) (rs:=[0, 1, 2, 4, 1]) (u:=2) (v:=3) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx31
+    (index_root (g:=x31) (i:=3) rfl (before_sound known511 valid511) geomx31 tablesx31 (by decide +kernel))
+    (index_root (g:=x31) (i:=0) rfl (before_sound known511 valid511) geomx31 tablesx31 (by decide +kernel))
+def maps83487 : List (Nat × List Nat) := [(83487,[]),(88607,[66,16]),(93727,[67,32]),(98847,[16,64,49,32]),(103967,[64,48,32,16]),(83623,[115,67,100,83]),(88743,[115,50,98,83,66,16]),(93863,[116,100,83,32]),(109223,[116,100,80,48,32,16]),(119463,[112,96,81,64,49,32]),(83769,[131,115,65,50,98,81]),(99150,[132,67,115,100,48,33,80]),(114510,[132,64,112,100,80]),(124750,[128,112,97,65,49,33,80]),(94124,[130,50,116,49,32,97,80]),(99244,[66,130,116,48,33,97,80]),(109484,[65,129,116,97,80]),(119724,[131,64,116,50,33,97,80])]
+def known83487 := extendKnown known42527 7 maps83487
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid83487 : Known known83487 := extendKnown_ok (m:=83487) valid42527 low83487 (by decide +kernel)
+def x187d6 (i : Nat) : Nat := 0x40440804242424384b03081007f803fa61fd10fd00778cfdc45f611
+def x187l6 : Packing := (7,1,2,0,0,6,0,x187d6)
+def x187h6 (i : Nat) : Nat := 0x2a000068
+def x187d5 (i : Nat) : Nat := 0x101028f54c530bd58600
+def x187l5 : Packing := (2,2,2,0,0,3,0,x187d5)
+def x187samples : Array (Bits × Bits) := #[(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffc8743f,0x20642a),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffc1330f,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffc99305),(0,0),(0x220bcc,0x22828c),(0x3c4bf0,0x1c0950),(0x178c00,0x128800),(0,0),(0x17f000,0x2d7000),(0,0)]
+def x187columns : List ColumnInfo := [(10,0,177,0,4),(16,8,163,0,4),(160,0,27,0,4)]
+def x187autos : List (List Nat) := [[],[115,84]]
+def x187levels : Nat → Packing
+  | 6 => x187l6
+  | 5 => x187l5
+  | _ => emptyPacking
+def x187index : Nat → Nat → Option (Nat × Nat)
+  | 6 => lookupWord 1 5 1 6 1 1 x187h6
+  | _ => fun _ => none
+def x187 : Forest := ⟨187,6,fun j => x187samples[j]?.getD (0,0),x187columns,x187autos,x187levels,x187index⟩
+set_option maxHeartbeats 0 in
+theorem geomx187 : graphValid x187 (boundsBefore known83487) = true := by
+  simp only [graphValid,Bool.and_eq_true]
+  refine ⟨⟨⟨by decide +kernel,by decide +kernel⟩,listPieces_all (d:=0) ?_⟩,listPieces_all (d:=0) ?_⟩
+  all_goals simp only [listPieces]
+  all_goals repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx187_6_0 : block x187 6 0 4=true := by
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx187_6_4 : block x187 6 4 3=true := by
+  apply groupedBlock (ar:=7) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx187_6 : block x187 6 0 7=true := (@block_merge x187 6 0 4 3 sx187_6_0 sx187_6_4)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx187_5_0 : block x187 5 0 2=true := by
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx187_5 : block x187 5 0 2=true := sx187_5_0
+theorem tablesx187 : checkedTables x187 6 := by
+  intro k hk
+  interval_cases k
+  · exact (rfl : block x187 0 0 0 = true)
+  · exact (rfl : block x187 1 0 0 = true)
+  · exact (rfl : block x187 2 0 0 = true)
+  · exact (rfl : block x187 3 0 0 = true)
+  · exact (rfl : block x187 4 0 0 = true)
+  · exact allx187_5
+  · exact allx187_6
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem plx187 : Impossible (graphGoal 187) 6 (vars 187).toFinset := plainA (q:=187) (prior:=boundsBefore known83487) (before_sound known83487 valid83487) (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low42683 : Lower (varsX 42683) (graphGoal 42683) 7 :=
+  strong_full (q:=187) (rs:=[2, 1, 16, 1, 1, 32]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx187
+    (index_root (g:=x187) (i:=4) rfl (before_sound known83487 valid83487) geomx187 tablesx187 (by decide +kernel))
+def maps42683 : List (Nat × List Nat) := [(42683,[]),(47806,[117,67,32])]
+def known42683 := extendKnown known83487 7 maps42683
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid42683 : Known known42683 := extendKnown_ok (m:=42683) valid83487 low42683 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low44219 : Lower (varsX 44219) (graphGoal 44219) 7 :=
+  strong_full (q:=187) (rs:=[16, 1, 16, 1, 1, 32]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx187
+    (index_root (g:=x187) (i:=5) rfl (before_sound known83487 valid83487) geomx187 tablesx187 (by decide +kernel))
+def maps44219 : List (Nat × List Nat) := [(44219,[]),(44731,[84,115]),(52926,[117,67,32]),(54974,[116,83,32]),(48071,[115,83,133,99,50,66,16])]
+def known44219 := extendKnown known42683 7 maps44219
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid44219 : Known known44219 := extendKnown_ok (m:=44219) valid42683 low44219 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low88763 : Lower (varsX 88763) (graphGoal 88763) 7 :=
+  strong_drop (q:=187) (hd:=inputs.getD 1 zero) (rs:=[2, 0, 16, 1, 1, 32]) (u:=1) (v:=3) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx187
+    (cut_root (prior:=boundsBefore known83487) (before_sound known83487 valid83487) (2,0,185,0,5) (by decide +kernel) (by decide +kernel))
+    (index_root (g:=x187) (i:=0) rfl (before_sound known83487 valid83487) geomx187 tablesx187 (by decide +kernel))
+def maps88763 : List (Nat × List Nat) := [(88763,[]),(88766,[117,67,32]),(83911,[115,83,133,99,50,66,16])]
+def known88763 := extendKnown known44219 7 maps88763
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid88763 : Known known88763 := extendKnown_ok (m:=88763) valid44219 low88763 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low99003 : Lower (varsX 99003) (graphGoal 99003) 7 :=
+  strong_drop (q:=187) (hd:=inputs.getD 3 zero) (rs:=[2, 1, 0, 1, 1, 32]) (u:=16) (v:=24) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx187
+    (cut_root (prior:=boundsBefore known83487) (before_sound known83487 valid83487) (0,8,163,16,5) (by decide +kernel) (by decide +kernel))
+    (index_root (g:=x187) (i:=1) rfl (before_sound known83487 valid83487) geomx187 tablesx187 (by decide +kernel))
+def maps99003 : List (Nat × List Nat) := [(99003,[]),(119483,[84,115]),(104126,[117,67,32]),(109246,[116,83,32]),(119751,[115,83,133,99,50,66,16])]
+def known99003 := extendKnown known88763 7 maps99003
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid99003 : Known known99003 := extendKnown_ok (m:=99003) valid88763 low99003 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low104123 : Lower (varsX 104123) (graphGoal 104123) 7 :=
+  strong_drop (q:=187) (hd:=inputs.getD 4 zero) (rs:=[2, 1, 16, 0, 1, 32]) (u:=1) (v:=17) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx187
+    (cut_root (prior:=boundsBefore known83487) (before_sound known83487 valid83487) (24,0,163,0,4) (by decide +kernel) (by decide +kernel))
+    (index_root (g:=x187) (i:=2) rfl (before_sound known83487 valid83487) geomx187 tablesx187 (by decide +kernel))
+def maps104123 : List (Nat × List Nat) := [(104123,[]),(109243,[84,115]),(99006,[117,67,32]),(119486,[116,83,32]),(94151,[115,83,133,99,50,66,16])]
+def known104123 := extendKnown known99003 7 maps104123
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid104123 : Known known104123 := extendKnown_ok (m:=104123) valid99003 low104123 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low83643 : Lower (varsX 83643) (graphGoal 83643) 7 :=
+  strong_drop (q:=187) (hd:=inputs.getD 0 zero) (rs:=[0, 1, 16, 1, 1, 32]) (u:=2) (v:=3) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx187
+    (index_root (g:=x187) (i:=6) rfl (before_sound known83487 valid83487) geomx187 tablesx187 (by decide +kernel))
+    (index_root (g:=x187) (i:=3) rfl (before_sound known83487 valid83487) geomx187 tablesx187 (by decide +kernel))
+def maps83643 : List (Nat × List Nat) := [(83643,[]),(93886,[117,67,32]),(89031,[115,83,133,99,50,66,16])]
+def known83643 := extendKnown known104123 7 maps83643
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid83643 : Known known83643 := extendKnown_ok (m:=83643) valid104123 low83643 (by decide +kernel)
+def x63d7 (i : Nat) : Nat := 0x3a04840ac3f865fc10
+def x63l7 : Packing := (2,1,2,0,0,4,0,x63d7)
+def x63h7 (i : Nat) : Nat := 0x1520079d85d46b7171000680020c0000f391436008009b010
+def x63d6 (i : Nat) : Nat := 0x101087cc4000804bc46202f211880840401ffdb4e4b74a0b44658480fb48032fd4c410bf58032bf58c10bf590109f59432be580329f59410bd58432bb58810af59010b758c10
+def x63l6 : Packing := (12,2,2,0,0,7,0,x63d6)
+def x63h6 (i : Nat) : Nat := 0x24f9400060ba8030352
+def x63d5 (i : Nat) : Nat := 0x108421104210872a1e50a03e498240196e52058432cea62b2821b54c1610cb5a98ac8086e53158810
+def x63l5 : Packing := (6,3,2,0,0,6,0,x63d5)
+def x63h5 (i : Nat) : Nat := 0x20034000
+def x63d4 (i : Nat) : Nat := 0x3b04813058432
+def x63l4 : Packing := (1,4,2,0,0,0,0,x63d4)
+def x63samples : Array (Bits × Bits) := #[(0x41a70be,0x600509c),(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffff2458b47,0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffff04d0a43),(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffff2a5e399,0xb30e190),(0x9e20c5e,0x486004e),(0x9500fe0,0x9580f20),(0xcebf040,0x9ffa040),(0,0),(0,0),(0,0)]
+def x63columns : List ColumnInfo := [(1,32,30,0,4),(6,0,57,0,4),(24,0,39,0,4),(32,0,31,0,7)]
+def x63autos : List (List Nat) := [[],[65,50]]
+def x63levels : Nat → Packing
+  | 7 => x63l7
+  | 6 => x63l6
+  | 5 => x63l5
+  | 4 => x63l4
+  | _ => emptyPacking
+def x63index : Nat → Nat → Option (Nat × Nat)
+  | 7 => lookupWord 7 21 2 9 4 1 x63h7
+  | 6 => lookupWord 2 9 1 8 3 1 x63h6
+  | 5 => lookupWord 1 5 1 6 1 1 x63h5
+  | _ => fun _ => none
+def x63 : Forest := ⟨63,7,fun j => x63samples[j]?.getD (0,0),x63columns,x63autos,x63levels,x63index⟩
+set_option maxHeartbeats 0 in
+theorem geomx63 : graphValid x63 (boundsBefore known83643) = true := by
+  simp only [graphValid,Bool.and_eq_true]
+  refine ⟨⟨⟨by decide +kernel,by decide +kernel⟩,listPieces_all (d:=0) ?_⟩,listPieces_all (d:=0) ?_⟩
+  all_goals simp only [listPieces]
+  all_goals repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx63_7_0 : block x63 7 0 2=true := by
+  apply groupedBlock (ar:=7) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx63_7 : block x63 7 0 2=true := sx63_7_0
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx63_6_0 : block x63 6 0 7=true := by
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx63_6_7 : block x63 6 7 5=true := by
+  apply groupedBlock (ar:=7) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx63_6 : block x63 6 0 12=true := (@block_merge x63 6 0 7 5 sx63_6_0 sx63_6_7)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx63_5_0 : block x63 5 0 6=true := by
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx63_5 : block x63 5 0 6=true := sx63_5_0
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx63_4_0 : block x63 4 0 1=true := by
+  apply groupedBlock (ar:=5) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx63_4 : block x63 4 0 1=true := sx63_4_0
+theorem tablesx63 : checkedTables x63 7 := by
+  intro k hk
+  interval_cases k
+  · exact (rfl : block x63 0 0 0 = true)
+  · exact (rfl : block x63 1 0 0 = true)
+  · exact (rfl : block x63 2 0 0 = true)
+  · exact (rfl : block x63 3 0 0 = true)
+  · exact allx63_4
+  · exact allx63_5
+  · exact allx63_6
+  · exact allx63_7
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem plx63 : Impossible (graphGoal 63) 7 (vars 63).toFinset := plainA (q:=63) (prior:=boundsBefore known83643) (before_sound known83643 valid83643) (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low1087 : Lower (varsX 1087) (graphGoal 1087) 8 :=
+  strong_full (q:=63) (rs:=[16, 4, 2, 4, 1, 1]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx63
+    (index_root (g:=x63) (i:=0) rfl (before_sound known83643 valid83643) geomx63 tablesx63 (by decide +kernel))
+def maps1087 : List (Nat × List Nat) := [(2623,[50,65]),(1119,[101,66,16]),(6303,[117,101,67,32]),(11423,[117,101,33,32,65,48]),(6319,[116,100,83,32]),(13487,[113,97,82,32,65,48]),(1207,[115,84,99]),(3255,[114,81,98,50,65]),(11694,[130,116,49,32,81,96]),(11708,[132,67,84,48,33,113,96])]
+def known1087 := extendKnown known83643 8 maps1087
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid1087 : Known known1087 := extendKnown_ok (m:=1087) valid83643 low1087 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low11327 : Lower (varsX 11327) (graphGoal 11327) 8 :=
+  strong_full (q:=63) (rs:=[2, 1, 2, 16, 1, 1]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx63
+    (index_root (g:=x63) (i:=1) rfl (before_sound known83643 valid83643) geomx63 tablesx63 (by decide +kernel))
+def maps11327 : List (Nat × List Nat) := [(2719,[117,101,67,32]),(3247,[116,100,83,32]),(13495,[115,84,99])]
+def known11327 := extendKnown known1087 8 maps11327
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid11327 : Known known11327 := extendKnown_ok (m:=11327) valid1087 low11327 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low1599 : Lower (varsX 1599) (graphGoal 1599) 8 :=
+  strong_full (q:=63) (rs:=[2, 1, 2, 4, 1, 1]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx63
+    (cut_root (prior:=boundsBefore known83643) (before_sound known83643 valid83643) (32,0,1567,0,7) (by decide +kernel) (by decide +kernel))
+def maps1599 : List (Nat × List Nat) := [(1719,[115,84,99])]
+def known1599 := extendKnown known11327 8 maps1599
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid1599 : Known known1599 := extendKnown_ok (m:=1599) valid11327 low1599 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low47679 : Lower (varsX 47679) (graphGoal 47679) 8 :=
+  strong_full (q:=63) (rs:=[2, 4, 2, 4, 1, 1]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx63
+    (cut_root (prior:=boundsBefore known83643) (before_sound known83643 valid83643) (32,0,47647,0,7) (by decide +kernel) (by decide +kernel))
+def maps47679 : List (Nat × List Nat) := [(42671,[116,100,83,32]),(68783,[113,97,82,32,65,48]),(47799,[115,84,99]),(68791,[114,81,98,50,65])]
+def known47679 := extendKnown known1599 8 maps47679
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid47679 : Known known47679 := extendKnown_ok (m:=47679) valid1599 low47679 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low42559 : Lower (varsX 42559) (graphGoal 42559) 8 :=
+  strong_full (q:=63) (rs:=[2, 1, 2, 4, 1, 1]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx63
+    (cut_root (prior:=boundsBefore known83643) (before_sound known83643 valid83643) (32,0,42527,0,7) (by decide +kernel) (by decide +kernel))
+def maps42559 : List (Nat × List Nat) := [(47791,[116,100,83,32]),(54959,[113,97,82,32,65,48]),(42679,[115,84,99]),(44727,[114,81,98,50,65])]
+def known42559 := extendKnown known47679 8 maps42559
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid42559 : Known known42559 := extendKnown_ok (m:=42559) valid47679 low42559 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low52799 : Lower (varsX 52799) (graphGoal 52799) 8 :=
+  strong_full (q:=63) (rs:=[2, 1, 8, 4, 1, 1]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx63
+    (cut_root (prior:=boundsBefore known83643) (before_sound known83643 valid83643) (32,0,52767,0,7) (by decide +kernel) (by decide +kernel))
+def maps52799 : List (Nat × List Nat) := [(44719,[116,100,83,32]),(54967,[115,84,99])]
+def known52799 := extendKnown known42559 8 maps52799
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid52799 : Known known52799 := extendKnown_ok (m:=52799) valid42559 low52799 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low88639 : Lower (varsX 88639) (graphGoal 88639) 8 :=
+  strong_drop (q:=63) (hd:=inputs.getD 1 zero) (rs:=[2, 0, 2, 4, 1, 1]) (u:=1) (v:=3) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx63
+    (cut_root (prior:=boundsBefore known83643) (before_sound known83643 valid83643) (32,0,88607,0,7) (by decide +kernel) (by decide +kernel))
+    (cut_root (prior:=boundsBefore known83643) (before_sound known83643 valid83643) (32,0,88607,0,7) (by decide +kernel) (by decide +kernel))
+def maps88639 : List (Nat × List Nat) := [(88751,[116,100,83,32]),(119471,[113,97,82,32,65,48]),(88759,[115,84,99]),(109239,[114,81,98,50,65])]
+def known88639 := extendKnown known52799 8 maps88639
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid88639 : Known known88639 := extendKnown_ok (m:=88639) valid52799 low88639 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low93759 : Lower (varsX 93759) (graphGoal 93759) 8 :=
+  strong_drop (q:=63) (hd:=inputs.getD 2 zero) (rs:=[2, 1, 0, 4, 1, 1]) (u:=2) (v:=6) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx63
+    (cut_root (prior:=boundsBefore known83643) (before_sound known83643 valid83643) (32,0,93727,0,7) (by decide +kernel) (by decide +kernel))
+    (cut_root (prior:=boundsBefore known83643) (before_sound known83643 valid83643) (32,0,93727,0,7) (by decide +kernel) (by decide +kernel))
+def maps93759 : List (Nat × List Nat) := [(83631,[116,100,83,32]),(109231,[113,97,82,32,65,48]),(93879,[115,84,99]),(119479,[114,81,98,50,65])]
+def known93759 := extendKnown known88639 8 maps93759
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid93759 : Known known93759 := extendKnown_ok (m:=93759) valid88639 low93759 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low83519 : Lower (varsX 83519) (graphGoal 83519) 8 :=
+  strong_drop (q:=63) (hd:=inputs.getD 0 zero) (rs:=[0, 1, 2, 4, 1, 1]) (u:=2) (v:=3) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx63
+    (cut_root (prior:=boundsBefore known83643) (before_sound known83643 valid83643) (32,0,83487,0,7) (by decide +kernel) (by decide +kernel))
+    (cut_root (prior:=boundsBefore known83643) (before_sound known83643 valid83643) (32,0,83487,0,7) (by decide +kernel) (by decide +kernel))
+def maps83519 : List (Nat × List Nat) := [(93871,[116,100,83,32]),(83639,[115,84,99]),(94158,[83,133,115,67,32,96])]
+def known83519 := extendKnown known93759 8 maps83519
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid83519 : Known known83519 := extendKnown_ok (m:=83519) valid93759 low83519 (by decide +kernel)
+def x189d7 (i : Nat) : Nat := 0x1880d0260231012190108406a02b5460333c3407f803fa61fd10fe187f043f841fa00
+def x189l7 : Packing := (7,1,3,0,0,7,0,x189d7)
+def x189h7 (i : Nat) : Nat := 0x581f03838f3cd8080000031c538000382fbe3054bd15580038dc1581da06000000414000486e0c4811858000890041099821030806bbf048085221009201600000058
+def x189d6 (i : Nat) : Nat := 0x8421000210800000004082d508d05bad508cf19283c280bf99910fe48130bf58910bf58430fe54030fe48110bf58930bf59420fc846009f59420f68ce00fa88a00bb58830bd58430
+def x189l6 : Packing := (14,2,3,0,0,7,0,x189d6)
+def x189h6 (i : Nat) : Nat := 0x700009040000000000ddd0800002
+def x189d5 (i : Nat) : Nat := 0x104208141ba541620c36698ac4186f15058430
+def x189l5 : Packing := (3,3,3,0,0,5,0,x189d5)
+def x189samples : Array (Bits × Bits) := #[(0x1a912e76,0x114b2672),(0,0),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffd1671ea7,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffd0870ca5),(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffe07b21db,0x878215a),(0x368c3114,0x26841804),(0xc34c9e8,0x8b48988),(0,0),(0x2704f608,0x27487200),(0,0)]
+def x189columns : List ColumnInfo := [(33,0,156,0,4),(24,0,165,0,4),(12,0,177,0,4),(132,0,57,0,4),(17,0,172,0,4),(0,0,189,0,8)]
+def x189autos : List (List Nat) := [[],[115,84],[32,67,117],[32,83,116],[48,82],[48,82,112,66],[64,114,50,48,80],[64,114,83],[80,50,116],[80,50,66,32,114],[112,66,48,82],[112,66]]
+def x189levels : Nat → Packing
+  | 7 => x189l7
+  | 6 => x189l6
+  | 5 => x189l5
+  | _ => emptyPacking
+def x189index : Nat → Nat → Option (Nat × Nat)
+  | 7 => lookupWord 29 37 3 12 4 4 x189h7
+  | 6 => lookupWord 2 11 1 10 2 4 x189h6
+  | _ => fun _ => none
+def x189 : Forest := ⟨189,7,fun j => x189samples[j]?.getD (0,0),x189columns,x189autos,x189levels,x189index⟩
+set_option maxHeartbeats 0 in
+theorem geomx189 : graphValid x189 (boundsBefore known83519) = true := by
+  simp only [graphValid,Bool.and_eq_true]
+  refine ⟨⟨⟨by decide +kernel,by decide +kernel⟩,listPieces_all (d:=1) ?_⟩,listPieces_all (d:=2) ?_⟩
+  all_goals simp only [listPieces]
+  all_goals repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx189_7_0 : block x189 7 0 1=true := by
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx189_7_1 : block x189 7 1 6=true := by
+  apply groupedBlock (ar:=7) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx189_7 : block x189 7 0 7=true := (@block_merge x189 7 0 1 6 sx189_7_0 sx189_7_1)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx189_6_0 : block x189 6 0 6=true := by
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx189_6_6 : block x189 6 6 8=true := by
+  apply groupedBlock (ar:=7) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx189_6 : block x189 6 0 14=true := (@block_merge x189 6 0 6 8 sx189_6_0 sx189_6_6)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx189_5_0 : block x189 5 0 3=true := by
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx189_5 : block x189 5 0 3=true := sx189_5_0
+theorem tablesx189 : checkedTables x189 7 := by
+  intro k hk
+  interval_cases k
+  · exact (rfl : block x189 0 0 0 = true)
+  · exact (rfl : block x189 1 0 0 = true)
+  · exact (rfl : block x189 2 0 0 = true)
+  · exact (rfl : block x189 3 0 0 = true)
+  · exact (rfl : block x189 4 0 0 = true)
+  · exact allx189_5
+  · exact allx189_6
+  · exact allx189_7
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem plx189 : Impossible (graphGoal 189) 7 (vars 189).toFinset := plainA (q:=189) (prior:=boundsBefore known83519) (before_sound known83519 valid83519) (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low2237 : Lower (varsX 2237) (graphGoal 2237) 8 :=
+  strong_full (q:=189) (rs:=[16, 8, 4, 1, 1, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx189
+    (index_root (g:=x189) (i:=1) rfl (before_sound known83519 valid83519) geomx189 tablesx189 (by decide +kernel))
+def maps2237 : List (Nat × List Nat) := [(2237,[]),(12477,[116,83,32]),(18109,[82,48,66,112])]
+def known2237 := extendKnown known83519 8 maps2237
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid2237 : Known known2237 := extendKnown_ok (m:=2237) valid83519 low2237 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low1725 : Lower (varsX 1725) (graphGoal 1725) 8 :=
+  strong_full (q:=189) (rs:=[16, 8, 4, 1, 1, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx189
+    (index_root (g:=x189) (i:=2) rfl (before_sound known83519 valid83519) geomx189 tablesx189 (by decide +kernel))
+def maps1725 : List (Nat × List Nat) := [(1725,[]),(17085,[82,48])]
+def known1725 := extendKnown known2237 8 maps1725
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid1725 : Known known1725 := extendKnown_ok (m:=1725) valid2237 low1725 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low2749 : Lower (varsX 2749) (graphGoal 2749) 8 :=
+  strong_full (q:=189) (rs:=[32, 8, 4, 8, 1, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx189
+    (index_root (g:=x189) (i:=3) rfl (before_sound known83519 valid83519) geomx189 tablesx189 (by decide +kernel))
+def maps2749 : List (Nat × List Nat) := [(2749,[]),(3261,[84,115]),(11453,[117,67,32])]
+def known2749 := extendKnown known1725 8 maps2749
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid2749 : Known known2749 := extendKnown_ok (m:=2749) valid1725 low2749 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low43197 : Lower (varsX 43197) (graphGoal 43197) 8 :=
+  strong_full (q:=189) (rs:=[20, 9, 4, 1, 1, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx189
+    (index_root (g:=x189) (i:=4) rfl (before_sound known83519 valid83519) geomx189 tablesx189 (by decide +kernel))
+def maps43197 : List (Nat × List Nat) := [(43197,[]),(58557,[82,48]),(64189,[83,114,64]),(46427,[130,50,98,82,115,33,65]),(48475,[135,101,50,33,16,64]),(63835,[135,98,82,33,49,64]),(49638,[115,83,82,130,99,66,16]),(55782,[117,130,99,32,64,16])]
+def known43197 := extendKnown known2749 8 maps43197
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid43197 : Known known43197 := extendKnown_ok (m:=43197) valid2749 low43197 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low44221 : Lower (varsX 44221) (graphGoal 44221) 8 :=
+  strong_full (q:=189) (rs:=[16, 8, 4, 1, 1, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx189
+    (index_root (g:=x189) (i:=5) rfl (before_sound known83519 valid83519) geomx189 tablesx189 (by decide +kernel))
+def maps44221 : List (Nat × List Nat) := [(44221,[]),(44733,[84,115]),(52925,[117,67,32]),(54973,[116,83,32]),(58045,[82,48]),(68797,[116,50,80]),(42843,[130,50,98,82,115,33,65]),(50011,[131,67,99,116,50,33,16,80]),(58203,[133,117,101,33,48]),(60251,[132,67,100,84,48,33,112]),(50150,[67,132,99,82,16]),(55270,[66,114,50,132,99,32,80,16]),(69094,[84,117,80,132,96,48,32,16])]
+def known44221 := extendKnown known43197 8 maps44221
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid44221 : Known known44221 := extendKnown_ok (m:=44221) valid43197 low44221 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low83645 : Lower (varsX 83645) (graphGoal 83645) 8 :=
+  strong_drop (q:=189) (hd:=inputs.getD 0 zero) (rs:=[0, 8, 4, 1, 1, 4]) (u:=16) (v:=17) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx189
+    (index_root (g:=x189) (i:=6) rfl (before_sound known83519 valid83519) geomx189 tablesx189 (by decide +kernel))
+    (index_root (g:=x189) (i:=0) rfl (before_sound known83519 valid83519) geomx189 tablesx189 (by decide +kernel))
+def maps83645 : List (Nat × List Nat) := [(83645,[]),(93885,[117,67,32]),(99005,[82,48]),(104125,[83,114,64]),(109245,[80,48,50,114,64]),(119485,[66,112,82,48]),(83803,[130,50,98,82,115,33,65]),(88923,[135,101,50,33,16,64]),(99163,[133,117,101,33,48]),(104283,[135,98,82,33,49,64]),(124763,[128,64,96,116,80,16,49,32]),(109542,[84,117,80,132,96,48,32,16]),(114662,[82,32,117,128,98,50,64,16]),(119782,[112,32,130,96,66,48,16])]
+def known83645 := extendKnown known44221 8 maps83645
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid83645 : Known known83645 := extendKnown_ok (m:=83645) valid44221 low83645 (by decide +kernel)
+def x251d7 (i : Nat) : Nat := 0x60bfd31
+def x251l7 : Packing := (1,1,1,0,0,0,0,x251d7)
+def x251samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80c9d,0x418),(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbab63,0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaa63),(0,0),(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc3073,0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffc2071),(0x433a2,0x1382),(0x1c43c,0x54024),(0x207c0,0x580),(0x3f800,0x2b800),(0,0)]
+def x251columns : List ColumnInfo := [(88,0,163,0,4),(8,0,243,0,7)]
+def x251autos : List (List Nat) := [[],[115,84],[65,99],[65,115,81,99],[81,118],[81,99,65,115]]
+def x251levels : Nat → Packing
+  | 7 => x251l7
+  | _ => emptyPacking
+def x251index : Nat → Nat → Option (Nat × Nat)
+  | _ => fun _ => none
+def x251 : Forest := ⟨251,7,fun j => x251samples[j]?.getD (0,0),x251columns,x251autos,x251levels,x251index⟩
+set_option maxHeartbeats 0 in
+theorem geomx251 : graphValid x251 (boundsBefore known83645) = true := by
+  simp only [graphValid,Bool.and_eq_true]
+  refine ⟨⟨⟨by decide +kernel,by decide +kernel⟩,listPieces_all (d:=0) ?_⟩,listPieces_all (d:=1) ?_⟩
+  all_goals simp only [listPieces]
+  all_goals repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx251_7_0 : block x251 7 0 1=true := by
+  apply groupedBlock (ar:=8) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx251_7 : block x251 7 0 1=true := sx251_7_0
+theorem tablesx251 : checkedTables x251 7 := by
+  intro k hk
+  interval_cases k
+  · exact (rfl : block x251 0 0 0 = true)
+  · exact (rfl : block x251 1 0 0 = true)
+  · exact (rfl : block x251 2 0 0 = true)
+  · exact (rfl : block x251 3 0 0 = true)
+  · exact (rfl : block x251 4 0 0 = true)
+  · exact (rfl : block x251 5 0 0 = true)
+  · exact (rfl : block x251 6 0 0 = true)
+  · exact allx251_7
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem plx251 : Impossible (graphGoal 251) 7 (vars 251).toFinset := plainA (q:=251) (prior:=boundsBefore known83645) (before_sound known83645 valid83645) (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low48891 : Lower (varsX 48891) (graphGoal 48891) 8 :=
+  strong_full (q:=251) (rs:=[2, 80, 16, 10, 1, 2, 32]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx251
+    (index_root (g:=x251) (i:=0) rfl (before_sound known83645 valid83645) geomx251 tablesx251 (by decide +kernel))
+def maps48891 : List (Nat × List Nat) := [(45527,[131,100,50,82,16]),(68602,[100,116,81,128,49,32])]
+def known48891 := extendKnown known83645 8 maps48891
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid48891 : Known known48891 := extendKnown_ok (m:=48891) valid83645 low48891 (by decide +kernel)
+def x127d8 (i : Nat) : Nat := 0x148813fd30
+def x127l8 : Packing := (1,1,3,0,0,0,0,x127d8)
+def x127h8 (i : Nat) : Nat := 0xe8021d0
+def x127d7 (i : Nat) : Nat := 0x34846d20c63c80742806fd604c3bea8a616f1d130
+def x127l7 : Packing := (3,2,3,0,0,6,0,x127d7)
+def x127samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffff5504c7d,0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffff8504879),(0x7ffffffffffffffffffffffffffffffffffffffffffffffffffffffff6a6338f,0x4a62304),(0x808bdf2,0x8009ce2),(0xb0dc23c,0x70d421c),(0x3103c0,0x200180),(0x7c1fc00,0x781b400),(0x3fe0000,0xb580000),(0,0),(0,0)]
+def x127columns : List ColumnInfo := [(20,8,99,0,4),(96,0,31,0,7),(2,64,61,0,5),(17,32,78,0,4),(34,64,29,0,4),(32,0,1119,0,8)]
+def x127autos : List (List Nat) := [[],[16,66,101]]
+def x127levels : Nat → Packing
+  | 8 => x127l8
+  | 7 => x127l7
+  | _ => emptyPacking
+def x127index : Nat → Nat → Option (Nat × Nat)
+  | 8 => lookupWord 1 5 1 7 2 1 x127h8
+  | _ => fun _ => none
+def x127 : Forest := ⟨127,8,fun j => x127samples[j]?.getD (0,0),x127columns,x127autos,x127levels,x127index⟩
+set_option maxHeartbeats 0 in
+theorem geomx127 : graphValid x127 (boundsBefore known48891) = true := by
+  simp only [graphValid,Bool.and_eq_true]
+  refine ⟨⟨⟨by decide +kernel,by decide +kernel⟩,listPieces_all (d:=1) ?_⟩,listPieces_all (d:=0) ?_⟩
+  all_goals simp only [listPieces]
+  all_goals repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx127_8_0 : block x127 8 0 1=true := by
+  apply groupedBlock (ar:=8) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx127_8 : block x127 8 0 1=true := sx127_8_0
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx127_7_0 : block x127 7 0 1=true := by
+  apply groupedBlock (ar:=7) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx127_7_1 : block x127 7 1 2=true := by
+  apply groupedBlock (ar:=8) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx127_7 : block x127 7 0 3=true := (@block_merge x127 7 0 1 2 sx127_7_0 sx127_7_1)
+theorem tablesx127 : checkedTables x127 8 := by
+  intro k hk
+  interval_cases k
+  · exact (rfl : block x127 0 0 0 = true)
+  · exact (rfl : block x127 1 0 0 = true)
+  · exact (rfl : block x127 2 0 0 = true)
+  · exact (rfl : block x127 3 0 0 = true)
+  · exact (rfl : block x127 4 0 0 = true)
+  · exact (rfl : block x127 5 0 0 = true)
+  · exact (rfl : block x127 6 0 0 = true)
+  · exact allx127_7
+  · exact allx127_8
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem plx127 : Impossible (graphGoal 127) 8 (vars 127).toFinset := plainA (q:=127) (prior:=boundsBefore known48891) (before_sound known48891 valid48891) (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low1151 : Lower (varsX 1151) (graphGoal 1151) 9 :=
+  strong_full (q:=127) (rs:=[16, 4, 2, 4, 1, 1, 2]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx127
+    (cut_root (prior:=boundsBefore known48891) (before_sound known48891 valid48891) (32,0,1119,0,8) (by decide +kernel) (by decide +kernel))
+def maps1151 : List (Nat × List Nat) := [(11742,[82,133,99,49,32,65,112])]
+def known1151 := extendKnown known48891 9 maps1151
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid1151 : Known known1151 := extendKnown_ok (m:=1151) valid48891 low1151 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low43647 : Lower (varsX 43647) (graphGoal 43647) 9 :=
+  strong_full (q:=127) (rs:=[10, 1, 2, 5, 1, 1, 2]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx127
+    (index_root (g:=x127) (i:=0) rfl (before_sound known48891 valid48891) geomx127 tablesx127 (by decide +kernel))
+def maps43647 : List (Nat × List Nat) := [(43935,[101,134,117,33,48]),(54206,[66,132,100,49,32,81,112]),(58814,[66,130,67,84,48,33,97,112]),(54750,[82,133,99,49,32,65,112]),(59358,[99,132,84,48,33,112]),(55789,[32,80,81,130,66,50,113,96]),(45555,[98,99,81,131,114,65])]
+def known43647 := extendKnown known1151 9 maps43647
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid43647 : Known known43647 := extendKnown_ok (m:=43647) valid1151 low43647 (by decide +kernel)
+def x191d10 (i : Nat) : Nat := 0x3513412a2048403830787068282019da00034f8f4f0ece8e4e0dcd8d49ccc2890d0bc06266026400431302f2e2d2c2b2a29252128006938085801004989464846022644426201f1e1d1c1b1a191817161514130078904840383070682878201888034403834143c100c2c0121e1c1a180a0806160090a090807060504030201005df9f9aa09514fced000087e02685e48b6fb9b0b3c59eaa946a583b65b8908d40ee12812800ff803fe33ff847fd40ff50ffd53ff443fc20ff103fc30ff14ffc63ff0c7fa00f78cff611
+def x191l10 : Packing := (16,1,7,0,0,11,0,x191d10)
+def x191h10 (i : Nat) : Nat := 0xb040000a1e000046556d152d79120000873836313aec1113fe1660d7636d803a69ab96bdaf1784df21adb38e08f93ef148618eee4a2670a23a39805a147ae8cb15abde22ecaa42178613cb9188e1ee17182c98394bb5447047e0fc1b15828d0ca98f54cc86809540ada34d94df20702062ed87ea116e7722000caa0918cd253d1979347779c5989b2e19e147c61af308abe933237117b41d9a80c4ad82a0c3ad49204a840148911d1169c65a5d0001448db62a549125489a172000092e000000000000018b2f90cc062323e4e704f86351b701a800000000016614e81830495c000798000b3261881d183fa171115c1917701c3d50c6f40e60007efa000000122a55b2c1d68b522afb30e030000fc680018340000000303722357220000000168660c00000002d20001612ccc9e2e681c416f81e3d8ba4c993092186d211a00000000000001eb0000000000000000a3aa45000000000012c901611e63a46000709a0004eaa34784cbac80000a03907c0004a74000000121480000000000c19114226e800000026672a7000142840f40000001d033095b4ece4803558c5813783502f55938a1510e000197c000000000000018dad41c0000e21c3f90920996087437f19fb9ea0f9e62891964d382e0006129c6843574322b8f91ae8555dc183c000733c0000000000108822c399d84049a5a2940e823b28f2a12000155ab7807d95310e09e8e1c0ff288edd0000250000101b2aa8bc9f8ef93580000004e41c408000000000000029b80001f2c000509f8417c7b2e008c22511ecba558000e05a90600009aa00068fad4e1cea0004807002a9b102fc19360ed96c02dd1900001831a4d800173499274d4786e066bf5000000012a0f21000038e5e45cafa425fcaec8da85ca3880000001162c17ca63015e9a9683792c068d16f83a8001e5a0001e6bcc49a562c4d6c5d154c662c99810d01bc29896568d316ba52b90a00010ae811e15f833f9090318d41391f9508d00cdfd0a82aa00890f140ce81403da80844c000062400103c7f08304f231ec27415a0005b2aa5fa30004283061400000000800024000045810304280020a1ab0014040c03200408028c684002c200022408a000402700000090c0800400000033004006001cb80040440100380ba00501190c00307080c081000c0800c180000008b81020c00302181830400081164c58400000020000c800c0410206485000a0c1810214000040000008000020e181800400301020008300006000200007
+def x191d9 (i : Nat) : Nat := (if i<2 then (if i<1 then 0x4b54945523ba3f4473c8db117da2c9452e899511e21f8437a862d09620bb41007ff4fd39f483e2c7b00f4b9e6e3c547774eb19d3a39ec7238e2e1c1837cc6d20d5e1a5d3468670cc97189930745f24bbe17262d8e597cb1695c52b265584a9314b528d050d89e2936f25ea4a108fc116321e441e08080fd51eec3cec7848e741c8438646e18d3719c231c061a8c1e17ea2f0c59b8b1715b82a3c51809a41278242846c08af10fa20e440807ba0ea41c8035c063e0c18166c2b905400a2e127423e841e07240c1816e8251046208440c2815c01a002300007fd2050ffea8281ff4c940ffae2107fd63803fe90c01ff48140ffae4a07fd510c3fe98281ff58233ff8e5007fd52503febb281ff58e11ffae6a07fe77503feb22a7ff50153ffa60887fd600c3feb1841ff58d10ffa85007fd2018ffe90a21ff5c910ffaa9007fe77443fe900a7ff44153ffa4119ffd42443feaa281ff4c553ffa82a07fd53083feb0a81ff58153ffaa519ffd10803fe98841ff5d540ffa40887fd6354fff002a7ff58d40ffaa2207fe7754ffeb1281ff1c940ffa61007fd60103fe902a7ff4c211ffa84a07fd200c3ff11401ff4c910ffae2a9ffd20803feb0881ff4ca00ffa40207fd31443fe88041ff54543ffae2a07fd610c3feb0287ff54153ffa60a9ffd7454ffeba221ff55110ffa82a9ffd73443feb9841ff50200ffa60107fd600c7fe382a7ff1c910ffa80887fd618cffea9061ff50600ffa63007fd520c7fea9081ff54633ffae0a9ffd41443fea8a81ff58140ffa62a07fd20083fea0041ef50040bfae4887f420847ee98c67fe48200bfae2a1ff553847ee99467f754233f7a84207dd6354efeb82877f5ca00fea2108dfd71083fc884017f1c233fec0108ff520847fd11401f748633fba4119fbd41503faa0423fd1c211fba6119dfd7054efeb8861fe5ce00ff2e3007de008cefe39281fe48110fbaa519ff920083ee384677f5d830ff265005fe77443fa98c23fd50510bfceea07f963802feb90817f9dc20bfae431fdd108cefe392217f1c211bfae3005fd7018efe394677f5c553fbaa719fdd548cefeb88c7fe50200fba8119ff953803fc984017f5cc20bfaea18fdc728cfef114677f5d831bf8e0a9dfd73803fc982817f1ca00bfaea205fd720c7ee982877f5c453fba60a9fdd648cefeba2217f5cd10bfaec207dd518cffc90c017f9dd53bfae2207f974803eea0c67f74c030ff0e5007f530847eeb0c677f5d543fbc66105fd72503fa082217f5c053bfae4187f972803fc98c01ef55140ff285007f941803fd00041f758233fbac719fdd428cffab1c237f5d430bfae9005fd75502feb8063f758a33ff2a9007f200847cf22467b799a33beae229ded72102beba881ee91200beae2207d633847af2ac673f5d840fb467005dd73103f5114013f5d830 else 0x92a950a4331d918a20a22114920109c0c6592a950a4432308ca20b220008a491a84e02d1788c082a86094920b0028622e168b0602f128a8b647118018230584e0000139809282c10c58041d8bc54400024b043158ec602f150b0004050300823098b45e2a12968160059086a13208a8a58158b0623b180bc4a40150016421a84c822a29086a13208a8a0109922445a109814301508c921316010024400009831170b4602f15160008218ec802b2c1414310211c4613170a8025b000098592514c8a51231842611494894552a14c46012882c92441504db33188b85630168bc5445304c800c3419ccc652b134b04b056fc26602d11c46f188b8602d160bc5423058043a2b24854880080c40e301604c082a81028025b0030622e180ac5a2c128bc5445244a000d178a8461302094200e2202c00b8584c172724980c58188b85643178ec54002028464519c988c25308e024893094a31158c05a251508c16010e8b85e57239240102c10c003b20142641150d49272e08c26012492060404874302e180bc4a2a118c4560b1685088007954a851299086a41098a9258188c0562d218bc5425200ec00c048201e0415000c132108ac011a0bc858218ec004028c0562d16094545c1184c022f240008a287960424318049a0099cc88a62c954a851120ec6a1340381a0f11804082a2200016a0502410060683c5401070100e138896800f2c954a8512990c8435208a826b210d4264115142600999146451a84c822a210826411a8a8a592a950a6432104ce581d80080421938760f0200c0e4000246230170b4423b178a85640002cac53008d05e50403c1c032488c02042200022b2a950a6522508c025105924881315344733228c8585048200e06118100702050048800610c762e201084350990454529b05543520845c31160c05a2f128ac54bc76001abe18900672388845a25020bc540b0028301d170b0602d17894542b18c562813003cbc1d188b8582d17894542b1855e2813003d7859760a886b0e8b0622e168c04a2a158beaf1509801e3b600bc6bd181006180e8b8602d160bc4a2a188ae2b1409801ebb21b005440e860602e168b04a2f150c457158a04c00f9fafca2b66810956727938100f038380c0d0182408118904c00f85f90b0611f420c837f05ca092c0e18183023e02a3ff57f62fdd9f903f007daef8e5ee8bd967adaf511e84bcbc7914f041deabb887688ec49d673a78747ae7c1cdab98c72c6e459c60387c705ee03dbeeb7876ecedc8db5936896cc0d895afe35a66afad49da68b4966892cff19dc3398662acb21946b240638cc6518a3b12761b4c2a182db0055fb8bf157c52ef55d86ba6972fae365bf6b7496cbad775a30b399655ac4c5822af7d5c4ab4e5626ab1953ca9ff531ca571490a8ef519ea19d411a78e4ea69b8935ca62d) else (if i<3 then 0x9188a42204cc0492134b700239186645192022261911c900b80c009292d1149301239020072512c4c250084c8c44404cb4601936664619114a4b11c984d2512c2e000a49a8166019084e482304c004939a49a31128aa022e231208a32003027002212480b0017092423914b646190b8c4d238848c4318a891010042c921322a42a528012480a11c2c270013920b8494c9e14482216e164517c05246808ca16212298a41228c94944424c0106024940545a2214484813168c838241104a71398092331948a20a1a918950b2240046452484dc14974b4c0472212600832124882a2d18cc520a1464a4a221260081b8489626138d476481c02a164412b48e4825918885964949248228a4510040cc8c45184a0f0e2d11c921180209847240a2005310444e48220b0004941844e068584e020b00181248001709241291844b2e11488261298be5e2e8c05a2c17c2c904513894b8462480204b244984c252968264524109a001904c8c45308400452412145b23c0405003170164624908e480092c8c4430044a46196e0f0e1d91c90450090200a089120000249402008584c8c45310898448992216491a84c54a85124890101400c5722400004928ee0d0d24114024022401327138b09000249874370a0284a463134890024918664519209a472291a0300000c904d260b05e2a240b46446858cc4a00692c94492411c842212118884509b08c22119108a5158c4602f15000c4a25c9815252804ac5319608604188c04a2a200b47600590a7e411a88c541338ac5c31160c05a2f1288c5413240a48b280040ac5313804682f310c5c311d8c05a2f1501080230030b03b161009150e8b8582d17894542b188c2286022801e7336140c8342089864002049c926005b8562e188c05a7011804582f128a801282298206325164a4552a14ca24300908160022114921388f87a3c1b0dcac331d8d014351784c02e9148416002d918485a22248413208a86a5170c45830168bc4a04221240013615868351794ca56298d05e0a29446a4115108a43200ec5a42c10e7f00200ec007098008d3219914c5619804682f28f8783d1b0dc663b05004a6a2c0c4082c1d8c05e25200a82600608c172724124586888b80830178a846311682cb41222001c552a14ca2421a90454134954a8592890c8441150d426a2c0ec802a2194ca683395884472308c42925c9a4a0a210c76002010d06733158b042119c622c020c05e250010d031020b44a2a118045c2f2491c001168d426411510a623234986b25221c7c3d1b158a6271a8e0680117ac2645931184a52c88c8a0199118547210d4264115143a0a160c05e251506056318ac505c2d099800112c94caa5421914020b24800465a3011c26f168bc4a0109810545a05801458200ec4a43419ccc58211688c4712180882360dcc65 else 0x25b25148a2005329348c44190b0c2b170b05a5a129208c451519064210038265b23168885211a889012404c822a40b4544439914925a25201423800cc650b2280104d99800673219114f002212462c129c00045291e025a24902006319488e4a2dca88a492104d44980c008e46228c8e4d9991c8c32229a73382d1208834179aa029001c08a3098008c4521bcc8021909c5c31160c0b8472411492280580224d138c04a5c151208c2c1900164b2409a16011298a41180124844099808e4259a8904413094c2324c0454448584c8a896c94190b8014dc391b0e06e331a96c4c2d1289014d2582a4c2692894c422202e020009914928258984a010991888796c94210b801496272e1208826129c152d9288c263b3542e00913114c10b22094c6d109348d01000c88a830c2c4e492e980c33))
+def x191l9 : Packing := (223,2,7,0,0,15,0,x191d9)
+def x191h9 (i : Nat) : Nat := (if i<2 then (if i<1 then 0xb41d0000c1f362370000b0e0a5b102aca5e700000000e02bb050608bf03418a1e29e910100000000000000000000f61725486dfc0000000081d8e00700000000314600000000351c0000e2a9000050f300000000b2c816fdb28a221622c30243a21bf218529f200b64498307d83fb1c622a8a2f451a252f121b8ba7912b9000012074148b1e21199428e81bc0000c56600003159150664bd71f6f19b0161748b21aa4504c0fd9069025d9195506bb175a196d11d51a5a2b151eec077c30f0000623fa041b18600000000015d55600000f28100700000115672aae0f2931e84f8790092fe9185030810fac123e6100000a0ad00008263f08352a500000000c075724b0000e2dc11bd000082ef331b72a030ed000000000000000000000000000000000000a29246900000000042fbe13a000000008279cabe331660408312a9cba284016f120ee29a847c41a1723b0115f0cd2d80419e129d00000000fc0301f2e0d352d895ca9eef616e14c7d13d80e30000c1cfb27295cbf147b0a8e14c10733d309131318dc6d4558c264b900ce2a222b44039d12b52973003c29b5018313cd0af1100300ed53832cd7a6a45bf9add11c1701200000000a142b024015161410010d08c000038449282047e708e000058791d4f5429d4627019663a72ec0000230a3c795458000001b00000e315f67f92c6000074790000e10d22060000d8e1422579f65dfb218c9270e317ae6a170c00000000a9380000e1b90000328b989ab60c086cd5d20000916bc0a300000000d80821b741ad72b242c42dcbe69ca2de953911e90000031d04a941e16269c1818087210ebc08ad0de4a5d066400fa88142324242f632f40812d1e86a95b99238a0b9a11799d1c088d0468cb8d02600000000b6d651e765dbe0828277000050604c17009630ee000050bae60fa235e84da176992e14ff00007309a8b812d0e29081ce00000000b2b611fad0b66271b8c7c4aa0000f0a5a48d000090dfd07800000000025082410001410103001600160915040d0e2c651600113a130d01070017030607013e04080a2e006f04190601041406263e0e3a042602050300171092000c000b062420031632121d07047700100b002b051d042b023c820805094617012a026602380f002701060d00102c040302191503040000250103120a062410090e011f3c021d0317010834021d080c04001a0003050e5416180f020b00143c0c08010e1f0404083232080b0f0d0a100c01000200020100021c0704141908000106210e451e000a0500020b00028f000f01010a07020e0c021411390d0f04000015000c010000000217000120020401001f0009150307041933230b070036010042012b1104051513060d002d02160200041c2b000508071b040131020104110e0502020217170f06170b0c000a0205 else 0xa28300007d790000c2011204905924b545940d9471d6b579206e022dd0c3822e301782fda1de31c22994d152c604d139e04e89d90000119892620000219a0000760176400000d980b2be22d680ff0000da955d81c3024e599cf20000d0d9024c0000d59fc67041c96229624ec522d015888b730e90ac00005222e1b5d6b300003d7d5280a305b0fc06ddb1574b0d905be0bbc043096ad0a22c8146e34d29097ef1b15257fec90000417e802dc1918c4de669a11b214a601f830182cf0275dc9a0000c41ea0c5a2d70000793532d40000f08fd2bf82489e0b5049f09f81e391bbb04d0000e14db076320c00b4016cf2a691da4256e14515fb5e8262dfd1fb01bf2ce8f2340df682e00000402a527300003020e07d0000000000005c9011f9a19da2b0a0a700670000a4a7d1f8c6c942d30000fc400000800dd28575fff6d3dab7023e6ca70000e2cbc57c7890830cc0dbfaa9000041770000000040e600000000954ed04b34020000640ad1080000d05e6c775463612732d500008035526b625cd0dee252c118609d80b80000f0eacd8b7deb32ff2668a1a300001599327e908148c3b2c024830000140f000000000000000031a9802c000000007022c0cfe70971a6b0952ca10000d82c0244d1cc80c2425a21ff00008084e1f1000062d2a26ee160b000020572536804c4a292ddc1f5b0f410f892e7a00510fb4665f18fb1147032306492123086aa04a24d70d550b37b1ac2e30000a104027c6109000091674254000072d902ba8876d1689226914362e8405f309c407b000081b3513b0000247bcc6500006514c30622611144242d6470f1ace20b097a823dbefc0000000002a4827bb699000083130000b0f0c09196d20000cc490000d2f8161b1163431140d0d52f705650ce0000002501d9c089bc7660b5497da5dacac9e194201421286ccc000051790000de4a000080a1a8e46cc5d0e80000901b0000f1d0731c000079daf1873011a0cc807a0000c476511e91fd366300008e1542f3acead0f9401ce43720234cfa7d6a000061f4b26c704c71be0000010500003d5884af8ee512c7780e55960000030d515381b64184a190ae11a071e1c0b4038ea381ea459a00005137000031e5b298b21fe1330000d65fe289427451fcc677821a4ad61ecab03169376319517f149b61c73d3ad576367292db042690d43457b112f2a770e426a7f0bf29050000117a000060c74a97d17c000052c90000526800006871c165818a0000000080e7e6e590bc0000000000000000b2cc51a07df9000000000000f8220000000012b50000527d00006d1f715c820d0000c02e3b190000010b50ae314e0000801a00000000126af09a44b700000000310f0000703f00000000f09000008c837def0642000002ca000065e4a03d00000000e0940000b2f9c30000) else (if i<3 then 0x17c5e2805de0f1c1b2921d41c30000c121e162d06dce9d211100f5a14000007a8d1033f11c322c7080b31470270000b1c5000081507122f981b0b2023035eda1fef221a0c0187bc2f71258225940e571ab902952ad1129a21ef49601df553524ee00ab128824cc60c63971e053552930fea1d4902fc4bf2155b120005420e192f2b0d28008ba828c39d18011baf15f5d5c00000000f2b30000d13e6001d4f3c66e0000000052b7012c947592143169031852ae1224103cd287e16d3c3286a3303e78ad412f129c00002299e18bdf0031cd000046b1b2110037a1265cad0000d052949e415b725f0000007910eb1097c624214f703b40740000e6be3264000000000231f9580000e002870d80f7752b669e2ce0000022e4b6893016608d515e100a0000acc8d2470000a215a25bd2e9405a3996e584c15a10580000c0c470a6000046ce0000000000000000c1d2924601e8a11a653262fad2eefa8b952ac8c83303ec2150efa057686d717800d841e4169de4c832e22527c46f958ba2da72e670ec50aa16cd629571821ea841d5511f0202d05500002223895a9072901ec125b1320000c10c644c0000e92f0d840000000039f9002862af40ca000021ca000065d7000022494d9610b70000c1667ef6f43fc2409dd702030000f173d8a0810a15dee4b62051726f307f0db5e0e9960e0000d51a8164159800001aec28bb000006ace2e1f88d0000f8836236e03044bb903aee609102b1837d6782ed12eb12abc0f6c1eda63f8188a293d0d7a28ce46dd977e294c1f074ca3d2eda99f038a2283603c13f31c4e2516220b1f78e83352d1494e6787443c1ae2278c30b10c9d1db54a00000725ed0b05286b17dc481521c45efc24a7304908570a045cde0be4006809b72330000e1359420e1ec21af0013c110f23c8065e90a9267c2009895ca08e136aa4c949d7cfc228fe68a0000000011eb865722605c6821c80000000032bb00000000e0a47099000000000000aa52e18e41a490a9c68e9068ad3581b4c8ce0000ed8592b8000052c1883d0000000000000000fcb100000000ca1000000000000072bd52e570b1000000000000000016380000831a00004ebe7510accededd214bf2914119a501405c0000604f0000906f12ce80456170b20f90426c590000e036b0d1309ec2fc612a0193e4c25213a49a10cb9a12316a9093306169d7e004c4040000fcbeca66320ae0dc8544b55fb5a8000061dc040552bc64d1c26d42a10000c296c6056208669ad26639ba0000000072766a759154f4db82f500000000c1a80000000020980000b4c3f06c000050c1a5b6de1056830000908a0000f07c00002ed10000d6df00004cb07845b42c00000000e8a9b91c024f0000201db96eca83612ea219f1d70000f41bba8a000081d180c89158f6bd997910e2f1ef065400 else 0xa00970da3047b1e6b28dd1e0722fc06361dd00484580225520d6f44072093636f22b522a00000000f124c2c512f051130138e09200000000d103000034a3b10601a7d19245f82210f0bd456466e2c5f959ca0000310700007245d130117b523ac1d3023902eaeaebb27a0000baaab894e2a300006b181227919752c20000befa00002a77e27f0000104400008189bae4e65552f661342a8150210000a3100000c1cb4149219f6954419c00002174b06a017200000000b04a807e9062d116812dd171a0dd8265e2))
+def x191d8 (i : Nat) : Nat := (if i<4 then (if i<2 then (if i<1 then 0x20054e11bfa884c600fd9618ce00bfa8848110ddd718cc20fb95291200fd9634c140f5d5258d53ff08148200fba4448600fd91080233fb54150110bfa8850600bdd8154233f5d1095633fda331ca009fc8754633bdd8159233cfd515d8409fd859dd40fcd2048633df5515cd109fd839dd10fd53058e11d7d205d440bdc8758633dbd425d200f76554c211fd93048153bdd8644233fd5514c633bde8848633df9105ca00bf88748600fd92044233bf98348600df57154440bf98154e00ded7254830fd96080233fb5414c540fb94255200ddd7058d539fd855c543fb64480211df5605c440bde8844233df5311c2119fd811c153fe95388a009fd874c420f5d5458d53d7d7554430bf88750a00bf9841ca00fe62280211fe93288a00cfd205d8309fe885c153ded201c910fcd2088a33ddd615cc40bfa8858e00fe94288a009fd819dd40df974800209fd815d540fd92058233dbd7255140f5d5255233f5d5254633ddd605cc40bde884c153df5714c4209fc8750153fe93188a00bf8874c600df5205c440df9305ca00ddd305d543ff11050600fba4488a009fc874c910fd63348211fd9201c233f5e0095633bf58348211fd551442339fc8750a00fd9314c200df5865c440bf98048600fda3388a00dec7250a00df5525c440bf9804ca00fd9314ca00bfa8850a00edd6359153ddd764c030dfa009dd53fb541509109fc8748233f3d5450153bdd8255233ff14148110fe92050a00edd2199a33bdd861c2339fc8758e00bde88546339fd815d830cfd815d840f5d20956339fd825d431f5d5254e33bdd8254233df5419dd10dbd419dd409fd8750940fd48148233dbd7250540fad4248040bf88050540bdc8754a33bde8858633df5855c440fce2254233bf5831c2119fc8750910df9201c233f795254e00cfd7654430bdd821c2339fd811ca00fd9204c143bdd804ca33df973800209fc87585409fc8754a33bf58054e11fd93258e00fb88050540f9d4259233ddd714c030d7d515d440bbd8454540bdd8158a339fc8755110f5d5154233cfd205d840cfd525d830fd9314c140df57154430fd61158a33d7d815d440bbd8250040ddd734c420d7d605d440df97080153ff14280211fd9301c153dbd549dd40df973480209fe885cd109fc874c211df5315c600fd930801539fd801ca33bdd8158e33bfa884ca00bdd854ca33fd63380211ded515c840fda0058a33bf980506009fc8758633fda33486009fe885cc20d7d525d4319fd869dd40df9205c0539fd87544309f48748211fe21188a00f561195633eda0099a33db57150040d3d7550040bb58404110ece2299a33d9d425cc40cbd425d8408fd861c1539bd841ca00d3d425d440fca3388a00db5425c440ed61199a33fd23380211fb24480211f5a0095633bb9841ca00cdd764c0309dc8750a33 else 0x55200ddd7358c209fc8759153bf58308211f5d524c153bdd8244233ded615c840ddd205cc40dbd7550040bdc8754633ff08050510ff08148020fb9544c140fd9528ce009fd805c5539fd8758d10f9c844c153bfa8855200bf98255200cfd615d830ddd7354c20f7a5550600bdd8358153ddc835c9409fd825d5439fd835c910df5615c440df97180020dbd425d5439fd849dd10fb54158540fe92188a00fd63308211bf48758e11fe92048600ff1315c6009fd815d8409fd821c233df9205c600df9205c063bf58258e119fe885d110f9d4255233bfa8848600bdd82502339fd825d540edd6058e33d7d525d5439fd8754c20cfd815d8309fd809dd539fd831c2119fc8780153fd9634c200bf88755200fb94250600cfd615d840bf9831ca009fd841c910df4721c211ede6680233fd56148633cfd605d831ff12080211bdd8058e33fe62250211f9d2091233bdc87582339fd851c940ddd305c543bf58155110edd2099a339fd805d831fb9425d200bdd8058a33fd92080233fd9534c140bdc8748233df5205c453bf4874c211ddd754c030fba441ca00ded805c8409fd825d440d7d825d440ff13080211bf6884c211d7d525d4309fc87506009fc874c540df9724c140bde8854a33ded855c840bf88750600cfd605d830ddd305c553ff14080211bf98448600fe92044020fd5304c611ff130482119fd819dd53bf98158e00ddd768cc20bde8858233fd53054e11fd53258e11fce2254633df9205ce00bf68850211fd61154233fe9421ca00bf98254e009fc8744153bdd8059233ded605c840bf688482119fd815d440bdd801ca33bbd841ca009fd829dd10bf5864c611fce2258a33ddd515cc409fc8758e11ff13148600ddc8750a33bf98050a00edd6158233bf68850510bf9811ca00ded72548409fc8758233df97348110fb9414c1409fd874c940df4815c940df57304110bde8848233d7d615d440fcd5288a33ddd525cc409fd821c153ff21155200df8705c153cfd525d8409fd861c233ff16150600bf98258e00cfd605d840fcd2050a339fd811c940edd6059233fe96388a00df5411c9109fc8748600f9d424c143d7d521c153bf88758e00bdd85486339fc87481539fd831ca009fd829dd40fb88055140bbe8850540dbd425d840bf58404110bde8858a339fe885c4209fd851ca339fd841c1539fd841ca00afd861c153bdd85506339fc8758d10edd6158a33bbe8855140ddd309dd53dbd425c440ded721c910bf8874ca00f9d6091233f9d4150233edd6358153f9d5191233ddd758cc20f3d5454940dbd71500409fc874c6009fd805c863fe92050910ddd301ca33dec725c940f5c854c1539fe885c553f9d4250633dbd425d440bf88754e00f5e558cc209fe885c910bf583442119fc8755200bdd851ca33fcd2188a33bf9864c200ff) else (if i<3 then 0x8143ff92050110dfd805c863dfd7344020dfd605c440fbc8255140bfd8258153dfd525d110dfd7254430bfd854c211dfd205c840dfd605c831bfd8058633fbd4250553bfd8550110fed4248110bfe885c910dfd615d200fdd3058d10dfe885c910fdd634c940dfd8748143bfc874c600bfe8854540f7d5254540dfd205c863fdd524c143bfd8344200f7d5250153dfd7258540dfd765cc20dfd205c440bfe8858540dfd755cc20bfe8858233bfe8848063dfd764c110efd6058d53ff5514c510bfd825d110dfc8748233ff5514c540dfd541c910ff9524c140dfe7754140fbd4258040dfd7448110fbd4158140fbd4154140dfd205c063dfd724c540bfe8858440ff9205cd10dfc8748153dfd205c553dfd615c840dfd7254540dfd525c031bfe8858143fdd634c140bfe8854831dfd611c233bfe884c600ff48148040dfd205c463ff9604c140dfd739dd10dfd605c143ff9209dd10ff56150553fbd4258440fbd541c940bfe8848053bfd8054831dfd855c830ff93048200fdd314c140bfe8848233dfd7254830dfd7650020bfd855d110f7d5250553ff9614c140fdd3050553bfd864ca00dfd754c420dfd7348020dfd315ca00dfd725d110bfe8854543dfd615ce00dfd7550020dfd511c940bfd8258e11dfd635c910bfd821c153dfd8748063fdd3058e11ff5514c910ff98448110bfe8850910dfd735c910dfd205c453bfd865d110bfd8258031efd6158030dfd109dd53dfd7244153ff92058030dfd7250110dfd7254140ff48148143dfd7250553dfd825c053bfd864c140bfe8858140dfd209dd53dfd515c143fdd304c510dfd7158940ffa8848110ff93048110dfd855c831dfd7150153ff9204c140dfe7754540ff48148153ff56150600fdd3044153dfd635ca00dfd7158140bfd8254633bfd831c910ff48148140bfe8858633bfd865cd10dfe774c110fdd6350553bfd8054633dfd764c510bfd8348110dfd7248030ff48148233dfd714c020fdd534c140bfe8854633bfe8848110dfd205d440fbd5450110dfd615c143bfd8550510dfd7258030fbd4050553ff98348110ff92058040fdd3059153bfd814ca00dfd855c840ff21158e00bf98055200fe92088a00fe9201c910bf981552009fd825c0539fc8758940fe9211ca009fd8758c209fd8758940bf68854e11fcd2054a33fe88788a00ff2111ca00df97148020bf98344200bf9801ca00ede668cc20efa6650600bdd8154e339fd861c9409fe885d540df9209dd10fda0054233fd56150633edd1099a33bf58058e11fb94050600d7d525d4409fc874ca009fc8788a009fc8754940fd61158233df48748211f3d54541409fc8754540bf68858e11ede6688a33fd9204c2339fe885c940f9d5450233bde8854233dec72486009fd825d430ded201c940bf88788a009fd831c910fb94 else 0x46c88b61112221042b8848104a1fe03ef87d00f961ef03db87800e921c7038186c20d521a68340867c0cb2195032286220c3a18102f085be0b2215e02b985500a6e147827384b008ca11301d8832a055a08980c5817c01c2032005c80aa012201e001b8000bfd8148143dfd7254940bfd8158e00ff56150540fdd314ca00fbd4254543dfd7158c20bfe8848143bfe8848153ff92058d10dfe7758d10dfd8748053dfd631c211bfe8855110bfd8255110efd6058d40dfd8748153fdd634ca00dfd7154c20dfd205d540dfd755d110dfd7159153bfe8858e00bfd864c200dfd205c543fbd4250510dfd205d430dfd865c440fbd4254440dfe7754940ff92058153dfd825c063bfd8054a33ff9205d110dfd205c053ff92055110fdd3048153dfe7758540ff55150510bfd861c940bfd8058940dfc825d540fdd314c200bfd811c153bfd864c510fbd4248040dfe7755110fdd2058d53dfd7254440bfd8258430dfd205c143fdd204c143dfd205d840ff48148063bfe8848140bfe885cd10efd6158140ff92044153dfd215d540dfd764c420ff92050910dfd635c600ff48148053bfd835c910dfd7148020dfd835c910bfd8158040fbd4154940ff92044200bfe884c110ff5514c553bfc8758e00dfd764c910dfd7154830bfe8844153dfd7348110bfd8250110fbd4158940bfe8854940fed2054a33dfd429dd10ff5514c110bfd8148063dfd615d440dfe7758940dfd305c910f7d5255140dfc7255200fdd3054543dfd7258140fbd4254840dfd605c840bfd8148053bfd8148233bfd8258633dfd605c031ff53148510fbd4255110ff48148030ff92058233fbd4158d40bfe8858031dfc829dd10dfd525c143efd6058633dfd7248140dfd511ca33dfd765d110bfd851c940ff55150910fbd4148140bfd8058e11fbd544c540ff48148200dfd7650110bfd8158030ff92058143f7d5254543dfd754c020ff55150110ff92058140bfd8258440dfd7158030dfd205c153dfd729dd10dfd7148030dfd7258d40bfe8854a33dfd535c910f7d5244153fdd634c200ff5514c420ff5415c910fdd3258d10bfe8858430bfd804c940dfd865c031fdd314c940bfe8858e11f7d5254633bfd8258233ff9514c140bfd8650110bfe8858d10dfc7250600bfd8254543bfd8058d10bfe884c910ff9204c910dfd7650510dfd7258430dfd525c831efd6158040fdd604c143bfd8054543dfd7348510bfd854c940bfe8848600bfd824c211ff5515d110bfe884c211dfd7254840dfc725d540dfd865c430dfd205d830dfd605c543dfd764c020ff53148600fbd2055140bfe884ca00fed2054940bfd8158d40dfd7650910dfe7748110dfe774c910ff48148020ff5515cd10dfd7154840dfd765cd10dfe7758140dfd205d543ff54148110dfd7154140dfd209dd40bfd825)) else (if i<6 then (if i<5 then 0x821f0402073c0ce816b024a041c07480b700e200fbffc7fc6ff29fd3bf8e7ed6fd49f9cbf207e22fbe1f6fbebc7d5afa79f3dbe4e7c42f821ef2bdcc7b66f691ec0bd5e7a8af489e8ebcfa799af2a9e3ebc647896f0c9e0cbc0077f6ef61ddabb9c771aedd1da8bb2e762aec19d76bade758aea89d44ba7a74c2e971d21ba2a7436e831cf9b9da736ee679cc2b96c72a6e4e9c95b91271f2e3a9c68b8b8712ae1f1c36b84a7076e089c04b7f06f9aded1bcdb7786ed2dd19b9bb7146df6db61b5fb6b06d2ed9d1b23b6386c3ed7f1af1b5de6b76d6b1ac9b5846ac2d521a9cb52069fad391a60b4a8690ad1b1a2eb44e686ad099a06b3fe67b6cf099d4b39066dacd51998b30465d6cb49961b2be655eca8194db28c64bec8c9911b20a63a6c7118d5b1a66342c6718c1b16a62cac5818a8b138623ec441885b0f261dac329858b07a6086c0097efafd05f96bea17bdaf6c5ecebd39790af085df2bb0974fae9a5d16b9c972cae365c3ab8396f0add25b22b4f169bad285a46b47967dacec5992b249641ac7458a2b091605ac0657daaf295d3ab845686acd1588aaee556eaac9556aa9e550aa9b151faa1253f2a7094d9a99a5302a5c94aca92c5212a399461a89650faa169420a81e501e9fb13dfa7b04f2e9e213c1a76a4e8e9d0938fa71a4e169bf1371a6ca4d4e9a6133aa65c4c7298a9308a6024b9696f12dba5a84aa694c1281a4f449ca9331259a48648c69151218a42247fe8f991f0a3c847868e811c3a36446968cf1196a31445f68bd9173a2d845a68b11155a28844de8909114a1fc43c687010d3a18e43128571092a10c41fa836905ba0a8413281b1029a030401a7f80fe39fc23f667dc8fb19f363dd67b98f709ec83d5e7a58f439e643c967878f029e003bba7698ebc9d603aa274e0e859cf239b27350e629ca2393a7238e359c48385e7058dfe9be437966ec8dd19b9436ba6d60da49b3a36426bd0d779ae0357a6ae0d3b9a40344e6838d049a0433c26720cc8998232fa6478c8298ec31a66338c5598a6312e6248c41987430ca60e0c0f981030166018bf197d42f8a5f00bdd97982f125d98ba1972a2e0e5b90b60966c2cba58e8b1596122bf25780ae895c22b665668ac595682ab25500a9894fa29ae52a8a43948228aa5118a1b940027f64f889da938826de4d809ad935626164bc897692de253a4a3893f9252248648a890891e4238246788b89162227e4498890910821664268840906820c6410081d902c204e40387fa8fd21f5e3db87af8f5a1e823c507788ed81d923ac07558e9c1cf239307198e1a1bda37506e78dc01b3a36386b08d341a4a34086748cc6196e32a06388c62186a307060b8c0817f22f305e38bae17162d5059d8b1816122b485578a8c14fa294051b8a1e140a28004f389e2137e26484c18956127a23c8 else 0x440c2611204712845110a0168601016000c02490444000012482108a21142000a312a242508e24c00718049100b60c5d16890220930018470908111c4602c7020261168491081058a3202c00114820400000c3b100491a2a294002490000a26098c031186a1022a0a842902828c4a2508824c00804c00102630084504c4011e2511060800200bd0010802488231804518540980038ba2d1804412600367e100462289578004c12481a855000c42000422846011c4012431184a228c47125001808228922102001014228029290138004080022408a350c490893000e02390498007011c85e840b130491c000008400ec49188a10002008920008822973f0c660080022912511440400223841380044124800bc13108e3008838b44789449180a1540024004412470004451244b11c5a2c5b000c030ee0000060984481245b1188238c020bc4910840008020000204002209238cc1312445208e111c0104c5c20762488518944a4504911e00388e248933000601888800002490009c00220924000289826300c1514a0012481509222a820000201684711449180a8508e808922296635080011480980021084b0044911e0030b100084808810008100088248c02286404005b18048114401000248c0011c461c5b12c17001044124406fd2f2bc65a25e23052a1056188601785450ac310c02f0a8a120a82c8aa288761a9cd04ac40ee2a170581685e1504a1586218628000c022bc310b0300b42f1802a0942bc500011c4568b22a894298a2224c2088262388a24b0661946819c5612c58efc231805a11c456eae0e85c1605a1785412856188618a0003008af2ac3ab83a170581805a128541586217e2a000c022bcb44bc45504aa0982950842efc4020621805e1500060c4300bc2a0acb5c22b6dd6aead2b59cab2cd640ac4f583aafad5dcab9b56aaac8d564aa9754a2a87d4f6a9a752eaa50d488a8cb510aa0ad3fca7ef4f7a9ddd3a2a7274dc29b0d348a6734c5a97ed2e4a5974aa2951d280a4cf4912915d212a3cb47328d9d190a2c74502898d118a1ff4372866d0b4a137420a834d05aa09740ca811d00a9fcf3f3a7dacfa69f433dfa7adcf429e2b3bca76ccec09d3b39ea730ce529c733882703cde49b8336a26bdcd589a573472681ccea99a332ba645cc8698db312a618cc2297ff2f9a5e1cbaa97372e0a5afcb3c96472c02573cac495572a4a53cca56948f2892505c9f2938b26b24c4c95c928724aa48dc8ee91bf231a45bc89e910b21da42ec84490431fd23e3c7ae8f2b1df23b1c7408e4f1c6237ac6d28d731a5a339c65a8c5b182a2fdc5e28ba716ea2cbc5928b1b15aa2a3c5248a17137a262c4a288d710fa212c40c880f0f921e0c3a8870b0d12190c30885df0b32159c2a4851709a2122c21883eb07720e6c1be832305e20aac13c) else (if i<7 then 0x890230845089200085a082622092312413108a2d884904c50888e248c46124492890050e154504712482388a21681312ae1009212d82080020089223c0041204916c4620b41118471016008002208a5124220092200001504a20d413100100045b11c42289228942080000100340be0018260009571120000049289023892228b45120131144c11c4930902308e32d02004c45124609c6438088411c2080000108c23892229040000424840a11c451245a2816260923077e116860102600081311c60188e2e08450816000c02492250c5d168c022400249852450518944a11049801004002000009908a3300224800300c2302e250004728c01124220855000e001240011c8098c02001630085a1a84518162209230000b18071745a3008824c006110211890228c4416c451c9a19a0000c645001010c5a09882a114424c003808e411c4a12460206a098a2d8950c82e00288e111845108000085a087700080b00400124820400000c4800049188e230923126001c04720922e08001146018b824882a04c00189211082a0007000920008e44a822308a2028201004710040008e3008100000301781400223892204c6010262289232f8205898238c420a841d880238cb508923009000c5b1288905c005114200a822922828c4a2508824c00802c4c1246abc002609242a8222840012442308a211c491684620003008a31242ab898248c4508222488e304c601002a114400bc01000617a00211c491706214002124224845300042b00020400111420114220c00211e2511062040021491580049267e0088138004412481dc00211c5b114637888215a00100138004412489ca702388a3514010a842284350aa0018762008e311422d0657110001248248c0282823180600266228c011244411499908a2067e18ba2d180441260031a0155e001304920a223894300882289270004712442488e20aa00108e14544911c70000021244611c5a240000080008c0230c0a11c451245a28422400022900b124515044012441188e098b841686010d42308000040095c4718047088e37888302c4712462308a21804510b824884380043788820ec471000100022384a168010a1411504ec087600080b4004911c80124280064248c02d08e128920009860044711049800a8544a21200010002e0c0248c3b00041608a0e8010a94490820a1684811d25110451245c485e12885c1244204002008215400300901024a104c27604454c8001808238922cfc20008c0988a3114224840011c4418070006001104918002d09230ef3f108f12a4c31246011062985e000d14148518944a1104980108004230a84519601124601081128a0000042d041308b410ee2510901400441247000400124460864d1680100045288415000302c00124602026240923022a29400249 else (if i<8 then 0x30451c14128880010441244011500146422892312447121811a8481686230600110480862704c49188e22884612442308a20c845118600a800114622092212c4711070a200217049124f0589223904412440008e24a60000069488b0000044504911c780040011442d08a20c901114624045a12442488e2406251092350b00084a11100a124a111c44146423092304c44108822880008064168471c22220923170491046244028010251104518b623084512450588a248c6049445188b128800088824884711449280020c80b00062388a248c45124480a0119092495c4740062922a238924000224000212000140022080a0945a184a2208a304162408464040018920008440a502488e310045146605200311049124c111c49144a2208a311813114623088242c4500062d08820c8450006238882120471050240a2111449188a10ca0040060008e211c44124e11893001047110496814220c604046a114824800217049104a142c2a00049208a149425104c116c47140023084408b4230847110420402240c5c1220b1688380c022c0041144410d42208461144248de211c2511062d088212028588a000d2d168471c002d8847110491a5022c00312400141416846241032118491892180046108c11204514ae80000300112124471a502289238844912062d08a24cc13114492090248a0b11449189a23203000c0542e2511460208e22085a1104049a2511072b888248d26894519092238d291704804c45124c8008c228c4412442288c21304517070008c216821288a21104712462388a000c2711c5c124893092238c4412442305140a050508e24904817042f000240c4412449288a09a00416822d89220941310b42208210c8471814144c22289220c8461247000b424a00012462d0e0218000108a800b6312447144a22094311c45108a248847000400050b8944248b8242e25110612850008e10008a3804441144922643040000104512450a88e800c451185190922124286400000c601145a18b623884b8950118027120491c5d168c0239100110451a0505092239049000422800211c001092238848124408b625168699400000c461144940413110485c00000c6040047188c24880008922d8911088a098901000451890000a11088a2488024800218200108a112422209224005a14162d08a309445108800084916c422092211049108811a84810b824880a085e22086311050524a050c60114492862d894441888111c44108e22085c124413088248c4712442280020b044114780050b12446188810ca00000600092249c5c124622092211822308a21084804c69284a80090416c2230c024ce000006228922021700092304c2098d428c8224402350c48110423044800042588c220c00118435216000c44000424216000c4811842d070 else 0x45000480a011908e410a0b126002002000a6316844188a80084411c422800217049109623886a11040504481244718b82488260944412481940020290b40063209221104912661189231104910de248847124435054220c481))))
+def x191l8 : Packing := (799,3,7,0,0,15,0,x191d8)
+def x191h8 (i : Nat) : Nat := 0x28c60000124000248d00000007129cf005a70f50000000f0a4000f019866a1de43d73a00000003c3474b7cd2812ef86a0bf414d11000052fc000e2d554f63344f2e1a7012e13f0e3e351ae57126c1b8e70822407c8c4103484520454a0000000000c344ce6038d7601dc9554aeca5f2a2479c1ec5157232fb8d1048533193e37b23b8b400014ae303f4bd00030d0e2204d5d22c000008c0000000c2d91d1c4022fb4a6000090ac15e82c834c000a6c90dd50394c5224b8131118042c8b00000000000f1a0000924c0df0002839000000040e00000000000f0820add270000818f08ff28800062ac83b232400082840007140000526b55c833f0b600dc805430f03163684c72251819205e0364145b2c50a94ea1005881c0ff7af48708241151c5d63bb4ed30f003e335b47e1c11c354d0c86a2360800f338000732245fb36d875329e45a71830e101cb03262ec000139400000020e652bfb3a519e53a8010c80b21e05ec2aa09700bbcc1702c00081adceff8f0000000057091b74215218402826e8cce122803c2c909eb2c40000003043c09b06c1171cc000034f400020ba0000000000000000000005b0541d00000006095c0c71e287c524752c9c284d951b8c2bf2c1473d194000c1398a4758096758acc84264b78750eb4cb9370000b3ae0282259c59371b8336345c70d1d9456000186f026002700014900378471828e81c552e0ece20e0b7e328015e061c8a42a5c58a380000000007a00000000002099000050e0003f2b6276882406a0c272f1c5b33cf4f1000084d5214000000049f60428e492e7052c18646222b1c89311dc09102280ac2e0455339ece9e388000f1f400052cf20631fc0000002193205881e0230060000403807417c90080000090062000001c35400122400400000851810860c00020cf3000c00801040091831031c10400032410c00000010400430440410090400490400801c014100200008000010210a0400020410810021400023c1000043002001281000000
+def x191d7 (i : Nat) : Nat := (if i<1 then 0x48754a33cfab8d10b0881db5425c5511033e922c02e431d7d655714c4208fe4bb0c99401db54261571103f4a8440a40204fd6468848233cbe43aa4a02a71fd9021d618ce3fb23442e4a047f6488758e11afa4bac2a0c015bd9420a77443a7a84c12ea2073d245205d8408fec910ea8a811fd91a21755023fb2443a20a9e7d261205c4538fec910eaa2213f59121d638023f92f442430076b481425d840ef848a40b80a7dd5515cd310833eae34424029c7f25d824c211cfab0b033ba81db57150960103b3a84902e62076d50576501108ff4cb04b80a797c875495150397a84902ec2074f509815d4408fecbd10900c7d9d42581731031f90eb02c319cef652885cd10e3eb0ac0ba8811fd9121d208ce3fb2043ac708cfd6468848110ceeb190e994015f591a21724433eae2c12c22077c5457348110e9ebaa84b08815ed9158172103be122900e119cef652884c211ef4902c0b90819f48121d208cfb6a82bb284884df6568858233ef4902eca12215f59261971103b6ac2b9282a07ec50520509108fec910ea02a7d3d4254575102bdb24b0ae42067d545831c9109becad10b00639bd4260575103b3ae6a12c2207ea4814255110ceeb9d10b08815f591581711033bae6c12c2206ed5058158d40eea48a40b9881d3d7550920103fa260a8a62a076d5c54258440af6cc2c2b90811fd91a217054f9e922902ec187e6505634c140ff0902a2a1221cdd61581731039dac2b02e42067d2058748053cde43a84aa2213dd93a21424423f92ec12c708d7da6487482119fac8d10902812fd96a215250397a84a8aec2067d2058748153eec9810e902a7f3954549305033eb0e40a40a076d509525c440cdeaa10e98a81db57150920102fe130a0a40887f44c08148143eec902c0b9881f69524811054fc3ac8aa2c6a9fe84814150910af84ba4100423eca0088a668cf36b08b98208872b509205d840fc490284982871f49760d208465bb2d442a519c7e25d815520087e4c2a4bb0613ba99610728036b30b198e50067521e3348211fe119c23114013b594a21308463e930902e229e1f549861c153bf0c890f11401f49205493054ef332640282a06ec612111ca00f6900423334670fc98549761026bb2b442c119cfc6448758e009ecc9900a0a813d993a214280373309198e50063721d63591538ee4bb04aa4671bd94a21734423eb23442e4885e664c80551408deca510b82a71bd9421d518cf2eb0ab9820884f564688482338eec9d10b92819b5825c5401023b92ec128119f4b509205d4409f8c890f11401b398591072803e9445004ab19e7520c815c940ec6a1240b9881f5200846558cefc324402828847d646885c940fc8a0a6298281ec622846668cf3390e42260a9fc64c154501539ceca10ea8c67da5424817110327b04baa802047d6448758e00 else (if i<2 then 0x1010a100100a08c205156281246008e124442a128451800044a11c228c22842404248424842484000002284220424840120248800004908490e2a08022841000238824840000024041cfc20000108a144a1145efc2000450a2508a20000000300451803004228480051284510000834d74c348346f45b3c33572eb2ab2971ff1bf17f16b1571430d7097083016fd6f12efee92e7ee6ae2adbed26d12ca6c3ac26c12ba6b92b7eb6ab2aaeaad6a6aa56a16a029ee9da99a98697295e94a90a8f68e287680a79e78a74a7367226e264a60a57255e54a53652250e4fa4e64d24be45243e42a41640239632a2ea2d62c22ae29a25a2462061f218617215e14a10a0f60e20ce0ba04e039ff9fe5fd1fbdfa9f95f81f41f01eeded9ec5e85e19dadd99d85d19cd9c6dc59bedbadb99b2db19b05ac5ab1a71a319f198594593191d8b189d83181d7dd7c975d6f16b167163161d60959d5314f14dd49d4893c53b13452ad24122d2192051991590ed08106d000fecfd8f98f84f70f5cef0edce70e30dc4db0d44cd8cc4c2cc18bacb14b00aecad8a40a009c09809409008ec8d88c48b08708307f07dc77075c7487346f46b467466062060c5a056054c5385245104d04bc47c4684283e837c33c3283142d426825424022c1941801401000c00540140033eb2243c450047f6448788a008fec910eb1c011fd984817114e3fb2443ac6887ec5058448110fcaa0a6299281eb56150562502beb22aa0e4884fd6468848063e9ea92e4aa2811fd9021d528cfb5a84902ea204fd6468848053cfb4c90e904231fd984817118e3fb2043ac8a9dfc6468848110cf6b9510b0881fa92050960103be122902e031efc48181551108fe4bb00b1c23eb541585605023f92ec2a6108c7f6448758e00cfc9010eaa2215f5964c571803af240b02ea20779245805c840e9ea12c0ba881f9930551315023fb25442eaa04bf65a8854a33f6cb1ac0982819f591a21724433e930902e2206fa4818255110afac8a40b88a75dd91581731033e902c3a40a1f67509515cc409becad10b028757d91581751026fb2b442c0a07e64c14050553cbea9308382a79dc874c1638473e90243a40a9d7d661205c4538fecbd10900a71fd9121d6454ff9240a9260a1e7d245825c053cbebab04b0881fb14158530503b3a84a92e62076d509865c440cfa40b0e900c7fb141481404432f90ea9220a9e7721d3048153afacb902900a7df120581711023f92ec0ac70047f261205c5538fec890eb04679bd5161072803ae922902ea2047fa65805c863fe898102902a797d75a21611025fb2d442a418e7d245801ca33afb4cb0cb8881d3d425497510277b29442608847f648874c211cbea9302382a73f591a212050f9eb0cb02e22073d585605c440ed6a1240b88813f591a212054e3fb2243a40a9c7f64 else 0x248400414028928c2d046105b08c24021023208f000611021142000022849120a0830a84716000901026114249010c824880002612841a850558a0491820aa00104500020009920010000000108810045400200440800085e100000092100030200155740020c08004008c100180068aa1409230d41090110248c0000000000155d000800000220491044092244a1000002001000008022a0010000000100000aae8004008a100000000238700040000490e152002a288004004320922a28108a80040a2a8005100200881244000000800004000423843010010440800c50248808943008018020003000440512880005000400040008a80041208008228401102089a18080a002030a100107008a80061808008000060000208a10881244110248810942288000881000142e800804c900098006aba00))
+def x191l7 : Packing := (246,4,7,0,0,12,0,x191d7)
+def x191h7 (i : Nat) : Nat := 0x68e86000083591a2800282388f1f65bc9015c0ee0af2981412000004a200000242c8c11ac2f406904274288180200c72c0
+def x191d6 (i : Nat) : Nat := 0x4408248400e1508228400c15080118200000000345420c01047049800182487fbb7735f4b06c2ae9a5641fde9d5c1ad9985712ce84403d49524c087481538fc2a520605544430dd636408759153de85089850520443f40a1481524c153f6848171509601039a92021d425511087d686996097014e1f5a1a65805c863f4a4814258175103d2542245205d4409dc6949850520443d8542245205cc4087d68497a2121803f81424c08148143e695089848171103ca542245205d840e744c08121d2054e1f5a95c68848053f625092058173103da1414817650910b0729d645516354e07ca9549861c153
+def x191l6 : Packing := (23,5,7,0,0,8,0,x191d6)
+def x191h6 (i : Nat) : Nat := 0x81900
+def x191d5 (i : Nat) : Nat := 0xa3390a134a4c28290221e50549302048748153
+def x191l5 : Packing := (2,6,7,0,0,3,0,x191d5)
+def x191samples : Array (Bits × Bits) := #[(0x7ffffffffffffffffffffffffffffff941d2b30357342282fac44c8e888f8bab,0x540d5972a15102040bb40204488008a02),(0x7ffffffffffffffffffffffffffffffa88063ac4033a602a50b11100b3d4632f,0x7ffffffffffffffffffffffffffffffa0c2228952209c12a40b7920213f4212d),(0x4d15d807a95a619b904015350e5e07014,0x49154404a18a61081a5004591e4015200),(0x13a43949cce80f65407b6a00002703c50,0x12ca3b614c600ae44022e30400972a878),(0x2ab984d812841c22d8172ef8c42881d80,0x2930848c1284b41a94411cf9b428d1580),(0x3ac204844f24d14f02a0c94237adb8040,0x2b82040d4ca0714b8000ed4a363cf0008),(0,0),(0x646aacb2721596f47422902795410a160,0x468aab2121586b4652312a4c1030a160),(0,0)]
+def x191columns : List ColumnInfo := [(24,0,167,0,7),(2,0,189,0,8),(160,0,6687,0,7),(8,0,83639,0,8),(8,0,93879,0,8),(8,0,1719,0,8),(8,0,44727,0,8),(8,0,54967,0,8),(8,0,109239,0,8),(8,0,119479,0,8),(2,0,43197,0,8),(160,0,31,0,7),(2,0,18109,0,8),(8,0,42679,0,8),(8,0,47799,0,8),(8,0,88759,0,8),(2,0,17085,0,8),(160,0,2079,0,7),(2,0,2237,0,8),(1,0,190,0,7),(2,0,2749,0,8),(32,0,2719,0,8),(16,0,93871,0,8),(16,0,119471,0,8),(16,0,13487,0,8),(16,0,42671,0,8),(16,0,44719,0,8),(16,0,47791,0,8),(16,0,54959,0,8),(16,0,68783,0,8),(16,0,83631,0,8),(16,0,88751,0,8),(16,0,109231,0,8),(24,0,1703,0,7),(160,0,1567,0,7),(4,0,187,0,7),(2,0,1725,0,8),(24,0,42663,0,7),(160,0,42527,0,7),(2,0,58557,0,8),(160,0,57887,0,7),(2,0,58045,0,8),(24,0,83623,0,7),(24,0,93863,0,7),(24,0,44711,0,7),(24,0,47783,0,7),(24,0,54951,0,7),(24,0,88743,0,7),(24,0,109223,0,7),(24,0,119463,0,7),(160,0,44063,0,7),(2,0,44221,0,8),(160,0,88607,0,7),(2,0,83645,0,8),(2,0,93885,0,8),(2,0,44733,0,8),(2,0,52925,0,8),(2,0,54973,0,8),(2,0,64189,0,8),(2,0,99005,0,8),(2,0,104125,0,8),(2,0,109245,0,8),(2,0,119485,0,8),(0,0,191,0,11),(160,0,98847,0,7),(160,0,83487,0,7),(4,0,83643,0,7),(1,0,99006,0,7),(35,0,156,0,4),(9,16,166,0,4),(19,0,172,0,4),(36,128,27,0,4),(4,8,163,16,5),(129,32,30,0,4),(1,0,47806,0,7),(4,0,42683,0,7),(26,0,165,0,4),(4,0,44219,0,7),(8,0,13495,0,8),(8,0,68791,0,8),(160,0,93727,0,7),(1,0,93886,0,7),(1,0,54974,0,7),(1,0,88766,0,7),(1,0,109246,0,7),(1,0,119486,0,7),(4,0,88763,0,7),(128,0,2623,0,8),(4,0,99003,0,7),(1,0,104126,0,7),(14,0,177,0,4),(134,0,57,0,4),(56,0,135,0,4),(24,0,7847,0,7),(24,0,12455,0,7),(24,0,68775,0,7),(20,8,163,0,4),(8,0,3255,0,8),(32,0,11423,0,8),(1,0,52926,0,7),(160,0,52767,0,7),(4,0,44731,0,7),(4,0,104123,0,7),(4,0,109243,0,7),(4,0,119483,0,7),(24,0,4263,0,7),(168,0,23,0,4),(16,0,6319,0,8),(160,0,103967,0,7),(16,0,3247,0,8),(2,0,3261,0,8),(152,0,39,0,4),(25,0,166,0,4),(8,0,1207,0,8),(32,0,6303,0,8),(160,0,47647,0,7)]
+def x191autos : List (List Nat) := [[],[115,84],[32,67,117],[32,83,116]]
+def x191levels : Nat → Packing
+  | 10 => x191l10
+  | 9 => x191l9
+  | 8 => x191l8
+  | 7 => x191l7
+  | 6 => x191l6
+  | 5 => x191l5
+  | _ => emptyPacking
+def x191index : Nat → Nat → Option (Nat × Nat)
+  | 10 => lookupWord 173 433 7 14 8 2 x191h10
+  | 9 => lookupWord 297 1487 8 16 10 2 x191h9
+  | 8 => lookupWord 142 357 6 14 8 2 x191h8
+  | 7 => lookupWord 13 33 3 11 5 2 x191h7
+  | 6 => lookupWord 1 3 1 7 1 2 x191h6
+  | _ => fun _ => none
+def x191 : Forest := ⟨191,10,fun j => x191samples[j]?.getD (0,0),x191columns,x191autos,x191levels,x191index⟩
+set_option maxHeartbeats 0 in
+theorem geomx191 : graphValid x191 (boundsBefore known43647) = true := by
+  simp only [graphValid,Bool.and_eq_true]
+  refine ⟨⟨⟨by decide +kernel,by decide +kernel⟩,listPieces_all (d:=4) ?_⟩,listPieces_all (d:=0) ?_⟩
+  all_goals simp only [listPieces]
+  all_goals repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_10_0 : block x191 10 0 3=true := by
+  apply groupedBlock (ar:=7) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_10_3 : block x191 10 3 13=true := by
+  apply groupedBlock (ar:=8) (d:=1)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx191_10 : block x191 10 0 16=true := (@block_merge x191 10 0 3 13 sx191_10_0 sx191_10_3)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_9_0 : block x191 9 0 15=true := by
+  apply groupedBlock (ar:=7) (d:=1)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_9_15 : block x191 9 15 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_9_51 : block x191 9 51 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_9_87 : block x191 9 87 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_9_123 : block x191 9 123 2=true := by
+  apply groupedBlock (ar:=8) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_9_125 : block x191 9 125 36=true := by
+  apply groupedBlock (ar:=9) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_9_161 : block x191 9 161 36=true := by
+  apply groupedBlock (ar:=9) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_9_197 : block x191 9 197 26=true := by
+  apply groupedBlock (ar:=9) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx191_9 : block x191 9 0 223=true := (@block_merge x191 9 0 197 26 (@block_merge x191 9 0 161 36 (@block_merge x191 9 0 125 36 (@block_merge x191 9 0 123 2 (@block_merge x191 9 0 87 36 (@block_merge x191 9 0 51 36 (@block_merge x191 9 0 15 36 sx191_9_0 sx191_9_15) sx191_9_51) sx191_9_87) sx191_9_123) sx191_9_125) sx191_9_161) sx191_9_197)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_0 : block x191 8 0 22=true := by
+  apply groupedBlock (ar:=7) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_22 : block x191 8 22 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_58 : block x191 8 58 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_94 : block x191 8 94 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_130 : block x191 8 130 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_166 : block x191 8 166 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_202 : block x191 8 202 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_238 : block x191 8 238 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_274 : block x191 8 274 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_310 : block x191 8 310 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_346 : block x191 8 346 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_382 : block x191 8 382 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_418 : block x191 8 418 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_454 : block x191 8 454 3=true := by
+  apply groupedBlock (ar:=8) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_457 : block x191 8 457 36=true := by
+  apply groupedBlock (ar:=9) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_493 : block x191 8 493 36=true := by
+  apply groupedBlock (ar:=9) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_529 : block x191 8 529 36=true := by
+  apply groupedBlock (ar:=9) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_565 : block x191 8 565 36=true := by
+  apply groupedBlock (ar:=9) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_601 : block x191 8 601 36=true := by
+  apply groupedBlock (ar:=9) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_637 : block x191 8 637 36=true := by
+  apply groupedBlock (ar:=9) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_673 : block x191 8 673 36=true := by
+  apply groupedBlock (ar:=9) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_709 : block x191 8 709 36=true := by
+  apply groupedBlock (ar:=9) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_745 : block x191 8 745 36=true := by
+  apply groupedBlock (ar:=9) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_8_781 : block x191 8 781 18=true := by
+  apply groupedBlock (ar:=9) (d:=1)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx191_8 : block x191 8 0 799=true := (@block_merge x191 8 0 781 18 (@block_merge x191 8 0 745 36 (@block_merge x191 8 0 709 36 (@block_merge x191 8 0 673 36 (@block_merge x191 8 0 637 36 (@block_merge x191 8 0 601 36 (@block_merge x191 8 0 565 36 (@block_merge x191 8 0 529 36 (@block_merge x191 8 0 493 36 (@block_merge x191 8 0 457 36 (@block_merge x191 8 0 454 3 (@block_merge x191 8 0 418 36 (@block_merge x191 8 0 382 36 (@block_merge x191 8 0 346 36 (@block_merge x191 8 0 310 36 (@block_merge x191 8 0 274 36 (@block_merge x191 8 0 238 36 (@block_merge x191 8 0 202 36 (@block_merge x191 8 0 166 36 (@block_merge x191 8 0 130 36 (@block_merge x191 8 0 94 36 (@block_merge x191 8 0 58 36 (@block_merge x191 8 0 22 36 sx191_8_0 sx191_8_22) sx191_8_58) sx191_8_94) sx191_8_130) sx191_8_166) sx191_8_202) sx191_8_238) sx191_8_274) sx191_8_310) sx191_8_346) sx191_8_382) sx191_8_418) sx191_8_454) sx191_8_457) sx191_8_493) sx191_8_529) sx191_8_565) sx191_8_601) sx191_8_637) sx191_8_673) sx191_8_709) sx191_8_745) sx191_8_781)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_7_0 : block x191 7 0 36=true := by
+  apply groupedBlock (ar:=7) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_7_36 : block x191 7 36 22=true := by
+  apply groupedBlock (ar:=7) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_7_58 : block x191 7 58 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_7_94 : block x191 7 94 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_7_130 : block x191 7 130 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_7_166 : block x191 7 166 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_7_202 : block x191 7 202 36=true := by
+  apply groupedBlock (ar:=8) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_7_238 : block x191 7 238 8=true := by
+  apply groupedBlock (ar:=8) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx191_7 : block x191 7 0 246=true := (@block_merge x191 7 0 238 8 (@block_merge x191 7 0 202 36 (@block_merge x191 7 0 166 36 (@block_merge x191 7 0 130 36 (@block_merge x191 7 0 94 36 (@block_merge x191 7 0 58 36 (@block_merge x191 7 0 36 22 sx191_7_0 sx191_7_36) sx191_7_58) sx191_7_94) sx191_7_130) sx191_7_166) sx191_7_202) sx191_7_238)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_6_0 : block x191 6 0 2=true := by
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_6_2 : block x191 6 2 21=true := by
+  apply groupedBlock (ar:=7) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx191_6 : block x191 6 0 23=true := (@block_merge x191 6 0 2 21 sx191_6_0 sx191_6_2)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx191_5_0 : block x191 5 0 2=true := by
+  apply groupedBlock (ar:=6) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx191_5 : block x191 5 0 2=true := sx191_5_0
+theorem tablesx191 : checkedTables x191 10 := by
+  intro k hk
+  interval_cases k
+  · exact (rfl : block x191 0 0 0 = true)
+  · exact (rfl : block x191 1 0 0 = true)
+  · exact (rfl : block x191 2 0 0 = true)
+  · exact (rfl : block x191 3 0 0 = true)
+  · exact (rfl : block x191 4 0 0 = true)
+  · exact allx191_5
+  · exact allx191_6
+  · exact allx191_7
+  · exact allx191_8
+  · exact allx191_9
+  · exact allx191_10
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem plx191 : Impossible (graphGoal 191) 10 (vars 191).toFinset := plainA (q:=191) (prior:=boundsBefore known43647) (before_sound known43647 valid43647) (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low6847 : Lower (varsX 6847) (graphGoal 6847) 11 :=
+  strong_full (q:=191) (rs:=[2, 1, 2, 4, 1, 1, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx191
+    (index_root (g:=x191) (i:=3) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+def maps6847 : List (Nat × List Nat) := [(5053,[129,82,97,48]),(17390,[66,114,132,49,32,81,96])]
+def known6847 := extendKnown known43647 11 maps6847
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid6847 : Known known6847 := extendKnown_ok (m:=6847) valid43647 low6847 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low18111 : Lower (varsX 18111) (graphGoal 18111) 11 :=
+  strong_full (q:=191) (rs:=[2, 1, 2, 4, 1, 1, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx191
+    (index_root (g:=x191) (i:=4) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+def maps18111 : List (Nat × List Nat) := [(4541,[129,82,97,48])]
+def known18111 := extendKnown known6847 11 maps18111
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid18111 : Known known18111 := extendKnown_ok (m:=18111) valid6847 low18111 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low17087 : Lower (varsX 17087) (graphGoal 17087) 11 :=
+  strong_full (q:=191) (rs:=[2, 1, 2, 4, 1, 1, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx191
+    (index_root (g:=x191) (i:=5) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+def maps17087 : List (Nat × List Nat) := [(17087,[]),(1981,[129,82,97,48])]
+def known17087 := extendKnown known18111 11 maps17087
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid17087 : Known known17087 := extendKnown_ok (m:=17087) valid18111 low17087 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low2239 : Lower (varsX 2239) (graphGoal 2239) 11 :=
+  strong_full (q:=191) (rs:=[2, 1, 2, 4, 1, 1, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx191
+    (index_root (g:=x191) (i:=6) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+def maps2239 : List (Nat × List Nat) := [(2239,[]),(12479,[116,83,32]),(2427,[130,114,98,81]),(1967,[113,129,97,82,32,65,48]),(2493,[129,82,97,48]),(12733,[129,116,50,97,80]),(12775,[84,117,80,132,96,48,32,16]),(12782,[66,114,132,49,32,81,96])]
+def known2239 := extendKnown known17087 11 maps2239
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid2239 : Known known2239 := extendKnown_ok (m:=2239) valid17087 low2239 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low2751 : Lower (varsX 2751) (graphGoal 2751) 11 :=
+  strong_full (q:=191) (rs:=[2, 1, 2, 4, 8, 1, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx191
+    (index_root (g:=x191) (i:=7) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+def maps2751 : List (Nat × List Nat) := [(2751,[]),(3263,[84,115]),(11455,[117,67,32]),(3503,[133,80,96,113,49,64]),(3517,[129,80,48,50,114,97,64]),(11709,[129,82,48,66,97,112]),(6631,[115,83,82,130,99,66,16])]
+def known2751 := extendKnown known2239 11 maps2751
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid2751 : Known known2751 := extendKnown_ok (m:=2751) valid2239 low2751 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low1727 : Lower (varsX 1727) (graphGoal 1727) 11 :=
+  strong_full (q:=191) (rs:=[2, 1, 2, 4, 1, 1, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx191
+    (index_root (g:=x191) (i:=8) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+def maps1727 : List (Nat × List Nat) := [(1727,[]),(2367,[135,50,65]),(7007,[135,101,50,33,16,64]),(12719,[113,129,97,82,32,65,48]),(17341,[129,82,97,48])]
+def known1727 := extendKnown known2751 11 maps1727
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid1727 : Known known1727 := extendKnown_ok (m:=1727) valid2751 low1727 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low42687 : Lower (varsX 42687) (graphGoal 42687) 11 :=
+  strong_full (q:=191) (rs:=[2, 1, 2, 4, 1, 1, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx191
+    (index_root (g:=x191) (i:=9) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+def maps42687 : List (Nat × List Nat) := [(42687,[]),(47807,[117,67,32]),(44351,[135,50,65]),(58175,[133,117,16,64,49,32]),(47967,[135,101,50,33,16,64]),(53087,[133,117,101,33,48]),(44923,[130,50,81,115,98,65]),(69499,[128,64,116,81,96,49,32]),(55215,[113,129,97,82,32,65,48]),(69039,[133,80,96,113,49,64]),(60349,[129,82,97,48]),(69565,[129,80,48,50,114,97,64]),(42983,[115,83,82,130,99,66,16]),(45031,[84,117,80,132,96,48,32,16]),(53230,[50,117,131,49,32,65,96]),(60398,[64,132,49,96])]
+def known42687 := extendKnown known1727 11 maps42687
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid42687 : Known known42687 := extendKnown_ok (m:=42687) valid1727 low42687 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low58559 : Lower (varsX 58559) (graphGoal 58559) 11 :=
+  strong_full (q:=191) (rs:=[2, 1, 2, 36, 1, 9, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx191
+    (index_root (g:=x191) (i:=10) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+def maps58559 : List (Nat × List Nat) := [(58559,[]),(64191,[117,67,32]),(51007,[133,117,16,64,49,32]),(54079,[135,50,65]),(46431,[133,117,101,33,48]),(63839,[135,101,50,33,16,64]),(54127,[128,97,65,49,33,112]),(48507,[128,64,116,81,96,49,32]),(63867,[128,80,81,67,96,113,32]),(43951,[113,129,97,82,32,65,48]),(51119,[133,80,96,113,49,64]),(43453,[129,82,97,48]),(64445,[129,80,48,50,114,97,64]),(55783,[84,117,80,132,96,48,32,16]),(49646,[64,132,49,96]),(73710,[50,117,131,49,32,65,96])]
+def known58559 := extendKnown known42687 11 maps58559
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid58559 : Known known58559 := extendKnown_ok (m:=58559) valid42687 low58559 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low58047 : Lower (varsX 58047) (graphGoal 58047) 11 :=
+  strong_full (q:=191) (rs:=[2, 1, 2, 16, 8, 1, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx191
+    (index_root (g:=x191) (i:=11) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+def maps58047 : List (Nat × List Nat) := [(58047,[]),(68799,[116,83,32]),(47935,[133,117,16,64,49,32]),(69439,[132,65,48,80,113,32]),(50043,[128,64,116,81,96,49,32]),(58235,[130,114,98,81]),(42927,[113,129,97,82,32,65,48]),(60335,[132,100,113,80]),(44477,[129,82,97,48]),(55229,[129,116,50,97,80]),(55271,[84,117,80,132,96,48,32,16]),(50158,[64,132,49,96]),(69102,[66,114,132,49,32,81,96])]
+def known58047 := extendKnown known58559 11 maps58047
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid58047 : Known known58047 := extendKnown_ok (m:=58047) valid58559 low58047 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low44223 : Lower (varsX 44223) (graphGoal 44223) 11 :=
+  strong_full (q:=191) (rs:=[16, 1, 2, 4, 1, 1, 4]) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx191
+    (index_root (g:=x191) (i:=12) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+def maps44223 : List (Nat × List Nat) := [(44223,[]),(44735,[84,115]),(52927,[117,67,32]),(54975,[116,83,32]),(42815,[135,50,65]),(44863,[131,65,50,114,81]),(53055,[133,117,16,64,49,32]),(60223,[132,65,48,80,113,32]),(42847,[135,101,50,33,16,64]),(50015,[131,67,99,116,50,33,16,80]),(58207,[133,117,101,33,48]),(60255,[132,67,100,84,48,33,112]),(42875,[130,50,81,115,98,65]),(60283,[128,80,81,67,96,113,32]),(44975,[133,80,96,113,49,64]),(48047,[113,129,97,82,32,65,48]),(53167,[131,33,99,67,32,81,112]),(69551,[132,100,113,80]),(44989,[129,80,48,50,114,97,64]),(53181,[129,82,48,66,97,112]),(58301,[129,82,97,48]),(69053,[129,116,50,97,80]),(48103,[115,83,82,130,99,66,16]),(50151,[67,132,99,82,16]),(69095,[84,117,80,132,96,48,32,16]),(69607,[80,132,99,112,32,16]),(48110,[50,117,131,49,32,65,96]),(55278,[66,114,132,49,32,81,96]),(69614,[80,84,132,49,113,96]),(74222,[64,132,49,96])]
+def known44223 := extendKnown known58047 11 maps44223
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid44223 : Known known44223 := extendKnown_ok (m:=44223) valid58047 low44223 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low88767 : Lower (varsX 88767) (graphGoal 88767) 11 :=
+  strong_drop (q:=191) (hd:=inputs.getD 1 zero) (rs:=[2, 0, 2, 4, 1, 1, 4]) (u:=1) (v:=3) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx191
+    (index_root (g:=x191) (i:=13) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+    (index_root (g:=x191) (i:=0) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+def maps88767 : List (Nat × List Nat) := [(88767,[]),(104255,[135,50,65]),(94047,[133,117,101,33,48]),(109435,[130,50,81,115,98,65]),(119727,[113,129,97,82,32,65,48]),(124861,[129,82,97,48]),(83943,[115,83,82,130,99,66,16]),(99310,[64,132,49,96])]
+def known88767 := extendKnown known44223 11 maps88767
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid88767 : Known known88767 := extendKnown_ok (m:=88767) valid44223 low88767 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low99007 : Lower (varsX 99007) (graphGoal 99007) 11 :=
+  strong_drop (q:=191) (hd:=inputs.getD 3 zero) (rs:=[2, 1, 2, 0, 1, 1, 4]) (u:=4) (v:=12) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx191
+    (index_root (g:=x191) (i:=14) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+    (index_root (g:=x191) (i:=1) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+def maps99007 : List (Nat × List Nat) := [(99007,[]),(104127,[117,67,32]),(109247,[116,83,32]),(119487,[84,115]),(88895,[133,117,16,64,49,32]),(94015,[135,50,65]),(109375,[132,65,48,80,113,32]),(124735,[131,65,50,114,81]),(83807,[133,117,101,33,48]),(104287,[135,101,50,33,16,64]),(124767,[131,67,99,116,50,33,16,80]),(99195,[130,114,98,81]),(104315,[128,80,81,67,96,113,32]),(83887,[113,129,97,82,32,65,48]),(89007,[133,80,96,113,49,64]),(99247,[132,100,113,80]),(124847,[131,33,99,67,32,81,112]),(83901,[129,82,97,48]),(94141,[129,116,50,97,80]),(104381,[129,80,48,50,114,97,64]),(119741,[129,82,48,66,97,112]),(94183,[84,117,80,132,96,48,32,16]),(114663,[80,132,99,112,32,16]),(119783,[115,83,82,130,99,66,16]),(89070,[64,132,49,96]),(109550,[66,114,132,49,32,81,96]),(114670,[50,117,131,49,32,65,96]),(119790,[80,84,132,49,113,96])]
+def known99007 := extendKnown known88767 11 maps99007
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid99007 : Known known99007 := extendKnown_ok (m:=99007) valid88767 low99007 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem low83647 : Lower (varsX 83647) (graphGoal 83647) 11 :=
+  strong_drop (q:=191) (hd:=inputs.getD 0 zero) (rs:=[0, 1, 2, 4, 1, 1, 4]) (u:=2) (v:=3) (by decide +kernel) (by decide +kernel) (by decide +kernel) plx191
+    (index_root (g:=x191) (i:=15) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+    (index_root (g:=x191) (i:=2) rfl (before_sound known43647 valid43647) geomx191 tablesx191 (by decide +kernel))
+def maps83647 : List (Nat × List Nat) := [(83647,[]),(93887,[117,67,32]),(83775,[135,50,65]),(99135,[133,117,16,64,49,32]),(88927,[135,101,50,33,16,64]),(99167,[133,117,101,33,48]),(83835,[130,50,81,115,98,65]),(124795,[128,64,116,81,96,49,32]),(94127,[113,129,97,82,32,65,48]),(109487,[133,80,96,113,49,64]),(99261,[129,82,97,48]),(109501,[129,80,48,50,114,97,64]),(89063,[115,83,82,130,99,66,16]),(109543,[84,117,80,132,96,48,32,16]),(94190,[50,117,131,49,32,65,96]),(124910,[64,132,49,96])]
+def known83647 := extendKnown known99007 11 maps83647
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem valid83647 : Known known83647 := extendKnown_ok (m:=83647) valid99007 low83647 (by decide +kernel)
+def x511d14 (i : Nat) : Nat := 0x380c0280801804008008ffd60
+def x511l14 : Packing := (1,1,9,0,0,0,0,x511d14)
+def x511h14 (i : Nat) : Nat := 0x1430b081a330000000d07c000f0cc41a400c000f0d0000e050000000242a60a3825000000080f40000001c0b3009010905cc12000243f003101b10180003036432000000070700000003c24f09800000000000000000000001d0000023000000080b602e000140fe0638010002c3c0000439b0bd00a0003811f0d643b00b38162065429e088ed7702440000010270000000000000000ac00070e083a4012036e020000e01c0000000000a0f80000000000000281300000000000000000203100010050000000d087c0e9078000000203700008158922440dae01
+def x511d13 (i : Nat) : Nat := (if i<1 then 0x32818d0ef1d83aa740128ac08873080818a0340580822b40e0300580a01e038068630280600000909a18830a61802d05501215c2a05d0b21590305f0bc05d159c1742185a0b01582aa070b201115a0605e024d0a013c2704d09812c2504909011c2304507901a0003e00e0782083d08491004803040c8430841042003f07c0f41e00307602410180e81c83806e0d81a8340660c81883005e0b81682c05002601c0640e02011822042098128278008ae0102a00208210520a01382604b0901182204208004c0503e0040f01d40e882b00f00404a0604215024014240000305601a00a0780802413120a0108250d81b41342480a1b83589e40e138008a60ce081100000c00806802818048e00003806802025158471c5020651c9ec4205a0181b81f1201c0302b0120802b81a12e12490be1402784509a1241f84707c1081e03d5260241d003040883806e0d41a03205c1781683a07208c1402704c1b411207524024008205448a074f89d03d0590161b41e922344605c0fa18c2d0580a80ec2b85500000c0302b0ba164480040120bd509011c1f8490841042002b00c01c1f03d0780240183a07604c10261b4140270420981282b00c01c118220022002502a0ca081109011c1f849084104204768490141f03d0780240187e0fa06c10261201f8420821002383e07a1241e00905a00c1d81304080030020000380480281c04901c838a704df091158580141ac1e141b83686c0d69a834a6884901424857002068101c19c330650360740a81c02e0300c01602004c0580a0280380681a002990048005c0d01802c050090110200300580a01e038068090b80002d850482d0590b015c2b0550a894c2922b40c0100e05109e781c0360680c81802e0580a8140260480881001e0380680c0160280380300c01602009010001bbedaf37b87ad5db322b8eac3e9f6a47e76c992256690022e788160cb8131f6a7a4ddc7754dc036e95b52686198e643d87a5f956e258dd5ce54e54a450c13594ae5224442d0813c40e4f3798d7d32f0c693058bad2d10a83265892d21007691aa05d1146c4bd11243a90a981da04bc000ffea9ac1ffc32583ffa40b07ff66160fff2aac1ffd41583ffb28b07ff60160ffec9ac1ffd84583ffae6b07ff5d160ffeb8ac1ffd51583ffa42b07ff60960ffe29ac1ffd92583ffb06b07ff54160fff112c1ffd30583ff92ab07ff24960ffeb82c1ffd32583ffaa4b07ffa6560ffe882c1ffd81583ffb2ab07ff24d60fff19ac1ffd75583ff8a4b07ff61560ffeb92c1ffd97583ffa62b07ff64560ffea12c1ffd43582ffb2ab05ff64d60fdf222c1efd65582ffb24b07df95560bff4cac1efd61583dfac8b07f78cd60bfecbac17fd91582ffb28b07fd84560ffc882c1efd63583fdc44b07fe80160ffcc02c1bfe88583bfceeb05ff66160 else 0x4038030ad1588f08681d03018253529a10301804a7b1280411583f40e589f0b61444b86212a1e00402f80101d0382b80c1cc3706d0bc1b0358201048ac00847640c817024070088100300580780e01a0300580a80802004a2a294727480a08115a6f4f62100606e07c818d05c12c0f04a0600b4040780a013c2684505e1781c84004c1202384207a0e81f03c80881c0482070128830861b4008840e281c40009040586203806c1785e02a0401d0390180600b40312a02c0501a01c034098144c80240080064300820ee1483c8990d220c3d043456818420710410101320701298a70680c8180670cc0203c01c0360bc2f0150220e81c8260300580581403500e15a2b40f0190301d01804c0509b8080240082a000082714c1703e86310a2302d0580ac2400481f1002342a0590761542bc000bb00d15a0640e011a03e1e01785e04c1682c0560aa1502c8574562744c02a00219825aa5505204e03c1284605009e1342285607c1081e40045681c2588509817c2404908e0f603a0607600c50809008082014617c2804f08a0fc2484708500215c070981002083d0781341f0480068181c809040c8a209012420c7684881d0303e07a0f00484214211c01896118054102819c3301903a1940e01b024062018170220400780c01c02c0a01a02a04c0501601b00515809000e09f1389a2028094e021c0920608281cb13c2744e0520f20a44c8691061c421c0200681d030840f500515809500881a0288191580c01e0380680b0140580c0000122344a8451369a9a13225c3647680a01915a070dc1ac368200a80040a098090928e4f808137a700e20283583c456509712c2542d8510fc188398780bc0e601c2b457019030070dc1ac0402f0da0e8364048000041502004cf09451400537a7401e818101023d470874f8035158201c4688c0f01703e86310a0e81c85a0b01582ac0340c1780405d0b215e000540768ac45820002011c51509115a0604081c418890aa05836042304440740e0243fa2b40d00201c010ac58870fe20c408750860044207a0e215c04820341c83f0841042003e07a0f02404707604c101a2182284d02a11c0c014020108208400350ae0340707c0f41e013040214180095c420831042043484345681c3d07104015010a06012787f0ea0053da700ba81c07020253e27b0f50141022b4e09d0368590160f5039a1e42c0550a81742c8570ac8ac26078)
+def x511l13 : Packing := (64,2,9,0,0,14,1,x511d13)
+def x511h13 (i : Nat) : Nat := (if i<1 then 0x1e14ee0aa780d682bfb0b120aec025ce1e2002e0000548b80000e1160000000000000c0b7000000003806e5748703ed053281ec41009744e84c0000000000000700ef4048807f307c8000000014011000000002c2a761227b7c385d000000000c03c00002e1f2010700000000120a4c12d0000381140001c0f80000000039d720000813680000000060dd20420000042cf0002c05518127c230c147e0a5d85cb5d560000e04900000000000000000000000000c0df00003819402ca0000b0273a2f80000a0076010200a9c0960000f07dc01000000017b0000681ac000000006073f04cf80062e4c567bc0340000120d4509ca811000000000000000000000120194055800000001887ff07ae81d1c137930cf951e84e0c2620000d006d834a40f2aef6506b00002d9a92146b044c0589424820fd0000000001cec0000d73b8000280c7410b4040204afc0500000000000000c2f244ea00004bc0141df201e000000003c09f811bf41a7020480442e6e8078a83cbed6f0127c0208820800000000000000001028840c5708080000000000000000000000000ed75fa2e7013381d200611b7f48450802e40d8e073485bec064805a20a4a0478c1b46171f05d453a8416581250000000000000003d10891023b015a0000d929e84d980b041411767d836f0087c366205b403b71a9c530f4054680d21c65916e78507040801b82094790ee84858193206db02cfad041c8aa11fb680d4a6aa47720cff7024cbf7eae1409aa09e9858f107e0000000000001804680d5694b80002c149ad79c03e083fc858b202140af6153180b8210410387030400000000f013ac325412ca0060000602ba41ca0000b0973838da4d7ed0b7063303445d928e880000504f800000000504e000000000000020a800002424c00000000305a80221010550048000184a4207a1091c84a80000a0a1b000805814121e108e053e027e40bc000001000a0100680080088080080203800005c4300040094000800300020f0000000e00940108400034001000318000080000000918820004000004000000000002000180001001000808020800500000000010000080201000000801100004000000c40000067000100c0a08020880210000068000000010002210820000e1000600100038000008c400000000220000448060100000080098000030600000008001000000040002c010042108d440002020000204000800001c00100200086000000000000140000920000000002000001000600000c008000000008000004070080100080008020080000000004010140000400084050000000080080060880008c40000000902000000000200002000002000003800000000000070000000000004600000008001000000000000c000140018020000020000008840010002200000404 else 0x21d29816ce049e02a4e413a0b82752c00c40145c0bc0748082cc00ea4e31f02ef21c3a448eefa1048f856400000000000000000c094401000366c98ec0b70106f0b7402c18233c85c602a2801000000000600a0000000014169000000002c2ea0000f038800000000200eb70b1c18594c2ed54d76618155427e40e84708f838381f4412c702138556808ec00ba075d051400000000094d8393ec066876a0417b014301ee802d401e0814f0294c158d070a8220000120dea75b545c3c2532066698310559c2e066bcf028881f9815900f3c2b7a000382cc60990000184754207ad6f000058cb4000160e20000682160197203000870000061a8000000000000125f0412019046b8a9118b401b316fd05e3815e213cc063e8455cdb1e062703d800000001c03f800b5a0ab1c84000000000000000000000eb48800000001601adb940035d011a0e2f8901401dc00000000e17d00000c1fcc0ec000058be4819020674703f8503626bc0980000000000000606f00000000000000161e0457055c0000000030663020cc05360a52087802838169407320a7bca4f42a40000c0050817fc2d7482097128000000000000000000000000124dd000000000410ee06860991804d026a0000000030061803a40560000021e2c21a0000300400000000040fcd92380000813d415cc05de84e9802ba04dd029380140001001fb7502c8629cc480eaa15580536c223e177e062083b941632137400908593e9cf40b5201f13ba7405ff28b106718233410c000c101c1c4eec2d0000070a180002c117ce7bf05f800018276811abbb0800010238000070780b496dd7f406a3007803340001ae0fd373f811b4285416df9149830bc1a68134000000003406d6117b0167455a0218a15a10947856c004a202b1053402f800000220600e280e7025f526c56ab98180c226c072772080002c17a0800a034c4ad410f8217cb061c0d8c00000000000000000000188e8d233b81d8807440268b6ef0302dc61c0d930a88042780aec0950000302e40001d133d0854832b8091ac5e00000000240ddc0e4b0bb33b9302f4e89e10479019000000000a04e885200000000000006028f02e780f40000000000)
+def x511d12 (i : Nat) : Nat := (if i<5 then (if i<2 then (if i<1 then 0x2ffda344160bffaa952582ffeaa54d60dff64d805837fd9261560ff754a33583fbd545d160bffaa9325837fd5365160fbf58d50583efd6554160ffe601425837fd9348160fbf59530583efd3159160ffe4c1705837fd9314960ffe60171583ff93044160fbf54964583ff55160560bff69492583ff95244160fbf58d70583efd8259160ffb549205837fc9264d60fbf54d64582ffda214d60dff28993583ff53148560fbf59580583ff9a360160dffa64535837fd935c560bff68c525837fca364960dffa6622582ffda254160fbf59521583efd6550d60bff68c95583efd8258560fbf4c5655837fd52a6560dff6a5535837fd9354160fbf595205837fc9564d60fef50974583efd6360160dff6a532583f7d5254560bff68895583bfd52a2160dff289955837fd925d160fbf58d105837fd9344160fbf59432583ff55284560dff6a5315837fe994c960dff60997583efd5258560dffa64325837fd53a6560dff649505837fca954d60dff6a5525837fd925d560fbf58d51583efda654560ffb4ca225837fd9295560dff64d75583efd6348160bff68032583fbd5291160ff754e33583efd6314960dff545975837fd3064960bff69493583efd6324960dff4c597583efd6524960dff48195583f7d5254d60dffa64525837fd9224d60ffe60141582ffda224d60ffe545805837fe9995560fbf59633583efd6348560f7f61d71583efda654d60bff69532583dfd735c960dff549945837fd9261160ffb54a225837fd3265560ff754d30583f7d3295560dff54d91583ff930601609ff68d97583cfd639dd60dbf596995835fd7165d609ffaa9925833fd92a2160fbe58e00582efda614960efe60184583e7d63955609ffaa9935827fda914960bfd68432582efda60c960f9f594955827fda914d609ff68d915837ee99889609ff2a553583edd6324d60fbe58d105827fca995560df764a33583ebd6391160efe601855837de998cd60f3f596775837dc9364d609ff6a4325833fd9860560b7f69c32582f7da50c960efe601815837f992801609ff2a532582efda358560ebf58e885837f993801609ff6a532583afd65a2160bef69052582efda614d60d7f64e775836fd6364960bbf695615827fca9549609ff696995827fca988960dfe64d80583ef96560160fbe601615837ed9224960fdb88a555827fda95c960fd79563358377c9565560df765633583ebd6461160fbd58581583fce228cd60dfb2a622583ef96580160ddfa665558377d93955609ffaa995582bfda80c960fbe601645827fda3a6560dbf58e995827fda266160cff64e88582ff9a00c960df72a633583ebd64505609ff2a6335827fca950560dfe65600583ef96544160dbf58d945827fda2a6560bef69032583ef96360160ffc54510583edd658cd60ddf2a6555835fd929dd60 else 0x31fc30c82e142b90284c25f8240421501efc1ca81b7419b0181c1448125410600f2c0ca80a840710042c02f801940003ffd8750960fff54e22583ffd825c160fff5cd98583ffd534c560fff54980583ffca254d60fff5cd80583ffda74c160fff54d72583ffd824c160fff54992583ffd7161160fff5cd41583ffd535c560fff68980583ffd534c160fff60920583ffd5464960fff6a573583ffda954960fff54d20583ffd315c160fff54d50583ffd5354560fff5c193583ffda354960fff54d42583ffd8254560fff54921583ffd5260d60fff54951583ffd535d160fff4c580583ffda54c960fff69d53583ffda354160fff54573583ffd305c560fff69153583ffd7348160fff68985583ffd314c160fff54991583ffda548160fff4c584583ffd7364960fff68153583ffd8250560fff68951583ffd5250560fff54920583ffd3150960fff69521583ffd5260960fff54953583ffda060960fff68552583ffca354960fff61d20583ffda74c560fff54910583ffda04c560fff4c173583ffda854960fff50971583ffda454960fff54985583ffd5250d60fff54d21583ffd3065560fff5c580583ffda54c560fff60971583ffd3060560fff69182583ffd528cd60fff69d80583ffd5265560fff5c192583ffca348160fffaa953583ffd4264960fff54993583ffd5250960fff54d32583ffd524c960fff5cd93583ffd3064960fff68950583ffda354560fff6a120583ffd5261160fff54d10583ffd5265160fff68553583ffd5260560fff68530583ffeaa54960fff54998583ffda560960fff68152583ffda254d60fff54930583ffd3160960fff69530583ffd5254160fff549315837fc3265560fbf59510583efd635d160dff549935837fd958cd60bff68d75583ff9a760160ffe4c5805837fda960d60fbf54d615837fd3065560fdf54e55583efd5258d60fbf59532582ffda354560f7f5cd745837fd9354560bff69521583fbd4250d60fbf594935837fd3166160dff549915837fd935c160f7f5c570583efd6550960ffe5cd805837fd9348560dff24995583fbd5391160ff74ca33583ff93048160ffd54571583bfd8260d60ffd4c5815837fd9225560eff609815837fe998cd60bff68d50583fbd4161160fbf58d755837fd9260160fef551845837fd5364960ffe54e00583efd6395560ffe48180583fdd314c160bff694325837fd9214d60ffe48170583ff95280160fef50941582ffda260160ffb54e22583efd634c160eff60181582ffda550d60f7f54e77583ff9a344160ffb54982582ffda35c560dff24d95582ffda261560ffe54d10583efd655d160dff64e55583efda64c560ffe54980583efd6325560fdf54a555837fd5166160fbf58d715837fd5266160ffd54e115837fda960960dff64970582ffda324960ffe6898058) else (if i<3 then 0xf0af034040c07707a083043071084607057897009503cc0940e40540b021801803003c05c06315c04004ba04602e05810d0910160320299da17216c02584d453412980d1024f605507e45702014240ec27027b08985980b091301682782f01f01e349015004810249c01fc2249ec81e16602c08101a50a011f09e0ff0f109b08b0810bd08507a12000307d07980801340e0414a6a86c40502a86b86d268801098069501f82482382101e01e81001695e804a80949ee1ac2000a8024c18c0e410e11e0fe00c00e1221410af034c56040d26a29a881c0627b09483f22b8100a1207584103303383280b80e00700580680a00600b00c00500d532303804c828c0fc10010410812411c0f80f40f002408204caf60b5f40f4f84e90da1780f4627428a26fa7b80c2060a03827c2d23b42cd03115c28829237ae378bf748b72076ef36ccf6adb66a76513622f5f1b5d5759b356cf52fb51f74f734c2f4afb49f7486345df444b42b741233fef3e2b3a873713348f30eb2e372b83286f267b24e723831dcf1c0b1a4715e3141f10db0fa70e130c4f09cb08070673047f016afeb6fc02fa6ef5aaf356f102ef0eecbae8b6e6c2e52ee2daded6dce2da5ed80ad616d302d0aecf4acdb6cc52c8dec56ac166bf42be3ebcdabba6b9b2b8aeb77ab5e6b122aefeacdaaab6a9b2a84ea71aa5b6a0629ece9d9a9c6699b2987e96ba955691228f5e8d9a8ab68772860e844a7fb67e527c5e7afa793677d274be714a6ce66af2698e66aa6456620260ce5e1a5b9658b2556e53aa51b64ea24afe466a42063d12393e374a35863302316e2d6a28a62592221e205a1d161b52192e170a15d611d20dfe0c0a0a76094205ce028a0005fed1fa9df8d9f5c5f2e1f0edebf9e8b5e691e3ade129dcf5d951d72dd3e9d1f5d061cefdcbe9c845c6b1c45dc0b9bbf5b761b59db169adc5ac91a94da699a445a2219e1d9bc999d59811967d9489938592518d2d8a49852582117ced7be9784575c1727d6f696da56b21662d643961b560515eed5d895b955881559d513950054bd14a6d47b946254401423d41093fa53d51397d375935653431317d2fb92d9529f1288d245922951fb11d5d1b391945175115bd12190e150c810a5d0749064504b1034d00f8fea4fd40fa8cf808f674f4b0f2ecf068ef34eb60e93ce838e644e2a0e10ce008df04dd70dabcd868d764d600d1fcd0c8cd24cb60ca2cc868c3d4c210c04cbdc8ba54b5f0b3ccb268af54ad90ab0ca5e8a514a380a18ca0b89cb49ac0998c9828930491d08e2c8cc88a4488b0874c85e883c482907fac7e487c547af0798c78287574744072ac71486fb46d906b6c694866346470639c620860145e505c5c5ac858a4577055ac523850d44fa04d4c4be848d445f0430c41a840443f103d7c3c183ae43950375c35f834c43330 else (if i<4 then 0x54003000151b85982f090009202c02d02b503515929c288292020421020c10c1e81c415e25c3d0025487b05e012120409c09e02909d052079099069071083c020a102a09004302007a084c01a2b009ac0902821223b021c05c0617442d804aa1ba1ac2c415c9a81a4d8ec4e840d0e6456130012783001d01b05b00d82601c06209501503900c01303a05e01806d06c01400a09b01a00966402a0208f8d82d50354743713d842181801dc1481e42641a41e820c20826c24010c0802101c609b010454026600e4e840d0e645613001273142de26a29ac060812c827b89422b8102070a1693514d60313d815103915804a025020c1c49d0818024080e05713e0e240c40e130012784084283d04383e83c09060783b83a0095d38515d37a2b838839184484382803182441fc24000401801c1ca81a060444081e0e20fe1124f60ba012040704004904804703e03c02003b2c8009514513a137d3dc061030101c0f700a81e9d09f21b41e8e4f614d0d759900240e13c700b00c01600a020018b0b01aabf00906106226484d753e503d3a22b83d048989bca289d28ae14481826014900e20fe1124f68ba012040726a29a00627bc0120722b0094420420808421021c1f41ec1e442a04004ae2049a8a690189ee2520fc8ae04081c28571024d45341204f712907e45702040e142b00e84d01000d08201484283e04301a83d83c885664830009853502484c015437436986c00834a428205843008080be09e07c078613527074012801100b01604300c00a09b05c85b009543984c202c37435c00c2b935034a41c421010c00e1541eaa2a8ae1b0025402002c0160145cd0b620c01282cc07327487709822b84081102a2060a15c4f83890310384c0049a16216a15824281a8ac94e144149213c13a0a40f20d21320e20f411280408600600e109802c0f456013203f04203d03c29383a0093873874848e000480101831828025023c1fc2441c82aa15e0682e808184f811e51c113014456040781781c80d80b08280c81481604381a80a000607a64426009800e83283380780700800684100b00580d005400932004bc03a1340702080520fa10a0f010c06a0f6b799900e8025e0f4086108112456012040767047126f40a28e46b43c3801803c2cc2f04800499a392111b89d10309ec2f10f901281060e24e840c0120407a07a7c27486d0bc07a300e02f00600507c349015004a00400f810810c0f40f1a4c2150e80254cde8e24e08144f88d6878727c28e08980a22b0723535436435c3693440084c034a2a3a81a9ed15c210280d0b540d51d0dc4f6108606908108408208304306102007107a8218540f4009717415f93514d60304093d84dc4a115c1f850903b429c2542080700341780301b01b410c18802806a81d990004026218c0ea12211e0fe0e4140120c else 0xd07812180180f07b0120121428ad073006161600909426f27428a29080f2060204974073c05c0540d40c05de3b33b202804c2842d9734003c1a421020c10c2a82081eb00681a084024395903e0970f10da00d0dd40f00245754a13ab04083904804703e03c2c803b009020541f06141cc23c1e05416441d8048102a9aaa6a9ed0182528ae81c20501c85c709309108f07d07907ac488498eccec1420400130070370fc8ad30e20e184e84c81e84f84984883c0430ab007a4483e83d8420af8410200e0009ad45503515d03859a2b8418632037e23616502a1d981d0582ce0bc24002565bd0a108b09308f079084ced04004107a5870130745270070081a7b0940dd0dc2b15b03047858303c2bc4b821a01200aa1b6004ac8368264e1b21b01ae1ac1aa12080284140c11f030152c0d3400a06409403c01a2b4070090ae8560ca602623b42c915c3c50303c9c17c13c1080f428c1301000f010c0f981e81a0e4025c08008208608407c07814607a156527072150012d28e09007145541646c442089401f23b400503d3a14743750304224b4616215616615a8ae1e28181e521a10a30f10dd0db0bc1630d70d8055457002104d29a27b81022b0cf02a3067166966414410c37435c13436b02a02c0390384f04c010433c00c2722b509c02a70158161b42441ea0f49d106081d611340d0e74560ee50c904343e80744143d0b0439090009522da28a31237235a36400515a4aa36c03303404804803844a00c238544c9c01fc9ee1742242c010c081010811345601204050ad43d82f0c7009284204185803d303515804810203151b82a201d81d8ad1b51b11ac0ae151004260209c12005580740e40e4578030868ac113030160c077a74a2b0ba0752821b0353dc2e8448048101c2f825a12e0c119607a1350710340e41790690620fa0f610a0f281c2a0024082a0fe4f70ba10611204060bb09981004381a43e44260762b44d81343d43c8000b00392640a80099d3dd45503d15d37d3a04205d050268ae9c21b49d281c1e8c14540c07c07811857214312c012984c46781e41784d41541a84884783e41883c842c0720622b05283d0610a1803c01290009c05b80c054e00a00d0350385b021a620c080024226058a2a1b21082c1256a0b40ae0a80ad0c00b20ba52102f0bd0be456d82882186e86b86c82686d00980760662b09082a84a801865456820944ac33c3343143c40e40b436c0540c44da01d03d0320340ec0604dc00415315c00804dc1c89f31d99d81c42409be02a1ae0f08ad6c0ec569121545148d8106787e89685186e82f85e86d20686b83a02a0ac8014180a808f825514504223605020b14713da21242a610a0fa0f40820ad8ae0f181d81a0ee0e810da0c503703902a05e0bc07501d01b019028c498060d901f0260db015035031856c56040))) else (if i<7 then (if i<6 then 0xec00c0726f02a020290c03009104c0228e0b06601e1591580485bc2181013a40c13d8582e18a0721ba17a06a1b61b02ec10e81820a05202a0028ac3c40000a82a2004026a09a0c28ed40f0170190010c208657f0c4012c10320709127c07a0aa80b86d83d274542b835915854515c3301542584c26a282cc08215605a1b210822501520410566030d64f7100130086054a86b05429a0b10992d4d436435c3684c84c191990760c106c1890701ba0981780e40e90601b681c25905104d0681ac2ed9901b10028ad0263e03fb70a30dd0bd0d90db80540c80d0d7456056113002150104f0fc87e89785185b89682f86e80885e83906102a400403a2b86289586b86c86d09802082a4098010a8dc4b027c2f01f01e81e021b02803821055d49015059804810421f621416c2581881e20ee1501b80201780e81ae15b00e81a17425615c1b01b70028ac0040aa0102a3611340d0e74560ee52fa84b46740e84f81e41541a84283c0bb83da0785f400a2b2640a8009981c836036c1f312067c23c1e41d96440985401034b121fa16e0a20b62560e609a0ea1b63e281cbda026004a4a082214608302608407808785780e07c07a16110a0c21e0872013027c00928e08908f29080d22b0204c2141e33b424c23c1ec04961416c09c1015ec01b41f616e25a18a1e21ba0220e61ac15a1b100100e81a25415217815c0ec1668ac17401226102600751f0014c490020400181665ec196012a85b89586e80886b87386d8014568470b007f0a86d03042044b158048700101ebd98161ac9eca480a810ce16601302513f08240c1127099069090084082c0162b826089009502302482401e81e61200481f05144b05982395c92240a855c218803c04006a1b28ae81e25402a1b42082ec992004025e1e61e503702f01f03902b01701902902702cc48013015035030c56176c0e12b0001517090009a70a070ba0873446426427c1dc24c2b41f42141e021d03003103c1ec2f850c02213010515854004d82cc0260461cc81a100224e1e00a40f2cd4d3508e086152cf7803456c0e112012ea7ca06a07a8e0b3071a2b072454d437058103c3683fc2440095940a0542c1080f681c2880f02ccbbe25802530d90d70025d740e052626f09428a2740432060203c2280541e821b1233b00b41f05996f41d004b013817c12c13c12412011c0f80f20198ac1181080f407810e8180802cc026900ec0ec0c120c570348ad0510921600feb018c02c01007a0642ba070e00ca0435048435c2a14d05884c983161461ba17834281e1ae1b21b68ac2a2004260209cce81060874560e340ec0c012040906e8570a585409802084b22b8660a102a5c3100700e42f00600d436436821d15c4a80504100a05d815532400804cea281082421561b022420cf1470a108b08108309309108f08507 else 0x5a422808446c4a859c021811a0541220681080f30170180f42cc0f810e0c026e2142ac02640e2106086c0f4e8c5740c012040984584801a84283dc76043c0600d08200a83e8300b38850ab0098d38503515d3d85983d22b86e048a6aca1b82c08ae1ae152122050a682a023d68800f10390260bc87c879808012054040ba6f0562d1878a06079344ac3140e40640540d43604c021a01d03203c0740a436c00000315c00854004d444206c0be07205604c17a05203206b00c0830ac0ea0282620260002c00aa81538050078034561b4112c0cc0e086a86b60506984941826826a08f4515d3785893dd030421825418a07017a03206206989181c1ac1b41b02ee0018ac0042a020a50b712d05e89f0c50108910d887c87812288e8128061e0150041188126a89429a27b02000909081022b83f2070b06820c4f844d0350384e18ac816c1e02561501881b80201ae1581b201b01e15c1b43c300000511c8ae0102a2c0d30da05461b0350030924d00fe90cb02d05b02f07884f06200884884783c83e80962b02a020840e40640c405436c36103400315878802065c008540413c3620ac8ac1c89c01c60f21ac9bd061461e1c312f0fc1970a30b70f112c5350c50110bd0721130d880080659112a4f70d68081e4812055a84d43943a84801a84283e83c0bb04308283d8850f00a80090208c14c14602915c3581040e975c0f0580152c4383649bca289d215e15a0ac8ac14a14613c81894d061e18c12307d078c48c0b08e157076591026150040d81b86781180d81580c80b814816818090c0386581a80a813061809800ab44560b0b427425428426c22c1f41e81560042bc24503048303810404c01922055cc20d9ec10c2c28ac1c517581e81802408176170190290310358ec40f0130160c204001300057f0c509a1611b0a84984760583c8038202bd2c8043500fc2f435c36436d1584e84c202428ae9bc2c49ee818210e09809e09209007a1e007808608207c08408d488612156013081d86581b86781581681880a80b81381a0bb8016072f18098002640b09841d3a021838b03d0300481020280a289d31d99d8210a382420321ba0f8819889902f02103888419208700ec0f056c5687c87a8780c216087215001330a404e08c04f05704805604703e04203d03c043407a2b04c04b05f03ba066070040200a1009cc0dc07c0ac0640a409c0b40c40d40505dc01c03b03804c05b03315848400404a2b404058620f60f301581408035cb8e1f810d220a0f30cf02f0210390170290348ec08680745701902d01480d0230018021a6013685b87886289585786ea06a0740785486d06140922b4478010f08040a898479471158418448101a07619e07202e03205a06206a0282ed89181c3ce0018ac2a020a218c12309107d07840c45708e15707659102615004) else (if i<8 then 0xc0760782b4000a8386540ec1843383fc1cc1d41340a40d40c601d03c04c4ac09c4d84d81040424814801500485822b400400f0b218142c211e00caf410e081108700240e8ad041012608f0ab62b4200430b0303fc22c0ac23c0c603b03c1840985824801022b404b90258ac0a900c0802a0c5885865840ff0ac40c45652016094048002060bb6078090b03860860432c08c0ac0840a40540d40c33b15fc09c0b600c04804830a10406857400582b824108181d0ea15900d0042c1217011e08780740e40cc56840160989580883986c86d0a880983a40929002a0b045682607f795a223041040a0f222c0a821815201e00e03041810122004859c50258ac23e0980800a82a0e56416213205500204109013016090af0ae0ad0ac0ab81e84a84584984884783dc00a0780740629002a809009020846244803c33d840b3550300488b0729c0fe0e61b011c0f40f000caf402408140ad0d64f745754a13a05478038000090900b10898268094564a02d15d3843693a03d08b1e1e49bca289d215e1580240828ac2421e206481a130b442c2103b0370ce90b01702b02702d015002013034c0e1e6c564c9000151286544b86781744d81c8150828140bb43e43c62b41e81a44243d800043607a640b3009bc0b405084406059821c4ac4680484daab798160f0c24a4e0e810ce8dc40d056c568d68da8d801285400f0a9090803028150f26f28a0a96050900a008486e41827b83e206604d815401c00600c0383fd0385884482b404b281e8ac2cca2a1b020cd09f08507d07816004080f85645707b40c1e1072086e05405905727b86b86c05d89d2a586629084b02a6c2642fc27864c2141ec1f41e303d15844021c1c854004beae612611e10b1da0f081e0f4082024024286054bbe00e2582c220518480424f604103a5a903c0549083a7b0b0043071606a0705d009020522640e40a856a1e40330322121ea1f322086021859c04004c212612211e10a0fa0f201d81c0260f424181a02428600e0ea04d15a08270fd0b70f112d07712b0c50dd0af0bd0ad0d70db0d940c0410a80c3003456812055008151844c85b89689586283980885e86c43e09843c0a820622b10e44844743d403409290020bc3f014428816c2dc4ac0442f436848201a00503811812c4b43141cc35c36010515c1504c204c00e8bea19a06e19e05d21605604e02907d1660682ed1558ad81e02499200044e814212140d07d07911857314312c012a084083043a0707aa0662b0090204c1413dc35854e02b0284f40081042710396620c349ef0901e91550591b1108225012e0a20b605e0c40dc01140c12a0bc0d60db80c04045611200380005508e15152ef29305005f8852640458578560470420a103cc00c072e304803d0a80a30900094392060abc80680580a00500d04d80780600c17a9 else (if i<9 then 0x112a29308fc0343b04362b2d10b0414d302e0101005804c0541cc08bbe23621517c9911360ed12616615911d0f8be42a02c0a40243000a4ca2826d28c28402617512100d0e481bd10a92c85f0bf076142012040150930142d62b43a0a940142002a0b04980159246a2a22ba2cc04435a2b43617c855e0020042f04d85414804822ec23c00915dc3fcafe05002618826e1341842c121fa53512d05f01089087ac0c8121c288ec561d218c80605404118438036074568208093439e00200115b03e0103f8542205410c81d10826c0240800a83ed25f313a83e8b3087006c0e52040e1508ba457012d08f42062b29a43ac024034010b0486920ba09a05303004865c102228e10210408081981c0261202ac2c1509506112d05b03d0100ff04d0910741a61600540128ad04102bf28e80886b0ae80908208986c20680184722b07f717bc17c04413224221201803a04870810303015055b99d8080bbe05611c0242842ad05ec5ea5bc5641970ca51d02903503101501b02b02611302c40d0120121210408401a700045792922932bd28a07f09004382022b2072060b0640ba4ac0540b054603303065c06c00200841311281fe1582b82410808ad81d00c2c145e2586d68d901678018064568130acc0e520c48d87841c86b86c4610ab0a8400c07a076072bf0612900200b080109822b082ac2342405c401810404b03004922055aa0e42c00a802611e04caf608101dc59085e811091012012150c0d006040156c2d188d29a495854408857859c00c03a06a2b2b52c843a46c89080985d80402aaa3283f84860095fa09a00303a0485828bb607902109a1200808ac0251b00a82402842ada85a0fe84d0ac15c120456874840c0e802160c2648140900092bf86209b84d0610b05076175c14410869a12015014c13058010400c0ec0f16a503c20f02ac080ae42c03582de28828623225810d9456c5701240e012040150743b815a0745f0a10090200a84423420c018103030218559cafc91221612e1320ee1161582a00820188ac18105834c0242843aa41d309b08a81102a8748728d908e8db086150c0cc5702710b01204122b443081781181542f81481380a81ac06a2b80943a60680d4010ae4208000cba86a85714804883d03fc05c36c1e93a044ac9902c20002ec2a0a04040d40ec0e4570121607a0760780922b0200a8306584140443660106291586d815055a881823c9ec2dc2c0b0528d8456041012156684302a80120745628807f809416a15fc4b414416947410c04435c13600044c1d436103404a04c16055857048601050915c00e49ec2e02a431810c20e108a2a1b1060225618c51c15d01210612102d0d9084514112b2d186045984345560645d62b22b2078095c0480484a010054142c40ab0080802c02602a0f14604108216008615660cb082 else 0x246a0ec4b43c20e20a209886435a0d030c1530301020495fc1d43601514800487005585804820011584d850c00a027c2dc3543801c823c1c60f09be1ad06022570f112b0748158ec130c0e81b0ae82c1e01661510a90768004561600c214300300968174590f330c8004550bb0b062b80806109b809695c96896414d13d854c1e810515c21057c23078103103821c22560e901081981c2ec02604e0020042c16e14dbc157807086086602c5703016ea2fa0fa48545989583a85e0a8290c0362b80945581a81350c30c0090bb264800801b400903b15a04870015202054209d215e158354380448a2810c18217881a17cad50628ade82f05e82a8268288308148350d980707580c81a150800197028e843803206a0760707f22b8094a2620f42da27c0ac3141c84da02303503b15a2fc4a8508151480048104cb452351650ee02217a12034d8198ad1552400240aa081e5d711909f0765144e90ac0541600414571490be1505201aa60413040c08740826078000bb0a8287e968c1793d87020496441d436315a0c04781534ac8afe1ac37d02900000301a819818bd42261b20040808ac20a213108640f012040150620785da07290409283fc2b20191587db03a048582217a1ae1b02a02402082dc3c02c106200611c23db0f10108068121310a80401e080da6058010200b18480980b0415e847d15b15810103821858202ce0248ac0240802a0c0ff0ac15c121806456812c0e16092d182882182d27b0e00a90ab090c0340983a82030110c02009841802a9c2620bc22a09a0541f63b53b021b03a06a0b45185803b850c1c804c8a3a1271d99d824091008039611cbbe056258285a21060f0170290341368490120121d303052101c16616108b12a5eb00132bd29307f847607009839848a0722b8032060200b0714542b93dc2b06505491587001004ec25a0c01504c3a18a0560690f42ec2a18ac20a05110a8182cc2c03a402408211061aa15c18c10702d0d8515084))))
+def x511l12 : Packing := (381,3,9,0,0,16,0,x511d12)
+def x511h12 (i : Nat) : Nat := (if i<2 then (if i<1 then 0x401f7c028a03a5e173d990b613c0c93280aa78255e148401e3a0fb73bad415f5044981707015e409880489c08f00000c18038132a0e560304ee8308186a53bf859bad7a4820b213900124e07c5351481576198b80dfd046de0dca347a41584bafd01756a301922568046806300000e139820000012081c003004000344000000058080000021818000050000002120c02200400000034101000008a000400000005000000005000c0130004008020108200000a400001800a040050000c00020012700042001a1c0810600000040000c0000c830004b050000380000001000380860204f80120470100053800a1ce0000000140000300000800300000001600000000001f003c001040c00000000870000002000c39e00000020000004000c080000000108000830800000100408000140040002200000000000080010000002080000000000030a0000000000000400100040000000200860c000070e043801e10302020008702009000000017000088316500000000000000000000040000638003000000000181800000800120000700040010404200080800100002020c2c092000068000003870008000080000024046010014489000008000000000000008040000000780000008d030020002003000004000000004006000000100004000c00000000000000040040600102004000202045000200001040000000000000a0818302000010c0000000080000014010040400000000000000007060040000000001628100040000500003800000000000048000000001800000160000000000170620003002000000000000600000000008018000020004000000850102002800000080000010600200010000000000018006000010204003000000000000010000002020010500201810008380000000104000000604001001010400000020000080000400004000000000000000c002000038000000000000001000000000040000e14000002c10000042000400180000000000000000000000060000002000000000100160400302000000018005000000000100000028000000000302000000018200000008000080090008000000c0000008002020410700001800210007020000000001830200080000818000000010000002000008a00040010008000020038002000000000004020000100040010000000000000004040000000004020008000000000034081000008002080000004003020000202004000000000020400008040000000181000000000000800e04001000008000000000000000000c00004002800000002020400400000000008000080000000300000000000001858002000800018000000000000000000200001080410000180020004000000000002000000000001040000000042800010002000000000000081200000 else 0xe1e089b0319012600001a0cce0182000040025932ecbaf7e08648051a00d984d3017f0000060f200000000063d37311ad80788091985a940ace82320160fa2f4e0284c201e090c851e602c7055ba10ca82afa164102c0e130d99660b4c80207e0d1d8569c14c53acc6e9cedd0c68ec000000000000000000780720000795620e7710440a12800000000000000000000000000073848009d1047fe155183e7cb78bbdb3ed2072c2fe14af834ea02334807616300000a0f62b99a002a38425a969402505740980c0c07b10599214e001a9010a981eb2135b8573e0dad8a866c3af00a5c1343043e00005a286000000001e0bc800000000105ec00000000000001b9ebe07080000000040136000000313e1118851d203e000006b538b2760000000000000783b5c01c704b6e004401a0f2097355c00fc9035dc0ce5843800004021000001baf20000602a1a0d8dd10ba05ad03d60080f021360b988149509968146014518259003290345013dd03ce2e42000000000585e5e0ec6805a00000000000001052560225016352c21823120c2fc36040a5c009f60c7c3ca1356a081afc0244b52600f1f0972611e0023f2e221a176a89c0054400e490385c1320853aa11848566a10750188b2f6c00c38122a93d2525918110e0ca0000000003b273c06da80fa000000000801d68388e00e002db207bc858b2103f029536424053c216ff05f1801983901203b605cbe01730492c07500000000000000e17a800004037681ce416c0000000002b8720000482d4e0f50000180d4904a4a0a100000000000001601d800000000080124083788c6213f384c7c10a003a7610b8059660f15c532c0a2b8042013bdcbe2ec687057761384bccd8f52800000000000002031905a1209a8b50bc0931b4a50f3170314013ae83700000201420000380166ccf00000000078c3de0ef80000000000000000000000a05b0000040d298500000000000e09000000e04aa3adc000000000e07615c5f403680001077b0000000000000000000000100534032200006000de363e85576c837849ec46b55d10a08963dc0403780001d2440000081246804960a6f8465e142404bc2859c82d7200163cbf40cea83bb607a000e7214c8cd2f40e5904b2a0f4fa47ca419b0063c007b02040349338dfc01a401a3a0517482ec17ca38cfa038f80cda02fa8156ee09904c54043183ea4d53dc9efa069802a3a13a584fa202648298a1160b49b456f9004e0000300acc01ef05d60000705dda011002d280e7705ade0c70000000006825b4f102024a000000000a0a3e099c802f5048da0bc00001211c503e400000000000000000000007041600007837b81725391c614f88a5c9250ba495805d80552e03c481ca611ba85ef80df6b3600000003ca0077e01b4c42980001409380000809ce82be000) else (if i<3 then 0x21085d1e16f48481e0915835f202068405400c580414109cac3d2121f9425e0564045b0348f04d8a03a80a180042d02ca610c2832b4006f8374601f002f481050000000006830dc141abdcd923ed811c804f2852c000000000000000001813688537a001a38d8a05b800008137a0166006c9809bc11a00001e0ab00000000000000c540800007212d018e241b6858e0000000008074e2275210000000d21e00000000d784dc612a88ce9a16dc818580d0f02c4a0bdc0350e03168302af7380000a0e019de5409c284ce0e52903dfc0b1d85b40840280000000383dc0000204200006000000000501aa00000000000000000000003046200000000001028000020ead82fe4012c4d97ae7c100d6f1488acee007758386e021e44a6000000001212b7847a440ab95f840055049560e6181bd52cc28406e16ef844d00ea581db004a201084f6e4056ea13b50364aeade857860998ab296ea0804e30f74d84759279b806f806f800002144ac94400fd60368005c03a2b2062a037621697044aa09a6c88b216ab84af0546b8359c023f82ea616bf34e62064d011b200eb8288c05964bf4614a6029ea0cbe82e4608023d0b816cb0216203bd8021c0db5b983cef19bdc460f46851a609e8854f40cfd857500c4634cc0e4e184532159101526efb8802c009b104a281761c8592d2fd01d620fa50584609f0ccd100e68832cee8128175c08d385f76b78780f6c08b4856200000000192e580000c88600001a13f80001a08aa02b1f29f00000c01b5850240b40000177750000080a980000c15c00000000000456b27300000000000001612980000803500000407e00001600f800010150201b0000000001811478b86601af4a7a00000000000000000020fc5828320b6202b4e179eca3a0000081b9d26f783ffe171b04f4a0c3f0434000018594005e480c8c10ec8118826a709aa0125980ff60e820519c142d85f8409723d134027704d5c0aea8542c00aa8229a04500001a0bed00b220e4084b8069d18101e07d4852ee092782dce10208057a0be2827ea070081068d7c0000180e2a83c27032a019400001019a00d06812e2016602cfc055705e381675cd91e0d524b22374ce8940200bac34a80798492780c2003fda141283e240b88000000006000aa0b32c8e200007043de901644b2000000000000000000000000000000000001211990278000000000126dc839e0000000000000000000053f02de4000c02c9a35dc813e000073a580000300b800004017b007900001f1730000000000c9bba10b300fcad35580d0af5743c03a156281c7a8469049a000000001a08700000000000000e06ea01fda149800000000582222eec88281c095c80b5a0259c97140949056b00c0200ce005fd3355015780141607178131012d648100049e814a017878264e8bfc81 else 0x51bd1e00a501cdc0c6f815180f6e8b4b0168b803de161b84f9c034881fe811d9d5bf351e9040362c128190c107cba1bc154020f5a003a8418a169f036680aaa0168c0868000180180000000007a9de000000001a12f8000040d580103e14580001a0982d02e611748379b178985100153685d397469c8b7c065d80e4e06640324c05f6835b2013482e0c04d0cc692ac11838e00ee038cdad5c884a98777c021420bb3825f6160480aa20cf68349c10360321c04b404cbe120f383340f80ba4c0009b0326816210238a067800000000000000000082b68817e806553296b98a204ee09a480155bbf9b0958029c8130082ee011c8bc39a0c1805c3e70c5a0de000000000437180001207e80001427b0000160b08847dc0747011ee12eb009480a488b46c17a78092204150534d20f0828d6151805cda01fa801de12700000f2bb90277ef06e826ec0572029140d308022c40d482a494e9a234ea056e00e9807200000000000001c043b05c4000000000c0827046bef7420522000000001e15f80000000000000ed7400000e05cf3dc9812c1b89800004848eeecd080b600001850c9413800008045c03ac0d14100d80000000000000283f980cc30a81c06b3050fc083d83a380fea83f6608da386e0000783600000403b78b59600e0000000001017ee0a580000000000000502fcee4a03c11af7cf00ba215e800000000403ee0000180ae000072387ccd1800000177985486d1a80000acd3ebb5400005836e0104f85b9684d00001ab46800018117c81f20000000000000781a5406763abc322780000603d00000a0f310a4b20af20383217f9822000000000000000000002d22812352a3a0121c08ba00a660cd9813800000018083508bb69e106aa4a200c588009217d48484a03c80001ef23803bc0000000004164d82e8e0448805fa23c6540540ec8000000003a2500b39700338edb384cd376f484426108e03afac3938334808e905da202290436402080000611145ca768e900000e0ae14398c11540052e0f01059e8113d8160883dcd9f6213cb054b20e35041000a1b856c6087809b3c0))
+def x511d11 (i : Nat) : Nat := (if i<7 then (if i<3 then (if i<1 then 0x648955833fecab40192c1bbf698a254d60febaa4a9c66b07fd5314c1815833fe54b42a9ac1fbe5496380160edfaa4b2d32b057fdb12a553583df6a9304c0ac1fbd5496160560cffb52d1aa4b07ef97358d805833fe98554c92c1ff654d3044160cffb72d2864b05feebb54920582ffd5daa7002c15ff6d52065560ffe220d12a2b057febb54994583bdeaa324c22c1fb758d3150960aff972d2304b0777db954a55582bfed912ac9ac19ff549a94c960ebfb72a9ceeb04ffebb68d50583bf711264caac13ff6c9a354160cffb44a9328b067fd526899858377ed3340a9ac1fbe5c16360160e7fb72c1306b04ffdb5689805833feb9b44cc2c1fbe6dd8059160dff34ed1b00b07ddd7354d74583f7c982ca882c17fe6d53044160edfaa4b1b24b077f5b954a11582bfedcb46a92c1cff54993a2160ffe2a2d1a20b057fdb5249935827fed9d54a92c15ff6c5935c160eefaa4c9caab07afd5258e885837fcdd300b8ac19ff6a4a254d609ffb74b9a40b07eed5260964582bfe5cb4ac12c17fe6d53060160bfbb6a99466b04ffdb568d1058377ed3348a9ac11ff2e95165d60ddeb42b2864b07bf13160181583f37112c72aac11ff2e99354560cdfacad1532b067be9969032583fa7114ab19ac11ff6c8a9955608ffb6454a82b047fcba54d925833fadcb42192c11ff2e99295560bdb974b2c66b047fcba60997582beed915319ac1fb54c56348560e7eaa2cc302b067bd9569032582bbe5d3272aac1ddb88993955608ffb6454aa6b067bda464c525823fed9554caac1fbc5456344160c7fb72d4064b0577db22a6555831ff4cb50192c15f72e9928cd60ef9c44cac66b07ef110699515833bf4cb4a192c19bf594a954d60cbfd32d3864b057edb32a622582f3e5d2c72aac1fb3889658cd60e7f30ac9b00b067bca950941582bee5d32b19ac15fb6d4a988960af7972a0b08b047fcba656335823fed9953112c19ef69299149608ffb6755324b07f7152545105823feda952992c15fd6c432655608ff974c9caab073f531661815823fed99532aac11ff2e93166160f77300a0b08b047fdb82a55258277e5d2cb19ac11ff6caaa64d608ff97498b2eb077ce22a66335833fd4cb40192c1dd7955928cd60dcfb6cd2864b067f995680325835fcd8350192c19bf58da2a6560eebc674ccaab047fdb32a54158337eb1952a9ac1ebd6096160560f5f308b2b00b06ebda458c525833fc54b00a0ac11ff6d4a9889609df974b1caab06ef96568032583df8c0aa2c02c11ff6d4a98cd608ffb6454c66b0776e22a66555833bedcb4a192c19fda65a10c960aefb6654caab066fda62a553582beeda95319ac1baf595a40c9609bfb6f552a4b047fdb32a5525823fe5d2a2cc2c11ef6d2aa64d60fce2a2b2a20b047f5b1aa992583d5cc02c8c22c1ebc6016160560 else (if i<2 then 0xc17fb6d53288960ffe220d1aa2b077f55164d715833fe54b4ea9ac15ff6e4a354960fd7aa4b1c88b04ffdba61d20583f76a9304b0ac1bbf69d6360160f9fae0b1ae2b04ffebb68985583f3ea934ca8ac1df7649534c160fd7acaa1282b067fd5268d91583bfcb8326902c1df76e5538cd60b7fb66a9510b07bf9b360185583faea9946a92c17fe6d5a360160ddfb44d32a2b077dd3028d92583bf6a9144caac15ffaed53a6560cffb72d130ab05efdb628d52583f6edb2a719ac1df754a998cd60cffae654aa6b05f7ebb54951583bfca9326c02c19ff2e5a261560bff576d3b00b067fdb96952158377ed3554a9ac1dfd485a94c560b7fd76a9510b077ed53a6622583f7c982c6c02c1dbf5c16364960feeaa4a9c22b067fda969153583fbca9aa5002c1dfe6e55380160eefaa4a8b30b067fda364d715833fed4b42a92c1fdd5495160560e7fb72a9510b07edd6368131582fdeda144a9ac1f7e6dd805c5609ffb61552a6b077ed32a6622582f7edab04b22c17bf6c56550960affb72a9a84b05feebb54e22582f7ed8aa4b22c1bbf6896354160fdf346b2a20b07fd9314c170583f7ca92c6882c1ddf5495365160fdea62b2a42b057febb54a995833fe5cb46b8ac1f3f6d9539dd60e7fb0ed4b04b07e7d5258e555833fed4b44a9ac1efe4c18060560eefcaad4a64b05ff5b254e11582bfed92a2cc2c19ff695a94c960bf7b66a9488b07ebd42595435833fed2d32992c17feaeda260160affb64a9b22b07fd9304c580582bff5daa6c8ac1cff54998605609ff974b9b24b06efda25955058377eb2b40192c1bbf699a254d60fdf284b2b00b0777d52a66555827fedd2e2c02c13ff2e95348160fdf2a4c02c2b07fb98050941583efcb8260b8ac1fbe58d205c160dff260d1300b07df9705c580583f7adb26290ac1f7e69d73601609ffd76d2a42b077f97064d8058377ea9346b0ac17feaed52441609ff974a9c44b05efebb54961583bf6dcaa5112c1fdb54d52889609ff974a9262b07bf9b760184583b7eaa2c6c92c1fb74c1a64c560bfbb6a98a60b04ffdb368985583bfca9327002c1bbf69563249609ffb61552a4b07bf58254581582ffcdaa40c02c19ff2e5a354560eefaa6c94aab067fdb969532582ffcd8a60b82c19ff4c2aa65560dfdaa4d1300b05ff9b568d10583ff4a9344c02c1dfb54ca988960cffb24d2a86b07edd654c5305827ff5db4a992c1dfb54a9988960cff972d1aeab077edb954982583f76db2a7112c17bf6c5635c160bdfb64a9ac2b07bf5814c582582ffcdd2a4882c1dfb6e55388960cffb454c8a6b06efeaa595325833fed1a60caac15ffaed5364960bff576a9400b07edd3259633583f7cd1acac02c13ff6e9305c560cffb4ad4b04b0777e994ca55583bfa58b52a92c1dbf54963a6560cffb4454aa6b067fda2 else 0xa4a9d32b057fdb728d92583bfab8aa2cc2c1fbd58d515c560efdb72a9240b04ffcba54a335833fed4b48c12c13ff6e95244160bff368d3b00b06ff5b568432582bfeda944c9ac1bbf6896325560eff324982e0b067fd52aa993582bff5daa4c8ac1bbf6d9a50c960eefaa4d4aa6b05fdebb54d30582ffcd9aa4c02c1efe5498060560cff972d2a42b073fd826a583583f7cd9b00b0ac17fe6e1205c160dfd944d12a6b077f9a764d80582f7edab04b0ac1dfb5499348160bdfd76a9ac2b05fdcba54a335833ff4cb46292c1bfe68d805c5609ffb63552a6b07ef9b760161583beeb9952a9ac1efe601a261560f7f300a9308b077f97364d80583fb6a9144a9ac1ddf548a954d60cffae755324b05fedb354982583afeb8326b8ac17fe6c18748160fbf2e0982e6b057fdb969152582bff5db52a92c1bdf549a354560affb66a9330b07ddd535cd725833fed4b48a92c19ff6a6aa54960befd76994aab06efda558d2158377ed2aca492c1fbe4c16548160bfed76a9422b07ebd5259184582efedb946902c1e7f61d825c560cffd3355264b07f795254d1058377ed1aca882c17fe6c13160160ddfb4cd3aa6b05efebb549645837ee51b46a92c13ff6caaa54d60affd76a9326b07ef9b654e00583bbedcaa72aac17fe6c95344160cffb53552a6b0777d53a6655583fec902a6982c1dfe4c120655609ffd76d12a0b06dfda75c5805837fcd1b44c02c19ff6899261160cffb46c92a0b07ef9a758d805833fed4946a92c1faf6d95391160eefaa4c9aa2b077f93064980583b7e982c6c92c17fb2e95388960edfacaa9330b05ff9b054910582bfedcb42a92c1bbf699a04c560cff973552a4b07f3d5354a44582ffd5daa6882c15ffaed5266160bff576a9300b067fd70aa9935833fed2d32192c1df7548a98cd60cffb52d42a4b077bdb954a44583f3ea92a6b22c1fd7549534c160bfbd76a9466b076fd5258d94582bfed92a6ca2c1efd4c58060560cff972d2a64b06efda769931583bee9953319ac13ff2e95264d60dbfb6f552a4b07ef95258d80583fb6a9aa4902c1efe6cd8060560fcfaa4b1aa2b057fdb22a5535833fed3b5298ac17feaeda360160cffb52d3aa6b05efdb254d645827fedd2a690ac13ffaeda3545609ffb71552a4b077f9b954a00582ffb5daa708ac15ff2e95264d60bf7d76a9488b04ffdba60951582ffcdd262c02c1df76e5528cd60bbfb6f552a4b057fdb96a152583beea9d3319ac1efb5498260d60efdaa49032ab07e7d5269953583f3edb2a72aac1def6e55391160affb66c92e0b04ffdb3689805833fed2b2690ac1bbf69d634c1609ffb63552a4b07ebd6550974583f7c982cac02c1fb76d9534c160bff374b9b00b077bd9255174583b7eb9ac6c92c19ff5c2aa64960bff366a9400b07bf9b260185582ffcd92a2c02)) else (if i<5 then (if i<4 then 0x1582ffed9aa4ca2c1dff5492065560fff2a4d1b00b077fd7364d20582ffed92a6982c1bff6898254560bffd76d2a64b07efd5258d20582ffed9aa4902c1fbfaed5358560fdfae6b1aa2b07fdd524c530583f7eb2b48c12c17ffaed5344160fff300d0262b07ff910aa953583ffaa8b04b8ac1dff2c953a6560bffb64a9a20b06ffd5268d10583f7ea92c6982c17ffaeda060960fdfac6a12e2b07efd654c173583bfea9324c02c1dff64da254560fdfb6ca9ae4b077fd524c195583bfeb9a62cc2c1bff695824c160effaa498b30b077fd9269153583ffc88340a92c17ff6cd5260960fdfac6d3b00b05ffdb354993583bff4caa6992c1ffe54d3048160fff260d0304b077fd526a583583bfea92a6c8ac1bff685305cd60ffdaa4d0304b077fd9254953583bfeb9b24c22c17ffaed528cd60fff2a498b00b07efcba549635837fe51b4a902c1dff646aa54960bffb62a9260b077fd52a6633582ffed9ae2c02c1fbf5496548160bffd76a9326b07efdb654e22583bfea9d33112c1dff646aa54d60fff30098a84b07efd6468d52582fff5daa7112c1ffe4c15260160eff974a9326b07ff93060920583f7eb0b50a92c1bff5cda354560bffb7051a40b05ffebb54981583ffca9260882c1fdf2cd5254560fff16690300b07bfdb560983583fee982a698ac1fbf5496344160bffb66d2b04b06ffda74c580583ffca9344c02c1fbf58da054960bffd76a9328b07ff9b254d10582ffed9aa8c92c1fef5514264960f7fb0ed0304b077fcb354998582fff5daa4982c1fbf591a854960fff2a4d1a20b07fed5260941583f7ea9ac6902c1eff6d58260560bffd76a9220b077fd5254d94583bfec9b42a92c1dffa65a54c960fefaa4a9a42b05ffdb128d52583ff6a9262c12c1fbf5cd6360160fdfb6ca9a60b06ffd5268980583bfed92a6ca2c1ffb5494264960fdfb64a9ac8b077fd5264984583f7eb1aa4c2ac1dff6cd5264560effaa4d4a62b07fdd304c582583ffcd9aa4882c1dff5499348160bffb6ad0304b07efd7359520583f7ea92ca982c17ff6e95260d60fdfaa4b1b00b05efebb54963583e7eb9ac6b82c1efe6c98061160fef2a4a8b00b05ff9b768980583f76a92ca902c1ffc4c58050560befd76a92a6b07ebd5259141582bfeda924caac13ffaeda260160ffd2a490300b077ed526a5825833fe54ae6a0ac1faf5955461160bfdd76a9304b0777d5254d91583dfcc0262c22c1ff64c0a348160fdf240b1a60b0777db954951583f3ea92a6b0ac15ffaed3265560fedaa4c12a2b05ff9b568980583ff4982a4902c1bfe69da260160cff973552a6b0777d536a5525833fed1326a82c1d7f54d929dd60bff366d1300b07eed5258d20583f7c502a4b1ac1aff6c1a80c960f7f300b8b08b077f95364a00583f7ca9300b22c1bdf54aaa54d60eefa else 0xc260b800ada0a4e0974088007c006cc05d80462029e01760001ffe69d3160160fff360c12e0b07ff9824c170582ffed92a698ac1ffe5498050560bffd76a9a42b05ffdb55cd92583bfea9326882c1bff68d535c560effb27552a4b07fbd7155184583bfec9554a9ac1ffe4c57360160effaa6c9a40b05ffdb550992583efec3a60b8ac1ffe4c18748160fefaa8a9ae2b05ffdb354991583ff6a9146902c1bff695a060960bffb6051aa4b07efd654c542583f7eb1b4a90ac1dff64d515cd60effb26d02a4b07efd634c171583dfec1260c0ac1fbf58d5254560fbfae0b9b26b07efd6369520583ff6982a4c12c1fbf58da154960ff7aa4a0b08b07ff95260142583f7edb2a6902c1dff64d5254560bffb64a9a42b05ffebb69582583bfea9326c02c17ff6c1524c560effb72a9220b07efd6468552582ffed82a4c0ac17ff6c55261160ffba60512a6b077fd9268153583dfea9300c0ac1ffe4c13160160fff34698b00b07ff9ba4c580583bfea9b24ba2c17ff6c4a254d60fdfaa498acab07ff95248180583ffc88340a9ac1fbf595314c160effae0d4b04b077fdb954983583fbea92a698ac1dff6e5524c160effaa69032ab077fe9954932583f7ea9aca902c1fbf6d58258560dff946d0aa4b05ffdb74c584582ffed9b40c12c1dff4c1a960960fbfae0a9ae2b05ffdb828d52583efeb9b4ec02c1fbf6d58259160bffd76a9308b07f7d53549205837fed2b48c12c1dff6c95364560eff964a9b22b07dfd875cd41582ffedab04a0ac17ff6c13160960fefaa4c12a2b07efd7358d20583bfeca554a92c1dff5493064960fdfac6d22a4b05ffdb354983582ffed9aa4c92c1dff6cd5265160fbfae6c3a40b07fecb354920583bfec9aa4c2ac1fbf549a64c560eff966a9532b05ffdb354981583efeb9ae0c92c1ffd5493160560dffb4a98b04b05ffebb54931582fff5daa6902c1fdf549534c160effb26d2a42b077fd7354598583efeb8b0ea12c1ffe4c15248160fdfacad0262b07ff5314c181583ff6a9304902c17ff6c95350960fff300b9a82b07ff9704c580583efeb8304b8ac1eff5498260560fdfb66a92c2b07efd63aa952583fdea0b0ea12c17ff6d53060560dff946d42a4b07ff9204c173583f7eb1b44a8ac1fdf5495350960fff374a9220b07efdb654d42583bfeb9b26c02c1bff28da054960bffd76a9306b05ffebb54991583fdea9284a0ac17ff6d5824c160dffb74c12a2b07ff98069d31583ffcdd2a6882c1fdf5495344160eff966a9322b05ffdb028953583bfe90352a9ac1fbf6c95358560f7fb0ec1282b07efd524c564583ff6a9348c12c1ffe4c5305c160fff300982e6b07bfd8769182582ffeda946902c1dff4c0a265560fdfb6ca9a64b05ffebb54943583bfedba62cc2c17ffaed5250560dff944d02a6b07fdd7354d3) else (if i<6 then 0x92d38d5384937bd374b370d3681362935b7357934b9344733d5334932bd326531f3319b315d30d1305f2fd32ef92d832d2b2c9f2c2d2bbb2b152af12a7f2a27296728db284f277526b5269125eb251124ed246123ef2397233f22cd224122032191213920c720071f951f231eb11e8d1e011d5b1ce91c431c1f1bc71b211a9519d5194918a317fd177116e5160b1531148b13e512f111c9117110e510a710010f5b0ee90e770e050d790d6f0cc90c090b7d0ad70a7f0a0d096708f5084f07dd0737060f05b705ad053b047b03ef036302d7014700d50048fff0ff16fe22fd7cfcf0fc98fbf2fb9afb0efab6fa44f99ef8f8f886f82ef788f6fcf63cf57cf572f4b2f3d8f39af342f29cf1f6f19ef12cf0baf02eef88ef16ee3ced96ecd6ec30ebd8eb4ceac0ea00e9a8e91ce890e81ee778e720e6e2e656e5b0e53ee4b2e40ce3cee328e2eae292e23ae1e2e170e0cae03edfccdf26decede5cddd0dcf6dc9edc2cdba0dae0da20d994d8d4d862d7f0d764d6a4d64cd5f4d582d52ad49ed412d3a0d2fad288d230d122d096d00acf98cf40ceb4ce28cd68cbf2cb4ccaf4ca4ec9c2c91cc890c7d0c75ec6ecc67ac5d4c562c4d6c3e2c356c2cac272c1b2c10cc032bf0abe64be0cbd80bd0ebc4ebbdcbb9ebb2cba6cba62b9f0b94ab8f2b8b4b842b7d0b744b6d2b660b5eeb5b0b4f0b464b3beb366b2dab24eb1f6b19eb0aaaf9caf5eaeecaeaeae70ae32ad72ad00ac8eac1cab76aa68a9c2a936a8dea81ea792a706a6aea622a5b0a50aa498a40ca39aa2f4a234a1a8a150a0dea0a09fe09f3a9ee29e709de49d3e9ccc9c749c029b769ad09a44996a98769804977897209660955294fa945493c892ee927c920a914a90be90328fa68ee68e748e028d908cea8c448bb88b7a8b568a9689f0896488d8888087c0873486a8863685c4853884e0846e83c8835682b0823e8198810c80b47ff47f687e747e1c7d907d047cac7c067b7a7b087a967a3e79cc7974790277f4779c775e76b8762c756c751474bc747e73f27380730e724e722a719e7146710870b070246f306e8a6de46d3e6c7e6c0c6bb46b766b1e6a926a0668de685267c66754671666566596653e64986440639a62f46234618e60805ff45f4e5ea85de85d425c685ba85b1c5a765a5259ac5920586057ba56ac56065594553c549653d6531652a451fe51725100505a4f804eda4dcc4c704bca4b0a4a4a49be48fe4824462c453844ac43ec434642d44248413a3fde3f383e923dec3cde3c523adc39ce38f4386837dc373636aa356834dc343633aa3304325e31b830c42f822edc2e502d5c2c9c2bc22b50295827c8273c269625d624ae23d422e021d2212c20a01edc1e6a1e121d861ce01c061b601a6c19ac195417de1752165e151c14aa1334124011b410da0f7e0ea40db00d580cb20 else 0xec0400ff329c016786d03d0184a05203c82640d207a04182b805782604201c404008204803f81c00098802705e0c7056914f84712390c12927b9158455102534731b887ca7453d9210d26a93d82418032079158329102893549ee40f22b0542204c11695fc9ec1b922bc1f844c1d409b481e810807142b801c0120203a9d08f44911831812384f047e1e307802b069e0f80540900148380040e529a9c00860200889401504281e810e07c0b336f50e80129007807419486d436216c01409b93220042260096281945602a83b9005341c831417b08583ec1e82a3079a0700482ec1600207028012208fc05026d4de0b391580812a6fc37281810809b2c9aa4f602a603481e4560a8440a10340bb22110f008703921f10f4156c8505802a0012d05049c00fe02b059a9d022c020401ca4f785903fe02c0c208907000812a8e23891c8726a93dc81e4560ca4409a4f720704083751285937a9ec12180c9030280c0d906c02a408608f0889a4e0405c05a9d012259354a6a4f6c0604a48ae40e8814700380e26f148700d0ad10414702c120e707480241220e00480080e0f2a21010c01343da1e50e41920bb481800ee05203c82100e3c04015002520a3020012408e04201e810c07c03cd640082076839004b813809e04e80a40a407904c81a4106071e01010c0f4084e00e8ac013100e020801801487c00280356f673200a8012b007020802904281f40f008601a81edb7a10ae6421d0025da6a5a681a5dba583a4f7a49fa447a3bba2e1a255a1c9a109a0b1a0259fcd9f759f1d9ec59e879dfb9d899d4b9ca59c339bc19b4f9add9a6b99df99a19963990b9899980d97b5974396d1967995ed956194ef947d942593999327929b920f919d914590ed90958fd58f498ebd8e4b8df38d9b8d438c838c2b8b858b138a8789fb89bd89318871881987a7871b865b860385c5855384fb846f841783a5836782db828381f7818580f980537fe17f3b7ee37e717dff7d737ce77c757c037b917b537afb7a897a3179bf7967790f788377f77785772d76bb764975d7757f74f37481740f73b7734572d3726171d5716370f1709970416fe96f916f1f6ead6e6f6dfd6d8b6d196cc16c696c116b856b136a876a4969d7693168bf684d67f5676966f76685661365a1652f646f63e36357631962c162016175611d60ab60395fe15f6f5f175e715dff5d735d1b5cc35c375bab5b1f5ac75a3b59c9593d58cb58a7581b57c3575156df56875615555554c9547153ff53a7534f52dd525151f9516d50e1506f4ffd4f3d4e7d4e254d994d5b4ce94c5d4beb4b454a854a4749ef497d48f1487f47f3479b4743469d464545ed459544ef449744254399432742cf424341b7412b40b93ff93fa13f493f0b3eb33e5b3e1d3ddf3d6d3ce13c6f3bfd3ba53b4d3af53a9d3a1139853))) else (if i<10 then (if i<8 then 0xc2090bc45705840001668015324025484591580241361132c20840e00900202c01506086400c013808089834cc11833263e00400b380482a0ea6440040048080f3054190ae0a904c032b0974180150a41083905080aa00002080482a0e69a059e00c0400a82c00c041007515c0241a66072870ac40320002601600d33039d0b905b8048024b2c8054200c0122bd01002ace68e04498ac110020804985882c31610bc70ac00905703800402905038481200904c03c015060420260120a06201728ed0091a892800a2b804826c150640c02a180200990382cc1c0708bd013801407048026c1507c7c432d0ad009213a41c0406c0b1080180631584581360b00541412207a13a48ac92c811580240400b00541903102aa00d8ac15284300482c10043a1e824287200906499628a6a53dd0195900a1891a81d4560815406817684241f20f008788541e82cf0600ab0898025a67054729bd8d74762389b08583dc1e581c0120c90439c0f4084038a15c00c0090101c12927b915845510255381a3915466f60531ad878706349d000e072c06034e40c0204613f0b7878047e2570c5c04c1e82401a40c603901fc21983e03a82ec1a6020984801b20d805082400400f002182a52c0693d82041c20a12801d4e80b0c374a381500843a9c30da02a93a281c0f46004e0bc23c0ff249ef01611153e0244a0a201e80f807811bd77e2594880ab004a819284241ea0f00860b0c42a0f8226c3905582a0012d93dc9a9c0d22b08b2204ca6fc3702424f6a0604218ce0a8e537b1ac8d647130438140091d0381c8218090c0c0354040a04c281945602a83b9704206904181e810804301061500e208201543d01a60097028c08004902380f80780209642af4012a9354a6980d27be00c8ac10209b449d30181115470280a08193dc8ac1b88cf290930daa7b93e281c0f4653e29c0cdec6b2389409204201f00f004003d05190b4156abd0540025889493dc8ac22a8812a9bc0fe0435030080222644a49ee4561154409651c089048602a456072329bf0dc09850349ec108653e29c0cdec6b23591c4c80c40d20280c2ebf5321c2c2260094e13e0b707883160f01200d3c1f2026c5602a010314e186d202c9d140e07a349f08ed80a53781c8b440c0e417a87d43c00482c00540204a9c005607ac3682ce4e81163823e51c091d37e02a4560e00102145611505d01d4809e02901e413206903883c014202a02181e810608404802b81300ab070002670a381ec0fa04002080480260930395856b23026c5605582c1e0a0c0b02c0218020299ec10266ad0304581ca6537ea3b0dca0693d82a01087056a0f9078043c42a0f508540808982ac012b06349bc056091c0648181c00204607287c090021802416180808d82ed281c02f03f903543ea1e002415002a010281d2c0b04802 else (if i<9 then 0x83646a2b0698284226404c28184818601c81801210c2100380e43a715c024012020054180f643e5158c142020515802480bb315981e0120b02c01d51504204803181c0604f026004122b228ad0550291a8ac041083058130000b0004844c1505c1d0357076020086410cd815a01c0240400a8299d004062b05483841c00a8821a281104380182c1c0e02062b02a2012905848ad0120ab2281c15009801002c0a81081502a0608f40c300640c84321002c0f01d43103f90d60b0089a1b1003264804a81400905030c40d009004826c1560a8303c001341805b82aca0bb059c10c16103a0541992012803100810120fe2125b00602005412565078836215a00322b2411e85609b603c208150517d60560120200541414489693b0024156517d099302c60708c6000226701000241600ab24001c5609b0541261383a549c0249813c1682cf00602016118013418c35a8af0780b7360e81678030100b0ca83c915881121054600c4560fb0048a40166733238af1f002008982a0d003600a8ae01242a283c200700901002aca02005402ac60ae115802709ab0b01002c0e11a034a15e0030092aa38112a2b0104024a00901002c0150482102c00120ab24208c5780004d82a0a0ab02182c060a981f48ac1084945205908410c4630328c22b364008015040700185802e2b80482a0d08210302c01504964600c0120a801002acc113030e0001600a8281c80e322b1a07815202004c08ae0548293e2588060a82048080a0b70570380520020004e1b30840b0481c8120a2b1e1330f029008982c0b45660180240c20d32906240e0d81e1e013105420483841e06c008384d140a88219488400905582cc80b3c0182841504435906240e301000241e80b3241b01300b31c0841360a80701015d418c01808015229007010a8151043501a7002020180a945628078185002e2b80482a0c22bc01826c1560a82d00c841009004b01080c0d33828095522b1e1581600d31815e0122815500540c0d505814041009055834c800906fc0a8150440c40a980362b004c81c1667044868100f00102024156502182ac160302b81fc4606804802460d604802a48400432e11601a0a824802c208610562b40252e76801c10e8746de8049980722b00484301600d33405e000455303c02422660700285802020515c0241507c01a10e0400a8202b45200ca180804562034e0040403c03981c1600e50541487767601002c01565c14609a8ad8650826128c0c0ae0598240040ba01a00413082a804945ee40320480a8156520082c08400e0220fa40c233783801e460604400820127415400d45700900482601a67030826240e3015008253400905802a0c07108618ac729a11580240400b00541900662b00483f80c20d33400cc5700900482ec00c0d33a062c5684320093e0160644a else 0x8020c009a281aa098821990900f00100024156594523181aa0b025005c0c020522402415660488431456314800810120f220b105862c214802c0a02a800410c1600f2089a9920128c00e11c1603715c0240401132428e08783922b4024a0ab215835811e0a9c0c0354e0ab703401d4884060100380e02ac0000241e40a82a0610860b000482608400e039a2b0020988219045602082182c080a882180801600ab28b10586c6560980805200b03d1590120dd182c00120201e09a8ac8090791013c0b00100c40e020050c0241565a0198ae0120200541507b45622b202482c41618b084562900581b0ac0a1058034c809181001e86108806844e03509b80c02ba568b07c22ab00e02001582c0150580c500540f0430581413641890382a48418015481c602020482601660a82c208a1980001002a0a0e084b62300541190544024e11d08e045c1c243bc4ae022801403503481c166020015385e2c0301002cc5100ab348ae05489d1a189002e2b807c024150620c110f00208f05814226061315e0000400a83212c45689d81502a0a6d1821c00d45610c804834ce00904803c01504034826004122b202080c20a808992073003315981e0120b0301c80e322b1159114602002182c01565577a17c193856a03c0ad456009054241aa0a9600844c1605c2b02a0c0e2902049554b0078048e104290103443280009b0541f08b043054600d0ad0093420a0000b0515e004136a64804a2098c9662f4121873047801a8194570090102c0412bf004e18b09a0b03428e0120b0182a58060da22182a0a02d81520240404070401c1c2c5605402220127a0028ac2180a82481c136205d81864560092018a4c8e0580c0184150113380c5611601002a09039202381c0400ab0581b08f0090048e012009119ec0410430581109a0b0c31834c848242b181c520409281848312070549012207a22bc0248098810044c1aa44048024542607040001fc0a85324024f2bfc26e1881800b02844c13180000482c01506c4602b8194340c00810860b705816848a070048430156505d82c0012303940800e2334d218a10486c800410c137009079248a8457801b81a00ec78600a8ac1a7009502854562a00826c8400e0200aa4562903837050090580940c40751582420060200701c1ca0a1058034c9813055c024160442851588ac809203c1007606404808015663850454157843e018384c5602ac0c02dd42fa13250570070090541a4f600901002c0150503904314563c7c432c1366bfc008262012720f61b08126930559421840001040a81c0503882c00e43c03881c1308090559653505404dc2648087059c00c0410090541980602007802a08020801cb2157b00928356054aed82190144290515802712c0b3303f815660600482401a60b03c91100629005702aca418903)) else (if i<12 then (if i<11 then 0x7002c06a2ba01843019448008240160a2b004826c150706cc13e4560522044f000020054100fe02a22b4208805d0cafc22d22b46783c8b41e40a80aa8be0090541824104991581a4904307963e015066480498c561315c10c1603c2388ae012c04148034cc45f06498ac0120b02cbbc0be0a342b48ae8721223a11e40c0b0015834ca0a8004e02d40f83d1481a569403a0083482260d33081c0120a105802a0b80031581842260a82a2525900e5c08028640e081055a0d1c0a808618ac1fc0e004440250a8a53783c940c0208049b009001601a0ac1420a83426c1a702a07003f81500b062b40253849a2b600f0260b0c1d18181a60b30480081688114802c07018a01a81c2180ca2a0800402c09838300662b01002c0c0bb821844f0606648049b1180f205582c08a070048430226405980820120a820c8490580405082a0a0532044e000e2b04d82a0c0b3821e0eb0066bf0104024e0b0a03824140c0a8299d015780307082a2086604881e940e301000241e80b3229101e4a2ba0040245f4611580810860ab22214cc8020059c0241506a0082a41aa0b0204601ff84d05401842266c18207704c83941d20600540f205463e0cc8b800044c1c030034e8020a90581014209082182a14570090699c1a7813004aad0160564b40241420200541452102b84102841505968cb210a929a24a90208bc43ae01a818040a2b2362010054fc2b02841600d32615812002006982c0a22b82182c0781305d834c1c082a3528024160882b83541c1056915e17f0bcc181482580722ba0082601600d332159806020058034ca0a025502cc72b9103c23312c020804985200200580c23f406515c20815050580080012387c1a4a0550092032f0100c5044836c1566c21600c4560d314803a8c00990323181664964315a0863030c00d45602080482a0c62b80480240400a82823d030c01b15a10c8400b03e0b704d83a004e3e01e42c43804560d593d834f03002005b9c1c00b0337e0981a609007f02a10418047881304189038c1500b0964008307704332061802c0301002dc1c060504080108305bd06011e0a826000c5610c0541013002000482c01505103402452140381002a0cc03089826c1504415501940ca0706900820120d344120054020050c26415065324002c0ee2b04dc024226760182a100d22b059834cc41890382a4704308ce0e58ad0092a00680700904d82a0a69a821c00cc0e0ae2154024e07251581c4660640483ec1200b02a0e416780305082a0b85601582c01a64078200ec0c80901002acc09006982c06207915881a0674c1682a20865c0982ecd1d80804802c0d813c018bc41604715824022b00905416128020515a81e1020b0302454e826019082457400030834cc84e9768b002af68218f0758260580c12207a0580e00e4568154024 else 0xc81c1500201a0804570208049016e0d50700a408a2b05882b8722b8158080150405982a0160385190ee0864078048c30d40305440241e044088184166800089970060a80100c1560204048c05484305402c0840545188ac5200b00049422a0ab821810c1605c01808015038048a420400200541480920780380a8980d055e0000120bb2981c61802a057101301a0180830002900541640c1190558c830098d1582c082900860328150408982ba012305402cd0400b02301016700331582be0120b03a10d80740105482c0a0a80580284642003082b816049322024160350380801503070010c1660b0202dd10402007000a8a0e0c00032c6113030c01c1e40e029a28c0c62b06a82c0aa2b404b00c840480482a0c0c0b02210d80662b40482241520b0384330014033158a4015c0e0382b81660b01b0120062f10584024b056c03891040aea0202a08c3b90348ac1200b02a0250400f2054108ae0ae059a81a0120b030be8521403315e0001500b0391581302c0083c80123435906016e0b0202cc15604350302c0b20690382a41604059d108156409015150ac0982038c1aa0b00558d003206c0003c81500b03609a8ac809180801134001a1598020a11c10e04100905808ac1c0601030001f83004e04c1560b0240e40558030544080aec805982c1012404118af0003474c06240a88d05996087009c01a080040501de0e608e07f010144560ae05810808290a01a81a04100905682a0f80005401846856603c8ac6020004890778038218e0400ab0048c0400ab13010808231583cd0120902515b00202005802a0a85604c108180e4c018b0a0400f02504c161009182dc80e418198ae0128201e00c1500201981a40e62b06a82c0a119c2b02424560d32c8ac1aa0ae182c045704319b2052040905703c0b081a22d00c1610092e2560000bb04d908318011208201220605402c0a60606a82c07401115c080040404c02c04290a01e00080c62b06502b8f26405820240c24a2b18ac1aa0b0202bf07e0b30860380b081a0182a00120ab2d1581420b01a8181a60900541016022bc000c18a290102a05206060580260a06107002ec1604202281a1040bb058160ac809069e01c1fc0b024c02cd06d10709a68077895c04617b0d9400a01a81945605d0153819609b0540e073813801c0241605c0001842260a8201841200a8058120c484201500800120fe318ac302d34940aa012408d8a40194384102c380f42b004e000150784160000400b00541680700900490181a65a46844c1200b041000800540d3419900c280008820260540b03a0242607315e0e81aac568219902a043054510804000901503ed00940a178136e060151208a0d307282841944c1d2b7a086308602601663c22d04e0120b02044cc5780004d82a0a07f0540980640408982a080ab) else (if i<13 then 0x40d20708982c0e113401a02460b7021901c1200a82c0800120f01e00e0400a8183801420fc180820860b018080150284131590400b0115960120a805810808290054088840b3201808081302a300810120a105590192098054038080a891582401a6441d80a9006020250e80120ab0541257a07f903301d01254100080522b069895680a80580c0fe856603c8ac981360202c00410092d00c160aa5182dd002418058110120a808c832880b0078410c60610698a401600092a81a0120ca07902a0a0b3050834c150422b02a0160820221580acc071b0e80400b007502a0a62b07920241604015410d40c0a805815086c0390382a41605a1d40241560a82500e0120201844c137009182ac041009182760960a904c20a85200a839c28156420421810cb00350320185200b02e00004062b058110860b02100c8064090100c166c040508d08a0ae44dd1588ac2900581c1120ae8218c520c0305402c02180d3302dc2180a80581015d22b40482cc160505b82a080c41805814143803103c81672060581024b403903c01cc560f280482ace0e0c0010807403465826c1a6480483c040c0a805814d682f1c2b02408120b30581c4c8607c000d0098f8160200120fe058104574568158e568a2b06982c084053030354160305483841c00432304d0122a0982c00400f08049416642007e0e8260ab00482b8160518661b022ea2b249be40d22b04802c0b803803834c5200200541a802607203cbb48ab405d81841c00090581b0060200540e8ac62b06a82c0830030388ac5204441515a40c0a8058164c8090404c184194584082ce8020f0202ba8ac0900581004181305803a89020055890fe0f08048c1660ae0784024829005982b87043c1582a0156462b481e00e391584641563064c0240120b0089944564090048430142501002861200a82200d0120201d02004080904d910400a811582c0822b05800801a644100080054305800805f50090781404022b054028486de21583c2012482b0158160342b481980f22b2504c8120200049287502007d82a080f2059c15816040929178150a2b0861114720601002c080b0903834c60a822b02c0641805bc0a860bb054026c62900544158160405d8a400120b020080012281680801420d324ad01500b0079104560ae058208080b3055a024704305820807847015600c60b3a2b18ad012090298ac8560ab0541016f0180540430160540202c0441306998ac012440240aa00e2c4055c024d2b404d82c01a64070b00c40e020202a004009b1cad0012c040700284bc0204102ac160408630041660a8210600540b09031304c0fb07f02c080b380482b81564c2560b45200b0004e0e80407015410c1568430581700660682182c2012501002a0429001582a06a64030e0020020f205402c0f85e186101c150a2b2 else 0x5f4a64058044d809009360103001303a0ac0400a1054181e00d38218f06102005402c2012582182c01563c018024156306160e60130200541608780310320814570090780381185690348ac1200d3282a01608090048080b018421b00e))))
+def x511l11 : Packing := (769,4,9,0,0,16,0,x511d11)
+def x511h11 (i : Nat) : Nat := 0x43b741aec20a9dd4000000004052ea1b81b2838c0001c37b42cac2a51e5400000000000000000003c0361da003968196408a42780000029680c1c211c134c1b40002019c801000000000000040180000c325813001fc5daf833e80c9dafa42dd435bc1cada4640fdc32f8371036642d80000c04b0329902c0001417d0096c118000201e0816f82071e894b3f82aec1a4c0a100e2c26d02bf43a200d8c1401a09807400000003400800000002c18c0308c377036240de5e254171429942ebc26a41e8c353823301a110fdc2d00000806d4311c0b000000002805ec35e655980d5422741d801f281bc408703b19f539a6ac33b1a038273de8c1eaa0217817581140003009c000000000000000001680000000019c91eb801580001c27d424d887e814f401747a00000000382a203029fa30022c004000080f002b802e181838110000000020384000200400002400ec100c22f825ee480000000029e4bc23a020e40ce003281d7c346de840000c2b280288354c1ce40f800000000000000c5c0640001818a439a42639ba2439f822103881a84802c431c82754258000000015e16a4f6421800000003c09b0152c1a80001c250000246780000812e81c400000001828400009fa6c0bc00010139834a40b94072c04c0000000201640000000000000001c1f567a886cfa9da436b0600dfac808d9df9c28ca4c200e540f542c39069819140ad403c9de80106cae5031642410063834fc3a5c198c2c6d145c2aa5e340122037cc0028090007e8254836cc2f442ec000000000003ddb0c26581ec00031e09001f010a015481e40000000000028079423c00000000000001c00000000000000024000000034617421e813d830c904e4184824b82d781b85e9400011b505ace815e431ac3428160d9eb0055c039c22800011efb4125406942fdc2b703a913b280d2005bc3ac81df02f28383828100a800000003814800000000000000034082823400000000000000039a15c20042ce4046812bc33782e75e12c33041d00002896640e800000002c244c820000000000002429080ec428ac17b811c000200a7810c000180b40003c30581fa832000021e6c0000000000000000000000000000039282fb9d70814507431f2d429c460800120861430c030100008318300878c0c70420408000820000801000070408530421c00410470800000040000420013c004000000804600004000808f1000000020400001402412c50830040c00000490000000400121c00800861480003000c0000001006001143085002000000000000
+def x511d10 (i : Nat) : Nat := (if i<2 then (if i<1 then 0xdcfdb758eaa54960b7facc5499360160dbf980aed5260560a7fcca54e9988960e5fca961d7350560fed963601305cd609efecc6d58258560bef9c35498059160fed9306d95348160fbb9805494161160dedd636e95260d6097fecc6c95365160cefda66c0a254d60fcf96169d73601609dfdc7aed5264d609dfdc7aed5261160f3f5815493166160d5fdc7aed52645608ffdc3aeda254160cefda66c1524c560b6fecc54963651608ffdc3aeda2615609dfdc7aed5264560fee920549634c16097fdc3aed5264560d5fdb7646aa54960aefdca549634c160befacc54980591609dfdc7aed524c16097fdc52e5a460960c7bd526d2aa64d6095fdc7aed5265160e6bca95954250560fcd9305cd635c16097eecc6cca988960facd635498260d609dbdc7aed529116097decc6d4a98cd6097bdc52e541611609f79c5aeda76016087fdc22e99395560c7ddb34c2aa6556097f5c1aeda954960c6fdb2594a954d60cebda66d0a254d6087fccaaed5364960c7f5b14c2aa64960a77cca6e5539556087fccaaed326556087fdc22e9958cd6087fdc56caaa64d608dfdc7aeda54c960fab9526016461160df7110aed5254560f74e3388a9995560977ecc6c8a995560cfd9302e95348160a77cca6e55295560977dc26cca995560e7f0a94c58050560d7cdb2548a98cd60fb71526055160160977ecc6cca995560faf1616cd8060560c7dd302e953649609df9c7aed5260160eaf9656c1a80c9609cfdc7aed5258d60a7edc22e6aa5496095fdc7aed526456087fccaaed5264d609df9c7aed528016097ddc22e9958cd60977dc22e9939556097ddc26d4a98cd6087fdc32e992955609df5c7aed5284560a7ecca6e55288960a7ddc32e6aa54d60fa798568d656016097decc6c8a98cd60a77dc52e6aa54960c5fdb76a6aa5496095fdc7aed5264d608dfdc7aeda548560fe7152441a6545609cfdc7aed5259160c5fdb72e6aa5496087fdc22e95166160a7dcca6e5538cd6097ddc52e9928cd609cfdc7aed5258560a77dc52e6aa54d60c7bdb46a4a254d6099fdc7aed52a2160fe7165545a344160a7bdc52a5425056097eecc6d4a9889608dfdc7aeda25416095fdc7aed52661609df9c7aed5244160c7f5b15c2aa649609bf9c8aeda26016087fccb69593485609fb9c4aeda360160f3755254598605609dddc7aed528cd60fb65526095160560c7ddb34c2aa64960c6fda66c8a954d60fbd1804c53060560fae552609616056095fdc7aed52a656087fdc22e99354560c6fdb258ca954d60fab9846dd8059160c7f5736c6aa64960c77d522e95166160e7b8a96014250560c7f5316c8a950560e67ca9549a654d608dfdc7aeda261560ff49534c15248160faf152601616056097edcb54ca988960a7f4ca6e55284560c5fcc96deaa54960d3b8b96014161160 else 0xa32f4caa3224c68311cbfc2e8cb902e2cb782dccb602cfcaf42b84ac02a7ca7029aca3c28349de272c972250c930247490a23a48ba229c8942204836208c8101f4c7961dd47461bec6da1aac69819dc64818d45f8179459a153c53c146c4de1284480117c43e10743fc0fa43ba0e643940dcc3360c1c2d80b4c27a08f420e077c1a2067416004fc0e6034c0b20244000f75d535493064960c7fd546ceaa64960dedd636c1524c560eafd656c1a80c960cefd636c2aa54960e5fd7068d935c560dbf980aed5261160aefdca5496360160a7fdc12e6aa54d609efecc6d58259160d7ddb15cca954d60fbe58154931609609dfdc7aed528cd60faf5616d58260560e6fcc96956348560a7fcca54a998cd60a7fdc32e5a548560adfdc728da54816097fdc2aed53645609dfdc7aed5250d60d5fdb7652aa54960f76d535499348160d5fdc7aed5265160ff59534c152481609efecc6c95359160cefd636e9305c5609dfdc7aed5260d6097fdc3aed5265160dbed816cd5260960fcf9635c1305c560c7fd876c8a950560bebecc5496461160cefd636e95244160bef9c35498058560a7fecc549a364560e5fd936deaa54960a7fdc12a5a754d60ff695254d3048160eedda64c0a254d60dbf9806dd31611609dfdc7aeda54c960e7f8a960173505609dfdc7aed524c560beedc35498258560c7fdb25c2aa64d60befacc549805856097fdc3aed52a6560beddc3595305cd609dfdc7aed5250560bef6cc5496160560ddedb7548a3481608ffdc3aeda260160b7bcc95058750960a7fdc82e5a35c560dbf9806cd5260560a7fdc32e5a261560fed96354d3048160ecfd636deaa54960f5f9735c19360160bdf9c72cd2060160a7fecc54aaa64d60d77db1548a954d609efecc6c95358560cefd636e2aa549609efdc36d582585609efdc2aed5358560fbf1815493160160fadd636d58260d609ff9c2aed5344160bef5c35496160560d5fdb764eaa54960d3fd816cd5266160befacc5496360160ff595254d3044160a7fecc6959348560aefecc549a358560eedd63685305cd609dfdc7aed5260560fe6d535496348160e5fd735c2aa649609dfdc7aeda5609608ffdc3aeda548560dedd636cd5260d60fed963481305cd60d3fd98aed52605609dfdc7aed524416097fdc2aed53a6560fbf1804c53060560aefdca5cd6354560c7fd986c6aa54960c7fdb1688a954d60aefecc6956348560edf9a35c1305c5609dfdc7aed5265160c7fd986ceaa54960a7fdc55ceaa64960def963aed5244160bebecc549645056097fecc6c953645608ffdc2aeda354160c7fd936e2aa54960cefda06d8a3549609ffacc6c95344160dbf9806c55261160ecfda35c1635c560aefecc6896354160c7fdb24c2aa65560fcf9735c16360160bef9c05496360160f5f9705cd9348160) else (if i<3 then 0x1222ad00b00184722f5456202c03c0184020002444048136202c0a2b008060048160200800f0101600048b80328ae0201800b00024405800122600c381684020002440100012200240ca1340c2100832502c0531590122c00ca2b8080020201600048802a034c544ae0000100c0b00184451582182b01d22b101601000400048809020244600654a20c900b0002468150150202de41820040b0201500582012302c00611004000488c016060434982260598f8010f0100580900340240f018120058080200024530310402c01c2010001220600e010080200024404801609158f007226040515b8f81016000489c5680aa0091f051c137010058709406001a67024102a2024636881c23640d34c4ab010c2f30d9a0068075035456303b722b098ac804880b008160180a80ca10227c0001503026c0a8100120700b856034c0b018181880a8c0102cc805401560580ec01a8aec0002a08058040d302cc404c01f6202840f2101c014870d9c210160502ec0b002a202a399200931012100150101012102600a8160c5421005400481e45a9d0300481602049c0a8101560100226307027c0181603cafc11303ec6069f00e0580c4200f093c09f074058018006998090034c0b0181601a81c20540410c8080400481300540c0b00901211080243100c2059815008997207088401049ac0302c00d320161c130180069900b002ac501c81560580f82de09b83a02c38f8281a60580800904640d31816010432a0717074161f00631080340c180360181c0402c02401810e059804005417062034c09003c202a2e456102c00a817011c0981a605813813e0b42c2e00c807801502044c0a810232079080dc02a0500481e0202c0205840120558c00903804020240ab1408605428ad00490090034c0b01801208c81a6304cc8c7c016601002300541a04302a2009034c9021c0120580e06220240fe1815ac21004006990014870c5c268160402c00a81017702189c20544012732190200e8ac404880d302c0540e40bc05de87c004e87805401600150040a84ee11a83e60ca82de096824606281060127ffdfde7ef5faa7e5df767d55f347c4def27b0dea27a05e6078fde1077f5ddc7725da875add5874ddd24740dce27305ca071fdc5e70f5c1c7025be86f1dbc26e85b806d0db306c3daee6b35a9e6a2da6a6925a366855a0267859ce66b599a65e595864dd924640d8e262cd88461c585e60f582a5fb57cc5ee57a65e157645cd57145c056ee5b356ac59f565c58ed61a57ad5e657155a4564557e557553c546d4fa53654b851ed45a50e540a4fa53c84e9d3944e3d36e4d3532c4bf52dc4a7d270493d22e48351de472d1aa45ed15a44e511844150e4437d0be427506e4135048409d0063f5cf703d04e8639cce5238fce2c382cddc36ecd9a35acd6634a4cf else 0xe00c0a810160054098039818595f81e40898c0b00945681008004d81605158cc0302c0419401600048ea06081608048b80702c04050841260804000488809038041482808200800091704c0580809002c122b18150a038809002c04054605620ca00b0144568100040302c020100012200242c01804020080009034c0b020160120800a110150100240d310120069880b00080405401602606202a14c56804880d302c0401000542034c20580012200ac0a81000200024460041302e12b82d02c383a20160103c029010040004880900080592210404048e62b09012070080b7101c40580700000805c0004090002440558432402c04058040b002845c018040203c1009101d41e00c020101600308809048ac0d3181760584c56302c020580400902ac405804c03a8ac42000809c098160202c02055840d302c0401))
+def x511l10 : Packing := (238,5,9,0,0,14,0,x511d10)
+def x511h10 (i : Nat) : Nat := 0x60417c1826c0e20d50478740000000000002ddb011000439c000000c07b0334006ec90a40660372c8677882bde901a914705641cc10671b3a9c2d25c00010181fa21200f0001426000b20400cc312170002007804000474202d00ac1c070021020010014009000000000040000300000000000
+def x511d9 (i : Nat) : Nat := 0x70070e0621176201601000b00b80308005404002c02b81c3c0b420000ab080058040580405805c0384130015035207180b00800908005804058040001601f7f6f71a4cfe2eef72af5668b318ec6226ff7d399a4be55294e65f25918641e0c8500147bedd549b4aa99358269fbaf662a4b1b28b059ee754a960142505609e7aebd98a92c2c0ac13cf9d7b315260164583397ac8e3d76a9308b0673e58dc7aed524416092feebd98a9554c9ac1daf161601b3549815822bfbaf66364a9b22b0633f58dc7aeda254160e2fab9b62b8554c92c13cbdd7b3152591415822bfbaf66364a9b28b061fd6c5c55ceaa6496092feebd98d2b2690ac199f9c7602bb5498158259fbaf6634ab1a42b04d7e75ecc5499360160ff24a9a40a92c6982c185fda371ebb5499158333f300e3d76a9308b06f3671d63601305cd609e7cebd98a92c6c02c17ae5d35498258581582f5e5baa9300b0b02b0647f71d98aed5260560967eebd98a9346b0ac13cf9d7b315260161582f575baa9300b2308b054ee754b96014161160
+def x511l9 : Packing := (31,6,9,0,0,9,0,x511d9)
+def x511h9 (i : Nat) : Nat := 0x1e170000c
+def x511d8 (i : Nat) : Nat := 0x294278b9e7b75526016461160ce3c605d7b31526016158305bdb475ecc54aaa64d60
+def x511l8 : Packing := (3,7,9,0,0,4,0,x511d8)
+def x511samples : Array (Bits × Bits) := #[(0x489095c248336a6166252fccb92181840020241886450000841070b81564f32,0x20db550048935b200a2e0790053108848c60440146100400841c2098052c112),(0x787440863a710001ab080a861c0416803b25005009c41094508a05846c9a3463,0x86040a43a708040ce080b84188402003601403201045484568c058460a82420),(0x750c2758c8020d80208bc04ac03881690f4b1c41111802d91289f0e51a00385d,0x750c8758400205a03021904ac03184dd494a00c59018225b8800b0401a049849),(0xa58508195005058c6c1adbc204a2842a248f90c40082423e632e0012239419e,0x25048a5b410601ecec00d95174a380022007d0068e20020263a450580384196),(0x9a242434ba6ea1010281a02e0a4011a9038828d432c67908d20200233c101e0,0x9a202024b668a41101c1202e0a4c336943982ad031cef93818420023b850060),(0xd7288a9ca20442ea6450d5117784e45521969bea419083c0150180a84047e00,0xc7008a9ca30400c374d0900872cae460309389ea88c04388700340604243e00),(0x9b039e817cef0f09501010854544c821e6b05982c283500177221246d88000,0x49a090bc1046f1f31501011a741ddec49eebf49a8e28a108173e00286540000),(0x2c36c223785a98a888267b119c0c3243406470033438800017318f971010000,0x283700635c5ba52889266b538c25120b434c7204363c88000ff49b9e1030000),(0x325b750548f90e04016206a08a32001109020a20712836e7004021851218000,0x105b65000cb90e00002626a4890001114100020171171475884021859038000)]
+def x511columns : List ColumnInfo := [(320,0,191,0,11),(17,0,494,0,11),(64,0,447,0,13),(66,0,445,0,11),(192,0,319,0,11),(4,0,507,0,12),(160,0,351,0,11),(24,0,487,0,11),(17,0,74222,0,11),(258,64,189,0,8),(320,0,93887,0,11),(320,0,99007,0,11),(320,0,109247,0,11),(320,0,1727,0,11),(320,0,2239,0,11),(320,0,3263,0,11),(320,0,11455,0,11),(320,0,12479,0,11),(320,0,17087,0,11),(320,0,42687,0,11),(320,0,44735,0,11),(320,0,47807,0,11),(320,0,52927,0,11),(320,0,54975,0,11),(320,0,58559,0,11),(320,0,68799,0,11),(320,0,83647,0,11),(320,0,88767,0,11),(320,0,119487,0,11),(320,0,58047,0,11),(66,0,58301,0,11),(192,0,58175,0,11),(83,0,428,0,7),(80,0,44975,0,11),(80,0,94127,0,11),(80,0,109487,0,11),(32,0,479,0,12),(80,0,12719,0,11),(80,0,43951,0,11),(80,0,53167,0,11),(80,0,83887,0,11),(258,64,58045,0,8),(9,16,486,0,8),(132,0,379,0,11),(80,0,1967,0,11),(80,0,42927,0,11),(80,0,48047,0,11),(17,0,73710,0,11),(80,0,51119,0,11),(80,0,55215,0,11),(80,0,60335,0,11),(80,0,69039,0,11),(80,0,69551,0,11),(80,0,89007,0,11),(80,0,99247,0,11),(80,0,119727,0,11),(80,0,124847,0,11),(17,0,49646,0,11),(17,0,50158,0,11),(192,0,42815,0,11),(66,0,94141,0,11),(66,0,99261,0,11),(66,0,109501,0,11),(66,0,11709,0,11),(66,0,12733,0,11),(66,0,17341,0,11),(66,0,53181,0,11),(258,64,58557,0,8),(132,0,48507,0,11),(66,0,60349,0,11),(66,0,2493,0,11),(66,0,43453,0,11),(66,0,44989,0,11),(66,0,83901,0,11),(66,0,44477,0,11),(66,0,64445,0,11),(66,0,69053,0,11),(66,0,69565,0,11),(66,0,104381,0,11),(66,0,119741,0,11),(66,0,124861,0,11),(17,0,119790,0,11),(258,64,119485,0,8),(24,0,119783,0,11),(192,0,44863,0,11),(192,0,53055,0,11),(192,0,54079,0,11),(192,0,83775,0,11),(192,0,94015,0,11),(192,0,99135,0,11),(192,0,109375,0,11),(17,0,124910,0,11),(192,0,124735,0,11),(192,0,2367,0,11),(17,0,55278,0,11),(66,0,55229,0,11),(258,64,54973,0,8),(480,0,31,0,7),(17,0,69614,0,11),(192,0,69439,0,11),(160,0,46431,0,11),(320,0,44223,0,11),(320,0,64191,0,11),(320,0,104127,0,11),(160,0,83807,0,11),(258,64,83645,0,8),(24,0,83943,0,11),(17,0,94190,0,11),(17,0,53230,0,11),(17,0,99310,0,11),(17,0,109550,0,11),(160,0,94047,0,11),(24,0,94183,0,11),(258,64,93885,0,8),(83,0,94124,0,7),(17,0,12782,0,11),(160,0,99167,0,11),(83,0,12716,0,7),(8,0,503,0,12),(258,64,12477,0,8),(17,0,69102,0,11),(258,64,68797,0,8),(258,64,99005,0,8),(24,0,109543,0,11),(132,0,99195,0,11),(192,0,88895,0,11),(17,0,89070,0,11),(65,0,54206,0,9),(192,0,44351,0,11),(258,64,11453,0,8),(258,64,43197,0,8),(258,64,52925,0,8),(258,64,109245,0,8),(192,0,51007,0,11),(66,0,5053,0,11),(83,0,17324,0,7),(164,0,347,0,8),(12,0,45555,0,9),(160,0,53087,0,11),(161,0,350,0,8),(192,0,47935,0,11),(192,0,60223,0,11),(132,0,109435,0,11),(65,0,58814,0,9),(36,128,347,0,8),(83,0,99244,0,7),(160,0,63839,0,11),(160,0,50015,0,11),(81,0,11694,0,8),(17,0,60398,0,11),(17,0,48110,0,11),(17,0,114670,0,11),(177,0,334,0,7),(258,64,44733,0,8),(24,0,45031,0,11),(344,0,167,0,7),(258,64,17085,0,8),(258,64,64189,0,8),(258,64,104125,0,8),(17,0,17390,0,11),(83,0,109484,0,7),(198,0,313,0,7),(66,0,1981,0,11),(66,0,3517,0,11),(66,0,4541,0,11),(144,0,367,0,11),(192,0,104255,0,11),(320,0,2751,0,11),(178,1,332,0,4),(56,0,455,0,7),(12,0,499,0,9),(85,2,424,0,4),(65,32,30,384,6),(74,0,437,0,7),(138,4,369,0,5),(164,0,48475,0,8),(449,32,30,0,4),(33,0,59358,0,9),(132,0,44923,0,11),(270,64,177,0,4),(24,0,55783,0,11),(24,0,55271,0,11),(145,32,78,256,5),(40,0,45527,0,8),(80,8,163,260,6),(24,0,48103,0,11),(480,0,83487,0,7),(321,0,190,0,7),(177,0,99150,0,7),(160,0,42847,0,11),(258,64,44221,0,8),(132,0,69499,0,11),(356,128,27,0,4),(1,16,55782,8,9),(164,0,42843,0,8),(164,0,50011,0,8),(164,0,63835,0,8),(5,0,68602,0,8),(83,0,53164,0,7),(36,128,48475,0,8),(24,0,42983,0,11),(162,0,349,0,7),(401,32,78,0,4),(9,16,55782,0,8),(160,0,104287,0,11),(132,0,104315,0,11),(164,0,104283,0,8),(67,0,11708,0,8),(7,0,504,0,7),(24,0,69095,0,11),(18,0,55789,0,9),(154,4,353,0,4),(132,0,58235,0,11),(44,128,339,0,5),(56,0,48071,0,7),(56,0,89031,0,7),(56,0,94151,0,7),(56,0,119751,0,7),(33,0,54750,0,9),(133,0,378,0,7),(344,0,83623,0,7),(198,0,83769,0,7),(132,0,50043,0,11),(260,0,251,0,8),(404,8,99,0,4),(9,16,50150,0,8),(133,2,312,64,5),(160,0,88927,0,11),(164,0,88923,0,8),(198,0,44857,0,7),(160,0,124767,0,11),(164,0,124763,0,8),(132,0,124795,0,11),(83,0,60332,0,7),(390,64,57,0,4),(160,0,58207,0,11),(164,0,58203,0,8),(144,0,54127,0,11),(193,2,312,4,5),(160,0,47967,0,11),(197,2,312,0,4),(164,0,46427,0,8),(345,0,166,0,4),(200,256,23,32,5),(177,0,114510,0,7),(132,0,60283,0,11),(132,0,63867,0,11),(24,0,6631,0,11),(80,0,431,0,11),(136,0,375,0,9),(32,128,46427,4,9),(282,64,165,0,4),(96,1,396,18,6),(9,16,49638,0,8),(329,16,166,0,4),(480,0,1567,0,7),(132,0,2427,0,11),(24,0,12775,0,11),(160,0,7007,0,11),(164,0,99163,0,8),(49,0,94158,0,8),(56,256,135,64,5),(177,0,124750,0,7),(160,0,60255,0,11),(164,0,60251,0,8),(24,0,50151,0,11),(132,0,42875,0,11),(24,0,69607,0,11),(156,0,355,0,7),(132,0,83835,0,11),(83,0,119724,0,7),(24,0,114663,0,11),(80,0,3503,0,11),(296,0,215,0,7),(83,0,55212,0,7),(232,256,23,0,4),(24,0,89063,0,11),(9,16,114662,0,8),(344,0,44711,0,7),(9,16,55270,0,8),(88,256,135,32,5),(166,0,345,0,5),(164,0,83803,0,8),(14,0,497,0,7),(9,16,69094,0,8),(9,16,119782,0,8),(268,0,243,0,7),(96,0,43935,0,9),(56,0,83911,0,7),(36,128,46427,0,8),(418,64,29,0,4),(33,0,11742,0,9),(32,128,50011,4,9),(32,128,42843,4,9),(193,0,318,0,7),(1,16,109542,8,9),(32,128,63835,4,9)]
+def x511autos : List (List Nat) := [[],[81,130,118],[16,82,131,100],[16,32,48,128,100,80,116],[32,83,116],[32,49,128,81,116,100],[48,33,133,118],[48,129,82],[80,16,33,50,116,131,100],[80,129,50,116],[128,49,100],[128,81,32,49,100,116]]
+def x511levels : Nat → Packing
+  | 14 => x511l14
+  | 13 => x511l13
+  | 12 => x511l12
+  | 11 => x511l11
+  | 10 => x511l10
+  | 9 => x511l9
+  | 8 => x511l8
+  | _ => emptyPacking
+def x511index : Nat → Nat → Option (Nat × Nat)
+  | 14 => lookupWord 16 121 3 14 6 4 x511h14
+  | 13 => lookupWord 521 705 5 17 9 4 x511h13
+  | 12 => lookupWord 1041 1303 7 18 10 4 x511h12
+  | 11 => lookupWord 151 409 6 16 8 4 x511h11
+  | 10 => lookupWord 45 57 4 13 5 4 x511h10
+  | 9 => lookupWord 3 5 1 10 2 4 x511h9
+  | _ => fun _ => none
+def x511 : Forest := ⟨511,14,fun j => x511samples[j]?.getD (0,0),x511columns,x511autos,x511levels,x511index⟩
+set_option maxHeartbeats 0 in
+theorem geomx511 : graphValid x511 (boundsBefore known83647) = true := by
+  simp only [graphValid,Bool.and_eq_true]
+  refine ⟨⟨⟨by decide +kernel,by decide +kernel⟩,listPieces_all (d:=4) ?_⟩,listPieces_all (d:=2) ?_⟩
+  all_goals simp only [listPieces]
+  all_goals repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_14_0 : block x511 14 0 1=true := by
+  apply groupedBlock (ar:=10) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx511_14 : block x511 14 0 1=true := sx511_14_0
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_13_0 : block x511 13 0 22=true := by
+  apply groupedBlock (ar:=10) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_13_22 : block x511 13 22 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_13_58 : block x511 13 58 6=true := by
+  apply groupedBlock (ar:=11) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx511_13 : block x511 13 0 64=true := (@block_merge x511 13 0 58 6 (@block_merge x511 13 0 22 36 sx511_13_0 sx511_13_22) sx511_13_58)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_12_0 : block x511 12 0 36=true := by
+  apply groupedBlock (ar:=10) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_12_36 : block x511 12 36 36=true := by
+  apply groupedBlock (ar:=10) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_12_72 : block x511 12 72 14=true := by
+  apply groupedBlock (ar:=10) (d:=1)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_12_86 : block x511 12 86 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_12_122 : block x511 12 122 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_12_158 : block x511 12 158 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_12_194 : block x511 12 194 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_12_230 : block x511 12 230 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_12_266 : block x511 12 266 7=true := by
+  apply groupedBlock (ar:=11) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_12_273 : block x511 12 273 36=true := by
+  apply groupedBlock (ar:=12) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_12_309 : block x511 12 309 36=true := by
+  apply groupedBlock (ar:=12) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_12_345 : block x511 12 345 36=true := by
+  apply groupedBlock (ar:=12) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx511_12 : block x511 12 0 381=true := (@block_merge x511 12 0 345 36 (@block_merge x511 12 0 309 36 (@block_merge x511 12 0 273 36 (@block_merge x511 12 0 266 7 (@block_merge x511 12 0 230 36 (@block_merge x511 12 0 194 36 (@block_merge x511 12 0 158 36 (@block_merge x511 12 0 122 36 (@block_merge x511 12 0 86 36 (@block_merge x511 12 0 72 14 (@block_merge x511 12 0 36 36 sx511_12_0 sx511_12_36) sx511_12_72) sx511_12_86) sx511_12_122) sx511_12_158) sx511_12_194) sx511_12_230) sx511_12_266) sx511_12_273) sx511_12_309) sx511_12_345)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_0 : block x511 11 0 5=true := by
+  apply groupedBlock (ar:=9) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_5 : block x511 11 5 36=true := by
+  apply groupedBlock (ar:=10) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_41 : block x511 11 41 36=true := by
+  apply groupedBlock (ar:=10) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_77 : block x511 11 77 16=true := by
+  apply groupedBlock (ar:=10) (d:=1)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_93 : block x511 11 93 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_129 : block x511 11 129 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_165 : block x511 11 165 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_201 : block x511 11 201 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_237 : block x511 11 237 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_273 : block x511 11 273 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_309 : block x511 11 309 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_345 : block x511 11 345 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_381 : block x511 11 381 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_417 : block x511 11 417 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_453 : block x511 11 453 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_489 : block x511 11 489 14=true := by
+  apply groupedBlock (ar:=11) (d:=1)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_503 : block x511 11 503 36=true := by
+  apply groupedBlock (ar:=12) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_539 : block x511 11 539 36=true := by
+  apply groupedBlock (ar:=12) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_575 : block x511 11 575 36=true := by
+  apply groupedBlock (ar:=12) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_611 : block x511 11 611 36=true := by
+  apply groupedBlock (ar:=12) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_647 : block x511 11 647 36=true := by
+  apply groupedBlock (ar:=12) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_683 : block x511 11 683 36=true := by
+  apply groupedBlock (ar:=12) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_719 : block x511 11 719 36=true := by
+  apply groupedBlock (ar:=12) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_11_755 : block x511 11 755 14=true := by
+  apply groupedBlock (ar:=12) (d:=1)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx511_11 : block x511 11 0 769=true := (@block_merge x511 11 0 755 14 (@block_merge x511 11 0 719 36 (@block_merge x511 11 0 683 36 (@block_merge x511 11 0 647 36 (@block_merge x511 11 0 611 36 (@block_merge x511 11 0 575 36 (@block_merge x511 11 0 539 36 (@block_merge x511 11 0 503 36 (@block_merge x511 11 0 489 14 (@block_merge x511 11 0 453 36 (@block_merge x511 11 0 417 36 (@block_merge x511 11 0 381 36 (@block_merge x511 11 0 345 36 (@block_merge x511 11 0 309 36 (@block_merge x511 11 0 273 36 (@block_merge x511 11 0 237 36 (@block_merge x511 11 0 201 36 (@block_merge x511 11 0 165 36 (@block_merge x511 11 0 129 36 (@block_merge x511 11 0 93 36 (@block_merge x511 11 0 77 16 (@block_merge x511 11 0 41 36 (@block_merge x511 11 0 5 36 sx511_11_0 sx511_11_5) sx511_11_41) sx511_11_77) sx511_11_93) sx511_11_129) sx511_11_165) sx511_11_201) sx511_11_237) sx511_11_273) sx511_11_309) sx511_11_345) sx511_11_381) sx511_11_417) sx511_11_453) sx511_11_489) sx511_11_503) sx511_11_539) sx511_11_575) sx511_11_611) sx511_11_647) sx511_11_683) sx511_11_719) sx511_11_755)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_10_0 : block x511 10 0 1=true := by
+  apply groupedBlock (ar:=9) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_10_1 : block x511 10 1 36=true := by
+  apply groupedBlock (ar:=10) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_10_37 : block x511 10 37 36=true := by
+  apply groupedBlock (ar:=10) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_10_73 : block x511 10 73 25=true := by
+  apply groupedBlock (ar:=10) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_10_98 : block x511 10 98 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_10_134 : block x511 10 134 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_10_170 : block x511 10 170 36=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_10_206 : block x511 10 206 32=true := by
+  apply groupedBlock (ar:=11) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx511_10 : block x511 10 0 238=true := (@block_merge x511 10 0 206 32 (@block_merge x511 10 0 170 36 (@block_merge x511 10 0 134 36 (@block_merge x511 10 0 98 36 (@block_merge x511 10 0 73 25 (@block_merge x511 10 0 37 36 (@block_merge x511 10 0 1 36 sx511_10_0 sx511_10_1) sx511_10_37) sx511_10_73) sx511_10_98) sx511_10_134) sx511_10_170) sx511_10_206)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_9_0 : block x511 9 0 1=true := by
+  apply groupedBlock (ar:=9) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_9_1 : block x511 9 1 30=true := by
+  apply groupedBlock (ar:=10) (d:=2)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx511_9 : block x511 9 0 31=true := (@block_merge x511 9 0 1 30 sx511_9_0 sx511_9_1)
+set_option maxHeartbeats 0 in
+set_option maxRecDepth 16384 in
+theorem sx511_8_0 : block x511 8 0 3=true := by
+  apply groupedBlock (ar:=9) (d:=0)
+  simp only [grouped,Nat.reduceDiv,Nat.reduceSub,Nat.reduceAdd]
+  repeat' apply And.intro
+  all_goals decide +kernel
+theorem allx511_8 : block x511 8 0 3=true := sx511_8_0
+theorem tablesx511 : checkedTables x511 14 := by
+  intro k hk
+  interval_cases k
+  · exact (rfl : block x511 0 0 0 = true)
+  · exact (rfl : block x511 1 0 0 = true)
+  · exact (rfl : block x511 2 0 0 = true)
+  · exact (rfl : block x511 3 0 0 = true)
+  · exact (rfl : block x511 4 0 0 = true)
+  · exact (rfl : block x511 5 0 0 = true)
+  · exact (rfl : block x511 6 0 0 = true)
+  · exact (rfl : block x511 7 0 0 = true)
+  · exact allx511_8
+  · exact allx511_9
+  · exact allx511_10
+  · exact allx511_11
+  · exact allx511_12
+  · exact allx511_13
+  · exact allx511_14
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem caseA : Impossible (graphGoal 511) 14 (vars 511).toFinset := by
+  have h := root_index (g:=dead) (before_sound known383 valid383) geomdead tablesdead (k:=14) (by decide)
+    (i:=0) (ws:=vars 511) (by decide +kernel)
+  have e : targetOf dead=graphGoal 511 := by decide +kernel
+  exact e ▸ h
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem caseB : Impossible (graphGoal 511) 14 (varsX 45567).toFinset :=
+  index_root (g:=x511) (i:=0) rfl (before_sound known83647 valid83647) geomx511 tablesx511 (by decide +kernel)
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem bound : ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.FanInTwo C →
+      (∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = (y 0 || y 6)) →
+      PEqualNP.MetaComplexity.circuitFun 9 C = edge → 16 ≤ C.size := by
+  intro C legal first h
+  by_contra! small
+  obtain ⟨k,t,S,hk,run,sub⟩ := initial_live C legal first h (by omega)
+  have eg : graph=graphGoal 45567 := by decide +kernel
+  have er : inputs++[seed]=varsX 45567 := by decide +kernel
+  have e1 : graphGoal 45567=graphGoal 511 := by decide +kernel
+  have e2 : vars 45567=vars 511 := by decide +kernel
+  rw [eg] at run
+  rw [er] at sub
+  have ok : fullOK 45567 [80, 1, 2, 4, 1, 1, 257, 4, 8] = true := by decide +kernel
+  rcases full_split ok run sub with e | e
+  · rw [e1,e,e2] at run; exact caseA k t hk run
+  · rw [e1,e] at run; exact caseB k t hk run
+def run (gs : List Gate) (w : List Bool) : List Bool :=
+  gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w
+theorem run_len (gs : List Gate) (w : List Bool) : (run gs w).length = w.length + gs.length := by
+  induction gs using List.reverseRecOn with
+  | nil => simp [run]
+  | append_singleton l a ih =>
+    simp only [run, List.foldl_append, List.foldl_cons, List.foldl_nil, List.length_append,
+      List.length_singleton] at ih ⊢
+    omega
+theorem run_old (gs : List Gate) (w : List Bool) (i : ℕ) (hi : i < w.length) :
+    (run gs w).getD i false = w.getD i false := by
+  induction gs generalizing w with
   | nil => rfl
-  | cons a l ih =>
-    simp only [triangle,ih,combineLanes,couples,lanesAppend,lanesMap,
-      List.length_map,←broadcast,lanePlace,Nat.shiftLeft_eq,Nat.mul_comm]
-
-def packedFamily (c : NodeContext) (ps : List Memo) (op : Nat) (ops : List Ax)
-    (sa sb : PackedSig) (a b : Nat) :=
-  let (cap,n,ws,cov,_,links) := c
-  let r := units ops.length
-  let full := r*(BitVec.allOnes 768).toNat
-  let un := op==2
-  let z := if un then (r*one.toNat) ^^^ a else if op==1 then a ||| b else a &&& b
-  let worth := wideWorth n cap op r full cov sa sb
-  let todo : Four := (worth false false,if un then 0 else worth true false,
-                       if un then 0 else worth false true,worth true true)
-  let left := wideRules r full a b z un todo ps
-  let verify := fun (ka kb : Bool) (t : Nat) => if t==0 then true else
-    onMarks (fun e : Ax =>
-      let w := (movedDecor op e.1 e.2).1
-      if !properB w || ws.any (fun v => v.1==w) then true else
-      linked ws links e.1 e.2 w un ka kb) t ops
-  verify false false left.1 && verify true false left.2.1 &&
-    verify false true left.2.2.1 && verify true true left.2.2.2
-
-def triangleNode (c : NodeContext) :=
-  let ws := c.2.2.1
-  let ss := c.2.2.2.2.1.map (memo ws (c.1-1))
-  let bs := couples ws
-  let (_,pa,pb) := triangle (fun w => w.2.1) ws
-  let (_,na,nb) := triangle (fun w => w.2.2) ws
-  let (_,a,b) := triangle (fun w => liftSig w.1) ws
-  let family := fun op => packedFamily c ss op bs (pa,na) (pb,nb) a b
-  prelim graph c && wideFamily c ss 2 (ws.map fun v => (v,v)) && family 0 && family 1
-
-theorem triangleNode_ok {c : NodeContext} (h : triangleNode c=true) :
-    (prelim graph c && testAll c c.2.2.1)=true := by
-  obtain ⟨cap,n,ws,cov,pools,links⟩ := c
-  apply wideNode_sound
-  simp only [triangleNode,triangle_eq] at h
-  exact h
-
-theorem symmetryOK : ∀ i : Fin 12, autoOK graph (symmetry i)=true := by decide +kernel
-
-lemma symmetryBack {xs ys : List Sig} {cap : Nat} (a : Fin 12)
-    (matchSet : sameWords (xs.map (movedWord (symmetry a))) ys=true)
-    (lower : Impossible graph cap ys.toFinset) : Impossible graph cap xs.toFinset := by
-  let p := symmetry a
-  have checked := symmetryOK a
-  change autoOK graph p=true at checked
-  simp only [autoOK,Bool.and_eq_true,beq_iff_eq] at checked
-  have onto : Function.Surjective (movedRow p) := fun r => ⟨movedRow p.reverse r,composed_id checked.2 r⟩
-  have eq : xs.toFinset.image (rename (movedRow p))=ys.toFinset := by
-    rw [←sameWords_sound matchSet]
-    ext w
-    simp only [Finset.mem_image,List.mem_toFinset,List.mem_map,moved_eq_rename,p]
-  intro k t hk run
-  have mapped := live_rename run (movedRow p) onto
-  have goal : rename (movedRow p) graph=graph := (moved_eq_rename p graph).symm.trans checked.1.1
-  rw [eq,goal] at mapped
-  exact lower k t hk mapped
-
-def symmetryTest (l : Layer) (idx : Index) (aliases : Nat → Nat) (depth i tag : Nat) :=
-  let p := symmetry (Fin.ofNat 12 tag)
-  let projected := (bank2303 depth (l.2 i)).map (movedWord p)
-  match idx (keySet projected) with
-  | none => false
-  | some j => decide (j<l.1) && aliases j==0 && sameWords projected (bank2303 depth (l.2 j))
-
-lemma symmetryTest_ok {l idx aliases depth i tag cap}
-    (master : ∀ j, j<l.1 → aliases j=0 → Impossible graph cap (bank2303 depth (l.2 j)).toFinset)
-    (h : symmetryTest l idx aliases depth i tag=true) :
-    Impossible graph cap (bank2303 depth (l.2 i)).toFinset := by
-  unfold symmetryTest at h
-  dsimp only at h
-  split at h
-  next => contradiction
-  next j _ =>
-    simp only [Bool.and_eq_true,decide_eq_true_eq,beq_iff_eq] at h
-    exact symmetryBack _ h.2 (master j h.1.1 h.1.2)
-
-def primaryCheck (l next : Layer) (hs : Hints) (idx : Index)
-    (exp : Nat → Bool) (cap depth i : Nat) :=
-  if exp i then triangleNode (ctx2303 l next hs idx cap depth i) else verifiedTerminal cap depth (l.2 i)
-def completeCheck (l next : Layer) (hs : Hints) (idx : Index)
-    (exp : Nat → Bool) (self : Index) (aliases : Nat → Nat) (cap depth i : Nat) :=
-  if aliases i==0 then primaryCheck l next hs idx exp cap depth i else
-    symmetryTest l self aliases depth i (aliases i)
-
-lemma completeCheck_ok {l next hs idx exp self aliases cap depth}
-    (prior : excluded (cap-1) (depth+1) next)
-    (pass : ∀ i, i<l.1 → completeCheck l next hs idx exp self aliases cap depth i=true) :
-    excluded cap depth l := by
-  have master (j) (bound : j<l.1) (direct : aliases j=0) :
-      Impossible graph cap (bank2303 depth (l.2 j)).toFinset := by
-    have h := pass j bound
-    simp only [completeCheck,direct,beq_self_eq_true,ite_true,primaryCheck] at h
-    split at h
-    · exact ctx2303_ok prior (triangleNode_ok h)
-    · exact verifiedTerminal_ok h
-  intro i hi
-  by_cases isMaster : aliases i=0
-  · exact master i hi isMaster
-  · have h := pass i hi
-    simp only [completeCheck,beq_eq_false_iff_ne.mpr isMaster,Bool.false_eq_true,ite_false] at h
-    exact symmetryTest_ok master h
-
-def treeCheck (p : Nat → Bool) (start len : Nat) : Nat → Prop
-  | 0 => span p len start=true
-  | h+1 => treeCheck p start (len/2) h ∧ treeCheck p (start+len/2) (len-len/2) h
-lemma tree_at {p start len height} (h : treeCheck p start len height)
-    (i : Nat) (lo : start ≤ i) (hi : i < start + len) : p i = true := by
-  induction height generalizing start len with
-  | zero => exact span2303_at h i lo hi
-  | succ n ih =>
-    change _ ∧ _ at h
-    by_cases first : i<start+len/2
-    · exact ih h.1 lo first
-    · exact ih h.2 (by omega) (by omega)
-def empty2303 : Layer := (0,fun _ => (0,0))
-def noIdx : Index := fun _ => none
-def test0 := completeCheck a0layer a1layer a0hints a1idx a0expanded a0idx a0alias 14 1
-def test1 := completeCheck a1layer a2layer a1hints a2idx a1expanded a1idx a1alias 13 2
-def test2 := completeCheck a2layer a3layer a2hints a3idx a2expanded a2idx a2alias 12 3
-def test3 := completeCheck a3layer a4layer a3hints a4idx a3expanded a3idx a3alias 11 4
-def test4 := completeCheck a4layer a5layer a4hints a5idx a4expanded a4idx a4alias 10 5
-def test5 := completeCheck a5layer empty2303 a5hints noIdx a5expanded a5idx a5alias 9 6
-
-theorem certify
-    (h0 : ∀ i, i<a0layer.1 → test0 i=true)
-    (h1 : ∀ i, i<a1layer.1 → test1 i=true)
-    (h2 : ∀ i, i<a2layer.1 → test2 i=true)
-    (h3 : ∀ i, i<a3layer.1 → test3 i=true)
-    (h4 : ∀ i, i<a4layer.1 → test4 i=true)
-    (h5 : ∀ i, i<a5layer.1 → test5 i=true) :
-    Impossible graph 14 start2303.toFinset := by
-  have e6 : excluded 8 7 empty2303 := by
-    intro i hi
-    exact False.elim (Nat.not_lt_zero i hi)
-  have e5 : excluded 9 6 a5layer := completeCheck_ok e6 h5
-  have e4 : excluded 10 5 a4layer := completeCheck_ok e5 h4
-  have e3 : excluded 11 4 a3layer := completeCheck_ok e4 h3
-  have e2 : excluded 12 3 a2layer := completeCheck_ok e3 h2
-  have e1 : excluded 13 2 a1layer := completeCheck_ok e2 h1
-  have e0 : excluded 14 1 a0layer := completeCheck_ok e1 h0
-  have init : (bank2303 1 (a0layer.2 0)).toFinset=start2303.toFinset := by decide +kernel
-  rw [←init]
-  exact e0 0 (by decide)
-
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b0_0 : treeCheck test0 0 1 0 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem proofLevel0 : treeCheck test0 0 1 0 := b0_0
-
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b1_0 : treeCheck test1 0 71 6 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem proofLevel1 : treeCheck test1 0 71 6 := b1_0
-
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b2_0 : treeCheck test2 0 830 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b2_1 : treeCheck test2 830 831 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem proofLevel2 : treeCheck test2 0 1661 10 := ⟨b2_0,b2_1⟩
-
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_0 : treeCheck test3 0 746 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_1 : treeCheck test3 746 746 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_2 : treeCheck test3 1492 746 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_3 : treeCheck test3 2238 747 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_4 : treeCheck test3 2985 746 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_5 : treeCheck test3 3731 747 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_6 : treeCheck test3 4478 746 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_7 : treeCheck test3 5224 747 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_8 : treeCheck test3 5971 746 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_9 : treeCheck test3 6717 747 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_10 : treeCheck test3 7464 746 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_11 : treeCheck test3 8210 747 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_12 : treeCheck test3 8957 746 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_13 : treeCheck test3 9703 747 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_14 : treeCheck test3 10450 746 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b3_15 : treeCheck test3 11196 747 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem proofLevel3 : treeCheck test3 0 11943 13 := ⟨⟨⟨⟨b3_0,b3_1⟩,⟨b3_2,b3_3⟩⟩,⟨⟨b3_4,b3_5⟩,⟨b3_6,b3_7⟩⟩⟩,⟨⟨⟨b3_8,b3_9⟩,⟨b3_10,b3_11⟩⟩,⟨⟨b3_12,b3_13⟩,⟨b3_14,b3_15⟩⟩⟩⟩
-
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b4_0 : treeCheck test4 0 572 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b4_1 : treeCheck test4 572 573 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b4_2 : treeCheck test4 1145 572 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b4_3 : treeCheck test4 1717 573 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b4_4 : treeCheck test4 2290 572 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b4_5 : treeCheck test4 2862 573 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b4_6 : treeCheck test4 3435 572 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b4_7 : treeCheck test4 4007 573 9 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem proofLevel4 : treeCheck test4 0 4580 12 := ⟨⟨⟨b4_0,b4_1⟩,⟨b4_2,b4_3⟩⟩,⟨⟨b4_4,b4_5⟩,⟨b4_6,b4_7⟩⟩⟩
-
-set_option maxRecDepth 8192 in
-set_option maxHeartbeats 0 in
-theorem b5_0 : treeCheck test5 0 185 7 := by
-  simp only [treeCheck]
-  repeat' apply And.intro
-  all_goals decide +kernel
-theorem proofLevel5 : treeCheck test5 0 185 7 := b5_0
-
-theorem certified : Impossible graph 14 start2303.toFinset :=
-  certify
-    (fun i hi => tree_at proofLevel0 i (Nat.zero_le _) hi)
-    (fun i hi => tree_at proofLevel1 i (Nat.zero_le _) hi)
-    (fun i hi => tree_at proofLevel2 i (Nat.zero_le _) hi)
-    (fun i hi => tree_at proofLevel3 i (Nat.zero_le _) hi)
-    (fun i hi => tree_at proofLevel4 i (Nat.zero_le _) hi)
-    (fun i hi => tree_at proofLevel5 i (Nat.zero_le _) hi)
-
-
-theorem noFourteen (C : Circuit) (fan : FanInTwo C) (size : C.size ≤ 14)
-    (full : ∀ x : Fin 9 → Bool, C.eval (List.ofFn x ++ [x 0 || x 6]) = edge x) : False := by
-  have eq : (execute C.gates start2303).getD C.output zero = graph := by
-    apply BitVec.eq_of_getLsbD_eq
-    intro j hj
-    let r : Row := ⟨j,hj⟩
-    change bit r _ = bit r graph
-    rw [←b_read,execute_bits _ _ _ (fun g hg => (fan g hg).1),edge_table]
-    have hs : start2303.map (bit r) =
-        List.ofFn (sample r) ++ [sample r 0 || sample r 6] := by
-      simp only [start2303,List.map_append,List.map_singleton,←sampled,unionSeed,bit_bin]
-      rfl
-    rw [hs]
-    exact full (sample r)
-  have out := get_rep (execute C.gates start2303) C.output
-  rw [eq] at out
-  obtain ⟨k,t,S,hk,h,sub⟩ := extract _ _ fan graph_proper (out.resolve_right (· graph_proper))
-  have cap : k ≤ 14 := hk.trans size
-  rcases rootCases h sub with rfl | rfl
-  · exact dead_start (before_sound known383 valid383) geomdead tablesdead k t cap h
-  · exact certified k t cap h
-
+  | cons g gs ih =>
+    refine (ih (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) (by simp; omega)).trans ?_
+    exact List.getD_append _ _ _ _ hi
+def bw (y : Fin 9 → Bool) : List Bool := List.ofFn y ++ [y 0 || y 6]
+theorem base (gs : List Gate) (o : ℕ) (legal : PEqualNP.MetaComplexity.FanInTwo ⟨gs, o⟩)
+    (small : gs.length ≤ 14) (h : ∀ y, (run gs (bw y)).getD o false = edge y) : False := by
+  have e : ∀ y : Fin 9 → Bool, (Circuit.mk (⟨GateOp.or, [0, 6]⟩ :: gs) o).wires (List.ofFn y) = run gs (bw y) := by
+    intro y
+    have e1 : GateOp.eval GateOp.or (([0, 6] : List ℕ).map fun i => (List.ofFn y).getD i false) = (y 0 || y 6) := by
+      simp [GateOp.eval, List.ofFn_succ]
+    change run gs (List.ofFn y ++ [GateOp.eval GateOp.or (([0, 6] : List ℕ).map fun i => (List.ofFn y).getD i false)]) = _
+    rw [e1]
+    rfl
+  have b := bound ⟨⟨GateOp.or, [0, 6]⟩ :: gs, o⟩ (by
+      intro g hg
+      rcases List.mem_cons.mp hg with rfl | hg
+      · simp
+      · exact legal g hg) (by
+      intro y
+      rw [e, run_old _ _ _ (by simp [bw])]
+      simp [bw, List.getD_eq_getElem?_getD]) (by
+      funext y
+      change ((Circuit.mk (⟨GateOp.or, [0, 6]⟩ :: gs) o).wires (List.ofFn y)).getD o false = _
+      rw [e]
+      exact h y)
+  have s : (Circuit.mk (⟨GateOp.or, [0, 6]⟩ :: gs) o).size = gs.length + 1 := rfl
+  omega
 end PEqualNP.Outside.L_meta_3951.Certificate
 
 namespace PEqualNP.Outside.L_meta_3951
@@ -6334,7 +6108,7 @@ have x1 : List (Fin (9 : ℕ) × Fin (9 : ℕ)) := List.map (fun (x1 : ℕ) => (
   have floor (D : Circuit) (legal : FanInTwo D) (bound : D.size ≤ 14)
       (full : ∀ x : Input, D.eval (input x) = edge x) : False := by
     have same : ∀ x : Input, edge x = Certificate.edge x := by decide +kernel
-    exact Certificate.noFourteen D legal bound (fun x => (full x).trans (same x))
+    exact Certificate.base D.gates D.output legal bound (fun x => (full x).trans (same x))
   dsimp only
   intro j C cut r b j0 j6 hf cap lr lt top avoid
   by_contra none
