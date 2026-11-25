@@ -74,7 +74,7 @@ def slot (l : Literal Small) : Fin 24 :=
     split <;> omega⟩
 
 def lit (i : Fin 24) : Literal Small :=
-  ((⟨i.val/6, by omega⟩, ⟨i.val/2%3, by omega⟩), decide (i.val%2=0))
+  ((⟨i.val/6, by omega⟩, ⟨Nat.mod (i.val / 2) 3, Nat.mod_lt _ (by decide)⟩), decide (Nat.mod i.val 2 = 0))
 
 theorem slot_lit : ∀ i, slot (lit i) = i := by decide +kernel
 theorem lit_slot : ∀ l, lit (slot l) = l := by decide +kernel
