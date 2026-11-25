@@ -35,7 +35,7 @@ ROOT="$(git rev-parse --show-toplevel)"
 # Every python3 here runs isolated (-I): a json.py or re.py in the folder this is run from is never loaded.
 STATE="$ROOT/.pnp"; mkdir -p "$STATE"
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1 ($2)" >&2; exit 1; }; }
-field() { python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1]));
+field() { python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1], encoding="utf-8"));
 for k in sys.argv[2].split("."): v=v.get(k) if isinstance(v,dict) else None
 print("" if v is None else v)' "$STATE/$1.json" "$2"; }
 # IS THE STEP STILL OPEN? Asked of the desk before building and again right before the pull request, so
@@ -45,7 +45,7 @@ print("" if v is None else v)' "$STATE/$1.json" "$2"; }
 still_open() {
   ans="$(curl --proto '=https' -fsS -m 10 -G "$DESK/step" --data-urlencode "gap=$1" 2>/dev/null)" || return 0
   printf '%s' "$ans" | python3 -I -c 'import json,sys,re
-try: d=json.load(sys.stdin)
+try: d=json.load(sys.stdin.buffer)
 except Exception: sys.exit(0)
 st=d.get("state") if isinstance(d,dict) else None
 if st in ("open","leased") or not isinstance(st,str): sys.exit(0)
@@ -78,6 +78,7 @@ has_file() { have "$1"; [ -n "$(field "$1" gap.file)" ] || { echo "$1 is a value
 # One line says so when anything was removed.
 tidy() { python3 -I - "$1" <<'PY'
 import re, sys
+sys.stdout.reconfigure(encoding="utf-8")  # the path it names may not be in the machine's code page
 p = sys.argv[1]
 try: s = open(p, encoding="utf-8").read()
 except UnicodeDecodeError: print("REFUSED: the file is not UTF-8 text\n  fix: save the file as UTF-8 text", file=sys.stderr); sys.exit(1)
@@ -114,7 +115,7 @@ if cut:
     t = re.sub(r"\n{3,}", "\n\n", "\n".join(l.rstrip() for l in "".join(out).split("\n"))).lstrip("\n")
     t = t if t.endswith("\n") else t + "\n"
     if t != s:
-        open(p, "w", encoding="utf-8").write(t); print("removed the comments from %s (a pull request carries the proof only)" % p)
+        open(p, "w", encoding="utf-8", newline="\n").write(t); print("removed the comments from %s (a pull request carries the proof only)" % p)
 PY
 }
 # WHAT IS SENT IS WHAT WAS CHECKED: check records the sha256 of the bytes that built, with the file's path; submit sends
@@ -129,6 +130,7 @@ size_ok() {
 # The python both `next` and `value` run first: the statement guard, the import rule and the value-step rule.
 guard_py() { cat <<'PY'
 import json, os, re, sys, unicodedata
+sys.stdout.reconfigure(encoding="utf-8"); sys.stderr.reconfigure(encoding="utf-8")  # not the machine's code page
 # Everything the desk returns is DATA: printed with control characters removed, never run.
 def clean(x):
     x = x if isinstance(x, str) else json.dumps(x)
@@ -197,7 +199,7 @@ PY
 
 next_py() { cat <<'PY'
 state, root = sys.argv[1], sys.argv[2]
-d = json.load(open(os.path.join(state, ".last.json")))
+d = json.load(open(os.path.join(state, ".last.json"), encoding="utf-8"))
 g = d.get("gap")
 if not g:
     print(clean(d.get("note") or d.get("error") or "no step right now; ask again in a few minutes")); sys.exit(0)
@@ -209,7 +211,7 @@ if g.get("kind") == "value":
     bad = value_why(g) or imports_why(g.get("imports"))
     if bad: refuse(gid, bad)
     for k in ("file", "module", "value"): g.pop(k, None)
-    json.dump(d, open(os.path.join(state, gid + ".json"), "w"), indent=1)
+    json.dump(d, open(os.path.join(state, gid + ".json"), "w", encoding="utf-8"), indent=1)
     print("STEP      ", gid, "-", clean(g.get("title", "")))
     print("VALUE STEP", VALUE_NOTE)
     print("TEMPLATE  ", clean(g["template"]))
@@ -223,14 +225,14 @@ if g.get("kind") == "value":
 gid, path, module = g["id"], g["file"], g["module"]
 if not re.fullmatch(r"L-[a-z]+-\d+", gid) or not re.fullmatch(r"lean/PEqualNP/Outside/[A-Za-z0-9_]+\.lean", path) or not re.fullmatch(r"PEqualNP\.Outside\.[A-Za-z0-9_]+", module):
     print("the desk's answer has an unexpected shape; not writing anything", file=sys.stderr); sys.exit(1)
-json.dump(d, open(os.path.join(state, gid + ".json"), "w"), indent=1)
+json.dump(d, open(os.path.join(state, gid + ".json"), "w", encoding="utf-8"), indent=1)
 imports = g.get("imports") or []
 bad = why(g.get("statement")) or imports_why(imports)
 if bad: refuse(gid, bad)
 full = os.path.join(root, path)
 if not os.path.exists(full):
     os.makedirs(os.path.dirname(full), exist_ok=True)
-    with open(full, "w") as f:
+    with open(full, "w", encoding="utf-8", newline="\n") as f:
         f.write("import Mathlib\n" + "".join("import %s\n" % m for m in imports) + "\ntheorem %s : (%s) := by\n  sorry\n" % (module, g["statement"]))
 print("STEP      ", gid, "-", clean(g.get("title", "")))
 if d.get("task") == "explore" and isinstance(d.get("direction"), dict):
@@ -246,7 +248,7 @@ PY
 }
 value_py() { cat <<'PY'
 state, root, gid, k = sys.argv[1:5]
-sf = os.path.join(state, gid + ".json"); d = json.load(open(sf)); g = d["gap"]
+sf = os.path.join(state, gid + ".json"); d = json.load(open(sf, encoding="utf-8")); g = d["gap"]
 if g.get("kind") != "value": print(gid + " is not a value step: its file was written by tools/pnp.sh next", file=sys.stderr); sys.exit(1)
 if not re.fullmatch(r"0|[1-9][0-9]{0,3}", k) or type(g.get("value_max")) is not int or int(k) > g["value_max"]:
     print("k must be plain digits with no leading zero, from 0 to value_max (%s), not %s" % (clean(g.get("value_max")), clean(k)[:20]), file=sys.stderr); sys.exit(1)
@@ -259,11 +261,11 @@ full = os.path.join(root, path)
 if os.path.exists(full): print("FILE      ", path, "exists already; left as it is")
 else:
     os.makedirs(os.path.dirname(full), exist_ok=True)
-    with open(full, "w") as f:
+    with open(full, "w", encoding="utf-8", newline="\n") as f:
         f.write("import Mathlib\n" + "".join("import %s\n" % m for m in g.get("imports") or []) + "\ntheorem %s : (%s) := by\n  sorry\n" % (module, k.join(g["template"].split(TOKEN))))
     print("FILE      ", path, "(skeleton written for k = %s; replace `sorry`, change nothing in the statement)" % k)
 g["file"], g["module"], g["value"] = path, module, int(k)
-json.dump(d, open(sf, "w"), indent=1)
+json.dump(d, open(sf, "w", encoding="utf-8"), indent=1)
 print("NEXT       tools/pnp.sh check %s, then tools/pnp.sh submit %s. One file only: delete the file of any other k you tried." % (gid, gid))
 PY
 }
@@ -273,8 +275,8 @@ PY
 # sentences word for word, each with the one fix; tools/test_pnp_check_guard.sh holds both to the same verdicts.
 format_py() { cat <<'PY'
 import json, re, sys, unicodedata
-p, rel, st = sys.argv[1:4]; imp = json.load(open(st))["gap"].get("imports") or []; mod = rel[5:-5].replace("/", "."); red = "/R_" in rel
-allow = sys.argv[4:] == ["--allow-sorry"]  # check --allow-sorry: the sorry rule alone is skipped; submit never passes it
+p, rel, st = sys.argv[1:4]; imp = json.load(open(st, encoding="utf-8"))["gap"].get("imports") or []; mod = rel[5:-5].replace("/", "."); red = "/R_" in rel
+sys.stderr.reconfigure(encoding="utf-8"); allow = sys.argv[4:] == ["--allow-sorry"]  # check --allow-sorry: the sorry rule alone is skipped; submit never passes it
 WS = "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"; S = "[" + WS + "]"
 def tok(x):  # the guard's tok(): 60 UTF-16 units, each one outside [A-Za-z0-9._'] read as ?
     u = str(x).encode("utf-16-le", "surrogatepass")[:120]
@@ -386,7 +388,7 @@ value)
 beat)
   stop_check
   have "$2"; curl -sS -X POST "$DESK/beat?lease=$(field "$2" lease.id)" | python3 -I -c 'import json,sys,re
-d=json.load(sys.stdin)
+d=json.load(sys.stdin.buffer)
 if isinstance(d.get("lease"), dict): print("lease until", re.sub(r"[^0-9TZ:.-]", "", str(d["lease"].get("expires_at")))); sys.exit(0)
 print("STOP: " + re.sub(r"[^ -~]", " ", str(d.get("error") or "the lease is gone"))[:300], file=sys.stderr); sys.exit(3)'
   ;;
@@ -441,7 +443,7 @@ submit)
   # meanwhile, and the pull request would be refused; stop. (A lease that only expired does not stop a finished proof.)
   if [ -n "$lease" ]; then
     { curl -sS -m 10 -X POST "$DESK/beat?lease=$lease" 2>/dev/null || true; } | python3 -I -c 'import json,sys,re
-try: d=json.load(sys.stdin)
+try: d=json.load(sys.stdin.buffer)
 except Exception: sys.exit(0)
 if isinstance(d, dict) and d.get("withdrawn") is True:
     print("STOP: not submitted. " + re.sub(r"[^ -~]", " ", str(d.get("error") or "the step was withdrawn"))[:300], file=sys.stderr); sys.exit(3)' || exit 3
