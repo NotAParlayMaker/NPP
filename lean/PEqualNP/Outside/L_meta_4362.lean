@@ -2800,25 +2800,64 @@ theorem s191_6_0 : block g191 6 0 1=true := by
 theorem bl191_6 : block g191 6 0 1 = true := s191_6_0
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem s191_7_0 : block g191 7 0 13=true := by
-  decide +kernel
+theorem s191_7_0p0 : block g191 7 0 4=true := by decide +kernel
+theorem s191_7_0p1 : block g191 7 4 4=true := by decide +kernel
+theorem s191_7_0p2 : block g191 7 8 4=true := by decide +kernel
+theorem s191_7_0p3 : block g191 7 12 1=true := by decide +kernel
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem s191_7_0 : block g191 7 0 13=true := (@block_merge g191 7 0 8 5 (@block_merge g191 7 0 4 4 s191_7_0p0 s191_7_0p1) (@block_merge g191 7 8 4 1 s191_7_0p2 s191_7_0p3))
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s191_7_1 : block g191 7 13 15=true := by
-  decide +kernel
+theorem s191_7_1p0 : block g191 7 13 4=true := by decide +kernel
+theorem s191_7_1p1 : block g191 7 17 4=true := by decide +kernel
+theorem s191_7_1p2 : block g191 7 21 4=true := by decide +kernel
+theorem s191_7_1p3 : block g191 7 25 3=true := by decide +kernel
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem s191_7_1 : block g191 7 13 15=true := (@block_merge g191 7 13 8 7 (@block_merge g191 7 13 4 4 s191_7_1p0 s191_7_1p1) (@block_merge g191 7 21 4 3 s191_7_1p2 s191_7_1p3))
 theorem bl191_7 : block g191 7 0 28 = true := (@block_merge g191 7 0 13 15 s191_7_0 s191_7_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
-theorem s191_8_0 : block g191 8 0 7=true := by
-  decide +kernel
+theorem s191_8_0p0 : block g191 8 0 4=true := by decide +kernel
+theorem s191_8_0p1 : block g191 8 4 3=true := by decide +kernel
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem s191_8_0 : block g191 8 0 7=true := (@block_merge g191 8 0 4 3 s191_8_0p0 s191_8_0p1)
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s191_8_1 : block g191 8 7 61=true := by
-  decide +kernel
+theorem s191_8_1p0 : block g191 8 7 4=true := by decide +kernel
+theorem s191_8_1p1 : block g191 8 11 4=true := by decide +kernel
+theorem s191_8_1p2 : block g191 8 15 4=true := by decide +kernel
+theorem s191_8_1p3 : block g191 8 19 4=true := by decide +kernel
+theorem s191_8_1p4 : block g191 8 23 4=true := by decide +kernel
+theorem s191_8_1p5 : block g191 8 27 4=true := by decide +kernel
+theorem s191_8_1p6 : block g191 8 31 4=true := by decide +kernel
+theorem s191_8_1p7 : block g191 8 35 4=true := by decide +kernel
+theorem s191_8_1p8 : block g191 8 39 4=true := by decide +kernel
+theorem s191_8_1p9 : block g191 8 43 4=true := by decide +kernel
+theorem s191_8_1p10 : block g191 8 47 4=true := by decide +kernel
+theorem s191_8_1p11 : block g191 8 51 4=true := by decide +kernel
+theorem s191_8_1p12 : block g191 8 55 4=true := by decide +kernel
+theorem s191_8_1p13 : block g191 8 59 4=true := by decide +kernel
+theorem s191_8_1p14 : block g191 8 63 4=true := by decide +kernel
+theorem s191_8_1p15 : block g191 8 67 1=true := by decide +kernel
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem s191_8_1 : block g191 8 7 61=true := (@block_merge g191 8 7 32 29 (@block_merge g191 8 7 16 16 (@block_merge g191 8 7 8 8 (@block_merge g191 8 7 4 4 s191_8_1p0 s191_8_1p1) (@block_merge g191 8 15 4 4 s191_8_1p2 s191_8_1p3)) (@block_merge g191 8 23 8 8 (@block_merge g191 8 23 4 4 s191_8_1p4 s191_8_1p5) (@block_merge g191 8 31 4 4 s191_8_1p6 s191_8_1p7))) (@block_merge g191 8 39 16 13 (@block_merge g191 8 39 8 8 (@block_merge g191 8 39 4 4 s191_8_1p8 s191_8_1p9) (@block_merge g191 8 47 4 4 s191_8_1p10 s191_8_1p11)) (@block_merge g191 8 55 8 5 (@block_merge g191 8 55 4 4 s191_8_1p12 s191_8_1p13) (@block_merge g191 8 63 4 1 s191_8_1p14 s191_8_1p15))))
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s191_8_2 : block g191 8 68 32=true := by
-  decide +kernel
+theorem s191_8_2p0 : block g191 8 68 4=true := by decide +kernel
+theorem s191_8_2p1 : block g191 8 72 4=true := by decide +kernel
+theorem s191_8_2p2 : block g191 8 76 4=true := by decide +kernel
+theorem s191_8_2p3 : block g191 8 80 4=true := by decide +kernel
+theorem s191_8_2p4 : block g191 8 84 4=true := by decide +kernel
+theorem s191_8_2p5 : block g191 8 88 4=true := by decide +kernel
+theorem s191_8_2p6 : block g191 8 92 4=true := by decide +kernel
+theorem s191_8_2p7 : block g191 8 96 4=true := by decide +kernel
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem s191_8_2 : block g191 8 68 32=true := (@block_merge g191 8 68 16 16 (@block_merge g191 8 68 8 8 (@block_merge g191 8 68 4 4 s191_8_2p0 s191_8_2p1) (@block_merge g191 8 76 4 4 s191_8_2p2 s191_8_2p3)) (@block_merge g191 8 84 8 8 (@block_merge g191 8 84 4 4 s191_8_2p4 s191_8_2p5) (@block_merge g191 8 92 4 4 s191_8_2p6 s191_8_2p7)))
 theorem bl191_8 : block g191 8 0 100 = true := (@block_merge g191 8 0 68 32 (@block_merge g191 8 0 7 61 s191_8_0 s191_8_1) s191_8_2)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
@@ -2826,8 +2865,12 @@ theorem s191_9_0 : block g191 9 0 3=true := by
   decide +kernel
 set_option maxHeartbeats 0 in
 set_option maxRecDepth 16384 in
-theorem s191_9_1 : block g191 9 3 9=true := by
-  decide +kernel
+theorem s191_9_1p0 : block g191 9 3 4=true := by decide +kernel
+theorem s191_9_1p1 : block g191 9 7 4=true := by decide +kernel
+theorem s191_9_1p2 : block g191 9 11 1=true := by decide +kernel
+set_option maxRecDepth 16384 in
+set_option maxHeartbeats 0 in
+theorem s191_9_1 : block g191 9 3 9=true := (@block_merge g191 9 3 4 5 s191_9_1p0 (@block_merge g191 9 7 4 1 s191_9_1p1 s191_9_1p2))
 theorem bl191_9 : block g191 9 0 12 = true := (@block_merge g191 9 0 3 9 s191_9_0 s191_9_1)
 set_option maxRecDepth 16384 in
 set_option maxHeartbeats 0 in
@@ -4723,12 +4766,23 @@ def allowed {n} (all : Nat) (cols : List (Nat × Nat × Nat)) : Rule n → Nat
     let le := (a.2.2 &&& (all ^^^ c.2.2)) ||| ((all ^^^ (a.2.2 ^^^ c.2.2)) &&& lo)
     diff ||| le
 
-def fast {n} (r : Nat) (rs : List (Rule n)) : Bool :=
-  if 1 ≤ r && r ≤ 5 && n ≤ 12 then
-    let all := full (r^n)
-    let cols := (List.range n).map (fun (i : Nat) => (plane r 0 n i,plane r 1 n i,plane r 2 n i))
-    rs.foldl (fun a q => a &&& allowed all cols q) all != 0
-  else true
+def covered {n} (mask : Nat) : Rule n → Bool
+ | .square i j .. => mask.testBit i.val && mask.testBit j.val
+ | .cube i j k .. => mask.testBit i.val && mask.testBit j.val && mask.testBit k.val
+
+def coords (n mask : Nat) := (List.range n).filter mask.testBit
+
+def col (r : Nat) (s : List Nat) (i : Nat) :=
+ let u := s.idxOf i
+ (plane r 0 s.length u,plane r 1 s.length u,plane r 2 s.length u)
+
+def fast {n} (r mask : Nat) (rules : List (Rule n)) :=
+ if 1 ≤ r && r ≤ 5 && n ≤ 12 && rules.all (covered mask) then
+   let s := coords n mask
+   let all := full (r^s.length)
+   let cols := (List.range n).map (col r s)
+   rules.foldl (fun a q => a &&& allowed all cols q) all != 0
+ else true
 
 theorem binary_diff : ∀ a b : Fin 5, ((a.val.testBit 0 ^^ b.val.testBit 0) ||
     (a.val.testBit 1 ^^ b.val.testBit 1) || (a.val.testBit 2 ^^ b.val.testBit 2)) = (a != b) := by decide +kernel
@@ -4747,32 +4801,51 @@ theorem fold_bit {α} (ok : α → Nat) (j : Nat) (rs : List α)
     apply ih (fun u hu => h u (List.mem_cons_of_mem _ hu))
     simp [Nat.testBit_and,ha,h q List.mem_cons_self]
 
-theorem sound {n r} {label : Fin n → Fin r} {rules : List (Rule n)}
-    (good : ∀ q ∈ rules, accepts label q = true) : fast r rules = true := by
+theorem sound {n r mask} {label : Fin n → Fin r} {rules : List (Rule n)}
+    (good : ∀ q ∈ rules, accepts label q = true) : fast r mask rules = true := by
   unfold fast
   split
   next bound =>
     simp only [Bool.and_eq_true, decide_eq_true_eq] at bound
-    let f (i : Nat) := if h : i < n then (label ⟨i,h⟩).val else 0
-    have hf (i) (hi : i < n) : f i < r := by simp only [f,dite_eq_left hi]; exact (label _).isLt
-    let ix := index r f n
-    let all := full (r^n)
-    let cols := (List.range n).map (fun (i : Nat) => (plane r 0 n i,plane r 1 n i,plane r 2 n i))
+    let s := coords n mask
+    let f (i : Nat) := if h : s.getD i n < n then (label ⟨_,h⟩).val else 0
+    have hf (i) (_hi : i < s.length) : f i < r := by
+      unfold f
+      split
+      · exact (label _).isLt
+      · omega
+    let ix := index r f s.length
+    let all := full (r^s.length)
+    let cols := (List.range n).map (col r s)
     have ha : all.testBit ix = true := by simp [all,full_bit,ix,index_lt hf]
-    have lookup (i : Fin n) : cols.getD i (0,0,0) = (plane r 0 n i,plane r 1 n i,plane r 2 n i) := by
+    have lookup (i : Fin n) : cols.getD i (0,0,0) = col r s i := by
       simp [cols,List.getD_eq_getElem?_getD,i.isLt]
-    have val (i : Fin n) (bit) : (plane r bit n i).testBit ix = (label i).val.testBit bit := by
-      simp only [ix,plane_at bit hf i.isLt,f,dite_eq_left i.isLt]
+    have use (i : Fin n) (hit : mask.testBit i.val = true) : i.val ∈ s :=
+      List.mem_filter.mpr ⟨List.mem_range.mpr i.isLt,hit⟩
+    have val (i : Fin n) (hi : i.val ∈ s) (bit) :
+        (plane r bit s.length (s.idxOf i.val)).testBit ix = (label i).val.testBit bit := by
+      have atI : s.getD (s.idxOf i.val) n = i.val := by
+        simp [List.getD_eq_getElem?_getD,List.getElem?_idxOf hi]
+      rw [plane_at bit hf (List.idxOf_lt_length_of_mem hi)]
+      simp only [f,atI,dif_pos i.isLt]
     let v (i : Fin n) : Fin 5 := ⟨(label i).val,by have := (label i).isLt; omega⟩
     have hq (q : Rule n) (hq : q ∈ rules) : (allowed all cols q).testBit ix = true := by
       have g := good q hq
+      have pass := List.all_eq_true.mp bound.2 q hq
       cases q with
       | square i j a o =>
-        simp only [allowed,lookup,Nat.testBit_or,Nat.testBit_xor,val]
+        simp only [covered,Bool.and_eq_true] at pass
+        have hi := use i pass.1
+        have hj := use j pass.2
+        simp only [allowed,lookup,col,Nat.testBit_or,Nat.testBit_xor,val i hi,val j hj]
         rw [binary_diff (v i) (v j)]
         exact g
       | cube i j k a b c bit sign =>
-        simp only [allowed,lookup,Nat.testBit_or,Nat.testBit_and,Nat.testBit_xor,val,ha,Bool.true_xor]
+        simp only [covered,Bool.and_eq_true] at pass
+        have hi := use i pass.1.1
+        have hj := use j pass.1.2
+        have hk := use k pass.2
+        simp only [allowed,lookup,col,Nat.testBit_or,Nat.testBit_and,Nat.testBit_xor,val i hi,val j hj,val k hk,ha,Bool.true_xor]
         rw [binary_diff (v i) (v j),binary_le (v i) (v k)]
         exact g
     have ok := fold_bit (allowed all cols) ix rules hq all ha
@@ -4791,8 +4864,31 @@ def matrix : List Word → Nat
   | [] => 0
   | w::ws => w.toNat ||| (matrix ws <<< 512)
 
-def stride (gap : Nat) := ((1 <<< (16*gap))-1)/((1 <<< gap)-1)
-def spread (x : Nat) := ((x*stride 511) &&& stride 512)*lane
+def nibbleD (u : Nat) := ((u * ((1 <<< 1533)+(1 <<< 1022)+(1 <<< 511)+1)) &&&
+  ((1 <<< 1536)+(1 <<< 1024)+(1 <<< 512)+1))*lane
+def nibble (u : Nat) := nibbleD (u % 16)
+theorem tab : ∀ u : Fin 16, nibbleD u.val = ColorBits.span 512 (fun d => if u.val.testBit d then lane else 0) 4 := by decide +kernel
+theorem bd (u : Nat) : ColorBits.Bounded (nibble u) 2048 := by
+  rw [nibble,tab (⟨u % 16,Nat.mod_lt _ (by decide)⟩ : Fin 16)]
+  apply ColorBits.span_out (w:=512)
+  intro d j hj
+  split <;> simp [lane,Nat.shiftLeft_eq,show ¬j<512 by omega]
+def spread (x : Nat) := ColorBits.span 2048 (fun n => nibble (x >>> (n*4))) 3
+theorem atLane (x i j : Nat) (hi : i<12) (hj:j<512) :
+ (spread x).testBit (i*512+j) = x.testBit i := by
+ have h : i*512+j = (i/4)*2048+((i % 4)*512+j) := by omega
+ rw [h,spread,ColorBits.span_at (fun d => bd _) (by omega) 3 (by omega)]
+ unfold nibble
+ rw [tab (⟨_,Nat.mod_lt _ (by decide)⟩ : Fin 16)]
+ rw [ColorBits.span_at (w:=512) (fun d => by
+   intro l hl
+   split <;> simp [lane,Nat.shiftLeft_eq,show ¬l<512 by omega]) hj 4 (by omega)]
+ simp only [Fin.val_mk]
+ have hm : ((x >>> (i/4*4)) % 16).testBit (i % 4) = x.testBit i := by
+   rw [show 16 = 2^4 by decide,Nat.testBit_mod_two_pow,Nat.testBit_shiftRight]
+   simp [show i % 4 < 4 by omega,show i/4*4 + i % 4 = i by omega]
+ rw [hm]
+ cases x.testBit i <;> simp [lane,Nat.shiftLeft_eq,hj]
 def collapse (x : Nat) :=
   let a := x ||| (x >>> 4096)
   let b := a ||| (a >>> 2048)
@@ -4847,11 +4943,6 @@ theorem collapse_false (z j : Nat) (hj : j<512) :
  simp [collapse,lane,Nat.testBit_and,Nat.testBit_or,Nat.testBit_shiftRight,Nat.shiftLeft_eq,hj,Fin.forall_fin_succ,Nat.add_comm,Nat.add_left_comm,Nat.add_assoc]
  simp only [and_assoc,and_left_comm,and_comm]
 
-def slowSpread (x : Nat) := ColorBits.span 512 (fun d => if x.testBit d then lane else 0) 16
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem spread_correct : ∀ x : Fin 4096, spread x.val = slowSpread x.val := by decide +kernel
-
 theorem force_sound (ws : List Word) (hn : ws.length ≤ 12) (T : Word) (mono b : Bool) (x : Nat)
  (h : force (matrix ws) (ColorBits.full ws.length) T.toNat x mono b = true) :
  forced T mono b ws (RankBase.RankRules.row x) = true := by
@@ -4880,12 +4971,9 @@ theorem force_sound (ws : List Word) (hn : ws.length ≤ 12) (T : Word) (mono b 
    intro i
    have r := bits ⟨i.val,by omega⟩
    have slice : s.testBit (i.val*512+j) = x.testBit i.val := by
-     have eq := spread_correct (⟨y,small⟩ : Fin 4096)
      change (spread y).testBit _ = _
-     rw [eq,slowSpread,ColorBits.span_at (w:=512) (f:=fun d => if y.testBit d then lane else 0) (fun d => by
-       intro l hl
-       split <;> simp [lane,Nat.shiftLeft_eq,show ¬l<512 by omega]) lim 16 (by omega)]
-     cases e : x.testBit i.val <;> simp [e,y,Nat.testBit_and,ColorBits.full_bit,i.isLt,lane,Nat.shiftLeft_eq,lim]
+     rw [atLane y i.val j (by omega) lim]
+     simp [y,Nat.testBit_and,ColorBits.full_bit,i.isLt]
    have wire : g.testBit (i.val*512+j) = (ws.get i).getLsbD j := by simpa [g,i.isLt] using matrix_bit ws i.val j lim
    change bad.testBit (i.val*512+j) = false at r
    cases mono <;> cases b <;> simp [bad,Nat.testBit_xor,Nat.testBit_and,wire,slice,fits] at r ⊢ <;> grind
@@ -4958,21 +5046,21 @@ theorem check_sound (T : Word) (mono : Bool) (ws : List Word) (hn : ws.length �
 
 end PackedRows
 
-def rankCheck (target : Word) (mono : Bool) (ws : List Word) (r code count : Nat) : Bool :=
+def rankCheck (target : Word) (mono : Bool) (ws : List Word) (r code count scope : Nat) : Bool :=
   let rules := readRules ws.length count code
-  (ws.length ≤ 12) && rules.all (PackedRows.check (PackedRows.matrix ws) (ColorBits.full ws.length) target.toNat mono) && !(ColorBits.fast (r+1) rules)
+  (ws.length ≤ 12) && rules.all (PackedRows.check (PackedRows.matrix ws) (ColorBits.full ws.length) target.toNat mono) && !(ColorBits.fast (r+1) scope rules)
 
-theorem rankCheck_sound {target : Word} {mono : Bool} {ws : List Word} {r code count : Nat}
+theorem rankCheck_sound {target : Word} {mono : Bool} {ws : List Word} {r code count scope : Nat}
     (F : (Fin ws.length → Bool) → Bool)
     (agree : ∀ p : Fin 512, F (fun i => (ws.get i).getLsbD p.val) = target.getLsbD p.val)
     (mon : mono = true → Monotone F) (group : Grouping r F)
-    (h : rankCheck target mono ws r code count = true) : False := by
+    (h : rankCheck target mono ws r code count scope = true) : False := by
   let rules := readRules ws.length count code
-  have pass : (ws.length ≤ 12 ∧ rules.all (PackedRows.check (PackedRows.matrix ws) (ColorBits.full ws.length) target.toNat mono) = true) ∧ ColorBits.fast (r+1) rules = false := by
+  have pass : (ws.length ≤ 12 ∧ rules.all (PackedRows.check (PackedRows.matrix ws) (ColorBits.full ws.length) target.toNat mono) = true) ∧ ColorBits.fast (r+1) scope rules = false := by
     simpa only [rankCheck, Bool.and_eq_true, Bool.not_eq_true',decide_eq_true_eq] using h
   have accept (claim : Rule ws.length) (hc : claim ∈ rules) : accepts group.label claim = true :=
     checksRule_sound F agree mon group (PackedRows.check_sound target mono ws pass.1.1 claim (List.all_eq_true.mp pass.1.2 _ hc))
-  have found : ColorBits.fast (r+1) rules = true :=
+  have found : ColorBits.fast (r+1) scope rules = true :=
     ColorBits.sound (r:=r+1) (label:=group.label) accept
   rw [pass.2] at found
   contradiction
@@ -5014,19 +5102,19 @@ def huffCodes (n : Nat) (f : Nat → Nat × (Nat → Nat)) (read : Nat → Nat �
     item.1 ||| (huffCodes n f read count item.2 <<< 36)
 
 def rankHuffCheck (target : Word) (mono : Bool) (ws : List Word) (r : Nat)
-    (format : Nat → Nat × (Nat → Nat)) (read : Nat → Nat → Nat) (tag p : Nat) : Bool :=
+    (format : Nat → Nat × (Nat → Nat)) (read : Nat → Nat → Nat) (tag p scope : Nat) : Bool :=
   if tag == 0 then false else if tag == 1 then
     forced target mono false ws (row (read p ws.length)) &&
       forced target mono true ws (row (read p ws.length))
   else
-    rankCheck target mono ws r (huffCodes ws.length format read (tag-2) p) (tag-2)
+    rankCheck target mono ws r (huffCodes ws.length format read (tag-2) p) (tag-2) scope
 
-theorem rankHuffCheck_sound {target : Word} {mono : Bool} {ws : List Word} {r tag p : Nat}
+theorem rankHuffCheck_sound {target : Word} {mono : Bool} {ws : List Word} {r tag p scope : Nat}
     {format : Nat → Nat × (Nat → Nat)} {read : Nat → Nat → Nat}
     (F : (Fin ws.length → Bool) → Bool)
     (agree : ∀ p : Fin 512, F (fun i => (ws.get i).getLsbD p.val) = target.getLsbD p.val)
     (mon : mono = true → Monotone F) (group : Grouping r F)
-    (h : rankHuffCheck target mono ws r format read tag p = true) : False := by
+    (h : rankHuffCheck target mono ws r format read tag p scope = true) : False := by
   unfold rankHuffCheck at h
   split at h
   · contradiction
@@ -6229,21 +6317,21 @@ def ruleRead3095 (word : Nat → Nat) (base start a off b tbl tb pi pb cw i : Na
     fixedRules3095 word cw (pp+5) (packedAt word pp 5)
 def signedColumns : IndexTree ColumnInfo := (.fork 43 ((.fork 21 ((.fork 10 ((.fork 5 ((.fork 2 (.leaf [(2,1,460,48,7),(5,0,506,0,8)]) (.leaf [(7,0,504,0,7),(5,2,440,64,6),(10,0,501,0,8)]))) ((.fork 2 (.leaf [(12,0,499,0,9),(8,4,369,130,7)]) (.leaf [(14,0,497,0,7),(10,4,369,128,6),(0,16,486,9,10)]))))) ((.fork 5 ((.fork 2 (.leaf [(17,0,494,0,11),(19,0,492,0,8)]) (.leaf [(21,2,424,64,5),(24,0,487,0,11),(8,16,486,1,9)]))) ((.fork 3 (.leaf [(25,0,486,0,8),(9,16,486,0,8),(26,4,353,128,5)]) (.leaf [(32,1,460,18,7),(1,32,94,384,7),(34,1,460,16,6)]))))))) ((.fork 11 ((.fork 5 ((.fork 2 (.leaf [(36,0,347,0,8),(40,0,471,0,8)]) (.leaf [(49,0,462,0,8),(50,1,460,0,5),(0,64,189,258,10)]))) ((.fork 3 (.leaf [(66,0,445,0,11),(2,64,189,256,9),(67,0,444,0,8)]) (.leaf [(70,0,441,0,8),(69,2,440,0,5),(74,4,305,128,5)]))))) ((.fork 5 ((.fork 2 (.leaf [(80,0,431,0,11),(83,0,428,0,7)]) (.leaf [(96,0,415,0,9),(96,1,396,18,6),(98,1,396,16,5)]))) ((.fork 3 (.leaf [(132,0,379,0,11),(4,128,347,32,9),(133,0,378,0,7)]) (.leaf [(134,0,377,0,8),(133,2,312,64,5),(136,0,375,0,9)]))))))))) ((.fork 22 ((.fork 11 ((.fork 5 ((.fork 2 (.leaf [(144,0,367,0,11),(152,4,353,2,5)]) (.leaf [(160,0,351,0,11),(160,1,332,18,6),(162,1,332,16,5)]))) ((.fork 3 (.leaf [(164,0,347,0,8),(36,128,347,0,8),(176,1,332,2,5)]) (.leaf [(192,0,319,0,11),(198,0,313,0,7),(264,0,247,0,9)]))))) ((.fork 5 ((.fork 2 (.leaf [(8,256,151,96,7),(280,0,231,0,8)]) (.leaf [(276,8,227,0,5),(257,32,94,128,6),(296,0,215,0,7)]))) ((.fork 3 (.leaf [(273,32,78,128,5),(56,256,135,64,5),(320,0,191,0,11)]) (.leaf [(256,64,189,2,9),(322,0,189,0,8),(258,64,189,0,8)]))))))) ((.fork 11 ((.fork 5 ((.fork 2 (.leaf [(324,0,187,0,7),(324,8,163,16,5)]) (.leaf [(321,32,30,128,5),(224,256,23,8,5),(10,64,181,256,6)]))) ((.fork 3 (.leaf [(129,0,382,0,9),(156,0,355,0,7),(129,32,94,256,6)]) (.leaf [(161,0,350,0,8),(177,0,334,0,7),(193,0,318,0,7)]))))) ((.fork 5 ((.fork 2 (.leaf [(289,0,222,0,7),(257,64,188,2,6)]) (.leaf [(321,0,190,0,7),(260,64,185,2,6),(72,256,151,32,6)]))) ((.fork 3 (.leaf [(328,0,183,0,8),(336,0,175,0,8),(344,0,167,0,7)]) (.leaf [(416,0,95,0,8),(448,0,63,0,8),(480,0,31,0,7)]))))))))))
 def rulesWord9 (i : Nat) : Nat := 0xa300090028c0026
-def spentSigned9 (i : Nat) : Nat := 0x0
+
 def rulesWord10 (i : Nat) : Nat := 0x582d4c99582d4c9901110125011101250065408900654089602e686e800e6106002c0028002448fa00f200e9801600e918f9009518f90095702d0146702d800a80120020001c001800140052001000928005000c80050008bba99685736458483313003f2c0d0c0b0a090807060504030201000f0e0d0c0b0a090807060504030201000f0e0d0c0b0a090807060504030201000f0e0d0c0b0a090807060504030201000f0e0d0c0b0a09080706050403020100934030201000aa42ba060e10c1d01ce1703b90d742750d76133aa6c5564a00b751997504cecc9a9925fffffffffffffffffff
-def spentSigned10 (i : Nat) : Nat := 0x0
+
 def linksSigned10 (i : Nat) : Nat := 0x90
 def rulesWord11 (i : Nat) : Nat := (if i<1 then 0x3008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b0280902007018050100300801003b3edf9f18f14b00ac0a80a40a009c09809409008c08808408007c07807407006c06806406005c05805405004c04804404003c03803403002c02802402001c01801401000c008004000200169b88d04636a0df261608033941bbf4187d06188433f01bb4a3466946fedda0c3d683fb711bfa96eb1fcc9b891751819fdf3741a3f3ad30aad6ad619fae07af43aabb3c3d219912722306b4eb5665063e2156753c52aa9585653ca736b0b82396f90ac521070c83a78b1483ccb797abb4852d4a825a3406c5a0a2676fd40f39116a147d1f41c81940f6e9f448fac58d4a44bb46a993b46a42626b4a5ba25cc9aa62ebd007ae113964155694b73f723242d411600dd5131f81638aa5d105a03e4ea823ca29e1d76a9079b53a7a8a4dac53e679ae639892b5429b3152cd3368337cc4822ae9b469b35f31142d1566b4f84988a5f761c89093c089595f08454f0e4484044acaf80a437872f764484be044acaf842297765e03292ac52f9e0e6508939118437afbb0e78ca1127223084558528134f10aa6be70f908a8439e322511870290de5e1cf1912722301486f421cf1912722301486f14d7139b64c468e5e5424c44e387282970a034da34db806a758436f5513ac2275812899d4e5c1b412eed0202272c51704dd978089cb2097768100e45628ba17002272c517977002272c51742f180722b149ce34f58d6361e31a736b267ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff else 0xa5c84b9297212e40948c39025230e4a1c8cd928723365a4c906d693241b4658ac391962b0e48449cb1211272c544c81255132049584cb8f96132e3e601481158052045402f18ba70dc80b9c1d34ba01ecd2c804f389a01bc039881938d202bc410800f0016119500d824d1046229c62182592906505c526864d28d261a425280092cba00dcb2c800280e9000a03a4028a8f900a2a3e4422a105108a841582098996082626405ac009016b002402704ee31f4241a0088135802204d60171c3a09b50078022808d008a023407000dc01b003500680082012ce2e806600c801880301069403241f4035803c810500f2041405e00b8016802c005600a80148028004e00980128024164d0885028c2214088886d022221b5a1cc0266872023183688fd60da23f600ac00e802a81d9045004a705c01d826488890992222424f110649340438067208641fc81b803e813e00fa0220042008000f801e003a007000d801a0032006000b8016002a08d200a00130024008a11f401100200066007900698170038804400d0018286e01e4024801600280048008000e001800280042002800c800a0021875c14148cf535cc0288931d0550dc1e0032cbc28d972187b1bf61d33434d2274610fc1d00395d5739c2ee8ade8c9521c75d8a5290d2c45c003c9df72ab3e838d9ea6e98e5111a3c4aa1d435000d2278680c00b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b02809020070180501003008010000f0380d0300b0280902007018050100)
-def spentSigned11 (i : Nat) : Nat := 0x0
+
 def linksSigned11 (i : Nat) : Nat := 0x3406304b78a20000015fa16107660aa0210000b19000034128000c0b4a06240b9852e0920000000000030a22065826b80300000002417b835847a21638003001a0946084000580e200fc02050c780df0814012c2ad841448cc11c00a782280a1a85c0006859801e000000041010000014d01d503e5016c014000281d647c008001c2043901520d9819800040500d2240d0000907b631e81cd0340001c110816b81500012079412581f000000000005010000000000000000e090c045027901220a9215d8180000705200000000000105cc51cda38000e98d606d59480000000611481e381c802d1520c2600003046000301f8000000081380000000100d204c00000000058000201bc856b004e026c1358273064e0c4b8d30471480002c21810810035830020410c008100700a040000
 def rulesWord12 (i : Nat) : Nat := (if i<1 then 0x8a4d4142852028013809804a024011808804202000f807803a01c00d806803201800b805802a0140098048022010007803801a00c0058028012008003801800a004001800800200004ee14196dd39a4bfd7cd9e463defbfd86be1dd26fba286c883e9a5b86be6dfb856fb5ff6e29dc87489a5e7cb86b9b76996fb95f6ef3ec1cf3f2eed7237fcfe7ffb3cf72e7dba4cd4c18c94d916ce3cd5ef3b2de9cc16b3b5da1b2cefdd5bee8ade4fa5ebea0995e2cbd74f3f5774e3c9d5ac8abe34d8b1e9cfb9e7f5bb2af838ac7ef7e676b1777ac893c3ceb9bdffe71d41266fce99fafdc7e49ea0af978cf1dfb0e32867f8ff21d050ce57d59bbf4f6933ef33e665395e6c71ddef378f5776a672bddb4daf76de9bfda0b99f9faf166cb71e37ed784e73332c715ae2dacdeadbbdfa9cae3b36e6bf53df9c7abd8f9cbdde2b1f2a4d0c7b98f7231d7ea7df12bb739ed0c7b2ee5eef337dcadfebe956efa3a903c732bb6bbba9568f51e5539fb95e35dddc3171a7eff792ee51e0de4b76e3e16d3f8e6ccda4e391dbebcf1e5e5e6ccc30b6e5e5926e91c8ec9b3cbcb88f6d7bb2847b7345c7ee96fefef99974cbbf0e2d7e6c33e3f7bd0c7bc96ede0ed853f8e6ee876e1c0e53fd873e6bff4d7336e1bf4bc32dbe168dbefc5b95e4e2de5fd867cb9fcbcfa4c393a71d9e6fb0d74303374e7cb2f6d7a36e9bc8fc41873b8e5e6657c6d4c74d6bce5c369264fe07a5377f173c1755fbf8f867499fc15ffaafc7e8bd0e9e7eaeead93a82df6f1f0cea878e7eb4655faf8c94fa5ac1458fef3ff3eda927667f38ff9d68b7c25c9f67dff5a25e3721c7fbe3869f34ef53387e9b98874fc1cfd55f4fd6463eff70ebd13fef5c79f7a7c3aebfd71fac1f34e7c9eabfd71a7c79fdd5de52e3fdcdc683cbd39876aa19fc9c77a7194141a248560f7e3f3f68346d79ab1fc24f15fbf8e5e7567f6e78dcaf3f2eae8cbce72bf6499b571e75eaa1c6a4becc3ce6f5ac9326adb3f963ca9a9d643b26a9fba151ff23f3f682ef6e9bcafc793c47f1af865e757dbb6e57e5f1f57c32f3bb1b20e5c7e78e07b4fd5bb2f39caf0340e4f4cd8f3af567e5c7959a4fad661ab6dd8d7819aedcab3a6a9fbbcea47e5cdf7d24d64ae5857935603c7ea7945a56db068c7ec18b27bfa9b60afc560fd8fbc5b5bb9ff634fde2daddd4fbece7a9154819b695e66f56a6534afdcdc2a458bc59dd6c0383458a47fdcef175b05dc9d3d6536286f525beb27c7cfd3d4de75fdcf87dd4dea798b955b1e0bbe71eb29d148f7c906dcdf1e7cf56fce9ff41d48b3b1ea0b7e5effa0b7ffffffff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000 else (if i<2 then 0x548810af0f8128004f593b125eb38069ac0148a253a85f0918e81140c80049787cf71c4b275caa05111e33204f0770a10ce10800473866fd5ccb4c618b153ea463ce694b10fd17e18c0044f826e99adb0753e9490198d29a414648900c80cc0022e3d4730d297227c40c738b211e1942101e0280280000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c014020030040040000f01c0340600b0140240400700c0140200300400400634e6eae else 0x28ba03e0400681983d0426031410903141091384039138403913141211314121435513d435513d1486051148605144740a944740a9015409501540952274899227489901348a501348a52524869252486900f405900f4059050411905041191165885116588504e415d04e415d0404021040402104940ed04940ed00944ed00944ed0544029054402905148d505148d50124099012409944a401944a401981045558104555821812d04e012d4104069410406903544b903544b980e409180e409132c601532c601504d094e211895e22e8036240805e0438082256800a411811e033813280f80be028895203c415903c415903e88fd52c88fd01844b101844b104c012c04a0124048011c0460114044010c042010404000fc03e00f403c00ec03a00e40276012027604e10e50d110e50d140e400d40e400d01c413501c4135034408503440850536019053601903800dc03600d4441807520b807503408d180a88d160b543960b543903300c803100c004f8042422909a02f00b802d00b0241506d241506d20e8886808a01e6348c9902b0c9904454b904454b902a00a4028009c03280c102600c143e807a80d983a80b406e80b409401f814a023907612658b912658b9626a03100ba0310194090019408c022088a02104ca80940fd80940fd020007c01e007401c006c01a0064018005c016005440b8cba014004c30e88fa012186e011004000f004604198fa00e003421b949a00c008a00b00280090020007001800500100032005002200593f145de365628ac1071b52fa))
-def spentSigned12 (i : Nat) : Nat := 0x0
+
 def linksSigned12 (i : Nat) : Nat := (if i < 2 then (if i < 1 then 0x40084f09ac000060353005100536406b8149540068055c00003059480dc406340000000000000b0aab0ad8d018bc2bb20892010420987cc1cb0028c30d00001d16c0000381a960be8825a0000101756a0714176813480000000000000c0a4b42d5701758ab200383420f809ab2ae4000000000000014197503880000000000000807f95cfa278f45143b00e341e90000342ede08cd413ac283c00000000000000000000001035d0234602b482b7b03cc0000a9aa88702000028033603600000a06e81cb600000807bb04d38057e2090c2af000000000000000c770000000002621c22ac907a8000070c28000000000000020a0442cd7098841f5e0670000000002c14ff09640000674bf41ee207f3824900000000060a5c000060ae442da50484c1f100000000030873884da091a1d280000000000000164feb01c800008075c826600000000040339c16fb77971e86902a682d9d05fc000070248c8170000000000000302520000102600000180af30af5019a404acc2cb10459415588bffceb100001828000002c0a290467eab2000020c88340d24147306080000b32830823e064f0110d019c00000000101ae000000000000000000e0720029e4058544bd304a2c2a150178c258000000000e04f9c0d0903ed86ac91533c1899097502e00000180ff60b84c1f0b0bfd2ead000000000d055b5ab8e07ac40c470264000004b9b8abf301b8000000003c08ec781501c1c0450000000000000080b3b81230000042f500001822b000028081313900000008e801d0e041f9846500a3400d904d4000000000000000002c26d0030e4a1890333c0b70000024fd000019d44004b00000c0305019e04ade01acf08370029c034d4035e077059939046e40edb054c0000715800000c00d80000c948540264043fc0cad4ac9809460498851b01adc001a88597020760518e5200000000ae2012e401720827414ce026a405b00010006000000560000001f006200010007006e000f003500120004000000070000004500080072000c0008000c003500290004001e00250003001c0015006a0007001700090002002200210000000b0001004400ba004200190000000e000900000027000d001200b6002e00ff000c001100170002003a0017002200030000000900a9000a0001000d001c00010000000900010021000e0003000000040071002f0007002c000a000600800089000d000f004200080000000c004300020025000c000e000400c0001e0008002600010062003300010020001b0015000c001700010002000b002b00ad0003000d00120023000100420005000000030002001800440000000000240000000e000c00000019000c0022003500180000002c00000006001100000002000a000100030072002400020056001d000000a5000e000000090011 else 0xeb0ba8425f403b80000801620122e02a29cf917aa8c24f80c046c47904280000f58c4003f7444100e500000052490aff251700bf446e4103ca02990000100c0da67400007077e04ca90021c0a6da5fc000000000000080604c0def015682fee5c264127b07dec16b00001818f0000000008025ce2096044800000000102e800001402c0000181b500000028d40788000030a9c000050219884fa030a41ef9093b801471528422aa45266e47c0405c2cc0000202de000020078d74800000505e9c10070a6a024a594e882c0000000000404268025d0b97c0e9bb7eb406dc06cdc194f0b400000a08ff82f490614000070bba407dc08a602f950056029b440180000b07480000a0718424d30bce01b7804600000f032d46e500003ca1160a0b00d2904798212c056180f7205e28074b0a50c1e090a800000c0078c061a04c1408be0551c139902f162f900000c24400000000000be000002bab08808e38ca41330000300f150224000000000428a606c941fbf0390000000a1680cfd051400006076000000000182d1f4447417cd0a45127fd0a1a11048ab9da9850067d5d08274580000105b142c6000000000e00f40000000000000e000400000000100e800000000000000c2e226500000000003c1063071c0000f003b4090306652da232be901796b5088060000000000501301042706c00000208b480ec00000802110601c07900003006411bae02e4e07a1c124b6aeb01adc02a9810de05df42dc000000000f02e00000c035bc30c4046a010cc06100216a087580f4d0944821f56729005f74573c03c80c0140070000150d10000000007a5cac02a0000101503031816f9425ec000000000000000b6c84bb107fc0000a0c2d82f6405a40000b009c000066590de5a10b0eead500003c0405023c00007061fcad4007b5051c70b178e3d50973000000000821700001650cd01f880bac095cc276508315c9a00000000000a1c0032504f3c4c1e77f40000b01539eb20000301d60000000006043ac10b7004fc30900000000000000c2280000240190000000005787502f2000008173e920441b940198000000c15c2cf8062c000000001ed8a90355c15b7904201ec306616e39301700000000009047b0adae81d7040c0000467250219f05880000805100000000000279b00dc0000e1c254091504bc000030195406300001c0b5d09dc00000000142ec00000828fd03740000b771a04ba408dd82010000282ebb0a63deea007cc00005064ae13f7947bc6c934bf80000706a3826e000000000a07d2c28e00002c096a0aac416dd682541950000000002073c027200002408c000000000c0860c07600000000000000000040695026300000c1cdd0658000000000000030294000000003409be00140000000000000a0bf00000709a1814eb08fb817110a9) else (if i < 3 then 0x361145c0953412a000020073904454dc50000201d19086a650a500f90024d089d0243000000000a00e8000040a121deca0ac6056620710000083ab00000709bd80fd705740000704f502039039a2401000000000f041400000000000009068400005056680b0505920215000029ee800003c0cd00000000000001514b00002a536000000000902d800000000002000000143063014fc19b0000082080000000000000199cd0000000005988da16a909a5c4e700001c2484038c0265a04c4c30372ac5c00390164000000000000000002dd21f099c000000000000000000000090009250900002404ae06e3414800000000010b7c217d00000825e909044206000000000801e800000000000000000000009039e004f00000814254bd400000000280a48008c8052006f542bad0b06c0b9076a80000c0784000070384000031b0d81f6d05f9c1d4908080000a0568000017238000000003421350b4800a3eb68f824500003c24c0000382c40000101bb80bc2c17d00001830400001a2f6365dc807fa03d6c1700000105f982b2ec242000000000f1559825b40159c1e38790a42a3d0121801c000038247b01040000d0409c0f9006f1853fc3812d12da07cac12de08b88236e086d40ea90ac29d074005b024020139e2adc081642b3d12cc0000108280000a0a58812ee00bcc27820116c0a1409d4422000001401dc095b009f000019ebdd32640000b0755c02e00003c24bc0a704253d28500000968340000000000000b06c4000040aa30225385dde49c30a214143109435843a0633418e80674c8250000104da400b40000000000000eaaf9c30800000c01200001aaad000014c9f90a302ad4805d000006070c0000d006281da40b7400000000000000000012aa4b1d800000058f404300000c15eb0b20000000002dc1b31bfb8255b01240000a07e0000000000da0a00002c03900169e20d6031400008149a412920838000015bd3811c273124108e14e25d198047cc527f0525800f103aec12500000000000001003400003c0680000000008212ac13660bc40000a06af854200001c0df50a7c000020b5c0000fbb280000a061b81c00036e4069c007cc28b60993c2b5c7aad418800000cc910000082b800002d27e00000220a3757c0000000000000000000000000000000000018117a0ac80000506440000202c865480079e008d000000000565180000a031c00008201c00000000100936032043022044c000030a26055556ab05dfcb861800000527702b4fa06440f0e09b000000000300800069840b3709f000713750242a2007080000807740000a94ef802bf079182d8000018020000000000e972c81bf80256c29540887806f812f800b18048000009062bc151300240000709f552b100003c00c1285d8031615a00000908d5420bb02b3816 else 0xd0228eeae80ba701af31af942ef00003de1ef924fe4f8d00c000000000141b6b0b990172f074c809e20bde4167508b19d1210347c4cbe09ef40bf809eac2e700000c230b4909655500002803b90a764210e06d242d640b8ec18300000000024a180000d0764000000002660b0000102d3d002c0000a01aa02bcf06aa82beb1548814149be3422f506400050a01f2908661bd1c1beb09c40000f213aa4f76029c000010aa402739735142c7b02ac000000000c022f032400003138401de0000281e600000027090c1e01dbf94dec083558e2c27f502d240462452000f6a036880d9000000000900100000e0a4dc09830474c2fbb0a4101ce4069c82a4002169089214a1806c674e780477089a996d00000c1a460a0ec011668ef416a0020980ef2111a9f0400002d044e41d7c132d045602c2908f00000000000000000020222501c00000a09d141a0e013400000000201cb0000342a6000000000f673242d4d8bf906ec0000300fc879))
 def rulesWord13 (i : Nat) : Nat := 0x48403212100c84b605212d81484f425213d09481800b805802312c41fa4b107e82780840d604d408910a15e44282e604a0b9812c0d603b03580e853815c15206501500a004c03b22e505a8b941680b40da02d03684151a210546881a41f206907ca26507289941c812008804081940e810d02e01d40581a203c06880e006803001610e805049a25d009004100600e23e90dc018045005002000c0044f9183f6deafca120e69114228018ddaf525172c43aeab3aaaa1e659663f09a138007b1a0508e42b87a120400e0300a02006010020001e0701a06016050120400e0300a02006010020012a0b104000047f35bb0a5cde492df3763517efb9fa831d461734370de89e5b6ec0d6a9aa13adf3e53b09a16424b60b76fcb24332467b9eb6bb0a1649e5be6c34d6a44643dcb7853458d0bc77aff97465da13f0b23db97f9e5aec685d93edbd1ae7f39bebe6b11e6be40b38b6f758e5304737f0699b2eb0f8f304736b6b171e6be0496f9add8bfaf1dd4189736318fe7dc889dbdd681eb4e5f7e18ece5d68d03839fb8623db4e5d1a1fc6b863833869b6eba7b9140bf1cfe6c1ec5d4edb903f732be139140655a4f725cfe77f5e708195027b93973539a413c32e6a48bce1a0ef3568399c345555555555555555555555555
-def spentSigned13 (i : Nat) : Nat := 0x0
+
 def linksSigned13 (i : Nat) : Nat := (if i < 2 then (if i < 1 then 0x65000000000000010021800000000000000e16183be000000000e10b7020640e600000000000000e085bc56b0045c5a70000000000636c00000608fc0478a002303d3570300000af6be81de00000b27a000000000c0a4802858174a01a20113c028721760049c40968000000006815e0000000000000500f8725080000000000000000060598000000001801cf0351656ac056ff46eea5af00fb341da46eb08472000060a7be100203a2212d74a07609de8153613a78180c0cf70123a16d501180000184c6a111f0151e1608c3fce01a300e380aad0322000018422000008074a067d048460285850a0000383f8000000000000000001c06a7807c000000000c0a42c5a9d6825118420301047d6e11783c360f380000209a6992a0000405be0137883b8000038574000020449a0f18000001010000000000000000c3a8435405fa021ec0ba000008010800cc0000103a9c0dc2001000001034600000000000007caf780370000000000000000000000000005c2d400004044b80198834a000000000a4420c95c0000000012151e8140000050252cd6c00000000068516000000000601538dbec097e13bc30fc8048ee0f28837600ae70001209d503e400000000000001035e00000000000000000000004051800000000000003ab36e138701966a790812a000020102c09e2b4f202ce7835d807d3c1df414b800000000000000000780a220f58000041209d2710cefaa0056136084ba928cc0409c091d80ba000060464600f18436000000000405598303a042f0058804c58431e03d0000180320000020a37004d08c5a006400005805ea460881ee000000000000000000000000000e10c80001c15e3837c80c9a227600001b0de00006bd2b04607c571c04f80000aa7580001e0275801ac04ee93be00000000080def82cca0f9b05956036d0463e17280000e0ef1824e00000000000002256c307800001a11de833b2233c802f81030027be40a285d6720b500c28b620035400bb195ca48b800000000000001807738b3c0c01d0018393160c387003c702060400d860c58404301060c3414b1008f07060cc00302c10408000820428086081c00b02340130400003000810f100410f001000a2e2410e04405840a0010108003000a0008616008000c00753140833b0418207000050000a41830204b800e040000608189021880d0a20301081800000040041e0c101060400106040010018083000c007000408000082000000000003400132080091a28416120018000001820404300000000600000800220080001400004080812a0c1800204000000850704ac41200082000a00000000c000002010208100000a1c00504180060494083040010d0008000000008700080030008a810810002020078222000020a000800218300021820104080230204381 else 0x700618128c02640000000000150d83d88176e01e000000d5ce60ed60019a1097045820ad00000000000000000000001213b78504001d800008169702be689b80000c1755815de07000001008b400f760528035360a9284a8000008585206af020bc06ec38ae0000000000121f802340c91053600000000193630000000007406d9077104dc0073a04fa00005820f40811802c80eb189ffe0ac0000000004027d016cc8474caa4d0467c13bf0154c06c3b25881598853c000000001a058e0084000050101204b882411644e08a8c0ba98375d0fe18414a01750097e06fa836be115a008240f42988f40d590310a06420309cc9358227215280000000045b94c09800001814ea85082e3d582d1613d9010fe099bcac1c156b85ce6130805c2212f300e62152505cc7170f824b094d00000000002dbde0030000000003328a213c0000081555831800ae80001411800000000000001c0b63587fe10f4811a000000000e14a2006d40d8329c190c2801b7800e00000620ef83d40000303f3c126500940132f836de12780000209a80000003460596000060313a0d958214e0b8d3820c0cc800002146bb3eee02c301120000504daf681905ab00f8800000000383ee000040453e05d0341a00004844400001030b80a2881daf680c02a14102920f00000138f20000703a060498000000000000000005808f00b79825c40bfd84aa120648237c07908230a041c80400002c8288403a080144128501c314748000124530054420a9800000000004a40000041e3a07f83a22000000001c0b54c29c000000001e0cc00000c0490000020ac800000000000004124f05a0612000000000070224a134102a20000620d82812000006048602c8810470561a13500000800ac02f5002b283380000605922237d0494516180001d763400ae0000382620000000000000000008071c029d0c6c80406486000001a00f8000000000816a00007844d406d384e6407600001204b00001c16000001612b980b6807b0b86c0000000000000583730154d0280000000000d65f8051c0d27cb814809500000000010012000000001c14780233601c484c9136073db181492cd86000000000000000000156a80001c8112838c0000504f2005f30006888a8000000007b4ee802a7058e608d3c40502d1382f372892828e00310554a80455004ac034ecd5a016a2808cc08480000e0096823c8063e81ac415b4038f40cf800000000000000000480034141d021a4041784d2700eb8057520c00001a07d983dc000000001d69b80000d22c80455ac496816c215ad08fa0000103dfa14e0000000000000000000000002032004900511042a00000000000007d385e04cf8250000000000c03af01838139285620000538120000785ac0000101fcc0fc08078c153a852c60) else (if i < 3 then 0x4780000c169f3ab84c9c80000805b80000416c28558000000001e14d48391e07a985c1a10a38021c07400000000030221414c680be000a00000a0fa100b8e14828358b2950000000002843e4350000cf811b109040000705778e9e800000000000018078980466c730820300bef042721039158320e50820d6031c0451409f98050000000001a12b00000000078199200e800000000000002068085d1916c684200000000000000249454133905c486e06815a6b6e00000e11bd0d6a600c0859f80d200001a15f283040000000008107a394080860038ae0c69036f8889b845a40b100001cc9070b438231a0111a0cdf83ebce63000010b72781380000000018e8b800007682cb2bde0c77838441240000080a0800016e608c809c05a084020000000018038383c14d50780fe20b3f841362369b3da00006007a1500083a5c0fd0ac540000385c6000000001e03f281a4a088a80fa80c7a0341216f1b8cb40f1000000000000000000182e5a0cb804b160b9d019a0000705730131080ed4027e03af8f60d04eb815fe8192016ec80330cd780389615a6b9d80090b8a085100505418e55d829981622816700d30053e5257d3855a0d0884f92f5020570616e2b93f800da848aa06ce0164001fedd8ac12e282a9a0d1285010110f05036240a855d6037fa579008af0129a0356558a005eb822f00537d9c4b21974d31c2cffb98ae0e58848920bf3917e406b9032be013b014600000000020e0703c8e072585dcc66d800008074881368166a3d59416de0591408e800018026e041800000000020840000000000858a0000000000000401b80000182c7c11a1047e8135c91684061c845ce02f20511807280001a88b503060022c818cc0e9f02f683540000160c8080340000703fbe25e8000180b6903b201306bd7a0000000000000000010026680888061703db20d680000000078026000000000a0752832c20ed80000000000000000000001812f800010258000000000485140000302d20000402c0606980000d0fd382f0ac1b00000000000001213d180900000302aca13300001d15f882f8000000001805c101e6000000000415310189d1626000420f86052a20da62b8a000000000c2277021c000000000021b00000000000001007a5216640d3d83ba210e8029ac0ffe0159807ed837e804d4005aee2c0017600000bd342e94e8b48414cd018b4125f01bc00002831661720000100ca5000f307670081a09600001814380001a0e6a05aea0e71055f60b08000000005023840ec00000a067681730110000000000633278ec8b01420000584b26126d824800004289741230000140d9b01f28129d039e204200000d238800016007c831480bb8000000007850c000070378601af824420b8100b52024fa068213f3826d81632029781540000056f200 else 0x5852760058000184edf817920e0a8522802ad81c4a0cd3830ca095d01f8482b503fd00a5534f4813fe84388032f0209e03c103ab00070000000006811d2d3d9057be03ca846a0000181f140d88000120af4c97800006042ed2780000109504006e6d5f80000e03bd841a000000000000008044c0ad88301422de816141389b905ae09285a2008a783874c22b8471835b580d80000182d70105f48cc004f581cc0000284b7808000001615960db2000000001e02900001a0148000000000045f42d0703cc9359800018144e83f6c039180d6c043000b2e0937041d60b280000000000000f22d40148c11eb82ae0053f806200003059c00e4800000000682dca155d05868029e829fa))
 def rulesWord14 (i : Nat) : Nat := 0x2680b81ba0982143e42143e42c83460a83442e40e42e40e405004003002230261e8bd99dca0f7b5
-def spentSigned14 (i : Nat) : Nat := 0x0
+
 def linksSigned14 (i : Nat) : Nat := 0xc61406daa300101e100014310001c110002186b070000400b10600029a30000000a074022703c00020bc000b0dc81ffb8c02500000000002807000000000140000000000a00400030c9033858c00030580004034000000340052880005057c0be718c217050435c8b8000b0b80005042c19904c0000000000000382d0039ea1000000000011e30001a22000000000038e300000000003e23c023c3a0002003d0932630003c1a000000012840000001027f0e2c0a0000000e05d0392b1842c60240000002423a080000903142be0d2828001a03610a4000000000000000000001c46207b92360c0000d099da1a0a90a3d060000000000000000002048000000306300036f10000d0000404002000050100003c1302004
 def signedLevels : Nat → Packing
   | 9 => (1,6,0,0,0,0,0,fun _ => 0)
@@ -6260,14 +6348,7 @@ def signedIndices : Nat → Nat → Option (Nat × Nat)
   | 13 => lookupWord 323 1357 7 18 10 4 linksSigned13
   | 14 => lookupWord 28 149 5 14 6 4 linksSigned14
   | _ => fun _ => none
-def signedBudgetData : Nat → Nat → Nat
-  | 9 => spentSigned9
-  | 10 => spentSigned10
-  | 11 => spentSigned11
-  | 12 => spentSigned12
-  | 13 => spentSigned13
-  | 14 => spentSigned14
-  | _ => fun _ => 0
+
 def signedRules : Nat → Nat → List (Nat × Nat)
   | 9 => ruleRead3095 rulesWord9 16384 2 0 2 0 2 17 70 0 14
   | 10 => ruleRead3095 rulesWord10 8192 356 8 404 8 1132 16 1836 0 13
@@ -6315,18 +6396,18 @@ def rankFormat : Nat → Nat × (Nat → Nat)
 def rankHeader9 (i : Nat) : Nat := 0
 def rankPayload9 (i : Nat) : Nat := 0
 def rankMode9 (i mode : Nat) : Nat × Nat := let v := packedAt rankHeader9 ((2*i+mode)*2) 2; (v &&& 1,v >>> 1)
-def rankHeader10 (i : Nat) : Nat := 0x50ce3000014258c0000506630000140e0c00004e9ca0000136ab400004bfeb000012d7a000004a06c0000122bb000004734c0000119a1c000045a880000110630000042e6a0000107c2000004132a000010122400003f00a00000f62b000003c6a800000ef2a000003aa0800000e69a0000038a8800000defa4000036ee900000d6a3000003454b00000ce020000032e6800000c832000003136700000becac00002ed8800000b5f2800002c82900000ad9a000002a30800000a5e20000028fc5000009daac000027561000009ae14000025828000008e9b000002230c00000851a4000020769000007cc3000001dc2b000007391c00001bda8000006c2a000001a208000006669c0000188a8000005f59c000016c680000057224000014fc9000005149c000013ac7000004b3ac000011cc90000043c1c00000fd08000003aba400000d9880000031ba000000b4e80000026f2800000798d0000019324000002ed400000004cc000000001
+def rankHeader10 (i : Nat) : Nat := 0x50ce3a12c74198e81c1ce9ca9b55b2ffae5af44a06c915d91cd323343c5a88883190b9aa0f844132a80912fc029ec563c6a877950ea821cd3438a886f7d2dbba5ad463454b67010cb9a19064313675f656bb6216be52c82956cd0a8c214bc428fc54ed569d58535c2a5828474d888c310a34a07693e618770ace7239bda83615068820ccd3988a82face5b1a0ae4494fc928a4e4eb1c967591cc921e0e3f42075748d98818dd02d3a04de50798d0c9920bb50009980001
 def rankPayload10 (i : Nat) : Nat := (if i < 1 then 0x659cdbcc9823229074c793a1ec4948202500832942894ee7ab6a8c3eca5efaa5a6d0945a66db38b0504110280bc24886347e0aa2507289419546882058b77a0b7f76b040a42c7952bc248818f7e4ec4c7eb36347e4a3822109ca48810dc382e159819450e61c1163a498959c43347f87046411895805e198c6c4d52a2e992971d4a5e8e0f50ec63626a954861e3c75398b09461265185129ca8f99eefb21bb97890cdb7e4e5b78b495b0a450a8dcc3d89029c6218c74f9b0a53181ae1d82a502507e1263ec3641cd3d80733520df4d31ccbdff31420a53f13106398c837441aa9f056d08a0636820857ef23e9f806ca4132d3d828faf20c51b4284514d01396360d91230df27b8547442a0c2f924167de34f54fbc38252088ea85444610763188e6a5075219e29f3f210351d79c18c95431e787c923ef78114e617d1a801533844b4f609e66c328fde74c7d96a314ad668628e4a60af2efc95d91be5ae7fe1c28efc9214f30edcc632ffc44c72092893e8d401899c6a3ab05e0c616249d0e799b0ca3479b6e0239ab44440c7e06a28fb8db03e1e48a627b544d05245132533ff4286a4e4e98fc3ca44f256e291cad035286fff18895ced0253bc63f2f2913c9c4591e22acf012804194a144a773d5b5461f652f7d52d3684a2f336d9c05e198c6c4d52a2f992971d4a5e8e0f50ec63626a955e61e3c75398b09461265185129ca8f99eefb21bb978bccdb7e4e33fe46c5a4ad85228546e61ec4814e310c63a7cd85298c2490670f9867fa140249469df49b27fed36dfeb373be4a303110495f9cb2d47540880215d1460b47ce56f5130d97ea18ffea911fb1aa8d8f11ccc660cd60c3605805faaac56ab10d17b05177dc686ef93d892bdcde2bac1864a345a600a85760b8080c1c7314888d083597c73623f030f526d277352a6cf63d98aec364f7da6472c32a34aa3073386f121878c98c94b6f77a8621895fc98cc188c1cc761561629f2efaa35bd46efb2d1b97e5fbef969379396de27256ef512a99162865d19791a9e4f549ee345ec188abc254862ab2d6ab48d127b8dbb957a1bbf2f647fd66baf2d72bdd8abc66fcbc6278bc55a4a64fb668148da0b25549529b23986844a3727fd6620b27787fd4eba6b36e0a4c6342951b623f23397fd4e10a3549c7e39b820319b23bcdc116119d22d88fcc5b9670a8a4b5ba29469a49a42f4a7a4de54f60b4a4c2f166ea938c750524e83191321db12417b2246af18522b4184e631b1b0cd3f6cc3642b99d1ab0a7a3c4745794495ca333a2d6525834c708308902c71fd96e98fd2236860b6608b3824288da1c2624d024891af11fe1e3687188e2ed11c21670404b7292c28ffd0a39ff208a9b2cabe90958c694625d0e124ceb62ab9c4bfea70c93eed58c9d22ac651b0aa58aec5628a946c8e321f9817ed8c2 else 0x4df269ed5789ed523bd66ea1430da51f68a223ecf1d327953be6f7847e062e14bda34f9386d8453166b58d90181ea3cfc9aba4246748a4ffea71b1a85d120578ed4e2db11bc7516236532b463f0f51a23a0902c6feed616ed426598480f57375798c2c07e052a64788ec37048415426598480f57375798c2c07e052fe4788ec37048416c28d4a4701cdf8239df9731aa433614c850f5d892905d0f224ac12e12b20718d812ffd961ea684594788e86c2c6d9082d851a941e039bf0473bf2e6355e66c2990a1ebb125209b23c43d9285867046340b73258b410825bfd18d83a3f3739684ba150857463603da32cb7a8e8b87f0eee6a87dccee9562b6768f9f5a3990d9120539ab1b65a1c85321447)
-def rankMode10 (i mode : Nat) : Nat × Nat := let v := packedAt rankHeader10 ((2*i+mode)*19) 19; (v &&& 31,v >>> 5)
-def rankHeader11 (i : Nat) : Nat := (if i < 2 then (if i < 1 then 0x70000009a201c0000026750800000099522c00000262aca00000098611c0000025fe0800000097ab240000025cecb00000096ff1c0000025b007000000964a2000000257d0800000095a82000000255848000000950a1c00000252cc90000009427280000024ea890000009326200000024b1c7000000921d280000024510c00000090b328000002402890000008fa71c0000023c6c90000008ec424000002395490000008da5280000023408b0000008c8328000002300c90000008b95200000022c1090000008a66240000022748a00000089852000000224b0900000088902800000220448000000878f240000021ce4700000086832c0000021818900000085cf1c00000216088000000850d2000000211e4a00000084281c0000020fa8500000082f5340000020864c00000081b22000000203eca000000805b24000001febcb0000007f3428000001fb7470000007e671c000001f86070000007db11c000001f4ccc0000007c4d34000001efa890000007b9d24000001ec44a0000007a682c000001e8c4700000079a924000001e448a00000078db1c000001e180900000077b82c000001dcc09000000767f2c000001d720c000000752f28000001d33c8000000740e30000001cddca00000073241c000001c988d00000071d924000001c454c000000708228000001c09480000006fc820000001bd00a0000006ed824000001b8c4a0000006dc720000001b52490000006cda24000001af64f0000006b6520000001abbc90000006a2e34000001a67c900000068fb28000001a15ca00000067cc240000019c94a00000066af20000001990080000006564480000019285000000063126800000185796000000602a4000000179a560000005ca7780000016ab9b0000005910600000015dc98000000561354000001536d300000053c2440000014901900000050e1540000013f34f0000004e5e58000001395010000004cde600000012ef530000004aa34c000001277d10000004894680000011c25500000046283c00000112c9800000043914c00000109dd300000041274c000000fddda0000003d8f6c000000f16930000003ad564000000e4a5900000037d054000000d8356000000351f54000000d14d100000032de54000000c6456000000302750000000ba7940000002dd440000000b03d80000002a905c000000a2fd700000027da3000000095f9d0000002432440000008ab14000000219b500000007fa180000001f4c3000000077c140000001c785400000071b810000001c64040000006c5920000001b0c04000000640d9000000177f50000000589d300000014765c0000004be15000000116654000000420cd0000000efe4c000000351590000000ba5640000002272500000008930400000017d2200000002d39400000000020 else 0x48000000ebaa30000003ac7c8000000eabf28000003a99ca000000ea0c1c000003a6fc9000000e95c2c000003a3d89000000e8532c000003a0049000000e7c21c0000039b9cc000000e68c2000000398a4b000000e5bd2c0000039580a000000e5082800000392c0a000000e456200000038e34b000000e3291c0000038b6c5000000e2662000000386d8a000000e1622400000384947000000e0d32000000381e48000000e0372000000380007000000dfc51c0000037d948000000deb128000003794c9000000ddac2400000374dcc000000dcab240000036fc4b000000db5e240000036c208000000da762800000366e4a000000d96e200000036340a000000d82b2c0000035e809000000d72e200000035ac87000000d6621c0000035770a000000d52e2c0000035318b000000d469200000034ff87000000d384240000034bb09000000d2a11c0000034814b000000d1582800000343549000000d0792000000340687000000cfa0200000033cdc7000000cebe2400000338bcb000000cdbe2c00000335c08000000cd032400000332b09000000cc4c280000032fd0a000000cb7b280000032bdca000000cab52000000328c0c000000c9e12400000325e8b000000c8fd2c00000322589000000c849240000031ff09000000c7b0200000031d948000000c6c82c00000319e07000000c6062000000314b4c000000c498200000030fcca000000c37b240000030bec8000000c24a2c00000307e47000000c18420000003041cd000000c06128000002ff10a000000bf751c000002fa94c000000be2128000002f72c7000000bcef2c000002f1389000000bbb438000002ec50a000000ba542c000002e53d0000000b8b024000002dfdcb000000b75e24000002dbb09000000b6a914000002d89c9000000b59328000002d3b8c000000b43d2c000002cfc09000000b39a24000002cc8c8000000b2b420000002c938a000000b1e320000002c5488000000b0a530000002c0609000000af7e28000002bc588000000ae8524000002b8e08000000ade920000002b468c000000ac8a28000002b01c9000000ab6b28000002ab808000000aa7320000002a8cc7000000a9c720000002a58ca000000a90220000002a2ac8000000a85e20000002a0688000000a7ae240000029c80a000000a6cf200000029784c000000a59d2000000293f4a000000a49b1c00000291305000000a4151c0000028f547000000a38a200000028c8ca000000a2e1200000028aa87000000a25228000002884c7000000a1d41c00000284c4d000000a0f61c00000282809000000a0332c0000027eb8b0000009eef2c0000027a3080000009e1d24000002774480000009d4230000002738080000009c46340000026fac70000009b5d200000026c6c70000009aad2c0000026984) else (if i < 3 then 0x28800000144c81c0000051058a00000143c8140000050cecb00000142af2400000506d4e000001415924000005045c800000140a628000005012880000013fe728000004fe2090000013f0d28000004fa6c90000013df128000004f6c070000013d5524000004f2ecc0000013c582c000004efa0a0000013b752c000004ebf880000013ab820000004e9b480000013a2b1c000004e69ca000001390830000004e2dc8000001381d28000004dd18b00000136d41c000004d844b000001358124000004d314a000001345e28000004cff0a00000133ad20000004cc60e00000132a924000004c9709000001320c20000004c618c000001310330000004c2ac9000001305328000004bfeca0000012f4128000004bb5480000012e4a24000004b6c890000012d3c28000004b34070000012c5c20000004af6cb0000012b242c000004ab04b0000012a731c000004a788b000001291b30000004a178a00000127f1280000049d3ca00000126ad300000049910900000125da2000000494c8f0000012437380000048eac8000001235f200000048bfc700000122772400000488e8700000121c1200000048414c0000012086240000047f0ca0000011f062800000479acb0000011e071c0000047508a0000011c90280000047088c0000011bca280000046d5c80000011ada240000046820d00000119822000000463fc80000011868240000045e64c000001171b300000045a80b00000115e73400000454b8b00000114cc20000004507cb00000113c2280000044cd49000001127d2c000004483cc00000111ac2c000004455c700000110ed24000004427480000010fe4280000043ce8a0000010ebe20000004396480000010df82000000435a0a0000010c85300000042f60b0000010b45280000042b90a0000010a6d2400000426f4b00000109562000000423f8a000001089d1c0000042050a00000107b81c0000041db47000001068f380000041750c00000105442c0000041224b000001042c1c0000040eec900000103132c0000040a1cb00000102142800000406109000001012c2800000403387000001006d240000040054a000000ff752c000003fd285000000fef228000003f9d8a000000fe4b14000003f8905000000fda830000003f5945000000fcd920000003f1a48000000fbf424000003ec68d000000fa8c2c000003e9288000000f9b824000003e4989000000f8b81c000003e0b8b000000f77728000003d9bce000000f6341c000003d718b000000f58120000003d4e88000000f4ee20000003d0c4a000000f3be1c000003cc50a000000f29630000003c8f89000000f1a638000003c2f8c000000f0621c000003bfa09000000ef7220000003bba89000000ee6c24000003b7f8a000000edab1c000003b4eca000000eca524000003b0e else (if i < 4 then 0xbe0300000196e30c0000065b20300000196a70c0000065a183000001967b0c0000065978300000196380c0000065868300000195ac2800000654d0c00000194ec1c000006524c8000001942d200000064f107000001936e240000064c1c900000192bd2000000649608000001920a20000006464ca00000191182800000641c0b00000190341c0000063fa070000018f4e2c0000063b5480000018e6e2800000638a070000018d9338000006346c80000018ccf20000006324c70000018c3a240000062ea4b0000018b4a200000062ae880000018a6d240000062868900000189b828000006244c90000018897200000062050900000187c7240000061de88000001872a200000061a948000001864e240000061780a00000184c83c00000611ec800000183b0300000060ce88000001828b280000060898700000181832400000604e4800000180b53000000601a09000001801624000005ff1080000017f8d1c000005faf100000017dd330000005f320e0000017c3130000005eec4a0000017b5724000005ec5480000017ad320000005e93ce00000179c734000005e5ec800000178fc20000005e2589000001780428000005de3c800000177531c000005db14a000001766a20000005d87c800000175a224000005d4d0800000174eb20000005d1b4800000173a434000005cc40c000001729620000005c848800000171c120000005c540a00000170ff20000005c1d890000016fd328000005bd8c90000016f1820000005ba88a0000016df12c000005b68480000016d0824000005b2d870000016c3420000005af1890000016ad734000005a988800000169d224000005a3f8d000001685e24000005a14c10000016848040000059ff0700000167a3200000059bf8a000001669b1c0000059724c00000165452000000594e8100000164c31c000005900cb0000016357280000058ac8900000161d1300000058558800000160cf200000057fdcc0000015f95200000057d2880000015efc2000000576b100000015d5720000005741890000015c55280000056f78a0000015b6c2c0000056c5070000015abd240000056994a00000159c83400000564d0b00000158f2200000056120c00000157fd1c0000055d80800000156e22400000559c0800000155f6200000055570a00000154a62800000550cc800000153d9240000054c24b0000015220340000054628c00000151252000000540d8c0000014f96300000053cf480000014e852c000005382ca0000014d712800000532a4b0000014bf22c0000052e14a0000014b33200000052990b0000014a171c00000527547000001498920000005247c800000148a52000000520dc80000014793280000051cc8700000146eb2000000519f070000014613280000051684a00000145502000000514 else 0x65c68300000197030c0000065)))
+def rankMode10 (i _mode : Nat) : Nat × Nat := let v := packedAt rankHeader10 (i*19) 19; (v &&& 31,v >>> 5)
+def rankHeader11 (i : Nat) : Nat := (if i == 0 then 0x875d518eb1f21d57e53a99ca75060ee9bf25d2b85ba3d89742996e80125cf843b9b9cc734610e6292dcb7a5b9580a728414e4b029c8ac438e34b71948ee2db15c4cc4386d8a70b112e1251dc1a64381e48701b90e0001dbf8a3b7d9486f5894de5325bb584b74dcc6e5592dbf12db6bc4b6c2086d3b14d9b929b2dc436340a6c1596d7a025ae5c435ac876b310ed5dc29aa5c5b5318b6a3490d3fe1da7084b4bb0969508ed2052da2b05343549683c90d01a1d9f40433cdc7675f12ce2f2d9b7c5b35c08668192ccac259898532fd0a65bd94caf729956a4328c0c64f092c97a2d91fa5b22589642492c7fc258f60431d948636416c6781d8c0c4314b4c624c10c3f32986f64b0bec8612516c1f91d830843041cd603094bfc4297eea3afa94c5f1094bdcb1d79de5af13895dda1cbb142974a85ae53d05c5812b7f72d6ebc4adbb095b548ab627256b2652d3b8c5a1e96b3f02567344acc8c8595a10b24e2963c642c5488585298b018255efc52bc588574292ae38215bd242b468c564514ac072556d652ab808553990aa331d538e42a58ca548110a8ab2150bc42a068853d712a720294d9e429784c52ce90a4fd2949363a91305520a8ea3d51d4714428c8ca517090a2aa1d44a452884c750ea0ea1313541ec3a828095019969fae2d3dde5a7a3084f0e929dd1213a8462738084e231a9beb1d36ba426c6c74d56969a611d34403a675084ca91698ab2930c23a5fe084bd592973b2d2dfe3a5b0074b251095f4212b5042558484a850e94b325284e524ea8949931092c71d243a524510c485994900a251f4e3a3c6c94762128e55251b4a523408b4641948c0325172a422c10945331289d229130a4224b094448148811210f1e4a1ce474341968606250b9e3a1608842869084792908503a0fa85417a9a82193103644203eca402d927faf2cfe6851fb7473f338e7e181cfb6239f4ccc3e269a7bea24f73a49ec44a3d34167a311cf35249e448a3c6d8e786024ef7059dcc093b3f9675c830ea5e51d33c83a0718737728e64839c988d38ec92711530e10451c094837e4106f4028ddb049b8c4a36e3906d4924d9b449af64f35b2906aef24d45c69a67c9347d94685728cf98499c94a335790664020cac89192850318934615e58c0548179a562e53bc5aae6cb220c15dc982b09aa54db4ca78489490192870aa4fcd3c9cbcb139501266f304bbd4c954699277d1244a344709548c507912c9821c8a642774c824e98fddda1ec7b63c5a4c75aac8e4a591be82a360d586a3ea8d14d1196f2a319158604ea0ba79416ea202c0f605520b8a2fd713ed18257e744864888ab1410cda81fe8603e986077c140e3c2a1c6e0438c8086c5920d86021903642efea0589d30a3b2e12f85422cca8420cd077f260d4564174ac82272504498205f48805a72800020 else if i == 1 then 0x3cb718796c80f2d4e1e5a183cb3d87965e0f2c701e58683cad61595343329d83e524c8ca169193c41f26dc4e4c1c9c95e91925823241446464cac88c1590702f20683e3fa07c7a7178ed5231cdc5638a07c6c99d8d1b23199e46324c7c61d138ba92f1694462ae88c536938a1a27137056244c9c44b918814270f8e4e1de88c3951186a5230c9c4e1780ac2641f847b230760660ce88c1459582261f03064e04e48c05a99806827002c4dff108bfc68f7ebc42fba665f320ebe18997bb12af6ae4dec548bd69917a4f3af38e6de5ec8bc7e11789626f00855de3c8bba98f76c52aecd445d87c8bad113753422e9d645d1b48b9d21b731032e52c45c8488b8e09171502ae1fe45c1d89b7e9956f6326de3045ba88ab6f8976da122da104db2d87b61a116bc626d5ae6da9888b4e91368fe36d0bc4da14c1b4240367fc1ecf46459bf8ab34d8f65c932ca8a4594e81b2618f64032ec6ae558ac89b0e899615622c19e457fdccafca915f4a22bdf84576b10aeab915d0626b8aa556f78aadb6175b141eb57a4d6994aace41b59342eb1e4456120cabfe8f576022adc44d59c08aafb11555c2aa94c5550cc8a9ec9353092ea4406d4628ca892915036329f2c653cf48a742974e0b2a9ae25532a4ba5f9174b852a9666452990ba50b8f49d51e931245247c8a452914837228f26551cc87a37591467c1e8c26551684aa2a811450a2289903d1058aa1e40b433b2e855e4d06d4ea0ac93411722814c55012889ff3953f88267e1a54fa6c99ef8953db01e7aaa4cf2ecc9e2c173be82a76ea5cebf889d5c113a6d2274563ce69ca9c841938b722703a54dd18b9b6a0f36112e6b024cd314a9a2f1533fc2a675a44cc60e995493325c26641844c618c98819930ab2660a654bfeca97a0952ed5225c944cb6c89969e152cd01e58b844af6cb9592172ac12e54e63ca788b948d99285e2a4fe2549d3ca9356992644264bb44494c8f921b9d23ab2246be448bfc7913b93223a1e4382448414c9043131fc32a3e0c5479acb8f038f1d422a3920547088c8de5151b572235b44c6820d8cc11118ff2230d04c5e64c8b8d9916a02e2bce6c54b8b8a6611141f2e2784544cd49893e97120f3223585c455c7887693109d221fc8543ce8a875f110e59221bf04435a0a8642990bd82e168a542b90a85369309bd2e12ac4423f8a844e8f08142a0f703c1db4783479d05d4320a885c1224b82160f03bb2606265c0a1cb810a1501842602585403387803693001529feea5bfd2857f7914fe7629fc962bf89057ed418fd6515f9b243f1a487dfa12fb1a35f5185be92887cdc12f92625f1703be0b8b7bbb94f66f39ec683bd718b7ac090f53a21e9dc43d0c4a79df0ef31429e52c63c8f8978d31cf0be31e0c43bbfa0977b910eeea25dcd84bb7f8a76d58eed3b29d94a4bb0e4 else 0x1971a0f2e061e5be)
 def rankPayload11 (i : Nat) : Nat := (if i < 6 then (if i < 3 then (if i < 1 then 0x3923c4304b3257d8399c3772e78cacb15ce653fed36ff60a8305192b1094b1490a8dc7fa3fbbd43120429e6628ec81417cc65a28dd9a9495fc8c119663a7aa495f6cc74108cc94ed8558d55749629f184a516709a7ea28ea8107dce73b0a243933ea057fb8d5114a3228868b9c666c55a36018026907149e2f18891bf224f031449c0c530545fe832c4fcc54971b01f709a494c74f81b1147aaf30cfff08479ac85b7b610350beccaf3cc982d05638d854a31f99c9f88144e413b58f110995e4264788e52d151f93de22241b21442f7302a42658676531b2a3ea715bead735c30fde6312bc4eec118fcc280cf735c07156aa8fc9e61a783d8e1036ded87b620bc44ea14a3f0017b4b02f30d3e022850f145439d8d064c08d63ab1dcc2948d93f13c444837ded9e221528e32a40d942ab7d5a522620a51d8f4c5bde61bacda5f7215edc217ae94c41814ac564e0f30361ab058ca416ec4ca52a286dac3f3d9cc0cb306318c4f92bf24a36252344f5e237ed0a143df6017b9d80b23551e4c55a6c8942b5e0caf551f93c66d034977d66c515c4a3587c1e21c31150ac7e62daf1ef6ca30b24989c2c59ceec1032c1918ac6eda632905f7b0d28a8540538a828cecc6313a984c14ca09b05d82540822cf19a9027ef327af354d9646fda0358632985a669a7fa9cc14c6c6031a8bea0ec0a33463c81c55ac7581b1017b76c511c92bde0cb17e70af11067bc84e417447c1e23408471486fb3a84d18fc9e83fb6197d83f3862bc0e0208f931886c431dbf4ec962d8684b0fd43833d9285a150651fd0f11316a53e0a6a3a31b018ffb447b4658f62897fea97df3833f9150e856e4d74bf50ab1988ffea9619d12053823a3ffc3d8a94b8ece9ee23428d42d0a541b15196d1214558db36150fafe7a9e14ca73cf86f6a816c8ff0d1d941ca49d923b281a8e6cf05ffa0da15306650107b01e40851a2c64a1920eac57c10b241d0caacd9c2e38d87c1238c6be39f043096516a628a04470859852b04f3051bc49503f7bda985b3031b4c7f65b0fcccc2dc42169390952d28e8a20458a9a0c8a730908270276ea105e1b3483a924a758a7b84228d92cc2031831329c67e66610985944a6508a2518cdd461850e707345b288d2a17d96f0a57298ed44b062899467e390e4e4950c7640bf22e51b41ac4ace30a20368453a841ce020a4c416aa8b4540c66527c9a184ea321a79bd8ea6d30731980c0c28428cfcc2d9e1636147bf2e9f9182b1c4cad12016b652fbb5c2c7c3cca4b03048198e3f06a553d22638fdc2d99234c7ef0db870f8801a6508613a8d6325781ffd06c5635b1d45a07f10c8a236b44951ecc2e19a97dda638fdc2db228dc3ef04512858aa6d78398c42891ae38fd5a36037b308086278fc1a238abc2294826925834ae2d7e449ef072190d3dc66927c9a else (if i < 2 then 0x91c0ba7251914905cb711e30a0474aa3030541b762a56c48528d9116626f2764cabdbb25396dec2b70a490d47f1392b77a8954c8624085681295d197b43909e550ed852085b0a420823a551b2d0bcc9422048c550ca312a9623f6632524e472a3185948a3e662546683155929b7c17d81c098fc7363b0a9cbdcbcfba0ad472c3159329b31b0d2969ea0a3e6751e9f8af2338361ffc9d77f1464ac9142b1184718ffb4d8c297872655ee9b90a45097189974842854e23ffaa57c65e31ffc6990c25e520b307d762c447db150e8921111660af25287fe46d024e6a7a33acc8ce1b8c99f88760a96ce600eeccd923b563b4ac853c829daa59aa2813419d292807c9ecb09344fc8c7083822e930f7e1208b95c8a350842a1ced8253b914a630e49898e90b63a405e11f7185a4881d521af0f2295060a2880210a93ffc93ffaa45bf4f618857395051919b936433741aba503c1a014ae8c399e503202c0ea310ab4ac16df38689fb6d2db2045592c32d51f6029c4e8676218468aabe9b3672b4f22118048b43f108a98e4ed69610e60c851d4909e7862e804982d18cafbd4247e42553204fde01becb0594600f04663ac3d172bdacd5140ab0db8a2105e1eb3ad09f9136e94c7d06ac969590adc90363a5831b245a2798803fa8fbde1e518e2a07169ff0315048b4a28560422ae91111c6d2ca0a7e2237c434a70178687429042a6e8850243d8823dd82810b175189c285cc1071ed90ea2b033dbf091c163b1741b7211e888fc05a7e53b1164f719d0cd9d3a8c448ea8a2e58760bff65a53bf063ec052c67e25a5fbfdc205a48c2942bc141cafcac0daae416c3a85b04a774bddac241514a120e955ff11796021e79c18dbb185af084fdb1191841450e310fde2a11905d24fdf90861a0210a3634e8efc2549fc44ce3618c0440e06c4502083a5a6d60a0c6a038c063f0919c389034a739b38df9152bc2320e6ec77609506fb3ab4b04f033de6514788a4f53a8c0c97e4542c662089d4c62c2350a93ad1fb04a250eb7ded86c0c30afde1b0a9df46a113f6cfcc5d6ded5c6db298dbdab0d898e43cc55ad98f768d8dc6c497c622a507980bb04a8307493a8d0e96f60c31413289ac9c4b8fd822a2320889cbc87431ef6c0c215083cc1c262461929758e2c0c4fb9852756826d12afde1614a8466fac4f379084491cafcdd11499d64a27618cbfea92893c15c8f6054ad3ab2462f461fbb4a7b66d850ab8c6f1b62418c702aec305cc231f99d128608a828c7b056b11571a51914420e02a675b61f68b224b9e1df80bef6045df71827ef19b1a4213a498514a8910bea1cfe9961588b766e935dced4275b1d9464564b2931f781fcd7a334180393693b9aec491422a6cf14197b1354b1ec30a254b15d863c66094e229216e4e4a65f8e381c9efb4c408c2db7d6633d8 else 0xf45e61d1599e519ea23016edd8a42ef8c5e00d15877e46db4215ab2d121d3ca2c854a118a62e6569b13f69ab02f63924447f50c2b0e232c14039f102881bacdb3671b80aa9a6b811a623a9797528384081be7173588b5814f05a66fca6720c87650040d31df80b14e9be9169ee31950e01d0654f53cc040298d154f27b0d15e0b1c41d90a527127a4c74a5e33054b2659e0a34cc9df47b76ec53ca33d8e491618994004517d461baa5a8f2250a1326389f7fac455a0a0b0cb71940da7283b4d42ad0f1d842493ff68ba98ad58a7c05c6305686a952f3fb4b77b860803de3c894284c98e27dfeb11568282c32dc650369ca0ed350ab43c7610924ffda2ea62b5629f01718c15a1aa54bcfed2ddee18200f78c34002186c6628b404a146c928512a467b023e0c360d612e894284e049b41dcd79234400f93df68b1ece8916154628569d94046116206ffc15f7ce13942429ff6888a87383dfa11d87ea0382158e28d459318810042942894ee7bcde2bac04220e4a12db673a150657d9202bbe87b450ba3a91410411f63b0a9c3dcbcfba0ad470c3158328931b0d0930fd4147ccea3d3f15e06706c3f9cbbf8a305648a1588c238c7fda2c7140f2a3733c8c2b47ad5e61dcaa5478864efacc762e700b25623e767dd19082526fff97419e60857e684119ec0117392bbecf189f11cb0c1391a2a9f2f14543a527517fdc679172b766c51b388a7b4d8632f04e4698ad462f3151e2e631088ddf606621bbf253211c84b7cfba6ee58efccc8294a7b4c95f60e8ec3df93902c894a85498e26252ad2505965b95e9ca4ef750ab4bc7612924ffda6ea62b5b7f18c95e9aa54bcfed2ddee58200f78caa3142b4eca42308b36fffbfe4e27294853fed33550e707bf423e9ea040e30a351a4c621b048764291428feb8f4390b4093b0caa1d825388fff3a6851928fa9ec8426a705f3023e9e408ebab7bc26953ff884a4f35876b9d54b889333bca58a89d8728e18ad586580ea290a2a9448d29272605929beea78d946c4e02dd3929c0c2bd1ab8da84c1c0192bfdc679172833ca4470648229ed323631b6ff938872323931aa4331d0422348dbbd4513e5e2048c6cf565ce3222308c4f9f917089cb09cdc62700c7d0d3fc725a62c202a7e47c91126810ec152c894a85498e26252ad2505965b95e9ca4ef750ab4bc7612924ffda6ea62b5b7f18c95e9aa54bcfed2ddee58200f78caa3142b4eca42308b36fffbfe4e27294853fed33550e707bf423e9ea040e30a351a4c621b048764291428feb8f4390b4093b0caa1d825388fff3a6851928fa9ec8426a705f302394532b198642094b6452c11851b25cc711936938a09941c946c4a2836f622092b1362b27fed3102309bf84a46d854a15121977d51e9ea377d968c2a87397c5cc6db7e4ed8529948d146ddca9db1235)) else (if i < 4 then 0xcac92945291ae2bf929bdedcc80a56ea404dc5588c381ba1bbce879e1ab953cc8439423c4e0a63182d6c9c7943582165b1dea7583ea004659179cca6a9d37e922610709ea467d2513ef054d57a95d6ec01b7af18de66aa9add79ba90d92eb1344a106b07d47d8d62d448e02490e42218b23532615ed53a9615fb4bd2414ba80dc8392bad9510f65d6d4c17c52fb15ab549ccdc69964f51334adf5494aa1d990c76e62814cb9c2728c351480a89b844d51e18bc2e7aad4a80d55a445c23946182190560cf13d44e17113a1d902a5199839541a70eb121de2f7c709238daa4b9baf52a034a8e397393858848c1e1a59189ef7862242cd0a5bf84504dc318c6e53138351b1d4826132eb414fed0c3f320ae40345f9c3148449ad9c6c00311993858ea417c3b44f7bc527d7b0c42a14a975a38792b1c9d078b2373b1c62b878c2dc94413608be18d5077bcf83659c318dd7b03614b18b245a9858ba84bed3af60ef78134c8058b1cda7e6095020e0a56b7442242d8c27da31459b3d8ba8313ec264a1127c3b4dc0d484e414abd6831e463a0f3415826f382090890dc1e2c3dcc6e6224f09689499d0799ef7861f99885429402995a8de70412112387928e94c4664e13b7c22e06edf0890df944eb7a7b0f310c1367b0c162c55cef8768a5d68a4f55c62c5d3fb520984494e799c854294c25d698892d3b9e629352139052fb4e0b04cdca62e9ec73ccc6f87b81c14a07b038a6103ed351ed819682b749e60cf2339e65a7e0a5f0a96fe1116e4a275a1169be72688de04297da74c305054e94c4807fb520a09f2150a5054c2387ccd3152b4c946c6fa8d89f60e1e4ad6e932413f7886d218e080500fc1b2c58b4d79fe1da6be3c9c5b185ca12b04582cdf393458d50d6ae721b4886d274144313bde39e65e7521390486d27f6a415a7993d22a56b091900e442bce79886d200a63705370798b1698b360b0c4cad4680534384d0ef845a59588c3ff538e9cc58d663ece1a6355308d1f50c60398f329dc0f4e182386d17339cd74de673fd4efc8309a1490c24ddc22bc6a17e39cceb6d3f42923e7930ba1bf844f21c208b4db3968ad1e50e98609abf84490a831acfb475a13402fed1ef78741e60cf233dbf21283689a149162fa84c7c6ad5fc22017a9c3785720990a0fc7319a3042894b00cf59d430e5838377e0e9e3084b18e2f13a2bf8d20241f8e182ca57aab8e55d1c81eaf41e84752ea30c981463a0eb12a32c95481e3298b4c32040c162d37d2209a6211a51481270b25502a6ba7b0c44cac561e0aaf0dda22262f7247ce24627808cd9262009783418411909e5922f0967b7316983b085458de7604788321d934f70ba3aa0e1f8887f501c52eb2042248cb6e2a1cc8408f68d3cde8bd4019a84c44e611ab7bd41c9abd8833d991f70aaff53b215041624a else (if i < 5 then 0x5559c2dd0f050cf6ae544b054c310620b72ce53432215fc864273186154c1537711e1512d5cebc8eb083e6b00cfa4ede6a8e30eb35741bca2813852ce30e0670b915abdb32ced5c41f09edfe5140bcb03b5bb97812b8c59eac1d2a4fdb26590150b56a35a776c535a95e8f440a5cfa51e2153aaf852819b670093f6c202a122ff0d1e16d416ccb0d949534c447952f7b5530f7d0c2c515fb4c823ac32da7106e14d51c633e2a48490776f06761b99ac0e35a75d63addbe2bc90a8e476ea545c23b4ed4419072a36ee910eb76ae210a236c13696b9db7321923a4a355aa448d4ca295982cb62bf91a25085065106d7042dd527158666117eb1a946550ef17be6b58c8e1953580dd5ec2ca896ae7177c8b9903b5f696aeabc418a9d6ec20e035d7ac0855bac81358832798566512ec636a850c5643c27ed1e04ae31908a7b90475f67457d215110738c83b751efaca910ed786555badb912f284bed367b16f30e8c051069ee2b4d680c6ca8741ae1e78b63f9087282788a988129935f95586089532dcff15fc94dc3b105c8d7362b71ba83bcc705318cbb194e0a36189e536529aebbe9224fed31ff7b1534172649e040e56d37c9f11033c6227439c8f10dc85b764bb16fd2220a8e22743b72ce516cd9efabb4591634dca2766dcf6490d2284395ad46dbc39084a22b7e5629e915468f1f6418826e4527cd8a0a457b9428439414a83523d5b12f7aa549fb67ce6313b36e758a7a454c832b2090ef0d1e5ab20f38f01b4d8ed58f65ec7a8dfd262a6426f7dba484ed79d1ade1c240e338295062b75482491d7dc148af727ed8ad6d8d251afef356e5c287e6eed328691b7230557afab5f03589acec923f215ee4fdb3b0bb3a0cad6b66e16c84e8155a39dab670ead56b469c2fc7a09c3d0c6bfbd409287194152433912163211a28f3664312e9e827988bb1ce4484ef92aa9ef69bf3862b7336888baa472a837c248313599c2728af37364fdb156b7501a33fe10a6b634ef66ce35af4d6c2f83eab56bd7f19bfd45f3818c51a48e88a28ea35016adf17be15bea964121ca514a68d1e1a4918840108360418959e34cd477d220625175d867d26c3cf0e11dab5f4e6dc9d6d9928b19df38b9a1ce36fca533fa1e4a06af113618b1e83168ad6ce3c677ce2c576d0a9c3db5641dd79516ea03467fc214d8edd8bc3aa00642ac64cb07563915fc98ae51749e7151a809d8870728dcea239dc2aadcc3aa7d8ca2c57f23b126a8fbbd9ed045e1c438dd114b45f0e310668ee93ce2efd8a5e4ee1ee61afef31b9d45d0f7b5550a02e50a18ad3b904c6a79446e0b30c079984fa3750ab593887448fb910900f40d1456a4a2798ba6dce92e6a78b91bfa45d0ebc6983d5990875e38081bf47388f1a491d0920c458a7a4451a3c2889d0ea8901344a10ae4f5b0c44a314cd3 else 0x916fd15e07319ea5050019f871349f0477a428860b147523f910ddf67adc86321aa134c425aa262e562d3444a83978a97a39ddfc1521ad58b0efc2b2ef54140182f04f898ebe47798d05a286154c97c1452705deb3393deb54a3ded50e0a98a2c53e213ded5453bf455b93ccb577861ad8b5172b7f81b583a4bc504f7ff28b452142b97fefa8e4668ed77bc282be3a0926794769cf712ef39b05e08d7a8d6943adce4a0bbce6ef7ad2a76c44cb55a3fec996c30a96688658215acc82fc178b5bb2ca454a25db1dca0b031b5a084bbee940c5cd414ea92dff35ac6b129c6514a5877ca6f0fbd52f829526d9938b5934c032457c75894e37528b58d4a73d424bbeb176490ca1a8e3c4d541bde5363be46c5a399dff2dc9d6320a5139876298454575c198247e4e762c4f7c94588c2320a73c286151273052170320a578bb93ec6af362867e04ac3779fb7c235b0640652fe0b1184dd5e042cb2adf85b30b19047549cc35890e202a756c842f17be7d415e65320b6aae938745ec9d38a952b6814a8a2364fb0f18a54ada0555a88f6b0216b72c68aa4fbe02d5a2889e615ea1d925ac9243a491f94b57bb1a88c331940b117578652a243b0c8394415194c82763e2ee4b0646c3be357d042d57a3b68554c639d28c4ff53b599444753e774b7493be1431378d1d729c8dfe521d679a52329251cbf93582863adbbb1cd0a5a2ef62c68cb10563be1ef9a06d35b7332873c3ea3e7745095c52bc920cfc2d9940c9ea33218e3c6c55591c5e2f7cc8b1aa1421df3ba73584e2545358eb2d5ce4d6b02156883a7baddf72633c091aaab1a3ae5364b542862a051f288ada4ec8751f411a6763dec58d19620ac7393ea0cca1d6df58145d8a6116320a8199053a57f388a8d46a091d3a44afe4780e9393ea36152cef679d89b631a89fb4b19b24f0246ab61df1a8af500caa0a74094248ed3a82a43ae81aeb106edceafc22622f6c44c398a9444946953a04833b733f10483d3573ba8c3ac26a35224a348f398a95de5b113075865d9476b61b9856c54bb5d947684190755add458eb3a06754be1ad4f030c3aed3d4535740bcb00d740dd0e6b4fa8dfd26a8620cd5d023c0c36b94d6a57a82a5e05d8194ada92a282ab5a3b93ef808acc6269140846e2b57d042d15bb0c5b0dfe86c86baf59d033aa5f0a6bfd8b2d5b26ab415061c1530d2a517f8bb91c9f50c0d9627a8649d6c7574bded5427deb113fd4e8847ce201e0854ba910a6c9646e37217d0ca96d645b5b07f12d0803d03e4561592ae15f31d91224178df28225418a372f6135bb82146e024bc80905214c6e8690ce0e6438120ef08334d882f2aaeef4f70018d62455025b3dde42fe0c5d57a9de13ba80ea3017033b083aedee65a46765410cb4fd56eb2a3552a2c6758d032dbc026f2d259c68f712d700e9610))) else (if i < 9 then (if i < 7 then 0x12bf880148efca3d4ee47863349d615b194ef09b9d395c8ee4b72648da31db30d57d4da286fbd44bfd157d45cab747a6ad0317936f455b504e420a1aac28a02986dd0a98ae8f7daaf274c57682c0a83131e57e179c5723bc1f913e1e7a580a52ba225ca4fc239b61d057c437dea787031e238b0def82b5f0a41405dd79917916fd14999ca36792b2094646fb3c4d30da58aa47d81dc10ab959eb642c90c8acb76a0948494ca4cb65f475254bbda6aa266b02ef59b642a658f2b4c2668ab4354da8f7b54664a75928a1e1f2eebd778419a16b3995bcd7a0560a335ca365d96d60e3746dc447046b94437de62c54ab43c8c12698cd67854704c57f26b465bcaac56fbb2fbd52eb7da6ef618966364d52c642a15fc8ee78d9b395aedc142b318ffea7313ed9d1efc8c1531a9ff73c17941a7ef0d8d32d964e9164e132bcc6ff213b7e945241999aca8a123565540bf022419cf79e28e4ab26a9b143227e5b4463ec68ce335dc20f5072cf4b3c2e139ef013f6c45e3056aa8fba1530d67b674b7f6aba5148e2b226a84a5295eb40caf02ec1894a0df3b50c0548df0f3c257ed0af50f02340caea284afda16761286a8af662b0cd8a192a5ce7996517f8a391e3b0c512465acf6cc9350a649f726311593ba5bfb543056a73de783d0541b3158627a8c91408e828d244af5041d4a890adfc2d986a8c3742864a9727d41ca9914240e33ef8362863c761ac54c8e73c6977daacd0a986d6c7554727a8035649f6a8f0ee14f816fb2dcd30ef41ab1ddc035a0896458cac3bcd30ee08168e04d5958f1eeb90c66477a73caf9575cfd4d92efe3e476959546ec01ae0e3227c21b77bc70b6bc5d759e6c82aa0bd92bc3eeeed0242ce54123b7589be0a9e1372980d3ce0a4bd80f2c1464720582b540859955ec56c0c68ed22a81797f82151b11602cf73054994a3308a2872883d1c3535e08162049d281a10c49897cc8c718da922cf278160c682f23f4170fbb40a9615f2795d23f397261862ff0279860669d281b26c1f892566a4ac3bf3f063cd91f8a88e40480d4766045b8b50b215c66d052ff11c4591f166827bfba22c35c8edfcf425e0c40ffe201df074f0bacbbf5a084a225cf2571002388b0877fc008e25df820865bfe64b78f54323f9080215d24a06812dff317f81b309e6c36fe5176290d68294897f928b4718b190d075415f1de186129448c84f7b4d6c698b165a26577e06c6fc0d682948b476977f23e922df92b0410d98cf30c2a98e5dfc8fe465321a9badff25597718df819414ae3723c920de09f84f10c8218dc4a2bf64614ab39593b4014ebe3b3271100319749d990ca0a4e77fc83756e81160852c279ba3d78467d241b36b91c77bbf57250758a2b7be6e2cbdd27e11414ce916593a5df2b77354aa1bb45a54e77b8bfc0d682a48da3b56e691f4 else (if i < 8 then 0xc34dff93509243410fb8451058bff2c5e5162ffc81770653cb37a32c764e3f61fc2f63d70a1e617e458695b88410fb84ebee0b8db17be40b8bfe72779e58b1c4262187b2e76f0041c78951825272aff844f7c15e8a7c25b9950c36452550534bbf4563d21572a64b17fe60bc6727ddfa7705a806e43a099c6ab2678b781d51fa6bc491421c0527858e8b850afb649247e02bc6661ac828a1c695e1380a57f8a990270100db8204906bbc0ea981c82616bb48696941a33f642281882d0c9828519a5dfa28a85c2af8d929119054726483a31da5dde58bff006daa99293efa0b03f79d21150c61f98bf0102d1009235b84243c5019692c9c23073470e8ca5cd4aa39324654ea0e8c75aa9916248cb58bfea75a0a1e337318de0cad561ce06530850c4aa1aada42cecb4d50bca319bfc15906c51c94f238fcdfb1f92a59d588f71e2195ce69aca8f35daa6f2fd0ba9bdf1e4169f9aee2716165d7628f1aba30e062ce9c4b381ba4f82b20626051439dbb732aace1ae96fed3152939ac0b31c53081ec2b1ef908c3ff539c24b4d05692c7a42a8952d83e9857a8c3ece977e8a8863dd75b5dccaf02571a56907376dd5da8d1b73948bace320f13de6aad0f659385cd0870b16576fd37b5d2d23456ff53961a9584eb0c64eafb5384a425398e4a16d0aa15ed605aa57f7ab6fe330016f09e1f0e6a3d23e7983c8e76b074b730549de11048edba8eb30fff0e55ce0a11b7bc033e92cbe1c73fd960243ea6c575df35cc1e463b31a6dbc6ed75df14b3cdfdcb9549f84bee1e02630578d3a50344977b147b128ecc62fddec2bdef514352f237c49e281a85e31dc10c6a2bf931e5aa26c8561d30dd6a8705134d82f99e1f0e77985bc2209d0074a31e9042a0a18f4578b37c0c97c4b89a178c5e23b40462b59a92f3be4a73d4463ded561854d308bab6bd53a8594684247f0f92103e01c1c90b0a637c1085a38e4223093584a77e37911a2f40792f0a650dc58393d642f61853176374a080f23e2ccaba53bf0c69c80563f20c4559dd9ca23e55fe7364b0fa909952ea77239023272a313ea0e474478d485642aca3cc19ab84ad494ca34d1b2698acd15728cac16fb2cbb28dcda9cd4c350bdf2355778a429caa87cc05fd6c857bb051d8095733a46c84da0f11c2be61d7e195273fe4c11f2ba22f0ed55363cca987fa2af52f2024148531ba1a43383924207c0483921614c6f8219268f30dca82b51e5c4bd91955ca2b12329759a45e6c4377e0a3a4711e175a17f799e1c0da65033de663c10ddf82b9947982fb0443bf25213deb315a919e1d0cb24ca2c7cc977c9d06e5df2716cc42877bcca0a973b5a105729ca4ef33a6c42de9e95e604e179cc8f4e40ad531de0361b38d4ee462e334bfeeeb326eb182b255fa490f08fc20a87a40fbc90260c683bc900a136ddd07 else 0x88c2ad839df0dfe35dee116c19e37bc741350dd8a7c25b31408f054e354480b33d584956e12703e0e8657f908bf844fde237e35bee169ef315d33c5df806e46ce05629f09230a1d2c8740aa5ef5494842af2149e1684f9b14a29590ea11aaa0c0038cd6fb8552f7aa4a550ac574c52b99ddb8b121ac2d3bb2b4474ff62db3bf7344ba8fbf1f96f20d04320454f64206c4fde59df011bde199c0d14f07b99cca4e359c448e082d0d5b3759a78c4aa1a37f451ff9681b2020620346832b0949c6bbdc244fdb0def11450e3643a84560879cee82cfbc07b67f6a43698a8543b7ee15e291a1ef0d648649149045b4846e4d313be4a520e532c205f21140ce1ec5ef5499514252a877c85e8405c038d96d48526175db6733c87dfbf36c4511901d7b84ea4a1e2e128a406dd62a95136bccb3ac48716f202a77d8d5eb7451a47a35ab80190811d0618851055654b5afb72a494f674b7fa28af50e125a6ae0b5984fdb35894eabfe30f43614e889a065210b3cc34d7bcd902693dc237fb62814551e36f0080d9395165a307c54c86d781c9820ec415ba28d23fc5bfaa46c1caf453e12ada42dac502adb474bbf45795093dc2abea5733bb716243585a7765688cb48cf9c759468f5b2d2d757597576f4665271d887547953216f76180ea8eaa64d36a5ebc7625103b120357f6dc82d361d8820e0e55a22986b5b4956e4d33aa99351bfc4c15e0a36bc0bbdc28a6d0a7a08b60cf78a991c24ce507a609c7a56421ee95b49d906159d392ef809948c270e6d7833838071ac49183dccd7e9d24e54bbf3aca0683286fdc2f9dc42bce59c0d5682b60e513ccf9e24a427b847be1b591083838d50a022b345640c54c6a7c1549f7d046c29d11340ca421679869af79b204d27b846ff6c50270fa8ebcf326d20224043c4a2871b2cb2aa046bb958d93aadcc803ed58967d475e3b242c7150694289eb622fcb3f10af6b58181ad8f3350aa039d924a15061797727b84e01c636bc70ff0e61501e6527195967d8b05d388a92ea307b1cc2b836248fbbdc22b043c7b5193d79f41338c2c60c8f12c9c22c20aabfe5625f33a5bfd14428822dea3c0ed8bff3e1d79ae06c9fee50a9c68527868b293a15fb4ab290825fb854cb7392d51fe9f0e703041cac44a18ec76318b7918e620949c84a4e561a252169f75dc857ad289bad34eb0c4be630bfed8c6b45bf84b58a056bec5f50852786be1d7962f7c96bbb281a5992bbf051bf897cc617b1e5aa489e06857ed225f32d5d8bdf225e33c9fc3af25ac1bf849cee635ba415ae03ce1d26070d3c3af258e2e814d7c7ef4516baee5a0a1e37ff0ebc6eae3693f8f7875e41bf84bf2ce3103461e912841a15fb494f2cde8cb1d938fd87f0b71b12f197a7a42281a996e7229cd38978c773f0dde70947f29e59bd1963b271fb0fe178ba04)) else (if i < 11 then (if i < 10 then 0xe1ef36c5b8b3e9cebbae39b60c92f9ab88103076b410b31d91b36b8b336f3cd6367a0b6fce1e6228828fde2e1d4bf92e9bd5f3a31d51cca614e514743a91491f13b5b57ab807646608c2fc98c5718bfa50eaf784f471243cb944e09e77f351c2b459afd188f80f1251110b25055e8abda7b465b8bbfc004f621e0e015ca62fe8d99c1fd96f2e77b2f3a487493913e6c823f2efa5be168230fc27228c231e9050c97836896e2341ecedfc404bff3d2b7e515ee9e4d4b2ce8825508d1750978bb4229182bf1d0b05191732b6f0df43d244efd9dc5ca52140cbe59a4ef3fcadccc6e419a2153cef9d2367ddf4a8fa2298208b643be053a418e77087237c8758e6f28325e4c621f092405d214a9de5360bcdf688b543a59cb11e590ad8891da7275e007f50cc8a45d1c68978caacd14ea32d284a01bbe8685de144442142bf69d294d3cb21c26a5ab42f77ca523fa81a638923ffa9d43f79446e4d16cc2958d471743aa1bba3294b1d49d75f9579139158c9417c63f2358af5c9eb67cbfc81a5ee09706ee649f600b031010326aeb587324619c609110f78aefc3483c9d89b460856a7c661a4b1616320a19f881355e8096eef4ca1a3b27f0de5da1366b31fc00eef11d6c88b015ca91345d42a0a3b5da1197f43a616ac3003056644ad97762cd94ecb47227ce403cd90f04dc92103e0241e90b0a637c108950120f46f94509a5ec61f6148a14b3962348a23ca0c904c86b1fbd52c67727228d9ad2e3669588f3547cf13ad63a4c70529df8e5e8e28be6513decb06dcfc3649f64cb771928e5686557ccc27bda62c1530d5449d415944299c93a45b5155a5c992f877c2463fa8457ed3a521a5e10612fde6e6e411d251b4fec44ae307f0ff6ce0c8a9183694a7858e337fa3a11fd0452316b2123fad839ca12183f6d37ee15594adadc8219f38eb28d1eb65a5ae8b14461fee56f27705a8e74fda82a4c23da8a549ac113f786e5270e754a545f72c155934cfb54d3de1978280dc84a1418c0038ce77c56f23ec54ee14a15ec4fdb2ae03a225719c2490b01b90a42731b2ca3570fe5e50ac541ab3c27ed859484137ee17c246cf55839cf3e08ffe226718fda9782a9ff097210b3c0754a31534d1fa42a1023f640dc6094841e482acf584fde9bee6a12481b5bb0b481df45bf848eaa6fd6342d5ce55b58e4a9696ea3dde78b1ab085948395fd920d6e2a9487ef062a05e67e1c8218461387f909216a27016c44b0355933d81c82709339416fb84fb260bc56f20b16afdbfa3d078a37e4a3ef3f02d420241882f14726b121d62f7aa5d8613f6cd6b157fc0a2a539cd24a8f12d396ca8464134dfb8531cad03c0863e1df960f3027a308dca8ea214b13a82b51ef848ccc57fcb04df8733818def3cc93215252a87732938ecd7321ab2925427df2368bdf29349ee1350 else 0xd500ae52da11a5d3017e9ee017002b8d5ff6d82ff6acc48ca305accee5c6add0965793af53a6ab68d374b2bc982962b10ab1885121ca0a2598ca32cf19cae44a542a65bfa094f60c5fd9eb8a44c08519e39ed8c79e6bfd758c94abcd97760bc812844c05486228df812b154cfa862a6572a2c1e8a1827efeee6c6882112056d892e42320abfd052759930a36b17975f68489395e21b58661aa5acb1d71c05e5ff6dc09e618e65483e5e4048290a63741086707b56180840c1db68211b81ecd99d716f3b3682ce5511442e983bec5708505295c7dccdc2dcc1ce0520349180912a087ea2e53cd3b4126aabda908b231f90675f0897d1042d47983b47245eb2c8b2462a82ba3bfc257a9544622a42adca92c37be8a09b7978581908d70e82ceb98efd1debcc842c9787a387258e25a6c911840766429831047228cafe468c625d264b1c0c6c70748ec58e273708c34b4272cf92233170f4374442e12908552374a089d5c669221bbdea30d1b0b7419c46c2d1c683b8bfd0dd234b639229e01c6bcc5fdb26b99e6faa55b7639798e95bf67ba2265893050e57c24ce915173bb15f113b0c438195e16fb001486242a192fec192f46ea0cd763d1cd4494821375aff1d3d6a0779a7683c5148e3148c15af5c1cc5085129ccafb02df84621d09005e5a3adce62c56ff2f0e31b0e42a54e3c9271b8714151295642a70ba773f2146523056b0748c8c51c54424f68b98e27cdf90ef65bc5961cc901f270992c49da26c41620e9519e4a07b43790b15df79bcdc86e616712ee085934c58628b857292bfe5d86284c76b01cd06f04738954f67b73ecc3708e27444ec363832430b061905519c67110b954aa7b3de2898bb2157c1a68dff14d8c43e0a8e45fe860e0636398844875ae521e02d9ef7f88875aef8ec89b4498fbce695d4440a52908a8245fe863da2844d50eb71a283aa0d980a729b1881bfd523900e47647ad7bab68e01105615513ee814a4fcb686f0a229d89f083423419d51335122cc36ed61bfd1680b9ae97c39e4e588edf68b59b24a5e0ee544c36fbc5d748c5d358c50340c7596676fb458ea63d940b2578a266a3bed31bfe741c37be8a2a310f82a3b1b91dd9599b3e7767ecec42ff49633df4564151d23ffc0932ef4f70c7012330f999c41798e1a7613992e21ff44bb123b0f98f6c9ac3d20417834262faebacb36997b84a1ad209338d37a22e82fbc040c6d442357588d8a8591ebc78adb612f1319ef809114f6a8c1dfa3919f50d3b14c939987cc2a0a305687bd598210a40d47d10ac946d9d07970e7154a13f78a5782148a996a86d57a226173079592f90b50add319f50691446b731bd1cb108290470c16ee1c36d7b2f5e51f6002497cb928a50c099d77aa48de40cdfa8de735963b4701965737b473d4ee1c2a3ec243ee802b717379a1da) else (if i < 12 then 0xe342081f129482f05a02f4bb5f60e4fd89f0856b099c13e0e6453e4b38c0d0197bad07087cc09de012a1518cea74d5bad4cd1f7d1dfdc839ce86c3a639ddf271c6866614c651cb2215ea74d05df4714152bd227598d850df052d150dedd9c22c94ed90a90e427c66e16492f629848f679de3868c829d09f3c9d2566c52090eb0253dfd94c2fee43a91f99f4b138509f6ad398b26781ff3ee6574abab62a0f7618ef30a25497d85ad709c918671824443d81541ee3c4d9b7546ec047ec348a2844e96d1020f41b43e13ee9ffa94c86744fb06208cc0cafc831de06c1722993a4109e34622ff91ffc354a77b523f2c5e50f3c2b646154a867cf10e77cb5f54a447934d3b18c4e2c752a96971f6662118d7764e0027de0f97418586b9e0f5353719c6c2288be2a9e90b15ca738254bc6009326ddc0571abfedb05fed5989c7319a9f90634e0034a266daf0c45c35618e4824a70329df0d24ba63e3beabe5219d77166bf46daf0adf769d814606ec1036709d1161ef54bc1de51529c2b4495d4152e33df9566e24e7dcc15ada4a06f07577d9f7de30f444b895e77b29d177de260ac32c9ecb14866cfb1e594e2a7d4342982547d409b51cedf6a9cbd1cc60649adada109fc331d05caaa278283fb4f778b2937e2ea4107bc10f9852963ba9c1f133dedaf115df768e338da62e11ccd0e3b247e7662e5190b869838dccde21c73182b8e353b21086797f9ad71dc11ce085239372168e00ae357fdb60bfdac1fa86ed5834fb98c9d9c6b039dda5f30dc1a62cc8278d031ac48cb748921c5967237f909ae794688e82ed616e902c6fe6bfc0430562e9870ba41c6c578216150a43e6c79e00f88caa19f7bc61029910f022ce357f1e046417931c470958b7790ba489c368c409bcf26ef79b30a96896df6989e252d48a182ac4410554da4edb0325d0406919d5431bf9abaa5f5074beba1e5450bdce2bc11445c391bfc858ba6b094bae89caa186df7988118444162c553a08858499603b7da6c7b38d1f9e4e588a0a894889c85d25433b51955612561b7fa29eef93bc943104102136a460ad9831b58f138bba018c92e980f780bd20968e5746b78f25b886bfc0ceff946f0816dcab184828a84a7bcd5031807f1037b6541196a32b15bc10a100429a9d4190278c5434bbf236029396ff9e4b710b042b0dbfc95f05271a9904eff8604c6621507bf03552dfc05edd44410719150a15e7986efc95d212b0c6e6cf0346f0828683b1bf231fb34088e821347bf03781b372886b178997709dee3542902a1f7e465d2862b094ba3bfd241a418f51a98d0b511d158a83df81aa14c97477f6a8f6063142918e3198855b68f6e8e9cae90952a5ef67af8d33f90b6a2acd8c43cbfc157c7f0242088e6816e610772250c11b9345f9831dedcdfd09e28eeecb5516a08d0b51347be else 0x150e804c385f0e0d3f07c658367b4e16cfed570b67fa3be2e15ef78b06e00bca6ec3402315da0b02a0c631f6432c57fa4602f87ac19232e2fc07edd78ef56baafb5f63be15ff869f2a112c7d8a610c5503b5b1678e7424b93dfb6b5e13916d811bf998dfe0211081284788419bbd222c9dacaa3bc09a1156ef94b276b2a8ef00a84615ff869f291d415243b0add3520e3ad414b9b57548d7f48826aaf163accc3f60754be1ad5f62cb6b940ca3acad95ea284ab35afc15d7accdd0e63dee7b005bc8dfd26873c5ba3954c081b194f844cc0a4750dbe9156d8423060c69a90376b8062ea0a95035052e083107ad4af51e05d9c8dfd263df40c423cdb56549c46cfec14ef0031bfb350bd890e821a076cbd371e0c6869ae619687b173386bcdc1372d1c3575ac399230ce3048887bc57fe1a41e4ec4df4252611d590b80c48c25be73620b3688211203ab32b56c4fbbd270077627f3fbab32a5b06588ea75af627fea2e544bd90cd664c28c8e31e5d7d7784127566b6ca13cb4798d7fb2cb85d9d86f86ea1d04d09149ee374a3ecf0c8748cacf123a9feb589b13f42cff9f7a310eac0b027cd89952ba5fd3a910658fb89fa24cb6214c851909592c448536c84134bf91d98e239088c275042aae216eb908c82e67a239088c268d6c0e55825ba15882dbe2247ad626d3f91d9e26544fcf113657523f62b6027caeb62b613641781206c5e60855fb88fcd0827811651adfcf26388f7d4bc1d3d767d7b7132aeb5a57a1fcc58ae564b71380cbe094a642a54b5ba8db7a9d2caf6a84841103418b5a18c4414511243bc91a211e84231fcc23fd8ad809b48f7fe788c572add5e237366b180b5a10586dfe0a738aa4ee1045c228f888fcc505033a8194ee1059c097f82ba42751853f316f9e74a57d83f024209424a85793188357f8380bae10e8832b0ddf8292444a172440a7682105c852995cb7c9ca204afb00571c13e2cc4d957e1bb6a2111d373977658ca52f3d44b9ff4fe27c4df0d3ee7fdd5d0ba92bd44dfe2a11fa165758efbf))))
-def rankMode11 (i mode : Nat) : Nat × Nat := let v := packedAt rankHeader11 ((2*i+mode)*23) 23; (v &&& 63,v >>> 6)
-def rankHeader12 (i : Nat) : Nat := (if i < 2 then (if i < 1 then 0x8000000e9055c0000039ec5b000000e6965c00000397191000000e497640000038b29e000000e1c25c00000384a10000000e0694c0000037d9d5000000deab48000003779d2000000dd16540000036f913000000da7b5c000003661d4000000d898500000035de18000000d6ad4000000355894000000d453580000034db90000000d2377400000345115000000d057500000033d595000000cdf37400000334690000000cbd3640000032ab99000000c9795800000321ad6000000c758680000031915a000000c5774800000311e15000000c3656800000307adc000000c0d868000002ff15a000000be0f84000002f4197000000bb9568000002ea754000000b9725c000002e1196000000b6c974000002d69d5000000b4d740000002cf596000000b2a760000002c8350000000b1524c000002c0918000000af3e58000002b8a16000000ad6a44000002b2693000000ab6a60000002a6160000000a7d46000000299998000000a5964800000293453000000a3cf540000028b7d7000000a1ef5c000002840d7000000a0703c0000027f40f0000009f283c00000277b140000009cae480000026e8570000009ac74c0000026755500000098db5c000002605930000009745540000025ce81000000964a5c00000255797000000944a5c0000024b61a00000091785000000241dd70000008f73580000023971a0000008d7a4c00000231f960000008b8f4c0000022ac530000008a104000000225ad100000088d140000002205930000008761480000021811500000084fc500000020e39b00000082675400000203e5a00000080004c000001fbf940000007d8370000001f119a0000007b6c40000001e955600000079903c000001e2c92000000776a68000001d805900000074a164000001cf0d2000000729950000001c6c14000000700678000001bd7900000006e0b64000001b2c5c0000006bad54000001aa8d700000068be900000019c76400000065869c0000018c626000000610c98000001840810000005f2594000001778de0000005c098c000001671e70000005703a00000015be410000005512940000014bfa500000050f1980000013d1a60000004e166400000131b990000004ab69000000125d5e000000479288000001176e600000043999c00000108e9e00000040ba88000000fd31e0000003cba94000000ec8e700000039879c000000dc1e6000000350280000000cd9a700000031f06c000000bf7a70000002e479c000000afe6200000028fd980000009d9a7000000260d74000000917e200000022c89c0000008545d0000001f37800000007595e0000001aa8940000005fc290000001510980000004822b00000010988c0000003c0260000000df3640000002c7270000000842a0000000168eb00000003e38400000000035 else 0x90000018f4f240000063bf090000018eaf24000006396c90000018dfd2400000636a470000018d5c240000063410a0000018cb724000006317c90000018beb2c0000062e7890000018b50200000062c0c90000018ac81c0000062a1880000018a39240000062788800000189ab1c000006252c900000188f32800000622f07000001886a1c0000062068800000187cd240000061e2c8000001873e200000061b98a00000186a4200000061958800000186032400000616aca00000185362800000613a4800000184b21c0000061168a00000183fa240000060e50a00000182c74400000605d5c000001807454000005fe5110000017f0d30000005f86170000017d4d48000005efc5b0000017aa060000005e5418000001781754000005dc716000001756f74000005d0957000001730858000005c9f8d00000171ab44000005c28540000016fa054000005bb5510000016dcc4c000005b2d580000016be454000005ac79400000169b274000005a139c000001669a6c0000059545a000001645c480000058eb1200000162aa5400000586b1400000160be480000057f4940000015e786000000573c580000015be7580000056965a000001595a5400000562f500000015800480000055d0d2000001564c5c00000556051000001547b580000054d316000001527a5000000546d13000001512a300000053e5990000014eb04c00000536b140000014bdc680000052b9d2000001498a5c00000522116000001475c5c00000519894000001453f5400000511bd4000001429f68000005067d800000140ba50000005002d00000013eeb64000004f6f180000013cbb5c000004ee4160000013aca50000004e7655000001390e50000004db65e000001352574000004cf819000001325560000004c5e56000001308854000004bebd30000012ec850000004b6cd50000012cc450000004aea950000012ab058000004a5adb00000128a73c0000049e817000001269f5800000497551000001247d700000048e69400000122dd4800000487cd30000012101540000047dc5a0000011e2d68000004712600000011ae25c0000046775500000119093c0000045f6d600000116b05400000455e160000011466500000044bc5a00000111b35c000004435530000010fc350000004398580000010cd06c0000042d51a0000010a7348000004250590000010866540000041fe0c000001069468000004175d000000104fb4c0000040e69900000102ea40000004069d800000100b650000003fd6d4000000fdc75c000003f3dd4000000fbb164000003eae92000000f89274000003de056000000f65d64000003d46d9000000f3e860000003ca519000000f1c350000003c1bd8000000ef7d54000003b96d8000000ed8054000003b2c14000000ebe940000003a81d) else (if i < 3 then 0x24b000001c830240000071f888000001c789240000071cc4a000001c6d9280000071a009000001c6162000000716f89000001c5692000000714708000001c4da2000000711bc9000001c3fe280000070f1c7000001c385200000070d0c8000001c2f21c0000070a848000001c2332c00000707f07000001c17c2c00000704489000001c0c52400000701989000001c02f1c000006ff388000001bf332c000006fb508000001be8724000006f9407000001bded28000006f6ac8000001bd6920000006f444a000001bcb928000006f1b08000001bc351c000006ef449000001bb7620000006ec6c9000001bac224000006e9b88000001ba2124000006e7509000001b98420000006e5347000001b8f528000006e2cc7000001b87120000006e0bc8000001b7972c000006dd347000001b7161c000006dad0a000001b65c1c000006d7509000001b58120000006d4d09000001b4fd1c000006d294a000001b41e30000006cf9c7000001b39620000006cc8c9000001b2d520000006ca0c9000001b24120000006c7fc8000001b1b224000006c5ec7000001b11528000006c3209000001b08620000006c0bc9000001afed20000006beac8000001af741c000006bcf47000001af061c000006bb3c7000001ae8224000006b9008000001adcd2c000006b6587000001ad2c20000006b2acb000001ac5d20000006b0987000001abe420000006adc89000001ab1324000006aaeca000001aa7920000006a8988000001a9e020000006a6788000001a93e24000006a3c49000001a8a520000006a1907000001a8231c0000069f587000001a771200000069cc07000001a6d1240000069a048000001a6342400000697cc7000001a5792c000006941ca000001a4be1c000006921c7000001a4501c0000068ffc8000001a36f300000068ce07000001a2e12000000689a89000001a21d2400000687547000001a16b24000006846c8000001a0ce24000006825c7000001a04a240000067fcc90000019f6f380000067c8890000019ee0200000067a7880000019e2c28000006777c90000019d7b2800000674b890000019cb82c0000067024d0000019ba5280000066d5470000019aeb240000066a7890000019a5c2000000667a8a000001999d240000066530700000199151c000006632090000019859240000065f74c0000019782240000065d00800000196fe200000065b1c700000196841c0000065908800000196081c000006571880000019584200000065508800000194f524000006525ca0000019455200000065078700000193dc200000064e0480000019334240000064bb87000001928c20000006492880000019208200000064718800000191791c0000064508700000190e62000000642908000001906d1c00000640d870000018fe9240000063e7 else 0x1f3fe28000007ce98a000001f3402c000007cba0a000001f27b2c000007c7d89000001f19324000007c44c9000001f0a124000007bf9cd000001ef5f2c000007bba0b000001eea620000007b890c000001ed9428000007b5488000001ecdc2c000007b1e0a000001ec1b28000007af109000001eb7724000007aca89000001eac628000007a9909000001ea0128000007a6a4a000001e93a24000007a3e08000001e8b620000007a1708000001e81a200000079f608000001e796200000079d508000001e712200000079b408000001e66524000007980ca000001e598240000079484a000001e4c928000007921c8000001e4052c0000078e68a000001e324280000078b5c9000001e24b300000078784a000001e1aa1c00000785a08000001e1262000000783388000001e0702400000780b88000001dfe1240000077e509000001df43240000077b1ca000001de402c0000077754a000001dd4b28000007730cc000001dc4e280000076fa89000001db8d200000076d008000001dae8280000076a40a000001da44200000076740a000001d9991c00000765887000001d92b1c00000763748000001d89b2000000761348000001d80b200000075f507000001d792200000075d007000001d6e8200000075a988000001d6482400000758188000001d5c4200000075544b000001d4da2000000752608000001d43e20000007501c7000001d3c5200000074de09000001d320280000074b348000001d25d2400000748149000001d1b7200000074534a000001d10b2000000743248000001d07b1c0000073fd8c000001cf76300000073c78a000001ce982c00000738a8c000001cdc628000007360c7000001cd362000000733d08000001cc9c280000073110a000001cbec280000072e50a000001cb3c280000072b90a000001ca8c2800000728d0a000001c9dc2800000725889000001c90a2800000722))
+def rankMode11 (i _mode : Nat) : Nat × Nat := let v := packedAt rankHeader11 (i*23) 23; (v &&& 63,v >>> 6)
+def rankHeader12 (i : Nat) : Nat := (if i == 0 then 0x9c7a7938efc271d5e4e396c9c6fe938da91f1ab84e3410ac65b938c5f2717d65e2e789c5a8118b032715903e2a188c51c9389e22313563e252c9c4799588bc1f10d43e20688c3e693878b230e7c461b98ac352118656230c064e16acac29b1584e92309643e1168ac1fd1383942b058e8e05d5cc03a2b7f9446fe1a65f8617bea6a57bf16ef540c5e5418bc0bab771c5aeadeedd0957b9842d727e36e3568dc2854b7d02b6ed546db989db2d58b5f22b6b1e52d364eda139cb34d3765516ac8b8958eb12b1552b61ac52c17c957f494af3c315cf162b7ceb56965aacad2b58bd42b000955d0d2ab262f558146a8f6b54d316a93d2951b44ea254653e599a758274dac5297b8d52b9d2a4c52f48845a8eb8bd19894a29fab446f52853ed5067d8a05d29400b427dd6ccf6f189e5daf3b905a7594a4e76559c872936d97a6a4aeccf819992ab131795a6110acbebd39764292db3565988a4aea9595582d296b6e514e7c9e817934fad25d54648fae48e694916ea521f34e4202ac7dc5a8f16b51c498235c4bc677558c849f17db5a2d60ac55e168a332912f16a2366bc4355387e1a90e616219a0dc2d51a8539a509416610ccac1fe0c834a3505d74209f69c0e69981752101a762016ca3fd6d47ee3aefcf751f762cbeae927c493af78159ecbacbd46d979f430f29465e386a3c1bd877beaaee5b61db00abb2c1475f4a0ea0761d20abb9ec5b734b2ee5c645c92ecb8b29e70e12ee12841c0d29b7d9d56f55a4dde749ba2cab6f9136d3daed98751b130a35de186b56a0d56251a8a6b34db90691bbad14455a0aea33d59566f9bacd1a4197a6cb2ab9964bcacc86b598eb0d31915a62bba4c4785586cad307adc606c34bfc5697c1f0af41975dcab4ba9d5172e4bae11965b64bab5a75569ae82cf5965953b0b20d4162a49ac0918579f2cae28595ad48ab269355b530a985814fa8c29999852cb24a4d14d479eaa8b7d750f7aea1035d40e07a7f40f4f941e9dec51395c926e8574d63a699d55531b6ba605934ba2aa973a052c94ba557974a252e92d86922f0a241dd747b9ac8e5c691af49a31f9645c7a68ab14d14208225ad14468a088164d0ec29218115427e28838e6d04ceaa03e5a4000267efe50fb06e1f119a3db6207a5558f32079e2c923bb534760164e942c9cf0d2394ca871b050e00cf1bd7903705b26cb170d75aa9aa8d7345f48671d90cb0d398c62630864c610204be4b29778de2e04c659c79cae07415be412a894a52fe94a1e3313d1a6270b324c6e64956d2125d5e23c94445db9887333908e9e205d443f4c78797528ec8e71cc3ce3707986a0500cd9a718f8362fde9c5c8f38afe62147ecc27669c4c1ae8917e211644e2151743e6f007595e0d544a17f0a42a21304822b084c460f00981be6c82c72704215005a3ac07c70800035 else 0xf9ff15f3a62be6805fcba0af93d97f1f627e3264fc44c9f85093efe737debe5fbba0bf75311ee2433db2857b5488f66e17ec782bd83657af109f5bb93eb2a27d58c57a9909f50095e9a92bd2744fa3e08f45b11e85c23d034479f608f3cb11e75423ce24479b408f33293e6032bcb304f9484af26495e48723c80a5f8e68af19215e2d727c496678784af0d50fe16823c24c4783388f03813e02e23bfc24f7e509efa193dec72bbc805f7754aeea595dcc333b89c576fa89edc691db4023b5d0576a40aed2211d9d02bb3323f65887ec958fd8dd23b1364761348ec0591d7d41faf24475d007eb7411d6a623ac904f58188eae211d5512fa9b44752608ea1f11d4071fa78a474de09e99015d2cd23a4ba4f48149e8db91d14d2ba2164743248e83d8fcff6339eec673c78ae74c17ce2a339b8c57360c7e69b11ccf4239938573110ae5f615cb942b9678572b90ae54615ca342b93b85725889e48515c8892f90604f1f888e3c493c7312b8db2571a009e30b11c5be278ad24714708e26d11c46f2787fc570f1c7e1c291c3432385e43f0a848e11997c1fc1f82f85f04489e06293c06627805e3eff388df9997bed4237d0e4ef9407def695bdab237ad246f444ade5c95bc6c23786a3eef449ddbb11bb1b2775844ee9b88dd1093b9d427730846e5347dc7a95b8b31f70e246e0bc8dbcb97b74d1f6e2c3edad0adb2e0fb5d4276b0246d4d09da7e8fb4a52b683c66cf9c7d9cb11b3232765aa46ca0c9d92091b1ff2363644ec5ec7d88a95b0c827610c46c0bc9d7f691afab235ee83ebcf47d7830faecf1f5d044eb9008d6e697ad961f5a5846b2acbd62e91ac261f57c846adc89d58993aabb2b54f246a8988d4f011a99e23527c4ea3c49d45291a8641f50463e9f587d3b891a7301f4da24e9a048d31a13a5f31f4af25e941cad25f0fa4871f48a03e8ffc8d1b799a3381f45c24689a89d10e93a1d51f42d64e846c8d06713a0971f40944e7fcc9cfb79d9f22273dc0467a788cf16159ddf273af65674b89ce5c179c0937374a566d547cd75939a9e2734b84667a8accce93994c1f322a3e63209cc2c9397dd332f044e5d008cb7f1196c71f2d083e59088cb040f95c6232b084655088ca7a9394972b28aa4650787c9ee1193812326684e4bb87c94611924a2324104647188c8bc8f91421f21cc4642908c8368f90361f1fd24e3e70)
 def rankPayload12 (i : Nat) : Nat := (if i < 8 then (if i < 4 then (if i < 2 then (if i < 1 then 0xc669e10728fd87f083a58b9055c287b2250c719aa34cfc9ee101284d18aa9843cc7f10887695627ef2a3bf090108513643b169c840b7367181b20402434834008189c21da66d4aabdcf4e938669a544866a80fe8a4f0b66467257f4b943864a706830a89c3413f6c0e4c1680b2cede85264270e551267bc44b033b0c1c457948a10edb7dc24c0e906450b629f0907620b0dd42e891c55fea978895c6c3740950a0c6d8152ab3d01f2fa7bca212543bd28a42075308789b2144fb1dab042a252388cb13c9858170d5826e24e10e3908103e041424e1037e42dc486b41946268c526dc02106557865030090544fde1aff060040d46387828024e973042d25d331e048309fb66edd0ec3750bedf70842a0c20dc1d9e65271e70630623089aa1de42182b715d2d0241bf2ae3787c7c7052785b670032284c0e1633381b0cd4ae60578ec55e27304d50ad3de34fc37409629f096cc50233043c56fcabfd520248abfd52fb32cc0748833c16637060b7f61dd8c1544dc2d0d4312965981c2d449a60ca816edd0e53db02c39418c823b73183cb1d8ec851cda46a8012bc2d2911397b0dd42f8e762af727a84c969af02a29416938a4c981cc2e605780920aaa0d57fc2deb959c80714e6b463ac1352f9d19c0f916e8509cbd0ba7c408d792761154dba97b61cc0e94706e9046d83420e9032715f3855317b7cecbd9102d6dd081d14a8ccb792705a0dd738ab0e2c849cda527d8a6473a63407f07c54d87392e1759c9f9056e4c2d8a702260e05093f13a23c1a05ee8c55299b08af6c16ca75245d4b606452e26d11354289f7315ca2d88fa45cff8a4e317c7abfe69c6322470f38318eab24455d2c3b1e0e6107e1a68cb5233b1589908862522843a3ec57f2075427d46421289d9d1d0c3352b27ed802a0dcd0af05152b329e7115bea97d9162c0caf30692bedf678a0b85b02a564bb4559d27ed98c2cb6ce013ea7909d0e112841b437038acd8cae31d90c44e8c311097aa2405d251cb958eb231b4b8dcfe91d4d0c3b099d86d3b395c8d4fc9509a60fc1468f1e0ec115bf193ea3164a2a8efa44121082e414d7c08312590cfa4497811a20fc61ba16529e13402e2d683578b02d8792e98bf740ea5ba8eb0424a8aeda03128b61050048d4cc1bf2713843b261a6d9ca04ace41e329a6fca48349f620db526cf0d00294c0c9257eded0c70315949068acb29a3012468cea40125a0b1252bfdcf445a27734d1dad92a7da5256e389d78d5e6ef5295542b561ce2a6c51b431433ea1b1a88cd8624c11a062a8af15461b4eb0562bc0dd3f761096c1c5605c253d80392bc66d093cbb2c5650f60850ad114f688f71178c2a32da31c4c93588f66416f6284173b61d46633d44cc20a0e4a16891605172b11c2ffc470e909174944f67944f8791ee29fa84bff54bef9cabfdc6 else 0xb95e3480ae4e96e11821402c9f81beae2be958e9d52c06b0763c318531354b4de1adc84282ec51c765b1278b9920e3850902ba4e8c582b958828c17e161b478a726e1429caefbb5e220719ed6113f098120239f0237fe6a45e788a00a706ce11c67489bb1d29df8286dd8708a16cc5a4b18a6b58d9014aa84c938a511e66d479f9122924d5c650ba6a47393b0e60b5f18556729659d8372de284388dbb0e1142d98b497374d6b1b2029550992714a23ccda8f3f2245249ab8ca174d48e72761cc1a11f1855672965eb8372de284388919b26194e05775e4614a1051b03cac71e16e6180b10da60c90a787731d61b1589810a5cb43190973d4c64a94ee4e6420a2bbef303260b4d7372431682a27e1253bf302b05a77108481fecb1c874b3193642b62c6292159dc32b8c2cc35394ea80a2a5644814ed346596d85186bc38a4ac1514a543884a44c64a08ea79847ff54b215b855506e9247ff81d453db233b906dd8708a16cc5a4b9ba6b58d9014aa84c938a511e66d479f9122924d5c650ba6a47393b0e60d08f8c2ab394b251c1b96f1421c5d4dc98cfc446085718425c68a1053800f8cc9f81b1d261a354b34b6190a27c26e1016c1c2b9042bd23fd1c60a93230828cc84461331a6312498c151afa2f2936375e06d88b04ba0d58e0063da995e674c3a5f634e24ed19d11719ded0953704007831d062ac5f726a5421fb29844e009346dd8708a16cc5a4b9ba6b58d9014aa84c938a511e66d479f9122924d5c650ba6a47393b0e60b5f18556729659d8372de28438da9dc68289d604982c5219fc9b9e919df808182444e20e2bc5a1d88ec8cb304728e1bc41750b1058935c731b45ccce513f8d3ba60d13008e6870b9a10e0cfc841a1620a27ef1b0a80f51f6674b98d22e8c713a250a13b3b0db9582b1068b6d9cc62658e62e51ecc823dc41376581a2c5b3142b2156181b15bd8a20dc85121d8cac526672a8b3844d9ce25ffaa419f60f213a0dd12830b1dc0cfa8143ee33094e8a1819829fa8d2efb3c36ec38450b662d25cdd35ac6c80a5542649c5288f336a3cfc8914926ae3285d35239c9d87305af8c2ab394b251c1b96f1421c7abfab0a42122964601ee485e04e76f8af0378bce2c81460856e1d52ca521414a3cba5b045715a295b9503a105199088c2e539862493182a35f4536224cffa5d83e00c7b532a0be34e24ed19d6c2f7848cf8e831562fb93528b8cd9fb2984935ad8dbb0e1142d98b496314d6b1b2029550992714a23ccda8f3f2245249ab8ca174d48e72761cc16be30aace52cbd706e5bc50871643aa5802d91e3100f725d1e80c90afe3420b17c814608505863bab92b425a5352b15a0f2e96c6e1a56ea5ca8e9037866c542527004868e42044ee6113642aaff85107e5a0673bf907198f9b1a1c94f0367915e1840d02cda0) else (if i < 3 then 0xa8c70a72a0a300b252c18e11427ef3ac82f62007c5e1fcdbd0fc58062cd59f18caf6415c5d38602c528a1f9ba772504111b623cbee713368c4488715062ac9c31dc56d2c2b46ae33df68ea77092c18415c82a56e7495735618ec5681895d1182144ed22ba30364b06309751b6f80b2b5937f4b718c58ef598721fe878afa5215a1e2b59f278c212470c50975186292b40daa6c907f258308c0b1c24d06a5615c82d4fa661c85052895d3414d019253fe1a9bfa5352b13b1d7464578d202a530ac05ba773b8ce87c0d26f2763a191296889cdc64fb8b395537169289e5c679052833c95f9170b1276996ae10c3056e68c7157518b8d59d3fc2a524630b4c93478986426425649468c3c386ce546c4022bbef33dbf2304d0627560a3ed81c0d2b11006e1c87fd330ef146020a22469498164a6fba9e3651ae4e31c4e1bc05ba7d04c2302c7129c0dc68410afd424ae8278370853803201d8e92c184c8f4b6183e24ed24d6423208018e6354b1682b15c0ab0c4e1dad8a300c30b35b27f1b9352b4dda26be679936417c6b5b2b8434394974aba8d9857a9710f0361cef07e33bde1115a3571a6ff1b28d0af1420612ea301bf97c6841694d4a6474ad90ee10de01c74e9494e2b58e8f165005981639efb4252c17f8bf4b618eea9b242ae1cc812568a1f9c462aa52db1b4538a54261c49ac3c9240851837c11352b0518a330a317c159c31ce2fc1bd73102a0c4887305eb9decca75202d0680ff96d23a5c5d5fcf3ee76a8a94f86453e99d32ba7903b054952993663024f62b24ce6317f4c51a820a543387a1ffe2a522050827163916867d2306109e7b29de9cc82d3a085a7360b4ec6369e510fea12a969bb74f0d0fbde1e6200dc39017ab0cb07f8778a3010510ae41299a524e66fc973cac86e4e31470c506f22ae9c57ea1257413c014e276fc9e3480b5380763a0b4c59ab3e31952082b8ba70deb8a5143f374e83410446d88f05e064cda311221c5418ab270c7715b4a02f259c646625d4685660592037aaa413a74560bd8829dced2bf5631c84ed381f963a74a4a712b40c6058ec518081ef094b02829543c0387f12698b000c9c506e70ce2e1273b22966eae535ad6c2a83573840da53565bd4d82d496b9f408ab0e24fb2b989126b0f6e1c1f10e6e4c2ebd9270c7056878ad67c9e308491c31425d4618a4ad036a9b241fc960c2302c709341a9585720b53e998721414a2574d053406494ff86a6fe94d4ac4ec75d1915e3480a94c2b016e9dcee33a1e06c5785210b18c975328a403e96c757272e8d91eaae62f75217862b43952a0a352bd52cd2f206948e9f9372632b99462b219f9dc6da38738c5d0b704fc08ae532e0b453a212da9151d810381c24b3b0b78f66c2f1ec8db05672e83a7d5f1a10401d91e312daf9c93ba30bc1afee1d4fa5253a4 else 0x8b1df908743de8782ad5dafd4ab11da457789d203a41ed48f74d6a11c6d56836b68eb5abe9479b30c66dcf4d6540ab9cdd4cfdb337864af5c3d19f6a71e94be931de2b29ec2c75baf18703284718a99508553a8efa4d8d01abf6b33f7e46c85c8276be3eea4058261e909c8b8ad623b5c1d59e0d75f50ed587165924b0acb879e185c42be91858d9337519604707d57509d6c8bd1e80c5a6a667251dbf84b1d7afb297c352cb6739a10e3c2e55ad63edc705aad01be3da1f7876f54f2455e6df84a0ce45ba901647c7b2d9ce8f439288ad06eaf03aa3d24ecd9c60b904acf6101547698fa9e931584d304ac08102d31c741a2a8572f7f34204ed78d5dda8f7bca5dc2696cf06c830e2cb31f106e020601adc75ca03329958e29772545c2dcbab385a37865b67d0f3c138438b163ab6ae516ea16623cc30206b537b5b8f43779990373d02846c20bf36a6ea4048cef9cc5f0d3078884e29a4bda689c2cacc61c0c0cca62a26df848bbc4176a725115a0dd5e07547a49d9b38c1720959ec202a8ed31f53d262b09a69a3cd509d60ba85a8efa4d6acf310c205a60cb44216857d219fee2b021d7a84ab2a2b0b5669ac32fc194d4cf1eb55b9620f5904b670cfde53cc435ed5810ebd56b71062d31d180b73d03040da971b8049c2c12dc43ab8d6b43f18d0116977b97794e190c14232490e56653f7b819be8f65c5292519df39ba3d1abe0bbdf0f5cf865d854c7a54f64cd72a22770b270ba1e0a33f065c2b8081997b1413c57e6a13adb083b4dab212d5d4f49d093b2c365d7d452a11104419b9a4dda722e3d2b7d8cb9fd61a6d56e154238ca546c8ebd640546fcb5750e8317c29db55e8782b05c55a87da597b3a3d359038081832a8278add2022f8153b5738dabe3decf7e556990801bb081c2e0bd5e2a4be0c2ca99512cd2f7f47a4d7508f15f9c9243884883d83da40688be6984fe657622c003c6bc3b36ec1f553aceb62a2104d06e6354ae9bcdd1433c948a6b8f2b139062ee041ab1c6c625c21f9e4fa81051a3eb3162b4c6d29c684c6815a1e4920fe34e85016f1020bc0c9ab67a287df8a53f2bf6909c5c1566b5cce9c0c4f31d78a3c8094706e07a3db05a36ec38450b662d258c535ac6c80a5542649c5288f336a3cfc8914926ae32d2135239c9d87305af8c2ab394b2f5c1b96f1421c702a2dba8c3701c8efa45e126169cd4aa4b826bc9c329b1dcd37d2689180787de1366a8169ee01a3c492ef59c469b02144121082e411982a5a60f3620b305050248d15f4961d302b8acd06837ce65cee7591fcbe31769d486fc5081b14602d428d5c6d04c29bfaa6c93df684ab9c60a9051d54639d096d1268343992e2ff00a3042b15a0663a79403edfb920b69487f2209de4b38c24d21586f0a38a1030e17bed08acbb73a91519ea9b2406fe6881f97a)) else (if i < 6 then (if i < 5 then 0x11df91e9c8058b7e20f277118c1885001f8a6aed42e253e90af80d0f5055e781833d15f5172beb0c36bdc9a4e43ca2d11e281bc3fd6146471894fe42452dbac2d60cdbc7252ec87054768e550e69cef29a4cb190a592e53bde36f51d0e95164698d9355aee15fc90ef7a8ccfd58e67b45aba9a0c4df8fa4e4f458bc70d0868422bedf29b5d628f1c09ee971603cdb943e8b007d1bf6231c4df837d20925282016dd5ca56e134c780ff4e50cf6f45803eebc1d88c745bf1628ddf3e7029941b7af1d5b81331e2572aa73287d1600f86b75e01de615dfa3742249631bc7baae51495f60141880932649c098c501a1442c82924afb4e080f3c2e55bd27e0c5dfd4f09a6df2980d16e79c6e86b46e50e4d80f216274c99c1012600049e711a03414a9b47773c6f8b7187f540b0c7181333208433bed337003ecf9c511a034149234766046f8b7187f540b0c2c80533208433bed6ee254c2a854820c565668578f16fc26b0f76431c4ff2b8512db954029d18b7aae7e1b885185f8654d9e74d8a2542d74dea2c3076e64143d2d9757a97b815d98af1baaf5297a3b26606698d214e57b55877e64dc92438b57a88532dabf61044bded32c7499dea174769dff1cfee690adbde0bbf411d560f795588fa4837bca6d8251ccba0b063ac9463db13485dcd48a05c0b517eefc07af319d85f707d31a0dcd36e5f46ed8905203e5788058417b9fe0d920365140af48c0448741bcfd606318f3d25f41fe3d25f902bd301c7ec1f4fb95f5853b9a1af07ee395e200f0f619c09b41d6ac1f3215979610ae00c74c20d234ac9b940c6640aabc52fb42ce751c561470214a052d0626b9932d0f00b057a746e07c2c9630d60145a895dcb6ecf239d394d8817073a914f7c2925953ea6c96b140eef085ee4851dacfcb08ddd0660e19618a2c7b940283128b78e1a32d0f3e93d344407ee313a49428a4502665d1d80b704fc978c56760c51080f04271c02b7701e6dc0fa9709a4940d9430a61ad4897952250d4b8df9f28dca0869072ae4268bd01e37e74cb900aae4468950628dcbd94316a034e080925e2bd798bf01e0a4c280518b98d01bc28a4f1c71c41882101324f3c2fb8bca07571985c22bc47ed140b54dd69d9c8b1d83f7d0c73f10afa4c7651ba1e8ad64182f98c3ffca7b516b6ae9065833105db9c94456fb165993d78077e9a84ab1ceea31ccd237b1fbc2c96b9419f6e10939dd462a1080cbbfd1a865ab9ca7a470aabce5700eb2f65b91cd83593d7951441951772c2e29d8a945641fe0da6a84eb35503a208662c58e857d230ac492204a61d76ec9319ba8daac68f83b2c551da2a6edc41fd3395c9878c2dd52fa3d8dc2b8081854875719daf20cf4a3ccc7ce3a0c5df06d3dfacbc474602cc319b14a0db6791f60ee7a375b53066a9e480770214c052981957e2b else 0xd9b3ba10920d0fe17508f7bcdacb990024e12772d357468d1085ae93a56f00814b5738de97f01eed785c82a61cbcc2e278655d7e6d939e02194418505f32967182ab47d9ef2b67808621faca913edf865331421b05dc1c95af70b9c432ebdce379af5560c5a285b76034caa90b3052a7c3392b9a10e3a31e0e2ff899c865fa01cb4cb4f71230458e90674a0e9ae8b7e82671a6bbc0859653ed3238b12ce9dcaca295d928ac32b9cd1cfec52a201cb47b89180f42ebe12c76651f65cc31c0c415c6367ac681f876aca7e59f529830a041abb6b1e79e6cd1c8301246c420de959439ba8c1574b405dac3192b329836223dd4fb4d634206bb6ae881688b49bc084544dd9ef35dcf849d962d73e0c6f510614d70ca8b42ae70f10fc5d80d8b1164ab8392975e640ccb39d83ee60a9648b9587ca4f1928c555c6d7a03b4b80791ce37b9e77c4137fff261de12ad991828df042952e2fd4896184afbde781a85e30c6eebec783978b85818da8295729cc0f80fe6749684fcf4b6a3649e8c300e19df583928f89dfa2a6bc17025ff160c6b06d6cf940d08445eabc1c42f9912f9918e27f1ab006366db31aaa01cd897900e50dc08df9f28dca0869072ae4268bd01e07c0394907242c0994317a7ac1f94524a084ed84dba2ea542be9dc6a561e48603e7cb2c315244bce277e84e64f773d5395e25bb31e0ff665043aa52b84a93e2727b8131a91c03a753900782eefb2008fd0b9b7f5d7ad6d2ba8e648df94e72bbc332215d2aa6f0d3f11ce50a3644aecca1e90cf2bc4cc176a7496396843623b53a91f2bbf091616542fe22e10bcb9ca91e29ef88e49ec9b01f6ef9a00a28292c6b0ff3d29c8679f22f531f9c072fad42be9dc64d61e48603e7cb2c315244bce27bd09cc9eee7aa72bc4267063c1fecca03754a5a135e813f890ef07726a551750bb2018b9cd3a579e06f66bd75a8845828dd17661c6c3f42f19ca578dbabd5b6d29fc8a4433d155b4c846411703f2186aabdc00405252ef6ab27fda8822d2c72c692ba0a8e274ed613f22dda82e83a28b4b25d0c479d4a5544b349d48f7bcd89f7bd4a44c692a4e7074d423b7274a9874f6337fa3915bb75095653d70943545268c769946a8376a4a0cb84a283fbb520c731463ff4edeb075e67861a71eb16060262d5afc2f38bef23937e00b1b354cc7ed73ca0564b81f2bf8861b380fc8a8d953d82d433a0f00a04e1b3954df5ac681826f945da31f18c1fdbb5f76f4afb8f32d0f1b8a8595c0a97b4965140f81358a60404d0732637f07be57d2d7ce3c71062a5c4aac3e604d01a068ea7976f8493cefa40fb2139230d6283f1b2a5c4a9211760e4028093ce2346c82924636cc08df38630fea8161859026664348677daddc4a8ef41ec1e31831c8e07e29abb50b802caf8d9c3587a1b3882cf4dcdb760c4c0d1) else (if i < 7 then 0x3a2d9b9838486274da815d126dfbeeb152943458bfa8c14525798e311a084049c124613435eed0a603de9a976efb0b0f0310d72e4049930a625776ec3c60e3dd60851b99336a2f4eda4f8ea0c4bd88dd0e71c0685328216408a9707a2549d5ce3210bba1779d7d0968288a23726c1623b6971d7721bec0c776761fd4008ed152911af786ee6354352578e5631154bd6e74d453df27381ad201ca5f3331e8a0d26654e58b2507741d214d14c3be8ec27827c30d63a7ca2ed2ff3370f1c6fe572c2c744be65bb42c01dc08b709a03c34d579b66d586eb6432570215de29613900ab6622a768ac999000e3e6bd98d286f94a2abb24a2556563a9a0d5a6dce161bacb605ac63897cc2c6a143583178f0bce2fb90acfcd9a0dae6acd5b37b914f7c2cac9630a94eb61708ed19ae0a74592a51c93a50efa3b31e8a58b256e42141d25e1f18cecc98e9d654f523df2b0c544318f7c9c637d3e602a4b2b0dc542392bef75eb03194b8e927f12f190d9c522bfd9dfc316ef1c07e4a31c61592523926a9186538dab0c64d4bcdba178c0a7f20cd0b206354adbc0311cce2c486a03333499f990115a771e2f3d95a2392b4fe22b2d6ea43ceac23f8241e2a96520a1720a16a0d557b9b38ccb6e841de0dcecad73e07a4230fe60cd7a1573a95486dfb9a25d6e841c02a89082c49440d06c2303d067cad306aac3f96521ac64cc5153b2d3a5074d742aaa4304240c5a235f1bd1681e8aad06a8bea0879d54dfe0d538fb2d5ce55a5aba558cd7865406dd5da8f74ef6e1093a09d461e22c5c7a162c73b78471173388168bb9dd0848b493ca041ef58d32125aeba6f6b2a0aa24284705c82b8d6bdce299092d66521e437b9e80bb5257ececb2a9846bb6a0849c21ee9429848c1ab182fd769f8f12125ba84c2e7196ae916b81ec32e47aba6629b160ca7776ee3d156e671629c54a963ef305296880492831c8c4f26131945a836419afd5e6ec9650f7303198a22bb7fcd08125f556024b46bb97ed5580aa2424df96ddac2dba1073b7213184bacad37181f65fa1bdb7721bc7dad42ae951694f20abf55fcfb2078b52fa2b3466bc280f99832ca6ecd9dd08490687fb5a855d2a2d29e4157eabf9f640f16a5f45668cd78501f3306594dd9b3ba10920d0ff20c7b90dd8a1ec87c174a14c24a9fc19bd2594cb69c404968d7bcdbc8c364921c305d2db84256cf57c9554e8b596b0b2c20a2a259ccc5078865b5a855d2a2d29e4157eabf9f640f16a5f45668cd78501f3306594dd9b3ba10920d0fea55889510b3052a9739a7e421d05ef230c814ddb0b92b7421279b11575b2d491448cd770ce4a3a507049c26ea59c83dad42ae951694f20abf55fcfb2078b52fa2b3466bc280f99832ca6ecd9dd08490687fb5a855d2a2d29e4157eabf9f640f16a5f45668cd78501f3306594d else 0x7613f23a4896c791ba7738699793b67a095f660e9191a289b21d8cf24bd469ed39b053accc0c6d3b18d5b194bf0a8e85de3a4e3be86c8419a487ff86222108c8c95b279ac2e8e325b5ce7ac488b516e71f758212860351bce9036a4689e08bcc0ced4d4afc681b20bf1cc6518cb43c79ca3fe40589f5f73772e64c33710ea900b051eb02ba2f71e8d0b3b0b0f5b5d1a0d5ce2c4611d843a458338320a567b9e67ae1df341a63f39a2cf3d1dd8dccc874f42d7a8a86eb794d2a3cc6513baa4a1d66fec9da32e87742910c8528a22accc0798b620b3ce1d31c49fbc77dce84a582e90699c23950cfc8cc142be767290b97e86a4e91a1cf76d73194666a57e45ed52c4e11bc21d99c179b378b251c0b802679f9a00afd85dcfb559afa98a7b5f3e96270ba60081649e7beb02a7610eb9a1ecd0fb9a7204cd49d2daefaeec19567043b6fc7b340ec21c30e8895ffbf98ece7dddcfd23012799238f49b8e299d7ec5c772fc4579db66f6f11986a9660bb5d9a1244d49d2786857c0852b6be67000b9efec9479129efa121465782afeecd364d1663b22b8b61b1a5c4e3d2c1d4950b717e82990a6f3e94d8a07666661da0d231c4692f3cef6cc9cb79d271f1815207a8dc0680905aa5c4ac5bcfafaf71f4c032e410838daa215cef8765ade0ca00b98ca308164bdcf66866379c02b8f4868688fe406850f7c928e2bdad8197467610ef57aab80429496e45b359bbea6dab95122eac8eb2bc156e8656cd9127fe23d77127f10121ff0d52e2fc3684ebd13ee15caf4b42eb886918666cf421c2365b83f0132e4a28456ee5e46f83d1c21657bed152e0fe3888d3c4870df3865edb6ed11860e40492128a01612869c3587bb340d0c59f2a1049e76ae7b35274861ed6e29cfdf00bd11031c65d269779cde14f3495ad2e7288ab2f3d15f5269ab72eb2ec871646aa31ef7ab666e17414c6535ea229ef79ba12141052115291311ec9d20806f172f55f8faffb39b76ee8d423ac94695de1ed5f603fa58c636acdda082fb8b617dc9d73327b4a48840684b276be0d92dce1ade7815482cddcceb03194f009b88a940bc0f4b7721a57792bbce963185c815d1207a1ac07dd6820bdc2c0da36e2e755f658152dcfe7ce7b98aefc75cd71d6acdb0758aca392cac93bb1f225fe125608c6b3f7826e5a0caef3e1d96b0a6d4f6a8112a8dfa58c6ba6431494f2fbd20af90d75a59b810a50317ae07a571e92d88a9a2e976a8459151087ceb682aeb10c4a838090530ed3312452c3378bf75fb61d7bfa97a38b268876e3128d417f2186afeccd17f819f8d6ff7604295f676e810a366d02a14ccccaef399d19b8957868d05ebc57d17a341882152e4fccb80f6ee9146285136a0ad2780936e07e12a9716e14cf5bef2160ac9e86b06580863880f013b60c97c3b2c593b403de7b41f7))) else (if i < 12 then (if i < 10 then (if i < 9 then 0x91918a21d71410bc6e9ec6ef70309ef91e907fdc4b2fadb2841d423a584ce99acaef24c4bf4c38df3c7cc51e23ecfc6c53f93ea304c60ad3dc89279d96738215f8418c1ca22052a6ac61fa9b24cfe24960a37552fa9775a884fb89293dfe428c1e012ff9a83e6dd5e6a4f8224d8a7b256d0c0c74063c146e616bcae7138207574a67e1c5c3617dcb95a73528cd65d3c9547be31e56b7781b5b495cd0a3053f9098c145c73585f8e1b2674e4a74295212b0402b95b3c3b81d53d8f92d946ba7e76bfa7d89259533586792ae9bccbb467e246dd379bea3114fe4c49da2704f3aa0a9748ff9b983ade1ceb75798ca9654d72e2e08ed27c135ab04bb3fe8897217a57362674b8c69c50424ba05c6730eaa0a00e47a41cbc57145df788303588977382141051abff3438cf784adc41954aeeaf1410bf1d0b341b1d0103097adddfac548c155b4f239c5f0149c577de2baf03097a639331926a917d853e0a4119533a7fc49e2ce5620e93c829c474c2b1c64429fc9f3f185a2e6d4d6349f84d73af40b801a1cae1a5f0257c0d0b62a211614f78aefbc5cce83e7e1e0e7135b88fa8c149fc7d3b9f90a3608052305620e96b9323db526e2a2127b3b2ce82ac22e6663dde13419dec993b05483afe1baf0322e607838684d068cf5b418c24935de9494bb2352b897cff4c7266324d522fb0a7c148232a674ff893c59cac41d27905388e985638c8853f93e7f424281d67bc8dfc26e503743731268818393e8c182a34d8dd7a1e77583a5b159d3b97df9a1462daa04d7fb2d8a0859ce42eef3cc651668358d015a2397cd0a346912f9fca488184b67e3a0e27a1214fa8c62bbef17414c85453d921799908ce61f8e059463a50364cc24d2e2058c5632b04005ac23b2645fe49b25a790c61689a1d3324d523226158e0f0060093352748a3ed423b341c7dcd35801728476a8e9b3c70cb905d8585f62cdcd4f2a20c23425f40b1ee7e118e4179f45cdc5482515f58875490b9238afc8ef4010a553902a0f463af30b2114bdb7b38288562c0c64ca08df38e29df6eddb162341fd7314e30e5bdd14620f4098bb5879f441c3ebdc76271733ca8416d5fc473be2196ba725791bf47616015dad8f72e3dc42958f49444d602cf1c2fba9c74e850f5c94838cfc4f56c8f19fc9e3420b54b0a3cdbf9f5b5d5fe6a50bae227cb341bf0d9290e5f022e63bbba74c4ced9c38c8ef47c432d1d761a414e7749d68b7d9a085e2ced8325f8002058e10ae719687a88ed6c5d35f26b0051dce08558d9aade7f00198ecdcff74d03a7b85e6c799533ebebe477a0ec3ac48c43aa5446c4f616211c69865c8250b89e6ce1c4e7f88e70171b508f72684a3c87e82ac571d47423e13aecb20702e217e7f23b22629ef86553fc4736227fb8c1664172b73291ef7aad8f457774377bcddc5ca2cf4 else 0x487e9d4ac3c377dca9ec5f61365a3918c5ea3d187f883ef9634f3672fac3fdbb95d27ed83ac4f4e96da8842cd23fd7ae3d2db2caadfd78273b86e4abf9b216cfe0c6612bb55c4faf57ae6653c9137b2b162cfe000b949fcc8245ef868d0c5b17a76d7d8298ae8ec5b9cee65daaff6530a89988a9da32119050fcaab8289920eb2260ffd7aff02409019bb112e64d11a07c1e82916e14c3381152e2f4da93d0d693c10c7112a02629a9587a571c3d21ec028dd3322f461fe20355cf720a55dd6fbea0c717480a4069230122340f92512bf5413cc948dd07a084bc8670b22f76c526505493b7e4ebf9f43d8a82a58e26c872e105d6547cf183f7d0ca1a8ef84a094151dac18ebd469ef9c1cebc32519a30d79a8ad66c156d1d6321190d70cec0c6897be9acd261f8e1380a9bc5922e505acd5802da550ca9b65c74510b161c66c2f84c0c1c760a9560602933aad0b27dc9851b3be2c20c6553fae112681f6d44223b8a2651b9cbbb36429656489c027a8978c7e41cb90e6cd0627d45211622933b5ed3ff1118a8e69e3b2cfa9d24e0a74b4348d6c3a285f851a47be969ee65edd65abcb27725f0ee6741410d7843226565e8c7be8e77a2d410bc930223485ec16ee04ce392f54a515f2c2501aa464dcb731e9e4f6c75320a568dcea42dea8b9b3c73d7e6fb8bd85858152682cdcbea81358053d82d4be87bb8bb9737f4b18df74b1184685a0cf38a638c0a8816380dd85d16fc7369d7cdf1d76a4a73413daa045caffb38733382f94fa72c60c15d0558e9831b01e48c149d3929dad04285e65e0eba75c64ce7ffc6cce14a81d179bc0a88754b46a793b0eb3f13dbb945cd9c386b01d303d7f6160594db9ccf203aecb4e7a123edb14609d40572bf0d52d97755ea27a748090f3be1cb85e25f07e9b18c1cfdfba1db2295e79b58411d6287e55289114ea0e022167b67e97d292766c7cf3c08c716f67266639d69db2a20c23f290f305da9fba25079e9f8865943407350b86a4bea27af1f2aa550d1a2745bfc3498d36c89127744bdf8865838cbd5fefbf11528a2c73923eef1c90dac0b79010ba7c52a93ec06e02c0c4945bdd3026e160a79e7b49f09fb4340faff0e263de4eb130af2c1c0b6c3a577b61cd4340733521efe118eda62d65b1040b25b9c2a837673a8f4e0ab8ca6ac509e24397bfcd0e648c339110f7244f3c2db9d19853c577e1a41e4ecedf0d4af3cfe1d9650714fa467b83d5ea53af0e2e3858192cd797a7a7284f4fced9d0326cd48a54961c54f0e9dc5fa49c46fbf3f2764078e306e95f1731f3e890bb2d78f94c287185aa781c6837140b582a4175c428dac501be890327c686c535e6254cdc07b00a374cc8bd187f54071725b10149c53ce654b5e031d07a70634493a5031b985b583a5e0a6153150f2b03183b5e85bbc0ccb7a61c60630) else (if i < 11 then 0x95355c06244cdf04850ebe1f58c1472f1854aa27c4feca617c2429561808dc0fa9b24d1e99f8f5c9b051aeab143b59f8cd5d0627df2b771328a20849aa42ee2a56de13622074b92e62505b908d65978ed70e5d16d3369941ee4a31d1728bd99c012e6f80d828c15c0b13be6cb29166554e753f0d52396f0cc69b8193edd58a81bafc4bb29c62519d040857d61c6396a61da7211305b3476803180dc44c411decf46e0a2649eed13dcc808542cf077628c3f1a7d843e2c76857288213628c3cbfc10a903459897c62518e588b6526f81e1af59cfac422941ca23bded8c12fd2dd813792ae72389505a0b4db82b14a96c22832c18e274cdbde385b52287d008e51056e4c2d8a70222851989d11e0d02f70de8c422bdb4a7521db186fbc24fcdb78811b26e5b90b46e0e6f9fe7a6d1ca2f6c90c2ff002c25e84958290e9fcdc8072c336ec1b2fe8494c24da6642bdc9391b14f7cd97424cacf76103245ca37b8555c6a2624f39f7f2ca9976acc6185f9dead9a102c5f531e0bd1e9a9c0ce2146bc70d168638d7e85271b0ff3d0b1a634cf866b006ad0321152e4f426a370431c76188d32649fea30514325203c1ed8b0b20240f8092920f4858132862f4f583f28a494109db09aa8fce4b901fd3b98b997d786a9e1b3004d9a9659d1095273c691adde8202c02f270058f436cc1d2f3ef04b1f9020252bcf4d74913bea18dcbe65e8eb63c95b98c14410995d30ef82faed818cbe5219a9c0c75dc59b7a0cc886831fe8e2ded89851762ba41beaebc02e55ba3d35681b36ec8c058d30bc9b7a0c7dba195b0f66059d11e1a095d66c151740b0510c1668e2c10ac5a798ecc8677fc584f3188a882b87f517a94b484d1ebc13ba4ebec29388a0855b194919f4906e0defa2974f0f217cc00ef20a732dd144274b2661498183b261464fa24ebebc82944731ac199783bb1e162451c564243b2c394126aa4ca910eacaf053dd6bf1f7f34d164aa15572beb0c32e14faa22620a29ef9b2e849959eec20648b946f70aab8d44c49e73efe59532ed598c30bf3bd5b3c30d2bbdd2e1606be68ecd60c6bc70d3e5bebebd7f88163b20a3db8aa783d735381b3aa1137172b646020160a11f02dc92913733a7b95bd4f0d17eed5de22a564109a9055d9ab40c6b06304df28bb47afcf9c8c6fc71a9040b1d90492fe0c1423e2faec8c059d55b84d7dab16067de96c069c1327094cca3b16e38c048213d61240cfd04ce57429130dd1e048c58a4394233f20b2609754fc089da73a30ca0de6cf3605485298adf216c4153024a00221fbbbe4ec3172beb287763a603f8b26d59ad8524604c0fcb473eaa3d7afe5e7127b5b333ba62b8c32262dd3ca79226aec3ddf52c680428c93f07d3061a3de9940cfee426ee953d9f560fe4de61819acd5ad8578964fe399533081214149d61a1 else 0xce42bff0d3e53718ad2ae40f831947a70dac2769c68f4fb4edd8c3dcf2d880c4f4d4b35cca9faf71eae9ca18fa1a1458d86fdca317608bfb0e0a76c80f01f484fc9c380b134ae638d9edd610b4e031b7cebf708c6d06ff800a16c7b8f4ec463b62ac8066639d6978ea20c2b3a2243cc176a7ee8941e7a7e219650d109d42e163400f5a6e2f629844941ab9dd2c633ed320a744d53c331946ceb980a947566eed1cbcb0d23d77e0585db09f3c7e223e3f1d176bef3d7b23014e916fad61ed479863526e5d0f2476a6a5660bb4bfedc9d656f09f3c753437675a739c806cb511029560d36e3727e4c2da393be46db932ce425608ad502bffd092985364be84db4bb674d8c6fc800e68c4708a1cc0548d4a1307a83dbbeed50b9a74bed8f7bea5e4edcd881b3654251231b983bca2a5493530ed16c1d65094b8df6ccfc16d442f7a47de0c7d0aee15a2af65f75b41418198560c1e7659d0408547dc742c0ac5728befdbcc3d057c6effa09082dd691f25e28210fba4f82620047d89f9189dfa1c2c14f3cf699e13f77481f5fe44cc7e42c3dac4c2b7583b3dacac136c1e13a86884e6784637326ab844d83e7b016d7e43f303ad13ab2ca305300518ac83799ea9efb1a169aab15a2e26b84b8de7c07b2fb1460f2c5fdab0c0544f91d0bdf03247fc987bb9dd8028cde7b1e16a1207607f4ca3d95ff885d0e61aa4eb8e4bd8232bc40ba6d6089ebc8da0dd31a16fe84958290e9fcdc8072c336ec1b2fe8494c24da6642bdc9391ad6def091aeaccf52aae526432b0ef31aa4751ce0b4739918e60e9ac04d060f02e12460dd52cfb61488f3202c4e142702c4e965ec3ce0bcbc9478b26782c8019f618d947a284359c75e6254cd86907a04cbc88f0a7bb45e8098e26144083f222164a09db7dfb4ca2ed196e085e49eb07e37c5b8bb21602613f95082fc406ad03067cda83c4df0d24630505c4d343f80030c0aa85cfc18286cb8fc7a49d276edc9d63ce58d3414c667490ed0a1e213b4c754d8672230b6bc9d785bdfee1b6b4874bb0c4e76c0b00be2ea5930d0114725864840525dd50f33cdd2442dc8854620e548cf1a8623be87b80164617736493fde6a7948515b63252c7928179952cc82aa2f84e54a52ef69bb342c2923222215d2b9bb46b5963432e41475db064a2cfe239d09fd19d771e678733a147da8466d5f242f9801de414e65ba2884e964cc293030764c28c9f449d7d7905288e6358352e5142cced30b2e46f97b013b4c1c821187b45f7921371728b68dd8a79e28101e7ac89ec12c58ebc01bc42049f18cd732a582975341862e01a1f92ce37cb1268343f0a7de52b9be56b05fbbed05092ae43912ea302d8a79e76231caecb1a04df86526ce886a58a15e3ecc00d6ea0a300f75341a29e7995f5898402c0c14d62a81292eb00f497b282e64858)) else (if i < 14 then (if i < 13 then 0xc128417fad1dfdef11fa3651288527a7241280753e4643b93593e396eab0127a45d27a2509ac05278691ba7a7ea30549f257a1ff5a9facf0656f5d22a7c8c87726b27c12f13ee82621a44284de321853986d53e36c3b9c393e094149c943ad0ee0089d67ee46d4fb01233f409a07f92758089da866fe4b38b95c2f820c30727276b93739b64fe09682250720d504241a3f48e296749c2f820c326e04d61839fa0490106db26466e793593e3941a8ff066214258e504bc4fba09a803b2659dcca3ce354c2a4f07e30c098394e666e1c0a74de613514fa411a03c09eed1c6d16c98dbb9e70e4f8e57ee375a2b88464130171088c205237580ef597759e0ca2f21355e91749e1047e8e502759dc866ce3540180104eb440bd17686b3c118994c200d44c77a2e2650dd0702f6f7e051c51700600530ad102f67c9aa61b3e86cda00060041394d5a205d44b650462641380300600413cbb02e534e7ad10070cff481729a18710ed722ad8d4f9bfa2eab0715e08c51827006c1daf831016a7ce6acf93a28d25ef34c6e053a0d713259c5cab26f2401a6168628ca6c777938a59d200568628cb5a61e37c208a0616bc959cc60e2bc02831a0e07c0180104eb441194d59e00d4482304e28c6bb814e88a7d2031de76f68380503f45f92b399c209d0e1a8943775c0180104e5365d82351208d7ba1b062a7567fe900a28c659cd0060d42882502e6dce680306a3247182308212d66ef1133754129dfb9ed8c0ba19a2f0f9c196734018351923940b80f3be6d059f3c31f9c4c8310068212ba51dcd294d2626fe8256e05407c0a387e632ce68032623241282304600e188cb063c64d293136e7a40f80f0a238c02b81500734018350a20940b89929a73424b814d0900306a2756689929a734018358eeb1c078c55e6247fa2c886f146534e68032631dd63af300a0c44e98381fb2745186f06a104db9cd0060d42889d0462743b8057029a1230700d4658fd93a3941ade011a04614b58030464c412d4f32e03c5ed1706266428805ddb45c71dbd4108e07280f922cfd032d79967843818bf559608cdb9cd0060d4288e50461045199700a3f41a80d7e603dc0a8093ea44efac79820a4068c901e2665cdf901ab240ba9102e52c988d397ff028e3299ed38ff14dfd0704249ed01a06ce08b500a71c248c527e70042e5391410900a332e0d7f2a871a601499b815b92741a8cb3bb454f680d0367045a80538e12464e8f1abf94e0084ca262b1cf69b8c13ab20caf9a2d434cb95778affc344276818c63ec8658afb77ca714f2ba85c41e03434f7d17e496baab905391fd3de386b582a407c77e854866d639b8b423c62ed0868d5463be5aff85603ddf690aedde4b38de9f0089536ab16bab8bd60c9211d60a942bff0d5f34866657d8052c9da48b9547780552b0f76431de7 else 0x46410d30fb84fe81210434c31b49f2046a9479a3340288dad82ff5e105e834d422053a8a87910e12533863033454eee9336e10d8281b256d8cdfd1f9d65e63430130ac04e490b243b77e283593a0cc6584ba2ac0e4d801046fa40186117620412a2111e29d0ea53086786cc8d5c1bff09add1246a5d488a7b17005a5c57b17e209d06ae0dff8394b3921c10f06ffc50e94cb3941d0d77ba530d234c22989d0e1dd68f902387e6da4f0a5304a997c41140c4b471c71326dece3e87b1634ccd98911e52d6a83b7f659e10e38634c34825da252c1ee931a6b55b2a531aa4b545a871ca14d10e9d453e905383bd271d6cd92d296994729e16f7c7c6ab905b8d97a055825a59dcca8f2e411a0cda77ba31f9c96ef78e08d6f6396cd88509fa4ce9eeb6c3c66153d73a416a654cfd028e319a3a8b3ce4ed7089c82e8144a7231f9c4ce06469f4125c6cf45581258183c9dd1a62bc0ca911ce0b608ae7607464eeb0559e73d64bf750e46528d9980aa212e59969765c8d83b59205eb393ac355bb86959f76416c89670835402f1f3b7fcd7bbf7b8024328e00a10e7f72e78e9e14a22141d817f844d18cd0124559e14a20ee7688111e8cc1d8c77ee2044799b07a31c34b6d3c208d28d9705a13dbb86905ad940ba8b10266d0e91bace4eb3f70760f4a181134e1ac3cd190b60fc02cb707a4beee8850f3c74f421c0ecd388111e66c1e8c70d29978f805e3a354f081122ffc68c83b282db41683d0220441d855046a35a4d190462bd288097e6a1c078bd332b4c078993be3246582501232566de321aedb670faffe1f38106ec831592086e009c86807837be3ff610901c1b9ea2c64e25e48700448723bbb23965cf42268fce0c43e9d30221f676c015a6fcc2d80f0322f45282b60a71d442054969d19a0144c26747e0929845b45182b26e65c1a85b34e1e7f79371ca77c3e8c93beb1c988a334a16c98b05fdea2102a41f45193f06a1bc15832c1fa3942a85b0fa1e4208fd04ac16e009c866ceffcc38a351674424b051fa86403a29002497cc04f65499899436497cc53a03dc0a084800386dfda587cc04ff40bd095ef5a4be65674329482e0fd6714e0831016497cc1e7a3d4d93ff8146a50350da59c5cad1ea6c368f306a2d5f486d3020d5308f338a7041880b24be65bb42c28ce2827f81470004799872d6550ca778e13f062c1c93961f314da21147f028d4a48acec74a1bdea03da2a8948a28d4e86d22a4e4ee8236079259fe4314049606de61acee98793ae05342473c1a80313ad1c1186d39e0d5c0a6848c1c02313ac0c7996713294126819482dce361dd318cbbae35c07ef37ea00da281b404960a046d1ff4f0822819042381e6d16eb8050dbc6eb3990c7768ab470723654d807dbafcc1a853d1e01c3480753e4643b93593e38c03925f308c87726b27) else (if i < 15 then 0x7a4518a37418d4f0de03d228c57daaf4dc60317a67a51d9871fef0113b4e44519c010b95304e6fff26e735c8a9b520814606b68046810a3ffe61c3bb49b4026859faa2528a73d0c84d6049606604a14601bf059fa0f49eb3a6a1d40a8009a1f73015297e4a4dc61c01121c42ff59eb3c2e5129f8a1f5c425cddbfde01805257d46ec095e634751679c30ab2cdfd037527b012438a7920290ee4646bc0500ec0d1481d0efff46bcbfd2ed1ce9a630fa4a4408e167341fcc686fbeed91b0fa8212ba40a714f245ae64c128093133ccc98e30126256bad504a4b4e88351fe0ceb984b2a3f380d47f83310a12c7280fe87dd00cc4684b1c60d47f833ae612c7280fb16a6d4b80906a3fc1988509639706f7cb16f37071fd460ae87dd13cf7698958b030e32623fc198850963956bffd502a0c60ee6241296b01ef4cbc88d33238c988ff0662142582507bb2265127cc682f2a5cc9bd3312e2119047004487388446114b3a20ef439897a63f412ad70960d41988d463f39d0fba16bad51ca4b4e88351fe0cc4284b1ca89d318d7112b4e0381d0efff46bcbfd2ed1ce9a6305aa2102a5bddb68115969a7f01143c08540a8318a2de904a71ffc8997409d329c7160be209d164ff97fed9ce9f042587934993bd2267fdff91ca8ec2483128606471af34d23f58282104a8c7e7051cb760bb0b0f03d2537e63a9c01241d15db596be8b003451a8d26e5ac0bbfd44e13fe051a95f142c86300208c438030c287c20ddd2cef0b7882402642585f12b790ca4d246db181743a03545929dba0ef14f4e06300205c438030c287d48ff45916ee08492e25e48d0d0e899076ff4ed83f4860156980d0b218c0082310e00c30a1f0be18c0081710e00c308110be15400ced15600c30ad30be18c0082310e00c30a1f0b2154c080515607ced8110be18c0082310e00c308110be05d34803fcb0c6cabff0b2154c080515607ced8110be18c0082310e00c30ad3f844d1f028e08b81127a05f85e008702f86300208c438030c287c8dfc5bb7656d009d422538979203b05228c20879283b4425f0be1c146a349b84ffdfc2f8716b9ad16a60496e29e9c2d617c2a8010462ac0186102217c11a69007f96189c57fe35d638c94c7016c1f8e697c2b59c9d6fe70a59d22884b887db4cb980639cf0acd893ff0d2b695a61f4e00920e256384cd8c708b0a7d207d05631d19b3b08a23d66a205628cd00a269105a224ef933aceae539180ab55c0a7434ba4c69d9bd261f4a582b18e8cd9d84511eb4e8cff151701c6ab656d28115c42967494665ce2b9946e3097869d821dce9a0847021c5382bb2e18c8b90b14e1f7faa9186ad2421b130b7d049482c1bff3fae15123f409082b37837fe4114cf01c21aa580ffdd73c014ce73fc811aa421ce9843e33bdc3ea678033b5fa94b2ce487288 else 0x987266895a285f51e074009872668943685ffdba5d128d57fa10499bfb4d002f8f300261c99a2544217ff68f344afddfe841266feda685f24be62655208146f10450301df83802e8627855c425c3bbfdf44f043a7c8589d67385820d99bbba27004114220539819e0103ad45548b13692ea7a09298400de02276984241c2f00438e053425014a5cff07645c44bf9df2a37e051a953fc21de01341c864e8ef9326867fda8381944c359ff50fcc2f6f244ad916f61acc081353b94ff9a19bcb075953b750fcc53bf028d4a50289d20773ff85e00872198117b631d0d82d076db421d198676804ea12c94caa34e8cff6fb0d6a1ff411708669c27b6bda71e6769412f78cd00f42d9290763663ade432b90a9708669c2da8d076df43c84334edad4684fe421e5bec79a87fd045c219a709edac02981433927be349610900596fad8cdfd045c21e63430130a1dc8c8d780a01d81a2903a0254ba8144e9069112a21138413c27a27696225a6a9f0764a4408e1673a5ef00a2044b884587441d94b09e89da588969aa7c1d9291023859c8d91c228440a337ee0ed248d97ee23c4083b09e89da588969aa7d13b4d69613d4f8897208d06112a7d1384fbc028829646c4099b4e7789d643a1a41df422074913b4d53e227a050404f380224388d833b2fd02823f88d5077a5c618df2523859c84507a204709d1b26b541df40a0844e87545dc0113acfdc8da9f09ea1e3a921380284398085f39236565b814e9305c89c010b94267478351ba0c6a786f01e914629dffa04d1a3c939377f21f7e8104243fdc88314c0a313f0564a41ae1b8c3d26970987d01e87ec893f0de03f0987d98273451b91ffe717fdc03e87c67a02b87a6105c0a274851fff34a4c566acb96ef4c15c9b0de0446e831a9e1bc))))
-def rankMode12 (i mode : Nat) : Nat × Nat := let v := packedAt rankHeader12 ((2*i+mode)*23) 23; (v &&& 63,v >>> 6)
-def rankHeader13 (i : Nat) : Nat := 0x17f8a1000005c5cac0000166aa10000056cc8c000014dba50000050a688000013462b000004992ac0000117e2b00000425eac00000fec9f000003cb28c00000eb19800000372cac00000d4319000003172ac00000bad20000002b02ac0000099534000001fdf28000006c6340000013b54400000351480000006df1c000000004a
+def rankMode12 (i _mode : Nat) : Nat × Nat := let v := packedAt rankHeader12 (i*23) 23; (v &&& 63,v >>> 6)
+def rankHeader13 (i : Nat) : Nat := 0x17f8a1b8b95d9aa86b66474dba5a14d14d18ae4c95717e2b84bd5bfb27de5946eb1986e595b50c658b956bad2056055a654d0fef946c634276a88d452036f8e0004a
 def rankPayload13 (i : Nat) : Nat := (if i < 1 then 0x876882d012294f4a977ce9814636e9a023b7da4a65c9838d825140c80901b53d279eb27a03d2d832c5f70942482909a0acc989d67a6dc1c9eb16e2ec6ebef28a494618c505203f418bd2c60c44e99907e66e0029291c2b9403aa517e0ac408453aa2146d0a2064b6dcf97a8c463a5b32e3a57bb6d27202cf298b1232ec1681b22b85d4c8ab0227146d9f103a29c0882b30b26c0c81f2da42c5f8a528a3752789d243b0b0f032c337058e7980f063a0c948e15ca01d528bf056204229d510a368510325b6e7cbd46231d2d9971d2bddb6939016794c58919760b40d915c2ea645581138a36cf881d14ece5148af17e560ca7521440c8c5d2ed7c5082bc4265ccd8e95ee15447b0705a2744080b36e0cb00896d7bc70e492103ea44338bf07242c14e8516a1440296d30290c5e93d07e65c749259f2b16066771c57f9db7ca0c40dfd460a42e705f48bb3ce8ecc780d01e2fceca59b0e29c74e9d2522be8696d38b802c14204be8193f215a1e143b87038452851356bf438a38628559ad3e3a7023de2712271a20794773207a3db4920b55281bf7e40690a8fae60dd7b8e18f788a942fe1db81142ce4169a90dd8114085189ac3d5cd728c58bedb4939ad7b2cf455ae727ec1daf8e903a16c38aa505629d608370a236d25a9b18e23df39c532e96c52c5d82202e5e99b453f3403a130e62049f02da70c2ae1148a1bc48ba11ce8c73883409559c93b156a0e3dc3b6db8118e12322c38a4b1ce4557eedf6b67649f603573a6e8e126b0f2493f20dc0ca29c0eb9653a90f8c1114aea4e1c0401c39a9935ae042e83427bf58206c0e8a72de0d5d2702db4d6891af2114fc873582386daaa587616d249d9ae68a4a3b1b06ae77bb01606353a04639c342737440ba197a23f4e51198db023efc748376722857ba9b81f046368557c60fe1eda4b1ce71645ae724fb870d6c08518cd8342241f9a96f38837548f893b85a29c038ab9778118e03a297409f15ca4e57393e18441bcbb3ca16e08a1338d04e18e0aa71700d8e7a1a5f61ddb58da1ce4bb210dd95e452aa503ad7c1ab9db7f03cbdd3631a2f8194b2a64d6ba1752cf4c58e10e224447c7b1b68cf8a8af05792819c88105aa3cd4ac15076971080b53614e24b9f197a7674e8e73ca0dd5215698d2168c706801aba416e2e8551c3b87006493c8b270c70375ca6b4c58452735cc52b218221c5f3da56be02c39c0f1020757382d463376daa9b8da5bce2e3937421776fa5b532a94cd83f8387885ecb3922a2bcfca8f06ae761106e2bc0581808528d5c0f14ace608aa5af29649f61f138aa0d9d82d976174e1c0465e3d8e94922ac389a9c454ab0e0428c406168e710284cfc97d1b7efd73855732f8fe6e4fa43bd363180cfbb5cb81c39afd0371b429c3e77432f4c589138b802c1517ce3428f2df4349da55 else 0x9e623541c0d94ce48bd00e6145b8512426d5f783917619f769e71b248ce090b0b2e040580f07e30c5aedd0267249081f00e19ca48392160a7428b50a6014a19814862f49e83f28251492cf9273a0cf2aff3b6f942681b22a85d4cbe917679d1d98f1b203c8583f8e28a4eded7ae650c2d8a718651442e4b70437463ca3175271c1e8df7924862bb81dd604c5d81d00eea44681f3922f40398516e484da93d46efbc1c8bb0cfbb7438d9246ae4858e30d2e040783f3370fb4618b5dba04c03a2907a8c54c9e546649c91fe82da29df3b2103a9171815206b82841ba84315afc57036e043788f016114e193f15e4a489f0816c74cf93b61ac948df1d22852184524630c039e7b1e664c299b80a629c5b8e12f619c349b503ae045d83d462134719c924207d488672920e485829d0a2d429805286605218bd27a0fca0e4a024b3e49c80b3cabfcedbe506206c8aa17532fa45d9e747663c6c8953924840f9630ce5241c90b053a145a85300a50cc0a4317a4f41f94128a4967c9390167957f9db7ca0c42c91542ea65f48bb3ce8ecc78d912a4a470ae500ea945f82b102114ea8851b4288192db73e5ea3118e96ccb8e95eedb49c80b3ca62c48cbb05a06c8ae175322ac089c51b67c40e8a72523857280754a2fc1588108a754428da1440c96db9f2f5188c74b665c74af76da4e4059e53162465d82d0364570ba99156044e28db3e207453b0728a1664d80511a7890e1bef200d939250ce29e843885c252465248a8c307202e4b8af6da4)
-def rankMode13 (i mode : Nat) : Nat × Nat := let v := packedAt rankHeader13 ((2*i+mode)*21) 21; (v &&& 127,v >>> 7)
+def rankMode13 (i _mode : Nat) : Nat × Nat := let v := packedAt rankHeader13 (i*21) 21; (v &&& 127,v >>> 7)
 def rankHeader14 (i : Nat) : Nat := 0
 def rankPayload14 (i : Nat) : Nat := 0
 def rankMode14 (i mode : Nat) : Nat × Nat := let v := packedAt rankHeader14 ((2*i+mode)*2) 2; (v &&& 1,v >>> 1)
@@ -6355,10 +6436,19 @@ def rankCount : Nat → Nat
   | 14 => 0
   | _ => 0
 
+def supportMask (k i : Nat) : Nat :=
+ let b := match k with
+  | 10 => 0xc4404402203ce1df1bd01d07f07f0ff06501d0ff13d17407d02f07517e10d01d22d00f01d07e07e27e27f0b906705d10717718b06f18f0cb36408f08c0fb0001821d42fc17e07e07e27e27f21626507507603c0e603611a2ce27624603c2f62ce0a62e22e622622a03b3d10fa0f41f70fe000
+  | 11 => 0x2101800c0060424404080061802040061e31fb14c03d0ad1911ec1ec0561b10a70f62bd1d70a60b12f702b1e601e1ff2290170990751e70671d205d05d07507501d07d05d03d06d01d1ce1be4ff03d1bf10f0bf10d03d03d07f05d07d01f0a61ff66e6ff1ef07d09705511d1ff1bd05504d03d05f04b0990bf0ae0ae09f14e1630e33ee1ed06e4590b915f0b30d309f0bd0ae0ee35f01d1a301701d29d35f0b129737f60f00000010e10f19f02b27f21d00010b36f19f61357b4cc11d56d0ae0ae0e66fd1630ec07f09f1e70390ed0bd1df29f09e4df03951452b05b0550db4b34b20e71fc1ff5de02d7b91bf06c2d53ec0de0df45f1e502d43f1981310b801f15918e36640d0ec41c16f1671ac03912c1b34481e70b74ff1ad1ac15b13917315919b09d4dc01d0bd3ee1f91bd0fd4a913918c1191a72df0ec15d3790d46d765956c0fc05f1661ff09d1ec0b90fd0ff0b90bd0bd07f29207e6665dc1520a759f2af2de04726f3cf1ba1bb2cf3f728f1563ff1bf0c518d04703e14308d53d13b29f5d32af08f1b30b72fe30f15312f5ef1a30a72471bf35b71f1bf47712e1d331d0775b72fe2de14c0cf08f3c54c718d08f10e18f7871d31b321f1b31ab18b31f1891c740700f3df3cf2ef1df1161d619f1df19f1d31d610e2671d61df10c1d61c710c10c15f10c51614e0cf1bb1cf24e52705f4073d747c5fe15215f31c24e10f3ce2294762fe25c3df7ad0b80b90bc07c2ec19e4981be6560b95de6540770bd01d1b90bd0bd0fd2dc06666648e1ee07d07d0bd0bd0673ae10722460e29f1ac14e0e50ec1ac1a809c0ec5dc1734471ef4ad58f2e60ec6e566c1e20f32f62744d422a05329747725f0b34620f66530530f767a0730d60560c744a07c0fc0ef0781b90ee05f0be03f07d09517f07d07f1ef0ed1ce0750391ac1bf10e05d3be3423d654e1a632f20e2951fd2f85d60b87ce5ec0b867c5661ff2fc67c1ff23c37c64e0ad20c02f0fe0ff0bf25e25e50725c25e0cd46a3de35c27c0a715c09e0bc75e27c12d4dd45a0f10960360f60360d60dc0a70d32db05656b0a747646812809c0cc0b80fc0b80ac0bd0e408e4ff05625e35f3af4cf0bc19310b1fb0b33de0336430d61d708709c0dc1bd1760f003c0de1bb05609c14e0b60dc05c04e1a739e46704e4520dd1dc19f1ba03311f25b3130bb2cf1ab09b4833873cc1ba21e0d658b0bc1960d43bc15a15221e07c58f14c0d07ce3ed60759919b57615b19806a0724943df1fe24e30f4fa1db04e0db0be04e38736f1c71e73cf07b1630ff2c71853ef3851ef3a718734606f38734732506f2873ef1872a73ef3a93693a938b34b2c31c91bd1b91ff3db0f93f73ff3ff1ff1ff17f17d13d1ff2bf2ce2ff0002ff27d23f2f51ff2df0bb2ff27d23f27f2ff2ff23f2ff2bf0ff1bf1bf1f93df0ff1db1fb07d1bf1df1ff0ea3ff1f61ef0ff2ff27427f0ff00000039e0002ff1e707f3ef3e70ff06b1e717d07f1ff0001ff1ff0ff
+  | 12 => 0x1ee1ee1bf1ee1bf1271b91a91ad1fd17d1ee1b81ef1bd0b51bd1b91b901f1391391b91ec1b91ee09d01701701d01701709509701701701f0b50970bd0b701f0b711f0be0bc1bf0b70390b90a61a60bc1390bc0bc1e61e60bf1ec1e61bf09f1b91390951ee16e0170b510e10e10e13913913913901e13910e12e13914e13913913f01d12e13910e13903716e0b918e1a61a61ae1e81ac1a811f1bf17d1bd1b717d1a40b512717d17d17d17d17d17d1ae17d17d1b917d0b71b90b914e17d1ae0be0a51ac1390950950bd0be01d0950b51a418e1f901d1bd03d03d17813901d1bd12d1791381b901713917d1bd1ac01e09f13c1bc16e12e12e09f19c01d1ae09c01f1ac1be1381191a71291ad12e1ad1a81ec1bd1a41a519c1391790950951b91a40b51b91391390951ac0b10b11311a813d1b81bf1a40ae1fc1b113913913d0b91b90b81390b91391ae1ec14e0a609c10e01e0a60be09e15e0a61ee0be0ac09c0ac12e1fe12c17814e13e12c12e12e11f09c1ce1ce1bf1ce0b10b511e1ce1bd1ce0b71ff0b709c1b11ce1391ae1b10a61381ce09d1fd1ae16c1ac0ac12c16c18c16c1ac16c16c1a71ac0a61a60a61ac1a410e1ac16c1ac0a612c1a616c1a41a41bc1bc1a91ec1bc0bc0bc1381bc1bc1bc1bc1fc0bc1b80bc1a81b81bc17813813d0bd12c1381b81bc1b811e0be12e13c16616e0be12e13816e09e1ce1e71ff1fb1ec1391fe15b1ff1ff1ef0fd1ff3ff1ff1ef0a71771bf17f0ed0fe0ff1bd1bd1ff1ff6df1ff1af1bd0bf0ff0fb1ff17f6bf07f1ff07f1bc1bd1bd1fd0ed0ff17f1bf1bd01f6df16f17f6df1af5ef0ff1ef1af1ef1ef2df1ff1f70fc1ff4ff1fd4ff1bd1bf1bf6ff1ff0ff6ff1ff17f15f17f1bf1fb4fd17f1ff1671ef1ef15b1ff1f315f1771bf3bf1ff3ff3ef0ff2ec3fd1bf19f0fd1ff1bf19f0fd1ff1ff1ff1dd1ff1bf1391ff19d0df1ff0dd1bf0fd69f6df1af1ff1bd6ff1ff1ff1ff1ff5fd1bf1ff1bd1fd1bd1bd1b56fd17f1ff17f0f91ff5ff1ff0bd1bd1ff1be1be1bf0ff6fe1fe4fe1fe07e6be1ff07e3ff3cf38f35f3ff3533f71ff35f39f3df3df35715f3df3df3df3df3ff35f3df0ff3ef2f73ff0bf19e1bf1ff0bd1bd1ff1ff0ff07d1bd1ff5ff6dd4ff1ee16f1ef1fe1ff1ff0af1ec0af5e66dc17f1fc1fe1ff1be1bf0001ff1ff1ff5fe6fc1ff1df1ff1fe1fe0fe1fc1bc1bc0bd1be1bd4fe0f73ff2fe3f739f1de3ff3df0f63df19d0df3ff3ff3bf0df3f73de3ff15e1ff3df1df1df2ff1ff1ff3ff1ff0001ff1fd1ff1ff3ff0001ff1ff1ff1ff0fd0df1ff1fd1ff1ff1ff1bf1ff1bf1ff1ff1ff3ff27f1ff1bd1ff1ff1fd1ff1ff1bf1ff1ff1fd1df1df1ff3ff1bf3ff1ff1ff1bd1ff3ff3ff3de1ff
+  | 13 => 0x1bf1ff1bf1bf1bf1bf1ff1ff1ff1ff1bf1ff1bd1ff1bd1ff1bf1ff1ff1ff1ff1ff1ff1ff1ff
+  | _ => 0
+ (b >>> (12*i)) &&& 4095
+
 def testPacked : FrontierTest := fun T mono ws r k i =>
   let chunk := rankModeData k i (if mono then 0 else 1)
   FrontRanks.rankHuffCheck T mono ws r (fun kind => if kind == 4 then (10, fun j => packedAt rankDictionary (36*j) 36) else let f := rankFormat kind; (f.1, fun j => packedAt f.2 (17*j) 17))
-    (packedAt (rankWords k)) chunk.1 chunk.2
+    (packedAt (rankWords k)) chunk.1 chunk.2 (supportMask k i)
 
 theorem testPackedOK : frontierTestOK testPacked := by
   intro T mono ws r k i F agree mon group checked
@@ -6375,874 +6465,791 @@ theorem joinBlock (k start a b : Nat)
 
 
 
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group9_0 : auditBlock 9 0 1 = true := by decide +kernel
-
-theorem level9 : auditBlock 9 0 1 = true := group9_0
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group10_0 : auditBlock 10 0 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group10_8 : auditBlock 10 8 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group10_16 : auditBlock 10 16 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group10_24 : auditBlock 10 24 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group10_32 : auditBlock 10 32 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group10_40 : auditBlock 10 40 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group10_48 : auditBlock 10 48 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group10_56 : auditBlock 10 56 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group10_64 : auditBlock 10 64 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group10_72 : auditBlock 10 72 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group10_80 : auditBlock 10 80 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group10_88 : auditBlock 10 88 3 = true := by decide +kernel
-
-theorem level10 : auditBlock 10 0 91 = true := (joinBlock 10 0 48 43 (joinBlock 10 0 24 24 (joinBlock 10 0 8 16 group10_0 (joinBlock 10 8 8 8 group10_8 group10_16)) (joinBlock 10 24 8 16 group10_24 (joinBlock 10 32 8 8 group10_32 group10_40))) (joinBlock 10 48 24 19 (joinBlock 10 48 8 16 group10_48 (joinBlock 10 56 8 8 group10_56 group10_64)) (joinBlock 10 72 8 11 group10_72 (joinBlock 10 80 8 3 group10_80 group10_88))))
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_0 : auditBlock 11 0 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_8 : auditBlock 11 8 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_16 : auditBlock 11 16 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_24 : auditBlock 11 24 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_32 : auditBlock 11 32 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_40 : auditBlock 11 40 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_48 : auditBlock 11 48 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_56 : auditBlock 11 56 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_64 : auditBlock 11 64 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_72 : auditBlock 11 72 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_80 : auditBlock 11 80 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_88 : auditBlock 11 88 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_96 : auditBlock 11 96 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_104 : auditBlock 11 104 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_112 : auditBlock 11 112 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_120 : auditBlock 11 120 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_128 : auditBlock 11 128 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_136 : auditBlock 11 136 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_144 : auditBlock 11 144 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_152 : auditBlock 11 152 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_160 : auditBlock 11 160 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_168 : auditBlock 11 168 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_176 : auditBlock 11 176 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_184 : auditBlock 11 184 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_192 : auditBlock 11 192 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_200 : auditBlock 11 200 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_208 : auditBlock 11 208 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_216 : auditBlock 11 216 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_224 : auditBlock 11 224 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_232 : auditBlock 11 232 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_240 : auditBlock 11 240 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_248 : auditBlock 11 248 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_256 : auditBlock 11 256 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_264 : auditBlock 11 264 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_272 : auditBlock 11 272 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_280 : auditBlock 11 280 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_288 : auditBlock 11 288 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_296 : auditBlock 11 296 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_304 : auditBlock 11 304 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_312 : auditBlock 11 312 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_320 : auditBlock 11 320 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_328 : auditBlock 11 328 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_336 : auditBlock 11 336 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_344 : auditBlock 11 344 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_352 : auditBlock 11 352 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_360 : auditBlock 11 360 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_368 : auditBlock 11 368 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_376 : auditBlock 11 376 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_384 : auditBlock 11 384 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_392 : auditBlock 11 392 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_400 : auditBlock 11 400 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_408 : auditBlock 11 408 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_416 : auditBlock 11 416 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_424 : auditBlock 11 424 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_432 : auditBlock 11 432 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_440 : auditBlock 11 440 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_448 : auditBlock 11 448 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_456 : auditBlock 11 456 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_464 : auditBlock 11 464 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_472 : auditBlock 11 472 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_480 : auditBlock 11 480 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_488 : auditBlock 11 488 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_496 : auditBlock 11 496 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_504 : auditBlock 11 504 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_512 : auditBlock 11 512 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_520 : auditBlock 11 520 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_528 : auditBlock 11 528 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_536 : auditBlock 11 536 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_544 : auditBlock 11 544 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_552 : auditBlock 11 552 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_560 : auditBlock 11 560 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_568 : auditBlock 11 568 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_576 : auditBlock 11 576 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_584 : auditBlock 11 584 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_592 : auditBlock 11 592 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_600 : auditBlock 11 600 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_608 : auditBlock 11 608 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_616 : auditBlock 11 616 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_624 : auditBlock 11 624 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_632 : auditBlock 11 632 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_640 : auditBlock 11 640 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_648 : auditBlock 11 648 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_656 : auditBlock 11 656 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_664 : auditBlock 11 664 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_672 : auditBlock 11 672 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_680 : auditBlock 11 680 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_688 : auditBlock 11 688 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_696 : auditBlock 11 696 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_704 : auditBlock 11 704 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_712 : auditBlock 11 712 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_720 : auditBlock 11 720 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_728 : auditBlock 11 728 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_736 : auditBlock 11 736 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_744 : auditBlock 11 744 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_752 : auditBlock 11 752 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_760 : auditBlock 11 760 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_768 : auditBlock 11 768 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group11_776 : auditBlock 11 776 6 = true := by decide +kernel
-
-theorem level11 : auditBlock 11 0 782 = true := (joinBlock 11 0 392 390 (joinBlock 11 0 192 200 (joinBlock 11 0 96 96 (joinBlock 11 0 48 48 (joinBlock 11 0 24 24 (joinBlock 11 0 8 16 group11_0 (joinBlock 11 8 8 8 group11_8 group11_16)) (joinBlock 11 24 8 16 group11_24 (joinBlock 11 32 8 8 group11_32 group11_40))) (joinBlock 11 48 24 24 (joinBlock 11 48 8 16 group11_48 (joinBlock 11 56 8 8 group11_56 group11_64)) (joinBlock 11 72 8 16 group11_72 (joinBlock 11 80 8 8 group11_80 group11_88)))) (joinBlock 11 96 48 48 (joinBlock 11 96 24 24 (joinBlock 11 96 8 16 group11_96 (joinBlock 11 104 8 8 group11_104 group11_112)) (joinBlock 11 120 8 16 group11_120 (joinBlock 11 128 8 8 group11_128 group11_136))) (joinBlock 11 144 24 24 (joinBlock 11 144 8 16 group11_144 (joinBlock 11 152 8 8 group11_152 group11_160)) (joinBlock 11 168 8 16 group11_168 (joinBlock 11 176 8 8 group11_176 group11_184))))) (joinBlock 11 192 96 104 (joinBlock 11 192 48 48 (joinBlock 11 192 24 24 (joinBlock 11 192 8 16 group11_192 (joinBlock 11 200 8 8 group11_200 group11_208)) (joinBlock 11 216 8 16 group11_216 (joinBlock 11 224 8 8 group11_224 group11_232))) (joinBlock 11 240 24 24 (joinBlock 11 240 8 16 group11_240 (joinBlock 11 248 8 8 group11_248 group11_256)) (joinBlock 11 264 8 16 group11_264 (joinBlock 11 272 8 8 group11_272 group11_280)))) (joinBlock 11 288 48 56 (joinBlock 11 288 24 24 (joinBlock 11 288 8 16 group11_288 (joinBlock 11 296 8 8 group11_296 group11_304)) (joinBlock 11 312 8 16 group11_312 (joinBlock 11 320 8 8 group11_320 group11_328))) (joinBlock 11 336 24 32 (joinBlock 11 336 8 16 group11_336 (joinBlock 11 344 8 8 group11_344 group11_352)) (joinBlock 11 360 16 16 (joinBlock 11 360 8 8 group11_360 group11_368) (joinBlock 11 376 8 8 group11_376 group11_384)))))) (joinBlock 11 392 192 198 (joinBlock 11 392 96 96 (joinBlock 11 392 48 48 (joinBlock 11 392 24 24 (joinBlock 11 392 8 16 group11_392 (joinBlock 11 400 8 8 group11_400 group11_408)) (joinBlock 11 416 8 16 group11_416 (joinBlock 11 424 8 8 group11_424 group11_432))) (joinBlock 11 440 24 24 (joinBlock 11 440 8 16 group11_440 (joinBlock 11 448 8 8 group11_448 group11_456)) (joinBlock 11 464 8 16 group11_464 (joinBlock 11 472 8 8 group11_472 group11_480)))) (joinBlock 11 488 48 48 (joinBlock 11 488 24 24 (joinBlock 11 488 8 16 group11_488 (joinBlock 11 496 8 8 group11_496 group11_504)) (joinBlock 11 512 8 16 group11_512 (joinBlock 11 520 8 8 group11_520 group11_528))) (joinBlock 11 536 24 24 (joinBlock 11 536 8 16 group11_536 (joinBlock 11 544 8 8 group11_544 group11_552)) (joinBlock 11 560 8 16 group11_560 (joinBlock 11 568 8 8 group11_568 group11_576))))) (joinBlock 11 584 96 102 (joinBlock 11 584 48 48 (joinBlock 11 584 24 24 (joinBlock 11 584 8 16 group11_584 (joinBlock 11 592 8 8 group11_592 group11_600)) (joinBlock 11 608 8 16 group11_608 (joinBlock 11 616 8 8 group11_616 group11_624))) (joinBlock 11 632 24 24 (joinBlock 11 632 8 16 group11_632 (joinBlock 11 640 8 8 group11_640 group11_648)) (joinBlock 11 656 8 16 group11_656 (joinBlock 11 664 8 8 group11_664 group11_672)))) (joinBlock 11 680 48 54 (joinBlock 11 680 24 24 (joinBlock 11 680 8 16 group11_680 (joinBlock 11 688 8 8 group11_688 group11_696)) (joinBlock 11 704 8 16 group11_704 (joinBlock 11 712 8 8 group11_712 group11_720))) (joinBlock 11 728 24 30 (joinBlock 11 728 8 16 group11_728 (joinBlock 11 736 8 8 group11_736 group11_744)) (joinBlock 11 752 16 14 (joinBlock 11 752 8 8 group11_752 group11_760) (joinBlock 11 768 8 6 group11_768 group11_776)))))))
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_0 : auditBlock 12 0 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_8 : auditBlock 12 8 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_16 : auditBlock 12 16 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_24 : auditBlock 12 24 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_32 : auditBlock 12 32 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_40 : auditBlock 12 40 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_48 : auditBlock 12 48 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_56 : auditBlock 12 56 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_64 : auditBlock 12 64 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_72 : auditBlock 12 72 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_80 : auditBlock 12 80 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_88 : auditBlock 12 88 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_96 : auditBlock 12 96 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_104 : auditBlock 12 104 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_112 : auditBlock 12 112 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_120 : auditBlock 12 120 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_128 : auditBlock 12 128 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_136 : auditBlock 12 136 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_144 : auditBlock 12 144 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_152 : auditBlock 12 152 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_160 : auditBlock 12 160 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_168 : auditBlock 12 168 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_176 : auditBlock 12 176 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_184 : auditBlock 12 184 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_192 : auditBlock 12 192 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_200 : auditBlock 12 200 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_208 : auditBlock 12 208 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_216 : auditBlock 12 216 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_224 : auditBlock 12 224 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_232 : auditBlock 12 232 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_240 : auditBlock 12 240 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_248 : auditBlock 12 248 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_256 : auditBlock 12 256 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_264 : auditBlock 12 264 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_272 : auditBlock 12 272 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_280 : auditBlock 12 280 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_288 : auditBlock 12 288 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_296 : auditBlock 12 296 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_304 : auditBlock 12 304 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_312 : auditBlock 12 312 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_320 : auditBlock 12 320 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_328 : auditBlock 12 328 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_336 : auditBlock 12 336 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_344 : auditBlock 12 344 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_352 : auditBlock 12 352 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_360 : auditBlock 12 360 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_368 : auditBlock 12 368 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_376 : auditBlock 12 376 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_384 : auditBlock 12 384 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_392 : auditBlock 12 392 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_400 : auditBlock 12 400 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_408 : auditBlock 12 408 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_416 : auditBlock 12 416 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_424 : auditBlock 12 424 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_432 : auditBlock 12 432 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_440 : auditBlock 12 440 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_448 : auditBlock 12 448 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_456 : auditBlock 12 456 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_464 : auditBlock 12 464 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_472 : auditBlock 12 472 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_480 : auditBlock 12 480 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_488 : auditBlock 12 488 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_496 : auditBlock 12 496 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_504 : auditBlock 12 504 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_512 : auditBlock 12 512 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_520 : auditBlock 12 520 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_528 : auditBlock 12 528 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_536 : auditBlock 12 536 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_544 : auditBlock 12 544 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_552 : auditBlock 12 552 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_560 : auditBlock 12 560 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_568 : auditBlock 12 568 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_576 : auditBlock 12 576 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_584 : auditBlock 12 584 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_592 : auditBlock 12 592 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_600 : auditBlock 12 600 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_608 : auditBlock 12 608 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_616 : auditBlock 12 616 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_624 : auditBlock 12 624 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_632 : auditBlock 12 632 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_640 : auditBlock 12 640 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_648 : auditBlock 12 648 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_656 : auditBlock 12 656 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_664 : auditBlock 12 664 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_672 : auditBlock 12 672 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_680 : auditBlock 12 680 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_688 : auditBlock 12 688 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_696 : auditBlock 12 696 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_704 : auditBlock 12 704 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_712 : auditBlock 12 712 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_720 : auditBlock 12 720 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_728 : auditBlock 12 728 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_736 : auditBlock 12 736 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group12_744 : auditBlock 12 744 7 = true := by decide +kernel
-
-theorem level12 : auditBlock 12 0 751 = true := (joinBlock 12 0 376 375 (joinBlock 12 0 184 192 (joinBlock 12 0 88 96 (joinBlock 12 0 40 48 (joinBlock 12 0 16 24 (joinBlock 12 0 8 8 group12_0 group12_8) (joinBlock 12 16 8 16 group12_16 (joinBlock 12 24 8 8 group12_24 group12_32))) (joinBlock 12 40 24 24 (joinBlock 12 40 8 16 group12_40 (joinBlock 12 48 8 8 group12_48 group12_56)) (joinBlock 12 64 8 16 group12_64 (joinBlock 12 72 8 8 group12_72 group12_80)))) (joinBlock 12 88 48 48 (joinBlock 12 88 24 24 (joinBlock 12 88 8 16 group12_88 (joinBlock 12 96 8 8 group12_96 group12_104)) (joinBlock 12 112 8 16 group12_112 (joinBlock 12 120 8 8 group12_120 group12_128))) (joinBlock 12 136 24 24 (joinBlock 12 136 8 16 group12_136 (joinBlock 12 144 8 8 group12_144 group12_152)) (joinBlock 12 160 8 16 group12_160 (joinBlock 12 168 8 8 group12_168 group12_176))))) (joinBlock 12 184 96 96 (joinBlock 12 184 48 48 (joinBlock 12 184 24 24 (joinBlock 12 184 8 16 group12_184 (joinBlock 12 192 8 8 group12_192 group12_200)) (joinBlock 12 208 8 16 group12_208 (joinBlock 12 216 8 8 group12_216 group12_224))) (joinBlock 12 232 24 24 (joinBlock 12 232 8 16 group12_232 (joinBlock 12 240 8 8 group12_240 group12_248)) (joinBlock 12 256 8 16 group12_256 (joinBlock 12 264 8 8 group12_264 group12_272)))) (joinBlock 12 280 48 48 (joinBlock 12 280 24 24 (joinBlock 12 280 8 16 group12_280 (joinBlock 12 288 8 8 group12_288 group12_296)) (joinBlock 12 304 8 16 group12_304 (joinBlock 12 312 8 8 group12_312 group12_320))) (joinBlock 12 328 24 24 (joinBlock 12 328 8 16 group12_328 (joinBlock 12 336 8 8 group12_336 group12_344)) (joinBlock 12 352 8 16 group12_352 (joinBlock 12 360 8 8 group12_360 group12_368)))))) (joinBlock 12 376 184 191 (joinBlock 12 376 88 96 (joinBlock 12 376 40 48 (joinBlock 12 376 16 24 (joinBlock 12 376 8 8 group12_376 group12_384) (joinBlock 12 392 8 16 group12_392 (joinBlock 12 400 8 8 group12_400 group12_408))) (joinBlock 12 416 24 24 (joinBlock 12 416 8 16 group12_416 (joinBlock 12 424 8 8 group12_424 group12_432)) (joinBlock 12 440 8 16 group12_440 (joinBlock 12 448 8 8 group12_448 group12_456)))) (joinBlock 12 464 48 48 (joinBlock 12 464 24 24 (joinBlock 12 464 8 16 group12_464 (joinBlock 12 472 8 8 group12_472 group12_480)) (joinBlock 12 488 8 16 group12_488 (joinBlock 12 496 8 8 group12_496 group12_504))) (joinBlock 12 512 24 24 (joinBlock 12 512 8 16 group12_512 (joinBlock 12 520 8 8 group12_520 group12_528)) (joinBlock 12 536 8 16 group12_536 (joinBlock 12 544 8 8 group12_544 group12_552))))) (joinBlock 12 560 96 95 (joinBlock 12 560 48 48 (joinBlock 12 560 24 24 (joinBlock 12 560 8 16 group12_560 (joinBlock 12 568 8 8 group12_568 group12_576)) (joinBlock 12 584 8 16 group12_584 (joinBlock 12 592 8 8 group12_592 group12_600))) (joinBlock 12 608 24 24 (joinBlock 12 608 8 16 group12_608 (joinBlock 12 616 8 8 group12_616 group12_624)) (joinBlock 12 632 8 16 group12_632 (joinBlock 12 640 8 8 group12_640 group12_648)))) (joinBlock 12 656 48 47 (joinBlock 12 656 24 24 (joinBlock 12 656 8 16 group12_656 (joinBlock 12 664 8 8 group12_664 group12_672)) (joinBlock 12 680 8 16 group12_680 (joinBlock 12 688 8 8 group12_688 group12_696))) (joinBlock 12 704 24 23 (joinBlock 12 704 8 16 group12_704 (joinBlock 12 712 8 8 group12_712 group12_720)) (joinBlock 12 728 8 15 group12_728 (joinBlock 12 736 8 7 group12_736 group12_744)))))))
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group13_0 : auditBlock 13 0 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group13_8 : auditBlock 13 8 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group13_16 : auditBlock 13 16 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group13_24 : auditBlock 13 24 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group13_32 : auditBlock 13 32 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group13_40 : auditBlock 13 40 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group13_48 : auditBlock 13 48 8 = true := by decide +kernel
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group13_56 : auditBlock 13 56 3 = true := by decide +kernel
-
-theorem level13 : auditBlock 13 0 59 = true := (joinBlock 13 0 32 27 (joinBlock 13 0 16 16 (joinBlock 13 0 8 8 group13_0 group13_8) (joinBlock 13 16 8 8 group13_16 group13_24)) (joinBlock 13 32 16 11 (joinBlock 13 32 8 8 group13_32 group13_40) (joinBlock 13 48 8 3 group13_48 group13_56)))
-
-set_option maxHeartbeats 0 in
-set_option maxRecDepth 32768 in
-theorem group14_0 : auditBlock 14 0 2 = true := by decide +kernel
-
-theorem level14 : auditBlock 14 0 2 = true := group14_0
-
+abbrev AB := auditBlock
+theorem J {k i a b : Nat} (x : AB k i a = true) (y : AB k (i+a) b = true) : AB k i (a+b) = true := joinBlock k i a b x y
+abbrev J9 := @J 9
+abbrev J10 := @J 10
+abbrev J11 := @J 11
+abbrev J12 := @J 12
+abbrev J13 := @J 13
+abbrev J14 := @J 14
+theorem v0 : AB 9 0 1=true := by decide +kernel
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 0 in
+theorem level9 : AB 9 0 1=true := v0
+theorem v1 : AB 10 0 3=true := by decide +kernel
+theorem v2 : AB 10 3 3=true := by decide +kernel
+theorem v3 : AB 10 6 3=true := by decide +kernel
+theorem v4 : AB 10 9 3=true := by decide +kernel
+theorem v5 : AB 10 12 3=true := by decide +kernel
+theorem v6 : AB 10 15 3=true := by decide +kernel
+theorem v7 : AB 10 18 3=true := by decide +kernel
+theorem v8 : AB 10 21 3=true := by decide +kernel
+theorem v9 : AB 10 24 3=true := by decide +kernel
+theorem v10 : AB 10 27 3=true := by decide +kernel
+theorem v11 : AB 10 30 3=true := by decide +kernel
+theorem v12 : AB 10 33 3=true := by decide +kernel
+theorem v13 : AB 10 36 3=true := by decide +kernel
+theorem v14 : AB 10 39 3=true := by decide +kernel
+theorem v15 : AB 10 42 3=true := by decide +kernel
+theorem v16 : AB 10 45 3=true := by decide +kernel
+theorem v17 : AB 10 48 3=true := by decide +kernel
+theorem v18 : AB 10 51 3=true := by decide +kernel
+theorem v19 : AB 10 54 3=true := by decide +kernel
+theorem v20 : AB 10 57 3=true := by decide +kernel
+theorem v21 : AB 10 60 3=true := by decide +kernel
+theorem v22 : AB 10 63 3=true := by decide +kernel
+theorem v23 : AB 10 66 3=true := by decide +kernel
+theorem v24 : AB 10 69 3=true := by decide +kernel
+theorem v25 : AB 10 72 3=true := by decide +kernel
+theorem v26 : AB 10 75 2=true := by decide +kernel
+theorem v27 : AB 10 77 1=true := by decide +kernel
+theorem v28 : AB 10 78 1=true := by decide +kernel
+theorem v29 : AB 10 79 1=true := by decide +kernel
+theorem v30 : AB 10 80 1=true := by decide +kernel
+theorem v31 : AB 10 81 1=true := by decide +kernel
+theorem v32 : AB 10 82 1=true := by decide +kernel
+theorem v33 : AB 10 83 1=true := by decide +kernel
+theorem v34 : AB 10 84 1=true := by decide +kernel
+theorem v35 : AB 10 85 1=true := by decide +kernel
+theorem v36 : AB 10 86 1=true := by decide +kernel
+theorem v37 : AB 10 87 1=true := by decide +kernel
+theorem v38 : AB 10 88 1=true := by decide +kernel
+theorem v39 : AB 10 89 1=true := by decide +kernel
+theorem v40 : AB 10 90 1=true := by decide +kernel
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 0 in
+theorem level10 : AB 10 0 91=true := (@J10 0 60 31 (@J10 0 30 30 (@J10 0 15 15 (@J10 0 6 9 (@J10 0 3 3 v1 v2) (@J10 6 3 6 v3 (@J10 9 3 3 v4 v5))) (@J10 15 6 9 (@J10 15 3 3 v6 v7) (@J10 21 3 6 v8 (@J10 24 3 3 v9 v10)))) (@J10 30 15 15 (@J10 30 6 9 (@J10 30 3 3 v11 v12) (@J10 36 3 6 v13 (@J10 39 3 3 v14 v15))) (@J10 45 6 9 (@J10 45 3 3 v16 v17) (@J10 51 3 6 v18 (@J10 54 3 3 v19 v20))))) (@J10 60 21 10 (@J10 60 15 6 (@J10 60 6 9 (@J10 60 3 3 v21 v22) (@J10 66 3 6 v23 (@J10 69 3 3 v24 v25))) (@J10 75 3 3 (@J10 75 2 1 v26 v27) (@J10 78 1 2 v28 (@J10 79 1 1 v29 v30)))) (@J10 81 5 5 (@J10 81 2 3 (@J10 81 1 1 v31 v32) (@J10 83 1 2 v33 (@J10 84 1 1 v34 v35))) (@J10 86 2 3 (@J10 86 1 1 v36 v37) (@J10 88 1 2 v38 (@J10 89 1 1 v39 v40))))))
+theorem v41 : AB 11 0 3=true := by decide +kernel
+theorem v42 : AB 11 3 3=true := by decide +kernel
+theorem v43 : AB 11 6 3=true := by decide +kernel
+theorem v44 : AB 11 9 3=true := by decide +kernel
+theorem v45 : AB 11 12 3=true := by decide +kernel
+theorem v46 : AB 11 15 3=true := by decide +kernel
+theorem v47 : AB 11 18 3=true := by decide +kernel
+theorem v48 : AB 11 21 3=true := by decide +kernel
+theorem v49 : AB 11 24 3=true := by decide +kernel
+theorem v50 : AB 11 27 3=true := by decide +kernel
+theorem v51 : AB 11 30 3=true := by decide +kernel
+theorem v52 : AB 11 33 3=true := by decide +kernel
+theorem v53 : AB 11 36 3=true := by decide +kernel
+theorem v54 : AB 11 39 3=true := by decide +kernel
+theorem v55 : AB 11 42 3=true := by decide +kernel
+theorem v56 : AB 11 45 3=true := by decide +kernel
+theorem v57 : AB 11 48 3=true := by decide +kernel
+theorem v58 : AB 11 51 3=true := by decide +kernel
+theorem v59 : AB 11 54 3=true := by decide +kernel
+theorem v60 : AB 11 57 3=true := by decide +kernel
+theorem v61 : AB 11 60 3=true := by decide +kernel
+theorem v62 : AB 11 63 3=true := by decide +kernel
+theorem v63 : AB 11 66 3=true := by decide +kernel
+theorem v64 : AB 11 69 3=true := by decide +kernel
+theorem v65 : AB 11 72 3=true := by decide +kernel
+theorem v66 : AB 11 75 3=true := by decide +kernel
+theorem v67 : AB 11 78 3=true := by decide +kernel
+theorem v68 : AB 11 81 3=true := by decide +kernel
+theorem v69 : AB 11 84 3=true := by decide +kernel
+theorem v70 : AB 11 87 3=true := by decide +kernel
+theorem v71 : AB 11 90 3=true := by decide +kernel
+theorem v72 : AB 11 93 3=true := by decide +kernel
+theorem v73 : AB 11 96 3=true := by decide +kernel
+theorem v74 : AB 11 99 3=true := by decide +kernel
+theorem v75 : AB 11 102 3=true := by decide +kernel
+theorem v76 : AB 11 105 3=true := by decide +kernel
+theorem v77 : AB 11 108 3=true := by decide +kernel
+theorem v78 : AB 11 111 3=true := by decide +kernel
+theorem v79 : AB 11 114 3=true := by decide +kernel
+theorem v80 : AB 11 117 3=true := by decide +kernel
+theorem v81 : AB 11 120 3=true := by decide +kernel
+theorem v82 : AB 11 123 3=true := by decide +kernel
+theorem v83 : AB 11 126 3=true := by decide +kernel
+theorem v84 : AB 11 129 3=true := by decide +kernel
+theorem v85 : AB 11 132 3=true := by decide +kernel
+theorem v86 : AB 11 135 3=true := by decide +kernel
+theorem v87 : AB 11 138 3=true := by decide +kernel
+theorem v88 : AB 11 141 3=true := by decide +kernel
+theorem v89 : AB 11 144 3=true := by decide +kernel
+theorem v90 : AB 11 147 3=true := by decide +kernel
+theorem v91 : AB 11 150 3=true := by decide +kernel
+theorem v92 : AB 11 153 3=true := by decide +kernel
+theorem v93 : AB 11 156 3=true := by decide +kernel
+theorem v94 : AB 11 159 3=true := by decide +kernel
+theorem v95 : AB 11 162 3=true := by decide +kernel
+theorem v96 : AB 11 165 3=true := by decide +kernel
+theorem v97 : AB 11 168 3=true := by decide +kernel
+theorem v98 : AB 11 171 3=true := by decide +kernel
+theorem v99 : AB 11 174 3=true := by decide +kernel
+theorem v100 : AB 11 177 3=true := by decide +kernel
+theorem v101 : AB 11 180 3=true := by decide +kernel
+theorem v102 : AB 11 183 3=true := by decide +kernel
+theorem v103 : AB 11 186 3=true := by decide +kernel
+theorem v104 : AB 11 189 3=true := by decide +kernel
+theorem v105 : AB 11 192 3=true := by decide +kernel
+theorem v106 : AB 11 195 3=true := by decide +kernel
+theorem v107 : AB 11 198 3=true := by decide +kernel
+theorem v108 : AB 11 201 3=true := by decide +kernel
+theorem v109 : AB 11 204 3=true := by decide +kernel
+theorem v110 : AB 11 207 3=true := by decide +kernel
+theorem v111 : AB 11 210 3=true := by decide +kernel
+theorem v112 : AB 11 213 3=true := by decide +kernel
+theorem v113 : AB 11 216 3=true := by decide +kernel
+theorem v114 : AB 11 219 3=true := by decide +kernel
+theorem v115 : AB 11 222 3=true := by decide +kernel
+theorem v116 : AB 11 225 3=true := by decide +kernel
+theorem v117 : AB 11 228 3=true := by decide +kernel
+theorem v118 : AB 11 231 3=true := by decide +kernel
+theorem v119 : AB 11 234 3=true := by decide +kernel
+theorem v120 : AB 11 237 3=true := by decide +kernel
+theorem v121 : AB 11 240 3=true := by decide +kernel
+theorem v122 : AB 11 243 3=true := by decide +kernel
+theorem v123 : AB 11 246 3=true := by decide +kernel
+theorem v124 : AB 11 249 3=true := by decide +kernel
+theorem v125 : AB 11 252 3=true := by decide +kernel
+theorem v126 : AB 11 255 3=true := by decide +kernel
+theorem v127 : AB 11 258 3=true := by decide +kernel
+theorem v128 : AB 11 261 3=true := by decide +kernel
+theorem v129 : AB 11 264 3=true := by decide +kernel
+theorem v130 : AB 11 267 3=true := by decide +kernel
+theorem v131 : AB 11 270 3=true := by decide +kernel
+theorem v132 : AB 11 273 3=true := by decide +kernel
+theorem v133 : AB 11 276 3=true := by decide +kernel
+theorem v134 : AB 11 279 3=true := by decide +kernel
+theorem v135 : AB 11 282 3=true := by decide +kernel
+theorem v136 : AB 11 285 3=true := by decide +kernel
+theorem v137 : AB 11 288 3=true := by decide +kernel
+theorem v138 : AB 11 291 3=true := by decide +kernel
+theorem v139 : AB 11 294 3=true := by decide +kernel
+theorem v140 : AB 11 297 3=true := by decide +kernel
+theorem v141 : AB 11 300 3=true := by decide +kernel
+theorem v142 : AB 11 303 3=true := by decide +kernel
+theorem v143 : AB 11 306 3=true := by decide +kernel
+theorem v144 : AB 11 309 3=true := by decide +kernel
+theorem v145 : AB 11 312 3=true := by decide +kernel
+theorem v146 : AB 11 315 3=true := by decide +kernel
+theorem v147 : AB 11 318 3=true := by decide +kernel
+theorem v148 : AB 11 321 3=true := by decide +kernel
+theorem v149 : AB 11 324 3=true := by decide +kernel
+theorem v150 : AB 11 327 3=true := by decide +kernel
+theorem v151 : AB 11 330 3=true := by decide +kernel
+theorem v152 : AB 11 333 3=true := by decide +kernel
+theorem v153 : AB 11 336 3=true := by decide +kernel
+theorem v154 : AB 11 339 3=true := by decide +kernel
+theorem v155 : AB 11 342 3=true := by decide +kernel
+theorem v156 : AB 11 345 3=true := by decide +kernel
+theorem v157 : AB 11 348 3=true := by decide +kernel
+theorem v158 : AB 11 351 3=true := by decide +kernel
+theorem v159 : AB 11 354 3=true := by decide +kernel
+theorem v160 : AB 11 357 3=true := by decide +kernel
+theorem v161 : AB 11 360 3=true := by decide +kernel
+theorem v162 : AB 11 363 3=true := by decide +kernel
+theorem v163 : AB 11 366 3=true := by decide +kernel
+theorem v164 : AB 11 369 3=true := by decide +kernel
+theorem v165 : AB 11 372 3=true := by decide +kernel
+theorem v166 : AB 11 375 3=true := by decide +kernel
+theorem v167 : AB 11 378 3=true := by decide +kernel
+theorem v168 : AB 11 381 3=true := by decide +kernel
+theorem v169 : AB 11 384 3=true := by decide +kernel
+theorem v170 : AB 11 387 3=true := by decide +kernel
+theorem v171 : AB 11 390 3=true := by decide +kernel
+theorem v172 : AB 11 393 3=true := by decide +kernel
+theorem v173 : AB 11 396 3=true := by decide +kernel
+theorem v174 : AB 11 399 3=true := by decide +kernel
+theorem v175 : AB 11 402 3=true := by decide +kernel
+theorem v176 : AB 11 405 3=true := by decide +kernel
+theorem v177 : AB 11 408 3=true := by decide +kernel
+theorem v178 : AB 11 411 3=true := by decide +kernel
+theorem v179 : AB 11 414 3=true := by decide +kernel
+theorem v180 : AB 11 417 3=true := by decide +kernel
+theorem v181 : AB 11 420 3=true := by decide +kernel
+theorem v182 : AB 11 423 3=true := by decide +kernel
+theorem v183 : AB 11 426 3=true := by decide +kernel
+theorem v184 : AB 11 429 3=true := by decide +kernel
+theorem v185 : AB 11 432 3=true := by decide +kernel
+theorem v186 : AB 11 435 3=true := by decide +kernel
+theorem v187 : AB 11 438 3=true := by decide +kernel
+theorem v188 : AB 11 441 3=true := by decide +kernel
+theorem v189 : AB 11 444 3=true := by decide +kernel
+theorem v190 : AB 11 447 3=true := by decide +kernel
+theorem v191 : AB 11 450 3=true := by decide +kernel
+theorem v192 : AB 11 453 3=true := by decide +kernel
+theorem v193 : AB 11 456 3=true := by decide +kernel
+theorem v194 : AB 11 459 3=true := by decide +kernel
+theorem v195 : AB 11 462 3=true := by decide +kernel
+theorem v196 : AB 11 465 3=true := by decide +kernel
+theorem v197 : AB 11 468 3=true := by decide +kernel
+theorem v198 : AB 11 471 3=true := by decide +kernel
+theorem v199 : AB 11 474 3=true := by decide +kernel
+theorem v200 : AB 11 477 3=true := by decide +kernel
+theorem v201 : AB 11 480 3=true := by decide +kernel
+theorem v202 : AB 11 483 3=true := by decide +kernel
+theorem v203 : AB 11 486 3=true := by decide +kernel
+theorem v204 : AB 11 489 3=true := by decide +kernel
+theorem v205 : AB 11 492 3=true := by decide +kernel
+theorem v206 : AB 11 495 3=true := by decide +kernel
+theorem v207 : AB 11 498 3=true := by decide +kernel
+theorem v208 : AB 11 501 3=true := by decide +kernel
+theorem v209 : AB 11 504 3=true := by decide +kernel
+theorem v210 : AB 11 507 3=true := by decide +kernel
+theorem v211 : AB 11 510 3=true := by decide +kernel
+theorem v212 : AB 11 513 3=true := by decide +kernel
+theorem v213 : AB 11 516 3=true := by decide +kernel
+theorem v214 : AB 11 519 3=true := by decide +kernel
+theorem v215 : AB 11 522 3=true := by decide +kernel
+theorem v216 : AB 11 525 3=true := by decide +kernel
+theorem v217 : AB 11 528 3=true := by decide +kernel
+theorem v218 : AB 11 531 3=true := by decide +kernel
+theorem v219 : AB 11 534 3=true := by decide +kernel
+theorem v220 : AB 11 537 3=true := by decide +kernel
+theorem v221 : AB 11 540 3=true := by decide +kernel
+theorem v222 : AB 11 543 3=true := by decide +kernel
+theorem v223 : AB 11 546 3=true := by decide +kernel
+theorem v224 : AB 11 549 3=true := by decide +kernel
+theorem v225 : AB 11 552 3=true := by decide +kernel
+theorem v226 : AB 11 555 3=true := by decide +kernel
+theorem v227 : AB 11 558 3=true := by decide +kernel
+theorem v228 : AB 11 561 3=true := by decide +kernel
+theorem v229 : AB 11 564 3=true := by decide +kernel
+theorem v230 : AB 11 567 3=true := by decide +kernel
+theorem v231 : AB 11 570 3=true := by decide +kernel
+theorem v232 : AB 11 573 3=true := by decide +kernel
+theorem v233 : AB 11 576 3=true := by decide +kernel
+theorem v234 : AB 11 579 3=true := by decide +kernel
+theorem v235 : AB 11 582 3=true := by decide +kernel
+theorem v236 : AB 11 585 3=true := by decide +kernel
+theorem v237 : AB 11 588 3=true := by decide +kernel
+theorem v238 : AB 11 591 3=true := by decide +kernel
+theorem v239 : AB 11 594 3=true := by decide +kernel
+theorem v240 : AB 11 597 3=true := by decide +kernel
+theorem v241 : AB 11 600 3=true := by decide +kernel
+theorem v242 : AB 11 603 3=true := by decide +kernel
+theorem v243 : AB 11 606 3=true := by decide +kernel
+theorem v244 : AB 11 609 3=true := by decide +kernel
+theorem v245 : AB 11 612 3=true := by decide +kernel
+theorem v246 : AB 11 615 3=true := by decide +kernel
+theorem v247 : AB 11 618 3=true := by decide +kernel
+theorem v248 : AB 11 621 3=true := by decide +kernel
+theorem v249 : AB 11 624 3=true := by decide +kernel
+theorem v250 : AB 11 627 3=true := by decide +kernel
+theorem v251 : AB 11 630 3=true := by decide +kernel
+theorem v252 : AB 11 633 3=true := by decide +kernel
+theorem v253 : AB 11 636 3=true := by decide +kernel
+theorem v254 : AB 11 639 3=true := by decide +kernel
+theorem v255 : AB 11 642 3=true := by decide +kernel
+theorem v256 : AB 11 645 3=true := by decide +kernel
+theorem v257 : AB 11 648 3=true := by decide +kernel
+theorem v258 : AB 11 651 3=true := by decide +kernel
+theorem v259 : AB 11 654 3=true := by decide +kernel
+theorem v260 : AB 11 657 3=true := by decide +kernel
+theorem v261 : AB 11 660 3=true := by decide +kernel
+theorem v262 : AB 11 663 3=true := by decide +kernel
+theorem v263 : AB 11 666 3=true := by decide +kernel
+theorem v264 : AB 11 669 3=true := by decide +kernel
+theorem v265 : AB 11 672 3=true := by decide +kernel
+theorem v266 : AB 11 675 3=true := by decide +kernel
+theorem v267 : AB 11 678 3=true := by decide +kernel
+theorem v268 : AB 11 681 3=true := by decide +kernel
+theorem v269 : AB 11 684 3=true := by decide +kernel
+theorem v270 : AB 11 687 3=true := by decide +kernel
+theorem v271 : AB 11 690 3=true := by decide +kernel
+theorem v272 : AB 11 693 3=true := by decide +kernel
+theorem v273 : AB 11 696 3=true := by decide +kernel
+theorem v274 : AB 11 699 3=true := by decide +kernel
+theorem v275 : AB 11 702 3=true := by decide +kernel
+theorem v276 : AB 11 705 3=true := by decide +kernel
+theorem v277 : AB 11 708 3=true := by decide +kernel
+theorem v278 : AB 11 711 3=true := by decide +kernel
+theorem v279 : AB 11 714 1=true := by decide +kernel
+theorem v280 : AB 11 715 1=true := by decide +kernel
+theorem v281 : AB 11 716 1=true := by decide +kernel
+theorem v282 : AB 11 717 1=true := by decide +kernel
+theorem v283 : AB 11 718 1=true := by decide +kernel
+theorem v284 : AB 11 719 1=true := by decide +kernel
+theorem v285 : AB 11 720 1=true := by decide +kernel
+theorem v286 : AB 11 721 1=true := by decide +kernel
+theorem v287 : AB 11 722 1=true := by decide +kernel
+theorem v288 : AB 11 723 1=true := by decide +kernel
+theorem v289 : AB 11 724 1=true := by decide +kernel
+theorem v290 : AB 11 725 1=true := by decide +kernel
+theorem v291 : AB 11 726 1=true := by decide +kernel
+theorem v292 : AB 11 727 1=true := by decide +kernel
+theorem v293 : AB 11 728 1=true := by decide +kernel
+theorem v294 : AB 11 729 1=true := by decide +kernel
+theorem v295 : AB 11 730 1=true := by decide +kernel
+theorem v296 : AB 11 731 1=true := by decide +kernel
+theorem v297 : AB 11 732 1=true := by decide +kernel
+theorem v298 : AB 11 733 1=true := by decide +kernel
+theorem v299 : AB 11 734 1=true := by decide +kernel
+theorem v300 : AB 11 735 1=true := by decide +kernel
+theorem v301 : AB 11 736 1=true := by decide +kernel
+theorem v302 : AB 11 737 1=true := by decide +kernel
+theorem v303 : AB 11 738 1=true := by decide +kernel
+theorem v304 : AB 11 739 1=true := by decide +kernel
+theorem v305 : AB 11 740 1=true := by decide +kernel
+theorem v306 : AB 11 741 1=true := by decide +kernel
+theorem v307 : AB 11 742 1=true := by decide +kernel
+theorem v308 : AB 11 743 1=true := by decide +kernel
+theorem v309 : AB 11 744 1=true := by decide +kernel
+theorem v310 : AB 11 745 1=true := by decide +kernel
+theorem v311 : AB 11 746 1=true := by decide +kernel
+theorem v312 : AB 11 747 1=true := by decide +kernel
+theorem v313 : AB 11 748 1=true := by decide +kernel
+theorem v314 : AB 11 749 1=true := by decide +kernel
+theorem v315 : AB 11 750 1=true := by decide +kernel
+theorem v316 : AB 11 751 1=true := by decide +kernel
+theorem v317 : AB 11 752 1=true := by decide +kernel
+theorem v318 : AB 11 753 1=true := by decide +kernel
+theorem v319 : AB 11 754 1=true := by decide +kernel
+theorem v320 : AB 11 755 1=true := by decide +kernel
+theorem v321 : AB 11 756 1=true := by decide +kernel
+theorem v322 : AB 11 757 1=true := by decide +kernel
+theorem v323 : AB 11 758 1=true := by decide +kernel
+theorem v324 : AB 11 759 1=true := by decide +kernel
+theorem v325 : AB 11 760 1=true := by decide +kernel
+theorem v326 : AB 11 761 1=true := by decide +kernel
+theorem v327 : AB 11 762 1=true := by decide +kernel
+theorem v328 : AB 11 763 1=true := by decide +kernel
+theorem v329 : AB 11 764 1=true := by decide +kernel
+theorem v330 : AB 11 765 1=true := by decide +kernel
+theorem v331 : AB 11 766 1=true := by decide +kernel
+theorem v332 : AB 11 767 1=true := by decide +kernel
+theorem v333 : AB 11 768 1=true := by decide +kernel
+theorem v334 : AB 11 769 1=true := by decide +kernel
+theorem v335 : AB 11 770 1=true := by decide +kernel
+theorem v336 : AB 11 771 1=true := by decide +kernel
+theorem v337 : AB 11 772 1=true := by decide +kernel
+theorem v338 : AB 11 773 1=true := by decide +kernel
+theorem v339 : AB 11 774 1=true := by decide +kernel
+theorem v340 : AB 11 775 1=true := by decide +kernel
+theorem v341 : AB 11 776 1=true := by decide +kernel
+theorem v342 : AB 11 777 1=true := by decide +kernel
+theorem v343 : AB 11 778 1=true := by decide +kernel
+theorem v344 : AB 11 779 1=true := by decide +kernel
+theorem v345 : AB 11 780 1=true := by decide +kernel
+theorem v346 : AB 11 781 1=true := by decide +kernel
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 0 in
+theorem level11 : AB 11 0 782=true := (@J11 0 459 323 (@J11 0 228 231 (@J11 0 114 114 (@J11 0 57 57 (@J11 0 27 30 (@J11 0 12 15 (@J11 0 6 6 (@J11 0 3 3 v41 v42) (@J11 6 3 3 v43 v44)) (@J11 12 6 9 (@J11 12 3 3 v45 v46) (@J11 18 3 6 v47 (@J11 21 3 3 v48 v49)))) (@J11 27 15 15 (@J11 27 6 9 (@J11 27 3 3 v50 v51) (@J11 33 3 6 v52 (@J11 36 3 3 v53 v54))) (@J11 42 6 9 (@J11 42 3 3 v55 v56) (@J11 48 3 6 v57 (@J11 51 3 3 v58 v59))))) (@J11 57 27 30 (@J11 57 12 15 (@J11 57 6 6 (@J11 57 3 3 v60 v61) (@J11 63 3 3 v62 v63)) (@J11 69 6 9 (@J11 69 3 3 v64 v65) (@J11 75 3 6 v66 (@J11 78 3 3 v67 v68)))) (@J11 84 15 15 (@J11 84 6 9 (@J11 84 3 3 v69 v70) (@J11 90 3 6 v71 (@J11 93 3 3 v72 v73))) (@J11 99 6 9 (@J11 99 3 3 v74 v75) (@J11 105 3 6 v76 (@J11 108 3 3 v77 v78)))))) (@J11 114 57 57 (@J11 114 27 30 (@J11 114 12 15 (@J11 114 6 6 (@J11 114 3 3 v79 v80) (@J11 120 3 3 v81 v82)) (@J11 126 6 9 (@J11 126 3 3 v83 v84) (@J11 132 3 6 v85 (@J11 135 3 3 v86 v87)))) (@J11 141 15 15 (@J11 141 6 9 (@J11 141 3 3 v88 v89) (@J11 147 3 6 v90 (@J11 150 3 3 v91 v92))) (@J11 156 6 9 (@J11 156 3 3 v93 v94) (@J11 162 3 6 v95 (@J11 165 3 3 v96 v97))))) (@J11 171 27 30 (@J11 171 12 15 (@J11 171 6 6 (@J11 171 3 3 v98 v99) (@J11 177 3 3 v100 v101)) (@J11 183 6 9 (@J11 183 3 3 v102 v103) (@J11 189 3 6 v104 (@J11 192 3 3 v105 v106)))) (@J11 198 15 15 (@J11 198 6 9 (@J11 198 3 3 v107 v108) (@J11 204 3 6 v109 (@J11 207 3 3 v110 v111))) (@J11 213 6 9 (@J11 213 3 3 v112 v113) (@J11 219 3 6 v114 (@J11 222 3 3 v115 v116))))))) (@J11 228 114 117 (@J11 228 57 57 (@J11 228 27 30 (@J11 228 12 15 (@J11 228 6 6 (@J11 228 3 3 v117 v118) (@J11 234 3 3 v119 v120)) (@J11 240 6 9 (@J11 240 3 3 v121 v122) (@J11 246 3 6 v123 (@J11 249 3 3 v124 v125)))) (@J11 255 15 15 (@J11 255 6 9 (@J11 255 3 3 v126 v127) (@J11 261 3 6 v128 (@J11 264 3 3 v129 v130))) (@J11 270 6 9 (@J11 270 3 3 v131 v132) (@J11 276 3 6 v133 (@J11 279 3 3 v134 v135))))) (@J11 285 27 30 (@J11 285 12 15 (@J11 285 6 6 (@J11 285 3 3 v136 v137) (@J11 291 3 3 v138 v139)) (@J11 297 6 9 (@J11 297 3 3 v140 v141) (@J11 303 3 6 v142 (@J11 306 3 3 v143 v144)))) (@J11 312 15 15 (@J11 312 6 9 (@J11 312 3 3 v145 v146) (@J11 318 3 6 v147 (@J11 321 3 3 v148 v149))) (@J11 327 6 9 (@J11 327 3 3 v150 v151) (@J11 333 3 6 v152 (@J11 336 3 3 v153 v154)))))) (@J11 342 57 60 (@J11 342 27 30 (@J11 342 12 15 (@J11 342 6 6 (@J11 342 3 3 v155 v156) (@J11 348 3 3 v157 v158)) (@J11 354 6 9 (@J11 354 3 3 v159 v160) (@J11 360 3 6 v161 (@J11 363 3 3 v162 v163)))) (@J11 369 15 15 (@J11 369 6 9 (@J11 369 3 3 v164 v165) (@J11 375 3 6 v166 (@J11 378 3 3 v167 v168))) (@J11 384 6 9 (@J11 384 3 3 v169 v170) (@J11 390 3 6 v171 (@J11 393 3 3 v172 v173))))) (@J11 399 30 30 (@J11 399 15 15 (@J11 399 6 9 (@J11 399 3 3 v174 v175) (@J11 405 3 6 v176 (@J11 408 3 3 v177 v178))) (@J11 414 6 9 (@J11 414 3 3 v179 v180) (@J11 420 3 6 v181 (@J11 423 3 3 v182 v183)))) (@J11 429 15 15 (@J11 429 6 9 (@J11 429 3 3 v184 v185) (@J11 435 3 6 v186 (@J11 438 3 3 v187 v188))) (@J11 444 6 9 (@J11 444 3 3 v189 v190) (@J11 450 3 6 v191 (@J11 453 3 3 v192 v193)))))))) (@J11 459 228 95 (@J11 459 114 114 (@J11 459 57 57 (@J11 459 27 30 (@J11 459 12 15 (@J11 459 6 6 (@J11 459 3 3 v194 v195) (@J11 465 3 3 v196 v197)) (@J11 471 6 9 (@J11 471 3 3 v198 v199) (@J11 477 3 6 v200 (@J11 480 3 3 v201 v202)))) (@J11 486 15 15 (@J11 486 6 9 (@J11 486 3 3 v203 v204) (@J11 492 3 6 v205 (@J11 495 3 3 v206 v207))) (@J11 501 6 9 (@J11 501 3 3 v208 v209) (@J11 507 3 6 v210 (@J11 510 3 3 v211 v212))))) (@J11 516 27 30 (@J11 516 12 15 (@J11 516 6 6 (@J11 516 3 3 v213 v214) (@J11 522 3 3 v215 v216)) (@J11 528 6 9 (@J11 528 3 3 v217 v218) (@J11 534 3 6 v219 (@J11 537 3 3 v220 v221)))) (@J11 543 15 15 (@J11 543 6 9 (@J11 543 3 3 v222 v223) (@J11 549 3 6 v224 (@J11 552 3 3 v225 v226))) (@J11 558 6 9 (@J11 558 3 3 v227 v228) (@J11 564 3 6 v229 (@J11 567 3 3 v230 v231)))))) (@J11 573 57 57 (@J11 573 27 30 (@J11 573 12 15 (@J11 573 6 6 (@J11 573 3 3 v232 v233) (@J11 579 3 3 v234 v235)) (@J11 585 6 9 (@J11 585 3 3 v236 v237) (@J11 591 3 6 v238 (@J11 594 3 3 v239 v240)))) (@J11 600 15 15 (@J11 600 6 9 (@J11 600 3 3 v241 v242) (@J11 606 3 6 v243 (@J11 609 3 3 v244 v245))) (@J11 615 6 9 (@J11 615 3 3 v246 v247) (@J11 621 3 6 v248 (@J11 624 3 3 v249 v250))))) (@J11 630 27 30 (@J11 630 12 15 (@J11 630 6 6 (@J11 630 3 3 v251 v252) (@J11 636 3 3 v253 v254)) (@J11 642 6 9 (@J11 642 3 3 v255 v256) (@J11 648 3 6 v257 (@J11 651 3 3 v258 v259)))) (@J11 657 15 15 (@J11 657 6 9 (@J11 657 3 3 v260 v261) (@J11 663 3 6 v262 (@J11 666 3 3 v263 v264))) (@J11 672 6 9 (@J11 672 3 3 v265 v266) (@J11 678 3 6 v267 (@J11 681 3 3 v268 v269))))))) (@J11 687 56 39 (@J11 687 37 19 (@J11 687 27 10 (@J11 687 12 15 (@J11 687 6 6 (@J11 687 3 3 v270 v271) (@J11 693 3 3 v272 v273)) (@J11 699 6 9 (@J11 699 3 3 v274 v275) (@J11 705 3 6 v276 (@J11 708 3 3 v277 v278)))) (@J11 714 5 5 (@J11 714 2 3 (@J11 714 1 1 v279 v280) (@J11 716 1 2 v281 (@J11 717 1 1 v282 v283))) (@J11 719 2 3 (@J11 719 1 1 v284 v285) (@J11 721 1 2 v286 (@J11 722 1 1 v287 v288))))) (@J11 724 9 10 (@J11 724 4 5 (@J11 724 2 2 (@J11 724 1 1 v289 v290) (@J11 726 1 1 v291 v292)) (@J11 728 2 3 (@J11 728 1 1 v293 v294) (@J11 730 1 2 v295 (@J11 731 1 1 v296 v297)))) (@J11 733 5 5 (@J11 733 2 3 (@J11 733 1 1 v298 v299) (@J11 735 1 2 v300 (@J11 736 1 1 v301 v302))) (@J11 738 2 3 (@J11 738 1 1 v303 v304) (@J11 740 1 2 v305 (@J11 741 1 1 v306 v307)))))) (@J11 743 19 20 (@J11 743 9 10 (@J11 743 4 5 (@J11 743 2 2 (@J11 743 1 1 v308 v309) (@J11 745 1 1 v310 v311)) (@J11 747 2 3 (@J11 747 1 1 v312 v313) (@J11 749 1 2 v314 (@J11 750 1 1 v315 v316)))) (@J11 752 5 5 (@J11 752 2 3 (@J11 752 1 1 v317 v318) (@J11 754 1 2 v319 (@J11 755 1 1 v320 v321))) (@J11 757 2 3 (@J11 757 1 1 v322 v323) (@J11 759 1 2 v324 (@J11 760 1 1 v325 v326))))) (@J11 762 10 10 (@J11 762 5 5 (@J11 762 2 3 (@J11 762 1 1 v327 v328) (@J11 764 1 2 v329 (@J11 765 1 1 v330 v331))) (@J11 767 2 3 (@J11 767 1 1 v332 v333) (@J11 769 1 2 v334 (@J11 770 1 1 v335 v336)))) (@J11 772 5 5 (@J11 772 2 3 (@J11 772 1 1 v337 v338) (@J11 774 1 2 v339 (@J11 775 1 1 v340 v341))) (@J11 777 2 3 (@J11 777 1 1 v342 v343) (@J11 779 1 2 v344 (@J11 780 1 1 v345 v346)))))))))
+theorem v347 : AB 12 0 1=true := by decide +kernel
+theorem v348 : AB 12 1 1=true := by decide +kernel
+theorem v349 : AB 12 2 1=true := by decide +kernel
+theorem v350 : AB 12 3 1=true := by decide +kernel
+theorem v351 : AB 12 4 1=true := by decide +kernel
+theorem v352 : AB 12 5 1=true := by decide +kernel
+theorem v353 : AB 12 6 1=true := by decide +kernel
+theorem v354 : AB 12 7 1=true := by decide +kernel
+theorem v355 : AB 12 8 1=true := by decide +kernel
+theorem v356 : AB 12 9 1=true := by decide +kernel
+theorem v357 : AB 12 10 1=true := by decide +kernel
+theorem v358 : AB 12 11 1=true := by decide +kernel
+theorem v359 : AB 12 12 1=true := by decide +kernel
+theorem v360 : AB 12 13 1=true := by decide +kernel
+theorem v361 : AB 12 14 1=true := by decide +kernel
+theorem v362 : AB 12 15 1=true := by decide +kernel
+theorem v363 : AB 12 16 1=true := by decide +kernel
+theorem v364 : AB 12 17 1=true := by decide +kernel
+theorem v365 : AB 12 18 1=true := by decide +kernel
+theorem v366 : AB 12 19 1=true := by decide +kernel
+theorem v367 : AB 12 20 1=true := by decide +kernel
+theorem v368 : AB 12 21 1=true := by decide +kernel
+theorem v369 : AB 12 22 1=true := by decide +kernel
+theorem v370 : AB 12 23 1=true := by decide +kernel
+theorem v371 : AB 12 24 1=true := by decide +kernel
+theorem v372 : AB 12 25 1=true := by decide +kernel
+theorem v373 : AB 12 26 1=true := by decide +kernel
+theorem v374 : AB 12 27 1=true := by decide +kernel
+theorem v375 : AB 12 28 1=true := by decide +kernel
+theorem v376 : AB 12 29 1=true := by decide +kernel
+theorem v377 : AB 12 30 1=true := by decide +kernel
+theorem v378 : AB 12 31 1=true := by decide +kernel
+theorem v379 : AB 12 32 1=true := by decide +kernel
+theorem v380 : AB 12 33 1=true := by decide +kernel
+theorem v381 : AB 12 34 1=true := by decide +kernel
+theorem v382 : AB 12 35 1=true := by decide +kernel
+theorem v383 : AB 12 36 1=true := by decide +kernel
+theorem v384 : AB 12 37 1=true := by decide +kernel
+theorem v385 : AB 12 38 1=true := by decide +kernel
+theorem v386 : AB 12 39 1=true := by decide +kernel
+theorem v387 : AB 12 40 1=true := by decide +kernel
+theorem v388 : AB 12 41 1=true := by decide +kernel
+theorem v389 : AB 12 42 1=true := by decide +kernel
+theorem v390 : AB 12 43 1=true := by decide +kernel
+theorem v391 : AB 12 44 1=true := by decide +kernel
+theorem v392 : AB 12 45 1=true := by decide +kernel
+theorem v393 : AB 12 46 1=true := by decide +kernel
+theorem v394 : AB 12 47 1=true := by decide +kernel
+theorem v395 : AB 12 48 1=true := by decide +kernel
+theorem v396 : AB 12 49 1=true := by decide +kernel
+theorem v397 : AB 12 50 1=true := by decide +kernel
+theorem v398 : AB 12 51 1=true := by decide +kernel
+theorem v399 : AB 12 52 1=true := by decide +kernel
+theorem v400 : AB 12 53 1=true := by decide +kernel
+theorem v401 : AB 12 54 1=true := by decide +kernel
+theorem v402 : AB 12 55 1=true := by decide +kernel
+theorem v403 : AB 12 56 3=true := by decide +kernel
+theorem v404 : AB 12 59 3=true := by decide +kernel
+theorem v405 : AB 12 62 3=true := by decide +kernel
+theorem v406 : AB 12 65 3=true := by decide +kernel
+theorem v407 : AB 12 68 3=true := by decide +kernel
+theorem v408 : AB 12 71 3=true := by decide +kernel
+theorem v409 : AB 12 74 3=true := by decide +kernel
+theorem v410 : AB 12 77 3=true := by decide +kernel
+theorem v411 : AB 12 80 3=true := by decide +kernel
+theorem v412 : AB 12 83 3=true := by decide +kernel
+theorem v413 : AB 12 86 3=true := by decide +kernel
+theorem v414 : AB 12 89 3=true := by decide +kernel
+theorem v415 : AB 12 92 3=true := by decide +kernel
+theorem v416 : AB 12 95 3=true := by decide +kernel
+theorem v417 : AB 12 98 3=true := by decide +kernel
+theorem v418 : AB 12 101 3=true := by decide +kernel
+theorem v419 : AB 12 104 3=true := by decide +kernel
+theorem v420 : AB 12 107 3=true := by decide +kernel
+theorem v421 : AB 12 110 3=true := by decide +kernel
+theorem v422 : AB 12 113 3=true := by decide +kernel
+theorem v423 : AB 12 116 3=true := by decide +kernel
+theorem v424 : AB 12 119 3=true := by decide +kernel
+theorem v425 : AB 12 122 3=true := by decide +kernel
+theorem v426 : AB 12 125 3=true := by decide +kernel
+theorem v427 : AB 12 128 3=true := by decide +kernel
+theorem v428 : AB 12 131 3=true := by decide +kernel
+theorem v429 : AB 12 134 3=true := by decide +kernel
+theorem v430 : AB 12 137 3=true := by decide +kernel
+theorem v431 : AB 12 140 3=true := by decide +kernel
+theorem v432 : AB 12 143 3=true := by decide +kernel
+theorem v433 : AB 12 146 3=true := by decide +kernel
+theorem v434 : AB 12 149 3=true := by decide +kernel
+theorem v435 : AB 12 152 3=true := by decide +kernel
+theorem v436 : AB 12 155 3=true := by decide +kernel
+theorem v437 : AB 12 158 3=true := by decide +kernel
+theorem v438 : AB 12 161 3=true := by decide +kernel
+theorem v439 : AB 12 164 3=true := by decide +kernel
+theorem v440 : AB 12 167 3=true := by decide +kernel
+theorem v441 : AB 12 170 3=true := by decide +kernel
+theorem v442 : AB 12 173 3=true := by decide +kernel
+theorem v443 : AB 12 176 3=true := by decide +kernel
+theorem v444 : AB 12 179 3=true := by decide +kernel
+theorem v445 : AB 12 182 3=true := by decide +kernel
+theorem v446 : AB 12 185 3=true := by decide +kernel
+theorem v447 : AB 12 188 3=true := by decide +kernel
+theorem v448 : AB 12 191 3=true := by decide +kernel
+theorem v449 : AB 12 194 3=true := by decide +kernel
+theorem v450 : AB 12 197 3=true := by decide +kernel
+theorem v451 : AB 12 200 3=true := by decide +kernel
+theorem v452 : AB 12 203 3=true := by decide +kernel
+theorem v453 : AB 12 206 3=true := by decide +kernel
+theorem v454 : AB 12 209 3=true := by decide +kernel
+theorem v455 : AB 12 212 3=true := by decide +kernel
+theorem v456 : AB 12 215 3=true := by decide +kernel
+theorem v457 : AB 12 218 3=true := by decide +kernel
+theorem v458 : AB 12 221 3=true := by decide +kernel
+theorem v459 : AB 12 224 3=true := by decide +kernel
+theorem v460 : AB 12 227 3=true := by decide +kernel
+theorem v461 : AB 12 230 3=true := by decide +kernel
+theorem v462 : AB 12 233 3=true := by decide +kernel
+theorem v463 : AB 12 236 3=true := by decide +kernel
+theorem v464 : AB 12 239 3=true := by decide +kernel
+theorem v465 : AB 12 242 3=true := by decide +kernel
+theorem v466 : AB 12 245 3=true := by decide +kernel
+theorem v467 : AB 12 248 3=true := by decide +kernel
+theorem v468 : AB 12 251 3=true := by decide +kernel
+theorem v469 : AB 12 254 3=true := by decide +kernel
+theorem v470 : AB 12 257 3=true := by decide +kernel
+theorem v471 : AB 12 260 3=true := by decide +kernel
+theorem v472 : AB 12 263 3=true := by decide +kernel
+theorem v473 : AB 12 266 3=true := by decide +kernel
+theorem v474 : AB 12 269 3=true := by decide +kernel
+theorem v475 : AB 12 272 3=true := by decide +kernel
+theorem v476 : AB 12 275 3=true := by decide +kernel
+theorem v477 : AB 12 278 3=true := by decide +kernel
+theorem v478 : AB 12 281 3=true := by decide +kernel
+theorem v479 : AB 12 284 3=true := by decide +kernel
+theorem v480 : AB 12 287 3=true := by decide +kernel
+theorem v481 : AB 12 290 3=true := by decide +kernel
+theorem v482 : AB 12 293 3=true := by decide +kernel
+theorem v483 : AB 12 296 3=true := by decide +kernel
+theorem v484 : AB 12 299 3=true := by decide +kernel
+theorem v485 : AB 12 302 3=true := by decide +kernel
+theorem v486 : AB 12 305 3=true := by decide +kernel
+theorem v487 : AB 12 308 3=true := by decide +kernel
+theorem v488 : AB 12 311 3=true := by decide +kernel
+theorem v489 : AB 12 314 3=true := by decide +kernel
+theorem v490 : AB 12 317 3=true := by decide +kernel
+theorem v491 : AB 12 320 3=true := by decide +kernel
+theorem v492 : AB 12 323 3=true := by decide +kernel
+theorem v493 : AB 12 326 3=true := by decide +kernel
+theorem v494 : AB 12 329 3=true := by decide +kernel
+theorem v495 : AB 12 332 3=true := by decide +kernel
+theorem v496 : AB 12 335 3=true := by decide +kernel
+theorem v497 : AB 12 338 3=true := by decide +kernel
+theorem v498 : AB 12 341 3=true := by decide +kernel
+theorem v499 : AB 12 344 3=true := by decide +kernel
+theorem v500 : AB 12 347 3=true := by decide +kernel
+theorem v501 : AB 12 350 3=true := by decide +kernel
+theorem v502 : AB 12 353 3=true := by decide +kernel
+theorem v503 : AB 12 356 3=true := by decide +kernel
+theorem v504 : AB 12 359 3=true := by decide +kernel
+theorem v505 : AB 12 362 3=true := by decide +kernel
+theorem v506 : AB 12 365 3=true := by decide +kernel
+theorem v507 : AB 12 368 3=true := by decide +kernel
+theorem v508 : AB 12 371 3=true := by decide +kernel
+theorem v509 : AB 12 374 3=true := by decide +kernel
+theorem v510 : AB 12 377 3=true := by decide +kernel
+theorem v511 : AB 12 380 3=true := by decide +kernel
+theorem v512 : AB 12 383 3=true := by decide +kernel
+theorem v513 : AB 12 386 3=true := by decide +kernel
+theorem v514 : AB 12 389 3=true := by decide +kernel
+theorem v515 : AB 12 392 3=true := by decide +kernel
+theorem v516 : AB 12 395 3=true := by decide +kernel
+theorem v517 : AB 12 398 3=true := by decide +kernel
+theorem v518 : AB 12 401 3=true := by decide +kernel
+theorem v519 : AB 12 404 3=true := by decide +kernel
+theorem v520 : AB 12 407 3=true := by decide +kernel
+theorem v521 : AB 12 410 3=true := by decide +kernel
+theorem v522 : AB 12 413 3=true := by decide +kernel
+theorem v523 : AB 12 416 3=true := by decide +kernel
+theorem v524 : AB 12 419 3=true := by decide +kernel
+theorem v525 : AB 12 422 3=true := by decide +kernel
+theorem v526 : AB 12 425 3=true := by decide +kernel
+theorem v527 : AB 12 428 3=true := by decide +kernel
+theorem v528 : AB 12 431 3=true := by decide +kernel
+theorem v529 : AB 12 434 3=true := by decide +kernel
+theorem v530 : AB 12 437 3=true := by decide +kernel
+theorem v531 : AB 12 440 3=true := by decide +kernel
+theorem v532 : AB 12 443 3=true := by decide +kernel
+theorem v533 : AB 12 446 3=true := by decide +kernel
+theorem v534 : AB 12 449 3=true := by decide +kernel
+theorem v535 : AB 12 452 3=true := by decide +kernel
+theorem v536 : AB 12 455 3=true := by decide +kernel
+theorem v537 : AB 12 458 3=true := by decide +kernel
+theorem v538 : AB 12 461 3=true := by decide +kernel
+theorem v539 : AB 12 464 3=true := by decide +kernel
+theorem v540 : AB 12 467 3=true := by decide +kernel
+theorem v541 : AB 12 470 3=true := by decide +kernel
+theorem v542 : AB 12 473 3=true := by decide +kernel
+theorem v543 : AB 12 476 3=true := by decide +kernel
+theorem v544 : AB 12 479 3=true := by decide +kernel
+theorem v545 : AB 12 482 3=true := by decide +kernel
+theorem v546 : AB 12 485 3=true := by decide +kernel
+theorem v547 : AB 12 488 3=true := by decide +kernel
+theorem v548 : AB 12 491 3=true := by decide +kernel
+theorem v549 : AB 12 494 3=true := by decide +kernel
+theorem v550 : AB 12 497 3=true := by decide +kernel
+theorem v551 : AB 12 500 3=true := by decide +kernel
+theorem v552 : AB 12 503 3=true := by decide +kernel
+theorem v553 : AB 12 506 3=true := by decide +kernel
+theorem v554 : AB 12 509 3=true := by decide +kernel
+theorem v555 : AB 12 512 3=true := by decide +kernel
+theorem v556 : AB 12 515 3=true := by decide +kernel
+theorem v557 : AB 12 518 3=true := by decide +kernel
+theorem v558 : AB 12 521 3=true := by decide +kernel
+theorem v559 : AB 12 524 3=true := by decide +kernel
+theorem v560 : AB 12 527 3=true := by decide +kernel
+theorem v561 : AB 12 530 3=true := by decide +kernel
+theorem v562 : AB 12 533 3=true := by decide +kernel
+theorem v563 : AB 12 536 3=true := by decide +kernel
+theorem v564 : AB 12 539 3=true := by decide +kernel
+theorem v565 : AB 12 542 3=true := by decide +kernel
+theorem v566 : AB 12 545 3=true := by decide +kernel
+theorem v567 : AB 12 548 3=true := by decide +kernel
+theorem v568 : AB 12 551 3=true := by decide +kernel
+theorem v569 : AB 12 554 3=true := by decide +kernel
+theorem v570 : AB 12 557 3=true := by decide +kernel
+theorem v571 : AB 12 560 3=true := by decide +kernel
+theorem v572 : AB 12 563 3=true := by decide +kernel
+theorem v573 : AB 12 566 3=true := by decide +kernel
+theorem v574 : AB 12 569 3=true := by decide +kernel
+theorem v575 : AB 12 572 3=true := by decide +kernel
+theorem v576 : AB 12 575 3=true := by decide +kernel
+theorem v577 : AB 12 578 3=true := by decide +kernel
+theorem v578 : AB 12 581 3=true := by decide +kernel
+theorem v579 : AB 12 584 3=true := by decide +kernel
+theorem v580 : AB 12 587 3=true := by decide +kernel
+theorem v581 : AB 12 590 3=true := by decide +kernel
+theorem v582 : AB 12 593 3=true := by decide +kernel
+theorem v583 : AB 12 596 3=true := by decide +kernel
+theorem v584 : AB 12 599 3=true := by decide +kernel
+theorem v585 : AB 12 602 3=true := by decide +kernel
+theorem v586 : AB 12 605 3=true := by decide +kernel
+theorem v587 : AB 12 608 3=true := by decide +kernel
+theorem v588 : AB 12 611 3=true := by decide +kernel
+theorem v589 : AB 12 614 3=true := by decide +kernel
+theorem v590 : AB 12 617 3=true := by decide +kernel
+theorem v591 : AB 12 620 3=true := by decide +kernel
+theorem v592 : AB 12 623 3=true := by decide +kernel
+theorem v593 : AB 12 626 3=true := by decide +kernel
+theorem v594 : AB 12 629 3=true := by decide +kernel
+theorem v595 : AB 12 632 3=true := by decide +kernel
+theorem v596 : AB 12 635 3=true := by decide +kernel
+theorem v597 : AB 12 638 3=true := by decide +kernel
+theorem v598 : AB 12 641 3=true := by decide +kernel
+theorem v599 : AB 12 644 3=true := by decide +kernel
+theorem v600 : AB 12 647 3=true := by decide +kernel
+theorem v601 : AB 12 650 3=true := by decide +kernel
+theorem v602 : AB 12 653 3=true := by decide +kernel
+theorem v603 : AB 12 656 1=true := by decide +kernel
+theorem v604 : AB 12 657 1=true := by decide +kernel
+theorem v605 : AB 12 658 1=true := by decide +kernel
+theorem v606 : AB 12 659 1=true := by decide +kernel
+theorem v607 : AB 12 660 1=true := by decide +kernel
+theorem v608 : AB 12 661 1=true := by decide +kernel
+theorem v609 : AB 12 662 1=true := by decide +kernel
+theorem v610 : AB 12 663 1=true := by decide +kernel
+theorem v611 : AB 12 664 1=true := by decide +kernel
+theorem v612 : AB 12 665 1=true := by decide +kernel
+theorem v613 : AB 12 666 1=true := by decide +kernel
+theorem v614 : AB 12 667 1=true := by decide +kernel
+theorem v615 : AB 12 668 1=true := by decide +kernel
+theorem v616 : AB 12 669 1=true := by decide +kernel
+theorem v617 : AB 12 670 1=true := by decide +kernel
+theorem v618 : AB 12 671 1=true := by decide +kernel
+theorem v619 : AB 12 672 1=true := by decide +kernel
+theorem v620 : AB 12 673 1=true := by decide +kernel
+theorem v621 : AB 12 674 1=true := by decide +kernel
+theorem v622 : AB 12 675 1=true := by decide +kernel
+theorem v623 : AB 12 676 1=true := by decide +kernel
+theorem v624 : AB 12 677 1=true := by decide +kernel
+theorem v625 : AB 12 678 1=true := by decide +kernel
+theorem v626 : AB 12 679 1=true := by decide +kernel
+theorem v627 : AB 12 680 1=true := by decide +kernel
+theorem v628 : AB 12 681 1=true := by decide +kernel
+theorem v629 : AB 12 682 1=true := by decide +kernel
+theorem v630 : AB 12 683 1=true := by decide +kernel
+theorem v631 : AB 12 684 1=true := by decide +kernel
+theorem v632 : AB 12 685 1=true := by decide +kernel
+theorem v633 : AB 12 686 1=true := by decide +kernel
+theorem v634 : AB 12 687 1=true := by decide +kernel
+theorem v635 : AB 12 688 1=true := by decide +kernel
+theorem v636 : AB 12 689 1=true := by decide +kernel
+theorem v637 : AB 12 690 1=true := by decide +kernel
+theorem v638 : AB 12 691 1=true := by decide +kernel
+theorem v639 : AB 12 692 1=true := by decide +kernel
+theorem v640 : AB 12 693 1=true := by decide +kernel
+theorem v641 : AB 12 694 1=true := by decide +kernel
+theorem v642 : AB 12 695 1=true := by decide +kernel
+theorem v643 : AB 12 696 1=true := by decide +kernel
+theorem v644 : AB 12 697 1=true := by decide +kernel
+theorem v645 : AB 12 698 1=true := by decide +kernel
+theorem v646 : AB 12 699 1=true := by decide +kernel
+theorem v647 : AB 12 700 1=true := by decide +kernel
+theorem v648 : AB 12 701 1=true := by decide +kernel
+theorem v649 : AB 12 702 1=true := by decide +kernel
+theorem v650 : AB 12 703 1=true := by decide +kernel
+theorem v651 : AB 12 704 1=true := by decide +kernel
+theorem v652 : AB 12 705 1=true := by decide +kernel
+theorem v653 : AB 12 706 1=true := by decide +kernel
+theorem v654 : AB 12 707 1=true := by decide +kernel
+theorem v655 : AB 12 708 1=true := by decide +kernel
+theorem v656 : AB 12 709 1=true := by decide +kernel
+theorem v657 : AB 12 710 1=true := by decide +kernel
+theorem v658 : AB 12 711 1=true := by decide +kernel
+theorem v659 : AB 12 712 1=true := by decide +kernel
+theorem v660 : AB 12 713 1=true := by decide +kernel
+theorem v661 : AB 12 714 1=true := by decide +kernel
+theorem v662 : AB 12 715 1=true := by decide +kernel
+theorem v663 : AB 12 716 1=true := by decide +kernel
+theorem v664 : AB 12 717 1=true := by decide +kernel
+theorem v665 : AB 12 718 1=true := by decide +kernel
+theorem v666 : AB 12 719 1=true := by decide +kernel
+theorem v667 : AB 12 720 1=true := by decide +kernel
+theorem v668 : AB 12 721 1=true := by decide +kernel
+theorem v669 : AB 12 722 1=true := by decide +kernel
+theorem v670 : AB 12 723 1=true := by decide +kernel
+theorem v671 : AB 12 724 1=true := by decide +kernel
+theorem v672 : AB 12 725 1=true := by decide +kernel
+theorem v673 : AB 12 726 1=true := by decide +kernel
+theorem v674 : AB 12 727 1=true := by decide +kernel
+theorem v675 : AB 12 728 1=true := by decide +kernel
+theorem v676 : AB 12 729 1=true := by decide +kernel
+theorem v677 : AB 12 730 1=true := by decide +kernel
+theorem v678 : AB 12 731 1=true := by decide +kernel
+theorem v679 : AB 12 732 1=true := by decide +kernel
+theorem v680 : AB 12 733 1=true := by decide +kernel
+theorem v681 : AB 12 734 1=true := by decide +kernel
+theorem v682 : AB 12 735 1=true := by decide +kernel
+theorem v683 : AB 12 736 1=true := by decide +kernel
+theorem v684 : AB 12 737 1=true := by decide +kernel
+theorem v685 : AB 12 738 1=true := by decide +kernel
+theorem v686 : AB 12 739 1=true := by decide +kernel
+theorem v687 : AB 12 740 1=true := by decide +kernel
+theorem v688 : AB 12 741 1=true := by decide +kernel
+theorem v689 : AB 12 742 1=true := by decide +kernel
+theorem v690 : AB 12 743 1=true := by decide +kernel
+theorem v691 : AB 12 744 1=true := by decide +kernel
+theorem v692 : AB 12 745 1=true := by decide +kernel
+theorem v693 : AB 12 746 1=true := by decide +kernel
+theorem v694 : AB 12 747 1=true := by decide +kernel
+theorem v695 : AB 12 748 1=true := by decide +kernel
+theorem v696 : AB 12 749 1=true := by decide +kernel
+theorem v697 : AB 12 750 1=true := by decide +kernel
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 0 in
+theorem level12 : AB 12 0 751=true := (@J12 0 413 338 (@J12 0 149 264 (@J12 0 43 106 (@J12 0 21 22 (@J12 0 10 11 (@J12 0 5 5 (@J12 0 2 3 (@J12 0 1 1 v347 v348) (@J12 2 1 2 v349 (@J12 3 1 1 v350 v351))) (@J12 5 2 3 (@J12 5 1 1 v352 v353) (@J12 7 1 2 v354 (@J12 8 1 1 v355 v356)))) (@J12 10 5 6 (@J12 10 2 3 (@J12 10 1 1 v357 v358) (@J12 12 1 2 v359 (@J12 13 1 1 v360 v361))) (@J12 15 3 3 (@J12 15 1 2 v362 (@J12 16 1 1 v363 v364)) (@J12 18 1 2 v365 (@J12 19 1 1 v366 v367))))) (@J12 21 11 11 (@J12 21 5 6 (@J12 21 2 3 (@J12 21 1 1 v368 v369) (@J12 23 1 2 v370 (@J12 24 1 1 v371 v372))) (@J12 26 3 3 (@J12 26 1 2 v373 (@J12 27 1 1 v374 v375)) (@J12 29 1 2 v376 (@J12 30 1 1 v377 v378)))) (@J12 32 5 6 (@J12 32 2 3 (@J12 32 1 1 v379 v380) (@J12 34 1 2 v381 (@J12 35 1 1 v382 v383))) (@J12 37 3 3 (@J12 37 1 2 v384 (@J12 38 1 1 v385 v386)) (@J12 40 1 2 v387 (@J12 41 1 1 v388 v389)))))) (@J12 43 40 66 (@J12 43 11 29 (@J12 43 5 6 (@J12 43 2 3 (@J12 43 1 1 v390 v391) (@J12 45 1 2 v392 (@J12 46 1 1 v393 v394))) (@J12 48 3 3 (@J12 48 1 2 v395 (@J12 49 1 1 v396 v397)) (@J12 51 1 2 v398 (@J12 52 1 1 v399 v400)))) (@J12 54 11 18 (@J12 54 2 9 (@J12 54 1 1 v401 v402) (@J12 56 3 6 v403 (@J12 59 3 3 v404 v405))) (@J12 65 9 9 (@J12 65 3 6 v406 (@J12 68 3 3 v407 v408)) (@J12 74 3 6 v409 (@J12 77 3 3 v410 v411))))) (@J12 83 33 33 (@J12 83 15 18 (@J12 83 6 9 (@J12 83 3 3 v412 v413) (@J12 89 3 6 v414 (@J12 92 3 3 v415 v416))) (@J12 98 9 9 (@J12 98 3 6 v417 (@J12 101 3 3 v418 v419)) (@J12 107 3 6 v420 (@J12 110 3 3 v421 v422)))) (@J12 116 15 18 (@J12 116 6 9 (@J12 116 3 3 v423 v424) (@J12 122 3 6 v425 (@J12 125 3 3 v426 v427))) (@J12 131 9 9 (@J12 131 3 6 v428 (@J12 134 3 3 v429 v430)) (@J12 140 3 6 v431 (@J12 143 3 3 v432 v433))))))) (@J12 149 132 132 (@J12 149 66 66 (@J12 149 33 33 (@J12 149 15 18 (@J12 149 6 9 (@J12 149 3 3 v434 v435) (@J12 155 3 6 v436 (@J12 158 3 3 v437 v438))) (@J12 164 9 9 (@J12 164 3 6 v439 (@J12 167 3 3 v440 v441)) (@J12 173 3 6 v442 (@J12 176 3 3 v443 v444)))) (@J12 182 15 18 (@J12 182 6 9 (@J12 182 3 3 v445 v446) (@J12 188 3 6 v447 (@J12 191 3 3 v448 v449))) (@J12 197 9 9 (@J12 197 3 6 v450 (@J12 200 3 3 v451 v452)) (@J12 206 3 6 v453 (@J12 209 3 3 v454 v455))))) (@J12 215 33 33 (@J12 215 15 18 (@J12 215 6 9 (@J12 215 3 3 v456 v457) (@J12 221 3 6 v458 (@J12 224 3 3 v459 v460))) (@J12 230 9 9 (@J12 230 3 6 v461 (@J12 233 3 3 v462 v463)) (@J12 239 3 6 v464 (@J12 242 3 3 v465 v466)))) (@J12 248 15 18 (@J12 248 6 9 (@J12 248 3 3 v467 v468) (@J12 254 3 6 v469 (@J12 257 3 3 v470 v471))) (@J12 263 9 9 (@J12 263 3 6 v472 (@J12 266 3 3 v473 v474)) (@J12 272 3 6 v475 (@J12 275 3 3 v476 v477)))))) (@J12 281 66 66 (@J12 281 33 33 (@J12 281 15 18 (@J12 281 6 9 (@J12 281 3 3 v478 v479) (@J12 287 3 6 v480 (@J12 290 3 3 v481 v482))) (@J12 296 9 9 (@J12 296 3 6 v483 (@J12 299 3 3 v484 v485)) (@J12 305 3 6 v486 (@J12 308 3 3 v487 v488)))) (@J12 314 15 18 (@J12 314 6 9 (@J12 314 3 3 v489 v490) (@J12 320 3 6 v491 (@J12 323 3 3 v492 v493))) (@J12 329 9 9 (@J12 329 3 6 v494 (@J12 332 3 3 v495 v496)) (@J12 338 3 6 v497 (@J12 341 3 3 v498 v499))))) (@J12 347 33 33 (@J12 347 15 18 (@J12 347 6 9 (@J12 347 3 3 v500 v501) (@J12 353 3 6 v502 (@J12 356 3 3 v503 v504))) (@J12 362 9 9 (@J12 362 3 6 v505 (@J12 365 3 3 v506 v507)) (@J12 371 3 6 v508 (@J12 374 3 3 v509 v510)))) (@J12 380 15 18 (@J12 380 6 9 (@J12 380 3 3 v511 v512) (@J12 386 3 6 v513 (@J12 389 3 3 v514 v515))) (@J12 395 9 9 (@J12 395 3 6 v516 (@J12 398 3 3 v517 v518)) (@J12 404 3 6 v519 (@J12 407 3 3 v520 v521)))))))) (@J12 413 250 88 (@J12 413 132 118 (@J12 413 66 66 (@J12 413 33 33 (@J12 413 15 18 (@J12 413 6 9 (@J12 413 3 3 v522 v523) (@J12 419 3 6 v524 (@J12 422 3 3 v525 v526))) (@J12 428 9 9 (@J12 428 3 6 v527 (@J12 431 3 3 v528 v529)) (@J12 437 3 6 v530 (@J12 440 3 3 v531 v532)))) (@J12 446 15 18 (@J12 446 6 9 (@J12 446 3 3 v533 v534) (@J12 452 3 6 v535 (@J12 455 3 3 v536 v537))) (@J12 461 9 9 (@J12 461 3 6 v538 (@J12 464 3 3 v539 v540)) (@J12 470 3 6 v541 (@J12 473 3 3 v542 v543))))) (@J12 479 33 33 (@J12 479 15 18 (@J12 479 6 9 (@J12 479 3 3 v544 v545) (@J12 485 3 6 v546 (@J12 488 3 3 v547 v548))) (@J12 494 9 9 (@J12 494 3 6 v549 (@J12 497 3 3 v550 v551)) (@J12 503 3 6 v552 (@J12 506 3 3 v553 v554)))) (@J12 512 15 18 (@J12 512 6 9 (@J12 512 3 3 v555 v556) (@J12 518 3 6 v557 (@J12 521 3 3 v558 v559))) (@J12 527 9 9 (@J12 527 3 6 v560 (@J12 530 3 3 v561 v562)) (@J12 536 3 6 v563 (@J12 539 3 3 v564 v565)))))) (@J12 545 66 52 (@J12 545 33 33 (@J12 545 15 18 (@J12 545 6 9 (@J12 545 3 3 v566 v567) (@J12 551 3 6 v568 (@J12 554 3 3 v569 v570))) (@J12 560 9 9 (@J12 560 3 6 v571 (@J12 563 3 3 v572 v573)) (@J12 569 3 6 v574 (@J12 572 3 3 v575 v576)))) (@J12 578 15 18 (@J12 578 6 9 (@J12 578 3 3 v577 v578) (@J12 584 3 6 v579 (@J12 587 3 3 v580 v581))) (@J12 593 9 9 (@J12 593 3 6 v582 (@J12 596 3 3 v583 v584)) (@J12 602 3 6 v585 (@J12 605 3 3 v586 v587))))) (@J12 611 33 19 (@J12 611 15 18 (@J12 611 6 9 (@J12 611 3 3 v588 v589) (@J12 617 3 6 v590 (@J12 620 3 3 v591 v592))) (@J12 626 9 9 (@J12 626 3 6 v593 (@J12 629 3 3 v594 v595)) (@J12 635 3 6 v596 (@J12 638 3 3 v597 v598)))) (@J12 644 13 6 (@J12 644 6 7 (@J12 644 3 3 v599 v600) (@J12 650 3 4 v601 (@J12 653 3 1 v602 v603))) (@J12 657 3 3 (@J12 657 1 2 v604 (@J12 658 1 1 v605 v606)) (@J12 660 1 2 v607 (@J12 661 1 1 v608 v609))))))) (@J12 663 44 44 (@J12 663 22 22 (@J12 663 11 11 (@J12 663 5 6 (@J12 663 2 3 (@J12 663 1 1 v610 v611) (@J12 665 1 2 v612 (@J12 666 1 1 v613 v614))) (@J12 668 3 3 (@J12 668 1 2 v615 (@J12 669 1 1 v616 v617)) (@J12 671 1 2 v618 (@J12 672 1 1 v619 v620)))) (@J12 674 5 6 (@J12 674 2 3 (@J12 674 1 1 v621 v622) (@J12 676 1 2 v623 (@J12 677 1 1 v624 v625))) (@J12 679 3 3 (@J12 679 1 2 v626 (@J12 680 1 1 v627 v628)) (@J12 682 1 2 v629 (@J12 683 1 1 v630 v631))))) (@J12 685 11 11 (@J12 685 5 6 (@J12 685 2 3 (@J12 685 1 1 v632 v633) (@J12 687 1 2 v634 (@J12 688 1 1 v635 v636))) (@J12 690 3 3 (@J12 690 1 2 v637 (@J12 691 1 1 v638 v639)) (@J12 693 1 2 v640 (@J12 694 1 1 v641 v642)))) (@J12 696 5 6 (@J12 696 2 3 (@J12 696 1 1 v643 v644) (@J12 698 1 2 v645 (@J12 699 1 1 v646 v647))) (@J12 701 3 3 (@J12 701 1 2 v648 (@J12 702 1 1 v649 v650)) (@J12 704 1 2 v651 (@J12 705 1 1 v652 v653)))))) (@J12 707 22 22 (@J12 707 11 11 (@J12 707 5 6 (@J12 707 2 3 (@J12 707 1 1 v654 v655) (@J12 709 1 2 v656 (@J12 710 1 1 v657 v658))) (@J12 712 3 3 (@J12 712 1 2 v659 (@J12 713 1 1 v660 v661)) (@J12 715 1 2 v662 (@J12 716 1 1 v663 v664)))) (@J12 718 5 6 (@J12 718 2 3 (@J12 718 1 1 v665 v666) (@J12 720 1 2 v667 (@J12 721 1 1 v668 v669))) (@J12 723 3 3 (@J12 723 1 2 v670 (@J12 724 1 1 v671 v672)) (@J12 726 1 2 v673 (@J12 727 1 1 v674 v675))))) (@J12 729 11 11 (@J12 729 5 6 (@J12 729 2 3 (@J12 729 1 1 v676 v677) (@J12 731 1 2 v678 (@J12 732 1 1 v679 v680))) (@J12 734 3 3 (@J12 734 1 2 v681 (@J12 735 1 1 v682 v683)) (@J12 737 1 2 v684 (@J12 738 1 1 v685 v686)))) (@J12 740 5 6 (@J12 740 2 3 (@J12 740 1 1 v687 v688) (@J12 742 1 2 v689 (@J12 743 1 1 v690 v691))) (@J12 745 3 3 (@J12 745 1 2 v692 (@J12 746 1 1 v693 v694)) (@J12 748 1 2 v695 (@J12 749 1 1 v696 v697)))))))))
+theorem v698 : AB 13 0 1=true := by decide +kernel
+theorem v699 : AB 13 1 1=true := by decide +kernel
+theorem v700 : AB 13 2 1=true := by decide +kernel
+theorem v701 : AB 13 3 1=true := by decide +kernel
+theorem v702 : AB 13 4 1=true := by decide +kernel
+theorem v703 : AB 13 5 1=true := by decide +kernel
+theorem v704 : AB 13 6 1=true := by decide +kernel
+theorem v705 : AB 13 7 1=true := by decide +kernel
+theorem v706 : AB 13 8 1=true := by decide +kernel
+theorem v707 : AB 13 9 1=true := by decide +kernel
+theorem v708 : AB 13 10 1=true := by decide +kernel
+theorem v709 : AB 13 11 1=true := by decide +kernel
+theorem v710 : AB 13 12 1=true := by decide +kernel
+theorem v711 : AB 13 13 1=true := by decide +kernel
+theorem v712 : AB 13 14 1=true := by decide +kernel
+theorem v713 : AB 13 15 1=true := by decide +kernel
+theorem v714 : AB 13 16 1=true := by decide +kernel
+theorem v715 : AB 13 17 1=true := by decide +kernel
+theorem v716 : AB 13 18 1=true := by decide +kernel
+theorem v717 : AB 13 19 1=true := by decide +kernel
+theorem v718 : AB 13 20 1=true := by decide +kernel
+theorem v719 : AB 13 21 1=true := by decide +kernel
+theorem v720 : AB 13 22 1=true := by decide +kernel
+theorem v721 : AB 13 23 1=true := by decide +kernel
+theorem v722 : AB 13 24 1=true := by decide +kernel
+theorem v723 : AB 13 25 1=true := by decide +kernel
+theorem v724 : AB 13 26 1=true := by decide +kernel
+theorem v725 : AB 13 27 1=true := by decide +kernel
+theorem v726 : AB 13 28 1=true := by decide +kernel
+theorem v727 : AB 13 29 1=true := by decide +kernel
+theorem v728 : AB 13 30 1=true := by decide +kernel
+theorem v729 : AB 13 31 1=true := by decide +kernel
+theorem v730 : AB 13 32 1=true := by decide +kernel
+theorem v731 : AB 13 33 1=true := by decide +kernel
+theorem v732 : AB 13 34 1=true := by decide +kernel
+theorem v733 : AB 13 35 1=true := by decide +kernel
+theorem v734 : AB 13 36 1=true := by decide +kernel
+theorem v735 : AB 13 37 1=true := by decide +kernel
+theorem v736 : AB 13 38 1=true := by decide +kernel
+theorem v737 : AB 13 39 1=true := by decide +kernel
+theorem v738 : AB 13 40 1=true := by decide +kernel
+theorem v739 : AB 13 41 1=true := by decide +kernel
+theorem v740 : AB 13 42 1=true := by decide +kernel
+theorem v741 : AB 13 43 1=true := by decide +kernel
+theorem v742 : AB 13 44 1=true := by decide +kernel
+theorem v743 : AB 13 45 1=true := by decide +kernel
+theorem v744 : AB 13 46 1=true := by decide +kernel
+theorem v745 : AB 13 47 1=true := by decide +kernel
+theorem v746 : AB 13 48 1=true := by decide +kernel
+theorem v747 : AB 13 49 1=true := by decide +kernel
+theorem v748 : AB 13 50 1=true := by decide +kernel
+theorem v749 : AB 13 51 1=true := by decide +kernel
+theorem v750 : AB 13 52 1=true := by decide +kernel
+theorem v751 : AB 13 53 1=true := by decide +kernel
+theorem v752 : AB 13 54 1=true := by decide +kernel
+theorem v753 : AB 13 55 1=true := by decide +kernel
+theorem v754 : AB 13 56 1=true := by decide +kernel
+theorem v755 : AB 13 57 1=true := by decide +kernel
+theorem v756 : AB 13 58 1=true := by decide +kernel
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 0 in
+theorem level13 : AB 13 0 59=true := (@J13 0 29 30 (@J13 0 14 15 (@J13 0 7 7 (@J13 0 3 4 (@J13 0 1 2 v698 (@J13 1 1 1 v699 v700)) (@J13 3 2 2 (@J13 3 1 1 v701 v702) (@J13 5 1 1 v703 v704))) (@J13 7 3 4 (@J13 7 1 2 v705 (@J13 8 1 1 v706 v707)) (@J13 10 2 2 (@J13 10 1 1 v708 v709) (@J13 12 1 1 v710 v711)))) (@J13 14 7 8 (@J13 14 3 4 (@J13 14 1 2 v712 (@J13 15 1 1 v713 v714)) (@J13 17 2 2 (@J13 17 1 1 v715 v716) (@J13 19 1 1 v717 v718))) (@J13 21 4 4 (@J13 21 2 2 (@J13 21 1 1 v719 v720) (@J13 23 1 1 v721 v722)) (@J13 25 2 2 (@J13 25 1 1 v723 v724) (@J13 27 1 1 v725 v726))))) (@J13 29 15 15 (@J13 29 7 8 (@J13 29 3 4 (@J13 29 1 2 v727 (@J13 30 1 1 v728 v729)) (@J13 32 2 2 (@J13 32 1 1 v730 v731) (@J13 34 1 1 v732 v733))) (@J13 36 4 4 (@J13 36 2 2 (@J13 36 1 1 v734 v735) (@J13 38 1 1 v736 v737)) (@J13 40 2 2 (@J13 40 1 1 v738 v739) (@J13 42 1 1 v740 v741)))) (@J13 44 7 8 (@J13 44 3 4 (@J13 44 1 2 v742 (@J13 45 1 1 v743 v744)) (@J13 47 2 2 (@J13 47 1 1 v745 v746) (@J13 49 1 1 v747 v748))) (@J13 51 4 4 (@J13 51 2 2 (@J13 51 1 1 v749 v750) (@J13 53 1 1 v751 v752)) (@J13 55 2 2 (@J13 55 1 1 v753 v754) (@J13 57 1 1 v755 v756))))))
+theorem v757 : AB 14 0 1=true := by decide +kernel
+theorem v758 : AB 14 1 1=true := by decide +kernel
+set_option maxRecDepth 32768 in
+set_option maxHeartbeats 0 in
+theorem level14 : AB 14 0 2=true := (@J14 0 1 1 v757 v758)
 theorem tables : hybridTables testPacked rankCount signedCertificate 14 := by
   intro k hk
   interval_cases k
@@ -7296,7 +7303,17 @@ set_option maxHeartbeats 0 in
 theorem rowSemantics :
     ∀ r : Row, augmentedInputs.map (bit r) =
       List.ofFn (sample r) ++ [sample r 0 || sample r 6] ∧
-      bit r graph = targetFn (sample r) := by decide +kernel
+      bit r graph = targetFn (sample r) := by
+  intro r
+  constructor
+  · unfold augmentedInputs
+    simp only [List.map_append,List.map_cons,List.map_nil]
+    congr 1
+    simp [firstOr,sample,bit,bin]
+  · have hg : graph = graphGoal 511 := by decide +kernel
+    rw [hg]
+    simp [graphGoal,vertex,bit,targetFn,edge,sample]
+    rfl
 
 def essentialRow (i : Fin 9) : Row :=
   Fin.ofNat 512 (([96, 1, 2, 4, 1, 1, 257, 4, 8] : List Nat).getD i.val 0)
