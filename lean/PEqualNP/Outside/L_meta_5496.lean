@@ -5,7 +5,7 @@ import PEqualNP.Defs
 -- lean/PEqualNP/Outside/L_meta_4795.lean (itself copied from L_meta_927.lean), with the namespace
 -- renamed; the barrier certificate for this graph is new.
 
-namespace PEqualNP.Outside.L5496
+namespace PEqualNP.Outside.L_meta_5496
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
@@ -2133,7 +2133,7 @@ theorem baseT : ∀ s : ℕ, HasCircuitSize 6 fT s → 7 ≤ s := by
       · exact fun i hi => span_ok zT_6 i (Nat.zero_le i) hi
     )
 
-end PEqualNP.Outside.L5496
+end PEqualNP.Outside.L_meta_5496
 
 theorem PEqualNP.Outside.L_meta_5496 : ∀ t : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 6 (fun x : Fin 6 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 0 && x 4) || (x 0 && x 5) || (x 1 && x 3) || (x 1 && x 4) || (x 2 && x 3) || (x 2 && x 4)) t → 7 ≤ t := by
-  exact PEqualNP.Outside.L5496.baseT
+  exact PEqualNP.Outside.L_meta_5496.baseT
