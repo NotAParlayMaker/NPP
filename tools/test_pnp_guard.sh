@@ -3,7 +3,7 @@
 # The statement guard of tools/pnp.sh next: a statement carrying Lean code is refused with nothing written; a plain
 # statement is written wrapped in parentheses; and, given a gaps.json, every statement in it passes.
 set -euo pipefail
-here="$(cd "$(dirname "$0")" && pwd)"; t="$(mktemp -d)"; trap 'kill $srv 2>/dev/null; rm -rf "$t"' EXIT
+here="$(cd "$(dirname "$0")" && pwd)"; t="$(mktemp -d)"; trap 'kill $srv 2>/dev/null || true; wait $srv 2>/dev/null || true; rm -rf "$t"' EXIT
 mkdir -p "$t/repo" "$t/bin" "$t/www"; git -C "$t/repo" init -q; mkdir -p "$t/repo/tools"; cp "$here/pnp.sh" "$t/repo/tools/"
 printf '#!/bin/sh\necho tester\n' > "$t/bin/gh"; chmod +x "$t/bin/gh"
 port=$((20000 + RANDOM % 20000)); (cd "$t/www" && exec python3 -m http.server "$port" --bind 127.0.0.1 >/dev/null 2>&1) & srv=$!

@@ -6,7 +6,7 @@
 # bytes check built. git, gh and lake are stubs on PATH: nothing is fetched from or pushed to a real host. Given a gaps.json,
 # every value row in it is written at k = 0 and at k = value_max and matched against valueGap.
 set -euo pipefail
-here="$(cd "$(dirname "$0")" && pwd)"; guard="$here/../.github/scripts/outside-guard.mjs"; t="$(mktemp -d)"; trap 'kill $srv 2>/dev/null; rm -rf "$t"' EXIT
+here="$(cd "$(dirname "$0")" && pwd)"; guard="$here/../.github/scripts/outside-guard.mjs"; t="$(mktemp -d)"; trap 'kill $srv 2>/dev/null || true; wait $srv 2>/dev/null || true; rm -rf "$t"' EXIT
 mkdir -p "$t/repo" "$t/bin" "$t/www"; git -C "$t/repo" init -q; mkdir -p "$t/repo/tools"; cp "$here/pnp.sh" "$t/repo/tools/"
 printf '#!/bin/sh\necho tester\n' > "$t/bin/gh"; chmod +x "$t/bin/gh"
 port=$((20000 + RANDOM % 20000)); (cd "$t/www" && exec python3 -m http.server "$port" --bind 127.0.0.1 >/dev/null 2>"$t/access") & srv=$!
@@ -102,7 +102,7 @@ fresh() { R="$t/$1"; git clone -q "$t/up" "$R"; mkdir -p "$R/tools"; cp "$here/p
 proof() { printf 'import Mathlib\n\ntheorem %s : (1 = 1) := rfl\n' "$2" > "$R/$1"; }
 check() { pnp check "$1" || { echo "FAIL: check"; cat "$t/out"; exit 1; }; }
 submit_says() { pnp submit "$1" && { echo "FAIL: submit went through"; cat "$t/out"; exit 1; }; grep -qF "$2" "$t/out" || { echo "FAIL: submit said:"; cat "$t/out"; exit 1; }; ! grep -qF "$3" "$t/out" || { echo "FAIL: wrong wording"; cat "$t/out"; exit 1; }; }
-PROVED='This step was just proved by someone else; your work still counts if it was inside your live lease. Ask the desk for another step: tools/pnp.sh next'
+PROVED='This step was just proved by someone else, and a recorded proof is final, so this one cannot be sent. You did nothing wrong. Ask the desk for another step: tools/pnp.sh next'
 NEVER='refused: never change a file that is already on main'
 serve "$(row "$T")"; fresh r1; pnp next; pnp value L-meta-9507 3; proof lean/PEqualNP/Outside/V_meta_9507__k3.lean PEqualNP.Outside.V_meta_9507__k3; check L-meta-9507
 cp "$R/lean/PEqualNP/Outside/V_meta_9507__k3.lean" "$t/up/lean/PEqualNP/Outside/"; git -C "$t/up" add -A; git -C "$t/up" commit -qm proved
@@ -138,9 +138,24 @@ git -C "$R" config core.autocrlf false; [ ! -e "$t/pushed" ] || { echo "FAIL: a 
 cp "$t/good" "$R/$F"; check L-meta-9507; pnp submit L-meta-9507 || true                # the release POST has no server here
 grep -q 'push -q -u origin L-meta-9507' "$t/pushed" || { cat "$t/out"; echo "FAIL: a checked file was not sent"; exit 1; }
 git -C "$R" cat-file blob "L-meta-9507:$F" | cmp -s - "$t/built" || { echo "FAIL: sent bytes are not the built bytes"; exit 1; }
+
+# 8. a module planted in the folder the script runs from (or on PYTHONPATH) is never loaded, by any command
+! grep -n 'python3 -' "$here/pnp.sh" | grep -v 'python3 -I ' || { echo "FAIL: a python3 that is not isolated"; exit 1; }
+serve "$(row "$T")"; fresh r5; F=lean/PEqualNP/Outside/V_meta_9507__k1.lean
+for m in json re os unicodedata hashlib; do printf 'open(%s, "a").write(%s)\nraise SystemExit(7)\n' "'$t/planted'" "'$m '" > "$R/$m.py"; echo "$m.py" >> "$R/.git/info/exclude"; done
+(cd "$R" && python3 -c 'import json') >/dev/null 2>&1 || true; [ -s "$t/planted" ] || { echo "FAIL: the plant does not work, so this proves nothing"; exit 1; }; rm "$t/planted"
+export PYTHONPATH="$R"
+pnp next || { cat "$t/out"; echo "FAIL: next beside planted modules"; exit 1; }
+pnp value L-meta-9507 1 || { cat "$t/out"; echo "FAIL: value beside planted modules"; exit 1; }
+printf 'import Mathlib\n-- note\ntheorem PEqualNP.Outside.V_meta_9507__k1 : (1 = 1) := rfl\n' > "$R/$F"
+pnp tidy L-meta-9507 || { cat "$t/out"; echo "FAIL: tidy beside planted modules"; exit 1; }
+check L-meta-9507; pnp beat L-meta-9507 || true; rm -f "$t/pushed"; pnp submit L-meta-9507 || true
+[ -s "$t/pushed" ] || { cat "$t/out"; echo "FAIL: submit beside planted modules"; exit 1; }
+unset PYTHONPATH
+[ ! -e "$t/planted" ] || { echo "FAIL: loaded a planted module: $(cat "$t/planted")"; exit 1; }
 R="$t/repo"
 
-# 8. live: every value row, at k = 0 and k = value_max, matches the guard
+# 9. live: every value row, at k = 0 and k = value_max, matches the guard
 if [ -n "${1:-}" ]; then
   n=0; while IFS= read -r -d '' r; do
     serve "$r"; id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$t/row.json")"; vm="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["value_max"])' "$t/row.json")"

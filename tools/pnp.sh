@@ -31,9 +31,10 @@ if [ -n "${PNP_DESK:-}" ]; then
 fi
 UPSTREAM=open-goat/pequalnp-proofs
 ROOT="$(git rev-parse --show-toplevel)"
+# Every python3 here runs isolated (-I): a json.py or re.py in the folder this is run from is never loaded.
 STATE="$ROOT/.pnp"; mkdir -p "$STATE"
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1 ($2)" >&2; exit 1; }; }
-field() { python3 -c 'import json,sys; v=json.load(open(sys.argv[1]));
+field() { python3 -I -c 'import json,sys; v=json.load(open(sys.argv[1]));
 for k in sys.argv[2].split("."): v=v.get(k) if isinstance(v,dict) else None
 print("" if v is None else v)' "$STATE/$1.json" "$2"; }
 # IS THE STEP STILL OPEN? Asked of the desk before building and again right before the pull request, so
@@ -42,7 +43,7 @@ print("" if v is None else v)' "$STATE/$1.json" "$2"; }
 # If the desk cannot be reached the script goes on: this check is a courtesy, never a gate.
 still_open() {
   ans="$(curl --proto '=https' -fsS -m 10 -G "$DESK/step" --data-urlencode "gap=$1" 2>/dev/null)" || return 0
-  printf '%s' "$ans" | python3 -c 'import json,sys,re
+  printf '%s' "$ans" | python3 -I -c 'import json,sys,re
 try: d=json.load(sys.stdin)
 except Exception: sys.exit(0)
 st=d.get("state") if isinstance(d,dict) else None
@@ -60,7 +61,7 @@ has_file() { have "$1"; [ -n "$(field "$1" gap.file)" ] || { echo "$1 is a value
 # COMMENTS OFF before the build that is recorded (a pull request carries the proof only): `--` line comments and `/- -/` blocks, nested, outside
 # string, raw string, char and «name» literals. A block becomes blanks, so every column after it stays where it was.
 # One line says so when anything was removed.
-tidy() { python3 - "$1" <<'PY'
+tidy() { python3 -I - "$1" <<'PY'
 import re, sys
 p = sys.argv[1]; s = open(p, encoding="utf-8").read(); out = []; i = 0; n = len(s); cut = False
 ident = lambda j: j >= 0 and (s[j].isalnum() or s[j] in "_'!?.")
@@ -100,7 +101,7 @@ PY
 }
 # WHAT IS SENT IS WHAT WAS CHECKED: check records the sha256 of the bytes that built, with the file's path; submit sends
 # the file only when its bytes, and then the committed bytes, are those. is_checked <step> <file> reads bytes on stdin.
-sha() { python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'; }
+sha() { python3 -I -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'; }
 is_checked() { [ -f "$STATE/$1.checked" ] && [ "$(cat "$STATE/$1.checked")" = "$(sha) $2" ]; }
 # The python both `next` and `value` run first: the statement guard, the import rule and the value-step rule.
 guard_py() { cat <<'PY'
@@ -260,13 +261,13 @@ next)
     --proof-of) [[ "${2:-}" =~ ^L-[a-z]+-[0-9]+$ ]] || { echo "--proof-of needs a step id, e.g. L-meta-1629" >&2; exit 1; }; q="$q&gap=$2&have=proof"; shift;;
     *) echo "unknown: $1" >&2; exit 1;; esac; shift; done
   curl -fsS "$DESK/next?$q" > "$STATE/.last.json" || { echo "the desk refused; its answer:" >&2; curl -sS "$DESK/next?$q" >&2; exit 1; }
-  python3 -c "$(guard_py)"$'\n'"$(next_py)" "$STATE" "$ROOT"
+  python3 -I -c "$(guard_py)"$'\n'"$(next_py)" "$STATE" "$ROOT"
   ;;
 value)
-  have "$2"; python3 -c "$(guard_py)"$'\n'"$(value_py)" "$STATE" "$ROOT" "$2" "${3:?the value k}"
+  have "$2"; python3 -I -c "$(guard_py)"$'\n'"$(value_py)" "$STATE" "$ROOT" "$2" "${3:?the value k}"
   ;;
 beat)
-  have "$2"; curl -sS -X POST "$DESK/beat?lease=$(field "$2" lease.id)" | python3 -c 'import json,sys,re
+  have "$2"; curl -sS -X POST "$DESK/beat?lease=$(field "$2" lease.id)" | python3 -I -c 'import json,sys,re
 d=json.load(sys.stdin)
 if isinstance(d.get("lease"), dict): print("lease until", re.sub(r"[^0-9TZ:.-]", "", str(d["lease"].get("expires_at")))); sys.exit(0)
 print("STOP: " + re.sub(r"[^ -~]", " ", str(d.get("error") or "the lease is gone"))[:300], file=sys.stderr); sys.exit(3)'
@@ -300,7 +301,7 @@ submit)
   changed="$(git diff --name-status "$base" HEAD)"
   # This step's own file already on main: someone proved it first, and the agent did nothing wrong.
   if git cat-file -e "FETCH_HEAD:$file" 2>/dev/null; then
-    echo "This step was just proved by someone else; your work still counts if it was inside your live lease. Ask the desk for another step: tools/pnp.sh next" >&2; exit 1
+    echo "This step was just proved by someone else, and a recorded proof is final, so this one cannot be sent. You did nothing wrong. Ask the desk for another step: tools/pnp.sh next" >&2; exit 1
   fi
   if [ "$changed" != "A	$file" ]; then
     echo "refused: never change a file that is already on main. Every proof is a NEW file; a recorded proof is final." >&2
@@ -315,7 +316,7 @@ submit)
   # Renew the lease right before the pull request: a 410 that says withdrawn means the step was proved or stood down
   # meanwhile, and the pull request would be refused; stop. (A lease that only expired does not stop a finished proof.)
   if [ -n "$lease" ]; then
-    { curl -sS -m 10 -X POST "$DESK/beat?lease=$lease" 2>/dev/null || true; } | python3 -c 'import json,sys,re
+    { curl -sS -m 10 -X POST "$DESK/beat?lease=$lease" 2>/dev/null || true; } | python3 -I -c 'import json,sys,re
 try: d=json.load(sys.stdin)
 except Exception: sys.exit(0)
 if isinstance(d, dict) and d.get("withdrawn") is True:
