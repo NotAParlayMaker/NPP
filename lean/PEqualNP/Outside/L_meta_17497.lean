@@ -81,11 +81,10 @@ theorem cover_extend {n} {L W : List (BitFn n)} (f : BitFn n) (hc : Covers L W) 
     Covers (L ++ [f]) W := by
   intro j
   obtain ⟨I,J,hJ,h⟩ := hc j
-  refine ⟨I,J,fun a ha => by simpa using Nat.lt.step (hJ a ha), ?_⟩
+  refine ⟨I,J,fun a ha => by simpa using Nat.lt_succ_of_lt (hJ a ha), ?_⟩
   intro x
   rw [h]
-  unfold expr
-  rw [read_append (L := L) (f := f) (x := x) (J := J) hJ]
+  exact congrArg (fun b => I.any x || b) (read_append (L := L) (f := f) (x := x) hJ).symm
 
 def opFn {n} (W : List (BitFn n)) (g : Gate) : BitFn n := fun x =>
   g.op.eval (g.inputs.map fun i => W.getD i off x)
@@ -93,7 +92,7 @@ def opFn {n} (W : List (BitFn n)) (g : Gate) : BitFn n := fun x =>
 def runFns {n} (gs : List Gate) (W : List (BitFn n)) : List (BitFn n) :=
   gs.foldl (fun W g => W ++ [opFn W g]) W
 
-def countAnd (g : Gate) : Bool :=
+noncomputable def countAnd (g : Gate) : Bool :=
   g.op.rec true false false (fun _ => false) false
 
 -- Each wire is represented by a disjunction of raw inputs and registered AND outputs.
@@ -114,7 +113,8 @@ theorem build {n} (gs : List Gate)
     have ht := fun t ht => allowed t (List.mem_cons_of_mem g ht)
     rcases hop with op | op
     · have gate (x : Fin n → Bool) : opFn W g x = (expr L Ia Ja x && expr L Ib Jb x) := by
-        simp [opFn, op, hab, GateOp.eval, ha, hb]
+        simp only [opFn, op, hab, GateOp.eval, List.map_cons, List.map_nil, List.all_cons,
+          List.all_nil, id_eq, Bool.and_true, ha, hb]
       have hn := normal_append (f := opFn W g) hL ⟨Ia, Ib, Ja, Jb, gate⟩
       have own : Form (L ++ [opFn W g]) (opFn W g) := by
         exact ⟨[],[L.length],by simp,by simp [expr]⟩
@@ -126,8 +126,9 @@ theorem build {n} (gs : List Gate)
         · intro j hj
           exact (List.mem_append.mp hj).elim (HJa j) (HJb j)
         · intro x
-          simp [opFn, op, hab, GateOp.eval, ha, hb, expr, Bool.or_assoc, Bool.or_left_comm,
-            Bool.or_comm]
+          simp only [opFn, op, hab, GateOp.eval, List.map_cons, List.map_nil, List.any_cons,
+            List.any_nil, id_eq, Bool.or_false, ha, hb, expr, List.any_append]
+          ac_rfl
       obtain ⟨L',hN,hS,hC⟩ := ih ht _ _ hL (cover_snoc _ hc gate)
       refine ⟨L',hN,?_,hC⟩
       simpa [countAnd, op, List.countP_cons] using hS
@@ -149,7 +150,7 @@ theorem run_values {n} (gs : List Gate) (W : List (BitFn n)) (x : Fin n → Bool
   | cons g gs ih =>
     change ((runFns gs (W ++ [opFn W g])).map _) = gs.foldl _ _
     rw [ih]
-    simp [opFn,lookup_values]
+    simp only [List.map_append, List.map_cons, List.map_nil, opFn, lookup_values]
 
 def inputFns (n : ℕ) : List (BitFn n) := List.ofFn fun i x => x i
 
