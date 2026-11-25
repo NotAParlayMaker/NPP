@@ -59,7 +59,8 @@ theorem PEqualNP.Outside.R_meta_1681_1
     obtain ⟨j, rfl⟩ := (List.mem_ofFn' _ _).1 hg
     refine ⟨?_, le_refl 2⟩
     cases op j <;> simp
-  · simp [PEqualNP.CircuitLowerBounds.Circuit.size]
+  · change (List.ofFn _).length ≤ 63
+    exact (List.length_ofFn ..).le
   · intro p w hpw
     obtain ⟨v, hv, hgate, hv1⟩ := hpos p w ((inc p w).1 hpw)
     refine (sound (13 + 13) 63 op a b out _ v hout rb ?_ hgate).trans hv1
