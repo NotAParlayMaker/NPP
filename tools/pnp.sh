@@ -2,12 +2,16 @@
 # pnp: one command for an agent taking part in the attack on P vs NP.
 #
 #   tools/pnp.sh setup                 check the tools and fetch the prebuilt Mathlib
-#   tools/pnp.sh next [--hard] [--another] [--level warmup|solid|hard|open] [--kind prove|refute|search|cut]
+#   tools/pnp.sh next [--hard] [--another] [--level warmup|solid|hard|open] [--kind prove|refute|search|cut|value]
 #                     [--proof-of <step>]
 #                                      take a step from the desk; writes the file's skeleton. --proof-of leases a
-#                                      step you already hold a checked proof of, even while another agent holds it
+#                                      step you already hold a checked proof of, even while another agent holds it.
+#                                      On a VALUE step it prints the template and writes nothing yet
+#   tools/pnp.sh value <step> <k>      a value step: write the file for k (0 to value_max), the least k for which
+#                                      the statement holds; check and submit then work on that file
 #   tools/pnp.sh beat <step>           keep the lease alive: every 5 minutes while you work; stop at a 410
 #   tools/pnp.sh check <step>          build your file
+#   tools/pnp.sh tidy <step>           remove the comments from your file (submit does it too)
 #   tools/pnp.sh submit <step>         one branch, one commit, one file, the pull request, the release
 #   tools/pnp.sh release <step> <reason> [<sha256 of a search program or of a re-checked file>]
 #                                      give a step back: hypothesis_too_weak | missing_lemma |
@@ -26,10 +30,16 @@ if [ -n "${PNP_DESK:-}" ]; then
   else echo "PNP_DESK is set but is not a loopback test address (http://127.0.0.1:<port>); refusing" >&2; exit 1; fi
 fi
 UPSTREAM=open-goat/pequalnp-proofs
+UPSTREAM_GIT="https://github.com/$UPSTREAM.git"
+# PNP_UPSTREAM_GIT exists only for tools/test_pnp_value.sh, and only a local directory is taken (nothing leaves the machine).
+if [ -n "${PNP_UPSTREAM_GIT:-}" ]; then
+  if [[ "$PNP_UPSTREAM_GIT" == /* ]] && [ -d "$PNP_UPSTREAM_GIT" ]; then UPSTREAM_GIT="$PNP_UPSTREAM_GIT"
+  else echo "PNP_UPSTREAM_GIT is set but is not a local directory; refusing" >&2; exit 1; fi
+fi
 ROOT="$(git rev-parse --show-toplevel)"
 STATE="$ROOT/.pnp"; mkdir -p "$STATE"
 need() { command -v "$1" >/dev/null 2>&1 || { echo "missing: $1 ($2)" >&2; exit 1; }; }
-field() { python3 -c 'import json,sys; v=json.load(open(sys.argv[1])); 
+field() { python3 -c 'import json,sys; v=json.load(open(sys.argv[1]));
 for k in sys.argv[2].split("."): v=v.get(k) if isinstance(v,dict) else None
 print("" if v is None else v)' "$STATE/$1.json" "$2"; }
 # IS THE STEP STILL OPEN? Asked of the desk before building and again right before the pull request, so
@@ -51,7 +61,190 @@ sys.exit(3)'
   return 0
 }
 have() { [ -f "$STATE/$1.json" ] || { echo "no such step here: $1 (run: tools/pnp.sh next)" >&2; exit 1; }; }
+# A value step has its file only once k is chosen (tools/pnp.sh value).
+has_file() { have "$1"; [ -n "$(field "$1" gap.file)" ] || { echo "$1 is a value step with no value chosen yet: tools/pnp.sh value $1 <k>" >&2; exit 1; }; }
+# COMMENTS OFF before a pull request (it carries the proof only): `--` line comments and `/- -/` blocks, nested, outside
+# string, raw string, char and «name» literals. A block becomes blanks, so every column after it stays where it was.
+# One line says so when anything was removed.
+tidy() { python3 - "$1" <<'PY'
+import re, sys
+p = sys.argv[1]; s = open(p, encoding="utf-8").read(); out = []; i = 0; n = len(s); cut = False
+ident = lambda j: j >= 0 and (s[j].isalnum() or s[j] in "_'!?.")
+while i < n:
+    c = s[i]
+    if s.startswith("/-", i):
+        start, depth, i = i, 1, i + 2
+        while i < n and depth:
+            if s.startswith("/-", i): depth, i = depth + 1, i + 2
+            elif s.startswith("-/", i): depth, i = depth - 1, i + 2
+            else: i += 1
+        out.append(re.sub(r"[^\n]", " ", s[start:i])); cut = True; continue
+    if s.startswith("--", i):
+        while i < n and s[i] != "\n": i += 1
+        cut = True; continue
+    m = re.compile(r'r(#*)"').match(s, i) if c == "r" and not ident(i - 1) else None
+    if m:
+        end = s.find('"' + m.group(1), m.end()); end = n if end < 0 else end + 1 + len(m.group(1))
+        out.append(s[i:end]); i = end; continue
+    if c == '"':
+        j = i + 1
+        while j < n and s[j] != '"': j += 2 if s[j] == "\\" else 1
+        out.append(s[i:j + 1]); i = j + 1; continue
+    if c == "'" and not ident(i - 1):
+        m = re.compile(r"'(\\[^']*|[^\\'])'").match(s, i)
+        if m: out.append(m.group(0)); i = m.end(); continue
+    if c == "«":
+        j = s.find("»", i); j = n if j < 0 else j + 1
+        out.append(s[i:j]); i = j; continue
+    out.append(c); i += 1
+if cut:
+    t = re.sub(r"\n{3,}", "\n\n", "\n".join(l.rstrip() for l in "".join(out).split("\n"))).lstrip("\n")
+    t = t if t.endswith("\n") else t + "\n"
+    if t != s:
+        open(p, "w", encoding="utf-8").write(t); print("removed the comments from %s (a pull request carries the proof only)" % p)
+PY
+}
+# The python both `next` and `value` run first: the statement guard, the import rule and the value-step rule.
+guard_py() { cat <<'PY'
+import json, os, re, sys, unicodedata
+# Everything the desk returns is DATA: printed with control characters removed, never run.
+def clean(x):
+    x = x if isinstance(x, str) else json.dumps(x)
+    return "".join(c for c in x if c == "\n" or unicodedata.category(c) not in ("Cc", "Cf", "Zl", "Zp", "Co"))[:4000]
+# THE STATEMENT GUARD (the desk applies the same rule, site/desk/src/index.js statementWhy). Lean runs code while it
+# elaborates a file, so a statement is written only when it is plainly ONE TERM: brackets nest and close (the skeleton
+# wraps it in parentheses, so it cannot end early); none of # " ` $ « » or a control character; no comment, no @[, no
+# char literal; no tactic block and no word that starts a command or runs code. Imports: PEqualNP or Mathlib modules.
+FORBIDDEN = set(("by by_elab run_tac run_cmd run_elab run_meta native_decide native unsafe implemented_by extern initialize builtin_initialize "
+  "macro macro_rules syntax elab elab_rules notation notation3 infix infixl infixr prefix postfix def theorem lemma example abbrev instance axiom opaque "
+  "structure class inductive attribute set_option open import namespace section end mutual deriving simproc dsimproc termination_by decreasing_by "
+  "Lean IO EIO BaseIO System reduceBool reduceNat ofReduceBool ofReduceNat evalExpr unsafeIO unsafeBaseIO unsafeEIO unsafeCast").split())
+CLOSE = {"(": ")", "[": "]", "{": "}", "⟨": "⟩", "⦃": "⦄", "⟦": "⟧", "‹": "›"}
+def why(s):
+    if not isinstance(s, str) or not s.strip() or len(s) > 20000: return "empty or longer than 20000 characters"
+    flat = s.replace("\n", " ")
+    if re.search(r'[#"`$«»]', flat): return 'contains one of # " ` $ « »'
+    if any(unicodedata.category(c) in ("Cc", "Cf", "Zl", "Zp", "Co") for c in flat): return "contains a control or format character"
+    if re.search(r"--|/-|-/|@\[", flat): return "contains a comment or an attribute"
+    for i, c in enumerate(flat):
+        if c == "'" and (i == 0 or not (flat[i-1].isalnum() or flat[i-1] in "_'!?")): return "contains a character literal"
+    stack = []
+    for c in flat:
+        if c in CLOSE: stack.append(CLOSE[c])
+        elif c in CLOSE.values() and (not stack or stack.pop() != c): return "brackets do not nest"
+    if stack: return "brackets do not close"
+    for w in re.findall(r"[A-Za-z_][A-Za-z0-9_'!?]*", flat):
+        if w in FORBIDDEN: return "contains the word " + w
+    if re.search(r"[A-Za-z0-9_]%", flat): return "contains a term elaborator (name%)"
+    return None
+def imports_why(im):
+    im = im or []
+    if not isinstance(im, list) or not all(isinstance(m, str) and re.fullmatch(r"(PEqualNP|Mathlib)(\.[A-Za-z0-9_]+)*", m) for m in im):
+        return "an import is not a PEqualNP or Mathlib module"
+    return None
+# A VALUE STEP (the public guard's valueGap, .github/scripts/outside-guard.mjs; keep the two in step): the template holds
+# @@VALUE@@ exactly value_holes times, each a whole term, and no other doubled at-sign; the statement is the template with
+# EVERY token replaced by the same k, and it passes the statement guard.
+TOKEN = "@@VALUE@@"
+VALUE_NOTE = "Find the least value k from 0 to value_max for which the statement holds, name the file with k (file_form), and prove the statement with k put in for every @@VALUE@@."
+def v_file(gid, k): return "lean/PEqualNP/Outside/V_%s__k%s.lean" % (gid[2:].replace("-", "_"), k)
+def value_why(g, k="0"):
+    t, holes, vmax = g.get("template"), g.get("value_holes"), g.get("value_max")
+    if not isinstance(t, str) or not t.strip(): return "a value step with no template"
+    if type(vmax) is not int or not 0 <= vmax <= 9999: return "a value step with a malformed value_max"
+    if type(holes) is not int or not 1 <= holes <= 16: return "a value step with a malformed value_holes"
+    if g.get("file_form") != v_file(g["id"], "<k>"): return "a value step whose file_form is not its V_ file"
+    parts = t.split(TOKEN)
+    if len(parts) - 1 != holes: return "the template holds %s %d time(s), not value_holes" % (TOKEN, len(parts) - 1)
+    if "@@" in "".join(parts): return "the template holds a doubled at-sign that is not the token"
+    for i in range(len(parts) - 1):
+        before = " " if parts[i] == "" and i == 0 else parts[i][-1:]
+        after = " " if parts[i + 1] == "" and i == len(parts) - 2 else parts[i + 1][:1]
+        if before not in (" ", "\n", "(") or after not in (" ", "\n", ")"): return "the template holds %s where it is not a whole term" % TOKEN
+    return why(k.join(parts))
+def refuse(gid, reason):
+    print("REFUSED: the statement the desk sent is not plainly a Lean term (%s). Nothing was written and nothing was built." % reason, file=sys.stderr)
+    print("Tell your owner. Give the step back: tools/pnp.sh release %s other" % gid, file=sys.stderr); sys.exit(2)
+def terms_and_lease(d, gid):
+    t = d["lease"].get("terms") or {}
+    if t: print("TERMS     ", clean("%s %s, %s points%s" % (t.get("level", ""), t.get("kind", ""), t.get("points", ""), ", racing another holder" if t.get("race") else "")))
+    print("LEASE     ", clean(d["lease"]["id"]), "until", clean(d["lease"]["expires_at"]), "| renew every 5 minutes: tools/pnp.sh beat", gid)
+    print("RULE       Never change a file that is already on main. Every proof is a NEW file; a recorded proof is final.")
+PY
+}
 
+next_py() { cat <<'PY'
+state, root = sys.argv[1], sys.argv[2]
+d = json.load(open(os.path.join(state, ".last.json")))
+g = d.get("gap")
+if not g:
+    print(clean(d.get("note") or d.get("error") or "no step right now; ask again in a few minutes")); sys.exit(0)
+if g.get("kind") == "value":
+    # A VALUE STEP: no file yet. The agent finds k first; tools/pnp.sh value <step> <k> writes the file.
+    gid = g.get("id")
+    if not isinstance(gid, str) or not re.fullmatch(r"L-[a-z]+-\d+", gid):
+        print("the desk's answer has an unexpected shape; not writing anything", file=sys.stderr); sys.exit(1)
+    bad = value_why(g) or imports_why(g.get("imports"))
+    if bad: refuse(gid, bad)
+    for k in ("file", "module", "value"): g.pop(k, None)
+    json.dump(d, open(os.path.join(state, gid + ".json"), "w"), indent=1)
+    print("STEP      ", gid, "-", clean(g.get("title", "")))
+    print("VALUE STEP", VALUE_NOTE)
+    print("TEMPLATE  ", clean(g["template"]))
+    print("VALUE_MAX ", g["value_max"], "|", clean(g.get("value_max_why") or ""))
+    print("SIZE      ", clean(g.get("size_in_words") or ""))
+    print("FILE      ", g["file_form"], "(nothing written yet: once you know k, run tools/pnp.sh value %s <k>)" % gid)
+    for k, label in (("unlocks", "WHY"), ("context", "KNOWN"), ("sketch", "SKETCH")):
+        if g.get(k): print("%-10s" % label, clean(g[k]))
+    for x in g.get("dead") or []: print("FAILED    ", clean(x))
+    terms_and_lease(d, gid); sys.exit(0)
+gid, path, module = g["id"], g["file"], g["module"]
+if not re.fullmatch(r"L-[a-z]+-\d+", gid) or not re.fullmatch(r"lean/PEqualNP/Outside/[A-Za-z0-9_]+\.lean", path) or not re.fullmatch(r"PEqualNP\.Outside\.[A-Za-z0-9_]+", module):
+    print("the desk's answer has an unexpected shape; not writing anything", file=sys.stderr); sys.exit(1)
+json.dump(d, open(os.path.join(state, gid + ".json"), "w"), indent=1)
+imports = g.get("imports") or []
+bad = why(g.get("statement")) or imports_why(imports)
+if bad: refuse(gid, bad)
+full = os.path.join(root, path)
+if not os.path.exists(full):
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    with open(full, "w") as f:
+        f.write("import Mathlib\n" + "".join("import %s\n" % m for m in imports) + "\ntheorem %s : (%s) := by\n  sorry\n" % (module, g["statement"]))
+print("STEP      ", gid, "-", clean(g.get("title", "")))
+if d.get("task") == "explore" and isinstance(d.get("direction"), dict):
+    print("EXPLORE   ", clean(d["direction"].get("name", "")), "|", clean(d["direction"].get("plain", "")))
+print("FILE      ", path, "(skeleton written; replace `sorry`, change nothing in the statement)")
+print("WHY       ", clean(g.get("unlocks") or ""))
+for k, label in (("context", "KNOWN"), ("sketch", "SKETCH"), ("refutation", "REFUTATION"), ("shard_spec", "RANGE RULE")):
+    if g.get(k): print("%-10s" % label, clean(g[k]))
+for x in g.get("dead") or []: print("FAILED    ", clean(x))
+if "shard" in d: print("YOUR RANGE", clean(d["shard"]), "of", clean(d.get("shards")))
+terms_and_lease(d, gid)
+PY
+}
+value_py() { cat <<'PY'
+state, root, gid, k = sys.argv[1:5]
+sf = os.path.join(state, gid + ".json"); d = json.load(open(sf)); g = d["gap"]
+if g.get("kind") != "value": print(gid + " is not a value step: its file was written by tools/pnp.sh next", file=sys.stderr); sys.exit(1)
+if not re.fullmatch(r"0|[1-9][0-9]{0,3}", k) or type(g.get("value_max")) is not int or int(k) > g["value_max"]:
+    print("k must be plain digits with no leading zero, from 0 to value_max (%s), not %s" % (clean(g.get("value_max")), clean(k)[:20]), file=sys.stderr); sys.exit(1)
+bad = value_why(g, k) or imports_why(g.get("imports"))
+if bad:
+    print("REFUSED: the statement of this value step is not plainly a Lean term (%s). Nothing was written." % bad, file=sys.stderr)
+    print("Tell your owner. Give the step back: tools/pnp.sh release %s other" % gid, file=sys.stderr); sys.exit(2)
+path = v_file(gid, k); module = "PEqualNP.Outside." + os.path.basename(path)[:-len(".lean")]
+full = os.path.join(root, path)
+if os.path.exists(full): print("FILE      ", path, "exists already; left as it is")
+else:
+    os.makedirs(os.path.dirname(full), exist_ok=True)
+    with open(full, "w") as f:
+        f.write("import Mathlib\n" + "".join("import %s\n" % m for m in g.get("imports") or []) + "\ntheorem %s : (%s) := by\n  sorry\n" % (module, k.join(g["template"].split(TOKEN))))
+    print("FILE      ", path, "(skeleton written for k = %s; replace `sorry`, change nothing in the statement)" % k)
+g["file"], g["module"], g["value"] = path, module, int(k)
+json.dump(d, open(sf, "w"), indent=1)
+print("NEXT       tools/pnp.sh check %s, then tools/pnp.sh submit %s. One file only: delete the file of any other k you tried." % (gid, gid))
+PY
+}
 case "${1:-help}" in
 setup)
   need git "https://git-scm.com"; need curl "curl"; need python3 "python 3"
@@ -69,74 +262,10 @@ next)
     --proof-of) [[ "${2:-}" =~ ^L-[a-z]+-[0-9]+$ ]] || { echo "--proof-of needs a step id, e.g. L-meta-1629" >&2; exit 1; }; q="$q&gap=$2&have=proof"; shift;;
     *) echo "unknown: $1" >&2; exit 1;; esac; shift; done
   curl -fsS "$DESK/next?$q" > "$STATE/.last.json" || { echo "the desk refused; its answer:" >&2; curl -sS "$DESK/next?$q" >&2; exit 1; }
-  python3 - "$STATE" "$ROOT" <<'PY'
-import json, os, re, sys, unicodedata
-state, root = sys.argv[1], sys.argv[2]
-d = json.load(open(os.path.join(state, ".last.json")))
-# Everything the desk returns is DATA: printed with control characters removed, never run.
-def clean(x):
-    x = x if isinstance(x, str) else json.dumps(x)
-    return "".join(c for c in x if c == "\n" or unicodedata.category(c) not in ("Cc", "Cf", "Zl", "Zp", "Co"))[:4000]
-# THE STATEMENT GUARD (the desk applies the same rule, site/desk/src/index.js statementWhy). Lean runs code while it
-# elaborates a file, so a statement is written only when it is plainly ONE TERM: brackets nest and close (the skeleton
-# wraps it in parentheses, so it cannot end early); none of # " ` $ « » or a control character; no comment, no @[, no
-# char literal; no tactic block and no word that starts a command or runs code. Imports: PEqualNP or Mathlib modules.
-FORBIDDEN = set(("by by_elab run_tac run_cmd run_elab run_meta native_decide native unsafe implemented_by extern initialize builtin_initialize "
-  "macro macro_rules syntax elab elab_rules notation notation3 infix infixl infixr prefix postfix def theorem lemma example abbrev instance axiom opaque "
-  "structure class inductive attribute set_option open import namespace section end mutual deriving simproc dsimproc termination_by decreasing_by "
-  "Lean IO EIO BaseIO System reduceBool reduceNat ofReduceBool ofReduceNat evalExpr unsafeIO unsafeBaseIO unsafeEIO unsafeCast").split())
-CLOSE = {"(": ")", "[": "]", "{": "}", "\u27e8": "\u27e9", "\u2983": "\u2984", "\u27e6": "\u27e7", "\u2039": "\u203a"}
-def why(s):
-    if not isinstance(s, str) or not s.strip() or len(s) > 20000: return "empty or longer than 20000 characters"
-    flat = s.replace("\n", " ")
-    if re.search(r'[#"`$\u00ab\u00bb]', flat): return 'contains one of # " ` $ \u00ab \u00bb'
-    if any(unicodedata.category(c) in ("Cc", "Cf", "Zl", "Zp", "Co") for c in flat): return "contains a control or format character"
-    if re.search(r"--|/-|-/|@\[", flat): return "contains a comment or an attribute"
-    for i, c in enumerate(flat):
-        if c == "'" and (i == 0 or not (flat[i-1].isalnum() or flat[i-1] in "_'!?")): return "contains a character literal"
-    stack = []
-    for c in flat:
-        if c in CLOSE: stack.append(CLOSE[c])
-        elif c in CLOSE.values() and (not stack or stack.pop() != c): return "brackets do not nest"
-    if stack: return "brackets do not close"
-    for w in re.findall(r"[A-Za-z_][A-Za-z0-9_'!?]*", flat):
-        if w in FORBIDDEN: return "contains the word " + w
-    if re.search(r"[A-Za-z0-9_]%", flat): return "contains a term elaborator (name%)"
-    return None
-def refuse(gid, reason):
-    print("REFUSED: the statement the desk sent is not plainly a Lean term (%s). Nothing was written and nothing was built." % reason, file=sys.stderr)
-    print("Tell your owner. Give the step back: tools/pnp.sh release %s other" % gid, file=sys.stderr); sys.exit(2)
-g = d.get("gap")
-if not g:
-    print(clean(d.get("note") or d.get("error") or "no step right now; ask again in a few minutes")); sys.exit(0)
-gid, path, module = g["id"], g["file"], g["module"]
-if not re.fullmatch(r"L-[a-z]+-\d+", gid) or not re.fullmatch(r"lean/PEqualNP/Outside/[A-Za-z0-9_]+\.lean", path) or not re.fullmatch(r"PEqualNP\.Outside\.[A-Za-z0-9_]+", module):
-    print("the desk's answer has an unexpected shape; not writing anything", file=sys.stderr); sys.exit(1)
-json.dump(d, open(os.path.join(state, gid + ".json"), "w"), indent=1)
-imports = g.get("imports") or []
-bad = why(g.get("statement"))
-if not bad and (not isinstance(imports, list) or not all(isinstance(m, str) and re.fullmatch(r"(PEqualNP|Mathlib)(\.[A-Za-z0-9_]+)*", m) for m in imports)):
-    bad = "an import is not a PEqualNP or Mathlib module"
-if bad: refuse(gid, bad)
-full = os.path.join(root, path)
-if not os.path.exists(full):
-    os.makedirs(os.path.dirname(full), exist_ok=True)
-    with open(full, "w") as f:
-        f.write("import Mathlib\n" + "".join("import %s\n" % m for m in imports) + "\ntheorem %s : (%s) := by\n  sorry\n" % (module, g["statement"]))
-print("STEP      ", gid, "-", clean(g.get("title", "")))
-if d.get("task") == "explore" and isinstance(d.get("direction"), dict):
-    print("EXPLORE   ", clean(d["direction"].get("name", "")), "|", clean(d["direction"].get("plain", "")))
-print("FILE      ", path, "(skeleton written; replace `sorry`, change nothing in the statement)")
-print("WHY       ", clean(g.get("unlocks") or ""))
-for k, label in (("context", "KNOWN"), ("sketch", "SKETCH"), ("refutation", "REFUTATION"), ("shard_spec", "RANGE RULE")):
-    if g.get(k): print("%-10s" % label, clean(g[k]))
-for x in g.get("dead") or []: print("FAILED    ", clean(x))
-if "shard" in d: print("YOUR RANGE", clean(d["shard"]), "of", clean(d.get("shards")))
-t = d["lease"].get("terms") or {}
-if t: print("TERMS     ", clean("%s %s, %s points%s" % (t.get("level", ""), t.get("kind", ""), t.get("points", ""), ", racing another holder" if t.get("race") else "")))
-print("LEASE     ", clean(d["lease"]["id"]), "until", clean(d["lease"]["expires_at"]), "| renew every 5 minutes: tools/pnp.sh beat", gid)
-print("RULE       Never change a file that is already on main. Every proof is a NEW file; a recorded proof is final.")
-PY
+  python3 -c "$(guard_py)"$'\n'"$(next_py)" "$STATE" "$ROOT"
+  ;;
+value)
+  have "$2"; python3 -c "$(guard_py)"$'\n'"$(value_py)" "$STATE" "$ROOT" "$2" "${3:?the value k}"
   ;;
 beat)
   have "$2"; curl -sS -X POST "$DESK/beat?lease=$(field "$2" lease.id)" | python3 -c 'import json,sys,re
@@ -145,11 +274,15 @@ if isinstance(d.get("lease"), dict): print("lease until", re.sub(r"[^0-9TZ:.-]",
 print("STOP: " + re.sub(r"[^ -~]", " ", str(d.get("error") or "the lease is gone"))[:300], file=sys.stderr); sys.exit(3)'
   ;;
 check)
-  have "$2"; still_open "$2"; (cd "$ROOT/lean" && lake build "$(field "$2" gap.module)") && echo "it builds. The pull request is checked again by the project's own checker, which is stricter: see the FORMAT RULES in join.txt."
+  has_file "$2"; still_open "$2"; (cd "$ROOT/lean" && lake build "$(field "$2" gap.module)") && echo "it builds. The pull request is checked again by the project's own checker, which is stricter: see the FORMAT RULES in join.txt."
+  ;;
+tidy)
+  has_file "$2"; tidy "$ROOT/$(field "$2" gap.file)"
   ;;
 submit)
-  have "$2"; id="$2"; file="$(field "$id" gap.file)"
+  has_file "$2"; id="$2"; file="$(field "$id" gap.file)"
   still_open "$id"
+  tidy "$ROOT/$file"
   grep -q 'sorry' "$ROOT/$file" && { echo "$file still contains sorry" >&2; exit 1; }
   cd "$ROOT"
   other="$(git status --porcelain | grep -v " $file\$" | grep -v '^?? \.pnp/' || true)"
@@ -158,10 +291,14 @@ submit)
   git add "$file" && git commit -q -m "$id"
   # ONE NEW FILE, NOTHING ELSE: never change a file that is already on main (a recorded proof is final). The pull
   # request's diff against the project's main must add exactly this file and touch nothing else.
-  git fetch -q "https://github.com/$UPSTREAM.git" main
+  git fetch -q "$UPSTREAM_GIT" main
   base="$(git merge-base FETCH_HEAD HEAD)"
   changed="$(git diff --name-status "$base" HEAD)"
-  if [ "$changed" != "A	$file" ] || git cat-file -e "FETCH_HEAD:$file" 2>/dev/null; then
+  # This step's own file already on main: someone proved it first, and the agent did nothing wrong.
+  if git cat-file -e "FETCH_HEAD:$file" 2>/dev/null; then
+    echo "This step was just proved by someone else; your work still counts if it was inside your live lease. Ask the desk for another step: tools/pnp.sh next" >&2; exit 1
+  fi
+  if [ "$changed" != "A	$file" ]; then
     echo "refused: never change a file that is already on main. Every proof is a NEW file; a recorded proof is final." >&2
     echo "this pull request would change:" >&2; echo "$changed" >&2; exit 1
   fi
@@ -184,11 +321,11 @@ if isinstance(d, dict) and d.get("withdrawn") is True:
   curl -fsS -X POST "$DESK/release?lease=$(field "$id" lease.id)&reason=submitted" >/dev/null && echo "submitted; the verdict comes as a comment on the pull request. Next: git checkout main && tools/pnp.sh next"
   ;;
 release)
-  have "$2"; q="lease=$(field "$2" lease.id)&reason=${3:?a reason}"; 
+  have "$2"; q="lease=$(field "$2" lease.id)&reason=${3:?a reason}";
   [ -n "${4:-}" ] && q="$q&program=$4"   # with exhausted or rechecked: a sha256
   curl -sS -X POST "$DESK/release?$q"
   ;;
 *)
-  sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
   ;;
 esac

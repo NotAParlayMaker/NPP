@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Run: bash tools/test_pnp_value.sh [gaps.json]
+# Value steps in tools/pnp.sh: `next` writes nothing; `value <step> <k>` writes the theorem whose statement is, byte for
+# byte, the one the public guard judges (valueGap in .github/scripts/outside-guard.mjs, run here); a bad k and an injected
+# template are refused with nothing written; `tidy` (and submit) removes comments outside literals. Given a gaps.json,
+# every value row in it is written at k = 0 and at k = value_max and matched against valueGap.
+set -euo pipefail
+here="$(cd "$(dirname "$0")" && pwd)"; guard="$here/../.github/scripts/outside-guard.mjs"; t="$(mktemp -d)"; trap 'kill $srv 2>/dev/null; rm -rf "$t"' EXIT
+mkdir -p "$t/repo" "$t/bin" "$t/www"; git -C "$t/repo" init -q; mkdir -p "$t/repo/tools"; cp "$here/pnp.sh" "$t/repo/tools/"
+printf '#!/bin/sh\necho tester\n' > "$t/bin/gh"; chmod +x "$t/bin/gh"
+port=$((20000 + RANDOM % 20000)); (cd "$t/www" && exec python3 -m http.server "$port" --bind 127.0.0.1 >/dev/null 2>&1) & srv=$!
+for _ in $(seq 50); do curl -s "http://127.0.0.1:$port/" >/dev/null && break; sleep 0.1; done
+R="$t/repo"; export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+mkdir -p "$t/up"; git -C "$t/up" init -q -b main; echo r > "$t/up/README"; mkdir -p "$t/up/lean/PEqualNP/Outside"; echo x > "$t/up/lean/PEqualNP/Outside/L_x_1.lean"
+git -C "$t/up" add -A; git -C "$t/up" -c user.name=t -c user.email=t@t commit -qm base
+pnp() { (cd "$R" && PATH="$t/bin:$PATH" PNP_DESK="http://127.0.0.1:$port" PNP_UPSTREAM_GIT="$t/up" bash tools/pnp.sh "$@") >"$t/out" 2>&1; }
+T=$'PEqualNP.MetaComplexity.HasCircuitSize 4 (fun x : Fin 4 → Bool => (1 : ℕ).testBit (PEqualNP.MetaComplexity.tableIndex x)) @@VALUE@@ ∧\n  ∀ t : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 4 (fun x : Fin 4 → Bool => (1 : ℕ).testBit (PEqualNP.MetaComplexity.tableIndex x)) t → @@VALUE@@ ≤ t'
+# serve <row json>: the desk's answer for that row; rm the step's old state and files
+serve() { printf '%s' "$1" > "$t/row.json"; python3 -c 'import json,sys; print(json.dumps({"gap":json.load(open(sys.argv[1])),"lease":{"id":"abc","expires_at":"2026-11-25T12:00:00Z","terms":{"kind":"value","level":"hard","points":100}}}))' "$t/row.json" > "$t/www/next"; rm -rf "$R/.pnp" "$R/lean"; }
+row() { python3 -c 'import json,sys; g={"id":"L-meta-9507","kind":"value","title":"Table 1a","template":sys.argv[1],"value_holes":int(sys.argv[2]),"value_max":4,"size_in_words":"AND, OR and NOT gates","value_max_why":"a 4-gate circuit","file_form":"lean/PEqualNP/Outside/V_meta_9507__k<k>.lean","imports":["PEqualNP.Defs","PEqualNP.Library.LRAT.LinkN2"],"sketch":"s"}; print(json.dumps(g))' "$1" "${2:-2}"; }
+# expect <row json file> <k> <file>: the skeleton's statement equals valueGap's, byte for byte, and the theorem names its module
+expect() { node --input-type=module -e '
+import { valueGap } from "'"$guard"'"; import { readFileSync } from "node:fs";
+const [row, k, file] = process.argv.slice(1); const g = JSON.parse(readFileSync(row, "utf8"));
+const rel = `lean/PEqualNP/Outside/V_${g.id.slice(2).replace(/-/g, "_")}__k${k}.lean`; const v = valueGap(g, rel, "check");
+const mod = "PEqualNP.Outside." + rel.slice("lean/PEqualNP/Outside/".length, -5);
+const want = "import Mathlib\n" + v.imports.map((m) => `import ${m}\n`).join("") + `\ntheorem ${mod} : (${v.statement}) := by\n  sorry\n`;
+const got = readFileSync(file, "utf8"); if (got !== want) { console.error("FAIL: skeleton differs from the guard\n--- got\n" + got + "--- want\n" + want); process.exit(1); }' "$@"; }
+V="$t/repo/lean/PEqualNP/Outside"
+
+# 1. next on a value step writes nothing and prints the template, the bound, the size and the task
+serve "$(row "$T")"; pnp next || { cat "$t/out"; echo "FAIL: next"; exit 1; }
+for w in 'VALUE STEP Find the least value k' 'TEMPLATE' 'VALUE_MAX  4' 'SIZE       AND, OR and NOT gates' 'tools/pnp.sh value L-meta-9507 <k>'; do grep -qF "$w" "$t/out" || { cat "$t/out"; echo "FAIL: next lacks: $w"; exit 1; }; done
+[ ! -e "$V" ] || { echo "FAIL: next wrote a file on a value step"; exit 1; }
+pnp check L-meta-9507 && { echo "FAIL: check ran before a value was chosen"; exit 1; }; grep -q 'no value chosen yet' "$t/out" || { cat "$t/out"; exit 1; }
+
+# 2. bad k refused, nothing written
+for k in 5 03 -1 1e1 ' 3' 3x 99999 ''; do pnp value L-meta-9507 "$k" && { echo "FAIL: k accepted: '$k'"; exit 1; }; [ ! -e "$V" ] || { echo "FAIL: file written for k '$k'"; exit 1; }; done
+
+# 3. k = 3: the skeleton is the guard's statement byte for byte, named V_meta_9507__k3, recorded for check and submit
+pnp value L-meta-9507 3 || { cat "$t/out"; echo "FAIL: value 3"; exit 1; }
+expect "$t/row.json" 3 "$V/V_meta_9507__k3.lean"
+grep -q '^theorem PEqualNP.Outside.V_meta_9507__k3 : (' "$V/V_meta_9507__k3.lean" || { echo "FAIL: theorem name"; exit 1; }
+(cd "$t/repo" && python3 -c 'import json,sys; g=json.load(open(".pnp/L-meta-9507.json"))["gap"]; sys.exit(0 if (g["file"], g["module"], g["value"]) == ("lean/PEqualNP/Outside/V_meta_9507__k3.lean", "PEqualNP.Outside.V_meta_9507__k3", 3) else 1)') || { echo "FAIL: not recorded for check and submit"; exit 1; }
+
+# 4. an injected template is refused at next and never written (the desk guards it too)
+for bad in "$(row "$T"$'\n#eval IO.println 1')" "$(row 'True) := trivial
+run_cmd pure ()
+example : (@@VALUE@@ = 0' 1)" "$(row "$T" 3)" "$(row "${T/@@VALUE@@ ≤/@@VALUE@@≤}")" "$(row "$T ∧ @@X@@ = 0")" "$(row "(by run_tac pure ()) = @@VALUE@@" 1)"; do
+  serve "$bad"; pnp next && { echo "FAIL: accepted: $bad"; exit 1; }; grep -q REFUSED "$t/out" || { cat "$t/out"; echo "FAIL: no reason"; exit 1; }
+  [ ! -e "$t/repo/.pnp/L-meta-9507.json" ] || ! pnp value L-meta-9507 1 || { echo "FAIL: value wrote an injected template"; exit 1; }; [ ! -e "$V" ] || { echo "FAIL: file written"; exit 1; }
+done
+
+# 5. comments are stripped outside literals (value and ordinary files alike: tidy is the step submit runs)
+serve "$(row "$T")"; pnp next; pnp value L-meta-9507 2
+cat > "$V/V_meta_9507__k2.lean" <<'LEAN'
+import Mathlib
+/-! module doc /- nested -/ still doc -/
+-- a line comment
+theorem PEqualNP.Outside.V_meta_9507__k2 : (1 = 1) := by -- trailing
+  have h : "a -- b /- c -/" = "a -- b /- c -/" := rfl /- why
+  it holds -/
+  have c : '-' = '-' := rfl
+  have r : r#"x -- y"# = r#"x -- y"# := rfl
+  rfl
+LEAN
+pnp tidy L-meta-9507 || { cat "$t/out"; echo "FAIL: tidy"; exit 1; }
+grep -q 'removed the comments' "$t/out" || { echo "FAIL: no notice"; exit 1; }
+cat > "$t/want" <<'LEAN'
+import Mathlib
+
+theorem PEqualNP.Outside.V_meta_9507__k2 : (1 = 1) := by
+  have h : "a -- b /- c -/" = "a -- b /- c -/" := rfl
+
+  have c : '-' = '-' := rfl
+  have r : r#"x -- y"# = r#"x -- y"# := rfl
+  rfl
+LEAN
+cmp -s "$t/want" "$V/V_meta_9507__k2.lean" || { echo "FAIL: tidy result"; diff "$t/want" "$V/V_meta_9507__k2.lean"; exit 1; }
+pnp tidy L-meta-9507; [ ! -s "$t/out" ] || { echo "FAIL: notice on a file with no comments"; cat "$t/out"; exit 1; }
+
+# 6. submit on a file already on main: this step's own file (value or ordinary) says it was proved first; a pull request
+#    that would change a file of a DIFFERENT step keeps the never-change-main wording. Upstream is a local directory.
+fresh() { R="$t/$1"; git clone -q "$t/up" "$R"; mkdir -p "$R/tools"; cp "$here/pnp.sh" "$R/tools/"; printf '.pnp/\ntools/\n' >> "$R/.git/info/exclude"; }
+proof() { printf 'import Mathlib\n\ntheorem %s : (1 = 1) := rfl\n' "$2" > "$R/$1"; }
+submit_says() { pnp submit "$1" && { echo "FAIL: submit went through"; cat "$t/out"; exit 1; }; grep -qF "$2" "$t/out" || { echo "FAIL: submit said:"; cat "$t/out"; exit 1; }; ! grep -qF "$3" "$t/out" || { echo "FAIL: wrong wording"; cat "$t/out"; exit 1; }; }
+PROVED='This step was just proved by someone else; your work still counts if it was inside your live lease. Ask the desk for another step: tools/pnp.sh next'
+NEVER='refused: never change a file that is already on main'
+serve "$(row "$T")"; fresh r1; pnp next; pnp value L-meta-9507 3; proof lean/PEqualNP/Outside/V_meta_9507__k3.lean PEqualNP.Outside.V_meta_9507__k3
+cp "$R/lean/PEqualNP/Outside/V_meta_9507__k3.lean" "$t/up/lean/PEqualNP/Outside/"; git -C "$t/up" add -A; git -C "$t/up" commit -qm proved
+submit_says L-meta-9507 "$PROVED" "$NEVER"
+fresh r2; python3 -c 'import json; print(json.dumps({"gap":{"id":"L-x-2","title":"t","statement":"1 = 1","file":"lean/PEqualNP/Outside/L_x_2.lean","module":"PEqualNP.Outside.L_x_2","imports":[]},"lease":{"id":"abc","expires_at":"2026-11-25T12:00:00Z"}}))' > "$t/www/next"
+pnp next; proof lean/PEqualNP/Outside/L_x_2.lean PEqualNP.Outside.L_x_2
+cp "$R/lean/PEqualNP/Outside/L_x_2.lean" "$t/up/lean/PEqualNP/Outside/"; git -C "$t/up" add -A; git -C "$t/up" commit -qm proved2
+submit_says L-x-2 "$PROVED" "$NEVER"
+serve "$(row "$T")"; fresh r3; pnp next; pnp value L-meta-9507 2; proof lean/PEqualNP/Outside/V_meta_9507__k2.lean PEqualNP.Outside.V_meta_9507__k2
+echo changed > "$R/lean/PEqualNP/Outside/L_x_1.lean"; git -C "$R" commit -qam "touch another step"
+submit_says L-meta-9507 "$NEVER" "just proved"
+R="$t/repo"
+
+# 7. live: every value row, at k = 0 and k = value_max, matches the guard
+if [ -n "${1:-}" ]; then
+  n=0; while IFS= read -r -d '' r; do
+    serve "$r"; id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$t/row.json")"; vm="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["value_max"])' "$t/row.json")"
+    pnp next || { cat "$t/out"; echo "FAIL: live row refused: $id"; exit 1; }
+    for k in 0 "$vm"; do pnp value "$id" "$k" || { cat "$t/out"; echo "FAIL: live value $id $k"; exit 1; }
+      expect "$t/row.json" "$k" "$R/$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["gap"]["file"])' "$t/repo/.pnp/$id.json")"; done
+    n=$((n+1)); done < <(python3 -c 'import json,sys; [sys.stdout.write(json.dumps(g)+"\0") for g in json.load(open(sys.argv[1]))["gaps"] if g.get("kind") == "value"]' "$1")
+  echo "live: $n value rows, each written at 0 and value_max, all equal to the guard's statement"
+fi
+echo "pnp value: pass"
