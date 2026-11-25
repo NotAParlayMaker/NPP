@@ -1118,12 +1118,16 @@ lemma main_ind (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
 
 end PEqualNP.Outside.L_meta_5779
 
-theorem PEqualNP.Outside.L_meta_5779.old_main : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (C : PEqualNP.CircuitLowerBounds.Circuit),
+namespace PEqualNP.Outside.L_meta_5779
+
+theorem old_main : ∀ (n : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (C : PEqualNP.CircuitLowerBounds.Circuit),
   G.edgeFinset.Nonempty → PEqualNP.TopForm.IsLeastAO G C →
     ∃ C' : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.TopForm.IsLeastAO G C' ∧ C'.size = C.size ∧
       (PEqualNP.TopForm.junk G C').card = (PEqualNP.TopForm.junk G C).card ∧ PEqualNP.TopForm.TopForm G C' := by
   intro n G _ C hG hC
   exact PEqualNP.Outside.L_meta_5779.main_ind n G hG _ C hC rfl
+
+end PEqualNP.Outside.L_meta_5779
 
 theorem PEqualNP.Outside.L_meta_5779 : ∀ (x1 : ℕ) (x2 : SimpleGraph (Fin x1)) [x3 : DecidableRel x2.Adj] (x4 : PEqualNP.CircuitLowerBounds.Circuit), x2.edgeFinset.Nonempty → PEqualNP.TopForm.IsLeastAO x2 x4 → ∃ (x7 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.TopForm.IsLeastAO x2 x7 ∧ x7.size = x4.size ∧ (PEqualNP.TopForm.junk x2 x7).card = (PEqualNP.TopForm.junk x2 x4).card ∧ PEqualNP.TopForm.TopForm x2 x7 :=
   PEqualNP.Outside.L_meta_5779.old_main
