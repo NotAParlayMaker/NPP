@@ -3544,14 +3544,14 @@ theorem nonNot4524 (C : Circuit) (legal : PEqualNP.MetaComplexity.FanInTwo C)
     dsimp only [ws]
     rw [List.map_ofFn]
     exact (he (fun i => bit r (pins4524 i))).trans (rows4524 r).symm
-  have hp : proper (graphGoal 383) := by decide +kernel
+  have hp : proper (graphGoal 383) := by unfold proper; decide +kernel
   have hnorm : nrm true (graphGoal 383) = graphGoal 383 := nrm_id (by decide +kernel)
   have out := get_rep (u:=true) (execute C.gates ws) C.output
   rw [heq] at out
   unfold Repr at out
   rw [hnorm] at out
   obtain ⟨k,S,hk,run,sub⟩ := extract C.gates ws legal (u:=true) (by simp) hp (out.resolve_right (fun h => h hp))
-  have hlist := list_run run S.toList (by simp) (by simp)
+  have hlist := list_run run S.toList (Finset.nodup_toList _) (by simp)
   have included : (ws.map (nrm true)).all (fun a => (vars 383).contains a) = true := by
     dsimp only [ws]
     decide +kernel
