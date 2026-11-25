@@ -253,7 +253,7 @@ setup)
   echo "ready. Next: tools/pnp.sh next   (add --hard for an open problem the attack is stuck on)"
   ;;
 next)
-  shift; q="handle=$(gh api user --jq .login)"
+  shift; q="handle=$(gh api user --jq .login)&value=1"   # value=1: this script can take a value step
   while [ $# -gt 0 ]; do case "$1" in
     --hard) q="$q&hard=1";; --another) q="$q&another=1";;
     --level|--kind) [[ "${2:-}" =~ ^[a-z]{1,10}$ ]] || { echo "$1 needs a word, e.g. $1 hard" >&2; exit 1; }; q="$q&${1#--}=$2"; shift;;

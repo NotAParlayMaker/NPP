@@ -9,7 +9,7 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"; guard="$here/../.github/scripts/outside-guard.mjs"; t="$(mktemp -d)"; trap 'kill $srv 2>/dev/null; rm -rf "$t"' EXIT
 mkdir -p "$t/repo" "$t/bin" "$t/www"; git -C "$t/repo" init -q; mkdir -p "$t/repo/tools"; cp "$here/pnp.sh" "$t/repo/tools/"
 printf '#!/bin/sh\necho tester\n' > "$t/bin/gh"; chmod +x "$t/bin/gh"
-port=$((20000 + RANDOM % 20000)); (cd "$t/www" && exec python3 -m http.server "$port" --bind 127.0.0.1 >/dev/null 2>&1) & srv=$!
+port=$((20000 + RANDOM % 20000)); (cd "$t/www" && exec python3 -m http.server "$port" --bind 127.0.0.1 >/dev/null 2>"$t/access") & srv=$!
 for _ in $(seq 50); do curl -s "http://127.0.0.1:$port/" >/dev/null && break; sleep 0.1; done
 R="$t/repo"; export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 mkdir -p "$t/up"; git -C "$t/up" init -q -b main; echo r > "$t/up/README"; mkdir -p "$t/up/lean/PEqualNP/Outside"; echo x > "$t/up/lean/PEqualNP/Outside/L_x_1.lean"
@@ -46,6 +46,7 @@ V="$t/repo/lean/PEqualNP/Outside"
 
 # 1. next on a value step writes nothing and prints the template, the bound, the size and the task
 serve "$(row "$T")"; pnp next || { cat "$t/out"; echo "FAIL: next"; exit 1; }
+grep -q 'GET /next?handle=tester&value=1 ' "$t/access" || { echo "FAIL: next does not say it can take a value step"; cat "$t/access"; exit 1; }
 for w in 'VALUE STEP Find the least value k' 'TEMPLATE' 'VALUE_MAX  4' 'SIZE       AND, OR and NOT gates' 'tools/pnp.sh value L-meta-9507 <k>'; do grep -qF "$w" "$t/out" || { cat "$t/out"; echo "FAIL: next lacks: $w"; exit 1; }; done
 [ ! -e "$V" ] || { echo "FAIL: next wrote a file on a value step"; exit 1; }
 pnp check L-meta-9507 && { echo "FAIL: check ran before a value was chosen"; exit 1; }; grep -q 'no value chosen yet' "$t/out" || { cat "$t/out"; exit 1; }
