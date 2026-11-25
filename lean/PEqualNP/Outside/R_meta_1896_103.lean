@@ -1,0 +1,91 @@
+import Mathlib
+import PEqualNP.Defs
+
+-- The generic maximal false inputs of the order-3 plane are exactly the 234 triangles (three
+-- non-collinear points with the four lines missing them) and the 234 frames (four points, no
+-- three collinear, with the three lines missing them); this was checked by enumeration.
+-- h1 and h2 state the false side on triangles and on frames without Finsets. The false value
+-- on every non-incident pair (one point, one line) is proven below from h1, by monotonicity of
+-- AND/OR circuits and an explicit triangle through the point missing the line.
+-- h3 is the OR-gate count under these explicit hypotheses.
+theorem PEqualNP.Outside.R_meta_1896_103 (h1 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), (∀ (x4 : Finset (Fin (13 : ℕ))), (∀ x5 ∉ x4, ∃ (x7 : Fin (13 : ℕ)), (∀ x8 ∈ x4, ¬(x8 = x7 ∨ x8 = x7 + (1 : Fin (13 : ℕ)) ∨ x8 = x7 + (3 : Fin (13 : ℕ)) ∨ x8 = x7 + (9 : Fin (13 : ℕ)))) ∧ (x5 = x7 ∨ x5 = x7 + (1 : Fin (13 : ℕ)) ∨ x5 = x7 + (3 : Fin (13 : ℕ)) ∨ x5 = x7 + (9 : Fin (13 : ℕ)))) → ((¬∃ (x6 : Fin (13 : ℕ)), ∀ x7 ∈ x4, x7 = x6 ∨ x7 = x6 + (1 : Fin (13 : ℕ)) ∨ x7 = x6 + (3 : Fin (13 : ℕ)) ∨ x7 = x6 + (9 : Fin (13 : ℕ))) ∧ ¬∃ (x6 : Fin (13 : ℕ)), ∀ (x7 : Fin (13 : ℕ)), (∀ x8 ∈ x4, ¬(x8 = x7 ∨ x8 = x7 + (1 : Fin (13 : ℕ)) ∨ x8 = x7 + (3 : Fin (13 : ℕ)) ∨ x8 = x7 + (9 : Fin (13 : ℕ)))) → x6 = x7 ∨ x6 = x7 + (1 : Fin (13 : ℕ)) ∨ x6 = x7 + (3 : Fin (13 : ℕ)) ∨ x6 = x7 + (9 : Fin (13 : ℕ))) → (PEqualNP.MetaComplexity.circuitFun ((13 : ℕ) + (13 : ℕ)) x1 fun (x7 : Fin ((13 : ℕ) + (13 : ℕ))) => Decidable.decide ((∃ x8 ∈ x4, x7 = Fin.castAdd (13 : ℕ) x8) ∨ ∃ (x8 : Fin (13 : ℕ)), x7 = Fin.natAdd (13 : ℕ) x8 ∧ ∀ x9 ∈ x4, ¬(x9 = x8 ∨ x9 = x8 + (1 : Fin (13 : ℕ)) ∨ x9 = x8 + (3 : Fin (13 : ℕ)) ∨ x9 = x8 + (9 : Fin (13 : ℕ))))) = Bool.false) → ∀ (y1 y2 y3 : Fin (13 : ℕ)), (¬∃ (y4 : Fin (13 : ℕ)), (y1 = y4 ∨ y1 = y4 + (1 : Fin (13 : ℕ)) ∨ y1 = y4 + (3 : Fin (13 : ℕ)) ∨ y1 = y4 + (9 : Fin (13 : ℕ))) ∧ (y2 = y4 ∨ y2 = y4 + (1 : Fin (13 : ℕ)) ∨ y2 = y4 + (3 : Fin (13 : ℕ)) ∨ y2 = y4 + (9 : Fin (13 : ℕ))) ∧ (y3 = y4 ∨ y3 = y4 + (1 : Fin (13 : ℕ)) ∨ y3 = y4 + (3 : Fin (13 : ℕ)) ∨ y3 = y4 + (9 : Fin (13 : ℕ)))) → (PEqualNP.MetaComplexity.circuitFun ((13 : ℕ) + (13 : ℕ)) x1 fun (x7 : Fin ((13 : ℕ) + (13 : ℕ))) => Decidable.decide (x7 = Fin.castAdd (13 : ℕ) y1 ∨ x7 = Fin.castAdd (13 : ℕ) y2 ∨ x7 = Fin.castAdd (13 : ℕ) y3 ∨ ∃ (y5 : Fin (13 : ℕ)), x7 = Fin.natAdd (13 : ℕ) y5 ∧ ¬(y1 = y5 ∨ y1 = y5 + (1 : Fin (13 : ℕ)) ∨ y1 = y5 + (3 : Fin (13 : ℕ)) ∨ y1 = y5 + (9 : Fin (13 : ℕ))) ∧ ¬(y2 = y5 ∨ y2 = y5 + (1 : Fin (13 : ℕ)) ∨ y2 = y5 + (3 : Fin (13 : ℕ)) ∨ y2 = y5 + (9 : Fin (13 : ℕ))) ∧ ¬(y3 = y5 ∨ y3 = y5 + (1 : Fin (13 : ℕ)) ∨ y3 = y5 + (3 : Fin (13 : ℕ)) ∨ y3 = y5 + (9 : Fin (13 : ℕ))))) = Bool.false) (h2 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), (∀ (x4 : Finset (Fin (13 : ℕ))), (∀ x5 ∉ x4, ∃ (x7 : Fin (13 : ℕ)), (∀ x8 ∈ x4, ¬(x8 = x7 ∨ x8 = x7 + (1 : Fin (13 : ℕ)) ∨ x8 = x7 + (3 : Fin (13 : ℕ)) ∨ x8 = x7 + (9 : Fin (13 : ℕ)))) ∧ (x5 = x7 ∨ x5 = x7 + (1 : Fin (13 : ℕ)) ∨ x5 = x7 + (3 : Fin (13 : ℕ)) ∨ x5 = x7 + (9 : Fin (13 : ℕ)))) → ((¬∃ (x6 : Fin (13 : ℕ)), ∀ x7 ∈ x4, x7 = x6 ∨ x7 = x6 + (1 : Fin (13 : ℕ)) ∨ x7 = x6 + (3 : Fin (13 : ℕ)) ∨ x7 = x6 + (9 : Fin (13 : ℕ))) ∧ ¬∃ (x6 : Fin (13 : ℕ)), ∀ (x7 : Fin (13 : ℕ)), (∀ x8 ∈ x4, ¬(x8 = x7 ∨ x8 = x7 + (1 : Fin (13 : ℕ)) ∨ x8 = x7 + (3 : Fin (13 : ℕ)) ∨ x8 = x7 + (9 : Fin (13 : ℕ)))) → x6 = x7 ∨ x6 = x7 + (1 : Fin (13 : ℕ)) ∨ x6 = x7 + (3 : Fin (13 : ℕ)) ∨ x6 = x7 + (9 : Fin (13 : ℕ))) → (PEqualNP.MetaComplexity.circuitFun ((13 : ℕ) + (13 : ℕ)) x1 fun (x7 : Fin ((13 : ℕ) + (13 : ℕ))) => Decidable.decide ((∃ x8 ∈ x4, x7 = Fin.castAdd (13 : ℕ) x8) ∨ ∃ (x8 : Fin (13 : ℕ)), x7 = Fin.natAdd (13 : ℕ) x8 ∧ ∀ x9 ∈ x4, ¬(x9 = x8 ∨ x9 = x8 + (1 : Fin (13 : ℕ)) ∨ x9 = x8 + (3 : Fin (13 : ℕ)) ∨ x9 = x8 + (9 : Fin (13 : ℕ))))) = Bool.false) → ∀ (y1 y2 y3 y4 : Fin (13 : ℕ)), (¬∃ (y5 : Fin (13 : ℕ)), (y1 = y5 ∨ y1 = y5 + (1 : Fin (13 : ℕ)) ∨ y1 = y5 + (3 : Fin (13 : ℕ)) ∨ y1 = y5 + (9 : Fin (13 : ℕ))) ∧ (y2 = y5 ∨ y2 = y5 + (1 : Fin (13 : ℕ)) ∨ y2 = y5 + (3 : Fin (13 : ℕ)) ∨ y2 = y5 + (9 : Fin (13 : ℕ))) ∧ (y3 = y5 ∨ y3 = y5 + (1 : Fin (13 : ℕ)) ∨ y3 = y5 + (3 : Fin (13 : ℕ)) ∨ y3 = y5 + (9 : Fin (13 : ℕ)))) → (¬∃ (y5 : Fin (13 : ℕ)), (y1 = y5 ∨ y1 = y5 + (1 : Fin (13 : ℕ)) ∨ y1 = y5 + (3 : Fin (13 : ℕ)) ∨ y1 = y5 + (9 : Fin (13 : ℕ))) ∧ (y2 = y5 ∨ y2 = y5 + (1 : Fin (13 : ℕ)) ∨ y2 = y5 + (3 : Fin (13 : ℕ)) ∨ y2 = y5 + (9 : Fin (13 : ℕ))) ∧ (y4 = y5 ∨ y4 = y5 + (1 : Fin (13 : ℕ)) ∨ y4 = y5 + (3 : Fin (13 : ℕ)) ∨ y4 = y5 + (9 : Fin (13 : ℕ)))) → (¬∃ (y5 : Fin (13 : ℕ)), (y1 = y5 ∨ y1 = y5 + (1 : Fin (13 : ℕ)) ∨ y1 = y5 + (3 : Fin (13 : ℕ)) ∨ y1 = y5 + (9 : Fin (13 : ℕ))) ∧ (y3 = y5 ∨ y3 = y5 + (1 : Fin (13 : ℕ)) ∨ y3 = y5 + (3 : Fin (13 : ℕ)) ∨ y3 = y5 + (9 : Fin (13 : ℕ))) ∧ (y4 = y5 ∨ y4 = y5 + (1 : Fin (13 : ℕ)) ∨ y4 = y5 + (3 : Fin (13 : ℕ)) ∨ y4 = y5 + (9 : Fin (13 : ℕ)))) → (¬∃ (y5 : Fin (13 : ℕ)), (y2 = y5 ∨ y2 = y5 + (1 : Fin (13 : ℕ)) ∨ y2 = y5 + (3 : Fin (13 : ℕ)) ∨ y2 = y5 + (9 : Fin (13 : ℕ))) ∧ (y3 = y5 ∨ y3 = y5 + (1 : Fin (13 : ℕ)) ∨ y3 = y5 + (3 : Fin (13 : ℕ)) ∨ y3 = y5 + (9 : Fin (13 : ℕ))) ∧ (y4 = y5 ∨ y4 = y5 + (1 : Fin (13 : ℕ)) ∨ y4 = y5 + (3 : Fin (13 : ℕ)) ∨ y4 = y5 + (9 : Fin (13 : ℕ)))) → (PEqualNP.MetaComplexity.circuitFun ((13 : ℕ) + (13 : ℕ)) x1 fun (x7 : Fin ((13 : ℕ) + (13 : ℕ))) => Decidable.decide (x7 = Fin.castAdd (13 : ℕ) y1 ∨ x7 = Fin.castAdd (13 : ℕ) y2 ∨ x7 = Fin.castAdd (13 : ℕ) y3 ∨ x7 = Fin.castAdd (13 : ℕ) y4 ∨ ∃ (y6 : Fin (13 : ℕ)), x7 = Fin.natAdd (13 : ℕ) y6 ∧ ¬(y1 = y6 ∨ y1 = y6 + (1 : Fin (13 : ℕ)) ∨ y1 = y6 + (3 : Fin (13 : ℕ)) ∨ y1 = y6 + (9 : Fin (13 : ℕ))) ∧ ¬(y2 = y6 ∨ y2 = y6 + (1 : Fin (13 : ℕ)) ∨ y2 = y6 + (3 : Fin (13 : ℕ)) ∨ y2 = y6 + (9 : Fin (13 : ℕ))) ∧ ¬(y3 = y6 ∨ y3 = y6 + (1 : Fin (13 : ℕ)) ∨ y3 = y6 + (3 : Fin (13 : ℕ)) ∨ y3 = y6 + (9 : Fin (13 : ℕ))) ∧ ¬(y4 = y6 ∨ y4 = y6 + (1 : Fin (13 : ℕ)) ∨ y4 = y6 + (3 : Fin (13 : ℕ)) ∨ y4 = y6 + (9 : Fin (13 : ℕ))))) = Bool.false) (h3 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.Monotone2 x1 → (∀ (x3 x4 : Fin (13 : ℕ)), x3 = x4 ∨ x3 = x4 + (1 : Fin (13 : ℕ)) ∨ x3 = x4 + (3 : Fin (13 : ℕ)) ∨ x3 = x4 + (9 : Fin (13 : ℕ)) → (PEqualNP.MetaComplexity.circuitFun ((13 : ℕ) + (13 : ℕ)) x1 fun (x6 : Fin ((13 : ℕ) + (13 : ℕ))) => Decidable.decide (x6 = Fin.castAdd (13 : ℕ) x3 ∨ x6 = Fin.natAdd (13 : ℕ) x4)) = Bool.true) → (∀ (y1 y2 : Fin (13 : ℕ)), ¬(y1 = y2 ∨ y1 = y2 + (1 : Fin (13 : ℕ)) ∨ y1 = y2 + (3 : Fin (13 : ℕ)) ∨ y1 = y2 + (9 : Fin (13 : ℕ))) → (PEqualNP.MetaComplexity.circuitFun ((13 : ℕ) + (13 : ℕ)) x1 fun (x7 : Fin ((13 : ℕ) + (13 : ℕ))) => Decidable.decide (x7 = Fin.castAdd (13 : ℕ) y1 ∨ x7 = Fin.natAdd (13 : ℕ) y2)) = Bool.false) → (∀ (y1 y2 y3 : Fin (13 : ℕ)), (¬∃ (y4 : Fin (13 : ℕ)), (y1 = y4 ∨ y1 = y4 + (1 : Fin (13 : ℕ)) ∨ y1 = y4 + (3 : Fin (13 : ℕ)) ∨ y1 = y4 + (9 : Fin (13 : ℕ))) ∧ (y2 = y4 ∨ y2 = y4 + (1 : Fin (13 : ℕ)) ∨ y2 = y4 + (3 : Fin (13 : ℕ)) ∨ y2 = y4 + (9 : Fin (13 : ℕ))) ∧ (y3 = y4 ∨ y3 = y4 + (1 : Fin (13 : ℕ)) ∨ y3 = y4 + (3 : Fin (13 : ℕ)) ∨ y3 = y4 + (9 : Fin (13 : ℕ)))) → (PEqualNP.MetaComplexity.circuitFun ((13 : ℕ) + (13 : ℕ)) x1 fun (x7 : Fin ((13 : ℕ) + (13 : ℕ))) => Decidable.decide (x7 = Fin.castAdd (13 : ℕ) y1 ∨ x7 = Fin.castAdd (13 : ℕ) y2 ∨ x7 = Fin.castAdd (13 : ℕ) y3 ∨ ∃ (y5 : Fin (13 : ℕ)), x7 = Fin.natAdd (13 : ℕ) y5 ∧ ¬(y1 = y5 ∨ y1 = y5 + (1 : Fin (13 : ℕ)) ∨ y1 = y5 + (3 : Fin (13 : ℕ)) ∨ y1 = y5 + (9 : Fin (13 : ℕ))) ∧ ¬(y2 = y5 ∨ y2 = y5 + (1 : Fin (13 : ℕ)) ∨ y2 = y5 + (3 : Fin (13 : ℕ)) ∨ y2 = y5 + (9 : Fin (13 : ℕ))) ∧ ¬(y3 = y5 ∨ y3 = y5 + (1 : Fin (13 : ℕ)) ∨ y3 = y5 + (3 : Fin (13 : ℕ)) ∨ y3 = y5 + (9 : Fin (13 : ℕ))))) = Bool.false) → (∀ (y1 y2 y3 y4 : Fin (13 : ℕ)), (¬∃ (y5 : Fin (13 : ℕ)), (y1 = y5 ∨ y1 = y5 + (1 : Fin (13 : ℕ)) ∨ y1 = y5 + (3 : Fin (13 : ℕ)) ∨ y1 = y5 + (9 : Fin (13 : ℕ))) ∧ (y2 = y5 ∨ y2 = y5 + (1 : Fin (13 : ℕ)) ∨ y2 = y5 + (3 : Fin (13 : ℕ)) ∨ y2 = y5 + (9 : Fin (13 : ℕ))) ∧ (y3 = y5 ∨ y3 = y5 + (1 : Fin (13 : ℕ)) ∨ y3 = y5 + (3 : Fin (13 : ℕ)) ∨ y3 = y5 + (9 : Fin (13 : ℕ)))) → (¬∃ (y5 : Fin (13 : ℕ)), (y1 = y5 ∨ y1 = y5 + (1 : Fin (13 : ℕ)) ∨ y1 = y5 + (3 : Fin (13 : ℕ)) ∨ y1 = y5 + (9 : Fin (13 : ℕ))) ∧ (y2 = y5 ∨ y2 = y5 + (1 : Fin (13 : ℕ)) ∨ y2 = y5 + (3 : Fin (13 : ℕ)) ∨ y2 = y5 + (9 : Fin (13 : ℕ))) ∧ (y4 = y5 ∨ y4 = y5 + (1 : Fin (13 : ℕ)) ∨ y4 = y5 + (3 : Fin (13 : ℕ)) ∨ y4 = y5 + (9 : Fin (13 : ℕ)))) → (¬∃ (y5 : Fin (13 : ℕ)), (y1 = y5 ∨ y1 = y5 + (1 : Fin (13 : ℕ)) ∨ y1 = y5 + (3 : Fin (13 : ℕ)) ∨ y1 = y5 + (9 : Fin (13 : ℕ))) ∧ (y3 = y5 ∨ y3 = y5 + (1 : Fin (13 : ℕ)) ∨ y3 = y5 + (3 : Fin (13 : ℕ)) ∨ y3 = y5 + (9 : Fin (13 : ℕ))) ∧ (y4 = y5 ∨ y4 = y5 + (1 : Fin (13 : ℕ)) ∨ y4 = y5 + (3 : Fin (13 : ℕ)) ∨ y4 = y5 + (9 : Fin (13 : ℕ)))) → (¬∃ (y5 : Fin (13 : ℕ)), (y2 = y5 ∨ y2 = y5 + (1 : Fin (13 : ℕ)) ∨ y2 = y5 + (3 : Fin (13 : ℕ)) ∨ y2 = y5 + (9 : Fin (13 : ℕ))) ∧ (y3 = y5 ∨ y3 = y5 + (1 : Fin (13 : ℕ)) ∨ y3 = y5 + (3 : Fin (13 : ℕ)) ∨ y3 = y5 + (9 : Fin (13 : ℕ))) ∧ (y4 = y5 ∨ y4 = y5 + (1 : Fin (13 : ℕ)) ∨ y4 = y5 + (3 : Fin (13 : ℕ)) ∨ y4 = y5 + (9 : Fin (13 : ℕ)))) → (PEqualNP.MetaComplexity.circuitFun ((13 : ℕ) + (13 : ℕ)) x1 fun (x7 : Fin ((13 : ℕ) + (13 : ℕ))) => Decidable.decide (x7 = Fin.castAdd (13 : ℕ) y1 ∨ x7 = Fin.castAdd (13 : ℕ) y2 ∨ x7 = Fin.castAdd (13 : ℕ) y3 ∨ x7 = Fin.castAdd (13 : ℕ) y4 ∨ ∃ (y6 : Fin (13 : ℕ)), x7 = Fin.natAdd (13 : ℕ) y6 ∧ ¬(y1 = y6 ∨ y1 = y6 + (1 : Fin (13 : ℕ)) ∨ y1 = y6 + (3 : Fin (13 : ℕ)) ∨ y1 = y6 + (9 : Fin (13 : ℕ))) ∧ ¬(y2 = y6 ∨ y2 = y6 + (1 : Fin (13 : ℕ)) ∨ y2 = y6 + (3 : Fin (13 : ℕ)) ∨ y2 = y6 + (9 : Fin (13 : ℕ))) ∧ ¬(y3 = y6 ∨ y3 = y6 + (1 : Fin (13 : ℕ)) ∨ y3 = y6 + (3 : Fin (13 : ℕ)) ∨ y3 = y6 + (9 : Fin (13 : ℕ))) ∧ ¬(y4 = y6 ∨ y4 = y6 + (1 : Fin (13 : ℕ)) ∨ y4 = y6 + (3 : Fin (13 : ℕ)) ∨ y4 = y6 + (9 : Fin (13 : ℕ))))) = Bool.false) → (51 : ℕ) ≤ {x5 : Fin x1.gates.length | (x1.gates.get x5).op = PEqualNP.CircuitLowerBounds.GateOp.or}.ncard) : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.Monotone2 x1 → (∀ (x3 x4 : Fin (13 : ℕ)), x3 = x4 ∨ x3 = x4 + (1 : Fin (13 : ℕ)) ∨ x3 = x4 + (3 : Fin (13 : ℕ)) ∨ x3 = x4 + (9 : Fin (13 : ℕ)) → (PEqualNP.MetaComplexity.circuitFun ((13 : ℕ) + (13 : ℕ)) x1 fun (x6 : Fin ((13 : ℕ) + (13 : ℕ))) => Decidable.decide (x6 = Fin.castAdd (13 : ℕ) x3 ∨ x6 = Fin.natAdd (13 : ℕ) x4)) = Bool.true) → (∀ (x4 : Finset (Fin (13 : ℕ))), (∀ x5 ∉ x4, ∃ (x7 : Fin (13 : ℕ)), (∀ x8 ∈ x4, ¬(x8 = x7 ∨ x8 = x7 + (1 : Fin (13 : ℕ)) ∨ x8 = x7 + (3 : Fin (13 : ℕ)) ∨ x8 = x7 + (9 : Fin (13 : ℕ)))) ∧ (x5 = x7 ∨ x5 = x7 + (1 : Fin (13 : ℕ)) ∨ x5 = x7 + (3 : Fin (13 : ℕ)) ∨ x5 = x7 + (9 : Fin (13 : ℕ)))) → ((¬∃ (x6 : Fin (13 : ℕ)), ∀ x7 ∈ x4, x7 = x6 ∨ x7 = x6 + (1 : Fin (13 : ℕ)) ∨ x7 = x6 + (3 : Fin (13 : ℕ)) ∨ x7 = x6 + (9 : Fin (13 : ℕ))) ∧ ¬∃ (x6 : Fin (13 : ℕ)), ∀ (x7 : Fin (13 : ℕ)), (∀ x8 ∈ x4, ¬(x8 = x7 ∨ x8 = x7 + (1 : Fin (13 : ℕ)) ∨ x8 = x7 + (3 : Fin (13 : ℕ)) ∨ x8 = x7 + (9 : Fin (13 : ℕ)))) → x6 = x7 ∨ x6 = x7 + (1 : Fin (13 : ℕ)) ∨ x6 = x7 + (3 : Fin (13 : ℕ)) ∨ x6 = x7 + (9 : Fin (13 : ℕ))) → (PEqualNP.MetaComplexity.circuitFun ((13 : ℕ) + (13 : ℕ)) x1 fun (x7 : Fin ((13 : ℕ) + (13 : ℕ))) => Decidable.decide ((∃ x8 ∈ x4, x7 = Fin.castAdd (13 : ℕ) x8) ∨ ∃ (x8 : Fin (13 : ℕ)), x7 = Fin.natAdd (13 : ℕ) x8 ∧ ∀ x9 ∈ x4, ¬(x9 = x8 ∨ x9 = x8 + (1 : Fin (13 : ℕ)) ∨ x9 = x8 + (3 : Fin (13 : ℕ)) ∨ x9 = x8 + (9 : Fin (13 : ℕ))))) = Bool.false) → (51 : ℕ) ≤ {x5 : Fin x1.gates.length | (x1.gates.get x5).op = PEqualNP.CircuitLowerBounds.GateOp.or}.ncard := by
+  have hmono : ∀ (C : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.Monotone2 C →
+      ∀ (n : ℕ) (x y : Fin n → Bool), (∀ u, x u = true → y u = true) →
+      PEqualNP.MetaComplexity.circuitFun n C x = true → PEqualNP.MetaComplexity.circuitFun n C y = true := by
+    intro C hC n x y hxy
+    have key : ∀ (gs : List PEqualNP.CircuitLowerBounds.Gate),
+        (∀ g ∈ gs, g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or) →
+        ∀ (w1 w2 : List Bool), w1.length = w2.length →
+        (∀ i, w1.getD i false = true → w2.getD i false = true) →
+        ∀ i, (gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w1).getD i false = true →
+          (gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w2).getD i false = true := by
+      intro gs
+      induction gs with
+      | nil => intro _ w1 w2 _ h i; exact h i
+      | cons g gs ih =>
+        intro hops w1 w2 hlen h
+        simp only [List.foldl_cons]
+        apply ih (fun g' hg' => hops g' (List.mem_cons_of_mem g hg'))
+        · simp [hlen]
+        · intro i hi
+          have hev : g.op.eval (g.inputs.map fun i => w1.getD i false) = true →
+              g.op.eval (g.inputs.map fun i => w2.getD i false) = true := by
+            rcases hops g (List.mem_cons_self) with hop | hop
+            · rw [hop]
+              intro hh
+              change (g.inputs.map fun i => w1.getD i false).all id = true at hh
+              change (g.inputs.map fun i => w2.getD i false).all id = true
+              rw [List.all_eq_true] at hh ⊢
+              intro b hb
+              obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hb
+              exact h j (hh _ (List.mem_map_of_mem hj))
+            · rw [hop]
+              intro hh
+              change (g.inputs.map fun i => w1.getD i false).any id = true at hh
+              change (g.inputs.map fun i => w2.getD i false).any id = true
+              rw [List.any_eq_true] at hh ⊢
+              obtain ⟨b, hb, hbt⟩ := hh
+              obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hb
+              exact ⟨w2.getD j false, List.mem_map_of_mem hj, h j hbt⟩
+          rcases lt_trichotomy i w1.length with hlt | heq | hgt
+          · rw [List.getD_append _ _ _ _ hlt] at hi
+            rw [List.getD_append _ _ _ _ (hlen ▸ hlt)]
+            exact h i hi
+          · subst heq
+            rw [List.getD_append_right _ _ _ _ (le_refl _), Nat.sub_self] at hi
+            rw [List.getD_append_right _ _ _ _ (le_of_eq hlen.symm), hlen, Nat.sub_self]
+            exact hev hi
+          · rw [List.getD_append_right _ _ _ _ (le_of_lt hgt)] at hi
+            obtain ⟨k, hk⟩ : ∃ k, i - w1.length = k + 1 := ⟨i - w1.length - 1, by omega⟩
+            rw [hk] at hi
+            simp at hi
+    have hops : ∀ g ∈ C.gates, g.op = PEqualNP.CircuitLowerBounds.GateOp.and ∨ g.op = PEqualNP.CircuitLowerBounds.GateOp.or := by
+      intro g hg
+      have := (hC g hg).1
+      simpa using this
+    intro hx
+    have hpt : ∀ i, (List.ofFn x).getD i false = true → (List.ofFn y).getD i false = true := by
+      intro i hi
+      simp only [List.getD_eq_getElem?_getD, List.getElem?_ofFn] at hi ⊢
+      by_cases hin : i < n
+      · simp only [hin, ↓reduceDIte, Option.getD_some] at hi ⊢
+        exact hxy _ hi
+      · simp [hin] at hi
+    exact key C.gates hops (List.ofFn x) (List.ofFn y) (by simp) hpt C.output hx
+  have tab : ∀ (p w : Fin (13 : ℕ)), ¬(p = w ∨ p = w + (1 : Fin (13 : ℕ)) ∨ p = w + (3 : Fin (13 : ℕ)) ∨ p = w + (9 : Fin (13 : ℕ))) → (¬∃ (y4 : Fin (13 : ℕ)), (p = y4 ∨ p = y4 + (1 : Fin (13 : ℕ)) ∨ p = y4 + (3 : Fin (13 : ℕ)) ∨ p = y4 + (9 : Fin (13 : ℕ))) ∧ ((p + (![0, 0, 2, 0, 1, 1, 1, 1, 2, 0, 1, 1, 3] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = y4 ∨ (p + (![0, 0, 2, 0, 1, 1, 1, 1, 2, 0, 1, 1, 3] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = y4 + (1 : Fin (13 : ℕ)) ∨ (p + (![0, 0, 2, 0, 1, 1, 1, 1, 2, 0, 1, 1, 3] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = y4 + (3 : Fin (13 : ℕ)) ∨ (p + (![0, 0, 2, 0, 1, 1, 1, 1, 2, 0, 1, 1, 3] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = y4 + (9 : Fin (13 : ℕ))) ∧ ((p + (![0, 0, 3, 0, 2, 2, 2, 4, 3, 0, 2, 4, 5] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = y4 ∨ (p + (![0, 0, 3, 0, 2, 2, 2, 4, 3, 0, 2, 4, 5] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = y4 + (1 : Fin (13 : ℕ)) ∨ (p + (![0, 0, 3, 0, 2, 2, 2, 4, 3, 0, 2, 4, 5] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = y4 + (3 : Fin (13 : ℕ)) ∨ (p + (![0, 0, 3, 0, 2, 2, 2, 4, 3, 0, 2, 4, 5] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = y4 + (9 : Fin (13 : ℕ)))) ∧ ¬((p + (![0, 0, 2, 0, 1, 1, 1, 1, 2, 0, 1, 1, 3] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = w ∨ (p + (![0, 0, 2, 0, 1, 1, 1, 1, 2, 0, 1, 1, 3] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = w + (1 : Fin (13 : ℕ)) ∨ (p + (![0, 0, 2, 0, 1, 1, 1, 1, 2, 0, 1, 1, 3] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = w + (3 : Fin (13 : ℕ)) ∨ (p + (![0, 0, 2, 0, 1, 1, 1, 1, 2, 0, 1, 1, 3] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = w + (9 : Fin (13 : ℕ))) ∧ ¬((p + (![0, 0, 3, 0, 2, 2, 2, 4, 3, 0, 2, 4, 5] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = w ∨ (p + (![0, 0, 3, 0, 2, 2, 2, 4, 3, 0, 2, 4, 5] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = w + (1 : Fin (13 : ℕ)) ∨ (p + (![0, 0, 3, 0, 2, 2, 2, 4, 3, 0, 2, 4, 5] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = w + (3 : Fin (13 : ℕ)) ∨ (p + (![0, 0, 3, 0, 2, 2, 2, 4, 3, 0, 2, 4, 5] : Fin (13 : ℕ) → Fin (13 : ℕ)) (p - w)) = w + (9 : Fin (13 : ℕ))) := by decide +kernel
+  intro x1 hm hT hG
+  have hpair : ∀ (y1 y2 : Fin (13 : ℕ)), ¬(y1 = y2 ∨ y1 = y2 + (1 : Fin (13 : ℕ)) ∨ y1 = y2 + (3 : Fin (13 : ℕ)) ∨ y1 = y2 + (9 : Fin (13 : ℕ))) → (PEqualNP.MetaComplexity.circuitFun ((13 : ℕ) + (13 : ℕ)) x1 fun (x7 : Fin ((13 : ℕ) + (13 : ℕ))) => Decidable.decide (x7 = Fin.castAdd (13 : ℕ) y1 ∨ x7 = Fin.natAdd (13 : ℕ) y2)) = Bool.false := by
+    intro y1 y2 hni
+    obtain ⟨hnc, hb, hc⟩ := tab y1 y2 hni
+    have htri := h1 x1 hG y1 _ _ hnc
+    by_contra hne
+    rw [Bool.not_eq_false] at hne
+    apply absurd htri
+    rw [Bool.not_eq_false]
+    refine hmono x1 hm _ _ _ ?_ hne
+    intro u hu
+    simp only [decide_eq_true_eq] at hu ⊢
+    rcases hu with rfl | rfl
+    · exact Or.inl rfl
+    · exact Or.inr (Or.inr (Or.inr ⟨y2, rfl, hni, hb, hc⟩))
+  exact h3 x1 hm hT hpair (h1 x1 hG) (h2 x1 hG)
