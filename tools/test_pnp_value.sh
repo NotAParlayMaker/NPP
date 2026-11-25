@@ -158,7 +158,27 @@ unset PYTHONPATH
 [ ! -e "$t/planted" ] || { echo "FAIL: loaded a planted module: $(cat "$t/planted")"; exit 1; }
 R="$t/repo"
 
-# 9. live: every value row, at k = 0 and k = value_max, matches the guard
+# 9. the size: 1 to 524288 bytes, the public guard's own limit; check refuses before lake is called, submit when the file grew
+[ "$(node --input-type=module -e 'import { MAX_BYTES } from "'"$guard"'"; console.log(MAX_BYTES)')" = 524288 ] || { echo "FAIL: the public guard's limit is not 524288"; exit 1; }
+serve "$(row "$T")"; fresh r6; pnp next; pnp value L-meta-9507 1; proof "$F" PEqualNP.Outside.V_meta_9507__k1; cp "$R/$F" "$t/small"
+sized() { cp "$t/small" "$R/$F"; head -c "$(($1 - $(wc -c < "$t/small")))" /dev/zero | tr '\0' '\n' >> "$R/$F"; [ "$(wc -c < "$R/$F")" -eq "$1" ] || { echo "FAIL: test file size"; exit 1; }; }
+size_says() { grep -qF "refused: $F is $1 bytes; a proof file must be 1 to 524288 bytes" "$t/out" || { cat "$t/out"; echo "FAIL: size line for $1"; exit 1; }; }
+for n in 0 524289; do
+  if [ "$n" = 0 ]; then : > "$R/$F"; else sized "$n"; fi
+  rm -f "$t/built"; pnp check L-meta-9507 && { echo "FAIL: check took $n bytes"; exit 1; }
+  size_says "$n"; [ ! -e "$t/built" ] || { echo "FAIL: lake was called on $n bytes"; exit 1; }
+done
+{ cat "$t/small"; printf -- '-- '; head -c 600000 /dev/zero | tr '\0' 'x'; echo; } > "$R/$F"; check L-meta-9507   # over the limit only by its comments
+rm -f "$t/pushed"; sized 524288; check L-meta-9507; cp "$R/$F" "$t/max"
+for n in 0 524289; do
+  if [ "$n" = 0 ]; then : > "$R/$F"; else sized "$n"; fi
+  pnp submit L-meta-9507 && { echo "FAIL: submit took $n bytes"; exit 1; }; size_says "$n"
+done
+[ ! -e "$t/pushed" ] || { echo "FAIL: a refused size was pushed"; exit 1; }
+cp "$t/max" "$R/$F"; pnp submit L-meta-9507 || true; [ -s "$t/pushed" ] || { cat "$t/out"; echo "FAIL: exactly 524288 bytes was not sent"; exit 1; }
+R="$t/repo"
+
+# 10. live: every value row, at k = 0 and k = value_max, matches the guard
 if [ -n "${1:-}" ]; then
   n=0; while IFS= read -r -d '' r; do
     serve "$r"; id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$t/row.json")"; vm="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["value_max"])' "$t/row.json")"

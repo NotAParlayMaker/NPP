@@ -103,6 +103,11 @@ PY
 # the file only when its bytes, and then the committed bytes, are those. is_checked <step> <file> reads bytes on stdin.
 sha() { python3 -I -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'; }
 is_checked() { [ -f "$STATE/$1.checked" ] && [ "$(cat "$STATE/$1.checked")" = "$(sha) $2" ]; }
+# The public guard takes a file of 1 to 524288 bytes (MAX_BYTES, .github/scripts/outside-guard.mjs); so does this.
+size_ok() {
+  bytes="$(wc -c < "$ROOT/$1" | tr -d ' ')"
+  [ "$bytes" -ge 1 ] && [ "$bytes" -le 524288 ] || { echo "refused: $1 is $bytes bytes; a proof file must be 1 to 524288 bytes" >&2; exit 1; }
+}
 # The python both `next` and `value` run first: the statement guard, the import rule and the value-step rule.
 guard_py() { cat <<'PY'
 import json, os, re, sys, unicodedata
@@ -274,7 +279,7 @@ print("STOP: " + re.sub(r"[^ -~]", " ", str(d.get("error") or "the lease is gone
   ;;
 check)
   has_file "$2"; id="$2"; file="$(field "$id" gap.file)"; rm -f "$STATE/$id.checked"; still_open "$id"
-  tidy "$ROOT/$file"; built="$(sha < "$ROOT/$file")"
+  tidy "$ROOT/$file"; size_ok "$file"; built="$(sha < "$ROOT/$file")"
   (cd "$ROOT/lean" && lake build "$(field "$id" gap.module)") || exit 1
   [ "$(sha < "$ROOT/$file")" = "$built" ] || { echo "$file changed while it was building; run check again" >&2; exit 1; }
   printf '%s %s\n' "$built" "$file" > "$STATE/$id.checked"
@@ -286,6 +291,7 @@ tidy)
 submit)
   has_file "$2"; id="$2"; file="$(field "$id" gap.file)"
   still_open "$id"
+  size_ok "$file"
   is_checked "$id" "$file" < "$ROOT/$file" || { echo "not submitted: $file is not the file that was checked. Run: tools/pnp.sh check $id" >&2; exit 1; }
   grep -q 'sorry' "$ROOT/$file" && { echo "$file still contains sorry" >&2; exit 1; }
   cd "$ROOT"
