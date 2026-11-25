@@ -57,7 +57,8 @@ theorem PEqualNP.Outside.R_meta_5306_217
     simpa [moveGate] using h a ha
 
   have same_size (t : Fin 13) (C : Circuit) : (rotate t C).size = C.size := by
-    simp [rotate, Circuit.size]
+    change (C.gates.map (moveGate t)).length = C.gates.length
+    exact List.length_map _
 
   have appendRead {α : Type} (w : List α) (v d : α) (i : ℕ) :
       (w ++ [v]).getD i d = if i = w.length then v else w.getD i d := by
