@@ -2,7 +2,6 @@ import PEqualNP.Defs
 
 namespace PEqualNP.Outside.L_meta_16755
 
-set_option exponentiation.threshold 2048
 
 -- Template: merged L_meta_12931.lean (signed live-wire search on a five-input restriction plus binary gate
 -- elimination); data for this table: restriction x5 = false, 240 sample pairs, search bound 7, witness 10 gates.
