@@ -3,9 +3,6 @@ import PEqualNP.Defs
 
 open PEqualNP.GenericRejection
 
--- Eight selected lines supply 32 incident pairs. Their two partial point unions,
--- full point union, product with the line, and running output are available to
--- the 24-gate search. The first line is fixed at zero and the other seven vary.
 set_option maxRecDepth 8192 in
 set_option maxHeartbeats 6000000 in
 theorem PEqualNP.Outside.R_meta_7758_618
