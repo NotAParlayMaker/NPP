@@ -2,7 +2,7 @@ import PEqualNP.Defs
 
 open PEqualNP.CircuitLowerBounds
 
--- The scan-prefix argument adapts the project proof in L_meta_2462.lean.
+-- The gate-list induction adapts the project proof in L_meta_2462.lean.
 private def scan {α : Type} (step : List α → Gate → α) (gs : List Gate) (w : List α) : List α :=
   gs.foldl (fun w g => w ++ [step w g]) w
 
