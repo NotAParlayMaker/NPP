@@ -10,13 +10,6 @@ open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 set_option maxRecDepth 3000 in
 set_option maxHeartbeats 1800000 in
 theorem PEqualNP.Outside.R_meta_5196_696
-    (compiler : ∀ (D : Circuit) (t : Fin 8) (T : Finset ℕ),
-      let w := fun y : Fin 8 → Bool => [y 1,y 0,y 4,y 7,y 5,y 2,false,y 6,y 3,y 1]
-      let z := fun y : Fin 8 → Bool => List.ofFn y ++ [!y t,true,false]
-      let V := fun i y => (D.wires (w y)).getD i false
-      FanInTwo D → (∀ i ∈ T, 10 ≤ i ∧ i < 10 + D.size ∧ ((∃ j < i, V i = V j) ∨ ∃ a, V i = fun y => (z y).getD a false)) →
-      ∃ E : Circuit, FanInTwo E ∧ E.size + T.card ≤ D.size ∧
-        ∀ y, E.eval (z y) = D.eval (w y))
     (literal : ∀ (x1 : Fin (8 : ℕ)) (x2 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.FanInTwo x2 → (∀ (x4 : Fin (8 : ℕ) → Bool), x2.eval (List.ofFn x4 ++ [!x4 x1, Bool.true, Bool.false]) = (fun (x5 : Fin (8 : ℕ) → Bool) => [(1 : ℕ), (12 : ℕ), (23 : ℕ), (4 : ℕ), (15 : ℕ), (26 : ℕ), (37 : ℕ), (46 : ℕ), (57 : ℕ), (74 : ℕ)].any fun (x6 : ℕ) => x5 (Fin.ofNat (8 : ℕ) (x6 / (10 : ℕ))) && x5 (Fin.ofNat (8 : ℕ) (x6 % (10 : ℕ)))) x4) → (13 : ℕ) ≤ x2.size)
     (binary : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.MetaComplexity.FanInTwo x1 → (∀ (x3 : Fin (9 : ℕ) → Bool), x1.eval (List.ofFn x3 ++ [x3 (0 : Fin (9 : ℕ)) || x3 (6 : Fin (9 : ℕ))]) = (x3 (0 : Fin (9 : ℕ)) && x3 (1 : Fin (9 : ℕ)) || x3 (1 : Fin (9 : ℕ)) && x3 (2 : Fin (9 : ℕ)) || x3 (2 : Fin (9 : ℕ)) && x3 (3 : Fin (9 : ℕ)) || x3 (3 : Fin (9 : ℕ)) && x3 (4 : Fin (9 : ℕ)) || x3 (4 : Fin (9 : ℕ)) && x3 (0 : Fin (9 : ℕ)) || x3 (0 : Fin (9 : ℕ)) && x3 (5 : Fin (9 : ℕ)) || x3 (1 : Fin (9 : ℕ)) && x3 (6 : Fin (9 : ℕ)) || x3 (2 : Fin (9 : ℕ)) && x3 (7 : Fin (9 : ℕ)) || x3 (3 : Fin (9 : ℕ)) && x3 (8 : Fin (9 : ℕ)) || x3 (5 : Fin (9 : ℕ)) && x3 (7 : Fin (9 : ℕ)) || x3 (6 : Fin (9 : ℕ)) && x3 (8 : Fin (9 : ℕ)) || x3 (8 : Fin (9 : ℕ)) && x3 (5 : Fin (9 : ℕ)))) → (13 : ℕ) ≤ List.countP (fun (x4 : PEqualNP.CircuitLowerBounds.Gate) => !x4.op.eval [Bool.false]) x1.gates)
     (hard : ∀ (D : Circuit) (v : Fin 9) (k : ℕ),
@@ -30,6 +23,156 @@ theorem PEqualNP.Outside.R_meta_5196_696
         (∀ i ∈ T, 10 ≤ i ∧ i < 24 ∧ ((∃ j < i, V i = V j) ∨ ∃ a, V i = fun y => (z y).getD a false)) → T.card ≤ 1) →
       ∃ (y : Fin 8 → Bool) (u : Bool), D.eval (w y u) ≠ ((115792089237316195379631272860981142487703928461450370304571918768505461864648 : ℕ).testBit (tableIndex y) || (u && (y 0 || y 3)))) :
     have x1 : (Fin (9 : ℕ) → Bool) → Bool := fun (x1 : Fin (9 : ℕ) → Bool) => [(1 : ℕ), (12 : ℕ), (23 : ℕ), (34 : ℕ), (40 : ℕ), (5 : ℕ), (16 : ℕ), (27 : ℕ), (38 : ℕ), (57 : ℕ), (68 : ℕ), (85 : ℕ)].any fun (x2 : ℕ) => x1 (Fin.ofNat (9 : ℕ) (x2 / (10 : ℕ))) && x1 (Fin.ofNat (9 : ℕ) (x2 % (10 : ℕ))); have x2 : (Fin (9 : ℕ) → Bool) → List Bool := fun (x2 : Fin (9 : ℕ) → Bool) => List.ofFn x2 ++ [x2 (0 : Fin (9 : ℕ)) || x2 (6 : Fin (9 : ℕ))]; have x3 : ℕ → PEqualNP.CircuitLowerBounds.Gate → Bool := fun (x3 : ℕ) (x4 : PEqualNP.CircuitLowerBounds.Gate) => (List.take (bif x4.op.eval [Bool.false] then (1 : ℕ) else (2 : ℕ)) x4.inputs).contains x3; ∀ (x4 : Fin (9 : ℕ)) (x5 : PEqualNP.CircuitLowerBounds.Circuit) (x6 : ℕ) (x7 : Bool),   x4 ≠ (0 : Fin (9 : ℕ)) →     x4 ≠ (6 : Fin (9 : ℕ)) →       PEqualNP.MetaComplexity.FanInTwo x5 →         x5.size = (13 : ℕ) →           (10 : ℕ) ≤ x6 →             x6 < (23 : ℕ) →               (∀ x14 ∈ List.take (x6 + (1 : ℕ) - (10 : ℕ)) x5.gates, ↑x4 ∉ x14.inputs) →                 (∀ (x15 x16 : Fin (9 : ℕ) → Bool), (∀ (x17 : Fin (9 : ℕ)), x17 ≠ x4 → x15 x17 = x16 x17) → x1 x15 ≠ x1 x16 → (x5.wires (x2 x15)).getD x6 Bool.false = !x7) →                   (∃ x16 ∈ x5.gates, x3 (9 : ℕ) x16 = Bool.true) →                     (∃ (x17 : PEqualNP.CircuitLowerBounds.Gate), x17.op = PEqualNP.CircuitLowerBounds.GateOp.or ∧ (∃ x18 ∉ [(0 : ℕ), (6 : ℕ), (9 : ℕ)], x17.inputs = [(6 : ℕ), x18] ∨ x17.inputs = [x18, (6 : ℕ)]) ∧ List.filter (x3 (6 : ℕ)) x5.gates = [x17]) →                       (∃ (x18 : Fin (9 : ℕ) → Bool), x18 (6 : Fin (9 : ℕ)) = Bool.false ∧ (x5.wires (x2 x18)).getD x6 Bool.false = x7) →                         ∃ (x19 : Fin (9 : ℕ) → Bool),                           have x20 : Bool := (x5.wires (x2 x19)).getD x6 Bool.false;                           x5.eval ((x2 x19).set (↑x4) (if x7 = Bool.true then x19 x4 || x20 else x19 x4 && x20)) ≠ x1 x19 := by
+  have compiler : ∀ (D : Circuit) (t : Fin 8) (T : Finset ℕ),
+      let w := fun y : Fin 8 → Bool => [y 1,y 0,y 4,y 7,y 5,y 2,false,y 6,y 3,y 1]
+      let z := fun y : Fin 8 → Bool => List.ofFn y ++ [!y t,true,false]
+      let V := fun i y => (D.wires (w y)).getD i false
+      FanInTwo D → (∀ i ∈ T, 10 ≤ i ∧ i < 10 + D.size ∧ ((∃ j < i, V i = V j) ∨ ∃ a, V i = fun y => (z y).getD a false)) →
+      ∃ E : Circuit, FanInTwo E ∧ E.size + T.card ≤ D.size ∧
+        ∀ y, E.eval (z y) = D.eval (w y) := by
+    let X := Fin 8 → Bool
+    let Row := X → List Bool
+    let OK (g : Gate) := g.op ∈ ({.and,.or,.not} : Set GateOp) ∧ g.inputs.length ≤ 2
+    let step (w : List Bool) (g : Gate) := w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
+    let run (gs : List Gate) (w : List Bool) := gs.foldl step w
+    let atWire (w : Row) (i : ℕ) := fun x => (w x).getD i false
+    let finish (gs : List Gate) (w : Row) := fun x => run gs (w x)
+    let repr (w : Row) (m : ℕ) (f : X → Bool) := ∃ j < m, f = atWire w j
+    have pref (gs : List Gate) (w : List Bool) (i : ℕ) (hi : i < w.length) :
+        (run gs w).getD i false = w.getD i false := by
+      induction gs generalizing w with
+      | nil => rfl
+      | cons g gs ih =>
+        change (run gs (step w g)).getD i false = _
+        rw [ih _ (by simp [step]; omega)]
+        exact List.getD_append _ _ _ _ hi
+
+    have compile (gs : List Gate) (z w d : Row) (n m : ℕ) (T : Finset ℕ)
+        (legal : ∀ g ∈ gs, OK g)
+        (hw : ∀ x, (w x).length = n) (hd : ∀ x, (d x).length = m)
+        (bank : ∀ i, repr d m (atWire w i)) (base : ∀ i, repr d m (atWire z i))
+        (nul : repr d m (fun _ => false))
+        (dup : ∀ i ∈ T, n ≤ i ∧ i < n+gs.length ∧
+          ((∃ j < i, atWire (finish gs w) i = atWire (finish gs w) j) ∨
+            ∃ j, atWire (finish gs w) i = atWire z j)) :
+        ∃ E : List Gate, (∀ g ∈ E, OK g) ∧ E.length + T.card ≤ gs.length ∧
+          ∀ i, ∃ j, atWire (finish gs w) i = atWire (finish E d) j := by
+      classical
+      induction gs generalizing w d n m T with
+      | nil =>
+        have empty : T = ∅ := Finset.eq_empty_iff_forall_notMem.mpr fun i h => by
+          have e := dup i h; simp at e; omega
+        refine ⟨[],by simp,by simp [empty],?_⟩
+        intro i
+        obtain ⟨j,_,h⟩ := bank i
+        exact ⟨j,h⟩
+      | cons g gs ih =>
+        let f := fun x => g.op.eval (g.inputs.map fun i => (w x).getD i false)
+        let w' : Row := fun x => (w x) ++ [f x]
+        have lw' : ∀ x, (w' x).length = n+1 := by simp [w',hw]
+        have last : atWire (finish (g::gs) w) n = f := by
+          funext x
+          change (run gs (w' x)).getD n false = _
+          rw [pref _ _ _ (by rw [lw']; omega)]
+          simp [w',←hw x]
+        have avoid (hn : n ∈ T) : repr d m f := by
+          rcases (dup n hn).2.2 with ⟨j,hj,e⟩ | ⟨j,e⟩
+          · have p : atWire (finish (g::gs) w) j = atWire w j :=
+              funext fun x => pref _ _ _ (by simpa [hw] using hj)
+            rw [←last,e,p]; exact bank j
+          · rw [←last,e]; exact base j
+        have saved : ∃ a : List Gate, (∀ q ∈ a, OK q) ∧
+            a.length + (if n ∈ T then 1 else 0) ≤ 1 ∧ repr (finish a d) (m+a.length) f ∧
+            (∀ x, (finish a d x).length = m+a.length) := by
+          by_cases hn : n ∈ T
+          · exact ⟨[],by simp,by simp [hn],avoid hn,hd⟩
+          choose s hs he using bank
+          let q : Gate := ⟨g.op,g.inputs.map s⟩
+          have lq : OK q := ⟨(legal g List.mem_cons_self).1,by simpa [q] using (legal g List.mem_cons_self).2⟩
+          refine ⟨[q],fun r h => List.mem_singleton.mp h ▸ lq,by simp [hn],⟨m,by simp,?_⟩,?_⟩
+          · funext x
+            change f x = ((d x) ++ [q.op.eval (q.inputs.map fun i => (d x).getD i false)]).getD m false
+            rw [←hd x]; simp only [List.getD_append_right,le_refl,Nat.sub_self,List.getD_cons_zero]
+            dsimp only [f,q]
+            rw [List.map_map]
+            congr 1
+            exact List.map_congr_left fun i _ => congrFun (he i) x
+          · intro x
+            change ((d x) ++ [_]).length = _
+            simp [hd]
+        obtain ⟨a,legalA,budget,fa,la⟩ := saved
+        have keep {v} (hv : repr d m v) : repr (finish a d) (m+a.length) v := by
+          obtain ⟨j,hj,rfl⟩ := hv
+          exact ⟨j,by omega,funext fun x => (pref a (d x) j (by simpa [hd] using hj)).symm⟩
+        have next (i : ℕ) : repr (finish a d) (m+a.length) (atWire w' i) := by
+          rcases lt_trichotomy i n with h|rfl|h
+          · have e : atWire w' i = atWire w i :=
+              funext fun x => List.getD_append _ _ _ _ (by simpa [hw] using h)
+            rw [e]; exact keep (bank i)
+          · have e : atWire w' i = f := funext fun x => by simp [atWire,w',←hw x]
+            rw [e]; exact fa
+          · have e : atWire w' i = fun _ => false :=
+              funext fun x => List.getD_eq_default _ _ (by rw [lw']; omega)
+            rw [e]; exact keep nul
+        obtain ⟨tail,ltail,btail,out⟩ := ih w' (finish a d) (n+1) (m+a.length) (T.erase n)
+          (fun q h => legal q (List.mem_cons_of_mem _ h)) lw' la next (fun i => keep (base i)) (keep nul)
+          (by
+            intro i hi
+            obtain ⟨ne,hm⟩ := Finset.mem_erase.mp hi
+            obtain ⟨low,high,same⟩ := dup i hm
+            refine ⟨by omega,by simp at high; omega,same⟩)
+        refine ⟨a++tail,?_,?_,?_⟩
+        · intro q h
+          rcases List.mem_append.mp h with h|h
+          · exact legalA q h
+          · exact ltail q h
+        · simp only [List.length_append,List.length_cons]
+          by_cases hn : n ∈ T
+          · have := Finset.card_erase_add_one hn; rw [if_pos hn] at budget; omega
+          · rw [Finset.erase_eq_of_notMem hn] at btail; rw [if_neg hn] at budget; omega
+        · intro i
+          obtain ⟨j,e⟩ := out i
+          refine ⟨j,?_⟩
+          change atWire (finish gs w') i = _
+          rw [e]
+          funext x
+          change ((tail.foldl step (a.foldl step (d x))).getD j false) =
+            (((a++tail).foldl step (d x)).getD j false)
+          rw [List.foldl_append]
+
+    intro D t T w z V legal dup
+    have lz : ∀ x, (z x).length = 11 := by simp [z]
+    have read (j : Fin 8) (x : X) : (z x).getD j.val false = x j := by
+      rw [List.getD_append _ _ _ _ (by simpa using j.isLt : j.val < (List.ofFn x).length)]
+      change (List.ofFn x).getD j.val false = x j
+      rw [List.getD_eq_getElem _ _ (by simpa using j.isLt),List.getElem_ofFn]
+    have zero (x : X) : (z x).getD 10 false = false := by
+      rw [List.getD_append_right _ _ _ _ (by simp : (List.ofFn x).length ≤ 10)]
+      simp
+    have wn (i : ℕ) : repr z 11 (atWire w i) := by
+      by_cases small : i < 10
+      · interval_cases i
+        all_goals first
+          | exact ⟨10,by decide,funext fun x => (zero x).symm⟩
+          | exact ⟨_,by decide,funext fun x => (read (1 : Fin 8) x).symm⟩
+          | exact ⟨_,by decide,funext fun x => (read (0 : Fin 8) x).symm⟩
+          | exact ⟨_,by decide,funext fun x => (read (4 : Fin 8) x).symm⟩
+          | exact ⟨_,by decide,funext fun x => (read (7 : Fin 8) x).symm⟩
+          | exact ⟨_,by decide,funext fun x => (read (5 : Fin 8) x).symm⟩
+          | exact ⟨_,by decide,funext fun x => (read (2 : Fin 8) x).symm⟩
+          | exact ⟨_,by decide,funext fun x => (read (6 : Fin 8) x).symm⟩
+          | exact ⟨_,by decide,funext fun x => (read (3 : Fin 8) x).symm⟩
+      · refine ⟨10,by decide,funext fun x => ?_⟩
+        exact (List.getD_eq_default _ _ (by simp [w]; omega)).trans (zero x).symm
+    have zn (i : ℕ) : repr z 11 (atWire z i) := by
+      by_cases h : i < 11
+      · exact ⟨i,h,rfl⟩
+      · exact ⟨10,by decide,funext fun x => (List.getD_eq_default _ _ (by rw [lz]; omega)).trans (zero x).symm⟩
+    obtain ⟨E,hE,sz,fin⟩ := compile D.gates z w z 10 11 T legal (by simp [w]) lz wn zn
+      ⟨10,by decide,funext fun x => (zero x).symm⟩ dup
+    obtain ⟨j,hj⟩ := fin D.output
+    exact ⟨⟨E,j⟩,hE,sz,fun y => (congrFun hj y).symm⟩
+
   let row (x : Fin 9 → Bool) : List Bool := List.ofFn x ++ [x 0 || x 6]
 
   let emit (w : List Bool) (g : Gate) : List Bool :=
