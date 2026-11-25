@@ -6,7 +6,6 @@ namespace PEqualNP.Outside.L_meta_7197
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
 
-attribute [local instance] lineDegreeGateOpDecEq
 
 def ld (gs : List Gate) (d : List ℕ) : List ℕ := gs.foldl (fun d g => d ++ [g.lineDegree d]) d
 
@@ -26,7 +25,7 @@ theorem ld_prefix (gs hs : List Gate) (d : List ℕ) (i : ℕ) (hi : i < d.lengt
     rw [← List.append_assoc, ld_snoc, ← ih]
     rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_append_left (by rw [ld_length]; simp; omega)]
 
-theorem ld_gate (gs : List Gate) (d : List ℕ) (j : ℕ) (hj : j < gs.length) (a b : ℕ) (h : gs[j].inputs = [a, b])
+theorem ld_gate (gs : List Gate) (d : List ℕ) (j : ℕ) (hj : j < gs.length) [Decidable (gs[j].op = GateOp.and)] (a b : ℕ) (h : gs[j].inputs = [a, b])
     (ha : a < d.length + j) (hb : b < d.length + j) :
     (ld gs d).getD (d.length + j) 0 = if gs[j].op = GateOp.and then (ld gs d).getD a 0 + (ld gs d).getD b 0
       else max ((ld gs d).getD a 0) ((ld gs d).getD b 0) := by
@@ -45,7 +44,9 @@ theorem ld_gate (gs : List Gate) (d : List ℕ) (j : ℕ) (hj : j < gs.length) (
   have : (ld (gs.take j) d ++ [gs[j].lineDegree (ld (gs.take j) d)]).getD (ld (gs.take j) d).length 0 = gs[j].lineDegree (ld (gs.take j) d) := by
     simp [List.getD_eq_getElem?_getD]
   rw [this, Gate.lineDegree, h]
-  simp
+  by_cases hh : gs[j].op = GateOp.and
+  · rw [if_pos hh, if_pos hh]; simp
+  · rw [if_neg hh, if_neg hh]; simp
 
 theorem aux : True := trivial
 
