@@ -8,8 +8,8 @@ theorem PEqualNP.Outside.R_meta_3326_67
       let step := fun (w : List Nat) (r : Nat) => ∃ a∈w, ∃ b∈w, r=a&&&b ∨ r=a|||b;
       ∀ (s : Fin 6) (k : Fin 450), (masks.getD s.val 0).testBit k.val=true →
         let w := seeds.getD s.val 0 :: raw;
-        let a := w.getD (k.val/15%15) 0;
-        let b := w.getD (k.val%15) 0;
+        let a := w.getD (k.val / 15 % 15) 0;
+        let b := w.getD (k.val % 15) 0;
         step w (if k.val<225 then a&&&b else a|||b))
     (search : let raw : List ℕ := [(95229015649943559 : ℕ), (63038587666488 : ℕ), (256462815680 : ℕ), (4292497062759936 : ℕ), (8521481482240 : ℕ), (14003410187812864 : ℕ), (55389823207997440 : ℕ), (189297016294081033 : ℕ), (155696362464477250 : ℕ), (218994303132270608 : ℕ), (183565875465490436 : ℕ), (229736628138025984 : ℕ), (270286071508633728 : ℕ), (288160007407550752 : ℕ)];
       let seeds : List Nat := [17871361015808,95274182876594239,1,284526031944024591,72622777407897600,241600541374316567];
@@ -18,8 +18,8 @@ theorem PEqualNP.Outside.R_meta_3326_67
       ∃ (s : Fin 6) (k : Fin 450),
         (masks.getD s.val 0).testBit k.val=true ∧
         let w := seeds.getD s.val 0 :: raw;
-        let a := w.getD (k.val/15%15) 0;
-        let b := w.getD (k.val%15) 0;
+        let a := w.getD (k.val / 15 % 15) 0;
+        let b := w.getD (k.val % 15) 0;
         let z := if k.val<225 then a&&&b else a|||b;
         ∃ p : List Nat, p.length≤23 ∧
           (∀ i : Fin p.length, step (w ++ z :: p.take i.val) (p.get i)) ∧
@@ -31,8 +31,8 @@ theorem PEqualNP.Outside.R_meta_3326_67
   let raw : List Nat := [95229015649943559,63038587666488,256462815680,4292497062759936,8521481482240,14003410187812864,55389823207997440,189297016294081033,155696362464477250,218994303132270608,183565875465490436,229736628138025984,270286071508633728,288160007407550752]
   let seed := seeds.getD s.val 0
   let w := seed::raw
-  let a := w.getD (k.val/15%15) 0
-  let b := w.getD (k.val%15) 0
+  let a := w.getD (k.val / 15 % 15) 0
+  let b := w.getD (k.val % 15) 0
   let z := if k.val<225 then a&&&b else a|||b
   have admit : seed ∈ seeds := by
     dsimp only [seed]
