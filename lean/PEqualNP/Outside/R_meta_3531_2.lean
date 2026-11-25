@@ -1,8 +1,9 @@
 import Mathlib
 import PEqualNP.Defs
 
--- The Nat and BitVec folds compute the same bits. One hypothesis is that bridge;
--- the other is a 25-gate witness in the BitVec 59 model.
+-- The Nat and BitVec folds compute the same bits. The first hypothesis is a
+-- 25-gate witness in the BitVec 59 model; the next two are the fold bridge and
+-- the initial-word translation.
 theorem PEqualNP.Outside.R_meta_3531_2
     (hWitness :
       let initial : List (BitVec 59) :=
@@ -42,7 +43,8 @@ theorem PEqualNP.Outside.R_meta_3531_2
         (if u < 21 then a.toNat ||| b.toNat else a.toNat &&& b.toNat) = 2097151 ∧
         a.toNat.testBit u ≠ b.toNat.testBit u ∧
         a.toNat.testBit u = b.toNat.testBit v ∧
-        b.toNat.testBit u = a.toNat.testBit v) ∧
+        b.toNat.testBit u = a.toNat.testBit v))
+    (hInit :
       List.map BitVec.toNat
         ([95229015649944073,63038587928642,256463372304,4292497062825988,
           8521482511360,14003410187716736,55389823206179104,189297016294080519,
@@ -80,7 +82,7 @@ theorem PEqualNP.Outside.R_meta_3531_2
     have tr := hBridge.2.1 base gs
     have ga := hBridge.1 words l.val
     have gb := hBridge.1 words r.val
-    have hnats := hBridge.2.2.2
+    have hnats := hInit
     rw [hnats] at tr
     rw [tr, ga, gb]
-    exact hBridge.2.2.1 _ _ _ _ hBits.1 hBits.2.1 hBits.2.2.1 hBits.2.2.2
+    exact hBridge.2.2 _ _ _ _ hBits.1 hBits.2.1 hBits.2.2.1 hBits.2.2.2
