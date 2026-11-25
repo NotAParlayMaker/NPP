@@ -219,7 +219,7 @@ lemma single_out {n : Nat} {I : Finset (Fin n)} {e : E n} {b : V n}
 -- A proper set of private inputs can reach the rest of the computation through one bit.
 -- A crossing edge distinguishes its inside singleton from the empty input. Both are rejected
 -- in isolation, so no internal edge can be accepted. Distinct same-side singletons would
--- then have to look identical to their external diagonal neighbors.
+-- then have to look identical to their diagonal neighbors outside the region.
 theorem cut_small {n : Nat} (I : Finset (Fin n)) (f e : E n) (spec : Spec I f)
     (priv : Private I f e (supp I e)) (outside : ∃ v : V n,v.2∈I ∧ v∉supp I e) :
     Small (supp I e) := by
