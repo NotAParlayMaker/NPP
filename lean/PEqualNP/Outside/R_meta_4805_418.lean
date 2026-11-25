@@ -39,7 +39,7 @@ theorem PEqualNP.Outside.R_meta_4805_418
     let k := src+(n+s)*o
     have q : k/(n+s)=o := by
       dsimp [k];rw [Nat.add_mul_div_left _ _ (by omega),Nat.div_eq_of_lt lt,Nat.zero_add]
-    have r : k%(n+s)=src := by simp [k,Nat.add_mul_mod_self_left,Nat.mod_eq_of_lt lt]
+    have r : k % (n + s) = src := by simp [k,Nat.add_mul_mod_self_left,Nat.mod_eq_of_lt lt]
     refine ⟨k,?_,a,?_⟩
     · change src+(n+s)*o<3*(n+s)
       interval_cases o <;> omega
