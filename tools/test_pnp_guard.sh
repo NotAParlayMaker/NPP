@@ -3,6 +3,8 @@
 # The statement guard of tools/pnp.sh next: a statement carrying Lean code is refused with nothing written; a plain
 # statement is written wrapped in parentheses; and, given a gaps.json, every statement in it passes.
 set -euo pipefail
+# The stop notice check of pnp.sh fetches the code host: this test never waits on a real host (git's own rewrite, this test's environment only).
+export GIT_ALLOW_PROTOCOL=file GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=url./nonexistent-host-for-test.insteadOf GIT_CONFIG_VALUE_0=https://github.com/
 here="$(cd "$(dirname "$0")" && pwd)"; t="$(mktemp -d)"; trap 'kill $srv 2>/dev/null || true; wait $srv 2>/dev/null || true; rm -rf "$t"' EXIT
 mkdir -p "$t/repo" "$t/bin" "$t/www"; git -C "$t/repo" init -q; mkdir -p "$t/repo/tools"; cp "$here/pnp.sh" "$t/repo/tools/"
 printf '#!/bin/sh\necho tester\n' > "$t/bin/gh"; chmod +x "$t/bin/gh"
