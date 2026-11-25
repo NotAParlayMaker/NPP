@@ -527,3 +527,27 @@ test('value cli: gap writes the instance to statement.txt and check to gap.kind;
   r = cli('imports', pj(d, 'v.lean'), pj(d, 'imports.json'), VF(6), 'reduce');
   assert.equal(r.status, 1); assert.match(r.stdout, /is a value file/);
 });
+
+// THE STEP'S ROW BY ID (25 Nov): both workflows fetch the desk's row for the one gap from one account-bound address,
+// never the whole list and never through pequalnp.com's DNS, and the advisory's id is the one its file belongs to.
+import { GAP_RE as GAP_RE_ROW, rowOfFile as rowOfFileRow } from './outside-guard.mjs';
+test('both workflows: the row by id from the one desk address, and the advisory id names the file\'s row', () => {
+  const wfs = ['authoritative.yml', 'advisory.yml'].map((n) => [n, readFileSync(new URL(`../workflows/${n}`, import.meta.url), 'utf8')]);
+  const urls = wfs.map(([n, wf]) => {
+    assert.doesNotMatch(wf, /data\.pequalnp\.com|gaps\.json"? *"\$GAPS_URL|GAPS_URL/, `${n}: still fetches the whole list`);
+    const m = wf.match(/^\s+ROW_URL: (\S+)$/m); assert.ok(m, `${n}: no ROW_URL`);
+    assert.equal(wf.match(/curl [^\n]*\$ROW_URL/g)?.length, 1, `${n}: fetches the row other than once`);
+    return m[1];
+  });
+  assert.equal(urls[0], urls[1], 'the two workflows read different desks');
+  assert.equal(urls[0], 'https://pequalnp-desk.pequalnp.workers.dev/desk/row?gap=');
+  assert.match(wfs[0][1], /curl [^\n]*--max-redirs 0[^\n]*"\$ROW_URL\$GAP"/);
+  const line = wfs[1][1].match(/^\s+(gap="L-\$\(basename "\$FILE" \.lean \| cut -c3- \| tr _ -\)")$/m); assert.ok(line, 'advisory: no gap line');
+  assert.match(wfs[1][1], /curl [^\n]*--max-redirs 0[^\n]*"\$ROW_URL\$gap"/);
+  for (const id of ['L-meta-632', 'L-gct-101', 'L-x-0', 'L-clb-034']) {
+    const file = `lean/PEqualNP/Outside/${id.replace(/-/g, '_')}.lean`;
+    const r = spawnSync('sh', ['-c', `${line[1]}; printf %s "$gap"`], { env: { PATH: process.env.PATH, FILE: file }, encoding: 'utf8' });
+    assert.equal(r.stdout, id); assert.ok(GAP_RE_ROW.test(r.stdout));
+    assert.ok(rowOfFileRow(file)({ id, file }), `${file} is not the row of ${id}`);
+  }
+});

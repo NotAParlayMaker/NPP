@@ -23,6 +23,9 @@
 // against the template with k put in (valueGap below: the one rule value steps add). A V_ file is
 // refused for every row that is not a value step, and an L_ or R_ file for a value step.
 //
+// <gaps.json> is the desk's list, whole or as the desk's row for one id (GET /desk/row?gap=<id>: the rows with that id,
+// its checked entry and its withdrawn reason), which the workflows fetch; the guard decides the same on either.
+//
 // Exit 0: the guard holds. Exit 1: REFUSED, one line per reason, each line starting `REFUSED: `.
 // The pull-request, gap and kind checks give one reason (the first). The checks of the file's text
 // (the import, plain-file and own-namespace rules) give EVERY problem they find, in file order, so

@@ -66,7 +66,12 @@ jobs:
       KIND: ${{ inputs.kind }}
       CORES: ${{ inputs.cores }}
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-      GAPS_URL: https://data.pequalnp.com/data/desk/gaps.json
+      # THE STEP'S ROW, by id (25 Nov): the desk answers the guard's input cut to the one gap id, so the size of the
+      # desk's list never bounds a check. The address is the desk Worker's workers.dev name, which belongs to the
+      # Cloudflare account and resolves under workers.dev: a change of pequalnp.com's registrar or DNS cannot move it.
+      # The id is put on only after the first step's pattern held. The hub records a verdict only when its
+      # statement_sha256 is the hash of the statement the hub itself holds for the lemma.
+      ROW_URL: https://pequalnp-desk.pequalnp.workers.dev/desk/row?gap=
       API: https://api.github.com
       W: /opt/pnp
       # THE PINNED ELAN (red team ruling, 2026-11-25): a release version and the sha256 of its
@@ -147,8 +152,9 @@ jobs:
         run: |
           set -eu
           exec > >(tee -a "$RUNNER_TEMP/steps.log") 2>&1   # kept for the verdict step
-          # The statement comes from the desk's public list, never from the pull request.
-          curl -sSf --proto '=https' --max-redirs 0 --max-filesize 20000000 -o "$W/in/gaps.json" "$GAPS_URL"
+          # The statement comes from the desk's row for the gap, never from the pull request (retried: a desk deploy can
+          # answer an error for a few seconds; a row that never arrives ends the run as a FAULT, which says nothing about the proof).
+          curl -sSf --proto '=https' --max-redirs 0 --max-filesize 1000000 --retry 3 --retry-all-errors -o "$W/in/gaps.json" "$ROW_URL$GAP"
           # The run's kind goes to the guard, which refuses it unless the desk's row agrees: check or
           # refute as the desk posts the step; reduce only for an R_<gap>_<n> file of a step posted to be
           # proved whose row carries reductions: true (DARK: absent, every reduction run is refused).
