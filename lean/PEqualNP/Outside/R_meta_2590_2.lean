@@ -14,9 +14,9 @@ theorem PEqualNP.Outside.R_meta_2590_2
       PEqualNP.TopForm.NoFourCycle G → G.edgeFinset.Nonempty → PEqualNP.TopForm.IsLeastAO G C →
       PEqualNP.TopForm.TopForm G C →
         (∀ a ∈ PEqualNP.TopForm.tops G C,
-          Disjoint (PEqualNP.TopForm.side (n := n) C a 0) (PEqualNP.TopForm.side (n := n) C a 1) ∧
-          (∀ u ∈ PEqualNP.TopForm.side (n := n) C a 0, ∀ v ∈ PEqualNP.TopForm.side (n := n) C a 1, G.Adj u v) ∧
-          ((PEqualNP.TopForm.side (n := n) C a 0).card ≤ 1 ∨ (PEqualNP.TopForm.side (n := n) C a 1).card ≤ 1)) ∧
+          Disjoint (PEqualNP.TopForm.orIn n C (PEqualNP.TopForm.opnd C a 0)) (PEqualNP.TopForm.orIn n C (PEqualNP.TopForm.opnd C a 1)) ∧
+          (∀ u ∈ PEqualNP.TopForm.orIn n C (PEqualNP.TopForm.opnd C a 0), ∀ v ∈ PEqualNP.TopForm.orIn n C (PEqualNP.TopForm.opnd C a 1), G.Adj u v) ∧
+          ((PEqualNP.TopForm.orIn n C (PEqualNP.TopForm.opnd C a 0)).card ≤ 1 ∨ (PEqualNP.TopForm.orIn n C (PEqualNP.TopForm.opnd C a 1)).card ≤ 1)) ∧
         ∀ u v : Fin n, s(u, v) ∈ PEqualNP.TopForm.Ustar G C →
           ∃ a ∈ PEqualNP.TopForm.tops G C, ∃ b : Fin 2, ∃ h ∈ PEqualNP.TopForm.junk G C,
             PEqualNP.EdgeOwnership.gateVal n C a (PEqualNP.EdgeOwnership.pairInput u v) = true ∧
