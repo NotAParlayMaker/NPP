@@ -28,7 +28,7 @@ theorem PEqualNP.Outside.R_meta_4185_371
       · exact Or.inr (Finset.mem_union_right K hwX)
     · have hdel : (x2.deleteEdges ↑(PEqualNP.TopForm.Ustar x2 x4)).Adj u v := by
         rw [SimpleGraph.deleteEdges_adj]
-        exact ⟨huv, by simpa using he⟩
+        exact ⟨huv, by rw [Finset.mem_coe]; exact he⟩
       rcases hKcov u v hdel with hu | hv
       · exact Or.inl (Finset.mem_union_left X hu)
       · exact Or.inr (Finset.mem_union_left X hv)
