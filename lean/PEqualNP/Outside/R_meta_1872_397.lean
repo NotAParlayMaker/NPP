@@ -5,7 +5,7 @@ open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.MetaComplexity
 theorem PEqualNP.Outside.R_meta_1872_397
     (normalize : ∀ (n : ℕ) (C : Circuit) (a b : ℕ), Monotone2 C → ReadsBack n C →
     a < n + C.size → b < n + C.size →
-    (∀ w ∈ ({a,b} : Finset ℕ), ∃ x y : List Bool, x.length = n ∧ y.length = n ∧
+    (∀ w : ℕ, w = a ∨ w = b → ∃ x y : List Bool, x.length = n ∧ y.length = n ∧
       (C.wires x).getD w false ≠ (C.wires y).getD w false) →
     ∃ (D : Circuit) (u v : ℕ), TopForm.IsAO2 n D ∧
       (∀ g ∈ D.gates, g.inputs.Nodup) ∧ D.size ≤ C.size ∧
@@ -22,10 +22,10 @@ theorem PEqualNP.Outside.R_meta_1872_397
   have len (p l : Fin 13) : (P p l).length = 26 := by simp [P]
   obtain ⟨pa,la,hpa,hwa,hwb⟩ := haOnly
   obtain ⟨pb,lb,hpb,hzb,hza⟩ := hbOnly
-  have hVar : ∀ w ∈ ({a,b} : Finset ℕ), ∃ x y : List Bool, x.length = 26 ∧ y.length = 26 ∧
+  have hVar : ∀ w : ℕ, w = a ∨ w = b → ∃ x y : List Bool, x.length = 26 ∧ y.length = 26 ∧
       (C.wires x).getD w false ≠ (C.wires y).getD w false := by
     intro w hw
-    rcases (show w = a ∨ w = b from by simpa using hw) with rfl | rfl
+    rcases hw with rfl | rfl
     · refine ⟨P pa la,P pb lb,len _ _,len _ _,?_⟩
       rw [show (C.wires (P pa la)).getD w false = true from hwa,
         show (C.wires (P pb lb)).getD w false = false from hza]
