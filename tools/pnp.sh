@@ -21,7 +21,10 @@ set -euo pipefail
 DESK="https://pequalnp.com/desk"
 # PNP_DESK exists only for tools/test_pnp_guard.sh, and only a loopback address is taken: an exported variable must never
 # send the agent's login to another host or take its statements from there.
-case "${PNP_DESK:-}" in "") ;; http://127.0.0.1:[0-9]*) DESK="$PNP_DESK" ;; *) echo "PNP_DESK is set but is not a loopback test address; refusing" >&2; exit 1 ;; esac
+if [ -n "${PNP_DESK:-}" ]; then
+  if [[ "$PNP_DESK" =~ ^http://127\.0\.0\.1:[0-9]{1,5}$ ]]; then DESK="$PNP_DESK"
+  else echo "PNP_DESK is set but is not a loopback test address (http://127.0.0.1:<port>); refusing" >&2; exit 1; fi
+fi
 UPSTREAM=open-goat/pequalnp-proofs
 ROOT="$(git rev-parse --show-toplevel)"
 STATE="$ROOT/.pnp"; mkdir -p "$STATE"
