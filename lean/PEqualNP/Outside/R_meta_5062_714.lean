@@ -82,10 +82,19 @@ theorem PEqualNP.Outside.R_meta_5062_714
         have hr := h (i, false)
         rw [bareL] at hl
         rw [bareR] at hr
-        simp only [PEqualNP.AndCount.AndCountCircuit.gateValFuel,
-          PEqualNP.AndCount.AndCountCircuit.sideTrue, hfun, hl, hr]
+        show (PEqualNP.AndCount.AndCountCircuit.sideTrue U (C.leftVars i) (C.leftGates i) i
+              (C.gateValFuel U d) &&
+            PEqualNP.AndCount.AndCountCircuit.sideTrue U (C.rightVars i) (C.rightGates i) i
+              (C.gateValFuel U d)) =
+          (PEqualNP.AndCount.AndCountCircuit.sideTrue V (C.leftVars i) (C.leftGates i) i
+              (C.gateValFuel V d) &&
+            PEqualNP.AndCount.AndCountCircuit.sideTrue V (C.rightVars i) (C.rightGates i) i
+              (C.gateValFuel V d))
+        delta PEqualNP.AndCount.AndCountCircuit.sideTrue
+        simp only [hfun, hl, hr]
     have gv : ∀ i, C.gateVal U i = C.gateVal V i := fun i => fuel C.size i
-    simp only [PEqualNP.AndCount.AndCountCircuit.eval, noOut, Finset.notMem_empty, false_and,
+    delta PEqualNP.AndCount.AndCountCircuit.eval
+    simp only [noOut, Finset.notMem_empty, false_and,
       exists_false, false_or, gv]
   -- separation
   have sep : ∀ (U : Finset (Fin 42)) (v w : Fin 42), (∀ a ∈ U, ∀ b ∈ U, ¬ G.Adj a b) → w ∈ U →
