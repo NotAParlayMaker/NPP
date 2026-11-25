@@ -1,289 +1,61 @@
 import Mathlib
 import PEqualNP.Defs
 
+-- The search and its soundness proof (down to search_safe) are adapted from the merged proof of
+-- L-meta-139 (PEqualNP/Outside/L_meta_139.lean, by Lewis Watson), here without NOT gates and on
+-- the 16 inputs with one vertex on each side on; target, bound and final theorems differ.
+
 namespace PEqualNP.Outside.L_meta_5468
 
-section Live
-
-variable {α : Type} [DecidableEq α]
-
-def build (ops : α → α → Finset α) (goal : α) : ℕ → Finset α → Prop
-  | 0, available => goal ∈ available
-  | k + 1, available => build ops goal k available ∨
-    ∃ a ∈ available, ∃ b ∈ available, a ≠ b ∧
-      ∃ z ∈ ops a b, build ops goal k (insert z available)
-
-def live (ops : α → α → Finset α) (goal : α) : ℕ → Finset α → Prop
-  | 0, s => s = {goal}
-  | k + 1, s => live ops goal k s ∨
-    ∃ a ∈ s, ∃ b ∈ s, a ≠ b ∧ ∃ z ∈ ops a b, z ∉ s ∧
-      ∃ rest : Finset α, s = insert a (insert b rest) ∧ live ops goal k (insert z rest)
-
-theorem compress {ops : α → α → Finset α} {goal : α} {k : ℕ} {available : Finset α}
-    (h : build ops goal k available) : ∃ s ⊆ available, live ops goal k s := by
-  induction k generalizing available with
-  | zero =>
-    exact ⟨{goal}, Finset.singleton_subset_iff.mpr h, rfl⟩
-  | succ k ih =>
-    rcases h with skip | ⟨a, ha, b, hb, hab, z, hz, tail⟩
-    · obtain ⟨s, hs, hrun⟩ := ih skip
-      exact ⟨s, hs, Or.inl hrun⟩
-    · obtain ⟨t, ht, hrun⟩ := ih tail
-      by_cases sub : t ⊆ available
-      · exact ⟨t, sub, Or.inl hrun⟩
-      · have hzmem : z ∈ t := by
-          by_contra hn
-          apply sub
-          intro u hu
-          rcases Finset.mem_insert.mp (ht hu) with rfl | ok
-          · exact False.elim (hn hu)
-          · exact ok
-        have hzout : z ∉ available := by
-          intro hh
-          exact sub ((Finset.insert_eq_of_mem hh) ▸ ht)
-        let rest := t.erase z
-        have hrest : rest ⊆ available := by
-          intro u hu
-          have hu' := Finset.mem_erase.mp hu
-          exact (Finset.mem_insert.mp (ht hu'.2)).resolve_left hu'.1
-        let s := insert a (insert b rest)
-        have hs : s ⊆ available := Finset.insert_subset ha (Finset.insert_subset hb hrest)
-        refine ⟨s, hs, Or.inr ⟨a, by simp [s], b, by simp [s], hab, z, hz,
-          fun h => hzout (hs h), rest, rfl, ?_⟩⟩
-        simpa [rest, Finset.insert_erase hzmem] using hrun
-
-theorem live_card {ops : α → α → Finset α} {goal : α} {k : ℕ} {s : Finset α}
-    (h : live ops goal k s) : s.card ≤ k + 1 := by
-  induction k generalizing s with
-  | zero => change s = {goal} at h; simp [h]
-  | succ k ih =>
-    rcases h with skip | ⟨a, ha, b, hb, hab, z, hz, hout, rest, rfl, tail⟩
-    · exact (ih skip).trans (by omega)
-    · have hzrest : z ∉ rest := fun hm => hout (by simp [hm])
-      have htail := ih tail
-      rw [Finset.card_insert_of_notMem hzrest] at htail
-      have h₁ := Finset.card_insert_le a (insert b rest)
-      have h₂ := Finset.card_insert_le b rest
-      omega
-
-theorem live_separates {ops : α → α → Finset α} {goal : α} (D : α → Prop)
-    (hd : D goal) (hops : ∀ a b, ∀ z ∈ ops a b, D z → D a ∨ D b)
-    {k : ℕ} {s : Finset α} (h : live ops goal k s) : ∃ w ∈ s, D w := by
-  induction k generalizing s with
-  | zero => change s = {goal} at h; exact ⟨goal, by simp [h], hd⟩
-  | succ k ih =>
-    rcases h with skip | ⟨a, ha, b, hb, hab, z, hz, hout, rest, rfl, tail⟩
-    · exact ih skip
-    · obtain ⟨w, hw, hD⟩ := ih tail
-      rcases Finset.mem_insert.mp hw with rfl | hw
-      · rcases hops a b w hz hD with h | h
-        · exact ⟨a, ha, h⟩
-        · exact ⟨b, hb, h⟩
-      · exact ⟨w, by simp [hw], hD⟩
-
-theorem first_live {ops : α → α → Finset α} {goal : α} {k : ℕ} {s : Finset α}
-    (h : live ops goal (k + 1) s) :
-    s = {goal} ∨
-    ∃ a ∈ s, ∃ b ∈ s, a ≠ b ∧ ∃ z ∈ ops a b, z ∉ s ∧
-      ∃ rest : Finset α, s = insert a (insert b rest) ∧ live ops goal k (insert z rest) := by
-  induction k with
-  | zero => exact h
-  | succ k ih =>
-    rcases h with skip | step
-    · rcases ih skip with done | ⟨a, ha, b, hb, hab, z, hz, hn, r, hs, tail⟩
-      · exact .inl done
-      · exact .inr ⟨a, ha, b, hb, hab, z, hz, hn, r, hs, Or.inl tail⟩
-    · exact .inr step
-
-end Live
-
-abbrev W := BitVec 120
-
-def ops (x y : W) : List W := [x &&& y, x ||| y]
-
-def sep (x : W) : BitVec 60 := ((x >>> 60) &&& ~~~x).setWidth 60
-
-def cuts (ws : List W) : BitVec 60 := ws.foldr (fun w v => sep w ||| v) 0
-
-def goal : W := (-1 : BitVec 60) ++ (0 : BitVec 60)
-
-def singles {α : Type} : List α → List (α × List α)
-  | [] => []
-  | a :: rest => (a, rest) :: (singles rest).map (fun (b, bs) => (b, a :: bs))
-
-def pairs {α : Type} : List α → List (α × α × List α)
-  | [] => []
-  | a :: rest => (singles rest).map (fun (b, bs) => (a, b, bs)) ++
-      (pairs rest).map (fun (b, c, bs) => (b, c, a :: bs))
-
-def rawInputs : List W :=
-  [0xffffff000000000000000, 0x3ffff000000041041041041041, 0xffffc0000000000082082082082082,
-   0xf3cf3cf3cf3cf3c, 0xfc003f00003f104104104104104, 0x3f000fc0000fc0208208208208208,
-   0xfc003f00003f000410410410410410, 0xfc00008e38e38e38e38e3]
-
-def inputs : List W := rawInputs
-
-theorem pick_one {α : Type} {a : α} {ws : List α} (h : a ∈ ws) :
-    ∃ rest, (a, rest) ∈ singles ws ∧ ws.Perm (a :: rest) := by
-  induction ws with
-  | nil => simp at h
-  | cons x xs ih =>
-    rcases List.mem_cons.mp h with e | h
-    · subst x; exact ⟨xs, by simp [singles], .refl _⟩
-    · obtain ⟨rest, hm, hp⟩ := ih h
-      refine ⟨x :: rest, List.mem_cons_of_mem _ (List.mem_map.mpr ⟨(a, rest), hm, rfl⟩), ?_⟩
-      exact (hp.cons x).trans (.swap _ _ _)
-
-theorem pick_two {α : Type} {a b : α} {ws : List α} (ha : a ∈ ws) (hb : b ∈ ws) (hne : a ≠ b) :
-    ∃ rest, ((a, b, rest) ∈ pairs ws ∨ (b, a, rest) ∈ pairs ws) ∧
-      ws.Perm (a :: b :: rest) := by
-  induction ws with
-  | nil => simp at ha
-  | cons x xs ih =>
-    rcases List.mem_cons.mp ha with h | ha
-    · subst x
-      obtain ⟨r, hm, hp⟩ := pick_one ((List.mem_cons.mp hb).resolve_left (Ne.symm hne))
-      exact ⟨r, .inl (List.mem_append_left _ (List.mem_map.mpr ⟨(b, r), hm, rfl⟩)), hp.cons a⟩
-    · rcases List.mem_cons.mp hb with h | hb
-      · subst x
-        obtain ⟨r, hm, hp⟩ := pick_one (ws := xs) (a := a) (by assumption)
-        exact ⟨r, .inr (List.mem_append_left _ (List.mem_map.mpr ⟨(a, r), hm, rfl⟩)),
-          (hp.cons b).trans (.swap _ _ _)⟩
-      · obtain ⟨r, hm, hp⟩ := ih ha hb
-        refine ⟨x :: r, ?_,
-          (hp.cons x).trans ((List.Perm.swap _ _ _).trans ((List.Perm.swap _ _ _).cons a))⟩
-        rcases hm with hm | hm
-        · exact .inl (List.mem_append_right _ (List.mem_map.mpr ⟨(a, b, r), hm, rfl⟩))
-        · exact .inr (List.mem_append_right _ (List.mem_map.mpr ⟨(b, a, r), hm, rfl⟩))
-
-abbrev basicOps (a b : W) : Finset W := (ops a b).toFinset
-
-def differs (i : Fin 60) (w : W) : Prop :=
-  w.getLsbD (60 + i.val) = true ∧ w.getLsbD i.val = false
-
-theorem ops_differs (i : Fin 60) (a b : W) (z : W) (hz : z ∈ basicOps a b)
-    (hd : differs i z) : differs i a ∨ differs i b := by
-  simp only [basicOps, ops, List.mem_toFinset, List.mem_cons, List.not_mem_nil, or_false] at hz
-  unfold differs at hd ⊢
-  rcases hz with rfl | rfl <;> revert hd <;>
-    simp only [BitVec.getLsbD_and, BitVec.getLsbD_or] <;>
-    cases a.getLsbD (60 + i.val) <;> cases a.getLsbD i.val <;>
-    cases b.getLsbD (60 + i.val) <;> cases b.getLsbD i.val <;> simp
-
-theorem goal_differs : ∀ i : Fin 60, differs i goal := by
-  unfold differs
-  decide
-
-theorem cuts_spec (ws : List W) (i : Fin 60) :
-    (cuts ws).getLsbD i.val = true ↔ ∃ w ∈ ws, differs i w := by
-  induction ws with
-  | nil => simp [cuts]
-  | cons a rest ih =>
-    change (sep a ||| cuts rest).getLsbD i.val = true ↔ _
-    rw [BitVec.getLsbD_or, Bool.or_eq_true, ih]
-    have hi : i.val < 120 := by omega
-    simp [sep, i.isLt, differs, hi, Nat.add_comm]
-
-theorem cuts_full {k : ℕ} {ws : List W} (h : live basicOps goal k ws.toFinset) :
-    cuts ws = -1 := by
-  apply BitVec.eq_of_getElem_eq
-  intro j hj
-  have hw := live_separates (differs ⟨j, hj⟩) (goal_differs ⟨j, hj⟩) (ops_differs ⟨j, hj⟩) h
-  have hbit := (cuts_spec ws ⟨j, hj⟩).mpr (by simpa using hw)
-  change (cuts ws)[j] = (BitVec.allOnes 60)[j]
-  rw [BitVec.getElem_allOnes]
-  simpa only [BitVec.getLsbD_eq_getElem hj] using hbit
-
-theorem ops_swap (a b : W) : basicOps a b = basicOps b a := by
-  ext z
-  simp [basicOps, ops, BitVec.and_comm, BitVec.or_comm]
-
-def keepChoices (a b : W) (r : List W) : List (List W) := [r, a :: r, b :: r, a :: b :: r]
-
-theorem recover_kept {ws r : List W} {a b : W} {needed : Finset W}
-    (hp : ws.Perm (a :: b :: r)) (hn : ws.Nodup)
-    (hs : ws.toFinset = insert a (insert b needed)) :
-    ∃ kept ∈ keepChoices a b r, kept.Nodup ∧ kept.toFinset = needed := by
-  have habr := hp.nodup_iff.mp hn
-  have hbase : ws.toFinset = insert a (insert b r.toFinset) := by
-    ext v
-    simp [hp.mem_iff]
-  have henne : ∀ v, v ∈ r ↔ v ∈ needed ∧ v ≠ a ∧ v ≠ b := by
-    intro v
-    have he : (v ∈ insert a (insert b r.toFinset)) ↔ v ∈ insert a (insert b needed) := by
-      rw [← hbase, ← hs]
-    simp only [Finset.mem_insert, List.mem_toFinset] at he
-    simp only [List.nodup_cons, List.mem_cons, not_or] at habr
-    grind
-  by_cases ha : a ∈ needed <;> by_cases hb : b ∈ needed
-  · refine ⟨a :: b :: r, by simp [keepChoices], habr, ?_⟩
-    ext v; simp [henne]; grind
-  · refine ⟨a :: r, by simp [keepChoices], ?_, ?_⟩
-    · simp_all [List.nodup_cons]
-    · ext v; simp [henne]; grind
-  · refine ⟨b :: r, by simp [keepChoices], (List.nodup_cons.mp habr).2, ?_⟩
-    ext v; simp [henne]; grind
-  · refine ⟨r, by simp [keepChoices], (List.nodup_cons.mp (List.nodup_cons.mp habr).2).2, ?_⟩
-    ext v; simp [henne]; grind
-
-theorem singleton_list {ws : List W} (hn : ws.Nodup) (hs : ws.toFinset = {goal}) : ws = [goal] := by
-  have hc := List.toFinset_card_of_nodup hn
-  rw [hs] at hc
-  cases ws with
-  | nil => simp at hc
-  | cons w ws =>
-    cases ws with
-    | nil => simpa using hs
-    | cons => simp at hc
-
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-
-private def possible (w : List W) (z : W) : Bool :=
-  z == 0 || z == BitVec.allOnes 120 || w.any (fun u => z == u ||
+private abbrev T := BitVec 16
+private def ins : List T := [0x000f, 0x00f0, 0x0f00, 0xf000, 0x1111, 0x2222, 0x4444, 0x8888]
+private def target : T := 0x077f
+private def possible (w : List T) (z : T) : Bool :=
+  z == 0 || z == (-1) || w.any (fun u => z == u ||
     w.any (fun v => z == (u &&& v) || z == (u ||| v)))
 
-private def bit (k : Fin 120) (z : W) : Bool := z[k.val]
+private def bit (k : Fin 16) (z : T) := z[k.val]
 
-private theorem read_bit (w : List W) (i : ℕ) (k : Fin 120) :
+private theorem read_bit (w : List T) (i : ℕ) (k : Fin 16) :
     (w.map (bit k)).getD i false = bit k (w.getD i 0) := by
   by_cases h : i < w.length
   · simp [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_eq_getElem h]
   · simp [List.getD_eq_getElem?_getD, List.getElem?_map,
       List.getElem?_eq_none (Nat.le_of_not_gt h), bit]
 
-private theorem read_wire (w : List W) (i : ℕ) : w.getD i 0 = 0 ∨ w.getD i 0 ∈ w := by
+private theorem read_wire (w : List T) (i : ℕ) : w.getD i 0 = 0 ∨ w.getD i 0 ∈ w := by
   by_cases h : i < w.length
   · exact Or.inr (by simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h])
   · simp [List.getD_eq_getElem?_getD, List.getElem?_eq_none (Nat.le_of_not_gt h)]
 
-private theorem atom {ws : List W} {x : W} (hx : x = 0 ∨ x ∈ ws) : possible ws x := by
+private theorem atom {ws : List T} {x : T} (hx : x = 0 ∨ x ∈ ws) :
+    possible ws x := by
   rcases hx with rfl | hx
   · simp [possible]
   · simp only [possible, Bool.or_eq_true, beq_iff_eq, List.any_eq_true]
-    exact .inr ⟨x, hx, .inl rfl⟩
+    grind
 
-private theorem pair {ws : List W} {x y : W} (hx : x = 0 ∨ x ∈ ws) (hy : y = 0 ∨ y ∈ ws) :
+private theorem pair {ws : List T} {x y : T} (hx : x = 0 ∨ x ∈ ws) (hy : y = 0 ∨ y ∈ ws) :
     possible ws (x &&& y) ∧ possible ws (x ||| y) := by
   rcases hx with rfl | hx
-  · simpa [possible] using atom hy
+  · simpa [possible] using (show possible ws 0 ∧ possible ws y from ⟨by simp [possible], atom hy⟩)
   rcases hy with rfl | hy
-  · simpa [possible] using atom (.inr hx)
+  · simpa [possible] using (show possible ws 0 ∧ possible ws x from ⟨by simp [possible], atom (.inr hx)⟩)
   · simp only [possible, Bool.or_eq_true, beq_iff_eq, List.any_eq_true]
     constructor
     · exact .inr ⟨x, hx, .inr ⟨y, hy, .inl rfl⟩⟩
     · exact .inr ⟨x, hx, .inr ⟨y, hy, .inr rfl⟩⟩
 
-private def step (w : List Bool) (g : Gate) : List Bool :=
+private def step (w : List Bool) (g : Gate) :=
   w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
 
 private def legal (g : Gate) : Prop :=
   g.op ∈ ({GateOp.and, GateOp.or} : Set GateOp) ∧ g.inputs.length ≤ 2
 
-set_option maxRecDepth 2000 in
-private theorem gate_table (w ws : List W) (hw : w ⊆ ws) (g : Gate) (hg : legal g) :
+private theorem gate_table (w ws : List T) (hw : w ⊆ ws) (g : Gate) (hg : legal g) :
     ∃ z, possible ws z ∧ ∀ k, step (w.map (bit k)) g = (w ++ [z]).map (bit k) := by
-  have mem (i : ℕ) : w.getD i 0 = 0 ∨ w.getD i 0 ∈ ws :=
-    (read_wire w i).imp_right (fun h => hw h)
+  have mem (i : ℕ) : w.getD i 0 = 0 ∨ w.getD i 0 ∈ ws := (read_wire w i).imp_right (fun h => hw h)
   obtain ⟨op, args⟩ := g
   obtain ⟨hop, hlen⟩ := hg
   change op = .and ∨ op = .or at hop
@@ -291,187 +63,231 @@ private theorem gate_table (w ws : List W) (hw : w ⊆ ws) (g : Gate) (hg : lega
   cases args with
   | nil =>
     rcases hop with rfl | rfl
-    · exact ⟨BitVec.allOnes 120, by simp [possible], by simp [step, GateOp.eval, bit]; decide⟩
+    · exact ⟨-1, by simp [possible], by simp [step, GateOp.eval, bit]; decide⟩
     · exact ⟨0, by simp [possible], by simp [step, GateOp.eval, bit]⟩
   | cons i tail =>
     cases tail with
     | nil =>
       rcases hop with rfl | rfl
-      · exact ⟨_, atom (mem i),
-          by simp only [step, List.map_cons, List.map_nil, read_bit]; simp [GateOp.eval]⟩
-      · exact ⟨_, atom (mem i),
-          by simp only [step, List.map_cons, List.map_nil, read_bit]; simp [GateOp.eval]⟩
+      · exact ⟨_, atom (mem i), by simp only [step, List.map_cons, List.map_nil, read_bit]; simp [GateOp.eval]⟩
+      · exact ⟨_, atom (mem i), by simp only [step, List.map_cons, List.map_nil, read_bit]; simp [GateOp.eval]⟩
     | cons j tail =>
       cases tail with
       | cons => simp at hlen
       | nil =>
         rcases hop with rfl | rfl
-        · exact ⟨_, (pair (mem i) (mem j)).1,
-            by simp only [step, List.map_cons, List.map_nil, read_bit]; simp [GateOp.eval, bit]⟩
-        · exact ⟨_, (pair (mem i) (mem j)).2,
-            by simp only [step, List.map_cons, List.map_nil, read_bit]; simp [GateOp.eval, bit]⟩
+        · exact ⟨_, (pair (mem i) (mem j)).1, by simp only [step, List.map_cons, List.map_nil, read_bit]; simp [GateOp.eval, bit]⟩
+        · exact ⟨_, (pair (mem i) (mem j)).2, by simp only [step, List.map_cons, List.map_nil, read_bit]; simp [GateOp.eval, bit]⟩
 
-def represents (available : Finset W) (w : List W) : Prop :=
-  ∀ u ∈ w, u = 0 ∨ u = BitVec.allOnes 120 ∨ u ∈ available
+private def safe : ℕ → List T → Prop
+  | 0, ws => ws.contains target = false
+  | n + 1, ws => ∀ z, possible ws z → safe n (z :: ws)
 
-theorem classify {available : Finset W} {ws : List W} (hw : represents available ws)
-    {z : W} (hz : possible ws z) :
-    z = 0 ∨ z = BitVec.allOnes 120 ∨ z ∈ available ∨
-      ∃ a ∈ available, ∃ b ∈ available, a ≠ b ∧ z ∈ basicOps a b := by
-  have lift {t : W} (h : t = 0 ∨ t = BitVec.allOnes 120 ∨ t ∈ available) :
-      t = 0 ∨ t = BitVec.allOnes 120 ∨ t ∈ available ∨
-        ∃ a ∈ available, ∃ b ∈ available, a ≠ b ∧ t ∈ basicOps a b :=
-    h.imp_right (Or.imp_right Or.inl)
-  simp only [possible, Bool.or_eq_true, beq_iff_eq, List.any_eq_true] at hz
-  rcases hz with ((h | h) | ⟨x, hx, h | ⟨y, hy, h | h⟩⟩)
-  · exact .inl h
-  · exact .inr (.inl h)
-  · subst z; exact lift (hw _ hx)
-  · subst z
-    rcases hw _ hx with rfl | rfl | hu
-    · left; simp
-    · rw [BitVec.allOnes_and]; exact lift (hw _ hy)
-    rcases hw _ hy with rfl | rfl | hv
-    · left; simp
-    · rw [BitVec.and_allOnes]; exact .inr (.inr (.inl hu))
-    by_cases h : x = y
-    · subst h; rw [BitVec.and_self]; exact .inr (.inr (.inl hu))
-    · exact .inr (.inr (.inr ⟨x, hu, y, hv, h, by simp [basicOps, ops]⟩))
-  · subst z
-    rcases hw _ hx with rfl | rfl | hu
-    · rw [show (0 : W) ||| y = y by ext i hi; simp]; exact lift (hw _ hy)
-    · right; left; exact BitVec.allOnes_or
-    rcases hw _ hy with rfl | rfl | hv
-    · rw [show x ||| (0 : W) = x by ext i hi; simp]; exact .inr (.inr (.inl hu))
-    · right; left; exact BitVec.or_allOnes
-    by_cases h : x = y
-    · subst h; rw [BitVec.or_self]; exact .inr (.inr (.inl hu))
-    · exact .inr (.inr (.inr ⟨x, hu, y, hv, h, by simp [basicOps, ops]⟩))
+private theorem absent {n : ℕ} {ws : List T} (h : safe n ws) : target ∉ ws := by
+  induction n generalizing ws with
+  | zero => simpa [safe] using h
+  | succ n ih =>
+    have ht := ih (h 0 (by simp [possible]))
+    exact fun hm => ht (List.mem_cons_of_mem _ hm)
 
-private theorem compile (gs : List Gate) (out : ℕ) (hg : ∀ g ∈ gs, legal g)
-    (w : List W) (av : Finset W) (hw : represents av w)
-    (he : ∀ k, (gs.foldl step (w.map (bit k))).getD out false = bit k goal) :
-    build basicOps goal gs.length av := by
-  induction gs generalizing w av with
+private theorem exclude (gs : List Gate) (out : ℕ) (hg : ∀ g ∈ gs, legal g)
+    (w ws : List T) (hw : w ⊆ ws) (m : ℕ) (hm : gs.length ≤ m) (hs : safe m ws)
+    (he : ∀ k, (gs.foldl step (w.map (bit k))).getD out false = bit k target) : False := by
+  induction gs generalizing w ws m with
   | nil =>
-    have hval : w.getD out 0 = goal := by
+    have hval : w.getD out 0 = target := by
       apply BitVec.eq_of_getElem_eq
       intro i hi
       simpa only [List.foldl_nil, read_bit, bit] using he ⟨i, hi⟩
     have hr := read_wire w out
     rw [hval] at hr
-    rcases hr with hz | hm
-    · exact False.elim ((by decide : goal ≠ (0 : W)) hz)
-    · rcases hw _ hm with h | h | h
-      · exact False.elim ((by decide : goal ≠ (0 : W)) h)
-      · exact False.elim ((by decide : goal ≠ BitVec.allOnes 120) h)
-      · exact h
+    rcases hr with hz | ht
+    · exact (by decide : target ≠ 0) hz
+    · exact absent hs (hw ht)
   | cons g gs ih =>
-    obtain ⟨z, hz, hstep⟩ := gate_table w w (fun _ h => h) g (hg g (by simp))
-    have fn := ih (fun g' h => hg g' (by simp [h])) (w ++ [z])
-    have he' : ∀ k, (gs.foldl step ((w ++ [z]).map (bit k))).getD out false = bit k goal := by
-      intro k; simpa only [List.foldl_cons, hstep] using he k
-    have appendOK (h : z = 0 ∨ z = BitVec.allOnes 120 ∨ z ∈ av) : represents av (w ++ [z]) := by
-      intro u hu
-      rcases List.mem_append.mp hu with old | fresh
-      · exact hw _ old
-      · have eq : u = z := List.mem_singleton.mp fresh
-        exact eq ▸ h
-    rcases classify hw hz with h | h | h | ⟨a, ha, b, hb, hab, hop⟩
-    · exact Or.inl (fn av (appendOK (.inl h)) he')
-    · exact Or.inl (fn av (appendOK (.inr (.inl h))) he')
-    · exact Or.inl (fn av (appendOK (.inr (.inr h))) he')
-    · refine Or.inr ⟨a, ha, b, hb, hab, z, hop, fn (insert z av) ?_ he'⟩
-      intro u hu
-      rcases List.mem_append.mp hu with hu | hu
-      · exact (hw _ hu).imp_right (Or.imp_right (Finset.mem_insert_of_mem ·))
-      · simp_all
+    cases m with
+    | zero => simp at hm
+    | succ m =>
+      obtain ⟨z, hz, hstep⟩ := gate_table w ws hw g (hg g (by simp))
+      apply ih (fun g' hg' => hg g' (by simp [hg'])) (w ++ [z]) (z :: ws) _ m
+        (by simpa using hm) (hs z hz)
+      · intro k
+        simpa only [List.foldl_cons, hstep] using he k
+      · intro x hx
+        simp only [List.mem_append, List.mem_singleton] at hx
+        rcases hx with hx | rfl
+        · exact List.mem_cons_of_mem _ (hw hx)
+        · simp
 
+private def choices (ws : List T) : List T :=
+  (0 :: -1 :: ws.flatMap (fun x => x :: ws.flatMap (fun y => [x &&& y, x ||| y]))).eraseDups
 
-def A : Fin 4 → Fin 4 → Bool := fun u v : Fin 4 => (1919 : ℕ).testBit (4 * u.val + v.val)
+private theorem choice_iff (ws : List T) (z : T) : z ∈ choices ws ↔ possible ws z := by
+  simp [choices, possible, List.any_eq_true]
+  grind
 
-def posL : List (Fin 4 × Fin 4) :=
-  [(0, 0), (0, 1), (0, 2), (0, 3), (1, 0), (1, 1), (1, 2), (2, 0), (2, 1), (2, 2)]
+-- With two gates left, only an existing wire containing every true bit of
+-- the target can serve as the other input to an AND. OR has the dual test.
+private def lastTwo (ws : List T) : Bool :=
+  let above := ws.filter (fun x => (x &&& target) == target)
+  let below := ws.filter (fun x => (x ||| target) == target)
+  (choices ws).all fun z => !(z == target ||
+    above.any (fun x => (x &&& z) == target) ||
+    below.any (fun x => (x ||| z) == target))
 
-def negL : List (Fin 4 × Fin 4) := [(1, 3), (2, 3), (3, 0), (3, 1), (3, 2), (3, 3)]
+private theorem lastTwo_safe {ws : List T} (h : lastTwo ws) : safe 2 ws := by
+  intro z hz v hv
+  have hz' := (choice_iff ws z).2 hz
+  have ht (u : T) (hu : u ∈ choices ws) := (List.all_eq_true.mp h) u hu
+  have hnot (u : T) (hu : u ∈ choices ws) : u ≠ target ∧
+      (∀ x ∈ ws, x &&& u ≠ target) ∧ (∀ x ∈ ws, x ||| u ≠ target) := by
+    have H := ht u hu
+    simp at H
+    obtain ⟨⟨h1,h3⟩,h4⟩ := H
+    refine ⟨h1,?_,?_⟩
+    · intro x hx he
+      apply h3 x hx _ he
+      rw [← he, ← BitVec.and_assoc, BitVec.and_self]
+    · intro x hx he
+      apply h4 x hx _ he
+      rw [← he, ← BitVec.or_assoc, BitVec.or_self]
+  have H := hnot z hz'
+  have base (x : T) (hx : x ∈ ws) := hnot x ((choice_iff ws x).2 (atom (.inr hx)))
+  have unary (x : T) (hx : x ∈ z :: ws) : x ≠ target := by
+    rcases List.mem_cons.mp hx with rfl | hx
+    · exact H.1
+    · exact (base x hx).1
+  have binary (x y : T) (hx : x ∈ z :: ws) (hy : y ∈ z :: ws) :
+      x &&& y ≠ target ∧ x ||| y ≠ target := by
+    rcases List.mem_cons.mp hx with hxe | hxm <;> rcases List.mem_cons.mp hy with hye | hym
+    · simpa [hxe, hye] using H.1
+    · simpa [hxe, BitVec.and_comm, BitVec.or_comm] using And.intro (H.2.1 y hym) (H.2.2 y hym)
+    · simpa [hye] using And.intro (H.2.1 x hxm) (H.2.2 x hxm)
+    · exact ⟨(base y hym).2.1 x hxm, (base y hym).2.2 x hxm⟩
+  have hv' : v ≠ target := by
+    simp only [possible, Bool.or_eq_true, beq_iff_eq, List.any_eq_true] at hv
+    rcases hv with ((h | h) | ⟨x, hx, (h | ⟨y, hy, h | h⟩)⟩) <;> subst v
+    · decide
+    · decide
+    · exact unary x hx
+    · exact (binary x y hx hy).1
+    · exact (binary x y hx hy).2
+  change (v :: z :: ws).contains target = false
+  suffices target ∉ v :: z :: ws by simpa using this
+  intro hm
+  rcases List.mem_cons.mp hm with he | hm
+  · exact hv' he.symm
+  · exact unary target hm rfl
 
-def samp (k : Fin 120) : Fin 4 × Fin 4 :=
-  if k.val < 60 then negL.getD (k.val % 6) (0, 0) else posL.getD ((k.val - 60) / 6) (0, 0)
+private def masked (ws : List T) (mask want : T) : Bool :=
+  let xs := ws.map (fun x => x &&& mask)
+  want == 0 || want == mask || xs.any fun x =>
+    x == want ||
+    ((x &&& want) == want && xs.any (fun y => (x &&& y) == want)) ||
+    ((x ||| want) == want && xs.any (fun y => (x ||| y) == want))
 
-theorem input_rows : ∀ k : Fin 120,
-    rawInputs.map (bit k) = PEqualNP.Represents.oneEach (samp k).1 (samp k).2 := by
-  decide +kernel
+private def fastTwo (ws : List T) : Bool :=
+  !(masked ws (-1) target ||
+    ws.any fun x =>
+      ((x &&& target) == target && masked ws x target) ||
+      ((x ||| target) == target && masked ws (~~~x) (target &&& ~~~x)))
 
-theorem goal_rows : ∀ k : Fin 120, bit k goal = A (samp k).1 (samp k).2 := by
-  decide +kernel
+private theorem masked_of_possible {ws : List T} {u : T} (hu : possible ws u) (m : T) :
+    masked ws m (u &&& m) := by
+  let xs := ws.map (fun x => x &&& m)
+  have mem (x : T) (hx : x ∈ ws) : x &&& m ∈ xs := List.mem_map.mpr ⟨x, hx, rfl⟩
+  simp only [masked, Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq, List.any_eq_true]
+  simp only [possible, Bool.or_eq_true, beq_iff_eq, List.any_eq_true] at hu
+  rcases hu with ((h | h) | ⟨x, hx, (h | ⟨y, hy, h | h⟩)⟩) <;> subst u
+  · exact .inl (.inl (by simp))
+  · exact .inl (.inr BitVec.allOnes_and)
+  · exact .inr ⟨_, mem x hx, .inl (.inl rfl)⟩
+  · refine .inr ⟨_, mem x hx, .inl (.inr ⟨?_, _, mem y hy, ?_⟩)⟩ <;>
+      apply BitVec.eq_of_getElem_eq <;> intro i hi <;> simp only [BitVec.getElem_and] <;>
+      cases x[i] <;> cases y[i] <;> cases m[i] <;> decide
+  · refine .inr ⟨_, mem x hx, .inr ⟨?_, _, mem y hy, ?_⟩⟩ <;>
+      apply BitVec.eq_of_getElem_eq <;> intro i hi <;> simp only [BitVec.getElem_and, BitVec.getElem_or] <;>
+      cases x[i] <;> cases y[i] <;> cases m[i] <;> decide
 
-theorem rows_eval (C : Circuit) (hr : PEqualNP.Represents.Represents A C) (k : Fin 120) :
-    (C.gates.foldl step (rawInputs.map (bit k))).getD C.output false = bit k goal := by
-  rw [input_rows k, goal_rows k]
-  exact hr (samp k).1 (samp k).2
+private theorem fast_implies_last {ws : List T} (hf : fastTwo ws) : lastTwo ws := by
+  simp [fastTwo] at hf
+  obtain ⟨hn, hp⟩ := hf
+  apply List.all_eq_true.mpr
+  intro z hz
+  have hz' := (choice_iff _ _).1 hz
+  simp
+  refine ⟨⟨?_, ?_⟩, ?_⟩
+  · intro he
+    have hh := masked_of_possible hz' (-1)
+    rw [show z &&& (-1 : T) = z from BitVec.and_allOnes, he] at hh
+    simp_all
+  · intro x hx ha he
+    have hh := masked_of_possible hz' x
+    rw [BitVec.and_comm z x, he] at hh
+    have hpair := hp x hx
+    simp_all
+  · intro x hx ha he
+    have hh := masked_of_possible hz' (~~~x)
+    have he' : z &&& ~~~x = target &&& ~~~x := by
+      rw [← he]
+      apply BitVec.eq_of_getElem_eq
+      intro i hi
+      simp
+      cases x[i] <;> cases z[i] <;> rfl
+    rw [he'] at hh
+    have hpair := hp x hx
+    simp_all
 
-theorem initial_rep : represents inputs.toFinset rawInputs := by
-  intro u hu
-  exact .inr (.inr (List.mem_toFinset.mpr hu))
+private def search : ℕ → List T → Bool
+  | 0, ws => fastTwo ws
+  | n+1, ws => (choices ws).all (fun z => search n (z :: ws))
 
-theorem get_build (C : Circuit) (hg : Monotone2 C) (hr : PEqualNP.Represents.Represents A C) :
-    build basicOps goal C.gates.length inputs.toFinset :=
-  compile C.gates C.output hg rawInputs inputs.toFinset initial_rep (rows_eval C hr)
+private theorem search_safe {n : ℕ} {ws : List T} (h : search n ws) : safe (n + 2) ws := by
+  induction n generalizing ws with
+  | zero => exact lastTwo_safe (fast_implies_last h)
+  | succ n ih =>
+    intro z hz
+    exact ih ((List.all_eq_true.mp h) z ((choice_iff _ _).2 hz))
 
-theorem extend_live {m n : ℕ} {s : Finset W} (le : m ≤ n) (h : live basicOps goal m s) :
-    live basicOps goal n s := by
-  induction le with
-  | refl => exact h
-  | step _ ih => exact Or.inl ih
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 100000000 in
+private theorem top_safe : safe 4 ins := by
+  apply search_safe (n := 2)
+  have starts : choices ins = [
+    0x0000, 0xffff, 0x000f, 0x00ff, 0x0f0f, 0xf00f, 0x0001, 0x111f, 0x0002, 0x222f, 0x0004, 0x444f, 0x0008, 0x888f, 0x00f0, 0x0ff0, 0xf0f0, 0x0010, 0x11f1, 0x0020, 0x22f2, 0x0040, 0x44f4, 0x0080, 0x88f8, 0x0f00, 0xff00, 0x0100, 0x1f11, 0x0200, 0x2f22, 0x0400, 0x4f44, 0x0800, 0x8f88, 0xf000, 0x1000, 0xf111, 0x2000, 0xf222, 0x4000, 0xf444, 0x8000, 0xf888, 0x1111, 0x3333, 0x5555, 0x9999, 0x2222, 0x6666, 0xaaaa, 0x4444, 0xcccc, 0x8888] := by decide
+  change (choices ins).all (fun z => search 1 (z :: ins)) = true
+  rw [starts]
+  simp only [List.all_cons, List.all_nil, Bool.and_eq_true]
+  repeat' apply And.intro
+  all_goals decide +kernel
 
-theorem inputs_nodup : inputs.Nodup := by decide +kernel
+private def A (u v : Fin 4) : Bool := (1919 : ℕ).testBit (4 * u.val + v.val)
 
--- every family of at most five inputs misses some cut
-set_option maxRecDepth 8000 in
-theorem all_small : inputs.sublists.all
-    (fun l => decide (5 < l.length) || !(cuts l == -1)) = true := by
-  decide +kernel
+private def uu (t : Fin 16) : Fin 4 := ⟨t.val / 4, by omega⟩
 
-theorem no_small (C : Circuit) (hm : Monotone2 C) (hs : C.size ≤ 4)
-    (hr : PEqualNP.Represents.Represents A C) : False := by
-  obtain ⟨S, hsub, hl⟩ := compress (get_build C hm hr)
-  have hl4 : live basicOps goal 4 S := extend_live hs hl
-  let l := inputs.filter (fun w => decide (w ∈ S))
-  have hlS : l.toFinset = S := by
-    ext v
-    simp only [l, List.mem_toFinset, List.mem_filter, decide_eq_true_eq]
-    constructor
-    · exact fun h => h.2
-    · exact fun h => ⟨List.mem_toFinset.mp (hsub h), h⟩
-  have hnd : l.Nodup := inputs_nodup.filter _
-  have hcard := live_card hl4
-  rw [← hlS, List.toFinset_card_of_nodup hnd] at hcard
-  have hfull : cuts l = -1 := cuts_full (hlS ▸ hl4)
-  have hmem : l ∈ inputs.sublists := List.mem_sublists.mpr List.filter_sublist
-  have hrow := List.all_eq_true.mp all_small l hmem
-  have h5 : decide (5 < l.length) = false := by simp; omega
-  rw [h5, hfull] at hrow
-  exact absurd hrow (by decide)
+private def vv (t : Fin 16) : Fin 4 := ⟨t.val % 4, by omega⟩
 
-def upperC : Circuit :=
-  { gates := [{ op := GateOp.or, inputs := [1, 2] }, { op := GateOp.or, inputs := [4, 5] },
-      { op := GateOp.or, inputs := [9, 6] }, { op := GateOp.and, inputs := [8, 10] },
-      { op := GateOp.or, inputs := [0, 11] }],
-    output := 12 }
+private theorem lower (h : PEqualNP.Represents.RepSizeAtMost A 4) : False := by
+  obtain ⟨C, hg, hsize, he⟩ := h
+  have hlen : C.gates.length ≤ 4 := hsize
+  apply exclude C.gates C.output
+    (fun g hg' => hg g hg')
+    ins ins (fun ⦃_⦄ h => h) 4 hlen top_safe
+  intro k
+  have hi : ∀ t, PEqualNP.Represents.oneEach (uu t) (vv t) = ins.map (bit t) := by decide
+  have ht : ∀ t, A (uu t) (vv t) = bit t target := by decide
+  unfold step
+  simpa only [Circuit.eval, Circuit.wires, hi, ht] using he (uu k) (vv k)
 
-theorem upper_mono : Monotone2 upperC := by
-  intro g hg
-  simp only [upperC, List.mem_cons, List.not_mem_nil, or_false] at hg
-  rcases hg with rfl | rfl | rfl | rfl | rfl <;> simp
-
-theorem upper_rep : PEqualNP.Represents.Represents A upperC := by
-  decide +kernel
+private theorem upper : PEqualNP.Represents.RepSizeAtMost A 5 := by
+  refine ⟨({ gates := [{ op := PEqualNP.CircuitLowerBounds.GateOp.or, inputs := [5, 6] }, { op := PEqualNP.CircuitLowerBounds.GateOp.or, inputs := [1, 2] }, { op := PEqualNP.CircuitLowerBounds.GateOp.or, inputs := [4, 8] }, { op := PEqualNP.CircuitLowerBounds.GateOp.and, inputs := [9, 10] }, { op := PEqualNP.CircuitLowerBounds.GateOp.or, inputs := [0, 11] }], output := 12 } : PEqualNP.CircuitLowerBounds.Circuit), ?_, ?_, ?_⟩
+  · intro g hg
+    fin_cases hg <;> simp
+  · decide
+  · decide
 
 end PEqualNP.Outside.L_meta_5468
 
 theorem PEqualNP.Outside.L_meta_5468 : PEqualNP.Represents.RepSizeAtMost (fun u v : Fin 4 => (1919 : ℕ).testBit (4 * u.val + v.val)) 5 ∧
-  ¬ PEqualNP.Represents.RepSizeAtMost (fun u v : Fin 4 => (1919 : ℕ).testBit (4 * u.val + v.val)) 4 := by
-  refine ⟨⟨PEqualNP.Outside.L_meta_5468.upperC, PEqualNP.Outside.L_meta_5468.upper_mono,
-    by decide, PEqualNP.Outside.L_meta_5468.upper_rep⟩, ?_⟩
-  rintro ⟨C, hm, hs, hr⟩
-  exact PEqualNP.Outside.L_meta_5468.no_small C hm hs hr
+  ¬ PEqualNP.Represents.RepSizeAtMost (fun u v : Fin 4 => (1919 : ℕ).testBit (4 * u.val + v.val)) 4 :=
+  ⟨PEqualNP.Outside.L_meta_5468.upper, fun h => PEqualNP.Outside.L_meta_5468.lower h⟩
