@@ -154,8 +154,8 @@ theorem PEqualNP.Outside.R_meta_2258_654
               (gateAt D (f h)).inputs.length = 2 ∧ f h ∈ W := by
             intro h hh
             have hs := Classical.choose_spec (hReader 11 G D (by norm_num) hLeast h hh)
-            have hf : f h = Classical.choose (hReader 11 G D (by norm_num) hLeast h hh) := by
-              simp only [f, dif_pos hh]
+            have hf : f h = Classical.choose (hReader 11 G D (by norm_num) hLeast h hh) :=
+              dite_eq_left hh
             rw [hf]
             obtain ⟨_, hin, hcone, hlen, hcls⟩ := hs
             refine ⟨hin, hlen, ?_⟩
