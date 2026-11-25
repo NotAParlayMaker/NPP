@@ -1,7 +1,7 @@
 import Mathlib
 import PEqualNP.Defs
 
-namespace PEqualNP.Outside.Normalize6897
+namespace PEqualNP.Outside.L_meta_6897
 
 variable {α : Type} [DecidableEq α]
 
@@ -102,7 +102,6 @@ theorem Chain.split {raw : List α} {d : α} {join meet : α → α → α}
     exact h
   · simpa using hc xs.length (by simp)
 
--- Retain a second copy only when its self-product is needed and unavailable as a raw input.
 def cap (all : List α) (a : α) : ℕ :=
   if meet a a ≠ a ∧ meet a a ∈ all ∧ meet a a ∉ raw then 2 else 1
 
@@ -111,7 +110,6 @@ theorem cap_bounds (all : List α) (a : α) :
   unfold cap
   split <;> decide
 
--- Induct on the prefix and retain each signal up to its multiplicity cap.
 theorem compress (all : List α)
     (initialDistinct : raw.Nodup)
     (initialFresh : ∀ a b, Pair raw d a b → join a b ∉ raw)
@@ -330,9 +328,9 @@ theorem initial_fresh (a b : Sig) (hp : Pair initial zero a b) : plus a b ∉ in
   rw [hi.2,hj.2,hk.2]
   rfl
 
-end PEqualNP.Outside.Normalize6897
+end PEqualNP.Outside.L_meta_6897
 
-open PEqualNP.Outside.Normalize6897 in
+open PEqualNP.Outside.L_meta_6897 in
 theorem PEqualNP.Outside.L_meta_6897 : have x1 : List (Fin (62 : ℕ) → Bool) := List.map (fun (x1 : ℕ) (x2 : Fin (62 : ℕ)) => x1.testBit ↑x2) [(2594090156585648135 : ℕ), (15270196031782968 : ℕ), (58150373818816 : ℕ), (94946423956573696 : ℕ), (54820275478360064 : ℕ), (3870282840506368 : ℕ), (133412159488 : ℕ), (1911954591369396745 : ℕ), (218716039641305168 : ℕ), (189725234880873600 : ℕ), (156548607028504576 : ℕ), (229736628137050114 : ℕ), (270286071509155872 : ℕ), (288160007408582916 : ℕ)]; have x2 : List (Fin (62 : ℕ) → Bool) → Prop := fun (x2 : List (Fin (62 : ℕ) → Bool)) =>   (fun (x3 : Fin (62 : ℕ)) => Decidable.decide (↑x3 < (21 : ℕ))) ∈ x2 ∧     ∀ x3 < x2.length,       ∃ (x5 : ℕ) (x6 : ℕ),         x5 ≠ x6 ∧           x5 < (14 : ℕ) + x3 ∧             x6 < (14 : ℕ) + x3 ∧               have x7 : Fin (62 : ℕ) → Bool := (x1 ++ x2).getD x5 fun (x7 : Fin (62 : ℕ)) => Bool.false;               have x8 : Fin (62 : ℕ) → Bool := (x1 ++ x2).getD x6 fun (x8 : Fin (62 : ℕ)) => Bool.false;               ((x2.getD x3 fun (x9 : Fin (62 : ℕ)) => Bool.false) = fun (x9 : Fin (62 : ℕ)) => x7 x9 || x8 x9) ∨ (0 : ℕ) < x3 ∧ (x2.getD x3 fun (x9 : Fin (62 : ℕ)) => Bool.false) = fun (x9 : Fin (62 : ℕ)) => if x9 = (60 : Fin (62 : ℕ)) then x7 (58 : Fin (62 : ℕ)) && x8 (60 : Fin (62 : ℕ)) || x7 (60 : Fin (62 : ℕ)) && x8 (58 : Fin (62 : ℕ)) else if x9 = (61 : Fin (62 : ℕ)) then x7 (59 : Fin (62 : ℕ)) && x8 (61 : Fin (62 : ℕ)) || x7 (61 : Fin (62 : ℕ)) && x8 (59 : Fin (62 : ℕ)) else x7 x9 && x8 x9; ∀ (x3 : List (Fin (62 : ℕ) → Bool)),   x2 x3 →     ∃ (x5 : List (Fin (62 : ℕ) → Bool)),       x5.length ≤ x3.length ∧         x2 x5 ∧           ∀ (x6 : Fin (62 : ℕ) → Bool),             have x7 : ℕ := List.count x6 (x1 ++ x5);             x7 ≤ (2 : ℕ) ∧ ((1 : ℕ) < x7 → ∃ x9 ∈ x5, x9 ≠ x6 ∧ x9 = fun (x10 : Fin (62 : ℕ)) => x6 x10 && (Decidable.decide (↑x10 < (60 : ℕ)) || x6 (x10 - (2 : Fin (62 : ℕ))))) := by
   change ∀ old : List Sig, accepted ∈ old ∧ Indexed initial zero plus prod old →
       ∃ new : List Sig, new.length ≤ old.length ∧ (accepted ∈ new ∧ Indexed initial zero plus prod new) ∧
