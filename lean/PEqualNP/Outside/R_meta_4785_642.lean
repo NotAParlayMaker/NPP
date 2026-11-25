@@ -73,7 +73,9 @@ theorem PEqualNP.Outside.R_meta_4785_642
         apply ih
         simpa [step, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h
     have hbound : x.length + C.gates.length ≤ n + k := by
-      simpa [Circuit.size, hx] using Nat.add_le_add_left hC n
+      have hlen : C.gates.length ≤ k := hC
+      rw [hx]
+      exact Nat.add_le_add_left hlen n
     change ((C.gates.map (clampGate (n+k))).foldl step x).getD
       (min C.output (n+k)) false = (C.gates.foldl step x).getD C.output false
     rw [fold_clamp C.gates x (n+k) hbound]
@@ -101,7 +103,9 @@ theorem PEqualNP.Outside.R_meta_4785_642
   let D : Circuit := { C with
     gates := C.gates.map (fun g => { g with inputs := g.inputs.map (fun i => min i 40) }),
     output := min C.output 40 }
-  have dsize : D.size = C.size := by simp [D,Circuit.size]
+  have dsize : D.size = C.size := by
+    change D.gates.length = C.gates.length
+    simp only [D,List.length_map]
   have dmono : Monotone2 D := by
     intro g hg
     change g ∈ C.gates.map _ at hg
