@@ -535,10 +535,240 @@ theorem bound_from_impossible (n : ℕ)
     | step _ ih => exact Or.inl ih
   exact impossible t ht (lift low run)
 
+def tab0 : List (ℕ × List W) :=
+  [(2, [0x7c0000ff804924f1c0000ff8000007, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc000024ffffffffc0000007ffffff])]
+
+def tab1 : List (ℕ × List W) :=
+  [(2, [0x7c00002481ff24f1c00000001ff007, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff])]
+
+def tab2 : List (ℕ × List W) :=
+  [(2, [0xfc0000248049ffffc0000000000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007])]
+
+def tab3 : List (ℕ × List W) :=
+  [(1, [0x7c0000ff804924f1c0000ff8000007, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc000024ffffffffc0000007ffffff])]
+
+def tab4 : List (ℕ × List W) :=
+  [(1, [0x7c0000ff804924f1c0000ff8000007, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc000024ffffffffc0000007ffffff])]
+
+def tab5 : List (ℕ × List W) :=
+  [(1, [0x7c00002481ff24f1c00000001ff007, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff])]
+
+def tab6 : List (ℕ × List W) :=
+  [(1, [0x7c00002481ff24f1c00000001ff007, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff])]
+
+def tab7 : List (ℕ × List W) :=
+  [(1, [0xfc0000248049ffffc0000000000fff, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007])]
+
+def tab8 : List (ℕ × List W) :=
+  [(1, [0xfc0000248049ffffc0000000000fff, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007]),
+   (0, [0x928a28905120900000000000000000, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff])]
+
+def tab9 : List (ℕ × List W) :=
+  [(0, [0xc92492422484420000000000000000, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xa45145090a12090000000000000000, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xdbaebaf275e4f24030c30e061c0e00, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x7c0000ff804924f1c0000ff8000007, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc000024ffffffffc0000007ffffff])]
+
+def tab10 : List (ℕ × List W) :=
+  [(0, [0x7c00002481ff24f1c00000001ff007, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0xfc0000248049ffffc0000000000fff, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007]),
+   (1, [0xfc00001b6000000fc00001ff000, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc000024ffffffffc0000007ffffff]),
+   (1, [0x80003f000000db0e0003f000000ff8, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc000024ffffffffc0000007ffffff]),
+   (1, [0xfc0db0000000000fc0ff8000000, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff])]
+
+def tab11 : List (ℕ × List W) :=
+  [(1, [0x800000007e00db0e00000007e00ff8, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff]),
+   (1, [0x3fdb000000000003fff8000000, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007]),
+   (1, [0x7fb6000000000007fff000, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007]),
+   (0, [0xffffffff7ffeff603cf3cfc79f8fc0, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xfffffffbfff7fbde33cf3e3e7c7e38, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xffffffdfffbfdfbe0f3cf1f9e3f1f8, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xdbaebaf275e4f24030c30e061c0e00, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff])]
+
+def tab12 : List (ℕ × List W) :=
+  [(0, [0xfc00001b6000000fc00001ff000, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x80003f000000db0e0003f000000ff8, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xfc0db0000000000fc0ff8000000, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0x800000007e00db0e00000007e00ff8, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0x3fdb000000000003fff8000000, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007]),
+   (0, [0x7fb6000000000007fff000, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007]),
+   (0, [0xffaebffff5edfffff0c3fffe1c0fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xfc003fff8049ffffc003fff8000fff, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff])]
+
+def tab13 : List (ℕ × List W) :=
+  [(0, [0x3ae800075a4000030c000061c0000, 0xdbaebaf275e4f24030c30e061c0e00, 0xfc003fff8049ffffc003fff8000fff, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xffaebaf6fffffffff0c30e07ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xfc000024ffffffffc0000007ffffff, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0x3aebad20000000030c30e00000000, 0xdbaebaf275e4f24030c30e061c0e00, 0xfc000024ffffffffc0000007ffffff, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0xfedb7fffdb7bffffcc33fff9838fff, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x2db40005b3200000c300001838000, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xfedb6dbdffffffffcc30c1c7ffffff, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0x2db6d99000000000c30c1c0000000, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0xfd7fd7ffafff6fffc3fc3ff87ff03f, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff])]
+
+def tab14 : List (ℕ × List W) :=
+  [(0, [0x817017002e004b0e03003000600038, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xfd75ffffaedfffffc30ffff8607fff, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x175c0002e960000030c0000607000, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xfd75d76fffffffffc30c303fffffff, 0xed75d74bae974b9e030c3038607038, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0x175d74b00000000030c3038000000, 0xed75d74bae974b9e030c3038607038, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0xffaffafff5fff6f1f0ff0ffe1ffe07, 0xdbaebaf275e4f24030c30e061c0e00, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xfedfedffdbffbdf1ccfccff99ff1c7, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x83a03a007400d20030030006000e00, 0xdbaebaf275e4f24030c30e061c0e00, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff])]
+
+def tab15 : List (ℕ × List W) :=
+  [(0, [0x82d02d005a0099000c00c0018001c0, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xfc0fffff81ffffffc0fffff81fffff, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xfc0fc0ffffffffffc0fc0fffffffff, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0xfc003fffffffffffc003ffffffffff, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007]),
+   (0, [0x4924926224c4624030c30e061c0e00, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x2451450d0a1a0d200c30c1c18381c0, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x128a28b05160b04030c30e061c0e00, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x245145098a13099e030c3038607038, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xd8003af20040f24000030e00000e00, 0xdbaebaf275e4f24030c30e061c0e00, 0xfc003fff8049ffffc003fff8000fff, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x2400050d80090dbfc000f1f80001ff, 0xdbaebaf275e4f24030c30e061c0e00, 0xfc003fff8049ffffc003fff8000fff, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xd800002075e4f240000000061c0e00, 0xdbaebaf275e4f24030c30e061c0e00, 0xfc000024ffffffffc0000007ffffff, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0x240000048a1b0dbfc0000001e3f1ff, 0xdbaebaf275e4f24030c30e061c0e00, 0xfc000024ffffffffc0000007ffffff, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0x128a2894512894200c30c1c18381c0, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xdbaebaf275e4f24030c30e061c0e00, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff])]
+
+def tab16 : List (ℕ × List W) :=
+  [(0, [0x49249242a485429e030c3038607038, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xdbaebaf275e4f24030c30e061c0e00, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xb4002d9d00089d200000c1c00001c0, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x48001262804162dfc0033e38000e3f, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xb40000045b3a9d20000000018381c0, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0x48000020a4c562dfc00000067c7e3f, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0x6c05c04b80970090000c0038007000, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x100a00b401682461c0f00fc01f8007, 0xed75d74bae974b9e030c3038607038, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xec00174b80014b9e00003038000038, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x100028b40048b461c003cfc0000fc7, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0xec000000ae974b9e00000000607038, 0xed75d74bae974b9e030c3038607038, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0x100000245168b461c00000079f8fc7, 0xed75d74bae974b9e030c3038607038, 0xfc000024ffffffffc0000007ffffff, 0xdbaebaf275e4f24030c30e061c0e00, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xfc003fff8049ffffc003fff8000fff]),
+   (0, [0x580e80f201e4204000c00e001c0000, 0xdbaebaf275e4f24030c30e061c0e00, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x340b409d013a0420003001c0038000, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x2401400d801b04b1c03c01f803f007, 0xdbaebaf275e4f24030c30e061c0e00, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff]),
+   (0, [0x4804806280c520d1c0cc0e381c7007, 0xb6db6d9d5b3a9d200c30c1c18381c0, 0x7c0fc0ff81ff24f1c0fc0ff81ff007, 0xdbaebaf275e4f24030c30e061c0e00, 0xed75d74bae974b9e030c3038607038, 0xfc003fff8049ffffc003fff8000fff, 0xfc000024ffffffffc0000007ffffff])]
+
+def table : List (ℕ × List W) := tab0 ++ tab1 ++ tab2 ++ tab3 ++ tab4 ++ tab5 ++ tab6 ++ tab7 ++ tab8 ++ tab9 ++ tab10 ++ tab11 ++ tab12 ++ tab13 ++ tab14 ++ tab15 ++ tab16
+
 set_option maxRecDepth 32000 in
 set_option maxHeartbeats 0 in
-theorem search_none : search 7 inputs = false := by
+theorem leaf0 : tab0.all (fun c => !(optimized 6 c.1 c.2)) = true := by
   decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf1 : tab1.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf2 : tab2.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf3 : tab3.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf4 : tab4.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf5 : tab5.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf6 : tab6.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf7 : tab7.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf8 : tab8.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf9 : tab9.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf10 : tab10.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf11 : tab11.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf12 : tab12.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf13 : tab13.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf14 : tab14.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf15 : tab15.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem leaf16 : tab16.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  decide +kernel
+
+theorem leaf_all : table.all (fun c => !(optimized 6 c.1 c.2)) = true := by
+  simp only [table, List.all_append, leaf0, leaf1, leaf2, leaf3, leaf4, leaf5, leaf6, leaf7, leaf8, leaf9, leaf10, leaf11, leaf12, leaf13, leaf14, leaf15, leaf16, Bool.and_self]
+
+def optT (e : ℕ) (ws : List W) : Bool := if (e, ws) ∈ table then false else optimized 6 e ws
+
+theorem optT_eq : optT = optimized 6 := by
+  funext e ws
+  unfold optT
+  split_ifs with h
+  · have hc := List.all_eq_true.mp leaf_all _ h
+    dsimp only at hc
+    revert hc
+    cases optimized 6 e ws <;> simp
+  · rfl
+
+def optRoot (e : ℕ) (ws : List W) : Bool :=
+  (ws == [goal] || ws == [~~~goal]) || (pairs ws).any (fun (a, b, r) => dispatch e optT a b r)
+
+theorem optRoot_eq : optRoot = optimized 7 := by
+  funext e ws
+  simp only [optRoot, optT_eq, optimized]
+
+set_option maxRecDepth 32000 in
+set_option maxHeartbeats 0 in
+theorem all_front : inputs.sublists.all
+    (fun l => decide (8 < l.length) || (cuts l != -1) || !(optRoot (8 - l.length) l)) = true := by
+  decide +kernel
+
+theorem search_none : search 7 inputs = false := by
+  cases hs : search 7 inputs with
+  | false => rfl
+  | true =>
+    obtain ⟨ws, hmem, hws⟩ := List.any_eq_true.mp hs
+    have hrow := List.all_eq_true.mp all_front ws hmem
+    rw [optRoot_eq] at hrow
+    simp only [Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at hws
+    obtain ⟨⟨hlen, hcut⟩, hopt⟩ := hws
+    simp [hopt, hcut, Nat.not_lt.mpr hlen] at hrow
 
 theorem no_small_binary (t : W) (ht : t = goal ∨ t = ~~~goal)
     (run : build basicOps t 7 inputs.toFinset) : False :=
