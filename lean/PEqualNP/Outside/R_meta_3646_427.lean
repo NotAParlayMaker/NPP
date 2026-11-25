@@ -35,23 +35,24 @@ theorem PEqualNP.Outside.R_meta_3646_427
   let rows33 : List ℕ := 24 :: 33 :: baseRows
   have litP : ∀ (a : ℕ → Bool) (v : ℕ), litVal a (P v) = a (v + 1) := by
     intro a v
-    simp only [litVal, P]
+    unfold litVal P
     have h1 : (2 * v + 2) / 2 = v + 1 := by omega
     have h2 : (2 * v + 2) % 2 = 0 := by omega
     rw [h1, h2]
     cases a (v + 1) <;> rfl
   have litQ : ∀ (a : ℕ → Bool) (v : ℕ), litVal a (Q v) = !(a (v + 1)) := by
     intro a v
-    simp only [litVal, Q]
+    unfold litVal Q
     have h1 : (2 * v + 3) / 2 = v + 1 := by omega
     have h2 : (2 * v + 3) % 2 = 1 := by omega
     rw [h1, h2]
     cases a (v + 1) <;> rfl
   have litL : ∀ (a : ℕ → Bool) (v : ℕ) (b : Bool), litVal a (L v b) = (a (v + 1) == b) := by
     intro a v b
+    unfold L
     cases b
-    · simp only [L, Bool.false_eq_true, ite_false, litQ]; cases a (v + 1) <;> rfl
-    · simp only [L, ite_true, litP]; cases a (v + 1) <;> rfl
+    · simp only [Bool.false_eq_true, ite_false, litQ]; cases a (v + 1) <;> rfl
+    · simp only [ite_true, litP]; cases a (v + 1) <;> rfl
   have stepLen : ∀ (gs : List Gate) (w : List Bool),
       (gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w).length =
         w.length + gs.length := by
@@ -80,33 +81,39 @@ theorem PEqualNP.Outside.R_meta_3646_427
     have hOpMem : ∀ j < 14, ClauseSat a [P (ix 10 14 0 j 0), P (ix 10 14 0 j 1), P (ix 10 14 0 j 2)] := by
       intro j hj
       apply ha
-      simp only [enc, List.mem_append, fOp, List.mem_map, List.mem_range]
+      unfold enc fOp
+      simp only [List.mem_append, List.mem_map, List.mem_range]
       exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl ⟨j, hj, rfl⟩))))))))))
     have hSrcAloMem : ∀ e ∈ ([1, 2] : List ℕ), ∀ j < 14,
         ClauseSat a ((List.range (10 + j + 1)).map fun k => P (ix 10 14 e j k)) := by
       intro e he j hj
       apply ha
-      simp only [enc, List.mem_append, fSrcAlo, List.mem_flatMap, List.mem_map, List.mem_range]
+      unfold enc fSrcAlo
+      simp only [List.mem_append, List.mem_flatMap, List.mem_map, List.mem_range]
       exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inr ⟨e, he, j, hj, rfl⟩))))))))))
     have hSrcEqMem : ∀ e ∈ ([1, 2] : List ℕ), ∀ j < 14, ∀ r ∈ rows, ∀ k < 10 + j + 1,
         ∀ c ∈ srcEq 10 14 e j k r, ClauseSat a c := by
       intro e he j hj r hr k hk c hc
       apply ha
-      simp only [enc, List.mem_append, fSrcEq, List.mem_flatMap, List.mem_range]
+      unfold enc fSrcEq
+      simp only [List.mem_append, List.mem_flatMap, List.mem_range]
       exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inr ⟨e, he, j, hj, r, hr, k, hk, hc⟩)))))))))
     have hGateMem : ∀ j < 14, ∀ r ∈ rows, ∀ c ∈ gateCl 10 14 j r, ClauseSat a c := by
       intro j hj r hr c hc
       apply ha
-      simp only [enc, List.mem_append, fGate, List.mem_flatMap, List.mem_range]
+      unfold enc fGate
+      simp only [List.mem_append, List.mem_flatMap, List.mem_range]
       exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inr ⟨j, hj, r, hr, hc⟩))))))))
     have hOutAloMem : ClauseSat a ((List.range 25).map fun k => P (ix 10 14 6 0 k)) := by
       apply ha
-      simp only [enc, List.mem_append, fOutAlo, List.mem_singleton]
+      unfold enc fOutAlo
+      simp only [List.mem_append, List.mem_singleton]
       exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inr trivial)))))))
     have hOutEqMem : ∀ r ∈ rows, ∀ k < 25, ∀ c ∈ outEq 10 14 gFun k r, ClauseSat a c := by
       intro r hr k hk c hc
       apply ha
-      simp only [enc, List.mem_append, fOutEq, List.mem_flatMap, List.mem_range]
+      unfold enc fOutEq
+      simp only [List.mem_append, List.mem_flatMap, List.mem_range]
       exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inr ⟨r, hr, k, hk, hc⟩))))))
     have hSrcPick : ∀ e ∈ ([1, 2] : List ℕ), ∀ j < 14,
         ∃ k < 10 + j + 1, a (ix 10 14 e j k + 1) = true := by
@@ -146,7 +153,8 @@ theorem PEqualNP.Outside.R_meta_3646_427
       dsimp only [mkGate]
       split_ifs <;> exact ⟨by simp, by simp⟩
     have hSz : C.size ≤ 14 := by
-      simp [C, gs, Circuit.size]
+      change gs.length ≤ 14
+      simp [gs]
     have hWires : ∀ r ∈ rows, ∀ m ≤ 14, ∀ j < m,
         (((List.range m).map mkGate).foldl
           (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
@@ -183,7 +191,7 @@ theorem PEqualNP.Outside.R_meta_3646_427
             intro e he k hk hae
             by_cases hk10 : k < 10
             · have hcl := hSrcEqMem e he j (by omega) r hr k hk
-                [Q (ix 10 14 e j k), L (ix 10 14 (e + 3) j r) (r.testBit k)] (by simp [srcEq, hk10])
+                [Q (ix 10 14 e j k), L (ix 10 14 (e + 3) j r) (r.testBit k)] (by unfold srcEq; simp [hk10])
               obtain ⟨l, hl, hlv⟩ := hcl
               simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
               rcases hl with rfl | rfl
@@ -197,10 +205,10 @@ theorem PEqualNP.Outside.R_meta_3646_427
             · by_cases hkj : k < 10 + j
               · have hcl1 := hSrcEqMem e he j (by omega) r hr k hk
                   [Q (ix 10 14 e j k), Q (ix 10 14 (e + 3) j r), P (ix 10 14 3 (k - 10) r)]
-                  (by simp [srcEq, hk10, hkj])
+                  (by unfold srcEq; simp [hk10, hkj])
                 have hcl2 := hSrcEqMem e he j (by omega) r hr k hk
                   [Q (ix 10 14 e j k), P (ix 10 14 (e + 3) j r), Q (ix 10 14 3 (k - 10) r)]
-                  (by simp [srcEq, hk10, hkj])
+                  (by unfold srcEq; simp [hk10, hkj])
                 have hw : wPrev.getD k false = a (ix 10 14 3 (k - 10) r + 1) := by
                   have hih := ih (by omega) (k - 10) (by omega)
                   have hek : 10 + (k - 10) = k := by omega
@@ -223,7 +231,7 @@ theorem PEqualNP.Outside.R_meta_3646_427
                   · rw [litP] at hlv1; rw [litQ] at hlv2; rw [hlv1] at hlv2; cases hlv2
               · have hcl := hSrcEqMem e he j (by omega) r hr k hk
                   [Q (ix 10 14 e j k), Q (ix 10 14 (e + 3) j r)]
-                  (by simp [srcEq, hk10, hkj])
+                  (by unfold srcEq; simp [hk10, hkj])
                 obtain ⟨l, hl, hlv⟩ := hcl
                 simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
                 rcases hl with rfl | rfl
@@ -239,11 +247,11 @@ theorem PEqualNP.Outside.R_meta_3646_427
           dsimp only [mkGate]
           by_cases hop0 : a (ix 10 14 0 j 0 + 1) = true
           · rw [ite_eq_left hop0]
-            simp only [GateOp.eval, List.map_cons, List.map_nil, List.all_cons,
-              List.all_nil, id_eq, Bool.and_true, hs1v, hs2v]
-            have hc1 := hGateMem j (by omega) r hr [Q (ix 10 14 0 j 0), Q (ix 10 14 3 j r), P (ix 10 14 4 j r)] (by simp [gateCl])
-            have hc2 := hGateMem j (by omega) r hr [Q (ix 10 14 0 j 0), Q (ix 10 14 3 j r), P (ix 10 14 5 j r)] (by simp [gateCl])
-            have hc3 := hGateMem j (by omega) r hr [Q (ix 10 14 0 j 0), P (ix 10 14 3 j r), Q (ix 10 14 4 j r), Q (ix 10 14 5 j r)] (by simp [gateCl])
+            change (wPrev.getD (s1 j) false && (wPrev.getD (s2 j) false && true)) = a (ix 10 14 3 j r + 1)
+            rw [Bool.and_true, hs1v, hs2v]
+            have hc1 := hGateMem j (by omega) r hr [Q (ix 10 14 0 j 0), Q (ix 10 14 3 j r), P (ix 10 14 4 j r)] (by unfold gateCl; simp)
+            have hc2 := hGateMem j (by omega) r hr [Q (ix 10 14 0 j 0), Q (ix 10 14 3 j r), P (ix 10 14 5 j r)] (by unfold gateCl; simp)
+            have hc3 := hGateMem j (by omega) r hr [Q (ix 10 14 0 j 0), P (ix 10 14 3 j r), Q (ix 10 14 4 j r), Q (ix 10 14 5 j r)] (by unfold gateCl; simp)
             cases h3 : a (ix 10 14 3 j r + 1) <;> cases h4 : a (ix 10 14 4 j r + 1) <;> cases h5 : a (ix 10 14 5 j r + 1) <;> try rfl
             · obtain ⟨l, hl, hlv⟩ := hc3
               simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
@@ -260,11 +268,11 @@ theorem PEqualNP.Outside.R_meta_3646_427
           · rw [ite_eq_right hop0]
             by_cases hop1 : a (ix 10 14 0 j 1 + 1) = true
             · rw [ite_eq_left hop1]
-              simp only [GateOp.eval, List.map_cons, List.map_nil, List.any_cons,
-                List.any_nil, id_eq, Bool.or_false, hs1v, hs2v]
-              have hc1 := hGateMem j (by omega) r hr [Q (ix 10 14 0 j 1), P (ix 10 14 3 j r), Q (ix 10 14 4 j r)] (by simp [gateCl])
-              have hc2 := hGateMem j (by omega) r hr [Q (ix 10 14 0 j 1), P (ix 10 14 3 j r), Q (ix 10 14 5 j r)] (by simp [gateCl])
-              have hc3 := hGateMem j (by omega) r hr [Q (ix 10 14 0 j 1), Q (ix 10 14 3 j r), P (ix 10 14 4 j r), P (ix 10 14 5 j r)] (by simp [gateCl])
+              change (wPrev.getD (s1 j) false || (wPrev.getD (s2 j) false || false)) = a (ix 10 14 3 j r + 1)
+              rw [Bool.or_false, hs1v, hs2v]
+              have hc1 := hGateMem j (by omega) r hr [Q (ix 10 14 0 j 1), P (ix 10 14 3 j r), Q (ix 10 14 4 j r)] (by unfold gateCl; simp)
+              have hc2 := hGateMem j (by omega) r hr [Q (ix 10 14 0 j 1), P (ix 10 14 3 j r), Q (ix 10 14 5 j r)] (by unfold gateCl; simp)
+              have hc3 := hGateMem j (by omega) r hr [Q (ix 10 14 0 j 1), Q (ix 10 14 3 j r), P (ix 10 14 4 j r), P (ix 10 14 5 j r)] (by unfold gateCl; simp)
               cases h3 : a (ix 10 14 3 j r + 1) <;> cases h4 : a (ix 10 14 4 j r + 1) <;> cases h5 : a (ix 10 14 5 j r + 1) <;> try rfl
               · obtain ⟨l, hl, hlv⟩ := hc2
                 simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
@@ -279,7 +287,7 @@ theorem PEqualNP.Outside.R_meta_3646_427
                 simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
                 rcases hl with rfl | rfl | rfl | rfl <;> simp [litP, litQ, hop1, h3, h4, h5] at hlv
             · rw [ite_eq_right hop1]
-              simp only [GateOp.eval, List.map_nil, List.all_nil]
+              change true = a (ix 10 14 3 j r + 1)
               have hop2 : a (ix 10 14 0 j 2 + 1) = true := by
                 obtain ⟨l, hl, hlv⟩ := hOpMem j (by omega)
                 simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
@@ -287,7 +295,7 @@ theorem PEqualNP.Outside.R_meta_3646_427
                 · rw [litP] at hlv; exact absurd hlv hop0
                 · rw [litP] at hlv; exact absurd hlv hop1
                 · rw [litP] at hlv; exact hlv
-              have hc := hGateMem j (by omega) r hr [Q (ix 10 14 0 j 2), P (ix 10 14 3 j r)] (by simp [gateCl])
+              have hc := hGateMem j (by omega) r hr [Q (ix 10 14 0 j 2), P (ix 10 14 3 j r)] (by unfold gateCl; simp)
               obtain ⟨l, hl, hlv⟩ := hc
               simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
               rcases hl with rfl | rfl
@@ -302,7 +310,7 @@ theorem PEqualNP.Outside.R_meta_3646_427
         simp only [List.getD_eq_getElem?_getD, List.getElem?_ofFn, h10, dite_true, Option.getD_some]
       rw [hw]
       by_contra hne
-      have hcl := hOutEqMem r hr outK houtKlt [Q (ix 10 14 6 0 outK)] (by simp [outEq, h10, hne])
+      have hcl := hOutEqMem r hr outK houtKlt [Q (ix 10 14 6 0 outK)] (by unfold outEq; simp [h10, hne])
       obtain ⟨l, hl, hlv⟩ := hcl
       simp only [List.mem_singleton] at hl
       rw [hl, litQ, houtKval] at hlv
@@ -315,7 +323,7 @@ theorem PEqualNP.Outside.R_meta_3646_427
           rwa [hek] at h14
         rw [hw]
         have hcl := hOutEqMem r hr outK houtKlt [Q (ix 10 14 6 0 outK), L (ix 10 14 3 (outK - 10) r) (gFun r)]
-          (by simp [outEq, h10, h24])
+          (by unfold outEq; simp [h10, h24])
         obtain ⟨l, hl, hlv⟩ := hcl
         simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
         rcases hl with rfl | rfl
@@ -329,7 +337,7 @@ theorem PEqualNP.Outside.R_meta_3646_427
         | false => rfl
         | true =>
           have hcl := hOutEqMem r hr outK houtKlt [Q (ix 10 14 6 0 outK)]
-            (by simp [outEq, h10, h24, hg])
+            (by unfold outEq; simp [h10, h24, hg])
           obtain ⟨l, hl, hlv⟩ := hcl
           simp only [List.mem_singleton] at hl
           rw [hl, litQ, houtKval] at hlv
@@ -341,13 +349,15 @@ theorem PEqualNP.Outside.R_meta_3646_427
     have haEnc : ∀ c ∈ enc 10 14 gFun rows3, ClauseSat a c := by
       intro c hc
       apply ha
-      simp only [enc2, List.mem_append]
+      unfold enc2
+      simp only [List.mem_append]
       exact Or.inl (Or.inl hc)
     have hdiv : k / (10 + 14) = 2 := by omega
     have hop13 : a (ix 10 14 0 13 2 + 1) = true := by
       have hcl : ClauseSat a [P (ix 10 14 0 13 2)] := by
         apply ha
-        simp only [List.mem_append, enc2Cube, hdiv, List.mem_cons]
+        unfold enc2Cube
+        simp only [List.mem_append, hdiv, List.mem_cons]
         exact Or.inr (Or.inr (Or.inl trivial))
       obtain ⟨l, hl, hlv⟩ := hcl
       simp only [List.mem_singleton] at hl
@@ -360,12 +370,14 @@ theorem PEqualNP.Outside.R_meta_3646_427
         ClauseSat a c := by
       intro j hj c hc
       apply haEnc
-      simp only [enc, List.mem_append, fPad, List.mem_flatMap, List.mem_range]
+      unfold enc fPad
+      simp only [List.mem_append, List.mem_flatMap, List.mem_range]
       exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inr ⟨j, hj, hc⟩))))
     have hPreMem : ∀ j < 13, ClauseSat a [Q (ix 10 14 7 (j + 1) 0), P (ix 10 14 7 j 0)] := by
       intro j hj
       apply haEnc
-      simp only [enc, List.mem_append, fPre, List.mem_map, List.mem_range]
+      unfold enc fPre
+      simp only [List.mem_append, List.mem_map, List.mem_range]
       exact Or.inl (Or.inl (Or.inl (Or.inr ⟨j, hj, rfl⟩)))
     have hpad13 : a (ix 10 14 7 13 0 + 1) = true := by
       obtain ⟨l, hl, hlv⟩ := hPadMem 13 (by omega) [P (ix 10 14 7 13 0), Q (ix 10 14 0 13 2)] (by simp)
@@ -400,8 +412,9 @@ theorem PEqualNP.Outside.R_meta_3646_427
         · rw [litP] at hlv; exact hlv
       have hcl : ClauseSat a [Q (ix 10 14 0 j 2), P (ix 10 14 3 j 24)] := by
         apply haEnc
-        simp only [enc, List.mem_append, fGate, List.mem_flatMap, List.mem_range]
-        exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inr ⟨j, hj, 24, by simp [rows3], by simp [gateCl]⟩))))))))
+        unfold enc fGate
+        simp only [List.mem_append, List.mem_flatMap, List.mem_range]
+        exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inr ⟨j, hj, 24, by simp [rows3], by unfold gateCl; simp⟩))))))))
       obtain ⟨l, hl, hlv⟩ := hcl
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hl
       rcases hl with rfl | rfl
@@ -409,12 +422,14 @@ theorem PEqualNP.Outside.R_meta_3646_427
       · rw [litP] at hlv; exact hlv
     have hOutAlo : ClauseSat a ((List.range 25).map fun k => P (ix 10 14 6 0 k)) := by
       apply haEnc
-      simp only [enc, List.mem_append, fOutAlo, List.mem_singleton]
+      unfold enc fOutAlo
+      simp only [List.mem_append, List.mem_singleton]
       exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inr trivial)))))))
     have hOutEq : ∀ r ∈ rows3, ∀ out < 25, ∀ c ∈ outEq 10 14 gFun out r, ClauseSat a c := by
       intro r hr out hout c hc
       apply haEnc
-      simp only [enc, List.mem_append, fOutEq, List.mem_flatMap, List.mem_range]
+      unfold enc fOutEq
+      simp only [List.mem_append, List.mem_flatMap, List.mem_range]
       exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inl (Or.inr ⟨r, hr, out, hout, hc⟩))))))
     obtain ⟨l, hl, hlv⟩ := hOutAlo
     simp only [List.mem_map, List.mem_range] at hl
@@ -423,7 +438,7 @@ theorem PEqualNP.Outside.R_meta_3646_427
     by_cases h10 : out < 10
     · have hkill : ∀ r ∈ rows3, r.testBit out ≠ gFun r → False := by
         intro r hr hne
-        obtain ⟨l', hl', hlv'⟩ := hOutEq r hr out hout [Q (ix 10 14 6 0 out)] (by simp [outEq, h10, hne])
+        obtain ⟨l', hl', hlv'⟩ := hOutEq r hr out hout [Q (ix 10 14 6 0 out)] (by unfold outEq; simp [h10, hne])
         simp only [List.mem_singleton] at hl'
         rw [hl', litQ, hlv] at hlv'
         cases hlv'
@@ -442,14 +457,14 @@ theorem PEqualNP.Outside.R_meta_3646_427
       · have hg24 : gFun 24 = false := by decide
         obtain ⟨l', hl', hlv'⟩ := hOutEq 24 (by decide) out hout
           [Q (ix 10 14 6 0 out), Q (ix 10 14 3 (out - 10) 24)]
-          (by simp [outEq, h10, h24, hg24, L])
+          (by unfold outEq L; simp [h10, h24, hg24])
         simp only [List.mem_cons, List.not_mem_nil, or_false] at hl'
         rcases hl' with rfl | rfl
         · rw [litQ, hlv] at hlv'; cases hlv'
         · rw [litQ, hGate24True (out - 10) (by omega)] at hlv'; cases hlv'
       · have hg515 : gFun 515 = true := by decide
         obtain ⟨l', hl', hlv'⟩ := hOutEq 515 (by decide) out hout
-          [Q (ix 10 14 6 0 out)] (by simp [outEq, h10, h24, hg515])
+          [Q (ix 10 14 6 0 out)] (by unfold outEq; simp [h10, h24, hg515])
         simp only [List.mem_singleton] at hl'
         rw [hl', litQ, hlv] at hlv'
         cases hlv'
@@ -459,7 +474,7 @@ theorem PEqualNP.Outside.R_meta_3646_427
     intro C hMono hSz hMatch
     have hBound : ∀ r ∈ rows3, r < 2 ^ 10 := by decide +kernel
     obtain ⟨k, hk, hSat⟩ := normalize 10 14 gFun rows3 C (by omega) hBound hMono hSz hMatch
-    have hk72 : k < 72 := by simpa [enc2CubeCount] using hk
+    have hk72 : k < 72 := hk
     by_cases h24 : k < 24
     · exact lastAnd k h24 hSat
     · by_cases h48 : k < 48
@@ -483,7 +498,9 @@ theorem PEqualNP.Outside.R_meta_3646_427
       have horig := hMono g0 hg0
       exact ⟨horig.1, by simpa [mapG] using horig.2⟩
     have hSz' : C'.size ≤ 14 := by
-      simpa [Circuit.size, C'] using hSz
+      change (C.gates.map mapG).length ≤ 14
+      rw [List.length_map]
+      exact hSz
     have hSim : ∀ (gs : List Gate) (u1 u2 : List Bool),
         u1.length = u2.length → 10 ≤ u1.length →
         (∀ i, u1.getD i false = u2.getD (mapW i) false) →
