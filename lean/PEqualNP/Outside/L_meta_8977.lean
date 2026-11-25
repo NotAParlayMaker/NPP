@@ -2537,6 +2537,11 @@ theorem allowed_of_min (rev : List W) (z : W)
 
 -- For each recorded first-step context, the corresponding subtree has already been excluded.
 set_option maxRecDepth 16000 in
+theorem allContextCons {α : Type} {f : α → Bool} {x : α} {xs : List α}
+    (hh : f x = true) (ht : xs.all f = true) : (x :: xs).all f = true := by
+  simp only [List.all_cons, hh, ht, Bool.and_self]
+
+set_option maxRecDepth 16000 in
 def cacheNext (f : Nat → Nat → List W → Bool) (tab : List (Nat × Nat × List W))
     (e w : Nat) (ws : List W) : Bool := if (e,w,ws) ∈ tab then false else f e w ws
 
@@ -2617,7 +2622,8 @@ def contextTable19 : List (Nat × Nat × List W) := [
 
 set_option maxRecDepth 16000 in
 theorem contextGood19 : contextTable19.all (fun t => !(symSearch allowed 2 6 (BitVec.ofNat 96 t.2.1 :: [0xf00f00ffff111111111111]) t.1 t.2.1 t.2.2)) = true := by
-  simp only [contextTable19, List.all_cons, List.all_nil, numericNode20, numericNode21, numericNode22, numericNode23, numericNode24, numericNode25, Bool.not_false, Bool.and_self]
+  unfold contextTable19
+  exact (allContextCons (congrArg Bool.not numericNode20) (allContextCons (congrArg Bool.not numericNode21) (allContextCons (congrArg Bool.not numericNode22) (allContextCons (congrArg Bool.not numericNode23) (allContextCons (congrArg Bool.not numericNode24) (allContextCons (congrArg Bool.not numericNode25) rfl))))))
 
 set_option maxRecDepth 16000 in
 theorem contextEq19 : cachedBranch 2 6 [0xf00f00ffff111111111111] contextTable19 = symSearch allowed 3 6 [0xf00f00ffff111111111111] := cachedBranch_eq 2 6 [0xf00f00ffff111111111111] contextTable19 contextGood19
@@ -2690,7 +2696,8 @@ def contextTable6 : List (Nat × Nat × List W) := [
 
 set_option maxRecDepth 16000 in
 theorem contextGood6 : contextTable6.all (fun t => !(symSearch allowed 1 6 (BitVec.ofNat 96 t.2.1 :: [0xf00f0fff00f222222222222, 0xf00f00ffff111111111111]) t.1 t.2.1 t.2.2)) = true := by
-  simp only [contextTable6, List.all_cons, List.all_nil, numericNode7, numericNode8, numericNode9, numericNode10, numericNode11, numericNode12, numericNode13, numericNode14, numericNode15, Bool.not_false, Bool.and_self]
+  unfold contextTable6
+  exact (allContextCons (congrArg Bool.not numericNode7) (allContextCons (congrArg Bool.not numericNode8) (allContextCons (congrArg Bool.not numericNode9) (allContextCons (congrArg Bool.not numericNode10) (allContextCons (congrArg Bool.not numericNode11) (allContextCons (congrArg Bool.not numericNode12) (allContextCons (congrArg Bool.not numericNode13) (allContextCons (congrArg Bool.not numericNode14) (allContextCons (congrArg Bool.not numericNode15) rfl)))))))))
 
 set_option maxRecDepth 16000 in
 theorem contextEq6 : cachedBranch 1 6 [0xf00f0fff00f222222222222, 0xf00f00ffff111111111111] contextTable6 = symSearch allowed 2 6 [0xf00f0fff00f222222222222, 0xf00f00ffff111111111111] := cachedBranch_eq 1 6 [0xf00f0fff00f222222222222, 0xf00f00ffff111111111111] contextTable6 contextGood6
@@ -2720,7 +2727,8 @@ def contextTable3 : List (Nat × Nat × List W) := [
 
 set_option maxRecDepth 16000 in
 theorem contextGood3 : contextTable3.all (fun t => !(symSearch allowed 2 6 (BitVec.ofNat 96 t.2.1 :: [0xf00f00ffff111111111111]) t.1 t.2.1 t.2.2)) = true := by
-  simp only [contextTable3, List.all_cons, List.all_nil, numericNode4, numericNode5, numericNode6, numericNode16, numericNode17, numericNode18, Bool.not_false, Bool.and_self]
+  unfold contextTable3
+  exact (allContextCons (congrArg Bool.not numericNode4) (allContextCons (congrArg Bool.not numericNode5) (allContextCons (congrArg Bool.not numericNode6) (allContextCons (congrArg Bool.not numericNode16) (allContextCons (congrArg Bool.not numericNode17) (allContextCons (congrArg Bool.not numericNode18) rfl))))))
 
 set_option maxRecDepth 16000 in
 theorem contextEq3 : cachedBranch 2 6 [0xf00f00ffff111111111111] contextTable3 = symSearch allowed 3 6 [0xf00f00ffff111111111111] := cachedBranch_eq 2 6 [0xf00f00ffff111111111111] contextTable3 contextGood3
@@ -2752,7 +2760,8 @@ def contextTable0 : List (Nat × Nat × List W) := [
 
 set_option maxRecDepth 16000 in
 theorem contextGood0 : contextTable0.all (fun t => !(symSearch allowed 3 6 (BitVec.ofNat 96 t.2.1 :: []) t.1 t.2.1 t.2.2)) = true := by
-  simp only [contextTable0, List.all_cons, List.all_nil, numericNode1, numericNode2, numericNode3, numericNode19, numericNode26, numericNode27, numericNode28, numericNode29, Bool.not_false, Bool.and_self]
+  unfold contextTable0
+  exact (allContextCons (congrArg Bool.not numericNode1) (allContextCons (congrArg Bool.not numericNode2) (allContextCons (congrArg Bool.not numericNode3) (allContextCons (congrArg Bool.not numericNode19) (allContextCons (congrArg Bool.not numericNode26) (allContextCons (congrArg Bool.not numericNode27) (allContextCons (congrArg Bool.not numericNode28) (allContextCons (congrArg Bool.not numericNode29) rfl))))))))
 
 set_option maxRecDepth 16000 in
 theorem contextEq0 : cachedBranch 3 6 [] contextTable0 = symSearch allowed 4 6 [] := cachedBranch_eq 3 6 [] contextTable0 contextGood0
