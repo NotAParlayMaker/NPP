@@ -330,8 +330,42 @@ theorem extend_live {m0 n0 : ℕ} {s : Finset W} (le : m0 ≤ n0) (h : live basi
 
 theorem inputs_nodup : inputs.Nodup := by decide +kernel
 
+-- The floor check, cut into seven kernel computations (four first pairs each) to keep memory low.
+def body : W × W × List W → Bool := fun (a, b, r) => dispatch 1 (optimized 7) a b r
+
+theorem any_split {α : Type} (f : α → Bool) (n : ℕ) (l : List α)
+    (h1 : (l.take n).any f = false) (h2 : (l.drop n).any f = false) : l.any f = false := by
+  rw [← List.take_append_drop n l, List.any_append, h1, h2]
+  rfl
+
 set_option maxRecDepth 16000 in
-theorem checked_floor : optimized 8 1 inputs = false := by decide +kernel
+theorem floor0 : ((pairs inputs).take 4).any body = false := by decide +kernel
+
+set_option maxRecDepth 16000 in
+theorem floor1 : (((pairs inputs).drop 4).take 4).any body = false := by decide +kernel
+
+set_option maxRecDepth 16000 in
+theorem floor2 : ((((pairs inputs).drop 4).drop 4).take 4).any body = false := by decide +kernel
+
+set_option maxRecDepth 16000 in
+theorem floor3 : (((((pairs inputs).drop 4).drop 4).drop 4).take 4).any body = false := by decide +kernel
+
+set_option maxRecDepth 16000 in
+theorem floor4 : ((((((pairs inputs).drop 4).drop 4).drop 4).drop 4).take 4).any body = false := by decide +kernel
+
+set_option maxRecDepth 16000 in
+theorem floor5 : (((((((pairs inputs).drop 4).drop 4).drop 4).drop 4).drop 4).take 4).any body = false := by decide +kernel
+
+set_option maxRecDepth 16000 in
+theorem floor6 : (((((((pairs inputs).drop 4).drop 4).drop 4).drop 4).drop 4).drop 4).any body = false := by decide +kernel
+
+theorem checked_floor : optimized 8 1 inputs = false := by
+  have h : (pairs inputs).any body = false :=
+    any_split body 4 _ floor0 (any_split body 4 _ floor1 (any_split body 4 _ floor2
+      (any_split body 4 _ floor3 (any_split body 4 _ floor4 (any_split body 4 _ floor5 floor6)))))
+  have e : optimized 8 1 inputs = (inputs == [goal] || (pairs inputs).any body) := rfl
+  rw [e, h]
+  decide
 
 theorem impossible {k S} (bound : k ≤ 8) (sub : S ⊆ inputs.toFinset)
     (h : live basicOps goal k S) : False := by
