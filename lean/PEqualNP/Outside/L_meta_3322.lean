@@ -243,3 +243,4 @@ theorem PEqualNP.Outside.L_meta_3322 : ∀ (x1 : (Fin (14 : ℕ) → Bool) → B
   have := hmin t ht
   simp only [hr]
   exact this
+
