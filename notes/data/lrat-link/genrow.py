@@ -3,7 +3,9 @@
 The formula handed to the checker is `enc n s (rowFun n f) rows` itself (Link.lean); the CNF file
 is only used to read the certificate's hints and must be genmono.py's output for the same
 (n, s, edges, rows).  Usage:
-  genrow.py f.cnf p.lrat out.lean NAMESPACE n s ROWS FEXPR [--seg HINTS]
+  genrow.py f.cnf p.lrat out.lean NAMESPACE n s ROWS FEXPR [--seg HINTS] [--enc2]
+--enc2: the formula is `enc2` (Link2.lean, with the lexicographic order; CNF from genmono.py
+with 'rows,lex') and the final theorem goes through `lower_of_unsat2`.
 ROWS: comma list; FEXPR: Lean Bool expression in `x : Fin n → Bool`.
 
 Original doc: Write a Lean file that proves a DIMACS formula unsatisfiable from an LRAT certificate (text
@@ -36,6 +38,11 @@ def opt(name, dflt):
 
 
 chunk = opt('--chunk', 2000)
+CUBE = opt('--cube', -1)  # piece k of the cube split: F = enc2 ... ++ enc2Cube N S k (implies --enc2)
+NOTG = '--not' in args  # NOT gates: LinkN2's enc2 (CNF from gennot.py), theorem for HasCircuitSize
+assert not (NOTG and CUBE >= 0), '--not has no cube mode'
+if CUBE >= 0 or NOTG:
+    flags.add('--enc2')
 seg = opt('--seg', 0)
 pos = [a for a in args if not a.startswith('--')]
 cnf, lrat, out, ns, N, S, ROWS, FEXPR = pos
@@ -183,17 +190,26 @@ def wordsdef(o, nm, ws):
 
 
 rowsL = '[' + ROWS + ']'
+E2 = '--enc2' in flags
+ENC = 'enc2' if E2 else 'enc'
 with open(out, 'w') as o:
-    o.write('import PEqualNP.Library.LRAT.Link\n\n')
-    o.write(f'/-!\n# Generated row file (genrow.py): no Monotone2 circuit with {S} gates for one function\n\n'
-            f'The formula handed to the checker is `enc {N} {S} (rowFun {N} fn) rows` itself. Certificate:\n'
+    o.write('import PEqualNP.Library.LRAT.Cube\n\n' if CUBE >= 0 else
+            'import PEqualNP.Library.LRAT.LinkN2\n\n' if NOTG else
+            'import PEqualNP.Library.LRAT.Link2\n\n' if E2 else 'import PEqualNP.Library.LRAT.Link\n\n')
+    o.write(f'/-!\n# Generated row file (genrow.py): no {"FanInTwo" if NOTG else "Monotone2"} circuit with {S} gates for one function\n\n'
+            f'The formula handed to the checker is `{ENC} {N} {S} (rowFun {N} fn) rows` itself. Certificate:\n'
             f'CaDiCaL LRAT, trimmed; {len(steps)} steps, {sum((len(s[2]) + 1) // 2 for s in steps)} hints, '
             f'{len(segs)} segment(s).\n-/\n\n')
-    o.write(f'namespace {ns}\nopen PEqualNP.Library.LRAT PEqualNP.Library.LRAT.Link\n\n')
+    o.write(f'namespace {ns}\nopen PEqualNP.Library.LRAT PEqualNP.Library.LRAT.{"LinkN" if NOTG else "Link"}\n\n')
     o.write('set_option maxRecDepth 1000000\nset_option maxHeartbeats 0\n\n')
     o.write(f'/-- The function. -/\ndef fn (x : Fin {N} → Bool) : Bool := {FEXPR}\n\n')
     o.write(f'/-- The rows. -/\ndef rows : List ℕ := {rowsL}\n\n')
-    o.write(f'/-- The formula: `enc` itself. -/\ndef F : List (List ℕ) := enc {N} {S} (rowFun {N} fn) rows\n\n')
+    if CUBE >= 0:
+        o.write(f'/-- The formula: piece {CUBE} of the cube split, `enc2 ++ enc2Cube` itself. -/\n'
+                f'def F : List (List ℕ) := enc2 {N} {S} (rowFun {N} fn) rows ++ '
+                f'PEqualNP.Defs.LratEncoding.enc2Cube {N} {S} {CUBE}\n\n')
+    else:
+        o.write(f'/-- The formula: `{ENC}` itself. -/\ndef F : List (List ℕ) := {ENC} {N} {S} (rowFun {N} fn) rows\n\n')
     wordsdef(o, f'{name}_Kw', pack(fk))
     o.write(f'noncomputable def {name}_K : List Nat := unpack {W} {name}_Kw\n\n')
     if len(segs) == 1:
@@ -221,11 +237,23 @@ with open(out, 'w') as o:
         for k in range(1, n):
             expr = f'seg{k} a ({expr})'
         o.write(f'theorem unsat : ¬ FormulaSat F := fun ⟨a, ha⟩ =>\n  {expr}\n\n')
-    o.write(f'/-- Every circuit of AND and OR gates of fan-in at most two computing the function on {N}\n'
-            f'inputs has at least {int(S) + 1} gates. -/\n'
-            f'theorem lower : ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 C →\n'
-            f'    (∀ x : Fin {N} → Bool, C.eval (List.ofFn x) = ({FEXPR})) → {int(S) + 1} ≤ C.size :=\n'
-            f'  lower_of_unsat {N} {S} fn rows (by decide) unsat\n\n')
+    if CUBE >= 0:
+        R = 'PEqualNP.Defs.LratEncoding'
+        o.write(f'/-- Piece {CUBE} of the cube split of the formula saying that a circuit of AND and OR gates\n'
+                f'of fan-in two with {S} gate slots computes the function on the rows is unsatisfiable. -/\n'
+                f'theorem piece : ¬ {R}.FormulaSat ({R}.enc2 {N} {S} ({R}.rowFun {N} fun x => {FEXPR})\n'
+                f'    {rowsL} ++ {R}.enc2Cube {N} {S} {CUBE}) :=\n  unsat\n\n')
+    elif NOTG:
+        o.write(f'/-- Every circuit of AND, OR and NOT gates of fan-in at most two computing the function on {N}\n'
+                f'inputs has at least {int(S) + 1} gates. -/\n'
+                f'theorem lower : ∀ t : ℕ, PEqualNP.MetaComplexity.HasCircuitSize {N} (fun x : Fin {N} → Bool => {FEXPR}) t →\n'
+                f'    {int(S) + 1} ≤ t :=\n  size_of_unsat2 {N} {S} fn rows (by decide) unsat\n\n')
+    else:
+        o.write(f'/-- Every circuit of AND and OR gates of fan-in at most two computing the function on {N}\n'
+                f'inputs has at least {int(S) + 1} gates. -/\n'
+                f'theorem lower : ∀ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 C →\n'
+                f'    (∀ x : Fin {N} → Bool, C.eval (List.ofFn x) = ({FEXPR})) → {int(S) + 1} ≤ C.size :=\n'
+                f'  {"lower_of_unsat2" if E2 else "lower_of_unsat"} {N} {S} fn rows (by decide) unsat\n\n')
     o.write(f'end {ns}\n')
 
 print(f'clauses={m} steps={len(steps)} hints={sum((len(s[2]) + 1) // 2 for s in steps)} W={W} segments={len(segs)} live_at_cuts={[len(b) for b in bounds]}')
