@@ -111,7 +111,10 @@ theorem PEqualNP.Outside.R_meta_3138_427
     intro g hg
     have hop := (hFan g hg).1
     simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hop
-    rcases hop with h | h | h <;> simp [h, GateOp.eval]
+    rcases hop with h | h | h
+    · rw [h]; exact ⟨fun h1 => Bool.noConfusion h1, fun h1 => GateOp.noConfusion h1⟩
+    · rw [h]; exact ⟨fun h1 => Bool.noConfusion h1, fun h1 => GateOp.noConfusion h1⟩
+    · rw [h]; exact ⟨fun _ => rfl, fun _ => rfl⟩
   have splitCount : ∀ (ls : List Gate),
       (∀ g ∈ ls, g.op.eval [false] = false) ∨
       ∃ pre N post, ls = pre ++ N :: post ∧ N.op.eval [false] = true ∧
@@ -153,7 +156,9 @@ theorem PEqualNP.Outside.R_meta_3138_427
       rcases hg with hg | rfl
       · exact toMono gs (fun _ h => h) hAllMono g hg
       · exact ⟨by simp [gOr], by simp [gOr]⟩
-    have hCSz : C.size ≤ 14 := by simp [C, Circuit.size, hLen]
+    have hCSz : C.size ≤ 14 := by
+      change (gs ++ [gOr]).length ≤ 14
+      simp [hLen]
     apply killMono14 C hCMono hCSz
     intro x
     unfold Circuit.eval Circuit.wires
@@ -164,7 +169,9 @@ theorem PEqualNP.Outside.R_meta_3138_427
     rw [← hwl]
     dsimp only [step, gOr]
     rw [getDSnocSelf]
-    simp only [GateOp.eval, List.map_cons, List.map_nil, List.any_cons, List.any_nil, id_eq, Bool.or_false]
+    change ((gs.foldl step (List.ofFn x ++ [x 0 || x 3])).getD a false ||
+      ((gs.foldl step (List.ofFn x ++ [x 0 || x 3])).getD b false || false)) = F9 x
+    rw [Bool.or_false]
     exact hGood x
   · have hPostFalse : ∀ g ∈ post, g.op.eval [false] = false := by
       have hc : (pre ++ N :: post).countP (fun g => g.op.eval [false]) ≤ 1 := hEqGs ▸ hNotCnt
@@ -194,10 +201,14 @@ theorem PEqualNP.Outside.R_meta_3138_427
       congr 2
       cases hi : N.inputs with
       | nil =>
-        simp only [u, hi, List.headD_nil, List.map_nil, GateOp.eval, List.headD_nil]
+        dsimp only [u]
+        rw [hi]
+        change (!false) = !(w.getD (10 + pre.length) false)
         rw [List.getD_eq_default _ _ (by omega)]
       | cons i is =>
-        simp only [u, hi, List.headD_cons, List.map_cons, GateOp.eval, List.headD_cons]
+        dsimp only [u]
+        rw [hi]
+        rfl
     by_cases huGe : 10 + pre.length ≤ u
     · -- N reads out-of-bounds false, so N outputs constant true = GateOp.and []
       let gTrue : Gate := ⟨GateOp.and, []⟩
@@ -216,7 +227,8 @@ theorem PEqualNP.Outside.R_meta_3138_427
           subst hg
           exact ⟨by simp [gOr], by simp [gOr]⟩
       have hCSz : C.size ≤ 14 := by
-        simp only [C, Circuit.size, List.length_append, List.length_cons, List.length_nil]
+        change (pre ++ gTrue :: post ++ [gOr]).length ≤ 14
+        simp only [List.length_append, List.length_cons, List.length_nil]
         omega
       apply killMono14 C hCMono hCSz
       intro x
@@ -238,7 +250,9 @@ theorem PEqualNP.Outside.R_meta_3138_427
       rw [← hwl]
       dsimp only [step, gOr]
       rw [getDSnocSelf]
-      simp only [GateOp.eval, List.map_cons, List.map_nil, List.any_cons, List.any_nil, id_eq, Bool.or_false]
+      change ((gs.foldl step (List.ofFn x ++ [x 0 || x 3])).getD a false ||
+        ((gs.foldl step (List.ofFn x ++ [x 0 || x 3])).getD b false || false)) = F9 x
+      rw [Bool.or_false]
       exact hGood x
     · by_cases hu10 : 10 ≤ u
       · -- u is a genuine monotone gate in pre: invoke notOfGate
