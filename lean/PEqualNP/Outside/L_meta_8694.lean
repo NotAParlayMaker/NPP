@@ -1,2492 +1,4157 @@
 import Mathlib
 import PEqualNP.Defs
 
-namespace PEqualNP.Outside.L_meta_8694_aux
+namespace PEqualNP.Outside.L_meta_8694
 
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
+-- The forest checker (lowerDag and its lemmas) is copied from the merged
+-- lean/PEqualNP/Outside/L_meta_8467.lean; the stage data below is new for this table.
 
-abbrev BFn (n : ℕ) := (Fin n → Bool) → Bool
+abbrev Forest := Nat → Nat × Nat
 
-/-! ## Section 1: Self-contained circuit simplification, relabeling, and gate elimination -/
+def unpack (packed width index : Nat) : Nat :=
+  (packed >>> (width * index)) &&& ((1 <<< width) - 1)
 
-def wiresFrom (gs : List Gate) (w : List Bool) : List Bool :=
-  gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w
+def decodeNode (parentWidth width packed index : Nat) : Nat × Nat :=
+  let entry := unpack packed width index
+  (entry &&& ((1 <<< parentWidth) - 1), entry >>> parentWidth)
 
-theorem wiresFrom_append (gs gs' : List Gate) (w : List Bool) :
-    wiresFrom (gs ++ gs') w = wiresFrom gs' (wiresFrom gs w) := by
-  simp [wiresFrom, List.foldl_append]
+def treeBlock (start count : Nat) (check : Nat → Bool) : Bool :=
+  (Nat.rec (motive := fun _ => Nat → Bool) (fun _ => true)
+    (fun _ next i => check i && next (i + 1)) count) start
 
-theorem wiresFrom_prefix (gs : List Gate) : ∀ w : List Bool,
-    ∃ t : List Bool, wiresFrom gs w = w ++ t ∧ t.length = gs.length := by
-  induction gs with
-  | nil => intro w; exact ⟨[], by simp [wiresFrom], rfl⟩
-  | cons g gs ih =>
-    intro w
-    obtain ⟨t, ht, hl⟩ := ih (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
-    refine ⟨g.op.eval (g.inputs.map fun i => w.getD i false) :: t, ?_, by simp [hl]⟩
-    have : wiresFrom (g :: gs) w
-        = wiresFrom gs (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) := rfl
-    rw [this, ht]; simp
+theorem treeBlock_at {start count i : Nat} {check : Nat → Bool}
+    (h : treeBlock start count check = true) (lo : start ≤ i) (hi : i < start + count) :
+    check i = true := by
+  induction count generalizing start with
+  | zero => omega
+  | succ count ih =>
+    change (check start && treeBlock (start + 1) count check) = true at h
+    rcases Bool.and_eq_true_iff.mp h with ⟨here, rest⟩
+    by_cases eq : i = start
+    · simpa [eq] using here
+    · exact ih rest (by omega) (by omega)
 
-theorem length_wiresFrom (gs : List Gate) (w : List Bool) :
-    (wiresFrom gs w).length = w.length + gs.length := by
-  obtain ⟨t, ht, hl⟩ := wiresFrom_prefix gs w
-  rw [ht]; simp [hl]
+theorem treeBlock_merge {start left right : Nat} {check : Nat → Bool}
+    (a : treeBlock start left check = true)
+    (b : treeBlock (start + left) right check = true) :
+    treeBlock start (left + right) check = true := by
+  induction left generalizing start with
+  | zero => simpa using b
+  | succ left ih =>
+    rw [Nat.succ_add]
+    change (check start && treeBlock (start + 1) (left + right) check) = true
+    change (check start && treeBlock (start + 1) left check) = true at a
+    rcases Bool.and_eq_true_iff.mp a with ⟨here, rest⟩
+    exact Bool.and_eq_true_iff.mpr ⟨here, ih rest (by
+      simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using b)⟩
 
-theorem getD_wiresFrom (gs : List Gate) (w : List Bool) (i : ℕ) (h : i < w.length) :
-    (wiresFrom gs w).getD i false = w.getD i false := by
-  obtain ⟨t, ht, _⟩ := wiresFrom_prefix gs w
-  rw [ht, List.getD_append _ _ _ _ h]
+abbrev Word := Nat
+abbrev RowState := Nat × List Word × List (Word × Word × Word)
+abbrev CutCheck := RowState → Bool
 
-def Ok (g : Gate) : Prop :=
-  g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) ∧ g.inputs.length ≤ 2
+def rootWords (base : List Word) (token : Nat) : List Word :=
+  List.rec (motive := fun _ => Nat → List Word) (fun _ => [])
+    (fun word _ next bits =>
+      let tail := next (bits >>> 1)
+      if bits &&& 1 == 0 then tail else word :: tail) base token
 
-theorem getD_snoc_ne {α : Type} (L : List α) (S d : α) (j : ℕ) (h : j ≠ L.length) :
-    (L ++ [S]).getD j d = L.getD j d := by
-  by_cases hj : j < L.length
-  · exact List.getD_append _ _ _ _ hj
-  · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by omega)]
+def rootState (base : List Word) (fuel token : Nat) : RowState :=
+  (fuel, rootWords base token, [])
 
-theorem getD_snoc_eq {α : Type} (L : List α) (S d : α) : (L ++ [S]).getD L.length d = S := by
+def insertWord (w : Word) (ws : List Word) : List Word :=
+  List.rec [w] (fun a tail next => if w ≤ a then w :: a :: tail else a :: next) ws
+
+def childState (mask token : Nat) (state : RowState) : Option RowState :=
+  let (fuel, ws, history) := state
+  let keep := token % 4
+  let op := (token / 4) % 3
+  let a := token / (4 * 3 * 64)
+  let b := (token / (4 * 3)) % 64
+  if fuel == 0 || b ≥ ws.length || (if op == 2 then a != b || keep ≥ 2 else a ≥ b) then none
+  else
+    let x := ws.getD a 0
+    let y := ws.getD b 0
+    let w := if op == 0 then x &&& y else if op == 1 then x ||| y else mask ^^^ x
+    if w == 0 || w == mask || ws.contains w then none
+    else
+      let rest := if keep.testBit 0 then ws else ws.erase x
+      let rest := if op == 2 || keep.testBit 1 then rest else rest.erase y
+      some (fuel - 1, insertWord w rest, (w, x, y) :: history)
+
+def gateToken (a b op keep : Nat) : Nat := ((a * 64 + b) * 3 + op) * 4 + keep
+
+abbrev Bound := Nat × List Word × Nat × Word
+
+def stockWord (mask : Nat) (stock : List Word) (needed : List Word) (word : Word) : List Word :=
+  let v := word &&& mask
+  if v == 0 || v == mask || stock.contains v || needed.contains v then needed
+  else v :: needed
+
+def recipeStart (mask : Nat) (stock words : List Word) : List Word :=
+  (List.rec (motive := fun _ => List Word → List Word) id
+    (fun word _ next seen => next (stockWord mask stock seen word)) words) []
+
+def recipeClosure (mask : Nat) (stock : List Word) (history : List (Word × Word × Word))
+    (start : List Word) : List Word :=
+  List.rec (motive := fun _ => List Word → List Word) id
+    (fun (out, a, b) _ next seen =>
+      next (if seen.contains (out &&& mask) then stockWord mask stock (stockWord mask stock seen a) b else seen))
+    history start
+
+def recipeNeeded (mask : Nat) (stock words : List Word) (history : List (Word × Word × Word)) :
+    List Word :=
+  recipeClosure mask stock history (recipeStart mask stock words)
+
+def maskFlat (mask word : Nat) : Bool :=
+  let v := word &&& mask
+  v == 0 || v == mask
+
+def flatCount (mask : Nat) (words : List Word) : Nat :=
+  List.rec 0 (fun word _ count => if maskFlat mask word then count + 1 else count) words
+
+def availableB (mask : Nat) (bank : List Word) (w : Word) : Bool :=
+  w == 0 || w == mask || bank.contains w
+
+def recipeGate (mask : Nat) (bank : List Word) (w a b : Word) : Bool :=
+  availableB mask bank a &&
+    ((w == mask ^^^ a) || (availableB mask bank b && (w == a &&& b || w == a ||| b)))
+
+def replayRecipes (mask : Nat) (needed : List Word) (recipes : List (Word × Word × Word))
+    (bank : List Word) : List Word :=
+  List.rec (motive := fun _ => List Word → List Word) (fun _ => [])
+    (fun (w, a, b) _ next bank =>
+      let v := w &&& mask
+      if needed.contains v && !availableB mask bank v &&
+          recipeGate mask bank v (a &&& mask) (b &&& mask) then
+        v :: next (v :: bank)
+      else next bank) recipes bank
+
+def boundCloses (target : Word) (state : RowState) (bound : Bound) : Bool :=
+  let (mask, stock, lower, goal) := bound
+  let (fuel, ws, history) := state
+  (target &&& mask) == goal && goal != 0 && goal != mask &&
+    (let remaining := fuel - flatCount mask ws
+     if remaining < lower then
+       let start := recipeStart mask stock ws
+       if start.length + remaining < lower then
+         let needed := recipeClosure mask stock history start
+         if needed.length + remaining < lower then
+           let replay := replayRecipes mask needed history.reverse stock
+           (replay.length + remaining < lower) &&
+             ws.all (fun w => availableB mask (replay ++ stock) (w &&& mask))
+         else false
+       else false
+     else false)
+
+def knownCloses (target : Word) (bounds : List Bound) (state : RowState) : Bool :=
+  List.rec false (fun bound _ later => boundCloses target state bound || later) bounds
+
+def AvailableWord (mask : Nat) (bank : List Word) (word : Word) : Prop :=
+  word = 0 ∨ word = mask ∨ word ∈ bank
+
+def GateWord (mask : Nat) (bank : List Word) (out : Word) : Prop :=
+  (∃ a, AvailableWord mask bank a ∧ out = mask ^^^ a) ∨
+  (∃ a b, AvailableWord mask bank a ∧ AvailableWord mask bank b ∧
+    (out = a &&& b ∨ out = a ||| b))
+
+def WordBuilds (mask : Nat) (roots : List Word) : List Word → Prop
+  | [] => True
+  | w :: ws => GateWord mask roots w ∧ WordBuilds mask (w :: roots) ws
+
+def Lower (mask : Nat) (roots : List Word) (target : Word) (minimum : Nat) : Prop :=
+  ∀ values, WordBuilds mask roots values →
+    AvailableWord mask (values ++ roots) target → minimum ≤ values.length
+
+def Known (bounds : List Bound) : Prop :=
+  ∀ bound ∈ bounds, Lower bound.1 bound.2.1 bound.2.2.2 bound.2.2.1
+
+theorem restrictWord (mask : Nat) (word : Word) : word &&& mask &&& mask = word &&& mask := by
   simp
 
-theorem getD_snoc_len {α : Type} (L : List α) (S d : α) (k : ℕ) (h : L.length = k) :
-    (L ++ [S]).getD k d = S := by
-  subst h; simp
-
-def gateSupp {n : ℕ} (L : List (Finset (Fin n))) (g : Gate) : Finset (Fin n) :=
-  (g.inputs.map fun a => L.getD a ∅).foldr (· ∪ ·) ∅
-
-theorem mem_foldr_union {n : ℕ} (l : List ℕ) (F : ℕ → Finset (Fin n)) (i : Fin n) :
-    i ∈ (l.map F).foldr (· ∪ ·) ∅ ↔ ∃ a ∈ l, i ∈ F a := by
-  induction l with
-  | nil => simp
-  | cons b l ih => simp [ih]
-
-theorem mem_gateSupp {n : ℕ} (L : List (Finset (Fin n))) (g : Gate) (i : Fin n) :
-    i ∈ gateSupp L g ↔ ∃ a ∈ g.inputs, i ∈ L.getD a ∅ :=
-  mem_foldr_union _ _ _
-
-def suppsFrom {n : ℕ} (gs : List Gate) (L : List (Finset (Fin n))) : List (Finset (Fin n)) :=
-  gs.foldl (fun L g => L ++ [gateSupp L g]) L
-
-def inputSupps (n : ℕ) : List (Finset (Fin n)) := List.ofFn fun i : Fin n => {i}
-
-def Agree {n : ℕ} (x y : Fin n → Bool) (L : List (Finset (Fin n))) (w w' : List Bool) : Prop :=
-  L.length = w.length ∧ w.length = w'.length ∧
-    ∀ j : ℕ, (∀ i ∈ L.getD j ∅, x i = y i) → w.getD j false = w'.getD j false
-
-theorem agree_wiresFrom {n : ℕ} (x y : Fin n → Bool) (gs : List Gate) :
-    ∀ (L : List (Finset (Fin n))) (w w' : List Bool), Agree x y L w w' →
-      Agree x y (suppsFrom gs L) (wiresFrom gs w) (wiresFrom gs w') := by
-  induction gs with
-  | nil => intro L w w' h; exact h
-  | cons g gs ih =>
-    intro L w w' h
-    obtain ⟨h1, h2, h3⟩ := h
-    apply ih (L ++ [gateSupp L g])
-      (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
-      (w' ++ [g.op.eval (g.inputs.map fun i => w'.getD i false)])
-    refine ⟨by simp [h1], by simp [h2], ?_⟩
-    intro j hj
-    by_cases hjl : j = L.length
-    · subst hjl
-      rw [getD_snoc_eq] at hj
-      rw [h1, getD_snoc_eq, h2, getD_snoc_eq]
-      congr 1
-      apply List.map_congr_left
-      intro a ha
-      exact h3 a (fun i hi => hj i ((mem_gateSupp L g i).2 ⟨a, ha, hi⟩))
-    · rw [getD_snoc_ne _ _ _ _ hjl] at hj
-      rw [getD_snoc_ne _ _ _ _ (by omega), getD_snoc_ne _ _ _ _ (by omega)]
-      exact h3 j hj
-
-theorem agree_inputs {n : ℕ} (x y : Fin n → Bool) :
-    Agree x y (inputSupps n) (List.ofFn x) (List.ofFn y) := by
-  refine ⟨by simp [inputSupps], by simp, ?_⟩
-  intro j hj
-  by_cases hjn : j < n
-  · have hx : x ⟨j, hjn⟩ = y ⟨j, hjn⟩ := hj _ (by simp [inputSupps, hjn])
-    simp [hjn, hx]
-  · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega)]
-
-def Cnt {n : ℕ} (t : ℕ) (L : List (Finset (Fin n))) : Prop :=
-  ∀ W : Finset ℕ, (W.biUnion fun j => L.getD j ∅).card ≤ t + W.card
-
-theorem cnt_inputs {n : ℕ} : Cnt 0 (inputSupps n) := by
-  intro W
-  refine le_trans Finset.card_biUnion_le ?_
-  rw [zero_add, Finset.card_eq_sum_ones]
-  apply Finset.sum_le_sum
-  intro j _
-  by_cases hjn : j < n
-  · simp [inputSupps, hjn]
-  · rw [List.getD_eq_default _ _ (by simp [inputSupps]; omega)]; simp
-
-theorem cnt_step {n : ℕ} (t : ℕ) (L : List (Finset (Fin n))) (g : Gate) (hg : g.inputs.length ≤ 2)
-    (h : Cnt t L) : Cnt (t + 1) (L ++ [gateSupp L g]) := by
-  intro W
-  by_cases hW : L.length ∈ W
-  · have hsub : (W.biUnion fun j => (L ++ [gateSupp L g]).getD j ∅)
-        ⊆ ((W.erase L.length ∪ g.inputs.toFinset).biUnion fun j => L.getD j ∅) := by
-      intro i hi
-      rw [Finset.mem_biUnion] at hi ⊢
-      obtain ⟨j, hjW, hij⟩ := hi
-      by_cases hjl : j = L.length
-      · subst hjl
-        rw [getD_snoc_eq] at hij
-        obtain ⟨a, ha, hia⟩ := (mem_gateSupp L g i).1 hij
-        exact ⟨a, Finset.mem_union_right _ (List.mem_toFinset.2 ha), hia⟩
-      · rw [getD_snoc_ne _ _ _ _ hjl] at hij
-        exact ⟨j, Finset.mem_union_left _ (Finset.mem_erase.2 ⟨hjl, hjW⟩), hij⟩
-    have hc1 : (W.erase L.length ∪ g.inputs.toFinset).card ≤ (W.card - 1) + 2 := by
-      refine le_trans (Finset.card_union_le _ _) ?_
-      rw [Finset.card_erase_of_mem hW]
-      exact Nat.add_le_add_left (le_trans (List.toFinset_card_le _) hg) _
-    have hWpos : 1 ≤ W.card := Finset.card_pos.2 ⟨_, hW⟩
-    have := h (W.erase L.length ∪ g.inputs.toFinset)
-    have := Finset.card_le_card hsub
-    omega
-  · have heq : (W.biUnion fun j => (L ++ [gateSupp L g]).getD j ∅)
-        = (W.biUnion fun j => L.getD j ∅) := by
-      apply Finset.biUnion_congr rfl
-      intro j hj
-      exact getD_snoc_ne _ _ _ _ (fun e => hW (e ▸ hj))
-    rw [heq]
-    have := h W
-    omega
-
-theorem cnt_suppsFrom {n : ℕ} (gs : List Gate) : ∀ (t : ℕ) (L : List (Finset (Fin n))),
-    (∀ g ∈ gs, Ok g) → Cnt t L → Cnt (t + gs.length) (suppsFrom gs L) := by
-  induction gs with
-  | nil => intro t L _ h; exact h
-  | cons g gs ih =>
-    intro t L hok h
-    have := ih (t + 1) (L ++ [gateSupp L g]) (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg'))
-      (cnt_step t L g (hok g List.mem_cons_self).2 h)
-    rw [List.length_cons, show t + (gs.length + 1) = t + 1 + gs.length by omega]
-    exact this
-
-theorem dep_lower_set (n : ℕ) (f : (Fin n → Bool) → Bool) (T : Finset (Fin n))
-    (hdep : ∀ i ∈ T, ∃ x : Fin n → Bool, f (Function.update x i (!x i)) ≠ f x)
-    (s : ℕ) (h : HasCircuitSize n f s) : T.card ≤ s + 1 := by
-  obtain ⟨C, ok, hsz, hev⟩ := h
-  have hsz' : C.gates.length ≤ s := hsz
-  set S := (suppsFrom C.gates (inputSupps n)).getD C.output ∅ with hS
-  have hall : T ⊆ S := by
-    intro i hiT
-    by_contra hi
-    obtain ⟨x, hx⟩ := hdep i hiT
-    apply hx
-    have hag := (agree_wiresFrom (Function.update x i (!x i)) x C.gates _ _ _
-      (agree_inputs _ _)).2.2 C.output (by
-        intro k hk
-        have : k ≠ i := fun e => hi (e ▸ hk)
-        simp [Function.update_of_ne this])
-    rw [← hev, ← hev]
-    exact hag
-  have hc := cnt_suppsFrom C.gates 0 (inputSupps n) ok cnt_inputs {C.output}
-  simp only [Finset.singleton_biUnion, Finset.card_singleton, zero_add] at hc
-  rw [← hS] at hc
-  have := Finset.card_le_card hall
-  omega
-
-def normGate (g : Gate) : Gate :=
-  match g.op with
-  | GateOp.not => ⟨GateOp.not, g.inputs.take 1⟩
-  | _ => g
-
-theorem normGate_eval (g : Gate) (F : ℕ → Bool) :
-    (normGate g).op.eval ((normGate g).inputs.map F) = g.op.eval (g.inputs.map F) := by
-  obtain ⟨op, inputs⟩ := g
-  cases op <;> simp only [normGate]
-  cases inputs <;> simp [GateOp.eval]
-
-def NOk (g : Gate) : Prop := Ok g ∧ (g.op = GateOp.not → g.inputs.length ≤ 1)
-
-theorem normGate_nok (g : Gate) (h : Ok g) : NOk (normGate g) := by
-  obtain ⟨op, inputs⟩ := g
-  obtain ⟨hop, hlen⟩ := h
-  rcases hop with h | h | h
-  · have : op = GateOp.and := h
-    subst this; exact ⟨⟨Or.inl rfl, hlen⟩, by simp [normGate]⟩
-  · have : op = GateOp.or := h
-    subst this; exact ⟨⟨Or.inr (Or.inl rfl), hlen⟩, by simp [normGate]⟩
-  · have : op = GateOp.not := h
-    subst this
-    refine ⟨⟨Or.inr (Or.inr rfl), ?_⟩, fun _ => ?_⟩ <;> simp [normGate] <;> omega
-
-theorem wiresFrom_norm (gs : List Gate) : ∀ w : List Bool,
-    wiresFrom (gs.map normGate) w = wiresFrom gs w := by
-  induction gs with
-  | nil => intro w; rfl
-  | cons g gs ih =>
-    intro w
-    have s1 : wiresFrom ((g :: gs).map normGate) w = wiresFrom (gs.map normGate)
-        (w ++ [(normGate g).op.eval ((normGate g).inputs.map fun i => w.getD i false)]) := rfl
-    have s2 : wiresFrom (g :: gs) w
-        = wiresFrom gs (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) := rfl
-    rw [s1, s2, normGate_eval, ih]
-
-abbrev Stat := Sum Bool ℕ
-
-def statVal (w : List Bool) : Stat → Bool
-  | Sum.inl c => c
-  | Sum.inr j => w.getD j false
-
-def statValid (m : ℕ) : Stat → Prop
-  | Sum.inl _ => True
-  | Sum.inr j => j < m
-
-def simpNot (m : ℕ) : List Stat → Option Gate × Stat
-  | [] => (none, Sum.inl true)
-  | Sum.inl c :: _ => (none, Sum.inl (!c))
-  | Sum.inr j :: _ => (some ⟨GateOp.not, [j]⟩, Sum.inr m)
-
-def simpAnd (m : ℕ) : List Stat → Option Gate × Stat
-  | [] => (none, Sum.inl true)
-  | [Sum.inl c] => (none, Sum.inl c)
-  | [Sum.inr j] => (none, Sum.inr j)
-  | [Sum.inl c, Sum.inl d] => (none, Sum.inl (c && d))
-  | [Sum.inl c, Sum.inr j] => (none, bif c then Sum.inr j else Sum.inl false)
-  | [Sum.inr j, Sum.inl c] => (none, bif c then Sum.inr j else Sum.inl false)
-  | [Sum.inr j, Sum.inr k] => (some ⟨GateOp.and, [j, k]⟩, Sum.inr m)
-  | _ => (none, Sum.inl false)
-
-def simpOr (m : ℕ) : List Stat → Option Gate × Stat
-  | [] => (none, Sum.inl false)
-  | [Sum.inl c] => (none, Sum.inl c)
-  | [Sum.inr j] => (none, Sum.inr j)
-  | [Sum.inl c, Sum.inl d] => (none, Sum.inl (c || d))
-  | [Sum.inl c, Sum.inr j] => (none, bif c then Sum.inl true else Sum.inr j)
-  | [Sum.inr j, Sum.inl c] => (none, bif c then Sum.inl true else Sum.inr j)
-  | [Sum.inr j, Sum.inr k] => (some ⟨GateOp.or, [j, k]⟩, Sum.inr m)
-  | _ => (none, Sum.inl false)
-
-def simplify (op : GateOp) (m : ℕ) (ins : List Stat) : Option Gate × Stat :=
-  match op with
-  | GateOp.and => simpAnd m ins
-  | GateOp.or => simpOr m ins
-  | GateOp.not => simpNot m ins
-  | _ => (none, Sum.inl false)
-
-def CleanG (m : ℕ) (g : Gate) : Prop :=
-  (g.op = GateOp.not ∧ ∃ j, j < m ∧ g.inputs = [j]) ∨
-  ((g.op = GateOp.and ∨ g.op = GateOp.or) ∧ ∃ j k, j < m ∧ k < m ∧ g.inputs = [j, k])
-
-theorem cleanG_lt {m : ℕ} {g : Gate} (h : CleanG m g) : ∀ a ∈ g.inputs, a < m := by
-  rcases h with ⟨_, j, hj, hin⟩ | ⟨_, j, k, hj, hk, hin⟩
-  · intro a ha; simp [hin] at ha; omega
-  · intro a ha; simp [hin] at ha; rcases ha with rfl | rfl <;> omega
-
-def CleanL (n : ℕ) (gs : List Gate) : Prop :=
-  ∀ p g, gs[p]? = some g → CleanG (n + p) g
-
-theorem simplify_ok (op : GateOp) (m : ℕ) (ins : List Stat) :
-    ∀ g ∈ (simplify op m ins).1, Ok g := by
-  intro g hg
-  cases op <;> simp only [simplify] at hg
-  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨c, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
-      simp [simpAnd] at hg <;> (subst hg; simp [Ok])
-  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨c, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
-      simp [simpOr] at hg <;> (subst hg; simp [Ok])
-  · rcases ins with _ | ⟨a, l⟩ <;> (try cases a) <;>
-      simp [simpNot] at hg <;> (subst hg; simp [Ok])
-  · simp at hg
-  · simp at hg
-
-theorem simplify_clean (op : GateOp) (m : ℕ) (ins : List Stat)
-    (hv : ∀ s ∈ ins, statValid m s) :
-    ∀ g ∈ (simplify op m ins).1, CleanG m g := by
-  intro g hg
-  cases op <;> simp only [simplify] at hg
-  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨c, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
-      simp [simpAnd] at hg
-    subst hg
-    exact Or.inr ⟨Or.inl rfl, _, _, hv (Sum.inr _) (by simp), hv (Sum.inr _) (by simp), rfl⟩
-  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨c, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
-      simp [simpOr] at hg
-    subst hg
-    exact Or.inr ⟨Or.inr rfl, _, _, hv (Sum.inr _) (by simp), hv (Sum.inr _) (by simp), rfl⟩
-  · rcases ins with _ | ⟨a, l⟩ <;> (try cases a) <;> simp [simpNot] at hg
-    subst hg
-    exact Or.inl ⟨rfl, _, hv (Sum.inr _) (by simp), rfl⟩
-  · simp at hg
-  · simp at hg
-
-theorem simplify_count (op : GateOp) (m : ℕ) (ins : List Stat)
-    (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not) (hlen : ins.length ≤ 2)
-    (hnot : op = GateOp.not → ins.length ≤ 1) (hc : ∃ c, Sum.inl c ∈ ins) :
-    (simplify op m ins).1 = none := by
-  obtain ⟨c, hc⟩ := hc
-  rcases hop with rfl | rfl | rfl
-  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨d, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
-      simp_all [simplify, simpAnd]
-  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨d, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
-      simp_all [simplify, simpOr]
-  · have := hnot rfl
-    rcases ins with _ | ⟨a, _ | ⟨b, l⟩⟩ <;> (try cases a) <;> simp_all [simplify, simpNot]
-
-theorem simplify_sound (op : GateOp) (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not)
-    (w : List Bool) (ins : List Stat) (hlen : ins.length ≤ 2)
-    (hv : ∀ s ∈ ins, statValid w.length s) :
-    statValid (w.length + (simplify op w.length ins).1.toList.length) (simplify op w.length ins).2 ∧
-    statVal (wiresFrom (simplify op w.length ins).1.toList w) (simplify op w.length ins).2
-      = op.eval (ins.map (statVal w)) := by
-  rcases hop with rfl | rfl | rfl
-  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨d, l⟩⟩⟩
-    · simp [simplify, simpAnd, statValid, statVal, GateOp.eval]
-    · cases a <;> simp_all [simplify, simpAnd, statValid, statVal, GateOp.eval, wiresFrom]
-    · cases a <;> cases b <;> (try rename_i c e; cases c) <;> (try cases e) <;>
-        simp_all [simplify, simpAnd, statValid, statVal, GateOp.eval, wiresFrom]
-    · simp at hlen
-  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨d, l⟩⟩⟩
-    · simp [simplify, simpOr, statValid, statVal, GateOp.eval]
-    · cases a <;> simp_all [simplify, simpOr, statValid, statVal, GateOp.eval, wiresFrom]
-    · cases a <;> cases b <;> (try rename_i c e; cases c) <;> (try cases e) <;>
-        simp_all [simplify, simpOr, statValid, statVal, GateOp.eval, wiresFrom]
-    · simp at hlen
-  · rcases ins with _ | ⟨a, l⟩
-    · simp [simplify, simpNot, statValid, statVal, GateOp.eval]
-    · cases a <;> simp_all [simplify, simpNot, statValid, statVal, GateOp.eval, wiresFrom]
-
-def elimStep (n : ℕ) (acc : List Stat × List Gate) (g : Gate) : List Stat × List Gate :=
-  (acc.1 ++ [(simplify g.op (n + acc.2.length)
-      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).2],
-    acc.2 ++ (simplify g.op (n + acc.2.length)
-      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList)
-
-def elim (n : ℕ) (gs : List Gate) (acc : List Stat × List Gate) : List Stat × List Gate :=
-  gs.foldl (elimStep n) acc
-
-theorem elim_cons (n : ℕ) (g : Gate) (gs : List Gate) (acc : List Stat × List Gate) :
-    elim n (g :: gs) acc = elim n gs (elimStep n acc g) := rfl
-
-theorem elim_append (n : ℕ) (pre post : List Gate) (acc : List Stat × List Gate) :
-    elim n (pre ++ post) acc = elim n post (elim n pre acc) := by
-  simp [elim, List.foldl_append]
-
-theorem elim_fst_len (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
-    (elim n gs acc).1.length = acc.1.length + gs.length := by
-  induction gs with
-  | nil => intro acc; rfl
-  | cons g gs ih =>
-    intro acc
-    rw [elim_cons, ih]
-    simp only [elimStep, List.length_append, List.length_cons, List.length_nil]
-    omega
-
-theorem elim_getD (n k : ℕ) (d : Stat) (gs : List Gate) : ∀ acc : List Stat × List Gate,
-    k < acc.1.length → (elim n gs acc).1.getD k d = acc.1.getD k d := by
-  induction gs with
-  | nil => intro acc _; rfl
-  | cons g gs ih =>
-    intro acc hk
-    rw [elim_cons, ih (elimStep n acc g) (by simp [elimStep]; omega)]
-    exact getD_snoc_ne _ _ _ _ (by omega)
-
-theorem toList_length_le {α : Type} (o : Option α) : o.toList.length ≤ 1 := by
-  cases o <;> simp
-
-theorem elim_ok (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
-    (∀ g ∈ acc.2, Ok g) → ∀ g ∈ (elim n gs acc).2, Ok g := by
-  induction gs with
-  | nil => intro acc h; exact h
-  | cons g gs ih =>
-    intro acc h
-    apply ih (elimStep n acc g)
-    intro g' hg'
-    rcases List.mem_append.1 hg' with h1 | h1
-    · exact h g' h1
-    · exact simplify_ok _ _ _ g' (by simpa using h1)
-
-theorem elim_len (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
-    (elim n gs acc).2.length ≤ acc.2.length + gs.length := by
-  induction gs with
-  | nil => intro acc; simp [elim]
-  | cons g gs ih =>
-    intro acc
-    have h1 := ih (elimStep n acc g)
-    have h2 : (elimStep n acc g).2.length ≤ acc.2.length + 1 := by
-      simp only [elimStep, List.length_append]
-      have := toList_length_le (simplify g.op (n + acc.2.length)
-        (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1
-      omega
-    rw [elim_cons, List.length_cons]; omega
-
-theorem elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
-    (∀ g ∈ gs, NOk g) → k < acc.1.length → (∃ c, acc.1.getD k (Sum.inl false) = Sum.inl c) →
-    (∃ g ∈ gs, k ∈ g.inputs) → (elim n gs acc).2.length + 1 ≤ acc.2.length + gs.length := by
-  induction gs with
-  | nil => intro acc _ _ _ h; obtain ⟨g, hg, _⟩ := h; simp at hg
-  | cons g gs ih =>
-    intro acc hok hk hc hex
-    rw [elim_cons, List.length_cons]
-    by_cases hkg : k ∈ g.inputs
-    · obtain ⟨c, hc⟩ := hc
-      have hnok := hok g List.mem_cons_self
-      have hnone : (simplify g.op (n + acc.2.length)
-          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1 = none := by
-        apply simplify_count
-        · exact hnok.1.1
-        · simpa using hnok.1.2
-        · intro h; simpa using hnok.2 h
-        · exact ⟨c, List.mem_map.2 ⟨k, hkg, hc⟩⟩
-      have h2 : (elimStep n acc g).2.length = acc.2.length := by
-        show (acc.2 ++ (simplify g.op (n + acc.2.length)
-          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList).length = _
-        rw [hnone]; simp
-      have := elim_len n gs (elimStep n acc g)
-      omega
-    · have hex' : ∃ g' ∈ gs, k ∈ g'.inputs := by
-        obtain ⟨g', hg', hk'⟩ := hex
-        rcases List.mem_cons.1 hg' with rfl | h
-        · exact absurd hk' hkg
-        · exact ⟨g', h, hk'⟩
-      have h1 := ih (elimStep n acc g) (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg'))
-        (by simp [elimStep]; omega)
-        (by
-          obtain ⟨c, hc⟩ := hc
-          refine ⟨c, ?_⟩
-          simp only [elimStep]
-          rw [getD_snoc_ne _ _ _ _ (by omega)]; exact hc)
-        hex'
-      have h2 : (elimStep n acc g).2.length ≤ acc.2.length + 1 := by
-        simp only [elimStep, List.length_append]
-        have := toList_length_le (simplify g.op (n + acc.2.length)
-          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1
-        omega
-      omega
-
-theorem statValid_mono {m m' : ℕ} (h : m ≤ m') : ∀ s : Stat, statValid m s → statValid m' s
-  | Sum.inl _, _ => trivial
-  | Sum.inr _, hj => lt_of_lt_of_le hj h
-
-theorem statVal_append (w t : List Bool) : ∀ s : Stat, statValid w.length s →
-    statVal (w ++ t) s = statVal w s
-  | Sum.inl _, _ => rfl
-  | Sum.inr _, hj => List.getD_append _ _ _ _ hj
-
-def Inv (n : ℕ) (y : List Bool) (w : List Bool) (acc : List Stat × List Gate) : Prop :=
-  acc.1.length = w.length ∧ ∀ i : ℕ,
-    statValid (n + acc.2.length) (acc.1.getD i (Sum.inl false)) ∧
-    statVal (wiresFrom acc.2 y) (acc.1.getD i (Sum.inl false)) = w.getD i false
-
-theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) :
-    ∀ (w : List Bool) (acc : List Stat × List Gate), (∀ g ∈ gs, Ok g) → Inv n y w acc →
-      Inv n y (wiresFrom gs w) (elim n gs acc) := by
-  induction gs with
-  | nil => intro w acc _ h; exact h
-  | cons g gs ih =>
-    intro w acc hok h
-    apply ih (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) (elimStep n acc g)
-      (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg'))
-    obtain ⟨hl, hi⟩ := h
-    set w' := wiresFrom acc.2 y with hw'
-    have lw' : w'.length = n + acc.2.length := by rw [hw', length_wiresFrom, hy]
-    set ins := g.inputs.map fun i => acc.1.getD i (Sum.inl false) with hins
-    have hgok := hok g List.mem_cons_self
-    have hs := simplify_sound g.op hgok.1 w' ins (by simpa [hins] using hgok.2)
-      (by
-        intro s hs
-        obtain ⟨a, _, rfl⟩ := List.mem_map.1 hs
-        rw [lw']; exact (hi a).1)
-    rw [lw'] at hs
-    set r := simplify g.op (n + acc.2.length) ins with hr
-    have hvals : ins.map (statVal w') = g.inputs.map fun i => w.getD i false := by
-      rw [hins, List.map_map]
-      apply List.map_congr_left
-      intro a _
-      exact (hi a).2
-    have hnew : wiresFrom (acc.2 ++ r.1.toList) y = wiresFrom r.1.toList w' := by
-      rw [wiresFrom_append]
-    obtain ⟨t, ht, _⟩ := wiresFrom_prefix r.1.toList w'
-    refine ⟨by simp [elimStep, hl], ?_⟩
-    intro i
-    show statValid (n + (acc.2 ++ r.1.toList).length) ((acc.1 ++ [r.2]).getD i (Sum.inl false)) ∧
-      statVal (wiresFrom (acc.2 ++ r.1.toList) y) ((acc.1 ++ [r.2]).getD i (Sum.inl false)) = _
-    rw [hnew, List.length_append, ← Nat.add_assoc]
-    by_cases hil : i = acc.1.length
-    · subst hil
-      rw [getD_snoc_eq, hl, getD_snoc_eq]
-      exact ⟨hs.1, by rw [hs.2, hvals]⟩
-    · rw [getD_snoc_ne _ _ _ _ hil, getD_snoc_ne _ _ _ _ (by omega)]
-      refine ⟨statValid_mono (by omega) _ (hi i).1, ?_⟩
-      rw [ht, statVal_append _ _ _ (by rw [lw']; exact (hi i).1)]
-      exact (hi i).2
-
-theorem elim_clean (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
-    (∀ g ∈ gs, Ok g) → (∀ i, statValid (n + acc.2.length) (acc.1.getD i (Sum.inl false))) →
-    CleanL n acc.2 → CleanL n (elim n gs acc).2 := by
-  induction gs with
-  | nil => intro acc _ _ hc; exact hc
-  | cons g gs ih =>
-    intro acc hok hv hc
-    have hstep := ih (elimStep n acc g) (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg'))
-    apply hstep
-    · intro i
-      set ins := g.inputs.map fun i => acc.1.getD i (Sum.inl false) with hins
-      have hgok := hok g List.mem_cons_self
-      have hs := simplify_sound g.op hgok.1 (List.replicate (n + acc.2.length) false) ins
-        (by simpa [hins] using hgok.2)
-        (by
-          intro s hs
-          obtain ⟨a, _, rfl⟩ := List.mem_map.1 hs
-          simpa using hv a)
-      simp only [List.length_replicate] at hs
-      show statValid (n + (acc.2 ++ _).length) ((acc.1 ++ [_]).getD i (Sum.inl false))
-      rw [List.length_append, ← Nat.add_assoc]
-      by_cases hil : i = acc.1.length
-      · subst hil; rw [getD_snoc_eq]; exact hs.1
-      · rw [getD_snoc_ne _ _ _ _ hil]; exact statValid_mono (by omega) _ (hv i)
-    · intro p g' hp
-      simp only [elimStep] at hp
-      by_cases hlt : p < acc.2.length
-      · rw [List.getElem?_append_left hlt] at hp
-        exact hc p g' hp
-      · rw [List.getElem?_append_right (by omega)] at hp
-        set r := simplify g.op (n + acc.2.length)
-          (g.inputs.map fun i => acc.1.getD i (Sum.inl false)) with hr
-        cases ho : r.1 with
-        | none => simp [ho] at hp
-        | some g0 =>
-          rw [ho] at hp
-          have hp0 : p - acc.2.length = 0 := by
-            have := (List.getElem?_eq_some_iff.1 hp).1
-            simp at this; omega
-          have hpeq : p = acc.2.length := by omega
-          rw [hp0] at hp
-          simp at hp
-          subst hp
-          rw [hpeq]
-          exact simplify_clean g.op (n + acc.2.length) _ (by
-            intro s hs
-            obtain ⟨a, _, rfl⟩ := List.mem_map.1 hs
-            exact hv a) g0 (by rw [← hr, ho]; rfl)
-
-def initStats (n : ℕ) (b : Bool) : List Stat :=
-  List.ofFn (fun i : Fin n => Sum.inr (i : ℕ)) ++ [Sum.inl b]
-
-theorem initStats_last (n : ℕ) (b : Bool) :
-    (initStats n b).getD n (Sum.inl false) = Sum.inl b :=
-  getD_snoc_len _ _ _ _ (by simp)
-
-theorem inv_init (n : ℕ) (b : Bool) (y : Fin n → Bool) :
-    Inv n (List.ofFn y) (List.ofFn y ++ [b]) (initStats n b, []) := by
-  refine ⟨by simp [initStats], ?_⟩
-  intro i
-  have l1 : (List.ofFn (fun i : Fin n => (Sum.inr (i : ℕ) : Stat))).length = n := by simp
-  have l2 : (List.ofFn y).length = n := by simp
-  by_cases hin : i = n
-  · subst hin
-    simp only [initStats]
-    rw [getD_snoc_len _ _ _ _ l1, getD_snoc_len _ _ _ _ l2]
-    exact ⟨trivial, rfl⟩
-  · simp only [initStats]
-    rw [getD_snoc_ne _ _ _ _ (by omega), getD_snoc_ne _ _ _ _ (by omega)]
-    by_cases hlt : i < n
-    · simp [hlt, statValid, statVal, wiresFrom]
-    · rw [List.getD_eq_default _ _ (by omega), List.getD_eq_default _ _ (by omega)]
-      exact ⟨trivial, rfl⟩
-
-theorem ofFn_snoc (n : ℕ) (y : Fin n → Bool) (b : Bool) :
-    List.ofFn (Fin.snoc y b : Fin (n + 1) → Bool) = List.ofFn y ++ [b] := by
-  rw [List.ofFn_succ']
-  simp
-
-theorem supp_noread (n : ℕ) (gs : List Gate) : ∀ L : List (Finset (Fin (n + 1))),
-    (∀ g ∈ gs, n ∉ g.inputs) → (∀ j : ℕ, j ≠ n → Fin.last n ∉ L.getD j ∅) →
-    ∀ j : ℕ, j ≠ n → Fin.last n ∉ (suppsFrom gs L).getD j ∅ := by
-  induction gs with
-  | nil => intro L _ h; exact h
-  | cons g gs ih =>
-    intro L hno h
-    apply ih (L ++ [gateSupp L g]) (fun g' hg' => hno g' (List.mem_cons_of_mem _ hg'))
-    intro j hj
-    by_cases hjl : j = L.length
-    · subst hjl
-      rw [getD_snoc_eq]
-      intro hmem
-      obtain ⟨a, ha, hia⟩ := (mem_gateSupp L g _).1 hmem
-      exact h a (fun e => hno g List.mem_cons_self (e ▸ ha)) hia
-    · rw [getD_snoc_ne _ _ _ _ hjl]; exact h j hj
-
-theorem inputSupps_getD (m j : ℕ) (h : j < m) :
-    (inputSupps m).getD j ∅ = {⟨j, h⟩} := by
-  simp [inputSupps, h]
-
-theorem inputSupps_noread (n : ℕ) : ∀ j : ℕ, j ≠ n →
-    Fin.last n ∉ (inputSupps (n + 1)).getD j ∅ := by
-  intro j hj
-  by_cases hlt : j < n + 1
-  · have e : (inputSupps (n + 1)).getD j ∅ = {⟨j, hlt⟩} := inputSupps_getD (n + 1) j hlt
-    rw [e, Finset.mem_singleton]
-    intro e'
-    exact hj (by have := congrArg Fin.val e'; simpa using this.symm)
-  · rw [List.getD_eq_default _ _ (by simp [inputSupps]; omega)]; simp
-
-theorem gate_elim_one (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (b : Bool) (s : ℕ)
-    (hdep : ∃ x : Fin (n + 1) → Bool, f (Function.update x (Fin.last n) (!x (Fin.last n))) ≠ f x)
-    (hnc : ∃ y y' : Fin n → Bool, f (Fin.snoc y b) ≠ f (Fin.snoc y' b))
-    (h : HasCircuitSize (n + 1) f s) :
-    ∃ s', s' + 1 ≤ s ∧ HasCircuitSize n (fun y : Fin n → Bool => f (Fin.snoc y b)) s' := by
-  obtain ⟨C, ok, hsz, hev⟩ := h
-  have hsz' : C.gates.length ≤ s := hsz
-  set gs := C.gates.map normGate with hgs
-  have hnok : ∀ g ∈ gs, NOk g := by
-    intro g hg
-    obtain ⟨g0, hg0, rfl⟩ := List.mem_map.1 hg
-    exact normGate_nok g0 (ok g0 hg0)
-  have hevg : ∀ x : Fin (n + 1) → Bool, (wiresFrom gs (List.ofFn x)).getD C.output false = f x := by
-    intro x
-    rw [hgs, wiresFrom_norm, ← hev x]; rfl
-  set acc := elim n gs (initStats n b, []) with hacc
-  have hinv : ∀ y : Fin n → Bool,
-      Inv n (List.ofFn y) (wiresFrom gs (List.ofFn (Fin.snoc y b : Fin (n + 1) → Bool))) acc := by
-    intro y
-    rw [ofFn_snoc]
-    exact inv_elim n _ (by simp) gs _ _ (fun g hg => (hnok g hg).1) (inv_init n b y)
-  have hval : ∀ y : Fin n → Bool,
-      statVal (wiresFrom acc.2 (List.ofFn y)) (acc.1.getD C.output (Sum.inl false))
-        = f (Fin.snoc y b) := by
-    intro y
-    rw [((hinv y).2 C.output).2, hevg]
-  cases hst : acc.1.getD C.output (Sum.inl false) with
-  | inl c =>
-    exfalso
-    obtain ⟨y, y', hne⟩ := hnc
-    apply hne
-    rw [← hval y, ← hval y', hst]; rfl
-  | inr j =>
-    have hlen : acc.2.length + 1 ≤ s := by
-      by_cases hread : ∃ g ∈ gs, n ∈ g.inputs
-      · have := elim_len_lt n n gs (initStats n b, []) hnok (by simp [initStats])
-          ⟨b, getD_snoc_len _ _ _ _ (by simp)⟩ hread
-        rw [← hacc] at this
-        have hl : gs.length = C.gates.length := by simp [hgs]
-        simp only [List.length_nil, zero_add] at this
-        omega
-      · exfalso
-        push Not at hread
-        have hout : C.output ≠ n := by
-          intro e
-          rw [e, hacc, elim_getD n n _ gs _ (by simp [initStats])] at hst
-          have hb : (initStats n b).getD n (Sum.inl false) = Sum.inl b :=
-            getD_snoc_len _ _ _ _ (by simp)
-          rw [show ((initStats n b, ([] : List Gate))).1 = initStats n b from rfl, hb] at hst
-          cases hst
-        obtain ⟨x, hx⟩ := hdep
-        apply hx
-        have hns := supp_noread n gs (inputSupps (n + 1)) hread (inputSupps_noread n) C.output hout
-        have hag := (agree_wiresFrom (Function.update x (Fin.last n) (!x (Fin.last n))) x gs _ _ _
-          (agree_inputs _ _)).2.2 C.output (by
-            intro k hk
-            have : k ≠ Fin.last n := fun e => hns (e ▸ hk)
-            simp [Function.update_of_ne this])
-        rw [← hevg, ← hevg]
-        exact hag
-    refine ⟨acc.2.length, hlen, ⟨acc.2, j⟩, elim_ok n gs _ (by simp), le_refl _, ?_⟩
-    intro y
-    have := hval y
-    rw [hst] at this
-    exact this
-
-theorem simplify_const (op : GateOp) (m : ℕ) (ins : List Stat)
-    (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not) (hlen : ins.length ≤ 2)
-    (hnot : op = GateOp.not → ins.length ≤ 1) (b : Bool)
-    (hand : op = GateOp.and → b = false) (hor : op = GateOp.or → b = true)
-    (hc : Sum.inl b ∈ ins) : ∃ c, (simplify op m ins).2 = Sum.inl c := by
-  rcases hop with rfl | rfl | rfl
-  · have := hand rfl
-    subst this
-    rcases ins with _ | ⟨a, _ | ⟨d, _ | ⟨e, l⟩⟩⟩ <;> (try cases a) <;> (try cases d) <;>
-      simp_all [simplify, simpAnd]
-  · have := hor rfl
-    subst this
-    rcases ins with _ | ⟨a, _ | ⟨d, _ | ⟨e, l⟩⟩⟩ <;> (try cases a) <;> (try cases d) <;>
-      simp_all [simplify, simpOr]
-  · have := hnot rfl
-    rcases ins with _ | ⟨a, _ | ⟨d, l⟩⟩ <;> (try cases a) <;> simp_all [simplify, simpNot]
-
-theorem elimStep_none (n : ℕ) (acc : List Stat × List Gate) (g : Gate) (hg : NOk g) (k : ℕ)
-    (hk : k ∈ g.inputs) (c : Bool) (hc : acc.1.getD k (Sum.inl false) = Sum.inl c) :
-    (elimStep n acc g).2.length = acc.2.length := by
-  have hnone : (simplify g.op (n + acc.2.length)
-      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1 = none := by
-    apply simplify_count
-    · exact hg.1.1
-    · simpa using hg.1.2
-    · intro h; simpa using hg.2 h
-    · exact ⟨c, List.mem_map.2 ⟨k, hk, hc⟩⟩
-  show (acc.2 ++ (simplify g.op (n + acc.2.length)
-    (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList).length = _
-  rw [hnone]; simp
-
-def fixBit (g : Gate) : Bool :=
-  match g.op with
-  | GateOp.or => true
-  | _ => false
-
-theorem elimStep_const (n : ℕ) (acc : List Stat × List Gate) (g : Gate) (hg : NOk g) (k : ℕ)
-    (hk : k ∈ g.inputs) (hc : acc.1.getD k (Sum.inl false) = Sum.inl (fixBit g)) :
-    ∃ c, (elimStep n acc g).1.getD acc.1.length (Sum.inl false) = Sum.inl c := by
-  have e : (elimStep n acc g).1.getD acc.1.length (Sum.inl false)
-      = (simplify g.op (n + acc.2.length)
-        (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).2 := getD_snoc_eq _ _ _
-  rw [e]
-  apply simplify_const _ _ _ hg.1.1 (by simpa using hg.1.2) (fun h => by simpa using hg.2 h)
-    (fixBit g)
-  · intro h; simp [fixBit, h]
-  · intro h; simp [fixBit, h]
-  · exact List.mem_map.2 ⟨k, hk, hc⟩
-
-theorem suppsFrom_append {n : ℕ} (pre post : List Gate) (L : List (Finset (Fin n))) :
-    suppsFrom (pre ++ post) L = suppsFrom post (suppsFrom pre L) := by
-  simp [suppsFrom, List.foldl_append]
-
-theorem length_suppsFrom {n : ℕ} (gs : List Gate) : ∀ L : List (Finset (Fin n)),
-    (suppsFrom gs L).length = L.length + gs.length := by
-  induction gs with
-  | nil => intro L; rfl
-  | cons g gs ih =>
-    intro L
-    have h : suppsFrom (g :: gs) L = suppsFrom gs (L ++ [gateSupp L g]) := rfl
-    rw [h, ih]
-    simp only [List.length_append, List.length_cons, List.length_nil]
-    omega
-
-theorem supp_noreadD (n : ℕ) (D : ℕ → Prop) (gs : List Gate) :
-    ∀ L : List (Finset (Fin (n + 1))),
-    (∀ g ∈ gs, ∀ a ∈ g.inputs, ¬ D a) → (∀ j : ℕ, ¬ D j → Fin.last n ∉ L.getD j ∅) →
-    ∀ j : ℕ, ¬ D j → Fin.last n ∉ (suppsFrom gs L).getD j ∅ := by
-  induction gs with
-  | nil => intro L _ h; exact h
-  | cons g gs ih =>
-    intro L hno h
-    apply ih (L ++ [gateSupp L g]) (fun g' hg' => hno g' (List.mem_cons_of_mem _ hg'))
-    intro j hj
-    by_cases hjl : j = L.length
-    · subst hjl
-      rw [getD_snoc_eq]
-      intro hmem
-      obtain ⟨a, ha, hia⟩ := (mem_gateSupp L g _).1 hmem
-      exact h a (hno g List.mem_cons_self a ha) hia
-    · rw [getD_snoc_ne _ _ _ _ hjl]; exact h j hj
-
-theorem two_saved (n : ℕ) (gs : List Gate) (hnok : ∀ g ∈ gs, NOk g) (o : ℕ)
-    (hdep : Fin.last n ∈ (suppsFrom gs (inputSupps (n + 1))).getD o ∅)
-    (hout : ∀ b c, (elim n gs (initStats n b, [])).1.getD o (Sum.inl false) ≠ Sum.inl c) :
-    ∃ b, (elim n gs (initStats n b, [])).2.length + 2 ≤ gs.length := by
-  have hon : o ≠ n := by
-    intro e
-    apply hout false false
-    rw [e, elim_getD n n _ gs _ (by simp [initStats])]
-    exact initStats_last n false
-  by_cases hread : ∃ g ∈ gs, n ∈ g.inputs
-  swap
-  · exfalso
-    push Not at hread
-    exact supp_noread n gs (inputSupps (n + 1)) hread (inputSupps_noread n) o hon hdep
-  obtain ⟨g, hg, hng⟩ := hread
-  obtain ⟨pre, post, rfl⟩ := List.append_of_mem hg
-  have hgn : NOk g := hnok g hg
-  have hpren : ∀ g' ∈ pre, NOk g' := fun g' h => hnok g' (List.mem_append_left _ h)
-  have hpostn : ∀ g' ∈ post, NOk g' :=
-    fun g' h => hnok g' (List.mem_append_right _ (List.mem_cons_of_mem _ h))
-  have hsplit : ∀ b, elim n (pre ++ g :: post) (initStats n b, [])
-      = elim n post (elimStep n (elim n pre (initStats n b, [])) g) :=
-    fun b => by rw [elim_append, elim_cons]
-  have hAn : ∀ b, (elim n pre (initStats n b, [])).1.getD n (Sum.inl false) = Sum.inl b := by
-    intro b
-    rw [elim_getD n n _ pre _ (by simp [initStats])]
-    exact initStats_last n b
-  have hAl : ∀ b, (elim n pre (initStats n b, [])).1.length = n + 1 + pre.length := by
-    intro b
-    rw [elim_fst_len]
-    simp [initStats]
-  have hA2 : ∀ b, (elim n pre (initStats n b, [])).2.length ≤ 0 + pre.length :=
-    fun b => elim_len n pre (initStats n b, [])
-  have hB2 := fun b => elimStep_none n (elim n pre (initStats n b, [])) g hgn n hng b (hAn b)
-  have hBl : ∀ b, (elimStep n (elim n pre (initStats n b, [])) g).1.length
-      = n + 1 + pre.length + 1 := by
-    intro b
-    simp [elimStep, hAl b]
-  have hBn : ∀ b, (elimStep n (elim n pre (initStats n b, [])) g).1.getD n (Sum.inl false)
-      = Sum.inl b := by
-    intro b
-    show ((elim n pre (initStats n b, [])).1 ++ [_]).getD n _ = _
-    rw [getD_snoc_ne _ _ _ _ (by rw [hAl b]; omega)]
-    exact hAn b
-  have hF := fun b => elim_len n post (elimStep n (elim n pre (initStats n b, [])) g)
-  have hlen : (pre ++ g :: post).length = pre.length + post.length + 1 := by
-    simp only [List.length_append, List.length_cons]; omega
-  by_cases h1 : ∃ g' ∈ pre, n ∈ g'.inputs
-  · refine ⟨false, ?_⟩
-    have a1 : (elim n pre (initStats n false, [])).2.length + 1 ≤ 0 + pre.length :=
-      elim_len_lt n n pre (initStats n false, []) hpren (by simp [initStats])
-        ⟨false, initStats_last n false⟩ h1
-    have := hF false
-    have := hB2 false
-    rw [hsplit, hlen]
-    omega
-  by_cases h2 : ∃ g' ∈ post, n ∈ g'.inputs
-  · refine ⟨false, ?_⟩
-    have a1 := elim_len_lt n n post (elimStep n (elim n pre (initStats n false, [])) g) hpostn
-      (by rw [hBl]; omega) ⟨false, hBn false⟩ h2
-    have := hA2 false
-    have := hB2 false
-    rw [hsplit, hlen]
-    omega
-  obtain ⟨c, hc⟩ := elimStep_const n (elim n pre (initStats n (fixBit g), [])) g hgn n hng
-    (hAn (fixBit g))
-  rw [hAl (fixBit g)] at hc
-  refine ⟨fixBit g, ?_⟩
-  by_cases h3 : ∃ g' ∈ post, (n + 1 + pre.length) ∈ g'.inputs
-  · have a1 := elim_len_lt n (n + 1 + pre.length) post
-      (elimStep n (elim n pre (initStats n (fixBit g), [])) g) hpostn
-      (by rw [hBl]; omega) ⟨c, hc⟩ h3
-    have := hA2 (fixBit g)
-    have := hB2 (fixBit g)
-    rw [hsplit, hlen]
-    omega
-  · exfalso
-    have hom : o ≠ n + 1 + pre.length := by
-      intro e
-      apply hout (fixBit g) c
-      rw [hsplit, e, elim_getD n _ _ post _ (by rw [hBl]; omega)]
-      exact hc
-    push Not at h1 h2 h3
-    have hs : suppsFrom (pre ++ g :: post) (inputSupps (n + 1))
-        = suppsFrom post (suppsFrom pre (inputSupps (n + 1))
-          ++ [gateSupp (suppsFrom pre (inputSupps (n + 1))) g]) := by
-      rw [suppsFrom_append]; rfl
-    rw [hs] at hdep
-    have hL := supp_noread n pre (inputSupps (n + 1)) h1 (inputSupps_noread n)
-    have hLl : (suppsFrom pre (inputSupps (n + 1))).length = n + 1 + pre.length := by
-      rw [length_suppsFrom]
-      simp [inputSupps]
-    refine supp_noreadD n (fun j => j = n ∨ j = n + 1 + pre.length) post _ ?_ ?_ o
-      (by simp [hon, hom]) hdep
-    · intro g' hg' a ha hD
-      rcases hD with rfl | rfl
-      · exact h2 g' hg' ha
-      · exact h3 g' hg' ha
-    · intro j hj
-      have hj' : j ≠ n ∧ j ≠ n + 1 + pre.length := by
-        constructor
-        · exact fun e => hj (Or.inl e)
-        · exact fun e => hj (Or.inr e)
-      rw [getD_snoc_ne _ _ _ _ (by rw [hLl]; exact hj'.2)]
-      exact hL j hj'.1
-
-theorem gate_elim_two (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (s : ℕ)
-    (hdep : ∃ x : Fin (n + 1) → Bool, f (Function.update x (Fin.last n) (!x (Fin.last n))) ≠ f x)
-    (hnc : ∀ b : Bool, ∃ y y' : Fin n → Bool, f (Fin.snoc y b) ≠ f (Fin.snoc y' b))
-    (h : HasCircuitSize (n + 1) f s) :
-    ∃ (b : Bool) (s' : ℕ), s' + 2 ≤ s ∧
-      HasCircuitSize n (fun y : Fin n → Bool => f (Fin.snoc y b)) s' := by
-  obtain ⟨C, ok, hsz, hev⟩ := h
-  have hsz' : C.gates.length ≤ s := hsz
-  set gs := C.gates.map normGate with hgs
-  have hl : gs.length = C.gates.length := by simp [hgs]
-  have hnok : ∀ g ∈ gs, NOk g := by
-    intro g hg
-    obtain ⟨g0, hg0, rfl⟩ := List.mem_map.1 hg
-    exact normGate_nok g0 (ok g0 hg0)
-  have hevg : ∀ x : Fin (n + 1) → Bool, (wiresFrom gs (List.ofFn x)).getD C.output false = f x := by
-    intro x
-    rw [hgs, wiresFrom_norm, ← hev x]; rfl
-  have hinv : ∀ (b : Bool) (y : Fin n → Bool),
-      Inv n (List.ofFn y) (wiresFrom gs (List.ofFn (Fin.snoc y b : Fin (n + 1) → Bool)))
-        (elim n gs (initStats n b, [])) := by
-    intro b y
-    rw [ofFn_snoc]
-    exact inv_elim n _ (by simp) gs _ _ (fun g hg => (hnok g hg).1) (inv_init n b y)
-  have hval : ∀ (b : Bool) (y : Fin n → Bool),
-      statVal (wiresFrom (elim n gs (initStats n b, [])).2 (List.ofFn y))
-        ((elim n gs (initStats n b, [])).1.getD C.output (Sum.inl false)) = f (Fin.snoc y b) := by
-    intro b y
-    rw [((hinv b y).2 C.output).2, hevg]
-  have hout : ∀ b c,
-      (elim n gs (initStats n b, [])).1.getD C.output (Sum.inl false) ≠ Sum.inl c := by
-    intro b c hst
-    obtain ⟨y, y', hne⟩ := hnc b
-    apply hne
-    rw [← hval b y, ← hval b y', hst]; rfl
-  have hsupp : Fin.last n ∈ (suppsFrom gs (inputSupps (n + 1))).getD C.output ∅ := by
-    by_contra hns
-    obtain ⟨x, hx⟩ := hdep
-    apply hx
-    have hag := (agree_wiresFrom (Function.update x (Fin.last n) (!x (Fin.last n))) x gs _ _ _
-      (agree_inputs _ _)).2.2 C.output (by
-        intro k hk
-        have : k ≠ Fin.last n := fun e => hns (e ▸ hk)
-        simp [Function.update_of_ne this])
-    rw [← hevg, ← hevg]
-    exact hag
-  obtain ⟨b, hb⟩ := two_saved n gs hnok C.output hsupp hout
-  cases hst : (elim n gs (initStats n b, [])).1.getD C.output (Sum.inl false) with
-  | inl c => exact absurd hst (hout b c)
-  | inr j =>
-    refine ⟨b, (elim n gs (initStats n b, [])).2.length, by omega,
-      ⟨(elim n gs (initStats n b, [])).2, j⟩, elim_ok n gs _ (by simp), le_refl _, ?_⟩
-    intro y
-    have := hval b y
-    rw [hst] at this
-    exact this
-
-def wmap (n m : ℕ) (π : Fin n → Fin m) (w : ℕ) : ℕ :=
-  if h : w < n then (π ⟨w, h⟩ : ℕ) else w - n + m
-
-def relGate (n m : ℕ) (π : Fin n → Fin m) (g : Gate) : Gate :=
-  ⟨g.op, g.inputs.map (wmap n m π)⟩
-
-def relabel (n m : ℕ) (π : Fin n → Fin m) (C : Circuit) : Circuit :=
-  ⟨C.gates.map (relGate n m π), wmap n m π C.output⟩
-
-def step (w : List Bool) (g : Gate) : List Bool :=
-  w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
-
-def Rel (n m : ℕ) (π : Fin n → Fin m) (W W' : List Bool) : Prop :=
-  n ≤ W.length ∧ W'.length + n = W.length + m ∧
-    ∀ w : ℕ, W'.getD (wmap n m π w) false = W.getD w false
-
-theorem rel_step (n m : ℕ) (π : Fin n → Fin m) (W W' : List Bool) (g : Gate)
-    (h : Rel n m π W W') : Rel n m π (step W g) (step W' (relGate n m π g)) := by
-  obtain ⟨h1, h2, h3⟩ := h
-  have hv : (relGate n m π g).op.eval
-      ((relGate n m π g).inputs.map fun i => W'.getD i false)
-      = g.op.eval (g.inputs.map fun i => W.getD i false) := by
-    simp only [relGate, List.map_map]
-    congr 1
-    apply List.map_congr_left
-    intro a _
-    exact h3 a
-  refine ⟨by simp [step]; omega, by simp [step]; omega, ?_⟩
-  intro w
-  simp only [step, hv]
-  rcases Nat.lt_trichotomy w W.length with hw | hw | hw
-  · have hlt : wmap n m π w < W'.length := by
-      unfold wmap
-      split
-      · have := (π ⟨w, by assumption⟩).2; omega
-      · omega
-    rw [List.getD_append _ _ _ _ hlt, List.getD_append _ _ _ _ hw]
-    exact h3 w
-  · have he : wmap n m π w = W'.length := by
-      unfold wmap
-      split
-      · omega
-      · omega
-    rw [he, hw, getD_snoc_eq, getD_snoc_eq]
-  · have hge : W'.length + 1 ≤ wmap n m π w := by
-      unfold wmap
-      split
-      · omega
-      · omega
-    rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega)]
-
-theorem rel_fold (n m : ℕ) (π : Fin n → Fin m) (gs : List Gate) :
-    ∀ W W' : List Bool, Rel n m π W W' →
-      Rel n m π (gs.foldl step W) ((gs.map (relGate n m π)).foldl step W') := by
-  induction gs with
-  | nil => intro W W' h; exact h
-  | cons g gs ih =>
-    intro W W' h
-    exact ih _ _ (rel_step n m π W W' g h)
-
-theorem rel_init (n m : ℕ) (π : Fin n → Fin m) (x : Fin m → Bool) :
-    Rel n m π (List.ofFn (x ∘ π)) (List.ofFn x) := by
-  refine ⟨by simp, by simp; omega, ?_⟩
-  intro w
-  unfold wmap
-  split
-  · rename_i hw
-    rw [List.getD_eq_getElem _ _ (by simp), List.getD_eq_getElem _ _ (by simpa using hw)]
-    simp
-  · rename_i hw
-    rw [List.getD_eq_default _ _ (by simp), List.getD_eq_default _ _ (by simp; omega)]
-
-theorem relabel_size {n m : ℕ} (π : Fin n → Fin m) (h : (Fin n → Bool) → Bool) (s : ℕ)
-    (hc : HasCircuitSize n h s) : HasCircuitSize m (fun x => h (x ∘ π)) s := by
-  obtain ⟨C, ok, hsz, hev⟩ := hc
-  refine ⟨relabel n m π C, ?_, ?_, ?_⟩
-  · intro g hg
-    obtain ⟨g0, hg0, rfl⟩ := List.mem_map.1 hg
-    exact ⟨(ok g0 hg0).1, by simpa [relGate] using (ok g0 hg0).2⟩
-  · simpa [relabel, Circuit.size] using hsz
-  · intro x
-    show _ = h (x ∘ π)
-    rw [← hev (x ∘ π)]
-    have := (rel_fold n m π C.gates _ _ (rel_init n m π x)).2.2 C.output
-    exact this
-
-theorem snoc_swap (n : ℕ) (p : Fin (n + 1)) (x : Fin (n + 1) → Bool) (b : Bool) :
-    (Fin.snoc (fun j : Fin n => x (Equiv.swap p (Fin.last n) j.castSucc)) b :
-        Fin (n + 1) → Bool) ∘ (Equiv.swap p (Fin.last n))
-      = Function.update x p b := by
-  funext j
-  simp only [Function.comp_apply]
-  by_cases hj : j = p
-  · subst hj
-    rw [Equiv.swap_apply_left, Fin.snoc_last, Function.update_self]
-  · have hl : Equiv.swap p (Fin.last n) j ≠ Fin.last n := by
-      intro e
-      apply hj
-      have := congrArg (Equiv.swap p (Fin.last n)) e
-      rwa [Equiv.swap_apply_self, Equiv.swap_apply_right] at this
-    obtain ⟨t, ht⟩ := Fin.exists_castSucc_eq.2 hl
-    rw [← ht, Fin.snoc_castSucc, ht, Equiv.swap_apply_self, Function.update_of_ne hj]
-
-theorem one_gate_at (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (p : Fin (n + 1)) (b : Bool) (s : ℕ)
-    (hdep : ∃ x : Fin (n + 1) → Bool, f (Function.update x p (!x p)) ≠ f x)
-    (hnc : ∃ x y : Fin (n + 1) → Bool,
-      f (Function.update x p b) ≠ f (Function.update y p b))
-    (h : HasCircuitSize (n + 1) f s) :
-    ∃ s' : ℕ, s' + 1 ≤ s ∧
-      HasCircuitSize (n + 1) (fun x => f (Function.update x p b)) s' := by
-  set σ : Equiv.Perm (Fin (n + 1)) := Equiv.swap p (Fin.last n) with hσ
-  have hg : HasCircuitSize (n + 1) (fun x => f (x ∘ σ)) s := relabel_size (⇑σ) f s h
-  have hss : ∀ x : Fin (n + 1) → Bool, (x ∘ σ) ∘ σ = x := by
-    intro x; funext j; simp [hσ, Equiv.swap_apply_self]
-  have hsl : σ.symm (Fin.last n) = p := by
-    rw [hσ, Equiv.symm_swap, Equiv.swap_apply_right]
-  have hdep' : ∃ x : Fin (n + 1) → Bool,
-      (fun x => f (x ∘ σ)) (Function.update x (Fin.last n) (!x (Fin.last n)))
-        ≠ (fun x => f (x ∘ σ)) x := by
-    obtain ⟨x0, hx0⟩ := hdep
-    refine ⟨x0 ∘ σ, ?_⟩
-    simp only
-    rw [Function.update_comp_equiv, hsl, hss]
-    have : (x0 ∘ ⇑σ) (Fin.last n) = x0 p := by simp [hσ, Equiv.swap_apply_right]
-    rw [this]; exact hx0
-  have hnc' : ∃ y y' : Fin n → Bool,
-      (fun x => f (x ∘ σ)) (Fin.snoc y b) ≠ (fun x => f (x ∘ σ)) (Fin.snoc y' b) := by
-    obtain ⟨x, y, hxy⟩ := hnc
-    refine ⟨fun j => x (σ j.castSucc), fun j => y (σ j.castSucc), ?_⟩
-    simp only
-    rw [snoc_swap, snoc_swap]
-    exact hxy
-  obtain ⟨s', hs, h'⟩ := gate_elim_one n _ b s hdep' hnc' hg
-  refine ⟨s', hs, ?_⟩
-  have h'' := relabel_size (fun j : Fin n => σ j.castSucc) _ s' h'
-  have e : (fun x : Fin (n + 1) → Bool =>
-      (fun y : Fin n → Bool => (fun x => f (x ∘ σ)) (Fin.snoc y b))
-        (x ∘ fun j : Fin n => σ j.castSucc))
-      = fun x => f (Function.update x p b) := by
-    funext x
-    simp only
-    exact congrArg f (snoc_swap n p x b)
-  rw [e] at h''
-  exact h''
-
-theorem gate_elim_at (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (p : Fin (n + 1)) (s : ℕ)
-    (hdep : ∃ x : Fin (n + 1) → Bool, f (Function.update x p (!x p)) ≠ f x)
-    (hnc : ∀ b : Bool, ∃ x y : Fin (n + 1) → Bool,
-      f (Function.update x p b) ≠ f (Function.update y p b))
-    (h : HasCircuitSize (n + 1) f s) :
-    ∃ (b : Bool) (s' : ℕ), s' + 2 ≤ s ∧
-      HasCircuitSize (n + 1) (fun x => f (Function.update x p b)) s' := by
-  set σ : Equiv.Perm (Fin (n + 1)) := Equiv.swap p (Fin.last n) with hσ
-  have hg : HasCircuitSize (n + 1) (fun x => f (x ∘ σ)) s := relabel_size (⇑σ) f s h
-  have hss : ∀ x : Fin (n + 1) → Bool, (x ∘ σ) ∘ σ = x := by
-    intro x; funext j; simp [hσ, Equiv.swap_apply_self]
-  have hsl : σ.symm (Fin.last n) = p := by
-    rw [hσ, Equiv.symm_swap, Equiv.swap_apply_right]
-  have hdep' : ∃ x : Fin (n + 1) → Bool,
-      (fun x => f (x ∘ σ)) (Function.update x (Fin.last n) (!x (Fin.last n)))
-        ≠ (fun x => f (x ∘ σ)) x := by
-    obtain ⟨x0, hx0⟩ := hdep
-    refine ⟨x0 ∘ σ, ?_⟩
-    simp only
-    rw [Function.update_comp_equiv, hsl, hss]
-    have : (x0 ∘ ⇑σ) (Fin.last n) = x0 p := by simp [hσ, Equiv.swap_apply_right]
-    rw [this]; exact hx0
-  have hnc' : ∀ b : Bool, ∃ y y' : Fin n → Bool,
-      (fun x => f (x ∘ σ)) (Fin.snoc y b) ≠ (fun x => f (x ∘ σ)) (Fin.snoc y' b) := by
-    intro b
-    obtain ⟨x, y, hxy⟩ := hnc b
-    refine ⟨fun j => x (σ j.castSucc), fun j => y (σ j.castSucc), ?_⟩
-    simp only
-    rw [snoc_swap, snoc_swap]
-    exact hxy
-  obtain ⟨b, s', hs, h'⟩ := gate_elim_two n _ s hdep' hnc' hg
-  refine ⟨b, s', hs, ?_⟩
-  have h'' := relabel_size (fun j : Fin n => σ j.castSucc) _ s' h'
-  have e : (fun x : Fin (n + 1) → Bool =>
-      (fun y : Fin n → Bool => (fun x => f (x ∘ σ)) (Fin.snoc y b))
-        (x ∘ fun j : Fin n => σ j.castSucc))
-      = fun x => f (Function.update x p b) := by
-    funext x
-    simp only
-    exact congrArg f (snoc_swap n p x b)
-  rw [e] at h''
-  exact h''
-
-/-! ## Section 2: Self-contained Run, Reach, NatRun, and barrier checker -/
-
-def val (gs : List Gate) (n : ℕ) (a : ℕ) : BFn n :=
-  fun x => (wiresFrom gs (List.ofFn x)).getD a false
-
-theorem val_input (gs : List Gate) (n : ℕ) (i : Fin n) : val gs n i = fun x => x i := by
-  funext x
-  unfold val
-  rw [getD_wiresFrom _ _ _ (by simp)]
-  simp
-
-theorem split_at {α : Type} (gs : List α) (p : ℕ) (g : α) (hp : gs[p]? = some g) :
-    ∃ pre post, gs = pre ++ g :: post ∧ pre.length = p := by
-  have hlt : p < gs.length := (List.getElem?_eq_some_iff.1 hp).1
-  have hget : gs[p] = g := (List.getElem?_eq_some_iff.1 hp).2
-  refine ⟨gs.take p, gs.drop (p + 1), ?_, by simp; omega⟩
-  have h1 : gs = gs.take p ++ gs.drop p := (List.take_append_drop p gs).symm
-  have h2 : gs.drop p = gs[p] :: gs.drop (p + 1) := List.drop_eq_getElem_cons hlt
-  exact h1.trans (by rw [h2, hget])
-
-theorem val_gate (n : ℕ) (gs : List Gate) (p : ℕ) (g : Gate) (hp : gs[p]? = some g)
-    (hlt : ∀ a ∈ g.inputs, a < n + p) (x : Fin n → Bool) :
-    val gs n (n + p) x = g.op.eval (g.inputs.map fun a => val gs n a x) := by
-  obtain ⟨pre, post, rfl, hlen⟩ := split_at gs p g hp
-  unfold val
-  have h1 : wiresFrom (pre ++ g :: post) (List.ofFn x) = wiresFrom post
-      (wiresFrom pre (List.ofFn x) ++
-        [g.op.eval (g.inputs.map fun i => (wiresFrom pre (List.ofFn x)).getD i false)]) := by
-    rw [wiresFrom_append]; rfl
-  have hl : (wiresFrom pre (List.ofFn x)).length = n + p := by
-    rw [length_wiresFrom]; simp [hlen]
-  rw [h1, getD_wiresFrom _ _ _ (by simp [hl]), getD_snoc_len _ _ _ _ hl]
-  congr 1
-  apply List.map_congr_left
-  intro a ha
-  have hal := hlt a ha
-  have e1 := getD_wiresFrom post (wiresFrom pre (List.ofFn x) ++
-        [g.op.eval (g.inputs.map fun i => (wiresFrom pre (List.ofFn x)).getD i false)]) a
-        (by simp [hl]; omega)
-  rw [e1, List.getD_append _ _ _ _ (by omega)]
-
-def initId (n : ℕ) : List Stat := List.ofFn fun i : Fin n => Sum.inr (i : ℕ)
-
-theorem inv_initId (n : ℕ) (y : Fin n → Bool) :
-    Inv n (List.ofFn y) (List.ofFn y) (initId n, []) := by
-  refine ⟨by simp [initId], ?_⟩
-  intro i
-  by_cases hlt : i < n
-  · simp [initId, hlt, statValid, statVal, wiresFrom]
-  · rw [List.getD_eq_default _ _ (by simp [initId]; omega),
-        List.getD_eq_default _ _ (by simp; omega)]
-    exact ⟨trivial, rfl⟩
-
-theorem exists_clean (n : ℕ) (f : BFn n) (s : ℕ)
-    (hnc : ∃ y y' : Fin n → Bool, f y ≠ f y') (h : HasCircuitSize n f s) :
-    ∃ gs o, CleanL n gs ∧ gs.length ≤ s ∧ o < n + gs.length ∧ ∀ x, val gs n o x = f x := by
-  obtain ⟨C, ok, hsz, hev⟩ := h
-  have hsz' : C.gates.length ≤ s := hsz
-  set acc := elim n C.gates (initId n, []) with hacc
-  have hinv : ∀ y : Fin n → Bool, Inv n (List.ofFn y) (wiresFrom C.gates (List.ofFn y)) acc :=
-    fun y => inv_elim n _ (by simp) C.gates _ _ ok (inv_initId n y)
-  have hcl : CleanL n acc.2 := by
-    apply elim_clean n C.gates (initId n, []) ok
-    · intro i
-      by_cases hlt : i < n
-      · simp [initId, hlt, statValid]
-      · rw [List.getD_eq_default _ _ (by simp [initId]; omega)]; trivial
-    · intro p g hp; simp at hp
-  have hlen : acc.2.length ≤ s := by
-    have := elim_len n C.gates (initId n, [])
-    rw [← hacc] at this
-    simp only [List.length_nil, zero_add] at this
-    omega
-  cases hst : acc.1.getD C.output (Sum.inl false) with
-  | inl c =>
-    exfalso
-    obtain ⟨y, y', hne⟩ := hnc
-    apply hne
-    have e1 := ((hinv y).2 C.output).2
-    have e2 := ((hinv y').2 C.output).2
-    rw [hst] at e1 e2
-    have h1 : (wiresFrom C.gates (List.ofFn y)).getD C.output false = f y := hev y
-    have h2 : (wiresFrom C.gates (List.ofFn y')).getD C.output false = f y' := hev y'
-    rw [← h1, ← h2, ← e1, ← e2]; rfl
-  | inr j =>
-    have hj : j < n + acc.2.length := by
-      obtain ⟨y, _, _⟩ := hnc
-      have := ((hinv y).2 C.output).1
-      rw [hst] at this
-      exact this
-    refine ⟨acc.2, j, hcl, hlen, hj, ?_⟩
-    intro x
-    have e1 := ((hinv x).2 C.output).2
-    rw [hst] at e1
-    exact e1.trans (hev x)
-
-def kept {α : Type} (b : Bool) (x : α) (xs : List α) : List α :=
-  if b then x :: xs else xs
-
-def Run {α : Type} (inv : α → α) (meet join : α → α → α) (y : α) (t : ℕ) (ws : List α) : Prop :=
-  ∀ P : ℕ → List α → Prop, P 0 [y] →
-    (∀ {s xs zs}, List.Perm xs zs → P s xs → P s zs) →
-    (∀ {s a r} (neg save : Bool), P s ((if neg then inv a else a) :: kept save a r) →
-      P (s+1) (a :: r)) →
-    (∀ {s a b r} (c ka kb : Bool),
-      P s ((if c then meet a b else join a b) :: kept ka a (kept kb b r)) →
-      P (s+1) (a :: b :: r)) → P t ws
-
-theorem Run.done {α inv meet join y} : @Run α inv meet join y 0 [y] := fun _ d _ _ _ => d
-
-theorem Run.perm {α inv meet join y s xs zs} (p : List.Perm xs zs)
-    (h : @Run α inv meet join y s xs) : Run inv meet join y s zs :=
-  fun P d q u b => q p (h P d q u b)
-
-theorem Run.one {α inv meet join y s a r} (neg save : Bool)
-    (h : @Run α inv meet join y s ((if neg then inv a else a) :: kept save a r)) :
-    Run inv meet join y (s+1) (a :: r) := fun P d q u b => u neg save (h P d q u b)
-
-theorem Run.two {α inv meet join y s a b r} (c ka kb : Bool)
-    (h : @Run α inv meet join y s ((if c then meet a b else join a b) :: kept ka a (kept kb b r))) :
-    Run inv meet join y (s+1) (a :: b :: r) := fun P d q u v => v c ka kb (h P d q u v)
-
-theorem Run.fold {α inv meet join y} {P : ∀ t ws, @Run α inv meet join y t ws → Prop}
-    (done : P 0 [y] Run.done)
-    (perm : ∀ {s xs zs} (hp : List.Perm xs zs) (h : Run inv meet join y s xs),
-      P s xs h → P s zs (Run.perm hp h))
-    (one : ∀ {s a r} (neg save : Bool)
-      (h : Run inv meet join y s ((if neg then inv a else a) :: kept save a r)),
-      P _ _ h → P _ _ (Run.one neg save h))
-    (two : ∀ {s a b r} (c ka kb : Bool)
-      (h : Run inv meet join y s ((if c then meet a b else join a b) :: kept ka a (kept kb b r))),
-      P _ _ h → P _ _ (Run.two c ka kb h))
-    {t ws} (h : Run inv meet join y t ws) : P t ws h := by
-  have hex := h (fun s xs => ∃ h' : Run inv meet join y s xs, P s xs h')
-    ⟨Run.done, done⟩
-    (fun hp ⟨h', ih⟩ => ⟨Run.perm hp h', perm hp h' ih⟩)
-    (fun n k ⟨h', ih⟩ => ⟨Run.one n k h', one n k h' ih⟩)
-    (fun c a b ⟨h', ih⟩ => ⟨Run.two c a b h', two c a b h' ih⟩)
-  exact hex.elim fun _ hp => hp
-
-theorem kept_map {α β : Type} (e : α → β) (b : Bool) (x : α) (xs : List α) :
-    (kept b x xs).map e = kept b (e x) (xs.map e) := by cases b <;> simp [kept]
-
-theorem mem_kept {α : Type} (b : Bool) (x a : α) (xs : List α) :
-    a ∈ kept b x xs ↔ (b = true ∧ a = x) ∨ a ∈ xs := by cases b <;> simp [kept]
-
-theorem nodup_kept {α : Type} (b : Bool) (x : α) (xs : List α) (h : xs.Nodup) (hx : x ∉ xs) :
-    (kept b x xs).Nodup := by
-  cases b
-  · simpa [kept] using h
-  · simpa [kept] using And.intro hx h
-
-theorem Run.map {α β : Type} (e : α → β) {inv : α → α} {meet join : α → α → α}
-    {inv' : β → β} {meet' join' : β → β → β}
-    (hi : ∀ a, e (inv a) = inv' (e a)) (hm : ∀ a b, e (meet a b) = meet' (e a) (e b))
-    (hj : ∀ a b, e (join a b) = join' (e a) (e b))
-    {y : α} {s : ℕ} {ws : List α} (h : Run inv meet join y s ws) :
-    Run inv' meet' join' (e y) s (ws.map e) := by
-  induction h using Run.fold with
-  | done => exact Run.done
-  | perm hp _ ih => exact Run.perm (hp.map e) ih
-  | @one s a rest neg save _ ih =>
-    have e1 : ((if neg then inv a else a) :: kept save a rest).map e
-        = (if neg then inv' (e a) else e a) :: kept save (e a) (rest.map e) := by
-      cases neg <;> simp [kept_map, hi]
-    rw [e1] at ih
-    exact Run.one neg save ih
-  | @two s a b rest conj ka kb _ ih =>
-    have e1 : ((if conj then meet a b else join a b) :: kept ka a (kept kb b rest)).map e
-        = (if conj then meet' (e a) (e b) else join' (e a) (e b))
-            :: kept ka (e a) (kept kb (e b) (rest.map e)) := by
-      cases conj <;> simp [kept_map, hm, hj]
-    rw [e1] at ih
-    exact Run.two conj ka kb ih
-
-def Reach (n : ℕ) (gs : List Gate) (o a : ℕ) : Prop :=
-  ∀ P : ℕ → Prop, P o →
-    (∀ q g, gs[q]? = some g → P (n + q) → ∀ u ∈ g.inputs, P u) → P a
-
-theorem reach_self (n : ℕ) (gs : List Gate) (o : ℕ) : Reach n gs o o :=
-  fun _ ho _ => ho
-
-theorem reach_step {n : ℕ} {gs : List Gate} {o q u : ℕ} {g : Gate}
-    (hq : gs[q]? = some g) (hr : Reach n gs o (n + q)) (hu : u ∈ g.inputs) :
-    Reach n gs o u :=
-  fun P ho hs => hs q g hq (hr P ho hs) u hu
-
-theorem reach_cases {n : ℕ} {gs : List Gate} {o a : ℕ} (h : Reach n gs o a) :
-    a = o ∨ ∃ q g, gs[q]? = some g ∧ a ∈ g.inputs ∧ Reach n gs o (n + q) := by
-  apply h (fun x => x = o ∨ ∃ q g, gs[q]? = some g ∧ x ∈ g.inputs ∧ Reach n gs o (n + q))
-  · exact Or.inl rfl
-  · intro q g hq hP u hu
-    refine Or.inr ⟨q, g, hq, hu, ?_⟩
-    rcases hP with rfl | ⟨q', g', hq', hin', hr'⟩
-    · exact reach_self n gs (n + q)
-    · exact reach_step hq' hr' hin'
-
-def Live (n : ℕ) (gs : List Gate) (o p a : ℕ) : Prop :=
-  a = o ∨ ∃ q, p ≤ q ∧ ∃ g, gs[q]? = some g ∧ a ∈ g.inputs ∧ Reach n gs o (n + q)
-
-open Classical in
-noncomputable def liveList (gs : List Gate) (n o p : ℕ) : List ℕ :=
-  (List.range (n + p)).filter (fun a => decide (Live n gs o p a))
-
-theorem mem_liveList (gs : List Gate) (n o p a : ℕ) :
-    a ∈ liveList gs n o p ↔ a < n + p ∧ Live n gs o p a := by
-  simp [liveList]
-
-theorem nodup_liveList (gs : List Gate) (n o p : ℕ) : (liveList gs n o p).Nodup :=
-  List.Nodup.filter _ List.nodup_range
-
-abbrev invF {n : ℕ} : BFn n → BFn n := fun a x => !a x
-abbrev meetF {n : ℕ} : BFn n → BFn n → BFn n := fun a b x => a x && b x
-abbrev joinF {n : ℕ} : BFn n → BFn n → BFn n := fun a b x => a x || b x
-
-theorem live_succ_reach (n : ℕ) (gs : List Gate) (o : ℕ) (hcl : CleanL n gs)
-    (p : ℕ) (g : Gate) (hg : gs[p]? = some g) (hr : Reach n gs o (n + p)) (a : ℕ) :
-    a ∈ liveList gs n o (p + 1) ↔
-      a = n + p ∨ (a ∈ liveList gs n o p ∧ (a ∈ g.inputs → Live n gs o (p + 1) a)) := by
-  rw [mem_liveList, mem_liveList]
-  constructor
-  · rintro ⟨hlt, hl⟩
-    by_cases ha : a = n + p
-    · exact Or.inl ha
-    · refine Or.inr ⟨⟨by omega, ?_⟩, fun _ => hl⟩
-      rcases hl with h | ⟨q, hq, g', hg', hin, hrq⟩
-      · exact Or.inl h
-      · exact Or.inr ⟨q, by omega, g', hg', hin, hrq⟩
-  · rintro (rfl | ⟨⟨hlt, hl⟩, himp⟩)
-    · refine ⟨by omega, ?_⟩
-      rcases reach_cases hr with h | ⟨q, g', hg', hin, hrq⟩
-      · exact Or.inl h
-      · refine Or.inr ⟨q, ?_, g', hg', hin, hrq⟩
-        have := cleanG_lt (hcl q g' hg') _ hin
-        omega
-    · refine ⟨by omega, ?_⟩
-      rcases hl with h | ⟨q, hq, g', hg', hin, hrq⟩
-      · exact Or.inl h
-      · by_cases hqp : q = p
-        · subst hqp
-          rw [hg] at hg'
-          cases hg'
-          exact himp hin
-        · exact Or.inr ⟨q, by omega, g', hg', hin, hrq⟩
-
-theorem live_succ_dead (n : ℕ) (gs : List Gate) (o : ℕ)
-    (p : ℕ) (hnr : ¬ Reach n gs o (n + p)) (a : ℕ) :
-    a ∈ liveList gs n o (p + 1) ↔ a ∈ liveList gs n o p := by
-  rw [mem_liveList, mem_liveList]
-  constructor
-  · rintro ⟨hlt, hl⟩
-    have hne : a ≠ n + p := by
-      rintro rfl
-      rcases hl with rfl | ⟨q, _, g', hg', hin, hrq⟩
-      · exact hnr (reach_self n gs _)
-      · exact hnr (reach_step hg' hrq hin)
-    refine ⟨by omega, ?_⟩
-    rcases hl with h | ⟨q, hq, g', hg', hin, hrq⟩
-    · exact Or.inl h
-    · exact Or.inr ⟨q, by omega, g', hg', hin, hrq⟩
-  · rintro ⟨hlt, hl⟩
-    refine ⟨by omega, ?_⟩
-    rcases hl with h | ⟨q, hq, g', hg', hin, hrq⟩
-    · exact Or.inl h
-    · by_cases hqp : q = p
-      · subst hqp; exact absurd hrq hnr
-      · exact Or.inr ⟨q, by omega, g', hg', hin, hrq⟩
-
-open Classical in
-theorem run_live (n : ℕ) (gs : List Gate) (o : ℕ) (hcl : CleanL n gs) (ho : o < n + gs.length) :
-    ∀ d p, p + d = gs.length →
-      ∃ d', d' ≤ d ∧
-        Run (invF (n := n)) meetF joinF (val gs n o) d' ((liveList gs n o p).map (val gs n)) := by
-  intro d
-  induction d with
-  | zero =>
-    intro p hp
-    have hperm : [o].Perm (liveList gs n o p) := by
-      refine (List.perm_ext_iff_of_nodup (List.nodup_singleton o) (nodup_liveList _ _ _ _)).2 ?_
-      intro a
-      rw [mem_liveList, List.mem_singleton]
-      constructor
-      · rintro rfl; exact ⟨by omega, Or.inl rfl⟩
-      · rintro ⟨_, h | ⟨q, hq, g', hg', _, _⟩⟩
-        · exact h
-        · have := (List.getElem?_eq_some_iff.1 hg').1; omega
-    exact ⟨0, le_rfl, Run.perm (hperm.map (val gs n)) Run.done⟩
-  | succ d ih =>
-    intro p hp
-    have hplt : p < gs.length := by omega
-    obtain ⟨g, hg⟩ : ∃ g, gs[p]? = some g := ⟨gs[p], List.getElem?_eq_getElem hplt⟩
-    obtain ⟨d', hd', IH⟩ := ih (p + 1) (by omega)
-    by_cases hr : Reach n gs o (n + p)
-    · have hstep := live_succ_reach n gs o hcl p g hg hr
-      have hin : ∀ a ∈ g.inputs, a ∈ liveList gs n o p := fun a ha =>
-        (mem_liveList _ _ _ _ _).2 ⟨cleanG_lt (hcl p g hg) a ha, Or.inr ⟨p, le_rfl, g, hg, ha, hr⟩⟩
-      have hnew : ∀ a ∈ liveList gs n o p, a ≠ n + p := fun a ha =>
-        Nat.ne_of_lt ((mem_liveList _ _ _ _ _).1 ha).1
-      have hvg := val_gate n gs p g hg (cleanG_lt (hcl p g hg))
-      have hnd0 := nodup_liveList gs n o p
-      have single : ∀ (j : ℕ) (neg : Bool), (∀ a, a ∈ g.inputs ↔ a = j) →
-          val gs n (n + p) = (if neg then invF (val gs n j) else val gs n j) →
-          Run (invF (n := n)) meetF joinF (val gs n o) (d' + 1)
-            ((liveList gs n o p).map (val gs n)) := by
-        intro j neg hmem hval
-        have hj := hin j ((hmem j).2 rfl)
-        have hp1 : (liveList gs n o p).Perm (j :: (liveList gs n o p).erase j) :=
-          List.perm_cons_erase hj
-        have hnr : ((liveList gs n o p).erase j).Nodup := hnd0.erase j
-        have hp2 : (liveList gs n o (p + 1)).Perm
-            ((n + p) :: kept (decide (Live n gs o (p + 1) j)) j ((liveList gs n o p).erase j)) := by
-          refine (List.perm_ext_iff_of_nodup (nodup_liveList _ _ _ _) ?_).2 ?_
-          · refine List.nodup_cons.2 ⟨?_, nodup_kept _ _ _ hnr (by simp [hnd0.mem_erase_iff])⟩
-            rw [mem_kept]
-            rintro (⟨_, h⟩ | h)
-            · exact hnew j hj h.symm
-            · exact hnew _ (List.mem_of_mem_erase h) rfl
-          · intro a
-            rw [hstep a, List.mem_cons, mem_kept, hnd0.mem_erase_iff, hmem a]
-            simp only [decide_eq_true_eq]
-            constructor
-            · rintro (h | ⟨h1, h2⟩)
-              · exact Or.inl h
-              · by_cases haj : a = j
-                · exact Or.inr (Or.inl ⟨haj ▸ h2 haj, haj⟩)
-                · exact Or.inr (Or.inr ⟨haj, h1⟩)
-            · rintro (h | ⟨h1, rfl⟩ | ⟨h1, h2⟩)
-              · exact Or.inl h
-              · exact Or.inr ⟨hj, fun _ => h1⟩
-              · exact Or.inr ⟨h2, fun h => absurd h h1⟩
-        have IH' := Run.perm (hp2.map (val gs n)) IH
-        rw [List.map_cons, kept_map, hval] at IH'
-        exact Run.perm (hp1.map (val gs n)).symm (Run.one neg _ IH')
-      refine ⟨d' + 1, by omega, ?_⟩
-      rcases hcl p g hg with ⟨hop, j, hj, hinp⟩ | ⟨hop, j, k, hj, hk, hinp⟩
-      · apply single j true
-        · intro a; simp [hinp]
-        · funext x; rw [hvg x, hop, hinp]; simp [GateOp.eval]
-      · by_cases hjk : j = k
-        · subst hjk
-          apply single j false
-          · intro a; simp [hinp]
-          · funext x; rw [hvg x, hinp]; rcases hop with hop | hop <;> rw [hop] <;> simp [GateOp.eval]
-        · have hjm := hin j (by simp [hinp])
-          have hkm := hin k (by simp [hinp])
-          have hke : k ∈ (liveList gs n o p).erase j :=
-            (hnd0.mem_erase_iff).2 ⟨fun e => hjk e.symm, hkm⟩
-          have hnr : ((liveList gs n o p).erase j).Nodup := hnd0.erase j
-          have hnr2 : (((liveList gs n o p).erase j).erase k).Nodup := hnr.erase k
-          have hp1 : (liveList gs n o p).Perm
-              (j :: k :: ((liveList gs n o p).erase j).erase k) :=
-            (List.perm_cons_erase hjm).trans ((List.perm_cons_erase hke).cons j)
-          have hmr : ∀ a, a ∈ ((liveList gs n o p).erase j).erase k ↔
-              a ≠ k ∧ a ≠ j ∧ a ∈ liveList gs n o p := by
-            intro a; rw [hnr.mem_erase_iff, hnd0.mem_erase_iff]
-          have hp2 : (liveList gs n o (p + 1)).Perm
-              ((n + p) :: kept (decide (Live n gs o (p + 1) j)) j
-                (kept (decide (Live n gs o (p + 1) k)) k
-                  (((liveList gs n o p).erase j).erase k))) := by
-            refine (List.perm_ext_iff_of_nodup (nodup_liveList _ _ _ _) ?_).2 ?_
-            · refine List.nodup_cons.2 ⟨?_, nodup_kept _ _ _ (nodup_kept _ _ _ hnr2 ?_) ?_⟩
-              · rw [mem_kept, mem_kept]
-                rintro (⟨_, h⟩ | ⟨_, h⟩ | h)
-                · exact hnew j hjm h.symm
-                · exact hnew k hkm h.symm
-                · exact hnew _ ((hmr _).1 h).2.2 rfl
-              · rw [hmr]; simp
-              · rw [mem_kept, hmr]
-                rintro (⟨_, h⟩ | h)
-                · exact hjk h
-                · exact h.2.1 rfl
-            · intro a
-              rw [hstep a, List.mem_cons, mem_kept, mem_kept, hmr a]
-              simp only [decide_eq_true_eq, hinp, List.mem_cons, List.not_mem_nil, or_false]
-              constructor
-              · rintro (h | ⟨h1, h2⟩)
-                · exact Or.inl h
-                · by_cases haj : a = j
-                  · exact Or.inr (Or.inl ⟨haj ▸ h2 (Or.inl haj), haj⟩)
-                  · by_cases hak : a = k
-                    · exact Or.inr (Or.inr (Or.inl ⟨hak ▸ h2 (Or.inr hak), hak⟩))
-                    · exact Or.inr (Or.inr (Or.inr ⟨hak, haj, h1⟩))
-              · rintro (h | ⟨h1, rfl⟩ | ⟨h1, rfl⟩ | ⟨h1, h2, h3⟩)
-                · exact Or.inl h
-                · exact Or.inr ⟨hjm, fun _ => h1⟩
-                · exact Or.inr ⟨hkm, fun _ => h1⟩
-                · exact Or.inr ⟨h3, fun h => by rcases h with h | h <;> contradiction⟩
-          have IH' := Run.perm (hp2.map (val gs n)) IH
-          have hval : val gs n (n + p) = (if decide (g.op = GateOp.and)
-              then meetF (val gs n j) (val gs n k) else joinF (val gs n j) (val gs n k)) := by
-            funext x; rw [hvg x, hinp]
-            rcases hop with hop | hop <;> rw [hop] <;> simp [GateOp.eval]
-          rw [List.map_cons, kept_map, kept_map, hval] at IH'
-          exact Run.perm (hp1.map (val gs n)).symm (Run.two _ _ _ IH')
-    · have hp : (liveList gs n o (p + 1)).Perm (liveList gs n o p) :=
-        (List.perm_ext_iff_of_nodup (nodup_liveList _ _ _ _) (nodup_liveList _ _ _ _)).2
-          (live_succ_dead n gs o p hr)
-      exact ⟨d', by omega, Run.perm (hp.map (val gs n)) IH⟩
-
-theorem exists_run {n : ℕ} (f : BFn n) (hnc : ∃ y y' : Fin n → Bool, f y ≠ f y') (s : ℕ)
-    (h : HasCircuitSize n f s) :
-    ∃ s', s' ≤ s ∧ ∃ ws : List (BFn n),
-      ws.Sublist (List.ofFn fun (i : Fin n) => (fun x : Fin n → Bool => x i)) ∧
-      Run (invF (n := n)) meetF joinF f s' ws := by
-  obtain ⟨gs, o, hcl, hlen, ho, hev⟩ := exists_clean n f s hnc h
-  obtain ⟨d', hd', hrun⟩ := run_live n gs o hcl ho gs.length 0 (by omega)
-  refine ⟨d', by omega, (liveList gs n o 0).map (val gs n), ?_, ?_⟩
-  · have e : (List.ofFn fun (i : Fin n) => (fun x : Fin n → Bool => x i))
-        = (List.range n).map (val gs n) := by
-      apply List.ext_getElem
-      · simp
-      · intro i h1 h2
-        simp only [List.getElem_ofFn, List.getElem_map, List.getElem_range]
-        exact (val_input gs n ⟨i, by simpa using h1⟩).symm
-    rw [e]
-    exact (List.filter_sublist).map _
-  · have hf : val gs n o = f := funext hev
-    rw [← hf]
-    exact hrun
-
-theorem run_len {α inv meet join y s xs} (h : @Run α inv meet join y s xs) :
-    xs.length ≤ s + 1 := by
-  induction h using Run.fold with
-  | done => simp
-  | perm hp _ ih => rwa [← hp.length_eq]
-  | one neg save h ih => cases save <;> simp_all [kept] <;> omega
-  | two conj ka kb h ih => cases ka <;> cases kb <;> simp_all [kept] <;> omega
-
-abbrev NatRun (m : Nat) := Run (· ^^^ m) (· &&& ·) (· ||| ·)
-
-theorem run_bits {m y s xs} (h : NatRun m y s xs) (i j : Nat)
-    (hm : m.testBit i = m.testBit j)
-    (hw : ∀ w ∈ xs, w.testBit i = w.testBit j) : y.testBit i = y.testBit j := by
-  induction h using Run.fold with
-  | done => exact hw _ (by simp)
-  | perm hp _ ih => exact ih (fun w h => hw w (hp.mem_iff.1 h))
-  | one neg save h ih =>
-    apply ih
-    have ha := hw _ List.mem_cons_self
-    intro w hmem
-    cases neg <;> cases save <;> simp only [Bool.false_eq_true, ite_false, ite_true,
-      kept, List.mem_cons] at hmem <;>
-      first | (rcases hmem with rfl | hr; exact ha; exact hw _ (by simp [hr]))
-            | (rcases hmem with rfl | hr; simp [ha, hm]; exact hw _ (by simp [hr]))
-  | two conj ka kb h ih =>
-    apply ih
-    have ha := hw _ List.mem_cons_self
-    have hb := hw _ (List.mem_cons_of_mem _ List.mem_cons_self)
-    intro w hmem
-    cases conj <;> cases ka <;> cases kb <;> simp only [Bool.false_eq_true,
-      ite_false, ite_true, kept, List.mem_cons] at hmem <;>
-      rcases hmem with rfl | hr <;> first | simp [ha, hb] | exact hw _ (by simp only [List.mem_cons]; tauto)
-
-
-theorem keep_perm {α : Type} {xs ys : List α} (p : xs.Perm ys) (b : Bool) (a : α) :
-    (kept b a xs).Perm (kept b a ys) := by cases b <;> simpa [kept] using p
-
-def tagU (ws : List Nat) (a : Nat) (neg ka : Bool) :=
-  4 * ws.idxOf a + 2 * neg.toNat + ka.toNat
-
-def tagB (ws : List Nat) (a b : Nat) (conj ka kb : Bool) :=
-  let j := ws.idxOf b
-  48 + 8 * (j*(j+1)/2 + ws.idxOf a) + 4 * conj.toNat + 2 * ka.toNat + kb.toNat
-
-def next (m : Nat) (slack : Nat) (ws : List Nat) (f : Nat → List Nat → Bool) : Bool :=
-  ws.any fun a =>
-    let ra := ws.erase a
-    (slack ≥ 1 && ([false,true].any fun neg =>
-      let w := if neg then a ^^^ m else a
-      f (tagU ws a neg false) (w :: ra) || (slack ≥ 2 && f (tagU ws a neg true) (w :: a :: ra)))) ||
-    ra.any fun b =>
-      a ≤ b && (let r := ra.erase b
-        [false,true].any fun conj =>
-          let w := if conj then a &&& b else a ||| b
-          f (tagB ws a b conj false false) (w :: r) || (slack ≥ 1 && (f (tagB ws a b conj true false) (w :: a :: r) || f (tagB ws a b conj false true) (w :: b :: r))) ||
-            (slack ≥ 2 && f (tagB ws a b conj true true) (w :: a :: b :: r)))
-
-theorem next_one {m y a rest} {neg save : Bool} {s ws} (p : (a :: rest).Perm ws)
-    (h : NatRun m y s ((if neg then a ^^^ m else a) :: kept save a rest))
-    (f : Nat → List Nat → Bool)
-    (hf : ∀ (t : Nat) ys, NatRun m y s ys → f t ys = true) :
-    next (m) (s+2-ws.length) ws f = true := by
-  have ha := p.mem_iff.1 List.mem_cons_self
-  have pr : rest.Perm (ws.erase a) := (p.trans (List.perm_cons_erase ha)).cons_inv
-  have hh := run_len h
-  have hl := p.length_eq
-  simp only [List.length_cons] at hl hh
-  have hsl : 1 ≤ s+2-ws.length := by cases save <;> simp [kept] at hh <;> omega
-  apply List.any_eq_true.2 ⟨a, ha, ?_⟩
-  rw [Bool.or_eq_true]; left
-  rw [Bool.and_eq_true]; refine ⟨decide_eq_true hsl, ?_⟩
-  apply List.any_eq_true.2 ⟨neg, by cases neg <;> simp, ?_⟩
-  have ht (t : Nat) := hf t _ (Run.perm ((keep_perm pr save a).cons _) h)
-  cases save with
-  | false => simp [kept] at ht; simp [ht]
-  | true =>
-    simp [kept] at ht hh
-    have hsl2 : 2 ≤ s+2-ws.length := by omega
-    simp [ht, hsl2]
-
-theorem next_two_sorted {m y a b rest} {conj ka kb : Bool} {s ws} (hab : a ≤ b)
-    (p : (a :: b :: rest).Perm ws)
-    (h : NatRun m y s
-      ((if conj then a &&& b else a ||| b) :: kept ka a (kept kb b rest)))
-    (f : Nat → List Nat → Bool)
-    (hf : ∀ (t : Nat) ys, NatRun m y s ys → f t ys = true) :
-    next (m) (s+2-ws.length) ws f = true := by
-  have ha := p.mem_iff.1 List.mem_cons_self
-  have pp := (p.trans (List.perm_cons_erase ha)).cons_inv
-  have hb := pp.mem_iff.1 List.mem_cons_self
-  have pr := (pp.trans (List.perm_cons_erase hb)).cons_inv
-  have hh := run_len h
-  have hl := p.length_eq
-  simp only [List.length_cons] at hl hh
-  apply List.any_eq_true.2 ⟨a, ha, ?_⟩
-  rw [Bool.or_eq_true]; right
-  apply List.any_eq_true.2 ⟨b, hb, ?_⟩
-  rw [Bool.and_eq_true]; refine ⟨decide_eq_true hab, ?_⟩
-  apply List.any_eq_true.2 ⟨conj, by cases conj <;> simp, ?_⟩
-  have ht (t : Nat) := hf t _ (Run.perm ((keep_perm (keep_perm pr kb b) ka a).cons _) h)
-  cases ka <;> cases kb <;> simp [kept] at ht hh <;>
-    simp only [ht, Bool.true_or, Bool.or_true, Bool.and_true, Bool.true_and] <;>
-    first | (simp [show 2 ≤ s+2-ws.length by omega]) | (simp [show 1 ≤ s+2-ws.length by omega])
-
-theorem next_two {m y a b rest} {conj ka kb : Bool} {s ws}
-    (p : (a :: b :: rest).Perm ws)
-    (h : NatRun m y s
-      ((if conj then a &&& b else a ||| b) :: kept ka a (kept kb b rest)))
-    (f : Nat → List Nat → Bool)
-    (hf : ∀ (t : Nat) ys, NatRun m y s ys → f t ys = true) :
-    next (m) (s+2-ws.length) ws f = true := by
-  rcases le_total a b with hab | hba
-  · exact next_two_sorted hab p h f hf
-  · apply next_two_sorted (conj := conj) (ka := kb) (kb := ka) hba ((List.Perm.swap _ _ _).trans p) _ f hf
-    have he : (if conj then a &&& b else a ||| b) = (if conj then b &&& a else b ||| a) := by
-      cases conj <;> simp [Nat.and_comm, Nat.or_comm]
-    rw [he] at h
-    apply Run.perm (List.Perm.cons _ ?_) h
-    cases ka <;> cases kb <;> simp [kept]
-    exact List.Perm.swap _ _ _
-
-theorem zero_done {α inv meet join y t ws} (h : @Run α inv meet join y t ws) :
-    t = 0 → ws = [y] := by
-  induction h using Run.fold with
-  | done => simp
-  | perm p h ih => intro ht; rw [ih ht] at p; exact List.perm_singleton.1 p.symm
-  | one => simp
-  | two => simp
-
-theorem next_complete {m y t ws} (h : NatRun m y t ws) :
-    ∀ s, t = s+1 → ∀ zs, ws.Perm zs → ∀ f : Nat → List Nat → Bool,
-      (∀ (t : Nat) ys, NatRun m y s ys → f t ys = true) →
-      next (m) (s+2-zs.length) zs f = true := by
-  induction h using Run.fold with
-  | done => simp
-  | perm p h ih => intro s he zs q; exact ih s he zs (p.trans q)
-  | one neg save h ih => intro s he zs p f hf; cases he; exact next_one p h f hf
-  | two conj ka kb h ih => intro s he zs p f hf; cases he; exact next_two p h f hf
-
-def pt (n : ℕ) (v : ℕ) : Fin n → Bool := fun i => v.testBit i
-
-def encL {n : ℕ} (a : BFn n) : List ℕ → ℕ
-  | [] => 0
-  | v :: t => Nat.bit (a (pt n v)) (encL a t)
-
-theorem encL_testBit {n : ℕ} (a : BFn n) : ∀ (l : List ℕ) (j : ℕ),
-    (encL a l).testBit j = (l.map fun v => a (pt n v)).getD j false
-  | [], j => by simp [encL]
-  | v :: t, 0 => by simp [encL, Nat.testBit_bit_zero]
-  | v :: t, j + 1 => by simp [encL, Nat.testBit_bit_succ, encL_testBit a t j]
-
-theorem encL_inv {n : ℕ} (a : BFn n) (l : List ℕ) :
-    encL (invF a) l = encL a l ^^^ (2 ^ l.length - 1) := by
-  apply Nat.eq_of_testBit_eq
-  intro j
-  rw [Nat.testBit_xor, Nat.testBit_two_pow_sub_one, encL_testBit, encL_testBit]
-  by_cases h : j < l.length
-  · simp [h]
-  · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega)]
-    simp [h]
-
-theorem encL_and {n : ℕ} (a b : BFn n) (l : List ℕ) :
-    encL (meetF a b) l = encL a l &&& encL b l := by
-  apply Nat.eq_of_testBit_eq
-  intro j
-  rw [Nat.testBit_and, encL_testBit, encL_testBit, encL_testBit]
-  by_cases h : j < l.length
-  · simp [h]
-  · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega),
-      List.getD_eq_default _ _ (by simp; omega)]
-    rfl
-
-theorem encL_or {n : ℕ} (a b : BFn n) (l : List ℕ) :
-    encL (joinF a b) l = encL a l ||| encL b l := by
-  apply Nat.eq_of_testBit_eq
-  intro j
-  rw [Nat.testBit_or, encL_testBit, encL_testBit, encL_testBit]
-  by_cases h : j < l.length
-  · simp [h]
-  · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega),
-      List.getD_eq_default _ _ (by simp; omega)]
-    rfl
-
-theorem bits_le {m y s ws} (h : NatRun m y s ws) (hl : ws.length = s+1) (i j : Nat)
-    (hw : ∀ a ∈ ws, a.testBit i ≤ a.testBit j) : y.testBit i ≤ y.testBit j := by
-  induction h using Run.fold with
-  | done => exact hw _ (by simp)
-  | perm hp _ ih =>
-    exact ih (hp.length_eq.trans hl) (fun a ha => hw a (hp.mem_iff.1 ha))
-  | one neg save h ih =>
-    have hh := run_len h
-    cases save <;> simp [kept] at hh hl <;> omega
-  | two conj ka kb h ih =>
-    have hh := run_len h
-    cases ka <;> cases kb <;> simp [kept] at hh hl <;> try omega
-    apply ih (by simp [kept]; omega)
-    have ha := hw _ List.mem_cons_self
-    have hb := hw _ (List.mem_cons_of_mem _ List.mem_cons_self)
-    intro a had
-    simp only [kept, Bool.false_eq_true, ite_false, List.mem_cons] at had
-    rcases had with rfl | ht
-    · cases conj <;> simp only [ite_true, Bool.false_eq_true, ite_false, Nat.testBit_or, Nat.testBit_and] <;>
-        first | exact Bool.or_le_or ha hb | exact Bool.and_le_and ha hb | grind
-    · exact hw _ (by simp [ht])
-
-
-theorem extend_run {α inv meet join y s t a r} (h : @Run α inv meet join y s (a::r))
-    (hle : s ≤ t) : Run inv meet join y t (a::r) := by
-  induction t, hle using Nat.le_induction with
-  | base => exact h
-  | succ t hle ih => exact Run.one false false ih
-
-/-! ## NOT-free circuits give NOT-free Runs (a copy of run_live with the NOT branch removed) -/
-
-theorem simplify_nonot (op : GateOp) (hop : op ≠ GateOp.not) (m : ℕ) (ins : List Stat) :
-    ∀ g ∈ (simplify op m ins).1, g.op ≠ GateOp.not := by
-  intro g hg
-  cases op <;> simp only [simplify] at hg
-  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨c, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
-      simp [simpAnd] at hg <;> (subst hg; simp)
-  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨c, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
-      simp [simpOr] at hg <;> (subst hg; simp)
-  · exact absurd rfl hop
-  · simp at hg
-  · simp at hg
-
-theorem elim_nonot (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
-    (∀ g ∈ gs, g.op ≠ GateOp.not) → (∀ g ∈ acc.2, g.op ≠ GateOp.not) →
-    ∀ g ∈ (elim n gs acc).2, g.op ≠ GateOp.not := by
-  induction gs with
-  | nil => intro acc _ h; exact h
-  | cons g gs ih =>
-    intro acc hg h
-    apply ih (elimStep n acc g) (fun g' hg' => hg g' (List.mem_cons_of_mem _ hg'))
-    intro g' hg'
-    rcases List.mem_append.1 hg' with h1 | h1
-    · exact h g' h1
-    · exact simplify_nonot _ (hg g List.mem_cons_self) _ _ g' (by simpa using h1)
-
-theorem exists_clean_m (n : ℕ) (f : BFn n) (s : ℕ)
-    (hnc : ∃ y y' : Fin n → Bool, f y ≠ f y')
-    (h : ∃ C : Circuit, FanInTwo C ∧ (∀ g ∈ C.gates, g.op ≠ GateOp.not) ∧ C.size ≤ s ∧
-      ∀ x : Fin n → Bool, C.eval (List.ofFn x) = f x) :
-    ∃ gs o, CleanL n gs ∧ (∀ (p : ℕ) (g : Gate), gs[p]? = some g → g.op ≠ GateOp.not) ∧ gs.length ≤ s ∧ o < n + gs.length ∧ ∀ x, val gs n o x = f x := by
-  obtain ⟨C, ok, hC, hsz, hev⟩ := h
-  have hsz' : C.gates.length ≤ s := hsz
-  set acc := elim n C.gates (initId n, []) with hacc
-  have hinv : ∀ y : Fin n → Bool, Inv n (List.ofFn y) (wiresFrom C.gates (List.ofFn y)) acc :=
-    fun y => inv_elim n _ (by simp) C.gates _ _ ok (inv_initId n y)
-  have hcl : CleanL n acc.2 := by
-    apply elim_clean n C.gates (initId n, []) ok
-    · intro i
-      by_cases hlt : i < n
-      · simp [initId, hlt, statValid]
-      · rw [List.getD_eq_default _ _ (by simp [initId]; omega)]; trivial
-    · intro p g hp; simp at hp
-  have hlen : acc.2.length ≤ s := by
-    have := elim_len n C.gates (initId n, [])
-    rw [← hacc] at this
-    simp only [List.length_nil, zero_add] at this
-    omega
-  cases hst : acc.1.getD C.output (Sum.inl false) with
-  | inl c =>
-    exfalso
-    obtain ⟨y, y', hne⟩ := hnc
-    apply hne
-    have e1 := ((hinv y).2 C.output).2
-    have e2 := ((hinv y').2 C.output).2
-    rw [hst] at e1 e2
-    have h1 : (wiresFrom C.gates (List.ofFn y)).getD C.output false = f y := hev y
-    have h2 : (wiresFrom C.gates (List.ofFn y')).getD C.output false = f y' := hev y'
-    rw [← h1, ← h2, ← e1, ← e2]; rfl
-  | inr j =>
-    have hj : j < n + acc.2.length := by
-      obtain ⟨y, _, _⟩ := hnc
-      have := ((hinv y).2 C.output).1
-      rw [hst] at this
-      exact this
-    refine ⟨acc.2, j, hcl, fun p g hp => elim_nonot n C.gates (initId n, []) hC (fun _ h => by simp at h) g (List.mem_of_getElem? hp), hlen, hj, ?_⟩
-    intro x
-    have e1 := ((hinv x).2 C.output).2
-    rw [hst] at e1
-    exact e1.trans (hev x)
-
-open Classical in
-theorem run_live_m (n : ℕ) (inv : BFn n → BFn n) (gs : List Gate) (o : ℕ) (hcl : CleanL n gs)
-    (hm : ∀ (p : ℕ) (g : Gate), gs[p]? = some g → g.op ≠ GateOp.not) (ho : o < n + gs.length) :
-    ∀ d p, p + d = gs.length →
-      ∃ d', d' ≤ d ∧
-        Run inv meetF joinF (val gs n o) d' ((liveList gs n o p).map (val gs n)) := by
-  intro d
-  induction d with
-  | zero =>
-    intro p hp
-    have hperm : [o].Perm (liveList gs n o p) := by
-      refine (List.perm_ext_iff_of_nodup (List.nodup_singleton o) (nodup_liveList _ _ _ _)).2 ?_
-      intro a
-      rw [mem_liveList, List.mem_singleton]
-      constructor
-      · rintro rfl; exact ⟨by omega, Or.inl rfl⟩
-      · rintro ⟨_, h | ⟨q, hq, g', hg', _, _⟩⟩
-        · exact h
-        · have := (List.getElem?_eq_some_iff.1 hg').1; omega
-    exact ⟨0, le_rfl, Run.perm (hperm.map (val gs n)) Run.done⟩
-  | succ d ih =>
-    intro p hp
-    have hplt : p < gs.length := by omega
-    obtain ⟨g, hg⟩ : ∃ g, gs[p]? = some g := ⟨gs[p], List.getElem?_eq_getElem hplt⟩
-    obtain ⟨d', hd', IH⟩ := ih (p + 1) (by omega)
-    by_cases hr : Reach n gs o (n + p)
-    · have hstep := live_succ_reach n gs o hcl p g hg hr
-      have hin : ∀ a ∈ g.inputs, a ∈ liveList gs n o p := fun a ha =>
-        (mem_liveList _ _ _ _ _).2 ⟨cleanG_lt (hcl p g hg) a ha, Or.inr ⟨p, le_rfl, g, hg, ha, hr⟩⟩
-      have hnew : ∀ a ∈ liveList gs n o p, a ≠ n + p := fun a ha =>
-        Nat.ne_of_lt ((mem_liveList _ _ _ _ _).1 ha).1
-      have hvg := val_gate n gs p g hg (cleanG_lt (hcl p g hg))
-      have hnd0 := nodup_liveList gs n o p
-      have single : ∀ (j : ℕ) (neg : Bool), (∀ a, a ∈ g.inputs ↔ a = j) →
-          val gs n (n + p) = (if neg then inv (val gs n j) else val gs n j) →
-          Run inv meetF joinF (val gs n o) (d' + 1)
-            ((liveList gs n o p).map (val gs n)) := by
-        intro j neg hmem hval
-        have hj := hin j ((hmem j).2 rfl)
-        have hp1 : (liveList gs n o p).Perm (j :: (liveList gs n o p).erase j) :=
-          List.perm_cons_erase hj
-        have hnr : ((liveList gs n o p).erase j).Nodup := hnd0.erase j
-        have hp2 : (liveList gs n o (p + 1)).Perm
-            ((n + p) :: kept (decide (Live n gs o (p + 1) j)) j ((liveList gs n o p).erase j)) := by
-          refine (List.perm_ext_iff_of_nodup (nodup_liveList _ _ _ _) ?_).2 ?_
-          · refine List.nodup_cons.2 ⟨?_, nodup_kept _ _ _ hnr (by simp [hnd0.mem_erase_iff])⟩
-            rw [mem_kept]
-            rintro (⟨_, h⟩ | h)
-            · exact hnew j hj h.symm
-            · exact hnew _ (List.mem_of_mem_erase h) rfl
-          · intro a
-            rw [hstep a, List.mem_cons, mem_kept, hnd0.mem_erase_iff, hmem a]
-            simp only [decide_eq_true_eq]
-            constructor
-            · rintro (h | ⟨h1, h2⟩)
-              · exact Or.inl h
-              · by_cases haj : a = j
-                · exact Or.inr (Or.inl ⟨haj ▸ h2 haj, haj⟩)
-                · exact Or.inr (Or.inr ⟨haj, h1⟩)
-            · rintro (h | ⟨h1, rfl⟩ | ⟨h1, h2⟩)
-              · exact Or.inl h
-              · exact Or.inr ⟨hj, fun _ => h1⟩
-              · exact Or.inr ⟨h2, fun h => absurd h h1⟩
-        have IH' := Run.perm (hp2.map (val gs n)) IH
-        rw [List.map_cons, kept_map, hval] at IH'
-        exact Run.perm (hp1.map (val gs n)).symm (Run.one neg _ IH')
-      refine ⟨d' + 1, by omega, ?_⟩
-      rcases hcl p g hg with ⟨hop, j, hj, hinp⟩ | ⟨hop, j, k, hj, hk, hinp⟩
-      · exact absurd hop (hm p g hg)
-      · by_cases hjk : j = k
-        · subst hjk
-          apply single j false
-          · intro a; simp [hinp]
-          · funext x; rw [hvg x, hinp]; rcases hop with hop | hop <;> rw [hop] <;> simp [GateOp.eval]
-        · have hjm := hin j (by simp [hinp])
-          have hkm := hin k (by simp [hinp])
-          have hke : k ∈ (liveList gs n o p).erase j :=
-            (hnd0.mem_erase_iff).2 ⟨fun e => hjk e.symm, hkm⟩
-          have hnr : ((liveList gs n o p).erase j).Nodup := hnd0.erase j
-          have hnr2 : (((liveList gs n o p).erase j).erase k).Nodup := hnr.erase k
-          have hp1 : (liveList gs n o p).Perm
-              (j :: k :: ((liveList gs n o p).erase j).erase k) :=
-            (List.perm_cons_erase hjm).trans ((List.perm_cons_erase hke).cons j)
-          have hmr : ∀ a, a ∈ ((liveList gs n o p).erase j).erase k ↔
-              a ≠ k ∧ a ≠ j ∧ a ∈ liveList gs n o p := by
-            intro a; rw [hnr.mem_erase_iff, hnd0.mem_erase_iff]
-          have hp2 : (liveList gs n o (p + 1)).Perm
-              ((n + p) :: kept (decide (Live n gs o (p + 1) j)) j
-                (kept (decide (Live n gs o (p + 1) k)) k
-                  (((liveList gs n o p).erase j).erase k))) := by
-            refine (List.perm_ext_iff_of_nodup (nodup_liveList _ _ _ _) ?_).2 ?_
-            · refine List.nodup_cons.2 ⟨?_, nodup_kept _ _ _ (nodup_kept _ _ _ hnr2 ?_) ?_⟩
-              · rw [mem_kept, mem_kept]
-                rintro (⟨_, h⟩ | ⟨_, h⟩ | h)
-                · exact hnew j hjm h.symm
-                · exact hnew k hkm h.symm
-                · exact hnew _ ((hmr _).1 h).2.2 rfl
-              · rw [hmr]; simp
-              · rw [mem_kept, hmr]
-                rintro (⟨_, h⟩ | h)
-                · exact hjk h
-                · exact h.2.1 rfl
-            · intro a
-              rw [hstep a, List.mem_cons, mem_kept, mem_kept, hmr a]
-              simp only [decide_eq_true_eq, hinp, List.mem_cons, List.not_mem_nil, or_false]
-              constructor
-              · rintro (h | ⟨h1, h2⟩)
-                · exact Or.inl h
-                · by_cases haj : a = j
-                  · exact Or.inr (Or.inl ⟨haj ▸ h2 (Or.inl haj), haj⟩)
-                  · by_cases hak : a = k
-                    · exact Or.inr (Or.inr (Or.inl ⟨hak ▸ h2 (Or.inr hak), hak⟩))
-                    · exact Or.inr (Or.inr (Or.inr ⟨hak, haj, h1⟩))
-              · rintro (h | ⟨h1, rfl⟩ | ⟨h1, rfl⟩ | ⟨h1, h2, h3⟩)
-                · exact Or.inl h
-                · exact Or.inr ⟨hjm, fun _ => h1⟩
-                · exact Or.inr ⟨hkm, fun _ => h1⟩
-                · exact Or.inr ⟨h3, fun h => by rcases h with h | h <;> contradiction⟩
-          have IH' := Run.perm (hp2.map (val gs n)) IH
-          have hval : val gs n (n + p) = (if decide (g.op = GateOp.and)
-              then meetF (val gs n j) (val gs n k) else joinF (val gs n j) (val gs n k)) := by
-            funext x; rw [hvg x, hinp]
-            rcases hop with hop | hop <;> rw [hop] <;> simp [GateOp.eval]
-          rw [List.map_cons, kept_map, kept_map, hval] at IH'
-          exact Run.perm (hp1.map (val gs n)).symm (Run.two _ _ _ IH')
-    · have hp : (liveList gs n o (p + 1)).Perm (liveList gs n o p) :=
-        (List.perm_ext_iff_of_nodup (nodup_liveList _ _ _ _) (nodup_liveList _ _ _ _)).2
-          (live_succ_dead n gs o p hr)
-      exact ⟨d', by omega, Run.perm (hp.map (val gs n)) IH⟩
-
-theorem exists_run_m {n : ℕ} (f : BFn n) (hnc : ∃ y y' : Fin n → Bool, f y ≠ f y') (s : ℕ)
-    (h : ∃ C : Circuit, FanInTwo C ∧ (∀ g ∈ C.gates, g.op ≠ GateOp.not) ∧ C.size ≤ s ∧
-      ∀ x : Fin n → Bool, C.eval (List.ofFn x) = f x) :
-    ∃ s', s' ≤ s ∧ ∃ ws : List (BFn n),
-      ws.Sublist (List.ofFn fun (i : Fin n) => (fun x : Fin n → Bool => x i)) ∧
-      Run (fun a => a) meetF joinF f s' ws := by
-  obtain ⟨gs, o, hcl, hm, hlen, ho, hev⟩ := exists_clean_m n f s hnc h
-  obtain ⟨d', hd', hrun⟩ := run_live_m n (fun a => a) gs o hcl hm ho gs.length 0 (by omega)
-  refine ⟨d', by omega, (liveList gs n o 0).map (val gs n), ?_, ?_⟩
-  · have e : (List.ofFn fun (i : Fin n) => (fun x : Fin n → Bool => x i))
-        = (List.range n).map (val gs n) := by
-      apply List.ext_getElem
-      · simp
-      · intro i h1 h2
-        simp only [List.getElem_ofFn, List.getElem_map, List.getElem_range]
-        exact (val_input gs n ⟨i, by simpa using h1⟩).symm
-    rw [e]
-    exact (List.filter_sublist).map _
-  · have hf : val gs n o = f := funext hev
-    rw [← hf]
-    exact hrun
-
-
-/-! ## Family 1: a certified frontier search (Run states closed under the moves of `next`) -/
-
-theorem run_nil {α inv meet join y t} (h : @Run α inv meet join y t []) : False := by
-  have key : ∀ t ws, @Run α inv meet join y t ws → ws ≠ [] := by
-    intro t ws h
-    induction h using Run.fold with
-    | done => simp
-    | perm hp _ ih => exact fun he => ih (List.Perm.eq_nil (he ▸ hp))
-    | one => simp
-    | two => simp
-  exact key t [] h rfl
-
-def isort (l : List ℕ) : List ℕ := l.insertionSort (· ≤ ·)
-
-inductive BT where
-  | lf : BT
-  | nd : BT → List ℕ → BT → BT
-
-def leqL : List ℕ → List ℕ → Bool
-  | [], [] => true
-  | a :: s, b :: t => Nat.beq a b && leqL s t
-  | _, _ => false
-
-theorem leqL_eq : ∀ a b : List ℕ, leqL a b = true → a = b
-  | [], [], _ => rfl
-  | a :: s, b :: t, h => by
-      simp only [leqL, Bool.and_eq_true] at h
-      rw [Nat.eq_of_beq_eq_true h.1, leqL_eq s t h.2]
-  | [], _ :: _, h => by simp [leqL] at h
-  | _ :: _, [], h => by simp [leqL] at h
-
-theorem leqL_self : ∀ a : List ℕ, leqL a a = true
-  | [] => rfl
-  | a :: s => by simp [leqL, leqL_self s]
-
-def ltL : List ℕ → List ℕ → Bool
-  | [], [] => false
-  | [], _ :: _ => true
-  | _ :: _, [] => false
-  | a :: s, b :: t => Nat.blt a b || (Nat.beq a b && ltL s t)
-
-def BT.mem : BT → List ℕ → Bool
-  | .lf, _ => false
-  | .nd l k r, x => leqL x k || (if ltL x k then l.mem x else r.mem x)
-
-def BT.toList : BT → List (List ℕ)
-  | .lf => []
-  | .nd l k r => l.toList ++ k :: r.toList
-
-theorem BT.mem_toList : ∀ (T : BT) (x : List ℕ), T.mem x = true → x ∈ T.toList
-  | .lf, x, h => by simp [BT.mem] at h
-  | .nd l k r, x, hm => by
-      simp only [BT.mem, Bool.or_eq_true] at hm
-      simp only [BT.toList, List.mem_append, List.mem_cons]
-      rcases hm with he | hm
-      · exact Or.inr (Or.inl (leqL_eq x k he))
-      · split at hm
-        · exact Or.inl (BT.mem_toList l x hm)
-        · exact Or.inr (Or.inr (BT.mem_toList r x hm))
-
-theorem all_app {α : Type} {p : α → Bool} {A B : List α} (ha : A.all p = true) (hb : B.all p = true) :
-    (A ++ B).all p = true := by
-  rw [List.all_append, ha, hb]; rfl
-
-theorem cover {p : List ℕ → List (ℕ × ℕ) → Bool} (T : BT) (L : List (List ℕ × List (ℕ × ℕ)))
-    (hK : T.toList = L.map Prod.fst) (hL : L.all (fun kh => p kh.1 kh.2) = true) :
-    ∀ x, T.mem x = true → ∃ h, p x h = true := by
-  intro x hx
-  have h1 := BT.mem_toList T x hx
-  rw [hK, List.mem_map] at h1
-  obtain ⟨kh, hkh, rfl⟩ := h1
-  exact ⟨kh.2, List.all_eq_true.1 hL kh hkh⟩
-
-/-- bit `i` is set when some wire differs at points `i` and `d + i` -/
-def accD (d : ℕ) : List ℕ → ℕ
-  | [] => 0
-  | w :: t => Nat.lor (Nat.xor w (Nat.shiftRight w d)) (accD d t)
-
-/-- the union of the wires that are false at point `q` -/
-def accM (q : ℕ) : List ℕ → ℕ
-  | [] => 0
-  | w :: t => bif Nat.testBit w q then accM q t else Nat.lor w (accM q t)
-
-theorem accD_of (d i : ℕ) : ∀ (ws : List ℕ) (w : ℕ), w ∈ ws → w.testBit i ≠ w.testBit (d + i) →
-    (accD d ws).testBit i = true
-  | [], w, hw, _ => by simp at hw
-  | u :: t, w, hw, hne => by
-      have e : accD d (u :: t) = (u ^^^ (u >>> d)) ||| accD d t := rfl
-      rw [e, Nat.testBit_or, Nat.testBit_xor, Nat.testBit_shiftRight, Bool.or_eq_true]
-      rcases List.mem_cons.1 hw with rfl | hw'
-      · left; cases h1 : w.testBit i <;> cases h2 : w.testBit (d + i) <;> simp_all
-      · right; exact accD_of d i t w hw' hne
-
-theorem accM_of (q p : ℕ) : ∀ (ws : List ℕ) (w : ℕ), w ∈ ws → w.testBit p = true →
-    w.testBit q = false → (accM q ws).testBit p = true
-  | [], w, hw, _, _ => by simp at hw
-  | u :: t, w, hw, hp, hq => by
-      rcases List.mem_cons.1 hw with rfl | hw'
-      · have e : accM q (w :: t) = w ||| accM q t := by simp [accM, hq]
-        rw [e, Nat.testBit_or, hp, Bool.true_or]
-      · have ih := accM_of q p t w hw' hp hq
-        cases hu : Nat.testBit u q
-        · have e : accM q (u :: t) = u ||| accM q t := by simp [accM, hu]
-          rw [e, Nat.testBit_or, ih, Bool.or_true]
-        · have e : accM q (u :: t) = accM q t := by simp [accM, hu]
-          rw [e, ih]
-
-theorem land_sub {R X i : ℕ} (h : Nat.beq (Nat.land R X) R = true) (hi : R.testBit i = true) :
-    X.testBit i = true := by
-  have he : (R &&& X) = R := Nat.eq_of_beq_eq_true h
-  have h2 := congrArg (fun z => Nat.testBit z i) he
-  simp only [Nat.testBit_and, hi, Bool.true_and] at h2
-  exact h2
-
-theorem land_of {R X : ℕ} (h : ∀ i, R.testBit i = true → X.testBit i = true) :
-    Nat.beq (Nat.land R X) R = true := by
-  have he : (R &&& X) = R := by
+theorem projectGate {mask cut : Nat} (submask : mask &&& cut = cut)
+    {roots : List Word} {out : Word} (gate : GateWord mask roots out) :
+    GateWord cut (roots.map (· &&& cut)) (out &&& cut) := by
+  have av {word : Word} (ha : AvailableWord mask roots word) :
+      AvailableWord cut (roots.map (· &&& cut)) (word &&& cut) := by
+    rcases ha with rfl | rfl | hm
+    · exact Or.inl (by simp)
+    · exact Or.inr (Or.inl submask)
+    · exact Or.inr (Or.inr (List.mem_map_of_mem hm))
+  rcases gate with ⟨a, ha, rfl⟩ | ⟨a, b, ha, hb, eq | eq⟩
+  · refine Or.inl ⟨a &&& cut, av ha, ?_⟩
     apply Nat.eq_of_testBit_eq
     intro i
-    rw [Nat.testBit_and]
-    cases hi : R.testBit i
-    · rfl
-    · rw [h i hi]; rfl
-  exact Nat.beq_eq_true_eq _ _ ▸ he
+    have cutAt := congrArg (fun n : Nat => n.testBit i) submask
+    simp only [Nat.testBit_and, Nat.testBit_xor] at cutAt ⊢
+    cases h : cut.testBit i
+    · simp
+    · simp [h] at cutAt
+      simp [cutAt]
+  · subst out
+    refine Or.inr ⟨a &&& cut, b &&& cut, av ha, av hb, Or.inl ?_⟩
+    apply Nat.eq_of_testBit_eq
+    intro i
+    simp only [Nat.testBit_and]
+    cases cut.testBit i <;> simp
+  · subst out
+    refine Or.inr ⟨a &&& cut, b &&& cut, av ha, av hb, Or.inr ?_⟩
+    apply Nat.eq_of_testBit_eq
+    intro i
+    simp only [Nat.testBit_and, Nat.testBit_or]
+    cases cut.testBit i <;> simp
 
-def distOK (pD : List (ℕ × ℕ)) (ws : List ℕ) : Bool :=
-  pD.all fun dr => Nat.beq (Nat.land dr.2 (accD dr.1 ws)) dr.2
+theorem projectBuilds {mask cut : Nat} (submask : mask &&& cut = cut)
+    {roots values : List Word} (builds : WordBuilds mask roots values) :
+    WordBuilds cut (roots.map (· &&& cut)) (values.map (· &&& cut)) := by
+  induction values generalizing roots with
+  | nil => trivial
+  | cons w ws ih =>
+    exact ⟨projectGate submask builds.1, ih builds.2⟩
 
-def monoOK (pM : List (ℕ × ℕ)) (ws : List ℕ) : Bool :=
-  pM.all fun qp => Nat.beq (Nat.land qp.2 (accM qp.1 ws)) qp.2
+theorem availableWeaken {mask : Nat} {small big : List Word} {w : Word}
+    (sub : ∀ x ∈ small, AvailableWord mask big x)
+    (av : AvailableWord mask small w) : AvailableWord mask big w := by
+  rcases av with rfl | rfl | h
+  · exact Or.inl rfl
+  · exact Or.inr (Or.inl rfl)
+  · exact sub w h
 
-def via (y : ℕ) (pD pM : List (ℕ × ℕ)) (t : ℕ) (ws : List ℕ) : Bool :=
-  Nat.ble ws.length (t + 1) && (t != 0 || leqL ws [y]) && distOK pD ws &&
-    (ws.length != t + 1 || monoOK pM ws)
+theorem gateWeaken {mask : Nat} {small big : List Word} {out : Word}
+    (sub : ∀ x ∈ small, AvailableWord mask big x)
+    (gate : GateWord mask small out) : GateWord mask big out := by
+  rcases gate with ⟨a, ha, rfl⟩ | ⟨a, b, ha, hb, eq⟩
+  · exact Or.inl ⟨a, availableWeaken sub ha, rfl⟩
+  · exact Or.inr ⟨a, b, availableWeaken sub ha, availableWeaken sub hb, eq⟩
 
-/-- `pD` entries `(d, R)`: every bit `i` of `R` has `y i ≠ y (d + i)`, both inside the mask.
-`pM` entries `(q, P)`: `y q` is false and every bit of `P` is a true point of `y`. -/
-def prsOK (m y : ℕ) (pD pM : List (ℕ × ℕ)) : Bool :=
-  pD.all (fun dr => Nat.beq (Nat.land dr.2 (Nat.xor y (Nat.shiftRight y dr.1))) dr.2 &&
-    Nat.beq (Nat.land dr.2 (Nat.xor m (Nat.shiftRight m dr.1))) 0) &&
-  pM.all (fun qp => Nat.beq (Nat.land qp.2 y) qp.2 && !Nat.testBit y qp.1)
+theorem extendKnown {bound : Bound} {bounds : List Bound}
+    (old : Known bounds)
+    (new : Lower bound.1 bound.2.1 bound.2.2.2 bound.2.2.1) :
+    Known (bound :: bounds) := by
+  intro x h
+  rcases List.mem_cons.mp h with rfl | h
+  · exact new
+  · exact old _ h
 
-theorem land_zero {R X i : ℕ} (h : Nat.beq (Nat.land R X) 0 = true) (hi : R.testBit i = true) :
-    X.testBit i = false := by
-  have he : (R &&& X) = 0 := Nat.eq_of_beq_eq_true h
-  have h2 := congrArg (fun z => Nat.testBit z i) he
-  simp only [Nat.testBit_and, hi, Bool.true_and, Nat.zero_testBit] at h2
-  exact h2
+def AgreesAt (i j : Nat) (word : Word) : Prop :=
+  word.testBit i = word.testBit j
 
-theorem via_sound {m y : ℕ} {pD pM : List (ℕ × ℕ)} (hp : prsOK m y pD pM = true) {t : ℕ}
-    {ws : List ℕ} (h : NatRun m y t ws) : via y pD pM t ws = true := by
-  simp only [prsOK, Bool.and_eq_true, List.all_eq_true] at hp
-  have hl := run_len h
-  simp only [via, Bool.and_eq_true, Bool.or_eq_true]
-  refine ⟨⟨⟨by rw [Nat.ble_eq]; exact hl, ?_⟩, ?_⟩, ?_⟩
-  · rcases Nat.eq_zero_or_pos t with rfl | ht
-    · right; rw [zero_done h rfl]; exact leqL_self _
-    · left; simp only [bne_iff_ne, ne_eq]; omega
-  · simp only [distOK, List.all_eq_true]
-    intro dr hdr
-    apply land_of
-    intro i hi
-    have h12 := hp.1 dr hdr
-    have hy : (y ^^^ (y >>> dr.1)).testBit i = true := land_sub h12.1 hi
-    have hmx : (m ^^^ (m >>> dr.1)).testBit i = false := land_zero h12.2 hi
-    simp only [Nat.testBit_xor, Nat.testBit_shiftRight] at hy hmx
-    have hmm : m.testBit i = m.testBit (dr.1 + i) := by
-      cases h1 : m.testBit i <;> cases h2 : m.testBit (dr.1 + i) <;> simp_all
-    by_contra hc
-    have hall : ∀ w ∈ ws, w.testBit i = w.testBit (dr.1 + i) := by
-      intro w hw
-      by_contra hne
-      exact hc (accD_of dr.1 i ws w hw hne)
-    have := run_bits h i (dr.1 + i) hmm hall
-    rw [this] at hy; simp at hy
-  · by_cases hlen : ws.length = t + 1
-    · right
-      simp only [monoOK, List.all_eq_true]
-      intro qp hqp
-      have h1 := hp.2 qp hqp
-      simp only [Bool.and_eq_true, Bool.not_eq_true'] at h1
-      apply land_of
-      intro p hpP
-      have hyp : y.testBit p = true := land_sub h1.1 hpP
-      by_contra hc
-      have hle : ∀ w ∈ ws, w.testBit p ≤ w.testBit qp.1 := by
-        intro w hw
-        cases h2 : w.testBit p
-        · exact Bool.false_le _
-        · cases h3 : w.testBit qp.1
-          · exact absurd (accM_of qp.1 p ws w hw h2 h3) hc
-          · exact le_refl _
-      have := bits_le h hlen p qp.1 hle
-      rw [hyp, h1.2] at this
-      exact absurd this (by decide)
-    · left; simpa using hlen
+theorem agreesAvailable {i j mask : Nat} {bank : List Word} {word : Word}
+    (m : AgreesAt i j mask) (all : ∀ w ∈ bank, AgreesAt i j w)
+    (av : AvailableWord mask bank word) : AgreesAt i j word := by
+  rcases av with rfl | rfl | h
+  · simp [AgreesAt]
+  · exact m
+  · exact all _ h
 
-/-- a bit map of tables: bit `k` of `actL pi w` is bit `pi[k]` of `w` (a symmetry of the target) -/
-def actL : List ℕ → ℕ → ℕ
-  | [], _ => 0
-  | p :: ps, w => Nat.bit (w.testBit p) (actL ps w)
+theorem agreesGate {i j mask : Nat} {bank : List Word} {word : Word}
+    (m : AgreesAt i j mask) (all : ∀ w ∈ bank, AgreesAt i j w)
+    (gate : GateWord mask bank word) : AgreesAt i j word := by
+  rcases gate with ⟨a, ha, rfl⟩ | ⟨a, b, ha, hb, eq | eq⟩
+  · simp only [AgreesAt, Nat.testBit_xor] at m ⊢
+    rw [m, show a.testBit i = a.testBit j from agreesAvailable m all ha]
+  · subst word
+    simp only [AgreesAt, Nat.testBit_and]
+    rw [show a.testBit i = a.testBit j from agreesAvailable m all ha,
+      show b.testBit i = b.testBit j from agreesAvailable m all hb]
+  · subst word
+    simp only [AgreesAt, Nat.testBit_or]
+    rw [show a.testBit i = a.testBit j from agreesAvailable m all ha,
+      show b.testBit i = b.testBit j from agreesAvailable m all hb]
 
-theorem actL_testBit : ∀ (pi : List ℕ) (w k : ℕ),
-    (actL pi w).testBit k = (pi[k]?.map w.testBit).getD false
-  | [], w, k => by simp [actL]
-  | p :: ps, w, 0 => by simp [actL, Nat.testBit_bit_zero]
-  | p :: ps, w, k + 1 => by simp [actL, Nat.testBit_bit_succ, actL_testBit ps w k]
+theorem agreesBuilds {i j mask : Nat} {roots values : List Word} {word : Word}
+    (m : AgreesAt i j mask) (all : ∀ w ∈ roots, AgreesAt i j w)
+    (builds : WordBuilds mask roots values)
+    (av : AvailableWord mask (values ++ roots) word) : AgreesAt i j word := by
+  induction values generalizing roots with
+  | nil => exact agreesAvailable m all av
+  | cons v vs ih =>
+    have vg := agreesGate m all builds.1
+    have hc : ∀ w ∈ v :: roots, AgreesAt i j w := by
+      intro w h
+      rcases List.mem_cons.mp h with rfl | mem
+      · exact vg
+      · exact all _ mem
+    apply ih hc builds.2
+    rcases av with h | h | h
+    · exact Or.inl h
+    · exact Or.inr (Or.inl h)
+    · exact Or.inr (Or.inr (by
+        simpa [List.mem_append, List.mem_cons, or_assoc, or_left_comm] using h))
 
-theorem actL_and (pi : List ℕ) (a b : ℕ) : actL pi (a &&& b) = actL pi a &&& actL pi b := by
-  apply Nat.eq_of_testBit_eq; intro k
-  rw [Nat.testBit_and, actL_testBit, actL_testBit, actL_testBit]
-  cases pi[k]? <;> simp [Nat.testBit_and]
+theorem buildsMap {m n : Nat} (f : Word → Word)
+    (zero : f 0 = 0) (ones : f m = n)
+    (invert : ∀ a, f (m ^^^ a) = n ^^^ f a)
+    (meet : ∀ a b, f (a &&& b) = f a &&& f b)
+    (join : ∀ a b, f (a ||| b) = f a ||| f b)
+    {roots : List Word} {bank : List Word}
+    (supply : ∀ v ∈ roots, AvailableWord n bank (f v))
+    {values : List Word} (h : WordBuilds m roots values) :
+    WordBuilds n bank (values.map f) := by
+  have av {bank roots : List Word} {v : Word}
+      (src : ∀ v ∈ roots, AvailableWord n bank (f v))
+      (h : AvailableWord m roots v) : AvailableWord n bank (f v) := by
+    rcases h with rfl | rfl | hv
+    · exact Or.inl zero
+    · exact Or.inr (Or.inl ones)
+    · exact src _ hv
+  induction values generalizing roots bank with
+  | nil => trivial
+  | cons v vs ih =>
+    refine ⟨?_, ih ?_ h.2⟩
+    · rcases h.1 with ⟨a, ha, eq⟩ | ⟨a, b, ha, hb, eq | eq⟩
+      · exact Or.inl ⟨f a, av supply ha, eq ▸ invert a⟩
+      · exact Or.inr ⟨f a, f b, av supply ha, av supply hb, Or.inl (eq ▸ meet a b)⟩
+      · exact Or.inr ⟨f a, f b, av supply ha, av supply hb, Or.inr (eq ▸ join a b)⟩
+    · intro w hw
+      rcases List.mem_cons.mp hw with rfl | hw
+      · exact Or.inr (Or.inr List.mem_cons_self)
+      · exact availableWeaken (fun x hx => Or.inr (Or.inr (List.mem_cons_of_mem _ hx))) (supply _ hw)
 
-theorem actL_or (pi : List ℕ) (a b : ℕ) : actL pi (a ||| b) = actL pi a ||| actL pi b := by
-  apply Nat.eq_of_testBit_eq; intro k
-  rw [Nat.testBit_or, actL_testBit, actL_testBit, actL_testBit]
-  cases pi[k]? <;> simp [Nat.testBit_or]
+theorem lowerMap {m n : Nat} (f : Word → Word)
+    (zero : f 0 = 0) (ones : f m = n)
+    (invert : ∀ a, f (m ^^^ a) = n ^^^ f a)
+    (meet : ∀ a b, f (a &&& b) = f a &&& f b)
+    (join : ∀ a b, f (a ||| b) = f a ||| f b)
+    {roots bank : List Word} {goal : Word} {minimum : Nat}
+    (supply : ∀ v ∈ roots, AvailableWord n bank (f v))
+    (bound : Lower n bank (f goal) minimum) :
+    Lower m roots goal minimum := by
+  intro values build hit
+  suffices AvailableWord n (values.map f ++ bank) (f goal) by
+    simpa using bound (values.map f) (buildsMap f zero ones invert meet join supply build) this
+  rcases hit with rfl | rfl | mem
+  · exact Or.inl zero
+  · exact Or.inr (Or.inl ones)
+  · rcases List.mem_append.mp mem with hv | hr
+    · exact Or.inr (Or.inr (List.mem_append_left _ (List.mem_map_of_mem hv)))
+    · exact availableWeaken (fun w hw => Or.inr (Or.inr (List.mem_append_right _ hw))) (supply _ hr)
 
-theorem actL_xor (pi : List ℕ) (a b : ℕ) : actL pi (a ^^^ b) = actL pi a ^^^ actL pi b := by
-  apply Nat.eq_of_testBit_eq; intro k
-  rw [Nat.testBit_xor, actL_testBit, actL_testBit, actL_testBit]
-  cases pi[k]? <;> simp [Nat.testBit_xor]
+theorem buildsWeaken {mask : Nat} {small big values : List Word}
+    (supply : ∀ w ∈ small, AvailableWord mask big w) (build : WordBuilds mask small values) :
+    WordBuilds mask big values := by
+  induction values generalizing small big with
+  | nil => trivial
+  | cons v vs ih =>
+    refine ⟨gateWeaken supply build.1, ih ?_ build.2⟩
+    intro w hw
+    rcases List.mem_cons.mp hw with rfl | hw
+    · exact Or.inr (Or.inr List.mem_cons_self)
+    · exact availableWeaken (fun x hx => Or.inr (Or.inr (List.mem_cons_of_mem _ hx))) (supply _ hw)
 
-theorem run_act {m y : ℕ} (pi : List ℕ) (hm : actL pi m = m) (hy : actL pi y = y) {t : ℕ}
-    {ws : List ℕ} (h : NatRun m y t ws) : NatRun m y t (ws.map (actL pi)) := by
-  have h2 := Run.map (actL pi) (inv' := (· ^^^ m)) (meet' := (· &&& ·)) (join' := (· ||| ·))
-    (fun a => by simp only [actL_xor, hm]) (fun a b => actL_and pi a b) (fun a b => actL_or pi a b) h
-  rwa [hy] at h2
+theorem gateBuildsIndex {mask : Nat} (bank values : List Word)
+    (legal : ∀ i, i < values.length →
+      GateWord mask (bank ++ values.take i) (values.getD i 0)) :
+    WordBuilds mask bank values := by
+  induction values generalizing bank with
+  | nil => trivial
+  | cons v vs ih =>
+    have first := legal 0 (by simp)
+    have tail : ∀ i, i < vs.length →
+        GateWord mask ((bank ++ [v]) ++ vs.take i) (vs.getD i 0) := by
+      intro i hi
+      simpa [List.take_succ_cons, List.append_assoc] using
+        legal (i + 1) (by simpa using hi)
+    refine ⟨by simpa using first, buildsWeaken ?_ (ih (bank ++ [v]) tail)⟩
+    intro w mem
+    exact Or.inr (Or.inr (by simpa [or_comm] using mem))
 
-def symOK (m y : ℕ) (G : List (List ℕ)) : Bool :=
-  G.all fun pi => Nat.beq (actL pi m) m && Nat.beq (actL pi y) y
+theorem lowerWeaken {mask goal minimum : Nat} {old new : List Word}
+    (lower : Lower mask old goal minimum) (supply : ∀ w ∈ new, AvailableWord mask old w) :
+    Lower mask new goal minimum := by
+  apply lowerMap id rfl rfl (fun _ => rfl) (fun _ _ => rfl) (fun _ _ => rfl) supply
+  exact lower
 
-theorem symOK_mem {m y : ℕ} {G : List (List ℕ)} (hG : symOK m y G = true) {pi : List ℕ}
-    (hpi : pi ∈ G) : actL pi m = m ∧ actL pi y = y := by
-  have := List.all_eq_true.1 hG pi hpi
-  simp only [Bool.and_eq_true] at this
-  exact ⟨Nat.eq_of_beq_eq_true this.1, Nat.eq_of_beq_eq_true this.2⟩
+def properWord (mask word : Word) : Prop := word ≠ 0 ∧ word ≠ mask
 
-/-- a successor not stored as it is may be stored up to the symmetry named by its hint -/
-def hfind (G : List (List ℕ)) (T : BT) (t : ℕ) (h : List (ℕ × ℕ)) (tag : ℕ) (ys : List ℕ) : Bool :=
-  match h.lookup tag with
-  | some j =>
-    match G[j]? with
-    | some pi => T.mem (t :: isort (ys.map (actL pi)))
-    | none => false
-  | none => false
+def binWord (isOr : Bool) (a b : Word) : Word :=
+  if isOr then a ||| b else a &&& b
 
-theorem hfind_false {m y : ℕ} {G : List (List ℕ)} (hG : symOK m y G = true) (T : BT) (t : ℕ)
-    (ih : ∀ ws, NatRun m y t ws → T.mem (t :: isort ws) = false)
-    (h : List (ℕ × ℕ)) (tag : ℕ) {ys : List ℕ} (hys : NatRun m y t ys) : hfind G T t h tag ys = false := by
-  unfold hfind
-  split
-  · split
-    · rename_i pi hpi
-      have hmem : pi ∈ G := List.mem_of_getElem? hpi
-      obtain ⟨hm, hy⟩ := symOK_mem hG hmem
-      exact ih _ (run_act pi hm hy hys)
-    · rfl
-  · rfl
+theorem binWord_comm (d : Bool) (a b : Word) : binWord d a b = binWord d b a := by
+  cases d <;> simp [binWord, Nat.land_comm, Nat.lor_comm]
 
-def stepOK (m y : ℕ) (pD pM : List (ℕ × ℕ)) (G : List (List ℕ)) (T : BT) :
-    List ℕ → List (ℕ × ℕ) → Bool
-  | [], _ => false
-  | 0 :: _, _ => false
-  | (t + 1) :: es, h => !(next m (t + 2 - es.length) es
-      (fun tag ys => via y pD pM t ys && !T.mem (t :: isort ys) && !hfind G T t h tag ys))
+variable {mask : Nat} {target : Word}
 
-theorem closure_sound {m y : ℕ} {pD pM : List (ℕ × ℕ)} {G : List (List ℕ)} (T : BT)
-    (hp : prsOK m y pD pM = true) (hG : symOK m y G = true)
-    (hT : ∀ x, T.mem x = true → ∃ h, stepOK m y pD pM G T x h = true) :
-    ∀ t ws, NatRun m y t ws → T.mem (t :: isort ws) = false := by
-  intro t
-  induction t with
+def LiveWord (mask : Nat) (target : Word) : Nat → Nat → Finset (Word) → Prop
+  | 0,t,S => t=0 ∧ S={target} ∧ properWord mask target
+  | k+1,t,S =>
+    (∃ (u : Nat) (U : Finset (Word)) (a : Word), t=u+1 ∧ S=insert a U ∧ properWord mask a ∧
+      (mask ^^^ a) ∉ insert a U ∧ LiveWord mask target k u (insert ((mask ^^^ a)) U)) ∨
+    (∃ (U : Finset (Word)) (a b : Word) (d : Bool), S=insert a (insert b U) ∧ properWord mask a ∧ properWord mask b ∧ a ≠ b ∧
+      binWord d a b ∉ insert a (insert b U) ∧ LiveWord mask target k t (insert (binWord d a b) U))
+theorem LiveWord.stop {target : Word} (hp : properWord mask target) : LiveWord mask target 0 0 {target} := ⟨rfl,rfl,hp⟩
+theorem LiveWord.unary {target : Word} {k t : Nat} {U : Finset (Word)} {a : Word} (ha : properWord mask a)
+    (hfresh : (mask ^^^ a) ∉ insert a U) (tail : LiveWord mask target k t (insert ((mask ^^^ a)) U)) :
+    LiveWord mask target (k+1) (t+1) (insert a U) :=
+  Or.inl ⟨t,U,a,rfl,rfl,ha,hfresh,tail⟩
+theorem LiveWord.binary {target : Word} {k t : Nat} {U : Finset (Word)} {a b : Word} {d : Bool}
+    (ha : properWord mask a) (hb : properWord mask b) (hab : a ≠ b)
+    (hfresh : binWord d a b ∉ insert a (insert b U)) (tail : LiveWord mask target k t (insert (binWord d a b) U)) :
+    LiveWord mask target (k+1) t (insert a (insert b U)) :=
+  Or.inr ⟨U,a,b,d,rfl,ha,hb,hab,hfresh,tail⟩
+theorem LiveWord.ind {target : Word} {motive : ∀ (k t : Nat) (S : Finset (Word)), LiveWord mask target k t S → Prop}
+    (stop : ∀ (hp : properWord mask target), motive 0 0 {target} (LiveWord.stop hp))
+    (unary : ∀ {k t : Nat} {U : Finset (Word)} {a : Word} (ha : properWord mask a)
+      (hfresh : (mask ^^^ a) ∉ insert a U) (tail : LiveWord mask target k t (insert ((mask ^^^ a)) U)),
+      motive k t (insert ((mask ^^^ a)) U) tail → motive (k+1) (t+1) (insert a U) (LiveWord.unary ha hfresh tail))
+    (binary : ∀ {k t : Nat} {U : Finset (Word)} {a b : Word} {d : Bool}
+      (ha : properWord mask a) (hb : properWord mask b) (hab : a ≠ b)
+      (hfresh : binWord d a b ∉ insert a (insert b U)) (tail : LiveWord mask target k t (insert (binWord d a b) U)),
+      motive k t (insert (binWord d a b) U) tail →
+      motive (k+1) t (insert a (insert b U)) (LiveWord.binary ha hb hab hfresh tail))
+    {k t : Nat} {S : Finset (Word)} (h : LiveWord mask target k t S) : motive k t S h := by
+  induction k generalizing t S with
   | zero =>
-    intro ws _
-    cases hm : T.mem (0 :: isort ws)
-    · rfl
-    · obtain ⟨h, hs⟩ := hT _ hm
-      simp [stepOK] at hs
-  | succ t ih =>
-    intro ws hw
-    cases hm : T.mem ((t + 1) :: isort ws)
-    · rfl
-    · obtain ⟨h, hs⟩ := hT _ hm
-      simp only [stepOK, Bool.not_eq_true'] at hs
-      have hperm : (isort ws).Perm ws := List.perm_insertionSort _ _
-      have hr : NatRun m y (t + 1) (isort ws) := Run.perm hperm.symm hw
-      have hn := next_complete hr t rfl (isort ws) (List.Perm.refl _)
-        (fun tag ys => via y pD pM t ys && !T.mem (t :: isort ys) && !hfind G T t h tag ys)
-        (fun tag ys hys => by simp [via_sound hp hys, ih ys hys, hfind_false hG T t ih h tag hys])
-      rw [hn] at hs; cases hs
+    obtain ⟨rfl,rfl,hp⟩ := h
+    exact stop hp
+  | succ k ih =>
+    rcases h with ⟨u,U,a,rfl,rfl,ha,hf,tail⟩ | ⟨U,a,b,d,rfl,ha,hb,hab,hf,tail⟩
+    · exact unary ha hf tail (ih tail)
+    · exact binary ha hb hab hf tail (ih tail)
 
-def rootOK (y : ℕ) (pD pM : List (ℕ × ℕ)) (G : List (List ℕ)) (T : BT) (cap : ℕ) (zs : List ℕ) : Bool :=
-  !via y pD pM cap zs || T.mem (cap :: isort zs) || G.any (fun pi => T.mem (cap :: isort (zs.map (actL pi))))
+theorem liveWordProper {k t S} (h : LiveWord mask target k t S) : ∀ a ∈ S, properWord mask a := by
+  induction h using LiveWord.ind with
+  | stop hp => simpa using hp
+  | unary ha hf _ ih => simpa using And.intro ha (fun a h => ih a (Finset.mem_insert_of_mem h))
+  | binary ha hb hab hf _ ih =>
+    simp only [Finset.forall_mem_insert]
+    exact ⟨ha,hb,fun a h => ih a (Finset.mem_insert_of_mem h)⟩
 
-theorem cert_core {m y : ℕ} {xs : List ℕ} {pD pM : List (ℕ × ℕ)} {G : List (List ℕ)} {T : BT} {cap : ℕ}
-    (hp : prsOK m y pD pM = true) (hG : symOK m y G = true)
-    (hT : ∀ x, T.mem x = true → ∃ h, stepOK m y pD pM G T x h = true)
-    (hi : xs.sublists.all (rootOK y pD pM G T cap) = true)
-    {s' : ℕ} (hs' : s' ≤ cap) {ws : List ℕ} (hsub : ws.Sublist xs) (hr : NatRun m y s' ws) : False := by
-  have hmem := List.all_eq_true.1 hi _ (List.mem_sublists.2 hsub)
-  revert hr hmem
-  cases ws with
-  | nil => intro hr _; exact run_nil hr
-  | cons a r =>
-    intro hr hmem
-    have hcap : NatRun m y cap (a :: r) := extend_run hr hs'
-    have hd := via_sound hp hcap
-    have hc := closure_sound T hp hG hT cap (a :: r) hcap
-    have hg : (G.any fun pi => T.mem (cap :: isort ((a :: r).map (actL pi)))) = false := by
-      rw [List.any_eq_false]
-      intro pi hpi
-      obtain ⟨hm, hy⟩ := symOK_mem hG hpi
-      rw [closure_sound T hp hG hT cap _ (run_act pi hm hy hcap)]
+theorem liveWordSize {k t S} (h : LiveWord mask target k t S) : t ≤ k ∧ S.card+t ≤ k+1 := by
+  induction h using LiveWord.ind with
+  | stop hp => simp
+  | @unary k t U a ha hf _ ih =>
+    have hu : (mask ^^^ a) ∉ U := fun hm => hf (Finset.mem_insert_of_mem hm)
+    rw [Finset.card_insert_of_notMem hu] at ih
+    have hc := Finset.card_insert_le a U
+    exact ⟨by omega,by omega⟩
+  | @binary k t U a b d ha hb hab hf _ ih =>
+    have hu : binWord d a b ∉ U := fun hm => hf (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hm))
+    rw [Finset.card_insert_of_notMem hu] at ih
+    have h1 := Finset.card_insert_le (a := a) (s := insert b U)
+    have h2 := Finset.card_insert_le (a := b) (s := U)
+    exact ⟨by omega,by omega⟩
+
+def wordRep (mask : Nat) (ws : List Word) (w : Word) : Prop :=
+  w ∈ ws ∨ ¬properWord mask w
+
+def wordWitness (mask : Nat) (ws : List Word) (w : Word) : Prop :=
+  (∃ a ∈ ws, properWord mask a ∧ w = mask ^^^ a) ∨
+  ∃ d a b, a ∈ ws ∧ b ∈ ws ∧ properWord mask a ∧ properWord mask b ∧
+    a ≠ b ∧ w = binWord d a b
+
+theorem pullWord {w : List (Word)} {z : Word} {k t S} (h : LiveWord mask target k t S)
+    (hz : wordRep mask w z ∨ wordWitness mask w z) (sub : ∀ a ∈ S, a ∈ w++[z]) :
+    ∃ k' t' S', k' ≤ k+1 ∧ LiveWord mask target k' t' S' ∧ ∀ a ∈ S', a ∈ w := by
+  by_cases hm : z ∈ S
+  · by_cases hw : z ∈ w
+    · refine ⟨k,t,S,by omega,h,?_⟩
+      intro a ha
+      have hu : a ∈ w ∨ a = z := by simpa using sub a ha
+      rcases hu with hu | rfl
+      · exact hu
+      · exact hw
+    · have hp := liveWordProper h z hm
+      rcases hz with hr | (⟨a,ha,hp',eq⟩ | ⟨d,a,b,ha,hb,pa,pb,hab,eq⟩)
+      · exact False.elim ((hr.resolve_left hw) hp)
+      · subst z
+        let U := S.erase ((mask ^^^ a))
+        have ht : LiveWord mask target k t (insert ((mask ^^^ a)) U) := by simpa [U,Finset.insert_erase hm] using h
+        have hu : ∀ v ∈ U, v ∈ w := by
+          intro v hv
+          obtain ⟨hne,hm⟩ := Finset.mem_erase.mp hv
+          simpa [hne] using sub v hm
+        have hf : (mask ^^^ a) ∉ insert a U := by
+          intro hh
+          rcases Finset.mem_insert.mp hh with eq | u
+          · exact hw (eq.symm ▸ ha)
+          · exact hw (hu _ u)
+        exact ⟨_,_,_,Nat.le_refl _,LiveWord.unary hp' hf ht,by simpa using And.intro ha hu⟩
+      · subst z
+        let U := S.erase (binWord d a b)
+        have ht : LiveWord mask target k t (insert (binWord d a b) U) := by simpa [U,Finset.insert_erase hm] using h
+        have hu : ∀ v ∈ U, v ∈ w := by
+          intro v hv
+          obtain ⟨hne,hm⟩ := Finset.mem_erase.mp hv
+          simpa [hne] using sub v hm
+        have hf : binWord d a b ∉ insert a (insert b U) := by
+          intro hh
+          rcases Finset.mem_insert.mp hh with eq | u
+          · exact hw (eq.symm ▸ ha)
+          rcases Finset.mem_insert.mp u with eq | u
+          · exact hw (eq.symm ▸ hb)
+          · exact hw (hu _ u)
+        exact ⟨_,_,_,Nat.le_refl _,LiveWord.binary pa pb hab hf ht,by simpa using And.intro ha (And.intro hb hu)⟩
+  · refine ⟨k,t,S,by omega,h,?_⟩
+    intro a ha
+    have hn : a ≠ z := fun hh => hm (hh ▸ ha)
+    simpa [hn] using sub a ha
+
+
+
+def Masked (mask word : Nat) : Prop := word &&& mask = word
+
+theorem maskedAvailable {bank : List Word} {word : Word}
+    (all : ∀ w ∈ bank, Masked mask w) (aw : AvailableWord mask bank word) :
+    Masked mask word := by
+  rcases aw with rfl | rfl | hw
+  · simp [Masked]
+  · simp [Masked]
+  · exact all _ hw
+
+theorem maskedGate {bank : List Word} {out : Word}
+    (all : ∀ w ∈ bank, Masked mask w) (g : GateWord mask bank out) :
+    Masked mask out := by
+  rcases g with ⟨a, ha, rfl⟩ | ⟨a, b, ha, hb, ea | ea⟩
+  · have h := projectGate (mask := mask) (cut := mask) (by simp)
+      (roots := bank) (out := mask ^^^ a) (Or.inl ⟨a, ha, rfl⟩)
+    have ma := maskedAvailable all ha
+    unfold Masked at ma ⊢
+    apply Nat.eq_of_testBit_eq
+    intro i
+    have bit := congrArg (fun n : Nat => n.testBit i) ma
+    simp only [Nat.testBit_and, Nat.testBit_xor] at bit ⊢
+    cases hm : mask.testBit i <;> simp_all
+  · subst out
+    have ma := maskedAvailable all ha
+    have mb := maskedAvailable all hb
+    simp only [Masked] at ma mb ⊢
+    rw [Nat.land_assoc, mb]
+  · subst out
+    have ma := maskedAvailable all ha
+    have mb := maskedAvailable all hb
+    unfold Masked at ma mb ⊢
+    apply Nat.eq_of_testBit_eq
+    intro i
+    have bitA := congrArg (fun n : Nat => n.testBit i) ma
+    have bitB := congrArg (fun n : Nat => n.testBit i) mb
+    simp only [Nat.testBit_and, Nat.testBit_or] at bitA bitB ⊢
+    cases hm : mask.testBit i <;> simp_all
+
+def binaryWitness (mask : Nat) (bank : List Word) (out : Word) : Prop :=
+  ∃ d a b, a ∈ bank ∧ b ∈ bank ∧ properWord mask a ∧ properWord mask b ∧
+    a ≠ b ∧ out = binWord d a b
+
+theorem classifyBinary {bank : List Word}
+    (all : ∀ w ∈ bank, Masked mask w) (d : Bool) {a b : Word}
+    (ha : AvailableWord mask bank a) (hb : AvailableWord mask bank b) :
+    wordRep mask bank (binWord d a b) ∨ binaryWitness mask bank (binWord d a b) := by
+  have c0 : wordRep mask bank 0 := Or.inr fun h => h.1 rfl
+  have cm : wordRep mask bank mask := Or.inr fun h => h.2 rfl
+  have classify {w : Word} (hw : AvailableWord mask bank w) :
+      w = 0 ∨ w = mask ∨ w ∈ bank ∧ properWord mask w := by
+    by_cases zh : w = 0
+    · exact Or.inl zh
+    by_cases mh : w = mask
+    · exact Or.inr (Or.inl mh)
+    exact Or.inr (Or.inr ⟨(hw.resolve_left zh).resolve_left mh, zh, mh⟩)
+  have ma : a &&& mask = a := maskedAvailable all ha
+  have mb : b &&& mask = b := maskedAvailable all hb
+  have absorbA : a ||| mask = mask := by
+    apply Nat.eq_of_testBit_eq
+    intro i
+    have h := congrArg (fun n : Nat => n.testBit i) ma
+    simp only [Nat.testBit_and, Nat.testBit_or] at h ⊢
+    cases hm : mask.testBit i <;> simp_all
+  have absorbB : b ||| mask = mask := by
+    apply Nat.eq_of_testBit_eq
+    intro i
+    have h := congrArg (fun n : Nat => n.testBit i) mb
+    simp only [Nat.testBit_and, Nat.testBit_or] at h ⊢
+    cases hm : mask.testBit i <;> simp_all
+  rcases classify ha with rfl | hma | ⟨ha', pa⟩
+  · rw [binWord_comm]
+    cases d
+    · exact Or.inl (by simpa [binWord] using c0)
+    · rcases hb with hz | hm | hv
+      · exact Or.inl (by simpa [binWord, hz] using c0)
+      · exact Or.inl (by simpa [binWord, hm] using cm)
+      · exact Or.inl (by simpa [binWord, wordRep] using
+          (Or.inl hv : wordRep mask bank b))
+  · rw [hma, binWord_comm]
+    cases d
+    · rcases hb with hz | hm | hv
+      · exact Or.inl (by simpa [binWord, hz] using c0)
+      · exact Or.inl (by simpa [binWord, hm] using cm)
+      · exact Or.inl (by simpa [binWord, mb, wordRep] using
+          (Or.inl hv : wordRep mask bank b))
+    · exact Or.inl (by simpa [binWord, absorbB] using cm)
+  rcases classify hb with rfl | hmb | ⟨hb', pb⟩
+  · cases d
+    · exact Or.inl (by simpa [binWord] using c0)
+    · exact Or.inl (by simpa [binWord, wordRep] using
+        (Or.inl ha' : wordRep mask bank a))
+  · rw [hmb]
+    cases d
+    · exact Or.inl (by simpa [binWord, ma, wordRep] using
+        (Or.inl ha' : wordRep mask bank a))
+    · exact Or.inl (by simpa [binWord, absorbA] using cm)
+  by_cases eq : a = b
+  · subst b
+    cases d <;> exact Or.inl (by simpa [binWord, wordRep] using
+      (Or.inl ha' : wordRep mask bank a))
+  exact Or.inr ⟨d, a, b, ha', hb', pa, pb, eq, rfl⟩
+
+theorem classifyWord {bank : List Word} {out : Word}
+    (all : ∀ w ∈ bank, Masked mask w) (gate : GateWord mask bank out) :
+    wordRep mask bank out ∨ wordWitness mask bank out := by
+  have c0 : wordRep mask bank 0 := Or.inr fun h => h.1 rfl
+  have cm : wordRep mask bank mask := Or.inr fun h => h.2 rfl
+  have classify {w : Word} (hw : AvailableWord mask bank w) :
+      w = 0 ∨ w = mask ∨ w ∈ bank ∧ properWord mask w := by
+    by_cases zh : w = 0
+    · exact Or.inl zh
+    by_cases mh : w = mask
+    · exact Or.inr (Or.inl mh)
+    exact Or.inr (Or.inr ⟨(hw.resolve_left zh).resolve_left mh, zh, mh⟩)
+  rcases gate with ⟨a, ha, rfl⟩ | ⟨a, b, ha, hb, h | h⟩
+  · rcases classify ha with rfl | hma | ⟨hm, hp⟩
+    · exact Or.inl (by simpa using cm)
+    · exact Or.inl (by simpa [hma] using c0)
+    · exact Or.inr (Or.inl ⟨a, hm, hp, rfl⟩)
+  · subst out; exact (classifyBinary all false ha hb).imp id Or.inr
+  · subst out; exact (classifyBinary all true ha hb).imp id Or.inr
+
+theorem extractWordLive {roots values : List Word}
+    (all : ∀ w ∈ roots, Masked mask w) (builds : WordBuilds mask roots values)
+    (hit : AvailableWord mask (values ++ roots) target) (p : properWord mask target) :
+    ∃ k t S, k ≤ values.length ∧ LiveWord mask target k t S ∧ ∀ w ∈ S, w ∈ roots := by
+  have hm := (hit.resolve_left p.1).resolve_left p.2
+  induction values generalizing roots with
+  | nil =>
+    exact ⟨0, 0, {target}, Nat.zero_le _, LiveWord.stop p, by simpa using hm⟩
+  | cons w ws ih =>
+    have next : ∀ v ∈ w :: roots, Masked mask v := by
+      intro v hv
+      rcases List.mem_cons.mp hv with rfl | hv
+      · exact maskedGate all builds.1
+      · exact all _ hv
+    have ht : AvailableWord mask (ws ++ w :: roots) target := by
+      exact Or.inr (Or.inr (by simpa [List.mem_append, List.mem_cons, or_assoc, or_left_comm] using hm))
+    obtain ⟨k, t, S, hk, live, sub⟩ :=
+      ih next builds.2 ht ((ht.resolve_left p.1).resolve_left p.2)
+    have available : ∀ v ∈ S, v ∈ roots ++ [w] := by
+      intro v h
+      simpa [or_comm] using sub v h
+    obtain ⟨k', t', S', hk', hl, hsub⟩ := pullWord live (classifyWord all builds.1) available
+    exact ⟨k', t', S', by simp only [List.length_cons]; omega, hl, hsub⟩
+
+theorem insertWordMem {x w : Word} {ws : List Word} :
+    x ∈ insertWord w ws ↔ x = w ∨ x ∈ ws := by
+  induction ws with
+  | nil => simp [insertWord]
+  | cons a tail ih =>
+    change x ∈ (if w ≤ a then w :: a :: tail else a :: insertWord w tail) ↔ _
+    split <;> simp [ih, or_assoc, or_left_comm]
+
+theorem insertWordNodup {w : Word} {ws : List Word} (nd : ws.Nodup) (fresh : w ∉ ws) :
+    (insertWord w ws).Nodup := by
+  induction ws with
+  | nil => simp [insertWord]
+  | cons a tail ih =>
+    change (if w ≤ a then w :: a :: tail else a :: insertWord w tail).Nodup
+    split
+    · exact List.nodup_cons.mpr ⟨fresh, nd⟩
+    have hn := List.nodup_cons.mp nd
+    have hnot : w ≠ a ∧ w ∉ tail := by simpa using fresh
+    exact List.nodup_cons.mpr ⟨by simp [insertWordMem, hnot.1.symm, hn.1], ih hn.2 hnot.2⟩
+
+theorem insertWordSet (w : Word) (ws : List Word) :
+    (insertWord w ws).toFinset = insert w ws.toFinset := by
+  ext x
+  simp [insertWordMem]
+
+theorem eraseWordSet {ws : List Word} (nd : ws.Nodup) (w : Word) :
+    (ws.erase w).toFinset = ws.toFinset.erase w := by
+  ext x
+  simp [nd.mem_erase_iff, and_comm]
+
+theorem gateTokenFields {a b op keep : Nat} (hb : b < 64) (ho : op < 3) (hk : keep < 4) :
+    gateToken a b op keep % 4 = keep ∧
+    gateToken a b op keep / 4 % 3 = op ∧
+    gateToken a b op keep / (4 * 3 * 64) = a ∧
+    gateToken a b op keep / (4 * 3) % 64 = b := by
+  unfold gateToken
+  omega
+
+def keepWord (save : Bool) (w : Word) (ws : List Word) : List Word :=
+  if save then ws else ws.erase w
+
+theorem keepNodup {ws : List Word} (nd : ws.Nodup) (save : Bool) (w : Word) :
+    (keepWord save w ws).Nodup := by
+  cases save
+  · exact nd.erase _
+  · exact nd
+
+theorem keepSubset (save : Bool) (w : Word) (ws : List Word) :
+    ∀ v ∈ keepWord save w ws, v ∈ ws := by
+  cases save
+  · exact fun _ h => List.mem_of_mem_erase h
+  · exact fun _ h => h
+
+theorem keepSet {ws : List Word} (nd : ws.Nodup) {w : Word} {U : Finset Word}
+    (eq : ws.toFinset = insert w U) :
+    (keepWord (decide (w ∈ U)) w ws).toFinset = U := by
+  by_cases hw : w ∈ U
+  · simp [keepWord, hw, eq, Finset.insert_eq_of_mem hw]
+  · simp [keepWord, hw, eraseWordSet nd, eq]
+
+theorem keepPairSet {ws : List Word} (nd : ws.Nodup) {a b : Word} {U : Finset Word}
+    (ab : a ≠ b) (eq : ws.toFinset = insert a (insert b U)) :
+    (keepWord (decide (b ∈ U)) b (keepWord (decide (a ∈ U)) a ws)).toFinset = U := by
+  have x : decide (a ∈ insert b U) = decide (a ∈ U) := by simp [ab]
+  have h := keepSet nd eq
+  rw [x] at h
+  exact keepSet (keepNodup nd _ _) h
+
+theorem getWord {ws : List Word} {x : Word} (h : x ∈ ws) :
+    ws.getD (ws.idxOf x) 0 = x := by
+  have inb := List.idxOf_lt_length_iff.mpr h
+  simpa [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem inb] using
+    List.getElem_idxOf inb
+
+theorem unaryChild {mask fuel a : Nat} {ws : List Word}
+    {history : List (Word × Word × Word)} {x : Word} {keep : Nat}
+    (ha : a < ws.length) (ha64 : a < 64) (hf : fuel ≠ 0) (hk : keep < 2)
+    (hx : ws.getD a 0 = x) (p : properWord mask (mask ^^^ x)) (fresh : mask ^^^ x ∉ ws) :
+    childState mask (gateToken a a 2 keep) (fuel, ws, history) =
+      some (fuel - 1, insertWord (mask ^^^ x) (keepWord (keep.testBit 0) x ws),
+        (mask ^^^ x, x, x) :: history) := by
+  obtain ⟨ke, op, aa, bb⟩ := gateTokenFields (a := a) ha64 (by decide : 2 < 3) (by omega : keep < 4)
+  simp only [childState, ke, op, aa, bb, hx]
+  simp [hf, Nat.not_le_of_lt ha, Nat.not_le_of_lt hk, p.1, p.2, fresh, keepWord]
+
+theorem binaryChild {mask fuel a b : Nat} {ws : List Word}
+    {history : List (Word × Word × Word)} {x y : Word} {keep : Nat}
+    (d : Bool) (hab : a < b) (hb : b < ws.length) (hb64 : b < 64)
+    (hf : fuel ≠ 0) (hk : keep < 4)
+    (hx : ws.getD a 0 = x) (hy : ws.getD b 0 = y)
+    (p : properWord mask (binWord d x y)) (fresh : binWord d x y ∉ ws) :
+    childState mask (gateToken a b (if d then 1 else 0) keep) (fuel, ws, history) =
+      some (fuel - 1, insertWord (binWord d x y)
+        (keepWord (keep.testBit 1) y (keepWord (keep.testBit 0) x ws)),
+        (binWord d x y, x, y) :: history) := by
+  have oh : (if d then 1 else 0) < 3 := by cases d <;> decide
+  obtain ⟨ke, op, aa, bb⟩ := gateTokenFields (a := a) hb64 oh hk
+  simp only [childState, ke, op, aa, bb, hx, hy]
+  cases d <;>
+    simp_all [Nat.not_le_of_lt hab, Nat.not_le_of_lt hb, keepWord, binWord, properWord]
+
+def WordViable (mask : Nat) (target : Word) (state : RowState) : Prop :=
+  state.2.1.Nodup ∧ ∃ k t, k ≤ state.1 ∧ LiveWord mask target k t state.2.1.toFinset
+
+def HasChild (mask : Nat) (state child : RowState) : Prop :=
+  ∃ a b op keep, a < state.2.1.length ∧
+    ((a = b ∧ op = 2 ∧ keep < 2) ∨
+      (a < b ∧ b < state.2.1.length ∧ op < 2 ∧ keep < 4)) ∧
+    childState mask (gateToken a b op keep) state = some child
+
+theorem unaryProgress {mask fuel k t : Nat} {x target : Word} {U : Finset Word} {ws : List Word}
+    {history : List (Word × Word × Word)}
+    (nd : ws.Nodup) (wide : ws.length ≤ 64) (hk : k + 1 ≤ fuel)
+    (he : ws.toFinset = insert x U) (fresh : mask ^^^ x ∉ insert x U)
+    (tail : LiveWord mask target k t (insert (mask ^^^ x) U)) :
+    ∃ child, HasChild mask (fuel, ws, history) child ∧ WordViable mask target child := by
+  let a := ws.idxOf x
+  have xm : x ∈ ws := by
+    rw [← List.mem_toFinset, he]
+    simp
+  have ha : a < ws.length := List.idxOf_lt_length_iff.mpr xm
+  have hx : ws.getD a 0 = x := getWord xm
+  have p := liveWordProper tail (mask ^^^ x) (Finset.mem_insert_self _ _)
+  let save := decide (x ∈ U)
+  let keep := if save then 1 else 0
+  have keepLt : keep < 2 := by dsimp [keep]; split <;> decide
+  have keepBit : keep.testBit 0 = save := by
+    unfold keep
+    cases save <;> decide
+  have fn : mask ^^^ x ∉ ws := by simpa [← List.mem_toFinset, he] using fresh
+  let rest := keepWord save x ws
+  let child : RowState := (fuel - 1, insertWord (mask ^^^ x) rest, (mask ^^^ x, x, x) :: history)
+  refine ⟨child, ⟨a, a, 2, keep, ha, Or.inl ⟨rfl, rfl, keepLt⟩, ?_⟩, ?_⟩
+  · have eq := unaryChild (fuel := fuel) (history := history) ha (by omega) (by omega) keepLt hx p fn
+    rw [keepBit] at eq
+    exact eq
+  · refine ⟨insertWordNodup (keepNodup nd save x) (fun h => fn (keepSubset save x ws _ h)),
+      k, t, by change k ≤ fuel - 1; omega, ?_⟩
+    change LiveWord mask target k t (insertWord (mask ^^^ x) rest).toFinset
+    rw [insertWordSet, keepSet nd he]
+    exact tail
+
+theorem binaryProgress {mask fuel k t : Nat} {x y target : Word} {d : Bool} {U : Finset Word}
+    {ws : List Word} {history : List (Word × Word × Word)}
+    (nd : ws.Nodup) (wide : ws.length ≤ 64) (hk : k + 1 ≤ fuel)
+    (he : ws.toFinset = insert x (insert y U)) (xy : x ≠ y)
+    (ordered : ws.idxOf x < ws.idxOf y) (fresh : binWord d x y ∉ insert x (insert y U))
+    (tail : LiveWord mask target k t (insert (binWord d x y) U)) :
+    ∃ child, HasChild mask (fuel, ws, history) child ∧ WordViable mask target child := by
+  let a := ws.idxOf x
+  let b := ws.idxOf y
+  have xm : x ∈ ws := by rw [← List.mem_toFinset, he]; simp
+  have ym : y ∈ ws := by rw [← List.mem_toFinset, he]; simp
+  have ha : a < ws.length := List.idxOf_lt_length_iff.mpr xm
+  have hb : b < ws.length := List.idxOf_lt_length_iff.mpr ym
+  have hab : a < b := ordered
+  have hx : ws.getD a 0 = x := getWord xm
+  have hy : ws.getD b 0 = y := getWord ym
+  let v := binWord d x y
+  have p := liveWordProper tail v (Finset.mem_insert_self _ _)
+  let saveX := decide (x ∈ U)
+  let saveY := decide (y ∈ U)
+  let keep := (if saveX then 1 else 0) + (if saveY then 2 else 0)
+  have fields : keep < 4 ∧ keep.testBit 0 = saveX ∧ keep.testBit 1 = saveY := by
+    unfold keep
+    cases saveX <;> cases saveY <;> decide
+  obtain ⟨keepLt, bx, by'⟩ := fields
+  have fn : v ∉ ws := by simpa [← List.mem_toFinset, he] using fresh
+  let rest := keepWord saveY y (keepWord saveX x ws)
+  let child : RowState := (fuel - 1, insertWord v rest, (v, x, y) :: history)
+  refine ⟨child, ⟨a, b, if d then 1 else 0, keep, ha, Or.inr ⟨hab, hb, ?_, keepLt⟩, ?_⟩, ?_⟩
+  · cases d <;> decide
+  · have eq := binaryChild (fuel := fuel) (history := history) d hab hb (by omega) (by omega) keepLt hx hy p fn
+    rw [bx, by'] at eq
+    exact eq
+  · refine ⟨insertWordNodup (keepNodup (keepNodup nd saveX x) saveY y)
+      (fun h => fn (keepSubset saveX x ws _ (keepSubset saveY y _ _ h))), k, t, by change k ≤ fuel - 1; omega, ?_⟩
+    change LiveWord mask target k t (insertWord v rest).toFinset
+    rw [insertWordSet, keepPairSet nd xy he]
+    exact tail
+
+theorem wordProgress {mask : Nat} {target : Word} {state : RowState}
+    (width : state.2.1.length ≤ 64) (h : WordViable mask target state) :
+    target ∈ state.2.1 ∨ ∃ child, HasChild mask state child ∧ WordViable mask target child := by
+  obtain ⟨fuel, ws, history⟩ := state
+  obtain ⟨nd, k, t, cap, live⟩ := h
+  cases k with
+  | zero =>
+    obtain ⟨_, eq, _⟩ := live
+    left
+    change ws.toFinset = {target} at eq
+    rw [← List.mem_toFinset, eq]
+    simp
+  | succ k =>
+    right
+    rcases live with ⟨u,U,x,_,eq,px,fresh,tail⟩ | ⟨U,x,y,d,eq,px,py,xy,fresh,tail⟩
+    · exact unaryProgress nd width cap eq fresh tail
+    have xm : x ∈ ws := by rw [← List.mem_toFinset, eq]; simp
+    have ym : y ∈ ws := by rw [← List.mem_toFinset, eq]; simp
+    have diff : ws.idxOf x ≠ ws.idxOf y := by
+      intro same
+      apply xy
+      rw [← getWord xm, same, getWord ym]
+    by_cases h : ws.idxOf x < ws.idxOf y
+    · exact binaryProgress nd width cap eq xy h fresh tail
+    · have eq' : ws.toFinset = insert y (insert x U) := by rw [eq, Finset.insert_comm]
+      have fresh' : binWord d y x ∉ insert y (insert x U) := by
+        rw [binWord_comm d y x, Finset.insert_comm]; exact fresh
+      have tail' : LiveWord mask target k t (insert (binWord d y x) U) := by
+        rw [binWord_comm d y x]; exact tail
+      exact binaryProgress nd width cap eq' xy.symm (by omega) fresh' tail'
+
+theorem rootWordSublist (base : List Word) (token : Nat) : (rootWords base token).Sublist base := by
+  induction base generalizing token with
+  | nil => exact List.Sublist.slnil
+  | cons w ws ih =>
+    change (if token &&& 1 == 0 then rootWords ws (token >>> 1)
+      else w :: rootWords ws (token >>> 1)).Sublist (w :: ws)
+    split
+    · exact (ih _).cons _
+    · exact (ih _).cons₂ _
+
+theorem rootToken (base : List Word) (S : Finset Word) :
+    ∃ token < 2 ^ base.length, (rootWords base token).toFinset = base.toFinset ∩ S := by
+  induction base with
+  | nil => exact ⟨0, by simp, by simp [rootWords]⟩
+  | cons w ws ih =>
+    obtain ⟨token, htoken, ih⟩ := ih
+    let bit : Nat := if w ∈ S then 1 else 0
+    have hbit : bit < 2 := by dsimp [bit]; split <;> decide
+    let code := 2 * token + bit
+    have low : code &&& 1 = bit := by
+      rw [show (1 : Nat) = 2 ^ 1 - 1 from rfl, Nat.and_two_pow_sub_one_eq_mod]
+      dsimp [code]
+      omega
+    have high : code >>> 1 = token := by
+      rw [Nat.shiftRight_eq_div_pow]
+      change code / 2 = token
+      dsimp [code]
+      omega
+    refine ⟨code, ?_, ?_⟩
+    · simp only [List.length_cons, pow_succ]
+      dsimp [code]
+      omega
+    · change (if code &&& 1 == 0 then rootWords ws (code >>> 1)
+        else w :: rootWords ws (code >>> 1)).toFinset = _
+      rw [low, high]
+      by_cases hw : w ∈ S
+      · simp [bit, hw, ih]
+      · simp [bit, hw, ih]
+
+theorem liveAgrees {i j k t : Nat} {S : Finset Word}
+    (h : LiveWord mask target k t S) (m : AgreesAt i j mask)
+    (all : ∀ w ∈ S, AgreesAt i j w) : AgreesAt i j target := by
+  induction h using LiveWord.ind with
+  | stop => exact all _ (Finset.mem_singleton_self _)
+  | @unary k t U a pa fresh tail ih =>
+    apply ih
+    intro w hw
+    rcases Finset.mem_insert.mp hw with rfl | hw
+    · simp only [AgreesAt, Nat.testBit_xor]
+      rw [show mask.testBit i = mask.testBit j from m,
+        show a.testBit i = a.testBit j from all a (Finset.mem_insert_self _ _)]
+    · exact all _ (Finset.mem_insert_of_mem hw)
+  | @binary k t U a b d pa pb ab fresh tail ih =>
+    apply ih
+    intro w hw
+    rcases Finset.mem_insert.mp hw with rfl | hw
+    · have aa : a.testBit i = a.testBit j := all a (Finset.mem_insert_self _ _)
+      have bb : b.testBit i = b.testBit j := all b (Finset.mem_insert_of_mem (Finset.mem_insert_self _ _))
+      cases d <;> simp [AgreesAt, binWord, Nat.testBit_and, Nat.testBit_or, aa, bb]
+    · exact all _ (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hw))
+
+theorem positiveInMask {i : Nat} (mt : Masked mask target) (ht : target.testBit i = true) :
+    mask.testBit i = true := by
+  have h := congrArg (fun n : Nat => n.testBit i) mt
+  simpa [Nat.testBit_and, ht] using h
+
+variable {rows : Nat}
+
+def fullMask (rows : Nat) : Nat := 2 ^ rows - 1
+
+theorem toNatMasked (v : BitVec rows) : Masked (fullMask rows) v.toNat := by
+  unfold Masked fullMask
+  rw [Nat.and_two_pow_sub_one_eq_mod, Nat.mod_eq_of_lt v.isLt]
+
+theorem notNat (v : BitVec rows) : (~~~v).toNat = fullMask rows ^^^ v.toNat := by
+  rw [← BitVec.xor_allOnes, BitVec.toNat_xor, Nat.xor_comm, BitVec.toNat_allOnes]
+  rfl
+
+theorem gateOfAvailable {bank : List Word} {w : Word}
+    (av : AvailableWord mask bank w) : GateWord mask bank w :=
+  Or.inr ⟨w, 0, av, Or.inl rfl, Or.inr (by simp)⟩
+
+theorem toNatAvailable (bank : List (BitVec rows)) (i : Nat) :
+    AvailableWord (fullMask rows) (bank.map BitVec.toNat) (bank.getD i 0).toNat := by
+  rw [List.getD_eq_getElem?_getD]
+  cases h : bank[i]? with
+  | none => exact Or.inl rfl
+  | some a => exact Or.inr (Or.inr (List.mem_map_of_mem (List.mem_of_getElem? h)))
+
+def buildable (m g : Word) : Nat → Finset (Word) → Prop
+  | 0, s => g ∈ s
+  | n+1, s => buildable m g n s ∨
+    (∃ a ∈ s, buildable m g n (insert (m ^^^ a) s)) ∨
+    (∃ a ∈ s, ∃ b ∈ s, ∃ d, buildable m g n (insert (binWord d a b) s))
+
+theorem supplyPool {m g : Word} {n s q} (sub : s ⊆ q) (h : buildable m g n s) : buildable m g n q := by
+  induction n generalizing s q with
+  | zero => exact sub h
+  | succ n ih =>
+    rcases h with h | ⟨a,ha,h⟩ | ⟨a,ha,b,hb,d,h⟩
+    · exact Or.inl (ih sub h)
+    · exact Or.inr (Or.inl ⟨a,sub ha,ih (Finset.insert_subset_insert _ sub) h⟩)
+    · exact Or.inr (Or.inr ⟨a,sub ha,b,sub hb,d,ih (Finset.insert_subset_insert _ sub) h⟩)
+
+theorem supplyMore {m g : Word} {n l s} (le : n ≤ l) (h : buildable m g n s) : buildable m g l s := by
+  induction le with
+  | refl => exact h
+  | step _ ih => exact Or.inl ih
+
+abbrev maskedFlat (m a : Word) : Prop := a &&& m = 0 ∨ a &&& m = m
+
+
+def flatSet (m : Word) (s : Finset (Word)) := s.filter (maskedFlat m)
+def visibleWords (m : Word) (s : Finset (Word)) := s.image fun w => w &&& m
+
+theorem flIns {m a : Word} {s : Finset (Word)} (ha : a ∉ s) :
+    (flatSet m (insert a s)).card = (flatSet m s).card + (if maskedFlat m a then 1 else 0) := by
+  by_cases f : maskedFlat m a <;> simp [flatSet,Finset.filter_insert,f,ha]
+
+theorem flLe (m a : Word) (s : Finset (Word)) :
+    (flatSet m (insert a s)).card ≤ (flatSet m s).card + (if maskedFlat m a then 1 else 0) := by
+  by_cases old : a ∈ s
+  · rw [Finset.insert_eq_of_mem old]
+    omega
+  · rw [flIns old]
+
+theorem prIns (m a : Word) (s : Finset (Word)) :
+    visibleWords m (insert a s) = insert (a &&& m) (visibleWords m s) := Finset.image_insert ..
+
+theorem cofNot {mask m : Nat} (sub : mask &&& m = m) (a : Word) :
+    (mask ^^^ a) &&& m = m ^^^ (a &&& m) := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  have h := congrArg (fun w : Nat => w.testBit i) sub
+  simp only [Nat.testBit_and, Nat.testBit_xor] at h ⊢
+  cases he : m.testBit i
+  · simp
+  · have hm : mask.testBit i = true := by simpa [he] using h
+    simp [hm]
+
+theorem cofBinary (m a b : Word) (d : Bool) :
+    binWord d a b &&& m = binWord d (a &&& m) (b &&& m) := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  cases d <;> simp only [binWord, Bool.false_eq_true, ite_false, ite_true, Nat.testBit_and, Nat.testBit_or] <;>
+    cases m.testBit i <;> simp
+
+theorem flNot {mask m : Nat} (sub : mask &&& m = m) (a : Word) :
+    maskedFlat m (mask ^^^ a) ↔ maskedFlat m a := by
+  unfold maskedFlat
+  rw [cofNot sub]
+  constructor <;> intro h
+  · rcases h with h | h
+    · right
+      have hh := congrArg (fun v => m ^^^ v) h
+      simpa [← Nat.xor_assoc] using hh
+    · left
+      have hh := congrArg (fun v => m ^^^ v) h
+      simpa [← Nat.xor_assoc] using hh
+  · rcases h with h | h <;> simp [h]
+
+theorem flBoth {m a b : Word} {d : Bool} (ha : maskedFlat m a) (hb : maskedFlat m b) :
+    maskedFlat m (binWord d a b) := by
+  unfold maskedFlat at *
+  rw [cofBinary]
+  rcases ha with ha | ha <;> rcases hb with hb | hb <;> cases d <;>
+    simp [binWord, ha, hb]
+
+theorem simpleBin {m a b : Word} {d : Bool} (h : maskedFlat m a ∨ maskedFlat m b) :
+    binWord d a b &&& m = 0 ∨ binWord d a b &&& m = m ∨
+      binWord d a b &&& m = a &&& m ∨ binWord d a b &&& m = b &&& m := by
+  rw [cofBinary]
+  have top1 (x : Word) : m &&& (x &&& m) = x &&& m := by
+    rw [Nat.land_comm x m, ← Nat.land_assoc]
+    simp
+  have top2 (x : Word) : m ||| (x &&& m) = m := by
+    apply Nat.eq_of_testBit_eq
+    intro i
+    simp only [Nat.testBit_or, Nat.testBit_and]
+    cases x.testBit i <;> cases m.testBit i <;> rfl
+  have right1 (x : Word) : (x &&& m) &&& m = x &&& m := restrictWord m x
+  have right2 (x : Word) : (x &&& m) ||| m = m := by rw [Nat.lor_comm, top2]
+  rcases h with (ha|ha)|(hb|hb) <;> cases d <;>
+    simp [binWord, *, top1, top2, right1, right2]
+
+def projectedStock (m : Word) (s : Finset (Word)) := insert 0 (insert m (visibleWords m s))
+
+theorem maskedBuild {goal : Word} {k t s} (run : LiveWord mask goal k t s) (m : Word) (submask : mask &&& m = m) (properGoal : ¬ maskedFlat m goal) :
+    ∃ n, n+(flatSet m s).card ≤ k ∧ buildable m (goal &&& m) n (projectedStock m s) := by
+  induction run using LiveWord.ind with
+  | stop =>
+    refine ⟨0,?_,?_⟩
+    · simp only [flatSet, Finset.filter_singleton, properGoal, ite_false, Finset.card_empty,
+        Nat.add_zero, Nat.le_refl]
+    · change goal &&& m ∈ projectedStock m {goal}
+      simp [projectedStock,visibleWords]
+  | @unary k t u a pa fresh tail ih =>
+    obtain ⟨n,cap,built⟩ := ih
+    have nn : (mask ^^^ a) ∉ u := fun h => fresh (Finset.mem_insert_of_mem h)
+    rw [flIns nn] at cap
+    have card := flLe m a u
+    have old : a &&& m ∈ projectedStock m (insert a u) := by simp [projectedStock,prIns]
+    have sub : projectedStock m u ⊆ projectedStock m (insert a u) := by
+      exact Finset.insert_subset_insert _ (Finset.insert_subset_insert _ (Finset.image_subset_image (Finset.subset_insert ..)))
+    by_cases f : maskedFlat m a
+    · have ff := (flNot submask a).mpr f
+      simp only [f,ff,ite_true] at cap card
+      refine ⟨n,by omega,supplyPool ?_ built⟩
+      intro w hw
+      simp only [projectedStock,prIns,Finset.mem_insert] at hw ⊢
+      rcases hw with rfl|rfl|rfl|h
+      · exact Or.inl rfl
+      · exact Or.inr (Or.inl rfl)
+      · rcases ff with e|e
+        · exact Or.inl e
+        · exact Or.inr (Or.inl e)
+      · exact Or.inr (Or.inr (Or.inr h))
+    · have nf := mt (flNot submask a).mp f
+      simp only [f,nf,ite_false] at cap card
+      refine ⟨n+1,by omega,Or.inr (Or.inl ⟨_,old,supplyPool ?_ built⟩)⟩
+      intro w hw
+      simp only [projectedStock,prIns,Finset.mem_insert] at hw ⊢
+      rw [cofNot submask] at hw
+      tauto
+  | @binary k t u a b d pa pb ab fresh tail ih =>
+    let v := binWord d a b
+    obtain ⟨n,cap,built⟩ := ih
+    have nn : v ∉ u := fun h => fresh (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem h))
+    change n+(flatSet m (insert v u)).card ≤ k at cap
+    rw [flIns nn] at cap
+    have ca := flLe m a (insert b u)
+    have cb := flLe m b u
+    by_cases simple : maskedFlat m a ∨ maskedFlat m b
+    · have budget : n + (flatSet m (insert a (insert b u))).card ≤ k+1 := by
+        by_cases fa : maskedFlat m a <;> by_cases fb : maskedFlat m b <;>
+          simp only [fa,fb,ite_true,ite_false] at ca cb simple
+        all_goals first | have vf : maskedFlat m v := flBoth fa fb; simp only [vf,ite_true] at cap; omega | omega | tauto
+      refine ⟨n,budget,supplyPool ?_ built⟩
+      intro w hw
+      simp only [projectedStock,prIns,Finset.mem_insert] at hw ⊢
+      rcases hw with e|e|e|e
+      · exact Or.inl e
+      · exact Or.inr (Or.inl e)
+      · subst w
+        have cases := simpleBin (d := d) simple
+        tauto
+      · tauto
+    · have fa : ¬maskedFlat m a := fun h => simple (Or.inl h)
+      have fb : ¬maskedFlat m b := fun h => simple (Or.inr h)
+      simp only [fa,fb,ite_false] at ca cb
+      refine ⟨n+1,by omega,Or.inr (Or.inr ⟨a &&& m,?_,b &&& m,?_,d,supplyPool ?_ built⟩)⟩
+      · simp [projectedStock,prIns]
+      · simp [projectedStock,prIns]
+      · intro w hw
+        simp only [projectedStock,prIns,Finset.mem_insert] at hw ⊢
+        rw [cofBinary] at hw
+        tauto
+
+theorem availableB_spec {mask : Nat} {bank : List Word} {v : Word} :
+    availableB mask bank v = true ↔ AvailableWord mask bank v := by
+  simp [availableB, AvailableWord, or_assoc]
+
+theorem recipeGate_spec {mask : Nat} {bank : List Word} {v a b : Word}
+    (h : recipeGate mask bank v a b = true) : GateWord mask bank v := by
+  simp only [recipeGate, Bool.and_eq_true, Bool.or_eq_true, beq_iff_eq, availableB_spec] at h
+  rcases h with ⟨ha, first | ⟨hb, second⟩⟩
+  · exact Or.inl ⟨a, ha, first⟩
+  · exact Or.inr ⟨a, b, ha, hb, second⟩
+
+theorem replayRecipesBuilds (mask : Nat) (needed : List Word) (recipes : List (Word × Word × Word))
+    (bank : List Word) : WordBuilds mask bank (replayRecipes mask needed recipes bank) := by
+  induction recipes generalizing bank with
+  | nil => trivial
+  | cons recipe recipes ih =>
+    obtain ⟨w, a, b⟩ := recipe
+    change WordBuilds mask bank
+      (if needed.contains (w &&& mask) && !availableB mask bank (w &&& mask) &&
+          recipeGate mask bank (w &&& mask) (a &&& mask) (b &&& mask) then
+        (w &&& mask) :: replayRecipes mask needed recipes ((w &&& mask) :: bank)
+      else replayRecipes mask needed recipes bank)
+    split
+    · rename_i yes
+      exact ⟨recipeGate_spec (Bool.and_eq_true_iff.mp yes).2, ih _⟩
+    · exact ih _
+
+theorem flatCountCard (mask : Nat) {words : List Word} (nodup : words.Nodup) :
+    flatCount mask words = (flatSet mask words.toFinset).card := by
+  induction words with
+  | nil => rfl
+  | cons w ws ih =>
+    have nd := List.nodup_cons.mp nodup
+    have fresh : w ∉ ws.toFinset := by simpa using nd.1
+    have bool : maskFlat mask w = true ↔ maskedFlat mask w := by
+      simp [maskFlat, maskedFlat]
+    change (if maskFlat mask w then flatCount mask ws + 1 else flatCount mask ws) = _
+    rw [List.toFinset_cons, flIns fresh, ih nd.2]
+    by_cases h : maskedFlat mask w
+    · simp [h, bool.mpr h]
+    · have no : maskFlat mask w = false := Bool.eq_false_iff.mpr (fun ht => h (bool.mp ht))
+      simp [h, no]
+
+theorem buildsAppend {mask : Nat} {roots first second : List Word}
+    (left : WordBuilds mask roots first)
+    (right : WordBuilds mask (first ++ roots) second) :
+    WordBuilds mask roots (first ++ second) := by
+  induction first generalizing roots with
+  | nil => exact right
+  | cons w ws ih =>
+    refine ⟨left.1, ih left.2 ?_⟩
+    have same (bank other vals : List Word) (perm : bank.Perm other)
+        (h : WordBuilds mask bank vals) : WordBuilds mask other vals := by
+      induction vals generalizing bank other with
+      | nil => trivial
+      | cons v vs ih =>
+        exact ⟨gateWeaken (fun x hx => Or.inr (Or.inr (perm.mem_iff.mp hx))) h.1,
+          ih _ _ (perm.cons v) h.2⟩
+    exact same _ _ _ (List.perm_middle (a := w) (l₁ := ws) (l₂ := roots)).symm right
+
+theorem buildableWords {mask goal n : Nat} {pool : Finset Word} {bank : List Word}
+    (h : buildable mask goal n pool) (supply : ∀ w ∈ pool, AvailableWord mask bank w) :
+    ∃ values, values.length ≤ n ∧ WordBuilds mask bank values ∧
+      AvailableWord mask (values ++ bank) goal := by
+  induction n generalizing pool bank with
+  | zero => exact ⟨[], Nat.le_refl _, trivial, supply _ h⟩
+  | succ n ih =>
+    have add {w : Word} (g : GateWord mask bank w)
+        (tail : buildable mask goal n (insert w pool)) :
+        ∃ values, values.length ≤ n+1 ∧ WordBuilds mask bank values ∧
+          AvailableWord mask (values ++ bank) goal := by
+      have growing : ∀ v ∈ insert w pool, AvailableWord mask (w :: bank) v := by
+        intro v hv
+        rcases Finset.mem_insert.mp hv with rfl | hv
+        · exact Or.inr (Or.inr List.mem_cons_self)
+        · exact availableWeaken (fun _ hh => Or.inr (Or.inr (List.mem_cons_of_mem _ hh))) (supply _ hv)
+      obtain ⟨values, budget, build, hit⟩ := ih tail growing
+      refine ⟨w :: values, by simp only [List.length_cons]; omega, ⟨g, build⟩, ?_⟩
+      rcases hit with h | h | h
+      · exact Or.inl h
+      · exact Or.inr (Or.inl h)
+      · exact Or.inr (Or.inr (by simp only [List.mem_append, List.mem_cons] at *; tauto))
+    rcases h with h | ⟨a, ha, h⟩ | ⟨a, ha, b, hb, d, h⟩
+    · obtain ⟨values, cap, build, hit⟩ := ih h supply
+      exact ⟨values, by omega, build, hit⟩
+    · exact add (Or.inl ⟨a, supply a ha, rfl⟩) h
+    · apply add (w := binWord d a b) ?_ h
+      exact Or.inr ⟨a, b, supply a ha, supply b hb, by cases d <;> simp [binWord]⟩
+
+theorem boundClosesSound {state : RowState} {bound : Bound}
+    (known : Lower bound.1 bound.2.1 bound.2.2.2 bound.2.2.1)
+    (submask : mask &&& bound.1 = bound.1)
+    (viable : WordViable mask target state) :
+    boundCloses target state bound = false := by
+  obtain ⟨fuel, ws, history⟩ := state
+  obtain ⟨cut, stock, minimum, goal⟩ := bound
+  obtain ⟨nd, k, t, steps, live⟩ := viable
+  change k ≤ fuel at steps
+  change LiveWord mask target k t ws.toFinset at live
+  apply Bool.eq_false_iff.mpr
+  intro hc
+  let replay := replayRecipes cut (recipeNeeded cut stock ws history) history.reverse stock
+  change ((target &&& cut) == goal && goal != 0 && goal != cut &&
+    (if fuel - flatCount cut ws < minimum then
+      if (recipeStart cut stock ws).length + (fuel - flatCount cut ws) < minimum then
+        if (recipeNeeded cut stock ws history).length + (fuel - flatCount cut ws) < minimum then
+          (replay.length + (fuel - flatCount cut ws) < minimum) &&
+            ws.all (fun w => availableB cut (replay ++ stock) (w &&& cut))
+        else false
+      else false
+    else false)) = true at hc
+  simp only [Bool.and_eq_true, beq_iff_eq, bne_iff_ne] at hc
+  obtain ⟨⟨⟨goalEq, nonzero⟩, nonflat⟩, scan⟩ := hc
+  split at scan <;> try contradiction
+  split at scan <;> try contradiction
+  split at scan <;> try contradiction
+  rcases Bool.and_eq_true_iff.mp scan with ⟨length, sources⟩
+  simp only [decide_eq_true_eq] at length
+  have pn : ¬maskedFlat cut target := by simpa [maskedFlat, goalEq] using And.intro nonzero nonflat
+  obtain ⟨n, hn, build⟩ := maskedBuild live cut submask pn
+  rw [← flatCountCard cut nd] at hn
+  change n + flatCount cut ws ≤ k at hn
+  have supply : ∀ w ∈ projectedStock cut ws.toFinset, AvailableWord cut (replay ++ stock) w := by
+    intro w hw
+    simp only [projectedStock, visibleWords, Finset.mem_insert, Finset.mem_image,
+      List.mem_toFinset] at hw
+    rcases hw with rfl | rfl | ⟨v, hv, rfl⟩
+    · exact Or.inl rfl
+    · exact Or.inr (Or.inl rfl)
+    · exact availableB_spec.mp (List.all_eq_true.mp sources v hv)
+  obtain ⟨ys, hy, built, avail⟩ := buildableWords build supply
+  have both := buildsAppend (replayRecipesBuilds cut _ history.reverse stock) built
+  have hit : AvailableWord cut ((replay ++ ys) ++ stock) goal := by
+    rw [← goalEq]
+    exact availableWeaken (fun v hv => Or.inr (Or.inr (by
+      simpa [List.mem_append, or_assoc, or_left_comm, or_comm] using hv))) avail
+  have enough := known (replay ++ ys) both hit
+  simp only [List.length_append] at enough
+  omega
+
+theorem knownClosesSound {bounds : List Bound} {state : RowState}
+    (known : Known bounds) (submask : ∀ b ∈ bounds, mask &&& b.1 = b.1)
+    (viable : WordViable mask target state) :
+    knownCloses target bounds state = false := by
+  induction bounds with
+  | nil => rfl
+  | cons bound bounds ih =>
+    change (boundCloses target state bound || knownCloses target bounds state) = false
+    rw [boundClosesSound (known _ List.mem_cons_self) (submask _ List.mem_cons_self) viable]
+    exact ih (fun b hb => known b (List.mem_cons_of_mem _ hb))
+      (fun b hb => submask b (List.mem_cons_of_mem _ hb))
+
+abbrev PointWire (rows : Nat) := Fin rows → Bool
+
+def encodePoint (f : PointWire rows) : BitVec rows :=
+  (BitVec.ofBoolListLE (List.ofFn f)).cast List.length_ofFn
+
+theorem encodeBit (f : PointWire rows) (i : Fin rows) :
+    (encodePoint f).getLsbD i.val = f i := by
+  simp only [encodePoint, BitVec.getLsbD_cast, BitVec.getLsbD_ofBoolListLE,
+    List.getD_eq_getElem?_getD, List.getElem?_ofFn]
+  simp [i.isLt]
+
+theorem encodeNot (f : PointWire rows) : encodePoint (fun j => !f j) = ~~~encodePoint f := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  rw [BitVec.getLsbD_not, encodeBit f ⟨i, hi⟩, encodeBit _ ⟨i, hi⟩]
+  simp [hi]
+
+theorem encodeAnd (a b : PointWire rows) :
+    encodePoint (fun i => a i && b i) = encodePoint a &&& encodePoint b := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  rw [BitVec.getLsbD_and, encodeBit a ⟨i, hi⟩, encodeBit b ⟨i, hi⟩, encodeBit _ ⟨i, hi⟩]
+
+theorem encodeOr (a b : PointWire rows) :
+    encodePoint (fun i => a i || b i) = encodePoint a ||| encodePoint b := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  rw [BitVec.getLsbD_or, encodeBit a ⟨i, hi⟩, encodeBit b ⟨i, hi⟩, encodeBit _ ⟨i, hi⟩]
+
+def pointWord (f : PointWire rows) : Word := (encodePoint f).toNat
+
+def relabel (sourceIndex : Fin rows → Fin rows) (word : Word) : Word :=
+  pointWord fun i => word.testBit (sourceIndex i).val
+
+theorem maskBit {i : Nat} (hi : i < rows) : (fullMask rows).testBit i = true := by
+  simp [fullMask, Nat.testBit_two_pow_sub_one, hi]
+
+theorem pointZero : pointWord (fun _ : Fin rows => false) = 0 := by
+  have eq : encodePoint (fun _ : Fin rows => false) = 0 := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro i hi
+    rw [encodeBit _ ⟨i, hi⟩]
+    simp
+  simp [pointWord, eq]
+
+theorem relabelZero (sourceIndex : Fin rows → Fin rows) : relabel sourceIndex 0 = 0 := by
+  simpa [relabel] using (pointZero (rows := rows))
+
+theorem relabelMask (sourceIndex : Fin rows → Fin rows) : relabel sourceIndex (fullMask rows) = fullMask rows := by
+  have all : (fun i => (fullMask rows).testBit (sourceIndex i).val) = fun _ => true := by
+    funext i
+    exact maskBit (sourceIndex i).isLt
+  have bits : encodePoint (fun _ : Fin rows => true) = BitVec.allOnes rows := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro i hi
+    rw [encodeBit _ ⟨i, hi⟩]
+    simp [hi]
+  simp [relabel, all, pointWord, bits, fullMask]
+
+theorem relabelNot (sourceIndex : Fin rows → Fin rows) (a : Word) :
+    relabel sourceIndex (fullMask rows ^^^ a) = fullMask rows ^^^ relabel sourceIndex a := by
+  have eq : (fun i => (fullMask rows ^^^ a).testBit (sourceIndex i).val) =
+      fun i => !a.testBit (sourceIndex i).val := by
+    funext i
+    simp [Nat.testBit_xor, maskBit (sourceIndex i).isLt]
+  simp only [relabel, eq, pointWord, encodeNot, notNat]
+
+theorem relabelAnd (sourceIndex : Fin rows → Fin rows) (a b : Word) :
+    relabel sourceIndex (a &&& b) = relabel sourceIndex a &&& relabel sourceIndex b := by
+  simp only [relabel, Nat.testBit_and, pointWord, encodeAnd, BitVec.toNat_and]
+
+theorem relabelOr (sourceIndex : Fin rows → Fin rows) (a b : Word) :
+    relabel sourceIndex (a ||| b) = relabel sourceIndex a ||| relabel sourceIndex b := by
+  simp only [relabel, Nat.testBit_or, pointWord, encodeOr, BitVec.toNat_or]
+
+theorem lowerRelabel (sourceIndex : Fin rows → Fin rows) {bank roots : List Word}
+    {src dst : Word} {minimum : Nat}
+    (old : Lower (fullMask rows) bank src minimum)
+    (goal : relabel sourceIndex dst = src)
+    (supply : ∀ w ∈ roots, AvailableWord (fullMask rows) bank (relabel sourceIndex w)) :
+    Lower (fullMask rows) roots dst minimum := by
+  apply lowerMap (relabel sourceIndex) (relabelZero sourceIndex) (relabelMask sourceIndex)
+    (relabelNot sourceIndex) (relabelAnd sourceIndex) (relabelOr sourceIndex) supply
+  rw [goal]
+  exact old
+
+theorem relabelXor (sourceIndex : Fin rows → Fin rows) (a b : Word) :
+    relabel sourceIndex (a ^^^ b) = relabel sourceIndex a ^^^ relabel sourceIndex b := by
+  have eq : encodePoint (fun i => (a ^^^ b).testBit (sourceIndex i).val) =
+      encodePoint (fun i => a.testBit (sourceIndex i).val) ^^^
+      encodePoint (fun i => b.testBit (sourceIndex i).val) := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro i hi
+    rw [BitVec.getLsbD_xor, encodeBit _ ⟨i, hi⟩, encodeBit _ ⟨i, hi⟩, encodeBit _ ⟨i, hi⟩]
+    exact Nat.testBit_xor ..
+  simpa only [relabel, pointWord, BitVec.toNat_xor] using congrArg BitVec.toNat eq
+
+theorem lowerRelabelMasked (sourceIndex : Fin rows → Fin rows)
+    {oldMask newMask : Nat} {bank roots : List Word} {src dst : Word} {minimum : Nat}
+    (old : Lower oldMask bank src minimum)
+    (masks : relabel sourceIndex newMask = oldMask)
+    (goal : relabel sourceIndex dst = src)
+    (supply : ∀ w ∈ roots, AvailableWord oldMask bank (relabel sourceIndex w)) :
+    Lower newMask roots dst minimum := by
+  apply lowerMap (relabel sourceIndex) (relabelZero sourceIndex) masks
+    (fun w => by rw [relabelXor, masks]) (relabelAnd sourceIndex) (relabelOr sourceIndex) supply
+  rwa [goal]
+
+theorem extendKnownRelabel (sourceIndex : Fin rows → Fin rows) {bounds : List Bound}
+    {source destination : Bound} (old : Known bounds) (mem : source ∈ bounds)
+    (budget : destination.2.2.1 = source.2.2.1)
+    (masks : relabel sourceIndex destination.1 = source.1)
+    (goal : relabel sourceIndex destination.2.2.2 = source.2.2.2)
+    (supply : ∀ w ∈ destination.2.1,
+      AvailableWord source.1 source.2.1 (relabel sourceIndex w)) :
+    Known (destination :: bounds) := by
+  apply extendKnown old
+  rw [budget]
+  exact lowerRelabelMasked sourceIndex (old _ mem) masks goal supply
+
+theorem relabelToNatBound (sourceIndex : Fin rows → Fin rows) (word : Word) :
+    Masked (fullMask rows) (relabel sourceIndex word) := toNatMasked _
+
+theorem relabelBit (sourceIndex : Fin rows → Fin rows) (word : Word) (i : Fin rows) :
+    (relabel sourceIndex word).testBit i.val = word.testBit (sourceIndex i).val :=
+  encodeBit _ i
+
+theorem relabelOutside (sourceIndex : Fin rows → Fin rows) (word i : Word) (h : rows ≤ i) :
+    (relabel sourceIndex word).testBit i = false := by
+  apply Nat.testBit_lt_two_pow
+  exact Nat.lt_of_lt_of_le (show (encodePoint _).toNat < 2 ^ rows from BitVec.isLt _)
+    (Nat.pow_le_pow_right (by decide) h)
+
+theorem relabelInj (sourceIndex : Fin rows → Fin rows) (onto : Function.Surjective sourceIndex)
+    {a b : Word} (ba : Masked (fullMask rows) a) (bb : Masked (fullMask rows) b)
+    (eq : relabel sourceIndex a = relabel sourceIndex b) : a = b := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  by_cases inside : i < rows
+  · obtain ⟨j, h⟩ := onto ⟨i, inside⟩
+    have bit := congrArg (fun w : Nat => w.testBit j.val) eq
+    simpa only [relabelBit, h] using bit
+  · have ea := congrArg (fun w : Nat => w.testBit i) ba
+    have eb := congrArg (fun w : Nat => w.testBit i) bb
+    simp only [Nat.testBit_and, fullMask, Nat.testBit_two_pow_sub_one, inside, decide_false,
+      Bool.and_false] at ea eb
+    rw [← ea, ← eb]
+
+theorem kw_step (goal : Word) (D D' : Finset Word) (u v w : ℕ) (c : ℕ → ℕ → Bool) (f : ℕ → ℕ → ℕ)
+    (hu : u ∈ D) (hv : v ∈ D) (huv : u ≠ v) (huD : u ∉ D') (hvD : v ∉ D')
+    (hsub : ∀ x ∈ D', x ≠ w → x ∈ D)
+    (hf : ∀ e i, goal.testBit e = true → goal.testBit i = false →
+      f e i ∈ D' ∧ (f e i).testBit e = true ∧ (f e i).testBit i = false)
+    (hr : ∀ e i e' i', goal.testBit e = true → goal.testBit e' = true → goal.testBit i = false → goal.testBit i' = false → f e i = f e' i' → f e i' = f e i)
+    (hcu : ∀ e i, w.testBit e = true → w.testBit i = false → c e i = true →
+      u.testBit e = true ∧ u.testBit i = false)
+    (hcv : ∀ e i, w.testBit e = true → w.testBit i = false → c e i = false →
+      v.testBit e = true ∧ v.testBit i = false)
+    (hc : ∀ e i e' i', c e i = c e' i' → c e i' = c e i) :
+    ∃ g : ℕ → ℕ → ℕ,
+      (∀ e i, goal.testBit e = true → goal.testBit i = false →
+        g e i ∈ D ∧ (g e i).testBit e = true ∧ (g e i).testBit i = false) ∧
+      (∀ e i e' i', goal.testBit e = true → goal.testBit e' = true → goal.testBit i = false → goal.testBit i' = false → g e i = g e' i' → g e i' = g e i) := by
+  have hg : ∀ e i, goal.testBit e = true → goal.testBit i = false → f e i = w →
+      ((if f e i = w then (cond (c e i) u v) else f e i) = u ∧ c e i = true) ∨
+      ((if f e i = w then (cond (c e i) u v) else f e i) = v ∧ c e i = false) := by
+    intro e i _ _ h
+    rw [ite_eq_left (h)]
+    cases c e i
+    · exact Or.inr ⟨rfl, rfl⟩
+    · exact Or.inl ⟨rfl, rfl⟩
+  refine ⟨fun e i => if f e i = w then (cond (c e i) u v) else f e i, ?_, ?_⟩
+  · intro e i he hi
+    obtain ⟨h1, h2, h3⟩ := hf e i he hi
+    show (if f e i = w then (cond (c e i) u v) else f e i) ∈ D ∧
+      (if f e i = w then (cond (c e i) u v) else f e i).testBit e = true ∧
+      (if f e i = w then (cond (c e i) u v) else f e i).testBit i = false
+    by_cases hw : f e i = w
+    · rw [hw] at h2 h3
+      rcases hg e i he hi hw with ⟨hx, hcc⟩ | ⟨hx, hcc⟩
+      · rw [hx]; exact ⟨hu, hcu e i h2 h3 hcc⟩
+      · rw [hx]; exact ⟨hv, hcv e i h2 h3 hcc⟩
+    · rw [ite_eq_right (hw)]; exact ⟨hsub _ h1 hw, h2, h3⟩
+  · intro e i e' i' he he' hi hi' heq
+    show (if f e i' = w then (cond (c e i') u v) else f e i') =
+      (if f e i = w then (cond (c e i) u v) else f e i)
+    have heq' : (if f e i = w then (cond (c e i) u v) else f e i) =
+      (if f e' i' = w then (cond (c e' i') u v) else f e' i') := heq
+    by_cases h1 : f e i = w
+    · by_cases h2 : f e' i' = w
+      · have h3 : f e i' = w := (hr e i e' i' he he' hi hi' (h1.trans h2.symm)).trans h1
+        have hcc : c e i = c e' i' := by
+          rcases hg e i he hi h1 with ⟨hx, hx'⟩ | ⟨hx, hx'⟩ <;>
+            rcases hg e' i' he' hi' h2 with ⟨hy, hy'⟩ | ⟨hy, hy'⟩
+          · rw [hx', hy']
+          · exact absurd (hx.symm.trans (heq'.trans hy)) huv
+          · exact absurd (hy.symm.trans (heq'.symm.trans hx)) huv
+          · rw [hx', hy']
+        rw [ite_eq_left (h3), ite_eq_left (h1), hc e i e' i' hcc]
+      · exfalso
+        rw [ite_eq_right (h2)] at heq'
+        have hm := (hf e' i' he' hi').1
+        rcases hg e i he hi h1 with ⟨hx, _⟩ | ⟨hx, _⟩
+        · exact huD (by rw [← hx, heq']; exact hm)
+        · exact hvD (by rw [← hx, heq']; exact hm)
+    · by_cases h2 : f e' i' = w
+      · exfalso
+        rw [ite_eq_right (h1)] at heq'
+        have hm := (hf e i he hi).1
+        rcases hg e' i' he' hi' h2 with ⟨hx, _⟩ | ⟨hx, _⟩
+        · exact huD (by rw [← hx, ← heq']; exact hm)
+        · exact hvD (by rw [← hx, ← heq']; exact hm)
+      · have h1n : (if f e i = w then (cond (c e i) u v) else f e i) = f e i := ite_eq_right h1
+        have h2n : (if f e' i' = w then (cond (c e' i') u v) else f e' i') = f e' i' := ite_eq_right h2
+        rw [h1n, h2n] at heq'
+        have h3 := hr e i e' i' he he' hi hi' heq'
+        have h3n : ¬ f e i' = w := by rw [h3]; exact h1
+        rw [h1n, ite_eq_right (h3n)]
+        exact h3
+
+theorem and_cu (u v e i : ℕ) (h1 : (u &&& v).testBit e = true) (_h2 : (u &&& v).testBit i = false)
+    (h3 : (!(u.testBit i)) = true) : u.testBit e = true ∧ u.testBit i = false := by
+  rw [Nat.testBit_and] at h1
+  cases hue : u.testBit e <;> cases hui : u.testBit i <;> simp_all
+
+theorem and_cv (u v e i : ℕ) (h1 : (u &&& v).testBit e = true) (h2 : (u &&& v).testBit i = false)
+    (h3 : (!(u.testBit i)) = false) : v.testBit e = true ∧ v.testBit i = false := by
+  rw [Nat.testBit_and] at h1 h2
+  cases hue : u.testBit e <;> cases hui : u.testBit i <;> simp_all
+
+theorem or_cu (u v e i : ℕ) (_h1 : (u ||| v).testBit e = true) (h2 : (u ||| v).testBit i = false)
+    (h3 : u.testBit e = true) : u.testBit e = true ∧ u.testBit i = false := by
+  rw [Nat.testBit_or] at h2
+  cases hue : u.testBit e <;> cases hui : u.testBit i <;> simp_all
+
+theorem or_cv (u v e i : ℕ) (h1 : (u ||| v).testBit e = true) (h2 : (u ||| v).testBit i = false)
+    (h3 : u.testBit e = false) : v.testBit e = true ∧ v.testBit i = false := by
+  rw [Nat.testBit_or] at h1 h2
+  cases hue : u.testBit e <;> cases hui : u.testBit i <;> simp_all
+
+def KWPartition (goal : Word) (ws : Finset Word) : Prop :=
+  ∃ f : Nat → Nat → Word,
+    (∀ e i, goal.testBit e = true → goal.testBit i = false →
+      f e i ∈ ws ∧ (f e i).testBit e = true ∧ (f e i).testBit i = false) ∧
+    (∀ e i e' i', goal.testBit e = true → goal.testBit e' = true →
+      goal.testBit i = false → goal.testBit i' = false → f e i = f e' i' → f e i' = f e i)
+
+theorem kwFromLive {mask goal : Word} {k : Nat} {S : Finset Word}
+    (live : LiveWord mask goal k 0 S) (tight : S.card = k + 1) : KWPartition goal S := by
+  induction k generalizing S with
+  | zero =>
+    obtain ⟨_, eq, _⟩ := live
+    subst S
+    exact ⟨fun _ _ => goal, fun _ _ hp hn => ⟨by simp, hp, hn⟩, fun _ _ _ _ _ _ _ _ _ => rfl⟩
+  | succ k ih =>
+    rcases live with ⟨u, U, a, eq, _⟩ | ⟨U, a, b, op, rfl, pa, pb, ab, fresh, tail⟩
+    · omega
+    let w := binWord op a b
+    have wU : w ∉ U := fun h => fresh (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem h))
+    have wA : w ≠ a := fun eq => fresh (Finset.mem_insert.mpr (Or.inl eq))
+    have wB : w ≠ b := fun eq => fresh (Finset.mem_insert_of_mem (Finset.mem_insert.mpr (Or.inl eq)))
+    have tailSize := (liveWordSize tail).2
+    change (insert w U).card + 0 ≤ k + 1 at tailSize
+    rw [Finset.card_insert_of_notMem wU] at tailSize
+    have paCard := Finset.card_insert_le a (insert b U)
+    have pbCard := Finset.card_insert_le b U
+    have aU : a ∉ U := by
+      intro h
+      rw [Finset.insert_eq_of_mem (Finset.mem_insert_of_mem h)] at tight
+      omega
+    have bU : b ∉ U := by
+      intro h
+      rw [Finset.insert_eq_of_mem h] at tight
+      have := Finset.card_insert_le a U
+      omega
+    obtain ⟨f, hf, hr⟩ := ih tail (by
+      change (insert w U).card = k + 1
+      rw [Finset.card_insert_of_notMem wU]
+      omega)
+    have keepA : a ∉ insert w U := by simp [wA.symm, aU]
+    have keepB : b ∉ insert w U := by simp [wB.symm, bU]
+    have other : ∀ x ∈ insert w U, x ≠ w → x ∈ insert a (insert b U) := by
+      intro x hx hn
+      exact Finset.mem_insert_of_mem (Finset.mem_insert_of_mem ((Finset.mem_insert.mp hx).resolve_left hn))
+    have ha : a ∈ insert a (insert b U) := Finset.mem_insert_self ..
+    have hb : b ∈ insert a (insert b U) := Finset.mem_insert_of_mem (Finset.mem_insert_self ..)
+    cases op
+    · exact kw_step goal _ _ a b w (fun _ i => !(a.testBit i)) f ha hb ab keepA keepB other hf hr
+        (fun e i h1 h2 h3 => and_cu a b e i h1 h2 h3) (fun e i h1 h2 h3 => and_cv a b e i h1 h2 h3)
+        (fun _ _ _ _ h => h.symm)
+    · exact kw_step goal _ _ a b w (fun e _ => a.testBit e) f ha hb ab keepA keepB other hf hr
+        (fun e i h1 h2 h3 => or_cu a b e i h1 h2 h3) (fun e i h1 h2 h3 => or_cv a b e i h1 h2 h3)
+        (fun _ _ _ _ _ => rfl)
+
+theorem liveDirected {mask goal : Word} {k : Nat} {S : Finset Word}
+    (live : LiveWord mask goal k 0 S) {p n : Nat}
+    (hp : goal.testBit p = true) (hn : goal.testBit n = false) :
+    ∃ w ∈ S, w.testBit p = true ∧ w.testBit n = false := by
+  induction k generalizing S with
+  | zero =>
+    obtain ⟨_,rfl,_⟩ := live
+    exact ⟨goal, by simp, hp, hn⟩
+  | succ k ih =>
+    rcases live with ⟨u, U, a, ueq, _⟩ | ⟨U,a,b,op,rfl,pa,pb,ab,fresh,tail⟩
+    · omega
+    obtain ⟨w, hw, wp, wn⟩ := ih tail
+    rcases Finset.mem_insert.mp hw with eq | hU
+    · subst w
+      cases op
+      · by_cases ha : a.testBit n = false
+        · exact ⟨a, Finset.mem_insert_self .., and_cu a b p n wp wn (by simp [ha])⟩
+        · exact ⟨b, Finset.mem_insert_of_mem (Finset.mem_insert_self ..),
+            and_cv a b p n wp wn (by cases h : a.testBit n <;> simp_all)⟩
+      · by_cases ha : a.testBit p = true
+        · exact ⟨a, Finset.mem_insert_self .., or_cu a b p n wp wn ha⟩
+        · exact ⟨b, Finset.mem_insert_of_mem (Finset.mem_insert_self ..),
+            or_cv a b p n wp wn (by cases h : a.testBit p <;> simp_all)⟩
+    · exact ⟨w, Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hU),wp,wn⟩
+
+namespace PackedRect
+
+theorem tb4095 (i : ℕ) : (4095 : ℕ).testBit i = decide (i < 12) := by
+  have e : (4095 : ℕ) = 2 ^ 12 - 1 := by norm_num
+  rw [e, Nat.testBit_two_pow_sub_one]
+
+def tb (w e : ℕ) : Bool := !(Nat.beq (Nat.land (Nat.shiftRight w e) 1) 0)
+
+theorem tb_eq (w e : ℕ) : tb w e = w.testBit e := by
+  have h : Nat.land (Nat.shiftRight w e) 1 = 1 &&& (w >>> e) := Nat.and_comm _ _
+  unfold tb Nat.testBit
+  rw [h]
+  generalize (1 &&& w >>> e) = X
+  cases X <;> rfl
+
+def rect (x J : ℕ) : ℕ → ℕ
+  | 0 => 0
+  | e + 1 => Nat.lor (cond (tb x e) (Nat.shiftLeft J (Nat.mul 12 e)) 0) (rect x J e)
+
+def rectW (x : ℕ) : ℕ := rect x (Nat.xor (Nat.shiftRight x 12) 4095) 12
+
+theorem rect_tb (x J i : ℕ) (hJ : J.testBit i = true) : ∀ n e : ℕ, e < n → x.testBit e = true →
+    (rect x J n).testBit (12 * e + i) = true := by
+  intro n
+  induction n with
+  | zero => intro e he; omega
+  | succ n ih =>
+    intro e he hx
+    show ((cond (tb x n) (J <<< (12 * n)) 0) ||| rect x J n).testBit (12 * e + i) = true
+    rw [Nat.testBit_or]
+    by_cases hen : e = n
+    · subst hen
+      rw [tb_eq, hx]
+      simp [Nat.testBit_shiftLeft, hJ]
+    · rw [ih e (by omega) hx]
       simp
-    unfold rootOK at hmem
-    rw [hd, hc, hg] at hmem
-    simp at hmem
 
-theorem lb_cert {n : ℕ} (f : BFn n) (l : List ℕ) (m y : ℕ) (xs : List ℕ)
-    (pD pM : List (ℕ × ℕ)) (G : List (List ℕ)) (T : BT) (cap lb : ℕ)
-    (hlb : cap + 1 = lb)
-    (hm : m = 2 ^ l.length - 1)
-    (hy : encL f l = y)
-    (hxs : (List.ofFn fun (i : Fin n) => (fun x : Fin n → Bool => x i)).map
-      (fun a => encL a l) = xs)
-    (hnc : ∃ a b : Fin n → Bool, f a ≠ f b)
-    (hp : prsOK m y pD pM = true) (hG : symOK m y G = true)
-    (hT : ∀ x, T.mem x = true → ∃ h, stepOK m y pD pM G T x h = true)
-    (hi : xs.sublists.all (rootOK y pD pM G T cap) = true) :
-    ∀ s, HasCircuitSize n f s → lb ≤ s := by
-  intro s h
-  by_contra hlt
-  obtain ⟨s', hs', ws, hsub, hrun⟩ := exists_run f hnc s h
-  have hr : NatRun m (encL f l) s' (ws.map fun a => encL a l) :=
-    Run.map (fun a : BFn n => encL a l) (fun a => by rw [hm]; exact encL_inv a l)
-      (fun a b => encL_and a b l) (fun a b => encL_or a b l) hrun
-  rw [hy] at hr
-  have hsub' : (ws.map fun a => encL a l).Sublist xs := by rw [← hxs]; exact hsub.map _
-  exact cert_core hp hG hT hi (by omega) hsub' hr
+theorem rectW_tb (x e i : ℕ) (he : e < 12) (hi : i < 12) (h1 : x.testBit e = true)
+    (h2 : x.testBit (12 + i) = false) : (rectW x).testBit (12 * e + i) = true := by
+  apply rect_tb _ _ _ _ 12 e he h1
+  show ((x >>> 12) ^^^ 4095).testBit i = true
+  rw [Nat.testBit_xor, Nat.testBit_shiftRight, h2, tb4095]
+  simp [hi]
+
+def full : ℕ := 22300745198530623141535718272648361505980415
+
+theorem full_eq : full = 2 ^ 144 - 1 := by norm_num [full]
+
+theorem tb_land (a b q : ℕ) : (Nat.land a b).testBit q = (a.testBit q && b.testBit q) :=
+  Nat.testBit_and a b q
+
+theorem tb_lor (a b q : ℕ) : (Nat.lor a b).testBit q = (a.testBit q || b.testBit q) :=
+  Nat.testBit_or a b q
+
+theorem tb_xor (a b q : ℕ) : (Nat.xor a b).testBit q = Bool.xor (a.testBit q) (b.testBit q) :=
+  Nat.testBit_xor a b q
+
+theorem full_tb (q : ℕ) : full.testBit q = decide (q < 144) := by
+  rw [full_eq, Nat.testBit_two_pow_sub_one]
+
+theorem land_sub (h a : ℕ) (H : ∀ q, h.testBit q = true → a.testBit q = true) :
+    Nat.land h a = h := by
+  apply Nat.eq_of_testBit_eq
+  intro q
+  rw [tb_land]
+  cases hh : h.testBit q
+  · rfl
+  · rw [H q hh]; rfl
+
+theorem land_disj (a h : ℕ) (H : ∀ q, a.testBit q = true → h.testBit q = true → False) :
+    Nat.land a h = 0 := by
+  apply Nat.eq_of_testBit_eq
+  intro q
+  rw [tb_land, Nat.zero_testBit]
+  cases ha : a.testBit q
+  · rfl
+  · cases hh : h.testBit q
+    · rfl
+    · exact (H q ha hh).elim
+
+def orS (x s : ℕ) : ℕ := Nat.lor x (Nat.shiftRight x s)
+
+def orSL (x s : ℕ) : ℕ := Nat.lor x (Nat.shiftLeft x s)
+
+theorem orS_tb (x s q : ℕ) : (orS x s).testBit q = (x.testBit q || x.testBit (s + q)) := by
+  show (x ||| x >>> s).testBit q = _
+  rw [Nat.testBit_or, Nat.testBit_shiftRight]
+
+theorem orSL_tb (x s q : ℕ) :
+    (orSL x s).testBit q = (x.testBit q || (decide (s ≤ q) && x.testBit (q - s))) := by
+  show (x ||| x <<< s).testBit q = _
+  simp only [Nat.testBit_or, Nat.testBit_shiftLeft, ge_iff_le]
+
+theorem orS_ex (k p x n s : ℕ)
+    (hx : ∀ q, x.testBit q = true → ∃ j, j < n ∧ p.testBit (k * j + q) = true) (q : ℕ)
+    (h : (orS x (k * s)).testBit q = true) : ∃ j, j < n + s ∧ p.testBit (k * j + q) = true := by
+  rw [orS_tb, Bool.or_eq_true] at h
+  rcases h with h | h
+  · obtain ⟨j, hj, hp⟩ := hx q h
+    exact ⟨j, by omega, hp⟩
+  · obtain ⟨j, hj, hp⟩ := hx _ h
+    refine ⟨j + s, by omega, ?_⟩
+    rw [Nat.mul_add, Nat.add_assoc]; exact hp
+
+theorem orSL_ex (k p x n s : ℕ)
+    (hx : ∀ q, x.testBit q = true → ∃ j, j < n ∧ k * j ≤ q ∧ p.testBit (q - k * j) = true)
+    (q : ℕ) (h : (orSL x (k * s)).testBit q = true) :
+    ∃ j, j < n + s ∧ k * j ≤ q ∧ p.testBit (q - k * j) = true := by
+  rw [orSL_tb, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
+  rcases h with h | ⟨hs, h⟩
+  · obtain ⟨j, hj, hq, hp⟩ := hx q h
+    exact ⟨j, by omega, hq, hp⟩
+  · obtain ⟨j, hj, hq, hp⟩ := hx _ h
+    have e : q - k * (j + s) = q - k * s - k * j := by rw [Nat.mul_add]; omega
+    refine ⟨j + s, by omega, ?_, ?_⟩
+    · rw [Nat.mul_add]; omega
+    · rw [e]; exact hp
+
+def rowM : ℕ := 5445847423328601499764522166702896582657
+
+theorem rowM_tb (q : ℕ) (h : rowM.testBit q = true) : q < 144 ∧ q % 12 = 0 := by
+  have hlt : q < 144 := by
+    by_contra hq
+    have h0 : rowM.testBit q = false := by
+      apply Nat.testBit_lt_two_pow
+      have h1 : rowM < 2 ^ 144 := by norm_num [rowM]
+      have h2 : (2 : ℕ) ^ 144 ≤ 2 ^ q := Nat.pow_le_pow_right (by norm_num) (by omega)
+      omega
+    rw [h0] at h
+    exact Bool.noConfusion h
+  have hall : ∀ q : ℕ, q < 144 → rowM.testBit q = true → q % 12 = 0 := by decide +kernel
+  exact ⟨hlt, hall q hlt h⟩
+
+def rowsOf (p : ℕ) : ℕ := Nat.land (orS (orS (orS (orS p 6) 3) 1) 1) rowM
+
+def colsOf (p : ℕ) : ℕ := Nat.land (orS (orS (orS (orS p 96) 48) 24) 12) 4095
+
+def hullC (p : ℕ) : ℕ :=
+  Nat.land (orSL (orSL (orSL (orSL (rowsOf p) 6) 3) 1) 1)
+    (orSL (orSL (orSL (orSL (colsOf p) 96) 48) 24) 12)
+
+def hull (p : ℕ) : ℕ := hullC (Nat.land p full)
+
+theorem rowsOf_tb (p q : ℕ) (h : (rowsOf p).testBit q = true) :
+    (q < 144 ∧ q % 12 = 0) ∧ ∃ j, j < 12 ∧ p.testBit (j + q) = true := by
+  unfold rowsOf at h
+  rw [tb_land, Bool.and_eq_true] at h
+  refine ⟨rowM_tb q h.2, ?_⟩
+  have h0 : ∀ q, p.testBit q = true → ∃ j, j < 1 ∧ p.testBit (1 * j + q) = true :=
+    fun q hq => ⟨0, by norm_num, by simpa using hq⟩
+  have h1 := orS_ex 1 p _ 1 6 h0
+  have h2 := orS_ex 1 p _ _ 3 h1
+  have h3 := orS_ex 1 p _ _ 1 h2
+  have h4 := orS_ex 1 p _ _ 1 h3
+  obtain ⟨j, hj, hp⟩ := h4 q h.1
+  exact ⟨j, by omega, by simpa using hp⟩
+
+theorem colsOf_tb (p q : ℕ) (h : (colsOf p).testBit q = true) :
+    q < 12 ∧ ∃ j, j < 16 ∧ p.testBit (12 * j + q) = true := by
+  unfold colsOf at h
+  rw [tb_land, Bool.and_eq_true, tb4095, decide_eq_true_eq] at h
+  refine ⟨h.2, ?_⟩
+  have h0 : ∀ q, p.testBit q = true → ∃ j, j < 1 ∧ p.testBit (12 * j + q) = true :=
+    fun q hq => ⟨0, by norm_num, by simpa using hq⟩
+  have h1 := orS_ex 12 p _ 1 8 h0
+  have h2 := orS_ex 12 p _ _ 4 h1
+  have h3 := orS_ex 12 p _ _ 2 h2
+  have h4 := orS_ex 12 p _ _ 1 h3
+  obtain ⟨j, hj, hp⟩ := h4 q h.1
+  exact ⟨j, by omega, hp⟩
+
+theorem hullC_spec (p : ℕ) (hp : ∀ q, p.testBit q = true → q < 144) (q : ℕ)
+    (h : (hullC p).testBit q = true) :
+    q < 144 ∧ ∃ i e', i < 12 ∧ e' < 12 ∧ p.testBit (12 * (q / 12) + i) = true ∧
+      p.testBit (12 * e' + q % 12) = true := by
+  unfold hullC at h
+  rw [tb_land, Bool.and_eq_true] at h
+  obtain ⟨hR, hC⟩ := h
+  have r0 : ∀ q, (rowsOf p).testBit q = true →
+      ∃ j, j < 1 ∧ 1 * j ≤ q ∧ (rowsOf p).testBit (q - 1 * j) = true :=
+    fun q hq => ⟨0, by norm_num, by omega, by simpa using hq⟩
+  have r1 := orSL_ex 1 (rowsOf p) _ 1 6 r0
+  have r2 := orSL_ex 1 (rowsOf p) _ _ 3 r1
+  have r3 := orSL_ex 1 (rowsOf p) _ _ 1 r2
+  have r4 := orSL_ex 1 (rowsOf p) _ _ 1 r3
+  obtain ⟨j, hj, hjq, hr⟩ := r4 q hR
+  obtain ⟨⟨hb, hm⟩, i, hi, hpi⟩ := rowsOf_tb p _ hr
+  have c0 : ∀ q, (colsOf p).testBit q = true →
+      ∃ j, j < 1 ∧ 12 * j ≤ q ∧ (colsOf p).testBit (q - 12 * j) = true :=
+    fun q hq => ⟨0, by norm_num, by omega, by simpa using hq⟩
+  have c1 := orSL_ex 12 (colsOf p) _ 1 8 c0
+  have c2 := orSL_ex 12 (colsOf p) _ _ 4 c1
+  have c3 := orSL_ex 12 (colsOf p) _ _ 2 c2
+  have c4 := orSL_ex 12 (colsOf p) _ _ 1 c3
+  obtain ⟨j', hj', hjq', hc⟩ := c4 q hC
+  obtain ⟨hlt, e', he', hpe⟩ := colsOf_tb p _ hc
+  have e1 : i + (q - 1 * j) = 12 * (q / 12) + i := by omega
+  have e2 : q - 12 * j' = q % 12 := by omega
+  rw [e1] at hpi
+  rw [e2] at hpe
+  have hb' := hp _ hpe
+  exact ⟨by omega, i, e', hi, by omega, hpi, hpe⟩
+
+theorem hull_spec (p q : ℕ) (h : (hull p).testBit q = true) :
+    q < 144 ∧ ∃ i e', i < 12 ∧ e' < 12 ∧ p.testBit (12 * (q / 12) + i) = true ∧
+      p.testBit (12 * e' + q % 12) = true := by
+  have hp : ∀ q, (Nat.land p full).testBit q = true → q < 144 := by
+    intro q hq
+    rw [tb_land, full_tb, Bool.and_eq_true, decide_eq_true_eq] at hq
+    exact hq.2
+  obtain ⟨h1, i, e', hi, he, ha, hb⟩ := hullC_spec _ hp q h
+  rw [tb_land, Bool.and_eq_true] at ha hb
+  exact ⟨h1, i, e', hi, he, ha.1, hb.1⟩
+
+def tw : List ℕ → ℕ → ℕ → ℕ
+  | [], _, t => t
+  | a :: l, o, t => tw l (Nat.lor o a) (Nat.lor t (Nat.land o a))
+
+def priv (t a : ℕ) : ℕ := hull (Nat.land a (Nat.xor t full))
+
+def hullsOK (t : ℕ) : List ℕ → ℕ → Bool
+  | [], _ => true
+  | a :: l, acc => Nat.beq (Nat.land (priv t a) a) (priv t a) &&
+      (Nat.beq (Nat.land acc (priv t a)) 0 && hullsOK t l (Nat.lor acc (priv t a)))
+
+def avOK1 (as : List ℕ) : Bool := hullsOK (tw as 0 0) as 0
+
+def orL : List ℕ → ℕ
+  | [] => 0
+  | a :: l => Nat.lor a (orL l)
+
+def rectOK1 (l : List ℕ) : Bool := avOK1 (l.map rectW)
+
+def IsRect (R : ℕ → Prop) : Prop :=
+  ∀ e i e' i' : ℕ, e < 12 → i < 12 → e' < 12 → i' < 12 →
+    R (12 * e + i) → R (12 * e' + i') → R (12 * e + i')
+
+def Part (zs : List ((ℕ → Prop) × ℕ)) : Prop :=
+  (∀ z ∈ zs, IsRect z.1) ∧
+  (∀ z ∈ zs, ∀ q, z.1 q → q < 144) ∧
+  (zs.Pairwise (fun z z' => ∀ q, z.1 q → z'.1 q → False)) ∧
+  (∀ q, q < 144 → ∃ z ∈ zs, z.1 q) ∧
+  (∀ z ∈ zs, ∀ q, z.1 q → z.2.testBit q = true)
+
+theorem Part.rect {zs : List ((ℕ → Prop) × ℕ)} (h : Part zs) :
+    ∀ z ∈ zs, IsRect z.1 := h.1
+
+theorem Part.bnd {zs : List ((ℕ → Prop) × ℕ)} (h : Part zs) :
+    ∀ z ∈ zs, ∀ q, z.1 q → q < 144 := h.2.1
+
+theorem Part.disj {zs : List ((ℕ → Prop) × ℕ)} (h : Part zs) :
+    zs.Pairwise (fun z z' => ∀ q, z.1 q → z'.1 q → False) := h.2.2.1
+
+theorem Part.cov {zs : List ((ℕ → Prop) × ℕ)} (h : Part zs) :
+    ∀ q, q < 144 → ∃ z ∈ zs, z.1 q := h.2.2.2.1
+
+theorem Part.sub {zs : List ((ℕ → Prop) × ℕ)} (h : Part zs) :
+    ∀ z ∈ zs, ∀ q, z.1 q → z.2.testBit q = true := h.2.2.2.2
 
 
-/-- the table index, written out for five inputs -/
-def idx5 (x : Fin 5 → Bool) : ℕ :=
-  (if x 0 then 2 ^ 0 else 0) + (if x 1 then 2 ^ 1 else 0) + (if x 2 then 2 ^ 2 else 0) +
-    (if x 3 then 2 ^ 3 else 0) + (if x 4 then 2 ^ 4 else 0)
+theorem pw_forall {α : Type} {R : α → α → Prop} (hs : ∀ a b, R a b → R b a) :
+    ∀ l : List α, l.Pairwise R → ∀ a ∈ l, ∀ b ∈ l, a ≠ b → R a b := by
+  intro l
+  induction l with
+  | nil => intro _ a ha; simp at ha
+  | cons x l ih =>
+    intro h a ha b hb hab
+    rw [List.pairwise_cons] at h
+    rcases List.mem_cons.mp ha with ha' | ha'
+    · rcases List.mem_cons.mp hb with hb' | hb'
+      · exact absurd (ha'.trans hb'.symm) hab
+      · rw [ha']; exact h.1 b hb'
+    · rcases List.mem_cons.mp hb with hb' | hb'
+      · rw [hb']; exact hs _ _ (h.1 a ha')
+      · exact ih h.2 a ha' b hb' hab
 
-theorem sum_eq (x : Fin 5 → Bool) : (∑ i : Fin 5, if x i then 2 ^ (i : ℕ) else 0) = idx5 x := by
-  rw [Fin.sum_univ_five]; rfl
+theorem tw_spec (q : ℕ) : ∀ (as : List ℕ) (o t : ℕ), (tw as o t).testBit q = false →
+    t.testBit q = false ∧ (o.testBit q = true → ∀ a ∈ as, a.testBit q = false) ∧
+    as.Pairwise (fun a b => ¬ (a.testBit q = true ∧ b.testBit q = true)) := by
+  intro as
+  induction as with
+  | nil => intro o t h; exact ⟨h, fun _ a ha => by simp at ha, List.Pairwise.nil⟩
+  | cons a l ih =>
+    intro o t h
+    obtain ⟨h1, h2, h3⟩ := ih (Nat.lor o a) (Nat.lor t (Nat.land o a)) h
+    rw [tb_lor, Bool.or_eq_false_iff, tb_land] at h1
+    refine ⟨h1.1, ?_, ?_⟩
+    · intro ho b hb
+      rcases List.mem_cons.mp hb with rfl | hb
+      · have h4 := h1.2
+        rw [ho] at h4
+        simpa using h4
+      · exact h2 (by rw [tb_lor, ho]; rfl) b hb
+    · refine List.pairwise_cons.mpr ⟨?_, h3⟩
+      intro b hb hab
+      have h4 := h2 (by rw [tb_lor, hab.1]; simp) b hb
+      rw [h4] at hab
+      exact Bool.noConfusion hab.2
 
-/-- a function true at the all-false input needs a gate -/
-theorem one_le {n : ℕ} (f : BFn n) (hf : f (fun _ => false) = true) :
-    ∀ s, HasCircuitSize n f s → 1 ≤ s := by
-  intro s hs
-  obtain ⟨C, _, hle, hC⟩ := hs
-  rcases Nat.eq_zero_or_pos s with rfl | hpos
-  · exfalso
-    have hg : C.gates = [] := List.eq_nil_of_length_eq_zero (Nat.le_zero.1 hle)
-    have h1 := hC (fun _ => false)
-    rw [hf] at h1
-    have e : C.eval (List.ofFn fun _ : Fin n => false) = false := by
-      unfold Circuit.eval Circuit.wires
-      rw [hg, List.foldl_nil, List.getD_eq_getElem?_getD, List.getElem?_ofFn]
-      split <;> rfl
-    rw [e] at h1
-    exact Bool.false_ne_true h1
-  · exact hpos
+theorem priv_in {zs : List ((ℕ → Prop) × ℕ)} (hP : Part zs) : ∀ z ∈ zs, ∀ q,
+    (priv (tw (zs.map Prod.snd) 0 0) z.2).testBit q = true → z.1 q := by
+  intro z hz q hq
+  obtain ⟨hq144, i, e', hi, he', ha, hb⟩ := hull_spec _ q hq
+  have key : ∀ x, x < 144 →
+      (Nat.land z.2 (Nat.xor (tw (zs.map Prod.snd) 0 0) full)).testBit x = true → z.1 x := by
+    intro x hx hbit
+    rw [tb_land, tb_xor, full_tb, Bool.and_eq_true] at hbit
+    obtain ⟨hzx, ht⟩ := hbit
+    have ht' : (tw (zs.map Prod.snd) 0 0).testBit x = false := by simpa [hx] using ht
+    obtain ⟨_, _, hpw⟩ := tw_spec x _ 0 0 ht'
+    rw [List.pairwise_map] at hpw
+    obtain ⟨z', hz', hzq⟩ := hP.cov x hx
+    by_cases hzz : z' = z
+    · rw [← hzz]; exact hzq
+    · exfalso
+      exact pw_forall (fun a b h h' => h ⟨h'.2, h'.1⟩) zs hpw z' hz' z hz hzz
+        ⟨hP.sub z' hz' x hzq, hzx⟩
+  have h1 := key _ (by omega) ha
+  have h2 := key _ (by omega) hb
+  have h3 := hP.rect z hz (q / 12) i e' (q % 12) (by omega) hi he' (Nat.mod_lt _ (by norm_num))
+    h1 h2
+  rwa [Nat.div_add_mod] at h3
 
-namespace R0
+theorem hullsOK_sound (t : ℕ) : ∀ (zs : List ((ℕ → Prop) × ℕ)) (acc : ℕ),
+    (∀ z ∈ zs, ∀ q, (priv t z.2).testBit q = true → z.1 q) →
+    (∀ z ∈ zs, ∀ q, z.1 q → z.2.testBit q = true) →
+    zs.Pairwise (fun z z' => ∀ q, z.1 q → z'.1 q → False) →
+    (∀ q, acc.testBit q = true → ∀ z ∈ zs, ¬ z.1 q) →
+    hullsOK t (zs.map Prod.snd) acc = true := by
+  intro zs
+  induction zs with
+  | nil => intros; rfl
+  | cons z zs ih =>
+    intro acc hh hs hd ha
+    rw [List.pairwise_cons] at hd
+    have hz := hh z List.mem_cons_self
+    have e1 := land_sub _ _ (fun q hq => hs z List.mem_cons_self q (hz q hq))
+    have e2 := land_disj acc (priv t z.2) (fun q h1 h2 => ha q h1 z List.mem_cons_self (hz q h2))
+    have e3 := ih (Nat.lor acc (priv t z.2)) (fun z' hz' => hh z' (List.mem_cons_of_mem _ hz'))
+      (fun z' hz' => hs z' (List.mem_cons_of_mem _ hz')) hd.2 (fun q hq z' hz' hz'q => by
+        rw [tb_lor, Bool.or_eq_true] at hq
+        rcases hq with hq | hq
+        · exact ha q hq z' (List.mem_cons_of_mem _ hz') hz'q
+        · exact hd.1 z' hz' q (hz q hq) hz'q)
+    show (Nat.beq (Nat.land (priv t z.2) z.2) (priv t z.2) &&
+      (Nat.beq (Nat.land acc (priv t z.2)) 0 &&
+        hullsOK t (zs.map Prod.snd) (Nat.lor acc (priv t z.2)))) = true
+    rw [e1, e2, e3, Nat.beq_refl]
+    rfl
 
-def L_ : List ℕ := [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31]
-def M_ : ℕ := 4294967295
-def Y_ : ℕ := 4276677288
-def XS_ : List ℕ := [2863311530,3435973836,4042322160,4278255360,4294901760]
-def PD_ : List (ℕ × ℕ) := [(1,18093396),(2,17960962),(4,17171458),(8,1441858),(16,5184)]
-def PM_ : List (ℕ × ℕ) := [(6,4276677288),(10,4276677288),(12,4276677288),(17,4276677288),(18,4276677288),(20,4276677288),(24,4276677288)]
+theorem avOK1_sound {zs : List ((ℕ → Prop) × ℕ)} (hP : Part zs) :
+    avOK1 (zs.map Prod.snd) = true :=
+  hullsOK_sound _ zs 0 (priv_in hP) hP.sub hP.disj (fun q hq => by simp at hq)
 
-def G_ : List (List ℕ) := [[0,1,2,3,8,9,10,11,4,5,6,7,12,13,14,15,16,17,18,19,24,25,26,27,20,21,22,23,28,29,30,31],[0,1,4,5,2,3,6,7,8,9,12,13,10,11,14,15,16,17,20,21,18,19,22,23,24,25,28,29,26,27,30,31],[0,1,4,5,8,9,12,13,2,3,6,7,10,11,14,15,16,17,20,21,24,25,28,29,18,19,22,23,26,27,30,31],[0,1,8,9,2,3,10,11,4,5,12,13,6,7,14,15,16,17,24,25,18,19,26,27,20,21,28,29,22,23,30,31],[0,1,8,9,4,5,12,13,2,3,10,11,6,7,14,15,16,17,24,25,20,21,28,29,18,19,26,27,22,23,30,31]]
+end PackedRect
 
-/-- the closed set of failing search states (1506 states, up to 5 symmetries) -/
-noncomputable def T_cert : BT := (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [2,3233857728,4278102698,4289265576] BT.lf) [2,3435973836,4204853920,4294617770] BT.lf) [2,3435973836,4205509290,4293962400] (BT.nd (BT.nd BT.lf [2,3941264106,4244373504,4289265576] BT.lf) [3,2829625512,3233857728,4278102698,4278255360] BT.lf)) [3,2829625512,3941264106,4244373504,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [3,2863180456,3233857728,4227922944,4294901760] BT.lf) [3,2863180456,3233857728,4244373504,4278255360] BT.lf) [3,2863311530,3233857728,4244373504,4289265576] (BT.nd (BT.nd BT.lf [3,2863311530,3233857728,4244416680,4278255360] BT.lf) [3,2863311530,3368601800,4244416680,4278255360] BT.lf))) [3,2863311530,3435956360,4042317984,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [3,2863311530,3435956360,4042318048,4278251008] BT.lf) [3,2863311530,3435956360,4042318048,4278255360] BT.lf) [3,2863311530,3435973836,4204853920,4293918720] (BT.nd (BT.nd BT.lf [3,2863311530,3435973836,4205509290,4293962400] BT.lf) [3,2863311530,4241280204,4293984240,4294963200] BT.lf)) [3,2863311530,4241292492,4293984240,4294950912] (BT.nd (BT.nd (BT.nd BT.lf [3,3233857728,3941264106,4244416680,4278255360] BT.lf) [3,3435956360,3941264106,4042301600,4278255360] BT.lf) [3,3435973836,3941264106,4244416680,4278255360] (BT.nd (BT.nd BT.lf [3,3435973836,4042322160,4272597674,4294770432] BT.lf) [3,3435973836,4042322160,4278102698,4289265576] BT.lf)))) [3,3435973836,4205488810,4293984240,4294963200] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [3,3435973836,4205505194,4293984240,4294901760] BT.lf) [3,3435973836,4205509290,4293962400] BT.lf) [3,3435973836,4205509290,4293962400,4293984240] (BT.nd (BT.nd BT.lf [3,3435973836,4205509290,4293962400,4294901760] BT.lf) [3,3435973836,4205509290,4293962400,4294945450] BT.lf)) [3,3435973836,4205509290,4293982960,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [3,3435973836,4205509290,4293984240,4294617770] BT.lf) [3,3435973836,4205509290,4293984240,4294945440] BT.lf) [3,3435973836,4205509290,4293984240,4294945450] (BT.nd (BT.nd BT.lf [3,3435973836,4210096880,4289374890,4294967040] BT.lf) [3,3435973836,4210096880,4289396650,4294945450] BT.lf))) [3,3435973836,4210621176,4289396650,4294945450] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [3,3435973836,4210752250,4289396650,4293962400] BT.lf) [3,3937069738,4241292492,4293984240,4294901760] BT.lf) [3,3941264106,4244438268,4289265576,4294901760] (BT.nd (BT.nd BT.lf [3,3974950124,4210752250,4288741280,4294945450] BT.lf) [4,16776960,2863311530,3435973836,4042322160] BT.lf)) [4,178916010,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [4,178956970,3435973836,4042322160,4278255360,4294901760] BT.lf) [4,214748364,2863311530,4042322160,4278255360,4294901760] BT.lf) [4,267390960,2863311530,3435973836,4026593280,4294901760] (BT.nd (BT.nd BT.lf [4,267390960,2863311530,3435973836,4294901760] BT.lf) [4,715795114,3435973836,4042322160,4278255360,4294901760] BT.lf))))) [4,1073676288,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,1077952576,2863311530,4244438268,4278255360,4294901760] BT.lf) [4,1145307136,2863311530,3722300620,4042322160,4278255360] BT.lf) [4,1145324612,2863311530,4042322160,4287168392,4294901760] (BT.nd (BT.nd BT.lf [4,1145848908,2863311530,4042322160,4278255360,4294901760] BT.lf) [4,1154237644,1357926640,2863311530,4278255360,4294901760] BT.lf)) [4,1154237644,1442775040,2863311530,4042322160,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [4,1154237644,2863311530,4042322160,4278255360,4294901760] BT.lf) [4,1154237644,2863311530,4042322160,4278255360,4294945280] BT.lf) [4,1154237644,2863311530,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [4,1154237644,2863311530,4210096880,4278255360,4294901760] BT.lf) [4,1154272460,2863311530,4042322160,4278255360,4294901760] BT.lf))) [4,1288457420,2863311530,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,1414791168,2863311530,3435973836,4042322160,4278255360] BT.lf) [4,1431633920,2863311530,3233857728,4244438268,4278255360] BT.lf) [4,1431633920,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd BT.lf [4,1431633920,2863311530,3435973836,4042322160,4287168392] BT.lf) [4,1431677610,2863311530,3435973836,4042322160,4278255360] BT.lf)) [4,1431677610,3435973836,4042322160,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [4,1432289280,2863311530,3435973836,4042322160,4278255360] BT.lf) [4,1437226410,3435973836,4042322160,4294901760] BT.lf) [4,1442775040,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd BT.lf [4,1442775040,2863311530,3435973836,4210096880,4278255360] BT.lf) [4,1442775210,2863311530,3435973836,4042322160,4278255360] BT.lf)))) [4,1610547200,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2290649224,4008618666,4042322160,4278255360,4294954188] BT.lf) [4,2290649224,4008636142,4042322160,4278255360,4294945450] BT.lf) [4,2290649224,4008636142,4042322160,4287168392,4294945450] (BT.nd (BT.nd BT.lf [4,2576980377,4042322160,4278255360,4294901760] BT.lf) [4,2829625512,2863311530,3233857728,4244373504,4278255360] BT.lf)) [4,2829625512,3435973836,4042322160,4278102698,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [4,2829625512,3435973836,4210752250,4278255360,4294945450] BT.lf) [4,2829625512,3941264106,4244438268,4278255360,4294901760] BT.lf) [4,2863180456,3233857728,4244438268,4278255360,4294901760] (BT.nd (BT.nd BT.lf [4,2863180456,3435187392,4042322160,4278255360,4294901760] BT.lf) [4,2863180456,3435973836,4042322160,4244373504,4278255360] BT.lf))) [4,2863180456,3435973836,4042322160,4278255360,4294705152] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863180456,3435973836,4042322160,4278255360,4294901760] BT.lf) [4,2863180456,3435973836,4042322160,4278255360,4294945448] BT.lf) [4,2863180456,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [4,2863180456,3435973836,4042322160,4287168392,4294901760] BT.lf) [4,2863180456,3435973836,4042322160,4289265576,4294901760] BT.lf)) [4,2863180456,3435973836,4042322160,4289396650,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [4,2863289685,3435973836,4042322160,4278255360] BT.lf) [4,2863311528,3435973836,4042322160,4278255360,4294901760] BT.lf) [4,2863311530,3221274624,4241292492,4293984240,4294901760] (BT.nd BT.lf [4,2863311530,3233808384,4244438268,4278255360,4294951104] BT.lf)))))) [4,2863311530,3233857536,4244438268,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3233857728,3435956360,4042301600,4278255360] BT.lf) [4,2863311530,3233857728,3435973836,4244416680,4278255360] BT.lf) [4,2863311530,3233857728,4227922944,4294770684,4294901760] (BT.nd (BT.nd BT.lf [4,2863311530,3233857728,4238933160,4278255360,4294901760] BT.lf) [4,2863311530,3233857728,4243389676,4278255360,4294901760] BT.lf)) [4,2863311530,3233857728,4244373504,4244438268,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3233857728,4244373504,4278255360,4294770684] BT.lf) [4,2863311530,3233857728,4244416680,4244438268,4278255360] BT.lf) [4,2863311530,3233857728,4244416680,4278255360] (BT.nd (BT.nd BT.lf [4,2863311530,3233857728,4244416680,4278255360,4294901760] BT.lf) [4,2863311530,3233857728,4244416680,4278255360,4294945450] BT.lf))) [4,2863311530,3233857728,4244434156,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3233857728,4244434156,4278255360,4294945450] BT.lf) [4,2863311530,3233857728,4244438268,4261477888,4294901760] BT.lf) [4,2863311530,3233857728,4244438268,4278059008,4278255360] (BT.nd (BT.nd BT.lf [4,2863311530,3233857728,4244438268,4278102698,4278255360] BT.lf) [4,2863311530,3233857728,4244438268,4278255360,4290772992] BT.lf)) [4,2863311530,3233857728,4244438268,4278255360,4291559424] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3233857728,4244438268,4278255360,4294705152] BT.lf) [4,2863311530,3233857728,4244438268,4278255360,4294901760] BT.lf) [4,2863311530,3233857728,4244438268,4278255360,4294902531] (BT.nd (BT.nd BT.lf [4,2863311530,3233857728,4244438268,4278255360,4294934656] BT.lf) [4,2863311530,3233857728,4244438268,4278255360,4294936712] BT.lf)))) [4,2863311530,3233857728,4244438268,4278255360,4294944936] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3233857728,4244438268,4278255360,4294945280] BT.lf) [4,2863311530,3233857728,4244438268,4278255360,4294945450] BT.lf) [4,2863311530,3233857728,4244438268,4278255360,4294950912] (BT.nd (BT.nd BT.lf [4,2863311530,3233857728,4244438268,4286644096,4294901760] BT.lf) [4,2863311530,3233857728,4244438268,4287168392,4294901760] BT.lf)) [4,2863311530,3233857728,4244438268,4289265576,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3233857728,4244438268,4290838272,4294901760] BT.lf) [4,2863311530,3233857728,4277993212,4278255360,4294901760] BT.lf) [4,2863311530,3284386755,4244438268,4278255360,4294901760] (BT.nd (BT.nd BT.lf [4,2863311530,3284386755,4278255360,4294901760] BT.lf) [4,2863311530,3301754060,4042322160,4278255360,4294901760] BT.lf))) [4,2863311530,3368077504,4244438268,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3368077504,4277993212,4278255360,4294901760] BT.lf) [4,2863311530,3368599744,4244438268,4278255360,4294901760] BT.lf) [4,2863311530,3368601800,4042322160,4244373504,4278255360] (BT.nd (BT.nd BT.lf [4,2863311530,3368601800,4042322160,4261477888,4294901760] BT.lf) [4,2863311530,3368601800,4042322160,4278059008,4278255360] BT.lf)) [4,2863311530,3368601800,4243651824,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3368601800,4244373504,4244438268,4278255360] BT.lf) [4,2863311530,3368601800,4244435184,4278255360,4294901760] BT.lf) [4,2863311530,3368601800,4244438268,4278255360,4294901760] (BT.nd BT.lf [4,2863311530,3368601800,4244438268,4278255360,4294945450] BT.lf))))) [4,2863311530,3435134976,4042322160,4278255360,4294757580] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435184320,4244438268,4278255360,4294901760] BT.lf) [4,2863311530,3435187392,4042322160,4287168392,4294901760] BT.lf) [4,2863311530,3435710664,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [4,2863311530,3435711688,4042322160,4278255360,4293918720] BT.lf) [4,2863311530,3435711688,4042322160,4278255360,4294574080] BT.lf)) [4,2863311530,3435711688,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435711688,4042322160,4278255360,4294945450] BT.lf) [4,2863311530,3435711688,4042322160,4287168392,4294901760] BT.lf) [4,2863311530,3435921408,3435973836,4042318048,4278255360] (BT.nd (BT.nd BT.lf [4,2863311530,3435921408,3722300620,4042322160,4278255360] BT.lf) [4,2863311530,3435921408,4042309824,4244438268,4278255360] BT.lf))) [4,2863311530,3435921408,4042322160,4241280204,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435921408,4042322160,4244425932,4278255360] BT.lf) [4,2863311530,3435921408,4042322160,4244434156,4278255360] BT.lf) [4,2863311530,3435921408,4042322160,4278255360,4294757580] (BT.nd (BT.nd BT.lf [4,2863311530,3435921408,4042322160,4287168392,4294954188] BT.lf) [4,2863311530,3435934515,4042322160,4278255360] BT.lf)) [4,2863311530,3435939020,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435956360,3435973836,4042318048,4278255360] BT.lf) [4,2863311530,3435956360,4042309824,4042322160,4278255360] BT.lf) [4,2863311530,3435956360,4042318048,4042322160,4278255360] (BT.nd (BT.nd BT.lf [4,2863311530,3435956360,4042318048,4278255360] BT.lf) [4,2863311530,3435956360,4042318048,4278255360,4294901760] BT.lf)))) [4,2863311530,3435956360,4042318048,4278255360,4294945450] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435956360,4042318048,4278255360,4294962926] BT.lf) [4,2863311530,3435956360,4042322160,4244425932,4278255360] BT.lf) [4,2863311530,3435956360,4042322160,4244434156,4278255360] (BT.nd (BT.nd BT.lf [4,2863311530,3435956360,4042322160,4278255360,4294951104] BT.lf) [4,2863311530,3435956360,4042322160,4278255360,4294954188] BT.lf)) [4,2863311530,3435956360,4042322160,4278255360,4294961898] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435956360,4042322160,4278255360,4294962926] BT.lf) [4,2863311530,3435970752,4042322160,4287168392,4294901760] BT.lf) [4,2863311530,3435970752,4177066232,4278255360,4294901760] (BT.nd (BT.nd BT.lf [4,2863311530,3435970764,4042322160,4278255360,4294901760] BT.lf) [4,2863311530,3435972744,4042322160,4278255360,4294901760] BT.lf))) [4,2863311530,3435972744,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435972808,4042322160,4210688000,4278255360] BT.lf) [4,2863311530,3435972808,4042322160,4278254080,4294901760] BT.lf) [4,2863311530,3435972808,4042322160,4278254080,4294945450] (BT.nd (BT.nd BT.lf [4,2863311530,3435972808,4042322160,4278255360,4294901760] BT.lf) [4,2863311530,3435972808,4042322160,4278255360,4294936712] BT.lf)) [4,2863311530,3435972808,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435972808,4177066232,4278255360,4294901760] BT.lf) [4,2863311530,3435973832,4042322160,4278255360,4294901760] BT.lf) [4,2863311530,3435973832,4042322160,4278255360,4294945450] (BT.nd BT.lf [4,2863311530,3435973836,3587506176,4042322160,4278255360] BT.lf))))))) [4,2863311530,3435973836,3705405440,4042322160,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,3722248192,4042322160,4278255360] BT.lf) [4,2863311530,3435973836,3722283144,4042322160,4278255360] BT.lf) [4,2863311530,3435973836,3724476416,4042322160,4278255360] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4241227776,4278255360] BT.lf) [4,2863311530,3435973836,4042322160,4241270920,4278255360] BT.lf)) [4,2863311530,3435973836,4042322160,4243324928,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4244373504,4278255360] BT.lf) [4,2863311530,3435973836,4042322160,4244373504,4287168392] BT.lf) [4,2863311530,3435973836,4042322160,4244373504,4289265408] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4244373504,4289265576] BT.lf) [4,2863311530,3435973836,4042322160,4244408456,4278255360] BT.lf))) [4,2863311530,3435973836,4042322160,4244416512,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4244416680,4278255360] BT.lf) [4,2863311530,3435973836,4042322160,4244570112,4278255360] BT.lf) [4,2863311530,3435973836,4042322160,4261216256,4278255360] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4277010432,4278255360] BT.lf) [4,2863311530,3435973836,4042322160,4277054122,4278255360] BT.lf)) [4,2863311530,3435973836,4042322160,4277927936,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4277971456,4278255360] BT.lf) [4,2863311530,3435973836,4042322160,4278059008,4278255360] BT.lf) [4,2863311530,3435973836,4042322160,4278102698,4278255360] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4278255360,4294705152] BT.lf) [4,2863311530,3435973836,4042322160,4278255360,4294748840] BT.lf)))) [4,2863311530,3435973836,4042322160,4278255360,4294836224] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4278255360,4294879914] BT.lf) [4,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [4,2863311530,3435973836,4042322160,4278255360,4294901763] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4278255360,4294901765] BT.lf) [4,2863311530,3435973836,4042322160,4278255360,4294901770] BT.lf)) [4,2863311530,3435973836,4042322160,4278255360,4294901772] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4278255360,4294901775] BT.lf) [4,2863311530,3435973836,4042322160,4278255360,4294901823] BT.lf) [4,2863311530,3435973836,4042322160,4278255360,4294901896] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4278255360,4294901930] BT.lf) [4,2863311530,3435973836,4042322160,4278255360,4294904490] BT.lf))) [4,2863311530,3435973836,4042322160,4278255360,4294934528] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4278255360,4294934656] BT.lf) [4,2863311530,3435973836,4042322160,4278255360,4294936704] BT.lf) [4,2863311530,3435973836,4042322160,4278255360,4294936712] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4278255360,4294936746] BT.lf) [4,2863311530,3435973836,4042322160,4278255360,4294944904] BT.lf)) [4,2863311530,3435973836,4042322160,4278255360,4294944936] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4278255360,4294945448] BT.lf) [4,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [4,2863311530,3435973836,4042322160,4278255360,4294945455] (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4278255360,4294950912] BT.lf))))) [4,2863311530,3435973836,4042322160,4278255360,4294951040] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4278255360,4294953096] BT.lf) [4,2863311530,3435973836,4042322160,4278255360,4294961834] BT.lf) [4,2863311530,3435973836,4042322160,4278255365,4294901760] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4278255365,4294945450] BT.lf) [4,2863311530,3435973836,4042322160,4278255372,4294901760] BT.lf)) [4,2863311530,3435973836,4042322160,4278255496,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4278320897,4294901760] BT.lf) [4,2863311530,3435973836,4042322160,4278779656,4294901760] BT.lf) [4,2863311530,3435973836,4042322160,4286643968,4294901760] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4286644096,4294901760] BT.lf) [4,2863311530,3435973836,4042322160,4286644096,4294934656] BT.lf))) [4,2863311530,3435973836,4042322160,4286644096,4294936712] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4286644096,4294945450] BT.lf) [4,2863311530,3435973836,4042322160,4287168256,4291559424] BT.lf) [4,2863311530,3435973836,4042322160,4287168256,4294901760] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4287168256,4294936712] BT.lf) [4,2863311530,3435973836,4042322160,4287168256,4294945450] BT.lf)) [4,2863311530,3435973836,4042322160,4287168384,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4287168392,4291559424] BT.lf) [4,2863311530,3435973836,4042322160,4287168392,4293918720] BT.lf) [4,2863311530,3435973836,4042322160,4287168392,4294443008] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4287168392,4294901760] BT.lf) [4,2863311530,3435973836,4042322160,4287168392,4294934656] BT.lf)))) [4,2863311530,3435973836,4042322160,4287168392,4294936576] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4287168392,4294936712] BT.lf) [4,2863311530,3435973836,4042322160,4287168392,4294942880] BT.lf) [4,2863311530,3435973836,4042322160,4287168392,4294945280] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4287168392,4294945416] BT.lf) [4,2863311530,3435973836,4042322160,4287168392,4294945450] BT.lf)) [4,2863311530,3435973836,4042322160,4289265408,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4289265544,4294901760] BT.lf) [4,2863311530,3435973836,4042322160,4289265576,4294901760] BT.lf) [4,2863311530,3435973836,4042322160,4289265576,4294944936] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4289265576,4294945450] BT.lf) [4,2863311530,3435973836,4042322160,4289331200,4291624704] BT.lf))) [4,2863311530,3435973836,4042322160,4289374890,4291624704] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4289396650,4291603080] BT.lf) [4,2863311530,3435973836,4042322160,4290772992,4290838272] BT.lf) [4,2863311530,3435973836,4042322160,4290838272,4291559424] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4290838272,4294901760] BT.lf) [4,2863311530,3435973836,4042322160,4290838272,4294945450] BT.lf)) [4,2863311530,3435973836,4042322160,4290838272,4294951104] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4290838400,4294901760] BT.lf) [4,2863311530,3435973836,4042322160,4290838400,4294945450] BT.lf) [4,2863311530,3435973836,4042322160,4290838464,4294950912] (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4291362560,4294901760] BT.lf)))))) [4,2863311530,3435973836,4042322160,4291362696,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4042322160,4291559424,4293984000] BT.lf) [4,2863311530,3435973836,4169726088,4293984240,4294901760] BT.lf) [4,2863311530,3435973836,4176541936,4287168392,4294901760] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4177064176,4287168256,4294901760] BT.lf) [4,2863311530,3435973836,4177064176,4287168392,4294901760] BT.lf)) [4,2863311530,3435973836,4177066232,4287168392,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4177066232,4287168392,4294936712] BT.lf) [4,2863311530,3435973836,4177066232,4287168392,4294945450] BT.lf) [4,2863311530,3435973836,4177066232,4288741280,4294901760] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4177066232,4289265576,4294901760] BT.lf) [4,2863311530,3435973836,4204853920,4293984240,4294901760] BT.lf))) [4,2863311530,3435973836,4205506560,4293984240,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4205509290,4293918720,4293984240] BT.lf) [4,2863311530,3435973836,4205509290,4293984240,4294901760] BT.lf) [4,2863311530,3435973836,4205509290,4293984240,4294945450] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4210096880,4288741280,4294901760] BT.lf) [4,2863311530,3435973836,4210096880,4289396480,4294901760] BT.lf)) [4,2863311530,3435973836,4210096880,4289396650,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4210096880,4289396650,4294945280] BT.lf) [4,2863311530,3435973836,4210096880,4289396650,4294945450] BT.lf) [4,2863311530,3435973836,4210621176,4289396650,4294901760] (BT.nd (BT.nd BT.lf [4,2863311530,3435973836,4241289216,4293984240,4294901760] BT.lf) [4,2863311530,3435973836,4243648752,4291624704,4294901760] BT.lf)))) [4,2863311530,3974950124,4210752250,4288741280,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,2863311615,3435973836,4042322160,4278255360,4294945450] BT.lf) [4,2863329006,3435973836,4042322160,4278255360,4294945450] BT.lf) [4,2863333375,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [4,2863377067,3435973836,4042322160,4278255360,4294901760] BT.lf) [4,3233857728,3937069738,4244438268,4278255360,4294901760] BT.lf)) [4,3233857728,3941247658,4244438268,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [4,3233857728,3941264106,4244438268,4278255360,4294945450] BT.lf) [4,3368601800,4008618666,4042322160,4278255360,4294901760] BT.lf) [4,3368601800,4008636142,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [4,3435921408,3435973836,4042322160,4205488810,4278255360] BT.lf) [4,3435956360,3941264106,4042322160,4278255360,4294945450] BT.lf))) [4,3435973836,3937053354,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,3435973836,3937069738,4042322160,4278255360,4294901760] BT.lf) [4,3435973836,3937069738,4042322160,4278255360,4294945450] BT.lf) [4,3435973836,3937069738,4042322160,4278255360,4294950912] (BT.nd (BT.nd BT.lf [4,3435973836,3937069738,4042322160,4278255360,4294961834] BT.lf) [4,3435973836,3937069738,4042322160,4290838464,4294901760] BT.lf)) [4,3435973836,3941247658,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [4,3435973836,3941247658,4042322160,4278255360,4294945450] BT.lf) [4,3435973836,3941247658,4042322160,4278255360,4294951104] BT.lf) [4,3435973836,3941247658,4042322160,4290838272,4294901760] (BT.nd BT.lf [4,3435973836,3941247658,4244435184,4278255360,4294901760] BT.lf))))) [4,3435973836,3941264042,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,3435973836,3941264106,4042322160,4278255360,4294945450] BT.lf) [4,3435973836,3941264106,4244438268,4278255360,4294945450] BT.lf) [4,3435973836,3974950124,4210752250,4278255360,4294945450] (BT.nd (BT.nd BT.lf [4,3435973836,4008356522,4042322160,4278255360,4293918720] BT.lf) [4,3435973836,4008356522,4042322160,4278255360,4294901760] BT.lf)) [4,3435973836,4008373994,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [4,3435973836,4008618666,4042322160,4210731690,4278255360] BT.lf) [4,3435973836,4008618666,4042322160,4287168392,4294901760] BT.lf) [4,3435973836,4008636142,4042322160,4278255360,4294617770] (BT.nd (BT.nd BT.lf [4,3435973836,4008636142,4042322160,4287168392,4294945450] BT.lf) [4,3435973836,4008636142,4205509290,4293984240,4294901760] BT.lf))) [4,3435973836,4205509290,4293984240,4294901760,4294945450] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,3435973836,4205509290,4293984240,4294945450] BT.lf) [4,3435973836,4210096880,4289396650,4294901760,4294945450] BT.lf) [4,3435973836,4210096880,4289396650,4294945280] (BT.nd (BT.nd BT.lf [4,3435973836,4210096880,4289396650,4294945450] BT.lf) [4,3435973836,4210752250,4289396650,4293984240,4294945450] BT.lf)) [4,3974950124,4210752250,4288741280,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,0,1431633920,2863311530,3435973836,4042322160,4278255360] BT.lf) [5,0,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,0,2863311530,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,15,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,85,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)))) [5,85,2863311530,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,170,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,204,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,255,2863311530,3435973836,4042322160,4278190080] (BT.nd (BT.nd BT.lf [5,255,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,255,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf)) [5,4095,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,17476,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,17476,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,21845,16711935,2863311530,3435973836,4042322160] (BT.nd (BT.nd BT.lf [5,21845,1431655765,3435973836,4042322160,4278255360] BT.lf) [5,21845,2863267840,3435973836,4042322160,4278255360] BT.lf))) [5,21845,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,21845,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,21845,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,21845,2863333375,3435973836,4042322160,4278255360] (BT.nd (BT.nd BT.lf [5,21845,2863333375,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,22015,2863311530,3435973836,4042322160,4278255360] BT.lf)) [5,22015,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,22015,2863311530,3435973836,4042322160,4278255360,4294945280] BT.lf) [5,34952,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,43690,2863267840,3435973836,4042322160,4278255360,4294901760] (BT.nd BT.lf [5,43690,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)))))))) [5,43690,2863311530,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,43690,2863333375,3435973836,4042322160,4278255360] BT.lf) [5,43690,2863333375,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,49344,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,52428,2863311530,3435921408,4042322160,4278255360,4294901760] BT.lf) [5,52428,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [5,52428,2863311530,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [5,52428,2863311530,3435986943,4042322160,4278255360] BT.lf) [5,52428,2863311530,3435986943,4042322160,4278255360,4294901760] BT.lf) [5,61166,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,64764,2863311530,3435973836,4042322160,4278255360] BT.lf) [5,64764,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf))) [5,65535,16711935,252645135,2863311530,3435973836] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,65535,16711935,1431655765,3435973836,4042322160] BT.lf) [5,65535,16711935,2863311530,3435973836,4042322160] BT.lf) [5,65535,1431633920,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd BT.lf [5,65535,1431655765,3435973836,4042322160,4278255360] BT.lf) [5,65535,2290649224,4008636142,4042322160,4278255360] BT.lf)) [5,65535,2863267840,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [5,65535,2863311530,3233857728,4244438268,4278255360] BT.lf) [5,65535,2863311530,3233857728,4244438268,4278255360,4294901760] BT.lf) [5,65535,2863311530,3435921408,4042322160,4278255360,4294954188] (BT.nd (BT.nd BT.lf [5,65535,2863311530,3435973836,4042322160,4244373504,4278255360] BT.lf) [5,65535,2863311530,3435973836,4042322160,4278255360] BT.lf)))) [5,65535,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,65535,2863311530,3435973836,4042322160,4278255360,4294936712] BT.lf) [5,65535,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,65535,2863311530,3435973836,4042322160,4287168392] (BT.nd (BT.nd BT.lf [5,65535,2863311530,3435973836,4042322160,4287168392,4294901760] BT.lf) [5,65535,2863333375,3435973836,4042322160,4278255360,4294945450] BT.lf)) [5,196611,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,327685,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,655370,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,786444,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,983040,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,983055,2863311530,3435973836,4026593280,4293984240,4294901760] BT.lf))) [5,983055,2863311530,3435973836,4026593280,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,983055,2863311530,3435973836,4042322160,4278255360,4293918720] BT.lf) [5,983055,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,983055,2863311530,3435973836,4042322160,4278255360,4294901775] (BT.nd (BT.nd BT.lf [5,983055,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,983295,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [5,1048575,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [5,1048575,2863311530,3435973836,4042322160,4278255360,4293918720] BT.lf) [5,1048575,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,4128831,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,4456516,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,5570560,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf))))) [5,5570645,2852170240,3435973836,4042322160,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,5570645,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,5570645,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,5570815,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,5592405,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,5636095,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [5,6226015,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,6226015,2863311530,3435973836,4042322160,4288741280,4294901760] BT.lf) [5,6226015,2863311530,3435973836,4042322160,4294901760] BT.lf) [5,8913032,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,11141120,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,11141290,2852170240,3435973836,4042322160,4278255360,4294901760] BT.lf))) [5,11141290,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,11141290,2863311530,3435973836,4042322160,4278255360,4294901930] BT.lf) [5,11141290,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,11141290,2868882175,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,11141290,2868882175,3435973836,4042322160,4294901760] BT.lf) [5,11184810,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [5,12583104,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,13369344,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,13369548,2863311530,3422604288,4042322160,4278255360,4294901760] BT.lf) [5,13369548,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,13369548,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,13369548,2863311530,3439316223,4042322160,4278255360,4294901760] BT.lf)))) [5,13369548,2863311530,3439316223,4042322160,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,13369548,2863311530,4008636142,4042322160,4278255360,4294901760] BT.lf) [5,13421772,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,15597806,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,16515324,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,16711680,2863311530,3435973836,4042322160,4278190080,4278255360] BT.lf)) [5,16711680,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,16711680,2863311530,3435973836,4042322160,4278255360,4294902015] BT.lf) [5,16711680,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,16711680,2863311530,3435973836,4042322160,4294902015] (BT.nd (BT.nd BT.lf [5,16711850,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,16711850,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf))) [5,16711884,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,16711935,252645135,858993459,2863311530,4294901760] BT.lf) [5,16711935,252645135,1431655765,3435973836,4294901760] BT.lf) [5,16711935,252645135,2863311530,3435973836,4294901760] (BT.nd (BT.nd BT.lf [5,16711935,252645135,2863311530,3435973836,4294945450] BT.lf) [5,16711935,1431633920,1431655765,3435973836,4042322160] BT.lf)) [5,16711935,1431633920,2863311530,3435973836,4042322160] (BT.nd (BT.nd (BT.nd BT.lf [5,16711935,1431633920,2863311530,3435973836,4042322160,4278255360] BT.lf) [5,16711935,1431655765,3435973836,4042322160,4294901760] BT.lf) [5,16711935,1431655765,3435973836,4042322160,4294945450] (BT.nd BT.lf [5,16711935,2290649224,4008636142,4042322160,4294901760] BT.lf)))))) [5,16711935,2852170240,3435973836,4042322160,4289396650,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,16711935,2863267840,3435973836,4042322160,4294945450] BT.lf) [5,16711935,2863311530,2863333375,3435973836,4042322160] BT.lf) [5,16711935,2863311530,3233857728,4244438268,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,16711935,2863311530,3233857728,4244438268,4294901760] BT.lf) [5,16711935,2863311530,3422604288,4042322160,4291624908,4294901760] BT.lf)) [5,16711935,2863311530,3435921408,4042322160,4294954188] (BT.nd (BT.nd (BT.nd BT.lf [5,16711935,2863311530,3435973836,4042322160,4244373504] BT.lf) [5,16711935,2863311530,3435973836,4042322160,4244373504,4278255360] BT.lf) [5,16711935,2863311530,3435973836,4042322160,4278255360,4291559424] (BT.nd (BT.nd BT.lf [5,16711935,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,16711935,2863311530,3435973836,4042322160,4278255360,4294901930] BT.lf))) [5,16711935,2863311530,3435973836,4042322160,4278255360,4294936712] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,16711935,2863311530,3435973836,4042322160,4278255360,4294945280] BT.lf) [5,16711935,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,16711935,2863311530,3435973836,4042322160,4287168392,4294901760] (BT.nd (BT.nd BT.lf [5,16711935,2863311530,3435973836,4042322160,4291559424] BT.lf) [5,16711935,2863311530,3435973836,4042322160,4294901760] BT.lf)) [5,16711935,2863311530,3435973836,4042322160,4294901930] (BT.nd (BT.nd (BT.nd BT.lf [5,16711935,2863311530,3435973836,4042322160,4294936712] BT.lf) [5,16711935,2863311530,3435973836,4042322160,4294945280] BT.lf) [5,16711935,2863311530,3435973836,4042322160,4294945450] (BT.nd (BT.nd BT.lf [5,16711935,2863311530,3435973836,4177066232,4278255360,4294901760] BT.lf) [5,16711935,2863311530,3435973836,4177066232,4294901760] BT.lf)))) [5,16711935,2863311530,3435973836,4210096880,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,16711935,2863311530,3435973836,4210096880,4294901760] BT.lf) [5,16715775,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,16733695,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,16733695,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,16777215,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [5,16777215,2863311530,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [5,16777215,2863311530,3435973836,4042322160,4294967040] BT.lf) [5,67044351,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,89458005,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,100599295,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,178916010,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf))) [5,214699212,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,268369920,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,268374015,2863311530,3435973836,4026593280,4293984240,4294901760] BT.lf) [5,268374015,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,268374015,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,268374015,2863311530,3435973836,4293984240,4294901760] BT.lf)) [5,268435455,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,1073692671,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,1077952576,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,1145307136,1431633920,2863311530,3435973836,4042322160,4278255360] (BT.nd BT.lf [5,1145307136,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf))))) [5,1145324612,1431633920,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,1145324612,2290649224,2863311530,4042322160,4278255360,4294901760] BT.lf) [5,1145324612,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,1145324612,2863311530,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,1145324612,2863311530,3722304989,4042322160,4278255360,4294901760] BT.lf) [5,1145324612,2863311530,4042322160,4244438268,4278255360,4294901760] BT.lf)) [5,1145324612,3722304989,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,1145359564,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,1154237644,1442797055,2863311530,4042322160,4278255360,4294901760] BT.lf) [5,1154237644,2852170240,2863311530,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,1154237644,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,1154237644,2863311530,4042322160,4278255360,4294901760] BT.lf))) [5,1414812756,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,1431633920,1431633920,2863311530,3435973836,4042322160,4278255360] BT.lf) [5,1431633920,1431655765,2863311530,3435973836,4042322160,4278255360] BT.lf) [5,1431633920,1431655765,3435973836,4042322160,4278255360] (BT.nd (BT.nd BT.lf [5,1431633920,1431699455,2863311530,3435973836,4042322160,4278255360] BT.lf) [5,1431633920,2290649224,2863311530,3435973836,4042322160,4278255360] BT.lf)) [5,1431633920,2863267840,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [5,1431633920,2863311530,2863311530,3435973836,4042322160,4278255360] BT.lf) [5,1431633920,2863311530,2863333375,3435973836,4042322160,4278255360] BT.lf) [5,1431633920,2863311530,3233857728,3435973836,4042322160,4278255360] (BT.nd (BT.nd BT.lf [5,1431633920,2863311530,3435921408,3435973836,4042322160,4278255360] BT.lf) [5,1431633920,2863311530,3435973836,3435973836,4042322160,4278255360] BT.lf)))) [5,1431633920,2863311530,3435973836,3722300620,4042322160,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,1431633920,2863311530,3435973836,3722304989,4042322160,4278255360] BT.lf) [5,1431633920,2863311530,3435973836,4008636142,4042322160,4278255360] BT.lf) [5,1431633920,2863311530,3435973836,4042322160,4244438268,4278255360] (BT.nd (BT.nd BT.lf [5,1431633920,2863311530,3435973836,4042322160,4278255360] BT.lf) [5,1431633920,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [5,1431633920,2863311530,3435973836,4042322160,4278255360,4294923605] (BT.nd (BT.nd (BT.nd BT.lf [5,1431633920,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,1431633920,2863311530,3435973836,4042322160,4278255360,4294954188] BT.lf) [5,1431633920,2863311530,3435973836,4042322160,4278255360,4294967295] (BT.nd (BT.nd BT.lf [5,1431633920,3435973836,4042322160,4278255360,4294923605] BT.lf) [5,1431633920,3435973836,4042322160,4278255360,4294945450] BT.lf))) [5,1431651396,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,1431655765,2863311530,3233857728,4244438268,4278255360,4294901760] BT.lf) [5,1431655765,2863311530,3435973836,3722248192,4042322160,4278255360] BT.lf) [5,1431655765,2863311530,3435973836,4042322160,4244373504,4278255360] (BT.nd (BT.nd BT.lf [5,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,1431655765,2863311530,3435973836,4042322160,4278255360,4294936712] BT.lf)) [5,1431655765,2863311530,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [5,1431655765,2863311530,3435973836,4042322160,4287168392,4294901760] BT.lf) [5,1431655765,2863333375,3435973836,4042322160,4278255360] BT.lf) [5,1431655765,3233857728,4244438268,4278255360,4294901760] (BT.nd BT.lf [5,1431655765,3435921408,4042322160,4278255360,4294954188] BT.lf))))))) [5,1431655765,3435973836,3722248192,4042322160,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,1431655765,3435973836,4042322160,4244373504,4278255360] BT.lf) [5,1431655765,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,1431655765,3435973836,4042322160,4278255360,4294936712] (BT.nd (BT.nd BT.lf [5,1431655765,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,1431655765,3435973836,4042322160,4287168392,4294901760] BT.lf)) [5,1431655935,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,1431699455,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,1431699455,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,1431699455,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,1432311135,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,1442775040,1442797055,2863311530,3435973836,4042322160,4278255360] BT.lf))) [5,1442775040,2852170240,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,1442775040,2863311530,3435973836,4042322160,4278255360] BT.lf) [5,1442775040,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,1442797055,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,1442797055,2863311530,3435973836,4042322160,4278255360,4294945280] BT.lf) [5,1442797055,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf)) [5,1442797055,2863311530,3435973836,4210096880,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,1442797055,3435973836,4042322160,4289396650,4294901760] BT.lf) [5,1442840575,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,1610571775,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2147516416,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2155872256,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)))) [5,2155905152,2863311530,3233857728,4244438268,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2155905152,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2155905152,2863311530,3435973836,4042322160,4278255360,4294934656] BT.lf) [5,2155905152,2863311530,3435973836,4042322160,4278255360,4294936712] (BT.nd (BT.nd BT.lf [5,2155905152,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,2155905152,2863311530,3435973836,4042322160,4286644096,4294901760] BT.lf)) [5,2155905152,2863311530,3435973836,4042322160,4287168392,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2155905152,2863311530,3435973836,4177066232,4278255360,4294901760] BT.lf) [5,2290124928,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2290614272,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2290614272,2863311530,3435973836,4042322160,4278255360,4294936712] BT.lf) [5,2290614272,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf))) [5,2290614272,2863311530,3435973836,4042322160,4287168256,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2290614272,2863311530,3435973836,4042322160,4287168392,4294901760] BT.lf) [5,2290647168,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2290649224,2862656160,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2290649224,2863311530,3233857728,4244438268,4278255360,4294901760] BT.lf) [5,2290649224,2863311530,3435187392,4042322160,4278255360,4294901760] BT.lf)) [5,2290649224,2863311530,3435921408,4042322160,4278255360,4294954188] (BT.nd (BT.nd (BT.nd BT.lf [5,2290649224,2863311530,3435970752,4042322160,4278255360,4294901760] BT.lf) [5,2290649224,2863311530,3435973836,4026593280,4293984240,4294901760] BT.lf) [5,2290649224,2863311530,3435973836,4042322160,4244373504,4278255360] (BT.nd BT.lf [5,2290649224,2863311530,3435973836,4042322160,4278255360,4293918720] BT.lf))))) [5,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2290649224,2863311530,3435973836,4042322160,4278255360,4294934656] BT.lf) [5,2290649224,2863311530,3435973836,4042322160,4278255360,4294936712] BT.lf) [5,2290649224,2863311530,3435973836,4042322160,4278255360,4294942880] (BT.nd (BT.nd BT.lf [5,2290649224,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,2290649224,2863311530,3435973836,4042322160,4286644096,4294901760] BT.lf)) [5,2290649224,2863311530,3435973836,4042322160,4287168256,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2290649224,2863311530,3435973836,4042322160,4287168392,4294901760] BT.lf) [5,2290649224,2863311530,3435973836,4042322160,4287168392,4294936712] BT.lf) [5,2290649224,2863311530,3435973836,4042322160,4287168392,4294945450] (BT.nd (BT.nd BT.lf [5,2290649224,2863311530,3435973836,4042322160,4288741280,4294901760] BT.lf) [5,2290649224,2863311530,3435973836,4177066232,4287168392,4294901760] BT.lf))) [5,2290649224,2863311530,3974950124,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2290649224,2863311530,4008627404,4042322160,4278255360,4294901760] BT.lf) [5,2290649224,2863311530,4008636142,4042322160,4278255360,4294901760] BT.lf) [5,2290649224,2863311530,4008636142,4042322160,4278255360,4294936712] (BT.nd (BT.nd BT.lf [5,2290649224,2863311530,4008636142,4042322160,4278255360,4294945450] BT.lf) [5,2290649224,2863311530,4008636142,4042322160,4287168392,4294901760] BT.lf)) [5,2290649224,3435973836,4008618666,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2290649224,3435973836,4008636142,4042322160,4278255360,4294945450] BT.lf) [5,2290649224,4008636142,4042322160,4278255360,4294901760] BT.lf) [5,2290649224,4008636142,4042322160,4278255360,4294901760,4294945450] (BT.nd (BT.nd BT.lf [5,2290649224,4008636142,4042322160,4278255360,4294936712] BT.lf) [5,2290649224,4008636142,4042322160,4278255360,4294945450] BT.lf)))) [5,2290649224,4008636142,4042322160,4287168392,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2290657962,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2290666700,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2290679807,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd BT.lf [5,2290679807,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2292877482,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [5,2295105740,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2298448127,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2298448127,2863311530,3435973836,4042322160,4294901760] BT.lf) [5,2827528328,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2829582336,2863311530,3435973836,4042322160,4244373504,4278255360] BT.lf) [5,2829582336,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf))) [5,2829617288,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2829625512,2863311530,3233857728,4244438268,4278255360,4294901760] BT.lf) [5,2829625512,2863311530,3435973836,4042322160,4244373504,4278255360] BT.lf) [5,2829625512,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2829625512,2863311530,3435973836,4042322160,4278255360,4294944936] BT.lf) [5,2829625512,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf)) [5,2829625512,2863311530,3435973836,4042322160,4289265576,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2829625512,2863311530,3435973836,4177066232,4278255360,4294901760] BT.lf) [5,2829625512,2863311530,3435973836,4210752250,4278255360,4294901760] BT.lf) [5,2829625512,3435973836,4210752250,4278255360,4294901760] (BT.nd BT.lf [5,2863180456,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)))))) [5,2863180456,3435973836,4042322160,4244438268,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863180456,3435973836,4042322160,4278255360,4294770684,4294901760] BT.lf) [5,2863180456,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863267840,2863311530,3233857728,4244438268,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863267840,2863311530,3435973836,4042322160,4244373504,4278255360] BT.lf) [5,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [5,2863267840,2863311530,3435973836,4042322160,4278255360,4294936712] (BT.nd (BT.nd (BT.nd BT.lf [5,2863267840,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,2863267840,2863311530,3435973836,4042322160,4287168256,4294901760] BT.lf) [5,2863267840,2863311530,3435973836,4042322160,4287168392,4294901760] (BT.nd (BT.nd BT.lf [5,2863267840,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,2863268010,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf))) [5,2863300736,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863302792,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863302792,2863311530,3435973836,4042322160,4278255360,4294936712] BT.lf) [5,2863302792,2863311530,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,2863302792,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,2863311016,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [5,2863311530,2863311530,3233857728,4244438268,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,2863311530,3435973836,4042322160,4244373504,4278255360] BT.lf) [5,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,2863311530,3435973836,4042322160,4278255360,4294936712] (BT.nd (BT.nd BT.lf [5,2863311530,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,2863311530,3435973836,4042322160,4287168392,4294901760] BT.lf)))) [5,2863311530,2863311615,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,2863329006,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,2863333375,3435973836,4042322160,4278255360] BT.lf) [5,2863311530,2863333375,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,2863333375,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,2863639215,3435973836,4042322160,4278255360,4294901760] BT.lf)) [5,2863311530,2867768046,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,2868838400,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,2868838655,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,2868882090,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,2868882175,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,2868882175,3435973836,4042322160,4278255360,4294945450] BT.lf))) [5,2863311530,2868903935,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,2952769535,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3221225472,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3221274624,3233857728,4244438268,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3221274624,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3221274624,3435973836,4042322160,4278255360,4294945450] BT.lf)) [5,2863311530,3221274624,3435973836,4042322160,4278255360,4294950912] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3221274624,3435973836,4042322160,4290838464,4294901760] BT.lf) [5,2863311530,3229663360,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3233808384,3233857728,4244438268,4278255360,4294901760] (BT.nd BT.lf [5,2863311530,3233808384,3435973836,4042322160,4278190080,4278255360] BT.lf))))) [5,2863311530,3233808384,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3233808384,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,3233808384,3435973836,4042322160,4278255360,4294951104] BT.lf) [5,2863311530,3233808384,3435973836,4042322160,4290838272,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3233808384,3435973836,4244435184,4278255360,4294901760] BT.lf) [5,2863311530,3233841280,3435973836,4042322160,4278255360,4294901760] BT.lf)) [5,2863311530,3233841280,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3233857536,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3233857728,3233857728,4244438268,4278255360,4294901760] BT.lf) [5,2863311530,3233857728,3422604288,4042322160,4291624908,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3233857728,3431517320,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3233857728,3435921408,4244438268,4278255360,4294901760] BT.lf))) [5,2863311530,3233857728,3435956360,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3233857728,3435956360,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,3233857728,3435973836,4042322160,4244373504,4278255360] BT.lf) [5,2863311530,3233857728,3435973836,4042322160,4278255360,4290772992] (BT.nd (BT.nd BT.lf [5,2863311530,3233857728,3435973836,4042322160,4278255360,4291559424] BT.lf) [5,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760] BT.lf)) [5,2863311530,3233857728,3435973836,4042322160,4278255360,4294934656] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3233857728,3435973836,4042322160,4278255360,4294936712] BT.lf) [5,2863311530,3233857728,3435973836,4042322160,4278255360,4294945280] BT.lf) [5,2863311530,3233857728,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,2863311530,3233857728,3435973836,4042322160,4278255360,4294950912] BT.lf) [5,2863311530,3233857728,3435973836,4042322160,4286644096,4294901760] BT.lf)))) [5,2863311530,3233857728,3435973836,4042322160,4287168392,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3233857728,3435973836,4042322160,4290838272,4294901760] BT.lf) [5,2863311530,3233857728,3435973836,4177066232,4278255360,4294901760] BT.lf) [5,2863311530,3233857728,3435973836,4210096880,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3233857728,3435973836,4243651824,4278255360,4294901760] BT.lf) [5,2863311530,3233857728,3435973836,4244373504,4244438268,4278255360] BT.lf)) [5,2863311530,3233857728,3435973836,4244435184,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3233857728,3435973836,4244438268,4278255360,4294901760] BT.lf) [5,2863311530,3233857728,3435973836,4244438268,4278255360,4294945450] BT.lf) [5,2863311530,3233857728,3941264106,4244438268,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3233857728,4008636142,4244438268,4278255360,4294901760] BT.lf) [5,2863311530,3233857728,4227922944,4244438268,4278255360,4294901760] BT.lf))) [5,2863311530,3233857728,4244373504,4244438268,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3233857728,4244373504,4244438268,4278255360,4294901760] BT.lf) [5,2863311530,3233857728,4244438268,4244438268,4278255360,4294901760] BT.lf) [5,2863311530,3233857728,4244438268,4278124286,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3233857728,4244438268,4278190080,4278255360,4294901760] BT.lf) [5,2863311530,3233857728,4244438268,4278255360,4278255360,4294901760] BT.lf)) [5,2863311530,3233857728,4244438268,4278255360,4289396650,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3233857728,4244438268,4278255360,4290838464,4294901760] BT.lf) [5,2863311530,3233857728,4244438268,4278255360,4291624908,4294901760] BT.lf) [5,2863311530,3233857728,4244438268,4278255360,4294770684,4294901760] (BT.nd BT.lf [5,2863311530,3233857728,4244438268,4278255360,4294901760] BT.lf))))))))) [5,2863311530,3233857728,4244438268,4278255360,4294901760,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3233857728,4244438268,4278255360,4294901760,4294945450] BT.lf) [5,2863311530,3233857728,4244438268,4278255360,4294901760,4294951104] BT.lf) [5,2863311530,3233857728,4244438268,4278255360,4294901760,4294954188] (BT.nd (BT.nd BT.lf [5,2863311530,3233857728,4244438268,4278255360,4294901760,4294966524] BT.lf) [5,2863311530,3233857728,4244438268,4278255360,4294901760,4294967040] BT.lf)) [5,2863311530,3233857728,4244438268,4278255360,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3233860812,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3233873919,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3234644172,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3237986559,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3301229764,3435973836,4042322160,4278255360,4294901760] BT.lf))) [5,2863311530,3364407432,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3368077504,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3368077504,3435973836,4210096880,4278255360,4294901760] BT.lf) [5,2863311530,3368550400,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3368585352,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3368599744,3435973836,4042322160,4278255360,4294901760] BT.lf)) [5,2863311530,3368601800,3435921408,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3368601800,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3368601800,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,3368601800,3435973836,4177066232,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3368601800,3435973836,4244438268,4278255360,4294901760] BT.lf) [5,2863311530,3368601800,4008636142,4042322160,4278255360,4294901760] BT.lf)))) [5,2863311530,3368601800,4042322160,4244438268,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3368601800,4042322160,4278124286,4278255360,4294901760] BT.lf) [5,2863311530,3368601800,4210752250,4244438268,4278255360,4294901760] BT.lf) [5,2863311530,3368601800,4244438268,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3435134976,3435973836,4042322160,4278255360,4293918720] BT.lf) [5,2863311530,3435134976,3435973836,4042322160,4278255360,4294901760] BT.lf)) [5,2863311530,3435184320,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435187392,3435973836,4042322160,4278255360,4293918720] BT.lf) [5,2863311530,3435187392,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435187392,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,2863311530,3435187392,4042322160,4244438268,4278255360,4294901760] BT.lf) [5,2863311530,3435187392,4042322160,4278255360,4294770684,4294901760] BT.lf))) [5,2863311530,3435711688,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435711688,4042322160,4210752250,4278255360,4294901760] BT.lf) [5,2863311530,3435711688,4042322160,4278255360,4293984240,4294901760] BT.lf) [5,2863311530,3435711688,4042322160,4278255360,4294639610,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3435711688,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435921408,3435973836,4042260480,4042322160,4278255360] BT.lf)) [5,2863311530,3435921408,3435973836,4042260480,4244435184,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435921408,3435973836,4042301600,4042322160,4278255360] BT.lf) [5,2863311530,3435921408,3435973836,4042309824,4042322160,4278255360] BT.lf) [5,2863311530,3435921408,3435973836,4042322160,4210688000,4278255360] (BT.nd (BT.nd BT.lf [5,2863311530,3435921408,3435973836,4042322160,4210731690,4278255360] BT.lf) [5,2863311530,3435921408,3435973836,4042322160,4244373504,4278255360] BT.lf))))) [5,2863311530,3435921408,3435973836,4042322160,4244425932,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435921408,3435973836,4042322160,4278255360,4293918720] BT.lf) [5,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435921408,3435973836,4042322160,4278255360,4294902015] (BT.nd (BT.nd BT.lf [5,2863311530,3435921408,3435973836,4042322160,4278255360,4294936712] BT.lf) [5,2863311530,3435921408,3435973836,4042322160,4278255360,4294942880] BT.lf)) [5,2863311530,3435921408,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435921408,3435973836,4042322160,4278255360,4294951104] BT.lf) [5,2863311530,3435921408,3435973836,4042322160,4278255360,4294954188] BT.lf) [5,2863311530,3435921408,3435973836,4042322160,4278255360,4294962926] (BT.nd (BT.nd BT.lf [5,2863311530,3435921408,3435973836,4042322160,4287168256,4294901760] BT.lf) [5,2863311530,3435921408,3435973836,4042322160,4287168392,4294901760] BT.lf))) [5,2863311530,3435921408,3435973836,4042322160,4288741280,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435921408,3435973836,4042322160,4290838272,4294901760] BT.lf) [5,2863311530,3435921408,3974950124,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435921408,4042322160,4244425932,4278255360] (BT.nd (BT.nd BT.lf [5,2863311530,3435921408,4042322160,4244425932,4278255360,4294901760] BT.lf) [5,2863311530,3435921408,4042322160,4244438268,4278255360,4294954188] BT.lf)) [5,2863311530,3435921408,4042322160,4278255360,4294954188] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435921612,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435938884,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435954304,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3435954304,3435973836,4042322160,4278255360,4294942880] BT.lf) [5,2863311530,3435956360,3435973836,4042301600,4042322160,4278255360] BT.lf)))) [5,2863311530,3435956360,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435956360,3435973836,4042322160,4278255360,4294936712] BT.lf) [5,2863311530,3435956360,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,3435956360,3435973836,4042322160,4278255360,4294954188] (BT.nd (BT.nd BT.lf [5,2863311530,3435956360,3435973836,4042322160,4278255360,4294962926] BT.lf) [5,2863311530,3435956360,4008636142,4042322160,4278255360,4294901760] BT.lf)) [5,2863311530,3435956360,4008636142,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435956360,4042322160,4278255360,4294901760,4294954188] BT.lf) [5,2863311530,3435956360,4042322160,4278255360,4294901760,4294962926] BT.lf) [5,2863311530,3435956360,4042322160,4278255360,4294945450,4294954188] (BT.nd (BT.nd BT.lf [5,2863311530,3435956360,4042322160,4278255360,4294945450,4294962926] BT.lf) [5,2863311530,3435956360,4042322160,4278255360,4294954188] BT.lf))) [5,2863311530,3435956360,4042322160,4278255360,4294962926] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435970560,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435970752,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435970752,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,2863311530,3435970752,4042322160,4244438268,4278255360,4294901760] BT.lf) [5,2863311530,3435970752,4042322160,4278255360,4291624908,4294901760] BT.lf)) [5,2863311530,3435972808,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435972808,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,3435972808,4042322160,4210752250,4278255360,4294901760] BT.lf) [5,2863311530,3435972808,4042322160,4278255360,4294901760] (BT.nd BT.lf [5,2863311530,3435972808,4042322160,4278255360,4294901760,4294945450] BT.lf)))))) [5,2863311530,3435972808,4042322160,4278255360,4294901760,4294963440] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435972808,4042322160,4278255360,4294901760,4294966010] BT.lf) [5,2863311530,3435972808,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,3435972808,4042322160,4278255360,4294945450,4294966010] (BT.nd (BT.nd BT.lf [5,2863311530,3435973824,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3435973836,4042322160,4244373504,4278255360] BT.lf)) [5,2863311530,3435973836,3435973836,4042322160,4278255360,4293918720] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3435973836,4042322160,4278255360,4294936712] BT.lf) [5,2863311530,3435973836,3435973836,4042322160,4278255360,4294942880] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,3435973836,3435973836,4042322160,4287168392,4294901760] BT.lf))) [5,2863311530,3435973836,3435973836,4042322160,4288741280,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3435973887,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3435978205,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3435978205,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3435982574,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3435986172,4042322160,4278255360,4294901760] BT.lf)) [5,2863311530,3435973836,3435986943,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3435986943,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,3435973836,3436170447,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3437087965,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3438202094,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3439119612,4042322160,4278255360,4294901760] BT.lf)))) [5,2863311530,3435973836,3439263744,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3439263999,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3439316172,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3439316223,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3439316223,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,3435973836,3439329279,4042322160,4278255360,4294901760] BT.lf)) [5,2863311530,3435973836,3489648639,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3587560917,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3705461980,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3722248192,3722304989,4042322160,4278255360] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3722248192,4042322160,4278255360] BT.lf) [5,2863311530,3435973836,3722248192,4042322160,4278255360,4294901760] BT.lf))) [5,2863311530,3435973836,3722270037,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3722300620,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3722304989,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3722304989,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3722313727,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3724533247,4042322160,4278255360,4294901760] BT.lf)) [5,2863311530,3435973836,3937069738,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3938511552,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3941203968,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3941247658,4042322160,4278255360,4294901760] (BT.nd BT.lf [5,2863311530,3435973836,3941253312,4042322160,4278255360,4294901760] BT.lf))))) [5,2863311530,3435973836,3941264106,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3941264106,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,3435973836,3941264106,4244438268,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3972852940,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3974889472,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3974930592,4042322160,4278255360,4294901760] BT.lf)) [5,2863311530,3435973836,3974941900,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3974950124,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,3974950124,4042322160,4278255360,4294942880] BT.lf) [5,2863311530,3435973836,3974950124,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,3974950124,4042322160,4288741280,4294901760] BT.lf) [5,2863311530,3435973836,3974950124,4210752250,4278255360,4294901760] BT.lf))) [5,2863311530,3435973836,4007718624,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4008373994,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4008505068,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4008574976,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4008574976,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,3435973836,4008574976,4042322160,4278255360,4294954188] BT.lf)) [5,2863311530,3435973836,4008574976,4042322160,4278255360,4294962926] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4008618666,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4008618666,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,3435973836,4008618666,4042322160,4278255360,4294954188] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4008627404,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4008627404,4042322160,4278255360,4294945450] BT.lf)))) [5,2863311530,3435973836,4008632544,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4008635114,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4008635628,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4008636142,4042322160,4244373504,4278255360] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4008636142,4042322160,4278059008,4278255360] BT.lf) [5,2863311530,3435973836,4008636142,4042322160,4278255360,4293918720] BT.lf)) [5,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4008636142,4042322160,4278255360,4294936712] BT.lf) [5,2863311530,3435973836,4008636142,4042322160,4278255360,4294942880] BT.lf) [5,2863311530,3435973836,4008636142,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4008636142,4042322160,4287168392,4294901760] BT.lf) [5,2863311530,3435973836,4008636142,4042322160,4288741280,4294901760] BT.lf))) [5,2863311530,3435973836,4008640511,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4009750271,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4241227776,4241292492,4278255360] BT.lf) [5,2863311530,3435973836,4042322160,4241227776,4278255360] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4241227776,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4241280204,4278255360,4294901760] BT.lf)) [5,2863311530,3435973836,4042322160,4241289216,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4241292492,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4241292492,4278255360,4294945450] BT.lf) [5,2863311530,3435973836,4042322160,4243389676,4278255360,4294901760] (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4244373504,4244373504,4278255360] BT.lf))))))) [5,2863311530,3435973836,4042322160,4244373504,4244425932,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4244373504,4244438268,4278255360] BT.lf) [5,2863311530,3435973836,4042322160,4244373504,4278102698,4278255360] BT.lf) [5,2863311530,3435973836,4042322160,4244373504,4278124286,4278255360] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4244373504,4278255360] BT.lf) [5,2863311530,3435973836,4042322160,4244373504,4278255360,4291624908] BT.lf)) [5,2863311530,3435973836,4042322160,4244373504,4278255360,4294770432] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4244373504,4278255360,4294770684] BT.lf) [5,2863311530,3435973836,4042322160,4244373504,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4244373504,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4244373504,4278255360,4294954188] BT.lf) [5,2863311530,3435973836,4042322160,4244373504,4278255360,4294966524] BT.lf))) [5,2863311530,3435973836,4042322160,4244373504,4278255360,4294967040] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4244416680,4244438268,4278255360] BT.lf) [5,2863311530,3435973836,4042322160,4244416680,4278255360] BT.lf) [5,2863311530,3435973836,4042322160,4244416680,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4244416680,4278255360,4294945450] BT.lf) [5,2863311530,3435973836,4042322160,4244425932,4278255360,4294901760] BT.lf)) [5,2863311530,3435973836,4042322160,4244425932,4278255360,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4244434156,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4244434156,4278255360,4294945450] BT.lf) [5,2863311530,3435973836,4042322160,4244438016,4278255360,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4244438220,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4244438268,4278059008,4278255360] BT.lf)))) [5,2863311530,3435973836,4042322160,4244438268,4278102698,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4244438268,4278255360,4294705152] BT.lf) [5,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4244438268,4278255360,4294902531] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4244438268,4278255360,4294936712] BT.lf) [5,2863311530,3435973836,4042322160,4244438268,4278255360,4294944936] BT.lf)) [5,2863311530,3435973836,4042322160,4244438268,4278255360,4294945280] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4244438268,4278255360,4294945450] BT.lf) [5,2863311530,3435973836,4042322160,4244438268,4287168392,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4244438268,4289265576,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4244439039,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4244634879,4278255360,4294901760] BT.lf))) [5,2863311530,3435973836,4042322160,4261281277,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4277075694,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4277993212,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4278059008,4278124286,4278255360] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278059008,4278255360] BT.lf) [5,2863311530,3435973836,4042322160,4278059008,4278255360,4294901760] BT.lf)) [5,2863311530,3435973836,4042322160,4278102698,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278102698,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4278111436,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4278120174,4278255360,4294901760] (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278123772,4278255360,4294901760] BT.lf))))) [5,2863311530,3435973836,4042322160,4278124286,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278124286,4278255360,4294945450] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294705152] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294705152,4294770684] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294705152,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294757580,4294901760] BT.lf)) [5,2863311530,3435973836,4042322160,4278255360,4294769916,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294770684,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294770684,4294945450] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901758,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760] BT.lf))) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294901775] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294901845] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294901930] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294901964] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294902015] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294905855] BT.lf)) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294919236] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294923605] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294923775] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294934656] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294936712] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294944936] BT.lf)))) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294945535] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294950912] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294951104] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294953160] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294954176] BT.lf)) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294954239] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294958557] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294961898] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294962412] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294962926] BT.lf))) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294966476] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294966524] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294967038] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294967292] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294901760,4294967295] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294901775] BT.lf)) [5,2863311530,3435973836,4042322160,4278255360,4294901930] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294902015,4294945450] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294902015,4294967040] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294923605,4294945450] (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294934656] BT.lf)))))) [5,2863311530,3435973836,4042322160,4278255360,4294936712] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294936712,4294936712] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294936712,4294945450] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294936712,4294954188] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294936712,4294963440] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294936712,4294965496] BT.lf)) [5,2863311530,3435973836,4042322160,4278255360,4294944936] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294945450,4294945450] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294945450,4294945535] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294945450,4294951104] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294945450,4294954188] BT.lf))) [5,2863311530,3435973836,4042322160,4278255360,4294945450,4294961898] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294945450,4294962926] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294945450,4294966524] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294945450,4294967038] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255360,4294945450,4294967295] BT.lf) [5,2863311530,3435973836,4042322160,4278255360,4294950912] BT.lf)) [5,2863311530,3435973836,4042322160,4278255360,4294951104,4294967040] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4278255615,4294901760,4294967040] BT.lf) [5,2863311530,3435973836,4042322160,4279238415,4293984240,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4283826005,4289396650,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4286644096,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4287102976,4287168392,4294901760] BT.lf)))) [5,2863311530,3435973836,4042322160,4287168256,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4287168392,4287168392,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4287168392,4289396650,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4287168392,4291624908,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4287168392,4293984240,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4287168392,4294508536,4294901760] BT.lf)) [5,2863311530,3435973836,4042322160,4287168392,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4287168392,4294901760,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4287168392,4294901760,4294936712] BT.lf) [5,2863311530,3435973836,4042322160,4287168392,4294901760,4294945450] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4287168392,4294901760,4294954188] BT.lf) [5,2863311530,3435973836,4042322160,4287168392,4294901760,4294963440] BT.lf))) [5,2863311530,3435973836,4042322160,4287168392,4294901760,4294967040] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4287168392,4294901760,4294967176] BT.lf) [5,2863311530,3435973836,4042322160,4287168392,4294936712] BT.lf) [5,2863311530,3435973836,4042322160,4287168392,4294945450] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4289265576,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4289396480,4291624908,4294901760] BT.lf)) [5,2863311530,3435973836,4042322160,4289396650,4290838464,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4289396650,4291559424,4291624908] BT.lf) [5,2863311530,3435973836,4042322160,4289396650,4291624704,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4289396650,4291624908,4294901760] (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4289396650,4291624908,4294945450] BT.lf))))) [5,2863311530,3435973836,4042322160,4289396650,4294770684,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4042322160,4290838272,4294901760] BT.lf) [5,2863311530,3435973836,4042322160,4290838464,4294901760,4294967040] BT.lf) [5,2863311530,3435973836,4042322160,4291624704,4293984240,4294901760] (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4177066232,4287168392,4294901760] BT.lf) [5,2863311530,3435973836,4205509290,4293984240,4294901760] BT.lf)) [5,2863311530,3435973836,4210096880,4289396650,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,2863311530,3435973836,4210752250,4289396650,4293984240,4294901760] BT.lf) [5,2863333375,3435973836,4042322160,4278255360,4294901760,4294945450] BT.lf) [5,2863333375,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,2868882175,3435973836,4042322160,4278255360,4289396650,4294901760] BT.lf) [5,3221274624,3435973836,3937069738,4042322160,4278255360,4294901760] BT.lf))) [5,3233808384,3435973836,3941247658,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,3233857728,3435973836,3937069738,4042322160,4278255360,4294901760] BT.lf) [5,3233857728,3435973836,3941247658,4042322160,4278255360,4294901760] BT.lf) [5,3233857728,3435973836,3941264106,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,3435921408,3435973836,3941247658,4042322160,4278255360,4294901760] BT.lf) [5,3435973836,3937069738,4042322160,4278255360,4294901760] BT.lf)) [5,3435973836,3941247658,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [5,3435973836,3941264106,4042322160,4278255360,4289396650,4294901760] BT.lf) [5,3435973836,3941264106,4042322160,4278255360,4294901760,4294945450] BT.lf) [5,3435973836,3941264106,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [5,3435973836,4008618666,4042322160,4210752250,4278255360,4294901760] BT.lf) [5,3435973836,4008636142,4042322160,4210752250,4278255360,4294945450] BT.lf)))) [6,0,65535,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,0,65535,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,0,16711935,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,0,16711935,2863311530,3435973836,4042322160,4294901760] (BT.nd (BT.nd BT.lf [6,0,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,0,1431655765,3435973836,4042322160,4278255360,4294901760] BT.lf)) [6,0,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,255,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,255,2863311530,3435973836,4042322160,4278255360,4294901760,4294967040] BT.lf) [6,21845,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd BT.lf [6,21845,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,21845,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450] BT.lf))) [6,21845,2863311530,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,43690,65535,2863311530,3435973836,4042322160,4278255360] BT.lf) [6,43690,65535,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,43690,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,52428,65535,2863311530,3435973836,4042322160,4278255360] BT.lf) [6,52428,65535,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [6,52428,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,65535,65535,2863311530,3435973836,4042322160,4278255360] BT.lf) [6,65535,65535,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,65535,16711935,2863311530,3435973836,4042322160] (BT.nd BT.lf [6,65535,16711935,2863311530,3435973836,4042322160,4278255360] BT.lf)))))))) [6,65535,16711935,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,65535,16711935,2863311530,3435973836,4042322160,4294901760] BT.lf) [6,65535,1431655765,2863311530,3435973836,4042322160,4278255360] BT.lf) [6,65535,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,65535,1431655765,3435973836,4042322160,4278255360] BT.lf) [6,65535,1431655765,3435973836,4042322160,4278255360,4294901760] BT.lf)) [6,65535,2290649224,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [6,65535,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,65535,2863267840,2863311530,3435973836,4042322160,4278255360] BT.lf) [6,65535,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,65535,2863311530,2863311530,3435973836,4042322160,4278255360] BT.lf) [6,65535,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf))) [6,65535,2863311530,2863333375,3435973836,4042322160,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,65535,2863311530,2863333375,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,65535,2863311530,3233857728,3435973836,4042322160,4278255360] BT.lf) [6,65535,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,65535,2863311530,3435921408,3435973836,4042322160,4278255360] BT.lf) [6,65535,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760] BT.lf)) [6,65535,2863311530,3435973836,3435973836,4042322160,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [6,65535,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,65535,2863311530,3435973836,3435986943,4042322160,4278255360] BT.lf) [6,65535,2863311530,3435973836,3435986943,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,65535,2863311530,3435973836,4008636142,4042322160,4278255360] BT.lf) [6,65535,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760] BT.lf)))) [6,65535,2863311530,3435973836,4042322160,4244438268,4278255360] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,65535,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760] BT.lf) [6,65535,2863311530,3435973836,4042322160,4278255360] BT.lf) [6,65535,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,65535,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760] BT.lf) [6,65535,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450] BT.lf)) [6,65535,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188] (BT.nd (BT.nd (BT.nd BT.lf [6,65535,2863311530,3435973836,4042322160,4278255360,4294901760,4294967295] BT.lf) [6,65535,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [6,65535,2863311530,3435973836,4042322160,4278255360,4294954188] (BT.nd (BT.nd BT.lf [6,65535,2863311530,3435973836,4042322160,4278255360,4294967295] BT.lf) [6,983055,2863311530,3435973836,4042322160,4278255360,4293984240,4294901760] BT.lf))) [6,983055,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,5570645,2863311530,3435973836,4042322160,4278255360,4289396650,4294901760] BT.lf) [6,5570645,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,11141290,16711935,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,11141290,16711935,2863311530,3435973836,4042322160,4294901760] BT.lf) [6,11141290,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [6,13369548,16711935,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,13369548,16711935,2863311530,3435973836,4042322160,4294901760] BT.lf) [6,13369548,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,16711680,16711935,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd BT.lf [6,16711680,16711935,2863311530,3435973836,4042322160,4294901760] BT.lf))))) [6,16711680,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,16711935,16711935,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,16711935,16711935,2863311530,3435973836,4042322160,4294901760] BT.lf) [6,16711935,252645135,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,16711935,252645135,2863311530,3435973836,4042322160,4294901760] BT.lf) [6,16711935,252645135,2863311530,3435973836,4294901760] BT.lf)) [6,16711935,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,16711935,1431655765,2863311530,3435973836,4042322160,4294901760] BT.lf) [6,16711935,1431655765,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,16711935,1431655765,3435973836,4042322160,4294901760] (BT.nd (BT.nd BT.lf [6,16711935,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,16711935,2290649224,2863311530,3435973836,4042322160,4294901760] BT.lf))) [6,16711935,2852170240,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,16711935,2852170240,2863311530,3435973836,4042322160,4294901760] BT.lf) [6,16711935,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,16711935,2863267840,2863311530,3435973836,4042322160,4294901760] (BT.nd (BT.nd BT.lf [6,16711935,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,16711935,2863311530,2863311530,3435973836,4042322160,4294901760] BT.lf)) [6,16711935,2863311530,2868882175,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,16711935,2863311530,2868882175,3435973836,4042322160,4294901760] BT.lf) [6,16711935,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,16711935,2863311530,3233857728,3435973836,4042322160,4294901760] (BT.nd (BT.nd BT.lf [6,16711935,2863311530,3422604288,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,16711935,2863311530,3422604288,3435973836,4042322160,4294901760] BT.lf)))) [6,16711935,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,16711935,2863311530,3435921408,3435973836,4042322160,4294901760] BT.lf) [6,16711935,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,16711935,2863311530,3435973836,3435973836,4042322160,4294901760] (BT.nd (BT.nd BT.lf [6,16711935,2863311530,3435973836,3439316223,4042322160,4278255360,4294901760] BT.lf) [6,16711935,2863311530,3435973836,3439316223,4042322160,4294901760] BT.lf)) [6,16711935,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,16711935,2863311530,3435973836,4008636142,4042322160,4294901760] BT.lf) [6,16711935,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760] BT.lf) [6,16711935,2863311530,3435973836,4042322160,4244438268,4294901760] (BT.nd (BT.nd BT.lf [6,16711935,2863311530,3435973836,4042322160,4278190080,4278255360,4294901760] BT.lf) [6,16711935,2863311530,3435973836,4042322160,4278190080,4294901760] BT.lf))) [6,16711935,2863311530,3435973836,4042322160,4278255360,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,16711935,2863311530,3435973836,4042322160,4278255360,4289396650,4294901760] BT.lf) [6,16711935,2863311530,3435973836,4042322160,4278255360,4291624908,4294901760] BT.lf) [6,16711935,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,16711935,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760] BT.lf) [6,16711935,2863311530,3435973836,4042322160,4278255360,4294901760,4294902015] BT.lf)) [6,16711935,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [6,16711935,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188] BT.lf) [6,16711935,2863311530,3435973836,4042322160,4278255360,4294901760,4294967040] BT.lf) [6,16711935,2863311530,3435973836,4042322160,4278255360,4294901760,4294967295] (BT.nd BT.lf [6,16711935,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf)))))) [6,16711935,2863311530,3435973836,4042322160,4289396650,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,16711935,2863311530,3435973836,4042322160,4291624908,4294901760] BT.lf) [6,16711935,2863311530,3435973836,4042322160,4294901760] BT.lf) [6,16711935,2863311530,3435973836,4042322160,4294901760,4294901760] (BT.nd (BT.nd BT.lf [6,16711935,2863311530,3435973836,4042322160,4294901760,4294902015] BT.lf) [6,16711935,2863311530,3435973836,4042322160,4294901760,4294945450] BT.lf)) [6,16711935,2863311530,3435973836,4042322160,4294901760,4294954188] (BT.nd (BT.nd (BT.nd BT.lf [6,16711935,2863311530,3435973836,4042322160,4294901760,4294967040] BT.lf) [6,16711935,2863311530,3435973836,4042322160,4294901760,4294967295] BT.lf) [6,16711935,2863311530,3435973836,4042322160,4294945450] (BT.nd (BT.nd BT.lf [6,16777215,2863311530,3435973836,4042322160,4278190080,4278255360,4294901760] BT.lf) [6,16777215,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf))) [6,268374015,2863311530,3435973836,4026593280,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,268374015,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,1145324612,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,1145324612,1431655765,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,1145324612,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,1431633920,1431655765,2863311530,3435973836,4042322160,4278255360] BT.lf)) [6,1431633920,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,1431633920,1431655765,3435973836,4042322160,4278255360] BT.lf) [6,1431633920,1431655765,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,1431633920,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd BT.lf [6,1431633920,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,1431655765,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)))) [6,1431655765,1431655765,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,1431655765,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,1431655765,2290649224,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,1431655765,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,1431655765,2863267840,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,1431655765,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [6,1431655765,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,1431655765,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,1431655765,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,1431655765,2863311530,3435973836,3722304989,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,1431655765,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760] BT.lf) [6,1431655765,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760] BT.lf))) [6,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760] BT.lf) [6,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760,4294923605] BT.lf) [6,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450] (BT.nd (BT.nd BT.lf [6,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188] BT.lf) [6,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760,4294967295] BT.lf)) [6,1431655765,2863311530,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [6,1431655765,3233857728,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,1431655765,3435921408,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,1431655765,3435973836,3435973836,4042322160,4278255360,4294901760] (BT.nd BT.lf [6,1431655765,3435973836,3722304989,4042322160,4278255360,4294901760] BT.lf))))) [6,1431655765,3435973836,4008636142,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,1431655765,3435973836,4042322160,4244438268,4278255360,4294901760] BT.lf) [6,1431655765,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,1431655765,3435973836,4042322160,4278255360,4294901760,4294901760] (BT.nd (BT.nd BT.lf [6,1431655765,3435973836,4042322160,4278255360,4294901760,4294923605] BT.lf) [6,1431655765,3435973836,4042322160,4278255360,4294901760,4294945450] BT.lf)) [6,1431655765,3435973836,4042322160,4278255360,4294901760,4294954188] (BT.nd (BT.nd (BT.nd BT.lf [6,1431655765,3435973836,4042322160,4278255360,4294901760,4294967295] BT.lf) [6,1431655765,3435973836,4042322160,4278255360,4294945450] BT.lf) [6,1431699455,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,1431699455,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,1442797055,2852170240,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf))) [6,1442797055,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2155905152,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2155905152,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2155905152,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2290614272,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2290614272,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [6,2290614272,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,2290614272,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2290649224,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2290649224,2694881440,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2290649224,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2290649224,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)))) [6,2290649224,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2290649224,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2290649224,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2290649224,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2290649224,2863311530,3435973836,4026593280,4042322160,4278255360,4294901760] BT.lf) [6,2290649224,2863311530,3435973836,4042260480,4042322160,4278255360,4294901760] BT.lf)) [6,2290649224,2863311530,3435973836,4042322160,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,2290649224,2863311530,3435973836,4042322160,4177066232,4278255360,4294901760] BT.lf) [6,2290649224,2863311530,3435973836,4042322160,4210752250,4278255360,4294901760] BT.lf) [6,2290649224,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2290649224,2863311530,3435973836,4042322160,4278255360,4293984240,4294901760] BT.lf) [6,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf))) [6,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760,4294936712] BT.lf) [6,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450] BT.lf) [6,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188] (BT.nd (BT.nd BT.lf [6,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760,4294963440] BT.lf) [6,2290649224,2863311530,3435973836,4042322160,4278255360,4294936712] BT.lf)) [6,2290649224,2863311530,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd (BT.nd BT.lf [6,2290649224,2863311530,3435973836,4042322160,4287168392,4294901760] BT.lf) [6,2290649224,2863311530,4008636142,4042322160,4278255360,4294901760] BT.lf) [6,2290649224,3435973836,4008636142,4042322160,4278255360,4294901760] (BT.nd BT.lf [6,2290649224,4008636142,4042322160,4278255360,4294901760] BT.lf))))))) [6,2829625512,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2829625512,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863267840,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863267840,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2863267840,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863267840,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760] BT.lf)) [6,2863267840,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,2863267840,2863311530,3435973836,4008627404,4042322160,4278255360,4294901760] BT.lf) [6,2863267840,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760] BT.lf) [6,2863267840,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760] BT.lf))) [6,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188] BT.lf) [6,2863267840,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf) [6,2863267840,3435973836,4042322160,4278255360,4294901760,4294945450] (BT.nd (BT.nd BT.lf [6,2863267840,3435973836,4042322160,4278255360,4294945450] BT.lf) [6,2863302792,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [6,2863302792,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188] (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2863311530,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760] BT.lf)))) [6,2863311530,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760] BT.lf) [6,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450] (BT.nd (BT.nd BT.lf [6,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188] BT.lf) [6,2863311530,2863311530,3435973836,4042322160,4278255360,4294945450] BT.lf)) [6,2863311530,2863333375,3435973836,4042322160,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,2863333375,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,2868882175,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3221274624,3233857728,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2863311530,3221274624,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3233808384,3233857728,3435973836,4042322160,4278255360,4294901760] BT.lf))) [6,2863311530,3233808384,3435921408,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3233808384,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3233857728,3233857728,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3233857728,3422604288,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2863311530,3233857728,3435921408,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3233857728,3435973836,3435973836,4042322160,4278255360,4294901760] BT.lf)) [6,2863311530,3233857728,3435973836,3941264106,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3233857728,3435973836,4008636142,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3233857728,3435973836,4042322160,4244438268,4278255360,4294901760] BT.lf) [6,2863311530,3233857728,3435973836,4042322160,4278190080,4278255360,4294901760] (BT.nd BT.lf [6,2863311530,3233857728,3435973836,4042322160,4278255360,4278255360,4294901760] BT.lf))))) [6,2863311530,3233857728,3435973836,4042322160,4278255360,4289396650,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3233857728,3435973836,4042322160,4278255360,4290838464,4294901760] BT.lf) [6,2863311530,3233857728,3435973836,4042322160,4278255360,4291624908,4294901760] BT.lf) [6,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760,4294901760] BT.lf) [6,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760,4294945450] BT.lf)) [6,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760,4294951104] (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760,4294954188] BT.lf) [6,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760,4294967040] BT.lf) [6,2863311530,3233857728,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [6,2863311530,3233857728,3435973836,4244438268,4278255360,4294901760] BT.lf) [6,2863311530,3233857728,4244438268,4278255360,4294901760] BT.lf))) [6,2863311530,3368601800,3435973836,4042322160,4210752250,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3368601800,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3435187392,3435973836,4042322160,4278255360,4293984240,4294901760] BT.lf) [6,2863311530,3435187392,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2863311530,3435921408,3435921408,3435973836,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3435921408,3435973836,3435973836,4042322160,4278255360,4294901760] BT.lf)) [6,2863311530,3435921408,3435973836,4008618666,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435921408,3435973836,4008636142,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3435921408,3435973836,4042260480,4042322160,4278255360] BT.lf) [6,2863311530,3435921408,3435973836,4042260480,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2863311530,3435921408,3435973836,4042322160,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3435921408,3435973836,4042322160,4210752250,4278255360,4294901760] BT.lf)))) [6,2863311530,3435921408,3435973836,4042322160,4244435184,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435921408,3435973836,4042322160,4244438268,4278255360,4294901760] BT.lf) [6,2863311530,3435921408,3435973836,4042322160,4278255360,4293984240,4294901760] BT.lf) [6,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760,4294901760] BT.lf) [6,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760,4294945450] BT.lf)) [6,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760,4294954188] (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760,4294963440] BT.lf) [6,2863311530,3435921408,3435973836,4042322160,4278255360,4294945450] BT.lf) [6,2863311530,3435921408,3435973836,4042322160,4278255360,4294954188] (BT.nd (BT.nd BT.lf [6,2863311530,3435921408,4042322160,4278255360,4294901760,4294954188] BT.lf) [6,2863311530,3435921408,4042322160,4278255360,4294954188] BT.lf))) [6,2863311530,3435956360,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435956360,3435973836,4042322160,4278255360,4294901760,4294945450] BT.lf) [6,2863311530,3435956360,3435973836,4042322160,4278255360,4294945450] BT.lf) [6,2863311530,3435970752,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2863311530,3435970752,3435973836,4042322160,4278255360,4294901760,4294963440] BT.lf) [6,2863311530,3435973836,3435973836,3435973836,4042322160,4278255360,4294901760] BT.lf)) [6,2863311530,3435973836,3435973836,4008636142,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,3435973836,4042322160,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3435973836,3435973836,4042322160,4210752250,4278255360,4294901760] BT.lf) [6,2863311530,3435973836,3435973836,4042322160,4244438268,4278255360,4294901760] (BT.nd BT.lf [6,2863311530,3435973836,3435973836,4042322160,4278255360,4293984240,4294901760] BT.lf)))))) [6,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760,4294901760] BT.lf) [6,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760,4294945450] BT.lf) [6,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760,4294954188] (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760,4294963440] BT.lf) [6,2863311530,3435973836,3435973836,4042322160,4278255360,4294945450] BT.lf)) [6,2863311530,3435973836,3435986943,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,3439316223,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3435973836,3722304989,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3435973836,3941264106,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,3974950124,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3435973836,4008574976,4008636142,4042322160,4278255360,4294901760] BT.lf))) [6,2863311530,3435973836,4008574976,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4008618666,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3435973836,4008627404,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3435973836,4008636142,4008636142,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4008636142,4042322160,4210752250,4278255360,4294901760] BT.lf) [6,2863311530,3435973836,4008636142,4042322160,4244438268,4278255360,4294901760] BT.lf)) [6,2863311530,3435973836,4008636142,4042322160,4278124286,4278255360,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4008636142,4042322160,4278255360,4293984240,4294901760] BT.lf) [6,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760] BT.lf) [6,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760,4294901760] (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760,4294945450] BT.lf) [6,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760,4294954188] BT.lf)))) [6,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760,4294962926] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760,4294963440] BT.lf) [6,2863311530,3435973836,4008636142,4042322160,4278255360,4294945450] BT.lf) [6,2863311530,3435973836,4042322160,4241292492,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4244373504,4244438268,4278255360] BT.lf) [6,2863311530,3435973836,4042322160,4244373504,4244438268,4278255360,4294901760] BT.lf)) [6,2863311530,3435973836,4042322160,4244373504,4278255360] (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4244373504,4278255360,4294901760] BT.lf) [6,2863311530,3435973836,4042322160,4244425932,4278255360,4294901760] BT.lf) [6,2863311530,3435973836,4042322160,4244438268,4244438268,4278255360,4294901760] (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4244438268,4278124286,4278255360,4294901760] BT.lf) [6,2863311530,3435973836,4042322160,4244438268,4278255360,4291624908,4294901760] BT.lf))) [6,2863311530,3435973836,4042322160,4244438268,4278255360,4294770684,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760] BT.lf) [6,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760,4294901760] BT.lf) [6,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760,4294945450] (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760,4294954188] BT.lf) [6,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760,4294966524] BT.lf)) [6,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760,4294967040] (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4244438268,4278255360,4294945450] BT.lf) [6,2863311530,3435973836,4042322160,4278124286,4278255360,4294901760] BT.lf) [6,2863311530,3435973836,4042322160,4278255360,4294770684,4294901760] (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf))))) [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760,4294901760] BT.lf) [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760,4294945450] BT.lf) [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760,4294954188] (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294902015] BT.lf) [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294923605] BT.lf)) [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294936712] (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450] BT.lf) [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450,4294945450] BT.lf) [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450,4294954188] (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450,4294962926] BT.lf) [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294951104] BT.lf))) [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188,4294954188] BT.lf) [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188,4294962926] BT.lf) [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188,4294963440] (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188,4294966524] BT.lf) [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294962926] BT.lf)) [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294966524] (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4278255360,4294901760,4294967295] BT.lf) [6,2863311530,3435973836,4042322160,4278255360,4294936712] BT.lf) [6,2863311530,3435973836,4042322160,4278255360,4294945450] (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4278255360,4294945450,4294945450] BT.lf) [6,2863311530,3435973836,4042322160,4278255360,4294945450,4294954188] BT.lf)))) [6,2863311530,3435973836,4042322160,4278255360,4294945450,4294962926] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,3435973836,4042322160,4287168392,4294901760] BT.lf) [6,2863311530,3435973836,4042322160,4289396650,4291624908,4294901760] BT.lf) [7,65535,2863311530,3435973836,4042322160,4278255360] (BT.nd (BT.nd BT.lf [7,65535,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [7,16711935,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [7,16711935,2863311530,3435973836,4042322160,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [7,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [7,1431655765,3435973836,4042322160,4278255360,4294901760] BT.lf) [7,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [7,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf) [7,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf))) [7,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [7,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760] BT.lf) [7,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760] BT.lf) [7,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760] (BT.nd (BT.nd BT.lf [7,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760] BT.lf) [7,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf)) [7,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760] (BT.nd (BT.nd (BT.nd BT.lf [7,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450] BT.lf) [7,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188] BT.lf) [7,2863311530,3435973836,4042322160,4278255360,4294945450] (BT.nd BT.lf [8,2863311530,3435973836,4042322160,4278255360,4294901760] BT.lf))))))))))
+abbrev Witness := Word × Nat × Nat
 
-noncomputable def K_0 : List (List ℕ × List (ℕ × ℕ)) := [([2,3233857728,4278102698,4289265576],[]),([2,3435973836,4204853920,4294617770],[]),([2,3435973836,4205509290,4293962400],[]),([2,3941264106,4244373504,4289265576],[]),([3,2829625512,3233857728,4278102698,4278255360],[(56,3)]),([3,2829625512,3941264106,4244373504,4278255360],[(72,3)]),([3,2863180456,3233857728,4227922944,4294901760],[]),([3,2863180456,3233857728,4244373504,4278255360],[]),([3,2863311530,3233857728,4244373504,4289265576],[]),([3,2863311530,3233857728,4244416680,4278255360],[(56,3)]),([3,2863311530,3368601800,4244416680,4278255360],[(56,3)]),([3,2863311530,3435956360,4042317984,4278255360],[]),([3,2863311530,3435956360,4042318048,4278251008],[]),([3,2863311530,3435956360,4042318048,4278255360],[]),([3,2863311530,3435973836,4204853920,4293918720],[]),([3,2863311530,3435973836,4205509290,4293962400],[]),([3,2863311530,4241280204,4293984240,4294963200],[]),([3,2863311530,4241292492,4293984240,4294950912],[]),([3,3233857728,3941264106,4244416680,4278255360],[(56,3)]),([3,3435956360,3941264106,4042301600,4278255360],[(72,3)]),([3,3435973836,3941264106,4244416680,4278255360],[]),([3,3435973836,4042322160,4272597674,4294770432],[]),([3,3435973836,4042322160,4278102698,4289265576],[]),([3,3435973836,4205488810,4293984240,4294963200],[]),([3,3435973836,4205505194,4293984240,4294901760],[]),([3,3435973836,4205509290,4293962400],[]),([3,3435973836,4205509290,4293962400,4293984240],[]),([3,3435973836,4205509290,4293962400,4294901760],[]),([3,3435973836,4205509290,4293962400,4294945450],[]),([3,3435973836,4205509290,4293982960,4294945450],[]),([3,3435973836,4205509290,4293984240,4294617770],[]),([3,3435973836,4205509290,4293984240,4294945440],[]),([3,3435973836,4205509290,4293984240,4294945450],[]),([3,3435973836,4210096880,4289374890,4294967040],[]),([3,3435973836,4210096880,4289396650,4294945450],[]),([3,3435973836,4210621176,4289396650,4294945450],[]),([3,3435973836,4210752250,4289396650,4293962400],[]),([3,3937069738,4241292492,4293984240,4294901760],[]),([3,3941264106,4244438268,4289265576,4294901760],[]),([3,3974950124,4210752250,4288741280,4294945450],[]),([4,16776960,2863311530,3435973836,4042322160],[]),([4,178916010,3435973836,4042322160,4278255360,4294945450],[]),([4,178956970,3435973836,4042322160,4278255360,4294901760],[]),([4,214748364,2863311530,4042322160,4278255360,4294901760],[]),([4,267390960,2863311530,3435973836,4026593280,4294901760],[]),([4,267390960,2863311530,3435973836,4294901760],[]),([4,715795114,3435973836,4042322160,4278255360,4294901760],[]),([4,1073676288,2863311530,3435973836,4042322160,4278255360],[]),([4,1077952576,2863311530,4244438268,4278255360,4294901760],[]),([4,1145307136,2863311530,3722300620,4042322160,4278255360],[]),([4,1145324612,2863311530,4042322160,4287168392,4294901760],[]),([4,1145848908,2863311530,4042322160,4278255360,4294901760],[]),([4,1154237644,1357926640,2863311530,4278255360,4294901760],[]),([4,1154237644,1442775040,2863311530,4042322160,4278255360],[]),([4,1154237644,2863311530,4042322160,4278255360,4294901760],[]),([4,1154237644,2863311530,4042322160,4278255360,4294945280],[]),([4,1154237644,2863311530,4042322160,4278255360,4294945450],[]),([4,1154237644,2863311530,4210096880,4278255360,4294901760],[]),([4,1154272460,2863311530,4042322160,4278255360,4294901760],[]),([4,1288457420,2863311530,4042322160,4278255360,4294901760],[]),([4,1414791168,2863311530,3435973836,4042322160,4278255360],[]),([4,1431633920,2863311530,3233857728,4244438268,4278255360],[]),([4,1431633920,2863311530,3435973836,4042322160,4278255360],[]),([4,1431633920,2863311530,3435973836,4042322160,4287168392],[]),([4,1431677610,2863311530,3435973836,4042322160,4278255360],[]),([4,1431677610,3435973836,4042322160,4278255360],[]),([4,1432289280,2863311530,3435973836,4042322160,4278255360],[]),([4,1437226410,3435973836,4042322160,4294901760],[]),([4,1442775040,2863311530,3435973836,4042322160,4278255360],[]),([4,1442775040,2863311530,3435973836,4210096880,4278255360],[]),([4,1442775210,2863311530,3435973836,4042322160,4278255360],[]),([4,1610547200,2863311530,3435973836,4042322160,4278255360],[]),([4,2290649224,4008618666,4042322160,4278255360,4294954188],[(72,4),(96,2)]),([4,2290649224,4008636142,4042322160,4278255360,4294945450],[(72,4),(96,2)]),([4,2290649224,4008636142,4042322160,4287168392,4294945450],[(56,2),(72,1),(96,2),(128,2)]),([4,2576980377,4042322160,4278255360,4294901760],[]),([4,2829625512,2863311530,3233857728,4244373504,4278255360],[(72,3)]),([4,2829625512,3435973836,4042322160,4278102698,4278255360],[]),([4,2829625512,3435973836,4210752250,4278255360,4294945450],[(56,3),(96,0)]),([4,2829625512,3941264106,4244438268,4278255360,4294901760],[(128,3)]),([4,2863180456,3233857728,4244438268,4278255360,4294901760],[]),([4,2863180456,3435187392,4042322160,4278255360,4294901760],[(116,2)]),([4,2863180456,3435973836,4042322160,4244373504,4278255360],[]),([4,2863180456,3435973836,4042322160,4278255360,4294705152],[]),([4,2863180456,3435973836,4042322160,4278255360,4294901760],[]),([4,2863180456,3435973836,4042322160,4278255360,4294945448],[]),([4,2863180456,3435973836,4042322160,4278255360,4294945450],[]),([4,2863180456,3435973836,4042322160,4287168392,4294901760],[]),([4,2863180456,3435973836,4042322160,4289265576,4294901760],[])]
-noncomputable def K_1 : List (List ℕ × List (ℕ × ℕ)) := [([4,2863180456,3435973836,4042322160,4289396650,4294901760],[]),([4,2863289685,3435973836,4042322160,4278255360],[]),([4,2863311528,3435973836,4042322160,4278255360,4294901760],[]),([4,2863311530,3221274624,4241292492,4293984240,4294901760],[]),([4,2863311530,3233808384,4244438268,4278255360,4294951104],[(56,3),(104,3)]),([4,2863311530,3233857536,4244438268,4278255360,4294901760],[(56,3)]),([4,2863311530,3233857728,3435956360,4042301600,4278255360],[(80,1)]),([4,2863311530,3233857728,3435973836,4244416680,4278255360],[]),([4,2863311530,3233857728,4227922944,4294770684,4294901760],[]),([4,2863311530,3233857728,4238933160,4278255360,4294901760],[]),([4,2863311530,3233857728,4243389676,4278255360,4294901760],[]),([4,2863311530,3233857728,4244373504,4244438268,4278255360],[]),([4,2863311530,3233857728,4244373504,4278255360,4294770684],[]),([4,2863311530,3233857728,4244416680,4244438268,4278255360],[(56,3)]),([4,2863311530,3233857728,4244416680,4278255360],[(56,3),(58,3)]),([4,2863311530,3233857728,4244416680,4278255360,4294901760],[(56,3)]),([4,2863311530,3233857728,4244416680,4278255360,4294945450],[(56,3)]),([4,2863311530,3233857728,4244434156,4278255360,4294901760],[]),([4,2863311530,3233857728,4244434156,4278255360,4294945450],[(56,3)]),([4,2863311530,3233857728,4244438268,4261477888,4294901760],[]),([4,2863311530,3233857728,4244438268,4278059008,4278255360],[]),([4,2863311530,3233857728,4244438268,4278102698,4278255360],[(56,3)]),([4,2863311530,3233857728,4244438268,4278255360,4290772992],[]),([4,2863311530,3233857728,4244438268,4278255360,4291559424],[]),([4,2863311530,3233857728,4244438268,4278255360,4294705152],[]),([4,2863311530,3233857728,4244438268,4278255360,4294901760],[]),([4,2863311530,3233857728,4244438268,4278255360,4294902531],[]),([4,2863311530,3233857728,4244438268,4278255360,4294934656],[]),([4,2863311530,3233857728,4244438268,4278255360,4294936712],[]),([4,2863311530,3233857728,4244438268,4278255360,4294944936],[(56,3)]),([4,2863311530,3233857728,4244438268,4278255360,4294945280],[]),([4,2863311530,3233857728,4244438268,4278255360,4294945450],[(56,3)]),([4,2863311530,3233857728,4244438268,4278255360,4294950912],[(104,3)]),([4,2863311530,3233857728,4244438268,4286644096,4294901760],[]),([4,2863311530,3233857728,4244438268,4287168392,4294901760],[]),([4,2863311530,3233857728,4244438268,4289265576,4294901760],[]),([4,2863311530,3233857728,4244438268,4290838272,4294901760],[(136,3)]),([4,2863311530,3233857728,4277993212,4278255360,4294901760],[]),([4,2863311530,3284386755,4244438268,4278255360,4294901760],[]),([4,2863311530,3284386755,4278255360,4294901760],[]),([4,2863311530,3301754060,4042322160,4278255360,4294901760],[]),([4,2863311530,3368077504,4244438268,4278255360,4294901760],[]),([4,2863311530,3368077504,4277993212,4278255360,4294901760],[]),([4,2863311530,3368599744,4244438268,4278255360,4294901760],[]),([4,2863311530,3368601800,4042322160,4244373504,4278255360],[]),([4,2863311530,3368601800,4042322160,4261477888,4294901760],[]),([4,2863311530,3368601800,4042322160,4278059008,4278255360],[]),([4,2863311530,3368601800,4243651824,4278255360,4294901760],[]),([4,2863311530,3368601800,4244373504,4244438268,4278255360],[]),([4,2863311530,3368601800,4244435184,4278255360,4294901760],[]),([4,2863311530,3368601800,4244438268,4278255360,4294901760],[]),([4,2863311530,3368601800,4244438268,4278255360,4294945450],[(56,3)]),([4,2863311530,3435134976,4042322160,4278255360,4294757580],[(56,2)]),([4,2863311530,3435184320,4244438268,4278255360,4294901760],[]),([4,2863311530,3435187392,4042322160,4287168392,4294901760],[]),([4,2863311530,3435710664,4042322160,4278255360,4294901760],[]),([4,2863311530,3435711688,4042322160,4278255360,4293918720],[]),([4,2863311530,3435711688,4042322160,4278255360,4294574080],[]),([4,2863311530,3435711688,4042322160,4278255360,4294901760],[]),([4,2863311530,3435711688,4042322160,4278255360,4294945450],[]),([4,2863311530,3435711688,4042322160,4287168392,4294901760],[]),([4,2863311530,3435921408,3435973836,4042318048,4278255360],[]),([4,2863311530,3435921408,3722300620,4042322160,4278255360],[]),([4,2863311530,3435921408,4042309824,4244438268,4278255360],[]),([4,2863311530,3435921408,4042322160,4241280204,4278255360],[]),([4,2863311530,3435921408,4042322160,4244425932,4278255360],[]),([4,2863311530,3435921408,4042322160,4244434156,4278255360],[]),([4,2863311530,3435921408,4042322160,4278255360,4294757580],[]),([4,2863311530,3435921408,4042322160,4287168392,4294954188],[(56,2)])]
-noncomputable def K_2 : List (List ℕ × List (ℕ × ℕ)) := [([4,2863311530,3435934515,4042322160,4278255360],[]),([4,2863311530,3435939020,4042322160,4278255360,4294901760],[]),([4,2863311530,3435956360,3435973836,4042318048,4278255360],[]),([4,2863311530,3435956360,4042309824,4042322160,4278255360],[]),([4,2863311530,3435956360,4042318048,4042322160,4278255360],[]),([4,2863311530,3435956360,4042318048,4278255360],[]),([4,2863311530,3435956360,4042318048,4278255360,4294901760],[]),([4,2863311530,3435956360,4042318048,4278255360,4294945450],[]),([4,2863311530,3435956360,4042318048,4278255360,4294962926],[]),([4,2863311530,3435956360,4042322160,4244425932,4278255360],[]),([4,2863311530,3435956360,4042322160,4244434156,4278255360],[]),([4,2863311530,3435956360,4042322160,4278255360,4294951104],[]),([4,2863311530,3435956360,4042322160,4278255360,4294954188],[]),([4,2863311530,3435956360,4042322160,4278255360,4294961898],[(156,0)]),([4,2863311530,3435956360,4042322160,4278255360,4294962926],[(156,0)]),([4,2863311530,3435970752,4042322160,4287168392,4294901760],[]),([4,2863311530,3435970752,4177066232,4278255360,4294901760],[]),([4,2863311530,3435970764,4042322160,4278255360,4294901760],[]),([4,2863311530,3435972744,4042322160,4278255360,4294901760],[]),([4,2863311530,3435972744,4042322160,4278255360,4294945450],[(148,1),(156,3)]),([4,2863311530,3435972808,4042322160,4210688000,4278255360],[]),([4,2863311530,3435972808,4042322160,4278254080,4294901760],[]),([4,2863311530,3435972808,4042322160,4278254080,4294945450],[(148,1)]),([4,2863311530,3435972808,4042322160,4278255360,4294901760],[]),([4,2863311530,3435972808,4042322160,4278255360,4294936712],[]),([4,2863311530,3435972808,4042322160,4278255360,4294945450],[(148,1)]),([4,2863311530,3435972808,4177066232,4278255360,4294901760],[]),([4,2863311530,3435973832,4042322160,4278255360,4294901760],[]),([4,2863311530,3435973832,4042322160,4278255360,4294945450],[]),([4,2863311530,3435973836,3587506176,4042322160,4278255360],[]),([4,2863311530,3435973836,3705405440,4042322160,4278255360],[]),([4,2863311530,3435973836,3722248192,4042322160,4278255360],[]),([4,2863311530,3435973836,3722283144,4042322160,4278255360],[]),([4,2863311530,3435973836,3724476416,4042322160,4278255360],[]),([4,2863311530,3435973836,4042322160,4241227776,4278255360],[]),([4,2863311530,3435973836,4042322160,4241270920,4278255360],[]),([4,2863311530,3435973836,4042322160,4243324928,4278255360],[]),([4,2863311530,3435973836,4042322160,4244373504,4278255360],[]),([4,2863311530,3435973836,4042322160,4244373504,4287168392],[]),([4,2863311530,3435973836,4042322160,4244373504,4289265408],[]),([4,2863311530,3435973836,4042322160,4244373504,4289265576],[]),([4,2863311530,3435973836,4042322160,4244408456,4278255360],[]),([4,2863311530,3435973836,4042322160,4244416512,4278255360],[]),([4,2863311530,3435973836,4042322160,4244416680,4278255360],[]),([4,2863311530,3435973836,4042322160,4244570112,4278255360],[]),([4,2863311530,3435973836,4042322160,4261216256,4278255360],[]),([4,2863311530,3435973836,4042322160,4277010432,4278255360],[]),([4,2863311530,3435973836,4042322160,4277054122,4278255360],[]),([4,2863311530,3435973836,4042322160,4277927936,4278255360],[]),([4,2863311530,3435973836,4042322160,4277971456,4278255360],[]),([4,2863311530,3435973836,4042322160,4278059008,4278255360],[]),([4,2863311530,3435973836,4042322160,4278102698,4278255360],[]),([4,2863311530,3435973836,4042322160,4278255360,4294705152],[]),([4,2863311530,3435973836,4042322160,4278255360,4294748840],[]),([4,2863311530,3435973836,4042322160,4278255360,4294836224],[]),([4,2863311530,3435973836,4042322160,4278255360,4294879914],[]),([4,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([4,2863311530,3435973836,4042322160,4278255360,4294901763],[]),([4,2863311530,3435973836,4042322160,4278255360,4294901765],[]),([4,2863311530,3435973836,4042322160,4278255360,4294901770],[]),([4,2863311530,3435973836,4042322160,4278255360,4294901772],[]),([4,2863311530,3435973836,4042322160,4278255360,4294901775],[]),([4,2863311530,3435973836,4042322160,4278255360,4294901823],[]),([4,2863311530,3435973836,4042322160,4278255360,4294901896],[]),([4,2863311530,3435973836,4042322160,4278255360,4294901930],[]),([4,2863311530,3435973836,4042322160,4278255360,4294904490],[]),([4,2863311530,3435973836,4042322160,4278255360,4294934528],[]),([4,2863311530,3435973836,4042322160,4278255360,4294934656],[]),([4,2863311530,3435973836,4042322160,4278255360,4294936704],[]),([4,2863311530,3435973836,4042322160,4278255360,4294936712],[])]
-noncomputable def K_3 : List (List ℕ × List (ℕ × ℕ)) := [([4,2863311530,3435973836,4042322160,4278255360,4294936746],[]),([4,2863311530,3435973836,4042322160,4278255360,4294944904],[]),([4,2863311530,3435973836,4042322160,4278255360,4294944936],[]),([4,2863311530,3435973836,4042322160,4278255360,4294945448],[]),([4,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([4,2863311530,3435973836,4042322160,4278255360,4294945455],[]),([4,2863311530,3435973836,4042322160,4278255360,4294950912],[]),([4,2863311530,3435973836,4042322160,4278255360,4294951040],[]),([4,2863311530,3435973836,4042322160,4278255360,4294953096],[]),([4,2863311530,3435973836,4042322160,4278255360,4294961834],[]),([4,2863311530,3435973836,4042322160,4278255365,4294901760],[]),([4,2863311530,3435973836,4042322160,4278255365,4294945450],[]),([4,2863311530,3435973836,4042322160,4278255372,4294901760],[]),([4,2863311530,3435973836,4042322160,4278255496,4294901760],[]),([4,2863311530,3435973836,4042322160,4278320897,4294901760],[]),([4,2863311530,3435973836,4042322160,4278779656,4294901760],[]),([4,2863311530,3435973836,4042322160,4286643968,4294901760],[]),([4,2863311530,3435973836,4042322160,4286644096,4294901760],[]),([4,2863311530,3435973836,4042322160,4286644096,4294934656],[]),([4,2863311530,3435973836,4042322160,4286644096,4294936712],[]),([4,2863311530,3435973836,4042322160,4286644096,4294945450],[]),([4,2863311530,3435973836,4042322160,4287168256,4291559424],[]),([4,2863311530,3435973836,4042322160,4287168256,4294901760],[]),([4,2863311530,3435973836,4042322160,4287168256,4294936712],[]),([4,2863311530,3435973836,4042322160,4287168256,4294945450],[]),([4,2863311530,3435973836,4042322160,4287168384,4294901760],[]),([4,2863311530,3435973836,4042322160,4287168392,4291559424],[]),([4,2863311530,3435973836,4042322160,4287168392,4293918720],[]),([4,2863311530,3435973836,4042322160,4287168392,4294443008],[]),([4,2863311530,3435973836,4042322160,4287168392,4294901760],[]),([4,2863311530,3435973836,4042322160,4287168392,4294934656],[]),([4,2863311530,3435973836,4042322160,4287168392,4294936576],[]),([4,2863311530,3435973836,4042322160,4287168392,4294936712],[]),([4,2863311530,3435973836,4042322160,4287168392,4294942880],[]),([4,2863311530,3435973836,4042322160,4287168392,4294945280],[]),([4,2863311530,3435973836,4042322160,4287168392,4294945416],[]),([4,2863311530,3435973836,4042322160,4287168392,4294945450],[(56,2)]),([4,2863311530,3435973836,4042322160,4289265408,4294901760],[]),([4,2863311530,3435973836,4042322160,4289265544,4294901760],[]),([4,2863311530,3435973836,4042322160,4289265576,4294901760],[]),([4,2863311530,3435973836,4042322160,4289265576,4294944936],[]),([4,2863311530,3435973836,4042322160,4289265576,4294945450],[(56,2),(72,0)]),([4,2863311530,3435973836,4042322160,4289331200,4291624704],[]),([4,2863311530,3435973836,4042322160,4289374890,4291624704],[]),([4,2863311530,3435973836,4042322160,4289396650,4291603080],[(56,1),(108,0)]),([4,2863311530,3435973836,4042322160,4290772992,4290838272],[]),([4,2863311530,3435973836,4042322160,4290838272,4291559424],[]),([4,2863311530,3435973836,4042322160,4290838272,4294901760],[]),([4,2863311530,3435973836,4042322160,4290838272,4294945450],[]),([4,2863311530,3435973836,4042322160,4290838272,4294951104],[(80,3)]),([4,2863311530,3435973836,4042322160,4290838400,4294901760],[]),([4,2863311530,3435973836,4042322160,4290838400,4294945450],[]),([4,2863311530,3435973836,4042322160,4290838464,4294950912],[(80,3)]),([4,2863311530,3435973836,4042322160,4291362560,4294901760],[]),([4,2863311530,3435973836,4042322160,4291362696,4294901760],[]),([4,2863311530,3435973836,4042322160,4291559424,4293984000],[]),([4,2863311530,3435973836,4169726088,4293984240,4294901760],[]),([4,2863311530,3435973836,4176541936,4287168392,4294901760],[]),([4,2863311530,3435973836,4177064176,4287168256,4294901760],[]),([4,2863311530,3435973836,4177064176,4287168392,4294901760],[]),([4,2863311530,3435973836,4177066232,4287168392,4294901760],[]),([4,2863311530,3435973836,4177066232,4287168392,4294936712],[]),([4,2863311530,3435973836,4177066232,4287168392,4294945450],[(56,1)]),([4,2863311530,3435973836,4177066232,4288741280,4294901760],[]),([4,2863311530,3435973836,4177066232,4289265576,4294901760],[]),([4,2863311530,3435973836,4204853920,4293984240,4294901760],[]),([4,2863311530,3435973836,4205506560,4293984240,4294901760],[]),([4,2863311530,3435973836,4205509290,4293918720,4293984240],[(132,2)]),([4,2863311530,3435973836,4205509290,4293984240,4294901760],[]),([4,2863311530,3435973836,4205509290,4293984240,4294945450],[]),([4,2863311530,3435973836,4210096880,4288741280,4294901760],[]),([4,2863311530,3435973836,4210096880,4289396480,4294901760],[])]
-noncomputable def K_4 : List (List ℕ × List (ℕ × ℕ)) := [([4,2863311530,3435973836,4210096880,4289396650,4294901760],[]),([4,2863311530,3435973836,4210096880,4289396650,4294945280],[]),([4,2863311530,3435973836,4210096880,4289396650,4294945450],[]),([4,2863311530,3435973836,4210621176,4289396650,4294901760],[]),([4,2863311530,3435973836,4241289216,4293984240,4294901760],[]),([4,2863311530,3435973836,4243648752,4291624704,4294901760],[]),([4,2863311530,3974950124,4210752250,4288741280,4294901760],[]),([4,2863311615,3435973836,4042322160,4278255360,4294945450],[]),([4,2863329006,3435973836,4042322160,4278255360,4294945450],[]),([4,2863333375,3435973836,4042322160,4278255360,4294945450],[]),([4,2863377067,3435973836,4042322160,4278255360,4294901760],[]),([4,3233857728,3937069738,4244438268,4278255360,4294901760],[(96,3)]),([4,3233857728,3941247658,4244438268,4278255360,4294901760],[(128,3)]),([4,3233857728,3941264106,4244438268,4278255360,4294945450],[(56,3),(72,3)]),([4,3368601800,4008618666,4042322160,4278255360,4294901760],[]),([4,3368601800,4008636142,4042322160,4278255360,4294945450],[(72,4)]),([4,3435921408,3435973836,4042322160,4205488810,4278255360],[]),([4,3435956360,3941264106,4042322160,4278255360,4294945450],[(72,4)]),([4,3435973836,3937053354,4042322160,4278255360,4294901760],[]),([4,3435973836,3937069738,4042322160,4278255360,4294901760],[]),([4,3435973836,3937069738,4042322160,4278255360,4294945450],[]),([4,3435973836,3937069738,4042322160,4278255360,4294950912],[]),([4,3435973836,3937069738,4042322160,4278255360,4294961834],[]),([4,3435973836,3937069738,4042322160,4290838464,4294901760],[(72,3)]),([4,3435973836,3941247658,4042322160,4278255360,4294901760],[]),([4,3435973836,3941247658,4042322160,4278255360,4294945450],[]),([4,3435973836,3941247658,4042322160,4278255360,4294951104],[(72,3)]),([4,3435973836,3941247658,4042322160,4290838272,4294901760],[]),([4,3435973836,3941247658,4244435184,4278255360,4294901760],[]),([4,3435973836,3941264042,4042322160,4278255360,4294901760],[(72,3)]),([4,3435973836,3941264106,4042322160,4278255360,4294945450],[(72,3)]),([4,3435973836,3941264106,4244438268,4278255360,4294945450],[(72,3)]),([4,3435973836,3974950124,4210752250,4278255360,4294945450],[(56,3)]),([4,3435973836,4008356522,4042322160,4278255360,4293918720],[(128,2)]),([4,3435973836,4008356522,4042322160,4278255360,4294901760],[]),([4,3435973836,4008373994,4042322160,4278255360,4294945450],[]),([4,3435973836,4008618666,4042322160,4210731690,4278255360],[]),([4,3435973836,4008618666,4042322160,4287168392,4294901760],[(128,2)]),([4,3435973836,4008636142,4042322160,4278255360,4294617770],[]),([4,3435973836,4008636142,4042322160,4287168392,4294945450],[(56,2)]),([4,3435973836,4008636142,4205509290,4293984240,4294901760],[]),([4,3435973836,4205509290,4293984240,4294901760,4294945450],[]),([4,3435973836,4205509290,4293984240,4294945450],[]),([4,3435973836,4210096880,4289396650,4294901760,4294945450],[]),([4,3435973836,4210096880,4289396650,4294945280],[]),([4,3435973836,4210096880,4289396650,4294945450],[]),([4,3435973836,4210752250,4289396650,4293984240,4294945450],[(116,0)]),([4,3974950124,4210752250,4288741280,4294901760],[]),([5,0,1431633920,2863311530,3435973836,4042322160,4278255360],[]),([5,0,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,0,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,15,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,85,2863311530,3435973836,4042322160,4278255360,4294901760],[(72,2),(96,0)]),([5,85,2863311530,3435973836,4042322160,4278255360,4294945450],[(72,2),(96,0)]),([5,170,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,204,2863311530,3435973836,4042322160,4278255360,4294901760],[(96,0)]),([5,255,2863311530,3435973836,4042322160,4278190080],[(128,3)]),([5,255,2863311530,3435973836,4042322160,4278255360,4294901760],[])]
-noncomputable def K_5 : List (List ℕ × List (ℕ × ℕ)) := [([5,255,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,4095,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,17476,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,17476,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,21845,16711935,2863311530,3435973836,4042322160],[]),([5,21845,1431655765,3435973836,4042322160,4278255360],[]),([5,21845,2863267840,3435973836,4042322160,4278255360],[]),([5,21845,2863311530,3435973836,4042322160,4278255360],[]),([5,21845,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,21845,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,21845,2863333375,3435973836,4042322160,4278255360],[]),([5,21845,2863333375,3435973836,4042322160,4278255360,4294945450],[]),([5,22015,2863311530,3435973836,4042322160,4278255360],[(2,3)]),([5,22015,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,22015,2863311530,3435973836,4042322160,4278255360,4294945280],[]),([5,34952,2863311530,3435973836,4042322160,4278255360,4294901760],[(96,0)]),([5,43690,2863267840,3435973836,4042322160,4278255360,4294901760],[]),([5,43690,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,43690,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,43690,2863333375,3435973836,4042322160,4278255360],[]),([5,43690,2863333375,3435973836,4042322160,4278255360,4294901760],[]),([5,49344,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,52428,2863311530,3435921408,4042322160,4278255360,4294901760],[]),([5,52428,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,52428,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,52428,2863311530,3435986943,4042322160,4278255360],[]),([5,52428,2863311530,3435986943,4042322160,4278255360,4294901760],[]),([5,61166,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,64764,2863311530,3435973836,4042322160,4278255360],[(2,3)]),([5,64764,2863311530,3435973836,4042322160,4278255360,4294901760],[])]
-noncomputable def K_6 : List (List ℕ × List (ℕ × ℕ)) := [([5,65535,16711935,252645135,2863311530,3435973836],[]),([5,65535,16711935,1431655765,3435973836,4042322160],[]),([5,65535,16711935,2863311530,3435973836,4042322160],[]),([5,65535,1431633920,2863311530,3435973836,4042322160,4278255360],[]),([5,65535,1431655765,3435973836,4042322160,4278255360],[]),([5,65535,2290649224,4008636142,4042322160,4278255360],[]),([5,65535,2863267840,3435973836,4042322160,4278255360,4294945450],[]),([5,65535,2863311530,3233857728,4244438268,4278255360],[]),([5,65535,2863311530,3233857728,4244438268,4278255360,4294901760],[]),([5,65535,2863311530,3435921408,4042322160,4278255360,4294954188],[]),([5,65535,2863311530,3435973836,4042322160,4244373504,4278255360],[]),([5,65535,2863311530,3435973836,4042322160,4278255360],[]),([5,65535,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,65535,2863311530,3435973836,4042322160,4278255360,4294936712],[]),([5,65535,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,65535,2863311530,3435973836,4042322160,4287168392],[]),([5,65535,2863311530,3435973836,4042322160,4287168392,4294901760],[]),([5,65535,2863333375,3435973836,4042322160,4278255360,4294945450],[]),([5,196611,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,327685,2863311530,3435973836,4042322160,4278255360,4294901760],[(72,2)]),([5,655370,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,786444,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,983040,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,983055,2863311530,3435973836,4026593280,4293984240,4294901760],[(96,2),(168,2)]),([5,983055,2863311530,3435973836,4026593280,4294901760],[(2,2),(96,2)]),([5,983055,2863311530,3435973836,4042322160,4278255360,4293918720],[]),([5,983055,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,983055,2863311530,3435973836,4042322160,4278255360,4294901775],[]),([5,983055,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,983295,2863311530,3435973836,4042322160,4278255360,4294901760],[])]
-noncomputable def K_7 : List (List ℕ × List (ℕ × ℕ)) := [([5,1048575,2863311530,3435973836,4042322160,4278255360],[(2,2)]),([5,1048575,2863311530,3435973836,4042322160,4278255360,4293918720],[]),([5,1048575,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,4128831,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,4456516,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,5570560,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,5570645,2852170240,3435973836,4042322160,4294901760],[(56,3)]),([5,5570645,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,5570645,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,5570815,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,5592405,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,5636095,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,6226015,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,6226015,2863311530,3435973836,4042322160,4288741280,4294901760],[]),([5,6226015,2863311530,3435973836,4042322160,4294901760],[(2,1)]),([5,8913032,2863311530,3435973836,4042322160,4278255360,4294901760],[(96,0)]),([5,11141120,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,11141290,2852170240,3435973836,4042322160,4278255360,4294901760],[]),([5,11141290,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,11141290,2863311530,3435973836,4042322160,4278255360,4294901930],[]),([5,11141290,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,11141290,2868882175,3435973836,4042322160,4278255360,4294901760],[]),([5,11141290,2868882175,3435973836,4042322160,4294901760],[]),([5,11184810,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,12583104,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,13369344,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,13369548,2863311530,3422604288,4042322160,4278255360,4294901760],[(128,0)]),([5,13369548,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,13369548,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,13369548,2863311530,3439316223,4042322160,4278255360,4294901760],[]),([5,13369548,2863311530,3439316223,4042322160,4294901760],[]),([5,13369548,2863311530,4008636142,4042322160,4278255360,4294901760],[]),([5,13421772,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,15597806,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,16515324,2863311530,3435973836,4042322160,4278255360,4294901760],[])]
-noncomputable def K_8 : List (List ℕ × List (ℕ × ℕ)) := [([5,16711680,2863311530,3435973836,4042322160,4278190080,4278255360],[]),([5,16711680,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,16711680,2863311530,3435973836,4042322160,4278255360,4294902015],[]),([5,16711680,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,16711680,2863311530,3435973836,4042322160,4294902015],[]),([5,16711850,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,16711850,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,16711884,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,16711935,252645135,858993459,2863311530,4294901760],[]),([5,16711935,252645135,1431655765,3435973836,4294901760],[]),([5,16711935,252645135,2863311530,3435973836,4294901760],[]),([5,16711935,252645135,2863311530,3435973836,4294945450],[]),([5,16711935,1431633920,1431655765,3435973836,4042322160],[]),([5,16711935,1431633920,2863311530,3435973836,4042322160],[]),([5,16711935,1431633920,2863311530,3435973836,4042322160,4278255360],[]),([5,16711935,1431655765,3435973836,4042322160,4294901760],[]),([5,16711935,1431655765,3435973836,4042322160,4294945450],[]),([5,16711935,2290649224,4008636142,4042322160,4294901760],[]),([5,16711935,2852170240,3435973836,4042322160,4289396650,4294901760],[]),([5,16711935,2863267840,3435973836,4042322160,4294945450],[]),([5,16711935,2863311530,2863333375,3435973836,4042322160],[]),([5,16711935,2863311530,3233857728,4244438268,4278255360,4294901760],[]),([5,16711935,2863311530,3233857728,4244438268,4294901760],[]),([5,16711935,2863311530,3422604288,4042322160,4291624908,4294901760],[]),([5,16711935,2863311530,3435921408,4042322160,4294954188],[])]
-noncomputable def K_9 : List (List ℕ × List (ℕ × ℕ)) := [([5,16711935,2863311530,3435973836,4042322160,4244373504],[]),([5,16711935,2863311530,3435973836,4042322160,4244373504,4278255360],[]),([5,16711935,2863311530,3435973836,4042322160,4278255360,4291559424],[]),([5,16711935,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,16711935,2863311530,3435973836,4042322160,4278255360,4294901930],[]),([5,16711935,2863311530,3435973836,4042322160,4278255360,4294936712],[]),([5,16711935,2863311530,3435973836,4042322160,4278255360,4294945280],[]),([5,16711935,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,16711935,2863311530,3435973836,4042322160,4287168392,4294901760],[]),([5,16711935,2863311530,3435973836,4042322160,4291559424],[(2,0)]),([5,16711935,2863311530,3435973836,4042322160,4294901760],[]),([5,16711935,2863311530,3435973836,4042322160,4294901930],[]),([5,16711935,2863311530,3435973836,4042322160,4294936712],[]),([5,16711935,2863311530,3435973836,4042322160,4294945280],[(2,3)]),([5,16711935,2863311530,3435973836,4042322160,4294945450],[]),([5,16711935,2863311530,3435973836,4177066232,4278255360,4294901760],[]),([5,16711935,2863311530,3435973836,4177066232,4294901760],[(2,0)]),([5,16711935,2863311530,3435973836,4210096880,4278255360,4294901760],[]),([5,16711935,2863311530,3435973836,4210096880,4294901760],[(2,3)]),([5,16715775,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,16733695,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,16733695,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,16777215,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,16777215,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,16777215,2863311530,3435973836,4042322160,4294967040],[]),([5,67044351,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,89458005,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,100599295,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,178916010,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,214699212,2863311530,3435973836,4042322160,4278255360,4294901760],[])]
-noncomputable def K_10 : List (List ℕ × List (ℕ × ℕ)) := [([5,268369920,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,268374015,2863311530,3435973836,4026593280,4293984240,4294901760],[]),([5,268374015,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,268374015,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,268374015,2863311530,3435973836,4293984240,4294901760],[(2,2)]),([5,268435455,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,1073692671,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,1077952576,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,1145307136,1431633920,2863311530,3435973836,4042322160,4278255360],[]),([5,1145307136,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,1145324612,1431633920,2863311530,3435973836,4042322160,4278255360],[]),([5,1145324612,2290649224,2863311530,4042322160,4278255360,4294901760],[(104,0)]),([5,1145324612,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,1145324612,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,1145324612,2863311530,3722304989,4042322160,4278255360,4294901760],[]),([5,1145324612,2863311530,4042322160,4244438268,4278255360,4294901760],[]),([5,1145324612,3722304989,4042322160,4278255360,4294901760],[]),([5,1145359564,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,1154237644,1442797055,2863311530,4042322160,4278255360,4294901760],[]),([5,1154237644,2852170240,2863311530,4042322160,4278255360,4294901760],[(56,4)]),([5,1154237644,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,1154237644,2863311530,4042322160,4278255360,4294901760],[]),([5,1414812756,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,1431633920,1431633920,2863311530,3435973836,4042322160,4278255360],[]),([5,1431633920,1431655765,2863311530,3435973836,4042322160,4278255360],[]),([5,1431633920,1431655765,3435973836,4042322160,4278255360],[]),([5,1431633920,1431699455,2863311530,3435973836,4042322160,4278255360],[]),([5,1431633920,2290649224,2863311530,3435973836,4042322160,4278255360],[(136,0)]),([5,1431633920,2863267840,2863311530,3435973836,4042322160,4278255360],[]),([5,1431633920,2863311530,2863311530,3435973836,4042322160,4278255360],[]),([5,1431633920,2863311530,2863333375,3435973836,4042322160,4278255360],[]),([5,1431633920,2863311530,3233857728,3435973836,4042322160,4278255360],[]),([5,1431633920,2863311530,3435921408,3435973836,4042322160,4278255360],[]),([5,1431633920,2863311530,3435973836,3435973836,4042322160,4278255360],[]),([5,1431633920,2863311530,3435973836,3722300620,4042322160,4278255360],[]),([5,1431633920,2863311530,3435973836,3722304989,4042322160,4278255360],[])]
-noncomputable def K_11 : List (List ℕ × List (ℕ × ℕ)) := [([5,1431633920,2863311530,3435973836,4008636142,4042322160,4278255360],[]),([5,1431633920,2863311530,3435973836,4042322160,4244438268,4278255360],[]),([5,1431633920,2863311530,3435973836,4042322160,4278255360],[]),([5,1431633920,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,1431633920,2863311530,3435973836,4042322160,4278255360,4294923605],[]),([5,1431633920,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,1431633920,2863311530,3435973836,4042322160,4278255360,4294954188],[]),([5,1431633920,2863311530,3435973836,4042322160,4278255360,4294967295],[]),([5,1431633920,3435973836,4042322160,4278255360,4294923605],[]),([5,1431633920,3435973836,4042322160,4278255360,4294945450],[]),([5,1431651396,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,1431655765,2863311530,3233857728,4244438268,4278255360,4294901760],[]),([5,1431655765,2863311530,3435973836,3722248192,4042322160,4278255360],[]),([5,1431655765,2863311530,3435973836,4042322160,4244373504,4278255360],[]),([5,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,1431655765,2863311530,3435973836,4042322160,4278255360,4294936712],[]),([5,1431655765,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,1431655765,2863311530,3435973836,4042322160,4287168392,4294901760],[]),([5,1431655765,2863333375,3435973836,4042322160,4278255360],[]),([5,1431655765,3233857728,4244438268,4278255360,4294901760],[]),([5,1431655765,3435921408,4042322160,4278255360,4294954188],[]),([5,1431655765,3435973836,3722248192,4042322160,4278255360],[]),([5,1431655765,3435973836,4042322160,4244373504,4278255360],[]),([5,1431655765,3435973836,4042322160,4278255360,4294901760],[]),([5,1431655765,3435973836,4042322160,4278255360,4294936712],[]),([5,1431655765,3435973836,4042322160,4278255360,4294945450],[]),([5,1431655765,3435973836,4042322160,4287168392,4294901760],[]),([5,1431655935,2863311530,3435973836,4042322160,4278255360,4294901760],[])]
-noncomputable def K_12 : List (List ℕ × List (ℕ × ℕ)) := [([5,1431699455,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,1431699455,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,1431699455,3435973836,4042322160,4278255360,4294945450],[]),([5,1432311135,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,1442775040,1442797055,2863311530,3435973836,4042322160,4278255360],[(140,1)]),([5,1442775040,2852170240,2863311530,3435973836,4042322160,4278255360],[(56,3),(104,1)]),([5,1442775040,2863311530,3435973836,4042322160,4278255360],[]),([5,1442775040,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,1442797055,2863311530,3435973836,4042322160,4278255360,4294901760],[(100,1)]),([5,1442797055,2863311530,3435973836,4042322160,4278255360,4294945280],[(100,1)]),([5,1442797055,2863311530,3435973836,4042322160,4278255360,4294945450],[(100,1)]),([5,1442797055,2863311530,3435973836,4210096880,4278255360,4294901760],[(100,1),(132,3)]),([5,1442797055,3435973836,4042322160,4289396650,4294901760],[]),([5,1442840575,2863311530,3435973836,4042322160,4278255360,4294901760],[(100,1)]),([5,1610571775,2863311530,3435973836,4042322160,4278255360,4294901760],[(100,1),(132,3)]),([5,2147516416,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2155872256,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2155905152,2863311530,3233857728,4244438268,4278255360,4294901760],[]),([5,2155905152,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2155905152,2863311530,3435973836,4042322160,4278255360,4294934656],[]),([5,2155905152,2863311530,3435973836,4042322160,4278255360,4294936712],[]),([5,2155905152,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,2155905152,2863311530,3435973836,4042322160,4286644096,4294901760],[]),([5,2155905152,2863311530,3435973836,4042322160,4287168392,4294901760],[]),([5,2155905152,2863311530,3435973836,4177066232,4278255360,4294901760],[(56,0),(72,0),(96,0),(128,0),(168,0)]),([5,2290124928,2863311530,3435973836,4042322160,4278255360,4294901760],[(96,0)]),([5,2290614272,2863311530,3435973836,4042322160,4278255360,4294901760],[(96,0)]),([5,2290614272,2863311530,3435973836,4042322160,4278255360,4294936712],[(96,0)]),([5,2290614272,2863311530,3435973836,4042322160,4278255360,4294945450],[(96,0)]),([5,2290614272,2863311530,3435973836,4042322160,4287168256,4294901760],[]),([5,2290614272,2863311530,3435973836,4042322160,4287168392,4294901760],[]),([5,2290647168,2863311530,3435973836,4042322160,4278255360,4294901760],[(96,0)]),([5,2290649224,2862656160,3435973836,4042322160,4278255360,4294901760],[]),([5,2290649224,2863311530,3233857728,4244438268,4278255360,4294901760],[]),([5,2290649224,2863311530,3435187392,4042322160,4278255360,4294901760],[(96,0)]),([5,2290649224,2863311530,3435921408,4042322160,4278255360,4294954188],[(96,0)]),([5,2290649224,2863311530,3435970752,4042322160,4278255360,4294901760],[])]
-noncomputable def K_13 : List (List ℕ × List (ℕ × ℕ)) := [([5,2290649224,2863311530,3435973836,4026593280,4293984240,4294901760],[(56,2),(72,2),(128,2),(168,2)]),([5,2290649224,2863311530,3435973836,4042322160,4244373504,4278255360],[(96,0)]),([5,2290649224,2863311530,3435973836,4042322160,4278255360,4293918720],[(56,2),(72,2),(96,0),(168,2)]),([5,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760],[(96,0)]),([5,2290649224,2863311530,3435973836,4042322160,4278255360,4294934656],[(96,0)]),([5,2290649224,2863311530,3435973836,4042322160,4278255360,4294936712],[(96,0)]),([5,2290649224,2863311530,3435973836,4042322160,4278255360,4294942880],[(56,1),(72,1),(96,0)]),([5,2290649224,2863311530,3435973836,4042322160,4278255360,4294945450],[(96,0)]),([5,2290649224,2863311530,3435973836,4042322160,4286644096,4294901760],[(96,0)]),([5,2290649224,2863311530,3435973836,4042322160,4287168256,4294901760],[(96,0)]),([5,2290649224,2863311530,3435973836,4042322160,4287168392,4294901760],[]),([5,2290649224,2863311530,3435973836,4042322160,4287168392,4294936712],[]),([5,2290649224,2863311530,3435973836,4042322160,4287168392,4294945450],[]),([5,2290649224,2863311530,3435973836,4042322160,4288741280,4294901760],[(56,1),(72,1),(168,1)]),([5,2290649224,2863311530,3435973836,4177066232,4287168392,4294901760],[]),([5,2290649224,2863311530,3974950124,4042322160,4278255360,4294901760],[(56,2),(72,2),(96,3),(128,1),(168,2)]),([5,2290649224,2863311530,4008627404,4042322160,4278255360,4294901760],[(96,4),(128,2)]),([5,2290649224,2863311530,4008636142,4042322160,4278255360,4294901760],[(96,4),(128,2)]),([5,2290649224,2863311530,4008636142,4042322160,4278255360,4294936712],[(96,4),(128,2)]),([5,2290649224,2863311530,4008636142,4042322160,4278255360,4294945450],[(96,4),(128,2)]),([5,2290649224,2863311530,4008636142,4042322160,4287168392,4294901760],[(56,2),(72,2),(96,1),(128,2),(168,2)]),([5,2290649224,3435973836,4008618666,4042322160,4278255360,4294901760],[(96,0)]),([5,2290649224,3435973836,4008636142,4042322160,4278255360,4294945450],[(96,0)]),([5,2290649224,4008636142,4042322160,4278255360,4294901760],[]),([5,2290649224,4008636142,4042322160,4278255360,4294901760,4294945450],[(72,4),(96,2)]),([5,2290649224,4008636142,4042322160,4278255360,4294936712],[(72,4),(96,2)]),([5,2290649224,4008636142,4042322160,4278255360,4294945450],[(72,4),(74,0),(73,1),(96,2),(97,3)]),([5,2290649224,4008636142,4042322160,4287168392,4294901760],[(72,1),(128,2)]),([5,2290657962,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2290666700,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2290679807,2863311530,3435973836,4042322160,4278255360],[(2,2)]),([5,2290679807,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2292877482,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2295105740,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2298448127,2863311530,3435973836,4042322160,4278255360,4294901760],[])]
-noncomputable def K_14 : List (List ℕ × List (ℕ × ℕ)) := [([5,2298448127,2863311530,3435973836,4042322160,4294901760],[(2,4)]),([5,2827528328,2863311530,3435973836,4042322160,4278255360,4294901760],[(72,2),(96,0)]),([5,2829582336,2863311530,3435973836,4042322160,4244373504,4278255360],[(72,2),(96,0)]),([5,2829582336,2863311530,3435973836,4042322160,4278255360,4294901760],[(72,2),(96,0)]),([5,2829617288,2863311530,3435973836,4042322160,4278255360,4294901760],[(72,2),(96,0)]),([5,2829625512,2863311530,3233857728,4244438268,4278255360,4294901760],[(72,3)]),([5,2829625512,2863311530,3435973836,4042322160,4244373504,4278255360],[(72,2),(96,0)]),([5,2829625512,2863311530,3435973836,4042322160,4278255360,4294901760],[(72,2),(96,0)]),([5,2829625512,2863311530,3435973836,4042322160,4278255360,4294944936],[(72,2),(96,0)]),([5,2829625512,2863311530,3435973836,4042322160,4278255360,4294945450],[(72,2),(96,0),(80,1)]),([5,2829625512,2863311530,3435973836,4042322160,4289265576,4294901760],[(72,1)]),([5,2829625512,2863311530,3435973836,4177066232,4278255360,4294901760],[(56,0),(72,3),(96,0),(168,0)]),([5,2829625512,2863311530,3435973836,4210752250,4278255360,4294901760],[(72,3),(128,0)]),([5,2829625512,3435973836,4210752250,4278255360,4294901760],[]),([5,2863180456,2863311530,3435973836,4042322160,4278255360,4294901760],[(72,2),(96,0),(80,2),(104,0)]),([5,2863180456,3435973836,4042322160,4244438268,4278255360,4294901760],[(156,3)]),([5,2863180456,3435973836,4042322160,4278255360,4294770684,4294901760],[]),([5,2863180456,3435973836,4042322160,4278255360,4294901760],[(58,2),(74,0)]),([5,2863267840,2863311530,3233857728,4244438268,4278255360,4294901760],[(72,3)]),([5,2863267840,2863311530,3435973836,4042322160,4244373504,4278255360],[]),([5,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2863267840,2863311530,3435973836,4042322160,4278255360,4294936712],[]),([5,2863267840,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,2863267840,2863311530,3435973836,4042322160,4287168256,4294901760],[]),([5,2863267840,2863311530,3435973836,4042322160,4287168392,4294901760],[(72,2)]),([5,2863267840,3435973836,4042322160,4278255360,4294945450],[]),([5,2863268010,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2863300736,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2863302792,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2863302792,2863311530,3435973836,4042322160,4278255360,4294936712],[]),([5,2863302792,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,2863302792,3435973836,4042322160,4278255360,4294945450],[]),([5,2863311016,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,2863311530,3233857728,4244438268,4278255360,4294901760],[(72,3)]),([5,2863311530,2863311530,3435973836,4042322160,4244373504,4278255360],[])]
-noncomputable def K_15 : List (List ℕ × List (ℕ × ℕ)) := [([5,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,2863311530,3435973836,4042322160,4278255360,4294936712],[]),([5,2863311530,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,2863311530,2863311530,3435973836,4042322160,4287168392,4294901760],[(72,2)]),([5,2863311530,2863311615,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,2863329006,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,2863333375,3435973836,4042322160,4278255360],[]),([5,2863311530,2863333375,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,2863333375,3435973836,4042322160,4278255360,4294945450],[]),([5,2863311530,2863639215,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,2867768046,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,2868838400,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,2868838655,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,2868882090,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,2868882175,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,2868882175,3435973836,4042322160,4278255360,4294945450],[]),([5,2863311530,2868903935,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,2952769535,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3221225472,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3221274624,3233857728,4244438268,4278255360,4294901760],[(144,3)]),([5,2863311530,3221274624,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3221274624,3435973836,4042322160,4278255360,4294945450],[]),([5,2863311530,3221274624,3435973836,4042322160,4278255360,4294950912],[]),([5,2863311530,3221274624,3435973836,4042322160,4290838464,4294901760],[(112,3)]),([5,2863311530,3229663360,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3233808384,3233857728,4244438268,4278255360,4294901760],[]),([5,2863311530,3233808384,3435973836,4042322160,4278190080,4278255360],[(56,3),(136,3),(176,3)]),([5,2863311530,3233808384,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3233808384,3435973836,4042322160,4278255360,4294945450],[]),([5,2863311530,3233808384,3435973836,4042322160,4278255360,4294951104],[]),([5,2863311530,3233808384,3435973836,4042322160,4290838272,4294901760],[]),([5,2863311530,3233808384,3435973836,4244435184,4278255360,4294901760],[(136,0)]),([5,2863311530,3233841280,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3233841280,3435973836,4042322160,4278255360,4294945450],[]),([5,2863311530,3233857536,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3233857728,3233857728,4244438268,4278255360,4294901760],[]),([5,2863311530,3233857728,3422604288,4042322160,4291624908,4294901760],[(104,0),(136,0)]),([5,2863311530,3233857728,3431517320,4042322160,4278255360,4294901760],[(136,0),(112,1)])]
-noncomputable def K_16 : List (List ℕ × List (ℕ × ℕ)) := [([5,2863311530,3233857728,3435921408,4244438268,4278255360,4294901760],[]),([5,2863311530,3233857728,3435956360,4042322160,4278255360,4294901760],[(112,1)]),([5,2863311530,3233857728,3435956360,4042322160,4278255360,4294945450],[(112,1)]),([5,2863311530,3233857728,3435973836,4042322160,4244373504,4278255360],[]),([5,2863311530,3233857728,3435973836,4042322160,4278255360,4290772992],[(80,3),(104,3)]),([5,2863311530,3233857728,3435973836,4042322160,4278255360,4291559424],[(80,0),(104,0)]),([5,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3233857728,3435973836,4042322160,4278255360,4294934656],[]),([5,2863311530,3233857728,3435973836,4042322160,4278255360,4294936712],[]),([5,2863311530,3233857728,3435973836,4042322160,4278255360,4294945280],[(80,3),(104,3)]),([5,2863311530,3233857728,3435973836,4042322160,4278255360,4294945450],[]),([5,2863311530,3233857728,3435973836,4042322160,4278255360,4294950912],[]),([5,2863311530,3233857728,3435973836,4042322160,4286644096,4294901760],[]),([5,2863311530,3233857728,3435973836,4042322160,4287168392,4294901760],[]),([5,2863311530,3233857728,3435973836,4042322160,4290838272,4294901760],[]),([5,2863311530,3233857728,3435973836,4177066232,4278255360,4294901760],[(80,0),(104,0)]),([5,2863311530,3233857728,3435973836,4210096880,4278255360,4294901760],[(80,3),(104,3)]),([5,2863311530,3233857728,3435973836,4243651824,4278255360,4294901760],[]),([5,2863311530,3233857728,3435973836,4244373504,4244438268,4278255360],[]),([5,2863311530,3233857728,3435973836,4244435184,4278255360,4294901760],[]),([5,2863311530,3233857728,3435973836,4244438268,4278255360,4294901760],[]),([5,2863311530,3233857728,3435973836,4244438268,4278255360,4294945450],[]),([5,2863311530,3233857728,3941264106,4244438268,4278255360,4294901760],[(80,3),(104,3)]),([5,2863311530,3233857728,4008636142,4244438268,4278255360,4294901760],[]),([5,2863311530,3233857728,4227922944,4244438268,4278255360,4294901760],[]),([5,2863311530,3233857728,4244373504,4244438268,4278255360],[(58,3)]),([5,2863311530,3233857728,4244373504,4244438268,4278255360,4294901760],[]),([5,2863311530,3233857728,4244438268,4244438268,4278255360,4294901760],[]),([5,2863311530,3233857728,4244438268,4278124286,4278255360,4294901760],[]),([5,2863311530,3233857728,4244438268,4278190080,4278255360,4294901760],[(104,3)]),([5,2863311530,3233857728,4244438268,4278255360,4278255360,4294901760],[]),([5,2863311530,3233857728,4244438268,4278255360,4289396650,4294901760],[(56,3)]),([5,2863311530,3233857728,4244438268,4278255360,4290838464,4294901760],[(108,3)]),([5,2863311530,3233857728,4244438268,4278255360,4291624908,4294901760],[]),([5,2863311530,3233857728,4244438268,4278255360,4294770684,4294901760],[]),([5,2863311530,3233857728,4244438268,4278255360,4294901760],[(58,3)]),([5,2863311530,3233857728,4244438268,4278255360,4294901760,4294901760],[])]
-noncomputable def K_17 : List (List ℕ × List (ℕ × ℕ)) := [([5,2863311530,3233857728,4244438268,4278255360,4294901760,4294945450],[(56,3)]),([5,2863311530,3233857728,4244438268,4278255360,4294901760,4294951104],[]),([5,2863311530,3233857728,4244438268,4278255360,4294901760,4294954188],[]),([5,2863311530,3233857728,4244438268,4278255360,4294901760,4294966524],[]),([5,2863311530,3233857728,4244438268,4278255360,4294901760,4294967040],[]),([5,2863311530,3233857728,4244438268,4278255360,4294945450],[(56,3),(58,3)]),([5,2863311530,3233860812,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3233873919,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3234644172,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3237986559,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3301229764,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3364407432,3435973836,4042322160,4278255360,4294901760],[(104,0)]),([5,2863311530,3368077504,3435973836,4042322160,4278255360,4294901760],[(104,0)]),([5,2863311530,3368077504,3435973836,4210096880,4278255360,4294901760],[(80,3),(104,3)]),([5,2863311530,3368550400,3435973836,4042322160,4278255360,4294901760],[(104,0)]),([5,2863311530,3368585352,3435973836,4042322160,4278255360,4294901760],[(104,0)]),([5,2863311530,3368599744,3435973836,4042322160,4278255360,4294901760],[(104,0)]),([5,2863311530,3368601800,3435921408,4042322160,4278255360,4294901760],[]),([5,2863311530,3368601800,3435973836,4042322160,4278255360,4294901760],[(104,0)]),([5,2863311530,3368601800,3435973836,4042322160,4278255360,4294945450],[(104,0)]),([5,2863311530,3368601800,3435973836,4177066232,4278255360,4294901760],[(80,0),(104,0)]),([5,2863311530,3368601800,3435973836,4244438268,4278255360,4294901760],[]),([5,2863311530,3368601800,4008636142,4042322160,4278255360,4294901760],[(104,4)]),([5,2863311530,3368601800,4042322160,4244438268,4278255360,4294901760],[]),([5,2863311530,3368601800,4042322160,4278124286,4278255360,4294901760],[]),([5,2863311530,3368601800,4210752250,4244438268,4278255360,4294901760],[]),([5,2863311530,3368601800,4244438268,4278255360,4294901760],[(58,3)]),([5,2863311530,3435134976,3435973836,4042322160,4278255360,4293918720],[(80,2),(104,3),(136,1),(176,2)]),([5,2863311530,3435134976,3435973836,4042322160,4278255360,4294901760],[(104,0)]),([5,2863311530,3435184320,3435973836,4042322160,4278255360,4294901760],[(104,0)]),([5,2863311530,3435187392,3435973836,4042322160,4278255360,4293918720],[(80,2)]),([5,2863311530,3435187392,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3435187392,3435973836,4042322160,4278255360,4294945450],[]),([5,2863311530,3435187392,4042322160,4244438268,4278255360,4294901760],[]),([5,2863311530,3435187392,4042322160,4278255360,4294770684,4294901760],[(116,2)]),([5,2863311530,3435711688,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3435711688,4042322160,4210752250,4278255360,4294901760],[(156,4)]),([5,2863311530,3435711688,4042322160,4278255360,4293984240,4294901760],[(116,2)])]
-noncomputable def K_18 : List (List ℕ × List (ℕ × ℕ)) := [([5,2863311530,3435711688,4042322160,4278255360,4294639610,4294901760],[]),([5,2863311530,3435711688,4042322160,4278255360,4294901760],[]),([5,2863311530,3435921408,3435973836,4042260480,4042322160,4278255360],[(136,1)]),([5,2863311530,3435921408,3435973836,4042260480,4244435184,4278255360],[(80,1),(136,1)]),([5,2863311530,3435921408,3435973836,4042301600,4042322160,4278255360],[(104,1),(136,1)]),([5,2863311530,3435921408,3435973836,4042309824,4042322160,4278255360],[]),([5,2863311530,3435921408,3435973836,4042322160,4210688000,4278255360],[(104,0)]),([5,2863311530,3435921408,3435973836,4042322160,4210731690,4278255360],[(104,0)]),([5,2863311530,3435921408,3435973836,4042322160,4244373504,4278255360],[]),([5,2863311530,3435921408,3435973836,4042322160,4244425932,4278255360],[]),([5,2863311530,3435921408,3435973836,4042322160,4278255360,4293918720],[(80,2),(104,3),(136,1)]),([5,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3435921408,3435973836,4042322160,4278255360,4294902015],[]),([5,2863311530,3435921408,3435973836,4042322160,4278255360,4294936712],[]),([5,2863311530,3435921408,3435973836,4042322160,4278255360,4294942880],[(80,1),(176,1)]),([5,2863311530,3435921408,3435973836,4042322160,4278255360,4294945450],[]),([5,2863311530,3435921408,3435973836,4042322160,4278255360,4294951104],[]),([5,2863311530,3435921408,3435973836,4042322160,4278255360,4294954188],[]),([5,2863311530,3435921408,3435973836,4042322160,4278255360,4294962926],[(204,0)]),([5,2863311530,3435921408,3435973836,4042322160,4287168256,4294901760],[]),([5,2863311530,3435921408,3435973836,4042322160,4287168392,4294901760],[]),([5,2863311530,3435921408,3435973836,4042322160,4288741280,4294901760],[(80,1),(176,1)]),([5,2863311530,3435921408,3435973836,4042322160,4290838272,4294901760],[(104,0)]),([5,2863311530,3435921408,3974950124,4042322160,4278255360,4294901760],[(80,2),(176,2)]),([5,2863311530,3435921408,4042322160,4244425932,4278255360],[(58,2)]),([5,2863311530,3435921408,4042322160,4244425932,4278255360,4294901760],[]),([5,2863311530,3435921408,4042322160,4244438268,4278255360,4294954188],[]),([5,2863311530,3435921408,4042322160,4278255360,4294954188],[]),([5,2863311530,3435921612,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3435938884,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3435954304,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3435954304,3435973836,4042322160,4278255360,4294942880],[(80,1),(176,1)]),([5,2863311530,3435956360,3435973836,4042301600,4042322160,4278255360],[(136,1)]),([5,2863311530,3435956360,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3435956360,3435973836,4042322160,4278255360,4294936712],[]),([5,2863311530,3435956360,3435973836,4042322160,4278255360,4294945450],[]),([5,2863311530,3435956360,3435973836,4042322160,4278255360,4294954188],[])]
-noncomputable def K_19 : List (List ℕ × List (ℕ × ℕ)) := [([5,2863311530,3435956360,3435973836,4042322160,4278255360,4294962926],[(204,0)]),([5,2863311530,3435956360,4008636142,4042322160,4278255360,4294901760],[]),([5,2863311530,3435956360,4008636142,4042322160,4278255360,4294945450],[]),([5,2863311530,3435956360,4042322160,4278255360,4294901760,4294954188],[]),([5,2863311530,3435956360,4042322160,4278255360,4294901760,4294962926],[(196,0)]),([5,2863311530,3435956360,4042322160,4278255360,4294945450,4294954188],[]),([5,2863311530,3435956360,4042322160,4278255360,4294945450,4294962926],[(196,0)]),([5,2863311530,3435956360,4042322160,4278255360,4294954188],[(158,0)]),([5,2863311530,3435956360,4042322160,4278255360,4294962926],[(156,0),(158,0),(157,0)]),([5,2863311530,3435970560,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3435970752,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3435970752,3435973836,4042322160,4278255360,4294945450],[(196,1)]),([5,2863311530,3435970752,4042322160,4244438268,4278255360,4294901760],[(188,1)]),([5,2863311530,3435970752,4042322160,4278255360,4291624908,4294901760],[(108,0)]),([5,2863311530,3435972808,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3435972808,3435973836,4042322160,4278255360,4294945450],[(196,1)]),([5,2863311530,3435972808,4042322160,4210752250,4278255360,4294901760],[]),([5,2863311530,3435972808,4042322160,4278255360,4294901760],[(150,1)]),([5,2863311530,3435972808,4042322160,4278255360,4294901760,4294945450],[(188,1)]),([5,2863311530,3435972808,4042322160,4278255360,4294901760,4294963440],[]),([5,2863311530,3435972808,4042322160,4278255360,4294901760,4294966010],[]),([5,2863311530,3435972808,4042322160,4278255360,4294945450],[(148,1),(150,1),(149,1)]),([5,2863311530,3435972808,4042322160,4278255360,4294945450,4294966010],[(148,1)]),([5,2863311530,3435973824,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3435973836,4042322160,4244373504,4278255360],[]),([5,2863311530,3435973836,3435973836,4042322160,4278255360,4293918720],[(64,2),(68,2)]),([5,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3435973836,4042322160,4278255360,4294936712],[]),([5,2863311530,3435973836,3435973836,4042322160,4278255360,4294942880],[(64,1),(68,1)]),([5,2863311530,3435973836,3435973836,4042322160,4278255360,4294945450],[]),([5,2863311530,3435973836,3435973836,4042322160,4287168392,4294901760],[]),([5,2863311530,3435973836,3435973836,4042322160,4288741280,4294901760],[(64,1),(68,1)]),([5,2863311530,3435973836,3435973887,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3435978205,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3435978205,4042322160,4278255360,4294945450],[])]
-noncomputable def K_20 : List (List ℕ × List (ℕ × ℕ)) := [([5,2863311530,3435973836,3435982574,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3435986172,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3435986943,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3435986943,4042322160,4278255360,4294945450],[]),([5,2863311530,3435973836,3436170447,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3437087965,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3438202094,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3439119612,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3439263744,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3439263999,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3439316172,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3439316223,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3439316223,4042322160,4278255360,4294945450],[]),([5,2863311530,3435973836,3439329279,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3489648639,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3587560917,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3705461980,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3722248192,3722304989,4042322160,4278255360],[]),([5,2863311530,3435973836,3722248192,4042322160,4278255360],[]),([5,2863311530,3435973836,3722248192,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3722270037,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3722300620,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3722304989,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3722304989,4042322160,4278255360,4294945450],[]),([5,2863311530,3435973836,3722313727,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3724533247,4042322160,4278255360,4294901760],[(116,1)]),([5,2863311530,3435973836,3937069738,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3938511552,4042322160,4278255360,4294901760],[(80,4),(104,3),(112,3)]),([5,2863311530,3435973836,3941203968,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3941247658,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,3941253312,4042322160,4278255360,4294901760],[(104,3)]),([5,2863311530,3435973836,3941264106,4042322160,4278255360,4294901760],[(104,3)]),([5,2863311530,3435973836,3941264106,4042322160,4278255360,4294945450],[(104,3)]),([5,2863311530,3435973836,3941264106,4244438268,4278255360,4294901760],[(104,3)]),([5,2863311530,3435973836,3972852940,4042322160,4278255360,4294901760],[(80,2)]),([5,2863311530,3435973836,3974889472,4042322160,4278255360,4294901760],[(80,2)]),([5,2863311530,3435973836,3974930592,4042322160,4278255360,4294901760],[(80,2),(184,1)]),([5,2863311530,3435973836,3974941900,4042322160,4278255360,4294901760],[(80,2)]),([5,2863311530,3435973836,3974950124,4042322160,4278255360,4294901760],[(80,2)])]
-noncomputable def K_21 : List (List ℕ × List (ℕ × ℕ)) := [([5,2863311530,3435973836,3974950124,4042322160,4278255360,4294942880],[(80,2),(84,1)]),([5,2863311530,3435973836,3974950124,4042322160,4278255360,4294945450],[(80,2)]),([5,2863311530,3435973836,3974950124,4042322160,4288741280,4294901760],[(80,1),(84,1)]),([5,2863311530,3435973836,3974950124,4210752250,4278255360,4294901760],[(80,3)]),([5,2863311530,3435973836,4007718624,4042322160,4278255360,4294901760],[(80,2),(156,2)]),([5,2863311530,3435973836,4008373994,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,4008505068,4042322160,4278255360,4294901760],[(80,2)]),([5,2863311530,3435973836,4008574976,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,4008574976,4042322160,4278255360,4294945450],[]),([5,2863311530,3435973836,4008574976,4042322160,4278255360,4294954188],[]),([5,2863311530,3435973836,4008574976,4042322160,4278255360,4294962926],[(196,1),(204,3)]),([5,2863311530,3435973836,4008618666,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,4008618666,4042322160,4278255360,4294945450],[]),([5,2863311530,3435973836,4008618666,4042322160,4278255360,4294954188],[]),([5,2863311530,3435973836,4008627404,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,4008627404,4042322160,4278255360,4294945450],[]),([5,2863311530,3435973836,4008632544,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,4008635114,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,4008635628,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,4008636142,4042322160,4244373504,4278255360],[(116,1)]),([5,2863311530,3435973836,4008636142,4042322160,4278059008,4278255360],[(116,1)]),([5,2863311530,3435973836,4008636142,4042322160,4278255360,4293918720],[(76,2),(84,2)]),([5,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,4008636142,4042322160,4278255360,4294936712],[]),([5,2863311530,3435973836,4008636142,4042322160,4278255360,4294942880],[(76,1),(84,1)]),([5,2863311530,3435973836,4008636142,4042322160,4278255360,4294945450],[]),([5,2863311530,3435973836,4008636142,4042322160,4287168392,4294901760],[(80,2)]),([5,2863311530,3435973836,4008636142,4042322160,4288741280,4294901760],[(76,1),(84,1)]),([5,2863311530,3435973836,4008640511,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,4009750271,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4241227776,4241292492,4278255360],[]),([5,2863311530,3435973836,4042322160,4241227776,4278255360],[(105,2)]),([5,2863311530,3435973836,4042322160,4241227776,4278255360,4294901760],[(104,2)]),([5,2863311530,3435973836,4042322160,4241280204,4278255360,4294901760],[(104,2)]),([5,2863311530,3435973836,4042322160,4241289216,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4241292492,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4241292492,4278255360,4294945450],[]),([5,2863311530,3435973836,4042322160,4243389676,4278255360,4294901760],[(116,1)])]
-noncomputable def K_22 : List (List ℕ × List (ℕ × ℕ)) := [([5,2863311530,3435973836,4042322160,4244373504,4244373504,4278255360],[]),([5,2863311530,3435973836,4042322160,4244373504,4244425932,4278255360],[]),([5,2863311530,3435973836,4042322160,4244373504,4244438268,4278255360],[]),([5,2863311530,3435973836,4042322160,4244373504,4278102698,4278255360],[]),([5,2863311530,3435973836,4042322160,4244373504,4278124286,4278255360],[(204,3)]),([5,2863311530,3435973836,4042322160,4244373504,4278255360],[]),([5,2863311530,3435973836,4042322160,4244373504,4278255360,4291624908],[(140,0)]),([5,2863311530,3435973836,4042322160,4244373504,4278255360,4294770432],[(156,3)]),([5,2863311530,3435973836,4042322160,4244373504,4278255360,4294770684],[]),([5,2863311530,3435973836,4042322160,4244373504,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4244373504,4278255360,4294945450],[]),([5,2863311530,3435973836,4042322160,4244373504,4278255360,4294954188],[]),([5,2863311530,3435973836,4042322160,4244373504,4278255360,4294966524],[]),([5,2863311530,3435973836,4042322160,4244373504,4278255360,4294967040],[]),([5,2863311530,3435973836,4042322160,4244416680,4244438268,4278255360],[]),([5,2863311530,3435973836,4042322160,4244416680,4278255360],[(58,2),(74,0),(85,1)]),([5,2863311530,3435973836,4042322160,4244416680,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4244416680,4278255360,4294945450],[]),([5,2863311530,3435973836,4042322160,4244425932,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4244425932,4278255360,4294945450],[]),([5,2863311530,3435973836,4042322160,4244434156,4278255360,4294901760],[(116,1)]),([5,2863311530,3435973836,4042322160,4244434156,4278255360,4294945450],[(116,1)]),([5,2863311530,3435973836,4042322160,4244438016,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4244438220,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4244438268,4278059008,4278255360],[]),([5,2863311530,3435973836,4042322160,4244438268,4278102698,4278255360],[]),([5,2863311530,3435973836,4042322160,4244438268,4278255360,4294705152],[]),([5,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4244438268,4278255360,4294902531],[(108,3),(116,3)]),([5,2863311530,3435973836,4042322160,4244438268,4278255360,4294936712],[]),([5,2863311530,3435973836,4042322160,4244438268,4278255360,4294944936],[]),([5,2863311530,3435973836,4042322160,4244438268,4278255360,4294945280],[(108,3),(116,3)]),([5,2863311530,3435973836,4042322160,4244438268,4278255360,4294945450],[]),([5,2863311530,3435973836,4042322160,4244438268,4287168392,4294901760],[]),([5,2863311530,3435973836,4042322160,4244438268,4289265576,4294901760],[]),([5,2863311530,3435973836,4042322160,4244439039,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4244634879,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4261281277,4278255360,4294901760],[])]
-noncomputable def K_23 : List (List ℕ × List (ℕ × ℕ)) := [([5,2863311530,3435973836,4042322160,4277075694,4278255360,4294901760],[(116,1),(156,3)]),([5,2863311530,3435973836,4042322160,4277993212,4278255360,4294901760],[(156,3)]),([5,2863311530,3435973836,4042322160,4278059008,4278124286,4278255360],[(204,3)]),([5,2863311530,3435973836,4042322160,4278059008,4278255360],[]),([5,2863311530,3435973836,4042322160,4278059008,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4278102698,4278255360],[(129,3)]),([5,2863311530,3435973836,4042322160,4278102698,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4278111436,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4278120174,4278255360,4294901760],[(116,1),(156,3)]),([5,2863311530,3435973836,4042322160,4278123772,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4278124286,4278255360,4294901760],[(156,3)]),([5,2863311530,3435973836,4042322160,4278124286,4278255360,4294945450],[(156,3)]),([5,2863311530,3435973836,4042322160,4278255360,4294705152],[]),([5,2863311530,3435973836,4042322160,4278255360,4294705152,4294770684],[]),([5,2863311530,3435973836,4042322160,4278255360,4294705152,4294901760],[]),([5,2863311530,3435973836,4042322160,4278255360,4294757580,4294901760],[]),([5,2863311530,3435973836,4042322160,4278255360,4294769916,4294901760],[]),([5,2863311530,3435973836,4042322160,4278255360,4294770684,4294901760],[]),([5,2863311530,3435973836,4042322160,4278255360,4294770684,4294945450],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901758,4294901760],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294901775],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294901845],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294901930],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294901964],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294902015],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294905855],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294919236],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294923605],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294923775],[(188,1)]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294934656],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294936712],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294944936],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294945535],[])]
-noncomputable def K_24 : List (List ℕ × List (ℕ × ℕ)) := [([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294950912],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294951104],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294953160],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294954176],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294954239],[(188,1)]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294958557],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294961898],[(188,1),(196,3)]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294962412],[(188,1)]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294962926],[(188,1),(196,3)]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294966476],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294966524],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294967038],[(196,3)]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294967292],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901760,4294967295],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901775],[]),([5,2863311530,3435973836,4042322160,4278255360,4294901930],[]),([5,2863311530,3435973836,4042322160,4278255360,4294902015,4294945450],[]),([5,2863311530,3435973836,4042322160,4278255360,4294902015,4294967040],[]),([5,2863311530,3435973836,4042322160,4278255360,4294923605,4294945450],[]),([5,2863311530,3435973836,4042322160,4278255360,4294934656],[]),([5,2863311530,3435973836,4042322160,4278255360,4294936712],[]),([5,2863311530,3435973836,4042322160,4278255360,4294936712,4294936712],[]),([5,2863311530,3435973836,4042322160,4278255360,4294936712,4294945450],[]),([5,2863311530,3435973836,4042322160,4278255360,4294936712,4294954188],[]),([5,2863311530,3435973836,4042322160,4278255360,4294936712,4294963440],[]),([5,2863311530,3435973836,4042322160,4278255360,4294936712,4294965496],[]),([5,2863311530,3435973836,4042322160,4278255360,4294944936],[]),([5,2863311530,3435973836,4042322160,4278255360,4294945450],[]),([5,2863311530,3435973836,4042322160,4278255360,4294945450,4294945450],[]),([5,2863311530,3435973836,4042322160,4278255360,4294945450,4294945535],[]),([5,2863311530,3435973836,4042322160,4278255360,4294945450,4294951104],[(148,1)]),([5,2863311530,3435973836,4042322160,4278255360,4294945450,4294954188],[]),([5,2863311530,3435973836,4042322160,4278255360,4294945450,4294961898],[(148,1),(188,1),(196,3)])]
-noncomputable def K_25 : List (List ℕ × List (ℕ × ℕ)) := [([5,2863311530,3435973836,4042322160,4278255360,4294945450,4294962926],[(188,1),(196,3)]),([5,2863311530,3435973836,4042322160,4278255360,4294945450,4294966524],[]),([5,2863311530,3435973836,4042322160,4278255360,4294945450,4294967038],[(196,3)]),([5,2863311530,3435973836,4042322160,4278255360,4294945450,4294967295],[]),([5,2863311530,3435973836,4042322160,4278255360,4294950912],[]),([5,2863311530,3435973836,4042322160,4278255360,4294951104,4294967040],[]),([5,2863311530,3435973836,4042322160,4278255615,4294901760,4294967040],[]),([5,2863311530,3435973836,4042322160,4279238415,4293984240,4294901760],[(116,2)]),([5,2863311530,3435973836,4042322160,4283826005,4289396650,4294901760],[]),([5,2863311530,3435973836,4042322160,4286644096,4294901760],[]),([5,2863311530,3435973836,4042322160,4287102976,4287168392,4294901760],[]),([5,2863311530,3435973836,4042322160,4287168256,4294901760],[]),([5,2863311530,3435973836,4042322160,4287168392,4287168392,4294901760],[]),([5,2863311530,3435973836,4042322160,4287168392,4289396650,4294901760],[]),([5,2863311530,3435973836,4042322160,4287168392,4291624908,4294901760],[(108,0)]),([5,2863311530,3435973836,4042322160,4287168392,4293984240,4294901760],[(116,2)]),([5,2863311530,3435973836,4042322160,4287168392,4294508536,4294901760],[(116,2)]),([5,2863311530,3435973836,4042322160,4287168392,4294901760],[(58,2)]),([5,2863311530,3435973836,4042322160,4287168392,4294901760,4294901760],[]),([5,2863311530,3435973836,4042322160,4287168392,4294901760,4294936712],[]),([5,2863311530,3435973836,4042322160,4287168392,4294901760,4294945450],[(56,2)]),([5,2863311530,3435973836,4042322160,4287168392,4294901760,4294954188],[]),([5,2863311530,3435973836,4042322160,4287168392,4294901760,4294963440],[]),([5,2863311530,3435973836,4042322160,4287168392,4294901760,4294967040],[(180,0)]),([5,2863311530,3435973836,4042322160,4287168392,4294901760,4294967176],[(180,0)]),([5,2863311530,3435973836,4042322160,4287168392,4294936712],[(56,2),(58,2)]),([5,2863311530,3435973836,4042322160,4287168392,4294945450],[(56,2),(58,2)]),([5,2863311530,3435973836,4042322160,4289265576,4294901760],[(58,2),(74,0)]),([5,2863311530,3435973836,4042322160,4289396480,4291624908,4294901760],[(108,0)]),([5,2863311530,3435973836,4042322160,4289396650,4290838464,4294901760],[(108,0),(116,2)]),([5,2863311530,3435973836,4042322160,4289396650,4291559424,4291624908],[(108,0)]),([5,2863311530,3435973836,4042322160,4289396650,4291624704,4294901760],[(108,0)]),([5,2863311530,3435973836,4042322160,4289396650,4291624908,4294901760],[(108,0)])]
-noncomputable def K_26 : List (List ℕ × List (ℕ × ℕ)) := [([5,2863311530,3435973836,4042322160,4289396650,4291624908,4294945450],[(56,1),(132,0),(108,0)]),([5,2863311530,3435973836,4042322160,4289396650,4294770684,4294901760],[]),([5,2863311530,3435973836,4042322160,4290838272,4294901760],[]),([5,2863311530,3435973836,4042322160,4290838464,4294901760,4294967040],[]),([5,2863311530,3435973836,4042322160,4291624704,4293984240,4294901760],[(116,2),(204,1)]),([5,2863311530,3435973836,4177066232,4287168392,4294901760],[(56,1),(58,1)]),([5,2863311530,3435973836,4205509290,4293984240,4294901760],[(101,2)]),([5,2863311530,3435973836,4210096880,4289396650,4294901760],[]),([5,2863311530,3435973836,4210752250,4289396650,4293984240,4294901760],[(156,0)]),([5,2863333375,3435973836,4042322160,4278255360,4294901760,4294945450],[]),([5,2863333375,3435973836,4042322160,4278255360,4294945450],[]),([5,2868882175,3435973836,4042322160,4278255360,4289396650,4294901760],[]),([5,3221274624,3435973836,3937069738,4042322160,4278255360,4294901760],[]),([5,3233808384,3435973836,3941247658,4042322160,4278255360,4294901760],[]),([5,3233857728,3435973836,3937069738,4042322160,4278255360,4294901760],[]),([5,3233857728,3435973836,3941247658,4042322160,4278255360,4294901760],[]),([5,3233857728,3435973836,3941264106,4042322160,4278255360,4294945450],[]),([5,3435921408,3435973836,3941247658,4042322160,4278255360,4294901760],[]),([5,3435973836,3937069738,4042322160,4278255360,4294901760],[]),([5,3435973836,3941247658,4042322160,4278255360,4294901760],[(158,3)]),([5,3435973836,3941264106,4042322160,4278255360,4289396650,4294901760],[(72,3)]),([5,3435973836,3941264106,4042322160,4278255360,4294901760,4294945450],[(72,3)]),([5,3435973836,3941264106,4042322160,4278255360,4294945450],[(72,3),(73,1),(149,1)]),([5,3435973836,4008618666,4042322160,4210752250,4278255360,4294901760],[]),([5,3435973836,4008636142,4042322160,4210752250,4278255360,4294945450],[(72,3),(84,1)]),([6,0,65535,2863311530,3435973836,4042322160,4278255360],[]),([6,0,65535,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,0,16711935,2863311530,3435973836,4042322160,4278255360,4294901760],[])]
-noncomputable def K_27 : List (List ℕ × List (ℕ × ℕ)) := [([6,0,16711935,2863311530,3435973836,4042322160,4294901760],[]),([6,0,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,0,1431655765,3435973836,4042322160,4278255360,4294901760],[]),([6,0,2863311530,3435973836,4042322160,4278255360,4294901760],[(97,1),(129,3)]),([6,255,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,3),(97,1),(101,1),(129,3)]),([6,255,2863311530,3435973836,4042322160,4278255360,4294901760,4294967040],[]),([6,21845,2863311530,3435973836,4042322160,4278255360],[(10,2),(14,0)]),([6,21845,2863311530,3435973836,4042322160,4278255360,4294901760],[(97,1),(101,1),(129,3),(133,3)]),([6,21845,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450],[]),([6,21845,2863311530,3435973836,4042322160,4278255360,4294945450],[(97,1),(101,1),(129,3),(133,3)]),([6,43690,65535,2863311530,3435973836,4042322160,4278255360],[]),([6,43690,65535,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,43690,2863311530,3435973836,4042322160,4278255360,4294901760],[(97,1),(101,1),(129,3),(133,3)]),([6,52428,65535,2863311530,3435973836,4042322160,4278255360],[])]
-noncomputable def K_28 : List (List ℕ × List (ℕ × ℕ)) := [([6,52428,65535,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,52428,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,2),(97,1),(129,3),(133,0)]),([6,65535,65535,2863311530,3435973836,4042322160,4278255360],[]),([6,65535,65535,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,65535,16711935,2863311530,3435973836,4042322160],[(14,1)]),([6,65535,16711935,2863311530,3435973836,4042322160,4278255360],[]),([6,65535,16711935,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,65535,16711935,2863311530,3435973836,4042322160,4294901760],[]),([6,65535,1431655765,2863311530,3435973836,4042322160,4278255360],[]),([6,65535,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,65535,1431655765,3435973836,4042322160,4278255360],[(10,2),(14,0)]),([6,65535,1431655765,3435973836,4042322160,4278255360,4294901760],[]),([6,65535,2290649224,2863311530,3435973836,4042322160,4278255360],[(136,0)]),([6,65535,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760],[(136,0)])]
-noncomputable def K_29 : List (List ℕ × List (ℕ × ℕ)) := [([6,65535,2863267840,2863311530,3435973836,4042322160,4278255360],[]),([6,65535,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,65535,2863311530,2863311530,3435973836,4042322160,4278255360],[]),([6,65535,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,65535,2863311530,2863333375,3435973836,4042322160,4278255360],[]),([6,65535,2863311530,2863333375,3435973836,4042322160,4278255360,4294901760],[]),([6,65535,2863311530,3233857728,3435973836,4042322160,4278255360],[]),([6,65535,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760],[]),([6,65535,2863311530,3435921408,3435973836,4042322160,4278255360],[]),([6,65535,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760],[]),([6,65535,2863311530,3435973836,3435973836,4042322160,4278255360],[]),([6,65535,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760],[]),([6,65535,2863311530,3435973836,3435986943,4042322160,4278255360],[]),([6,65535,2863311530,3435973836,3435986943,4042322160,4278255360,4294901760],[]),([6,65535,2863311530,3435973836,4008636142,4042322160,4278255360],[])]
-noncomputable def K_30 : List (List ℕ × List (ℕ × ℕ)) := [([6,65535,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760],[]),([6,65535,2863311530,3435973836,4042322160,4244438268,4278255360],[]),([6,65535,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760],[]),([6,65535,2863311530,3435973836,4042322160,4278255360],[(10,2),(14,0)]),([6,65535,2863311530,3435973836,4042322160,4278255360,4294901760],[(97,1),(101,1),(129,3),(133,3)]),([6,65535,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760],[]),([6,65535,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450],[]),([6,65535,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188],[(72,2)]),([6,65535,2863311530,3435973836,4042322160,4278255360,4294901760,4294967295],[]),([6,65535,2863311530,3435973836,4042322160,4278255360,4294945450],[(97,1),(101,1),(129,3),(133,3)]),([6,65535,2863311530,3435973836,4042322160,4278255360,4294954188],[]),([6,65535,2863311530,3435973836,4042322160,4278255360,4294967295],[]),([6,983055,2863311530,3435973836,4042322160,4278255360,4293984240,4294901760],[(96,0),(216,2)]),([6,983055,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,2),(97,1),(129,3)]),([6,5570645,2863311530,3435973836,4042322160,4278255360,4289396650,4294901760],[]),([6,5570645,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,3),(97,1),(101,1),(129,3)])]
-noncomputable def K_31 : List (List ℕ × List (ℕ × ℕ)) := [([6,11141290,16711935,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,11141290,16711935,2863311530,3435973836,4042322160,4294901760],[]),([6,11141290,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,3),(97,1),(101,1),(129,3)]),([6,13369548,16711935,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,13369548,16711935,2863311530,3435973836,4042322160,4294901760],[]),([6,13369548,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,4),(97,1),(129,0)]),([6,16711680,16711935,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,16711680,16711935,2863311530,3435973836,4042322160,4294901760],[]),([6,16711680,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,3),(97,1),(101,1),(129,3)]),([6,16711935,16711935,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,16711935,16711935,2863311530,3435973836,4042322160,4294901760],[]),([6,16711935,252645135,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,16711935,252645135,2863311530,3435973836,4042322160,4294901760],[(2,0)]),([6,16711935,252645135,2863311530,3435973836,4294901760],[(2,0)])]
-noncomputable def K_32 : List (List ℕ × List (ℕ × ℕ)) := [([6,16711935,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,16711935,1431655765,2863311530,3435973836,4042322160,4294901760],[]),([6,16711935,1431655765,3435973836,4042322160,4278255360,4294901760],[]),([6,16711935,1431655765,3435973836,4042322160,4294901760],[(10,1)]),([6,16711935,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,16711935,2290649224,2863311530,3435973836,4042322160,4294901760],[]),([6,16711935,2852170240,2863311530,3435973836,4042322160,4278255360,4294901760],[(104,1)]),([6,16711935,2852170240,2863311530,3435973836,4042322160,4294901760],[(2,3),(104,1)]),([6,16711935,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,16711935,2863267840,2863311530,3435973836,4042322160,4294901760],[]),([6,16711935,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,16711935,2863311530,2863311530,3435973836,4042322160,4294901760],[]),([6,16711935,2863311530,2868882175,3435973836,4042322160,4278255360,4294901760],[]),([6,16711935,2863311530,2868882175,3435973836,4042322160,4294901760],[]),([6,16711935,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760],[])]
-noncomputable def K_33 : List (List ℕ × List (ℕ × ℕ)) := [([6,16711935,2863311530,3233857728,3435973836,4042322160,4294901760],[]),([6,16711935,2863311530,3422604288,3435973836,4042322160,4278255360,4294901760],[]),([6,16711935,2863311530,3422604288,3435973836,4042322160,4294901760],[(2,0)]),([6,16711935,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760],[]),([6,16711935,2863311530,3435921408,3435973836,4042322160,4294901760],[]),([6,16711935,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760],[]),([6,16711935,2863311530,3435973836,3435973836,4042322160,4294901760],[]),([6,16711935,2863311530,3435973836,3439316223,4042322160,4278255360,4294901760],[]),([6,16711935,2863311530,3435973836,3439316223,4042322160,4294901760],[]),([6,16711935,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760],[]),([6,16711935,2863311530,3435973836,4008636142,4042322160,4294901760],[]),([6,16711935,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760],[]),([6,16711935,2863311530,3435973836,4042322160,4244438268,4294901760],[]),([6,16711935,2863311530,3435973836,4042322160,4278190080,4278255360,4294901760],[]),([6,16711935,2863311530,3435973836,4042322160,4278190080,4294901760],[(2,3)])]
-noncomputable def K_34 : List (List ℕ × List (ℕ × ℕ)) := [([6,16711935,2863311530,3435973836,4042322160,4278255360,4278255360,4294901760],[]),([6,16711935,2863311530,3435973836,4042322160,4278255360,4289396650,4294901760],[]),([6,16711935,2863311530,3435973836,4042322160,4278255360,4291624908,4294901760],[(72,2)]),([6,16711935,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,3),(97,1),(101,1)]),([6,16711935,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760],[]),([6,16711935,2863311530,3435973836,4042322160,4278255360,4294901760,4294902015],[]),([6,16711935,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450],[]),([6,16711935,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188],[]),([6,16711935,2863311530,3435973836,4042322160,4278255360,4294901760,4294967040],[]),([6,16711935,2863311530,3435973836,4042322160,4278255360,4294901760,4294967295],[]),([6,16711935,2863311530,3435973836,4042322160,4278255360,4294945450],[(2,3),(97,1),(101,1)]),([6,16711935,2863311530,3435973836,4042322160,4289396650,4294901760],[(2,3)]),([6,16711935,2863311530,3435973836,4042322160,4291624908,4294901760],[(2,0)]),([6,16711935,2863311530,3435973836,4042322160,4294901760],[(10,1)]),([6,16711935,2863311530,3435973836,4042322160,4294901760,4294901760],[]),([6,16711935,2863311530,3435973836,4042322160,4294901760,4294902015],[])]
-noncomputable def K_35 : List (List ℕ × List (ℕ × ℕ)) := [([6,16711935,2863311530,3435973836,4042322160,4294901760,4294945450],[]),([6,16711935,2863311530,3435973836,4042322160,4294901760,4294954188],[]),([6,16711935,2863311530,3435973836,4042322160,4294901760,4294967040],[(2,3)]),([6,16711935,2863311530,3435973836,4042322160,4294901760,4294967295],[]),([6,16711935,2863311530,3435973836,4042322160,4294945450],[(10,1)]),([6,16777215,2863311530,3435973836,4042322160,4278190080,4278255360,4294901760],[(172,3)]),([6,16777215,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,3),(97,1),(101,1),(133,3)]),([6,268374015,2863311530,3435973836,4026593280,4042322160,4278255360,4294901760],[(132,1),(172,3)]),([6,268374015,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,2),(101,1),(133,3)]),([6,1145324612,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,1145324612,1431655765,3435973836,4042322160,4278255360,4294901760],[]),([6,1145324612,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,2),(97,1),(129,3),(133,0),(145,0)]),([6,1431633920,1431655765,2863311530,3435973836,4042322160,4278255360],[(137,1),(141,1),(177,3),(181,3)]),([6,1431633920,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760],[])]
-noncomputable def K_36 : List (List ℕ × List (ℕ × ℕ)) := [([6,1431633920,1431655765,3435973836,4042322160,4278255360],[(10,2),(14,0)]),([6,1431633920,1431655765,3435973836,4042322160,4278255360,4294901760],[]),([6,1431633920,2863311530,3435973836,4042322160,4278255360],[(99,1),(103,1),(131,3),(135,3),(107,1),(111,1),(139,3),(143,3),(10,2),(11,2),(147,0),(151,0),(13,1),(14,0),(15,0),(155,2),(159,2),(17,3)]),([6,1431633920,2863311530,3435973836,4042322160,4278255360,4294901760],[(97,1),(101,1),(129,3),(133,3),(194,1),(198,1),(202,3),(206,3)]),([6,1431655765,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,1431655765,1431655765,3435973836,4042322160,4278255360,4294901760],[]),([6,1431655765,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760],[(136,0)]),([6,1431655765,2290649224,3435973836,4042322160,4278255360,4294901760],[(104,0)]),([6,1431655765,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,1431655765,2863267840,3435973836,4042322160,4278255360,4294901760],[]),([6,1431655765,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,1431655765,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760],[]),([6,1431655765,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760],[]),([6,1431655765,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760],[]),([6,1431655765,2863311530,3435973836,3722304989,4042322160,4278255360,4294901760],[]),([6,1431655765,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760],[(72,2)]),([6,1431655765,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760],[(100,1)])]
-noncomputable def K_37 : List (List ℕ × List (ℕ × ℕ)) := [([6,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760],[(97,1),(101,1),(129,3),(133,3)]),([6,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760],[]),([6,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760,4294923605],[]),([6,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450],[]),([6,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188],[]),([6,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760,4294967295],[]),([6,1431655765,2863311530,3435973836,4042322160,4278255360,4294945450],[(97,1),(101,1),(129,3),(133,3)]),([6,1431655765,3233857728,3435973836,4042322160,4278255360,4294901760],[]),([6,1431655765,3435921408,3435973836,4042322160,4278255360,4294901760],[]),([6,1431655765,3435973836,3435973836,4042322160,4278255360,4294901760],[]),([6,1431655765,3435973836,3722304989,4042322160,4278255360,4294901760],[]),([6,1431655765,3435973836,4008636142,4042322160,4278255360,4294901760],[]),([6,1431655765,3435973836,4042322160,4244438268,4278255360,4294901760],[]),([6,1431655765,3435973836,4042322160,4278255360,4294901760],[(6,2),(10,0)])]
-noncomputable def K_38 : List (List ℕ × List (ℕ × ℕ)) := [([6,1431655765,3435973836,4042322160,4278255360,4294901760,4294901760],[]),([6,1431655765,3435973836,4042322160,4278255360,4294901760,4294923605],[]),([6,1431655765,3435973836,4042322160,4278255360,4294901760,4294945450],[]),([6,1431655765,3435973836,4042322160,4278255360,4294901760,4294954188],[]),([6,1431655765,3435973836,4042322160,4278255360,4294901760,4294967295],[]),([6,1431655765,3435973836,4042322160,4278255360,4294945450],[(6,2),(10,0)]),([6,1431699455,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,1431699455,2863311530,3435973836,4042322160,4278255360,4294901760],[(97,1),(101,1),(129,3),(133,3)]),([6,1442797055,2852170240,2863311530,3435973836,4042322160,4278255360,4294901760],[(132,1),(172,3),(104,1)]),([6,1442797055,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,3),(97,1),(100,1),(102,1),(101,1),(133,3)]),([6,2155905152,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,2155905152,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760],[]),([6,2155905152,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,3),(97,1),(129,3)]),([6,2290614272,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760],[(128,0),(136,0)]),([6,2290614272,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760],[(128,0)])]
-noncomputable def K_39 : List (List ℕ × List (ℕ × ℕ)) := [([6,2290614272,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760],[(128,0)]),([6,2290614272,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,2),(96,0),(98,0),(97,1),(129,3),(133,0)]),([6,2290649224,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760],[(128,0)]),([6,2290649224,2694881440,2863311530,3435973836,4042322160,4278255360,4294901760],[(72,1),(96,1),(128,1),(168,1),(216,1)]),([6,2290649224,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760],[(128,0)]),([6,2290649224,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760],[(128,0)]),([6,2290649224,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760],[]),([6,2290649224,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760],[(128,0)]),([6,2290649224,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760],[(128,0)]),([6,2290649224,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760],[(128,0)]),([6,2290649224,2863311530,3435973836,4026593280,4042322160,4278255360,4294901760],[(56,2),(72,2),(96,2),(128,4),(168,2),(216,2)]),([6,2290649224,2863311530,3435973836,4042260480,4042322160,4278255360,4294901760],[(56,1),(72,1),(96,1),(128,1),(168,1),(216,1)]),([6,2290649224,2863311530,3435973836,4042322160,4042322160,4278255360,4294901760],[(56,1),(72,1),(96,1),(168,1),(216,1)]),([6,2290649224,2863311530,3435973836,4042322160,4177066232,4278255360,4294901760],[(56,1),(72,1),(96,0),(128,1),(168,1),(216,1),(152,0)]),([6,2290649224,2863311530,3435973836,4042322160,4210752250,4278255360,4294901760],[(56,1),(72,1),(96,0),(128,1),(168,1),(216,1)]),([6,2290649224,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760],[(96,0)]),([6,2290649224,2863311530,3435973836,4042322160,4278255360,4293984240,4294901760],[(56,2),(72,2),(96,0),(168,2),(216,2)]),([6,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,2),(96,0),(98,0),(97,1),(129,3),(133,0)]),([6,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760],[(96,0)]),([6,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760,4294936712],[(96,0)]),([6,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450],[(96,0)]),([6,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188],[(96,0)])]
-noncomputable def K_40 : List (List ℕ × List (ℕ × ℕ)) := [([6,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760,4294963440],[(56,1),(72,1),(96,0),(216,1)]),([6,2290649224,2863311530,3435973836,4042322160,4278255360,4294936712],[(2,2),(96,0),(98,0),(97,1),(129,3),(133,0)]),([6,2290649224,2863311530,3435973836,4042322160,4278255360,4294945450],[(2,2),(96,0),(98,0),(97,1),(129,3),(133,0)]),([6,2290649224,2863311530,3435973836,4042322160,4287168392,4294901760],[(2,2),(97,1)]),([6,2290649224,2863311530,4008636142,4042322160,4278255360,4294901760],[(96,4),(98,0),(97,1),(128,2),(129,3)]),([6,2290649224,3435973836,4008636142,4042322160,4278255360,4294901760],[(6,2)]),([6,2290649224,4008636142,4042322160,4278255360,4294901760],[(2,2),(74,0),(6,2),(10,0)]),([6,2829625512,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760],[(72,2),(96,0)]),([6,2829625512,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,3),(72,2),(74,1),(96,0),(97,1),(101,1),(129,3),(133,3),(80,1),(82,1),(141,3)]),([6,2863267840,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,2863267840,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,2863267840,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760],[]),([6,2863267840,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760],[]),([6,2863267840,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760],[]),([6,2863267840,2863311530,3435973836,4008627404,4042322160,4278255360,4294901760],[]),([6,2863267840,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760],[]),([6,2863267840,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760],[(72,2),(96,0)])]
-noncomputable def K_41 : List (List ℕ × List (ℕ × ℕ)) := [([6,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760],[(97,1),(101,1),(129,3),(133,3)]),([6,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760],[]),([6,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450],[]),([6,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188],[]),([6,2863267840,2863311530,3435973836,4042322160,4278255360,4294945450],[(97,1),(101,1),(129,3),(133,3)]),([6,2863267840,3435973836,4042322160,4278255360,4294901760,4294945450],[]),([6,2863267840,3435973836,4042322160,4278255360,4294945450],[(6,2),(10,0)]),([6,2863302792,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,2),(97,1),(101,1),(129,3),(133,3)]),([6,2863302792,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188],[]),([6,2863311530,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760],[]),([6,2863311530,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760],[]),([6,2863311530,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760],[]),([6,2863311530,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760],[]),([6,2863311530,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760],[]),([6,2863311530,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760],[(72,2),(96,0)]),([6,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760],[(97,1),(101,1),(129,3),(133,3)]),([6,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760],[])]
-noncomputable def K_42 : List (List ℕ × List (ℕ × ℕ)) := [([6,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450],[]),([6,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188],[]),([6,2863311530,2863311530,3435973836,4042322160,4278255360,4294945450],[(97,1),(101,1),(129,3),(133,3)]),([6,2863311530,2863333375,3435973836,4042322160,4278255360],[(10,2),(14,0)]),([6,2863311530,2863333375,3435973836,4042322160,4278255360,4294901760],[(105,1),(109,1),(137,3),(141,3)]),([6,2863311530,2868882175,3435973836,4042322160,4278255360,4294901760],[(6,3),(105,1),(109,1),(141,3)]),([6,2863311530,3221274624,3233857728,3435973836,4042322160,4278255360,4294901760],[]),([6,2863311530,3221274624,3435973836,4042322160,4278255360,4294901760],[(105,1),(137,3)]),([6,2863311530,3233808384,3233857728,3435973836,4042322160,4278255360,4294901760],[]),([6,2863311530,3233808384,3435921408,3435973836,4042322160,4278255360,4294901760],[]),([6,2863311530,3233808384,3435973836,4042322160,4278255360,4294901760],[(6,3),(105,1),(137,3)]),([6,2863311530,3233857728,3233857728,3435973836,4042322160,4278255360,4294901760],[]),([6,2863311530,3233857728,3422604288,3435973836,4042322160,4278255360,4294901760],[(104,0),(136,0),(176,0),(152,0)]),([6,2863311530,3233857728,3435921408,3435973836,4042322160,4278255360,4294901760],[]),([6,2863311530,3233857728,3435973836,3435973836,4042322160,4278255360,4294901760],[]),([6,2863311530,3233857728,3435973836,3941264106,4042322160,4278255360,4294901760],[]),([6,2863311530,3233857728,3435973836,4008636142,4042322160,4278255360,4294901760],[]),([6,2863311530,3233857728,3435973836,4042322160,4244438268,4278255360,4294901760],[(84,1),(144,1)])]
-noncomputable def K_43 : List (List ℕ × List (ℕ × ℕ)) := [([6,2863311530,3233857728,3435973836,4042322160,4278190080,4278255360,4294901760],[(80,3),(104,3),(136,3)]),([6,2863311530,3233857728,3435973836,4042322160,4278255360,4278255360,4294901760],[(80,3),(104,3),(136,3)]),([6,2863311530,3233857728,3435973836,4042322160,4278255360,4289396650,4294901760],[(80,3),(104,3),(176,3),(196,1)]),([6,2863311530,3233857728,3435973836,4042322160,4278255360,4290838464,4294901760],[(80,3),(104,3),(176,3)]),([6,2863311530,3233857728,3435973836,4042322160,4278255360,4291624908,4294901760],[(80,0),(104,0),(176,0)]),([6,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760],[(6,3),(105,1),(137,3),(113,1)]),([6,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760,4294901760],[]),([6,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760,4294945450],[(244,1)]),([6,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760,4294951104],[]),([6,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760,4294954188],[]),([6,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760,4294967040],[(80,3),(104,3),(224,3)]),([6,2863311530,3233857728,3435973836,4042322160,4278255360,4294945450],[(6,3),(105,1),(137,3),(113,1),(197,1)]),([6,2863311530,3233857728,3435973836,4244438268,4278255360,4294901760],[(10,2),(149,0)]),([6,2863311530,3233857728,4244438268,4278255360,4294901760],[(58,3),(103,3),(6,3),(7,3),(10,3),(11,3)]),([6,2863311530,3368601800,3435973836,4042322160,4210752250,4278255360,4294901760],[(80,1),(104,0),(136,1)]),([6,2863311530,3368601800,3435973836,4042322160,4278255360,4294901760],[(6,4),(104,0),(105,1),(137,3),(141,0),(149,0)]),([6,2863311530,3435187392,3435973836,4042322160,4278255360,4293984240,4294901760],[(80,2),(176,2),(156,2)]),([6,2863311530,3435187392,3435973836,4042322160,4278255360,4294901760],[(6,2),(105,1),(137,3),(141,0),(145,0)])]
-noncomputable def K_44 : List (List ℕ × List (ℕ × ℕ)) := [([6,2863311530,3435921408,3435921408,3435973836,4042322160,4278255360,4294901760],[]),([6,2863311530,3435921408,3435973836,3435973836,4042322160,4278255360,4294901760],[]),([6,2863311530,3435921408,3435973836,4008618666,4042322160,4278255360,4294901760],[]),([6,2863311530,3435921408,3435973836,4008636142,4042322160,4278255360,4294901760],[]),([6,2863311530,3435921408,3435973836,4042260480,4042322160,4278255360],[(58,1),(105,1),(136,1),(137,1),(181,0),(113,1),(197,2)]),([6,2863311530,3435921408,3435973836,4042260480,4042322160,4278255360,4294901760],[(80,1),(136,1),(224,1)]),([6,2863311530,3435921408,3435973836,4042322160,4042322160,4278255360,4294901760],[(80,1),(104,1),(224,1)]),([6,2863311530,3435921408,3435973836,4042322160,4210752250,4278255360,4294901760],[(80,1),(104,0),(136,1),(224,1)]),([6,2863311530,3435921408,3435973836,4042322160,4244435184,4278255360,4294901760],[(80,1),(136,1),(224,1)]),([6,2863311530,3435921408,3435973836,4042322160,4244438268,4278255360,4294901760],[]),([6,2863311530,3435921408,3435973836,4042322160,4278255360,4293984240,4294901760],[(80,2),(104,0),(176,2),(224,2),(156,2)]),([6,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760],[(6,2),(105,1),(137,3),(141,0),(206,0)]),([6,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760,4294901760],[]),([6,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760,4294945450],[]),([6,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760,4294954188],[]),([6,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760,4294963440],[(80,1),(176,1),(224,1)]),([6,2863311530,3435921408,3435973836,4042322160,4278255360,4294945450],[(6,2),(105,1),(137,3),(141,0),(206,0)]),([6,2863311530,3435921408,3435973836,4042322160,4278255360,4294954188],[(145,0),(206,0)])]
-noncomputable def K_45 : List (List ℕ × List (ℕ × ℕ)) := [([6,2863311530,3435921408,4042322160,4278255360,4294901760,4294954188],[]),([6,2863311530,3435921408,4042322160,4278255360,4294954188],[(6,2),(10,0),(18,2)]),([6,2863311530,3435956360,3435973836,4042322160,4278255360,4294901760],[(6,2),(105,1),(137,3),(141,0),(149,0),(198,1),(206,3)]),([6,2863311530,3435956360,3435973836,4042322160,4278255360,4294901760,4294945450],[]),([6,2863311530,3435956360,3435973836,4042322160,4278255360,4294945450],[(6,2),(105,1),(137,3),(141,0),(149,0),(206,0)]),([6,2863311530,3435970752,3435973836,4042322160,4278255360,4294901760],[(6,4),(105,1),(137,3),(141,0),(198,1)]),([6,2863311530,3435970752,3435973836,4042322160,4278255360,4294901760,4294963440],[(80,1),(224,1)]),([6,2863311530,3435973836,3435973836,3435973836,4042322160,4278255360,4294901760],[]),([6,2863311530,3435973836,3435973836,4008636142,4042322160,4278255360,4294901760],[]),([6,2863311530,3435973836,3435973836,4042322160,4042322160,4278255360,4294901760],[(64,1),(68,1)]),([6,2863311530,3435973836,3435973836,4042322160,4210752250,4278255360,4294901760],[(64,1),(68,1),(104,0)]),([6,2863311530,3435973836,3435973836,4042322160,4244438268,4278255360,4294901760],[]),([6,2863311530,3435973836,3435973836,4042322160,4278255360,4293984240,4294901760],[(64,2),(68,2),(156,2)]),([6,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760],[(6,2),(137,0),(141,0)]),([6,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760,4294901760],[]),([6,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760,4294945450],[]),([6,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760,4294954188],[])]
-noncomputable def K_46 : List (List ℕ × List (ℕ × ℕ)) := [([6,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760,4294963440],[(64,1),(68,1)]),([6,2863311530,3435973836,3435973836,4042322160,4278255360,4294945450],[(6,2),(137,0),(141,0)]),([6,2863311530,3435973836,3435986943,4042322160,4278255360,4294901760],[(177,2),(10,2),(117,1),(145,0),(149,3)]),([6,2863311530,3435973836,3439316223,4042322160,4278255360,4294901760],[(137,2),(10,4),(117,1),(149,0)]),([6,2863311530,3435973836,3722304989,4042322160,4278255360,4294901760],[(58,2),(10,2),(117,1),(145,0),(149,3)]),([6,2863311530,3435973836,3941264106,4042322160,4278255360,4294901760],[(104,3),(105,1),(10,3),(113,1),(117,1),(145,3),(149,3)]),([6,2863311530,3435973836,3974950124,4042322160,4278255360,4294901760],[(58,2),(6,2),(80,2),(81,2),(105,2),(109,1),(137,2),(141,3),(177,2),(10,4),(117,1),(145,0),(149,3)]),([6,2863311530,3435973836,4008574976,4008636142,4042322160,4278255360,4294901760],[]),([6,2863311530,3435973836,4008574976,4042322160,4278255360,4294901760],[(10,2),(113,1),(117,1),(145,3),(149,3),(198,1),(206,3)]),([6,2863311530,3435973836,4008618666,4042322160,4278255360,4294901760],[(129,0),(10,2),(113,1),(117,1),(145,3),(149,3),(198,1),(206,3)]),([6,2863311530,3435973836,4008627404,4042322160,4278255360,4294901760],[(105,2),(137,4),(10,2),(117,1),(145,0),(149,3)]),([6,2863311530,3435973836,4008636142,4008636142,4042322160,4278255360,4294901760],[]),([6,2863311530,3435973836,4008636142,4042322160,4210752250,4278255360,4294901760],[(76,1),(84,1),(104,3),(116,1)]),([6,2863311530,3435973836,4008636142,4042322160,4244438268,4278255360,4294901760],[(80,2),(136,2),(116,1)])]
-noncomputable def K_47 : List (List ℕ × List (ℕ × ℕ)) := [([6,2863311530,3435973836,4008636142,4042322160,4278124286,4278255360,4294901760],[(116,1),(204,3)]),([6,2863311530,3435973836,4008636142,4042322160,4278255360,4293984240,4294901760],[(76,2),(84,2),(176,2),(156,2)]),([6,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760],[(105,2),(137,4),(10,2),(117,1),(145,0),(149,3)]),([6,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760,4294901760],[]),([6,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760,4294945450],[]),([6,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760,4294954188],[]),([6,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760,4294962926],[(244,1),(252,3)]),([6,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760,4294963440],[(76,1),(84,1)]),([6,2863311530,3435973836,4008636142,4042322160,4278255360,4294945450],[(129,0),(105,2),(137,4),(10,2),(117,1),(145,0),(149,3)]),([6,2863311530,3435973836,4042322160,4241292492,4278255360,4294901760],[(58,2),(85,1),(141,3),(177,2),(118,1),(14,2),(153,0),(157,3)]),([6,2863311530,3435973836,4042322160,4244373504,4244438268,4278255360],[(58,2),(74,0),(85,1),(150,1),(18,3),(205,3)]),([6,2863311530,3435973836,4042322160,4244373504,4244438268,4278255360,4294901760],[]),([6,2863311530,3435973836,4042322160,4244373504,4278255360],[(75,1),(79,1),(131,3),(135,3),(6,2),(7,2),(143,0),(9,1),(10,0),(11,0),(115,1),(119,1),(147,1),(151,2),(14,3),(15,3),(159,3),(17,3)]),([6,2863311530,3435973836,4042322160,4244373504,4278255360,4294901760],[(114,1),(118,1),(186,1),(190,1),(14,3),(153,3),(157,3),(206,3)]),([6,2863311530,3435973836,4042322160,4244425932,4278255360,4294901760],[(58,2),(85,1),(137,2),(118,1),(14,4),(153,0),(157,3)]),([6,2863311530,3435973836,4042322160,4244438268,4244438268,4278255360,4294901760],[]),([6,2863311530,3435973836,4042322160,4244438268,4278124286,4278255360,4294901760],[(204,3)])]
-noncomputable def K_48 : List (List ℕ × List (ℕ × ℕ)) := [([6,2863311530,3435973836,4042322160,4244438268,4278255360,4291624908,4294901760],[(108,0),(140,0),(116,0),(188,1),(156,3),(260,0)]),([6,2863311530,3435973836,4042322160,4244438268,4278255360,4294770684,4294901760],[(156,3)]),([6,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760],[(58,2),(74,0),(85,1),(118,1),(14,3),(157,3)]),([6,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760,4294901760],[]),([6,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760,4294945450],[]),([6,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760,4294954188],[(236,1)]),([6,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760,4294966524],[]),([6,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760,4294967040],[(108,3),(228,0),(116,3),(236,2)]),([6,2863311530,3435973836,4042322160,4244438268,4278255360,4294945450],[(58,2),(74,0),(85,1),(118,1),(14,3),(157,3)]),([6,2863311530,3435973836,4042322160,4278124286,4278255360,4294901760],[(118,1),(14,3),(156,3),(158,3),(157,3)]),([6,2863311530,3435973836,4042322160,4278255360,4294770684,4294901760],[(58,2),(74,0),(150,1),(158,3)]),([6,2863311530,3435973836,4042322160,4278255360,4294901760],[(75,1),(79,1),(99,3),(103,3),(6,2),(7,2),(107,0),(111,0),(9,1),(10,0),(11,0),(115,2),(119,2),(147,1),(151,1),(13,3),(155,3),(159,3)]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760],[(146,1),(150,1),(154,3),(158,3)]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760,4294901760],[]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760,4294945450],[]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760,4294954188],[])]
-noncomputable def K_49 : List (List ℕ × List (ℕ × ℕ)) := [([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294902015],[(150,1),(186,1),(190,1),(198,3),(22,3)]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294923605],[(186,1),(190,1),(194,3),(198,3)]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294936712],[(150,1),(186,1),(190,1),(154,0),(158,3),(194,3),(198,3),(22,2)]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450],[(146,1),(150,1),(186,1),(190,1),(154,3),(158,3),(194,3),(198,3)]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450,4294945450],[]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450,4294954188],[]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450,4294962926],[(236,1),(244,3)]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294951104],[(150,1),(186,1),(190,1),(194,3),(198,3),(22,3)]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188],[(190,1),(194,0),(198,3),(22,2)]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188,4294954188],[]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188,4294962926],[(236,1),(244,3)]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188,4294963440],[(180,1),(204,1)]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188,4294966524],[]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294962926],[(188,1),(190,1),(189,1),(194,0),(196,3),(198,3),(197,3),(22,2)]),([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294966524],[(190,1),(198,3),(22,3)])]
-noncomputable def K_50 : List (List ℕ × List (ℕ × ℕ)) := [([6,2863311530,3435973836,4042322160,4278255360,4294901760,4294967295],[(190,1),(198,3)]),([6,2863311530,3435973836,4042322160,4278255360,4294936712],[(75,1),(79,1),(99,3),(103,3),(6,2),(7,2),(107,0),(111,0),(9,1),(10,0),(11,0),(115,2),(119,2),(151,1),(13,3),(155,0),(159,3),(18,2),(19,2)]),([6,2863311530,3435973836,4042322160,4278255360,4294945450],[(75,1),(79,1),(99,3),(103,3),(6,2),(7,2),(107,0),(111,0),(9,1),(10,0),(11,0),(115,2),(119,2),(147,1),(151,1),(13,3),(155,3),(159,3)]),([6,2863311530,3435973836,4042322160,4278255360,4294945450,4294945450],[(146,1),(150,1),(154,3),(158,3)]),([6,2863311530,3435973836,4042322160,4278255360,4294945450,4294954188],[(190,1),(194,0),(198,3),(22,2)]),([6,2863311530,3435973836,4042322160,4278255360,4294945450,4294962926],[(188,1),(190,1),(189,1),(194,0),(196,3),(198,3),(197,3),(22,2)]),([6,2863311530,3435973836,4042322160,4287168392,4294901760],[(58,2),(75,1),(79,1),(103,0),(6,2),(7,2),(111,0),(9,1),(10,0),(11,0),(119,2),(151,1),(14,1),(15,1)]),([6,2863311530,3435973836,4042322160,4289396650,4291624908,4294901760],[(58,1),(132,0),(134,0),(108,0),(110,0),(109,0)]),([7,65535,2863311530,3435973836,4042322160,4278255360],[(99,1),(103,1),(131,3),(135,3),(107,1),(111,1),(139,3),(143,3),(10,2),(11,2),(147,0),(151,0),(13,1),(14,0),(15,0),(155,2),(159,2),(17,3)]),([7,65535,2863311530,3435973836,4042322160,4278255360,4294901760],[(97,1),(99,1),(101,1),(103,1),(129,3),(131,3),(133,3),(135,3),(107,1),(111,1),(139,3),(143,3),(10,2),(11,2),(147,0),(151,0),(13,1),(14,0),(15,0),(155,2),(159,2),(194,1),(195,1),(198,1),(199,1),(17,3),(202,3),(203,3),(206,3),(207,3)]),([7,16711935,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,3),(97,1),(99,1),(101,1),(103,1),(107,1),(111,1),(10,2),(11,1),(13,1),(14,0),(154,1),(155,1),(158,1),(159,1),(195,1),(199,1)])]
-noncomputable def K_51 : List (List ℕ × List (ℕ × ℕ)) := [([7,16711935,2863311530,3435973836,4042322160,4294901760],[(99,1),(103,1),(107,1),(111,1),(10,1),(11,1),(13,1),(155,1),(159,1)]),([7,1431655765,2863311530,3435973836,4042322160,4278255360,4294901760],[(97,1),(99,1),(101,1),(103,1),(129,3),(131,3),(133,3),(135,3),(105,1),(107,1),(109,1),(111,1),(137,3),(139,3),(141,3),(143,3),(10,2),(11,2),(147,0),(151,0),(13,1),(14,0),(15,0),(155,2),(159,2),(195,1),(199,1),(17,3),(203,3),(207,3)]),([7,1431655765,3435973836,4042322160,4278255360,4294901760],[(75,1),(79,1),(99,3),(103,3),(6,2),(7,2),(107,0),(111,0),(9,1),(10,0),(11,0),(115,2),(119,2),(147,1),(151,1),(13,3),(155,3),(159,3)]),([7,2290649224,2863311530,3435973836,4042322160,4278255360,4294901760],[(2,2),(3,2),(96,0),(98,0),(97,1),(129,3),(131,0),(133,0),(135,0),(139,0),(143,0),(10,2),(11,2),(147,0),(151,0),(14,0),(15,0),(17,0),(203,0),(207,0)]),([7,2863267840,2863311530,3435973836,4042322160,4278255360,4294901760],[(97,1),(99,1),(101,1),(103,1),(129,3),(131,3),(133,3),(135,3),(107,1),(111,1),(139,3),(143,3),(10,2),(11,2),(147,0),(151,0),(13,1),(14,0),(15,0),(155,2),(159,2),(195,1),(199,1),(17,3),(203,3),(207,3)]),([7,2863311530,2863311530,3435973836,4042322160,4278255360,4294901760],[(97,1),(99,1),(101,1),(103,1),(129,3),(131,3),(133,3),(135,3),(10,2),(11,2),(147,0),(151,0),(13,1),(14,0),(15,0),(155,2),(159,2),(195,1),(199,1),(17,3),(203,3),(207,3)]),([7,2863311530,3233857728,3435973836,4042322160,4278255360,4294901760],[(99,1),(103,1),(135,3),(6,3),(7,3),(105,1),(107,1),(137,3),(10,2),(11,2),(113,1),(13,1),(14,0),(15,0),(155,1),(159,1),(195,1),(199,1)]),([7,2863311530,3435921408,3435973836,4042322160,4278255360,4294901760],[(103,1),(131,0),(135,3),(6,2),(7,2),(105,1),(137,3),(139,0),(141,0),(143,0),(10,2),(11,2),(147,0),(151,0),(14,0),(15,0),(159,2),(17,0),(203,0),(206,0),(207,0)]),([7,2863311530,3435973836,3435973836,4042322160,4278255360,4294901760],[(103,1),(131,0),(135,3),(6,2),(7,2),(137,0),(139,0),(141,0),(143,0),(14,0),(15,0),(159,2),(199,1),(17,0),(203,0),(207,3)])]
-noncomputable def K_52 : List (List ℕ × List (ℕ × ℕ)) := [([7,2863311530,3435973836,4008636142,4042322160,4278255360,4294901760],[(103,1),(131,0),(135,3),(6,2),(7,2),(105,2),(137,4),(139,0),(143,0),(10,2),(11,2),(117,1),(119,1),(145,0),(147,0),(149,3),(151,3),(13,1),(14,0),(15,0),(159,2),(199,1),(17,3),(203,0),(207,3)]),([7,2863311530,3435973836,4042322160,4244438268,4278255360,4294901760],[(58,2),(74,0),(75,1),(79,1),(131,3),(135,3),(6,2),(7,2),(85,1),(143,0),(9,1),(10,0),(11,0),(118,1),(119,1),(147,1),(151,2),(187,1),(191,1),(14,3),(15,3),(157,3),(159,3),(17,3),(207,3)]),([7,2863311530,3435973836,4042322160,4278255360,4294901760],[(75,1),(79,1),(99,3),(103,3),(6,2),(7,2),(107,0),(111,0),(9,1),(10,0),(11,0),(115,2),(119,2),(147,1),(151,1),(13,3),(155,3),(159,3)]),([7,2863311530,3435973836,4042322160,4278255360,4294901760,4294901760],[(75,1),(79,1),(99,3),(103,3),(6,2),(7,2),(107,0),(111,0),(9,1),(10,0),(11,0),(115,2),(119,2),(146,1),(147,1),(150,1),(151,1),(13,3),(154,3),(155,3),(158,3),(159,3)]),([7,2863311530,3435973836,4042322160,4278255360,4294901760,4294945450],[(75,1),(79,1),(99,3),(103,3),(6,2),(7,2),(107,0),(111,0),(9,1),(10,0),(11,0),(115,2),(119,2),(146,1),(147,1),(150,1),(151,1),(186,1),(187,1),(190,1),(191,1),(13,3),(154,3),(155,3),(158,3),(159,3),(194,3),(195,3),(198,3),(199,3)]),([7,2863311530,3435973836,4042322160,4278255360,4294901760,4294954188],[(75,1),(79,1),(99,3),(103,3),(6,2),(7,2),(107,0),(111,0),(9,1),(10,0),(11,0),(115,2),(119,2),(151,1),(190,1),(191,1),(13,3),(155,0),(159,3),(194,0),(195,0),(198,3),(199,3),(22,2),(23,2)]),([7,2863311530,3435973836,4042322160,4278255360,4294945450],[(75,1),(79,1),(99,3),(103,3),(6,2),(7,2),(107,0),(111,0),(9,1),(10,0),(11,0),(115,2),(119,2),(147,1),(151,1),(13,3),(155,3),(159,3)]),([8,2863311530,3435973836,4042322160,4278255360,4294901760],[(75,1),(79,1),(99,3),(103,3),(6,2),(7,2),(107,0),(111,0),(9,1),(10,0),(11,0),(115,2),(119,2),(147,1),(151,1),(13,3),(155,3),(159,3)])]
-theorem c_0 : K_0.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_1 : K_1.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_2 : K_2.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_3 : K_3.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_4 : K_4.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_5 : K_5.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_6 : K_6.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_7 : K_7.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_8 : K_8.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_9 : K_9.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_10 : K_10.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_11 : K_11.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_12 : K_12.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_13 : K_13.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_14 : K_14.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_15 : K_15.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_16 : K_16.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_17 : K_17.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_18 : K_18.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_19 : K_19.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_20 : K_20.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_21 : K_21.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_22 : K_22.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_23 : K_23.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_24 : K_24.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_25 : K_25.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_26 : K_26.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_27 : K_27.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_28 : K_28.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_29 : K_29.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_30 : K_30.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_31 : K_31.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_32 : K_32.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_33 : K_33.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_34 : K_34.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_35 : K_35.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_36 : K_36.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_37 : K_37.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_38 : K_38.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_39 : K_39.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_40 : K_40.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_41 : K_41.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_42 : K_42.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_43 : K_43.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_44 : K_44.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_45 : K_45.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_46 : K_46.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_47 : K_47.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_48 : K_48.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_49 : K_49.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_50 : K_50.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_51 : K_51.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
-theorem c_52 : K_52.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
+def witnessWord (w : Witness) : Word := w.1
+
+def essentialB (mask target : Word) (stock : List Word) (entry : Witness) : Bool :=
+  let (w,p,n) := entry
+  mask.testBit p && mask.testBit n && target.testBit p && !target.testBit n &&
+    (w.testBit p != w.testBit n) &&
+    stock.all (fun x => x == w || x.testBit p == x.testBit n)
+
+theorem essentialRequired {stock : List Word} {entry : Witness} {S : Finset Word} {k t : Nat}
+    (ok : essentialB mask target stock entry = true)
+    (sub : ∀ w ∈ S, w ∈ stock) (live : LiveWord mask target k t S) :
+    witnessWord entry ∈ S := by
+  obtain ⟨w,p,n⟩ := entry
+  simp only [essentialB, Bool.and_eq_true] at ok
+  obtain ⟨⟨⟨⟨⟨mp,mn⟩,tp⟩,tn⟩,unequal⟩,rest⟩ := ok
+  by_contra no
+  have all : ∀ x ∈ S, AgreesAt p n x := by
+    intro x hx
+    have h := List.all_eq_true.mp rest x (sub x hx)
+    have hw : x ≠ w := fun e => no (by simpa [witnessWord, e] using hx)
+    simpa [hw, AgreesAt] using h
+  have agree := liveAgrees live (mp.trans mn.symm) all
+  have falseBit : target.testBit n = false := by simpa using tn
+  simp [AgreesAt, tp, falseBit] at agree
+
+theorem essentialWordsIn {stock : List Word} {witnesses : List Witness} {S : Finset Word} {k t : Nat}
+    (ok : witnesses.all (essentialB mask target stock) = true)
+    (sub : ∀ w ∈ S, w ∈ stock) (live : LiveWord mask target k t S) :
+    (witnesses.map witnessWord).toFinset ⊆ S := by
+  intro w hw
+  obtain ⟨entry, mem, rfl⟩ := List.mem_map.mp (List.mem_toFinset.mp hw)
+  exact essentialRequired (List.all_eq_true.mp ok entry mem) sub live
+
+theorem essentialLower {stock : List Word} {witnesses : List Witness} {minimum : Nat}
+    (proper : properWord mask target)
+    (masked : ∀ w ∈ stock, Masked mask w)
+    (ok : witnesses.all (essentialB mask target stock) = true)
+    (bound : minimum ≤ (witnesses.map witnessWord).toFinset.card - 1) :
+    Lower mask stock target minimum := by
+  intro values build hit
+  obtain ⟨k,t,S,hk,live,sub⟩ := extractWordLive masked build hit proper
+  have card := Finset.card_le_card (essentialWordsIn ok sub live)
+  have size := (liveWordSize live).2
+  omega
+
+theorem essentialLift {stock cutStock : List Word} {witnesses : List Witness} {minimum cut prior : Nat}
+    (proper : properWord mask target)
+    (masked : ∀ w ∈ stock, Masked mask w)
+    (ok : witnesses.all (essentialB mask target stock) = true)
+    (submask : mask &&& cut = cut)
+    (cutProper : properWord cut (target &&& cut))
+    (supplies : ∀ w ∈ stock, AvailableWord cut cutStock (w &&& cut))
+    (known : Lower cut cutStock (target &&& cut) prior)
+    (bound : minimum ≤ prior + (flatSet cut (witnesses.map witnessWord).toFinset).card) :
+    Lower mask stock target minimum := by
+  intro values build hit
+  obtain ⟨k,t,S,hk,live,sub⟩ := extractWordLive masked build hit proper
+  have subW := essentialWordsIn ok sub live
+  have subFlat : flatSet cut (witnesses.map witnessWord).toFinset ⊆ flatSet cut S :=
+    Finset.filter_subset_filter _ subW
+  have card := Finset.card_le_card subFlat
+  have pf : ¬maskedFlat cut target := by simpa [maskedFlat, properWord] using cutProper
+  obtain ⟨n, budget, built⟩ := maskedBuild live cut submask pf
+  have starts : ∀ w ∈ projectedStock cut S, AvailableWord cut cutStock w := by
+    intro w hw
+    simp only [projectedStock, visibleWords, Finset.mem_insert, Finset.mem_image] at hw
+    rcases hw with rfl | rfl | ⟨x,hx,rfl⟩
+    · exact Or.inl rfl
+    · exact Or.inr (Or.inl rfl)
+    · exact supplies _ (sub _ hx)
+  obtain ⟨ys,len,built',out⟩ := buildableWords built starts
+  have lower := known ys built' out
+  omega
+
+def unpackWitnesses (stock : List Word) (codes : List Nat) : List Witness :=
+  List.rec [] (fun code _ rest =>
+    (stock.getD (code >>> 18) 0, (code >>> 9) &&& 511, code &&& 511) :: rest) codes
+
+def DagAuto (mask goal : Word) (select : Fin rows → Fin rows) : Prop :=
+  Function.Surjective select ∧ relabel select mask = mask ∧ relabel select goal = goal
+
+abbrev WordMoveStep := List (Word × Nat) × List (Word × Nat)
+abbrev WordMove := List WordMoveStep
+
+def mixStep (m : WordMoveStep) (w : Word) : Word :=
+  let left := List.rec 0 (fun (part,n) _ acc => ((w &&& part) <<< n) ||| acc) m.1
+  let right := List.rec 0 (fun (part,n) _ acc => ((w &&& part) >>> n) ||| acc) m.2
+  left ||| right
+
+def BitLinear (f : Word → Word) : Prop :=
+  ∀ w i, (f w).testBit i = true ↔ ∃ j, w.testBit j = true ∧ (f (2 ^ j)).testBit i = true
+
+theorem bitLinearZero : BitLinear (fun _ => 0) := by
+  simp [BitLinear]
+
+theorem bitLinearOr {f g : Word → Word} (hf : BitLinear f) (hg : BitLinear g) :
+    BitLinear (fun w => f w ||| g w) := by
+  intro w i
+  change ((f w ||| g w).testBit i = true) ↔ _
+  simp only [Nat.testBit_or, Bool.or_eq_true]
+  rw [hf w i, hg w i]
+  constructor
+  · rintro (⟨j,hw,hj⟩ | ⟨j,hw,hj⟩)
+    · exact ⟨j,hw,Or.inl hj⟩
+    · exact ⟨j,hw,Or.inr hj⟩
+  · rintro ⟨j,hw,hj | hj⟩
+    · exact Or.inl ⟨j,hw,hj⟩
+    · exact Or.inr ⟨j,hw,hj⟩
+
+theorem bitLinearLeft (mask n : Nat) : BitLinear (fun w => (w &&& mask) <<< n) := by
+  intro w i
+  simp only [Nat.testBit_shiftLeft, Nat.testBit_and, Nat.testBit_two_pow,
+    Bool.and_eq_true, decide_eq_true_eq]
+  constructor
+  · rintro ⟨h, hw, hm⟩
+    exact ⟨i-n,hw,h,rfl,hm⟩
+  · rintro ⟨j,hw,h,rfl,hm⟩
+    exact ⟨h,hw,hm⟩
+
+theorem bitLinearRight (mask n : Nat) : BitLinear (fun w => (w &&& mask) >>> n) := by
+  intro w i
+  simp only [Nat.testBit_shiftRight, Nat.testBit_and, Nat.testBit_two_pow,
+    Bool.and_eq_true, decide_eq_true_eq]
+  constructor
+  · rintro ⟨hw,hm⟩
+    exact ⟨n+i,hw,rfl,hm⟩
+  · rintro ⟨j,hw,rfl,hm⟩
+    exact ⟨hw,hm⟩
+
+theorem mixStepLinear (move : WordMoveStep) : BitLinear (mixStep move) := by
+  obtain ⟨left, right⟩ := move
+  unfold mixStep
+  apply bitLinearOr
+  · induction left with
+    | nil => exact bitLinearZero
+    | cons entry rest ih =>
+      obtain ⟨part, count⟩ := entry
+      exact bitLinearOr (bitLinearLeft part count) ih
+  · induction right with
+    | nil => exact bitLinearZero
+    | cons entry rest ih =>
+      obtain ⟨part, count⟩ := entry
+      exact bitLinearOr (bitLinearRight part count) ih
+
+def mixMove (move : WordMove) (w : Word) : Word :=
+  (List.rec (motive := fun _ => Word → Word) id
+    (fun step _ next w => next (mixStep step w)) move) w
+
+theorem bitLinearId : BitLinear id := by
+  intro w i
+  change w.testBit i = true ↔ ∃ j, w.testBit j = true ∧ (2 ^ j).testBit i = true
+  simp [Nat.testBit_two_pow]
+
+theorem bitLinearComp {f g : Word → Word} (hf : BitLinear f) (hg : BitLinear g) :
+    BitLinear (fun w => f (g w)) := by
+  intro w i
+  change (f (g w)).testBit i = true ↔ ∃ j, w.testBit j = true ∧ (f (g (2 ^ j))).testBit i = true
+  rw [hf]
+  constructor
+  · rintro ⟨j,gj,fj⟩
+    obtain ⟨k,wk,gk⟩ := (hg w j).mp gj
+    exact ⟨k,wk,(hf (g (2^k)) i).mpr ⟨j,gk,fj⟩⟩
+  · rintro ⟨j,wj,h⟩
+    obtain ⟨k,gk,fk⟩ := (hf (g (2^j)) i).mp h
+    exact ⟨k,(hg w k).mpr ⟨j,wj,gk⟩,fk⟩
+
+theorem mixMoveLinear (move : WordMove) : BitLinear (mixMove move) := by
+  induction move with
+  | nil => exact bitLinearId
+  | cons op ops ih =>
+    change BitLinear (fun w => mixMove ops (mixStep op w))
+    exact bitLinearComp ih (mixStepLinear op)
+
+def permuteAxes (axes : List Nat) (offset row : Nat) : Nat :=
+  offset ^^^ (List.rec (motive := fun _ => Nat → Nat) (fun _ => 0)
+    (fun j _ next i => (if row.testBit i then 1 <<< j else 0) ||| next (i + 1)) axes) 0
+
+theorem relabelLinear (select : Fin rows → Fin rows) : BitLinear (relabel select) := by
+  intro w i
+  by_cases inside : i < rows
+  · let ii : Fin rows := ⟨i,inside⟩
+    change (relabel select w).testBit ii.val = true ↔ _
+    rw [relabelBit]
+    constructor
+    · intro h
+      refine ⟨(select ii).val,h,?_⟩
+      change (relabel select (2 ^ (select ii).val)).testBit ii.val = true
+      rw [relabelBit, Nat.testBit_two_pow]
+      simp
+    · rintro ⟨j,h,bit⟩
+      change (relabel select (2^j)).testBit ii.val = true at bit
+      rw [relabelBit, Nat.testBit_two_pow, decide_eq_true_eq] at bit
+      exact bit ▸ h
+  · rw [relabelOutside _ _ _ (Nat.le_of_not_gt inside)]
+    simp [relabelOutside _ _ _ (Nat.le_of_not_gt inside)]
+
+theorem wordMoveAgreement {select : Fin rows → Fin rows} {mask : Word} {move : WordMove}
+    (bounded : Masked (fullMask rows) mask)
+    (basis : ∀ i : Fin rows, mask.testBit i.val = true →
+      mixMove move (2 ^ i.val) = relabel select (2 ^ i.val))
+    {w : Word} (masked : Masked mask w) : mixMove move w = relabel select w := by
+  apply Nat.eq_of_testBit_eq
+  intro i
+  apply Bool.eq_iff_iff.mpr
+  rw [mixMoveLinear, relabelLinear]
+  have source {j : Nat} (bit : w.testBit j = true) :
+      mixMove move (2^j) = relabel select (2^j) := by
+    have m : mask.testBit j = true := by
+      have eq := congrArg (fun x : Nat => x.testBit j) masked
+      simpa [Nat.testBit_and, bit] using eq
+    have within : j < rows := by
+      have eq := congrArg (fun x : Nat => x.testBit j) bounded
+      simpa [Nat.testBit_and, fullMask, Nat.testBit_two_pow_sub_one, m] using eq
+    exact basis ⟨j,within⟩ m
+  constructor <;> rintro ⟨j,hj,hi⟩
+  · exact ⟨j,hj,by rwa [← source hj]⟩
+  · exact ⟨j,hj,by rwa [source hj]⟩
+
+theorem relabelBasis {select inverse : Fin rows → Fin rows}
+    (left : ∀ i, inverse (select i) = i) :
+    ∀ j : Fin rows, select (inverse j) = j →
+      relabel select (2 ^ j.val) = 2 ^ (inverse j).val := by
+  intro j right
+  apply Nat.eq_of_testBit_eq
+  intro i
+  by_cases inside : i < rows
+  · let pos : Fin rows := ⟨i,inside⟩
+    change (relabel select (2 ^ j.val)).testBit pos.val = _
+    rw [relabelBit, Nat.testBit_two_pow, Nat.testBit_two_pow]
+    apply (Bool.eq_iff_iff).mpr
+    simp only [decide_eq_true_eq]
+    constructor
+    · intro eq
+      have e : j = select pos := Fin.ext eq
+      rw [e,left]
+    · intro eq
+      have hp : inverse j = pos := Fin.ext eq
+      rw [← hp, right]
+  · rw [relabelOutside _ _ _ (Nat.le_of_not_gt inside), Nat.testBit_two_pow]
+    have ne : (inverse j).val ≠ i := by have := (inverse j).isLt; omega
+    simp [ne]
+
+theorem dagAutoFromMove {select inverse : Fin rows → Fin rows} {mask goal : Word} {move : WordMove}
+    (left : ∀ i, inverse (select i) = i)
+    (right : ∀ i, select (inverse i) = i)
+    (bm : Masked (fullMask rows) mask)
+    (gm : Masked mask goal)
+    (basis : ∀ i : Fin rows, mask.testBit i.val = true →
+      mixMove move (2 ^ i.val) = 2 ^ (inverse i).val)
+    (sameMask : mixMove move mask = mask) (sameGoal : mixMove move goal = goal) :
+    DagAuto mask goal select ∧ ∀ w, Masked mask w → mixMove move w = relabel select w := by
+  have agree {w : Word} (hw : Masked mask w) : mixMove move w = relabel select w :=
+    wordMoveAgreement bm (fun i h => (basis i h).trans (relabelBasis left i (right i)).symm) hw
+  exact ⟨⟨fun i => ⟨inverse i,right i⟩,(agree (by simp [Masked])).symm.trans sameMask,
+    (agree gm).symm.trans sameGoal⟩,fun _ h => agree h⟩
+
+theorem maskedBelow {mask w : Word} (bm : Masked (fullMask rows) mask)
+    (bw : Masked mask w) : Masked (fullMask rows) w := by
+  unfold Masked at *
+  rw [← bw, Nat.land_assoc, bm, bw]
+
+theorem maskedTransfer {mask w : Word} {select : Fin rows → Fin rows}
+    (same : relabel select mask = mask) (hw : Masked mask w) :
+    Masked mask (relabel select w) := by
+  unfold Masked at *
+  rw [← same, ← relabelAnd, hw]
+
+theorem liveMaskedImage {mask goal : Word} {select : Fin rows → Fin rows}
+    (auto : DagAuto mask goal select) (maskBounds : Masked (fullMask rows) mask)
+    {k t : Nat} {S : Finset Word} (live : LiveWord mask goal k t S)
+    (masked : ∀ w ∈ S, Masked mask w) :
+    LiveWord mask goal k t (S.image (relabel select)) := by
+  let f := relabel select
+  have hmask : f mask = mask := auto.2.1
+  have inj {a b : Word} (ma : Masked mask a) (mb : Masked mask b) :
+      f a = f b → a = b :=
+    relabelInj select auto.1 (maskedBelow maskBounds ma) (maskedBelow maskBounds mb)
+  have proper {a : Word} (ma : Masked mask a) (ha : properWord mask a) :
+      properWord mask (f a) := by
+    exact ⟨fun eq => ha.1 (inj ma (by simp [Masked]) (eq.trans (relabelZero select).symm)),
+      fun eq => ha.2 (inj ma (by simp [Masked]) (eq.trans hmask.symm))⟩
+  have freshImage {S : Finset Word} {v : Word} (hv : v ∉ S) (mv : Masked mask v)
+      (ms : ∀ w ∈ S, Masked mask w) : f v ∉ S.image f := by
+    intro hw
+    obtain ⟨w,hs,eq⟩ := Finset.mem_image.mp hw
+    exact hv (inj (ms w hs) mv eq ▸ hs)
+  induction live using LiveWord.ind with
+  | stop hp =>
+    rw [Finset.image_singleton, auto.2.2]
+    exact LiveWord.stop hp
+  | @unary k t U a ha fresh tail ih =>
+    let v := mask ^^^ a
+    have ma := masked a (Finset.mem_insert_self ..)
+    have mv : Masked mask v := by
+      apply maskedGate (bank := [a]) (by simpa using ma)
+      exact Or.inl ⟨a, Or.inr (Or.inr (by simp)), rfl⟩
+    have hnew : ∀ w ∈ insert v U, Masked mask w := by
+      intro w h
+      rcases Finset.mem_insert.mp h with rfl | hU
+      · exact mv
+      · exact masked _ (Finset.mem_insert_of_mem hU)
+    have fve : f v = mask ^^^ f a := by
+      change relabel select (mask ^^^ a) = _
+      rw [relabelXor, auto.2.1]
+    have ht := ih hnew
+    have hf := freshImage fresh mv masked
+    change LiveWord mask goal (k+1) (t+1) ((insert a U).image f)
+    rw [Finset.image_insert] at ht hf
+    change LiveWord mask goal k t (insert (f v) (U.image f)) at ht
+    rw [fve] at ht hf
+    rw [Finset.image_insert]
+    exact LiveWord.unary (proper ma ha) hf ht
+  | @binary k t U a b op pa pb ab fresh tail ih =>
+    let v := binWord op a b
+    have ma := masked a (Finset.mem_insert_self ..)
+    have mb := masked b (Finset.mem_insert_of_mem (Finset.mem_insert_self ..))
+    have mv : Masked mask v := by
+      apply maskedGate (bank := [a,b]) (by simpa using And.intro ma mb)
+      exact Or.inr ⟨a,b,Or.inr (Or.inr (by simp)),Or.inr (Or.inr (by simp)),by
+        cases op <;> simp [v, binWord]⟩
+    have hnew : ∀ w ∈ insert v U, Masked mask w := by
+      intro w h
+      rcases Finset.mem_insert.mp h with rfl | hU
+      · exact mv
+      · exact masked _ (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hU))
+    have fve : f v = binWord op (f a) (f b) := by
+      cases op
+      · exact relabelAnd ..
+      · exact relabelOr ..
+    have ht := ih hnew
+    have hf := freshImage fresh mv masked
+    change LiveWord mask goal (k+1) t ((insert a (insert b U)).image f)
+    rw [Finset.image_insert] at ht
+    change LiveWord mask goal k t (insert (f v) (U.image f)) at ht
+    rw [fve] at ht
+    rw [Finset.image_insert, Finset.image_insert, fve] at hf
+    rw [Finset.image_insert, Finset.image_insert]
+    exact LiveWord.binary (proper ma pa) (proper mb pb) (fun h => ab (inj ma mb h)) hf ht
+
+def dagMoveWords (m : WordMove) (ws : List Word) : List Word :=
+  List.rec [] (fun w _ next => insertWord (mixMove m w) next) ws
+
+theorem dagMoveSet {m : WordMove} {ws : List Word} {select : Fin rows → Fin rows}
+    (agree : ∀ w ∈ ws, mixMove m w = relabel select w) :
+    (dagMoveWords m ws).toFinset = ws.toFinset.image (relabel select) := by
+  induction ws with
+  | nil => simp [dagMoveWords]
+  | cons w ws ih =>
+    change (insertWord (mixMove m w) (dagMoveWords m ws)).toFinset = _
+    rw [insertWordSet, ih (fun w hw => agree _ (List.mem_cons_of_mem _ hw)),
+      agree _ List.mem_cons_self, List.toFinset_cons, Finset.image_insert]
+
+abbrev RowChart := { rows : List Nat // rows.length = 24 }
+
+def chartRow (chart : RowChart) (i : Nat) : Nat :=
+  chart.val.getD i 0
+
+def chartBits (w : Word) (rows : List Nat) : Word :=
+  List.rec 0 (fun r _ packed => ((w >>> r) &&& 1) ||| (packed <<< 1)) rows
+
+theorem chartBitsBit (w : Word) (rows : List Nat) (i : Nat) (hi : i < rows.length) :
+    (chartBits w rows).testBit i = w.testBit (rows.getD i 0) := by
+  induction rows generalizing i with
+  | nil => simp at hi
+  | cons row rows ih =>
+    change (((w >>> row) &&& 1) ||| (chartBits w rows <<< 1)).testBit i = _
+    rw [Nat.testBit_or, Nat.testBit_and, Nat.testBit_shiftRight, Nat.testBit_shiftLeft]
+    cases i with
+    | zero => simp
+    | succ i =>
+      have lt : i < rows.length := by simpa using hi
+      simp [ih i lt, Nat.testBit_succ]
+
+def chartWord (chart : RowChart) (w : Word) : Word := chartBits w chart.val
+
+def ChartOK (goal : Word) (chart : RowChart) : Prop :=
+  (∀ i : Fin 12, goal.testBit (chartRow chart i.val) = true) ∧
+  (∀ i : Fin 12, goal.testBit (chartRow chart (12+i.val)) = false)
+
+def chartCheck (goal : Word) (chart : Option RowChart) : Bool :=
+  chart.all fun c => @decide (ChartOK goal c) (by unfold ChartOK; infer_instance)
+
+theorem chartOfCheck {goal : Word} {chart : Option RowChart}
+    (ok : chartCheck goal chart = true) (c : RowChart) (eq : chart = some c) :
+    ChartOK goal c := by
+  subst chart
+  unfold ChartOK
+  exact of_decide_eq_true ok
+
+theorem chartWordBit (chart : RowChart) (w : Word) {i : Nat} (hi : i < 24) :
+    (chartWord chart w).testBit i = w.testBit (chartRow chart i) := by
+  exact chartBitsBit w chart.val i (by rw [chart.property]; exact hi)
+
+theorem chartPos {goal : Word} {chart : RowChart} (ok : ChartOK goal chart) {i : Nat} (hi : i < 12) :
+    goal.testBit (chartRow chart i) = true := ok.1 ⟨i,hi⟩
+
+theorem chartNeg {goal : Word} {chart : RowChart} (ok : ChartOK goal chart) {i : Nat} (hi : i < 12) :
+    goal.testBit (chartRow chart (12+i)) = false := ok.2 ⟨i,hi⟩
+
+theorem chartRectangles {goal : Word} {chart : RowChart} {ws : List Word}
+    (ok : ChartOK goal chart) (nd : ws.Nodup) (kw : KWPartition goal ws.toFinset) :
+    PackedRect.rectOK1 (ws.map (chartWord chart)) = true := by
+  obtain ⟨f, good, rectangle⟩ := kw
+  let label := fun p n => f (chartRow chart p) (chartRow chart (12+n))
+  let part := fun w => ((fun q : Nat => q < 144 ∧ label (q/12) (q % 12) = w),
+    PackedRect.rectW (chartWord chart w))
+  have partition : PackedRect.Part (ws.map part) := by
+    refine ⟨?_,?_,?_,?_,?_⟩
+    · intro z hz
+      obtain ⟨w,_,rfl⟩ := List.mem_map.mp hz
+      intro p n p' n' hp hn hp' hn' h h'
+      have divmod (a b : Nat) (lt : b < 12) :
+          (12*a+b)/12 = a ∧ (12*a+b)%12 = b := by omega
+      have h1 := h.2
+      have h2 := h'.2
+      rw [(divmod p n hn).1, (divmod p n hn).2] at h1
+      rw [(divmod p' n' hn').1, (divmod p' n' hn').2] at h2
+      refine ⟨by omega,?_⟩
+      rw [(divmod p n' hn').1, (divmod p n' hn').2]
+      exact (rectangle _ _ _ _ (chartPos ok hp) (chartPos ok hp') (chartNeg ok hn)
+        (chartNeg ok hn') (h1.trans h2.symm)).trans h1
+    · intro z hz q hq
+      obtain ⟨w,_,rfl⟩ := List.mem_map.mp hz
+      exact hq.1
+    · rw [List.pairwise_map]
+      exact List.Pairwise.imp (fun hne q h1 h2 => hne (h1.2.symm.trans h2.2)) nd
+    · intro q hq
+      have member := (good _ _ (chartPos ok (show q/12 < 12 by omega))
+        (chartNeg ok (Nat.mod_lt q (by decide : 0 < 12)))).1
+      exact ⟨_, List.mem_map.mpr ⟨_,List.mem_toFinset.mp member,rfl⟩,hq,rfl⟩
+    · intro z hz q hq
+      obtain ⟨w,_,rfl⟩ := List.mem_map.mp hz
+      obtain ⟨bound, same⟩ := hq
+      have hp : q/12 < 12 := by omega
+      have hn : q % 12 < 12 := Nat.mod_lt _ (by decide)
+      have h := (good _ _ (chartPos ok hp) (chartNeg ok hn)).2
+      change (label (q/12) (q % 12)).testBit (chartRow chart (q/12)) = true ∧
+        (label (q/12) (q % 12)).testBit (chartRow chart (12+q % 12)) = false at h
+      rw [same] at h
+      have bit := PackedRect.rectW_tb (chartWord chart w) (q/12) (q % 12) hp hn
+        ((chartWordBit chart w (by omega)).trans h.1)
+        ((chartWordBit chart w (by omega)).trans h.2)
+      rwa [Nat.div_add_mod] at bit
+  have hw := PackedRect.avOK1_sound partition
+  simpa only [PackedRect.rectOK1, List.map_map, Function.comp_def, part] using hw
+
+theorem tightChart {goal mask : Word} {chart : RowChart} {ws : List Word} {fuel : Nat}
+    (ok : ChartOK goal chart) (tight : ws.length = fuel + 1)
+    (viable : WordViable mask goal (fuel,ws,[])) : PackedRect.rectOK1 (ws.map (chartWord chart)) = true := by
+  obtain ⟨nd,k,t,cap,live⟩ := viable
+  change k ≤ fuel at cap
+  have card := (liveWordSize live).2
+  rw [List.toFinset_card_of_nodup nd] at card
+  change (ws : List Word).length + t ≤ k + 1 at card
+  have ht : t = 0 := by omega
+  have hk : ws.toFinset.card = k + 1 := by
+    have q : ws.toFinset.card = ws.length := List.toFinset_card_of_nodup nd
+    omega
+  subst t
+  exact chartRectangles ok nd (kwFromLive live hk)
+
+def dagForceWord {α : Type} (word : Word) (cont : Word → α) : α :=
+  Nat.rec (cont 0) (fun k _ => cont (k + 1)) word
+
+theorem dagForceWordEq {α : Type} (word : Word) (cont : Word → α) :
+    dagForceWord word cont = cont word := by cases word <;> rfl
+
+def dagForceWords (words : List Word) (cont : List Word → Bool) : Bool :=
+  (List.rec (motive := fun _ => (List Word → Bool) → Bool) (fun k => k [])
+    (fun w _ next k => dagForceWord w (fun v => next (fun rest => k (v :: rest)))) words) cont
+
+theorem dagForceWordsEq (words : List Word) (cont : List Word → Bool) :
+    dagForceWords words cont = cont words := by
+  induction words generalizing cont with
+  | nil => rfl
+  | cons w ws ih =>
+    change dagForceWord w (fun v => dagForceWords ws (fun rest => cont (v :: rest))) = _
+    rw [dagForceWordEq, ih]
+
+def dagBoundCloses (target : Word) (state : RowState) (bound : Bound) : Bool :=
+  let (mask, stock, lower, goal) := bound
+  let (fuel, ws, history) := state
+  (target &&& mask) == goal && goal != 0 && goal != mask &&
+    dagForceWord (fuel - flatCount mask ws) (fun remaining =>
+      if Nat.blt remaining lower then
+        dagForceWords (recipeStart mask stock ws) (fun start =>
+          if Nat.blt (start.length + remaining) lower then
+            dagForceWords (recipeClosure mask stock history start) (fun needed =>
+              if Nat.blt (needed.length + remaining) lower then
+                dagForceWords (replayRecipes mask needed history.reverse stock) (fun replay =>
+                  decide (replay.length + remaining < lower) &&
+                    ws.all (fun w => availableB mask (replay ++ stock) (w &&& mask)))
+              else false)
+          else false)
+      else false)
+
+theorem dagBoundClosesEq (target : Word) (state : RowState) (bound : Bound) :
+    dagBoundCloses target state bound = boundCloses target state bound := by
+  obtain ⟨fuel, ws, history⟩ := state
+  obtain ⟨mask, stock, lower, goal⟩ := bound
+  simp [dagBoundCloses, boundCloses, dagForceWordsEq, dagForceWordEq, Nat.blt_eq]
+
+def dagKnownCloses (target : Word) (bounds : List Bound) (state : RowState) : Bool :=
+  List.rec false (fun bound _ later => dagBoundCloses target state bound || later) bounds
+
+theorem dagKnownClosesEq (target : Word) (bounds : List Bound) (state : RowState) :
+    dagKnownCloses target bounds state = knownCloses target bounds state := by
+  induction bounds with
+  | nil => rfl
+  | cons bound bounds ih =>
+    change (dagBoundCloses target state bound || dagKnownCloses target bounds state) =
+      (boundCloses target state bound || knownCloses target bounds state)
+    rw [dagBoundClosesEq, ih]
+
+abbrev DagLink := Nat × Nat
+abbrev DagLinks := Nat → Nat → Option DagLink
+
+def dagAllowedRoot (witnesses : List Witness) (ws : List Word) : Bool :=
+  witnesses.all (fun entry => ws.contains (witnessWord entry))
+
+def dagTrace (mask : Word) (stock : List Word) (fuel : Nat) (forest : Forest)
+    (i : Nat) : Option RowState :=
+  (Nat.rec (motive := fun _ => Nat → Option RowState) (fun _ => none)
+    (fun _ previous j =>
+      let (parent, token) := forest j
+      if parent == 0 then
+        if token < 2 ^ stock.length then some (rootState stock fuel token) else none
+      else (previous (parent - 1)).bind (childState mask token)) (fuel + 1)) i
+
+def dagRef (count : Nat) (states : Nat → Option RowState)
+    (moves : Array WordMove) (links : DagLinks) (parent token : Nat) (state : RowState) : Bool :=
+  match links parent token with
+  | none => false
+  | some (destination, auto) =>
+    Nat.blt destination count &&
+      match states destination with
+      | none => false
+      | some saved =>
+        saved.1 == state.1 &&
+          if auto == 0 then saved.2.1 == state.2.1
+          else match moves[auto-1]? with
+               | none => false
+               | some m => saved.2.1 == dagMoveWords m state.2.1
+
+def dagPartition (directed : Bool) (ws : List Word) : Word → Word → Bool :=
+  List.rec
+    (fun p n => Nat.beq p 0 || Nat.beq n 0)
+    (fun w _ rest p n =>
+      Nat.beq p 0 || Nat.beq n 0 ||
+      dagForceWord (p &&& w) (fun up =>
+        dagForceWord (n &&& w) (fun down =>
+          rest up down &&
+            dagForceWord (p ^^^ up) (fun offP =>
+              dagForceWord (if directed then n else n ^^^ down) (rest offP))))) ws
+
+theorem dagOffBits {v w : Word} {i : Nat} (bit : (v ^^^ (v &&& w)).testBit i = true) :
+    v.testBit i = true ∧ w.testBit i = false := by
+  rw [Nat.testBit_xor, Nat.testBit_and] at bit
+  cases hv : v.testBit i <;> cases hw : w.testBit i <;> simp [hv, hw] at bit ⊢
+
+theorem dagPartitionSound {directed : Bool} {ws : List Word} {positive negative : Word}
+    (fail : dagPartition directed ws positive negative = false) :
+    ∃ p n, positive.testBit p = true ∧ negative.testBit n = true ∧
+      ∀ w ∈ ws, if directed then w.testBit p = true → w.testBit n = true
+                  else w.testBit p = w.testBit n := by
+  have nonempty {w : Word} (hn : w ≠ 0) : ∃ j, w.testBit j = true := by
+    by_contra! all
+    apply hn
+    apply Nat.eq_of_testBit_eq
+    intro i
+    simp [all i]
+  induction ws generalizing positive negative with
+  | nil =>
+    change (Nat.beq positive 0 || Nat.beq negative 0) = false at fail
+    simp only [Bool.or_eq_false_iff] at fail
+    obtain ⟨p,hp⟩ := nonempty (w := positive) (fun eq => by simp [eq] at fail)
+    obtain ⟨n,hn⟩ := nonempty (w := negative) (fun eq => by simp [eq] at fail)
+    exact ⟨p,n,hp,hn,by simp⟩
+  | cons w ws ih =>
+    change (Nat.beq positive 0 || Nat.beq negative 0 ||
+      dagForceWord (positive &&& w) (fun up =>
+        dagForceWord (negative &&& w) (fun down =>
+          dagPartition directed ws up down &&
+            dagForceWord (positive ^^^ up) (fun offP =>
+              dagForceWord (if directed then negative else negative ^^^ down)
+                (dagPartition directed ws offP))))) = false at fail
+    simp only [dagForceWordEq, Bool.or_eq_false_iff, Bool.and_eq_false_iff] at fail
+    rcases fail.2 with on | off
+    · obtain ⟨p,n,hp,hn,agree⟩ := ih on
+      rw [Nat.testBit_and, Bool.and_eq_true] at hp hn
+      refine ⟨p,n,hp.1,hn.1,?_⟩
+      intro a ha
+      rcases List.mem_cons.mp ha with rfl | tail
+      · simp [hp.2, hn.2]
+      · exact agree _ tail
+    · obtain ⟨p,n,hp,hn,agree⟩ := ih off
+      have hp' := dagOffBits hp
+      cases mode : directed
+      · have hn' : negative.testBit n = true ∧ w.testBit n = false := by
+          apply dagOffBits
+          simpa [mode] using hn
+        refine ⟨p,n,hp'.1,hn'.1,?_⟩
+        intro a ha
+        rcases List.mem_cons.mp ha with rfl | tail
+        · simp [hp'.2, hn'.2]
+        · simpa [mode] using agree _ tail
+      · have hn' : negative.testBit n = true := by simpa [mode] using hn
+        refine ⟨p,n,hp'.1,hn',?_⟩
+        intro a ha
+        rcases List.mem_cons.mp ha with rfl | tail
+        · simp [hp'.2]
+        · simpa [mode] using agree _ tail
+
+theorem dagPartitionLive {mask goal : Word} {ws : List Word} {k t : Nat} {directed : Bool}
+    (goalMask : Masked mask goal) (live : LiveWord mask goal k t ws.toFinset)
+    (noNot : directed = true → t = 0) :
+    dagPartition directed ws goal (mask ^^^ goal) = true := by
+  by_contra fail
+  have openPair : dagPartition directed ws goal (mask ^^^ goal) = false := by
+    cases h : dagPartition directed ws goal (mask ^^^ goal) <;> simp_all
+  obtain ⟨p,n,hp,hn,agree⟩ := dagPartitionSound openPair
+  have pm := positiveInMask goalMask hp
+  have nm : mask.testBit n = true ∧ goal.testBit n = false := by
+    rw [Nat.testBit_xor] at hn
+    have implied := fun ht : goal.testBit n = true => positiveInMask goalMask ht
+    cases hm : mask.testBit n <;> cases ht : goal.testBit n <;> simp_all
+  cases mode : directed with
+  | false =>
+    have same := liveAgrees live (pm.trans nm.1.symm) (fun w hw => by
+      simpa [mode,AgreesAt] using agree w (List.mem_toFinset.mp hw))
+    simp [AgreesAt, hp, nm.2] at same
+  | true =>
+    have ht := noNot mode
+    subst t
+    obtain ⟨w,hw,a,b⟩ := liveDirected live hp nm.2
+    have same := agree w (List.mem_toFinset.mp hw)
+    simp [mode, a, b] at same
+
+abbrev DagSample := Nat × Nat
+abbrev DagSignals := Word × Word
+abbrev DagCounts := Word × Word × Word
+
+def dagForceCache (tags : List DagSignals) (use : List DagSignals → Bool) : Bool :=
+  (List.rec (motive := fun _ => (List DagSignals → Bool) → Bool) (fun k => k [])
+    (fun tag _ next k =>
+      dagForceWord tag.1 (fun up => dagForceWord tag.2 (fun down =>
+        next (fun tail => k ((up,down)::tail))))) tags) use
+
+theorem dagForceCacheEq (tags : List DagSignals) (use : List DagSignals → Bool) :
+    dagForceCache tags use = use tags := by
+  induction tags generalizing use with
+  | nil => rfl
+  | cons tag rest ih =>
+    obtain ⟨a,b⟩ := tag
+    change dagForceWord a (fun up => dagForceWord b (fun down =>
+      dagForceCache rest (fun tail => use ((up,down)::tail)))) = _
+    simp only [dagForceWordEq, ih]
+
+def dagSignalContrast (directed : Bool) (full : Word) (tag : DagSignals) : Word :=
+  if directed then tag.1 &&& (tag.2 ^^^ full) else tag.1 ^^^ tag.2
+
+def dagCountStep (acc : DagCounts) (column : Word) : DagCounts :=
+  (acc.1 ||| column, acc.2.1 ||| (acc.1 &&& column), acc.2.2 ||| (acc.2.1 &&& column))
+
+def dagCountSigns (directed : Bool) (full : Word) (tags : List DagSignals)
+    (use : DagCounts → Bool) : Bool :=
+  (List.rec (motive := fun _ => (DagCounts → Bool) → Bool) (fun k => k (0,0,0))
+    (fun tag _ more k =>
+      dagForceWord (dagSignalContrast directed full tag) (fun column =>
+        more (fun acc =>
+          dagForceWord (acc.1 ||| column) (fun once =>
+            dagForceWord (acc.2.1 ||| (acc.1 &&& column)) (fun twice =>
+              dagForceWord (acc.2.2 ||| (acc.2.1 &&& column)) (fun thrice => k (once,twice,thrice)))))))
+    tags) use
+
+theorem dagCountSignsEq (directed : Bool) (full : Word) (tags : List DagSignals)
+    (use : DagCounts → Bool) : dagCountSigns directed full tags use =
+    use (tags.foldr (fun tag acc => dagCountStep acc (dagSignalContrast directed full tag)) (0,0,0)) := by
+  induction tags generalizing use with
+  | nil => rfl
+  | cons tag tags ih =>
+    change dagForceWord (dagSignalContrast directed full tag) (fun column =>
+      dagCountSigns directed full tags (fun acc =>
+        dagForceWord (acc.1 ||| column) (fun once =>
+          dagForceWord (acc.2.1 ||| (acc.1 &&& column)) (fun twice =>
+            dagForceWord (acc.2.2 ||| (acc.2.1 &&& column)) (fun thrice => use (once,twice,thrice)))))) = _
+    simp only [dagForceWordEq, ih]
+    rfl
+
+def dagHighest (value : Word) : Nat :=
+  (Nat.rec (motive := fun _ => Word → Nat → Nat) (fun _ offset => offset)
+    (fun i next w offset =>
+      let shift := 1 <<< i
+      dagForceWord (w >>> shift) (fun upper =>
+        if Nat.beq upper 0 then next w offset else next upper (offset+shift))) 8) value 0
+
+def dagSampleMiss (sample : DagSample) (full : Word) (normal tight : DagCounts)
+    (x y out : DagSignals) (directed : Bool) (op keep : Nat) : List Nat :=
+  let counts := if directed then tight else normal
+  let dx := if keep.testBit 0 then 0 else dagSignalContrast directed full x
+  let dy := if op == 2 || keep.testBit 1 then 0 else dagSignalContrast directed full y
+  let rest := counts.2.2 ||| (counts.2.1 ^^^ (counts.2.1 &&& dx &&& dy)) |||
+    (counts.1 ^^^ (counts.1 &&& (dx ||| dy)))
+  dagForceWord ((rest ||| dagSignalContrast directed full out) ^^^ full) (fun missing =>
+    if Nat.beq missing 0 then [] else [unpack sample.1 18 (dagHighest missing)])
+
+def dagPairReject (mask goal : Word) (directed : Bool) (ws : List Word) (pairs : List Nat) : Bool :=
+  pairs.any fun code =>
+    let p := code &&& 511
+    let n := code >>> 9
+    goal.testBit p && mask.testBit n && !goal.testBit n &&
+      ws.all (fun w => if directed then !(w.testBit p) || w.testBit n
+                       else w.testBit p == w.testBit n)
+
+theorem dagPairsOpen {mask goal : Word} {ws : List Word} {pairs : List Nat} {k t : Nat} {directed : Bool}
+    (masked : Masked mask goal) (live : LiveWord mask goal k t ws.toFinset)
+    (noNot : directed = true → t = 0) : dagPairReject mask goal directed ws pairs = false := by
+  apply Bool.eq_false_iff.mpr
+  intro close
+  obtain ⟨code,_,check⟩ := List.any_eq_true.mp close
+  simp only [Bool.and_eq_true, Bool.not_eq_true, List.all_eq_true] at check
+  obtain ⟨⟨⟨hp, mn⟩, hn⟩, bank⟩ := check
+  have neg : goal.testBit (code >>> 9) = false := by simpa using hn
+  cases mode : directed
+  · have h := liveAgrees live ((positiveInMask masked hp).trans mn.symm) (fun w hw => by
+      have pair := bank _ (List.mem_toFinset.mp hw)
+      simpa [mode, AgreesAt] using pair)
+    simp [AgreesAt, hp, neg] at h
+  · have ht := noNot mode
+    subst t
+    obtain ⟨word,mem,on,off⟩ := liveDirected live hp neg
+    have pair := bank _ (List.mem_toFinset.mp mem)
+    simp [mode,on,off] at pair
+
+def dagLocal (mask goal : Word) (chart : Option RowChart)
+    (cut : CutCheck) (state : RowState) : Bool :=
+  let (fuel,ws,_) := state
+  ws.length > fuel + 1 ||
+    (!ws.contains goal &&
+      (fuel == 0 ||
+        (if ws.length == fuel + 1 then
+           chart.any (fun c => !PackedRect.rectOK1 (ws.map (chartWord c)))
+         else false) ||
+        cut state ||
+        (if ws.length == fuel + 1 then !dagPartition true ws goal (mask ^^^ goal)
+         else !dagPartition false ws goal (mask ^^^ goal))))
+
+def dagSizeFloor (n op keep : Nat) : Nat :=
+  (n - (if keep.testBit 0 then 0 else 1) -
+    (if op == 2 || keep.testBit 1 then 0 else 1)) + 1
+
+def dagTooWide (n fuel token : Nat) : Bool :=
+  dagSizeFloor n (token / 4 % 3) (token % 4) > (fuel-1) + 1
+
+def dagKept (ws : List Word) (op keep x y : Nat) : List Word :=
+  keepWord (op == 2 || keep.testBit 1) y (keepWord (keep.testBit 0) x ws)
+
+def dagGateWord (mask op x y : Word) : Word :=
+  if Nat.beq op 0 then x &&& y else if Nat.beq op 1 then x ||| y else mask ^^^ x
+
+def dagDirectChild (mask : Word) (state : RowState) (a b op keep x y out : Nat) : Option RowState :=
+  let (fuel, ws, history) := state
+  if fuel == 0 || b ≥ ws.length || (if op == 2 then a != b || keep ≥ 2 else a ≥ b) then none
+  else if out == 0 || out == mask || ws.contains out then none
+  else
+    some (fuel-1, insertWord out (dagKept ws op keep x y), (out,x,y) :: history)
+
+theorem dagDirectChildEq {mask a b op keep : Nat} {state : RowState}
+    (hb : b < 64) (hop : op < 3) (hk : keep < 4) :
+    let x := state.2.1.getD a 0
+    let y := state.2.1.getD b 0
+    dagDirectChild mask state a b op keep x y (dagGateWord mask op x y) =
+      childState mask (gateToken a b op keep) state := by
+  obtain ⟨fuel,ws,history⟩ := state
+  obtain ⟨keepEq,opEq,aEq,bEq⟩ := gateTokenFields (a := a) hb hop hk
+  simp only [childState, keepEq, opEq, aEq, bEq]
+  rfl
+
+abbrev DagTagged := Word × DagSignals
+
+def dagTagBases (stock : List Word) (positive negative width : Nat) : List DagTagged :=
+  (List.rec (motive := fun _ => Nat → List DagTagged) (fun _ => [])
+    (fun w _ next i => (w, unpack positive width i, unpack negative width i) :: next (i+1)) stock) 0
+
+def dagTagRoot (bank : List DagTagged) (token : Nat) : List DagTagged :=
+  (List.rec (motive := fun _ => Nat → List DagTagged) (fun _ => [])
+    (fun tag _ next k =>
+      if Nat.beq (k &&& 1) 0 then next (k >>> 1) else tag :: next (k >>> 1)) bank) token
+
+def dagTagKeep (keep : Bool) (w : Word) (bank : List DagTagged) : List DagTagged :=
+  if keep then bank
+  else List.rec [] (fun tag tail next => if Nat.beq tag.1 w then tail else tag :: next) bank
+
+def dagTagInsert (tag : DagTagged) (bank : List DagTagged) : List DagTagged :=
+  List.rec [tag] (fun old tail next => if Nat.ble tag.1 old.1 then tag :: old :: tail else old :: next) bank
+
+def dagTagStep (mask full token : Word) (bank : List DagTagged) : List DagTagged :=
+  let keep := token % 4
+  let op := token / 4 % 3
+  let x := bank.getD (token / (4*3*64)) (0,0,0)
+  let y := bank.getD (token / (4*3) % 64) (0,0,0)
+  let tag := (dagGateWord mask op x.1 y.1, dagGateWord full op x.2.1 y.2.1, dagGateWord full op x.2.2 y.2.2)
+  dagTagInsert tag (dagTagKeep (op == 2 || keep.testBit 1) y.1 (dagTagKeep (keep.testBit 0) x.1 bank))
+
+def dagTraceTags (mask width : Word) (root : List DagTagged) (fuel : Nat) (forest : Forest)
+    (i : Nat) : List DagSignals :=
+  let tags := (Nat.rec (motive := fun _ => Nat → List DagTagged) (fun _ => [])
+    (fun _ previous j =>
+      let (parent, token) := forest j
+      if Nat.beq parent 0 then dagTagRoot root token
+      else dagTagStep mask (fullMask width) token (previous (parent-1))) (fuel+1)) i
+  List.rec [] (fun tag _ rest => tag.2 :: rest) tags
+
+def dagPackWords (ws : List Word) : Word :=
+  List.rec 0 (fun w _ tail => (w &&& fullMask 512) ||| (tail <<< 512)) ws
+
+def dagLaneMarks (n : Nat) : Word :=
+  Nat.rec 0 (fun _ more => 1 ||| (more <<< 512)) n
+
+def dagOmitted (a b : Nat) (left right : Bool) : Word :=
+  (if left then 0 else 1 <<< (512*a)) ||| (if right then 0 else 1 <<< (512*b))
+
+def dagPackedPair (mask goal packed marks erased out : Word) (directed : Bool) (pairs : List Nat) : Bool :=
+  pairs.any fun code =>
+    dagForceWord code (fun code =>
+      dagForceWord (code &&& 511) (fun p =>
+        dagForceWord (code >>> 9) (fun n =>
+          let up := (packed >>> p) &&& marks
+          let down := (packed >>> n) &&& marks
+          let contrast := if directed then up &&& (down ^^^ marks) else up ^^^ down
+          let gateOK := if directed then !out.testBit p || out.testBit n else out.testBit p == out.testBit n
+          goal.testBit p && mask.testBit n && !goal.testBit n && Nat.blt p 512 && Nat.blt n 512 &&
+            gateOK && Nat.beq (contrast &&& (marks ^^^ erased)) 0)))
+
+theorem dagPackBits {ws : List Word} {i row : Nat} (inside : i < ws.length) (width : row < 512) :
+    (dagPackWords ws).testBit (512*i+row) = (ws.getD i 0).testBit row := by
+  induction ws generalizing i with
+  | nil => simp at inside
+  | cons w ws ih =>
+    change ((w &&& fullMask 512) ||| (dagPackWords ws <<< 512)).testBit (512*i+row) = _
+    rw [Nat.testBit_or, Nat.testBit_and, Nat.testBit_shiftLeft]
+    cases i with
+    | zero => simp [fullMask, Nat.testBit_two_pow_sub_one, width, Nat.not_le.mpr width]
+    | succ i =>
+      have hi : i < ws.length := by simpa using inside
+      have crossed : 512 ≤ 512*i.succ+row := by omega
+      have offset : 512*i.succ+row-512 = 512*i+row := by omega
+      have past : ¬ 512*i.succ+row < 512 := by omega
+      simp [crossed, offset, fullMask, Nat.testBit_two_pow_sub_one, past, ih hi]
+
+theorem dagMarkBits {length i : Nat} (inside : i < length) :
+    (dagLaneMarks length).testBit (512*i) = true := by
+  induction length generalizing i with
+  | zero => omega
+  | succ length ih =>
+    change (1 ||| (dagLaneMarks length <<< 512)).testBit (512*i) = true
+    rw [Nat.testBit_or, Nat.testBit_shiftLeft]
+    cases i with
+    | zero => simp
+    | succ i =>
+      have hi : i < length := by omega
+      have crossed : 512 ≤ 512*i.succ := by omega
+      have offset : 512*i.succ-512 = 512*i := by omega
+      simp [crossed, offset, ih hi]
+
+def dagCheckChildren (mask goal : Word) (chart : Option RowChart) (cut : CutCheck)
+    (reference : Nat → RowState → Bool) (state : RowState) (sample : DagSample) (tags : List DagSignals) : Bool :=
+  let n := state.2.1.length
+  (n ≤ 64) && !state.2.1.contains goal &&
+  dagForceWord (dagPackWords state.2.1) (fun packed =>
+    dagForceWord (dagLaneMarks n) (fun marks =>
+      dagForceCache tags (fun tags =>
+    dagForceWord (fullMask sample.2) (fun full =>
+      dagCountSigns false full tags (fun normal =>
+        dagCountSigns true full tags (fun tight =>
+          let visit := fun a b op retains =>
+            dagForceWord (state.2.1.getD a 0) (fun x =>
+              dagForceWord (state.2.1.getD b 0) (fun y =>
+                dagForceWord (dagGateWord mask op x y) (fun out =>
+                  let xs := tags.getD a (0,0)
+                  let ys := tags.getD b (0,0)
+                  dagForceWord (dagGateWord full op xs.1 ys.1) (fun up =>
+                    dagForceWord (dagGateWord full op xs.2 ys.2) (fun down =>
+                      treeBlock 0 retains (fun keep =>
+                        let token := gateToken a b op keep
+                        if dagTooWide n state.1 token then true else
+                          let directed := dagSizeFloor n op keep == (state.1-1)+1
+                          let pairs := dagSampleMiss sample full normal tight xs ys (up,down) directed op keep
+                          let erased := dagOmitted a b (keep.testBit 0) (op == 2 || keep.testBit 1)
+                          if dagPackedPair mask goal packed marks erased out directed pairs then true
+                          else match dagDirectChild mask state a b op keep x y out with
+                          | none => true
+                          | some (fuel, ws, history) => dagForceWords ws (fun forced =>
+                            let child := (fuel, forced, history)
+                            reference token child || dagLocal mask goal chart cut child)))))))
+          treeBlock 0 n (fun a =>
+            visit a a 2 2 && treeBlock (a+1) (n-(a+1)) (fun b =>
+              treeBlock 0 2 (fun op => visit a b op 4)))))))))
+
+def dagStateOK (mask : Word) (ws : List Word) : Bool :=
+  (ws.dedup.length == ws.length) && ws.all (fun w => w &&& mask == w)
+
+theorem dagStateOKSpec {mask : Word} {ws : List Word} (ok : dagStateOK mask ws = true) :
+    ws.Nodup ∧ ∀ w ∈ ws, Masked mask w := by
+  simp only [dagStateOK, Bool.and_eq_true, beq_iff_eq, List.all_eq_true] at ok
+  exact ⟨List.nodup_iff_length_dedup_eq.mpr ok.1, ok.2⟩
+
+def dagCheckNode (mask goal : Word) (chart : Option RowChart) (cut : CutCheck)
+    (count : Nat) (states : Nat → Option RowState) (moves : Array WordMove) (links : DagLinks)
+    (sample : DagSample) (tags : Nat → List DagSignals) (i : Nat) : Bool :=
+  match states i with
+  | none => false
+  | some (fuel, ws, history) => dagForceWords ws (fun forced =>
+      dagStateOK mask forced && dagCheckChildren mask goal chart cut
+        (dagRef count states moves links (i+1)) (fuel, forced, history) sample (tags i))
+
+def dagCheckRoots (mask goal : Word) (chart : Option RowChart) (cut : CutCheck)
+    (witnesses : List Witness) (reference : Nat → RowState → Bool) (stock : List Word)
+    (fuel : Nat) : Bool :=
+  treeBlock 0 (2^stock.length) fun token =>
+    let state := rootState stock fuel token
+    !dagAllowedRoot witnesses state.2.1 || dagLocal mask goal chart cut state || reference token state
+
+theorem dagLocalOpen {mask goal : Word} {chart : Option RowChart}
+    {cut : CutCheck} {state : RowState}
+    (masked : Masked mask goal) (chartOK : ∀ c, chart = some c → ChartOK goal c)
+    (viable : WordViable mask goal state) (noCut : cut state = false) :
+    dagLocal mask goal chart cut state = false := by
+  obtain ⟨fuel,ws,history⟩ := state
+  have ⟨nd,k,t,cap,live⟩ := viable
+  change k ≤ fuel at cap
+  have card := (liveWordSize live).2
+  rw [List.toFinset_card_of_nodup nd] at card
+  change ws.length + t ≤ k + 1 at card
+  have fit : ¬ ws.length > fuel + 1 := by omega
+  by_cases hz : fuel = 0
+  · have kz : k = 0 := by omega
+    subst k
+    obtain ⟨_,eq,_⟩ := live
+    have hm : goal ∈ ws := List.mem_toFinset.mp (by rw [eq]; simp)
+    simp [dagLocal, fit, hm]
+  by_cases tight : ws.length = fuel + 1
+  · have ht : t = 0 := by omega
+    subst t
+    have dir := dagPartitionLive (directed := true) masked live (fun _ => rfl)
+    have noChart : chart.any (fun c => !PackedRect.rectOK1 (ws.map (chartWord c))) = false := by
+      cases opt : chart with
+      | none => rfl
+      | some c =>
+        have vt : WordViable mask goal (fuel,ws,[]) := viable
+        have ok := tightChart (chartOK c opt) tight vt
+        simp [ok]
+    simp [dagLocal, fit, hz, tight, dir, noCut, noChart]
+  · have sep := dagPartitionLive (directed := false) masked live (by simp)
+    simp [dagLocal, fit, hz, tight, sep, noCut]
+
+theorem dagInsertLength (w : Word) (ws : List Word) :
+    (insertWord w ws).length = ws.length + 1 := by
+  induction ws with
+  | nil => rfl
+  | cons a ws ih =>
+    change (if w ≤ a then w :: a :: ws else a :: insertWord w ws).length = _
+    split <;> simp [ih]
+
+theorem dagKeepLength (keep : Bool) (w : Word) (ws : List Word) :
+    ws.length - (if keep then 0 else 1) ≤ (keepWord keep w ws).length := by
+  cases keep
+  · exact List.le_length_erase
+  · simp [keepWord]
+
+theorem dagWideChild {mask token : Nat} {state child : RowState}
+    (eval : childState mask token state = some child)
+    (wide : dagTooWide state.2.1.length state.1 token = true) :
+    child.2.1.length > child.1 + 1 := by
+  obtain ⟨fuel,ws,history⟩ := state
+  let keep := token % 4
+  let op := token / 4 % 3
+  let i := token / (4 * 3 * 64)
+  let j := token / (4 * 3) % 64
+  let x := ws.getD i 0
+  let y := ws.getD j 0
+  let z := if op == 0 then x &&& y else if op == 1 then x ||| y else mask ^^^ x
+  let a := keep.testBit 0
+  let b := op == 2 || keep.testBit 1
+  let rest := keepWord b y (keepWord a x ws)
+  let bad : Bool := fuel == 0 || j ≥ ws.length || (if op == 2 then i != j || keep ≥ 2 else i ≥ j)
+  let stale : Bool := z == 0 || z == mask || ws.contains z
+  change (if bad then none else if stale then none else
+    some (fuel - 1, insertWord z rest, (z,x,y) :: history)) = some child at eval
+  by_cases hb : bad = true
+  · simp [hb] at eval
+  by_cases hs : stale = true
+  · simp [hb,hs] at eval
+  have eq : (fuel-1, insertWord z rest, (z,x,y) :: history) = child := by simpa [hb,hs] using eval
+  rw [← eq]
+  change (insertWord z rest).length > fuel - 1 + 1
+  rw [dagInsertLength]
+  have h1 := dagKeepLength a x ws
+  have h2 := dagKeepLength b y (keepWord a x ws)
+  have h : ws.length - (if a then 0 else 1) - (if b then 0 else 1) + 1 > fuel - 1 + 1 :=
+    of_decide_eq_true wide
+  dsimp only [rest]
+  omega
+
+theorem dagKeepMem {ws : List Word} {x w : Word} {keep : Bool}
+    (nd : ws.Nodup) (h : w ∈ keepWord keep x ws) : w ∈ ws ∧ (keep = true ∨ w ≠ x) := by
+  cases keep
+  · simpa [keepWord, nd.mem_erase_iff, and_comm] using h
+  · simpa [keepWord] using h
+
+theorem dagKeepNodup {ws : List Word} (nd : ws.Nodup) (keep : Bool) (x : Word) :
+    (keepWord keep x ws).Nodup := by
+  cases keep
+  · exact nd.erase x
+  · exact nd
+
+theorem dagPackedPairSound {mask goal out : Word} {ws : List Word} {directed : Bool}
+    {pairs : List Nat} {a b : Nat} {left right : Bool}
+    (nd : ws.Nodup)
+    (checked : dagPackedPair mask goal (dagPackWords ws) (dagLaneMarks ws.length)
+      (dagOmitted a b left right) out directed pairs = true) :
+    dagPairReject mask goal directed
+      (out :: keepWord right (ws.getD b 0) (keepWord left (ws.getD a 0) ws)) pairs = true := by
+  obtain ⟨code,mem,verdict⟩ := List.any_eq_true.mp checked
+  apply List.any_eq_true.mpr
+  refine ⟨code,mem,?_⟩
+  simp only [dagForceWordEq, Bool.and_eq_true, Nat.blt_eq] at verdict
+  obtain ⟨⟨⟨⟨⟨⟨hp, hn⟩, neg⟩, wp⟩, wn⟩, output⟩, closure⟩ := verdict
+  refine Bool.and_eq_true_iff.mpr ⟨Bool.and_eq_true_iff.mpr ⟨
+    Bool.and_eq_true_iff.mpr ⟨hp,hn⟩,neg⟩,List.all_eq_true.mpr ?_⟩
+  intro w hw
+  rcases List.mem_cons.mp hw with rfl | later
+  · exact output
+  have rightMem := dagKeepMem (dagKeepNodup nd left (ws.getD a 0)) later
+  have leftMem := dagKeepMem nd rightMem.1
+  obtain ⟨i,inside,eq⟩ := List.mem_iff_getElem.mp leftMem.1
+  have atIndex : ws.getD i 0 = w := by
+    simpa [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem inside] using eq
+  have omitted : (dagOmitted a b left right).testBit (512*i) = false := by
+    have cleared (j : Nat) (keep : Bool) (h : keep = true ∨ w ≠ ws.getD j 0) :
+        (if keep then 0 else 1 <<< (512*j)).testBit (512*i) = false := by
+      rcases h with yes | diff
+      · simp [yes]
+      · have ne : i ≠ j := fun same => diff (same ▸ atIndex).symm
+        cases keep <;> simp [Nat.shiftLeft_eq, Nat.testBit_two_pow, show 512*j ≠ 512*i by omega]
+    simp [dagOmitted, Nat.testBit_or, cleared a left leftMem.2, cleared b right rightMem.2]
+  let p := code &&& 511
+  let n := code >>> 9
+  let marks := dagLaneMarks ws.length
+  let signal := dagPackWords ws
+  have mark : marks.testBit (512*i) = true := dagMarkBits inside
+  have test {j : Nat} (within : j < 512) :
+      ((signal >>> j) &&& marks).testBit (512*i) = w.testBit j := by
+    rw [Nat.testBit_and, Nat.testBit_shiftRight, mark, Bool.and_true,
+      Nat.add_comm j, dagPackBits inside within, atIndex]
+  have h := congrArg (fun word => Nat.testBit word (512*i)) (Nat.beq_eq.mp closure)
+  simp only [Nat.zero_testBit] at h
+  change (((if directed then (signal >>> p &&& marks) &&& ((signal >>> n &&& marks) ^^^ marks)
+      else (signal >>> p &&& marks) ^^^ (signal >>> n &&& marks)) &&&
+    (marks ^^^ dagOmitted a b left right)).testBit (512*i)) = false at h
+  have pt := test (j := p) wp
+  have nt := test (j := n) wn
+  cases directed <;> cases px : w.testBit p <;> cases nx : w.testBit n <;>
+    simp [px,nx,pt,nt,Nat.testBit_and,Nat.testBit_xor,mark,omitted,p,n] at h ⊢
+
+theorem dagEarlyOpen {mask goal a b op keep out : Nat} {state child : RowState}
+    (masked : Masked mask goal) (viable : WordViable mask goal child)
+    (parent : state.2.1.Nodup) (eval : dagDirectChild mask state a b op keep
+      (state.2.1.getD a 0) (state.2.1.getD b 0) out = some child) (pairs : List Nat) :
+    dagPackedPair mask goal (dagPackWords state.2.1) (dagLaneMarks state.2.1.length)
+      (dagOmitted a b (keep.testBit 0) (op == 2 || keep.testBit 1)) out
+      (dagSizeFloor state.2.1.length op keep == (state.1-1)+1) pairs = false := by
+  obtain ⟨fuel,ws,history⟩ := state
+  let x := ws.getD a 0
+  let y := ws.getD b 0
+  apply Bool.eq_false_iff.mpr
+  intro closed
+  have closed := dagPackedPairSound parent closed
+  let bad : Bool := fuel == 0 || b ≥ ws.length || (if op == 2 then a != b || keep ≥ 2 else a ≥ b)
+  let stale : Bool := out == 0 || out == mask || ws.contains out
+  let bank := dagKept ws op keep x y
+  change (if bad then none else if stale then none else
+    some (fuel-1, insertWord out bank, (out,x,y)::history)) = some child at eval
+  by_cases h : bad = true
+  · simp [h] at eval
+  by_cases h' : stale = true
+  · simp [h,h'] at eval
+  have eq : (fuel-1,insertWord out bank,(out,x,y)::history) = child := by simpa [h,h'] using eval
+  subst child
+  obtain ⟨nd,k,t,cap,live⟩ := viable
+  change k ≤ fuel-1 at cap
+  have size := (liveWordSize live).2
+  change (insertWord out bank : List Word).toFinset.card + t ≤ k+1 at size
+  rw [List.toFinset_card_of_nodup nd, dagInsertLength] at size
+  have same : (out::bank).toFinset = (insertWord out bank).toFinset := by
+    ext w
+    simp only [List.mem_toFinset, List.mem_cons, insertWordMem]
+  have openBank := dagPairsOpen (pairs := pairs)
+    (directed := dagSizeFloor ws.length op keep == (fuel-1)+1) masked (show LiveWord mask goal k t (out::bank).toFinset by rwa [same])
+  have available : (dagSizeFloor ws.length op keep == (fuel-1)+1) = true → t = 0 := by
+    intro directed
+    have exactBudget := beq_iff_eq.mp directed
+    have first := dagKeepLength (keep.testBit 0) x ws
+    have second := dagKeepLength (op == 2 || keep.testBit 1) y (keepWord (keep.testBit 0) x ws)
+    change dagSizeFloor ws.length op keep = (fuel-1)+1 at exactBudget
+    unfold dagSizeFloor at exactBudget
+    dsimp only [bank, dagKept] at size
+    omega
+  have refuses := openBank available
+  exact Bool.noConfusion (closed.symm.trans refuses)
+
+theorem dagChildAt {mask goal : Word} {chart : Option RowChart}
+    {cut : CutCheck} {ref : Nat → RowState → Bool} {state child : RowState} {sample : DagSample} {tags : List DagSignals} {a b op keep : Nat}
+    (checked : dagCheckChildren mask goal chart cut ref state sample tags = true)
+    (ha : a < state.2.1.length)
+    (legal : (a = b ∧ op = 2 ∧ keep < 2) ∨ (a < b ∧ b < state.2.1.length ∧ op < 2 ∧ keep < 4))
+    (eval : childState mask (gateToken a b op keep) state = some child)
+    (masked : Masked mask goal) (viable : WordViable mask goal child) (nd : state.2.1.Nodup)
+    (openChild : dagLocal mask goal chart cut child = false) :
+    ref (gateToken a b op keep) child = true := by
+  have narrow : dagTooWide state.2.1.length state.1 (gateToken a b op keep) = false := by
+    apply Bool.eq_false_iff.mpr
+    intro h
+    have tooMany := dagWideChild eval h
+    obtain ⟨f,w,path⟩ := child
+    simp [dagLocal, tooMany] at openChild
+  simp only [dagCheckChildren, dagForceCacheEq, dagForceWordEq, dagCountSignsEq,
+    Bool.and_eq_true, decide_eq_true_eq] at checked
+  have width := checked.1.1
+  have atA := treeBlock_at checked.2 (i := a) (Nat.zero_le _) (by simpa using ha)
+  rcases Bool.and_eq_true_iff.mp atA with ⟨unary,binary⟩
+  rcases legal with ⟨rfl,rfl,hk⟩ | ⟨ab,hb,hop,hk⟩
+  · have atKeep := treeBlock_at unary (i := keep) (Nat.zero_le _) (by simpa using hk)
+    have fields := dagDirectChildEq (mask := mask) (state := state) (a := a) (b := a) (op := 2)
+      (keep := keep) (by omega) (by decide) (by omega)
+    have direct := fields.trans eval
+    have early := dagEarlyOpen masked viable nd direct
+    rcases child with ⟨fuel,ws,history⟩
+    simpa only [narrow,Bool.false_eq_true,ite_false,fields,eval,dagForceWordsEq,early,openChild,Bool.or_false] using atKeep
+  · have atB := treeBlock_at binary (i := b) (by omega) (by omega)
+    have atOp := treeBlock_at atB (i := op) (Nat.zero_le _) (by simpa using hop)
+    have atKeep := treeBlock_at atOp (i := keep) (Nat.zero_le _) (by simpa using hk)
+    have fields := dagDirectChildEq (mask := mask) (state := state) (a := a) (b := b) (op := op)
+      (keep := keep) (by omega) (by omega) hk
+    have direct := fields.trans eval
+    have early := dagEarlyOpen masked viable nd direct
+    rcases child with ⟨fuel,ws,history⟩
+    simpa only [narrow,Bool.false_eq_true,ite_false,fields,eval,dagForceWordsEq,early,openChild,Bool.or_false] using atKeep
+
+theorem readWordMasked {mask : Word} {ws : List Word}
+    (all : ∀ w ∈ ws, Masked mask w) (i : Nat) : Masked mask (ws.getD i 0) := by
+  simp only [List.getD_eq_getElem?_getD]
+  cases h : ws[i]? with
+  | none => simp [Masked]
+  | some w => exact all w (List.mem_of_getElem? h)
+
+theorem childStateData {mask token : Nat} {state child : RowState}
+    (eval : childState mask token state = some child)
+    (masked : ∀ w ∈ state.2.1, Masked mask w) :
+    child.1 < state.1 ∧ ∀ w ∈ child.2.1, Masked mask w := by
+  obtain ⟨fuel,ws,history⟩ := state
+  let keep := token % 4
+  let op := token / 4 % 3
+  let a := token / (4 * 3 * 64)
+  let b := token / (4 * 3) % 64
+  let x := ws.getD a 0
+  let y := ws.getD b 0
+  let z := if op == 0 then x &&& y else if op == 1 then x ||| y else mask ^^^ x
+  let rest := keepWord (op == 2 || keep.testBit 1) y (keepWord (keep.testBit 0) x ws)
+  let bad : Bool := fuel == 0 || b ≥ ws.length || (if op == 2 then a != b || keep ≥ 2 else a ≥ b)
+  let stale : Bool := z == 0 || z == mask || ws.contains z
+  change (if bad then none else if stale then none else
+    some (fuel - 1, insertWord z rest, (z,x,y) :: history)) = some child at eval
+  by_cases hb : bad = true
+  · simp [hb] at eval
+  by_cases hs : stale = true
+  · simp [hb,hs] at eval
+  have eq : (fuel-1, insertWord z rest, (z,x,y) :: history) = child := by simpa [hb,hs] using eval
+  subst child
+  have pos : 0 < fuel := by
+    by_contra! h
+    have he : fuel = 0 := by omega
+    simp [bad, he] at hb
+  refine ⟨by dsimp; omega,?_⟩
+  have read (i : Nat) : AvailableWord mask ws (ws.getD i 0) := by
+    simp only [List.getD_eq_getElem?_getD]
+    cases h : ws[i]? with
+    | none => exact Or.inl rfl
+    | some a => exact Or.inr (Or.inr (List.mem_of_getElem? h))
+  have hm : Masked mask z := by
+    apply maskedGate masked
+    unfold z
+    split
+    · exact Or.inr ⟨x,y,read _,read _,Or.inl rfl⟩
+    split
+    · exact Or.inr ⟨x,y,read _,read _,Or.inr rfl⟩
+    · exact Or.inl ⟨x,read _,rfl⟩
+  intro w hw
+  rcases insertWordMem.mp hw with rfl | other
+  · exact hm
+  · apply masked w
+    apply keepSubset (keep.testBit 0) x ws w
+    exact keepSubset (op == 2 || keep.testBit 1) y _ w other
+
+def DagMovesOK (mask goal : Word) (width : Nat) (moves : Array WordMove) : Prop :=
+  ∀ (i : Nat) (m : WordMove), moves[i]? = some m →
+    ∃ select : Fin width → Fin width, DagAuto mask goal select ∧
+      ∀ w, Masked mask w → mixMove m w = relabel select w
+
+abbrev DagMoveRecord (width : Nat) := WordMove × (Fin width → Fin width) × (Fin width → Fin width)
+
+def dagMoves (cert : List (DagMoveRecord width)) : Array WordMove := (cert.map Prod.fst).toArray
+
+def dagMoveRecordProps {width : Nat} (mask goal : Word) (entry : DagMoveRecord width) : Prop :=
+  let (move, select, inverse) := entry
+  (∀ i, inverse (select i) = i) ∧ (∀ i, select (inverse i) = i) ∧
+    (mask &&& fullMask width = mask) ∧ (goal &&& mask = goal) ∧
+    (∀ i : Fin width, mask.testBit i.val = true →
+      mixMove move (2 ^ i.val) = 2 ^ (inverse i).val) ∧
+    mixMove move mask = mask ∧ mixMove move goal = goal
+
+def dagMoveRecordOK {width : Nat} (mask goal : Word) (entry : DagMoveRecord width) : Bool :=
+  let (move, select, inverse) := entry
+  decide ((∀ i, inverse (select i) = i) ∧ (∀ i, select (inverse i) = i) ∧
+    (mask &&& fullMask width = mask) ∧ (goal &&& mask = goal) ∧
+    (∀ i : Fin width, mask.testBit i.val = true →
+      mixMove move (2 ^ i.val) = 2 ^ (inverse i).val) ∧
+    mixMove move mask = mask ∧ mixMove move goal = goal)
+
+theorem dagMoveRecordSpec {width : Nat} {mask goal : Word} {entry : DagMoveRecord width}
+    (ok : dagMoveRecordOK mask goal entry = true) : dagMoveRecordProps mask goal entry := by
+  rcases entry with ⟨move,select,inverse⟩
+  unfold dagMoveRecordProps
+  exact of_decide_eq_true ok
+
+theorem dagMovesOfCheck {width : Nat} {mask goal : Word} {cert : List (DagMoveRecord width)}
+    (ok : cert.all (dagMoveRecordOK mask goal) = true) :
+    DagMovesOK mask goal width (dagMoves cert) := by
+  intro i m get
+  simp only [dagMoves, List.getElem?_toArray, List.getElem?_map] at get
+  cases e : cert[i]? with
+  | none => simp [e] at get
+  | some entry =>
+    have eq : entry.1 = m := by simpa [e] using get
+    rcases entry with ⟨move,select,inverse⟩
+    obtain ⟨left,right,bm,gm,basis,mm,mg⟩ :=
+      dagMoveRecordSpec (List.all_eq_true.mp ok _ (List.mem_of_getElem? e))
+    subst m
+    exact ⟨select, dagAutoFromMove left right bm gm basis mm mg⟩
+
+theorem dagLinked {mask goal : Word} {width count : Nat} {states : Nat → Option RowState}
+    {moves : Array WordMove} {links : DagLinks} {parent token : Nat} {state : RowState}
+    (bounds : Masked (fullMask width) mask)
+    (valid : DagMovesOK mask goal width moves)
+    (masked : ∀ w ∈ state.2.1, Masked mask w)
+    (ok : dagRef count states moves links parent token state = true)
+    {k t : Nat} (live : LiveWord mask goal k t state.2.1.toFinset) :
+    ∃ i saved, i < count ∧ states i = some saved ∧ saved.1 = state.1 ∧
+      LiveWord mask goal k t saved.2.1.toFinset := by
+  unfold dagRef at ok
+  split at ok
+  · contradiction
+  next destination auto h =>
+    have hd := Nat.blt_eq.mp (Bool.and_eq_true_iff.mp ok).1
+    have finish := (Bool.and_eq_true_iff.mp ok).2
+    cases eq : states destination with
+    | none => simp [eq] at finish
+    | some saved =>
+      simp only [eq, Bool.and_eq_true, beq_iff_eq] at finish
+      refine ⟨destination,saved,hd,eq,finish.1,?_⟩
+      have last := finish.2
+      split at last
+      · have same : saved.2.1 = state.2.1 := beq_iff_eq.mp last
+        rwa [same]
+      · split at last
+        · contradiction
+        next m hm =>
+          obtain ⟨select,auto,agree⟩ := valid _ _ hm
+          have same : saved.2.1 = dagMoveWords m state.2.1 := beq_iff_eq.mp last
+          rw [same, dagMoveSet (fun w hw => agree w (masked w hw))]
+          exact liveMaskedImage auto bounds live (fun w hw => masked _ (List.mem_toFinset.mp hw))
+
+theorem dagAllNodes {mask goal : Word} {width fuel count : Nat}
+    {stock : List Word} {chart : Option RowChart}
+    {cut : CutCheck} {forest : Forest} {moves : Array WordMove} {links : DagLinks} {sample : DagSample}
+    {tags : Nat → List DagSignals}
+    (maskBounds : Masked (fullMask width) mask)
+    (goalMask : Masked mask goal)
+    (chartOK : ∀ c, chart = some c → ChartOK goal c)
+    (cutSound : ∀ s, WordViable mask goal s → cut s = false)
+    (autos : DagMovesOK mask goal width moves)
+    (verified : treeBlock 0 count (dagCheckNode mask goal chart cut count
+      (dagTrace mask stock fuel forest) moves links sample tags) = true):
+    ∀ cap i saved, i < count → dagTrace mask stock fuel forest i = some saved →
+      saved.1 = cap → ∀ k t, k ≤ cap → ¬LiveWord mask goal k t saved.2.1.toFinset := by
+  intro cap
+  induction cap using Nat.strong_induction_on with
+  | ind cap ih =>
+    intro i s iBound stateEq sFuel k t kBound live
+    rcases s with ⟨remaining, words, history⟩
+    let s : RowState := (remaining, words, history)
+    let states := dagTrace mask stock fuel forest
+    change states i = some s at stateEq
+    have checked := treeBlock_at verified (Nat.zero_le i) (by simpa using iBound)
+    change dagCheckNode mask goal chart cut count states moves links sample tags i = true at checked
+    simp only [dagCheckNode, stateEq, dagForceWordsEq, Bool.and_eq_true] at checked
+    obtain ⟨nd,masked⟩ := dagStateOKSpec checked.1
+    have ok := checked.2
+    have viable : WordViable mask goal s := ⟨nd,k,t,sFuel ▸ kBound,live⟩
+    have scanned := ok
+    simp only [dagCheckChildren, Bool.and_eq_true, decide_eq_true_eq] at scanned
+    have wide := scanned.1.1
+    have absent := scanned.1.2
+    rcases wordProgress wide viable with hit | ⟨child, possible, cv⟩
+    · simpa [hit] using absent
+    obtain ⟨a,b,op,keep,ha,legal,eval⟩ := possible
+    have r := dagChildAt ok ha legal eval goalMask cv nd (dagLocalOpen goalMask chartOK cv (cutSound _ cv))
+    have ⟨less,cm⟩ := childStateData eval masked
+    have below : child.1 < cap := sFuel ▸ less
+    obtain ⟨_,k',t',fits,clive⟩ := cv
+    obtain ⟨j,dest,bound,restore,fuelEq,tail⟩ :=
+      dagLinked maskBounds autos cm r clive
+    exact ih child.1 below j dest bound restore fuelEq k' t' fits tail
+
+theorem lowerDag {mask goal : Word} {width fuel count : Nat}
+    {stock : List Word} {chart : Option RowChart}
+    {forest : Forest} {moves : Array WordMove} {links : DagLinks} {sample : DagSample}
+    {tags : Nat → List DagSignals}
+    {bounds : List Bound} {witnesses : List Witness}
+    (maskBounds : Masked (fullMask width) mask)
+    (goalMask : Masked mask goal) (proper : properWord mask goal)
+    (chartOK : ∀ c, chart = some c → ChartOK goal c)
+    (autos : DagMovesOK mask goal width moves)
+    (stockMasked : ∀ w ∈ stock, Masked mask w) (stockNd : stock.Nodup)
+    (essential : witnesses.all (essentialB mask goal stock) = true)
+    (known : Known bounds) (submasks : ∀ b ∈ bounds, mask &&& b.1 = b.1)
+    (rootCheck : dagCheckRoots mask goal chart (dagKnownCloses goal bounds) witnesses
+      (dagRef count (dagTrace mask stock fuel forest) moves links 0)
+      stock fuel = true)
+    (nodeCheck : treeBlock 0 count (dagCheckNode mask goal chart (dagKnownCloses goal bounds)
+      count (dagTrace mask stock fuel forest) moves links sample tags) = true) :
+    Lower mask stock goal (fuel+1) := by
+  intro values build hit
+  by_contra! small
+  obtain ⟨k,t,S,hk,live,sub⟩ := extractWordLive stockMasked build hit proper
+  have included : S ⊆ stock.toFinset := fun w hw => List.mem_toFinset.mpr (sub w hw)
+  obtain ⟨token,tokenBound,eq⟩ := rootToken stock S
+  rw [Finset.inter_eq_right.mpr included] at eq
+  let state := rootState stock fuel token
+  have eq' : state.2.1.toFinset = S := eq
+  have v : WordViable mask goal state := by
+    refine ⟨(rootWordSublist stock token).nodup stockNd,k,t,?_,?_⟩
+    · change k ≤ fuel
+      omega
+    · rwa [eq']
+  have cutOpen (s : RowState) (h : WordViable mask goal s) : dagKnownCloses goal bounds s = false := by
+    rw [dagKnownClosesEq]
+    exact knownClosesSound known submasks h
+  have openRoot := dagLocalOpen goalMask chartOK v (cutOpen _ v)
+  have allowed : dagAllowedRoot witnesses state.2.1 = true := by
+    apply List.all_eq_true.mpr
+    intro entry mem
+    apply List.contains_iff_mem.mpr
+    rw [← List.mem_toFinset, eq']
+    exact essentialRequired (List.all_eq_true.mp essential entry mem) sub live
+  have checked := treeBlock_at rootCheck (Nat.zero_le token) (by simpa using tokenBound)
+  change (!dagAllowedRoot witnesses state.2.1 || dagLocal mask goal chart (dagKnownCloses goal bounds) state ||
+    dagRef count (dagTrace mask stock fuel forest) moves links 0 token state) = true at checked
+  simp only [allowed,openRoot,Bool.not_true,Bool.false_or] at checked
+  have finish := dagAllNodes maskBounds goalMask chartOK cutOpen autos nodeCheck
+  have fits : k ≤ fuel := by omega
+  have still : LiveWord mask goal k t state.2.1.toFinset := by rwa [eq']
+  have stateMask : ∀ w ∈ state.2.1, Masked mask w := by
+    intro w hw
+    exact stockMasked _ ((rootWordSublist stock token).subset hw)
+  obtain ⟨i,s,hi,restore,cap,plan⟩ := dagLinked maskBounds autos stateMask checked still
+  exact finish fuel i s hi restore cap k t fits plan
+
+def dagLookupLinks (index data indexWidth sizeBits tokenBits destinationBits autoBits trials : Nat) :
+    DagLinks := fun parent token =>
+  let entry := unpack index indexWidth parent
+  let size := entry &&& ((1 <<< sizeBits) - 1)
+  let offset := entry >>> sizeBits
+  let width := tokenBits + destinationBits + autoBits
+  (Nat.rec (motive := fun _ => Nat → Nat → Option DagLink) (fun _ _ => none)
+    (fun _ next lo hi =>
+      if Nat.blt lo hi then
+        let mid := (lo+hi)/2
+        let code := unpack data width mid
+        let key := code &&& ((1 <<< tokenBits) - 1)
+        if Nat.beq token key then
+          some ((code >>> tokenBits) &&& ((1 <<< destinationBits) - 1),
+            code >>> (tokenBits + destinationBits))
+        else if Nat.blt token key then next lo mid else next (mid+1) hi
+      else none) trials) offset (offset+size)
+
+def projectDAGStock (mask : Word) (source : List Word) (indices : List Nat) : List Word :=
+  List.rec [] (fun i _ rest => (mask &&& source.getD i 0) :: rest) indices
+
+theorem stockMaskedOfCheck {mask : Word} {stock : List Word}
+    (h : stock.all (fun w => w &&& mask == w) = true) :
+    ∀ w ∈ stock, Masked mask w := by
+  intro w hw
+  exact beq_iff_eq.mp (List.all_eq_true.mp h w hw)
+
+theorem suppliesOfCheck {oldMask : Word} {old new : List Word} {rename : Word → Word}
+    (h : new.all (fun w => availableB oldMask old (rename w)) = true) :
+    ∀ w ∈ new, AvailableWord oldMask old (rename w) := by
+  intro w hw
+  exact availableB_spec.mp (List.all_eq_true.mp h w hw)
+
+def dagShift (mask : Word) (move : WordMove) (word : Word) : Word :=
+  mixMove move (word &&& mask)
+
+def dagShiftUnique (mask : Word) (move : WordMove) : Nat → Word → Bool :=
+  Nat.rec (fun _ => true) (fun i next occupied =>
+    if mask.testBit i then
+      dagForceWord (mixMove move (2^i)) (fun col =>
+        Nat.beq (col &&& occupied) 0 && dagForceWord (occupied ||| col) next)
+    else next occupied)
+
+theorem dagShiftLinear (mask : Word) (move : WordMove) : BitLinear (dagShift mask move) := by
+  apply bitLinearComp (mixMoveLinear move)
+  simpa using bitLinearRight mask 0
+
+theorem dagShiftBasis (mask : Word) (move : WordMove) (i : Nat) :
+    dagShift mask move (2 ^ i) = if mask.testBit i then mixMove move (2^i) else 0 := by
+  have select : 2 ^ i &&& mask = if mask.testBit i then 2^i else 0 := by
+    apply Nat.eq_of_testBit_eq
+    intro j
+    by_cases same : i = j
+    · subst j
+      simp only [Nat.testBit_and, Nat.testBit_two_pow, decide_true, Bool.true_and]
+      cases mask.testBit i <;> simp
+    · cases h : mask.testBit i <;> simp [Nat.testBit_and, Nat.testBit_two_pow, same, h]
+  rw [dagShift, select]
+  split
+  · rfl
+  · apply Nat.eq_of_testBit_eq
+    intro j
+    apply Bool.eq_iff_iff.mpr
+    rw [mixMoveLinear]
+    simp
+
+theorem dagShiftUniqueSpec {mask : Word} {move : WordMove} {n : Nat} {occupied : Word}
+    (ok : dagShiftUnique mask move n occupied = true) :
+    (∀ j < n, ∀ b, (dagShift mask move (2^j)).testBit b = true → occupied.testBit b = false) ∧
+    (∀ j < n, ∀ k < n, ∀ b, (dagShift mask move (2^j)).testBit b = true →
+      (dagShift mask move (2^k)).testBit b = true → j = k) := by
+  induction n generalizing occupied with
+  | zero => simp
+  | succ n ih =>
+    let col := mixMove move (2^n)
+    change (if mask.testBit n then dagForceWord col (fun w =>
+      Nat.beq (w &&& occupied) 0 && dagForceWord (occupied ||| w) (dagShiftUnique mask move n))
+      else dagShiftUnique mask move n occupied) = true at ok
+    cases active : mask.testBit n
+    · simp [active,dagForceWordEq] at ok
+      obtain ⟨existing,unique⟩ := ih ok
+      have dead : dagShift mask move (2^n) = 0 := by simp [dagShiftBasis,active]
+      refine ⟨?_,?_⟩
+      · intro j hj b h
+        by_cases same : j = n
+        · simp [same,dead] at h
+        · exact existing j (by omega) b h
+      · intro j hj k hk b a c
+        by_cases e : j = n
+        · simp [e,dead] at a
+        by_cases e' : k = n
+        · simp [e',dead] at c
+        exact unique j (by omega) k (by omega) b a c
+    · simp only [active,ite_true,dagForceWordEq,Bool.and_eq_true] at ok
+      have disjoint := Nat.beq_eq.mp ok.1
+      obtain ⟨existing,unique⟩ := ih ok.2
+      have colEq : dagShift mask move (2^n) = col := by simp [dagShiftBasis,active,col]
+      have old {j b : Nat} (hj : j < n) (h : (dagShift mask move (2^j)).testBit b = true) :
+          occupied.testBit b = false ∧ col.testBit b = false := by
+        simpa [Nat.testBit_or, Bool.or_eq_false_iff] using existing j hj b h
+      refine ⟨?_,?_⟩
+      · intro j hj b h
+        by_cases same : j = n
+        · rw [same,colEq] at h
+          have bit := congrArg (fun w => Nat.testBit w b) disjoint
+          simpa [Nat.testBit_and,h] using bit
+        · exact (old (by omega) h).1
+      · intro j hj k hk b a c
+        by_cases e : j = n
+        · by_cases e' : k = n
+          · exact e.trans e'.symm
+          · rw [e,colEq,(old (by omega) c).2] at a
+            contradiction
+        by_cases e' : k = n
+        · rw [e',colEq,(old (by omega) a).2] at c
+          contradiction
+        exact unique j (by omega) k (by omega) b a c
+
+theorem dagShiftGates {mask : Word} {move : WordMove} {width : Nat}
+    (bounded : Masked (fullMask width) mask) (checked : dagShiftUnique mask move width 0 = true) :
+    (∀ a b, dagShift mask move (a &&& b) = dagShift mask move a &&& dagShift mask move b) ∧
+    (∀ a b, dagShift mask move (a ||| b) = dagShift mask move a ||| dagShift mask move b) ∧
+    (∀ a b, dagShift mask move (a ^^^ b) = dagShift mask move a ^^^ dagShift mask move b) := by
+  let f := dagShift mask move
+  have lin := dagShiftLinear mask move
+  have uniq {j k i : Nat} (hj : (f (2^j)).testBit i = true) (hk : (f (2^k)).testBit i = true) : j = k := by
+    have within {m : Nat} (a : (f (2^m)).testBit i = true) : m < width := by
+      by_contra! big
+      have eq := congrArg (fun w => Nat.testBit w m) bounded
+      have zero : mask.testBit m = false := by
+        simpa [Masked,fullMask,Nat.testBit_and,Nat.testBit_two_pow_sub_one,show ¬m < width by omega] using eq.symm
+      simp [f,dagShiftBasis,zero] at a
+    exact (dagShiftUniqueSpec checked).2 j (within hj) k (within hk) i hj hk
+  refine ⟨?_,?_,?_⟩
+  · intro a b
+    apply Nat.eq_of_testBit_eq; intro i
+    apply Bool.eq_iff_iff.mpr
+    rw [Nat.testBit_and, Bool.and_eq_true, lin, lin, lin]
+    constructor
+    · rintro ⟨j,hj,h⟩
+      rw [Nat.testBit_and, Bool.and_eq_true] at hj
+      exact ⟨⟨j,hj.1,h⟩,⟨j,hj.2,h⟩⟩
+    · rintro ⟨⟨j,hj,q⟩,⟨k,hk,r⟩⟩
+      have same := uniq q r
+      subst k
+      exact ⟨j,by simp [Nat.testBit_and,hj,hk],q⟩
+  · intro a b
+    apply Nat.eq_of_testBit_eq; intro i
+    apply Bool.eq_iff_iff.mpr
+    rw [lin (a ||| b) i, Nat.testBit_or, Bool.or_eq_true, lin a i, lin b i]
+    simp only [Nat.testBit_or, Bool.or_eq_true]
+    constructor
+    · rintro ⟨j,(left | right),same⟩
+      · exact Or.inl ⟨j,left,same⟩
+      · exact Or.inr ⟨j,right,same⟩
+    · rintro (⟨j,left,same⟩ | ⟨j,right,same⟩)
+      · exact ⟨j,Or.inl left,same⟩
+      · exact ⟨j,Or.inr right,same⟩
+  · intro a b
+    apply Nat.eq_of_testBit_eq; intro i
+    have l := lin a i
+    have r := lin b i
+    have v := lin (a ^^^ b) i
+    cases pa : (f a).testBit i <;> cases pb : (f b).testBit i
+    · rw [Nat.testBit_xor,pa,pb]
+      apply Bool.eq_false_iff.mpr
+      intro yes
+      obtain ⟨j,hj,h⟩ := v.mp yes
+      have disj : a.testBit j = true ∨ b.testBit j = true := by
+        rw [Nat.testBit_xor] at hj
+        cases aj : a.testBit j <;> cases bj : b.testBit j <;> simp [aj,bj] at hj ⊢
+      rcases disj with da | db
+      · have := l.mpr ⟨j,da,h⟩
+        change (f a).testBit i = true at this
+        simp [pa] at this
+      · have := r.mpr ⟨j,db,h⟩
+        change (f b).testBit i = true at this
+        simp [pb] at this
+    · rw [Nat.testBit_xor,pa,pb]
+      apply v.mpr
+      obtain ⟨j,hj,h⟩ := r.mp pb
+      have notA : a.testBit j = false := Bool.eq_false_iff.mpr (fun yes => by
+        have := l.mpr ⟨j,yes,h⟩
+        change (f a).testBit i = true at this
+        simp [pa] at this)
+      exact ⟨j,by simp [Nat.testBit_xor,notA,hj],h⟩
+    · rw [Nat.testBit_xor,pa,pb]
+      apply v.mpr
+      obtain ⟨j,hj,h⟩ := l.mp pa
+      have notB : b.testBit j = false := Bool.eq_false_iff.mpr (fun yes => by
+        have := r.mpr ⟨j,yes,h⟩
+        change (f b).testBit i = true at this
+        simp [pb] at this)
+      exact ⟨j,by simp [Nat.testBit_xor,hj,notB],h⟩
+    · rw [Nat.testBit_xor,pa,pb]
+      apply Bool.eq_false_iff.mpr
+      intro yes
+      obtain ⟨j,hj,h⟩ := v.mp yes
+      obtain ⟨a',ha,q⟩ := l.mp pa
+      obtain ⟨b',hb,r⟩ := r.mp pb
+      have ea := uniq h q
+      have eb := uniq h r
+      rw [← ea] at ha
+      rw [← eb] at hb
+      simp [Nat.testBit_xor,ha,hb] at hj
+
+def dagShiftCheck (width mask goal oldMask oldGoal : Word) (stock old : List Word) (move : WordMove) : Bool :=
+  Nat.beq (mask &&& fullMask width) mask && dagShiftUnique mask move width 0 &&
+    Nat.beq (dagShift mask move mask) oldMask && Nat.beq (dagShift mask move goal) oldGoal &&
+    stock.all (fun w => availableB oldMask old (dagShift mask move w))
+
+theorem dagShiftLower {width mask goal oldMask oldGoal : Word} {stock old : List Word} {min : Nat}
+    (move : WordMove) (origin : Lower oldMask old oldGoal min)
+    (ok : dagShiftCheck width mask goal oldMask oldGoal stock old move = true) :
+    Lower mask stock goal min := by
+  simp only [dagShiftCheck,Bool.and_eq_true,Nat.beq_eq] at ok
+  obtain ⟨⟨⟨⟨bounded,unique⟩,masks⟩,goals⟩,supply⟩ := ok
+  obtain ⟨andG,orG,xorG⟩ := dagShiftGates bounded unique
+  have zero : dagShift mask move 0 = 0 := by
+    apply Nat.eq_of_testBit_eq
+    intro i
+    apply Bool.eq_iff_iff.mpr
+    rw [dagShiftLinear]
+    simp
+  apply lowerMap (dagShift mask move) zero masks (fun w => by rw [xorG,masks]) andG orG (suppliesOfCheck supply)
+  rwa [goals]
+
+def moveSchedule (stages : Array WordMoveStep) (indices : List Nat) : WordMove :=
+  List.rec [] (fun i _ rest => stages[i]?.getD ([],[]) :: rest) indices
+
+def hcsGateVal {rows : Nat} (bank : List (BitVec rows)) (g : PEqualNP.CircuitLowerBounds.Gate) :
+    BitVec rows :=
+  let args := g.inputs.map fun i => bank.getD i 0
+  match g.op with
+  | PEqualNP.CircuitLowerBounds.GateOp.and => args.foldr (· &&& ·) (BitVec.allOnes rows)
+  | PEqualNP.CircuitLowerBounds.GateOp.or => args.foldr (· ||| ·) 0
+  | PEqualNP.CircuitLowerBounds.GateOp.not => ~~~(args.headD 0)
+  | _ => 0
+
+def hcsStep {rows : Nat} (bank : List (BitVec rows)) (g : PEqualNP.CircuitLowerBounds.Gate) :
+    List (BitVec rows) :=
+  bank ++ [hcsGateVal bank g]
+
+theorem hcsGetDBit {rows : Nat} (bank : List (BitVec rows)) (i : Nat) (k : Nat) :
+    (bank.getD k 0).getLsbD i = (bank.map fun w => w.getLsbD i).getD k false := by
+  simp only [List.getD_eq_getElem?_getD, List.getElem?_map]
+  cases bank[k]? <;> simp
+
+theorem hcsAndBit {rows : Nat} (xs : List (BitVec rows)) (i : Fin rows) :
+    (xs.foldr (· &&& ·) (BitVec.allOnes rows)).getLsbD i.val = (xs.map fun w => w.getLsbD i.val).all id := by
+  induction xs with
+  | nil => simp [i.isLt]
+  | cons a t ih => simp only [List.foldr_cons, BitVec.getLsbD_and, List.map_cons, List.all_cons, id_eq, ih]
+
+theorem hcsOrBit {rows : Nat} (xs : List (BitVec rows)) (i : Fin rows) :
+    (xs.foldr (· ||| ·) 0).getLsbD i.val = (xs.map fun w => w.getLsbD i.val).any id := by
+  induction xs with
+  | nil => simp
+  | cons a t ih => simp only [List.foldr_cons, BitVec.getLsbD_or, List.map_cons, List.any_cons, id_eq, ih]
+
+theorem hcsGateBit {rows : Nat} (bank : List (BitVec rows)) (i : Fin rows)
+    (g : PEqualNP.CircuitLowerBounds.Gate)
+    (hop : g.op ∈ ({PEqualNP.CircuitLowerBounds.GateOp.and,
+      PEqualNP.CircuitLowerBounds.GateOp.or,
+      PEqualNP.CircuitLowerBounds.GateOp.not} : Set PEqualNP.CircuitLowerBounds.GateOp)) :
+    (hcsGateVal bank g).getLsbD i.val =
+      g.op.eval (g.inputs.map fun k => (bank.map fun w => w.getLsbD i.val).getD k false) := by
+  obtain ⟨op, ins⟩ := g
+  simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hop
+  rcases hop with rfl | rfl | rfl
+  · simp only [hcsGateVal, PEqualNP.CircuitLowerBounds.GateOp.eval, hcsAndBit, List.map_map]
+    congr 1
+    apply List.map_congr_left
+    intro k _
+    exact hcsGetDBit bank i.val k
+  · simp only [hcsGateVal, PEqualNP.CircuitLowerBounds.GateOp.eval, hcsOrBit, List.map_map]
+    congr 1
+    apply List.map_congr_left
+    intro k _
+    exact hcsGetDBit bank i.val k
+  · simp only [hcsGateVal, PEqualNP.CircuitLowerBounds.GateOp.eval, BitVec.getLsbD_not, i.isLt,
+      decide_true, Bool.true_and]
+    cases ins with
+    | nil => simp
+    | cons k _ => simp only [List.map_cons, List.headD_cons, hcsGetDBit]
+
+theorem hcsFoldBits {rows : Nat} (bank : List (BitVec rows)) (i : Fin rows)
+    (gs : List PEqualNP.CircuitLowerBounds.Gate)
+    (hfan : ∀ g ∈ gs, g.op ∈ ({PEqualNP.CircuitLowerBounds.GateOp.and,
+      PEqualNP.CircuitLowerBounds.GateOp.or,
+      PEqualNP.CircuitLowerBounds.GateOp.not} : Set PEqualNP.CircuitLowerBounds.GateOp) ∧
+      g.inputs.length ≤ 2) :
+    (gs.foldl hcsStep bank).map (fun w => w.getLsbD i.val) =
+      gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun k => w.getD k false)])
+        (bank.map fun w => w.getLsbD i.val) := by
+  induction gs generalizing bank with
+  | nil => rfl
+  | cons g gs ih =>
+    simp only [List.foldl_cons]
+    have hstep : (hcsStep bank g).map (fun w => w.getLsbD i.val) =
+        (bank.map fun w => w.getLsbD i.val) ++
+          [g.op.eval (g.inputs.map fun k => (bank.map fun w => w.getLsbD i.val).getD k false)] := by
+      simp only [hcsStep, List.map_append, List.map_cons, List.map_nil,
+        hcsGateBit bank i g (hfan g List.mem_cons_self).1]
+    rw [ih (hcsStep bank g) (fun g' hg' => hfan g' (List.mem_cons_of_mem _ hg')), hstep]
+
+theorem hcsGateWord {rows : Nat} (bank : List (BitVec rows))
+    (g : PEqualNP.CircuitLowerBounds.Gate)
+    (hop : g.op ∈ ({PEqualNP.CircuitLowerBounds.GateOp.and,
+      PEqualNP.CircuitLowerBounds.GateOp.or,
+      PEqualNP.CircuitLowerBounds.GateOp.not} : Set PEqualNP.CircuitLowerBounds.GateOp))
+    (hlen : g.inputs.length ≤ 2) :
+    GateWord (fullMask rows) (bank.map BitVec.toNat) (hcsGateVal bank g).toNat := by
+  obtain ⟨op, ins⟩ := g
+  simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hop
+  have zeroAv : AvailableWord (fullMask rows) (bank.map BitVec.toNat) 0 := Or.inl rfl
+  have maskAv : AvailableWord (fullMask rows) (bank.map BitVec.toNat) (fullMask rows) :=
+    Or.inr (Or.inl rfl)
+  rcases hop with rfl | rfl | rfl
+  · cases ins with
+    | nil => exact gateOfAvailable (by simpa [hcsGateVal, fullMask] using maskAv)
+    | cons a t =>
+      cases t with
+      | nil => exact gateOfAvailable (by simpa [hcsGateVal] using toNatAvailable bank a)
+      | cons b t =>
+        cases t with
+        | nil =>
+          exact Or.inr ⟨_, _, toNatAvailable bank a, toNatAvailable bank b,
+            Or.inl (by simp [hcsGateVal, BitVec.toNat_and])⟩
+        | cons c t => simp at hlen
+  · cases ins with
+    | nil => exact gateOfAvailable (by simpa [hcsGateVal] using zeroAv)
+    | cons a t =>
+      cases t with
+      | nil => exact gateOfAvailable (by simpa [hcsGateVal] using toNatAvailable bank a)
+      | cons b t =>
+        cases t with
+        | nil =>
+          exact Or.inr ⟨_, _, toNatAvailable bank a, toNatAvailable bank b,
+            Or.inr (by simp [hcsGateVal, BitVec.toNat_or])⟩
+        | cons c t => simp at hlen
+  · cases ins with
+    | nil => exact Or.inl ⟨0, zeroAv, by simpa [hcsGateVal] using notNat (0 : BitVec rows)⟩
+    | cons a _ => exact Or.inl ⟨_, toNatAvailable bank a, by simpa [hcsGateVal] using notNat (bank.getD a 0)⟩
+
+theorem hcsBuilds {rows : Nat} (bank : List (BitVec rows))
+    (gs : List PEqualNP.CircuitLowerBounds.Gate)
+    (hfan : ∀ g ∈ gs, g.op ∈ ({PEqualNP.CircuitLowerBounds.GateOp.and,
+      PEqualNP.CircuitLowerBounds.GateOp.or,
+      PEqualNP.CircuitLowerBounds.GateOp.not} : Set PEqualNP.CircuitLowerBounds.GateOp) ∧
+      g.inputs.length ≤ 2) :
+    ∃ vs, vs.length = gs.length ∧ WordBuilds (fullMask rows) (bank.map BitVec.toNat) vs ∧
+      ∀ v ∈ gs.foldl hcsStep bank, v.toNat ∈ vs ++ bank.map BitVec.toNat := by
+  induction gs generalizing bank with
+  | nil => exact ⟨[], rfl, trivial, fun _ h => List.mem_map_of_mem h⟩
+  | cons g gs ih =>
+    let v := hcsGateVal bank g
+    have hg := hfan g List.mem_cons_self
+    obtain ⟨xs, len, build, sub⟩ := ih (hcsStep bank g) (fun g' hg' => hfan g' (List.mem_cons_of_mem _ hg'))
+    have eq : (hcsStep bank g).map BitVec.toNat = bank.map BitVec.toNat ++ [v.toNat] := by
+      simp [hcsStep, v]
+    rw [eq] at build
+    refine ⟨v.toNat :: xs, by simp [len], ⟨hcsGateWord bank g hg.1 hg.2, buildsWeaken ?_ build⟩, ?_⟩
+    · intro u hu; exact Or.inr (Or.inr (by simpa [or_comm] using hu))
+    · intro u hu; have m := sub u hu; rw [eq] at m
+      simpa [List.mem_append, or_assoc, or_left_comm, or_comm] using m
+
+def hcsCheckPow (p : Nat → Bool) : Nat → Nat → Bool
+  | 0, s => p s
+  | k + 1, s => hcsCheckPow p k s && hcsCheckPow p k (s + 2 ^ k)
+
+theorem hcsCheckPow_spec {p : Nat → Bool} {k s i : Nat}
+    (h : hcsCheckPow p k s = true) (lo : s ≤ i) (hi : i < s + 2 ^ k) : p i = true := by
+  induction k generalizing s with
+  | zero =>
+    have e : i = s := by omega
+    simpa [hcsCheckPow, e] using h
+  | succ k ih =>
+    simp only [hcsCheckPow, Bool.and_eq_true] at h
+    by_cases hlt : i < s + 2 ^ k
+    · exact ih h.1 lo hlt
+    · exact ih h.2 (by omega) (by rw [Nat.pow_succ] at hi; omega)
+
+theorem hcsLowerEq {m1 m2 g1 g2 min : Nat} {b1 b2 : List Word}
+    (hm : m1 = m2) (hb : b1 = b2) (hg : g1 = g2)
+    (h : Lower m1 b1 g1 min) : Lower m2 b2 g2 min := by
+  subst hm; subst hb; subst hg; exact h
+
+theorem hcsLower {n : Nat} (raw : List (BitVec (2 ^ n))) (goal : BitVec (2 ^ n)) (min : Nat)
+    (f : (Fin n → Bool) → Bool)
+    (hRaw : hcsCheckPow (fun r => (raw.map fun v => v.getLsbD r) == List.ofFn fun j : Fin n => r.testBit j.val) n 0 = true)
+    (hGoal : hcsCheckPow (fun r => goal.getLsbD r == f (fun j : Fin n => r.testBit j.val)) n 0 = true)
+    (claim : Lower (fullMask (2 ^ n)) (raw.map BitVec.toNat) goal.toNat min)
+    (t : Nat) (h : PEqualNP.MetaComplexity.HasCircuitSize n f t) : min ≤ t := by
+  obtain ⟨C, hfan, hsz, hev⟩ := h
+  obtain ⟨vs, len, built, sub⟩ := hcsBuilds raw C.gates hfan
+  let eb := C.gates.foldl hcsStep raw
+  have same : eb.getD C.output 0 = goal := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro j hj
+    let y : Fin n → Bool := fun k => j.testBit k.val
+    have hbank : raw.map (fun v => v.getLsbD j) = List.ofFn y :=
+      beq_iff_eq.mp (hcsCheckPow_spec hRaw (Nat.zero_le j) (Nat.zero_add _ ▸ hj))
+    have hfg : goal.getLsbD j = f y :=
+      beq_iff_eq.mp (hcsCheckPow_spec hGoal (Nat.zero_le j) (Nat.zero_add _ ▸ hj))
+    have hbits := hcsFoldBits raw ⟨j, hj⟩ C.gates hfan
+    have hevj : (C.wires (List.ofFn y)).getD C.output false = f y := hev y
+    change (C.gates.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun k => w.getD k false)])
+      (List.ofFn y)).getD C.output false = f y at hevj
+    rw [← hbank, ← hbits] at hevj
+    rw [hfg, ← hevj, ← hcsGetDBit]
+  have av : AvailableWord (fullMask (2 ^ n)) (vs ++ raw.map BitVec.toNat) goal.toNat := by
+    rw [← same, List.getD_eq_getElem?_getD]
+    cases h : eb[C.output]? with
+    | none => exact Or.inl rfl
+    | some v => exact Or.inr (Or.inr (sub v (List.mem_of_getElem? h)))
+  have lb := claim vs built av
+  have hs : C.gates.length ≤ t := hsz
+  omega
+
+
+def sBase : List Word := [0xaaaaaaaa, 0xcccccccc, 0xf0f0f0f0, 0xff00ff00, 0xffff0000]
+
+def sGoal : Word := 0xfee8eaa8
+
+def x0Mask : Word := 0x55555555
+abbrev x0Goal : Word := sGoal &&& x0Mask
+abbrev x0StockWords : List Word := projectDAGStock x0Mask sBase [1, 2, 3, 4]
+def x0Fact : Bound := (x0Mask, x0StockWords, 7, x0Goal)
+def x0Cuts : List Bound := []
+def x0Chart : Option RowChart := none
+def x0Sample : DagSample := (0, 0)
+def x0Witnesses := unpackWitnesses x0StockWords [7180, 269322, 531462, 797702]
+def x0Links : DagLinks :=
+  dagLookupLinks 0x1238247048e091c12382470482690411e163c047808e851c0a370c6838cc3188a300c5a38859108221043e287c10f821d1438187010e021c0436186c10d8215342a084c507160c140e57ed8fd81fb03f607ec0fd81fb03ea67d40fa81f02be007c00f709ec13d617a06f385e513c817846eab1d503a6273c8e781cf039a27340e681cb139417280e501ca039217240e481c3338417004e001be137256e40db89b22b4cc6980d285a40b44267c6cf819f033a26702cd09990b2c36298c50188130846046c0818102fe25ec8bd817b02f225e40bc817712ee05d82bb017602ea15d40ba816f32dc15b04b6016b0ad605a44b4816902ce2588ab101610ac2057c4ad154e629c05380a7014e029c05380a41948029005200a195430286050449f893e0a7634e829c09370a6834a1894012612444488090091c2238047008d091a0234046048b8517022e045c08b0516022c0440c87850d121a042c48315050a06240c08088fc29f803c187800ef09dc13b04748ce901d2039c47304e411c6138066a30d401a4233886700cc1190431466280c5018622fc85f80bf017a22f405e80bb117602e825d00ba017212e405c80b3316412c045800ae115c02b425680ad01562298a5300a50946228825100a01136526c047b08f011c123424588881910021c243048509062200640008000fc21c9839007010d841b0035086620c6318c031806110ba416862d005a00b0215082a005400a42148029005010a0013c227804f009e01382270048308c21142228043108601082210042008020eca1d803a087020dc21b8035106a00d021a0034006420b4a16802c0858008181000200040008001000200034606800d001a0034006800a9401a0001 0x5340aa9804d4b01ea500d52404a9001d1e92c5e310018c528c01202008a200e50c04266c493e030994984e589a6cc4b31624983124bd8927c6612e9309c3134d58965ac4942c389bb134d189658c48f5335a0999500cc67e6608c0359e8194f00c676061393309c0184d8cc26a06130024981924ccc9a6464b31324978134b80965a049103247498c3fe4c1a6c490f3307418c4a80915a048800184cc9819d89250648ac0303f80c4de4da6926b2c93495b10438cc5ce64b2931d6418caac0c4fc04b2701d2e00cc940da480652301e9100d48404a4001d1e92c5db10014c523a012020088d8144680420e6491503083198434c9a1464b05324821924558c2066490263086193424c960264919c387ab1ac618ca2ec631663085993420c9600648530358a01944c0c624060cf624880123998c21ec50fe3347f9944358c2180610a9308481841009208c490762683312c158920604d0202580812394c61a2648fd0247eb12390c61ff260fe6306819238cc61f8048aa024228062518c1f2c4826318548181100321d2630b6368431ac018d1c4c4cfb32a641933e8c5150062430197c008870035ec060db3186d18c3b80c1c2634de3196c98c3c40d1e0020d83187749835cc61acc48e031a6e98cb54c61eb26cf493279c98bca4c1df258df31a6e18cb50c609c052ed02676012bac091cac48e9018733183a18a1a4668d332872b1433cca1a2638e56247200c39a4c1c6c50ce3346818e3864c1c0048de9306e812360091b0c48db6266d312b65891ae034d60196a80c33cc91a2648cd02468b1233d89198048cd6246619234d8c1a4c48d03306719232c0c1920207d024210063198c0b4c481a3183e012104031cf264e26326fb153718a5a8c50ca3366419931cc50f604a40019628088400358606cc2032608153000997e024be00e5e4962ed88008628ba009010042e00a16e038b2330508122800c14e04ca40254f81227809164c609d0244e0182980994604a9b0245b61c2318d56ac64b463159b1814ccd562664b0331579982940994404a9a02430b122b4c90f4660ac3284c01a2640a154c48203181f9922a4c71220509401c53b18298cc149260a36304f19227989142c4ca06254fb12274c993864a9b3243c80c25cc90c6048976243c00c2664c130c6096324310121dc0607c018923241e806249890460309463049b12244cc0440303c00c55c98aa18c54a66ca23354d19a1d8c98766349502a2e013240078380348f008469981bc0610a6606e0183a80d1c8064da030880344380e1b00610b2606b018350121d0068e2032690184649b22e4c9152628993043496138ca50864c83325411921cc068e0032680183cb12200c60f46607f3283301a19c0a0fac48143181d1921f0c70b00505a01c3c9941840a0c6020796243c18c1ea4c0ee6505f034310081d64c0e86487293038b121b0c90d8c486f626373129b5890d66346a3193498c184090ca6486302432b12180090c6c48616243019219d8c0ccc48643303101817c090ba038593241c8060e0030b2c48170182db18169890b0648160181b8061fa4c8f6c4a76332399951c0ca4d06503631a2f01b1700c8ae03c1001a2b0041518c05e0184c930170060d40386401a2d00c27c980b0030560184c930150060d00386201a2900c2481a1200a0a6c6c5263228b189418c09cc544d62625b129298908ec403300e180068a00307c648453181f998110c70480682601c211920e0c60746484131c0c0140680707c6382001c118080f8c907a6303f6301e18e07c0d0440203831c0a00e05c04072648383181d3120dcc7026050160101ab180d189064c603162415b120ad8905e64c2e325169920b0c6854632293181299208409040048256241181208cc9042c482032413b18098cc048648220300f8120740a032630150180a00c0658902e030173180ab12050c60372601a3240c18c058090260301103421b1910189876664363261998f0c0c74506381e0360e0190480a82004c0f0080681b0300c8160540a0260480f0200680d258056200218a00c024040114792da2c964e98ae4cc4f1f6218e310444cadee64eea31f6218daf4c5572628ae02b47013a0407caa036460130700781c024020100000f 15 5 12 9 0 7
+def x0Data : Forest := fun i => decodeNode 9 21 0xaa9004d4801ea400d52004a9001d4892d00804d1a4b00203943010a1e1c4eccca766633b3309d9984f80ca760633b0309db15804cc27006138936939984d40c26b26b2732696992cb4c925a6493002696812cb40925b26927620938124a8c764e6492801d93b138040da400652001e9000d48004a4001d2062100c964740263ac40010288d00846b0e224c6512631893184498c22a0651203189018448cac020491062887c98be18c2180610c6367c4984240c212c6af862680b12c0589202c490402680812c0409202c68f89307e3183f1891fa048fc32a7c18a3e1891f2022f8327008183da4d9d7264eb93175c983ac0d1e0020f092c75c983b8099d604aeb0247598f804061d2c50e893262c9838d891c8030e462871b193164c1c0048e062a62c98374091bac52c56266ab12b55891aac48d801a6a80cb54061aac50c563065b1232d891a2660cb6246799232d89198648cc0306599b31404192664c531462b183180458a636010365f0192f80a97c04cbe0125f0072f8c5403258ba6205d004ae8c5002050b701c5be1c2bd8c95ec62af63057b182c8cc95e662af33057815804c915a650ac93147b122a8c7152c628f63053198298cd91f260a36305199aa3d89936c4a9b6244db12278c993664a9b3244d99a23e4c12cc60966244b9922580a91ec609162448b12248cc12203c8f00847813804cc11b26c8293241498a0a4c1040688701c43c9620a4c10a64c823254119220807c02630803283fc99159890fa6387c6252b4981dd890f0630783283b99915a4c0e86487432a2b4981c5890e26525662634b129a5890d2c486c31a3498c9a4c60d2650566302fb1217d890ca6605f6243181817d890c0648600242f81b158070ba064566302c312161890b26485801e2b00415806c02c605463623b1911d8c48ec604793027b1511d8988f2604c62523b1211c0d0900504862023809804c608a6384463207992108c7082c4c0f6301e1920f4c607a6383c33207b120dcc90706303831c1b99303d8c068c483431e07b180c58906263a0f326149928a4c9052634296241598c8a4c60526380f6300f99807d8904a6481f3241181807d89040648200240f81b03c0a03a0640f9300999204d89032630133180b81204d89028630140180981503c0d02204c0f008078078040d8100640802a04013020078100340800900c960098800462802009010040080200201e00 i
+def x0Tags := dagTraceTags x0Mask 0 (dagTagBases x0StockWords 0 0 0) 6 x0Data
+def x0States := dagTrace x0Mask x0StockWords 6 x0Data
+def x0MoveCert : List (DagMoveRecord 32) := []
+def x0Moves := dagMoves x0MoveCert
 set_option maxRecDepth 100000 in
-theorem hK_cert : T_cert.toList = (((((K_0 ++ (K_1 ++ K_2)) ++ (K_3 ++ (K_4 ++ K_5))) ++ ((K_6 ++ (K_7 ++ K_8)) ++ ((K_9 ++ K_10) ++ (K_11 ++ K_12)))) ++ (((K_13 ++ (K_14 ++ K_15)) ++ (K_16 ++ (K_17 ++ K_18))) ++ ((K_19 ++ (K_20 ++ K_21)) ++ ((K_22 ++ K_23) ++ (K_24 ++ K_25))))) ++ ((((K_26 ++ (K_27 ++ K_28)) ++ (K_29 ++ (K_30 ++ K_31))) ++ ((K_32 ++ (K_33 ++ K_34)) ++ ((K_35 ++ K_36) ++ (K_37 ++ K_38)))) ++ (((K_39 ++ (K_40 ++ K_41)) ++ ((K_42 ++ K_43) ++ (K_44 ++ K_45))) ++ ((K_46 ++ (K_47 ++ K_48)) ++ ((K_49 ++ K_50) ++ (K_51 ++ K_52)))))).map Prod.fst := by decide +kernel
+set_option maxHeartbeats 0 in
+theorem x0Autos : DagMovesOK x0Mask x0Goal 32 x0Moves := dagMovesOfCheck (by decide +kernel)
+def x0Check := dagCheckNode x0Mask x0Goal x0Chart (dagKnownCloses x0Goal x0Cuts) 334 x0States x0Moves x0Links x0Sample x0Tags
+def x0RootAt (token : Nat) : Bool :=
+  let s := rootState x0StockWords 6 token
+  !dagAllowedRoot x0Witnesses s.2.1 || dagLocal x0Mask x0Goal x0Chart (dagKnownCloses x0Goal x0Cuts) s ||
+  dagRef 334 x0States x0Moves x0Links 0 token s
 set_option maxRecDepth 100000 in
-theorem hT_cert : ∀ x, T_cert.mem x = true → ∃ h, (stepOK M_ Y_ PD_ PM_ G_ T_cert) x h = true :=
-  cover (p := stepOK M_ Y_ PD_ PM_ G_ T_cert) T_cert _ hK_cert ((all_app (all_app (all_app (all_app (all_app c_0 (all_app c_1 c_2)) (all_app c_3 (all_app c_4 c_5))) (all_app (all_app c_6 (all_app c_7 c_8)) (all_app (all_app c_9 c_10) (all_app c_11 c_12)))) (all_app (all_app (all_app c_13 (all_app c_14 c_15)) (all_app c_16 (all_app c_17 c_18))) (all_app (all_app c_19 (all_app c_20 c_21)) (all_app (all_app c_22 c_23) (all_app c_24 c_25))))) (all_app (all_app (all_app (all_app c_26 (all_app c_27 c_28)) (all_app c_29 (all_app c_30 c_31))) (all_app (all_app c_32 (all_app c_33 c_34)) (all_app (all_app c_35 c_36) (all_app c_37 c_38)))) (all_app (all_app (all_app c_39 (all_app c_40 c_41)) (all_app (all_app c_42 c_43) (all_app c_44 c_45))) (all_app (all_app c_46 (all_app c_47 c_48)) (all_app (all_app c_49 c_50) (all_app c_51 c_52)))))))
-
-theorem lb : ∀ s : ℕ, HasCircuitSize 5 (fun x : Fin 5 → Bool => Nat.testBit 0xfee8eaa8 (idx5 x)) s → 9 ≤ s :=
-  lb_cert _ L_ M_ Y_ XS_ PD_ PM_ G_ T_cert 8 9 rfl (by decide +kernel) (by decide +kernel) (by decide +kernel) ⟨fun _ => false, fun _ => true, by decide +kernel⟩ (by decide +kernel) (by decide +kernel) hT_cert (by decide +kernel)
-
+set_option maxHeartbeats 0 in
+theorem x0RootBlock0 : treeBlock 0 16 x0RootAt = true := by decide +kernel
+theorem x0Roots : dagCheckRoots x0Mask x0Goal x0Chart (dagKnownCloses x0Goal x0Cuts) x0Witnesses (dagRef 334 x0States x0Moves x0Links 0) x0StockWords 6 = true := x0RootBlock0
 set_option maxRecDepth 100000 in
-theorem main : ∀ s : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 5 (fun x : Fin 5 → Bool => Nat.testBit 0xfee8eaa8 (∑ i : Fin 5, if x i then 2 ^ (i : ℕ) else 0)) s → ∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 C ∧ C.size ≤ s ∧ ∀ x : Fin 5 → Bool, C.eval (List.ofFn x) = Nat.testBit 0xfee8eaa8 (∑ i : Fin 5, if x i then 2 ^ (i : ℕ) else 0) := by
-  intro s h
-  simp only [sum_eq] at h ⊢
-  exact ⟨⟨[⟨.or, [0, 4]⟩, ⟨.and, [1, 2]⟩, ⟨.or, [0, 6]⟩, ⟨.or, [1, 2]⟩, ⟨.and, [7, 3]⟩, ⟨.or, [7, 3]⟩, ⟨.and, [8, 10]⟩, ⟨.and, [11, 5]⟩, ⟨.or, [9, 12]⟩], 13⟩, by simp [PEqualNP.MetaComplexity.Monotone2], le_trans (by decide) (lb s h), by decide +kernel⟩
+set_option maxHeartbeats 0 in
+theorem x0Block0 : treeBlock 0 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block16 : treeBlock 16 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block32 : treeBlock 32 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block48 : treeBlock 48 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block64 : treeBlock 64 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block80 : treeBlock 80 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block96 : treeBlock 96 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block112 : treeBlock 112 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block128 : treeBlock 128 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block144 : treeBlock 144 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block160 : treeBlock 160 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block176 : treeBlock 176 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block192 : treeBlock 192 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block208 : treeBlock 208 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block224 : treeBlock 224 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block240 : treeBlock 240 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block256 : treeBlock 256 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block272 : treeBlock 272 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block288 : treeBlock 288 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block304 : treeBlock 304 16 x0Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Block320 : treeBlock 320 14 x0Check = true := by decide +kernel
+theorem x0Blocks : treeBlock 0 334 x0Check = true := (@treeBlock_merge 0 160 174 x0Check (@treeBlock_merge 0 80 80 x0Check (@treeBlock_merge 0 32 48 x0Check (@treeBlock_merge 0 16 16 x0Check x0Block0 x0Block16) (@treeBlock_merge 32 16 32 x0Check x0Block32 (@treeBlock_merge 48 16 16 x0Check x0Block48 x0Block64))) (@treeBlock_merge 80 32 48 x0Check (@treeBlock_merge 80 16 16 x0Check x0Block80 x0Block96) (@treeBlock_merge 112 16 32 x0Check x0Block112 (@treeBlock_merge 128 16 16 x0Check x0Block128 x0Block144)))) (@treeBlock_merge 160 80 94 x0Check (@treeBlock_merge 160 32 48 x0Check (@treeBlock_merge 160 16 16 x0Check x0Block160 x0Block176) (@treeBlock_merge 192 16 32 x0Check x0Block192 (@treeBlock_merge 208 16 16 x0Check x0Block208 x0Block224))) (@treeBlock_merge 240 48 46 x0Check (@treeBlock_merge 240 16 32 x0Check x0Block240 (@treeBlock_merge 256 16 16 x0Check x0Block256 x0Block272)) (@treeBlock_merge 288 16 30 x0Check x0Block288 (@treeBlock_merge 304 16 14 x0Check x0Block304 x0Block320)))))
+theorem x0Known : Known x0Cuts := show Known [] from fun _ h => False.elim (List.not_mem_nil h)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x0Stock : Lower x0Mask x0StockWords x0Goal 7 := by
+  apply lowerDag _ _ _ _ x0Autos _ _ _ x0Known _ x0Roots x0Blocks
+  · unfold Masked; decide +kernel
+  · unfold Masked; decide +kernel
+  · unfold properWord; decide +kernel
+  · exact chartOfCheck (by decide +kernel)
+  · exact stockMaskedOfCheck (by decide +kernel)
+  · unfold x0StockWords; decide +kernel
+  · decide +kernel
+  · simp only [x0Cuts, List.mem_cons, List.not_mem_nil, or_false]
+    intro b h
+    exact False.elim h
 
-end R0
+def x1Mask : Word := 0x33333333
+abbrev x1Goal : Word := sGoal &&& x1Mask
+abbrev x1StockWords : List Word := projectDAGStock x1Mask sBase [0, 2, 3, 4]
+def x1Fact : Bound := (x1Mask, x1StockWords, 5, x1Goal)
+def x1Cuts : List Bound := []
+def x1Chart : Option RowChart := none
+def x1Sample : DagSample := (0, 0)
+def x1Witnesses := unpackWitnesses x1StockWords [2564, 264705, 528897, 800780]
+def x1Links : DagLinks :=
+  dagLookupLinks 0x6318c48e1 0x7891324b89632520a400f 5 2 11 3 0 4
+def x1Data : Forest := fun i => decodeNode 3 14 0xc4a5929c4899220524078 i
+def x1Tags := dagTraceTags x1Mask 0 (dagTagBases x1StockWords 0 0 0) 4 x1Data
+def x1States := dagTrace x1Mask x1StockWords 4 x1Data
+def x1MoveCert : List (DagMoveRecord 32) := []
+def x1Moves := dagMoves x1MoveCert
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x1Autos : DagMovesOK x1Mask x1Goal 32 x1Moves := dagMovesOfCheck (by decide +kernel)
+def x1Check := dagCheckNode x1Mask x1Goal x1Chart (dagKnownCloses x1Goal x1Cuts) 6 x1States x1Moves x1Links x1Sample x1Tags
+def x1RootAt (token : Nat) : Bool :=
+  let s := rootState x1StockWords 4 token
+  !dagAllowedRoot x1Witnesses s.2.1 || dagLocal x1Mask x1Goal x1Chart (dagKnownCloses x1Goal x1Cuts) s ||
+  dagRef 6 x1States x1Moves x1Links 0 token s
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x1RootBlock0 : treeBlock 0 16 x1RootAt = true := by decide +kernel
+theorem x1Roots : dagCheckRoots x1Mask x1Goal x1Chart (dagKnownCloses x1Goal x1Cuts) x1Witnesses (dagRef 6 x1States x1Moves x1Links 0) x1StockWords 4 = true := x1RootBlock0
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x1Block0 : treeBlock 0 6 x1Check = true := by decide +kernel
+theorem x1Blocks : treeBlock 0 6 x1Check = true := x1Block0
+theorem x1Known : Known x1Cuts := show Known [] from fun _ h => False.elim (List.not_mem_nil h)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x1Stock : Lower x1Mask x1StockWords x1Goal 5 := by
+  apply lowerDag _ _ _ _ x1Autos _ _ _ x1Known _ x1Roots x1Blocks
+  · unfold Masked; decide +kernel
+  · unfold Masked; decide +kernel
+  · unfold properWord; decide +kernel
+  · exact chartOfCheck (by decide +kernel)
+  · exact stockMaskedOfCheck (by decide +kernel)
+  · unfold x1StockWords; decide +kernel
+  · decide +kernel
+  · simp only [x1Cuts, List.mem_cons, List.not_mem_nil, or_false]
+    intro b h
+    exact False.elim h
 
-end PEqualNP.Outside.L_meta_8694_aux
+def x2Mask : Word := 0xf0f0f0f
+abbrev x2Goal : Word := sGoal &&& x2Mask
+abbrev x2StockWords : List Word := projectDAGStock x2Mask sBase [0, 1, 3, 4]
+def x2Fact : Bound := (x2Mask, x2StockWords, 5, x2Goal)
+def x2Cuts : List Bound := []
+def x2Chart : Option RowChart := none
+def x2Sample : DagSample := (0, 0)
+def x2Witnesses := unpackWitnesses x2StockWords [1538, 263681, 528897, 799754]
+def x2Links : DagLinks :=
+  dagLookupLinks 0x6318c48e1 0x7891324b89632520a400f 5 2 11 3 0 4
+def x2Data : Forest := fun i => decodeNode 3 14 0xc4a5929c4899220524078 i
+def x2Tags := dagTraceTags x2Mask 0 (dagTagBases x2StockWords 0 0 0) 4 x2Data
+def x2States := dagTrace x2Mask x2StockWords 4 x2Data
+def x2MoveCert : List (DagMoveRecord 32) := []
+def x2Moves := dagMoves x2MoveCert
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x2Autos : DagMovesOK x2Mask x2Goal 32 x2Moves := dagMovesOfCheck (by decide +kernel)
+def x2Check := dagCheckNode x2Mask x2Goal x2Chart (dagKnownCloses x2Goal x2Cuts) 6 x2States x2Moves x2Links x2Sample x2Tags
+def x2RootAt (token : Nat) : Bool :=
+  let s := rootState x2StockWords 4 token
+  !dagAllowedRoot x2Witnesses s.2.1 || dagLocal x2Mask x2Goal x2Chart (dagKnownCloses x2Goal x2Cuts) s ||
+  dagRef 6 x2States x2Moves x2Links 0 token s
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x2RootBlock0 : treeBlock 0 16 x2RootAt = true := by decide +kernel
+theorem x2Roots : dagCheckRoots x2Mask x2Goal x2Chart (dagKnownCloses x2Goal x2Cuts) x2Witnesses (dagRef 6 x2States x2Moves x2Links 0) x2StockWords 4 = true := x2RootBlock0
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x2Block0 : treeBlock 0 6 x2Check = true := by decide +kernel
+theorem x2Blocks : treeBlock 0 6 x2Check = true := x2Block0
+theorem x2Known : Known x2Cuts := show Known [] from fun _ h => False.elim (List.not_mem_nil h)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x2Stock : Lower x2Mask x2StockWords x2Goal 5 := by
+  apply lowerDag _ _ _ _ x2Autos _ _ _ x2Known _ x2Roots x2Blocks
+  · unfold Masked; decide +kernel
+  · unfold Masked; decide +kernel
+  · unfold properWord; decide +kernel
+  · exact chartOfCheck (by decide +kernel)
+  · exact stockMaskedOfCheck (by decide +kernel)
+  · unfold x2StockWords; decide +kernel
+  · decide +kernel
+  · simp only [x2Cuts, List.mem_cons, List.not_mem_nil, or_false]
+    intro b h
+    exact False.elim h
 
-open PEqualNP.Outside.L_meta_8694_aux in
-theorem PEqualNP.Outside.L_meta_8694 : ∀ s : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 5 (fun x : Fin 5 → Bool => Nat.testBit 0xfee8eaa8 (∑ i : Fin 5, if x i then 2 ^ (i : ℕ) else 0)) s → ∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 C ∧ C.size ≤ s ∧ ∀ x : Fin 5 → Bool, C.eval (List.ofFn x) = Nat.testBit 0xfee8eaa8 (∑ i : Fin 5, if x i then 2 ^ (i : ℕ) else 0) :=
-  R0.main
+def x3Mask : Word := 0xff00ff
+abbrev x3Goal : Word := sGoal &&& x3Mask
+abbrev x3StockWords : List Word := projectDAGStock x3Mask sBase [0, 1, 2, 4]
+def x3Fact : Bound := (x3Mask, x3StockWords, 5, x3Goal)
+def x3Cuts : List Bound := []
+def x3Chart : Option RowChart := none
+def x3Sample : DagSample := (0, 0)
+def x3Witnesses := unpackWitnesses x3StockWords [1538, 263681, 526849, 797702]
+def x3Links : DagLinks :=
+  dagLookupLinks 0x6318c48e1 0x7891324b89632520a400f 5 2 11 3 0 4
+def x3Data : Forest := fun i => decodeNode 3 14 0xc4a5929c4899220524078 i
+def x3Tags := dagTraceTags x3Mask 0 (dagTagBases x3StockWords 0 0 0) 4 x3Data
+def x3States := dagTrace x3Mask x3StockWords 4 x3Data
+def x3MoveCert : List (DagMoveRecord 32) := []
+def x3Moves := dagMoves x3MoveCert
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x3Autos : DagMovesOK x3Mask x3Goal 32 x3Moves := dagMovesOfCheck (by decide +kernel)
+def x3Check := dagCheckNode x3Mask x3Goal x3Chart (dagKnownCloses x3Goal x3Cuts) 6 x3States x3Moves x3Links x3Sample x3Tags
+def x3RootAt (token : Nat) : Bool :=
+  let s := rootState x3StockWords 4 token
+  !dagAllowedRoot x3Witnesses s.2.1 || dagLocal x3Mask x3Goal x3Chart (dagKnownCloses x3Goal x3Cuts) s ||
+  dagRef 6 x3States x3Moves x3Links 0 token s
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x3RootBlock0 : treeBlock 0 16 x3RootAt = true := by decide +kernel
+theorem x3Roots : dagCheckRoots x3Mask x3Goal x3Chart (dagKnownCloses x3Goal x3Cuts) x3Witnesses (dagRef 6 x3States x3Moves x3Links 0) x3StockWords 4 = true := x3RootBlock0
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x3Block0 : treeBlock 0 6 x3Check = true := by decide +kernel
+theorem x3Blocks : treeBlock 0 6 x3Check = true := x3Block0
+theorem x3Known : Known x3Cuts := show Known [] from fun _ h => False.elim (List.not_mem_nil h)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x3Stock : Lower x3Mask x3StockWords x3Goal 5 := by
+  apply lowerDag _ _ _ _ x3Autos _ _ _ x3Known _ x3Roots x3Blocks
+  · unfold Masked; decide +kernel
+  · unfold Masked; decide +kernel
+  · unfold properWord; decide +kernel
+  · exact chartOfCheck (by decide +kernel)
+  · exact stockMaskedOfCheck (by decide +kernel)
+  · unfold x3StockWords; decide +kernel
+  · decide +kernel
+  · simp only [x3Cuts, List.mem_cons, List.not_mem_nil, or_false]
+    intro b h
+    exact False.elim h
+
+def x4Mask : Word := 0xffff
+abbrev x4Goal : Word := sGoal &&& x4Mask
+abbrev x4StockWords : List Word := projectDAGStock x4Mask sBase [0, 1, 2, 3]
+def x4Fact : Bound := (x4Mask, x4StockWords, 6, x4Goal)
+def x4Cuts : List Bound := []
+def x4Chart : Option RowChart := none
+def x4Sample : DagSample := (0, 0)
+def x4Witnesses := unpackWitnesses x4StockWords [1538, 263681, 526849, 791041]
+def x4Links : DagLinks :=
+  dagLookupLinks 0x2b0541a4348280d009c3306604a190320230c6088310220402801001e13c0780e09c0380684d01a0302600c01612c0580a841a001 0x200885892193408021c324718d19318658a02008558c14330480a1101c3e4c0e324300d0b01c258c08624180d0502808022492d8e4b2262b8189df62179881d32b6cc9da31f60c6d731558c51302b4009cd01f2806c70131003c300904020000f 11 5 12 6 0 7
+def x4Data : Forest := fun i => decodeNode 6 18 0x24b4192c058ac19348589c162105880132b058d1c32704c7c162864c6c131504c50163050cc1402b040a1101c4409c193038c90e01f040d0b01c2c06c1630218908013040d050281403c10090402020080403c0 i
+def x4Tags := dagTraceTags x4Mask 0 (dagTagBases x4StockWords 0 0 0) 5 x4Data
+def x4States := dagTrace x4Mask x4StockWords 5 x4Data
+def x4MoveCert : List (DagMoveRecord 32) := []
+def x4Moves := dagMoves x4MoveCert
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x4Autos : DagMovesOK x4Mask x4Goal 32 x4Moves := dagMovesOfCheck (by decide +kernel)
+def x4Check := dagCheckNode x4Mask x4Goal x4Chart (dagKnownCloses x4Goal x4Cuts) 37 x4States x4Moves x4Links x4Sample x4Tags
+def x4RootAt (token : Nat) : Bool :=
+  let s := rootState x4StockWords 5 token
+  !dagAllowedRoot x4Witnesses s.2.1 || dagLocal x4Mask x4Goal x4Chart (dagKnownCloses x4Goal x4Cuts) s ||
+  dagRef 37 x4States x4Moves x4Links 0 token s
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x4RootBlock0 : treeBlock 0 16 x4RootAt = true := by decide +kernel
+theorem x4Roots : dagCheckRoots x4Mask x4Goal x4Chart (dagKnownCloses x4Goal x4Cuts) x4Witnesses (dagRef 37 x4States x4Moves x4Links 0) x4StockWords 5 = true := x4RootBlock0
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x4Block0 : treeBlock 0 16 x4Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x4Block16 : treeBlock 16 16 x4Check = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x4Block32 : treeBlock 32 5 x4Check = true := by decide +kernel
+theorem x4Blocks : treeBlock 0 37 x4Check = true := (@treeBlock_merge 0 16 21 x4Check x4Block0 (@treeBlock_merge 16 16 5 x4Check x4Block16 x4Block32))
+theorem x4Known : Known x4Cuts := show Known [] from fun _ h => False.elim (List.not_mem_nil h)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem x4Stock : Lower x4Mask x4StockWords x4Goal 6 := by
+  apply lowerDag _ _ _ _ x4Autos _ _ _ x4Known _ x4Roots x4Blocks
+  · unfold Masked; decide +kernel
+  · unfold Masked; decide +kernel
+  · unfold properWord; decide +kernel
+  · exact chartOfCheck (by decide +kernel)
+  · exact stockMaskedOfCheck (by decide +kernel)
+  · unfold x4StockWords; decide +kernel
+  · decide +kernel
+  · simp only [x4Cuts, List.mem_cons, List.not_mem_nil, or_false]
+    intro b h
+    exact False.elim h
+
+def topMask : Word := 0xffffffff
+abbrev topGoal : Word := sGoal &&& topMask
+abbrev topStockWords : List Word := projectDAGStock topMask sBase [0, 1, 2, 3, 4]
+def topFact : Bound := (topMask, topStockWords, 9, topGoal)
+def topCuts : List Bound := [x0Fact, x1Fact, x2Fact, x3Fact, x4Fact]
+def topChart : Option RowChart := none
+def topSample : DagSample := (0, 0)
+def topWitnesses := unpackWitnesses topStockWords [1538, 263681, 526849, 791041, 1059846]
+def topLinks : DagLinks :=
+  dagLookupLinks 0x386ce183860e183822e083820e083820d847600d80348cd10b440d1032ebcb832e0cb832a2ca832a0ca83281ca03280ca03071c107002bf86fc1be0af04bb86ec1b98ee60b982e60b982dc5b702dc0b702da1b50ed40b486cc3a9cea41a902a40a886a20a8829e2a7829e0a68a9a0a60684aa1027e39f827e09f06744999e660998264199026219806600980260092324429102440910240290024008aae2a08a822a0898a26089822608906240890224089021e387821e087821e0859216085061407cc5f017b09ea17a05e427711da17605d237481d207481d207215c807201c80708dc016e8dba06e05b236c05b006b09aa16a8185360857a45e057615d817605d057405d017025c017005c016c25b016a15a816a055a95605581503540150054014e153814644e1d3614c893204b0d2c04a092614905221478916445050e343810e043810e0428904341010213f0cfa13e04f233c80f203c80f203a14e803984e603980e603904bf32f04b442c84b012c00b002c00b002c00ae12b80aa22a80a812a00a802908a40242890024008a322808a0228088122008041c9c7201c807011c006e11b046c01b006a11a806621980641190062118046001800600180048c1108440110044010084000f843e00f043c00f003c00e083800e0022b00c0001 0x41f0e609870f39376ec99b264b57f258a0637423199998ac84c4e256210831043c0aa1c03d10f4586fa241a4b218c86f064185b1fb998ad8ec42be620851a1a74d061267e9332b3218f904c6c4662a0f31483fa241b109f3286e593562496af64b160c86926353131590189c40c420e6205e61c0364b209870f893761c96aee4b15ec6e6162b1fb1387d88418c41030278100dbfc0d9fc03cfa048807a2bf7d11f9286f09417dc9fbe64b5f1258e462b613103dcd0cbc682f633f48195a0cc9c9263e1d3150598a318021b9260f403c6db12318101e3e885a341777a2369891c6682e133d63020365891dde90d79307682635a4c1d6084ea041748203a0079aac48e3c486a312380cc1a6c48e1f4869498381901e7e88f2c43786213bf0f5d9872e7c38734a1b964b1c8c86d162460b102acd0dc466e553356f999a28cac9063e1b3150518a373101aa66ad90406c0143564f1a6648d36346e61c36e4ddb5262d792d6b4962a8cdda8656d23270d18a824c51a1e88a93415419ab3410153284ce93d6649629cd09bbe88d193467b21298d0d9663a193150418a3201218c080c500c64fa231f10d89872c3c38614a13064d948c86886374131991d8a42cc42076205e61c01a4b1798700592c5fe1c2fa4dd7b25abb92c51b1ba1d8ad02c4e15621023102e809d72036b60365a8152c4120b5898acc48553122aa4d152c98a86405398e2941216fe8ab4f4459ca1a765056527eb092d57c962b990cbcc82ad63f55b15a9989d48c42a362043195918c7c2862822008403182840f0fe648220404f7a216990537e888f64146b1e9f8c90440807d3244dfa41ed8c1340987a6304c02125c1052c0809502a2d626247120f26487832447e242318c0ee6487632446fa4232500ea66045c403a3182240f0e6c48a0f444fe21a771093987a99c394a61c24e50d25258906434731b9558d516c668a62b44310a1d8810c686723242218f84cc510128079634371a61c0d00d46507494039c9a1e18d4fa0807c01c3c49e1d9890ed26880c383fc9b9fa4c4f725a7a92c3cb1b9dd8aceac4e7462139b101c7d10dcc8270635360201ba508db27a6b92c35321213d11072868292d40c961c98d0de6846932a0c0040f9890ce0605a94c32ca40f4c6078c48630301db120e8c60300805ff442d4a0973108a987c51c381c98c0e0c60b9290539301b98c160100ae0205ac422ce1e95b0e06c63054c4829e200d4c60300683431828e240c9890a00983162427021134104980804b03622ca0116500cde8864c433161c9870e0c12865e9422ec9e96e4dcab26c5293327c9692a4b092c864863723b10118d0c8866e303180918a0fa4d07ac502c34c171a00a0cd0792683b9341c49b0e18f06cc48369341a0200cc0707d8703d9371e4968ee4b074c6e396311bb158d589c64c423162017fa20b25045d26a2a040166210af0f45387028942217a210710c818723fc38183140b4d084e66c24048110200840303c0901a9300e01e06b100300801700c12fa208f10c418721fc380eca186e4dc332661692d0ac9605190826c6c1262a06e1c01a4b01b8700592c04b120264d00d8700592c0861c03e4dc1d25a0c92c05b1b8298ac10c4e076210231000c09c0403711c388449bc164b603258f56376f315b2989d80c42b86205119ba14cacd064e4331f1318d844c54026280001f 14 5 12 9 0 7
+def topData : Forest := fun i => decodeNode 9 21 0x30e003e8b0902a8700f43bd1212c870963f849a1c24cfe1326e01f448362141a4b403871020278100dc0a4b003e8af60367f00f3fbd11ed286f693f7b0243ea4b5ed258f63437b19fbd98dc02078f4f446fe21b7fd11e3884dfc3d6ffa43b4131db872df04274020ba0101d003ce8c386fca1b7e4b1bec86dfc487199bb7fd21c0c80e03336fb15807d1197870d293769498b48101b0050d892d6949634a4f1aa656d263469993b4a4d197e88d064265c9eb301019b258cc31d65b13807d1182090c8c43608203180318b872c1c3860ca13064d982c4201c385cc9bae64b573870bc92c5c813ae406d72c4001f455181b2d40a96be88a394351c9fa8c1216325aa392c51b21a8d8fd47890ac62b51c9a29d9314ec80a731c53b13a8c1214ac42a36205199b8040f143e8886c43437a227b1090d87a86f484d02626b0e50c084950414a8202540a92b870869434349621b12122c8686c4847b1ba1bd21192808c63343315a180f112c4286620431a1a18cac03e886994334c969a64b0d38707393739c989cc100f80387c92d39c961cd8dce72787862b39c9a1d989ce6c427362039b1a1a7d10e0c6a7034234ca11aa4f4d40806c92c353211a8ca8d264e0103033fa2112520cb8864403031e1c9130e08928644f442fca11124f4892905c9372262115b0f4ac080570102be1c15a4d88989053c4029c99913120a00985092d2202112c104960804b03625c9611190c88c6e44620221a19125008a66e4431f00fa209f10c4f87227c3813e1c0c64dc6325a3192c18b1b8c58c462c783862b18c9a0d989c620803301c19b108c588062c5027f441749a8b8d084f88428c3d140200ab0e051284283361398d807d102409024c43090200880304387212c380902407a50c240781c9370962006a4cc240801800c0bc9684a4b024c841263609315048c5403870029370149680b0e01b258026370131580a4d012c4e026210161c0164b00ac40020270100d808c500203e00 i
+def topTags := dagTraceTags topMask 0 (dagTagBases topStockWords 0 0 0) 8 topData
+def topStates := dagTrace topMask topStockWords 8 topData
+def topMoveCert : List (DagMoveRecord 32) := []
+def topMoves := dagMoves topMoveCert
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topAutos : DagMovesOK topMask topGoal 32 topMoves := dagMovesOfCheck (by decide +kernel)
+def topCheck := dagCheckNode topMask topGoal topChart (dagKnownCloses topGoal topCuts) 274 topStates topMoves topLinks topSample topTags
+def topRootAt (token : Nat) : Bool :=
+  let s := rootState topStockWords 8 token
+  !dagAllowedRoot topWitnesses s.2.1 || dagLocal topMask topGoal topChart (dagKnownCloses topGoal topCuts) s ||
+  dagRef 274 topStates topMoves topLinks 0 token s
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topRootBlock0 : treeBlock 0 32 topRootAt = true := by decide +kernel
+theorem topRoots : dagCheckRoots topMask topGoal topChart (dagKnownCloses topGoal topCuts) topWitnesses (dagRef 274 topStates topMoves topLinks 0) topStockWords 8 = true := topRootBlock0
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock0 : treeBlock 0 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock16 : treeBlock 16 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock32 : treeBlock 32 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock48 : treeBlock 48 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock64 : treeBlock 64 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock80 : treeBlock 80 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock96 : treeBlock 96 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock112 : treeBlock 112 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock128 : treeBlock 128 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock144 : treeBlock 144 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock160 : treeBlock 160 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock176 : treeBlock 176 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock192 : treeBlock 192 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock208 : treeBlock 208 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock224 : treeBlock 224 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock240 : treeBlock 240 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock256 : treeBlock 256 16 topCheck = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topBlock272 : treeBlock 272 2 topCheck = true := by decide +kernel
+theorem topBlocks : treeBlock 0 274 topCheck = true := (@treeBlock_merge 0 144 130 topCheck (@treeBlock_merge 0 64 80 topCheck (@treeBlock_merge 0 32 32 topCheck (@treeBlock_merge 0 16 16 topCheck topBlock0 topBlock16) (@treeBlock_merge 32 16 16 topCheck topBlock32 topBlock48)) (@treeBlock_merge 64 32 48 topCheck (@treeBlock_merge 64 16 16 topCheck topBlock64 topBlock80) (@treeBlock_merge 96 16 32 topCheck topBlock96 (@treeBlock_merge 112 16 16 topCheck topBlock112 topBlock128)))) (@treeBlock_merge 144 64 66 topCheck (@treeBlock_merge 144 32 32 topCheck (@treeBlock_merge 144 16 16 topCheck topBlock144 topBlock160) (@treeBlock_merge 176 16 16 topCheck topBlock176 topBlock192)) (@treeBlock_merge 208 32 34 topCheck (@treeBlock_merge 208 16 16 topCheck topBlock208 topBlock224) (@treeBlock_merge 240 16 18 topCheck topBlock240 (@treeBlock_merge 256 16 2 topCheck topBlock256 topBlock272)))))
+theorem topKnown : Known topCuts := extendKnown (extendKnown (extendKnown (extendKnown (extendKnown (show Known [] from fun _ h => False.elim (List.not_mem_nil h)) x4Stock) x3Stock) x2Stock) x1Stock) x0Stock
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem topStock : Lower topMask topStockWords topGoal 9 := by
+  apply lowerDag _ _ _ _ topAutos _ _ _ topKnown _ topRoots topBlocks
+  · unfold Masked; decide +kernel
+  · unfold Masked; decide +kernel
+  · unfold properWord; decide +kernel
+  · exact chartOfCheck (by decide +kernel)
+  · exact stockMaskedOfCheck (by decide +kernel)
+  · unfold topStockWords; decide +kernel
+  · decide +kernel
+  · simp only [topCuts, List.mem_cons, List.not_mem_nil, or_false]
+    intro b h
+    rcases h with rfl | rfl | rfl | rfl | rfl <;> decide +kernel
+
+end PEqualNP.Outside.L_meta_8694
+
+
+open PEqualNP.Outside.L_meta_8694 in
+theorem PEqualNP.Outside.L_meta_8694 : ∀ s : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 5 (fun x : Fin 5 → Bool => Nat.testBit 0xfee8eaa8 (∑ i : Fin 5, if x i then 2 ^ (i : ℕ) else 0)) s → ∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 C ∧ C.size ≤ s ∧ ∀ x : Fin 5 → Bool, C.eval (List.ofFn x) = Nat.testBit 0xfee8eaa8 (∑ i : Fin 5, if x i then 2 ^ (i : ℕ) else 0) := by
+  intro t h
+  let raw : List (BitVec 32) := [0xaaaaaaaa, 0xcccccccc, 0xf0f0f0f0, 0xff00ff00, 0xffff0000]
+  let goal : BitVec 32 := 0xfee8eaa8
+  have root : Lower (fullMask 32) (raw.map BitVec.toNat) goal.toNat 9 :=
+    hcsLowerEq (by decide +kernel) (by decide +kernel) (by decide +kernel) topStock
+  have size : 9 ≤ t :=
+    hcsLower (n := 5) raw goal 9 _ (by decide +kernel) (by decide +kernel) root t h
+  let circuit : PEqualNP.CircuitLowerBounds.Circuit :=
+    ⟨[⟨.and, [1, 3]⟩, ⟨.or, [0, 5]⟩, ⟨.or, [2, 6]⟩, ⟨.and, [2, 6]⟩, ⟨.and, [4, 7]⟩, ⟨.or, [0, 9]⟩, ⟨.or, [1, 3]⟩, ⟨.and, [10, 11]⟩, ⟨.or, [8, 12]⟩], 13⟩
+  refine ⟨circuit, ?_, ?_, by decide +kernel⟩
+  · intro gate member
+    simp only [circuit, List.mem_cons, List.not_mem_nil, or_false] at member
+    rcases member with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp
+  · exact Nat.le_trans (by decide +kernel : circuit.size ≤ 9) size
