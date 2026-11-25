@@ -108,6 +108,7 @@ theorem aux : True := trivial
 
 end PEqualNP.Outside.L_meta_6595
 
+
 theorem PEqualNP.Outside.L_meta_6595 : ∀ (x1 x2 : ℕ) (x3 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.TopForm.IsAO2 x1 x3 → ∀ (x5 : Fin x2 × Fin x2 → Fin x1 → Bool) (x6 : Finset (Fin x2) → Fin x1 → Bool), ∃ (x7 : ℕ → Set ((Fin x2 × Fin x2) × Finset (Fin x2))), (∀ (x8 : ℕ), ∃ (x9 : Set (Fin x2 × Fin x2)) (x10 : Set (Finset (Fin x2))), x7 x8 = x9 ×ˢ x10) ∧ (∀ (x8 : Fin x1), x7 ↑x8 = {x9 : (Fin x2 × Fin x2) × Finset (Fin x2) | x5 x9.1 x8 = Bool.true ∧ x6 x9.2 x8 = Bool.false}) ∧ (∀ (x8 : Fin x3.size), ∃ x9 < x1 + ↑x8, ∃ x10 < x1 + ↑x8, (x3.gates.get x8).inputs = [x9, x10] ∧ x7 (x1 + ↑x8) ⊆ x7 x9 ∪ x7 x10) ∧ (x3.output < x1 + x3.size ∨ x7 x3.output = ∅) ∧ x7 x3.output = {x8 : (Fin x2 × Fin x2) × Finset (Fin x2) | PEqualNP.MetaComplexity.circuitFun x1 x3 (x5 x8.1) = Bool.true ∧ PEqualNP.MetaComplexity.circuitFun x1 x3 (x6 x8.2) = Bool.false} := by
   intro n N C hC φ ψ
   let V : (Fin n → Bool) → ℕ → Bool := fun z w => (PEqualNP.Outside.L_meta_6595.run C.gates (List.ofFn z)).getD w false
