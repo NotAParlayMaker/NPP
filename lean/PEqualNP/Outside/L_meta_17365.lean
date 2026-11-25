@@ -13,7 +13,9 @@ reads the first `k` wires of a wire list of length `m`, and the new gates are ap
 wire `m - 1`. So two subcircuits are put one after the other without renumbering any gate.
 -/
 
-namespace PEqualNP.Outside.L_meta_17365.Helpers
+namespace PEqualNP.Outside.L_meta_17365
+
+namespace Helpers
 
 open PEqualNP.CircuitLowerBounds
 
@@ -127,7 +129,7 @@ theorem shannon (k : ℕ) : ∀ (f : (Fin k → Bool) → Bool) (m : ℕ), k ≤
       rw [show M = w2.length from l2.symm, final_gates w2 k o0 o1 hk2 h02 h12, ek, e0, e1]
       cases w.getD k false <;> simp
 
-end PEqualNP.Outside.L_meta_17365.Helpers
+end Helpers
 
 
 /-!
@@ -139,7 +141,7 @@ edge into a column that is not full, and a right vertex with an edge from a row 
 must be read. So their number is at most the size plus one (`reads_le`).
 -/
 
-namespace PEqualNP.Outside.L_meta_17365.RepReads
+namespace RepReads
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_17365.Helpers
 open PEqualNP.Represents
@@ -328,7 +330,7 @@ theorem reads_le {n m s : ℕ} (A : Fin n → Fin m → Bool) (h : RepSizeAtMost
   have : C.gates.length ≤ s := hs
   omega
 
-end PEqualNP.Outside.L_meta_17365.RepReads
+end RepReads
 
 
 /-!
@@ -339,7 +341,7 @@ is its other wire). Every live wire that is off is read by a live gate that disa
 as many gates disappear as there are live inputs in `Z`, unless the output is off (`kill`).
 -/
 
-namespace PEqualNP.Outside.L_meta_17365.RepInduced
+namespace RepInduced
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Outside.L_meta_17365.Helpers
 open PEqualNP.Represents RepReads
@@ -888,10 +890,10 @@ theorem induced : ∀ (n m s : ℕ) (A : Fin n → Fin m → Bool) (R : Finset (
     try rw [e3, e4]
     omega
 
-end PEqualNP.Outside.L_meta_17365.RepInduced
+end RepInduced
 
 
-namespace PEqualNP.Outside.L_meta_17365.C7626
+namespace C7626
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
@@ -2620,14 +2622,13 @@ theorem main : ∀ (n : ℕ) (C : Circuit), PEqualNP.MetaComplexity.Monotone2 C 
 
 theorem aux : True := trivial
 
-end PEqualNP.Outside.L_meta_17365.C7626
+end C7626
 
-theorem PEqualNP.Outside.L_meta_17365.C7626.crown : ∀ n s : ℕ, PEqualNP.Represents.RepSizeAtMost (fun u v : Fin n => decide (u ≠ v)) s → 3 * n ≤ s + 3 := by
+theorem C7626.crown : ∀ n s : ℕ, PEqualNP.Represents.RepSizeAtMost (fun u v : Fin n => decide (u ≠ v)) s → 3 * n ≤ s + 3 := by
   rintro n s ⟨C, hC, hs, hf⟩
   have := PEqualNP.Outside.L_meta_17365.C7626.main n C hC hf
   omega
 
-namespace PEqualNP.Outside.L_meta_17365
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity PEqualNP.Represents
 
