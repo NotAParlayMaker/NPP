@@ -105,7 +105,9 @@ theorem PEqualNP.Outside.R_meta_4123_512
       H.Adj a b → (v = w ∨ H.Adj v w) →
       ((H.Adj v a ∨ H.Adj w a) ∧ a ≠ v ∧ a ≠ w) →
       ¬ ((H.Adj v b ∨ H.Adj w b) ∧ b ≠ v ∧ b ≠ w) := by
-    intro a b v w hab hvw ⟨ha_adj, hav, haw⟩ ⟨hb_adj, hbv, hbw⟩
+    intro a b v w hab hvw ha hb
+    rcases ha with ⟨ha_adj, hav, haw⟩
+    rcases hb with ⟨hb_adj, hbv, hbw⟩
     have habG := hH_sub a b hab
     rcases ha_adj with hva | hwa <;> rcases hb_adj with hvb | hwb
     · exact hno3 v a b (hH_sub _ _ hva) habG (hH_sub _ _ hvb).symm
@@ -121,14 +123,12 @@ theorem PEqualNP.Outside.R_meta_4123_512
     rw [← SimpleGraph.coe_edgeFinset, Set.ncard_coe_finset]
   have hSumBound : T.card + H.edgeFinset.card ≤ t + 1 := by omega
   have howner_ex : ∀ e ∈ H.edgeFinset, ∃ u ∈ T, u ∈ e := by
-    intro e he
+    refine Sym2.ind (fun a b he => ?_)
     rw [SimpleGraph.mem_edgeFinset] at he
-    induction e using Sym2.ind with
-    | _ a b =>
-      rw [SimpleGraph.mem_edgeSet] at he
-      rcases hTcov a b he with ha | hb
-      · exact ⟨a, ha, Sym2.mem_mk_left a b⟩
-      · exact ⟨b, hb, Sym2.mem_mk_right a b⟩
+    rw [SimpleGraph.mem_edgeSet] at he
+    rcases hTcov a b he with ha | hb
+    · exact ⟨a, ha, Sym2.mem_mk_left a b⟩
+    · exact ⟨b, hb, Sym2.mem_mk_right a b⟩
   let owner : Sym2 (Fin n) → Fin n := fun e =>
     if he : e ∈ H.edgeFinset then Classical.choose (howner_ex e he) else z
   have howner_mem_T : ∀ e ∈ H.edgeFinset, owner e ∈ T := by
@@ -138,16 +138,14 @@ theorem PEqualNP.Outside.R_meta_4123_512
     intro e he; simp only [owner, he, ↓reduceDIte]
     exact (Classical.choose_spec (howner_ex e he)).2
   have hother_ex : ∀ e ∈ H.edgeFinset, ∃ b : Fin n, e = s(owner e, b) ∧ H.Adj (owner e) b := by
-    intro e he
-    have heSet : e ∈ H.edgeSet := SimpleGraph.mem_edgeFinset.mp he
-    have hu : owner e ∈ e := howner_mem_e e he
-    induction e using Sym2.ind with
-    | _ a b =>
-      rw [SimpleGraph.mem_edgeSet] at heSet
-      rw [Sym2.mem_iff] at hu
-      rcases hu with h1 | h2
-      · exact ⟨b, by rw [h1], by rw [h1]; exact heSet⟩
-      · exact ⟨a, by rw [h2, Sym2.eq_swap], by rw [h2]; exact heSet.symm⟩
+    refine Sym2.ind (fun a b he => ?_)
+    have heSet : s(a, b) ∈ H.edgeSet := SimpleGraph.mem_edgeFinset.mp he
+    have hu : owner s(a, b) ∈ s(a, b) := howner_mem_e s(a, b) he
+    rw [SimpleGraph.mem_edgeSet] at heSet
+    rw [Sym2.mem_iff] at hu
+    rcases hu with h1 | h2
+    · exact ⟨b, by rw [h1], by rw [h1]; exact heSet⟩
+    · exact ⟨a, by rw [h2, Sym2.eq_swap], by rw [h2]; exact heSet.symm⟩
   let other : Sym2 (Fin n) → Fin n := fun e =>
     if he : e ∈ H.edgeFinset then Classical.choose (hother_ex e he) else z
   have hother_eq : ∀ e ∈ H.edgeFinset, e = s(owner e, other e) := by
@@ -241,12 +239,14 @@ theorem PEqualNP.Outside.R_meta_4123_512
   constructor
   · by_cases hbad : bad v w u0
     · refine ⟨iE, ⟨hXiE, hYiE.mpr hbad⟩, ?_⟩
-      intro j ⟨hXj, hYj⟩
+      intro j hj
+      rcases hj with ⟨hXj, hYj⟩
       rcases hX_only j hXj with rfl | rfl
       · exact (hYiT.mp hYj hbad).elim
       · rfl
     · refine ⟨iT, ⟨hXiT, hYiT.mpr hbad⟩, ?_⟩
-      intro j ⟨hXj, hYj⟩
+      intro j hj
+      rcases hj with ⟨hXj, hYj⟩
       rcases hX_only j hXj with rfl | rfl
       · rfl
       · exact (hbad (hYiE.mp hYj)).elim
