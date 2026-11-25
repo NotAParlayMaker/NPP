@@ -1,1117 +1,2111 @@
+import Mathlib.Data.Tree.Basic
 import PEqualNP.Defs
 
 namespace PEqualNP.Outside.L_meta_16807
 
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 
-open PEqualNP.CircuitLowerBounds
+-- The certificate checker, the restriction lemma and the relabeling below are taken from the merged proof of
+-- L-meta-11082 by MartinMatoJames, which names its own sources in the next two lines. The certificate itself
+-- (the table of unreachable live-wire states and its symmetry hints) and the circuit are new, found by our own search.
+-- The six-input certificate and its checker are from L-meta-9553 in this repository.
+-- The one-gate restriction and wire relabeling are from L-meta-9479, following L-meta-927.
 
-abbrev Sig := BitVec 256
+abbrev BFn (n : ℕ) := (Fin n → Bool) → Bool
 
-def zero : Sig := 0
 
-def one : Sig := BitVec.allOnes 256
 
-def neg (a : Sig) : Sig := ~~~a
+def wiresFrom (gs : List Gate) (w : List Bool) : List Bool :=
+  gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w
 
-def bin (d : Nat) (a b : Sig) : Sig :=
-  if d=0 then a &&& b else if d=1 then a ||| b else if d=2 then a &&& ~~~b else ~~~a &&& b
+theorem wiresFrom_append (gs gs' : List Gate) (w : List Bool) :
+    wiresFrom (gs ++ gs') w = wiresFrom gs' (wiresFrom gs w) := by
+  simp [wiresFrom, List.foldl_append]
 
-def proper (a : Sig) : Prop := a ≠ zero ∧ a ≠ one
+theorem wiresFrom_prefix (gs : List Gate) : ∀ w : List Bool,
+    ∃ t : List Bool, wiresFrom gs w = w ++ t ∧ t.length = gs.length := by
+  induction gs with
+  | nil => intro w; exact ⟨[], by simp [wiresFrom], rfl⟩
+  | cons g gs ih =>
+    intro w
+    obtain ⟨t, ht, hl⟩ := ih (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
+    refine ⟨g.op.eval (g.inputs.map fun i => w.getD i false) :: t, ?_, by simp [hl]⟩
+    have : wiresFrom (g :: gs) w
+        = wiresFrom gs (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) := rfl
+    rw [this, ht]; simp
 
-def allowed (u : Bool) (d : Nat) : Prop := d<2 ∨ (u=true ∧ d<4)
+theorem length_wiresFrom (gs : List Gate) (w : List Bool) :
+    (wiresFrom gs w).length = w.length + gs.length := by
+  obtain ⟨t, ht, hl⟩ := wiresFrom_prefix gs w
+  rw [ht]; simp [hl]
 
-def flipOp (d : Nat) := if d=2 then 3 else if d=3 then 2 else d
+theorem getD_wiresFrom (gs : List Gate) (w : List Bool) (i : ℕ) (h : i < w.length) :
+    (wiresFrom gs w).getD i false = w.getD i false := by
+  obtain ⟨t, ht, _⟩ := wiresFrom_prefix gs w
+  rw [ht, List.getD_append _ _ _ _ h]
 
-theorem allowed_four {u d} (h : allowed u d) : d=0 ∨ d=1 ∨ (u=true ∧ d=2) ∨ (u=true ∧ d=3) := by
-  rcases h with h | ⟨h,j⟩
-  · omega
-  · have : d=0 ∨ d=1 ∨ d=2 ∨ d=3 := by omega
-    rcases this with h1 | h1 | h1 | h1
-    · exact Or.inl h1
-    · exact Or.inr (Or.inl h1)
-    · exact Or.inr (Or.inr (Or.inl ⟨h,h1⟩))
-    · exact Or.inr (Or.inr (Or.inr ⟨h,h1⟩))
+def Ok (g : Gate) : Prop :=
+  g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) ∧ g.inputs.length ≤ 2
 
-theorem bin_flip {u d} (h : allowed u d) (a b : Sig) : bin d a b = bin (flipOp d) b a := by
-  rcases allowed_four h with rfl | rfl | ⟨_,rfl⟩ | ⟨_,rfl⟩ <;> simp [bin,flipOp,BitVec.and_comm,BitVec.or_comm]
+theorem getD_snoc_ne {α : Type} (L : List α) (S d : α) (j : ℕ) (h : j ≠ L.length) :
+    (L ++ [S]).getD j d = L.getD j d := by
+  by_cases hj : j < L.length
+  · exact List.getD_append _ _ _ _ hj
+  · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by omega)]
 
-theorem flip_flip {u d} (h : allowed u d) : allowed u (flipOp d) ∧ flipOp (flipOp d)=d := by
-  rcases allowed_four h with rfl | rfl | ⟨hu,rfl⟩ | ⟨hu,rfl⟩
-  all_goals simp_all [flipOp,allowed]
+theorem getD_snoc_eq {α : Type} (L : List α) (S d : α) : (L ++ [S]).getD L.length d = S := by
+  simp
 
-def Live (u : Bool) (target : Sig) : Nat → Finset Sig → Prop
-  | 0,S => S={target} ∧ proper target
-  | k+1,S => ∃ (U : Finset Sig) (a b : Sig) (d : Nat), allowed u d ∧ S=insert a (insert b U) ∧
-      proper a ∧ proper b ∧ a ≠ b ∧
-      bin d a b ∉ insert a (insert b U) ∧ Live u target k (insert (bin d a b) U)
+theorem getD_snoc_len {α : Type} (L : List α) (S d : α) (k : ℕ) (h : L.length = k) :
+    (L ++ [S]).getD k d = S := by
+  subst h; simp
 
-theorem Live.stop {u} {target : Sig} (hp : proper target) : Live u target 0 {target} := ⟨rfl,hp⟩
+abbrev Stat := Sum Bool ℕ
 
-theorem Live.binary {u} {target : Sig} {k : Nat} {U : Finset Sig} {a b : Sig} {d : Nat} (hd : allowed u d)
-    (ha : proper a) (hb : proper b) (hab : a ≠ b)
-    (hfresh : bin d a b ∉ insert a (insert b U)) (tail : Live u target k (insert (bin d a b) U)) :
-    Live u target (k+1) (insert a (insert b U)) :=
-  ⟨U,a,b,d,hd,rfl,ha,hb,hab,hfresh,tail⟩
+def statVal (w : List Bool) : Stat → Bool
+  | Sum.inl c => c
+  | Sum.inr j => w.getD j false
 
-theorem Live.ind {u} {target : Sig} {motive : ∀ (k : Nat) (S : Finset Sig), Live u target k S → Prop}
-    (stop : ∀ (hp : proper target), motive 0 {target} (Live.stop hp))
-    (binary : ∀ {k : Nat} {U : Finset Sig} {a b : Sig} {d : Nat} (hd : allowed u d)
-      (ha : proper a) (hb : proper b) (hab : a ≠ b)
-      (hfresh : bin d a b ∉ insert a (insert b U)) (tail : Live u target k (insert (bin d a b) U)),
-      motive k (insert (bin d a b) U) tail →
-      motive (k+1) (insert a (insert b U)) (Live.binary hd ha hb hab hfresh tail))
-    {k : Nat} {S : Finset Sig} (h : Live u target k S) : motive k S h := by
-  induction k generalizing S with
+def statValid (m : ℕ) : Stat → Prop
+  | Sum.inl _ => True
+  | Sum.inr j => j < m
+
+def simpNot (m : ℕ) : List Stat → Option Gate × Stat
+  | [] => (none, Sum.inl true)
+  | Sum.inl c :: _ => (none, Sum.inl (!c))
+  | Sum.inr j :: _ => (some ⟨GateOp.not, [j]⟩, Sum.inr m)
+
+def simpAnd (m : ℕ) : List Stat → Option Gate × Stat
+  | [] => (none, Sum.inl true)
+  | [Sum.inl c] => (none, Sum.inl c)
+  | [Sum.inr j] => (none, Sum.inr j)
+  | [Sum.inl c, Sum.inl d] => (none, Sum.inl (c && d))
+  | [Sum.inl c, Sum.inr j] => (none, bif c then Sum.inr j else Sum.inl false)
+  | [Sum.inr j, Sum.inl c] => (none, bif c then Sum.inr j else Sum.inl false)
+  | [Sum.inr j, Sum.inr k] => (some ⟨GateOp.and, [j, k]⟩, Sum.inr m)
+  | _ => (none, Sum.inl false)
+
+def simpOr (m : ℕ) : List Stat → Option Gate × Stat
+  | [] => (none, Sum.inl false)
+  | [Sum.inl c] => (none, Sum.inl c)
+  | [Sum.inr j] => (none, Sum.inr j)
+  | [Sum.inl c, Sum.inl d] => (none, Sum.inl (c || d))
+  | [Sum.inl c, Sum.inr j] => (none, bif c then Sum.inl true else Sum.inr j)
+  | [Sum.inr j, Sum.inl c] => (none, bif c then Sum.inl true else Sum.inr j)
+  | [Sum.inr j, Sum.inr k] => (some ⟨GateOp.or, [j, k]⟩, Sum.inr m)
+  | _ => (none, Sum.inl false)
+
+def simplify (op : GateOp) (m : ℕ) (ins : List Stat) : Option Gate × Stat :=
+  match op with
+  | GateOp.and => simpAnd m ins
+  | GateOp.or => simpOr m ins
+  | GateOp.not => simpNot m ins
+  | _ => (none, Sum.inl false)
+
+def CleanG (m : ℕ) (g : Gate) : Prop :=
+  (g.op = GateOp.not ∧ ∃ j, j < m ∧ g.inputs = [j]) ∨
+  ((g.op = GateOp.and ∨ g.op = GateOp.or) ∧ ∃ j k, j < m ∧ k < m ∧ g.inputs = [j, k])
+
+theorem cleanG_lt {m : ℕ} {g : Gate} (h : CleanG m g) : ∀ a ∈ g.inputs, a < m := by
+  rcases h with ⟨_, j, hj, hin⟩ | ⟨_, j, k, hj, hk, hin⟩
+  · intro a ha; simp [hin] at ha; omega
+  · intro a ha; simp [hin] at ha; rcases ha with rfl | rfl <;> omega
+
+def CleanL (n : ℕ) (gs : List Gate) : Prop :=
+  ∀ p g, gs[p]? = some g → CleanG (n + p) g
+
+theorem simplify_clean (op : GateOp) (m : ℕ) (ins : List Stat)
+    (hv : ∀ s ∈ ins, statValid m s) :
+    ∀ g ∈ (simplify op m ins).1, CleanG m g := by
+  intro g hg
+  cases op <;> simp only [simplify] at hg
+  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨c, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
+      simp [simpAnd] at hg
+    subst hg
+    exact Or.inr ⟨Or.inl rfl, _, _, hv (Sum.inr _) (by simp), hv (Sum.inr _) (by simp), rfl⟩
+  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨c, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
+      simp [simpOr] at hg
+    subst hg
+    exact Or.inr ⟨Or.inr rfl, _, _, hv (Sum.inr _) (by simp), hv (Sum.inr _) (by simp), rfl⟩
+  · rcases ins with _ | ⟨a, l⟩ <;> (try cases a) <;> simp [simpNot] at hg
+    subst hg
+    exact Or.inl ⟨rfl, _, hv (Sum.inr _) (by simp), rfl⟩
+  · simp at hg
+  · simp at hg
+
+theorem simplify_sound (op : GateOp) (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not)
+    (w : List Bool) (ins : List Stat) (hlen : ins.length ≤ 2)
+    (hv : ∀ s ∈ ins, statValid w.length s) :
+    statValid (w.length + (simplify op w.length ins).1.toList.length) (simplify op w.length ins).2 ∧
+    statVal (wiresFrom (simplify op w.length ins).1.toList w) (simplify op w.length ins).2
+      = op.eval (ins.map (statVal w)) := by
+  rcases hop with rfl | rfl | rfl
+  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨d, l⟩⟩⟩
+    · simp [simplify, simpAnd, statValid, statVal, GateOp.eval]
+    · cases a <;> simp_all [simplify, simpAnd, statValid, statVal, GateOp.eval, wiresFrom]
+    · cases a <;> cases b <;> (try rename_i c e; cases c) <;> (try cases e) <;>
+        simp_all [simplify, simpAnd, statValid, statVal, GateOp.eval, wiresFrom]
+    · simp at hlen
+  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨d, l⟩⟩⟩
+    · simp [simplify, simpOr, statValid, statVal, GateOp.eval]
+    · cases a <;> simp_all [simplify, simpOr, statValid, statVal, GateOp.eval, wiresFrom]
+    · cases a <;> cases b <;> (try rename_i c e; cases c) <;> (try cases e) <;>
+        simp_all [simplify, simpOr, statValid, statVal, GateOp.eval, wiresFrom]
+    · simp at hlen
+  · rcases ins with _ | ⟨a, l⟩
+    · simp [simplify, simpNot, statValid, statVal, GateOp.eval]
+    · cases a <;> simp_all [simplify, simpNot, statValid, statVal, GateOp.eval, wiresFrom]
+
+def elimStep (n : ℕ) (acc : List Stat × List Gate) (g : Gate) : List Stat × List Gate :=
+  (acc.1 ++ [(simplify g.op (n + acc.2.length)
+      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).2],
+    acc.2 ++ (simplify g.op (n + acc.2.length)
+      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList)
+
+def elim (n : ℕ) (gs : List Gate) (acc : List Stat × List Gate) : List Stat × List Gate :=
+  gs.foldl (elimStep n) acc
+
+theorem elim_cons (n : ℕ) (g : Gate) (gs : List Gate) (acc : List Stat × List Gate) :
+    elim n (g :: gs) acc = elim n gs (elimStep n acc g) := rfl
+
+theorem toList_length_le {α : Type} (o : Option α) : o.toList.length ≤ 1 := by
+  cases o <;> simp
+
+theorem elim_len (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
+    (elim n gs acc).2.length ≤ acc.2.length + gs.length := by
+  induction gs with
+  | nil => intro acc; simp [elim]
+  | cons g gs ih =>
+    intro acc
+    have h1 := ih (elimStep n acc g)
+    have h2 : (elimStep n acc g).2.length ≤ acc.2.length + 1 := by
+      simp only [elimStep, List.length_append]
+      have := toList_length_le (simplify g.op (n + acc.2.length)
+        (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1
+      omega
+    rw [elim_cons, List.length_cons]; omega
+
+theorem statValid_mono {m m' : ℕ} (h : m ≤ m') : ∀ s : Stat, statValid m s → statValid m' s
+  | Sum.inl _, _ => trivial
+  | Sum.inr _, hj => lt_of_lt_of_le hj h
+
+theorem statVal_append (w t : List Bool) : ∀ s : Stat, statValid w.length s →
+    statVal (w ++ t) s = statVal w s
+  | Sum.inl _, _ => rfl
+  | Sum.inr _, hj => List.getD_append _ _ _ _ hj
+
+def Inv (n : ℕ) (y : List Bool) (w : List Bool) (acc : List Stat × List Gate) : Prop :=
+  acc.1.length = w.length ∧ ∀ i : ℕ,
+    statValid (n + acc.2.length) (acc.1.getD i (Sum.inl false)) ∧
+    statVal (wiresFrom acc.2 y) (acc.1.getD i (Sum.inl false)) = w.getD i false
+
+theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) :
+    ∀ (w : List Bool) (acc : List Stat × List Gate), (∀ g ∈ gs, Ok g) → Inv n y w acc →
+      Inv n y (wiresFrom gs w) (elim n gs acc) := by
+  induction gs with
+  | nil => intro w acc _ h; exact h
+  | cons g gs ih =>
+    intro w acc hok h
+    apply ih (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) (elimStep n acc g)
+      (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg'))
+    obtain ⟨hl, hi⟩ := h
+    set w' := wiresFrom acc.2 y with hw'
+    have lw' : w'.length = n + acc.2.length := by rw [hw', length_wiresFrom, hy]
+    set ins := g.inputs.map fun i => acc.1.getD i (Sum.inl false) with hins
+    have hgok := hok g List.mem_cons_self
+    have hs := simplify_sound g.op hgok.1 w' ins (by simpa [hins] using hgok.2)
+      (by
+        intro s hs
+        obtain ⟨a, _, rfl⟩ := List.mem_map.1 hs
+        rw [lw']; exact (hi a).1)
+    rw [lw'] at hs
+    set r := simplify g.op (n + acc.2.length) ins with hr
+    have hvals : ins.map (statVal w') = g.inputs.map fun i => w.getD i false := by
+      rw [hins, List.map_map]
+      apply List.map_congr_left
+      intro a _
+      exact (hi a).2
+    have hnew : wiresFrom (acc.2 ++ r.1.toList) y = wiresFrom r.1.toList w' := by
+      rw [wiresFrom_append]
+    obtain ⟨t, ht, _⟩ := wiresFrom_prefix r.1.toList w'
+    refine ⟨by simp [elimStep, hl], ?_⟩
+    intro i
+    show statValid (n + (acc.2 ++ r.1.toList).length) ((acc.1 ++ [r.2]).getD i (Sum.inl false)) ∧
+      statVal (wiresFrom (acc.2 ++ r.1.toList) y) ((acc.1 ++ [r.2]).getD i (Sum.inl false)) = _
+    rw [hnew, List.length_append, ← Nat.add_assoc]
+    by_cases hil : i = acc.1.length
+    · subst hil
+      rw [getD_snoc_eq, hl, getD_snoc_eq]
+      exact ⟨hs.1, by rw [hs.2, hvals]⟩
+    · rw [getD_snoc_ne _ _ _ _ hil, getD_snoc_ne _ _ _ _ (by omega)]
+      refine ⟨statValid_mono (by omega) _ (hi i).1, ?_⟩
+      rw [ht, statVal_append _ _ _ (by rw [lw']; exact (hi i).1)]
+      exact (hi i).2
+
+theorem elim_clean (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
+    (∀ g ∈ gs, Ok g) → (∀ i, statValid (n + acc.2.length) (acc.1.getD i (Sum.inl false))) →
+    CleanL n acc.2 → CleanL n (elim n gs acc).2 := by
+  induction gs with
+  | nil => intro acc _ _ hc; exact hc
+  | cons g gs ih =>
+    intro acc hok hv hc
+    have hstep := ih (elimStep n acc g) (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg'))
+    apply hstep
+    · intro i
+      set ins := g.inputs.map fun i => acc.1.getD i (Sum.inl false) with hins
+      have hgok := hok g List.mem_cons_self
+      have hs := simplify_sound g.op hgok.1 (List.replicate (n + acc.2.length) false) ins
+        (by simpa [hins] using hgok.2)
+        (by
+          intro s hs
+          obtain ⟨a, _, rfl⟩ := List.mem_map.1 hs
+          simpa using hv a)
+      simp only [List.length_replicate] at hs
+      show statValid (n + (acc.2 ++ _).length) ((acc.1 ++ [_]).getD i (Sum.inl false))
+      rw [List.length_append, ← Nat.add_assoc]
+      by_cases hil : i = acc.1.length
+      · subst hil; rw [getD_snoc_eq]; exact hs.1
+      · rw [getD_snoc_ne _ _ _ _ hil]; exact statValid_mono (by omega) _ (hv i)
+    · intro p g' hp
+      simp only [elimStep] at hp
+      by_cases hlt : p < acc.2.length
+      · rw [List.getElem?_append_left hlt] at hp
+        exact hc p g' hp
+      · rw [List.getElem?_append_right (by omega)] at hp
+        set r := simplify g.op (n + acc.2.length)
+          (g.inputs.map fun i => acc.1.getD i (Sum.inl false)) with hr
+        cases ho : r.1 with
+        | none => simp [ho] at hp
+        | some g0 =>
+          rw [ho] at hp
+          have hp0 : p - acc.2.length = 0 := by
+            have := (List.getElem?_eq_some_iff.1 hp).1
+            simp at this; omega
+          have hpeq : p = acc.2.length := by omega
+          rw [hp0] at hp
+          simp at hp
+          subst hp
+          rw [hpeq]
+          exact simplify_clean g.op (n + acc.2.length) _ (by
+            intro s hs
+            obtain ⟨a, _, rfl⟩ := List.mem_map.1 hs
+            exact hv a) g0 (by rw [← hr, ho]; rfl)
+
+
+
+def val (gs : List Gate) (n : ℕ) (a : ℕ) : BFn n :=
+  fun x => (wiresFrom gs (List.ofFn x)).getD a false
+
+theorem val_input (gs : List Gate) (n : ℕ) (i : Fin n) : val gs n i = fun x => x i := by
+  funext x
+  unfold val
+  rw [getD_wiresFrom _ _ _ (by simp)]
+  simp
+
+theorem split_at {α : Type} (gs : List α) (p : ℕ) (g : α) (hp : gs[p]? = some g) :
+    ∃ pre post, gs = pre ++ g :: post ∧ pre.length = p := by
+  have hlt : p < gs.length := (List.getElem?_eq_some_iff.1 hp).1
+  have hget : gs[p] = g := (List.getElem?_eq_some_iff.1 hp).2
+  refine ⟨gs.take p, gs.drop (p + 1), ?_, by simp; omega⟩
+  have h1 : gs = gs.take p ++ gs.drop p := (List.take_append_drop p gs).symm
+  have h2 : gs.drop p = gs[p] :: gs.drop (p + 1) := List.drop_eq_getElem_cons hlt
+  exact h1.trans (by rw [h2, hget])
+
+theorem val_gate (n : ℕ) (gs : List Gate) (p : ℕ) (g : Gate) (hp : gs[p]? = some g)
+    (hlt : ∀ a ∈ g.inputs, a < n + p) (x : Fin n → Bool) :
+    val gs n (n + p) x = g.op.eval (g.inputs.map fun a => val gs n a x) := by
+  obtain ⟨pre, post, rfl, hlen⟩ := split_at gs p g hp
+  unfold val
+  have h1 : wiresFrom (pre ++ g :: post) (List.ofFn x) = wiresFrom post
+      (wiresFrom pre (List.ofFn x) ++
+        [g.op.eval (g.inputs.map fun i => (wiresFrom pre (List.ofFn x)).getD i false)]) := by
+    rw [wiresFrom_append]; rfl
+  have hl : (wiresFrom pre (List.ofFn x)).length = n + p := by
+    rw [length_wiresFrom]; simp [hlen]
+  rw [h1, getD_wiresFrom _ _ _ (by simp [hl]), getD_snoc_len _ _ _ _ hl]
+  congr 1
+  apply List.map_congr_left
+  intro a ha
+  have hal := hlt a ha
+  have e1 := getD_wiresFrom post (wiresFrom pre (List.ofFn x) ++
+        [g.op.eval (g.inputs.map fun i => (wiresFrom pre (List.ofFn x)).getD i false)]) a
+        (by simp [hl]; omega)
+  rw [e1, List.getD_append _ _ _ _ (by omega)]
+
+def initId (n : ℕ) : List Stat := List.ofFn fun i : Fin n => Sum.inr (i : ℕ)
+
+theorem inv_initId (n : ℕ) (y : Fin n → Bool) :
+    Inv n (List.ofFn y) (List.ofFn y) (initId n, []) := by
+  refine ⟨by simp [initId], ?_⟩
+  intro i
+  by_cases hlt : i < n
+  · simp [initId, hlt, statValid, statVal, wiresFrom]
+  · rw [List.getD_eq_default _ _ (by simp [initId]; omega),
+        List.getD_eq_default _ _ (by simp; omega)]
+    exact ⟨trivial, rfl⟩
+
+theorem exists_clean (n : ℕ) (f : BFn n) (s : ℕ)
+    (hnc : ∃ y y' : Fin n → Bool, f y ≠ f y') (h : HasCircuitSize n f s) :
+    ∃ gs o, CleanL n gs ∧ gs.length ≤ s ∧ o < n + gs.length ∧ ∀ x, val gs n o x = f x := by
+  obtain ⟨C, ok, hsz, hev⟩ := h
+  have hsz' : C.gates.length ≤ s := hsz
+  set acc := elim n C.gates (initId n, []) with hacc
+  have hinv : ∀ y : Fin n → Bool, Inv n (List.ofFn y) (wiresFrom C.gates (List.ofFn y)) acc :=
+    fun y => inv_elim n _ (by simp) C.gates _ _ ok (inv_initId n y)
+  have hcl : CleanL n acc.2 := by
+    apply elim_clean n C.gates (initId n, []) ok
+    · intro i
+      by_cases hlt : i < n
+      · simp [initId, hlt, statValid]
+      · rw [List.getD_eq_default _ _ (by simp [initId]; omega)]; trivial
+    · intro p g hp; simp at hp
+  have hlen : acc.2.length ≤ s := by
+    have := elim_len n C.gates (initId n, [])
+    rw [← hacc] at this
+    simp only [List.length_nil, zero_add] at this
+    omega
+  cases hst : acc.1.getD C.output (Sum.inl false) with
+  | inl c =>
+    exfalso
+    obtain ⟨y, y', hne⟩ := hnc
+    apply hne
+    have e1 := ((hinv y).2 C.output).2
+    have e2 := ((hinv y').2 C.output).2
+    rw [hst] at e1 e2
+    have h1 : (wiresFrom C.gates (List.ofFn y)).getD C.output false = f y := hev y
+    have h2 : (wiresFrom C.gates (List.ofFn y')).getD C.output false = f y' := hev y'
+    rw [← h1, ← h2, ← e1, ← e2]; rfl
+  | inr j =>
+    have hj : j < n + acc.2.length := by
+      obtain ⟨y, _, _⟩ := hnc
+      have := ((hinv y).2 C.output).1
+      rw [hst] at this
+      exact this
+    refine ⟨acc.2, j, hcl, hlen, hj, ?_⟩
+    intro x
+    have e1 := ((hinv x).2 C.output).2
+    rw [hst] at e1
+    exact e1.trans (hev x)
+
+def kept {α : Type} (b : Bool) (x : α) (xs : List α) : List α :=
+  if b then x :: xs else xs
+
+def Run {α : Type} (inv : α → α) (meet join : α → α → α) (y : α) (t : ℕ) (ws : List α) : Prop :=
+  ∀ P : ℕ → List α → Prop, P 0 [y] →
+    (∀ {s xs zs}, List.Perm xs zs → P s xs → P s zs) →
+    (∀ {s a r} (neg save : Bool), P s ((if neg then inv a else a) :: kept save a r) →
+      P (s+1) (a :: r)) →
+    (∀ {s a b r} (c ka kb : Bool),
+      P s ((if c then meet a b else join a b) :: kept ka a (kept kb b r)) →
+      P (s+1) (a :: b :: r)) → P t ws
+
+theorem Run.done {α inv meet join y} : @Run α inv meet join y 0 [y] := fun _ d _ _ _ => d
+
+theorem Run.perm {α inv meet join y s xs zs} (p : List.Perm xs zs)
+    (h : @Run α inv meet join y s xs) : Run inv meet join y s zs :=
+  fun P d q u b => q p (h P d q u b)
+
+theorem Run.one {α inv meet join y s a r} (neg save : Bool)
+    (h : @Run α inv meet join y s ((if neg then inv a else a) :: kept save a r)) :
+    Run inv meet join y (s+1) (a :: r) := fun P d q u b => u neg save (h P d q u b)
+
+theorem Run.two {α inv meet join y s a b r} (c ka kb : Bool)
+    (h : @Run α inv meet join y s ((if c then meet a b else join a b) :: kept ka a (kept kb b r))) :
+    Run inv meet join y (s+1) (a :: b :: r) := fun P d q u v => v c ka kb (h P d q u v)
+
+theorem Run.fold {α inv meet join y} {P : ∀ t ws, @Run α inv meet join y t ws → Prop}
+    (done : P 0 [y] Run.done)
+    (perm : ∀ {s xs zs} (hp : List.Perm xs zs) (h : Run inv meet join y s xs),
+      P s xs h → P s zs (Run.perm hp h))
+    (one : ∀ {s a r} (neg save : Bool)
+      (h : Run inv meet join y s ((if neg then inv a else a) :: kept save a r)),
+      P _ _ h → P _ _ (Run.one neg save h))
+    (two : ∀ {s a b r} (c ka kb : Bool)
+      (h : Run inv meet join y s ((if c then meet a b else join a b) :: kept ka a (kept kb b r))),
+      P _ _ h → P _ _ (Run.two c ka kb h))
+    {t ws} (h : Run inv meet join y t ws) : P t ws h := by
+  have hex := h (fun s xs => ∃ h' : Run inv meet join y s xs, P s xs h')
+    ⟨Run.done, done⟩
+    (fun hp ⟨h', ih⟩ => ⟨Run.perm hp h', perm hp h' ih⟩)
+    (fun n k ⟨h', ih⟩ => ⟨Run.one n k h', one n k h' ih⟩)
+    (fun c a b ⟨h', ih⟩ => ⟨Run.two c a b h', two c a b h' ih⟩)
+  exact hex.elim fun _ hp => hp
+
+theorem kept_map {α β : Type} (e : α → β) (b : Bool) (x : α) (xs : List α) :
+    (kept b x xs).map e = kept b (e x) (xs.map e) := by cases b <;> simp [kept]
+
+theorem mem_kept {α : Type} (b : Bool) (x a : α) (xs : List α) :
+    a ∈ kept b x xs ↔ (b = true ∧ a = x) ∨ a ∈ xs := by cases b <;> simp [kept]
+
+theorem nodup_kept {α : Type} (b : Bool) (x : α) (xs : List α) (h : xs.Nodup) (hx : x ∉ xs) :
+    (kept b x xs).Nodup := by
+  cases b
+  · simpa [kept] using h
+  · simpa [kept] using And.intro hx h
+
+theorem Run.map {α β : Type} (e : α → β) {inv : α → α} {meet join : α → α → α}
+    {inv' : β → β} {meet' join' : β → β → β}
+    (hi : ∀ a, e (inv a) = inv' (e a)) (hm : ∀ a b, e (meet a b) = meet' (e a) (e b))
+    (hj : ∀ a b, e (join a b) = join' (e a) (e b))
+    {y : α} {s : ℕ} {ws : List α} (h : Run inv meet join y s ws) :
+    Run inv' meet' join' (e y) s (ws.map e) := by
+  induction h using Run.fold with
+  | done => exact Run.done
+  | perm hp _ ih => exact Run.perm (hp.map e) ih
+  | @one s a rest neg save _ ih =>
+    have e1 : ((if neg then inv a else a) :: kept save a rest).map e
+        = (if neg then inv' (e a) else e a) :: kept save (e a) (rest.map e) := by
+      cases neg <;> simp [kept_map, hi]
+    rw [e1] at ih
+    exact Run.one neg save ih
+  | @two s a b rest conj ka kb _ ih =>
+    have e1 : ((if conj then meet a b else join a b) :: kept ka a (kept kb b rest)).map e
+        = (if conj then meet' (e a) (e b) else join' (e a) (e b))
+            :: kept ka (e a) (kept kb (e b) (rest.map e)) := by
+      cases conj <;> simp [kept_map, hm, hj]
+    rw [e1] at ih
+    exact Run.two conj ka kb ih
+
+def Reach (n : ℕ) (gs : List Gate) (o a : ℕ) : Prop :=
+  ∀ P : ℕ → Prop, P o →
+    (∀ q g, gs[q]? = some g → P (n + q) → ∀ u ∈ g.inputs, P u) → P a
+
+theorem reach_self (n : ℕ) (gs : List Gate) (o : ℕ) : Reach n gs o o :=
+  fun _ ho _ => ho
+
+theorem reach_step {n : ℕ} {gs : List Gate} {o q u : ℕ} {g : Gate}
+    (hq : gs[q]? = some g) (hr : Reach n gs o (n + q)) (hu : u ∈ g.inputs) :
+    Reach n gs o u :=
+  fun P ho hs => hs q g hq (hr P ho hs) u hu
+
+theorem reach_cases {n : ℕ} {gs : List Gate} {o a : ℕ} (h : Reach n gs o a) :
+    a = o ∨ ∃ q g, gs[q]? = some g ∧ a ∈ g.inputs ∧ Reach n gs o (n + q) := by
+  apply h (fun x => x = o ∨ ∃ q g, gs[q]? = some g ∧ x ∈ g.inputs ∧ Reach n gs o (n + q))
+  · exact Or.inl rfl
+  · intro q g hq hP u hu
+    refine Or.inr ⟨q, g, hq, hu, ?_⟩
+    rcases hP with rfl | ⟨q', g', hq', hin', hr'⟩
+    · exact reach_self n gs (n + q)
+    · exact reach_step hq' hr' hin'
+
+def Live (n : ℕ) (gs : List Gate) (o p a : ℕ) : Prop :=
+  a = o ∨ ∃ q, p ≤ q ∧ ∃ g, gs[q]? = some g ∧ a ∈ g.inputs ∧ Reach n gs o (n + q)
+
+open Classical in
+noncomputable def liveList (gs : List Gate) (n o p : ℕ) : List ℕ :=
+  (List.range (n + p)).filter (fun a => decide (Live n gs o p a))
+
+theorem mem_liveList (gs : List Gate) (n o p a : ℕ) :
+    a ∈ liveList gs n o p ↔ a < n + p ∧ Live n gs o p a := by
+  simp [liveList]
+
+theorem nodup_liveList (gs : List Gate) (n o p : ℕ) : (liveList gs n o p).Nodup :=
+  List.Nodup.filter _ List.nodup_range
+
+abbrev invF {n : ℕ} : BFn n → BFn n := fun a x => !a x
+abbrev meetF {n : ℕ} : BFn n → BFn n → BFn n := fun a b x => a x && b x
+abbrev joinF {n : ℕ} : BFn n → BFn n → BFn n := fun a b x => a x || b x
+
+theorem live_succ_reach (n : ℕ) (gs : List Gate) (o : ℕ) (hcl : CleanL n gs)
+    (p : ℕ) (g : Gate) (hg : gs[p]? = some g) (hr : Reach n gs o (n + p)) (a : ℕ) :
+    a ∈ liveList gs n o (p + 1) ↔
+      a = n + p ∨ (a ∈ liveList gs n o p ∧ (a ∈ g.inputs → Live n gs o (p + 1) a)) := by
+  rw [mem_liveList, mem_liveList]
+  constructor
+  · rintro ⟨hlt, hl⟩
+    by_cases ha : a = n + p
+    · exact Or.inl ha
+    · refine Or.inr ⟨⟨by omega, ?_⟩, fun _ => hl⟩
+      rcases hl with h | ⟨q, hq, g', hg', hin, hrq⟩
+      · exact Or.inl h
+      · exact Or.inr ⟨q, by omega, g', hg', hin, hrq⟩
+  · rintro (rfl | ⟨⟨hlt, hl⟩, himp⟩)
+    · refine ⟨by omega, ?_⟩
+      rcases reach_cases hr with h | ⟨q, g', hg', hin, hrq⟩
+      · exact Or.inl h
+      · refine Or.inr ⟨q, ?_, g', hg', hin, hrq⟩
+        have := cleanG_lt (hcl q g' hg') _ hin
+        omega
+    · refine ⟨by omega, ?_⟩
+      rcases hl with h | ⟨q, hq, g', hg', hin, hrq⟩
+      · exact Or.inl h
+      · by_cases hqp : q = p
+        · subst hqp
+          rw [hg] at hg'
+          cases hg'
+          exact himp hin
+        · exact Or.inr ⟨q, by omega, g', hg', hin, hrq⟩
+
+theorem live_succ_dead (n : ℕ) (gs : List Gate) (o : ℕ)
+    (p : ℕ) (hnr : ¬ Reach n gs o (n + p)) (a : ℕ) :
+    a ∈ liveList gs n o (p + 1) ↔ a ∈ liveList gs n o p := by
+  rw [mem_liveList, mem_liveList]
+  constructor
+  · rintro ⟨hlt, hl⟩
+    have hne : a ≠ n + p := by
+      rintro rfl
+      rcases hl with rfl | ⟨q, _, g', hg', hin, hrq⟩
+      · exact hnr (reach_self n gs _)
+      · exact hnr (reach_step hg' hrq hin)
+    refine ⟨by omega, ?_⟩
+    rcases hl with h | ⟨q, hq, g', hg', hin, hrq⟩
+    · exact Or.inl h
+    · exact Or.inr ⟨q, by omega, g', hg', hin, hrq⟩
+  · rintro ⟨hlt, hl⟩
+    refine ⟨by omega, ?_⟩
+    rcases hl with h | ⟨q, hq, g', hg', hin, hrq⟩
+    · exact Or.inl h
+    · by_cases hqp : q = p
+      · subst hqp; exact absurd hrq hnr
+      · exact Or.inr ⟨q, by omega, g', hg', hin, hrq⟩
+
+open Classical in
+theorem run_live (n : ℕ) (gs : List Gate) (o : ℕ) (hcl : CleanL n gs) (ho : o < n + gs.length) :
+    ∀ d p, p + d = gs.length →
+      ∃ d', d' ≤ d ∧
+        Run (invF (n := n)) meetF joinF (val gs n o) d' ((liveList gs n o p).map (val gs n)) := by
+  intro d
+  induction d with
   | zero =>
-    obtain ⟨rfl,hp⟩ := h
-    exact stop hp
-  | succ k ih =>
-    obtain ⟨U,a,b,d,hd,rfl,ha,hb,hab,hf,tail⟩ := h
-    exact binary hd ha hb hab hf tail (ih tail)
+    intro p hp
+    have hperm : [o].Perm (liveList gs n o p) := by
+      refine (List.perm_ext_iff_of_nodup (List.nodup_singleton o) (nodup_liveList _ _ _ _)).2 ?_
+      intro a
+      rw [mem_liveList, List.mem_singleton]
+      constructor
+      · rintro rfl; exact ⟨by omega, Or.inl rfl⟩
+      · rintro ⟨_, h | ⟨q, hq, g', hg', _, _⟩⟩
+        · exact h
+        · have := (List.getElem?_eq_some_iff.1 hg').1; omega
+    exact ⟨0, le_rfl, Run.perm (hperm.map (val gs n)) Run.done⟩
+  | succ d ih =>
+    intro p hp
+    have hplt : p < gs.length := by omega
+    obtain ⟨g, hg⟩ : ∃ g, gs[p]? = some g := ⟨gs[p], List.getElem?_eq_getElem hplt⟩
+    obtain ⟨d', hd', IH⟩ := ih (p + 1) (by omega)
+    by_cases hr : Reach n gs o (n + p)
+    · have hstep := live_succ_reach n gs o hcl p g hg hr
+      have hin : ∀ a ∈ g.inputs, a ∈ liveList gs n o p := fun a ha =>
+        (mem_liveList _ _ _ _ _).2 ⟨cleanG_lt (hcl p g hg) a ha, Or.inr ⟨p, le_rfl, g, hg, ha, hr⟩⟩
+      have hnew : ∀ a ∈ liveList gs n o p, a ≠ n + p := fun a ha =>
+        Nat.ne_of_lt ((mem_liveList _ _ _ _ _).1 ha).1
+      have hvg := val_gate n gs p g hg (cleanG_lt (hcl p g hg))
+      have hnd0 := nodup_liveList gs n o p
+      have single : ∀ (j : ℕ) (neg : Bool), (∀ a, a ∈ g.inputs ↔ a = j) →
+          val gs n (n + p) = (if neg then invF (val gs n j) else val gs n j) →
+          Run (invF (n := n)) meetF joinF (val gs n o) (d' + 1)
+            ((liveList gs n o p).map (val gs n)) := by
+        intro j neg hmem hval
+        have hj := hin j ((hmem j).2 rfl)
+        have hp1 : (liveList gs n o p).Perm (j :: (liveList gs n o p).erase j) :=
+          List.perm_cons_erase hj
+        have hnr : ((liveList gs n o p).erase j).Nodup := hnd0.erase j
+        have hp2 : (liveList gs n o (p + 1)).Perm
+            ((n + p) :: kept (decide (Live n gs o (p + 1) j)) j ((liveList gs n o p).erase j)) := by
+          refine (List.perm_ext_iff_of_nodup (nodup_liveList _ _ _ _) ?_).2 ?_
+          · refine List.nodup_cons.2 ⟨?_, nodup_kept _ _ _ hnr (by simp [hnd0.mem_erase_iff])⟩
+            rw [mem_kept]
+            rintro (⟨_, h⟩ | h)
+            · exact hnew j hj h.symm
+            · exact hnew _ (List.mem_of_mem_erase h) rfl
+          · intro a
+            rw [hstep a, List.mem_cons, mem_kept, hnd0.mem_erase_iff, hmem a]
+            simp only [decide_eq_true_eq]
+            constructor
+            · rintro (h | ⟨h1, h2⟩)
+              · exact Or.inl h
+              · by_cases haj : a = j
+                · exact Or.inr (Or.inl ⟨haj ▸ h2 haj, haj⟩)
+                · exact Or.inr (Or.inr ⟨haj, h1⟩)
+            · rintro (h | ⟨h1, rfl⟩ | ⟨h1, h2⟩)
+              · exact Or.inl h
+              · exact Or.inr ⟨hj, fun _ => h1⟩
+              · exact Or.inr ⟨h2, fun h => absurd h h1⟩
+        have IH' := Run.perm (hp2.map (val gs n)) IH
+        rw [List.map_cons, kept_map, hval] at IH'
+        exact Run.perm (hp1.map (val gs n)).symm (Run.one neg _ IH')
+      refine ⟨d' + 1, by omega, ?_⟩
+      rcases hcl p g hg with ⟨hop, j, hj, hinp⟩ | ⟨hop, j, k, hj, hk, hinp⟩
+      · apply single j true
+        · intro a; simp [hinp]
+        · funext x; rw [hvg x, hop, hinp]; simp [GateOp.eval]
+      · by_cases hjk : j = k
+        · subst hjk
+          apply single j false
+          · intro a; simp [hinp]
+          · funext x; rw [hvg x, hinp]; rcases hop with hop | hop <;> rw [hop] <;> simp [GateOp.eval]
+        · have hjm := hin j (by simp [hinp])
+          have hkm := hin k (by simp [hinp])
+          have hke : k ∈ (liveList gs n o p).erase j :=
+            (hnd0.mem_erase_iff).2 ⟨fun e => hjk e.symm, hkm⟩
+          have hnr : ((liveList gs n o p).erase j).Nodup := hnd0.erase j
+          have hnr2 : (((liveList gs n o p).erase j).erase k).Nodup := hnr.erase k
+          have hp1 : (liveList gs n o p).Perm
+              (j :: k :: ((liveList gs n o p).erase j).erase k) :=
+            (List.perm_cons_erase hjm).trans ((List.perm_cons_erase hke).cons j)
+          have hmr : ∀ a, a ∈ ((liveList gs n o p).erase j).erase k ↔
+              a ≠ k ∧ a ≠ j ∧ a ∈ liveList gs n o p := by
+            intro a; rw [hnr.mem_erase_iff, hnd0.mem_erase_iff]
+          have hp2 : (liveList gs n o (p + 1)).Perm
+              ((n + p) :: kept (decide (Live n gs o (p + 1) j)) j
+                (kept (decide (Live n gs o (p + 1) k)) k
+                  (((liveList gs n o p).erase j).erase k))) := by
+            refine (List.perm_ext_iff_of_nodup (nodup_liveList _ _ _ _) ?_).2 ?_
+            · refine List.nodup_cons.2 ⟨?_, nodup_kept _ _ _ (nodup_kept _ _ _ hnr2 ?_) ?_⟩
+              · rw [mem_kept, mem_kept]
+                rintro (⟨_, h⟩ | ⟨_, h⟩ | h)
+                · exact hnew j hjm h.symm
+                · exact hnew k hkm h.symm
+                · exact hnew _ ((hmr _).1 h).2.2 rfl
+              · rw [hmr]; simp
+              · rw [mem_kept, hmr]
+                rintro (⟨_, h⟩ | h)
+                · exact hjk h
+                · exact h.2.1 rfl
+            · intro a
+              rw [hstep a, List.mem_cons, mem_kept, mem_kept, hmr a]
+              simp only [decide_eq_true_eq, hinp, List.mem_cons, List.not_mem_nil, or_false]
+              constructor
+              · rintro (h | ⟨h1, h2⟩)
+                · exact Or.inl h
+                · by_cases haj : a = j
+                  · exact Or.inr (Or.inl ⟨haj ▸ h2 (Or.inl haj), haj⟩)
+                  · by_cases hak : a = k
+                    · exact Or.inr (Or.inr (Or.inl ⟨hak ▸ h2 (Or.inr hak), hak⟩))
+                    · exact Or.inr (Or.inr (Or.inr ⟨hak, haj, h1⟩))
+              · rintro (h | ⟨h1, rfl⟩ | ⟨h1, rfl⟩ | ⟨h1, h2, h3⟩)
+                · exact Or.inl h
+                · exact Or.inr ⟨hjm, fun _ => h1⟩
+                · exact Or.inr ⟨hkm, fun _ => h1⟩
+                · exact Or.inr ⟨h3, fun h => by rcases h with h | h <;> contradiction⟩
+          have IH' := Run.perm (hp2.map (val gs n)) IH
+          have hval : val gs n (n + p) = (if decide (g.op = GateOp.and)
+              then meetF (val gs n j) (val gs n k) else joinF (val gs n j) (val gs n k)) := by
+            funext x; rw [hvg x, hinp]
+            rcases hop with hop | hop <;> rw [hop] <;> simp [GateOp.eval]
+          rw [List.map_cons, kept_map, kept_map, hval] at IH'
+          exact Run.perm (hp1.map (val gs n)).symm (Run.two _ _ _ IH')
+    · have hp : (liveList gs n o (p + 1)).Perm (liveList gs n o p) :=
+        (List.perm_ext_iff_of_nodup (nodup_liveList _ _ _ _) (nodup_liveList _ _ _ _)).2
+          (live_succ_dead n gs o p hr)
+      exact ⟨d', by omega, Run.perm (hp.map (val gs n)) IH⟩
 
-private lemma live_proper {u target k S} (h : Live u target k S) : ∀ a ∈ S, proper a := by
-  induction h using Live.ind with
-  | stop hp => simpa using hp
-  | binary hd ha hb hab hf _ ih =>
-    simp only [Finset.forall_mem_insert]
-    exact ⟨ha,hb,fun a h => ih a (Finset.mem_insert_of_mem h)⟩
+theorem exists_run {n : ℕ} (f : BFn n) (hnc : ∃ y y' : Fin n → Bool, f y ≠ f y') (s : ℕ)
+    (h : HasCircuitSize n f s) :
+    ∃ s', s' ≤ s ∧ ∃ ws : List (BFn n),
+      ws.Sublist (List.ofFn fun (i : Fin n) => (fun x : Fin n → Bool => x i)) ∧
+      Run (invF (n := n)) meetF joinF f s' ws := by
+  obtain ⟨gs, o, hcl, hlen, ho, hev⟩ := exists_clean n f s hnc h
+  obtain ⟨d', hd', hrun⟩ := run_live n gs o hcl ho gs.length 0 (by omega)
+  refine ⟨d', by omega, (liveList gs n o 0).map (val gs n), ?_, ?_⟩
+  · have e : (List.ofFn fun (i : Fin n) => (fun x : Fin n → Bool => x i))
+        = (List.range n).map (val gs n) := by
+      apply List.ext_getElem
+      · simp
+      · intro i h1 h2
+        simp only [List.getElem_ofFn, List.getElem_map, List.getElem_range]
+        exact (val_input gs n ⟨i, by simpa using h1⟩).symm
+    rw [e]
+    exact (List.filter_sublist).map _
+  · have hf : val gs n o = f := funext hev
+    rw [← hf]
+    exact hrun
 
-private lemma live_size {u target k S} (h : Live u target k S) : S.card ≤ k+1 := by
-  induction h using Live.ind with
-  | stop hp => simp
-  | @binary k U a b d hd ha hb hab hf _ ih =>
-    have hu : bin d a b ∉ U := fun hm => hf (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hm))
-    rw [Finset.card_insert_of_notMem hu] at ih
-    have h1 := Finset.card_insert_le (a := a) (s := insert b U)
-    have h2 := Finset.card_insert_le (a := b) (s := U)
+theorem run_len {α inv meet join y s xs} (h : @Run α inv meet join y s xs) :
+    xs.length ≤ s + 1 := by
+  induction h using Run.fold with
+  | done => simp
+  | perm hp _ ih => rwa [← hp.length_eq]
+  | one neg save h ih => cases save <;> simp_all [kept] <;> omega
+  | two conj ka kb h ih => cases ka <;> cases kb <;> simp_all [kept] <;> omega
+
+abbrev NatRun (m : Nat) := Run (· ^^^ m) (· &&& ·) (· ||| ·)
+
+theorem run_bits {m y s xs} (h : NatRun m y s xs) (i j : Nat)
+    (hm : m.testBit i = m.testBit j)
+    (hw : ∀ w ∈ xs, w.testBit i = w.testBit j) : y.testBit i = y.testBit j := by
+  induction h using Run.fold with
+  | done => exact hw _ (by simp)
+  | perm hp _ ih => exact ih (fun w h => hw w (hp.mem_iff.1 h))
+  | one neg save h ih =>
+    apply ih
+    have ha := hw _ List.mem_cons_self
+    intro w hmem
+    cases neg <;> cases save <;> simp only [Bool.false_eq_true, ite_false, ite_true,
+      kept, List.mem_cons] at hmem <;>
+      first | (rcases hmem with rfl | hr; exact ha; exact hw _ (by simp [hr]))
+            | (rcases hmem with rfl | hr; simp [ha, hm]; exact hw _ (by simp [hr]))
+  | two conj ka kb h ih =>
+    apply ih
+    have ha := hw _ List.mem_cons_self
+    have hb := hw _ (List.mem_cons_of_mem _ List.mem_cons_self)
+    intro w hmem
+    cases conj <;> cases ka <;> cases kb <;> simp only [Bool.false_eq_true,
+      ite_false, ite_true, kept, List.mem_cons] at hmem <;>
+      rcases hmem with rfl | hr <;> first | simp [ha, hb] | exact hw _ (by simp only [List.mem_cons]; tauto)
+
+
+theorem keep_perm {α : Type} {xs ys : List α} (p : xs.Perm ys) (b : Bool) (a : α) :
+    (kept b a xs).Perm (kept b a ys) := by cases b <;> simpa [kept] using p
+
+def tagU (ws : List Nat) (a : Nat) (neg ka : Bool) :=
+  4 * ws.idxOf a + 2 * neg.toNat + ka.toNat
+
+def tagB (ws : List Nat) (a b : Nat) (conj ka kb : Bool) :=
+  let j := ws.idxOf b
+  48 + 8 * (j*(j+1)/2 + ws.idxOf a) + 4 * conj.toNat + 2 * ka.toNat + kb.toNat
+
+def next (m : Nat) (slack : Nat) (ws : List Nat) (f : Nat → List Nat → Bool) : Bool :=
+  ws.any fun a =>
+    let ra := ws.erase a
+    (slack ≥ 1 && ([false,true].any fun neg =>
+      let w := if neg then a ^^^ m else a
+      f (tagU ws a neg false) (w :: ra) || (slack ≥ 2 && f (tagU ws a neg true) (w :: a :: ra)))) ||
+    ra.any fun b =>
+      a ≤ b && (let r := ra.erase b
+        [false,true].any fun conj =>
+          let w := if conj then a &&& b else a ||| b
+          f (tagB ws a b conj false false) (w :: r) || (slack ≥ 1 && (f (tagB ws a b conj true false) (w :: a :: r) || f (tagB ws a b conj false true) (w :: b :: r))) ||
+            (slack ≥ 2 && f (tagB ws a b conj true true) (w :: a :: b :: r)))
+
+theorem next_one {m y a rest} {neg save : Bool} {s ws} (p : (a :: rest).Perm ws)
+    (h : NatRun m y s ((if neg then a ^^^ m else a) :: kept save a rest))
+    (f : Nat → List Nat → Bool)
+    (hf : ∀ (t : Nat) ys, NatRun m y s ys → f t ys = true) :
+    next (m) (s+2-ws.length) ws f = true := by
+  have ha := p.mem_iff.1 List.mem_cons_self
+  have pr : rest.Perm (ws.erase a) := (p.trans (List.perm_cons_erase ha)).cons_inv
+  have hh := run_len h
+  have hl := p.length_eq
+  simp only [List.length_cons] at hl hh
+  have hsl : 1 ≤ s+2-ws.length := by cases save <;> simp [kept] at hh <;> omega
+  apply List.any_eq_true.2 ⟨a, ha, ?_⟩
+  rw [Bool.or_eq_true]; left
+  rw [Bool.and_eq_true]; refine ⟨decide_eq_true hsl, ?_⟩
+  apply List.any_eq_true.2 ⟨neg, by cases neg <;> simp, ?_⟩
+  have ht (t : Nat) := hf t _ (Run.perm ((keep_perm pr save a).cons _) h)
+  cases save with
+  | false => simp [kept] at ht; simp [ht]
+  | true =>
+    simp [kept] at ht hh
+    have hsl2 : 2 ≤ s+2-ws.length := by omega
+    simp [ht, hsl2]
+
+theorem next_two_sorted {m y a b rest} {conj ka kb : Bool} {s ws} (hab : a ≤ b)
+    (p : (a :: b :: rest).Perm ws)
+    (h : NatRun m y s
+      ((if conj then a &&& b else a ||| b) :: kept ka a (kept kb b rest)))
+    (f : Nat → List Nat → Bool)
+    (hf : ∀ (t : Nat) ys, NatRun m y s ys → f t ys = true) :
+    next (m) (s+2-ws.length) ws f = true := by
+  have ha := p.mem_iff.1 List.mem_cons_self
+  have pp := (p.trans (List.perm_cons_erase ha)).cons_inv
+  have hb := pp.mem_iff.1 List.mem_cons_self
+  have pr := (pp.trans (List.perm_cons_erase hb)).cons_inv
+  have hh := run_len h
+  have hl := p.length_eq
+  simp only [List.length_cons] at hl hh
+  apply List.any_eq_true.2 ⟨a, ha, ?_⟩
+  rw [Bool.or_eq_true]; right
+  apply List.any_eq_true.2 ⟨b, hb, ?_⟩
+  rw [Bool.and_eq_true]; refine ⟨decide_eq_true hab, ?_⟩
+  apply List.any_eq_true.2 ⟨conj, by cases conj <;> simp, ?_⟩
+  have ht (t : Nat) := hf t _ (Run.perm ((keep_perm (keep_perm pr kb b) ka a).cons _) h)
+  cases ka <;> cases kb <;> simp [kept] at ht hh <;>
+    simp only [ht, Bool.true_or, Bool.or_true, Bool.and_true, Bool.true_and] <;>
+    first | (simp [show 2 ≤ s+2-ws.length by omega]) | (simp [show 1 ≤ s+2-ws.length by omega])
+
+theorem next_two {m y a b rest} {conj ka kb : Bool} {s ws}
+    (p : (a :: b :: rest).Perm ws)
+    (h : NatRun m y s
+      ((if conj then a &&& b else a ||| b) :: kept ka a (kept kb b rest)))
+    (f : Nat → List Nat → Bool)
+    (hf : ∀ (t : Nat) ys, NatRun m y s ys → f t ys = true) :
+    next (m) (s+2-ws.length) ws f = true := by
+  rcases le_total a b with hab | hba
+  · exact next_two_sorted hab p h f hf
+  · apply next_two_sorted (conj := conj) (ka := kb) (kb := ka) hba ((List.Perm.swap _ _ _).trans p) _ f hf
+    have he : (if conj then a &&& b else a ||| b) = (if conj then b &&& a else b ||| a) := by
+      cases conj <;> simp [Nat.and_comm, Nat.or_comm]
+    rw [he] at h
+    apply Run.perm (List.Perm.cons _ ?_) h
+    cases ka <;> cases kb <;> simp [kept]
+    exact List.Perm.swap _ _ _
+
+theorem zero_done {α inv meet join y t ws} (h : @Run α inv meet join y t ws) :
+    t = 0 → ws = [y] := by
+  induction h using Run.fold with
+  | done => simp
+  | perm p h ih => intro ht; rw [ih ht] at p; exact List.perm_singleton.1 p.symm
+  | one => simp
+  | two => simp
+
+theorem next_complete {m y t ws} (h : NatRun m y t ws) :
+    ∀ s, t = s+1 → ∀ zs, ws.Perm zs → ∀ f : Nat → List Nat → Bool,
+      (∀ (t : Nat) ys, NatRun m y s ys → f t ys = true) →
+      next (m) (s+2-zs.length) zs f = true := by
+  induction h using Run.fold with
+  | done => simp
+  | perm p h ih => intro s he zs q; exact ih s he zs (p.trans q)
+  | one neg save h ih => intro s he zs p f hf; cases he; exact next_one p h f hf
+  | two conj ka kb h ih => intro s he zs p f hf; cases he; exact next_two p h f hf
+
+def pt (n : ℕ) (v : ℕ) : Fin n → Bool := fun i => v.testBit i
+
+def encL {n : ℕ} (a : BFn n) : List ℕ → ℕ
+  | [] => 0
+  | v :: t => Nat.bit (a (pt n v)) (encL a t)
+
+theorem encL_testBit {n : ℕ} (a : BFn n) : ∀ (l : List ℕ) (j : ℕ),
+    (encL a l).testBit j = (l.map fun v => a (pt n v)).getD j false
+  | [], j => by simp [encL]
+  | v :: t, 0 => by simp [encL, Nat.testBit_bit_zero]
+  | v :: t, j + 1 => by simp [encL, Nat.testBit_bit_succ, encL_testBit a t j]
+
+theorem encL_inv {n : ℕ} (a : BFn n) (l : List ℕ) :
+    encL (invF a) l = encL a l ^^^ (2 ^ l.length - 1) := by
+  apply Nat.eq_of_testBit_eq
+  intro j
+  rw [Nat.testBit_xor, Nat.testBit_two_pow_sub_one, encL_testBit, encL_testBit]
+  by_cases h : j < l.length
+  · simp [h]
+  · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega)]
+    simp [h]
+
+theorem encL_and {n : ℕ} (a b : BFn n) (l : List ℕ) :
+    encL (meetF a b) l = encL a l &&& encL b l := by
+  apply Nat.eq_of_testBit_eq
+  intro j
+  rw [Nat.testBit_and, encL_testBit, encL_testBit, encL_testBit]
+  by_cases h : j < l.length
+  · simp [h]
+  · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega),
+      List.getD_eq_default _ _ (by simp; omega)]
+    rfl
+
+theorem encL_or {n : ℕ} (a b : BFn n) (l : List ℕ) :
+    encL (joinF a b) l = encL a l ||| encL b l := by
+  apply Nat.eq_of_testBit_eq
+  intro j
+  rw [Nat.testBit_or, encL_testBit, encL_testBit, encL_testBit]
+  by_cases h : j < l.length
+  · simp [h]
+  · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega),
+      List.getD_eq_default _ _ (by simp; omega)]
+    rfl
+
+theorem bits_le {m y s ws} (h : NatRun m y s ws) (hl : ws.length = s+1) (i j : Nat)
+    (hw : ∀ a ∈ ws, a.testBit i ≤ a.testBit j) : y.testBit i ≤ y.testBit j := by
+  induction h using Run.fold with
+  | done => exact hw _ (by simp)
+  | perm hp _ ih =>
+    exact ih (hp.length_eq.trans hl) (fun a ha => hw a (hp.mem_iff.1 ha))
+  | one neg save h ih =>
+    have hh := run_len h
+    cases save <;> simp [kept] at hh hl <;> omega
+  | two conj ka kb h ih =>
+    have hh := run_len h
+    cases ka <;> cases kb <;> simp [kept] at hh hl <;> try omega
+    apply ih (by simp [kept]; omega)
+    have ha := hw _ List.mem_cons_self
+    have hb := hw _ (List.mem_cons_of_mem _ List.mem_cons_self)
+    intro a had
+    simp only [kept, Bool.false_eq_true, ite_false, List.mem_cons] at had
+    rcases had with rfl | ht
+    · cases conj <;> simp only [ite_true, Bool.false_eq_true, ite_false, Nat.testBit_or, Nat.testBit_and] <;>
+        first | exact Bool.or_le_or ha hb | exact Bool.and_le_and ha hb | grind
+    · exact hw _ (by simp [ht])
+
+
+theorem extend_run {α inv meet join y s t a r} (h : @Run α inv meet join y s (a::r))
+    (hle : s ≤ t) : Run inv meet join y t (a::r) := by
+  induction t, hle using Nat.le_induction with
+  | base => exact h
+  | succ t hle ih => exact Run.one false false ih
+
+
+
+theorem run_nil {α inv meet join y t} (h : @Run α inv meet join y t []) : False := by
+  have key : ∀ t ws, @Run α inv meet join y t ws → ws ≠ [] := by
+    intro t ws h
+    induction h using Run.fold with
+    | done => simp
+    | perm hp _ ih => exact fun he => ih (List.Perm.eq_nil (he ▸ hp))
+    | one => simp
+    | two => simp
+  exact key t [] h rfl
+
+def isort (l : List ℕ) : List ℕ := l.insertionSort (· ≤ ·)
+
+def BT := BinaryTree (List ℕ)
+
+def BT.lf : BT := BinaryTree.nil
+
+def BT.nd (l : BT) (k : List ℕ) (r : BT) : BT := BinaryTree.node k l r
+
+def leqL : List ℕ → List ℕ → Bool
+  | [], [] => true
+  | a :: s, b :: t => Nat.beq a b && leqL s t
+  | _, _ => false
+
+theorem leqL_eq : ∀ a b : List ℕ, leqL a b = true → a = b
+  | [], [], _ => rfl
+  | a :: s, b :: t, h => by
+      simp only [leqL, Bool.and_eq_true] at h
+      rw [Nat.eq_of_beq_eq_true h.1, leqL_eq s t h.2]
+  | [], _ :: _, h => by simp [leqL] at h
+  | _ :: _, [], h => by simp [leqL] at h
+
+theorem leqL_self : ∀ a : List ℕ, leqL a a = true
+  | [] => rfl
+  | a :: s => by simp [leqL, leqL_self s]
+
+def ltL : List ℕ → List ℕ → Bool
+  | [], [] => false
+  | [], _ :: _ => true
+  | _ :: _, [] => false
+  | a :: s, b :: t => Nat.blt a b || (Nat.beq a b && ltL s t)
+
+def BT.mem : BT → List ℕ → Bool
+  | .nil, _ => false
+  | .node k l r, x => leqL x k || (if ltL x k then BT.mem l x else BT.mem r x)
+
+def BT.toList : BT → List (List ℕ)
+  | .nil => []
+  | .node k l r => BT.toList l ++ k :: BT.toList r
+
+theorem BT.mem_toList : ∀ (T : BT) (x : List ℕ), T.mem x = true → x ∈ T.toList
+  | .nil, x, h => by simp [BT.mem] at h
+  | .node k l r, x, hm => by
+      simp only [BT.mem, Bool.or_eq_true] at hm
+      simp only [BT.toList, List.mem_append, List.mem_cons]
+      rcases hm with he | hm
+      · exact Or.inr (Or.inl (leqL_eq x k he))
+      · split at hm
+        · exact Or.inl (BT.mem_toList l x hm)
+        · exact Or.inr (Or.inr (BT.mem_toList r x hm))
+
+theorem all_app {α : Type} {p : α → Bool} {A B : List α} (ha : A.all p = true) (hb : B.all p = true) :
+    (A ++ B).all p = true := by
+  rw [List.all_append, ha, hb]; rfl
+
+theorem cover {p : List ℕ → List (ℕ × ℕ) → Bool} (T : BT) (L : List (List ℕ × List (ℕ × ℕ)))
+    (hK : T.toList = L.map Prod.fst) (hL : L.all (fun kh => p kh.1 kh.2) = true) :
+    ∀ x, T.mem x = true → ∃ h, p x h = true := by
+  intro x hx
+  have h1 := BT.mem_toList T x hx
+  rw [hK, List.mem_map] at h1
+  obtain ⟨kh, hkh, rfl⟩ := h1
+  exact ⟨kh.2, List.all_eq_true.1 hL kh hkh⟩
+
+
+def accD (d : ℕ) : List ℕ → ℕ
+  | [] => 0
+  | w :: t => Nat.lor (Nat.xor w (Nat.shiftRight w d)) (accD d t)
+
+
+def accM (q : ℕ) : List ℕ → ℕ
+  | [] => 0
+  | w :: t => bif Nat.testBit w q then accM q t else Nat.lor w (accM q t)
+
+theorem accD_of (d i : ℕ) : ∀ (ws : List ℕ) (w : ℕ), w ∈ ws → w.testBit i ≠ w.testBit (d + i) →
+    (accD d ws).testBit i = true
+  | [], w, hw, _ => by simp at hw
+  | u :: t, w, hw, hne => by
+      have e : accD d (u :: t) = (u ^^^ (u >>> d)) ||| accD d t := rfl
+      rw [e, Nat.testBit_or, Nat.testBit_xor, Nat.testBit_shiftRight, Bool.or_eq_true]
+      rcases List.mem_cons.1 hw with rfl | hw'
+      · left; cases h1 : w.testBit i <;> cases h2 : w.testBit (d + i) <;> simp_all
+      · right; exact accD_of d i t w hw' hne
+
+theorem accM_of (q p : ℕ) : ∀ (ws : List ℕ) (w : ℕ), w ∈ ws → w.testBit p = true →
+    w.testBit q = false → (accM q ws).testBit p = true
+  | [], w, hw, _, _ => by simp at hw
+  | u :: t, w, hw, hp, hq => by
+      rcases List.mem_cons.1 hw with rfl | hw'
+      · have e : accM q (w :: t) = w ||| accM q t := by simp [accM, hq]
+        rw [e, Nat.testBit_or, hp, Bool.true_or]
+      · have ih := accM_of q p t w hw' hp hq
+        cases hu : Nat.testBit u q
+        · have e : accM q (u :: t) = u ||| accM q t := by simp [accM, hu]
+          rw [e, Nat.testBit_or, ih, Bool.or_true]
+        · have e : accM q (u :: t) = accM q t := by simp [accM, hu]
+          rw [e, ih]
+
+theorem land_sub {R X i : ℕ} (h : Nat.beq (Nat.land R X) R = true) (hi : R.testBit i = true) :
+    X.testBit i = true := by
+  have he : (R &&& X) = R := Nat.eq_of_beq_eq_true h
+  have h2 := congrArg (fun z => Nat.testBit z i) he
+  simp only [Nat.testBit_and, hi, Bool.true_and] at h2
+  exact h2
+
+theorem land_of {R X : ℕ} (h : ∀ i, R.testBit i = true → X.testBit i = true) :
+    Nat.beq (Nat.land R X) R = true := by
+  have he : (R &&& X) = R := by
+    apply Nat.eq_of_testBit_eq
+    intro i
+    rw [Nat.testBit_and]
+    cases hi : R.testBit i
+    · rfl
+    · rw [h i hi]; rfl
+  exact Nat.beq_eq_true_eq _ _ ▸ he
+
+def distOK (pD : List (ℕ × ℕ)) (ws : List ℕ) : Bool :=
+  pD.all fun dr => Nat.beq (Nat.land dr.2 (accD dr.1 ws)) dr.2
+
+def monoOK (pM : List (ℕ × ℕ)) (ws : List ℕ) : Bool :=
+  pM.all fun qp => Nat.beq (Nat.land qp.2 (accM qp.1 ws)) qp.2
+
+def via (y : ℕ) (pD pM : List (ℕ × ℕ)) (t : ℕ) (ws : List ℕ) : Bool :=
+  Nat.ble ws.length (t + 1) && (t != 0 || leqL ws [y]) && distOK pD ws &&
+    (ws.length != t + 1 || monoOK pM ws)
+
+
+def prsOK (m y : ℕ) (pD pM : List (ℕ × ℕ)) : Bool :=
+  pD.all (fun dr => Nat.beq (Nat.land dr.2 (Nat.xor y (Nat.shiftRight y dr.1))) dr.2 &&
+    Nat.beq (Nat.land dr.2 (Nat.xor m (Nat.shiftRight m dr.1))) 0) &&
+  pM.all (fun qp => Nat.beq (Nat.land qp.2 y) qp.2 && !Nat.testBit y qp.1)
+
+theorem land_zero {R X i : ℕ} (h : Nat.beq (Nat.land R X) 0 = true) (hi : R.testBit i = true) :
+    X.testBit i = false := by
+  have he : (R &&& X) = 0 := Nat.eq_of_beq_eq_true h
+  have h2 := congrArg (fun z => Nat.testBit z i) he
+  simp only [Nat.testBit_and, hi, Bool.true_and, Nat.zero_testBit] at h2
+  exact h2
+
+theorem via_sound {m y : ℕ} {pD pM : List (ℕ × ℕ)} (hp : prsOK m y pD pM = true) {t : ℕ}
+    {ws : List ℕ} (h : NatRun m y t ws) : via y pD pM t ws = true := by
+  simp only [prsOK, Bool.and_eq_true, List.all_eq_true] at hp
+  have hl := run_len h
+  simp only [via, Bool.and_eq_true, Bool.or_eq_true]
+  refine ⟨⟨⟨by rw [Nat.ble_eq]; exact hl, ?_⟩, ?_⟩, ?_⟩
+  · rcases Nat.eq_zero_or_pos t with rfl | ht
+    · right; rw [zero_done h rfl]; exact leqL_self _
+    · left; simp only [bne_iff_ne, ne_eq]; omega
+  · simp only [distOK, List.all_eq_true]
+    intro dr hdr
+    apply land_of
+    intro i hi
+    have h12 := hp.1 dr hdr
+    have hy : (y ^^^ (y >>> dr.1)).testBit i = true := land_sub h12.1 hi
+    have hmx : (m ^^^ (m >>> dr.1)).testBit i = false := land_zero h12.2 hi
+    simp only [Nat.testBit_xor, Nat.testBit_shiftRight] at hy hmx
+    have hmm : m.testBit i = m.testBit (dr.1 + i) := by
+      cases h1 : m.testBit i <;> cases h2 : m.testBit (dr.1 + i) <;> simp_all
+    by_contra hc
+    have hall : ∀ w ∈ ws, w.testBit i = w.testBit (dr.1 + i) := by
+      intro w hw
+      by_contra hne
+      exact hc (accD_of dr.1 i ws w hw hne)
+    have := run_bits h i (dr.1 + i) hmm hall
+    rw [this] at hy; simp at hy
+  · by_cases hlen : ws.length = t + 1
+    · right
+      simp only [monoOK, List.all_eq_true]
+      intro qp hqp
+      have h1 := hp.2 qp hqp
+      simp only [Bool.and_eq_true, Bool.not_eq_true'] at h1
+      apply land_of
+      intro p hpP
+      have hyp : y.testBit p = true := land_sub h1.1 hpP
+      by_contra hc
+      have hle : ∀ w ∈ ws, w.testBit p ≤ w.testBit qp.1 := by
+        intro w hw
+        cases h2 : w.testBit p
+        · exact Bool.false_le _
+        · cases h3 : w.testBit qp.1
+          · exact absurd (accM_of qp.1 p ws w hw h2 h3) hc
+          · exact le_refl _
+      have := bits_le h hlen p qp.1 hle
+      rw [hyp, h1.2] at this
+      exact absurd this (by decide)
+    · left; simpa using hlen
+
+
+def actL : List ℕ → ℕ → ℕ
+  | [], _ => 0
+  | p :: ps, w => Nat.bit (w.testBit p) (actL ps w)
+
+theorem actL_testBit : ∀ (pi : List ℕ) (w k : ℕ),
+    (actL pi w).testBit k = (pi[k]?.map w.testBit).getD false
+  | [], w, k => by simp [actL]
+  | p :: ps, w, 0 => by simp [actL, Nat.testBit_bit_zero]
+  | p :: ps, w, k + 1 => by simp [actL, Nat.testBit_bit_succ, actL_testBit ps w k]
+
+theorem actL_and (pi : List ℕ) (a b : ℕ) : actL pi (a &&& b) = actL pi a &&& actL pi b := by
+  apply Nat.eq_of_testBit_eq; intro k
+  rw [Nat.testBit_and, actL_testBit, actL_testBit, actL_testBit]
+  cases pi[k]? <;> simp [Nat.testBit_and]
+
+theorem actL_or (pi : List ℕ) (a b : ℕ) : actL pi (a ||| b) = actL pi a ||| actL pi b := by
+  apply Nat.eq_of_testBit_eq; intro k
+  rw [Nat.testBit_or, actL_testBit, actL_testBit, actL_testBit]
+  cases pi[k]? <;> simp [Nat.testBit_or]
+
+theorem actL_xor (pi : List ℕ) (a b : ℕ) : actL pi (a ^^^ b) = actL pi a ^^^ actL pi b := by
+  apply Nat.eq_of_testBit_eq; intro k
+  rw [Nat.testBit_xor, actL_testBit, actL_testBit, actL_testBit]
+  cases pi[k]? <;> simp [Nat.testBit_xor]
+
+theorem run_act {m y : ℕ} (pi : List ℕ) (hm : actL pi m = m) (hy : actL pi y = y) {t : ℕ}
+    {ws : List ℕ} (h : NatRun m y t ws) : NatRun m y t (ws.map (actL pi)) := by
+  have h2 := Run.map (actL pi) (inv' := (· ^^^ m)) (meet' := (· &&& ·)) (join' := (· ||| ·))
+    (fun a => by simp only [actL_xor, hm]) (fun a b => actL_and pi a b) (fun a b => actL_or pi a b) h
+  rwa [hy] at h2
+
+def symOK (m y : ℕ) (G : List (List ℕ)) : Bool :=
+  G.all fun pi => Nat.beq (actL pi m) m && Nat.beq (actL pi y) y
+
+theorem symOK_mem {m y : ℕ} {G : List (List ℕ)} (hG : symOK m y G = true) {pi : List ℕ}
+    (hpi : pi ∈ G) : actL pi m = m ∧ actL pi y = y := by
+  have := List.all_eq_true.1 hG pi hpi
+  simp only [Bool.and_eq_true] at this
+  exact ⟨Nat.eq_of_beq_eq_true this.1, Nat.eq_of_beq_eq_true this.2⟩
+
+
+def hfind (G : List (List ℕ)) (T : BT) (t : ℕ) (h : List (ℕ × ℕ)) (tag : ℕ) (ys : List ℕ) : Bool :=
+  match h.lookup tag with
+  | some j =>
+    match G[j]? with
+    | some pi => T.mem (t :: isort (ys.map (actL pi)))
+    | none => false
+  | none => false
+
+theorem hfind_false {m y : ℕ} {G : List (List ℕ)} (hG : symOK m y G = true) (T : BT) (t : ℕ)
+    (ih : ∀ ws, NatRun m y t ws → T.mem (t :: isort ws) = false)
+    (h : List (ℕ × ℕ)) (tag : ℕ) {ys : List ℕ} (hys : NatRun m y t ys) : hfind G T t h tag ys = false := by
+  unfold hfind
+  split
+  · split
+    · rename_i pi hpi
+      have hmem : pi ∈ G := List.mem_of_getElem? hpi
+      obtain ⟨hm, hy⟩ := symOK_mem hG hmem
+      exact ih _ (run_act pi hm hy hys)
+    · rfl
+  · rfl
+
+def stepOK (m y : ℕ) (pD pM : List (ℕ × ℕ)) (G : List (List ℕ)) (T : BT) :
+    List ℕ → List (ℕ × ℕ) → Bool
+  | [], _ => false
+  | 0 :: _, _ => false
+  | (t + 1) :: es, h => !(next m (t + 2 - es.length) es
+      (fun tag ys => via y pD pM t ys && !T.mem (t :: isort ys) && !hfind G T t h tag ys))
+
+theorem closure_sound {m y : ℕ} {pD pM : List (ℕ × ℕ)} {G : List (List ℕ)} (T : BT)
+    (hp : prsOK m y pD pM = true) (hG : symOK m y G = true)
+    (hT : ∀ x, T.mem x = true → ∃ h, stepOK m y pD pM G T x h = true) :
+    ∀ t ws, NatRun m y t ws → T.mem (t :: isort ws) = false := by
+  intro t
+  induction t with
+  | zero =>
+    intro ws _
+    cases hm : T.mem (0 :: isort ws)
+    · rfl
+    · obtain ⟨h, hs⟩ := hT _ hm
+      simp [stepOK] at hs
+  | succ t ih =>
+    intro ws hw
+    cases hm : T.mem ((t + 1) :: isort ws)
+    · rfl
+    · obtain ⟨h, hs⟩ := hT _ hm
+      simp only [stepOK, Bool.not_eq_true'] at hs
+      have hperm : (isort ws).Perm ws := List.perm_insertionSort _ _
+      have hr : NatRun m y (t + 1) (isort ws) := Run.perm hperm.symm hw
+      have hn := next_complete hr t rfl (isort ws) (List.Perm.refl _)
+        (fun tag ys => via y pD pM t ys && !T.mem (t :: isort ys) && !hfind G T t h tag ys)
+        (fun tag ys hys => by simp [via_sound hp hys, ih ys hys, hfind_false hG T t ih h tag hys])
+      rw [hn] at hs; cases hs
+
+def rootOK (y : ℕ) (pD pM : List (ℕ × ℕ)) (G : List (List ℕ)) (T : BT) (cap : ℕ) (zs : List ℕ) : Bool :=
+  !via y pD pM cap zs || T.mem (cap :: isort zs) || G.any (fun pi => T.mem (cap :: isort (zs.map (actL pi))))
+
+theorem cert_core {m y : ℕ} {xs : List ℕ} {pD pM : List (ℕ × ℕ)} {G : List (List ℕ)} {T : BT} {cap : ℕ}
+    (hp : prsOK m y pD pM = true) (hG : symOK m y G = true)
+    (hT : ∀ x, T.mem x = true → ∃ h, stepOK m y pD pM G T x h = true)
+    (hi : xs.sublists.all (rootOK y pD pM G T cap) = true)
+    {s' : ℕ} (hs' : s' ≤ cap) {ws : List ℕ} (hsub : ws.Sublist xs) (hr : NatRun m y s' ws) : False := by
+  have hmem := List.all_eq_true.1 hi _ (List.mem_sublists.2 hsub)
+  revert hr hmem
+  cases ws with
+  | nil => intro hr _; exact run_nil hr
+  | cons a r =>
+    intro hr hmem
+    have hcap : NatRun m y cap (a :: r) := extend_run hr hs'
+    have hd := via_sound hp hcap
+    have hc := closure_sound T hp hG hT cap (a :: r) hcap
+    have hg : (G.any fun pi => T.mem (cap :: isort ((a :: r).map (actL pi)))) = false := by
+      rw [List.any_eq_false]
+      intro pi hpi
+      obtain ⟨hm, hy⟩ := symOK_mem hG hpi
+      rw [closure_sound T hp hG hT cap _ (run_act pi hm hy hcap)]
+      simp
+    unfold rootOK at hmem
+    rw [hd, hc, hg] at hmem
+    simp at hmem
+
+theorem lb_cert {n : ℕ} (f : BFn n) (l : List ℕ) (m y : ℕ) (xs : List ℕ)
+    (pD pM : List (ℕ × ℕ)) (G : List (List ℕ)) (T : BT) (cap lb : ℕ)
+    (hlb : cap + 1 = lb)
+    (hm : m = 2 ^ l.length - 1)
+    (hy : encL f l = y)
+    (hxs : (List.ofFn fun (i : Fin n) => (fun x : Fin n → Bool => x i)).map
+      (fun a => encL a l) = xs)
+    (hnc : ∃ a b : Fin n → Bool, f a ≠ f b)
+    (hp : prsOK m y pD pM = true) (hG : symOK m y G = true)
+    (hT : ∀ x, T.mem x = true → ∃ h, stepOK m y pD pM G T x h = true)
+    (hi : xs.sublists.all (rootOK y pD pM G T cap) = true) :
+    ∀ s, HasCircuitSize n f s → lb ≤ s := by
+  intro s h
+  by_contra hlt
+  obtain ⟨s', hs', ws, hsub, hrun⟩ := exists_run f hnc s h
+  have hr : NatRun m (encL f l) s' (ws.map fun a => encL a l) :=
+    Run.map (fun a : BFn n => encL a l) (fun a => by rw [hm]; exact encL_inv a l)
+      (fun a b => encL_and a b l) (fun a b => encL_or a b l) hrun
+  rw [hy] at hr
+  have hsub' : (ws.map fun a => encL a l).Sublist xs := by rw [← hxs]; exact hsub.map _
+  exact cert_core hp hG hT hi (by omega) hsub' hr
+
+def L_ : List ℕ := [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63]
+def M_ : ℕ := 18446744073709551615
+def Y_ : ℕ := 18369882623121870024
+def XS_ : List ℕ := [12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320]
+def PD_ : List (ℕ × ℕ) := [(1,115292175845730988),(2,96076770284929018),(3,86469131906667857),(4,72057612610306052),(5,79263370916309678),(6,78062376393375739),(7,77461930603009361),(8,4503617179484164),(9,4953976503184046),(10,4878882166800379),(11,4841386483602769),(12,281492465057796),(13,309639419472558),(14,304913811193851),(15,302602476139857),(16,17609670406148),(17,19368351740590),(18,19040788968443),(19,18928475673425),(20,1116995740420),(21,1226410007342),(22,1173725079355),(23,1198850644273),(24,86203573812),(25,92538649014),(26,91393324663),(27,90749079959),(28,21779063399),(29,21671689119),(30,4420237155),(31,4312863005),(32,35791394),(33,62634941),(34,58161010),(35,51450133),(36,52568614),(37,54246335),(38,53966707),(39,19992853),(40,3285542),(41,3390399),(42,3372915),(43,1249557),(44,205350),(45,211903),(46,210803),(47,78101),(48,12838),(49,13247),(50,13171),(51,4885),(52,806),(53,831),(54,819),(55,309),(56,54),(57,55),(58,55),(59,23),(60,7),(61,7),(62,3),(63,1)]
+def PM_ : List (ℕ × ℕ) := [(0,18369882623121870024),(1,18369882623121870024),(2,18369882623121870024),(4,18369882623121870024),(5,18369882623121870024),(8,18369882623121870024),(9,18369882623121870024),(12,18369882623121870024),(13,18369882623121870024),(16,18369882623121870024),(17,18369882623121870024),(20,18369882623121870024),(21,18369882623121870024),(24,18369882623121870024),(25,18369882623121870024),(32,18369882623121870024),(34,18369882623121870024),(36,18369882623121870024),(40,18369882623121870024),(44,18369882623121870024),(48,18369882623121870024),(52,18369882623121870024),(56,18369882623121870024)]
+def G_ : List (List ℕ) := [[0,1,2,3,4,5,6,7,16,17,18,19,20,21,22,23,8,9,10,11,12,13,14,15,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,48,49,50,51,52,53,54,55,40,41,42,43,44,45,46,47,56,57,58,59,60,61,62,63],[0,1,2,3,8,9,10,11,4,5,6,7,12,13,14,15,16,17,18,19,24,25,26,27,20,21,22,23,28,29,30,31,32,33,34,35,40,41,42,43,36,37,38,39,44,45,46,47,48,49,50,51,56,57,58,59,52,53,54,55,60,61,62,63],[0,1,2,3,8,9,10,11,16,17,18,19,24,25,26,27,4,5,6,7,12,13,14,15,20,21,22,23,28,29,30,31,32,33,34,35,40,41,42,43,48,49,50,51,56,57,58,59,36,37,38,39,44,45,46,47,52,53,54,55,60,61,62,63],[0,1,2,3,16,17,18,19,4,5,6,7,20,21,22,23,8,9,10,11,24,25,26,27,12,13,14,15,28,29,30,31,32,33,34,35,48,49,50,51,36,37,38,39,52,53,54,55,40,41,42,43,56,57,58,59,44,45,46,47,60,61,62,63],[0,1,2,3,16,17,18,19,8,9,10,11,24,25,26,27,4,5,6,7,20,21,22,23,12,13,14,15,28,29,30,31,32,33,34,35,48,49,50,51,40,41,42,43,56,57,58,59,36,37,38,39,52,53,54,55,44,45,46,47,60,61,62,63]]
+
+noncomputable def T_cert : BT := (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [3,12297829382473034410,18216159773593488588,18446744009285042160,18446744069414584320] BT.lf) [3,14757395258967641292,18085043209485482232,18422818335609126792,18446650250148939912] BT.lf) [3,17216961134889585868,17294086455919964160,18445336677350834170,18446462603027742720] (BT.nd BT.lf [3,17216961134889585868,17348130476094714048,18422818335611355050,18446462603027742720] BT.lf)) [3,17216961134889585868,17357137812788408512,18422818335611355050,18446462603027742720] (BT.nd (BT.nd (BT.nd BT.lf [3,17216961134889585868,17361641481138401520,18374966859414961920,18446463333172183210] BT.lf) [3,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912] BT.lf) [3,17216961134889585868,17361641481138401520,18374966859414961920,18446720893771040968] (BT.nd BT.lf [3,17216961134889585868,17361641481138401520,18413248040372076424,18446650250148904960] BT.lf))) [3,17216961134889585868,17361641481138401520,18422818335600213760,18446650250148939912] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [3,17216961134889585868,17361641481138401520,18422818335609126792,18446650250148939912] BT.lf) [4,187647121205930,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [4,4919131752989213764,12297829381900372104,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [4,5787213827585110128,12297829381900372104,14757395258967641292,18374966859414961920,18446462603027742720] BT.lf)) [4,5787213829741015280,12297829382473034410,17216961134889585868,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [4,9838263505978427528,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960] BT.lf) [4,12297829379609722880,14757395258967641292,17294086455919964160,18445336677350834170,18446462603027742720] (BT.nd BT.lf [4,12297829379609722880,14757395258967641292,17348130476094714048,18422818335611355050,18446462603027742720] BT.lf)))) [4,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446463333172183210] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464] BT.lf) [4,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912] BT.lf) [4,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446683364346808520] (BT.nd BT.lf [4,12297829379609722880,14757395258967641292,17361641481138401520,18413248040372076424,18446612720724707464] BT.lf)) [4,12297829379609722880,14757395258967641292,17361641481138401520,18413248040372076424,18446650250148904960] (BT.nd (BT.nd (BT.nd BT.lf [4,12297829379609722880,17216961134889585868,17361641481138401520,18374966859414961920,18446612720724707464] BT.lf) [4,12297829379609722880,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912] BT.lf) [4,12297829379609757832,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [4,12297829381900372104,14757395258967641292,17294086455919964160,18442521884633399280,18446462603027742720] BT.lf))) [4,12297829381900372104,14757395258967641292,17348130476094714048,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,12297829381900372104,14757395258967641292,17361641481135255744,18374966859414961920,18446462603027742720] BT.lf) [4,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [4,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464] (BT.nd BT.lf [4,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446639212082987136] BT.lf)) [4,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960] (BT.nd (BT.nd BT.lf [4,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912] BT.lf) [4,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446674533894045888] (BT.nd BT.lf [4,12297829381900372104,14757395258967641292,17361641481138401520,18422818335609126792,18446650250148939912] BT.lf))))) [4,12297829381900372104,17072280789247118540,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,12297829381900372104,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [4,12297829381900372104,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960] BT.lf) [4,12297829381900372104,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912] (BT.nd BT.lf [4,12297829382439348392,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)) [4,12297829382473034410,14757395258967641292,17293822573129236480,18446744009285042160,18446744069414584320] (BT.nd (BT.nd (BT.nd BT.lf [4,12297829382473034410,14757395258967641292,17294086455919964160,18446687728033582272,18446744069414584320] BT.lf) [4,12297829382473034410,14757395258967641292,17348077699536568512,18446742978492890880,18446744069414584320] BT.lf) [4,12297829382473034410,14757395258967641292,17348130476094714048,18446686903399861248,18446744069414584320] (BT.nd BT.lf [4,12297829382473034410,14757395258967641292,17361641481138401520,18432331679584275456,18446744069414584320] BT.lf))) [4,12297829382473034410,14757395258967641292,18085043209350738160,18422818335600213760,18446650250148904960] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,12297829382473034410,17216961134889585868,17294086455919964160,18442521884633399280,18446462603027742720] BT.lf) [4,12297829382473034410,17216961134889585868,17348130476094714048,18374966859414961920,18446462603027742720] BT.lf) [4,12297829382473034410,17216961134889585868,17357137812788408512,18374966859414961920,18446462603027742720] (BT.nd BT.lf [4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)) [4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446612720724672512] (BT.nd (BT.nd BT.lf [4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446612720724707464] BT.lf) [4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446639212082954240] (BT.nd BT.lf [4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960] BT.lf)))) [4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446674533894045888] BT.lf) [4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446709855705088192] BT.lf) [4,12297829382473034410,17216961134889585868,17361641481138401520,18422818335600213760,18446650250148904960] (BT.nd BT.lf [4,12297829382473034410,17361641481138401520,18216159773593488588,18446742978492890880,18446744069414584320] BT.lf)) [4,13527612320720337851,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [4,14757395258967641292,16927600443537279176,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [4,14757395258967641292,16927600444109941482,18158790778715962368,18446462603027742720,18446744069414584320] (BT.nd BT.lf [4,14757395258967641292,17215835218375274218,17294086455919964160,18446462603027742720,18446744069414584320] BT.lf))) [4,14757395258967641292,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,16927600443537279176,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [4,16927600444109941482,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [4,17216961134889585868,17294086455919964160,17361641481138401520,18422818335611355050,18446462603027742720] (BT.nd BT.lf [4,17216961134889585868,17361641481138401520,18062524867779689130,18374966859414961920,18446462603027742720] BT.lf)) [4,17216961134889585868,17361641481138401520,18085043208171727530,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [4,17216961134889585868,17361641481138401520,18085043209485482232,18374966859414961920,18446462603027742720] BT.lf) [4,17216961134889585868,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720] (BT.nd BT.lf [4,17216961134889585868,17361641481138401520,18085043209519168250,18374966859414961920,18446650250148904960] BT.lf)))))) [4,17216961134889585868,17361641481138401520,18374966859414961920,18445336677350834170,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [4,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960,18446650250148948650] BT.lf) [4,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912] BT.lf) [4,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912,18446744069414584320] (BT.nd BT.lf [4,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912,18446744072850558156] BT.lf)) [4,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148948650,18446687779573189836] (BT.nd (BT.nd (BT.nd BT.lf [4,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148948650,18446725308997422284] BT.lf) [4,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148948650,18446744073709486080] BT.lf) [4,17216961135462248174,17361641481138401520,18374966859414961920,18446650250148939912,18446744072850558156] (BT.nd BT.lf [5,858993459,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf))) [5,2863311530,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,4294967295,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,4294967295,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,187647121205930,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,281470681808895,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920] BT.lf)) [5,281470681808895,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [5,281470681808895,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920] BT.lf) [5,281470681808895,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,1229782938819965747,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)))) [5,1229782938819965747,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,2459565875921944576,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,2459715994191571626,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [5,3472540227093983472,12297829382473034410,14757395258967641292,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [5,3689348813882916864,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)) [5,3689348814741910323,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [5,3689348814741910323,12297829381900372104,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,3689348814741910323,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,3689573990428311552,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf))) [5,4919131752989213764,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,4919131755279862988,12297829379609722880,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,4919131755279862988,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [5,5787213829741015280,12297829379609722880,12297829382473034410,14757395258967641292,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,5787213829741015280,12297829382473034410,14757395258967641292,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [5,6148914691236517205,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [5,6148914691236517205,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,6148914691236517205,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,6148914691809179511,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf))))) [5,6148914691809179511,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,6148914694099828735,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,8102099357864587376,12297829382473034410,14757395258967641292,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [5,8608480565726806016,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,9838263503687778304,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)) [5,9838263505978427528,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd BT.lf [5,9838263505978427528,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464] BT.lf) [5,9838263505978427528,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960] BT.lf) [5,9838263505978427528,12297829379609722880,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,9838263505978427528,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf))) [5,9838263505978427528,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,11574427651397386240,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,11574427653553291392,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,11574427654092267680,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,11574427654092267680,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)) [5,12153149036796881064,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [5,12297829379609722880,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,12297829379609722880,12297829381900372104,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,12297829379609722880,12297829382473034410,14757395258967641292,17294086455919964160,18442521884633399280,18446462603027742720] BT.lf)))) [5,12297829379609722880,12297829382473034410,14757395258967641292,17348130476094714048,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724672512] BT.lf) [5,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464] (BT.nd BT.lf [5,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446639212082954240] BT.lf)) [5,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960] (BT.nd (BT.nd BT.lf [5,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446674533894045888] BT.lf) [5,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18422818335600213760,18446650250148904960] (BT.nd BT.lf [5,12297829379609722880,12297829382473034410,17072280789247118540,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf))) [5,12297829379609722880,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829379609722880,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960] BT.lf) [5,12297829379609722880,13527612320720337851,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,12297829379609722880,14468034567615334600,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,12297829379609722880,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)) [5,12297829379609722880,14757395258967641292,17294086455919964160,17361641481138401520,18422818335611355050,18446462603027742720] (BT.nd (BT.nd BT.lf [5,12297829379609722880,14757395258967641292,17361641481138401520,17940362863843014904,18374966859414961920,18446462603027742720] BT.lf) [5,12297829379609722880,14757395258967641292,17361641481138401520,18062524867779689130,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,12297829379609722880,14757395258967641292,17361641481138401520,18085043208171727530,18374966859414961920,18446462603027742720] BT.lf))))))) [5,12297829379609722880,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829379609722880,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446650250148904960] BT.lf) [5,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18445336677350834170,18446462603027742720] BT.lf) [5,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464] (BT.nd BT.lf [5,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464,18446744069414584320] BT.lf)) [5,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960,18446650250148948650] (BT.nd (BT.nd (BT.nd BT.lf [5,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148948650,18446687779573189836] BT.lf) [5,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148948650,18446744073709486080] BT.lf) [5,12297829379609722880,17216961134889585868,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,12297829379609766570,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf))) [5,12297829381765628032,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829381900372104,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,12297829381900372104,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,12297829381900372104,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912] (BT.nd BT.lf [5,12297829381900372104,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)) [5,12297829381900372104,13889313184910721216,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [5,12297829381900372104,14757395255531667456,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,12297829381900372104,14757395258967641292,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,12297829381900372104,14757395258967641292,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)))) [5,12297829381900372104,14757395258967641292,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829381900372104,14757395258967641292,17294086455919964160,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,12297829381900372104,14757395258967641292,17361641477096079360,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,12297829381900372104,14757395258967641292,17361641480329937088,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,12297829381900372104,14757395258967641292,17361641481138401520,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)) [5,12297829381900372104,14757395258967641292,17361641481138401520,18085043209485482232,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [5,12297829381900372104,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720] BT.lf) [5,12297829381900372104,14757395258967641292,17361641481138401520,18229723555195321596,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18442521884633399280,18446462603027742720] BT.lf))) [5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744071705233544] BT.lf) [5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072277895850] (BT.nd BT.lf [5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf)) [5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744073423220462] (BT.nd (BT.nd BT.lf [5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744073456906480] BT.lf) [5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744073659022588] (BT.nd BT.lf [5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912] BT.lf))))) [5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912,18446744072850558156] BT.lf) [5,12297829381900372104,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,12297829381900372104,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [5,12297829381900372104,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf)) [5,12297829381900372104,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382439348392,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [5,12297829382439348392,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf) [5,12297829382473034410,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,12297829382473034410,12297923203170304000,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf))) [5,12297829382473034410,13527612317570695168,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382473034410,13889313184910721216,14757395258967641292,18158790778715962368,18446462603027742720,18446744069414584320] BT.lf) [5,12297829382473034410,13889313184910721216,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,12297829382473034410,14754017507706719424,14757395258967641292,17294086455919964160,18446462603027742720,18446744069414584320] (BT.nd BT.lf [5,12297829382473034410,14757395255531667456,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)) [5,12297829382473034410,14757395258967641292,16927600440168677376,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,16927600443402535104,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,12297829382473034410,14757395258967641292,17216961131453612032,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)))) [5,12297829382473034410,14757395258967641292,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17293822573129236480,17361641481138401520,18446742978492890880,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18446686903399861248,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17294086455919964160,18226345803934399728,18446462603027742720,18446744069414584320] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17294086455919964160,18442521884633399280,18446462603027742720,18446744069414584320] BT.lf)) [5,12297829382473034410,14757395258967641292,17294086455919964160,18442521884633399280,18446462603027742720,18446744072850558156] (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17294086455919964160,18445336677350834170,18446462603027742720,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17294086455919964160,18446462603027742720,18446744009285042160,18446744069414584320] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17294087486712115440,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf))) [5,12297829382473034410,14757395258967641292,17316604797659443280,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17348077699536568512,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17348130476094714048,18374966859414961920,18432107379212156928,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17348130476094714048,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17348130476094714048,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf)) [5,12297829382473034410,14757395258967641292,17348130476094714048,18422818335611355050,18446462603027742720,18446744069414584320] (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17348130476094714048,18429010879589711808,18446462603027742720,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17348130476094714048,18442521884633399280,18446462603027742720,18446744069414584320] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17348130476094714048,18446462603027742720,18446742978492890880,18446744069414584320] BT.lf)))))) [5,12297829382473034410,14757395258967641292,17357137812790505696,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641274979971264,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481135255744,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481135255744,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,17578661995559780352,18374966859414961920,18446462603027742720] BT.lf)) [5,12297829382473034410,14757395258967641292,17361641481138401520,18062524863574179840,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18085043205308416000,18374966859414961920,18446462603027742720] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18085043208677017800,18374966859414961920,18446462603027742720] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374403896593350656,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374403900029324492,18374966859414961920,18446462603027742720] BT.lf))) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18445336673056194560,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414606165] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414636748] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069700915473] BT.lf)) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744070559908932] (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744070762025040] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744070846240085] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744071570489472] BT.lf)))) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744071705233544] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072635858944] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072648442048] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072783186120] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072849771712] BT.lf)) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744073136889309] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744073441116160] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462822071074867,18446744069414584320] BT.lf))) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446463333172183210,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446463633819894000,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446603890271944832,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724672512,18446744069414584320] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464,18446744069414584320] BT.lf)) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464,18446744071705233544] (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464,18446744072850558156] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446639212082954240,18446744069414584320] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650245854003200,18446650250148904960] BT.lf))))) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960,18446744072850558156] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912,18446744072850558156] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446673709260324864,18446744069414584320] BT.lf)) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446674533893996544,18446744069414584320] (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446674533894045888,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446674533894045888,18446744072648442048] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446674533894045888,18446744072850558156] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446683364346808520,18446744069414584320] BT.lf))) [5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446687728033582272,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18413248040372076424,18446612720724707464,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18422818335600213760,18446650250148904960,18446744069414584320] BT.lf) [5,12297829382473034410,14757395258967641292,17361641481138401520,18429010879589711808,18446674533894045888,18446744069414584320] (BT.nd BT.lf [5,12297829382473034410,14757395258967641292,17361641481138401520,18432332555757604044,18446742978492890880,18446744069414584320] BT.lf)) [5,12297829382473034410,14757395258967641292,17361641481138401520,18432387754677305088,18446687779573189836,18446744069414584320] (BT.nd (BT.nd BT.lf [5,12297829382473034410,14757395259826634751,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf) [5,12297829382473034410,16204198715190198464,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,12297829382473034410,17072280789247118540,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)))) [5,12297829382473034410,17072280789786094828,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382473034410,17216961131453612032,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,12297829382473034410,17216961134889585868,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,12297829382473034410,17216961134889585868,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,12297829382473034410,17216961134889585868,17294086455919964160,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)) [5,12297829382473034410,17216961134889585868,17361641477096079360,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [5,12297829382473034410,17216961134889585868,17361641481138401520,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,12297829382473034410,17216961134889585868,17361641481138401520,18085043209350738160,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,12297829382473034410,17216961134889585868,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720] BT.lf))) [5,12297829382473034410,17216961134889585868,17361641481138401520,18229723555195321596,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382473034410,17216961134889585868,17361641481138401520,18374403900837788924,18374966859414961920,18446462603027742720] BT.lf) [5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18442521884633399280,18446462603027742720] BT.lf) [5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744072277895850] (BT.nd (BT.nd BT.lf [5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf) [5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744073456906480] (BT.nd BT.lf [5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960] BT.lf)))))))) [5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,12297829382473034410,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf) [5,12297829382473034410,17361641481138401520,18216159773593488588,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [5,12297829382759365563,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [5,12297829382759365563,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf)) [5,12297829383820475130,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd BT.lf [5,14757395258967641292,16909585770718358186,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [5,14757395258967641292,16927600440168677376,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [5,14757395258967641292,16927600443031988906,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [5,14757395258967641292,16927600444109941482,17294086455919964160,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf))) [5,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720,18446744072648442048] BT.lf) [5,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf) [5,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446674533894045888,18446744069414584320] (BT.nd BT.lf [5,14757395258967641292,16927600444109941482,18229723555195321596,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [5,14757395258967641292,17215835218375274218,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd BT.lf [5,14757395258967641292,17216961131453612032,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720] BT.lf) [5,14757395258967641292,17216961134889585868,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720] (BT.nd BT.lf [5,14757395258967641292,17361641481138401520,18062436906849446570,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)))) [5,17216961134889585868,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [5,17216961134889585868,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [5,17216961135462248174,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf) [6,0,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,65535,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,858993459,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [6,858993459,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,858993459,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd BT.lf [6,1431655765,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf))) [6,2863311530,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,2863311530,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,3435973836,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,4042322160,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,4294967295,281470681808895,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920] BT.lf)) [6,4294967295,3689348814741910323,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [6,4294967295,6148914691236517205,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [6,4294967295,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [6,4294967295,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf))))) [6,4294967295,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,4294967295,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf) [6,1095216660735,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,56294136361779,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,93823560602965,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,187647121205930,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd BT.lf [6,225176545447116,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,264913582878960,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,281470681743360,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,281470681808895,71777214294589695,12297829382473034410,14757395258967641292,17361641481138401520,18446744069414584320] BT.lf))) [6,281470681808895,3689348814741910323,12297829382473034410,17361641481138401520,18374966859414961920,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,281470681808895,6148914691236517205,14757395258967641292,17361641481138401520,18374966859414961920,18446744069414584320] BT.lf) [6,281470681808895,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920] BT.lf) [6,281470681808895,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [6,281470681808895,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,281470681808895,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd (BT.nd BT.lf [6,281470681808895,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446744069414584320] BT.lf) [6,281470681808895,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446744072850558156] (BT.nd BT.lf [6,281474976710655,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)))) [6,72057589759737855,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,1229782938247303441,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,2459565876494606882,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,3472328296227680304,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,3689348813882916864,3689348814741910323,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)) [6,3689348813882916864,3689348814741910323,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [6,3689348813882916864,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [6,3689348813882916864,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,3689348814741910323,6148914691236517205,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf))) [6,3689348814741910323,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,3689348814741910323,12297829379609722880,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [6,3689348814741910323,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,3689348814741910323,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd BT.lf [6,3689348814741910323,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,3689348814741910323,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd (BT.nd BT.lf [6,3689348818177884159,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,3689573991287357439,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,4919131752989213764,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)))))) [6,5787213827046133840,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,6148914689804861440,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,6148914691236517205,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [6,6148914691236517205,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [6,6148914691236517205,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,6148914691236517205,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744070846240085] (BT.nd (BT.nd (BT.nd BT.lf [6,6148914691236517205,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf) [6,6148914691236517205,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,6148914691236517205,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744070846240085] (BT.nd BT.lf [6,6148914691236517205,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf))) [6,6148914694099828735,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,6148914694099828735,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [6,6148914694099828735,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,6149102338357723135,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,8608480567731124087,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,9259542123273814144,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd BT.lf [6,9838263503687778304,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [6,9838263503687778304,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,9838263505978427528,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)))) [6,9838263505978427528,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,9838263505978427528,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,9838263505978427528,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,9838263505978427528,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744071705233544] (BT.nd BT.lf [6,9838263505978427528,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf)) [6,9838263505978427528,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464,18446744069414584320] (BT.nd (BT.nd BT.lf [6,11529390970613309440,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,11574427651397386240,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [6,11574427651397386240,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf))) [6,11574427654092267680,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,11574427654092267680,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,11574427654092267680,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf) [6,12153149036796881064,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12295014589755599520,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,12297829379609722880,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [6,12297829379609722880,12297829382473034410,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [6,12297829379609722880,12297829382473034410,13889313184910721216,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [6,12297829379609722880,12297829382473034410,14757395255531667456,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf))))) [6,12297829379609722880,12297829382473034410,14757395258967641292,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829379609722880,12297829382473034410,14757395258967641292,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [6,12297829379609722880,12297829382473034410,14757395258967641292,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [6,12297829379609722880,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [6,12297829379609722880,12297829382473034410,14757395258967641292,17361641477096079360,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf)) [6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd BT.lf [6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18085043209350738160,18374966859414961920,18446462603027742720] BT.lf) [6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720] BT.lf) [6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18229723555195321596,18374966859414961920,18446462603027742720] (BT.nd BT.lf [6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18442521884633399280,18446462603027742720] BT.lf))) [6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072277895850] BT.lf) [6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd BT.lf [6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744073456906480] BT.lf)) [6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960] (BT.nd (BT.nd BT.lf [6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960,18446744069414584320] BT.lf) [6,12297829379609722880,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [6,12297829379609722880,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)))) [6,12297829379609722880,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829379609722880,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829381900372104,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [6,12297829381900372104,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829381900372104,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf)) [6,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [6,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072850558156] (BT.nd BT.lf [6,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf))) [6,12297829382304604320,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf) [6,12297829382473034410,12297829383904690175,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,12297923206033637375,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,12297829382473034410,13527612320720337851,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd BT.lf [6,12297829382473034410,13835269164735971328,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,13889313181676863488,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,13889313184910721216,14757395258967641292,17294086455919964160,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf))))))) [6,12297829382473034410,13889313184910721216,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,13889313184910721216,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072648442048] BT.lf) [6,12297829382473034410,13889313184910721216,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf) [6,12297829382473034410,13889313184910721216,14757395258967641292,17361641481138401520,18374966859414961920,18446674533894045888,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,13889313184910721216,14757395258967641292,18229723555195321596,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,12297829382473034410,14468034567615334600,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,14754017507706719424,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395255531667456,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395255531667456,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd BT.lf [6,12297829382473034410,14757395257822316680,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf))) [6,12297829382473034410,14757395258765525184,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf) [6,12297829382473034410,14757395258967641292,14757395259826634751,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,14757395259826634751,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,12297829382473034410,14757395258967641292,14757451553104003071,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,15987178197214944733,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,16204198715729174752,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)))) [6,12297829382473034410,14757395258967641292,17072280789786094828,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17216961131453612032,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [6,12297829382473034410,14757395258967641292,17216961131453612032,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [6,12297829382473034410,14757395258967641292,17216961131453612032,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17216961134316923562,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,12297829382473034410,14757395258967641292,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf))) [6,12297829382473034410,14757395258967641292,17293822573129236480,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17294086451893370880,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18422818335611355050,18446462603027742720,18446744069414584320] BT.lf)) [6,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18442521884633399280,18446462603027742720,18446744069414584320] (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18446462603027742720,18446742978492890880,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17294086455919964160,18442521884633399280,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17339123139398922400,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf))))) [6,12297829382473034410,14757395258967641292,17348130476094714048,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17348130476094714048,18374966859414961920,18432388630850633676,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17348130476094714048,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17361640450346250240,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641477096079360,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,12297829382473034410,14757395258967641292,17361641477096079360,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641479790960800,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17361641480329937088,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17361641480329937088,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481122672640,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf))) [6,12297829382473034410,14757395258967641292,17361641481138401520,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,17361641481391046655,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,17361658038237331455,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,17578661999652631539,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,12297829382473034410,14757395258967641292,17361641481138401520,17723342345328784885,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,17940362863843014904,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18062524867779689130,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18082228416801733360,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)))) [6,12297829382473034410,14757395258967641292,17361641481138401520,18085043205308416000,18085043209519168250,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18085043205308416000,18374966859414961920,18446462603027742720] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18085043205308416000,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18085043208171727530,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18085043209350738160,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,12297829382473034410,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18216212550151634124,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18226345803934399728,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf))) [6,12297829382473034410,14757395258967641292,17361641481138401520,18229723550950883328,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18229723554386857164,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18229723554993205488,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18229723555195321596,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18229723555195321596,18374966859414961920,18446462603027742720,18446744072850558156] BT.lf)) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374403900871474942,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18442505391958978800,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18442521880339415040,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18442521884381737200,18446462603027742720,18446744069414584320] BT.lf)))))) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18442521884633399280,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18442521884633399280,18446462603027742720,18446744072850558156] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18445336677350834170,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18445899635894321148,18446462603027742720,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744009285042160,18446744069414584320] BT.lf)) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744069414584320] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744069414649855] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744070273577779] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744070846240085] BT.lf))) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744071705233544] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072109465760] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072277895850] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072648442048] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072850558156] BT.lf)) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073423220462] (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073441177600] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073456906480] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073625336570] BT.lf)))) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073659022588] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073708568560] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073709551615] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744070846240085] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744071705233544] BT.lf)) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072277895850,18446744072850558156] (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072648442048] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156,18446744072850558156] BT.lf))) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156,18446744073423220462] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156,18446744073456906480] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156,18446744073659022588] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960,18446744069414584320] BT.lf)) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148948650,18446687779573189836,18446744069414584320] (BT.nd (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148948650,18446744069414584320,18446744073709486080] BT.lf) [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446674533894045888,18446744069414584320] (BT.nd BT.lf [6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446687779573189836,18446727516610621680,18446744069414584320] BT.lf))))) [6,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [6,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [6,12297829382473034410,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072850558156] BT.lf) [6,12297829382473034410,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd BT.lf [6,13889313184910721216,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [6,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd BT.lf [6,14757395258967641292,17216961135462248174,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [7,4294967295,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] BT.lf) [7,4294967295,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [7,281470681808895,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf))) [7,281470681808895,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [7,3689348814741910323,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [7,3689348814741910323,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [7,6148914691236517205,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [7,6148914691236517205,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [7,9838263505978427528,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd BT.lf [7,11574427654092267680,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [7,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720] (BT.nd BT.lf [7,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)))) [7,12297829382473034410,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [7,12297829382473034410,13889313184910721216,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [7,12297829382473034410,14757395255531667456,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [7,12297829382473034410,14757395258967641292,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [7,12297829382473034410,14757395258967641292,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)) [7,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd BT.lf [7,12297829382473034410,14757395258967641292,17361641477096079360,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [7,12297829382473034410,14757395258967641292,17361641481138401520,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd BT.lf [7,12297829382473034410,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf))) [7,12297829382473034410,14757395258967641292,17361641481138401520,18229723555195321596,18374966859414961920,18446462603027742720,18446744069414584320] (BT.nd (BT.nd (BT.nd (BT.nd BT.lf [7,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18442521884633399280,18446462603027742720,18446744069414584320] BT.lf) [7,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf) [7,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744069414584320] (BT.nd BT.lf [7,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072277895850] BT.lf)) [7,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072850558156] (BT.nd (BT.nd BT.lf [7,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073456906480] BT.lf) [7,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156] (BT.nd BT.lf [8,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320] BT.lf)))))))))
+
+noncomputable def K_0 : List (List ℕ × List (ℕ × ℕ)) := [([3,12297829382473034410,18216159773593488588,18446744009285042160,18446744069414584320],[]),([3,14757395258967641292,18085043209485482232,18422818335609126792,18446650250148939912],[]),([3,17216961134889585868,17294086455919964160,18445336677350834170,18446462603027742720],[]),([3,17216961134889585868,17348130476094714048,18422818335611355050,18446462603027742720],[]),([3,17216961134889585868,17357137812788408512,18422818335611355050,18446462603027742720],[]),([3,17216961134889585868,17361641481138401520,18374966859414961920,18446463333172183210],[]),([3,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912],[]),([3,17216961134889585868,17361641481138401520,18374966859414961920,18446720893771040968],[]),([3,17216961134889585868,17361641481138401520,18413248040372076424,18446650250148904960],[]),([3,17216961134889585868,17361641481138401520,18422818335600213760,18446650250148939912],[]),([3,17216961134889585868,17361641481138401520,18422818335609126792,18446650250148939912],[]),([4,187647121205930,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(72,2),(96,0)]),([4,4919131752989213764,12297829381900372104,17361641481138401520,18374966859414961920,18446462603027742720],[]),([4,5787213827585110128,12297829381900372104,14757395258967641292,18374966859414961920,18446462603027742720],[]),([4,5787213829741015280,12297829382473034410,17216961134889585868,18374966859414961920,18446462603027742720],[]),([4,9838263505978427528,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960],[(72,1)]),([4,12297829379609722880,14757395258967641292,17294086455919964160,18445336677350834170,18446462603027742720],[]),([4,12297829379609722880,14757395258967641292,17348130476094714048,18422818335611355050,18446462603027742720],[]),([4,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446463333172183210],[]),([4,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464],[]),([4,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912],[]),([4,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446683364346808520],[]),([4,12297829379609722880,14757395258967641292,17361641481138401520,18413248040372076424,18446612720724707464],[]),([4,12297829379609722880,14757395258967641292,17361641481138401520,18413248040372076424,18446650250148904960],[]),([4,12297829379609722880,17216961134889585868,17361641481138401520,18374966859414961920,18446612720724707464],[(72,2),(96,0)]),([4,12297829379609722880,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912],[(72,1)]),([4,12297829379609757832,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([4,12297829381900372104,14757395258967641292,17294086455919964160,18442521884633399280,18446462603027742720],[]),([4,12297829381900372104,14757395258967641292,17348130476094714048,18374966859414961920,18446462603027742720],[]),([4,12297829381900372104,14757395258967641292,17361641481135255744,18374966859414961920,18446462603027742720],[]),([4,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([4,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464],[]),([4,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446639212082987136],[]),([4,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960],[]),([4,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912],[]),([4,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446674533894045888],[]),([4,12297829381900372104,14757395258967641292,17361641481138401520,18422818335609126792,18446650250148939912],[]),([4,12297829381900372104,17072280789247118540,17361641481138401520,18374966859414961920,18446462603027742720],[]),([4,12297829381900372104,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(72,2),(96,0)]),([4,12297829381900372104,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960],[(72,2),(96,0)]),([4,12297829381900372104,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912],[(72,1)]),([4,12297829382439348392,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(72,2)]),([4,12297829382473034410,14757395258967641292,17293822573129236480,18446744009285042160,18446744069414584320],[]),([4,12297829382473034410,14757395258967641292,17294086455919964160,18446687728033582272,18446744069414584320],[]),([4,12297829382473034410,14757395258967641292,17348077699536568512,18446742978492890880,18446744069414584320],[]),([4,12297829382473034410,14757395258967641292,17348130476094714048,18446686903399861248,18446744069414584320],[]),([4,12297829382473034410,14757395258967641292,17361641481138401520,18432331679584275456,18446744069414584320],[]),([4,12297829382473034410,14757395258967641292,18085043209350738160,18422818335600213760,18446650250148904960],[]),([4,12297829382473034410,17216961134889585868,17294086455919964160,18442521884633399280,18446462603027742720],[]),([4,12297829382473034410,17216961134889585868,17348130476094714048,18374966859414961920,18446462603027742720],[]),([4,12297829382473034410,17216961134889585868,17357137812788408512,18374966859414961920,18446462603027742720],[]),([4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[]),([4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446612720724672512],[]),([4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446612720724707464],[]),([4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446639212082954240],[]),([4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960],[]),([4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912],[]),([4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446674533894045888],[]),([4,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446709855705088192],[]),([4,12297829382473034410,17216961134889585868,17361641481138401520,18422818335600213760,18446650250148904960],[]),([4,12297829382473034410,17361641481138401520,18216159773593488588,18446742978492890880,18446744069414584320],[]),([4,13527612320720337851,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[]),([4,14757395258967641292,16927600443537279176,17361641481138401520,18374966859414961920,18446462603027742720],[]),([4,14757395258967641292,16927600444109941482,18158790778715962368,18446462603027742720,18446744069414584320],[]),([4,14757395258967641292,17215835218375274218,17294086455919964160,18446462603027742720,18446744069414584320],[]),([4,14757395258967641292,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912],[]),([4,16927600443537279176,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(72,2),(96,0)]),([4,16927600444109941482,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[]),([4,17216961134889585868,17294086455919964160,17361641481138401520,18422818335611355050,18446462603027742720],[]),([4,17216961134889585868,17361641481138401520,18062524867779689130,18374966859414961920,18446462603027742720],[]),([4,17216961134889585868,17361641481138401520,18085043208171727530,18374966859414961920,18446462603027742720],[]),([4,17216961134889585868,17361641481138401520,18085043209485482232,18374966859414961920,18446462603027742720],[(80,2)]),([4,17216961134889585868,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720],[]),([4,17216961134889585868,17361641481138401520,18085043209519168250,18374966859414961920,18446650250148904960],[]),([4,17216961134889585868,17361641481138401520,18374966859414961920,18445336677350834170,18446462603027742720],[]),([4,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960,18446650250148948650],[]),([4,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912],[]),([4,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912,18446744069414584320],[]),([4,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148939912,18446744072850558156],[]),([4,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148948650,18446687779573189836],[(140,0),(148,2)]),([4,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148948650,18446725308997422284],[(140,0),(148,2)]),([4,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148948650,18446744073709486080],[]),([4,17216961135462248174,17361641481138401520,18374966859414961920,18446650250148939912,18446744072850558156],[]),([5,858993459,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,2863311530,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,4294967295,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,4294967295,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,187647121205930,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2),(128,0)]),([5,281470681808895,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920],[]),([5,281470681808895,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,281470681808895,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920],[]),([5,281470681808895,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,1229782938819965747,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,1229782938819965747,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,2459565875921944576,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,2459715994191571626,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,3472540227093983472,12297829382473034410,14757395258967641292,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,3689348813882916864,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,3689348814741910323,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,3689348814741910323,12297829381900372104,17361641481138401520,18374966859414961920,18446462603027742720],[])]
+noncomputable def K_1 : List (List ℕ × List (ℕ × ℕ)) := [([5,3689348814741910323,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,3689573990428311552,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,4919131752989213764,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([5,4919131755279862988,12297829379609722880,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,4919131755279862988,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,5787213829741015280,12297829379609722880,12297829382473034410,14757395258967641292,18374966859414961920,18446462603027742720],[]),([5,5787213829741015280,12297829382473034410,14757395258967641292,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,6148914691236517205,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,6148914691236517205,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,6148914691236517205,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,6148914691809179511,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(132,1),(172,3)]),([5,6148914691809179511,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,6148914694099828735,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(132,1),(172,3)]),([5,8102099357864587376,12297829382473034410,14757395258967641292,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,8608480565726806016,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,9838263503687778304,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2),(128,0)]),([5,9838263505978427528,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2),(128,0)]),([5,9838263505978427528,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464],[(96,1)]),([5,9838263505978427528,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960],[(96,1)]),([5,9838263505978427528,12297829379609722880,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2),(128,0),(104,2),(136,0)]),([5,9838263505978427528,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2),(128,0)]),([5,9838263505978427528,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2),(128,0)]),([5,11574427651397386240,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(128,0)]),([5,11574427653553291392,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(128,0)]),([5,11574427654092267680,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,11574427654092267680,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12153149036796881064,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2)]),([5,12297829379609722880,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2),(128,0),(104,2),(136,0)]),([5,12297829379609722880,12297829381900372104,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2),(128,0),(104,2),(136,0)]),([5,12297829379609722880,12297829382473034410,14757395258967641292,17294086455919964160,18442521884633399280,18446462603027742720],[]),([5,12297829379609722880,12297829382473034410,14757395258967641292,17348130476094714048,18374966859414961920,18446462603027742720],[]),([5,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724672512],[]),([5,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464],[]),([5,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446639212082954240],[]),([5,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960],[]),([5,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446674533894045888],[]),([5,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18422818335600213760,18446650250148904960],[]),([5,12297829379609722880,12297829382473034410,17072280789247118540,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829379609722880,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2),(128,0)]),([5,12297829379609722880,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960],[(96,1)]),([5,12297829379609722880,13527612320720337851,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829379609722880,14468034567615334600,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(104,2),(136,0)]),([5,12297829379609722880,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829379609722880,14757395258967641292,17294086455919964160,17361641481138401520,18422818335611355050,18446462603027742720],[]),([5,12297829379609722880,14757395258967641292,17361641481138401520,17940362863843014904,18374966859414961920,18446462603027742720],[(112,2)]),([5,12297829379609722880,14757395258967641292,17361641481138401520,18062524867779689130,18374966859414961920,18446462603027742720],[]),([5,12297829379609722880,14757395258967641292,17361641481138401520,18085043208171727530,18374966859414961920,18446462603027742720],[]),([5,12297829379609722880,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720],[]),([5,12297829379609722880,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446650250148904960],[]),([5,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18445336677350834170,18446462603027742720],[]),([5,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464],[(74,2),(98,0)]),([5,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464,18446744069414584320],[]),([5,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960,18446650250148948650],[]),([5,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148948650,18446687779573189836],[(188,0),(196,2)]),([5,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148948650,18446744073709486080],[]),([5,12297829379609722880,17216961134889585868,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720],[(72,2),(128,0)]),([5,12297829379609766570,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,12297829381765628032,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829381900372104,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2),(128,0)]),([5,12297829381900372104,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829381900372104,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912],[]),([5,12297829381900372104,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2),(128,0)]),([5,12297829381900372104,13889313184910721216,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(136,0)]),([5,12297829381900372104,14757395255531667456,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829381900372104,14757395258967641292,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829381900372104,14757395258967641292,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2),(128,0)]),([5,12297829381900372104,14757395258967641292,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829381900372104,14757395258967641292,17294086455919964160,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829381900372104,14757395258967641292,17361641477096079360,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829381900372104,14757395258967641292,17361641480329937088,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829381900372104,14757395258967641292,17361641481138401520,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18085043209485482232,18374966859414961920,18446462603027742720],[(112,2)]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720],[]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18229723555195321596,18374966859414961920,18446462603027742720],[(156,1),(196,3)]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18442521884633399280,18446462603027742720],[]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(74,2),(98,0)]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744071705233544],[]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072277895850],[]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744073423220462],[]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744073456906480],[]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744073659022588],[(196,1),(204,3)]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912],[(74,1)]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912,18446744069414584320],[]),([5,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912,18446744072850558156],[]),([5,12297829381900372104,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(72,2),(74,2),(96,0),(98,0),(97,1),(129,3)]),([5,12297829381900372104,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(72,2),(96,0)]),([5,12297829381900372104,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[(72,2),(96,0)]),([5,12297829381900372104,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[(72,2),(96,0)]),([5,12297829382439348392,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,12297829382439348392,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([5,12297829382473034410,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,12297923203170304000,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,13527612317570695168,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,13889313184910721216,14757395258967641292,18158790778715962368,18446462603027742720,18446744069414584320],[(104,3),(136,1)]),([5,12297829382473034410,13889313184910721216,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(136,0)]),([5,12297829382473034410,14754017507706719424,14757395258967641292,17294086455919964160,18446462603027742720,18446744069414584320],[(104,3)]),([5,12297829382473034410,14757395255531667456,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[])]
+noncomputable def K_2 : List (List ℕ × List (ℕ × ℕ)) := [([5,12297829382473034410,14757395258967641292,16927600440168677376,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,14757395258967641292,16927600443402535104,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,14757395258967641292,17216961131453612032,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,14757395258967641292,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,14757395258967641292,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960],[]),([5,12297829382473034410,14757395258967641292,17293822573129236480,17361641481138401520,18446742978492890880,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18446686903399861248,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17294086455919964160,18226345803934399728,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17294086455919964160,18442521884633399280,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17294086455919964160,18442521884633399280,18446462603027742720,18446744072850558156],[]),([5,12297829382473034410,14757395258967641292,17294086455919964160,18445336677350834170,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17294086455919964160,18446462603027742720,18446744009285042160,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17294087486712115440,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17316604797659443280,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17348077699536568512,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17348130476094714048,18374966859414961920,18432107379212156928,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17348130476094714048,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17348130476094714048,18374966859414961920,18446462603027742720,18446744072850558156],[]),([5,12297829382473034410,14757395258967641292,17348130476094714048,18422818335611355050,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17348130476094714048,18429010879589711808,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17348130476094714048,18442521884633399280,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17348130476094714048,18446462603027742720,18446742978492890880,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17357137812790505696,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641274979971264,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481135255744,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481135255744,18374966859414961920,18446462603027742720,18446744072850558156],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,17578661995559780352,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18062524863574179840,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18085043205308416000,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18085043208677017800,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374403896593350656,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374403900029324492,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18445336673056194560,18446462603027742720],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414606165],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414636748],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069700915473],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744070559908932],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744070762025040],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744070846240085],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744071570489472],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744071705233544],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072635858944],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072648442048],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072783186120],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072849771712],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744073136889309],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744073441116160],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462822071074867,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446463333172183210,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446463633819894000,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446603890271944832,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724672512,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464,18446744071705233544],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464,18446744072850558156],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446639212082954240,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650245854003200,18446650250148904960],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960,18446744072850558156],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148939912,18446744072850558156],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446673709260324864,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446674533893996544,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446674533894045888,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446674533894045888,18446744072648442048],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446674533894045888,18446744072850558156],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446683364346808520,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446687728033582272,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18413248040372076424,18446612720724707464,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18422818335600213760,18446650250148904960,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18429010879589711808,18446674533894045888,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18432332555757604044,18446742978492890880,18446744069414584320],[]),([5,12297829382473034410,14757395258967641292,17361641481138401520,18432387754677305088,18446687779573189836,18446744069414584320],[(148,0)]),([5,12297829382473034410,14757395259826634751,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([5,12297829382473034410,16204198715190198464,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(136,0)]),([5,12297829382473034410,17072280789247118540,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,17072280789786094828,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([5,12297829382473034410,17216961131453612032,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,17216961134889585868,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,17216961134889585868,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,17216961134889585868,17294086455919964160,17361641481138401520,18374966859414961920,18446462603027742720],[(96,1)]),([5,12297829382473034410,17216961134889585868,17361641477096079360,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,17216961134889585868,17361641481138401520,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,17216961134889585868,17361641481138401520,18085043209350738160,18374966859414961920,18446462603027742720],[(72,2),(112,2)]),([5,12297829382473034410,17216961134889585868,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720],[]),([5,12297829382473034410,17216961134889585868,17361641481138401520,18229723555195321596,18374966859414961920,18446462603027742720],[(72,2),(156,1),(196,3)]),([5,12297829382473034410,17216961134889585868,17361641481138401520,18374403900837788924,18374966859414961920,18446462603027742720],[(72,2),(156,1),(196,3)]),([5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18442521884633399280,18446462603027742720],[]),([5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(97,1),(129,3)]),([5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744072277895850],[]),([5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744073456906480],[(72,2)]),([5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960],[(97,1)]),([5,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446650250148904960,18446744069414584320],[]),([5,12297829382473034410,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([5,12297829382473034410,17361641481138401520,18216159773593488588,18374966859414961920,18446462603027742720,18446744069414584320],[(104,3),(136,1)]),([5,12297829382759365563,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[])]
+noncomputable def K_3 : List (List ℕ × List (ℕ × ℕ)) := [([5,12297829382759365563,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([5,12297829383820475130,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,14757395258967641292,16909585770718358186,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,14757395258967641292,16927600440168677376,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720],[]),([5,14757395258967641292,16927600443031988906,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,14757395258967641292,16927600444109941482,17294086455919964160,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720,18446744072648442048],[]),([5,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([5,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446674533894045888,18446744069414584320],[]),([5,14757395258967641292,16927600444109941482,18229723555195321596,18374966859414961920,18446462603027742720,18446744069414584320],[(148,0)]),([5,14757395258967641292,17215835218375274218,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,14757395258967641292,17216961131453612032,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720],[]),([5,14757395258967641292,17216961134889585868,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720],[(72,2)]),([5,14757395258967641292,17361641481138401520,18062436906849446570,18374966859414961920,18446462603027742720,18446744069414584320],[]),([5,17216961134889585868,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720],[(58,2),(109,1),(141,3),(145,0)]),([5,17216961134889585868,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720,18446744069414584320],[(176,2)]),([5,17216961135462248174,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,0,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,65535,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,858993459,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,858993459,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,858993459,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,1431655765,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,2863311530,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,2863311530,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,3435973836,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,4042322160,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,4294967295,281470681808895,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920],[]),([6,4294967295,3689348814741910323,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,4294967295,6148914691236517205,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,4294967295,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,4294967295,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,4294967295,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,4294967295,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,1095216660735,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,56294136361779,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(96,2),(128,0)]),([6,93823560602965,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,187647121205930,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(96,2),(128,0)]),([6,225176545447116,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,264913582878960,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(128,0)]),([6,281470681743360,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,281470681808895,71777214294589695,12297829382473034410,14757395258967641292,17361641481138401520,18446744069414584320],[]),([6,281470681808895,3689348814741910323,12297829382473034410,17361641481138401520,18374966859414961920,18446744069414584320],[]),([6,281470681808895,6148914691236517205,14757395258967641292,17361641481138401520,18374966859414961920,18446744069414584320],[]),([6,281470681808895,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920],[]),([6,281470681808895,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,281470681808895,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,281470681808895,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,281470681808895,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446744069414584320],[]),([6,281470681808895,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446744072850558156],[]),([6,281474976710655,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,72057589759737855,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,1229782938247303441,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,2459565876494606882,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,3472328296227680304,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,3689348813882916864,3689348814741910323,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,3689348813882916864,3689348814741910323,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,3689348813882916864,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,3689348813882916864,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,3689348814741910323,6148914691236517205,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,3689348814741910323,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,3689348814741910323,12297829379609722880,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,3689348814741910323,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,3689348814741910323,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,3689348814741910323,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,3689348814741910323,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,3689348818177884159,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,3689573991287357439,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(132,1)]),([6,4919131752989213764,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,5787213827046133840,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,6148914689804861440,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,6148914691236517205,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,6148914691236517205,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,6148914691236517205,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,6148914691236517205,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744070846240085],[]),([6,6148914691236517205,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,6148914691236517205,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,6148914691236517205,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744070846240085],[]),([6,6148914691236517205,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,6148914694099828735,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(172,1),(220,3)]),([6,6148914694099828735,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,6148914694099828735,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(132,1),(172,3)]),([6,6149102338357723135,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,8608480567731124087,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(132,1),(172,3)]),([6,9259542123273814144,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(128,0)]),([6,9838263503687778304,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(128,2),(168,0)]),([6,9838263503687778304,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(96,2),(128,0)]),([6,9838263505978427528,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(128,2),(168,0)]),([6,9838263505978427528,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2),(98,2),(128,0),(130,0),(129,1),(169,3),(106,2),(138,0)]),([6,9838263505978427528,12297829379609722880,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(96,2),(128,0)]),([6,9838263505978427528,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(96,2),(128,0)]),([6,9838263505978427528,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744071705233544],[(96,2),(128,0)]),([6,9838263505978427528,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[(96,2),(128,0)]),([6,9838263505978427528,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464,18446744069414584320],[(96,1)]),([6,11529390970613309440,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,11574427651397386240,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(168,0)]),([6,11574427651397386240,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(128,0)]),([6,11574427654092267680,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,11574427654092267680,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[])]
+noncomputable def K_4 : List (List ℕ × List (ℕ × ℕ)) := [([6,11574427654092267680,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,12153149036796881064,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(96,2)]),([6,12295014589755599520,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829379609722880,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(128,2),(168,0)]),([6,12297829379609722880,12297829382473034410,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,12297829379609722880,12297829382473034410,13889313184910721216,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(184,0)]),([6,12297829379609722880,12297829382473034410,14757395255531667456,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,12297829379609722880,12297829382473034410,14757395258967641292,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(128,2),(168,0)]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18374966859414961920,18446462603027742720],[(136,1)]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17361641477096079360,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18085043209350738160,18374966859414961920,18446462603027742720],[(104,2),(152,2)]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720],[]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18229723555195321596,18374966859414961920,18446462603027742720],[(104,2),(204,1),(252,3)]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18442521884633399280,18446462603027742720],[]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(98,2),(130,0),(137,1),(177,3)]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(96,2),(128,0)]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072277895850],[]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[(96,2),(128,0)]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744073456906480],[(104,2)]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960],[(98,1),(137,1)]),([6,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960,18446744069414584320],[(96,1)]),([6,12297829379609722880,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(96,2),(98,2),(128,0),(130,0),(129,1),(133,1),(169,3),(173,3),(137,1),(177,3)]),([6,12297829379609722880,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(96,2),(128,0)]),([6,12297829379609722880,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720],[(74,2),(130,0),(82,2),(149,1),(189,3),(193,0)]),([6,12297829379609722880,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720,18446744069414584320],[(232,2)]),([6,12297829381900372104,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(98,2),(130,0),(137,1),(141,1),(177,3),(181,3)]),([6,12297829381900372104,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(96,2),(128,0)]),([6,12297829381900372104,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[(96,2),(128,0)]),([6,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(74,2),(98,0),(99,1),(103,1),(131,3),(135,3),(107,1),(111,1),(139,3),(143,3),(10,2),(11,2),(147,0),(151,0),(13,1),(14,0),(15,0),(155,2),(159,2),(17,3)]),([6,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(74,2),(98,0),(194,1),(198,1),(202,3),(206,3)]),([6,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072850558156],[]),([6,12297829381900372104,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[(74,2),(98,0),(194,1),(198,1),(202,3),(206,3)]),([6,12297829382304604320,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(96,2)]),([6,12297829382473034410,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,12297829382473034410,12297829383904690175,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,12297923206033637375,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,13527612320720337851,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,13835269164735971328,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,13889313181676863488,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(136,0)]),([6,12297829382473034410,13889313184910721216,14757395258967641292,17294086455919964160,18374966859414961920,18446462603027742720,18446744069414584320],[(136,1),(176,1)]),([6,12297829382473034410,13889313184910721216,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(136,0)]),([6,12297829382473034410,13889313184910721216,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072648442048],[(136,0)]),([6,12297829382473034410,13889313184910721216,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[(136,0)]),([6,12297829382473034410,13889313184910721216,14757395258967641292,17361641481138401520,18374966859414961920,18446674533894045888,18446744069414584320],[]),([6,12297829382473034410,13889313184910721216,14757395258967641292,18229723555195321596,18374966859414961920,18446462603027742720,18446744069414584320],[(136,4),(176,2),(196,0)]),([6,12297829382473034410,14468034567615334600,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(104,2),(136,0)]),([6,12297829382473034410,14754017507706719424,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(104,2),(136,0)]),([6,12297829382473034410,14757395255531667456,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395255531667456,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,12297829382473034410,14757395257822316680,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258765525184,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,12297829382473034410,14757395258967641292,14757395259826634751,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,12297829382473034410,14757395258967641292,14757395259826634751,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,14757451553104003071,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,15987178197214944733,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,16204198715729174752,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17072280789786094828,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17216961131453612032,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720],[]),([6,12297829382473034410,14757395258967641292,17216961131453612032,17361641481138401520,18374966859414961920,18446462603027742720],[(129,1),(169,3)]),([6,12297829382473034410,14757395258967641292,17216961131453612032,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17216961134316923562,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(129,1),(169,3),(137,1),(141,1),(177,3),(181,3)]),([6,12297829382473034410,14757395258967641292,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,12297829382473034410,14757395258967641292,17293822573129236480,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(152,3),(192,1)]),([6,12297829382473034410,14757395258967641292,17294086451893370880,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18422818335611355050,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18442521884633399280,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18446462603027742720,18446742978492890880,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17294086455919964160,18442521884633399280,18446462603027742720,18446744069414584320],[(82,3),(149,3)]),([6,12297829382473034410,14757395258967641292,17339123139398922400,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17348130476094714048,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(144,0)]),([6,12297829382473034410,14757395258967641292,17348130476094714048,18374966859414961920,18432388630850633676,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17348130476094714048,18374966859414961920,18446462603027742720,18446744069414584320],[(110,1)]),([6,12297829382473034410,14757395258967641292,17361640450346250240,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641477096079360,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641477096079360,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,12297829382473034410,14757395258967641292,17361641479790960800,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641480329937088,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641480329937088,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,12297829382473034410,14757395258967641292,17361641481122672640,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,17361641481391046655,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,17361658038237331455,18374966859414961920,18446462603027742720,18446744069414584320],[(156,1)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,17578661999652631539,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,17723342345328784885,18374966859414961920,18446462603027742720,18446744069414584320],[(156,1),(196,3)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,17940362863843014904,18374966859414961920,18446462603027742720,18446744069414584320],[(112,2)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18062524867779689130,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18082228416801733360,18374966859414961920,18446462603027742720,18446744069414584320],[])]
+noncomputable def K_5 : List (List ℕ × List (ℕ × ℕ)) := [([6,12297829382473034410,14757395258967641292,17361641481138401520,18085043205308416000,18085043209519168250,18374966859414961920,18446462603027742720],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18085043205308416000,18374966859414961920,18446462603027742720],[(113,2)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18085043205308416000,18374966859414961920,18446462603027742720,18446744069414584320],[(112,2)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18085043208171727530,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18085043209350738160,18374966859414961920,18446462603027742720,18446744069414584320],[(112,2)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18216212550151634124,18374966859414961920,18446462603027742720,18446744069414584320],[(144,3),(156,1),(196,3)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18226345803934399728,18374966859414961920,18446462603027742720,18446744069414584320],[(112,2),(156,1)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18229723550950883328,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18229723554386857164,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18229723554993205488,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18229723555195321596,18374966859414961920,18446462603027742720,18446744069414584320],[(156,1),(196,3)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18229723555195321596,18374966859414961920,18446462603027742720,18446744072850558156],[(156,1),(196,3)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374403900871474942,18374966859414961920,18446462603027742720,18446744069414584320],[(156,1),(196,3)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18442505391958978800,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18442521880339415040,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18442521884381737200,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18442521884633399280,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18442521884633399280,18446462603027742720,18446744072850558156],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18445336677350834170,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18445899635894321148,18446462603027742720,18446744069414584320],[(204,3)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744009285042160,18446744069414584320],[(148,0),(156,2)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744069414649855],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744070273577779],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744070846240085],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744071705233544],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072109465760],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072277895850],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072648442048],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072850558156],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073423220462],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073441177600],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073456906480],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073625336570],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073659022588],[(244,1),(252,3)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073708568560],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073709551615],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744070846240085],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744071705233544],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072277895850,18446744072850558156],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072648442048],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156,18446744072850558156],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156,18446744073423220462],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156,18446744073456906480],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156,18446744073659022588],[(244,1),(252,3)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446612720724707464,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148904960,18446744069414584320],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148948650,18446687779573189836,18446744069414584320],[(188,0),(196,2)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446650250148948650,18446744069414584320,18446744073709486080],[]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446674533894045888,18446744069414584320],[(82,2),(117,1),(149,0)]),([6,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446687779573189836,18446727516610621680,18446744069414584320],[(148,0),(156,2)]),([6,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720],[(97,1),(99,1),(103,1),(129,3),(131,3),(135,3),(107,1),(111,1),(139,3),(143,3),(10,2),(11,2),(147,0),(151,0),(13,1),(14,0),(15,0),(155,2),(159,2),(17,3)]),([6,12297829382473034410,17216961134889585868,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(97,1),(129,3),(194,1),(198,1),(202,3),(206,3)]),([6,12297829382473034410,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072850558156],[]),([6,12297829382473034410,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[(97,1),(129,3)]),([6,13889313184910721216,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(128,0)]),([6,14757395258967641292,16927600444109941482,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(149,0)]),([6,14757395258967641292,17216961135462248174,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720,18446744069414584320],[]),([7,4294967295,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(14,2),(18,0)]),([7,4294967295,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(129,1),(133,1),(169,3),(173,3)]),([7,281470681808895,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(2,3),(129,1),(133,1)]),([7,281470681808895,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446744069414584320],[(14,1)]),([7,3689348814741910323,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(129,1),(133,1),(169,3),(173,3)]),([7,3689348814741910323,12297829382473034410,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(10,2),(14,0)]),([7,6148914691236517205,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(129,1),(133,1),(169,3),(173,3)]),([7,6148914691236517205,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(10,2),(14,0)]),([7,9838263505978427528,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(96,2),(98,2),(128,0),(130,0),(129,1),(133,1),(169,3),(173,3)]),([7,11574427654092267680,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(2,2),(129,1),(169,3),(173,0)]),([7,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720],[(98,2),(130,0),(131,1),(135,1),(171,3),(175,3),(137,1),(139,1),(143,1),(177,3),(179,3),(183,3),(147,1),(151,1),(187,3),(191,3),(14,2),(15,2),(195,0),(199,0),(17,1),(18,0),(19,0),(203,2),(207,2),(21,3)]),([7,12297829379609722880,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(96,2),(98,2),(128,0),(130,0),(129,1),(133,1),(169,3),(173,3),(137,1),(177,3),(250,1),(254,1),(258,3),(262,3)]),([7,12297829382473034410,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(129,1),(133,1),(169,3),(173,3)]),([7,12297829382473034410,13889313184910721216,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(6,2),(136,0),(138,0),(137,1),(177,3),(181,0),(197,0)]),([7,12297829382473034410,14757395255531667456,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(137,1),(141,1),(177,3),(181,3)]),([7,12297829382473034410,14757395258967641292,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(137,1),(141,1),(177,3),(181,3)]),([7,12297829382473034410,14757395258967641292,17216961135462248174,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(129,1),(169,3),(145,1),(149,1),(185,3),(189,3)]),([7,12297829382473034410,14757395258967641292,17294086455919964160,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(98,1),(142,1),(10,3),(145,1),(185,3),(153,1),(193,1)]),([7,12297829382473034410,14757395258967641292,17361641477096079360,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(10,2),(145,1),(185,3),(189,0)]),([7,12297829382473034410,14757395258967641292,17361641481138401520,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(10,2),(185,0),(189,0)]),([7,12297829382473034410,14757395258967641292,17361641481138401520,18085043209519168250,18374966859414961920,18446462603027742720,18446744069414584320],[(82,2),(149,1),(189,3),(233,2),(14,2),(157,1),(193,0),(197,3)]),([7,12297829382473034410,14757395258967641292,17361641481138401520,18229723555195321596,18374966859414961920,18446462603027742720,18446744069414584320],[(74,2),(145,2),(185,4),(14,2),(156,1),(158,1),(157,1),(193,0),(196,3),(198,3),(197,3)]),([7,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18442521884633399280,18446462603027742720,18446744069414584320],[(82,2),(106,0),(117,1),(189,3),(158,1),(197,4),(18,3),(205,3)]),([7,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(99,1),(103,1),(131,3),(135,3),(107,1),(111,1),(139,3),(143,3),(10,2),(11,2),(147,0),(151,0),(13,1),(14,0),(15,0),(155,2),(159,2),(195,1),(199,1),(17,3),(203,3),(207,3)]),([7,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744069414584320],[(194,1),(198,1),(202,3),(206,3)]),([7,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072277895850],[(242,1),(246,1),(250,3),(254,3)]),([7,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744072850558156],[(194,1),(198,1),(242,1),(246,1),(202,3),(206,3),(250,3),(254,3)]),([7,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320,18446744073456906480],[(74,2),(246,1),(250,0),(254,3),(26,2)]),([7,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744072850558156],[(99,1),(103,1),(131,3),(135,3),(107,1),(111,1),(139,3),(143,3),(10,2),(11,2),(147,0),(151,0),(13,1),(14,0),(15,0),(155,2),(159,2),(195,1),(199,1),(17,3),(203,3),(207,3)]),([8,12297829382473034410,14757395258967641292,17361641481138401520,18374966859414961920,18446462603027742720,18446744069414584320],[(99,1),(103,1),(131,3),(135,3),(107,1),(111,1),(139,3),(143,3),(10,2),(11,2),(147,0),(151,0),(13,1),(14,0),(15,0),(155,2),(159,2),(195,1),(199,1),(17,3),(203,3),(207,3)])]
+set_option maxRecDepth 100000 in
+theorem c_0 : K_0.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+theorem c_1 : K_1.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+theorem c_2 : K_2.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+theorem c_3 : K_3.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+theorem c_4 : K_4.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+theorem c_5 : K_5.all (fun kh => stepOK M_ Y_ PD_ PM_ G_ T_cert kh.1 kh.2) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+theorem hK_cert : T_cert.toList = ((((((K_0 ++ K_1) ++ K_2) ++ K_3) ++ K_4) ++ K_5)).map Prod.fst := by decide +kernel
+set_option maxRecDepth 100000 in
+theorem hT_cert : ∀ x, T_cert.mem x = true → ∃ h, (stepOK M_ Y_ PD_ PM_ G_ T_cert) x h = true :=
+  cover (p := stepOK M_ Y_ PD_ PM_ G_ T_cert) T_cert _ hK_cert (all_app (all_app (all_app (all_app (all_app c_0 c_1) c_2) c_3) c_4) c_5)
+
+namespace Restrict
+
+abbrev BFn (n : ℕ) := (Fin n → Bool) → Bool
+
+
+
+def wiresFrom (gs : List Gate) (w : List Bool) : List Bool :=
+  gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w
+
+theorem wiresFrom_append (gs gs' : List Gate) (w : List Bool) :
+    wiresFrom (gs ++ gs') w = wiresFrom gs' (wiresFrom gs w) := by
+  simp [wiresFrom, List.foldl_append]
+
+theorem wiresFrom_prefix (gs : List Gate) : ∀ w : List Bool,
+    ∃ t : List Bool, wiresFrom gs w = w ++ t ∧ t.length = gs.length := by
+  induction gs with
+  | nil => intro w; exact ⟨[], by simp [wiresFrom], rfl⟩
+  | cons g gs ih =>
+    intro w
+    obtain ⟨t, ht, hl⟩ := ih (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
+    refine ⟨g.op.eval (g.inputs.map fun i => w.getD i false) :: t, ?_, by simp [hl]⟩
+    have : wiresFrom (g :: gs) w
+        = wiresFrom gs (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) := rfl
+    rw [this, ht]; simp
+
+theorem length_wiresFrom (gs : List Gate) (w : List Bool) :
+    (wiresFrom gs w).length = w.length + gs.length := by
+  obtain ⟨t, ht, hl⟩ := wiresFrom_prefix gs w
+  rw [ht]; simp [hl]
+
+theorem getD_wiresFrom (gs : List Gate) (w : List Bool) (i : ℕ) (h : i < w.length) :
+    (wiresFrom gs w).getD i false = w.getD i false := by
+  obtain ⟨t, ht, _⟩ := wiresFrom_prefix gs w
+  rw [ht, List.getD_append _ _ _ _ h]
+
+def Ok (g : Gate) : Prop :=
+  g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) ∧ g.inputs.length ≤ 2
+
+theorem getD_snoc_ne {α : Type} (L : List α) (S d : α) (j : ℕ) (h : j ≠ L.length) :
+    (L ++ [S]).getD j d = L.getD j d := by
+  by_cases hj : j < L.length
+  · exact List.getD_append _ _ _ _ hj
+  · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by omega)]
+
+theorem getD_snoc_eq {α : Type} (L : List α) (S d : α) : (L ++ [S]).getD L.length d = S := by
+  simp
+
+theorem getD_snoc_len {α : Type} (L : List α) (S d : α) (k : ℕ) (h : L.length = k) :
+    (L ++ [S]).getD k d = S := by
+  subst h; simp
+
+def gateSupp {n : ℕ} (L : List (Finset (Fin n))) (g : Gate) : Finset (Fin n) :=
+  (g.inputs.map fun a => L.getD a ∅).foldr (· ∪ ·) ∅
+
+theorem mem_foldr_union {n : ℕ} (l : List ℕ) (F : ℕ → Finset (Fin n)) (i : Fin n) :
+    i ∈ (l.map F).foldr (· ∪ ·) ∅ ↔ ∃ a ∈ l, i ∈ F a := by
+  induction l with
+  | nil => simp
+  | cons b l ih => simp [ih]
+
+theorem mem_gateSupp {n : ℕ} (L : List (Finset (Fin n))) (g : Gate) (i : Fin n) :
+    i ∈ gateSupp L g ↔ ∃ a ∈ g.inputs, i ∈ L.getD a ∅ :=
+  mem_foldr_union _ _ _
+
+def suppsFrom {n : ℕ} (gs : List Gate) (L : List (Finset (Fin n))) : List (Finset (Fin n)) :=
+  gs.foldl (fun L g => L ++ [gateSupp L g]) L
+
+def inputSupps (n : ℕ) : List (Finset (Fin n)) := List.ofFn fun i : Fin n => {i}
+
+def Agree {n : ℕ} (x y : Fin n → Bool) (L : List (Finset (Fin n))) (w w' : List Bool) : Prop :=
+  L.length = w.length ∧ w.length = w'.length ∧
+    ∀ j : ℕ, (∀ i ∈ L.getD j ∅, x i = y i) → w.getD j false = w'.getD j false
+
+theorem agree_wiresFrom {n : ℕ} (x y : Fin n → Bool) (gs : List Gate) :
+    ∀ (L : List (Finset (Fin n))) (w w' : List Bool), Agree x y L w w' →
+      Agree x y (suppsFrom gs L) (wiresFrom gs w) (wiresFrom gs w') := by
+  induction gs with
+  | nil => intro L w w' h; exact h
+  | cons g gs ih =>
+    intro L w w' h
+    obtain ⟨h1, h2, h3⟩ := h
+    apply ih (L ++ [gateSupp L g])
+      (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
+      (w' ++ [g.op.eval (g.inputs.map fun i => w'.getD i false)])
+    refine ⟨by simp [h1], by simp [h2], ?_⟩
+    intro j hj
+    by_cases hjl : j = L.length
+    · subst hjl
+      rw [getD_snoc_eq] at hj
+      rw [h1, getD_snoc_eq, h2, getD_snoc_eq]
+      congr 1
+      apply List.map_congr_left
+      intro a ha
+      exact h3 a (fun i hi => hj i ((mem_gateSupp L g i).2 ⟨a, ha, hi⟩))
+    · rw [getD_snoc_ne _ _ _ _ hjl] at hj
+      rw [getD_snoc_ne _ _ _ _ (by omega), getD_snoc_ne _ _ _ _ (by omega)]
+      exact h3 j hj
+
+theorem agree_inputs {n : ℕ} (x y : Fin n → Bool) :
+    Agree x y (inputSupps n) (List.ofFn x) (List.ofFn y) := by
+  refine ⟨by simp [inputSupps], by simp, ?_⟩
+  intro j hj
+  by_cases hjn : j < n
+  · have hx : x ⟨j, hjn⟩ = y ⟨j, hjn⟩ := hj _ (by simp [inputSupps, hjn])
+    simp [hjn, hx]
+  · rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega)]
+
+def Cnt {n : ℕ} (t : ℕ) (L : List (Finset (Fin n))) : Prop :=
+  ∀ W : Finset ℕ, (W.biUnion fun j => L.getD j ∅).card ≤ t + W.card
+
+theorem cnt_inputs {n : ℕ} : Cnt 0 (inputSupps n) := by
+  intro W
+  refine le_trans Finset.card_biUnion_le ?_
+  rw [zero_add, Finset.card_eq_sum_ones]
+  apply Finset.sum_le_sum
+  intro j _
+  by_cases hjn : j < n
+  · simp [inputSupps, hjn]
+  · rw [List.getD_eq_default _ _ (by simp [inputSupps]; omega)]; simp
+
+theorem cnt_step {n : ℕ} (t : ℕ) (L : List (Finset (Fin n))) (g : Gate) (hg : g.inputs.length ≤ 2)
+    (h : Cnt t L) : Cnt (t + 1) (L ++ [gateSupp L g]) := by
+  intro W
+  by_cases hW : L.length ∈ W
+  · have hsub : (W.biUnion fun j => (L ++ [gateSupp L g]).getD j ∅)
+        ⊆ ((W.erase L.length ∪ g.inputs.toFinset).biUnion fun j => L.getD j ∅) := by
+      intro i hi
+      rw [Finset.mem_biUnion] at hi ⊢
+      obtain ⟨j, hjW, hij⟩ := hi
+      by_cases hjl : j = L.length
+      · subst hjl
+        rw [getD_snoc_eq] at hij
+        obtain ⟨a, ha, hia⟩ := (mem_gateSupp L g i).1 hij
+        exact ⟨a, Finset.mem_union_right _ (List.mem_toFinset.2 ha), hia⟩
+      · rw [getD_snoc_ne _ _ _ _ hjl] at hij
+        exact ⟨j, Finset.mem_union_left _ (Finset.mem_erase.2 ⟨hjl, hjW⟩), hij⟩
+    have hc1 : (W.erase L.length ∪ g.inputs.toFinset).card ≤ (W.card - 1) + 2 := by
+      refine le_trans (Finset.card_union_le _ _) ?_
+      rw [Finset.card_erase_of_mem hW]
+      exact Nat.add_le_add_left (le_trans (List.toFinset_card_le _) hg) _
+    have hWpos : 1 ≤ W.card := Finset.card_pos.2 ⟨_, hW⟩
+    have := h (W.erase L.length ∪ g.inputs.toFinset)
+    have := Finset.card_le_card hsub
+    omega
+  · have heq : (W.biUnion fun j => (L ++ [gateSupp L g]).getD j ∅)
+        = (W.biUnion fun j => L.getD j ∅) := by
+      apply Finset.biUnion_congr rfl
+      intro j hj
+      exact getD_snoc_ne _ _ _ _ (fun e => hW (e ▸ hj))
+    rw [heq]
+    have := h W
     omega
 
-def bit (i : Fin 256) (a : Sig) : Bool := a.getLsbD i.val
+theorem cnt_suppsFrom {n : ℕ} (gs : List Gate) : ∀ (t : ℕ) (L : List (Finset (Fin n))),
+    (∀ g ∈ gs, Ok g) → Cnt t L → Cnt (t + gs.length) (suppsFrom gs L) := by
+  induction gs with
+  | nil => intro t L _ h; exact h
+  | cons g gs ih =>
+    intro t L hok h
+    have := ih (t + 1) (L ++ [gateSupp L g]) (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg'))
+      (cnt_step t L g (hok g List.mem_cons_self).2 h)
+    rw [List.length_cons, show t + (gs.length + 1) = t + 1 + gs.length by omega]
+    exact this
 
-private lemma bit_zero (i) : bit i zero = false := by simp [bit,zero]
+theorem dep_lower_set (n : ℕ) (f : (Fin n → Bool) → Bool) (T : Finset (Fin n))
+    (hdep : ∀ i ∈ T, ∃ x : Fin n → Bool, f (Function.update x i (!x i)) ≠ f x)
+    (s : ℕ) (h : HasCircuitSize n f s) : T.card ≤ s + 1 := by
+  obtain ⟨C, ok, hsz, hev⟩ := h
+  have hsz' : C.gates.length ≤ s := hsz
+  set S := (suppsFrom C.gates (inputSupps n)).getD C.output ∅ with hS
+  have hall : T ⊆ S := by
+    intro i hiT
+    by_contra hi
+    obtain ⟨x, hx⟩ := hdep i hiT
+    apply hx
+    have hag := (agree_wiresFrom (Function.update x i (!x i)) x C.gates _ _ _
+      (agree_inputs _ _)).2.2 C.output (by
+        intro k hk
+        have : k ≠ i := fun e => hi (e ▸ hk)
+        simp [Function.update_of_ne this])
+    rw [← hev, ← hev]
+    exact hag
+  have hc := cnt_suppsFrom C.gates 0 (inputSupps n) ok cnt_inputs {C.output}
+  simp only [Finset.singleton_biUnion, Finset.card_singleton, zero_add] at hc
+  rw [← hS] at hc
+  have := Finset.card_le_card hall
+  omega
 
-private lemma bit_one (i) : bit i one = true := by unfold bit one; rw [BitVec.getLsbD_allOnes]; simp
-
-private lemma bit_neg (i) (a : Sig) : bit i (neg a) = !(bit i a) := by simp [bit,neg,i.isLt]
-
-private lemma bit_bin (i d) (a b : Sig) : bit i (bin d a b) =
-    (if d=0 then bit i a && bit i b else if d=1 then bit i a || bit i b else
-      if d=2 then bit i a && !(bit i b) else !(bit i a) && bit i b) := by
-  unfold bin
-  split_ifs <;> simp [bit]
-
-theorem bit_ext {a b : Sig} (h : ∀ i, bit i a = bit i b) : a=b :=
-  BitVec.eq_of_getLsbD_eq fun j hj => h ⟨j,hj⟩
-
-def nrm (u : Bool) (a : Sig) : Sig := if u && bit 0 a then neg a else a
-
-theorem nrm_false (a : Sig) : nrm false a = a := rfl
-
-theorem nrm_bit (a : Sig) : bit 0 (nrm true a) = false := by
-  cases h : bit 0 a <;> simp [nrm,h,bit_neg]
-
-theorem nrm_id {u} {a : Sig} (h : bit 0 a = false) : nrm u a = a := by simp [nrm,h]
-
-theorem neg_neg' (a : Sig) : neg (neg a) = a := by simp [neg]
-
-theorem nrm_neg (a : Sig) : nrm true (neg a) = nrm true a := by
-  cases h : bit 0 a <;> simp [nrm,h,bit_neg,neg_neg']
-
-theorem proper_neg {a : Sig} (h : proper (neg a)) : proper a := by
-  refine ⟨?_,?_⟩
-  · rintro rfl
-    exact h.2 (by simp [neg,zero,one])
-  · rintro rfl
-    exact h.1 (by simp [neg,zero,one])
-
-theorem proper_nrm {u} {a : Sig} (h : proper (nrm u a)) : proper a := by
-  unfold nrm at h
-  split at h
-  · exact proper_neg h
-  · exact h
-
-def prime (d : Bool) (a b : Sig) := if d then a ||| b else a &&& b
-
-theorem bit_prime (i) (d : Bool) (a b : Sig) : bit i (prime d a b) =
-    (if d then bit i a || bit i b else bit i a && bit i b) := by cases d <;> simp [prime,bit]
-
-theorem nrm_prime (d : Bool) (a b : Sig) :
-    ∃ e, e<4 ∧ nrm true (prime d a b) = bin e (nrm true a) (nrm true b) := by
-  refine ⟨if d then (if bit 0 a then (if bit 0 b then 0 else 2) else (if bit 0 b then 3 else 1))
-    else (if bit 0 a then (if bit 0 b then 1 else 3) else (if bit 0 b then 2 else 0)),?_,?_⟩
-  · split_ifs <;> omega
-  · apply bit_ext
-    intro i
-    cases d <;> cases ha : bit 0 a <;> cases hb : bit 0 b <;>
-      simp only [nrm,bit_prime,ha,hb,bit_bin,bit_neg,Bool.true_and,Bool.false_and,Bool.and_true,Bool.and_false,Bool.false_or,
-        Bool.or_false,Bool.true_or,Bool.or_true,Bool.false_eq_true,ite_true,ite_false] <;>
-      cases hx : bit i a <;> cases hy : bit i b <;> simp [hx,hy,bit_neg,bit_prime]
-
-def gv (w : List Sig) (g : Gate) : Sig :=
-  let xs := g.inputs.map (fun i => w.getD i zero)
+def normGate (g : Gate) : Gate :=
   match g.op with
-  | .and => xs.foldr (prime false) one
-  | .or => xs.foldr (prime true) zero
-  | .not => neg (xs.headD zero)
-  | _ => zero
+  | GateOp.not => ⟨GateOp.not, g.inputs.take 1⟩
+  | _ => g
 
-def execute (gs : List Gate) (w : List Sig) : List Sig :=
-  gs.foldl (fun l g => l ++ [gv l g]) w
+theorem normGate_eval (g : Gate) (F : ℕ → Bool) :
+    (normGate g).op.eval ((normGate g).inputs.map F) = g.op.eval (g.inputs.map F) := by
+  obtain ⟨op, inputs⟩ := g
+  cases op <;> simp only [normGate]
+  cases inputs <;> simp [GateOp.eval]
 
-def represented (w : List Sig) (v : Sig) : Prop := v ∈ w ∨ ¬proper v
+def NOk (g : Gate) : Prop := Ok g ∧ (g.op = GateOp.not → g.inputs.length ≤ 1)
 
-def Repr (u : Bool) (w : List Sig) (v : Sig) : Prop := represented w (nrm u v)
+theorem normGate_nok (g : Gate) (h : Ok g) : NOk (normGate g) := by
+  obtain ⟨op, inputs⟩ := g
+  obtain ⟨hop, hlen⟩ := h
+  rcases hop with h | h | h
+  · have : op = GateOp.and := h
+    subst this; exact ⟨⟨Or.inl rfl, hlen⟩, by simp [normGate]⟩
+  · have : op = GateOp.or := h
+    subst this; exact ⟨⟨Or.inr (Or.inl rfl), hlen⟩, by simp [normGate]⟩
+  · have : op = GateOp.not := h
+    subst this
+    refine ⟨⟨Or.inr (Or.inr rfl), ?_⟩, fun _ => ?_⟩ <;> simp [normGate] <;> omega
 
-private lemma bin_laws (a : Sig) :
-    bin 0 a one = a ∧ bin 1 a zero = a ∧
-    bin 0 a zero = zero ∧ bin 1 a one = one ∧
-    bin 0 a a = a ∧ bin 1 a a = a ∧ bin 2 a a = zero ∧ bin 3 a a = zero ∧ bin 2 a zero = a ∧
-    bin 3 zero a = a ∧ bin 2 zero a = zero ∧ bin 3 a zero = zero ∧ bin 0 zero a = zero ∧ bin 1 zero a = a ∧
-    bin 0 one a = a ∧ bin 1 one a = one := by
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩ <;> apply bit_ext <;> intro i <;>
-    simp [bit_bin,bit_zero,bit_one]
-
-private lemma neg_laws : neg zero = one ∧ neg one = zero := by simp [neg,zero,one]
-
-private lemma operand_cases {w : List Sig} {a : Sig} (h : represented w a) :
-    a = zero ∨ a = one ∨ a ∈ w ∧ proper a := by
-  by_cases hz : a = zero
-  · exact Or.inl hz
-  by_cases ho : a = one
-  · exact Or.inr (Or.inl ho)
-  exact Or.inr (Or.inr ⟨h.resolve_right (fun x => x ⟨hz,ho⟩),hz,ho⟩)
-
-def witness (u : Bool) (w : List Sig) (z : Sig) : Prop :=
-  ∃ d a b, allowed u d ∧ a ∈ w ∧ b ∈ w ∧ proper a ∧ proper b ∧ a ≠ b ∧ z = bin d a b
-
-private lemma bin_rep {u w a b} (d : Nat) (hd : allowed u d) (ha : represented w a) (hb : represented w b)
-    (no : u=true → a ≠ one ∧ b ≠ one) :
-    represented w (bin d a b) ∨ witness u w (bin d a b) := by
-  have rz : represented w zero := Or.inr (fun h => h.1 rfl)
-  have ro : represented w one := Or.inr (fun h => h.2 rfl)
-  obtain ⟨a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15,a16⟩ := bin_laws a
-  obtain ⟨b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16⟩ := bin_laws b
-  by_cases he : a=b
-  · subst b
-    left
-    rcases allowed_four hd with rfl | rfl | ⟨_,rfl⟩ | ⟨_,rfl⟩
-    · exact a5.symm ▸ ha
-    · exact a6.symm ▸ ha
-    · exact a7.symm ▸ rz
-    · exact a8.symm ▸ rz
-  rcases operand_cases ha with rfl | rfl | ⟨ham,hap⟩
-  · left
-    rcases allowed_four hd with rfl | rfl | ⟨_,rfl⟩ | ⟨_,rfl⟩
-    · exact b13.symm ▸ rz
-    · exact b14.symm ▸ hb
-    · exact b11.symm ▸ rz
-    · exact b10.symm ▸ hb
-  · left
-    rcases allowed_four hd with rfl | rfl | ⟨hu,rfl⟩ | ⟨hu,rfl⟩
-    · exact b15.symm ▸ hb
-    · exact b16.symm ▸ ro
-    · exact absurd rfl (no hu).1
-    · exact absurd rfl (no hu).1
-  rcases operand_cases hb with rfl | rfl | ⟨hbm,hbp⟩
-  · left
-    rcases allowed_four hd with rfl | rfl | ⟨_,rfl⟩ | ⟨_,rfl⟩
-    · exact a3.symm ▸ rz
-    · exact a2.symm ▸ ha
-    · exact a9.symm ▸ ha
-    · exact a12.symm ▸ rz
-  · left
-    rcases allowed_four hd with rfl | rfl | ⟨hu,rfl⟩ | ⟨hu,rfl⟩
-    · exact a1.symm ▸ ha
-    · exact a4.symm ▸ ro
-    · exact absurd rfl (no hu).2
-    · exact absurd rfl (no hu).2
-  exact Or.inr ⟨d,a,b,hd,ham,hbm,hap,hbp,he,rfl⟩
-
-theorem norm_ne_one (a : Sig) : nrm true a ≠ one := by
-  intro h
-  have := nrm_bit a
-  rw [h,bit_one] at this
-  exact Bool.noConfusion this
-
-theorem prime_rep {u w a b} (d : Bool) (ha : Repr u w a) (hb : Repr u w b) :
-    Repr u w (prime d a b) ∨ witness u w (nrm u (prime d a b)) := by
-  cases u
-  · have e : prime d a b = bin (if d then 1 else 0) a b := by cases d <;> rfl
-    have h := bin_rep (u:=false) (if d then 1 else 0) (Or.inl (by split <;> omega)) ha hb (by simp)
-    unfold Repr
-    simp only [nrm_false] at h ⊢
-    rwa [e]
-  · obtain ⟨e,he,eq⟩ := nrm_prime d a b
-    unfold Repr
-    rw [eq]
-    exact bin_rep e (Or.inr ⟨rfl,he⟩) ha hb (fun _ => ⟨norm_ne_one a,norm_ne_one b⟩)
-
-theorem repr_const {u w} {v : Sig} (h : v=zero ∨ v=one) : Repr u w v := by
-  refine Or.inr fun hp => ?_
-  have := proper_nrm hp
-  rcases h with rfl | rfl
-  · exact this.1 rfl
-  · exact this.2 rfl
-
-private lemma get_rep {u} (w : List Sig) (i : Nat) : Repr u (w.map (nrm u)) (w.getD i zero) := by
-  simp only [List.getD_eq_getElem?_getD]
-  cases h : w[i]? with
-  | none => exact repr_const (Or.inl rfl)
-  | some a => exact Or.inl (List.mem_map_of_mem (List.mem_of_getElem? h))
-
-theorem repr_neg {w a} (h : Repr true w a) : Repr true w (neg a) := by
-  unfold Repr
-  rwa [nrm_neg]
-
-def isNot (g : Gate) : Bool := match g.op with
-  | .not => true
-  | _ => false
-
-private lemma gate_rep (u : Bool) (w : List Sig) (g : Gate)
-    (h : g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp) ∧ g.inputs.length≤2)
-    (mono : u=false → isNot g=false) :
-    Repr u (w.map (nrm u)) (gv w g) ∨ (isNot g=false ∧ witness u (w.map (nrm u)) (nrm u (gv w g))) := by
-  obtain ⟨o,l⟩ := g
-  simp only [Set.mem_insert_iff,Set.mem_singleton_iff] at h
-  obtain ⟨ho,hl⟩ := h
-  have prim (d : Bool) : Repr u (w.map (nrm u)) ((l.map (fun i => w.getD i zero)).foldr (prime d) (if d then zero else one)) ∨
-      witness u (w.map (nrm u)) (nrm u ((l.map (fun i => w.getD i zero)).foldr (prime d) (if d then zero else one))) := by
-    have unit (v : Sig) : prime d v (if d then zero else one) = v := by
-      apply bit_ext
-      intro i
-      cases d <;> simp [bit_prime,bit_zero,bit_one]
-    cases l with
-    | nil => exact Or.inl (repr_const (by cases d <;> simp))
-    | cons i l =>
-      cases l with
-      | nil =>
-        simp only [List.map_cons,List.map_nil,List.foldr_cons,List.foldr_nil,unit]
-        exact Or.inl (get_rep w i)
-      | cons j l =>
-        cases l with
-        | cons a l => simp at hl
-        | nil =>
-          simp only [List.map_cons,List.map_nil,List.foldr_cons,List.foldr_nil,unit]
-          exact prime_rep d (get_rep w i) (get_rep w j)
-  rcases ho with rfl | rfl | rfl
-  · exact (prim false).imp id (fun h => ⟨rfl,h⟩)
-  · exact (prim true).imp id (fun h => ⟨rfl,h⟩)
-  · cases u
-    · exact absurd (mono rfl) (by simp [isNot])
-    left
-    cases l with
-    | nil => exact repr_const (Or.inr (by simp [gv,neg_laws]))
-    | cons i l => exact repr_neg (get_rep w i)
-
-
-private lemma pull_gate {u target} {w : List Sig} {z : Sig} {k S c} (h : Live u target k S)
-    (hz : represented w z ∨ (c=1 ∧ witness u w z)) (sub : ∀ a ∈ S, a ∈ w++[z]) :
-    ∃ k' S', k' ≤ k+c ∧ Live u target k' S' ∧ ∀ a ∈ S', a ∈ w := by
-  by_cases hm : z ∈ S
-  · by_cases hw : z ∈ w
-    · refine ⟨k,S,by omega,h,?_⟩
-      intro a ha
-      have hu : a ∈ w ∨ a = z := by simpa using sub a ha
-      rcases hu with hu | rfl
-      · exact hu
-      · exact hw
-    · have hp := live_proper h z hm
-      rcases hz with hr | ⟨rfl,d,a,b,hd,ha,hb,pa,pb,hab,eq⟩
-      · exact False.elim ((hr.resolve_left hw) hp)
-      · subst z
-        let U := S.erase (bin d a b)
-        have ht : Live u target k (insert (bin d a b) U) := by simpa [U,Finset.insert_erase hm] using h
-        have hu : ∀ v ∈ U, v ∈ w := by
-          intro v hv
-          obtain ⟨hne,hm⟩ := Finset.mem_erase.mp hv
-          simpa [hne] using sub v hm
-        have hf : bin d a b ∉ insert a (insert b U) := by
-          intro hh
-          rcases Finset.mem_insert.mp hh with eq | u
-          · exact hw (eq.symm ▸ ha)
-          rcases Finset.mem_insert.mp u with eq | u
-          · exact hw (eq.symm ▸ hb)
-          · exact hw (hu _ u)
-        exact ⟨_,_,Nat.le_refl _,Live.binary hd pa pb hab hf ht,by simpa using And.intro ha (And.intro hb hu)⟩
-  · refine ⟨k,S,by omega,h,?_⟩
-    intro a ha
-    have hn : a ≠ z := fun hh => hm (hh ▸ ha)
-    simpa [hn] using sub a ha
-
-private lemma extract {u target} (gs : List Gate) (w : List Sig)
-    (legal : ∀ g ∈ gs, g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp) ∧ g.inputs.length≤2)
-    (mono : u=false → ∀ g ∈ gs, isNot g=false)
-    (hp : proper target) (hout : target ∈ (execute gs w).map (nrm u)) :
-    ∃ k S, k ≤ gs.countP (fun g => !isNot g) ∧ Live u target k S ∧ ∀ a ∈ S, a ∈ w.map (nrm u) := by
-  induction gs generalizing w with
-  | nil => exact ⟨0,{target},by simp,Live.stop hp,by simpa [execute] using hout⟩
+theorem wiresFrom_norm (gs : List Gate) : ∀ w : List Bool,
+    wiresFrom (gs.map normGate) w = wiresFrom gs w := by
+  induction gs with
+  | nil => intro w; rfl
   | cons g gs ih =>
-    obtain ⟨k,S,hk,ht,hs⟩ := ih (w++[gv w g]) (fun a ha => legal a (by simp [ha]))
-      (fun hu a ha => mono hu a (by simp [ha])) hout
-    have rep := gate_rep u w g (legal g (by simp)) (fun hu => mono hu g (by simp))
-    rw [List.map_append] at hs
-    have rep' : represented (w.map (nrm u)) (nrm u (gv w g)) ∨
-        ((if isNot g then 0 else 1)=1 ∧ witness u (w.map (nrm u)) (nrm u (gv w g))) :=
-      rep.imp id (fun h => ⟨by simp [h.1],h.2⟩)
-    obtain ⟨l,T,hl,hu,hT⟩ := pull_gate ht rep' hs
-    refine ⟨l,T,?_,hu,hT⟩
-    rw [List.countP_cons]
-    cases hn : isNot g <;> simp [hn] at hl ⊢ <;> omega
+    intro w
+    have s1 : wiresFrom ((g :: gs).map normGate) w = wiresFrom (gs.map normGate)
+        (w ++ [(normGate g).op.eval ((normGate g).inputs.map fun i => w.getD i false)]) := rfl
+    have s2 : wiresFrom (g :: gs) w
+        = wiresFrom gs (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) := rfl
+    rw [s1, s2, normGate_eval, ih]
 
-private lemma b_read (i) (w : List Sig) (j : Nat) :
-    (w.map (bit i)).getD j false = bit i (w.getD j zero) := by
-  simp only [List.getD_eq_getElem?_getD,List.getElem?_map]
-  cases w[j]? with
-  | none => exact (bit_zero _).symm
-  | some a => rfl
+abbrev Stat := Sum Bool ℕ
 
-private lemma run_bit (i) (g : Gate) (w : List Sig)
-    (hg : g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp)) :
-    bit i (gv w g) = g.op.eval (g.inputs.map fun j => (w.map (bit i)).getD j false) := by
-  obtain ⟨o,l⟩ := g
-  simp only [Set.mem_insert_iff,Set.mem_singleton_iff] at hg
-  simp only [b_read]
-  rcases hg with rfl | rfl | rfl
-  · induction l with
-    | nil => exact bit_one _
-    | cons a l ih =>
-      change bit i (prime false _ _) = (_ && _)
-      rw [bit_prime]; exact congrArg (fun x => bit i (w.getD a zero) && x) ih
-  · induction l with
-    | nil => exact bit_zero _
-    | cons a l ih =>
-      change bit i (prime true _ _) = (_ || _)
-      rw [bit_prime]; exact congrArg (fun x => bit i (w.getD a zero) || x) ih
-  · cases l with
-    | nil =>
-      change bit i (neg zero) = !false
-      rw [bit_neg,bit_zero]
-    | cons a l => exact bit_neg _ _
+def statVal (w : List Bool) : Stat → Bool
+  | Sum.inl c => c
+  | Sum.inr j => w.getD j false
 
-private lemma execute_bits (gs : List Gate) (i) (w : List Sig)
-    (hg : ∀ g ∈ gs, g.op ∈ ({GateOp.and,GateOp.or,GateOp.not} : Set GateOp)) :
-    (execute gs w).map (bit i) =
-    gs.foldl (fun (l : List Bool) g => l++[g.op.eval (g.inputs.map fun j => l.getD j false)]) (w.map (bit i)) := by
-  induction gs generalizing w with
-  | nil => rfl
+def statValid (m : ℕ) : Stat → Prop
+  | Sum.inl _ => True
+  | Sum.inr j => j < m
+
+def simpNot (m : ℕ) : List Stat → Option Gate × Stat
+  | [] => (none, Sum.inl true)
+  | Sum.inl c :: _ => (none, Sum.inl (!c))
+  | Sum.inr j :: _ => (some ⟨GateOp.not, [j]⟩, Sum.inr m)
+
+def simpAnd (m : ℕ) : List Stat → Option Gate × Stat
+  | [] => (none, Sum.inl true)
+  | [Sum.inl c] => (none, Sum.inl c)
+  | [Sum.inr j] => (none, Sum.inr j)
+  | [Sum.inl c, Sum.inl d] => (none, Sum.inl (c && d))
+  | [Sum.inl c, Sum.inr j] => (none, bif c then Sum.inr j else Sum.inl false)
+  | [Sum.inr j, Sum.inl c] => (none, bif c then Sum.inr j else Sum.inl false)
+  | [Sum.inr j, Sum.inr k] => (some ⟨GateOp.and, [j, k]⟩, Sum.inr m)
+  | _ => (none, Sum.inl false)
+
+def simpOr (m : ℕ) : List Stat → Option Gate × Stat
+  | [] => (none, Sum.inl false)
+  | [Sum.inl c] => (none, Sum.inl c)
+  | [Sum.inr j] => (none, Sum.inr j)
+  | [Sum.inl c, Sum.inl d] => (none, Sum.inl (c || d))
+  | [Sum.inl c, Sum.inr j] => (none, bif c then Sum.inl true else Sum.inr j)
+  | [Sum.inr j, Sum.inl c] => (none, bif c then Sum.inl true else Sum.inr j)
+  | [Sum.inr j, Sum.inr k] => (some ⟨GateOp.or, [j, k]⟩, Sum.inr m)
+  | _ => (none, Sum.inl false)
+
+def simplify (op : GateOp) (m : ℕ) (ins : List Stat) : Option Gate × Stat :=
+  match op with
+  | GateOp.and => simpAnd m ins
+  | GateOp.or => simpOr m ins
+  | GateOp.not => simpNot m ins
+  | _ => (none, Sum.inl false)
+
+def CleanG (m : ℕ) (g : Gate) : Prop :=
+  (g.op = GateOp.not ∧ ∃ j, j < m ∧ g.inputs = [j]) ∨
+  ((g.op = GateOp.and ∨ g.op = GateOp.or) ∧ ∃ j k, j < m ∧ k < m ∧ g.inputs = [j, k])
+
+theorem cleanG_lt {m : ℕ} {g : Gate} (h : CleanG m g) : ∀ a ∈ g.inputs, a < m := by
+  rcases h with ⟨_, j, hj, hin⟩ | ⟨_, j, k, hj, hk, hin⟩
+  · intro a ha; simp [hin] at ha; omega
+  · intro a ha; simp [hin] at ha; rcases ha with rfl | rfl <;> omega
+
+def CleanL (n : ℕ) (gs : List Gate) : Prop :=
+  ∀ p g, gs[p]? = some g → CleanG (n + p) g
+
+theorem simplify_ok (op : GateOp) (m : ℕ) (ins : List Stat) :
+    ∀ g ∈ (simplify op m ins).1, Ok g := by
+  intro g hg
+  cases op <;> simp only [simplify] at hg
+  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨c, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
+      simp [simpAnd] at hg <;> (subst hg; simp [Ok])
+  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨c, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
+      simp [simpOr] at hg <;> (subst hg; simp [Ok])
+  · rcases ins with _ | ⟨a, l⟩ <;> (try cases a) <;>
+      simp [simpNot] at hg <;> (subst hg; simp [Ok])
+  · simp at hg
+  · simp at hg
+
+theorem simplify_clean (op : GateOp) (m : ℕ) (ins : List Stat)
+    (hv : ∀ s ∈ ins, statValid m s) :
+    ∀ g ∈ (simplify op m ins).1, CleanG m g := by
+  intro g hg
+  cases op <;> simp only [simplify] at hg
+  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨c, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
+      simp [simpAnd] at hg
+    subst hg
+    exact Or.inr ⟨Or.inl rfl, _, _, hv (Sum.inr _) (by simp), hv (Sum.inr _) (by simp), rfl⟩
+  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨c, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
+      simp [simpOr] at hg
+    subst hg
+    exact Or.inr ⟨Or.inr rfl, _, _, hv (Sum.inr _) (by simp), hv (Sum.inr _) (by simp), rfl⟩
+  · rcases ins with _ | ⟨a, l⟩ <;> (try cases a) <;> simp [simpNot] at hg
+    subst hg
+    exact Or.inl ⟨rfl, _, hv (Sum.inr _) (by simp), rfl⟩
+  · simp at hg
+  · simp at hg
+
+theorem simplify_count (op : GateOp) (m : ℕ) (ins : List Stat)
+    (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not) (hlen : ins.length ≤ 2)
+    (hnot : op = GateOp.not → ins.length ≤ 1) (hc : ∃ c, Sum.inl c ∈ ins) :
+    (simplify op m ins).1 = none := by
+  obtain ⟨c, hc⟩ := hc
+  rcases hop with rfl | rfl | rfl
+  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨d, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
+      simp_all [simplify, simpAnd]
+  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨d, l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
+      simp_all [simplify, simpOr]
+  · have := hnot rfl
+    rcases ins with _ | ⟨a, _ | ⟨b, l⟩⟩ <;> (try cases a) <;> simp_all [simplify, simpNot]
+
+theorem simplify_sound (op : GateOp) (hop : op = GateOp.and ∨ op = GateOp.or ∨ op = GateOp.not)
+    (w : List Bool) (ins : List Stat) (hlen : ins.length ≤ 2)
+    (hv : ∀ s ∈ ins, statValid w.length s) :
+    statValid (w.length + (simplify op w.length ins).1.toList.length) (simplify op w.length ins).2 ∧
+    statVal (wiresFrom (simplify op w.length ins).1.toList w) (simplify op w.length ins).2
+      = op.eval (ins.map (statVal w)) := by
+  rcases hop with rfl | rfl | rfl
+  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨d, l⟩⟩⟩
+    · simp [simplify, simpAnd, statValid, statVal, GateOp.eval]
+    · cases a <;> simp_all [simplify, simpAnd, statValid, statVal, GateOp.eval, wiresFrom]
+    · cases a <;> cases b <;> (try rename_i c e; cases c) <;> (try cases e) <;>
+        simp_all [simplify, simpAnd, statValid, statVal, GateOp.eval, wiresFrom]
+    · simp at hlen
+  · rcases ins with _ | ⟨a, _ | ⟨b, _ | ⟨d, l⟩⟩⟩
+    · simp [simplify, simpOr, statValid, statVal, GateOp.eval]
+    · cases a <;> simp_all [simplify, simpOr, statValid, statVal, GateOp.eval, wiresFrom]
+    · cases a <;> cases b <;> (try rename_i c e; cases c) <;> (try cases e) <;>
+        simp_all [simplify, simpOr, statValid, statVal, GateOp.eval, wiresFrom]
+    · simp at hlen
+  · rcases ins with _ | ⟨a, l⟩
+    · simp [simplify, simpNot, statValid, statVal, GateOp.eval]
+    · cases a <;> simp_all [simplify, simpNot, statValid, statVal, GateOp.eval, wiresFrom]
+
+def elimStep (n : ℕ) (acc : List Stat × List Gate) (g : Gate) : List Stat × List Gate :=
+  (acc.1 ++ [(simplify g.op (n + acc.2.length)
+      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).2],
+    acc.2 ++ (simplify g.op (n + acc.2.length)
+      (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList)
+
+def elim (n : ℕ) (gs : List Gate) (acc : List Stat × List Gate) : List Stat × List Gate :=
+  gs.foldl (elimStep n) acc
+
+theorem elim_cons (n : ℕ) (g : Gate) (gs : List Gate) (acc : List Stat × List Gate) :
+    elim n (g :: gs) acc = elim n gs (elimStep n acc g) := rfl
+
+theorem elim_append (n : ℕ) (pre post : List Gate) (acc : List Stat × List Gate) :
+    elim n (pre ++ post) acc = elim n post (elim n pre acc) := by
+  simp [elim, List.foldl_append]
+
+theorem elim_fst_len (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
+    (elim n gs acc).1.length = acc.1.length + gs.length := by
+  induction gs with
+  | nil => intro acc; rfl
   | cons g gs ih =>
-    change (execute gs (w++[gv w g])).map _ = _
-    rw [ih _ (fun a ha => hg a (by simp [ha]))]
-    simp only [List.foldl_cons,List.map_append,List.map_singleton,run_bit i g w (hg g (by simp))]
+    intro acc
+    rw [elim_cons, ih]
+    simp only [elimStep, List.length_append, List.length_cons, List.length_nil]
+    omega
 
+theorem elim_getD (n k : ℕ) (d : Stat) (gs : List Gate) : ∀ acc : List Stat × List Gate,
+    k < acc.1.length → (elim n gs acc).1.getD k d = acc.1.getD k d := by
+  induction gs with
+  | nil => intro acc _; rfl
+  | cons g gs ih =>
+    intro acc hk
+    rw [elim_cons, ih (elimStep n acc g) (by simp [elimStep]; omega)]
+    exact getD_snoc_ne _ _ _ _ (by omega)
 
-abbrev Row := Fin 256
+theorem toList_length_le {α : Type} (o : Option α) : o.toList.length ≤ 1 := by
+  cases o <;> simp
 
-def plainWord (a : Sig) : Bool := !(bit 0 a)
+theorem elim_ok (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
+    (∀ g ∈ acc.2, Ok g) → ∀ g ∈ (elim n gs acc).2, Ok g := by
+  induction gs with
+  | nil => intro acc h; exact h
+  | cons g gs ih =>
+    intro acc h
+    apply ih (elimStep n acc g)
+    intro g' hg'
+    rcases List.mem_append.1 hg' with h1 | h1
+    · exact h g' h1
+    · exact simplify_ok _ _ _ g' (by simpa using h1)
 
-theorem normalize_plain {u} {w : List Sig} (h : w.all plainWord = true) : w.map (nrm u) = w := by
-  have eq : w.map (nrm u) = w.map id := by
-    apply List.map_congr_left
-    intro a ha
-    exact nrm_id (by simpa [plainWord] using List.all_eq_true.mp h a ha)
-  rw [eq, List.map_id]
+theorem elim_len (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
+    (elim n gs acc).2.length ≤ acc.2.length + gs.length := by
+  induction gs with
+  | nil => intro acc; simp [elim]
+  | cons g gs ih =>
+    intro acc
+    have h1 := ih (elimStep n acc g)
+    have h2 : (elimStep n acc g).2.length ≤ acc.2.length + 1 := by
+      simp only [elimStep, List.length_append]
+      have := toList_length_le (simplify g.op (n + acc.2.length)
+        (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1
+      omega
+    rw [elim_cons, List.length_cons]; omega
 
-theorem live_row_difference {u T k S} (h : Live u T k S) {r s : Row}
-    (diff : bit r T ≠ bit s T) : ∃ a ∈ S, bit r a ≠ bit s a := by
-  induction h using Live.ind with
-  | stop hp => exact ⟨_,by simp,diff⟩
-  | @binary k U a b d hd ha hb hab hf _ ih =>
-    obtain ⟨v,hv,hd⟩ := ih
-    rcases Finset.mem_insert.mp hv with rfl | hu
-    · by_cases aeq : bit r a = bit s a
-      · refine ⟨b,by simp,?_⟩
-        intro beq
-        exact hd (by rw [bit_bin,bit_bin,aeq,beq])
-      · exact ⟨a,by simp,aeq⟩
-    · exact ⟨v,Finset.mem_insert_of_mem (Finset.mem_insert_of_mem hu),hd⟩
-
-theorem raw_required {u T k S} (h : Live u T k S) (roots : List Sig) (a : Sig)
-    (sub : ∀ v ∈ S, v ∈ roots) (r s : Row) (diff : bit r T ≠ bit s T)
-    (isolated : ∀ v ∈ roots, v ≠ a → bit r v = bit s v) : a ∈ S := by
-  obtain ⟨v,hv,hd⟩ := live_row_difference h diff
-  by_cases veq : v=a
-  · simpa [veq] using hv
-  · exact False.elim (hd (isolated v (sub v hv) veq))
-
-
-
-
-variable {n : ℕ}
-
-def roots (wires : Fin n → Sig) : List Sig := List.ofFn wires
-
-def sampled (wires : Fin n → Sig) (r : Row) (i : Fin n) : Bool := bit r (wires i)
-
-theorem sampledInput (wires : Fin n → Sig) (r : Row) :
-    List.ofFn (sampled wires r) = (roots wires).map (bit r) := by
-  rw [roots, List.map_ofFn]
-  rfl
-
-def singles {α : Type} : List α → List (α × List α)
-  | [] => []
-  | a :: rest => (a, rest) :: (singles rest).map (fun (b, bs) => (b, a :: bs))
-
-def pairs {α : Type} : List α → List (α × α × List α)
-  | [] => []
-  | a :: rest => (singles rest).map (fun (b, bs) => (a, b, bs)) ++
-      (pairs rest).map (fun (b, c, bs) => (b, c, a :: bs))
-
-theorem pick_one {α : Type} {a : α} {ws : List α} (h : a ∈ ws) :
-    ∃ rest, (a, rest) ∈ singles ws ∧ ws.Perm (a :: rest) := by
-  induction ws with
-  | nil => simp at h
-  | cons x xs ih =>
-    rcases List.mem_cons.mp h with e | h
-    · subst x; exact ⟨xs, by simp [singles], .refl _⟩
-    · obtain ⟨rest, hm, hp⟩ := ih h
-      refine ⟨x :: rest, List.mem_cons_of_mem _ (List.mem_map.mpr ⟨(a, rest), hm, rfl⟩), ?_⟩
-      exact (hp.cons x).trans (.swap _ _ _)
-
-theorem pick_two {α : Type} {a b : α} {ws : List α} (ha : a ∈ ws) (hb : b ∈ ws) (hne : a ≠ b) :
-    ∃ rest, ((a, b, rest) ∈ pairs ws ∨ (b, a, rest) ∈ pairs ws) ∧
-      ws.Perm (a :: b :: rest) := by
-  induction ws with
-  | nil => simp at ha
-  | cons x xs ih =>
-    rcases List.mem_cons.mp ha with h | ha
-    · subst x
-      obtain ⟨r, hm, hp⟩ := pick_one ((List.mem_cons.mp hb).resolve_left (Ne.symm hne))
-      exact ⟨r, .inl (List.mem_append_left _ (List.mem_map.mpr ⟨(b, r), hm, rfl⟩)), hp.cons a⟩
-    · rcases List.mem_cons.mp hb with h | hb
-      · subst x
-        obtain ⟨r, hm, hp⟩ := pick_one (ws := xs) (a := a) (by assumption)
-        exact ⟨r, .inr (List.mem_append_left _ (List.mem_map.mpr ⟨(a, r), hm, rfl⟩)),
-          (hp.cons b).trans (.swap _ _ _)⟩
-      · obtain ⟨r, hm, hp⟩ := ih ha hb
-        refine ⟨x :: r, ?_,
-          (hp.cons x).trans ((List.Perm.swap _ _ _).trans ((List.Perm.swap _ _ _).cons a))⟩
-        rcases hm with hm | hm
-        · exact .inl (List.mem_append_right _ (List.mem_map.mpr ⟨(a, b, r), hm, rfl⟩))
-        · exact .inr (List.mem_append_right _ (List.mem_map.mpr ⟨(b, a, r), hm, rfl⟩))
-
-
-
-section Live
-
-variable {α : Type} [DecidableEq α]
-
-def build (ops : α → α → Finset α) (goal : α) : ℕ → Finset α → Prop
-  | 0, available => goal ∈ available
-  | k + 1, available => build ops goal k available ∨
-    ∃ a ∈ available, ∃ b ∈ available, a ≠ b ∧
-      ∃ z ∈ ops a b, build ops goal k (insert z available)
-
-def live (ops : α → α → Finset α) (goal : α) : ℕ → Finset α → Prop
-  | 0, s => s = {goal}
-  | k + 1, s => live ops goal k s ∨
-    ∃ a ∈ s, ∃ b ∈ s, a ≠ b ∧ ∃ z ∈ ops a b, z ∉ s ∧
-      ∃ rest : Finset α, s = insert a (insert b rest) ∧ live ops goal k (insert z rest)
-
-theorem compress {ops : α → α → Finset α} {goal : α} {k : ℕ} {available : Finset α}
-    (h : build ops goal k available) : ∃ s ⊆ available, live ops goal k s := by
-  induction k generalizing available with
-  | zero =>
-    exact ⟨{goal}, Finset.singleton_subset_iff.mpr h, rfl⟩
-  | succ k ih =>
-    rcases h with skip | ⟨a, ha, b, hb, hab, z, hz, tail⟩
-    · obtain ⟨s, hs, hrun⟩ := ih skip
-      exact ⟨s, hs, Or.inl hrun⟩
-    · obtain ⟨t, ht, hrun⟩ := ih tail
-      by_cases sub : t ⊆ available
-      · exact ⟨t, sub, Or.inl hrun⟩
-      · have hzmem : z ∈ t := by
-          by_contra hn
-          apply sub
-          intro u hu
-          rcases Finset.mem_insert.mp (ht hu) with rfl | ok
-          · exact False.elim (hn hu)
-          · exact ok
-        have hzout : z ∉ available := by
-          intro hh
-          exact sub ((Finset.insert_eq_of_mem hh) ▸ ht)
-        let rest := t.erase z
-        have hrest : rest ⊆ available := by
-          intro u hu
-          have hu' := Finset.mem_erase.mp hu
-          exact (Finset.mem_insert.mp (ht hu'.2)).resolve_left hu'.1
-        let s := insert a (insert b rest)
-        have hs : s ⊆ available := Finset.insert_subset ha (Finset.insert_subset hb hrest)
-        refine ⟨s, hs, Or.inr ⟨a, by simp [s], b, by simp [s], hab, z, hz,
-          fun h => hzout (hs h), rest, rfl, ?_⟩⟩
-        simpa [rest, Finset.insert_erase hzmem] using hrun
-
-theorem live_card {ops : α → α → Finset α} {goal : α} {k : ℕ} {s : Finset α}
-    (h : live ops goal k s) : s.card ≤ k + 1 := by
-  induction k generalizing s with
-  | zero => change s = {goal} at h; simp [h]
-  | succ k ih =>
-    rcases h with skip | ⟨a, ha, b, hb, hab, z, hz, hout, rest, rfl, tail⟩
-    · exact (ih skip).trans (by omega)
-    · have hzrest : z ∉ rest := fun hm => hout (by simp [hm])
-      have htail := ih tail
-      rw [Finset.card_insert_of_notMem hzrest] at htail
-      have h₁ := Finset.card_insert_le a (insert b rest)
-      have h₂ := Finset.card_insert_le b rest
+theorem elim_len_lt (n k : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
+    (∀ g ∈ gs, NOk g) → k < acc.1.length → (∃ c, acc.1.getD k (Sum.inl false) = Sum.inl c) →
+    (∃ g ∈ gs, k ∈ g.inputs) → (elim n gs acc).2.length + 1 ≤ acc.2.length + gs.length := by
+  induction gs with
+  | nil => intro acc _ _ _ h; obtain ⟨g, hg, _⟩ := h; simp at hg
+  | cons g gs ih =>
+    intro acc hok hk hc hex
+    rw [elim_cons, List.length_cons]
+    by_cases hkg : k ∈ g.inputs
+    · obtain ⟨c, hc⟩ := hc
+      have hnok := hok g List.mem_cons_self
+      have hnone : (simplify g.op (n + acc.2.length)
+          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1 = none := by
+        apply simplify_count
+        · exact hnok.1.1
+        · simpa using hnok.1.2
+        · intro h; simpa using hnok.2 h
+        · exact ⟨c, List.mem_map.2 ⟨k, hkg, hc⟩⟩
+      have h2 : (elimStep n acc g).2.length = acc.2.length := by
+        show (acc.2 ++ (simplify g.op (n + acc.2.length)
+          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1.toList).length = _
+        rw [hnone]; simp
+      have := elim_len n gs (elimStep n acc g)
+      omega
+    · have hex' : ∃ g' ∈ gs, k ∈ g'.inputs := by
+        obtain ⟨g', hg', hk'⟩ := hex
+        rcases List.mem_cons.1 hg' with rfl | h
+        · exact absurd hk' hkg
+        · exact ⟨g', h, hk'⟩
+      have h1 := ih (elimStep n acc g) (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg'))
+        (by simp [elimStep]; omega)
+        (by
+          obtain ⟨c, hc⟩ := hc
+          refine ⟨c, ?_⟩
+          simp only [elimStep]
+          rw [getD_snoc_ne _ _ _ _ (by omega)]; exact hc)
+        hex'
+      have h2 : (elimStep n acc g).2.length ≤ acc.2.length + 1 := by
+        simp only [elimStep, List.length_append]
+        have := toList_length_le (simplify g.op (n + acc.2.length)
+          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).1
+        omega
       omega
 
-theorem live_separates {ops : α → α → Finset α} {goal : α} (D : α → Prop)
-    (hd : D goal) (hops : ∀ a b, ∀ z ∈ ops a b, D z → D a ∨ D b)
-    {k : ℕ} {s : Finset α} (h : live ops goal k s) : ∃ w ∈ s, D w := by
-  induction k generalizing s with
-  | zero => change s = {goal} at h; exact ⟨goal, by simp [h], hd⟩
-  | succ k ih =>
-    rcases h with skip | ⟨a, ha, b, hb, hab, z, hz, hout, rest, rfl, tail⟩
-    · exact ih skip
-    · obtain ⟨w, hw, hD⟩ := ih tail
-      rcases Finset.mem_insert.mp hw with rfl | hw
-      · rcases hops a b w hz hD with h | h
-        · exact ⟨a, ha, h⟩
-        · exact ⟨b, hb, h⟩
-      · exact ⟨w, by simp [hw], hD⟩
+theorem statValid_mono {m m' : ℕ} (h : m ≤ m') : ∀ s : Stat, statValid m s → statValid m' s
+  | Sum.inl _, _ => trivial
+  | Sum.inr _, hj => lt_of_lt_of_le hj h
 
+theorem statVal_append (w t : List Bool) : ∀ s : Stat, statValid w.length s →
+    statVal (w ++ t) s = statVal w s
+  | Sum.inl _, _ => rfl
+  | Sum.inr _, hj => List.getD_append _ _ _ _ hj
 
-end Live
+def Inv (n : ℕ) (y : List Bool) (w : List Bool) (acc : List Stat × List Gate) : Prop :=
+  acc.1.length = w.length ∧ ∀ i : ℕ,
+    statValid (n + acc.2.length) (acc.1.getD i (Sum.inl false)) ∧
+    statVal (wiresFrom acc.2 y) (acc.1.getD i (Sum.inl false)) = w.getD i false
 
-namespace Projection
-variable {α β : Type} [DecidableEq α] [DecidableEq β] [Zero β]
-theorem build_mono {ops : β → β → Finset β} {g : β} {k : ℕ} {S T : Finset β}
-    (h : build ops g k S) (hst : S ⊆ T) : build ops g k T := by
-  induction k generalizing S T with
-  | zero => exact hst h
-  | succ k ih =>
-    rcases h with h | ⟨a, ha, b, hb, hab, z, hz, ht⟩
-    · exact Or.inl (ih h hst)
-    · exact Or.inr ⟨a, hst ha, b, hst hb, hab, z, hz, ih ht (Finset.insert_subset_insert _ hst)⟩
-def proj (f : α → β) (s : Finset α) : Finset β := (s.image f).erase 0
-def zeros (f : α → β) (s : Finset α) : ℕ := (s.filter (fun a => f a = 0)).card
+theorem inv_elim (n : ℕ) (y : List Bool) (hy : y.length = n) (gs : List Gate) :
+    ∀ (w : List Bool) (acc : List Stat × List Gate), (∀ g ∈ gs, Ok g) → Inv n y w acc →
+      Inv n y (wiresFrom gs w) (elim n gs acc) := by
+  induction gs with
+  | nil => intro w acc _ h; exact h
+  | cons g gs ih =>
+    intro w acc hok h
+    apply ih (w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) (elimStep n acc g)
+      (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg'))
+    obtain ⟨hl, hi⟩ := h
+    set w' := wiresFrom acc.2 y with hw'
+    have lw' : w'.length = n + acc.2.length := by rw [hw', length_wiresFrom, hy]
+    set ins := g.inputs.map fun i => acc.1.getD i (Sum.inl false) with hins
+    have hgok := hok g List.mem_cons_self
+    have hs := simplify_sound g.op hgok.1 w' ins (by simpa [hins] using hgok.2)
+      (by
+        intro s hs
+        obtain ⟨a, _, rfl⟩ := List.mem_map.1 hs
+        rw [lw']; exact (hi a).1)
+    rw [lw'] at hs
+    set r := simplify g.op (n + acc.2.length) ins with hr
+    have hvals : ins.map (statVal w') = g.inputs.map fun i => w.getD i false := by
+      rw [hins, List.map_map]
+      apply List.map_congr_left
+      intro a _
+      exact (hi a).2
+    have hnew : wiresFrom (acc.2 ++ r.1.toList) y = wiresFrom r.1.toList w' := by
+      rw [wiresFrom_append]
+    obtain ⟨t, ht, _⟩ := wiresFrom_prefix r.1.toList w'
+    refine ⟨by simp [elimStep, hl], ?_⟩
+    intro i
+    show statValid (n + (acc.2 ++ r.1.toList).length) ((acc.1 ++ [r.2]).getD i (Sum.inl false)) ∧
+      statVal (wiresFrom (acc.2 ++ r.1.toList) y) ((acc.1 ++ [r.2]).getD i (Sum.inl false)) = _
+    rw [hnew, List.length_append, ← Nat.add_assoc]
+    by_cases hil : i = acc.1.length
+    · subst hil
+      rw [getD_snoc_eq, hl, getD_snoc_eq]
+      exact ⟨hs.1, by rw [hs.2, hvals]⟩
+    · rw [getD_snoc_ne _ _ _ _ hil, getD_snoc_ne _ _ _ _ (by omega)]
+      refine ⟨statValid_mono (by omega) _ (hi i).1, ?_⟩
+      rw [ht, statVal_append _ _ _ (by rw [lw']; exact (hi i).1)]
+      exact (hi i).2
 
-theorem zeros_paid (f : α → β) (a b z : α) (r : Finset α)
-    (ha : f a ≠ 0) (hb : f b ≠ 0) :
-    zeros f (insert a (insert b r)) ≤ zeros f (insert z r) := by
-  simp only [zeros, Finset.filter_insert, if_neg ha, if_neg hb]
-  split_ifs
-  · exact Finset.card_le_card (Finset.subset_insert _ _)
-  · exact le_rfl
+theorem elim_clean (n : ℕ) (gs : List Gate) : ∀ acc : List Stat × List Gate,
+    (∀ g ∈ gs, Ok g) → (∀ i, statValid (n + acc.2.length) (acc.1.getD i (Sum.inl false))) →
+    CleanL n acc.2 → CleanL n (elim n gs acc).2 := by
+  induction gs with
+  | nil => intro acc _ _ hc; exact hc
+  | cons g gs ih =>
+    intro acc hok hv hc
+    have hstep := ih (elimStep n acc g) (fun g' hg' => hok g' (List.mem_cons_of_mem _ hg'))
+    apply hstep
+    · intro i
+      set ins := g.inputs.map fun i => acc.1.getD i (Sum.inl false) with hins
+      have hgok := hok g List.mem_cons_self
+      have hs := simplify_sound g.op hgok.1 (List.replicate (n + acc.2.length) false) ins
+        (by simpa [hins] using hgok.2)
+        (by
+          intro s hs
+          obtain ⟨a, _, rfl⟩ := List.mem_map.1 hs
+          simpa using hv a)
+      simp only [List.length_replicate] at hs
+      show statValid (n + (acc.2 ++ _).length) ((acc.1 ++ [_]).getD i (Sum.inl false))
+      rw [List.length_append, ← Nat.add_assoc]
+      by_cases hil : i = acc.1.length
+      · subst hil; rw [getD_snoc_eq]; exact hs.1
+      · rw [getD_snoc_ne _ _ _ _ hil]; exact statValid_mono (by omega) _ (hv i)
+    · intro p g' hp
+      simp only [elimStep] at hp
+      by_cases hlt : p < acc.2.length
+      · rw [List.getElem?_append_left hlt] at hp
+        exact hc p g' hp
+      · rw [List.getElem?_append_right (by omega)] at hp
+        set r := simplify g.op (n + acc.2.length)
+          (g.inputs.map fun i => acc.1.getD i (Sum.inl false)) with hr
+        cases ho : r.1 with
+        | none => simp [ho] at hp
+        | some g0 =>
+          rw [ho] at hp
+          have hp0 : p - acc.2.length = 0 := by
+            have := (List.getElem?_eq_some_iff.1 hp).1
+            simp at this; omega
+          have hpeq : p = acc.2.length := by omega
+          rw [hp0] at hp
+          simp at hp
+          subst hp
+          rw [hpeq]
+          exact simplify_clean g.op (n + acc.2.length) _ (by
+            intro s hs
+            obtain ⟨a, _, rfl⟩ := List.mem_map.1 hs
+            exact hv a) g0 (by rw [← hr, ho]; rfl)
 
-theorem zeros_free (f : α → β) (a b z : α) (r : Finset α)
-    (hn : z ∉ insert a (insert b r))
-    (hz : f a = 0 → f b = 0 → f z = 0) :
-    zeros f (insert a (insert b r)) ≤ zeros f (insert z r) + 1 := by
-  have hzr : z ∉ r := fun hr => hn (by simp [hr])
-  let t := r.filter (fun x => f x = 0)
-  have h1 := Finset.card_insert_le a t
-  have h2 := Finset.card_insert_le b t
-  have h3 := Finset.card_insert_le a (insert b t)
-  have h4 : t.card ≤ (insert z t).card := Finset.card_le_card (Finset.subset_insert _ _)
-  have hznot : z ∉ t := by simp [t, hzr]
-  have h5 := Finset.card_insert_of_notMem hznot
-  dsimp [t] at h1 h2 h3 h4 h5
-  by_cases ha : f a = 0 <;> by_cases hb : f b = 0 <;> by_cases hzero : f z = 0
-  all_goals simp only [zeros, Finset.filter_insert, ha, hb, hzero, if_true, if_false]
-  all_goals try { exfalso; exact hzero (hz ha hb) }
-  all_goals omega
+def initStats (n : ℕ) (b : Bool) : List Stat :=
+  List.ofFn (fun i : Fin n => Sum.inr (i : ℕ)) ++ [Sum.inl b]
 
-theorem proj_subset_insert (f : α → β) (a b z : α) (r : Finset α) :
-    proj f (insert z r) ⊆ insert (f z) (proj f (insert a (insert b r))) := by
-  intro x hx
-  simp only [proj, Finset.mem_erase, Finset.mem_image, Finset.mem_insert] at hx ⊢
-  rcases hx with ⟨hx0, w, (rfl | hw), rfl⟩
-  · exact Or.inl rfl
-  · exact Or.inr ⟨hx0, w, Or.inr (Or.inr hw), rfl⟩
+theorem initStats_last (n : ℕ) (b : Bool) :
+    (initStats n b).getD n (Sum.inl false) = Sum.inl b :=
+  getD_snoc_len _ _ _ _ (by simp)
 
-theorem proj_subset_free (f : α → β) (a b z : α) (r : Finset α)
-    (hz : f z = 0 ∨ f z = f a ∨ f z = f b) :
-    proj f (insert z r) ⊆ proj f (insert a (insert b r)) := by
-  intro x hx
-  simp only [proj, Finset.mem_erase, Finset.mem_image, Finset.mem_insert] at hx ⊢
-  rcases hx with ⟨hx0, w, (rfl | hw), rfl⟩
-  · rcases hz with hz | hz | hz
-    · exact False.elim (hx0 hz)
-    · exact ⟨hx0, a, Or.inl rfl, hz.symm⟩
-    · exact ⟨hx0, b, Or.inr (Or.inl rfl), hz.symm⟩
-  · exact ⟨hx0, w, Or.inr (Or.inr hw), rfl⟩
+theorem inv_init (n : ℕ) (b : Bool) (y : Fin n → Bool) :
+    Inv n (List.ofFn y) (List.ofFn y ++ [b]) (initStats n b, []) := by
+  refine ⟨by simp [initStats], ?_⟩
+  intro i
+  have l1 : (List.ofFn (fun i : Fin n => (Sum.inr (i : ℕ) : Stat))).length = n := by simp
+  have l2 : (List.ofFn y).length = n := by simp
+  by_cases hin : i = n
+  · subst hin
+    simp only [initStats]
+    rw [getD_snoc_len _ _ _ _ l1, getD_snoc_len _ _ _ _ l2]
+    exact ⟨trivial, rfl⟩
+  · simp only [initStats]
+    rw [getD_snoc_ne _ _ _ _ (by omega), getD_snoc_ne _ _ _ _ (by omega)]
+    by_cases hlt : i < n
+    · simp [hlt, statValid, statVal, wiresFrom]
+    · rw [List.getD_eq_default _ _ (by omega), List.getD_eq_default _ _ (by omega)]
+      exact ⟨trivial, rfl⟩
 
-theorem project_step (f : α → β) (ops : α → α → Finset α) (ops' : β → β → Finset β)
-    (samezero : ∀ a b z, z ∈ ops a b → f a = 0 → f b = 0 → f z = 0)
-    (casesStep : ∀ a b z, z ∈ ops a b →
-      f z = 0 ∨ f z = f a ∨ f z = f b ∨
-        (f a ≠ 0 ∧ f b ≠ 0 ∧ f a ≠ f b ∧ f z ∈ ops' (f a) (f b))) :
-    ∀ a b z r, a ≠ b → z ∈ ops a b → z ∉ insert a (insert b r) →
-      let s := insert a (insert b r)
-      let t := insert z r
-      ((proj f t ⊆ proj f s ∧ zeros f s ≤ zeros f t + 1) ∨
-       (∃ x ∈ proj f s, ∃ y ∈ proj f s, x ≠ y ∧ ∃ v ∈ ops' x y,
-         proj f t ⊆ insert v (proj f s) ∧ zeros f s ≤ zeros f t)) := by
-  intro a b z r hab hz hn
-  rcases casesStep a b z hz with h | h | h | ⟨ha, hb, hab', hmem⟩
-  · exact Or.inl ⟨proj_subset_free f a b z r (Or.inl h), zeros_free f a b z r hn (samezero a b z hz)⟩
-  · exact Or.inl ⟨proj_subset_free f a b z r (Or.inr (Or.inl h)), zeros_free f a b z r hn (samezero a b z hz)⟩
-  · exact Or.inl ⟨proj_subset_free f a b z r (Or.inr (Or.inr h)), zeros_free f a b z r hn (samezero a b z hz)⟩
-  · right
-    refine ⟨f a, ?_, f b, ?_, hab', f z, hmem, proj_subset_insert f a b z r, zeros_paid f a b z r ha hb⟩
-    · simp [proj, ha]
-    · simp [proj, hb]
+theorem ofFn_snoc (n : ℕ) (y : Fin n → Bool) (b : Bool) :
+    List.ofFn (Fin.snoc y b : Fin (n + 1) → Bool) = List.ofFn y ++ [b] := by
+  rw [List.ofFn_succ']
+  simp
 
-theorem projection {ops : α → α → Finset α} {ops' : β → β → Finset β}
-    {goal : α} (f : α → β) (hg : f goal ≠ 0)
-    (step : ∀ a b z r, a ≠ b → z ∈ ops a b → z ∉ insert a (insert b r) →
-      let s := insert a (insert b r)
-      let t := insert z r
-      ((proj f t ⊆ proj f s ∧ zeros f s ≤ zeros f t + 1) ∨
-       (∃ x ∈ proj f s, ∃ y ∈ proj f s, x ≠ y ∧ ∃ v ∈ ops' x y,
-         proj f t ⊆ insert v (proj f s) ∧ zeros f s ≤ zeros f t)))
-    {k : ℕ} {s : Finset α} (h : live ops goal k s) :
-    ∃ j, j + zeros f s ≤ k ∧ build ops' (f goal) j (proj f s) := by
-  induction k generalizing s with
-  | zero =>
-    change s = {goal} at h
-    subst s
-    refine ⟨0, ?_, ?_⟩
-    · simp [zeros, hg]
-    · simp [build, proj, hg]
-  | succ k ih =>
-    rcases h with skip | ⟨a, ha, b, hb, hab, z, hz, hout, r, rfl, tail⟩
-    · obtain ⟨j, hj, hbuild⟩ := ih skip
-      exact ⟨j, by omega, hbuild⟩
-    · obtain ⟨j, hj, hbuild⟩ := ih tail
-      rcases step a b z r hab hz hout with ⟨hsub, hc⟩ | ⟨x, hx, y, hy, hxy, v, hv, hsub, hc⟩
-      · exact ⟨j, by omega, build_mono hbuild hsub⟩
-      · exact ⟨j+1, by omega, Or.inr ⟨x, hx, y, hy, hxy, v, hv, build_mono hbuild hsub⟩⟩
-end Projection
+theorem supp_noread (n : ℕ) (gs : List Gate) : ∀ L : List (Finset (Fin (n + 1))),
+    (∀ g ∈ gs, n ∉ g.inputs) → (∀ j : ℕ, j ≠ n → Fin.last n ∉ L.getD j ∅) →
+    ∀ j : ℕ, j ≠ n → Fin.last n ∉ (suppsFrom gs L).getD j ∅ := by
+  induction gs with
+  | nil => intro L _ h; exact h
+  | cons g gs ih =>
+    intro L hno h
+    apply ih (L ++ [gateSupp L g]) (fun g' hg' => hno g' (List.mem_cons_of_mem _ hg'))
+    intro j hj
+    by_cases hjl : j = L.length
+    · subst hjl
+      rw [getD_snoc_eq]
+      intro hmem
+      obtain ⟨a, ha, hia⟩ := (mem_gateSupp L g _).1 hmem
+      exact h a (fun e => hno g List.mem_cons_self (e ▸ ha)) hia
+    · rw [getD_snoc_ne _ _ _ _ hjl]; exact h j hj
 
+theorem inputSupps_getD (m j : ℕ) (h : j < m) :
+    (inputSupps m).getD j ∅ = {⟨j, h⟩} := by
+  simp [inputSupps, h]
 
-def signedOps (a b : Sig) : Finset Sig := ((List.range 4).map (fun d => bin d a b)).toFinset
+theorem inputSupps_noread (n : ℕ) : ∀ j : ℕ, j ≠ n →
+    Fin.last n ∉ (inputSupps (n + 1)).getD j ∅ := by
+  intro j hj
+  by_cases hlt : j < n + 1
+  · have e : (inputSupps (n + 1)).getD j ∅ = {⟨j, hlt⟩} := inputSupps_getD (n + 1) j hlt
+    rw [e, Finset.mem_singleton]
+    intro e'
+    exact hj (by have := congrArg Fin.val e'; simpa using this.symm)
+  · rw [List.getD_eq_default _ _ (by simp [inputSupps]; omega)]; simp
 
-theorem memSigned {a b z : Sig} : z ∈ signedOps a b ↔ ∃ d < 4, bin d a b = z := by
-  simp only [signedOps, List.mem_toFinset, List.mem_map, List.mem_range]
-
-theorem anySigned {u : Bool} {T : Sig} {k : ℕ} {S : Finset Sig} (h : Live u T k S) :
-    live signedOps T k S := by
-  induction h using Live.ind with
-  | stop hp => rfl
-  | @binary k U a b d hd ha hb hab hf _ ih =>
-    have d4 : d < 4 := by rcases hd with h | h <;> omega
-    exact Or.inr ⟨a, by simp, b, by simp, hab, bin d a b, memSigned.mpr ⟨d, d4, rfl⟩,
-      hf, U, rfl, ih⟩
-
-theorem signedSeparates (r s : Row) (a b z : Sig) (hz : z ∈ signedOps a b)
-    (hd : bit r z ≠ bit s z) : bit r a ≠ bit s a ∨ bit r b ≠ bit s b := by
-  obtain ⟨d, _, rfl⟩ := memSigned.mp hz
-  by_cases h : bit r a = bit s a
-  · right
-    intro hb
-    apply hd
-    rw [bit_bin, bit_bin, h, hb]
-  · exact Or.inl h
-
-def crop (w : Sig) : Sig := (w.setWidth 128).setWidth 256
-
-theorem bitCrop (w : Sig) (i : ℕ) :
-    (crop w).getLsbD i = (decide (i < 128) && w.getLsbD i) := by
-  by_cases h : i < 128
-  · have hh : i < 256 := by omega
-    simp [crop, h, hh]
-  · simp [crop, h]
-
-
-theorem crop_bin (d : ℕ) (a b : Sig) : crop (bin d a b) = bin d (crop a) (crop b) := by
-  simp only [bin]
-  split_ifs <;> apply BitVec.eq_of_getLsbD_eq
-  all_goals
-    intro i hi
-    by_cases lo : i < 128 <;>
-      simp only [bitCrop, BitVec.getLsbD_and, BitVec.getLsbD_or, BitVec.getLsbD_not,
-        hi, lo, decide_true, decide_false, Bool.true_and, Bool.false_and, Bool.and_false,
-        Bool.false_or, Bool.or_false, Bool.not_false]
-
-
-
-theorem bin_zero_op (a b : Sig) : bin 0 a b = a &&& b := rfl
-theorem bin_one_op (a b : Sig) : bin 1 a b = a ||| b := rfl
-theorem bin_two_op (a b : Sig) : bin 2 a b = a &&& ~~~b := rfl
-theorem bin_three_op (a b : Sig) : bin 3 a b = ~~~a &&& b := rfl
-
-theorem crop_cases (a b z : Sig) (hz : z ∈ signedOps a b) :
-    crop z = 0 ∨ crop z = crop a ∨ crop z = crop b ∨
-    (crop a ≠ 0 ∧ crop b ≠ 0 ∧ crop a ≠ crop b ∧ crop z ∈ signedOps (crop a) (crop b)) := by
-  obtain ⟨d, d4, rfl⟩ := memSigned.mp hz
-  rw [crop_bin]
-  generalize crop a = p
-  generalize crop b = q
-  by_cases ha : p = 0
-  · subst p
-    rcases (show d=0 ∨ d=1 ∨ d=2 ∨ d=3 by omega) with rfl | rfl | rfl | rfl
-    · left; exact BitVec.zero_and
-    · right; right; left; exact BitVec.zero_or
-    · left; exact BitVec.zero_and
-    · right; right; left; exact BitVec.allOnes_and
-  by_cases hb : q = 0
-  · subst q
-    rcases (show d=0 ∨ d=1 ∨ d=2 ∨ d=3 by omega) with rfl | rfl | rfl | rfl
-    · left; exact BitVec.and_zero
-    · right; left; exact BitVec.or_zero
-    · right; left; exact BitVec.and_allOnes
-    · left; exact BitVec.and_zero
-  by_cases h : p = q
-  · subst q
-    rcases (show d=0 ∨ d=1 ∨ d=2 ∨ d=3 by omega) with rfl | rfl | rfl | rfl
-    · right; left; exact BitVec.and_self
-    · right; left; exact BitVec.or_self
-    · left; exact BitVec.and_not_self p
-    · left; exact BitVec.not_and_self p
-  exact Or.inr (Or.inr (Or.inr ⟨ha, hb, h, memSigned.mpr ⟨d, d4, rfl⟩⟩))
-
-theorem crop_zero (a b z : Sig) (hz : z ∈ signedOps a b)
-    (ha : crop a = 0) (hb : crop b = 0) : crop z = 0 := by
-  obtain ⟨d, d4, rfl⟩ := memSigned.mp hz
-  have ds : d=0 ∨ d=1 ∨ d=2 ∨ d=3 := by omega
-  rw [crop_bin, ha, hb]
-  rcases ds with rfl | rfl | rfl | rfl <;> simp [bin]
-
-
-def cut (w : Sig) : BitVec 64 := ((w >>> 64) ^^^ w).setWidth 64
-
-def cuts (xs : List Sig) : BitVec 64 := xs.foldr (fun w total => cut w ||| total) 0
-
-def separatedOn (T : Sig) (xs : List Sig) : Bool := (cuts xs &&& cut T) == cut T
-
-theorem cut_get (w : Sig) (i : ℕ) (hi : i < 64) :
-    (cut w).getLsbD i = (w.getLsbD (64+i) ^^ w.getLsbD i) := by
-  simp [cut, hi]
-
-theorem cutsOfMem {i : ℕ} {a : Sig} {xs : List Sig} (m : a ∈ xs)
-    (h : (cut a).getLsbD i = true) : (cuts xs).getLsbD i = true := by
-  induction xs with
-  | nil => simp at m
-  | cons b bs ih =>
-    rcases List.mem_cons.mp m with rfl | tail
-    · simp [cuts, h]
-    · change (cut b ||| cuts bs).getLsbD i = true
-      rw [BitVec.getLsbD_or, ih tail]
-      simp
-
-theorem separatedOfLive {T : Sig} {k : ℕ} {S : Finset Sig} (run : live signedOps T k S)
-    {xs : List Sig} (eq : xs.toFinset = S) :
-    separatedOn T xs = true := by
-  apply beq_iff_eq.mpr
-  apply BitVec.eq_of_getLsbD_eq
-  intro i hi
-  simp only [BitVec.getLsbD_and]
-  cases bitreq : (cut T).getLsbD i
-  · simp
-  · have ci : 64+i < 256 := by omega
-    rw [cut_get T i hi] at bitreq
-    have diff : bit ⟨64+i, ci⟩ T ≠ bit ⟨i, by omega⟩ T := by
-      intro he
-      change T.getLsbD (64+i) = T.getLsbD i at he
-      rw [he] at bitreq
-      simp at bitreq
-    obtain ⟨a, ha, hdiff⟩ := live_separates (fun w => bit ⟨64+i, ci⟩ w ≠ bit ⟨i, by omega⟩ w) diff (signedSeparates _ _) run
-    rw [← eq] at ha
-    have hbit : (cut a).getLsbD i = true := by
-      rw [cut_get a i hi]
-      change a.getLsbD (64+i) ≠ a.getLsbD i at hdiff
-      cases h1 : a.getLsbD (64+i) <;> cases h2 : a.getLsbD i <;> simp_all
-    simpa using cutsOfMem (List.mem_toFinset.mp ha) hbit
-
-def keepChoices (a b : Sig) (r : List Sig) : List (List Sig) := [r, a :: r, b :: r, a :: b :: r]
-
-theorem recover_kept {ws r : List Sig} {a b : Sig} {needed : Finset Sig}
-    (hp : ws.Perm (a :: b :: r)) (hn : ws.Nodup)
-    (hs : ws.toFinset = insert a (insert b needed)) :
-    ∃ kept ∈ keepChoices a b r, kept.Nodup ∧ kept.toFinset = needed := by
-  have habr := hp.nodup_iff.mp hn
-  have hbase : ws.toFinset = insert a (insert b r.toFinset) := by
-    ext v
-    simp [hp.mem_iff]
-  have henne : ∀ v, v ∈ r ↔ v ∈ needed ∧ v ≠ a ∧ v ≠ b := by
-    intro v
-    have he : (v ∈ insert a (insert b r.toFinset)) ↔ v ∈ insert a (insert b needed) := by
-      rw [← hbase, ← hs]
-    simp only [Finset.mem_insert, List.mem_toFinset] at he
-    simp only [List.nodup_cons, List.mem_cons, not_or] at habr
-    grind
-  by_cases ha : a ∈ needed <;> by_cases hb : b ∈ needed
-  · refine ⟨a :: b :: r, by simp [keepChoices], habr, ?_⟩
-    ext v; simp [henne]; grind
-  · refine ⟨a :: r, by simp [keepChoices], ?_, ?_⟩
-    · simp_all [List.nodup_cons]
-    · ext v; simp [henne]; grind
-  · refine ⟨b :: r, by simp [keepChoices], (List.nodup_cons.mp habr).2, ?_⟩
-    ext v; simp [henne]; grind
-  · refine ⟨r, by simp [keepChoices], (List.nodup_cons.mp (List.nodup_cons.mp habr).2).2, ?_⟩
-    ext v; simp [henne]; grind
-
-
-def searchBranches (T : Sig) (k : ℕ) (xs : List Sig) (search : List Sig → Bool) : Bool :=
-  (pairs xs).any (fun (a,b,r) =>
-    (List.range 4).any (fun d =>
-      (keepChoices a b r).any (fun kept =>
-        let z := bin d a b
-        let next := z :: kept
-        decide (z ≠ a ∧ z ≠ b ∧ z ∉ kept) &&
-        decide (next.length ≤ k + 1) && separatedOn T next && search next)))
-
-theorem searchBranches_mono (T : Sig) {k l : ℕ} (bound : k ≤ l) (xs : List Sig)
-    {f g : List Sig → Bool} (next : ∀ ws, f ws = true → g ws = true)
-    (h : searchBranches T k xs f = true) : searchBranches T l xs g = true := by
-  unfold searchBranches at h ⊢
-  obtain ⟨⟨a,b,r⟩, hab, step⟩ := List.any_eq_true.mp h
-  obtain ⟨d, hd, step⟩ := List.any_eq_true.mp step
-  obtain ⟨kept, hkept, step⟩ := List.any_eq_true.mp step
-  apply List.any_eq_true.mpr
-  refine ⟨(a,b,r), hab, List.any_eq_true.mpr ⟨d, hd, List.any_eq_true.mpr ⟨kept, hkept, ?_⟩⟩⟩
-  dsimp only at step ⊢
-  simp only [Bool.and_eq_true, decide_eq_true_eq] at step ⊢
-  rcases step with ⟨⟨⟨fresh, len⟩, sep⟩, tail⟩
-  exact ⟨⟨⟨fresh, len.trans (Nat.succ_le_succ bound)⟩, sep⟩, next _ tail⟩
-
-def boundedSearch (T : Sig) : ℕ → List Sig → Bool
-  | 0, xs => xs == [T]
-  | k + 1, xs => (xs == [T]) ||
-    (decide (xs.length ≤ k + 2) && separatedOn T xs &&
-      searchBranches T k xs (boundedSearch T k))
-
-theorem searchBudgetStep (T : Sig) (k : ℕ) (xs : List Sig)
-    (h : boundedSearch T k xs = true) : boundedSearch T (k + 1) xs = true := by
-  induction k generalizing xs with
-  | zero =>
-    change (xs == [T]) = true at h
-    rw [boundedSearch, h]
-    rfl
-  | succ k ih =>
-    rw [boundedSearch] at h ⊢
-    simp only [Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h ⊢
-    rcases h with done | ⟨⟨len, sep⟩, tails⟩
-    · exact Or.inl done
-    · refine Or.inr ⟨⟨by omega, sep⟩, ?_⟩
-      exact searchBranches_mono T (Nat.le_succ k) xs ih tails
-
-theorem boundedComplete (T : Sig) {k : ℕ} {S : Finset Sig}
-    (run : live signedOps T k S) (xs : List Sig) (hn : xs.Nodup) (hs : xs.toFinset = S) :
-    boundedSearch T k xs = true := by
-  induction k generalizing S xs with
-  | zero =>
-    have hS : S = {T} := run
-    subst S
-    have hlen := List.toFinset_card_of_nodup hn
-    rw [hs] at hlen
-    simp only [Finset.card_singleton] at hlen
-    cases xs with
-    | nil => simp at hlen
-    | cons v vs =>
-      cases vs with
-      | nil => simpa [boundedSearch] using hs
-      | cons w ws => simp at hlen
-  | succ k ih =>
-    have len : xs.length ≤ k + 2 := by
-      rw [← List.toFinset_card_of_nodup hn, hs]
-      exact live_card run
-    have separate := separatedOfLive run hs
-    rcases run with skip | ⟨a, ma, b, mb, hab, z, opZ, hf, U, rfl, tail⟩
-    · exact searchBudgetStep T k xs (ih skip xs hn hs)
-    obtain ⟨d, d4, rfl⟩ := memSigned.mp opZ
-    have hd : allowed true d := Or.inr ⟨rfl,d4⟩
-    let z := bin d a b
-    have hz : z ∉ U := fun h => hf (Finset.mem_insert_of_mem (Finset.mem_insert_of_mem h))
-    have aMem : a ∈ xs := List.mem_toFinset.mp (hs.symm ▸ (by simp : a ∈ insert a (insert b U)))
-    have bMem : b ∈ xs := List.mem_toFinset.mp (hs.symm ▸ (by simp : b ∈ insert a (insert b U)))
-    obtain ⟨r, step, hp⟩ := pick_two aMem bMem hab
-    have proof (p q : Sig) (j : ℕ) (hit : (p,q,r) ∈ pairs xs)
-        (hpq : xs.Perm (p :: q :: r)) (hs' : xs.toFinset = insert p (insert q U))
-        (j4 : j < 4) (heq : bin j p q = z) :
-        searchBranches T k xs (boundedSearch T k) = true := by
-      unfold searchBranches
-      obtain ⟨kept, hkeep, hnK, hK⟩ := recover_kept hpq hn hs'
-      have hnz : (z :: kept).Nodup := by
-        refine List.nodup_cons.mpr ⟨?_, hnK⟩
-        intro hm
-        exact hz (hK ▸ List.mem_toFinset.mpr hm)
-      have hsZ : (z :: kept).toFinset = insert z U := by simp [hK]
-      have hlen : (z :: kept).length ≤ k+1 := by
-        rw [← List.toFinset_card_of_nodup hnz, hsZ]
-        exact live_card tail
-      have guard := separatedOfLive tail hsZ
-      have good := ih tail (z :: kept) hnz hsZ
-      apply List.any_eq_true.mpr
-      refine ⟨(p,q,r), hit, List.any_eq_true.mpr ⟨j, List.mem_range.mpr j4, ?_⟩⟩
-      apply List.any_eq_true.mpr
-      refine ⟨kept, hkeep, ?_⟩
-      dsimp only
-      have fresh : decide (z ≠ p ∧ z ≠ q ∧ z ∉ kept) = true := by
-        apply decide_eq_true
-        refine ⟨?_, ?_, ?_⟩
-        · intro h
-          apply hf
-          change z ∈ insert a (insert b U)
-          rw [h, ← hs]
-          exact List.mem_toFinset.mpr (hpq.mem_iff.mpr (by simp : p ∈ p :: q :: r))
-        · intro h
-          apply hf
-          change z ∈ insert a (insert b U)
-          rw [h, ← hs]
-          exact List.mem_toFinset.mpr (hpq.mem_iff.mpr (by simp : q ∈ p :: q :: r))
-        · exact fun h => hz (hK ▸ List.mem_toFinset.mpr h)
-      rw [heq, fresh, guard, good]
-      simp only [Bool.true_and, Bool.and_true, decide_eq_true_eq]
-      exact hlen
-    rw [boundedSearch, Bool.or_eq_true]
-    right
-    simp only [Bool.and_eq_true, decide_eq_true_eq]
-    refine ⟨⟨len, separate⟩, ?_⟩
-    rcases step with h | h
-    · exact proof a b d h hp hs d4 rfl
-    · obtain ⟨hd', _⟩ := flip_flip hd
-      have d4' : flipOp d < 4 := by rcases hd' with h | h <;> omega
-      exact proof b a (flipOp d) h (hp.trans (List.Perm.swap _ _ _))
-        (by simpa [Finset.insert_comm] using hs) d4' (bin_flip hd a b).symm
-
-
-
-
-theorem binary_lower_projected (C : Circuit) (fit : FanInTwo C) (wires : Fin n → Sig)
-    (wirePlain : (roots wires).all plainWord = true) (T : Sig)
-    (pT : proper T) (t0 : bit 0 T = false)
-    (computes : ∀ r : Row, C.eval (List.ofFn (sampled wires r)) = bit r T)
-    (positions : Fin n → Row × Row)
-    (changes : ∀ i : Fin n, bit (positions i).1 T ≠ bit (positions i).2 T)
-    (isolated : ∀ i j : Fin n, wires j ≠ wires i →
-      bit (positions i).1 (wires j) = bit (positions i).2 (wires j))
-    (minor : List Sig) (minorT : Sig) (removed cap : ℕ)
-    (hproj : crop T = minorT) (hgoal : minorT ≠ 0)
-    (hcount : Projection.zeros crop (roots wires).toFinset = removed)
-    (htarget : ∀ i : Fin n, crop (wires i) = 0 ∨ crop (wires i) ∈ minor)
-    (hdist : minor.Nodup)
-    (noSmall : ∀ j : Fin cap, (minor.sublists.all (fun xs =>
-      !(boundedSearch minorT j.val xs))) = true) :
-    removed + cap ≤ C.gates.countP (fun g => !isNot g) := by
-  have goalEq : (execute C.gates (roots wires)).getD C.output zero = T := by
-    apply bit_ext
-    intro r
-    rw [← b_read, execute_bits _ _ _ (fun g hg => (fit g hg).1), ← sampledInput]
-    exact computes r
-  have out := get_rep (u := true) (execute C.gates (roots wires)) C.output
-  rw [goalEq] at out
-  unfold Repr at out
-  rw [nrm_id t0] at out
-  obtain ⟨k, S, hk, run, sub⟩ := extract (u := true) C.gates (roots wires) fit (by simp) pT
-    (out.resolve_right (fun h => h pT))
-  rw [normalize_plain wirePlain] at sub
-  have incl : (roots wires).toFinset ⊆ S := by
-    intro a ha
-    have mem := List.mem_toFinset.mp ha
-    rw [roots] at mem
-    obtain ⟨i, rfl⟩ := List.mem_ofFn.mp mem
-    apply raw_required run (roots wires) _ sub (positions i).1 (positions i).2 (changes i)
-    intro v hv hne
-    rw [roots] at hv
-    obtain ⟨j, rfl⟩ := List.mem_ofFn.mp hv
-    exact isolated i j hne
-  have equal : (roots wires).toFinset = S :=
-    Finset.Subset.antisymm incl (fun a ha => List.mem_toFinset.mpr (sub a ha))
-  have nonzero : crop T ≠ 0 := by rw [hproj]; exact hgoal
-  obtain ⟨j, hj, hb⟩ := Projection.projection (ops' := signedOps) crop nonzero
-    (Projection.project_step crop signedOps signedOps crop_zero crop_cases) (anySigned run)
-  rw [← equal, hcount] at hj
-  rw [hproj] at hb
-  by_contra! lower
-  have small : j < cap := by omega
-  obtain ⟨S', hs', run'⟩ := compress hb
-  have subset : S' ⊆ minor.toFinset := by
-    intro a ha
-    obtain ⟨hnz, himg⟩ := Finset.mem_erase.mp (hs' ha)
-    obtain ⟨w, hw, rfl⟩ := Finset.mem_image.mp himg
-    have h := sub w hw
-    rw [roots] at h
-    obtain ⟨i, rfl⟩ := List.mem_ofFn.mp h
-    exact List.mem_toFinset.mpr ((htarget i).resolve_left hnz)
-  let xs := minor.filter (fun w => decide (w ∈ S'))
-  have xsSet : xs.toFinset = S' := by
-    ext v
-    simp only [xs, List.mem_toFinset, List.mem_filter, decide_eq_true_eq]
-    exact ⟨And.right, fun h => ⟨List.mem_toFinset.mp (subset h), h⟩⟩
-  have exhausted := List.all_eq_true.mp (noSmall ⟨j, small⟩) xs
-    (List.mem_sublists.mpr List.filter_sublist)
-  have passed := boundedComplete minorT run' xs (hdist.filter _) xsSet
-  simp [passed] at exhausted
-
-theorem no_inversion_projected {f : (Fin n → Bool) → Bool} (wires : Fin n → Sig)
-    (wirePlain : (roots wires).all plainWord = true) (T : Sig)
-    (pT : proper T) (t0 : bit 0 T = false)
-    (table : ∀ r : Row, f (sampled wires r) = bit r T)
-    (positions : Fin n → Row × Row)
-    (changes : ∀ i : Fin n, bit (positions i).1 T ≠ bit (positions i).2 T)
-    (isolated : ∀ i j : Fin n, wires j ≠ wires i →
-      bit (positions i).1 (wires j) = bit (positions i).2 (wires j))
-    (minor : List Sig) (minorT : Sig) (removed cap : ℕ)
-    (hproj : crop T = minorT) (hgoal : minorT ≠ 0)
-    (hcount : Projection.zeros crop (roots wires).toFinset = removed)
-    (htarget : ∀ i : Fin n, crop (wires i) = 0 ∨ crop (wires i) ∈ minor)
-    (hdist : minor.Nodup)
-    (noSmall : ∀ j : Fin cap, (minor.sublists.all (fun xs =>
-      !(boundedSearch minorT j.val xs))) = true)
-    (W : Circuit) (mono : Monotone2 W) (small : W.size ≤ removed + cap + 1)
-    (correct : ∀ x : Fin n → Bool, W.eval (List.ofFn x) = f x) :
-    ∀ s : ℕ, HasCircuitSize n f s →
-      ∃ C : Circuit, Monotone2 C ∧ C.size ≤ s ∧ ∀ x : Fin n → Bool, C.eval (List.ofFn x) = f x := by
-  intro s h
-  obtain ⟨C, fit, budget, eval⟩ := h
-  by_cases hn : ∃ g ∈ C.gates, g.op = GateOp.not
-  · have lower := binary_lower_projected C fit wires wirePlain T pT t0
-      (fun r => (eval (sampled wires r)).trans (table r)) positions changes isolated
-      minor minorT removed cap hproj hgoal hcount htarget hdist noSmall
-    obtain ⟨g, hg, hop⟩ := hn
-    have extra : C.gates.countP (fun t => !isNot t) < C.gates.length := by
-      by_contra! h
-      have hall := List.countP_eq_length.mp (Nat.le_antisymm List.countP_le_length h) g hg
-      simp [isNot, hop] at hall
-    change C.gates.length ≤ s at budget
-    exact ⟨W, mono, by omega, correct⟩
-  · refine ⟨C, ?_, budget, eval⟩
+theorem gate_elim_one (n : ℕ) (f : (Fin (n + 1) → Bool) → Bool) (b : Bool) (s : ℕ)
+    (hdep : ∃ x : Fin (n + 1) → Bool, f (Function.update x (Fin.last n) (!x (Fin.last n))) ≠ f x)
+    (hnc : ∃ y y' : Fin n → Bool, f (Fin.snoc y b) ≠ f (Fin.snoc y' b))
+    (h : HasCircuitSize (n + 1) f s) :
+    ∃ s', s' + 1 ≤ s ∧ HasCircuitSize n (fun y : Fin n → Bool => f (Fin.snoc y b)) s' := by
+  obtain ⟨C, ok, hsz, hev⟩ := h
+  have hsz' : C.gates.length ≤ s := hsz
+  set gs := C.gates.map normGate with hgs
+  have hnok : ∀ g ∈ gs, NOk g := by
     intro g hg
-    obtain ⟨ops, width⟩ := fit g hg
-    have hnot : g.op ≠ GateOp.not := fun p => hn ⟨g, hg, p⟩
-    simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at ops
-    refine ⟨?_, width⟩
-    rcases ops with ha | ho | nt
-    · simp [ha]
-    · simp [ho]
-    · exact False.elim (hnot nt)
+    obtain ⟨g0, hg0, rfl⟩ := List.mem_map.1 hg
+    exact normGate_nok g0 (ok g0 hg0)
+  have hevg : ∀ x : Fin (n + 1) → Bool, (wiresFrom gs (List.ofFn x)).getD C.output false = f x := by
+    intro x
+    rw [hgs, wiresFrom_norm, ← hev x]; rfl
+  set acc := elim n gs (initStats n b, []) with hacc
+  have hinv : ∀ y : Fin n → Bool,
+      Inv n (List.ofFn y) (wiresFrom gs (List.ofFn (Fin.snoc y b : Fin (n + 1) → Bool))) acc := by
+    intro y
+    rw [ofFn_snoc]
+    exact inv_elim n _ (by simp) gs _ _ (fun g hg => (hnok g hg).1) (inv_init n b y)
+  have hval : ∀ y : Fin n → Bool,
+      statVal (wiresFrom acc.2 (List.ofFn y)) (acc.1.getD C.output (Sum.inl false))
+        = f (Fin.snoc y b) := by
+    intro y
+    rw [((hinv y).2 C.output).2, hevg]
+  cases hst : acc.1.getD C.output (Sum.inl false) with
+  | inl c =>
+    exfalso
+    obtain ⟨y, y', hne⟩ := hnc
+    apply hne
+    rw [← hval y, ← hval y', hst]; rfl
+  | inr j =>
+    have hlen : acc.2.length + 1 ≤ s := by
+      by_cases hread : ∃ g ∈ gs, n ∈ g.inputs
+      · have := elim_len_lt n n gs (initStats n b, []) hnok (by simp [initStats])
+          ⟨b, getD_snoc_len _ _ _ _ (by simp)⟩ hread
+        rw [← hacc] at this
+        have hl : gs.length = C.gates.length := by simp [hgs]
+        simp only [List.length_nil, zero_add] at this
+        omega
+      · exfalso
+        push Not at hread
+        have hout : C.output ≠ n := by
+          intro e
+          rw [e, hacc, elim_getD n n _ gs _ (by simp [initStats])] at hst
+          have hb : (initStats n b).getD n (Sum.inl false) = Sum.inl b :=
+            getD_snoc_len _ _ _ _ (by simp)
+          rw [show ((initStats n b, ([] : List Gate))).1 = initStats n b from rfl, hb] at hst
+          cases hst
+        obtain ⟨x, hx⟩ := hdep
+        apply hx
+        have hns := supp_noread n gs (inputSupps (n + 1)) hread (inputSupps_noread n) C.output hout
+        have hag := (agree_wiresFrom (Function.update x (Fin.last n) (!x (Fin.last n))) x gs _ _ _
+          (agree_inputs _ _)).2.2 C.output (by
+            intro k hk
+            have : k ≠ Fin.last n := fun e => hns (e ▸ hk)
+            simp [Function.update_of_ne this])
+        rw [← hevg, ← hevg]
+        exact hag
+    refine ⟨acc.2.length, hlen, ⟨acc.2, j⟩, elim_ok n gs _ (by simp), le_refl _, ?_⟩
+    intro y
+    have := hval y
+    rw [hst] at this
+    exact this
 
+def wmap (n m : ℕ) (π : Fin n → Fin m) (w : ℕ) : ℕ :=
+  if h : w < n then (π ⟨w, h⟩ : ℕ) else w - n + m
 
-def target : Sig := 0xaffffffffffffffff0000000000000000
-def edgeFn (x : Fin 6 → Bool) : Bool := Nat.testBit (4277071594 * 2 ^ 32 + 4241280200) (∑ i : Fin 6, if x i then 2 ^ (i : ℕ) else 0)
-def positions : Fin 6 → Row × Row := ![(128, 129), (4, 68), (1, 65), (2, 66), (3, 67), (130, 131)]
-def wires : Fin 6 → Sig := ![0xe00000000000000000000000000000000, 0x3fffbffdfbf77eb7f0000000001f0000e, 0xd65db4ebd5bab6d303f01f80fe0006d0, 0x9b6ed972e7dcfce4fc001fff000018e0, 0xe38f1e7cf9ef3f88ffffe00000001f00, 0x800000000000000000000000000000000]
-def minorInputs : List Sig := [0xfffbffdfbf77eb7f0000000001f0000e, 0xd65db4ebd5bab6d303f01f80fe0006d0, 0x9b6ed972e7dcfce4fc001fff000018e0, 0xe38f1e7cf9ef3f88ffffe00000001f00]
-def minorTarget : Sig := 0xffffffffffffffff0000000000000000
-def shortCircuit : Circuit :=
-  ⟨[⟨.and, [2, 3]⟩, ⟨.and, [4, 6]⟩, ⟨.or, [1, 7]⟩, ⟨.or, [3, 4]⟩, ⟨.or, [2, 9]⟩, ⟨.and, [8, 10]⟩, ⟨.or, [5, 8]⟩, ⟨.and, [0, 12]⟩, ⟨.or, [11, 13]⟩], 14⟩
+def relGate (n m : ℕ) (π : Fin n → Fin m) (g : Gate) : Gate :=
+  ⟨g.op, g.inputs.map (wmap n m π)⟩
 
-set_option maxRecDepth 16000 in
-set_option maxHeartbeats 28000000 in
-theorem exactTable : ∀ r : Row, edgeFn (sampled wires r) = bit r target := by
-  decide +kernel
+def relabel (n m : ℕ) (π : Fin n → Fin m) (C : Circuit) : Circuit :=
+  ⟨C.gates.map (relGate n m π), wmap n m π C.output⟩
 
-set_option maxRecDepth 16000 in
-set_option maxHeartbeats 30000000 in
-theorem exhausted : ∀ j : Fin 6, minorInputs.sublists.all
-    (fun xs => !(boundedSearch minorTarget j.val xs)) = true := by
-  decide +kernel
+def step (w : List Bool) (g : Gate) : List Bool :=
+  w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
 
-set_option maxRecDepth 16000 in
-set_option maxHeartbeats 24000000 in
-theorem circuitCorrect : ∀ x : Fin 6 → Bool, shortCircuit.eval (List.ofFn x) = edgeFn x := by
+def Rel (n m : ℕ) (π : Fin n → Fin m) (W W' : List Bool) : Prop :=
+  n ≤ W.length ∧ W'.length + n = W.length + m ∧
+    ∀ w : ℕ, W'.getD (wmap n m π w) false = W.getD w false
+
+theorem rel_step (n m : ℕ) (π : Fin n → Fin m) (W W' : List Bool) (g : Gate)
+    (h : Rel n m π W W') : Rel n m π (step W g) (step W' (relGate n m π g)) := by
+  obtain ⟨h1, h2, h3⟩ := h
+  have hv : (relGate n m π g).op.eval
+      ((relGate n m π g).inputs.map fun i => W'.getD i false)
+      = g.op.eval (g.inputs.map fun i => W.getD i false) := by
+    simp only [relGate, List.map_map]
+    congr 1
+    apply List.map_congr_left
+    intro a _
+    exact h3 a
+  refine ⟨by simp [step]; omega, by simp [step]; omega, ?_⟩
+  intro w
+  simp only [step, hv]
+  rcases Nat.lt_trichotomy w W.length with hw | hw | hw
+  · have hlt : wmap n m π w < W'.length := by
+      unfold wmap
+      split
+      · have := (π ⟨w, by assumption⟩).2; omega
+      · omega
+    rw [List.getD_append _ _ _ _ hlt, List.getD_append _ _ _ _ hw]
+    exact h3 w
+  · have he : wmap n m π w = W'.length := by
+      unfold wmap
+      split
+      · omega
+      · omega
+    rw [he, hw, getD_snoc_eq, getD_snoc_eq]
+  · have hge : W'.length + 1 ≤ wmap n m π w := by
+      unfold wmap
+      split
+      · omega
+      · omega
+    rw [List.getD_eq_default _ _ (by simp; omega), List.getD_eq_default _ _ (by simp; omega)]
+
+theorem rel_fold (n m : ℕ) (π : Fin n → Fin m) (gs : List Gate) :
+    ∀ W W' : List Bool, Rel n m π W W' →
+      Rel n m π (gs.foldl step W) ((gs.map (relGate n m π)).foldl step W') := by
+  induction gs with
+  | nil => intro W W' h; exact h
+  | cons g gs ih =>
+    intro W W' h
+    exact ih _ _ (rel_step n m π W W' g h)
+
+theorem rel_init (n m : ℕ) (π : Fin n → Fin m) (x : Fin m → Bool) :
+    Rel n m π (List.ofFn (x ∘ π)) (List.ofFn x) := by
+  refine ⟨by simp, by simp; omega, ?_⟩
+  intro w
+  unfold wmap
+  split
+  · rename_i hw
+    rw [List.getD_eq_getElem _ _ (by simp), List.getD_eq_getElem _ _ (by simpa using hw)]
+    simp
+  · rename_i hw
+    rw [List.getD_eq_default _ _ (by simp), List.getD_eq_default _ _ (by simp; omega)]
+
+theorem relabel_size {n m : ℕ} (π : Fin n → Fin m) (h : (Fin n → Bool) → Bool) (s : ℕ)
+    (hc : HasCircuitSize n h s) : HasCircuitSize m (fun x => h (x ∘ π)) s := by
+  obtain ⟨C, ok, hsz, hev⟩ := hc
+  refine ⟨relabel n m π C, ?_, ?_, ?_⟩
+  · intro g hg
+    obtain ⟨g0, hg0, rfl⟩ := List.mem_map.1 hg
+    exact ⟨(ok g0 hg0).1, by simpa [relGate] using (ok g0 hg0).2⟩
+  · simpa [relabel, Circuit.size] using hsz
+  · intro x
+    show _ = h (x ∘ π)
+    rw [← hev (x ∘ π)]
+    have := (rel_fold n m π C.gates _ _ (rel_init n m π x)).2.2 C.output
+    exact this
+
+end Restrict
+
+def idx6 (x : Fin 6 → Bool) : ℕ :=
+  (if x 0 then 2 ^ 0 else 0) + (if x 1 then 2 ^ 1 else 0) + (if x 2 then 2 ^ 2 else 0) +
+    (if x 3 then 2 ^ 3 else 0) + (if x 4 then 2 ^ 4 else 0) + (if x 5 then 2 ^ 5 else 0)
+
+theorem sum_eq (x : Fin 6 → Bool) : (∑ i : Fin 6, if x i then 2 ^ (i : ℕ) else 0) = idx6 x := by
+  rw [Fin.sum_univ_six]; rfl
+
+def target (x : Fin 6 → Bool) : Bool := Nat.testBit (4277071594 * 2 ^ 32 + 4241280200) (idx6 x)
+
+theorem required (s : ℕ) (h : HasCircuitSize 6 target s) : 9 ≤ s :=
+  lb_cert target L_ M_ Y_ XS_ PD_ PM_ G_ T_cert 8 9 rfl (by decide +kernel) (by decide +kernel) (by decide +kernel) ⟨fun _ => false, fun _ => true, by decide +kernel⟩ (by decide +kernel) (by decide +kernel) hT_cert (by decide +kernel) s h
+
+def witness : Circuit := ⟨[⟨.or, [0, 2]⟩, ⟨.and, [3, 4]⟩, ⟨.and, [5, 0]⟩, ⟨.or, [1, 8]⟩, ⟨.and, [2, 7]⟩, ⟨.or, [6, 3]⟩, ⟨.or, [4, 11]⟩, ⟨.or, [9, 10]⟩, ⟨.and, [12, 13]⟩], 14⟩
+
+set_option maxRecDepth 100000 in
+theorem witnessCorrect : ∀ x : Fin 6 → Bool, witness.eval (List.ofFn x) = target x := by
   decide +kernel
 
 end PEqualNP.Outside.L_meta_16807
 
-open PEqualNP.Outside.L_meta_16807 PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity in
+open PEqualNP.Outside.L_meta_16807 PEqualNP.MetaComplexity in
 theorem PEqualNP.Outside.L_meta_16807 : ∀ s : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 6 (fun x : Fin 6 → Bool => Nat.testBit (4277071594 * 2 ^ 32 + 4241280200) (∑ i : Fin 6, if x i then 2 ^ (i : ℕ) else 0)) s → ∃ C : PEqualNP.CircuitLowerBounds.Circuit, PEqualNP.MetaComplexity.Monotone2 C ∧ C.size ≤ s ∧ ∀ x : Fin 6 → Bool, C.eval (List.ofFn x) = Nat.testBit (4277071594 * 2 ^ 32 + 4241280200) (∑ i : Fin 6, if x i then 2 ^ (i : ℕ) else 0) := by
-  exact no_inversion_projected wires (by decide +kernel) target
-    (by unfold proper; decide +kernel) (by decide +kernel)
-    exactTable positions (by decide +kernel) (by decide +kernel)
-    minorInputs minorTarget 2 6 (by decide +kernel) (by decide +kernel)
-    (by decide +kernel) (by decide +kernel) (by decide +kernel) exhausted shortCircuit
-    (by simp [shortCircuit, Monotone2]) (by decide +kernel) circuitCorrect
+  intro s h
+  have h' : HasCircuitSize 6 target s := by
+    obtain ⟨C, ok, sz, ev⟩ := h
+    refine ⟨C, ok, sz, fun x => (ev x).trans ?_⟩
+    show Nat.testBit (4277071594 * 2 ^ 32 + 4241280200) (∑ i : Fin 6, if x i then 2 ^ (i : ℕ) else 0) = target x
+    rw [sum_eq]; rfl
+  have big := required s h'
+  refine ⟨witness, by simp [Monotone2, witness], ?_, fun x => ?_⟩
+  · have : witness.size = 9 := rfl
+    omega
+  · show witness.eval (List.ofFn x) = Nat.testBit (4277071594 * 2 ^ 32 + 4241280200) (∑ i : Fin 6, if x i then 2 ^ (i : ℕ) else 0)
+    rw [witnessCorrect x, sum_eq]; rfl
