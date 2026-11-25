@@ -4,7 +4,8 @@ import PEqualNP.Defs
 -- The search engine is adapted from PEqualNP.Outside.L_meta_1673 by Trey Kind (pull request 6929, Apache License 2.0).
 -- This file declares its own data types (records for the search state and inductive predicates).
 
-namespace PEqualNP.Outside.L_meta_10678.Certificate
+namespace PEqualNP.Outside.L_meta_10678
+namespace Certificate
 variable {R : ℕ → ℕ}
 def op (d : Bool) (a b : ℕ) : ℕ := bif d then a ||| b else a &&& b
 lemma op_comm (d : Bool) (a b : ℕ) : op d a b = op d b a := by
@@ -7278,12 +7279,7 @@ theorem final : ∀ t : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 8 (fun x : F
   by_contra hlt
   have hlt' : t < 15 := by omega
   exact iroot D.size (by omega) (bridge D hD hf)
-end PEqualNP.Outside.L_meta_10678.Certificate
-
-theorem PEqualNP.Outside.L_meta_10678.Certificate.bound : ∀ t : ℕ, PEqualNP.MetaComplexity.HasCircuitSize 8 (fun x : Fin 8 → Bool => (x 0 && x 1) || (x 0 && x 2) || (x 0 && x 3) || (x 1 && x 2) || (x 1 && x 4) || (x 2 && x 5) || (x 3 && x 6) || (x 3 && x 7) || (x 4 && x 6) || (x 5 && x 7) || (x 6 && x 7)) t → 15 ≤ t :=
-  PEqualNP.Outside.L_meta_10678.Certificate.final
-
-namespace PEqualNP.Outside.L_meta_10678
+end Certificate
 
 -- Wire relabeling follows the argument in L_meta_927 by sanchan.
 namespace Renaming
@@ -7388,4 +7384,4 @@ theorem PEqualNP.Outside.L_meta_10678 : ∀ t : ℕ, PEqualNP.MetaComplexity.Has
     change ( (x 0 && x 1) || (x 0 && x 3) || (x 6 && x 3) || (x 6 && x 4) || (x 1 && x 4) || (x 0 && x 2) || (x 1 && x 2) || (x 5 && x 2) || (x 6 && x 7) || (x 5 && x 7) || (x 3 && x 7)) = _
     simp only [Bool.and_comm, Bool.or_assoc, Bool.or_left_comm, Bool.or_comm]
   rw [eqn] at hw
-  exact PEqualNP.Outside.L_meta_10678.Certificate.bound t hw
+  exact PEqualNP.Outside.L_meta_10678.Certificate.final t hw
