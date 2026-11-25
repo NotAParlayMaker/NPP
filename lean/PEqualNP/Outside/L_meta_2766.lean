@@ -1,7133 +1,5019 @@
-import Mathlib.Data.Finset.Card
-import Mathlib.Data.Finset.Image
-import Mathlib.Data.Set.Image
+import Mathlib.Data.Tree.Basic
 import Mathlib.Data.Nat.Bitwise
-import Mathlib.Data.List.Sublists
-import Mathlib.Tactic.IntervalCases
+import Mathlib.Tactic.DefEqTransformations
+import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Tauto
-import Mathlib.Algebra.BigOperators.Intervals
 import PEqualNP.Defs
 
-
--- The finite search specializes the Petersen graph search by Trey Kind in L_meta_1673.
--- Each checkpoint records the remaining signals and their budgets on restricted inputs.
+-- The 24-test exclusion uses the certificate proved by Leg0shii in L-meta-4284.
+-- The bit projection uses the circuit semantics proved by wlo2 in L-meta-3418.
 namespace PEqualNP.Outside.L_meta_2766
 
-def op (d : Bool) (a b : ℕ) : ℕ := bif d then a ||| b else a &&& b
-lemma op_comm (d : Bool) (a b : ℕ) : op d a b = op d b a := by
-  cases d <;> simp [op, Nat.and_comm, Nat.or_comm]
-lemma op_bit (d : Bool) (a b i : ℕ) : (op d a b).testBit i =
-    bif d then a.testBit i || b.testBit i else a.testBit i && b.testBit i := by
-  cases d <;> simp [op]
-lemma op_self (d : Bool) (a : ℕ) : op d a a = a := by cases d <;> simp [op]
+def domN (w d : ℕ) : Bool :=
+  Nat.beq (Nat.land (Nat.land w 4095) (Nat.sub 16777215 d)) 0 &&
+  Nat.beq (Nat.land (Nat.land d (Nat.sub 16777215 w)) 16773120) 0
 
-inductive Sol (m T : ℕ) : ℕ → Set ℕ → Prop
-  | done {q : ℕ} {S : Set ℕ} : T ∈ S → Sol m T q S
-  | un {q : ℕ} {S : Set ℕ} {a : ℕ} : False → Sol m T q (insert (a ^^^ m) S) → Sol m T (q + 1) S
-  | bi {q : ℕ} {S : Set ℕ} {d : Bool} {a b : ℕ} : a ∈ S → b ∈ S →
-      Sol m T q (insert (op d a b) S) → Sol m T (q + 1) S
-lemma Sol.mono {m T q : ℕ} {S : Set ℕ} (h : Sol m T q S) :
-    ∀ {q' : ℕ} {S' : Set ℕ}, q ≤ q' → S ⊆ S' → Sol m T q' S' := by
-  induction h with
-  | done h => intro q' S' _ hs; exact .done (hs h)
-  | un bad => exact False.elim bad
-  | bi h1 h2 _ ih =>
-    intro q' S' hq hs
-    obtain ⟨r, rfl⟩ : ∃ r, q' = r + 1 := ⟨q' - 1, by omega⟩
-    exact .bi (hs h1) (hs h2) (ih (by omega) (Set.insert_subset_insert hs))
+def blk (m : Bool) (w d : ℕ) : Bool := cond m (domN w d) (Nat.beq w d)
 
-inductive Live (m T : ℕ) : ℕ → ℕ → Finset ℕ → Prop
-  | stop : Live m T 0 0 {T}
-  | un {k t : ℕ} {a : ℕ} {U : Finset ℕ} : False → Live m T k t (insert (a ^^^ m) U) →
-      Live m T (k + 1) (t + 1) (insert a U)
-  | bi {k t : ℕ} {d : Bool} {a b : ℕ} {U : Finset ℕ} : a ≠ b → Live m T k t (insert (op d a b) U) →
-      Live m T (k + 1) t (insert a (insert b U))
-lemma Live.sol {m T k t : ℕ} {S : Finset ℕ} (h : Live m T k t S) : Sol m T k (S : Set ℕ) := by
-  induction h with
-  | stop => exact .done (by simp)
-  | un bad => exact False.elim bad
-  | @bi k t d a b U _ _ ih =>
-    refine .bi (d := d) (a := a) (b := b) (by simp) (by simp) (ih.mono le_rfl ?_)
-    intro x hx; simp at hx ⊢; tauto
-lemma Sol.live {m T q : ℕ} {S : Set ℕ} (h : Sol m T q S) :
-    ∃ k ≤ q, ∃ t, ∃ S0 : Finset ℕ, (S0 : Set ℕ) ⊆ S ∧ Live m T k t S0 := by
-  induction h with
-  | @done q S h => exact ⟨0, by omega, 0, {T}, by simpa using h, .stop⟩
-  | un bad => exact False.elim bad
-  | @bi q S d a b ha hb _ ih =>
-    obtain ⟨k, hk, t, S1, hs, hl⟩ := ih
-    by_cases hg : op d a b ∈ S1
-    · by_cases hab : a = b
-      · subst hab; rw [op_self] at hs
-        exact ⟨k, by omega, t, S1, fun x hx => (hs hx).elim (fun e => e ▸ ha) id, hl⟩
-      refine ⟨k + 1, by omega, t, insert a (insert b (S1.erase (op d a b))), ?_, .bi hab (by rwa [Finset.insert_erase hg])⟩
-      intro x hx
-      simp at hx
-      rcases hx with rfl | rfl | ⟨h1, h2⟩
-      · exact ha
-      · exact hb
-      · exact (hs h1).resolve_left h2
-    · exact ⟨k, by omega, t, S1, fun x hx => (hs hx).resolve_left (fun e => hg (e ▸ hx)), hl⟩
+def base10 : List ℕ :=
+  [113184, 430348, 902208, 3227782, 5521457, 5689661, 8532035, 11083800, 13501056, 15731968]
 
-def C (m : ℕ) (S : Set ℕ) : Set ℕ := S ∪ {0, m}
-lemma C_mono {m : ℕ} {S S' : Set ℕ} (h : S ⊆ S') : C m S ⊆ C m S' := Set.union_subset_union_left _ h
-lemma sub_C (m : ℕ) (S : Set ℕ) : S ⊆ C m S := Set.subset_union_left
+def base12 : List ℕ := 0 :: 16777215 :: base10
 
-def Un (_m _a : ℕ) (_S _S' : Finset ℕ) : Prop := False
-def Bi (d : Bool) (a b : ℕ) (S S' : Finset ℕ) : Prop :=
-  a ≠ b ∧ ∃ U, S = insert a (insert b U) ∧ S' = insert (op d a b) U
-lemma Un.live {m T a k t : ℕ} {S S' : Finset ℕ} (h : Un m a S S') (hl : Live m T k t S') :
-    Live m T (k + 1) (t + 1) S := False.elim h
-lemma Bi.live {m T a b k t : ℕ} {d : Bool} {S S' : Finset ℕ} (h : Bi d a b S S') (hl : Live m T k t S') :
-    Live m T (k + 1) t S := by obtain ⟨hab, U, rfl, rfl⟩ := h; exact .bi hab hl
-lemma Bi.symm {a b : ℕ} {d : Bool} {S S' : Finset ℕ} (h : Bi d a b S S') : Bi d b a S S' := by
-  obtain ⟨hab, U, rfl, rfl⟩ := h
-  exact ⟨hab.symm, U, Finset.insert_comm _ _ _, by rw [op_comm]⟩
-lemma Un.sub {m a : ℕ} {S S' : Finset ℕ} (h : Un m a S S') : a ∈ S ∧ S' ⊆ insert (a ^^^ m) S := False.elim h
-lemma Bi.sub {a b : ℕ} {d : Bool} {S S' : Finset ℕ} (h : Bi d a b S S') :
-    a ∈ S ∧ b ∈ S ∧ S' ⊆ insert (op d a b) S := by
-  obtain ⟨_, U, rfl, rfl⟩ := h
-  refine ⟨by simp, by simp, Finset.insert_subset_insert _ ?_⟩
-  intro x hx; simp [hx]
-
-def Min (m T k t : ℕ) (S : Finset ℕ) : Prop := Live m T k t S ∧ ∀ q < k, ¬ Sol m T q (C m S)
-lemma Un.sol {m T a q : ℕ} {S S' : Finset ℕ} (h : Un m a S S') (hs : Sol m T q (C m S')) :
-    Sol m T (q + 1) (C m S) := False.elim h
-lemma Bi.sol {m T a b q : ℕ} {d : Bool} {S S' : Finset ℕ} (h : Bi d a b S S') (hs : Sol m T q (C m S')) :
-    Sol m T (q + 1) (C m S) := by
-  obtain ⟨ha, hb, hsub⟩ := h.sub
-  refine .bi (d := d) (a := a) (b := b) (sub_C _ _ (by simpa using ha)) (sub_C _ _ (by simpa using hb)) (hs.mono le_rfl ?_)
-  intro x hx
-  rcases hx with hx | hx
-  · have := hsub hx; simp at this
-    rcases this with rfl | h'
-    · exact Or.inl rfl
-    · exact Or.inr (Or.inl h')
-  · exact Or.inr (Or.inr hx)
-lemma Un.min {m T a k t : ℕ} {S S' : Finset ℕ} (h : Un m a S S') (hl : Live m T k t S')
-    (hm : ∀ q < k + 1, ¬ Sol m T q (C m S)) : Min m T k t S' := False.elim h
-lemma Bi.min {m T a b k t : ℕ} {d : Bool} {S S' : Finset ℕ} (h : Bi d a b S S') (hl : Live m T k t S')
-    (hm : ∀ q < k + 1, ¬ Sol m T q (C m S)) : Min m T k t S' :=
-  ⟨hl, fun q hq hs => hm (q + 1) (by omega) (h.sol hs)⟩
-lemma Un.fresh {m T a k t : ℕ} {S S' : Finset ℕ} (h : Un m a S S') (hl : Live m T k t S')
-    (hm : ∀ q < k + 1, ¬ Sol m T q (C m S)) : a ^^^ m ∉ C m S := False.elim h
-lemma Bi.fresh {m T a b k t : ℕ} {d : Bool} {S S' : Finset ℕ} (h : Bi d a b S S') (hl : Live m T k t S')
-    (hm : ∀ q < k + 1, ¬ Sol m T q (C m S)) : op d a b ∉ C m S := by
-  intro hg
-  apply hm k (by omega)
-  refine hl.sol.mono le_rfl fun x hx => ?_
-  have := h.sub.2.2 hx; simp at this
-  rcases this with rfl | h'
-  · exact hg
-  · exact Or.inl h'
-
-lemma Min.size {m T : ℕ} : ∀ {k t : ℕ} {S : Finset ℕ}, Min m T k t S → S.card + t ≤ k + 1 ∧ t ≤ k := by
-  intro k t S ⟨hl, hm⟩
-  induction hl with
-  | stop => simp
-  | un bad => exact False.elim bad
-  | @bi k t d a b U hab hl ih =>
-    have hu : Bi d a b (insert a (insert b U)) (insert (op d a b) U) := ⟨hab, U, rfl, rfl⟩
-    have ih := ih (hu.min hl hm).2
-    have hf : op d a b ∉ U := fun h => hu.fresh hl hm (sub_C _ _ (by simp [h]))
-    have h1 := Finset.card_insert_le a (insert b U)
-    have h2 := Finset.card_insert_le b U
-    rw [Finset.card_insert_of_notMem hf] at ih; omega
-
-def phi (a n : ℕ) (X : Finset ℕ) : Finset ℕ := insert a (X.erase n)
-lemma phi_bi {a n b c : ℕ} {d : Bool} {X X' : Finset ℕ} (h : Bi d b c X X') (h1 : b ≠ n) (h2 : c ≠ n)
-    (h3 : op d b c ≠ n) : Bi d b c (phi a n X) (phi a n X') := by
-  obtain ⟨hab, U, rfl, rfl⟩ := h
-  refine ⟨hab, insert a (U.erase n), ?_, ?_⟩ <;> ext x <;> simp [phi] <;> grind
-lemma bi_keep {b c n : ℕ} {d : Bool} {X X' : Finset ℕ} (h : Bi d b c X X') (hn : n ∈ X) (h1 : b ≠ n)
-    (h2 : c ≠ n) : n ∈ X' := by
-  obtain ⟨_, U, rfl, rfl⟩ := h
-  simp at hn ⊢; rcases hn with h | h | h
-  · exact absurd h.symm h1
-  · exact absurd h.symm h2
-  · exact Or.inr h
-
-lemma first_move {m T : ℕ} : ∀ (k t : ℕ) (S : Finset ℕ), Min m T k t S → 2 ≤ S.card →
-    (∃ k0 d a b S1, k = k0 + 1 ∧ Bi d a b S S1 ∧ Live m T k0 t S1) ∨
-    (∃ k0 t0 a d c S1 S2, k = k0 + 2 ∧ t = t0 + 1 ∧ Un m a S S1 ∧ Bi d (a ^^^ m) c S1 S2 ∧ Live m T k0 t0 S2) ∨
-    (∃ k0 t0 a a' d S1 S2 S3, k = k0 + 3 ∧ t = t0 + 2 ∧ Un m a S S1 ∧ a' ≠ a ^^^ m ∧ Un m a' S1 S2 ∧
-      Bi d (a ^^^ m) (a' ^^^ m) S2 S3 ∧ Live m T k0 t0 S3) := by
-  intro k
-  induction k using Nat.strong_induction_on with
-  | _ k ih =>
-  intro t S hS hc
-  obtain ⟨hl, hm⟩ := hS
-  cases hl with
-  | stop => simp at hc
-  | @bi k t d a b U hab hl => exact Or.inl ⟨k, d, a, b, _, rfl, ⟨hab, U, rfl, rfl⟩, hl⟩
-  | un bad => exact False.elim bad
-lemma and_op (d : Bool) (a b n : ℕ) : op d a b &&& n = op d (a &&& n) (b &&& n) := by
-  apply Nat.eq_of_testBit_eq; intro i
-  cases d <;> simp [op_bit] <;> grind
-lemma and_neg {m n : ℕ} (hn : n &&& m = n) (a : ℕ) : (a ^^^ m) &&& n = (a &&& n) ^^^ n := by
-  apply Nat.eq_of_testBit_eq; intro i
-  have := congrArg (fun x => x.testBit i) hn
-  simp at this ⊢
-  grind
-abbrev Cst (n x : ℕ) : Prop := x &&& n = 0 ∨ x &&& n = n
-def Im (n : ℕ) (S : Finset ℕ) : Set ℕ := (fun x => x &&& n) '' (S : Set ℕ)
-lemma Im_mem {n x : ℕ} {S : Finset ℕ} (h : x ∈ S) : x &&& n ∈ C n (Im n S) := Or.inl ⟨x, by simpa using h, rfl⟩
-lemma Cst_mem {n x : ℕ} {S : Set ℕ} (h : Cst n x) : x &&& n ∈ C n S := by
-  rcases h with h | h <;> simp [C, h]
-lemma Cst_neg {m n a : ℕ} (hn : n &&& m = n) : Cst n (a ^^^ m) ↔ Cst n a := by
-  unfold Cst; rw [and_neg hn]
-  constructor
-  · rintro (h | h)
-    · right; have := congrArg (· ^^^ n) h; simpa using this
-    · left; have := congrArg (· ^^^ n) h; simpa using this
-  · rintro (h | h) <;> simp [h]
-lemma op_cst {n a b : ℕ} (d : Bool) (ha : Cst n a) :
-    op d a b &&& n = 0 ∨ op d a b &&& n = n ∨ op d a b &&& n = b &&& n := by
-  rw [and_op]
-  rcases ha with h | h <;> rw [h] <;> cases d
-  · left; simp [op]
-  · right; right; simp [op]
-  · right; right; apply Nat.eq_of_testBit_eq; intro i; simp [op]
-  · right; left; apply Nat.eq_of_testBit_eq; intro i; simp [op]
-lemma op_cst2 {n a b : ℕ} (d : Bool) (ha : Cst n a) (hb : Cst n b) : Cst n (op d a b) := by
-  rcases op_cst (b := b) d ha with h | h | h
-  · exact Or.inl h
-  · exact Or.inr h
-  · unfold Cst at hb ⊢; rw [h]; exact hb
-lemma op_cst_mem {n a b : ℕ} {S : Finset ℕ} (d : Bool) (h : Cst n a ∨ Cst n b) (ha : a ∈ S) (hb : b ∈ S) :
-    op d a b &&& n ∈ C n (Im n S) := by
-  rcases h with h | h
-  · rcases op_cst (b := b) d h with e | e | e <;> rw [e]
-    · simp [C]
-    · simp [C]
-    · exact Im_mem hb
-  · rw [op_comm]
-    rcases op_cst (b := a) d h with e | e | e <;> rw [e]
-    · simp [C]
-    · simp [C]
-    · exact Im_mem ha
-lemma C_Im_sub {n g : ℕ} {S S' : Finset ℕ} {Q : Set ℕ} (h : S' ⊆ insert g S) (hg : g &&& n ∈ Q)
-    (hQ : C n (Im n S) ⊆ Q) : C n (Im n S') ⊆ Q := by
-  rintro x (⟨y, hy, rfl⟩ | hx)
-  · have := h hy; simp at this
-    rcases this with rfl | h'
-    · exact hg
-    · exact hQ (Im_mem h')
-  · exact hQ (Or.inr hx)
-section proj
-variable {m T n : ℕ} (hn : n &&& m = n)
-include hn
-lemma Un.im {a q : ℕ} {S S' : Finset ℕ} (h : Un m a S S') (hs : Sol n (T &&& n) q (C n (Im n S'))) :
-    Sol n (T &&& n) (q + 1) (C n (Im n S)) := False.elim h
-omit hn in
-lemma Bi.im {a b q : ℕ} {d : Bool} {S S' : Finset ℕ} (h : Bi d a b S S') (hs : Sol n (T &&& n) q (C n (Im n S'))) :
-    Sol n (T &&& n) (q + 1) (C n (Im n S)) := by
-  obtain ⟨ha, hb, hsub⟩ := h.sub
-  refine .bi (d := d) (Im_mem ha) (Im_mem hb) (hs.mono le_rfl (C_Im_sub hsub ?_ (Set.subset_insert _ _)))
-  rw [and_op]; exact Or.inl rfl
-lemma Un.kill {a q : ℕ} {S S' : Finset ℕ} (h : Un m a S S') (hc : Cst n a) (hs : Sol n (T &&& n) q (C n (Im n S'))) :
-    Sol n (T &&& n) q (C n (Im n S)) := False.elim h
-omit hn in
-lemma Bi.kill {a b q : ℕ} {d : Bool} {S S' : Finset ℕ} (h : Bi d a b S S') (hc : Cst n a ∨ Cst n b)
-    (hs : Sol n (T &&& n) q (C n (Im n S'))) : Sol n (T &&& n) q (C n (Im n S)) :=
-  hs.mono le_rfl (C_Im_sub h.sub.2.2 (op_cst_mem d hc h.sub.1 h.sub.2.1) subset_rfl)
-lemma Min.const (hT0 : T &&& n ≠ 0) (hT1 : T &&& n ≠ n) {k t : ℕ} {S : Finset ℕ} (h : Min m T k t S) :
-    ∃ q, q + (S.filter (Cst n)).card ≤ k ∧ Sol n (T &&& n) q (C n (Im n S)) := by
-  obtain ⟨hl, hm⟩ := h
-  induction hl with
-  | stop =>
-    refine ⟨0, ?_, .done (Im_mem (by simp))⟩
-    rw [Finset.filter_eq_empty_iff.2]; · simp
-    intro x hx; simp at hx; subst hx
-    rintro (h | h); exacts [hT0 h, hT1 h]
-  | un bad => exact False.elim bad
-  | @bi k t d a b U hab hl ih =>
-    have hu : Bi d a b (insert a (insert b U)) (insert (op d a b) U) := ⟨hab, U, rfl, rfl⟩
-    obtain ⟨q, hq, hs⟩ := ih (hu.min hl hm).2
-    have hf : op d a b ∉ U := fun h => hu.fresh hl hm (sub_C _ _ (by simp [h]))
-    have h1 : (U.filter (Cst n)).card ≤ ((insert (op d a b) U).filter (Cst n)).card :=
-      Finset.card_le_card (Finset.filter_subset_filter _ (Finset.subset_insert _ _))
-    have ca := Finset.card_insert_le a (U.filter (Cst n))
-    have cb := Finset.card_insert_le b (U.filter (Cst n))
-    by_cases hca : Cst n a
-    · refine ⟨q, ?_, hu.kill (Or.inl hca) hs⟩
-      rw [Finset.filter_insert, ite_eq_left hca, Finset.filter_insert]
-      by_cases hcb : Cst n b
-      · rw [ite_eq_left hcb]
-        rw [Finset.filter_insert, ite_eq_left (op_cst2 d hca hcb), Finset.card_insert_of_notMem (by simp [hf])] at hq
-        have := Finset.card_insert_le a (insert b (U.filter (Cst n))); omega
-      · rw [ite_eq_right hcb]; omega
-    · rw [Finset.filter_insert, ite_eq_right hca, Finset.filter_insert]
-      by_cases hcb : Cst n b
-      · refine ⟨q, ?_, hu.kill (Or.inr hcb) hs⟩
-        rw [ite_eq_left hcb]; omega
-      · refine ⟨q + 1, ?_, hu.im hs⟩
-        rw [ite_eq_right hcb]; omega
-end proj
-lemma Min.proper {m T k t : ℕ} (hT : T &&& m = T) (hT0 : T ≠ 0) (hT1 : T ≠ m) {S : Finset ℕ} (hS : ∀ x ∈ S, x &&& m = x)
-    (h : Min m T k t S) : 0 ∉ S ∧ m ∉ S := by
-  obtain ⟨q, hq, hs⟩ := h.const (n := m) (by simp) (by rwa [hT]) (by rwa [hT])
-  have hi : Im m S = (S : Set ℕ) := by
-    ext x; constructor
-    · rintro ⟨y, hy, rfl⟩; have := hS y hy; simp only; rw [this]; exact hy
-    · intro hx; exact ⟨x, hx, hS x hx⟩
-  rw [hi, hT] at hs
-  have key : ∀ x ∈ S, ¬ Cst m x := by
-    intro x hx hc
-    have : 0 < (S.filter (Cst m)).card := Finset.card_pos.2 ⟨x, by simp [hx, hc]⟩
-    exact h.2 q (by omega) hs
-  exact ⟨fun h0 => key 0 h0 (Or.inl (by simp)), fun h1 => key m h1 (Or.inr (by simp))⟩
-
-def sepb (N : ℕ) (d : Bool) (w i : ℕ) : Bool :=
-  bif d then xor (w.testBit i) (w.testBit (N + i)) else w.testBit i && !w.testBit (N + i)
-def pos' (t : ℕ) : Bool := decide (0 < t)
-section cov
-variable {N m T i : ℕ} (m1 : m.testBit i = true) (m2 : m.testBit (N + i) = true)
-  (t1 : T.testBit i = true) (t2 : T.testBit (N + i) = false)
-include t1 t2 m1 m2
-lemma Live.cov {k t : ℕ} {S : Finset ℕ} (h : Live m T k t S) : ∃ w ∈ S, sepb N (pos' t) w i = true := by
-  induction h with
-  | stop => exact ⟨T, by simp, by simp [sepb, pos', t1, t2]⟩
-  | un bad => exact False.elim bad
-  | @bi k t d a b U _ _ ih =>
-    obtain ⟨w, hw, hs⟩ := ih
-    simp at hw
-    rcases hw with rfl | hw
-    · by_cases ha : sepb N (pos' t) a i = true
-      · exact ⟨a, by simp, ha⟩
-      · refine ⟨b, by simp, ?_⟩
-        revert hs ha
-        unfold sepb; simp only [op_bit]
-        cases pos' t <;> cases d <;> cases a.testBit i <;> cases a.testBit (N + i) <;> cases b.testBit i <;>
-          cases b.testBit (N + i) <;> simp
-    · exact ⟨w, by simp [hw], hs⟩
-end cov
-def Uq (N : ℕ) (e : Bool) (S : Finset ℕ) (a i : ℕ) : Prop :=
-  sepb N e a i = true ∧ ∀ c ∈ S, c ≠ a → sepb N e c i = false
-lemma sepb_weak {N w i : ℕ} (e : Bool) (h : sepb N e w i = true) : sepb N true w i = true := by
-  revert h; cases e <;> simp [sepb] <;> cases w.testBit i <;> cases w.testBit (N + i) <;> simp
-section rect
-variable {N m T : ℕ}
-def Lg (N m T i : ℕ) : Prop := m.testBit i = true ∧ m.testBit (N + i) = true ∧ T.testBit i = true ∧ T.testBit (N + i) = false
-lemma bi_uq {a b k t c i : ℕ} {d e : Bool} {U : Finset ℕ} (he : e = true ∨ e = pos' t) (hl : Live m T k t (insert (op d a b) U))
-    (ha : a ∉ U) (hb : b ∉ U) (hi : Lg N m T i)
-    (hc : c ∈ insert a (insert b U)) (h : Uq N e (insert a (insert b U)) c i) :
-    Uq N e (insert (op d a b) U) (if c = a ∨ c = b then op d a b else c) i := by
-  obtain ⟨w, hw, hs⟩ := hl.cov hi.1 hi.2.1 hi.2.2.1 hi.2.2.2
-  have hs : sepb N e w i = true := by
-    rcases he with rfl | rfl
-    · exact sepb_weak _ hs
-    · exact hs
-  by_cases hcc : c = a ∨ c = b
-  · rw [ite_eq_left hcc]
-    have hU : ∀ x ∈ U, sepb N e x i = false := by
-      intro x hx
-      refine h.2 x (by simp [hx]) ?_
-      rintro rfl
-      rcases hcc with rfl | rfl; exacts [ha hx, hb hx]
-    simp at hw
-    rcases hw with rfl | hw
-    · refine ⟨hs, fun x hx hne => ?_⟩
-      simp at hx; exact hU x (hx.resolve_left hne)
-    · rw [hU w hw] at hs; simp at hs
-  · rw [ite_eq_right hcc]
-    push Not at hcc
-    refine ⟨h.1, fun x hx hne => ?_⟩
-    simp at hx
-    rcases hx with rfl | hx
-    · have h1 := h.2 a (by simp) (Ne.symm hcc.1)
-      have h2 := h.2 b (by simp) (Ne.symm hcc.2)
-      revert h1 h2; unfold sepb; simp only [op_bit]
-      cases e <;> cases d <;> cases a.testBit i <;> cases a.testBit (N + i) <;> cases b.testBit i <;>
-          cases b.testBit (N + i) <;> simp
-    · exact h.2 x (by simp [hx]) hne
-lemma un_uq {a c i : ℕ} {U : Finset ℕ} (hi : Lg N m T i) (ha : a ∉ U)
-    (hc : c ∈ insert a U) (h : Uq N true (insert a U) c i) :
-    Uq N true (insert (a ^^^ m) U) (if c = a then a ^^^ m else c) i := by
-  have hn : sepb N true (a ^^^ m) i = sepb N true a i := by simp [sepb, hi.1, hi.2.1]
-  by_cases hcc : c = a
-  · rw [ite_eq_left hcc]; subst hcc
-    refine ⟨by rw [hn]; exact h.1, fun x hx hne => ?_⟩
-    simp at hx
-    exact h.2 x (by simp [hx.resolve_left hne]) (fun e => ha (e ▸ hx.resolve_left hne))
-  · rw [ite_eq_right hcc]
-    refine ⟨h.1, fun x hx hne => ?_⟩
-    simp at hx
-    rcases hx with rfl | hx
-    · rw [hn]; exact h.2 a (by simp) (Ne.symm hcc)
-    · exact h.2 x (by simp [hx]) hne
-lemma phi_mem {x y g c : ℕ} {U : Finset ℕ} (hc : c ∈ insert x (insert y U)) :
-    (if c = x ∨ c = y then g else c) ∈ insert g U := by
-  split_ifs with h
-  · simp
-  · simp only [Finset.mem_insert] at hc ⊢; tauto
-lemma phi_ne {x y g a b : ℕ} {U : Finset ℕ} (hg : g ∉ U) (ha : a ∈ insert x (insert y U)) (hb : b ∈ insert x (insert y U))
-    (hab : a ≠ b) (h : ¬ ((a = x ∨ a = y) ∧ (b = x ∨ b = y))) :
-    (if a = x ∨ a = y then g else a) ≠ (if b = x ∨ b = y then g else b) := by
-  simp only [Finset.mem_insert] at ha hb
-  split_ifs with p q q
-  · exact absurd ⟨p, q⟩ h
-  · rintro rfl; tauto
-  · rintro rfl; tauto
-  · exact hab
-lemma bi_tight {a b k t : ℕ} {d : Bool} {U : Finset ℕ} (hab : a ≠ b) (hl : Live m T k t (insert (op d a b) U))
-    (hm : ∀ q < k + 1, ¬ Sol m T q (C m ((insert a (insert b U) : Finset ℕ) : Set ℕ)))
-    (hc : (insert a (insert b U)).card + t = k + 2) :
-    a ∉ U ∧ b ∉ U ∧ op d a b ∉ U ∧ (insert (op d a b) U).card + t = k + 1 ∧ Min m T k t (insert (op d a b) U) := by
-  have hu : Bi d a b (insert a (insert b U)) (insert (op d a b) U) := ⟨hab, U, rfl, rfl⟩
-  have hf : op d a b ∉ U := fun h => hu.fresh hl hm (sub_C _ _ (by simp [h]))
-  have hmin := hu.min hl hm
-  have hs := hmin.size.1
-  rw [Finset.card_insert_of_notMem hf] at hs ⊢
-  have h1 := Finset.card_insert_le a (insert b U)
-  have h2 := Finset.card_insert_le b U
-  have ha : a ∉ insert b U := fun h => by rw [Finset.insert_eq_of_mem h] at hc; omega
-  have hb : b ∉ U := fun h => by rw [Finset.insert_eq_of_mem h] at hc h1; omega
-  exact ⟨fun h => ha (by simp [h]), hb, hf, by omega, hmin⟩
-lemma rect0 {k : ℕ} {S : Finset ℕ} (hl : Live m T k 0 S) (hm : ∀ q < k, ¬ Sol m T q (C m (S : Set ℕ)))
-    (hc : S.card = k + 1) {i1 i2 j1 j2 : ℕ} (h1 : Lg N m T i1) (h2 : Lg N m T i2) (h3 : Lg N m T j1) (h4 : Lg N m T j2) :
-    ∀ {a b : ℕ}, a ∈ S → b ∈ S → a ≠ b →
-    (∀ w ∈ S, w.testBit i1 = w.testBit i2) → (∀ w ∈ S, w.testBit (N + j1) = w.testBit (N + j2)) →
-    Uq N false S a i1 → Uq N false S b i2 → Uq N false S a j1 → Uq N false S b j2 → False := by
-  generalize ht : 0 = t at hl
-  induction hl with
-  | stop => intro a b ha hb hab; simp at ha hb; exact absurd (ha.trans hb.symm) hab
-  | un bad => exact False.elim bad
-  | @bi k t d x y U hxy hl ih =>
-    subst ht
-    intro a b ha hb hab r1 r2 u1 u2 u3 u4
-    obtain ⟨hx, hy, hg, hc', hmin⟩ := bi_tight hxy hl hm (by simpa using hc)
-    have tr : ∀ {c i}, Lg N m T i → c ∈ insert x (insert y U) → Uq N false (insert x (insert y U)) c i →
-        Uq N false (insert (op d x y) U) (if c = x ∨ c = y then op d x y else c) i :=
-      fun hi hc h => bi_uq (Or.inr (by simp [pos'])) hl hx hy hi hc h
-    by_cases hab' : (a = x ∨ a = y) ∧ (b = x ∨ b = y)
-    · have v1 := tr h1 ha u1; have v2 := tr h2 hb u2; have v3 := tr h3 ha u3; have v4 := tr h4 hb u4
-      rw [ite_eq_left hab'.1] at v1 v3; rw [ite_eq_left hab'.2] at v2 v4
-      have hop : op d x y = op d a b := by
-        rcases hab' with ⟨rfl | rfl, rfl | rfl⟩
-        · exact absurd rfl hab
-        · rfl
-        · exact op_comm _ _ _
-        · exact absurd rfl hab
-      rw [hop] at v1 v2 v3 v4
-      have e1 := r1 b hb; have e2 := r2 b hb
-      have n1 := u1.2 b hb (Ne.symm hab); have n3 := u3.2 b hb (Ne.symm hab)
-      have s1 := v1.1; have s3 := v3.1; have s2 := u2.1; have s4 := u4.1
-      revert e1 e2 n1 n3 s1 s3 s2 s4
-      unfold sepb; simp only [op_bit]
-      cases d <;> simp <;> grind
-    · refine ih hmin.2 (by simpa using hc') rfl ?_ ?_ ?_ ?_ ?_ (tr h1 ha u1) (tr h2 hb u2) (tr h3 ha u3) (tr h4 hb u4)
-      · exact phi_mem ha
-      · exact phi_mem hb
-      · exact phi_ne hg ha hb hab hab'
-      · intro w hw; simp at hw
-        rcases hw with rfl | hw
-        · simp only [op_bit, r1 x (by simp), r1 y (by simp)]
-        · exact r1 w (by simp [hw])
-      · intro w hw; simp at hw
-        rcases hw with rfl | hw
-        · simp only [op_bit, r2 x (by simp), r2 y (by simp)]
-        · exact r2 w (by simp [hw])
-lemma polar {k t : ℕ} {S : Finset ℕ} (hl : Live m T k t S) (hm : ∀ q < k, ¬ Sol m T q (C m (S : Set ℕ)))
-    (hc : S.card + t = k + 1) {i j : ℕ} (h1 : Lg N m T i) (h2 : Lg N m T j) :
-    ∀ {a : ℕ}, a ∈ S → Uq N true S a i → Uq N true S a j → a.testBit i = a.testBit j := by
-  induction hl with
-  | stop => intro a ha _ _; simp at ha; subst ha; rw [h1.2.2.1, h2.2.2.1]
-  | un bad => exact False.elim bad
-  | @bi k t d x y U hxy hl ih =>
-    intro a ha u1 u2
-    obtain ⟨hx, hy, hg, hc', hmin⟩ := bi_tight hxy hl hm (by omega)
-    have v1 := bi_uq (Or.inl rfl) hl hx hy h1 ha u1
-    have v2 := bi_uq (Or.inl rfl) hl hx hy h2 ha u2
-    have := ih hmin.2 hc' (phi_mem ha) v1 v2
-    split_ifs at this v1 v2 with h
-    · obtain ⟨b, hb, hab, hop⟩ : ∃ b ∈ insert x (insert y U), b ≠ a ∧ op d x y = op d a b := by
-        rcases h with rfl | rfl
-        · exact ⟨y, by simp, Ne.symm hxy, rfl⟩
-        · exact ⟨x, by simp, hxy, op_comm _ _ _⟩
-      rw [hop] at this v1 v2
-      have n1 := u1.2 b hb hab; have n2 := u2.2 b hb hab
-      have s1 := v1.1; have s2 := v2.1; have p1 := u1.1; have p2 := u2.1
-      revert this n1 n2 s1 s2 p1 p2
-      unfold sepb; simp only [op_bit]
-      cases d <;> simp <;> grind
-    · exact this
-lemma rect1 {k t : ℕ} {S : Finset ℕ} (hl : Live m T k t S) (hm : ∀ q < k, ¬ Sol m T q (C m (S : Set ℕ)))
-    (hc : S.card + t = k + 1) {i1 i2 j1 j2 : ℕ} (h1 : Lg N m T i1) (h2 : Lg N m T i2) (h3 : Lg N m T j1) (h4 : Lg N m T j2) :
-    ∀ {a b : ℕ}, a ∈ S → b ∈ S → a ≠ b →
-    (∀ w ∈ S, w.testBit i1 = w.testBit i2) → (∀ w ∈ S, w.testBit (N + j1) = w.testBit (N + j2)) →
-    Uq N true S a i1 → Uq N true S b i2 → Uq N true S a j1 → Uq N true S b j2 → False := by
-  induction hl with
-  | stop => intro a b ha hb hab; simp at ha hb; exact absurd (ha.trans hb.symm) hab
-  | un bad => exact False.elim bad
-  | @bi k t d x y U hxy hl ih =>
-    intro a b ha hb hab r1 r2 u1 u2 u3 u4
-    obtain ⟨hx, hy, hg, hc', hmin⟩ := bi_tight hxy hl hm (by omega)
-    have tr : ∀ {c i}, Lg N m T i → c ∈ insert x (insert y U) → Uq N true (insert x (insert y U)) c i →
-        Uq N true (insert (op d x y) U) (if c = x ∨ c = y then op d x y else c) i :=
-      fun hi hc h => bi_uq (Or.inl rfl) hl hx hy hi hc h
-    by_cases hab' : (a = x ∨ a = y) ∧ (b = x ∨ b = y)
-    · have v1 := tr h1 ha u1; have v2 := tr h2 hb u2; have v3 := tr h3 ha u3; have v4 := tr h4 hb u4
-      rw [ite_eq_left hab'.1] at v1 v3; rw [ite_eq_left hab'.2] at v2 v4
-      have hpol := polar hl hmin.2 hc' h1 h3 (by simp) v1 v3
-      have hop : op d x y = op d a b := by
-        rcases hab' with ⟨rfl | rfl, rfl | rfl⟩
-        · exact absurd rfl hab
-        · rfl
-        · exact op_comm _ _ _
-        · exact absurd rfl hab
-      rw [hop] at v1 v2 v3 v4 hpol
-      have e1 := r1 a ha; have e2 := r2 a ha; have e1b := r1 b hb; have e2b := r2 b hb
-      have n1 := u1.2 b hb (Ne.symm hab); have n3 := u3.2 b hb (Ne.symm hab)
-      have n2 := u2.2 a ha hab; have n4 := u4.2 a ha hab
-      have s1 := v1.1; have s3 := v3.1; have s2 := v2.1; have s4 := v4.1
-      have p1 := u1.1; have p2 := u2.1; have p3 := u3.1; have p4 := u4.1
-      revert e1 e2 e1b e2b n1 n2 n3 n4 s1 s2 s3 s4 p1 p2 p3 p4 hpol
-      unfold sepb; simp only [op_bit]
-      cases d <;> simp <;> grind
-    · refine ih hmin.2 hc' ?_ ?_ ?_ ?_ ?_ (tr h1 ha u1) (tr h2 hb u2) (tr h3 ha u3) (tr h4 hb u4)
-      · exact phi_mem ha
-      · exact phi_mem hb
-      · exact phi_ne hg ha hb hab hab'
-      · intro w hw; simp at hw
-        rcases hw with rfl | hw
-        · simp only [op_bit, r1 x (by simp), r1 y (by simp)]
-        · exact r1 w (by simp [hw])
-      · intro w hw; simp at hw
-        rcases hw with rfl | hw
-        · simp only [op_bit, r2 x (by simp), r2 y (by simp)]
-        · exact r2 w (by simp [hw])
-end rect
-
-structure W where
-  s : Nat
-  a : Nat
-  b : Nat
-  c : Nat
-structure X where
-  w : W
-  s : Nat
-  q : Nat
-  u : Nat
-def NN : Nat := 1118
-def AA : Nat := 0x1ffff7df7fffef7fffefbdffffbefbeeffffdffff7df7bef7fffefbdef6ffffbeffffdf7bef7deffffdef6fbffff7bffff7df7ddef6fbeefbbbbffd6ab6aaaad6db5b6aab5ab6b7fff6daadafffeab6b56dfffd6d6b56b6daadb5adb5ad7fff6b5ad56b7fff6b56b6d6dab5b6dad57fff5b6aad6dafffeb5fffdb5fffd6fffed7fff7fff0000000000000000
-def HX : Nat := 0x2954955552924a49554a5494800092552500015494a9200029294a94925524a524a52800094a52a94800094a94929254a49252a8000a4955292500014a00024a0002900012800080000000000000000000
-def HY : Nat := 0x2000082080001080001042000041041100002000082084108000104210900004100002084108210000210904000084000082082210904110444400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-noncomputable section core
-def st (n : Nat) (f : Nat → Bool) : Bool := Nat.rec (motive := fun _ => Bool) (f 0) (fun m _ => f (Nat.succ m)) n
-def sp (d : Bool) (l s : Nat) : Nat :=
-  Nat.land (Nat.xor s (Nat.land (Nat.shiftRight s NN) l)) (Bool.rec (motive := fun _ => Nat) (Nat.land s l) l d)
-def cov (d : Bool) (l : Nat) (v : List W) : Nat :=
-  List.rec (motive := fun _ => Nat) 0 (fun w _ ih => Nat.lor (sp d l w.s) ih) v
-def twice (d : Bool) (l : Nat) (v : List W) : Nat :=
-  List.rec (motive := fun _ => Nat) 0 (fun w t ih => Nat.lor (Nat.land (sp d l w.s) (cov d l t)) ih) v
-def hit (f e : Nat) : Bool := (Bool.rec (motive := fun _ => Bool) ((Bool.rec (motive := fun _ => Bool) (true) (false) (Nat.beq (Nat.land (Nat.land f e) HY) 0))) (false) (Nat.beq (Nat.land (Nat.land f e) HX) 0))
-def hits (f : Nat) (m : List Nat) : Bool := (List.rec (motive := fun _ => Bool) (false) (fun e _ ih => (Bool.rec (motive := fun _ => Bool) (ih) (true) (hit f e))) (m))
-def flag (d : Bool) (l o : Nat) (w : W) : Nat := Nat.add (Nat.land (sp d l w.s) o) AA
-def rect (d : Bool) (l o : Nat) (v : List W) : List Nat → Bool :=
-  List.rec (motive := fun _ => List Nat → Bool) (fun _ => false)
-    (fun w _ ih m => (Bool.rec (motive := fun _ => Bool) (ih (flag d l o w :: m)) (true) (hits (flag d l o w) m))) v
-def mkX (d : Bool) (l o : Nat) (v : List W) : List X :=
-  List.rec (motive := fun _ => List X) [] (fun w _ ih => ⟨w, w.s, Nat.shiftRight w.s NN, Nat.land (sp d l w.s) o⟩ :: ih) v
-def rm (x y : Nat) (v : List W) : (List W → Bool) → Bool :=
-  List.rec (motive := fun _ => (List W → Bool) → Bool) (fun h => h []) (fun w _ ih h => Bool.rec (motive := fun _ => Bool) (Bool.rec (motive := fun _ => Bool) (ih (fun r => h (w :: r))) (ih h) (Nat.beq w.s y)) (ih h) (Nat.beq w.s x)) v
-def ins (o : W) (v : List W) : (List W → Bool) → Bool :=
-  List.rec (motive := fun _ => (List W → Bool) → Bool) (fun h => h [o]) (fun w t ih h => Bool.rec (motive := fun _ => Bool) (ih (fun r => h (w :: r))) (Bool.rec (motive := fun _ => Bool) (h (o :: w :: t)) false (Nat.beq o.s w.s)) (Nat.ble w.s o.s)) v
-def tail (f : Nat → List W → Bool) (d : Bool) (l e n z : Nat) (r : List W) : Bool :=
-  Bool.rec (motive := fun _ => Bool) (f z r) (Bool.rec (motive := fun _ => Bool) (f z r) false (rect d l (Nat.xor l (twice d l r)) r [])) (Nat.beq n e)
-def child (f : Nat → List W → Bool) (d : Bool) (l g e n : Nat) (mk : (List W → Bool) → Bool) (z : Nat) : Bool :=
-  Bool.rec (motive := fun _ => Bool) false (st z (fun z => mk (tail f d l e n z))) (Nat.beq (Nat.land z g) g)
-def put (m s x y : Nat) (v : List W) (h : List W → Bool) : Bool :=
-  (st (s) (fun s => (Bool.rec (motive := fun _ => Bool) ((Bool.rec (motive := fun _ => Bool) ((st (x) (fun x => (st (y) (fun y => (st (Nat.lor x y) (fun w => ins ⟨s, x, y, w⟩ v h))))))) (false) (Nat.beq s m))) (false) (Nat.beq s 0))))
-def kids (c : Nat → ((List W → Bool) → Bool) → Nat → Bool) (e n z x y a c' : Nat) (oa oc : Bool) (mk : (List W → Bool) → Bool) : Bool :=
-  (Bool.rec (motive := fun _ => Bool) ((Bool.rec (motive := fun _ => Bool) ((Bool.rec (motive := fun _ => Bool) (false) (c (Nat.succ (Nat.succ n)) mk (Nat.sub (Nat.sub z x) y)) (Nat.ble (Nat.succ (Nat.succ n)) e))) (true) ((Bool.rec (motive := fun _ => Bool) (false) ((Bool.rec (motive := fun _ => Bool) ((Bool.rec (motive := fun _ => Bool) (false) (c (Nat.succ n) (fun h => mk (fun r => rm a a r h)) (Nat.sub z y)) (oa))) (true) ((Bool.rec (motive := fun _ => Bool) (false) (c (Nat.succ n) (fun h => mk (fun r => rm c' c' r h)) (Nat.sub z x)) (oc))))) (Nat.ble (Nat.succ n) e))))) (true) ((Bool.rec (motive := fun _ => Bool) (false) ((Bool.rec (motive := fun _ => Bool) (false) (c n (fun h => mk (fun r => rm a c' r h)) z) (oc))) (oa))))
-def mid (f : Nat → List W → Bool) (d : Bool) (l m g e n z : Nat) (v : List W) (a c : W) (da dc s x y : Nat) : Bool :=
-  (Bool.rec (motive := fun _ => Bool) (false) ((st (Nat.sub (Nat.add z (Nat.land a.c c.c)) (Nat.lor x y)) (fun z => kids (child f d l g e) e n z a.c c.c a.s c.s (Nat.beq da 0) (Nat.beq dc 0) (put m s x y v)))) (Nat.beq (Nat.land (Nat.sub (Nat.add z (Nat.land a.c c.c)) (Nat.lor x y)) g) g))
-def f0 (h : W → W → Nat → Nat → Nat → Nat → Nat → Bool) (a c : W) (da dc s x y : Nat) : Bool :=
-  (Bool.rec (motive := fun _ => Bool) (false) (h a c da dc s x y) (Nat.beq (Nat.lor da dc) 0))
-def f1 (h : W → W → Nat → Nat → Nat → Nat → Nat → Bool) (a c : W) (da dc s x y : Nat) : Bool :=
-  (Bool.rec (motive := fun _ => Bool) (false) (h a c da dc s x y) (Nat.beq (Nat.mul da dc) 0))
-def f2 (h : W → W → Nat → Nat → Nat → Nat → Nat → Bool) (a c : W) (da dc s x y : Nat) : Bool := h a c da dc s x y
-def pair (h : W → W → Nat → Nat → Nat → Nat → Nat → Bool) (a c : X) : Bool :=
-  X.rec (motive := fun _ => Bool) (fun a s q u => X.rec (motive := fun _ => Bool) (fun c s' q' u' => (Bool.rec (motive := fun _ => Bool) (h a c (Nat.land u q') (Nat.land u' q) (Nat.lor s s') (Nat.land a.a c.a) (Nat.lor a.b c.b)) (true) (h a c (Nat.xor (Nat.land u s') u) (Nat.xor (Nat.land u' s) u') (Nat.land s s') (Nat.lor a.a c.a) (Nat.land a.b c.b)))) c) a
-def scan (p : X → Bool) (xs : List X) : Bool := (List.rec (motive := fun _ => Bool) (false) (fun c _ jh => (Bool.rec (motive := fun _ => Bool) (jh) (true) (p c))) (xs))
-def pairs (h : X → X → Bool) (xs : List X) : Bool :=
-  (List.rec (motive := fun _ => Bool) (false) (fun a r ih => (Bool.rec (motive := fun _ => Bool) (ih) (true) (scan (h a) r))) (xs))
-def pairsP (q : Nat) (h : X → X → Bool) (xs : List X) : Bool :=
-  scan (fun a => (Bool.rec (motive := fun _ => Bool) (false) (scan (fun c => (Bool.rec (motive := fun _ => Bool) (h a c) (false) (Nat.beq c.s q))) xs) (Nat.beq a.s q))) xs
-def pairsQ (q q' : Nat) (h : X → X → Bool) (xs : List X) : Bool :=
-  scan (fun a => (Bool.rec (motive := fun _ => Bool) (false) (scan (fun c => (Bool.rec (motive := fun _ => Bool) (false) (h a c) (Nat.beq c.s q'))) xs) (Nat.beq a.s q))) xs
-def nots (f : Nat → Nat → List W → Bool) (d : Bool) (l m g e n z q : Nat) (v r : List W) : Bool :=
-  (List.rec (motive := fun _ => Bool) (false) (fun a _ ih => (Bool.rec (motive := fun _ => Bool) (ih) (true) ((Bool.rec (motive := fun _ => Bool) ((st (Nat.xor a.s m) (fun s => (st (Nat.sub z a.c) (fun z => ins ⟨s, a.b, a.a, a.c⟩ v (fun v => (Bool.rec (motive := fun _ => Bool) ((Bool.rec (motive := fun _ => Bool) (false) (child (f s) d l g e (Nat.succ n) (fun h => h v) (Nat.sub z a.c)) (Nat.ble (Nat.succ n) e))) (true) ((Bool.rec (motive := fun _ => Bool) (false) (child (f s) d l g e n (rm a.s a.s v) z) (Nat.ble n e)))))))))) (false) (Nat.beq (Nat.succ a.s) q))))) (r))
-def pos (t : Nat) : Bool := Nat.rec (motive := fun _ => Bool) false (fun _ _ => true) t
-def wst (d : Bool) (l : Nat) (v : List W) : Nat := Nat.xor l (twice d l v)
-def node (f : Nat → List W → Bool) (d : Bool) (l m g e n z : Nat) (v : List W) (go : (X → X → Bool) → List X → Bool) : Bool :=
-  (fun h => (fun xs => Bool.rec (motive := fun _ => Bool) (go (pair (f0 h)) xs)
-    (Bool.rec (motive := fun _ => Bool) (go (pair (f1 h)) xs) (go (pair (f2 h)) xs) (Nat.ble (Nat.succ n) e)) (Nat.ble n e))
-    (mkX d l (wst d l v) v))
-  (mid f d l m g e (Nat.pred n) z v)
-def prd (t : Nat) (h : Nat → Bool) : Bool := Nat.rec (motive := fun _ => Bool) false (fun s _ => h s) t
-def look (l m g : Nat) (fuel : Nat) : Nat → Nat → Nat → List W → Bool :=
-  Nat.rec (motive := fun _ => Nat → Nat → Nat → List W → Bool) (fun _ _ _ _ => true)
-    (fun _ ih k t z v => (fun n => (Bool.rec (motive := fun _ => Bool) ((Bool.rec (motive := fun _ => Bool) (prd t (fun s => nots (fun q z v => (Bool.rec (motive := fun _ => Bool) (prd s (fun s => nots (fun q' z v => node (ih (Nat.sub k 3) s) (pos s) l m g (Nat.sub (Nat.sub k 2) s) v.length z v (pairsQ q q')) (pos s) l m g (Nat.sub (Nat.sub k 1) s) v.length z (Nat.succ q) v v)) (true) (node (ih (Nat.sub k 2) s) (pos s) l m g (Nat.sub (Nat.sub k 1) s) v.length z v (pairsP q)))) (pos s) l m g (Nat.sub k s) n z 0 v v)) (true) (node (ih (Nat.sub k 1) t) (pos t) l m g (Nat.sub k t) n z v pairs))) (true) (Nat.ble n 1))) v.length) fuel
-end core
-lemma bR (c e t : Bool) : (Bool.rec (motive := fun _ => Bool) e t c : Bool) = bif c then t else e := by cases c <;> rfl
-lemma st_eq (n : ℕ) (f : ℕ → Bool) : st n f = f n := by cases n <;> rfl
-lemma nl (a b : ℕ) : Nat.land a b = a &&& b := rfl
-lemma no (a b : ℕ) : Nat.lor a b = a ||| b := rfl
-lemma nx (a b : ℕ) : Nat.xor a b = a ^^^ b := rfl
-lemma nsr (a b : ℕ) : Nat.shiftRight a b = a >>> b := rfl
-lemma sp_bit (d : Bool) (l s i : ℕ) : (sp d l s).testBit i = (l.testBit i && sepb NN d s i) := by
-  cases d <;> simp [sp, sepb, nl, nx, nsr, Nat.testBit_shiftRight] <;>
-    cases l.testBit i <;> cases s.testBit i <;> cases s.testBit (NN + i) <;> rfl
-lemma cov_bit (d : Bool) (l i : ℕ) (v : List W) : (cov d l v).testBit i = true ↔ ∃ w ∈ v, (sp d l w.s).testBit i = true := by
-  induction v with
-  | nil => simp [cov]
-  | cons w v ih =>
-    change (Nat.lor (sp d l w.s) (cov d l v)).testBit i = true ↔ _
-    simp [no, ih]
-lemma twice_bit (d : Bool) (l i : ℕ) (v : List W) (h : (twice d l v).testBit i = false) :
-    v.Pairwise (fun w w' => ¬ ((sp d l w.s).testBit i = true ∧ (sp d l w'.s).testBit i = true)) := by
-  induction v with
-  | nil => simp
-  | cons w v ih =>
-    change (Nat.lor (Nat.land (sp d l w.s) (cov d l v)) (twice d l v)).testBit i = false at h
-    simp only [no, nl, Nat.testBit_or, Nat.testBit_and, Bool.or_eq_false_iff] at h
-    refine List.pairwise_cons.2 ⟨fun w' hw' ⟨h1, h2⟩ => ?_, ih h.2⟩
-    have := (cov_bit d l i v).2 ⟨w', hw', h2⟩
-    simp [h1, this] at h
-def Rep (v : List W) (S : Finset ℕ) : Prop := (v.map W.s).Nodup ∧ (v.map W.s).toFinset = S
-lemma Rep.mem {v : List W} {S : Finset ℕ} (h : Rep v S) {x : ℕ} : x ∈ S ↔ ∃ w ∈ v, w.s = x := by
-  rw [← h.2]; simp
-lemma Rep.inj {v : List W} {S : Finset ℕ} (h : Rep v S) {w w' : W} (hw : w ∈ v) (hw' : w' ∈ v) (e : w.s = w'.s) : w = w' :=
-  List.inj_on_of_nodup_map h.1 hw hw' e
-lemma Rep.card {v : List W} {S : Finset ℕ} (h : Rep v S) : S.card = v.length := by
-  rw [← h.2, List.toFinset_card_of_nodup h.1, List.length_map]
-lemma uq_of {d : Bool} {l i : ℕ} {v : List W} {S : Finset ℕ} (h : Rep v S) {w : W} (hw : w ∈ v)
-    (hu : (Nat.land (sp d l w.s) (wst d l v)).testBit i = true) : l.testBit i = true ∧ Uq NN d S w.s i := by
-  simp only [nl, wst, nx, Nat.testBit_and, Nat.testBit_xor, Bool.and_eq_true, sp_bit] at hu
-  obtain ⟨⟨hl, hs⟩, ht⟩ := hu
-  have ht : (twice d l v).testBit i = false := by simpa [hl] using ht
-  refine ⟨hl, hs, fun c hc hne => ?_⟩
-  obtain ⟨w', hw', rfl⟩ := h.mem.1 hc
-  have hp := twice_bit d l i v ht
-  haveI : Std.Symm (fun w w' : W => ¬ ((sp d l w.s).testBit i = true ∧ (sp d l w'.s).testBit i = true)) :=
-    ⟨fun a b h h' => h h'.symm⟩
-  have := hp.forall hw hw' (fun e => hne (by rw [e]))
-  simp only [sp_bit, hl, hs, Bool.true_and, true_and] at this
-  simpa using this
-def segsX : List (ℕ × ℕ) := [(63,79), (79,95), (95,97), (97,100), (100,116), (116,119), (119,121), (121,137), (137,139), (139,142), (142,145), (145,161), (161,163), (163,166), (166,168), (168,184), (184,186), (186,189), (189,192), (192,195), (195,197), (197,200), (200,202), (202,204), (204,206), (206,208), (208,211), (211,214), (214,217), (217,219), (219,235), (235,237), (237,239), (239,241), (241,244), (244,246), (246,249), (249,252), (252,255), (255,258), (258,261), (261,263), (263,266), (266,268), (268,270), (270,273), (273,276), (276,279), (279,281), (281,284), (284,287), (287,290), (290,292), (292,295), (295,297), (297,299), (299,302), (302,304), (304,307), (307,323), (323,326), (326,328), (328,331), (331,333), (333,335), (335,337), (337,340), (340,342), (342,345), (345,347), (347,350), (350,352), (352,355), (355,371), (371,373), (373,376), (376,378), (378,381), (381,383), (383,386), (386,389), (389,392), (392,394), (394,397), (397,399), (399,402), (402,405), (405,408), (408,410), (410,412), (412,414), (414,417), (417,420), (420,423), (423,426), (426,428), (428,431), (431,433), (433,435), (435,438), (438,440), (440,443), (443,445), (445,448), (448,451), (451,453), (453,469), (469,472), (472,475), (475,477), (477,479), (479,482), (482,484), (484,487), (487,490), (490,492), (492,494), (494,496), (496,512), (512,514), (514,517), (517,520), (520,522), (522,524), (524,526), (526,529), (529,532), (532,535), (535,551), (551,554), (554,556), (556,559), (559,562), (562,564), (564,566), (566,569), (569,571), (571,574), (574,576), (576,578), (578,580), (580,582), (582,584), (584,587), (587,590), (590,593), (593,595), (595,598), (598,601), (601,604), (604,607), (607,609), (609,612), (612,614), (614,616), (616,618), (618,620), (620,622), (622,624), (624,626), (626,628), (628,631), (631,634), (634,636), (636,638), (638,640), (640,643), (643,645)]
-def segsY : List (ℕ × ℕ) := [(645,658), (658,662), (662,666), (666,670), (670,676), (676,680), (680,686), (686,692), (692,695), (695,700), (700,705), (705,709), (709,715), (715,721), (721,727), (727,746), (746,751), (751,770), (770,776), (776,779), (779,784), (784,789), (789,808), (808,813), (813,819), (819,824), (824,830), (830,835), (835,841), (841,860), (860,866), (866,884), (884,887), (887,892), (892,897), (897,902), (902,908), (908,927), (927,932), (932,938), (938,943), (943,949), (949,955), (955,973), (973,992), (992,996), (996,1002), (1002,1008), (1008,1014), (1014,1033), (1033,1038), (1038,1044), (1044,1063), (1063,1068), (1068,1087), (1087,1093), (1093,1099), (1099,1117)]
-def segOk (s : ℕ × ℕ) : Bool := decide (s.1 < s.2) && decide (AA % 2 ^ s.2 + 2 ^ (s.1 + 1) = 2 ^ s.2 + AA % 2 ^ s.1) &&
-  !AA.testBit s.1 && !AA.testBit s.2
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma segX_ok : segsX.all segOk = true := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma segY_ok : segsY.all segOk = true := by decide +kernel
-def bitsOf (L : List (ℕ × ℕ)) : ℕ := L.foldr (fun s x => 2 ^ s.2 ||| x) 0
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma HX_eq : HX = bitsOf segsX := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma HY_eq : HY = bitsOf segsY := by decide +kernel
-lemma bitsOf_bit {L : List (ℕ × ℕ)} {h : ℕ} (hh : (bitsOf L).testBit h = true) : ∃ s ∈ L, s.2 = h := by
-  induction L with
-  | nil => simp [bitsOf] at hh
-  | cons s L ih =>
-    change (2 ^ s.2 ||| bitsOf L).testBit h = true at hh
-    rw [Nat.testBit_or, Nat.testBit_two_pow, Bool.or_eq_true] at hh
-    rcases hh with hh | hh
-    · exact ⟨s, by simp, by simpa using hh⟩
-    · obtain ⟨s', hs', e⟩ := ih hh; exact ⟨s', by simp [hs'], e⟩
-lemma carry {u A p h : ℕ} (hp : p < h) (hA : A % 2 ^ h + 2 ^ (p + 1) = 2 ^ h + A % 2 ^ p) (hAh : A.testBit h = false)
-    (huh : u.testBit h = false) (hup : u.testBit p = false) (hs : (u + A).testBit h = true) :
-    ∃ i, p < i ∧ i < h ∧ u.testBit i = true := by
-  by_contra hno
-  push Not at hno
-  have e1 : u % 2 ^ h = u % 2 ^ p := by
-    apply Nat.eq_of_testBit_eq; intro i
-    simp only [Nat.testBit_mod_two_pow]
-    by_cases h1 : i < p
-    · simp [h1, show i < h by omega]
-    · by_cases h2 : i < h
-      · rcases Nat.lt_or_ge p i with h3 | h3
-        · simp [h1, hno i h3 h2]
-        · obtain rfl : i = p := by omega
-          simp [hup]
-      · simp [h1, h2]
-  have l1 := Nat.mod_lt u (Nat.two_pow_pos p)
-  have l2 := Nat.mod_lt A (Nat.two_pow_pos p)
-  have hlt : u % 2 ^ h + A % 2 ^ h < 2 ^ h := by rw [e1]; have := Nat.pow_succ 2 p; omega
-  have e2 : (u + A).testBit h = (u / 2 ^ h + A / 2 ^ h).testBit 0 := by
-    have : u + A = 2 ^ h * (u / 2 ^ h + A / 2 ^ h) + (u % 2 ^ h + A % 2 ^ h) := by
-      have a1 := Nat.div_add_mod u (2 ^ h); have a2 := Nat.div_add_mod A (2 ^ h)
-      rw [Nat.mul_add]; omega
-    rw [this, Nat.testBit_two_pow_mul_add _ hlt]; simp
-  have b1 : (u / 2 ^ h).testBit 0 = false := by rw [← huh, Nat.testBit_div_two_pow]; simp
-  have b2 : (A / 2 ^ h).testBit 0 = false := by rw [← hAh, Nat.testBit_div_two_pow]; simp
-  rw [e2] at hs
-  simp [Nat.testBit_zero] at hs b1 b2
-  omega
-def Same (L : List (ℕ × ℕ)) (i j : ℕ) : Prop := ∃ s ∈ L, s.1 < i ∧ i < s.2 ∧ s.1 < j ∧ j < s.2
-def Good (l s : ℕ) : Prop := (∀ i j, Same segsX i j → l.testBit i = true → l.testBit j = true → s.testBit i = s.testBit j) ∧
-  (∀ i j, Same segsY i j → l.testBit i = true → l.testBit j = true → s.testBit (NN + i) = s.testBit (NN + j))
-lemma flag_seg {L : List (ℕ × ℕ)} (hL : L.all segOk = true) {u : ℕ} (hu : ∀ i, u.testBit i = true → AA.testBit i = true)
-    {s : ℕ × ℕ} (hs : s ∈ L) (hb : (u + AA).testBit s.2 = true) : ∃ i, s.1 < i ∧ i < s.2 ∧ u.testBit i = true := by
-  have h := List.all_eq_true.1 hL s hs
-  simp only [segOk, Bool.and_eq_true, decide_eq_true_eq, Bool.not_eq_true'] at h
-  refine carry h.1.1.1 h.1.1.2 h.2 ?_ ?_ hb
-  · by_contra hc; have := hu _ (by simpa using hc); rw [h.2] at this; simp at this
-  · by_contra hc; have := hu _ (by simpa using hc); rw [h.1.2] at this; simp at this
-lemma hit_spec {f e : ℕ} (h : hit f e = true) :
-    (∃ s ∈ segsX, f.testBit s.2 = true ∧ e.testBit s.2 = true) ∧ (∃ s ∈ segsY, f.testBit s.2 = true ∧ e.testBit s.2 = true) := by
-  have aux : ∀ H, Nat.beq (Nat.land (Nat.land f e) H) 0 = false → ∃ i, f.testBit i = true ∧ e.testBit i = true ∧ H.testBit i = true := by
-    intro H hH
-    have hne : (f &&& e &&& H) ≠ 0 := fun h0 => by rw [nl, nl, h0] at hH; simp at hH
-    obtain ⟨i, hi⟩ := Nat.exists_testBit_of_ne_zero hne
-    simp at hi; exact ⟨i, hi.1.1, hi.1.2, hi.2⟩
-  simp only [hit, bR] at h
-  cases h1 : Nat.beq (Nat.land (Nat.land f e) HX) 0 with
-  | true => rw [h1] at h; simp only [cond_true, Bool.false_eq_true] at h
-  | false =>
-    cases h2 : Nat.beq (Nat.land (Nat.land f e) HY) 0 with
-    | true => rw [h1, h2] at h; simp only [cond_true, cond_false, Bool.false_eq_true] at h
-    | false =>
-      obtain ⟨i, a1, a2, a3⟩ := aux _ h1
-      obtain ⟨j, b1, b2, b3⟩ := aux _ h2
-      rw [HX_eq] at a3; rw [HY_eq] at b3
-      obtain ⟨s, hs, rfl⟩ := bitsOf_bit a3
-      obtain ⟨s', hs', rfl⟩ := bitsOf_bit b3
-      exact ⟨⟨s, hs, a1, a2⟩, ⟨s', hs', b1, b2⟩⟩
-lemma hits_false {f : ℕ} {m : List ℕ} (h : ∀ e ∈ m, hit f e = false) : hits f m = false := by
-  induction m with
-  | nil => rfl
-  | cons e m ih =>
-    change (Bool.rec (motive := fun _ => Bool) (hits f m) true (hit f e) : Bool) = false
-    rw [bR, h e (by simp), ih (fun x hx => h x (by simp [hx]))]; rfl
-lemma rect_false {d : Bool} {l o : ℕ} {v : List W} : ∀ {m : List ℕ}, v.Pairwise (fun a b => hit (flag d l o b) (flag d l o a) = false) →
-    (∀ w ∈ v, ∀ e ∈ m, hit (flag d l o w) e = false) → rect d l o v m = false := by
-  induction v with
-  | nil => intros; rfl
-  | cons w v ih =>
-    intro m hp hm
-    change (Bool.rec (motive := fun _ => Bool) (rect d l o v (flag d l o w :: m)) true (hits (flag d l o w) m) : Bool) = false
-    rw [List.pairwise_cons] at hp
-    rw [bR, hits_false (hm w (by simp)), ih hp.2]; · rfl
-    intro w' hw' e he
-    simp at he
-    rcases he with rfl | he
-    · exact hp.1 w' hw'
-    · exact hm w' (by simp [hw']) e he
-lemma Live.pos {m T k t : ℕ} {S : Finset ℕ} (h : Live m T k t S) : 0 < S.card := by
-  cases h with
-  | stop => simp
-  | un bad => exact False.elim bad
-  | bi => exact Finset.card_pos.2 (Finset.insert_nonempty _ _)
-def pk (n : ℕ) (f : ℕ → ℕ) : ℕ := ∑ j ∈ Finset.range n, f j * 2 ^ (5 * j)
-lemma pk_succ (n : ℕ) (f : ℕ → ℕ) : pk (n + 1) f = 2 ^ (5 * n) * f n + pk n f := by
-  rw [pk, Finset.sum_range_succ, ← pk]; ring
-lemma pk_lt {n : ℕ} {f : ℕ → ℕ} (h : ∀ j < n, f j < 32) : pk n f < 2 ^ (5 * n) := by
-  induction n with
-  | zero => simp [pk]
-  | succ n ih =>
-    have := ih (fun j hj => h j (by omega))
-    have h2 := h n (by omega)
-    rw [pk_succ, show 5 * (n + 1) = 5 * n + 5 by ring, pow_add]
-    have : 2 ^ (5 * n) * f n ≤ 2 ^ (5 * n) * 31 := Nat.mul_le_mul_left _ (by omega)
-    omega
-lemma pk_add (n : ℕ) (f g : ℕ → ℕ) : pk n f + pk n g = pk n (fun j => f j + g j) := by
-  simp [pk, ← Finset.sum_add_distrib, add_mul]
-lemma pk_congr {n : ℕ} {f g : ℕ → ℕ} (h : ∀ j < n, f j = g j) : pk n f = pk n g :=
-  Finset.sum_congr rfl fun j hj => by rw [h j (by simpa using hj)]
-lemma pk_sub {n : ℕ} {f g : ℕ → ℕ} (h : ∀ j < n, g j ≤ f j) : pk n f - pk n g = pk n (fun j => f j - g j) := by
-  have : pk n (fun j => f j - g j) + pk n g = pk n f := by
-    rw [pk_add]; exact pk_congr fun j hj => Nat.sub_add_cancel (h j hj)
-  omega
-lemma pk_guard {n : ℕ} {f : ℕ → ℕ} (h : ∀ j < n, 16 ≤ f j ∧ f j < 32) :
-    pk n f &&& pk n (fun _ => 16) = pk n (fun _ => 16) := by
-  induction n with
-  | zero => simp [pk]
-  | succ n ih =>
-    have ih := ih (fun j hj => h j (by omega))
-    have h1 : pk n f < 2 ^ (5 * n) := pk_lt fun j hj => (h j (by omega)).2
-    have h2 : pk n (fun _ => 16) < 2 ^ (5 * n) := pk_lt fun _ _ => by omega
-    have h3 : f n &&& 16 = 16 := by
-      obtain ⟨a, b⟩ := h n (by omega)
-      generalize f n = x at *
-      interval_cases x <;> rfl
-    rw [pk_succ, pk_succ]
-    apply Nat.eq_of_testBit_eq; intro i
-    rw [Nat.testBit_and, Nat.testBit_two_pow_mul_add _ h1, Nat.testBit_two_pow_mul_add _ h2]
-    split_ifs with hi
-    · rw [← Nat.testBit_and, ih]
-    · rw [← Nat.testBit_and, h3]
-def isPk (n x : ℕ) : Prop := ∀ i, x.testBit i = true → i % 5 = 0 ∧ i / 5 < n
-lemma pk_of {n : ℕ} : ∀ {x : ℕ}, isPk n x → x = pk n (fun j => (x.testBit (5 * j)).toNat) := by
-  induction n with
-  | zero =>
-    intro x h
-    simp only [pk, Finset.range_zero, Finset.sum_empty]
-    apply Nat.eq_of_testBit_eq; intro i
-    by_contra hc
-    have := h i (by simpa using hc); omega
-  | succ n ih =>
-    intro x h
-    have hm : isPk n (x % 2 ^ (5 * n)) := by
-      intro i hi
-      simp only [Nat.testBit_mod_two_pow, Bool.and_eq_true, decide_eq_true_eq] at hi
-      exact ⟨(h i hi.2).1, by omega⟩
-    have e := ih hm
-    have hd : x / 2 ^ (5 * n) = (x.testBit (5 * n)).toNat := by
-      apply Nat.eq_of_testBit_eq; intro i
-      rw [Nat.testBit_div_two_pow]
-      cases i with
-      | zero => cases hb : x.testBit (5 * n) <;> simp [hb]
-      | succ i =>
-        have e1 : x.testBit (i + 1 + 5 * n) = false := by
-          by_contra hc
-          have := h _ (by simpa using hc); omega
-        rw [e1]
-        cases x.testBit (5 * n) <;> simp [Nat.testBit_succ]
-    rw [pk_succ, ← hd]
-    have e2 : pk n (fun j => (x.testBit (5 * j)).toNat) = x % 2 ^ (5 * n) := by
-      conv_rhs => rw [e]
-      refine pk_congr fun j hj => ?_
-      rw [Nat.testBit_mod_two_pow]; simp [show 5 * j < 5 * n by omega]
-    rw [e2]; exact (Nat.div_add_mod x _).symm
-lemma isPk_and {n x y : ℕ} (hx : isPk n x) : isPk n (x &&& y) := fun i hi => hx i (by simp at hi; exact hi.1)
-lemma isPk_or {n x y : ℕ} (hx : isPk n x) (hy : isPk n y) : isPk n (x ||| y) := fun i hi => by
-  simp at hi; exact hi.elim (hx i) (hy i)
-def fl (w : W) (j : ℕ) : ℕ := (w.c.testBit (5 * j)).toNat
-lemma fl_le (w : W) (j : ℕ) : fl w j ≤ 1 := by unfold fl; cases w.c.testBit (5 * j) <;> simp
-def cnt (v : List W) (j : ℕ) : ℕ := (v.map (fun w => fl w j)).sum
-lemma cnt_cons (w : W) (v : List W) (j : ℕ) : cnt (w :: v) j = fl w j + cnt v j := by simp [cnt]
-lemma cnt_perm {v v' : List W} (h : v.Perm v') (j : ℕ) : cnt v j = cnt v' j := (h.map _).sum_eq
-structure WOk (P : List ℕ) (w : W) : Prop where
-  pa : isPk P.length w.a
-  pb : isPk P.length w.b
-  ec : w.c = w.a ||| w.b
-  ca : ∀ j < P.length, w.a.testBit (5 * j) = true → w.s &&& P.getD j 0 = 0
-  cb : ∀ j < P.length, w.b.testBit (5 * j) = true → w.s &&& P.getD j 0 = P.getD j 0
-lemma WOk.pc {P : List ℕ} {w : W} (h : WOk P w) : isPk P.length w.c := by rw [h.ec]; exact isPk_or h.pa h.pb
-lemma WOk.cst {P : List ℕ} {w : W} (h : WOk P w) {j : ℕ} (hj : j < P.length) (hf : w.c.testBit (5 * j) = true) :
-    Cst (P.getD j 0) w.s := by
-  rw [h.ec, Nat.testBit_or, Bool.or_eq_true] at hf
-  exact hf.elim (fun h1 => Or.inl (h.ca j hj h1)) (fun h1 => Or.inr (h.cb j hj h1))
-def Cl (P : List ℕ) (T k : ℕ) (b : ℕ → ℕ) (S : Finset ℕ) : Prop := ∀ j < P.length, ∀ q, q + b j < k →
-  ¬ Sol (P.getD j 0) (T &&& P.getD j 0) q (C (P.getD j 0) (Im (P.getD j 0) S))
-structure StOk (P : List ℕ) (T l k z : ℕ) (v : List W) (S : Finset ℕ) : Prop where
-  rep : Rep v S
-  wok : ∀ w ∈ v, WOk P w
-  good : ∀ w ∈ v, Good l w.s
-  bud : ∃ b : ℕ → ℕ, (∀ j < P.length, b j ≤ 15) ∧ Cl P T k b S ∧ z = pk P.length (fun j => 16 + b j - cnt v j)
-structure Ctx (P : List ℕ) (l m g T : ℕ) : Prop where
-  lg : ∀ i, l.testBit i = true → Lg NN m T i ∧ AA.testBit i = true
-  hP : ∀ j < P.length, P.getD j 0 &&& m = P.getD j 0 ∧ T &&& P.getD j 0 ≠ 0 ∧ T &&& P.getD j 0 ≠ P.getD j 0
-  hg : g = pk P.length (fun _ => 16)
-section sound
-variable {P : List ℕ} {l m g T : ℕ} (X : Ctx P l m g T)
-include X
-lemma cnt_le {k k' t : ℕ} {v : List W} {S : Finset ℕ} {b : ℕ → ℕ} (hr : Rep v S) (hw : ∀ w ∈ v, WOk P w)
-    (hc : Cl P T k b S) (hm : Min m T k' t S) (hk : k' ≤ k) : ∀ j < P.length, cnt v j ≤ b j := by
-  intro j hj
-  obtain ⟨p1, p2, p3⟩ := X.hP j hj
-  obtain ⟨q, hq, hs⟩ := hm.const p1 p2 p3
-  have hqb : ¬ q + b j < k := fun h => hc j hj q h hs
-  have : cnt v j ≤ (S.filter (Cst (P.getD j 0))).card := by
-    have e : cnt v j = (v.filter (fun w => w.c.testBit (5 * j))).length := by
-      clear hr hw
-      induction v with
-      | nil => rfl
-      | cons w v ih =>
-        rw [cnt_cons, ih, List.filter_cons, fl]
-        cases w.c.testBit (5 * j) <;> simp; omega
-    rw [e, ← List.length_map W.s, ← List.toFinset_card_of_nodup (hr.1.sublist (List.filter_sublist.map _))]
-    apply Finset.card_le_card
-    intro x hx
-    simp only [List.mem_toFinset, List.mem_map, List.mem_filter] at hx
-    obtain ⟨w, ⟨h1, h2⟩, rfl⟩ := hx
-    rw [Finset.mem_filter]
-    exact ⟨hr.mem.2 ⟨w, h1, rfl⟩, (hw w h1).cst hj h2⟩
-  omega
-lemma tail_sound {f : ℕ → List W → Bool} {d : Bool} {e n z t k k' : ℕ} {r : List W} {S : Finset ℕ}
-    (hr : StOk P T l k z r S) (hm : Min m T k' t S) (hk : k' ≤ k) (hd : d = pos' t) (hn : n = r.length)
-    (he : e = k + 1 - t) (h : tail f d l e n z r = false) : f z r = false := by
-  simp only [tail, bR] at h
-  by_cases hne : n = e
-  · have hb : Nat.beq n e = true := by simpa using hne
-    rw [hb, cond_true] at h
-    cases hrect : rect d l (Nat.xor l (twice d l r)) r [] with
-    | false => rw [hrect] at h; simpa using h
-    | true =>
-      exfalso
-      have hs := hm.size
-      have hcard := hr.rep.card
-      have hpos : 0 < S.card := hm.1.pos
-      have htight : S.card + t = k' + 1 := by omega
-      rw [rect_false (o := Nat.xor l (twice d l r))] at hrect; · simp at hrect
-      · have hnd : r.Pairwise (fun a b => a.s ≠ b.s) := List.pairwise_map.1 hr.rep.1
-        refine hnd.imp_of_mem fun {a b} ha hb' hab => ?_
-        by_contra hhit
-        rw [Bool.not_eq_false] at hhit
-        obtain ⟨⟨s, hs1, x1, x2⟩, ⟨s', hs2, y1, y2⟩⟩ := hit_spec hhit
-        have hu : ∀ w, ∀ i, (Nat.land (sp d l w) (wst d l r)).testBit i = true → AA.testBit i = true := by
-          intro w i hi
-          simp only [nl, Nat.testBit_and, sp_bit, Bool.and_eq_true] at hi
-          exact (X.lg i hi.1.1).2
-        obtain ⟨i2, b1, b2, b3⟩ := flag_seg segX_ok (hu b.s) hs1 x1
-        obtain ⟨i1, a1, a2, a3⟩ := flag_seg segX_ok (hu a.s) hs1 x2
-        obtain ⟨j2, d1, d2, d3⟩ := flag_seg segY_ok (hu b.s) hs2 y1
-        obtain ⟨j1, c1, c2, c3⟩ := flag_seg segY_ok (hu a.s) hs2 y2
-        obtain ⟨l1, u1⟩ := uq_of hr.rep ha a3
-        obtain ⟨l2, u2⟩ := uq_of hr.rep hb' b3
-        obtain ⟨l3, u3⟩ := uq_of hr.rep ha c3
-        obtain ⟨l4, u4⟩ := uq_of hr.rep hb' d3
-        have g1 : ∀ w ∈ S, w.testBit i1 = w.testBit i2 := by
-          intro w hw; obtain ⟨w', hw', rfl⟩ := hr.rep.mem.1 hw
-          exact (hr.good w' hw').1 _ _ ⟨s, hs1, a1, a2, b1, b2⟩ l1 l2
-        have g2 : ∀ w ∈ S, w.testBit (NN + j1) = w.testBit (NN + j2) := by
-          intro w hw; obtain ⟨w', hw', rfl⟩ := hr.rep.mem.1 hw
-          exact (hr.good w' hw').2 _ _ ⟨s', hs2, c1, c2, d1, d2⟩ l3 l4
-        have ma := hr.rep.mem.2 ⟨a, ha, rfl⟩
-        have mb := hr.rep.mem.2 ⟨b, hb', rfl⟩
-        rcases Nat.eq_zero_or_pos t with rfl | htp
-        · have hd' : d = false := by rw [hd]; simp [pos']
-          subst hd'
-          exact rect0 hm.1 hm.2 (by simpa using htight) (X.lg _ l1).1 (X.lg _ l2).1 (X.lg _ l3).1 (X.lg _ l4).1
-            ma mb hab g1 g2 u1 u2 u3 u4
-        · have hd' : d = true := by rw [hd]; simp [pos', htp]
-          subst hd'
-          exact rect1 hm.1 hm.2 htight (X.lg _ l1).1 (X.lg _ l2).1 (X.lg _ l3).1 (X.lg _ l4).1
-            ma mb hab g1 g2 u1 u2 u3 u4
-      · simp
-  · have hb : Nat.beq n e = false := Bool.eq_false_iff.2 fun h => hne (Nat.eq_of_beq_eq_true h)
-    rw [hb, cond_false] at h; exact h
-lemma guard_ok {k k' t z : ℕ} {v : List W} {S : Finset ℕ} (hr : StOk P T l k z v S) (hm : Min m T k' t S) (hk : k' ≤ k) :
-    Nat.beq (Nat.land z g) g = true := by
-  obtain ⟨b, hb, hc, hz⟩ := hr.bud
-  have hle := cnt_le X hr.rep hr.wok hc hm hk
-  rw [nl, hz, X.hg, pk_guard]; · simp
-  intro j hj
-  have := hb j hj; have := hle j hj; omega
-lemma child_sound {f : ℕ → List W → Bool} {d : Bool} {e n z t k k' : ℕ} {r : List W} {S : Finset ℕ}
-    {mk : (List W → Bool) → Bool} (hmk : ∀ h, mk h = h r)
-    (hr : StOk P T l k z r S) (hm : Min m T k' t S) (hk : k' ≤ k) (hd : d = pos' t) (hn : n = r.length)
-    (he : e = k + 1 - t) (h : child f d l g e n mk z = false) : f z r = false := by
-  simp only [child, bR, st_eq, guard_ok X hr hm hk, cond_true, hmk] at h
-  exact tail_sound X hr hm hk hd hn he h
-end sound
-lemma rm_eq (x y : ℕ) (v : List W) : ∀ h, rm x y v h = h (v.filter (fun w => !(Nat.beq w.s x || Nat.beq w.s y))) := by
-  induction v with
-  | nil => intro h; rfl
-  | cons w v ih =>
-    intro h
-    change (Bool.rec (motive := fun _ => Bool) (Bool.rec (motive := fun _ => Bool) (rm x y v (fun r => h (w :: r)))
-      (rm x y v h) (Nat.beq w.s y)) (rm x y v h) (Nat.beq w.s x) : Bool) = _
-    rw [bR, bR, ih, ih, List.filter_cons]
-    cases Nat.beq w.s x <;> cases Nat.beq w.s y <;> simp
-lemma ins_spec (o : W) (v : List W) (hv : ∀ w ∈ v, w.s ≠ o.s) : ∃ r : List W, r.Perm (o :: v) ∧ ∀ h, ins o v h = h r := by
-  induction v with
-  | nil => exact ⟨[o], List.Perm.refl _, fun h => rfl⟩
-  | cons w v ih =>
-    obtain ⟨r, hp, hr⟩ := ih fun w' hw' => hv w' (by simp [hw'])
-    have e : ∀ h, ins o (w :: v) h = bif Nat.ble w.s o.s then (bif Nat.beq o.s w.s then false else h (o :: w :: v)) else ins o v (fun r => h (w :: r)) := by
-      intro h
-      change (Bool.rec (motive := fun _ => Bool) (ins o v (fun r => h (w :: r)))
-        (Bool.rec (motive := fun _ => Bool) (h (o :: w :: v)) false (Nat.beq o.s w.s)) (Nat.ble w.s o.s) : Bool) = _
-      rw [bR, bR]
-    cases hb : Nat.ble w.s o.s with
-    | true =>
-      refine ⟨o :: w :: v, List.Perm.refl _, fun h => ?_⟩
-      have : Nat.beq o.s w.s = false := Bool.eq_false_iff.2 fun h => hv w (by simp) (Nat.eq_of_beq_eq_true h).symm
-      rw [e, hb, this]; rfl
-    | false =>
-      refine ⟨w :: r, (List.Perm.cons w hp).trans (List.Perm.swap _ _ _), fun h => ?_⟩
-      rw [e, hb, hr]; rfl
-lemma filter_perm {v : List W} (hv : (v.map W.s).Nodup) {a : W} (ha : a ∈ v) :
-    (a :: v.filter (fun w => !Nat.beq w.s a.s)).Perm v := by
-  induction v with
-  | nil => simp at ha
-  | cons w v ih =>
-    simp only [List.map_cons, List.nodup_cons, List.mem_map, not_exists, not_and] at hv
-    have hne : ∀ x y : ℕ, x ≠ y → Nat.beq x y = false := fun x y h => Bool.eq_false_iff.2 fun h' => h (Nat.eq_of_beq_eq_true h')
-    simp only [List.mem_cons] at ha
-    rcases ha with rfl | ha
-    · have : v.filter (fun w => !Nat.beq w.s a.s) = v := by
-        rw [List.filter_eq_self]
-        intro w' hw'
-        rw [hne _ _ (hv.1 w' hw')]; rfl
-      rw [List.filter_cons, this]; simp
-    · rw [List.filter_cons, hne w.s a.s (fun e => hv.1 a ha e.symm)]
-      simp only [Bool.not_false, if_true]
-      exact (List.Perm.swap _ _ _).trans ((ih hv.2 ha).cons w)
-lemma filter2 {v : List W} {x y : ℕ} : v.filter (fun w => !(Nat.beq w.s x || Nat.beq w.s y)) =
-    (v.filter (fun w => !Nat.beq w.s x)).filter (fun w => !Nat.beq w.s y) := by
-  rw [List.filter_filter]; congr 1; funext w; cases Nat.beq w.s x <;> cases Nat.beq w.s y <;> rfl
-lemma filter1 {v : List W} {x : ℕ} : v.filter (fun w => !(Nat.beq w.s x || Nat.beq w.s x)) = v.filter (fun w => !Nat.beq w.s x) := by
-  congr 1; funext w; cases Nat.beq w.s x <;> rfl
-inductive Shape (o a c : W) (v : List W) : Bool → Bool → List W → Prop
-  | ff {r} : (a :: c :: r).Perm (o :: v) → Shape o a c v false false r
-  | tf {r} : (c :: r).Perm (o :: v) → Shape o a c v true false r
-  | ft {r} : (a :: r).Perm (o :: v) → Shape o a c v false true r
-  | tt {r} : r.Perm (o :: v) → Shape o a c v true true r
-lemma Shape.cnt {o a c : W} {v r : List W} {ka kc : Bool} (h : Shape o a c v ka kc r) (j : ℕ) :
-    cnt r j + (bif ka then 0 else fl a j) + (bif kc then 0 else fl c j) = fl o j + cnt v j := by
-  cases h with
-  | ff h => have := cnt_perm h j; simp only [cnt_cons] at this; simp; omega
-  | tf h => have := cnt_perm h j; simp only [cnt_cons] at this; simp; omega
-  | ft h => have := cnt_perm h j; simp only [cnt_cons] at this; simp; omega
-  | tt h => have := cnt_perm h j; simp only [cnt_cons] at this; simp; omega
-lemma Shape.mem {o a c : W} {v r : List W} {ka kc : Bool} (h : Shape o a c v ka kc r) {w : W} (hw : w ∈ r) : w = o ∨ w ∈ v := by
-  have : w ∈ o :: v := by
-    cases h with
-    | ff h => exact h.subset (by simp [hw])
-    | tf h => exact h.subset (by simp [hw])
-    | ft h => exact h.subset (by simp [hw])
-    | tt h => exact h.subset (by simp [hw])
-  simpa using this
-lemma Shape.len {o a c : W} {v r : List W} {ka kc : Bool} (h : Shape o a c v ka kc r) :
-    r.length + (bif ka then 0 else 1) + (bif kc then 0 else 1) = v.length + 1 := by
-  cases h with
-  | ff h => have := h.length_eq; simp at this ⊢; omega
-  | tf h => have := h.length_eq; simp at this ⊢; omega
-  | ft h => have := h.length_eq; simp at this ⊢; omega
-  | tt h => have := h.length_eq; simp at this ⊢; omega
-lemma Shape.rep {o a c : W} {v r : List W} {ka kc : Bool} (h : Shape o a c v ka kc r) {S S' : Finset ℕ} (hr : Rep v S)
-    (ha : a ∈ v) (hc : c ∈ v) (hac : a.s ≠ c.s) (ho : o.s ∉ S)
-    (hS : ∀ x, x ∈ S' ↔ x = o.s ∨ (x ∈ S ∧ (x = a.s → ka = true) ∧ (x = c.s → kc = true))) : Rep r S' := by
-  have hov : ((o :: v).map W.s).Nodup := by
-    simp only [List.map_cons, List.nodup_cons]
-    refine ⟨fun hm => ho ?_, hr.1⟩
-    rw [← hr.2]; simpa using hm
-  have hvS : ∀ x, x ∈ v.map W.s ↔ x ∈ S := fun x => by rw [← hr.2]; simp
-  have hm : ∀ x, x ∈ (o :: v).map W.s ↔ x = o.s ∨ x ∈ S := fun x => by simp only [List.map_cons, List.mem_cons, hvS]
-  have haS := (hvS a.s).1 (List.mem_map_of_mem ha)
-  have hcS := (hvS c.s).1 (List.mem_map_of_mem hc)
-  have hao : a.s ≠ o.s := fun e => ho (e ▸ haS)
-  have hco : c.s ≠ o.s := fun e => ho (e ▸ hcS)
-  cases h with
-  | ff h =>
-    have hn := (h.map W.s).nodup_iff.2 hov
-    simp only [List.map_cons, List.nodup_cons, List.mem_cons, not_or] at hn
-    refine ⟨hn.2.2, Finset.ext fun x => ?_⟩
-    have hx := (h.map W.s).mem_iff (a := x)
-    rw [hm] at hx; simp only [List.map_cons, List.mem_cons] at hx
-    rw [List.mem_toFinset, hS]
-    constructor
-    · intro h1
-      have n1 : x ≠ a.s := fun e => hn.1.2 (e ▸ h1)
-      have n2 : x ≠ c.s := fun e => hn.2.1 (e ▸ h1)
-      rcases hx.1 (Or.inr (Or.inr h1)) with e | e
-      · exact Or.inl e
-      · exact Or.inr ⟨e, fun e => absurd e n1, fun e => absurd e n2⟩
-    · rintro (e | ⟨e, f1, f2⟩)
-      · rcases hx.2 (Or.inl e) with e' | e' | e'
-        · exact absurd (e'.symm.trans e) hao
-        · exact absurd (e'.symm.trans e) hco
-        · exact e'
-      · rcases hx.2 (Or.inr e) with e' | e' | e'
-        · exact absurd (f1 e') (by simp)
-        · exact absurd (f2 e') (by simp)
-        · exact e'
-  | tf h =>
-    have hn := (h.map W.s).nodup_iff.2 hov
-    simp only [List.map_cons, List.nodup_cons] at hn
-    refine ⟨hn.2, Finset.ext fun x => ?_⟩
-    have hx := (h.map W.s).mem_iff (a := x)
-    rw [hm] at hx; simp only [List.map_cons, List.mem_cons] at hx
-    rw [List.mem_toFinset, hS]
-    constructor
-    · intro h1
-      have n2 : x ≠ c.s := fun e => hn.1 (e ▸ h1)
-      rcases hx.1 (Or.inr h1) with e | e
-      · exact Or.inl e
-      · exact Or.inr ⟨e, fun _ => rfl, fun e => absurd e n2⟩
-    · rintro (e | ⟨e, f1, f2⟩)
-      · exact (hx.2 (Or.inl e)).resolve_left fun e' => hco (e'.symm.trans e)
-      · exact (hx.2 (Or.inr e)).resolve_left fun e' => by simpa using f2 e'
-  | ft h =>
-    have hn := (h.map W.s).nodup_iff.2 hov
-    simp only [List.map_cons, List.nodup_cons] at hn
-    refine ⟨hn.2, Finset.ext fun x => ?_⟩
-    have hx := (h.map W.s).mem_iff (a := x)
-    rw [hm] at hx; simp only [List.map_cons, List.mem_cons] at hx
-    rw [List.mem_toFinset, hS]
-    constructor
-    · intro h1
-      have n2 : x ≠ a.s := fun e => hn.1 (e ▸ h1)
-      rcases hx.1 (Or.inr h1) with e | e
-      · exact Or.inl e
-      · exact Or.inr ⟨e, fun e => absurd e n2, fun _ => rfl⟩
-    · rintro (e | ⟨e, f1, f2⟩)
-      · exact (hx.2 (Or.inl e)).resolve_left fun e' => hao (e'.symm.trans e)
-      · exact (hx.2 (Or.inr e)).resolve_left fun e' => by simpa using f1 e'
-  | tt h =>
-    have hn := (h.map W.s).nodup_iff.2 hov
-    refine ⟨hn, Finset.ext fun x => ?_⟩
-    have hx := (h.map W.s).mem_iff (a := x)
-    rw [hm] at hx
-    rw [List.mem_toFinset, hS, hx]; simp
-lemma shape_all {o a c : W} {v r : List W} (ho : ∀ w ∈ v, w.s ≠ o.s) (hp : r.Perm (o :: v)) (hv : (v.map W.s).Nodup)
-    (ha : a ∈ v) (hc : c ∈ v) (hac : a.s ≠ c.s) :
-    Shape o a c v false false (r.filter (fun w => !(Nat.beq w.s a.s || Nat.beq w.s c.s))) ∧
-    Shape o a c v true false (r.filter (fun w => !(Nat.beq w.s c.s || Nat.beq w.s c.s))) ∧
-    Shape o a c v false true (r.filter (fun w => !(Nat.beq w.s a.s || Nat.beq w.s a.s))) ∧ Shape o a c v true true r := by
-  have hnd : (r.map W.s).Nodup := by
-    refine (hp.map W.s).nodup_iff.2 ?_
-    simp only [List.map_cons, List.nodup_cons, List.mem_map, not_exists, not_and]
-    exact ⟨fun w hw => ho w hw, hv⟩
-  have har : a ∈ r := hp.symm.subset (by simp [ha])
-  have hcr : c ∈ r := hp.symm.subset (by simp [hc])
-  refine ⟨.ff ?_, .tf ?_, .ft ?_, .tt hp⟩
-  · rw [filter2]
-    have h1 := filter_perm hnd har
-    have h2 : c ∈ r.filter (fun w => !Nat.beq w.s a.s) := by
-      rw [List.mem_filter]; refine ⟨hcr, ?_⟩
-      rw [Bool.eq_false_iff.2 fun h => hac (Nat.eq_of_beq_eq_true h).symm]; rfl
-    exact ((filter_perm (hnd.sublist (List.filter_sublist.map _)) h2).cons a).trans (h1.trans hp)
-  · rw [filter1]; exact (filter_perm hnd hcr).trans hp
-  · rw [filter1]; exact (filter_perm hnd har).trans hp
-lemma cnt_two {v : List W} {a c : W} (ha : a ∈ v) (hc : c ∈ v) (hv : (v.map W.s).Nodup) (hac : a.s ≠ c.s) (j : ℕ) :
-    fl a j + fl c j ≤ cnt v j := by
-  have h1 := cnt_perm (filter_perm hv ha) j
-  have h2 : c ∈ v.filter (fun w => !Nat.beq w.s a.s) := by
-    rw [List.mem_filter]; refine ⟨hc, ?_⟩
-    rw [Bool.eq_false_iff.2 fun h => hac (Nat.eq_of_beq_eq_true h).symm]; rfl
-  have h3 := cnt_perm (filter_perm (hv.sublist (List.filter_sublist.map _)) h2) j
-  simp only [cnt_cons] at h1 h3; omega
-lemma cnt_one {v : List W} {a : W} (ha : a ∈ v) (hv : (v.map W.s).Nodup) (j : ℕ) : fl a j ≤ cnt v j := by
-  have h1 := cnt_perm (filter_perm hv ha) j
-  simp only [cnt_cons] at h1; omega
-def opW (d : Bool) (a c : W) : W := bif d then ⟨a.s ||| c.s, a.a &&& c.a, a.b ||| c.b, (a.a &&& c.a) ||| (a.b ||| c.b)⟩
-  else ⟨a.s &&& c.s, a.a ||| c.a, a.b &&& c.b, (a.a ||| c.a) ||| (a.b &&& c.b)⟩
-lemma opW_s (d : Bool) (a c : W) : (opW d a c).s = op d a.s c.s := by cases d <;> rfl
-lemma opW_ok {P : List ℕ} {a c : W} (d : Bool) (ha : WOk P a) (hc : WOk P c) : WOk P (opW d a c) := by
-  cases d
-  · refine ⟨isPk_or ha.pa hc.pa, isPk_and ha.pb, rfl, fun j hj h => ?_, fun j hj h => ?_⟩
-    · have h : (a.a ||| c.a).testBit (5 * j) = true := h
-      rw [Nat.testBit_or, Bool.or_eq_true] at h
-      rw [opW_s, and_op]
-      rcases h with h | h
-      · rw [ha.ca j hj h]; simp [op]
-      · rw [hc.ca j hj h]; simp [op]
-    · have h : (a.b &&& c.b).testBit (5 * j) = true := h
-      rw [Nat.testBit_and, Bool.and_eq_true] at h
-      rw [opW_s, and_op, ha.cb j hj h.1, hc.cb j hj h.2, op_self]
-  · refine ⟨isPk_and ha.pa, isPk_or ha.pb hc.pb, rfl, fun j hj h => ?_, fun j hj h => ?_⟩
-    · have h : (a.a &&& c.a).testBit (5 * j) = true := h
-      rw [Nat.testBit_and, Bool.and_eq_true] at h
-      rw [opW_s, and_op, ha.ca j hj h.1, hc.ca j hj h.2, op_self]
-    · have h : (a.b ||| c.b).testBit (5 * j) = true := h
-      rw [Nat.testBit_or, Bool.or_eq_true] at h
-      rw [opW_s, and_op]
-      rcases h with h | h
-      · rw [ha.cb j hj h]; apply Nat.eq_of_testBit_eq; intro i; simp [op]
-      · rw [hc.cb j hj h]; apply Nat.eq_of_testBit_eq; intro i; simp [op]
-lemma op_good {l x y : ℕ} (d : Bool) (hx : Good l x) (hy : Good l y) : Good l (op d x y) := by
-  refine ⟨fun i j h h1 h2 => ?_, fun i j h h1 h2 => ?_⟩
-  · rw [op_bit, op_bit, hx.1 i j h h1 h2, hy.1 i j h h1 h2]
-  · rw [op_bit, op_bit, hx.2 i j h h1 h2, hy.2 i j h h1 h2]
-lemma fl_and {P : List ℕ} {a c : W} (ha : WOk P a) : a.c &&& c.c = pk P.length (fun j => fl a j * fl c j) := by
-  rw [pk_of (isPk_and (y := c.c) ha.pc)]
-  refine pk_congr fun j _ => ?_
-  rw [Nat.testBit_and]; unfold fl; cases a.c.testBit (5 * j) <;> cases c.c.testBit (5 * j) <;> rfl
-lemma fl_pk {P : List ℕ} {a : W} (ha : WOk P a) : a.c = pk P.length (fl a) := pk_of ha.pc
-section sound
-variable {P : List ℕ} {l m g T : ℕ} (X : Ctx P l m g T)
-include X
-lemma bi_st {k k' t z : ℕ} {v r : List W} {S S' : Finset ℕ} {d' : Bool} {a c : W} {ka kc : Bool}
-    (hs : StOk P T l (k + 1) z v S) (hm : Min m T (k' + 1) t S) (hk : k' ≤ k) (hb : Bi d' a.s c.s S S')
-    (hl : Live m T k' t S') (ha : a ∈ v) (hc : c ∈ v) (hka : ka = decide (a.s ∈ S')) (hkc : kc = decide (c.s ∈ S'))
-    (hsh : Shape (opW d' a c) a c v ka kc r) :
-    StOk P T l k (z + (a.c &&& c.c) - (opW d' a c).c - (bif ka then a.c else 0) - (bif kc then c.c else 0)) r S' ∧
-    Nat.beq (Nat.land (z + (a.c &&& c.c) - (opW d' a c).c) g) g = true := by
-  obtain ⟨b, hb15, hcl, hz⟩ := hs.bud
-  have hle := cnt_le X hs.rep hs.wok hcl hm (by omega)
-  have hab : a.s ≠ c.s := hb.1
-  have hfr := hb.fresh hl hm.2
-  have hfS : (opW d' a c).s ∉ S := by rw [opW_s]; exact fun h => hfr (sub_C _ _ (by simpa using h))
-  have wa := hs.wok a ha; have wc := hs.wok c hc
-  have wo := opW_ok d' wa wc
-  have hrep : Rep r S' := by
-    refine hsh.rep hs.rep ha hc hab hfS fun x => ?_
-    obtain ⟨_, U, e1, e2⟩ := hb
-    rw [opW_s] at hfS ⊢
-    rw [e2, Finset.mem_insert]
-    constructor
-    · rintro (h | h)
-      · exact Or.inl h
-      · refine Or.inr ⟨by rw [e1]; simp [h], ?_, ?_⟩
-        · rintro rfl; rw [hka, e2]; simp [h]
-        · rintro rfl; rw [hkc, e2]; simp [h]
-    · rintro (h | ⟨h, f1, f2⟩)
-      · exact Or.inl h
-      · rw [e1] at h; simp only [Finset.mem_insert] at h
-        rcases h with h | h | h
-        · have := f1 h; rw [hka, decide_eq_true_eq, e2, Finset.mem_insert] at this; rw [h]; exact this
-        · have := f2 h; rw [hkc, decide_eq_true_eq, e2, Finset.mem_insert] at this; rw [h]; exact this
-        · exact Or.inr h
-  have hwok : ∀ w ∈ r, WOk P w := fun w hw => (hsh.mem hw).elim (fun e => e ▸ wo) (hs.wok w)
-  have hgood : ∀ w ∈ r, Good l w.s := fun w hw => by
-    rcases hsh.mem hw with rfl | h
-    · rw [opW_s]; exact op_good _ (hs.good a ha) (hs.good c hc)
-    · exact hs.good w h
-  let b' : ℕ → ℕ := fun j => b j - max (fl a j) (fl c j)
-  have hcl' : Cl P T k b' S' := by
-    intro j hj q hq hsol
-    have hl1 := hle j hj
-    have h2 := cnt_two ha hc hs.rep.1 hab j
-    simp only [b'] at hq
-    by_cases hkill : a.c.testBit (5 * j) = true ∨ c.c.testBit (5 * j) = true
-    · refine hcl j hj q ?_ (hb.kill (hkill.imp (wa.cst hj) (wc.cst hj)) hsol)
-      have : 1 ≤ max (fl a j) (fl c j) := by
-        rcases hkill with h | h <;> simp [fl, h]
-      have := fl_le a j; have := fl_le c j; omega
-    · push Not at hkill
-      refine hcl j hj (q + 1) ?_ (hb.im hsol)
-      have e1 : fl a j = 0 := by simp [fl, hkill.1]
-      have e2 : fl c j = 0 := by simp [fl, hkill.2]
-      rw [e1, e2] at hq; simp at hq; omega
-  have hmin := hb.min hl hm.2
-  have hle' := cnt_le X hrep hwok hcl' hmin hk
-  have num : ∀ j < P.length, 1 ≤ 16 + b j - cnt v j + fl a j * fl c j ∧ fl (opW d' a c) j ≤ 1 ∧
-      16 ≤ 16 + b j - cnt v j + fl a j * fl c j - fl (opW d' a c) j ∧ 16 + b j - cnt v j + fl a j * fl c j - fl (opW d' a c) j < 32 ∧
-      16 + b j - cnt v j + fl a j * fl c j - fl (opW d' a c) j - (bif ka then fl a j else 0) - (bif kc then fl c j else 0) = 16 + b' j - cnt r j := by
-    intro j hj
-    have q1 := hle j hj; have q2 := hle' j hj; have q3 := cnt_two ha hc hs.rep.1 hab j; have q4 := hb15 j hj
-    have q5 := hsh.cnt j; have q6 := fl_le a j; have q7 := fl_le c j; have q8 := fl_le (opW d' a c) j
-    simp only [b'] at q2 ⊢
-    generalize fl a j = fa at *; generalize fl c j = fc at *; generalize fl (opW d' a c) j = fo at *
-    interval_cases fa <;> interval_cases fc <;> cases ka <;> cases kc <;> simp at q2 q3 q5 ⊢ <;> omega
-  have e1 : z + (a.c &&& c.c) - (opW d' a c).c = pk P.length (fun j => 16 + b j - cnt v j + fl a j * fl c j - fl (opW d' a c) j) := by
-    rw [hz, fl_and wa, fl_pk wo, pk_add, pk_sub]
-    intro j hj; have := num j hj; omega
-  refine ⟨⟨hrep, hwok, hgood, b', fun j hj => ?_, hcl', ?_⟩, ?_⟩
-  · have := hb15 j hj; simp only [b']; omega
-  · rw [e1]
-    have ea : (bif ka then a.c else 0) = pk P.length (fun j => bif ka then fl a j else 0) := by
-      cases ka
-      · simp [pk]
-      · exact fl_pk wa
-    have ec : (bif kc then c.c else 0) = pk P.length (fun j => bif kc then fl c j else 0) := by
-      cases kc
-      · simp [pk]
-      · exact fl_pk wc
-    have le1 : ∀ j, (bif ka then fl a j else 0) ≤ 1 := fun j => by cases ka <;> simp [fl_le]
-    have le2 : ∀ j, (bif kc then fl c j else 0) ≤ 1 := fun j => by cases kc <;> simp [fl_le]
-    rw [ea, ec, pk_sub, pk_sub]
-    · exact pk_congr fun j hj => (num j hj).2.2.2.2
-    · intro j hj; have := num j hj; have := le1 j; have := le2 j; omega
-    · intro j hj; have := num j hj; have := le1 j; omega
-  · rw [e1, nl, X.hg, pk_guard]; · simp
-    intro j hj; have := num j hj; omega
-lemma drop_ok {k' t : ℕ} {v : List W} {S S' : Finset ℕ} {d' : Bool} {a c : W} {i : ℕ} (hr : Rep v S)
-    (hb : Bi d' a.s c.s S S') (hl : Live m T k' t S')
-    (ha : a ∈ v) (hk : a.s ∉ S')
-    (hu : (Nat.land (sp (pos' t) l a.s) (wst (pos' t) l v)).testBit i = true) :
-    bif d' then c.s.testBit (NN + i) = false else c.s.testBit i = true := by
-  obtain ⟨hli, u1, u2⟩ := uq_of hr ha hu
-  obtain ⟨⟨m1, m2, t1, t2⟩, _⟩ := X.lg i hli
-  obtain ⟨w, hw, hs⟩ := hl.cov m1 m2 t1 t2
-  have hac : c.s ≠ a.s := hb.1.symm
-  have hsub := hb.sub.2.2 hw
-  rw [Finset.mem_insert] at hsub
-  have hg : sepb NN (pos' t) (op d' a.s c.s) i = true := by
-    rcases hsub with rfl | h
-    · exact hs
-    · have := u2 w h (fun e => hk (e ▸ hw))
-      rw [this] at hs; simp at hs
-  have hcn := u2 c.s hb.sub.2.1 hac
-  revert hg hcn u1
-  unfold sepb; simp only [op_bit]
-  cases pos' t <;> cases d' <;> cases a.s.testBit i <;> cases a.s.testBit (NN + i) <;> cases c.s.testBit i <;>
-    cases c.s.testBit (NN + i) <;> simp
-end sound
-def mkx (d : Bool) (l o : ℕ) (w : W) : X := ⟨w, w.s, Nat.shiftRight w.s NN, Nat.land (sp d l w.s) o⟩
-lemma mkX_eq (d : Bool) (l o : ℕ) (v : List W) : mkX d l o v = v.map (mkx d l o) := by
-  induction v with
-  | nil => rfl
-  | cons w v ih => change _ :: mkX d l o v = _; rw [ih]; rfl
-def modeF (n e : ℕ) : (W → W → ℕ → ℕ → ℕ → ℕ → ℕ → Bool) → W → W → ℕ → ℕ → ℕ → ℕ → ℕ → Bool :=
-  bif Nat.ble n e then (bif Nat.ble (Nat.succ n) e then f2 else f1) else f0
-lemma node_eq (f : ℕ → List W → Bool) (d : Bool) (l m g e n z : ℕ) (v : List W) (go : (X → X → Bool) → List X → Bool) :
-    node f d l m g e n z v go = go (pair (modeF n e (mid f d l m g e (Nat.pred n) z v))) (v.map (mkx d l (wst d l v))) := by
-  rw [← mkX_eq]; unfold node modeF
-  cases Nat.ble n e <;> cases Nat.ble (Nat.succ n) e <;> rfl
-lemma modeF_false {n e : ℕ} {h : W → W → ℕ → ℕ → ℕ → ℕ → ℕ → Bool} {a c : W} {da dc : ℕ} {s x y : ℕ}
-    (hf : modeF n e h a c da dc s x y = false) (h0 : ¬ n ≤ e → da = 0 ∧ dc = 0) (h1 : ¬ n + 1 ≤ e → da = 0 ∨ dc = 0) :
-    h a c da dc s x y = false := by
-  unfold modeF at hf
-  cases b1 : Nat.ble n e with
-  | false =>
-    have := h0 (fun h => by rw [Nat.ble_eq_true_of_le h] at b1; simp at b1)
-    rw [b1, this.1, this.2] at hf; rw [this.1, this.2]; exact hf
-  | true =>
-    cases b2 : Nat.ble (Nat.succ n) e with
-    | false =>
-      have := h1 (fun h => by rw [Nat.ble_eq_true_of_le h] at b2; simp at b2)
-      have h3 : Nat.beq (Nat.mul da dc) 0 = true := by
-        change Nat.beq (da * dc) 0 = true
-        rcases this with h | h <;> simp [h]
-      rw [b1, b2] at hf
-      simp only [Bool.cond_true, Bool.cond_false, f1, h3] at hf
-      exact hf
-    | true => rw [b1, b2] at hf; exact hf
-def dfc (d d' : Bool) (l o : ℕ) (a c : W) : ℕ := bif d' then Nat.land (Nat.land (sp d l a.s) o) (Nat.shiftRight c.s NN)
-  else Nat.xor (Nat.land (Nat.land (sp d l a.s) o) c.s) (Nat.land (sp d l a.s) o)
-lemma pair_false {h : W → W → ℕ → ℕ → ℕ → ℕ → ℕ → Bool} {d : Bool} {l o : ℕ} {a c : W}
-    (hp : pair h (mkx d l o a) (mkx d l o c) = false) (d' : Bool) :
-    h a c (dfc d d' l o a c) (dfc d d' l o c a) (opW d' a c).s (opW d' a c).a (opW d' a c).b = false := by
-  simp only [pair, mkx, bR] at hp
-  rw [Bool.cond_eq_ite] at hp
-  split_ifs at hp with h1
-  · cases d'
-    · rw [Bool.not_eq_true] at h1; exact h1
-    · exact hp
-lemma put_eq {m : ℕ} {o : W} {v : List W} (ho : Nat.lor o.a o.b = o.c) (h0 : o.s ≠ 0) (h1 : o.s ≠ m) (h : List W → Bool) :
-    put m o.s o.a o.b v h = ins o v h := by
-  have hb0 : Nat.beq o.s 0 = false := Bool.eq_false_iff.2 fun h => h0 (Nat.eq_of_beq_eq_true h)
-  have hb1 : Nat.beq o.s m = false := Bool.eq_false_iff.2 fun h => h1 (Nat.eq_of_beq_eq_true h)
-  simp only [put, st_eq, hb0, hb1, ho]
-lemma mid_false {f : ℕ → List W → Bool} {d : Bool} {l m g e n z : ℕ} {v : List W} {a c : W} {da dc : ℕ} {d' : Bool}
-    (h : mid f d l m g e n z v a c da dc (opW d' a c).s (opW d' a c).a (opW d' a c).b = false)
-    (hg : Nat.beq (Nat.land (z + (a.c &&& c.c) - (opW d' a c).c) g) g = true) :
-    kids (child f d l g e) e n (z + (a.c &&& c.c) - (opW d' a c).c) a.c c.c a.s c.s (Nat.beq da 0) (Nat.beq dc 0)
-      (put m (opW d' a c).s (opW d' a c).a (opW d' a c).b v) = false := by
-  have ec : Nat.lor (opW d' a c).a (opW d' a c).b = (opW d' a c).c := by cases d' <;> rfl
-  simp only [mid, st_eq, ec] at h
-  have hg' : Nat.beq (Nat.land (Nat.sub (Nat.add z (Nat.land a.c c.c)) (opW d' a c).c) g) g = true := hg
-  rw [hg'] at h
-  exact h
-lemma kids_false {ch : ℕ → ((List W → Bool) → Bool) → ℕ → Bool} {e n z x y a c : ℕ} {oa oc : Bool} {mk : (List W → Bool) → Bool}
-    (h : kids ch e n z x y a c oa oc mk = false) :
-    (oa = true → oc = true → ch n (fun h => mk (fun r => rm a c r h)) z = false) ∧
-    (oc = true → n + 1 ≤ e → ch (n + 1) (fun h => mk (fun r => rm c c r h)) (z - x) = false) ∧
-    (oa = true → n + 1 ≤ e → ch (n + 1) (fun h => mk (fun r => rm a a r h)) (z - y) = false) ∧
-    (n + 2 ≤ e → ch (n + 2) mk (z - x - y) = false) := by
-  simp only [kids, bR] at h
-  have b1 : n + 1 ≤ e → Nat.ble (Nat.succ n) e = true := fun h => Nat.ble_eq_true_of_le h
-  have b2 : n + 2 ≤ e → Nat.ble (Nat.succ (Nat.succ n)) e = true := fun h => Nat.ble_eq_true_of_le h
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · intro h1 h2; subst h1 h2
-    revert h; simp only [Bool.cond_true]; cases ch n (fun h => mk (fun r => rm a c r h)) z <;> simp
-  · intro h1 h2; subst h1; rw [b1 h2] at h
-    revert h; simp only [Bool.cond_true]
-    change _ → ch (Nat.succ n) (fun h => mk (fun r => rm c c r h)) (Nat.sub z x) = false
-    cases ch (Nat.succ n) (fun h => mk (fun r => rm c c r h)) (Nat.sub z x) <;> simp
-  · intro h1 h2; subst h1; rw [b1 h2] at h
-    revert h; simp only [Bool.cond_true]
-    change _ → ch (Nat.succ n) (fun h => mk (fun r => rm a a r h)) (Nat.sub z y) = false
-    cases ch (Nat.succ n) (fun h => mk (fun r => rm a a r h)) (Nat.sub z y) <;> simp
-  · intro h2; rw [b2 h2] at h
-    revert h; simp only [Bool.cond_true]
-    change _ → ch (Nat.succ (Nat.succ n)) mk (Nat.sub (Nat.sub z x) y) = false
-    cases ch (Nat.succ (Nat.succ n)) mk (Nat.sub (Nat.sub z x) y) <;> simp
-section sound
-variable {P : List ℕ} {l m g T : ℕ} (X : Ctx P l m g T)
-include X
-lemma gate_sound {f : ℕ → List W → Bool} {d : Bool} {e n z t k k' : ℕ} {v : List W} {S S' : Finset ℕ} {a c : W} {d' : Bool}
-    (hs : StOk P T l (k + 1) z v S) (hm : Min m T (k' + 1) t S) (hk : k' ≤ k) (hd : d = pos' t) (hn : n = v.length)
-    (he : e = k + 1 - t) (hb : Bi d' a.s c.s S S') (hl : Live m T k' t S') (ha : a ∈ v) (hc : c ∈ v)
-    (hp : pair (modeF n e (mid f d l m g e (Nat.pred n) z v)) (mkx d l (wst d l v) a) (mkx d l (wst d l v) c) = false) :
-    ∃ z' r, f z' r = false ∧ StOk P T l k z' r S' := by
-  subst hd hn
-  have hmin := hb.min hl hm.2
-  have hsz := hmin.size
-  have hpos := hl.pos
-  have hfr := hb.fresh hl hm.2
-  have hosS : ∀ w ∈ v, w.s ≠ (opW d' a c).s := fun w hw e => hfr (by
-    rw [← opW_s, ← e]; exact sub_C _ _ (by simpa using hs.rep.mem.2 ⟨w, hw, rfl⟩))
-  have ho0 : (opW d' a c).s ≠ 0 := fun e => hfr (by rw [← opW_s, e]; simp [C])
-  have ho1 : (opW d' a c).s ≠ m := fun e => hfr (by rw [← opW_s, e]; simp [C])
-  obtain ⟨r0, hr0, hins⟩ := ins_spec (opW d' a c) v hosS
-  obtain ⟨s1, s2, s3, s4⟩ := shape_all hosS hr0 hs.rep.1 ha hc hb.1
-  have hp := pair_false hp d'
-  generalize hoa : dfc (pos' t) d' l (wst (pos' t) l v) a c = da at hp
-  generalize hoc : dfc (pos' t) d' l (wst (pos' t) l v) c a = dc at hp
-  have filt : ∀ {x y : W}, (∀ i, (Nat.land (sp (pos' t) l x.s) (wst (pos' t) l v)).testBit i = true → bif d' then y.s.testBit (NN + i) = false else y.s.testBit i = true) →
-      dfc (pos' t) d' l (wst (pos' t) l v) x y = 0 := by
-    intro x y hu
-    unfold dfc
-    generalize Nat.land (sp (pos' t) l x.s) (wst (pos' t) l v) = u at *
-    cases d'
-    · simp only [Bool.cond_false, nl, nx] at hu ⊢
-      apply Nat.eq_of_testBit_eq; intro i
-      have := hu i
-      rw [Nat.testBit_xor, Nat.testBit_and]; cases h1 : u.testBit i <;> simp_all
-    · simp only [Bool.cond_true, nl, nsr] at hu ⊢
-      apply Nat.eq_of_testBit_eq; intro i
-      have := hu i
-      rw [Nat.testBit_and, Nat.testBit_shiftRight]; cases h1 : u.testBit i <;> simp_all
-  have fa : a.s ∉ S' → da = 0 := fun h => by
-    rw [← hoa]; exact filt fun i hi => drop_ok X hs.rep hb hl ha h hi
-  have fc : c.s ∉ S' → dc = 0 := fun h => by
-    rw [← hoc]; exact filt fun i hi => drop_ok X hs.rep hb.symm hl hc h hi
-  have b0 : ∀ {q : ℕ}, q = 0 → Nat.beq q 0 = true := fun h => by rw [h]; rfl
-  have hput : ∀ h, put m (opW d' a c).s (opW d' a c).a (opW d' a c).b v h = h r0 := fun h => by
-    rw [put_eq (by cases d' <;> rfl) ho0 ho1, hins]
-  have hv2 : 2 ≤ v.length := by
-    rw [← hs.rep.card]
-    have : ({a.s, c.s} : Finset ℕ) ⊆ S := by
-      intro x hx; simp at hx; rcases hx with rfl | rfl; exacts [hb.sub.1, hb.sub.2.1]
-    have h2 := Finset.card_le_card this
-    rwa [Finset.card_pair hb.1] at h2
-  have hpr : Nat.pred v.length + 1 = v.length := by simp [Nat.pred_eq_sub_one]; omega
-  have main : ∀ {ka kc : Bool} {r : List W}, ka = decide (a.s ∈ S') → kc = decide (c.s ∈ S') → Shape (opW d' a c) a c v ka kc r →
-      r.length = S'.card ∧ S'.card ≤ e ∧ StOk P T l k (z + (a.c &&& c.c) - (opW d' a c).c - (bif ka then a.c else 0) - (bif kc then c.c else 0)) r S' := by
-    intro ka kc r h1 h2 h3
-    have := (bi_st X hs hm hk hb hl ha hc h1 h2 h3).1
-    exact ⟨this.rep.card.symm, by omega, this⟩
-  have hguard : Nat.beq (Nat.land (z + (a.c &&& c.c) - (opW d' a c).c) g) g = true := by
-    by_cases q1 : a.s ∈ S' <;> by_cases q2 : c.s ∈ S'
-    · exact (bi_st X hs hm hk hb hl ha hc (by simp [q1]) (by simp [q2]) s4).2
-    · exact (bi_st X hs hm hk hb hl ha hc (by simp [q1]) (by simp [q2]) s2).2
-    · exact (bi_st X hs hm hk hb hl ha hc (by simp [q1]) (by simp [q2]) s3).2
-    · exact (bi_st X hs hm hk hb hl ha hc (by simp [q1]) (by simp [q2]) s1).2
-  have fin : ∀ {n z' : ℕ} {r : List W} {mk : (List W → Bool) → Bool}, (∀ h, mk h = h r) → StOk P T l k z' r S' → n = r.length →
-      child f (pos' t) l g e n mk z' = false → ∃ z' r, f z' r = false ∧ StOk P T l k z' r S' :=
-    fun {n z' r mk} h1 h2 h3 h4 => ⟨z', r, child_sound X h1 h2 hmin hk rfl h3 he h4, h2⟩
-  by_cases q1 : a.s ∈ S' <;> by_cases q2 : c.s ∈ S'
-  · obtain ⟨c1, c2, c3⟩ := main (by simp [q1]) (by simp [q2]) s4
-    have hlen := s4.len; simp at hlen
-    have hmid := mid_false (modeF_false hp (fun h => by omega) (fun h => by omega)) hguard
-    exact fin hput c3 (by omega) ((kids_false hmid).2.2.2 (by omega))
-  · obtain ⟨c1, c2, c3⟩ := main (by simp [q1]) (by simp [q2]) s2
-    have hlen := s2.len; simp only [Bool.cond_true, Bool.cond_false] at hlen
-    have hmid := mid_false (modeF_false hp (fun h => by omega) (fun h => Or.inr (fc q2))) hguard
-    exact fin (fun h => by rw [hput, rm_eq]) (by simpa using c3) (by omega) ((kids_false hmid).2.1 (b0 (fc q2)) (by omega))
-  · obtain ⟨c1, c2, c3⟩ := main (by simp [q1]) (by simp [q2]) s3
-    have hlen := s3.len; simp only [Bool.cond_true, Bool.cond_false] at hlen
-    have hmid := mid_false (modeF_false hp (fun h => by omega) (fun h => Or.inl (fa q1))) hguard
-    exact fin (fun h => by rw [hput, rm_eq]) (by simpa using c3) (by omega) ((kids_false hmid).2.2.1 (b0 (fa q1)) (by omega))
-  · obtain ⟨c1, c2, c3⟩ := main (by simp [q1]) (by simp [q2]) s1
-    have hlen := s1.len; simp only [Bool.cond_false] at hlen
-    have hmid := mid_false (modeF_false hp (fun h => ⟨fa q1, fc q2⟩) (fun h => Or.inl (fa q1))) hguard
-    exact fin (fun h => by rw [hput, rm_eq]) (by simpa using c3) (by omega) ((kids_false hmid).1 (b0 (fa q1)) (b0 (fc q2)))
-end sound
-def notW (m : ℕ) (a : W) : W := ⟨a.s ^^^ m, a.b, a.a, a.c⟩
-section sound
-variable {P : List ℕ} {l m g T : ℕ} (X : Ctx P l m g T)
-include X
-lemma un_st {k k' t z : ℕ} {v r : List W} {S S' : Finset ℕ} {a : W} {ka : Bool}
-    (hs : StOk P T l (k + 1) z v S) (hm : Min m T (k' + 1) (t + 1) S) (hk : k' ≤ k) (hb : Un m a.s S S')
-    (hl : Live m T k' t S') (ha : a ∈ v) (hka : ka = decide (a.s ∈ S'))
-    (hsh : bif ka then r.Perm (notW m a :: v) else (a :: r).Perm (notW m a :: v)) :
-    StOk P T l k (z - a.c - (bif ka then a.c else 0)) r S' := False.elim hb
-end sound
-lemma nots_false {f : ℕ → ℕ → List W → Bool} {d : Bool} {l m g e n z q : ℕ} {v r : List W} (h : nots f d l m g e n z q v r = false)
-    {a : W} (ha : a ∈ r) (hq : a.s + 1 ≠ q) : ins (notW m a) v (fun v =>
-      (bif (bif Nat.ble n e then child (f (a.s ^^^ m)) d l g e n (rm a.s a.s v) (z - a.c) else false) then true else
-      (bif Nat.ble (n + 1) e then child (f (a.s ^^^ m)) d l g e (n + 1) (fun h => h v) (z - a.c - a.c) else false))) = false := by
-  induction r with
-  | nil => simp at ha
-  | cons w r ih =>
-    change (Bool.rec (motive := fun _ => Bool) (nots f d l m g e n z q v r) true (Bool.rec (motive := fun _ => Bool)
-      (st (Nat.xor w.s m) (fun s => st (Nat.sub z w.c) (fun z => ins ⟨s, w.b, w.a, w.c⟩ v (fun v =>
-        Bool.rec (motive := fun _ => Bool) (Bool.rec (motive := fun _ => Bool) false
-          (child (f s) d l g e (Nat.succ n) (fun h => h v) (Nat.sub z w.c)) (Nat.ble (Nat.succ n) e)) true
-          (Bool.rec (motive := fun _ => Bool) false (child (f s) d l g e n (rm w.s w.s v) z) (Nat.ble n e)))))) false (Nat.beq (Nat.succ w.s) q)) : Bool) = false at h
-    rw [bR, bR] at h
-    simp only [st_eq, bR] at h
-    simp only [List.mem_cons] at ha
-    rcases ha with rfl | ha
-    · rw [Bool.eq_false_iff.2 fun h => hq (Nat.eq_of_beq_eq_true h), Bool.cond_false] at h
-      cases hh : ins (notW m a) v (fun v =>
-        (bif (bif Nat.ble n e then child (f (a.s ^^^ m)) d l g e n (rm a.s a.s v) (z - a.c) else false) then true else
-        (bif Nat.ble (n + 1) e then child (f (a.s ^^^ m)) d l g e (n + 1) (fun h => h v) (z - a.c - a.c) else false))) with
-      | false => rfl
-      | true =>
-        have h : (bif ins (notW m a) v (fun v =>
-          (bif (bif Nat.ble n e then child (f (a.s ^^^ m)) d l g e n (rm a.s a.s v) (z - a.c) else false) then true else
-          (bif Nat.ble (n + 1) e then child (f (a.s ^^^ m)) d l g e (n + 1) (fun h => h v) (z - a.c - a.c) else false))) then true
-          else nots f d l m g e n z q v r) = false := h
-        rw [hh] at h; simp at h
-    · refine ih ?_ ha
-      revert h
-      cases nots f d l m g e n z q v r <;> simp
-section sound
-variable {P : List ℕ} {l m g T : ℕ} (X : Ctx P l m g T)
-include X
-lemma nots_sound {f : ℕ → ℕ → List W → Bool} {d : Bool} {e n z q t k k' : ℕ} {v : List W} {S S' : Finset ℕ} {a : W}
-    (hs : StOk P T l (k + 1) z v S) (hm : Min m T (k' + 1) (t + 1) S) (hk : k' ≤ k) (hd : d = pos' t) (hn : n = v.length)
-    (he : e = k + 1 - t) (hb : Un m a.s S S') (hl : Live m T k' t S') (ha : a ∈ v) (hq : a.s + 1 ≠ q) {rr : List W} (har' : a ∈ rr)
-    (hp : nots f d l m g e n z q v rr = false) : ∃ z' r, f (a.s ^^^ m) z' r = false ∧ StOk P T l k z' r S' := by
-  subst hd hn
-  have hmin := hb.min hl hm.2
-  have hsz := hmin.size
-  have hfr := hb.fresh hl hm.2
-  have hosS : ∀ w ∈ v, w.s ≠ (notW m a).s := fun w hw e => hfr (by
-    change a.s ^^^ m ∈ _
-    have : w.s = a.s ^^^ m := e
-    rw [← this]; exact sub_C _ _ (by simpa using hs.rep.mem.2 ⟨w, hw, rfl⟩))
-  obtain ⟨r0, hr0, hins⟩ := ins_spec (notW m a) v hosS
-  have h := nots_false hp har' hq
-  rw [hins] at h
-  have hl0 : r0.length = v.length + 1 := by rw [hr0.length_eq]; simp
-  have hnd : (r0.map W.s).Nodup := by
-    refine (hr0.map W.s).nodup_iff.2 ?_
-    simp only [List.map_cons, List.nodup_cons, List.mem_map, not_exists, not_and]
-    exact ⟨fun w hw => hosS w hw, hs.rep.1⟩
-  have har : a ∈ r0 := hr0.symm.subset (by simp [ha])
-  by_cases q1 : a.s ∈ S'
-  · have hst := un_st X hs hm hk hb hl ha (ka := true) (by simp [q1]) hr0
-    have hc := hst.rep.card
-    have hb1 : Nat.ble (v.length + 1) e = true := Nat.ble_eq_true_of_le (by omega)
-    rw [hb1] at h
-    have h : child (f (a.s ^^^ m)) (pos' t) l g e (v.length + 1) (fun h => h r0) (z - a.c - a.c) = false := by
-      revert h; simp only [Bool.cond_true]
-      cases child (f (a.s ^^^ m)) (pos' t) l g e (v.length + 1) (fun h => h r0) (z - a.c - a.c) <;> simp
-    exact ⟨_, _, child_sound X (fun h => rfl) hst hmin hk rfl (by omega) he h, hst⟩
-  · have hperm : (a :: r0.filter (fun w => !(Nat.beq w.s a.s || Nat.beq w.s a.s))).Perm (notW m a :: v) := by
-      rw [filter1]; exact (filter_perm hnd har).trans hr0
-    have hst := un_st X hs hm hk hb hl ha (ka := false) (by simp [q1]) hperm
-    simp only [Bool.cond_false, Nat.sub_zero] at hst
-    have hc := hst.rep.card
-    have hlen := hperm.length_eq
-    simp only [List.length_cons] at hlen
-    have hb1 : Nat.ble v.length e = true := Nat.ble_eq_true_of_le (by omega)
-    rw [hb1] at h
-    have h : child (f (a.s ^^^ m)) (pos' t) l g e v.length (rm a.s a.s r0) (z - a.c) = false := by
-      revert h; simp only [Bool.cond_true]
-      cases child (f (a.s ^^^ m)) (pos' t) l g e v.length (rm a.s a.s r0) (z - a.c) <;> simp
-    exact ⟨_, _, child_sound X (rm_eq _ _ _) hst hmin hk rfl (by omega) he h, hst⟩
-end sound
-def FM (m T k t : ℕ) (S : Finset ℕ) (KP : ℕ → ℕ → Prop) (KN : ℕ → Prop) : Prop :=
-  (∃ k0 d a b S1, k = k0 + 1 ∧ KP a b ∧ Bi d a b S S1 ∧ Live m T k0 t S1) ∨
-  (∃ k0 t0 a d c S1 S2, k = k0 + 2 ∧ t = t0 + 1 ∧ KN a ∧ Un m a S S1 ∧ Bi d (a ^^^ m) c S1 S2 ∧ Live m T k0 t0 S2) ∨
-  (∃ k0 t0 a a' d S1 S2 S3, k = k0 + 3 ∧ t = t0 + 2 ∧ KN a ∧ Un m a S S1 ∧ a' ≠ a ^^^ m ∧ Un m a' S1 S2 ∧
-    Bi d (a ^^^ m) (a' ^^^ m) S2 S3 ∧ Live m T k0 t0 S3)
-lemma FM_of {m T k t : ℕ} {S : Finset ℕ} (h : Min m T k t S) (hc : 2 ≤ S.card) : FM m T k t S (fun _ _ => True) (fun _ => True) := by
-  rcases first_move k t S h hc with ⟨k0, d, a, b, S1, e, h⟩ | ⟨k0, t0, a, d, c, S1, S2, e, e', h⟩ | ⟨k0, t0, a, a', d, S1, S2, S3, e, e', h⟩
-  · exact Or.inl ⟨k0, d, a, b, S1, e, trivial, h⟩
-  · exact Or.inr (Or.inl ⟨k0, t0, a, d, c, S1, S2, e, e', trivial, h⟩)
-  · exact Or.inr (Or.inr ⟨k0, t0, a, a', d, S1, S2, S3, e, e', trivial, h⟩)
-lemma scan_false {p : X → Bool} {xs : List X} (h : scan p xs = false) : ∀ c ∈ xs, p c = false := by
-  induction xs with
-  | nil => simp
-  | cons a r ih =>
-    change (Bool.rec (motive := fun _ => Bool) (scan p r) true (p a) : Bool) = false at h
-    rw [bR] at h
-    intro c hc
-    simp only [List.mem_cons] at hc
-    rcases hc with rfl | hc
-    · revert h; cases p c <;> simp
-    · refine ih ?_ c hc
-      revert h; cases scan p r <;> simp
-lemma pairs_false {h : X → X → Bool} {xs : List X} (hp : pairs h xs = false) : xs.Pairwise (fun a c => h a c = false) := by
-  induction xs with
-  | nil => simp
-  | cons a r ih =>
-    change (Bool.rec (motive := fun _ => Bool) (pairs h r) true (scan (h a) r) : Bool) = false at hp
-    rw [bR] at hp
-    rw [List.pairwise_cons]
-    constructor
-    · apply scan_false; revert hp; cases scan (h a) r <;> simp
-    · apply ih; revert hp; cases pairs h r <;> simp
-lemma beq_f {x y : ℕ} (h : x ≠ y) : Nat.beq x y = false := Bool.eq_false_iff.2 fun h' => h (Nat.eq_of_beq_eq_true h')
-lemma pairsP_false {h : X → X → Bool} {xs : List X} {q : ℕ} {a c : X} (hp : pairsP q h xs = false) (ha : a ∈ xs) (hq : a.s = q)
-    (hc : c ∈ xs) (hcq : c.s ≠ q) : h a c = false := by
-  have h1 := scan_false hp a ha
-  simp only [bR] at h1
-  rw [hq, Nat.beq_refl, Bool.cond_true] at h1
-  have h2 := scan_false h1 c hc
-  beta_reduce at h2
-  rwa [beq_f hcq, Bool.cond_false] at h2
-lemma pairsQ_false {h : X → X → Bool} {xs : List X} {q q' : ℕ} {a c : X} (hp : pairsQ q q' h xs = false) (ha : a ∈ xs) (hq : a.s = q)
-    (hc : c ∈ xs) (hcq : c.s = q') : h a c = false := by
-  have h1 := scan_false hp a ha
-  simp only [bR] at h1
-  rw [hq, Nat.beq_refl, Bool.cond_true] at h1
-  have h2 := scan_false h1 c hc
-  beta_reduce at h2
-  rwa [hcq, Nat.beq_refl, Bool.cond_true] at h2
-lemma pos_eq (t : ℕ) : pos t = pos' t := by cases t <;> simp [pos, pos']
-lemma look_succ (l m g fuel k t z : ℕ) (v : List W) (h : look l m g (fuel + 1) k t z v = false) :
-    2 ≤ v.length ∧ node (look l m g fuel (k - 1) t) (pos' t) l m g (k - t) v.length z v pairs = false ∧
-    ∀ s, t = s + 1 → nots (fun q z v => bif node (look l m g fuel (k - 2) s) (pos' s) l m g (k - 1 - s) v.length z v (pairsP q) then true
-      else prd s (fun s => nots (fun q' z v => node (look l m g fuel (k - 3) s) (pos' s) l m g (k - 2 - s) v.length z v (pairsQ q q'))
-        (pos' s) l m g (k - 1 - s) v.length z (q + 1) v v)) (pos' s) l m g (k - s) v.length z 0 v v = false := by
-  change (Bool.rec (motive := fun _ => Bool) (Bool.rec (motive := fun _ => Bool) (prd t (fun s => nots (fun q z v =>
-      (Bool.rec (motive := fun _ => Bool) (prd s (fun s => nots (fun q' z v => node (look l m g fuel (k - 3) s) (pos s) l m g (k - 2 - s)
-        v.length z v (pairsQ q q')) (pos s) l m g (k - 1 - s) v.length z (q + 1) v v)) true
-        (node (look l m g fuel (k - 2) s) (pos s) l m g (k - 1 - s) v.length z v (pairsP q)))) (pos s) l m g (k - s) v.length z 0 v v)) true
-      (node (look l m g fuel (k - 1) t) (pos t) l m g (k - t) v.length z v pairs)) true (Nat.ble v.length 1) : Bool) = false at h
-  simp only [bR, pos_eq] at h
-  cases h0 : Nat.ble v.length 1 with
-  | true => rw [h0] at h; simp at h
-  | false =>
-    rw [h0, Bool.cond_false] at h
-    have hlen : 2 ≤ v.length := by
-      by_contra hc
-      rw [Nat.ble_eq_true_of_le (by omega)] at h0; simp at h0
-    cases h1 : node (look l m g fuel (k - 1) t) (pos' t) l m g (k - t) v.length z v pairs with
-    | true => rw [h1] at h; simp at h
-    | false =>
-      rw [h1, Bool.cond_false] at h
-      refine ⟨hlen, rfl, ?_⟩
-      rintro s rfl
-      exact h
-section sound
-variable {P : List ℕ} {l m g T : ℕ} (X : Ctx P l m g T)
-include X
-lemma node_bi {f : ℕ → List W → Bool} {d : Bool} {e n z t k k' : ℕ} {v : List W} {S S' : Finset ℕ} {x y : ℕ} {d' : Bool}
-    {go : (L_meta_2766.X → L_meta_2766.X → Bool) → List L_meta_2766.X → Bool}
-    (hs : StOk P T l (k + 1) z v S) (hm : Min m T (k' + 1) t S) (hk : k' ≤ k) (hd : d = pos' t) (hn : n = v.length)
-    (he : e = k + 1 - t) (hb : Bi d' x y S S') (hl : Live m T k' t S')
-    (hgo : ∀ h xs, go h xs = false → ∀ a c : W, a ∈ v → c ∈ v → a.s = x → c.s = y → xs = v.map (mkx d l (wst d l v)) →
-      h (mkx d l (wst d l v) a) (mkx d l (wst d l v) c) = false ∨ h (mkx d l (wst d l v) c) (mkx d l (wst d l v) a) = false)
-    (hp : node f d l m g e n z v go = false) : ∃ z' r, f z' r = false ∧ StOk P T l k z' r S' := by
-  rw [node_eq] at hp
-  obtain ⟨a, ha, rfl⟩ := hs.rep.mem.1 hb.sub.1
-  obtain ⟨c, hc, rfl⟩ := hs.rep.mem.1 hb.sub.2.1
-  rcases hgo _ _ hp a c ha hc rfl rfl rfl with h | h
-  · exact gate_sound X hs hm hk hd hn he hb hl ha hc h
-  · exact gate_sound X hs hm hk hd hn he hb.symm hl hc ha h
-lemma step_sound {fuel : ℕ} (ih : ∀ (k t z : ℕ) (v : List W) (S : Finset ℕ), look l m g fuel k t z v = false → StOk P T l k z v S →
-    ∀ k' ≤ k, ¬ Min m T k' t S) {k t z : ℕ} {v : List W} {S : Finset ℕ} (hs : StOk P T l k z v S) (hlen : 2 ≤ v.length)
-    {KP : ℕ → ℕ → Prop} {KN : ℕ → Prop}
-    (hA : ∀ x y : ℕ, x ≠ y → KP x y → ∃ go : (L_meta_2766.X → L_meta_2766.X → Bool) → List L_meta_2766.X → Bool,
-      node (look l m g fuel (k - 1) t) (pos' t) l m g (k - t) v.length z v go = false ∧
-      ∀ h, go h (v.map (mkx (pos' t) l (wst (pos' t) l v))) = false → ∀ a c : W, a ∈ v → c ∈ v → a.s = x → c.s = y →
-        h (mkx (pos' t) l (wst (pos' t) l v) a) (mkx (pos' t) l (wst (pos' t) l v) c) = false ∨
-        h (mkx (pos' t) l (wst (pos' t) l v) c) (mkx (pos' t) l (wst (pos' t) l v) a) = false)
-    (hN : ∀ s, t = s + 1 → ∀ a ∈ v, KN a.s → ∃ rr, a ∈ rr ∧ nots (fun q z v =>
-      bif node (look l m g fuel (k - 2) s) (pos' s) l m g (k - 1 - s) v.length z v (pairsP q) then true
-      else prd s (fun s => nots (fun q' z v => node (look l m g fuel (k - 3) s) (pos' s) l m g (k - 2 - s) v.length z v (pairsQ q q'))
-        (pos' s) l m g (k - 1 - s) v.length z (q + 1) v v)) (pos' s) l m g (k - s) v.length z 0 v rr = false) :
-    ∀ k' ≤ k, Min m T k' t S → ¬ FM m T k' t S KP KN := by
-  intro k' hk hm hfm
-  rcases hfm with
-    ⟨k0, d, a, b, S1, rfl, hkp, hb, hl⟩ | ⟨k0, t0, a, d, c, S1, S2, rfl, rfl, hkn, hu, hb, hl⟩ |
-    ⟨k0, t0, a, a', d, S1, S2, S3, rfl, rfl, hkn, hu, hne, hu', hb, hl⟩
-  · obtain ⟨k, rfl⟩ : ∃ j, k = j + 1 := ⟨k - 1, by omega⟩
-    obtain ⟨go, h1, hgo⟩ := hA a b hb.1 hkp
-    obtain ⟨z', r, hf, hst⟩ := node_bi X hs hm (by omega) rfl rfl (by omega) hb hl (fun h xs hp a c ha hc hax hcy hxs => by
-      subst hxs
-      exact hgo h hp a c ha hc hax hcy) h1
-    exact ih _ _ _ _ _ hf hst k0 (by simpa using hk) (hb.min hl hm.2)
-  · obtain ⟨k, rfl⟩ : ∃ j, k = j + 2 := ⟨k - 2, by omega⟩
-    have hl1 := hb.live hl
-    obtain ⟨wa, hwa, rfl⟩ := hs.rep.mem.1 hu.sub.1
-    obtain ⟨rr, hrr, h2⟩ := hN t0 rfl wa hwa hkn
-    obtain ⟨z1, r1, hf1, hst1⟩ := nots_sound X (k := k + 1) hs hm (by omega) rfl rfl (by omega) hu hl1 hwa (by omega) hrr h2
-    have hm1 := hu.min hl1 hm.2
-    rw [Bool.cond_eq_ite] at hf1
-    split_ifs at hf1 with hf2
-    rw [Bool.not_eq_true] at hf2
-    obtain ⟨z', r, hf, hst⟩ := node_bi X hst1 hm1 (by omega) rfl rfl (by omega) hb hl (fun h xs hp a c ha hc hax hcy hxs => by
-      subst hxs
-      exact Or.inl (pairsP_false hp (List.mem_map_of_mem ha) hax (List.mem_map_of_mem hc) (fun e => hb.1 (by rw [← hcy, ← e]; rfl)))) hf2
-    exact ih _ _ _ _ _ hf hst k0 (by simpa using hk) (hb.min hl hm1.2)
-  · obtain ⟨k, rfl⟩ : ∃ j, k = j + 3 := ⟨k - 3, by omega⟩
-    have hl1 := hb.live hl
-    have hl2 := hu'.live hl1
-    obtain ⟨wa, hwa, rfl⟩ := hs.rep.mem.1 hu.sub.1
-    obtain ⟨rr, hrr, h2⟩ := hN (t0 + 1) rfl wa hwa hkn
-    obtain ⟨z1, r1, hf1, hst1⟩ := nots_sound X (k := k + 2) hs hm (by omega) rfl rfl (by omega) hu hl2 hwa (by omega) hrr h2
-    have hm1 := hu.min hl2 hm.2
-    rw [Bool.cond_eq_ite] at hf1
-    split_ifs at hf1 with hf2
-    obtain ⟨wa', hwa', rfl⟩ := hst1.rep.mem.1 hu'.sub.1
-    obtain ⟨z2, r2, hf3, hst2⟩ := nots_sound X (k := k + 1) hst1 hm1 (by omega) rfl rfl (by omega) hu' hl1 hwa' (by omega) hwa' hf1
-    have hm2 := hu'.min hl1 hm1.2
-    obtain ⟨z', r, hf, hst⟩ := node_bi X hst2 hm2 (by omega) rfl rfl (by omega) hb hl (fun h xs hp a c ha hc hax hcy hxs => by
-      subst hxs
-      exact Or.inl (pairsQ_false hp (List.mem_map_of_mem ha) hax (List.mem_map_of_mem hc) hcy)) hf3
-    exact ih _ _ _ _ _ hf hst k0 (by simpa using hk) (hb.min hl hm2.2)
-theorem look_sound : ∀ (fuel k t z : ℕ) (v : List W) (S : Finset ℕ), look l m g fuel k t z v = false → StOk P T l k z v S →
-    ∀ k' ≤ k, ¬ Min m T k' t S := by
-  intro fuel
-  induction fuel with
-  | zero => intro k t z v S h; simp [look] at h
-  | succ fuel ih =>
-    intro k t z v S h hs
-    obtain ⟨hlen, h1, h2⟩ := look_succ _ _ _ _ _ _ _ _ h
-    intro k' hk hm
-    refine step_sound X (KP := fun _ _ => True) (KN := fun _ => True) ih hs hlen (fun x y hxy _ => ⟨pairs, h1, fun h hp a c ha hc hax hcy => ?_⟩)
-      (fun s hs a ha _ => ⟨v, ha, h2 s hs⟩) k' hk hm (FM_of hm (by rw [hs.rep.card]; exact hlen))
-    have hpw := pairs_false hp
-    have : Std.Symm (fun a c : L_meta_2766.X => h a c = false ∨ h c a = false) := ⟨fun a b h => h.symm⟩
-    refine (hpw.imp (S := fun a c => h a c = false ∨ h c a = false) fun h => Or.inl h).forall (List.mem_map_of_mem ha) (List.mem_map_of_mem hc) ?_
-    intro e
-    have : a.s = c.s := congrArg L_meta_2766.X.s e
-    exact hxy (by rw [← hax, ← hcy, this])
-end sound
-def rawP : List ℕ := [0x1ffff8000000007fffe000f8000007fffc07c000000003e003c00000000000000001f03ffff03c00000000000000000000000f83e00e000020c00800086060800008c0ca44000080948800085032910410204200288610001004a8402001108ca8408000010822020b0844a880000000821511012a20042a221951014a880a888000000000000000010290417e052000852085ad14800be0008a51e2901f002100252f802f0005482002a4108217c089ea40f00800690800690410442120be0f80b80a40830020016181860000230300000002020000006b40c00010c0810801a218400040100000802c4630000601080c6188186c2110000000a8161afffe04000035fffc60000d00007fff2cb20284c2023205, 0x7fffc07c00000000003e00000003e0000000000000000f81ffff80078000000000000000000000000000000ffffc0ffffc001f003c3e00000e000040202208843010100010002102183080620460842018408c0a000000100100230c0310431810841210431000808010000400101043860888410a08c0c41182141184208c21046904700000000000000001f04301f02086001086f80012182f8200110c02430410be046e86081e1000a1840050c210420420030c2121127c30127c30027c04f0f82008b8810d0080882210c04060004000800000c20180000230806000016c000000c02c058c300c000060421068000060460610c0043002d57fff1862210c2000030000184000100000d7fff7fff605989290008a0c3, 0x1ffff8007fffef80000000000000000000000000000003fffe0000007c0f80003ffff7803e0000000000007c0078000003ee00000000000001000024208c00d806141800b00c282098140185050401000800024080008061400020000461482140405808160120506281012010260c502018a04c18a008c510462906280000000000000000020860820410c16b90c101ad433e100002218048608210420050c1044228bc30002819f03e00848be19e00f8088600088609f081e201042fb90021800000002c0005b08230036000006002c0000083605000001610040060281b020002000000058150b7fff08503016020580d814000040682c0d80000800001b000016fffe17fff00004840d0f006c20810, 0x7fffdf000001ffffbef0000000003ffff000001f78000000000000000ffffdf00000003efb8000000002800000001240002000a000068800a0000d2000000901a60002c02400ab00000d6000c90a40055800c9004009b000240024b000d102400a58001a405034a000348501a6300d200d200000000000000000421410408428202428208060a042042140513e147c000844ee28fbc000110a0899e50400847de104504002041141165d47c4000844fbee110008500a00002800db0000800280000000028000000a80056dfffc000b00b002ac0000358000006b00156000000b0036c002b000dac000005b002d6000000b5fffc0000016fffec00000000000004525d9ab670, 0x7fffdf00000001ffffbef00000000003ffff000000000fbc00000000003fffef80000000fbc00000000003effffde00000000007bd8000000000005800280ab500000280d600014911b600029242ad2800524800580009b400000b600015121096a00015120295a00000894d00001522149aa00002a4828549469549402a4801524152400000000000000001f0187c01003006b830fbc080c0000808f860081810403ef0083020804089cc3e01060003ef10800860020f925d8780118100001ef62084200100616000a02ad600000a035800000006d80000000ab6b0000000016000b6d800002d800000006b5ac00000000b56800002b5b6000000005b6a800000000b5fffdb5fffc000000000000004c32000238851dce, 0x3fffefbffff7de00000000000003effffdeffffdf7df70000000000000000000000000000002aa000000019892a1200370000000006c00485080000000092429001b80000000001b02d5ada53400000000003316daab534806e0000d80000d80006c00036003600000000000000000852020820a4040c2404103090084104284805120208210813040410884add03eade81f780020025080040f9b5e079b5e07df7dc0000100400214800000aa800000000aa80000000006daadafffe00000000000016b56000000002db5ad7fff0000000000000b56b6d6d80000000000005b6aad6dafffe00000000000000000000000000940c0523a2600210, 0x3ffff7fffdf7de00000000000003fffefbffff7defbdf7bffff7bd8000000000000000000000000000000000a84800000000002aa42a4840de00000001b800000000370005ad5ada6aa6d400000019c00000000019c02d52d35a6ad69b6a541bc00000000003700006e00006e000370001b801b800000000000000001084041041080830080820c020108208cf9019e407df7a0024080001000c9e03ec9f01f7bef7dec9f01ef60206000206000001000804000002021016ab600000000000aab5ab6b7fff000000000000000000000016b56b6daadb580000000000000000000000b56b6d6dab5b6dad57fff000000000000000000000000000000000000000a180bb188920c1a4, 0x7fffdf7dffffbc000000000000000003ffff7fffdf7defbdffffbef7bd8000000000000000000000000000000000000000000000000000000000005aadaaaaa5b6d498000000018e000000031c0000000063800012852d36ab4962494259e01ad4b55a99e018000000000000000019c0000000000338000670000670003380019c019c000000000000000001f1807df7e300f4030000100c02000008fe011f807df7bef47f00fbdef60e00100e000821000000e0008004038002038002082090000000820006016ab6aaaad6db5b6000000000000000000000000000000000016b56b6daadb5adb5ad7fff6b5ad56b7fff6000000000000000000000000000000000000000000000000000000000000130220c900310c00, 0x7fffdf7dffffbdffffbef7fffefbefb80000000000000000000000000000000000000000000000000000000000000000000000000000000000000050292aaab5a496d800940929f001240a4be002adad527c005b0000000000000000001e00000000001e000000000000000000001e000000000003c0000780000780003c0001e001e0000000000000000001fe007df7fc00f7fc00fbdff003efbeef0001e000410400078000820000f00020f000104208410f000108483c00043c0004104100008208000038016ab6aaaad6db5b6aab5ab6b7fff6daadafffeab6b56dfffd6c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000092683e00754c0101]
-def rawL : List ℕ := rawP ++ [rawP.getD 0 0 ||| rawP.getD 3 0]
-def FPM : ℕ := 2 ^ 64 - 1
-def FULL : ℕ := 2 ^ NN - 1
-def TG : ℕ := 0x1ffff7df7fffef7fffefbdffffbefbeeffffdffff7df7bef7fffefbdef6ffffbeffffdf7bef7deffffdef6fbffff7bffff7df7ddef6fbeefbbbbffd6ab6aaaad6db5b6aab5ab6b7fff6daadafffeab6b56dfffd6d6b56b6daadb5adb5ad7fff6b5ad56b7fff6b56b6d6dab5b6dad57fff5b6aad6dafffeb5fffdb5fffd6fffed7fff7ffffc7abffbffeabfd5
-def kz (Z : ℕ) : ℕ := (List.range 9).foldr (fun i x => bif Nat.testBit Z i then Nat.lor x (Nat.land (Nat.lor (rawP.getD i 0) (Nat.shiftRight (rawP.getD i 0) NN)) FULL) else x) 0
-def lz (Z : ℕ) : ℕ := Nat.land AA (Nat.xor (kz Z) FULL)
-def fz (Z : ℕ) : ℕ := Nat.land FPM (Nat.xor (kz Z) FULL)
-def mz (Z : ℕ) : ℕ := Nat.lor (Nat.lor (lz Z) (fz Z)) (Nat.shiftLeft (lz Z) NN)
-def tz (Z : ℕ) : ℕ := Nat.land TG (mz Z)
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma AA_TG : AA &&& TG = AA := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma TG_lt : TG < 2 ^ NN := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma AA_lt : AA < 2 ^ NN := by decide +kernel
-lemma lz_lg (Z i : ℕ) (h : (lz Z).testBit i = true) : Lg NN (mz Z) (tz Z) i ∧ AA.testBit i = true := by
-  have hA : AA.testBit i = true := by
-    simp only [lz, nl, Nat.testBit_and, Bool.and_eq_true] at h; exact h.1
-  have hT : TG.testBit i = true := by
-    have := congrArg (fun x => x.testBit i) AA_TG
-    simp [hA] at this; exact this
-  have m1 : (mz Z).testBit i = true := by simp [mz, no, h]
-  have m2 : (mz Z).testBit (NN + i) = true := by
-    simp only [mz, no, Nat.testBit_or, Nat.shiftLeft_eq, Bool.or_eq_true]
-    right
-    change (lz Z <<< NN).testBit (NN + i) = true
-    rw [Nat.testBit_shiftLeft]; simp [h]
-  refine ⟨⟨m1, m2, ?_, ?_⟩, hA⟩
-  · simp only [tz, nl, Nat.testBit_and, hT, m1]; rfl
-  · simp only [tz, nl, Nat.testBit_and]
-    rw [Nat.testBit_lt_two_pow (lt_of_lt_of_le TG_lt (Nat.pow_le_pow_right (by omega) (by omega)))]; rfl
-def segGood (w o : ℕ) (s : ℕ × ℕ) : Bool :=
-  Nat.beq ((w >>> (o + s.1 + 1)) % 2 ^ (s.2 - s.1 - 1)) 0 || Nat.beq ((w >>> (o + s.1 + 1)) % 2 ^ (s.2 - s.1 - 1)) (2 ^ (s.2 - s.1 - 1) - 1)
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma raw_good : rawL.all (fun w => segsX.all (segGood w 0) && segsY.all (segGood w NN)) = true := by decide +kernel
-lemma segGood_eq {w o : ℕ} {s : ℕ × ℕ} (h : segGood w o s = true) {i j : ℕ} (h1 : s.1 < i) (h2 : i < s.2) (h3 : s.1 < j) (h4 : j < s.2) :
-    w.testBit (o + i) = w.testBit (o + j) := by
-  have key : ∀ i, s.1 < i → i < s.2 → w.testBit (o + i) = ((w >>> (o + s.1 + 1)) % 2 ^ (s.2 - s.1 - 1)).testBit (i - s.1 - 1) := by
-    intro i h1 h2
-    rw [Nat.testBit_mod_two_pow, Nat.testBit_shiftRight, show o + s.1 + 1 + (i - s.1 - 1) = o + i by omega]
-    simp [show i - s.1 - 1 < s.2 - s.1 - 1 by omega]
-  rw [key i h1 h2, key j h3 h4]
-  simp only [segGood, Bool.or_eq_true, Nat.beq_eq] at h
-  rcases h with h | h <;> rw [h]
-  · simp
-  · rw [Nat.testBit_two_pow_sub_one, Nat.testBit_two_pow_sub_one]
-    simp [show i - s.1 - 1 < s.2 - s.1 - 1 by omega, show j - s.1 - 1 < s.2 - s.1 - 1 by omega]
-lemma wire_good {w : ℕ} (hw : w ∈ rawL) (Z : ℕ) : Good (lz Z) (w &&& mz Z) := by
-  have h := List.all_eq_true.1 raw_good w hw
-  simp only [Bool.and_eq_true, List.all_eq_true] at h
-  refine ⟨fun i j hij h1 h2 => ?_, fun i j hij h1 h2 => ?_⟩ <;> obtain ⟨s, hs, a1, a2, a3, a4⟩ := hij
-  · have := segGood_eq (h.1 s hs) a1 a2 a3 a4
-    simp only [Nat.zero_add] at this
-    rw [Nat.testBit_and, Nat.testBit_and, this, (lz_lg Z i h1).1.1, (lz_lg Z j h2).1.1]
-  · have := segGood_eq (h.2 s hs) a1 a2 a3 a4
-    rw [Nat.testBit_and, Nat.testBit_and, this, (lz_lg Z i h1).1.2.1, (lz_lg Z j h2).1.2.1]
-noncomputable section packed0
-def pL (L : List ℕ) : ℕ := List.rec (motive := fun _ => ℕ) 0 (fun d _ ih => Nat.add (Nat.shiftLeft ih 5) d) L
-end packed0
-lemma pL_cons (d : ℕ) (L : List ℕ) : pL (d :: L) = 2 ^ 5 * pL L + d := by
-  change (pL L <<< 5) + d = _; rw [Nat.shiftLeft_eq]; ring
-lemma pL_pk (L : List ℕ) : pL L = pk L.length (fun j => L.getD j 0) := by
-  induction L with
-  | nil => simp [pL, pk]
-  | cons d L ih =>
-    rw [pL_cons, ih, pk, pk, List.length_cons, Finset.sum_range_succ', Finset.mul_sum]
-    simp only [Nat.mul_zero, pow_zero, mul_one, List.getD_cons_zero, List.getD_cons_succ]
-    congr 1
-    refine Finset.sum_congr rfl fun j _ => ?_
-    rw [show 5 * (j + 1) = 5 * j + 5 by ring, pow_add]; ring
-lemma pL_bit {L : List ℕ} (h : ∀ d ∈ L, d ≤ 1) : ∀ i, (pL L).testBit i = true ↔ (i % 5 = 0 ∧ i / 5 < L.length ∧ L.getD (i / 5) 0 = 1) := by
-  induction L with
-  | nil => intro i; simp [pL]
-  | cons d L ih =>
+theorem land_compl (w : ℕ) : w &&& (16777215 - w) = 0 := by
+  rcases lt_or_ge w (2 ^ 24) with h | h
+  · apply Nat.eq_of_testBit_eq
     intro i
-    have hd := h d (by simp)
-    have ih := ih fun x hx => h x (by simp [hx])
-    rw [pL_cons, Nat.testBit_two_pow_mul_add _ (by omega)]
-    split_ifs with hi
-    · have : i / 5 = 0 := by omega
-      rw [this]
-      rcases Nat.eq_zero_or_pos i with rfl | hp
-      · interval_cases d <;> simp
-      · constructor
-        · intro hb
-          have : d.testBit i = false := Nat.testBit_lt_two_pow (lt_of_le_of_lt hd (Nat.one_lt_two_pow (by omega)))
-          rw [this] at hb; simp at hb
-        · intro hb; omega
-    · rw [ih, show i / 5 = (i - 5) / 5 + 1 by omega]
-      simp only [List.length_cons, List.getD_cons_succ]
-      constructor
-      · rintro ⟨a, b, c⟩; exact ⟨by omega, by omega, c⟩
-      · rintro ⟨a, b, c⟩; exact ⟨by omega, by omega, c⟩
-lemma pL_isPk {L : List ℕ} (h : ∀ d ∈ L, d ≤ 1) : isPk L.length (pL L) := fun i hi => by
-  have := (pL_bit h i).1 hi; exact ⟨this.1, this.2.1⟩
-def bit01 (b : Bool) : ℕ := bif b then 1 else 0
-def mkW (P : List ℕ) (s : ℕ) : W := ⟨s, pL (P.map fun n => bit01 (Nat.beq (Nat.land s n) 0)), pL (P.map fun n => bit01 (Nat.beq (Nat.land s n) n)),
-  Nat.lor (pL (P.map fun n => bit01 (Nat.beq (Nat.land s n) 0))) (pL (P.map fun n => bit01 (Nat.beq (Nat.land s n) n)))⟩
-lemma mkW_ok (P : List ℕ) (s : ℕ) : WOk P (mkW P s) := by
-  have h01 : ∀ f : ℕ → Bool, ∀ d ∈ P.map (fun n => bit01 (f n)), d ≤ 1 := by
-    intro f d hd; simp only [List.mem_map] at hd
-    obtain ⟨n, _, rfl⟩ := hd; cases f n <;> simp [bit01]
-  have bt : ∀ f : ℕ → Bool, ∀ j < P.length, (pL (P.map fun n => bit01 (f n))).testBit (5 * j) = true → f (P.getD j 0) = true := by
-    intro f j hj h
-    have h := ((pL_bit (h01 f) _).1 h).2.2
-    rw [show 5 * j / 5 = j by omega, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_eq_getElem hj] at h
-    rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hj]
-    simp at h ⊢
-    cases hf : f P[j] <;> simp [bit01, hf] at h ⊢
-  refine ⟨?_, ?_, rfl, fun j hj h => ?_, fun j hj h => ?_⟩
-  · have := pL_isPk (h01 fun n => Nat.beq (Nat.land s n) 0); rwa [List.length_map] at this
-  · have := pL_isPk (h01 fun n => Nat.beq (Nat.land s n) n); rwa [List.length_map] at this
-  · exact Nat.eq_of_beq_eq_true (bt (fun n => Nat.beq (Nat.land s n) 0) j hj h)
-  · exact Nat.eq_of_beq_eq_true (bt (fun n => Nat.beq (Nat.land s n) n) j hj h)
-noncomputable section packed1
-def addS (o : W) (v : List W) : List W := List.rec (motive := fun _ => List W) [o]
-  (fun w t ih => Bool.rec (motive := fun _ => List W) (w :: ih) (Bool.rec (motive := fun _ => List W) (o :: w :: t) (w :: t) (Nat.beq o.s w.s)) (Nat.ble w.s o.s)) v
-def avl (P : List ℕ) (m : ℕ) (L : List ℕ) : List W := List.rec (motive := fun _ => List W) []
-  (fun w _ ih => Bool.rec (motive := fun _ => List W) (Bool.rec (motive := fun _ => List W) (addS (mkW P (Nat.land w m)) ih) ih (Nat.beq (Nat.land w m) m)) ih (Nat.beq (Nat.land w m) 0)) L
-def frc (v : List W) : (List W → Bool) → Bool := List.rec (motive := fun _ => (List W → Bool) → Bool) (fun h => h [])
-  (fun w _ ih h => st w.s fun s => st w.a fun a => st w.b fun b => st w.c fun c => ih fun r => h (⟨s, a, b, c⟩ :: r)) v
-def anySub (v : List W) : (List W → Bool) → Bool := List.rec (motive := fun _ => (List W → Bool) → Bool) (fun h => h [])
-  (fun w _ ih h => Bool.rec (motive := fun _ => Bool) (ih h) true (ih fun r => h (w :: r))) v
-def sumc (v : List W) : ℕ := List.rec (motive := fun _ => ℕ) 0 (fun w _ ih => Nat.add w.c ih) v
-def MM : ℕ := 214
-def hb (H x : ℕ) : Bool := Nat.beq (Nat.land (Nat.shiftRight H (Nat.mod x MM)) 1) 1
-def filt (H : ℕ) (v : List W) : List W := List.rec (motive := fun _ => List W) [] (fun w _ ih => Bool.rec (motive := fun _ => List W) ih (w :: ih) (hb H w.s)) v
-def pairsC (H : ℕ) (h : X → X → Bool) (xs : List X) : Bool :=
-  List.rec (motive := fun _ => Bool) false (fun a r ih => Bool.rec (motive := fun _ => Bool) ih true
-    (scan (fun x => Bool.rec (motive := fun _ => Bool) false (h a x) (hb H (Nat.add a.s x.s))) r)) xs
-def topC (l m g fuel H HN k t z : ℕ) (v : List W) : Bool :=
-  Bool.rec (motive := fun _ => Bool) (Bool.rec (motive := fun _ => Bool) (prd t (fun s => nots (fun q z v =>
-      (Bool.rec (motive := fun _ => Bool) (prd s (fun s => nots (fun q' z v => node (look l m g fuel (Nat.sub k 3) s) (pos s) l m g (Nat.sub (Nat.sub k 2) s)
-        v.length z v (pairsQ q q')) (pos s) l m g (Nat.sub (Nat.sub k 1) s) v.length z (Nat.succ q) v v)) true
-        (node (look l m g fuel (Nat.sub k 2) s) (pos s) l m g (Nat.sub (Nat.sub k 1) s) v.length z v (pairsP q)))) (pos s) l m g (Nat.sub k s) v.length z 0 v (filt HN v))) true
-      (node (look l m g fuel (Nat.sub k 1) t) (pos t) l m g (Nat.sub k t) v.length z v (pairsC H))) true (Nat.ble v.length 1)
-def startv (l m g B K t H HN : ℕ) (v : List W) : Bool :=
-  Bool.rec (motive := fun _ => Bool) false (Bool.rec (motive := fun _ => Bool) false
-    (child (fun z r => topC l m g K H HN K t z r) (pos t) l g (Nat.sub (Nat.succ K) t) v.length (fun h => h v) (Nat.sub B (sumc v)))
-    (Nat.ble v.length (Nat.sub (Nat.succ K) t))) (Nat.beq (cov (pos t) l v) l)
-end packed1
-lemma frc_eq (v : List W) : ∀ h, frc v h = h v := by
-  induction v with
-  | nil => intro h; rfl
-  | cons w v ih =>
-    intro h
-    change st w.s (fun s => st w.a fun a => st w.b fun b => st w.c fun c => frc v fun r => h (⟨s, a, b, c⟩ :: r)) = _
-    simp only [st_eq]; rw [ih]
-lemma anySub_false {v : List W} : ∀ {h : List W → Bool}, anySub v h = false → ∀ r, r.Sublist v → h r = false := by
-  induction v with
-  | nil => intro h hh r hr; rw [List.sublist_nil.1 hr]; exact hh
-  | cons w v ih =>
-    intro h hh r hr
-    change (Bool.rec (motive := fun _ => Bool) (anySub v h) true (anySub v fun r => h (w :: r)) : Bool) = false at hh
-    rw [bR] at hh
-    cases h1 : anySub v (fun r => h (w :: r)) with
-    | true => rw [h1] at hh; simp at hh
-    | false =>
-      rw [h1, Bool.cond_false] at hh
-      cases hr with
-      | cons _ hr => exact ih hh r hr
-      | cons_cons _ hr => exact ih h1 _ hr
-lemma addS_cons (o w : W) (t : List W) : addS o (w :: t) = bif Nat.ble w.s o.s then (bif Nat.beq o.s w.s then w :: t else o :: w :: t) else w :: addS o t := by
-  change Bool.rec (motive := fun _ => List W) (w :: addS o t) (Bool.rec (motive := fun _ => List W) (o :: w :: t) (w :: t) (Nat.beq o.s w.s)) (Nat.ble w.s o.s) = _
-  cases Nat.ble w.s o.s <;> cases Nat.beq o.s w.s <;> rfl
-def Srt (v : List W) : Prop := v.Pairwise (fun a b => b.s < a.s)
-lemma addS_spec {o : W} {v : List W} (hv : Srt v) : Srt (addS o v) ∧ (∀ w ∈ addS o v, w = o ∨ w ∈ v) ∧
-    (∃ w ∈ addS o v, w.s = o.s) ∧ ∀ w ∈ v, w ∈ addS o v := by
-  induction v with
-  | nil => exact ⟨List.pairwise_singleton _ _, by simp [addS], ⟨o, by simp [addS], rfl⟩, by simp⟩
-  | cons x t ih =>
-    have hp := List.pairwise_cons.1 hv
-    obtain ⟨i1, i2, i3, i4⟩ := ih hp.2
-    rw [addS_cons]
-    cases h1 : Nat.ble x.s o.s with
-    | true =>
-      have hle := Nat.le_of_ble_eq_true h1
-      cases h2 : Nat.beq o.s x.s with
-      | true => exact ⟨hv, fun w hw => Or.inr hw, ⟨x, by simp, (Nat.eq_of_beq_eq_true h2).symm⟩, fun w hw => hw⟩
-      | false =>
-        have hne : o.s ≠ x.s := fun e => by rw [e, Nat.beq_refl] at h2; simp at h2
-        refine ⟨List.pairwise_cons.2 ⟨fun w hw => ?_, hv⟩, fun w hw => by simpa using hw, ⟨o, by simp, rfl⟩, fun w hw => by simp at hw ⊢; tauto⟩
-        simp only [List.mem_cons] at hw
-        rcases hw with rfl | hw
-        · omega
-        · have := hp.1 w hw; omega
-    | false =>
-      have hlt : o.s < x.s := by
-        by_contra hc; rw [Nat.ble_eq_true_of_le (by omega)] at h1; simp at h1
-      refine ⟨List.pairwise_cons.2 ⟨fun w hw => ?_, i1⟩, fun w hw => ?_, ?_, fun w hw => ?_⟩
-      · rcases i2 w hw with rfl | h
-        · exact hlt
-        · exact hp.1 w h
-      · simp only [Bool.cond_false, List.mem_cons] at hw ⊢
-        rcases hw with rfl | hw
-        · simp
-        · rcases i2 w hw with h | h <;> simp [h]
-      · obtain ⟨w, hw, e⟩ := i3; exact ⟨w, by simp [hw], e⟩
-      · simp only [Bool.cond_false, List.mem_cons] at hw ⊢
-        rcases hw with rfl | hw
-        · simp
-        · exact Or.inr (i4 w hw)
-lemma avl_spec (P : List ℕ) (m : ℕ) (L : List ℕ) : Srt (avl P m L) ∧ (∀ w ∈ avl P m L, ∃ x ∈ L, w = mkW P (x &&& m)) ∧
-    ∀ x ∈ L, x &&& m ≠ 0 → x &&& m ≠ m → ∃ w ∈ avl P m L, w.s = x &&& m := by
-  induction L with
-  | nil => exact ⟨List.Pairwise.nil, by simp [avl], by simp⟩
-  | cons y L ih =>
-    obtain ⟨i1, i2, i3⟩ := ih
-    have e : avl P m (y :: L) = bif Nat.beq (Nat.land y m) 0 then avl P m L else bif Nat.beq (Nat.land y m) m then avl P m L else addS (mkW P (Nat.land y m)) (avl P m L) := by
-      change Bool.rec (motive := fun _ => List W) (Bool.rec (motive := fun _ => List W) (addS (mkW P (Nat.land y m)) (avl P m L)) (avl P m L) (Nat.beq (Nat.land y m) m)) (avl P m L) (Nat.beq (Nat.land y m) 0) = _
-      cases Nat.beq (Nat.land y m) 0 <;> cases Nat.beq (Nat.land y m) m <;> rfl
-    have old : ∀ w ∈ avl P m L, ∃ x ∈ y :: L, w = mkW P (x &&& m) := fun w hw => by
-      obtain ⟨x, hx, e⟩ := i2 w hw; exact ⟨x, by simp [hx], e⟩
-    rw [e]
-    cases h1 : Nat.beq (Nat.land y m) 0 with
-    | true =>
-      refine ⟨i1, old, fun x hx h2 h3 => ?_⟩
-      simp only [List.mem_cons] at hx
-      rcases hx with rfl | hx
-      · exact absurd (Nat.eq_of_beq_eq_true h1) h2
-      · exact i3 x hx h2 h3
-    | false =>
-      cases h1' : Nat.beq (Nat.land y m) m with
-      | true =>
-        refine ⟨i1, old, fun x hx h2 h3 => ?_⟩
-        simp only [List.mem_cons] at hx
-        rcases hx with rfl | hx
-        · exact absurd (Nat.eq_of_beq_eq_true h1') h3
-        · exact i3 x hx h2 h3
-      | false =>
-        obtain ⟨j1, j2, j3, j4⟩ := addS_spec (o := mkW P (Nat.land y m)) i1
-        refine ⟨j1, fun w hw => ?_, fun x hx h2 h3 => ?_⟩
-        · rcases j2 w hw with rfl | h
-          · exact ⟨y, by simp, rfl⟩
-          · exact old w h
-        · simp only [List.mem_cons] at hx
-          rcases hx with rfl | hx
-          · exact j3
-          · obtain ⟨w, hw, e⟩ := i3 x hx h2 h3; exact ⟨w, j4 w hw, e⟩
-lemma filt_mem {H : ℕ} {v : List W} {w : W} (hw : w ∈ v) (hH : hb H w.s = true) : w ∈ filt H v := by
-  induction v with
-  | nil => simp at hw
-  | cons x v ih =>
-    have e : filt H (x :: v) = bif hb H x.s then x :: filt H v else filt H v := by
-      change Bool.rec (motive := fun _ => List W) (filt H v) (x :: filt H v) (hb H x.s) = _
-      cases hb H x.s <;> rfl
-    rw [e]
-    simp only [List.mem_cons] at hw
-    rcases hw with rfl | hw
-    · rw [hH]; simp
-    · cases hb H x.s <;> simp [ih hw]
-lemma pairsC_false {H : ℕ} {h : X → X → Bool} {xs : List X} (hp : pairsC H h xs = false) :
-    xs.Pairwise (fun a b => hb H (a.s + b.s) = true → h a b = false) := by
-  induction xs with
-  | nil => simp
-  | cons a r ih =>
-    change (Bool.rec (motive := fun _ => Bool) (pairsC H h r) true
-      (scan (fun x => Bool.rec (motive := fun _ => Bool) false (h a x) (hb H (Nat.add a.s x.s))) r) : Bool) = false at hp
-    rw [bR] at hp
-    rw [List.pairwise_cons]
-    constructor
-    · intro b hbm hi
-      have h1 : scan (fun x => Bool.rec (motive := fun _ => Bool) false (h a x) (hb H (Nat.add a.s x.s))) r = false := by
-        revert hp
-        cases scan (fun x => Bool.rec (motive := fun _ => Bool) false (h a x) (hb H (Nat.add a.s x.s))) r <;> simp
-      have h2 := scan_false h1 b hbm
-      beta_reduce at h2
-      rw [bR] at h2
-      have h3 : hb H (Nat.add a.s b.s) = true := hi
-      rwa [h3, Bool.cond_true] at h2
-    · apply ih; revert hp; cases pairsC H h r <;> simp
-lemma topC_succ {l m g fuel H HN k t z : ℕ} {v : List W} (h : topC l m g fuel H HN k t z v = false) :
-    2 ≤ v.length ∧ node (look l m g fuel (k - 1) t) (pos' t) l m g (k - t) v.length z v (pairsC H) = false ∧
-    ∀ s, t = s + 1 → nots (fun q z v => bif node (look l m g fuel (k - 2) s) (pos' s) l m g (k - 1 - s) v.length z v (pairsP q) then true
-      else prd s (fun s => nots (fun q' z v => node (look l m g fuel (k - 3) s) (pos' s) l m g (k - 2 - s) v.length z v (pairsQ q q'))
-        (pos' s) l m g (k - 1 - s) v.length z (q + 1) v v)) (pos' s) l m g (k - s) v.length z 0 v (filt HN v) = false := by
-  simp only [topC, bR, pos_eq] at h
-  cases h0 : Nat.ble v.length 1 with
-  | true => rw [h0] at h; simp at h
-  | false =>
-    rw [h0, Bool.cond_false] at h
-    have hlen : 2 ≤ v.length := by
-      by_contra hc
-      rw [Nat.ble_eq_true_of_le (by omega)] at h0; simp at h0
-    cases h1 : node (look l m g fuel (Nat.sub k 1) t) (pos' t) l m g (Nat.sub k t) v.length z v (pairsC H) with
-    | true => rw [h1] at h; simp at h
-    | false =>
-      rw [h1, Bool.cond_false] at h
-      refine ⟨hlen, rfl, ?_⟩
-      rintro s rfl
-      exact h
-def KP (M : List (ℕ × ℕ)) (x y : ℕ) : Prop := ∃ p ∈ M, hb p.1 (x + y) = true
-def KN (M : List (ℕ × ℕ)) (x : ℕ) : Prop := ∃ p ∈ M, hb p.2 x = true
-lemma topC_sound {P : List ℕ} {l m g T : ℕ} (X : Ctx P l m g T) {fuel k t z : ℕ} {v : List W} {S : Finset ℕ} {M : List (ℕ × ℕ)} (hlen : 2 ≤ v.length)
-    (h : ∀ p ∈ M, topC l m g fuel p.1 p.2 k t z v = false) (hs : StOk P T l k z v S) :
-    ∀ k' ≤ k, Min m T k' t S → ¬ FM m T k' t S (KP M) (KN M) := by
-  refine step_sound X (look_sound X fuel) hs hlen (fun x y hxy ⟨p, hpM, hpx⟩ => ⟨pairsC p.1, (topC_succ (h p hpM)).2.1, ?_⟩)
-    (fun s hst a ha ⟨p, hpM, hpa⟩ => ⟨_, filt_mem ha hpa, (topC_succ (h p hpM)).2.2 s hst⟩)
-  intro h hp a b ha hb' hax hby
-  have hpw := pairsC_false hp
-  have : Std.Symm (fun a b : L_meta_2766.X => hb p.1 (a.s + b.s) = true → (h a b = false ∨ h b a = false)) :=
-    ⟨fun a b h e => (h (by rw [Nat.add_comm]; exact e)).symm⟩
-  refine (hpw.imp (S := fun a b => hb p.1 (a.s + b.s) = true → (h a b = false ∨ h b a = false)) fun h e => Or.inl (h e)).forall
-    (List.mem_map_of_mem ha) (List.mem_map_of_mem hb') ?_ ?_
-  · intro e
-    have : a.s = b.s := congrArg L_meta_2766.X.s e
-    exact hxy (by rw [← hax, ← hby, this])
-  · change hb p.1 (a.s + b.s) = true; rw [hax, hby]; exact hpx
-def tab : List (ℕ × ℕ) := [(19, 8), (25, 8), (28, 8), (49, 8), (67, 8), (70, 7), (81, 8), (82, 8), (88, 8), (134, 7), (140, 8), (145, 8), (148, 8), (152, 8), (161, 8), (164, 7), (176, 8), (194, 7), (196, 7), (208, 8), (224, 7), (280, 8), (322, 7), (328, 8), (336, 8), (352, 7), (416, 7), (448, 7), (7, 7), (14, 7), (21, 7), (26, 7), (35, 7), (56, 7), (74, 7), (84, 7), (98, 6), (112, 7), (133, 7), (146, 7), (162, 6), (168, 7), (193, 7), (200, 7), (268, 7), (273, 7), (289, 7), (296, 7), (321, 7), (324, 6), (388, 6), (400, 7), (22, 6), (76, 6), (97, 6), (131, 6), (304, 6), (392, 6), (11, 5), (13, 5), (37, 5), (38, 4), (41, 5), (42, 5), (44, 5), (50, 5), (52, 5), (69, 5), (73, 5), (100, 5), (104, 5), (137, 5), (138, 5), (259, 5), (261, 5), (262, 4), (265, 5), (266, 5), (274, 5), (276, 5), (290, 4), (292, 4), (385, 5), (386, 5), (17, 11), (24, 11), (66, 10), (80, 11), (132, 10), (144, 11), (160, 10), (192, 10), (320, 10), (3, 9), (6, 8), (12, 9), (18, 9), (20, 9), (33, 9), (48, 9), (65, 9), (68, 9), (72, 9), (96, 9), (129, 9), (130, 9), (136, 9), (264, 9), (272, 9), (288, 8), (384, 9), (5, 8), (9, 8), (10, 8), (34, 7), (36, 7), (40, 8), (257, 8), (258, 7), (260, 7), (16, 13), (64, 13), (128, 13), (1, 12), (2, 11), (4, 11), (8, 12), (32, 11), (256, 11)]
-def pr (Z : ℕ) : List (ℕ × ℕ) := tab.filter (fun e => Nat.beq (Nat.land Z e.1) Z && !Nat.beq Z e.1)
-def WZ (Z : ℕ) : Set ℕ := {x | ∃ w ∈ rawL, x = w &&& mz Z}
-def Imp (Z L : ℕ) : Prop := ∀ q < L, ¬ Sol (mz Z) (tz Z) q (C (mz Z) (WZ Z))
-def PZ (Z : ℕ) : List ℕ := (pr Z).map (fun e => mz e.1)
-def pOk (Z : ℕ) : Bool := !Nat.beq (tz Z) 0 && !Nat.beq (tz Z) (mz Z) && (pr Z).all (fun e => Nat.beq (Nat.land (mz e.1) (mz Z)) (mz e.1) &&
-  !Nat.beq (tz e.1) 0 && !Nat.beq (tz e.1) (mz e.1))
-noncomputable def chk (Z K t H HN : ℕ) : Bool :=
-  (fun l => (fun m => (fun P => (fun g => (fun B =>
-    frc (avl P m rawL) (fun v => anySub v (fun r => st l fun l => st m fun m => st g fun g => st B fun B => startv l m g B K t H HN r)))
-    (pL ((pr Z).map fun e => 16 + (K - e.2)))) (pL ((pr Z).map fun _ => 16))) (PZ Z)) (mz Z)) (lz Z)
-lemma tz_sub {Z Z' : ℕ} (h : mz Z' &&& mz Z = mz Z') : tz Z &&& mz Z' = tz Z' := by
-  simp only [tz, nl, Nat.and_assoc]; rw [Nat.and_comm (mz Z), h]
-lemma Im_WZ {Z Z' : ℕ} (h : mz Z' &&& mz Z = mz Z') {S : Finset ℕ} (hS : (S : Set ℕ) ⊆ WZ Z) : Im (mz Z') S ⊆ WZ Z' := by
-  rintro x ⟨y, hy, rfl⟩
-  obtain ⟨w, hw, rfl⟩ := hS hy
-  exact ⟨w, hw, by simp only [Nat.and_assoc]; rw [Nat.and_comm (mz Z), h]⟩
-lemma sumc_eq {P : List ℕ} {v : List W} (hw : ∀ w ∈ v, WOk P w) : sumc v = pk P.length (cnt v) := by
-  induction v with
-  | nil => simp [sumc, pk, cnt]
-  | cons w v ih =>
-    change w.c + sumc v = _
-    rw [ih fun x hx => hw x (by simp [hx]), fl_pk (hw w (by simp)), pk_add]
-    exact pk_congr fun j _ => by rw [cnt_cons]
-lemma pk16 (Z K : ℕ) : pL ((pr Z).map fun e => 16 + (K - e.2)) = pk (PZ Z).length (fun j => 16 + (K - ((pr Z).getD j (0, K)).2)) := by
-  rw [pL_pk, PZ, List.length_map, List.length_map]
-  refine pk_congr fun j hj => ?_
-  simp only [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_eq_getElem hj]; rfl
-theorem imp_of {Z L : ℕ} (hp : pOk Z = true) (hL : L ≤ 15) (hI : ∀ e ∈ pr Z, Imp e.1 e.2)
-    (hb : (∃ e ∈ pr Z, L ≤ e.2) ∨ ∀ t < L, t=0 → ∃ M : List (ℕ × ℕ), M ≠ [] ∧ (∀ p ∈ M, chk Z (L - 1) t p.1 p.2 = false) ∧
-      ∀ (k : ℕ) (S : Finset ℕ), (S : Set ℕ) ⊆ WZ Z → Min (mz Z) (tz Z) k t S → 2 ≤ S.card →
-        ∃ S' : Finset ℕ, (S' : Set ℕ) ⊆ WZ Z ∧ Min (mz Z) (tz Z) k t S' ∧ FM (mz Z) (tz Z) k t S' (KP M) (KN M)) : Imp Z L := by
-  intro q hq hsol
-  simp only [pOk, Bool.and_eq_true, Bool.not_eq_true', List.all_eq_true] at hp
-  obtain ⟨⟨hp0, hp1⟩, hp2⟩ := hp
-  have nb : ∀ {x y : ℕ}, Nat.beq x y = false → x ≠ y := fun h e => by rw [e, Nat.beq_refl] at h; simp at h
-  have hT : tz Z &&& mz Z = tz Z := by simp only [tz, nl, Nat.and_assoc, Nat.and_self]
-  classical
-  have hex : ∃ q, Sol (mz Z) (tz Z) q (C (mz Z) (WZ Z)) := ⟨q, hsol⟩
-  have hqL : Nat.find hex < L := lt_of_le_of_lt (Nat.find_min' hex hsol) hq
-  obtain ⟨k, hk, t, S, hS, hl⟩ := (Nat.find_spec hex).live
-  have hCS : C (mz Z) (S : Set ℕ) ⊆ C (mz Z) (WZ Z) := by
-    rintro x (hx | hx)
-    · exact hS hx
-    · exact Or.inr hx
-  have hkeq : k = Nat.find hex := le_antisymm hk (Nat.find_min' hex (hl.sol.mono le_rfl hS))
-  have hm : Min (mz Z) (tz Z) k t S := ⟨hl, fun q' hq' hs => Nat.find_min hex (by omega) (hs.mono le_rfl hCS)⟩
-  have hbd : ∀ x ∈ S, x &&& mz Z = x := by
-    intro x hx
-    rcases hS hx with ⟨w, _, rfl⟩ | h
-    · rw [Nat.and_assoc, Nat.and_self]
-    · simp at h; rcases h with rfl | rfl <;> simp
-  obtain ⟨h0, h1⟩ := hm.proper hT (nb hp0) (nb hp1) hbd
-  have hSW : (S : Set ℕ) ⊆ WZ Z := by
-    intro x hx
-    rcases hS hx with h | h
-    · exact h
-    · simp at h; rcases h with rfl | rfl
-      · exact absurd hx h0
-      · exact absurd hx h1
-  have hproj : ∀ e ∈ pr Z, mz e.1 &&& mz Z = mz e.1 ∧ tz e.1 ≠ 0 ∧ tz e.1 ≠ mz e.1 := by
-    intro e he
-    obtain ⟨⟨a, b⟩, c⟩ := hp2 e he
-    exact ⟨Nat.eq_of_beq_eq_true a, nb b, nb c⟩
-  have hno : ∀ S : Finset ℕ, (S : Set ℕ) ⊆ WZ Z → ∀ e ∈ pr Z, ∀ q < e.2, ¬ Sol (mz e.1) (tz Z &&& mz e.1) q (C (mz e.1) (Im (mz e.1) S)) := by
-    intro S hSW e he q hq hs
-    have h3 := (hproj e he).1
-    rw [tz_sub h3] at hs
-    exact hI e he q hq (hs.mono le_rfl (C_mono (Im_WZ h3 hSW)))
-  have htk := hm.size.2
-  rcases hb with ⟨e, he, hle⟩ | hb
-  · have h3 := hproj e he
-    obtain ⟨q', hq', hs'⟩ := hm.const h3.1 (by rw [tz_sub h3.1]; exact h3.2.1) (by rw [tz_sub h3.1]; exact h3.2.2)
-    exact hno S hSW e he q' (by omega) hs'
-  have tz0 : t=0 := by
-    have hh := hm.1
-    clear * - hh
-    induction hh with
-    | stop => rfl
-    | un bad => exact bad.elim
-    | bi _ _ ih => exact ih
-  obtain ⟨M, hM, hchk, hsym⟩ := hb t (by omega) tz0
-  have key : ∀ S : Finset ℕ, (S : Set ℕ) ⊆ WZ Z → Min (mz Z) (tz Z) k t S → 2 ≤ S.card ∧ ¬ FM (mz Z) (tz Z) k t S (KP M) (KN M) := by
-    clear h0 h1 hbd hl hm hSW hCS hS S
-    intro S hSW hm
-    have hl := hm.1
-    have hbd : ∀ x ∈ S, x &&& mz Z = x := by
-      intro x hx
-      obtain ⟨w, _, rfl⟩ := hSW hx
-      rw [Nat.and_assoc, Nat.and_self]
-    obtain ⟨h0, h1⟩ := hm.proper hT (nb hp0) (nb hp1) hbd
-    obtain ⟨a1, a2, a3⟩ := avl_spec (PZ Z) (mz Z) rawL
-    set v := (avl (PZ Z) (mz Z) rawL).filter (fun w => decide (w.s ∈ S)) with hv
-    have hsub : v.Sublist (avl (PZ Z) (mz Z) rawL) := List.filter_sublist
-    have hnd : (v.map W.s).Nodup := by
-      rw [List.Nodup, List.pairwise_map]
-      exact (a1.sublist hsub).imp fun h => Nat.ne_of_gt h
-    have hrep : Rep v S := by
-      refine ⟨hnd, Finset.ext fun x => ?_⟩
-      rw [List.mem_toFinset, List.mem_map]
-      constructor
-      · rintro ⟨w, hw, rfl⟩
-        rw [hv, List.mem_filter] at hw; simpa using hw.2
-      · intro hx
-        obtain ⟨w, hw, rfl⟩ := hSW hx
-        obtain ⟨w', hw', e⟩ := a3 w hw (fun e => h0 (e ▸ hx)) (fun e => h1 (e ▸ hx))
-        exact ⟨w', by rw [hv, List.mem_filter]; exact ⟨hw', by simpa [e] using hx⟩, e⟩
-    have hwok : ∀ w ∈ v, WOk (PZ Z) w := by
-      intro w hw
-      obtain ⟨x, _, rfl⟩ := a2 w (hsub.subset hw); exact mkW_ok _ _
-    have hgood : ∀ w ∈ v, Good (lz Z) w.s := by
-      intro w hw
-      obtain ⟨x, hx, rfl⟩ := a2 w (hsub.subset hw); exact wire_good hx Z
-    have hPlen : (PZ Z).length = (pr Z).length := by simp [PZ]
-    have hPget : ∀ j < (PZ Z).length, (PZ Z).getD j 0 = mz ((pr Z).getD j (0, L - 1)).1 ∧ (pr Z).getD j (0, L - 1) ∈ pr Z := by
-      intro j hj
-      rw [hPlen] at hj
-      simp [PZ, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_eq_getElem hj]
-    have X : Ctx (PZ Z) (lz Z) (mz Z) (pL ((pr Z).map fun _ => 16)) (tz Z) := by
-      refine ⟨fun i hi => lz_lg Z i hi, fun j hj => ?_, ?_⟩
-      · obtain ⟨e1, e2⟩ := hPget j hj
-        have h3 := hproj _ e2
-        rw [e1, tz_sub h3.1]; exact h3
-      · rw [pL_pk, List.length_map, hPlen]
-        refine pk_congr fun j hj => ?_
-        rw [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_eq_getElem hj]; rfl
-    have hcl : Cl (PZ Z) (tz Z) (L - 1) (fun j => L - 1 - ((pr Z).getD j (0, L - 1)).2) S := by
-      intro j hj q hq
-      obtain ⟨e1, e2⟩ := hPget j hj
-      have hq' : q + (L - 1 - ((pr Z).getD j (0, L - 1)).2) < L - 1 := hq
-      rw [e1]; exact hno S hSW _ e2 q (by omega)
-    have hle := cnt_le X hrep hwok hcl hm (by omega)
-    have hst : StOk (PZ Z) (tz Z) (lz Z) (L - 1) (pL ((pr Z).map fun e => 16 + (L - 1 - e.2)) - sumc v) v S := by
-      refine ⟨hrep, hwok, hgood, _, fun j _ => by omega, hcl, ?_⟩
-      rw [sumc_eq hwok, pk16, pk_sub]
-      intro j hj; have := hle j hj; omega
-    have hcov : Nat.beq (cov (pos t) (lz Z) v) (lz Z) = true := by
-      rw [Nat.beq_eq]
-      apply Nat.eq_of_testBit_eq; intro i
-      cases hli : (lz Z).testBit i with
-      | false =>
-        by_contra hc
-        obtain ⟨w, _, hw⟩ := (cov_bit _ _ _ _).1 (by simpa using hc)
-        rw [sp_bit, hli] at hw; simp at hw
-      | true =>
-        rw [cov_bit]
-        obtain ⟨⟨m1, m2, t1, t2⟩, _⟩ := lz_lg Z i hli
-        obtain ⟨w, hw, hs⟩ := hl.cov m1 m2 t1 t2
-        obtain ⟨w', hw', rfl⟩ := hrep.mem.1 hw
-        exact ⟨w', hw', by rw [sp_bit, hli, pos_eq, hs]; rfl⟩
-    have hsz := hm.size.1
-    have hcard := hrep.card
-    have hble : Nat.ble v.length (Nat.sub (Nat.succ (L - 1)) t) = true := Nat.ble_eq_true_of_le (by
-      change v.length ≤ L - 1 + 1 - t; omega)
-    have all : ∀ p ∈ M, topC (lz Z) (mz Z) (pL ((pr Z).map fun _ => 16)) (L - 1) p.1 p.2 (L - 1) t (pL ((pr Z).map fun e => 16 + (L - 1 - e.2)) - sumc v) v = false := by
-      intro p hpM
-      have h2 := hchk p hpM
-      simp only [chk, frc_eq, st_eq] at h2
-      have h3 := anySub_false h2 v hsub
-      simp only [startv, bR, hcov, hble, Bool.cond_true] at h3
-      exact child_sound X (f := fun z r => topC (lz Z) (mz Z) _ (L - 1) p.1 p.2 (L - 1) t z r) (fun h => rfl) hst hm (by omega) (pos_eq t) rfl rfl h3
-    obtain ⟨p0, hp0M⟩ := List.exists_mem_of_ne_nil M hM
-    have hlen := (topC_succ (all p0 hp0M)).1
-    exact ⟨by rw [hcard]; exact hlen, topC_sound X hlen all hst k (by omega) hm⟩
-  obtain ⟨S', hS', hm', hfm⟩ := hsym k S hSW hm (key S hSW hm).1
-  exact (key S' hS' hm').2 hfm
+    have e : 16777215 - w = 2 ^ 24 - (w + 1) := by omega
+    rw [e, Nat.testBit_and, Nat.testBit_two_pow_sub_succ h]
+    cases w.testBit i <;> simp
+  · have e : 16777215 - w = 0 := by omega
+    simp [e]
 
-def FF : ℕ := 2 ^ MM - 1
-lemma hbF (x : ℕ) : hb FF x = true := by
-  have h : x % MM < MM := Nat.mod_lt _ (by decide)
-  have h2 : FF.testBit (x % MM) = true := by rw [FF, Nat.testBit_two_pow_sub_one]; simpa using h
-  unfold hb
-  rw [Nat.beq_eq]
-  change (FF >>> (x % MM)) &&& 1 = 1
-  rw [Nat.testBit] at h2
-  rw [Nat.and_one_is_mod]
-  simp only [Nat.one_and_eq_mod_two, bne_iff_ne, ne_eq] at h2
-  omega
-lemma FM_mono {m T k t : ℕ} {S : Finset ℕ} {A A' : ℕ → ℕ → Prop} {B B' : ℕ → Prop} (h : FM m T k t S A B) (h1 : ∀ x y, A x y → A' x y)
-    (h2 : ∀ x, B x → B' x) : FM m T k t S A' B' := by
-  rcases h with ⟨k0, d, a, b, S1, e, q, h⟩ | ⟨k0, t0, a, d, c, S1, S2, e, e', q, h⟩ | ⟨k0, t0, a, a', d, S1, S2, S3, e, e', q, h⟩
-  · exact Or.inl ⟨k0, d, a, b, S1, e, h1 _ _ q, h⟩
-  · exact Or.inr (Or.inl ⟨k0, t0, a, d, c, S1, S2, e, e', h2 _ q, h⟩)
-  · exact Or.inr (Or.inr ⟨k0, t0, a, a', d, S1, S2, S3, e, e', h2 _ q, h⟩)
-def kFull (M : List (ℕ × ℕ)) : Bool := (List.range MM).all (fun r => M.any (fun p => hb p.1 r) && M.any (fun p => hb p.2 r))
-lemma hb_mod (H x : ℕ) : hb H x = hb H (x % MM) := by
-  unfold hb
-  change Nat.beq ((H >>> (x % MM)) &&& 1) 1 = Nat.beq ((H >>> (x % MM % MM)) &&& 1) 1
-  rw [Nat.mod_mod]
-lemma sym_full {Z t : ℕ} {M : List (ℕ × ℕ)} (hM : kFull M = true) (k : ℕ) (S : Finset ℕ) (hS : (S : Set ℕ) ⊆ WZ Z) (hm : Min (mz Z) (tz Z) k t S)
-    (hc : 2 ≤ S.card) : ∃ S' : Finset ℕ, (S' : Set ℕ) ⊆ WZ Z ∧ Min (mz Z) (tz Z) k t S' ∧ FM (mz Z) (tz Z) k t S' (KP M) (KN M) := by
-  have h : ∀ x, (∃ p ∈ M, hb p.1 x = true) ∧ ∃ p ∈ M, hb p.2 x = true := by
-    intro x
-    have := List.all_eq_true.1 hM (x % MM) (List.mem_range.2 (Nat.mod_lt _ (by decide)))
-    simp only [Bool.and_eq_true, List.any_eq_true, ← hb_mod] at this
-    exact this
-  exact ⟨S, hS, hm, FM_mono (FM_of hm hc) (fun x y _ => (h (x + y)).1) (fun x _ => (h x).2)⟩
-
-theorem splitImp {Z L : ℕ} {M : List (ℕ × ℕ)} (hp : pOk Z = true) (hL : L ≤ 15)
-    (hI : ∀ e∈pr Z, Imp e.1 e.2) (ne : M≠[]) (full : kFull M=true)
-    (checks : ∀ p∈M, chk Z (L-1) 0 p.1 p.2=false) : Imp Z L := by
-  apply imp_of hp hL hI (Or.inr ?_)
-  intro t _ ht
-  subst t
-  exact ⟨M, ne, checks, sym_full full⟩
-theorem monotoneImp {Z L : ℕ} (hp : pOk Z=true) (hL : L ≤ 15) (hI : ∀ e∈pr Z,Imp e.1 e.2)
-    (hz : chk Z (L-1) 0 FF FF = false) : Imp Z L := by
-  apply imp_of hp hL hI (Or.inr ?_)
-  intro t _ ht
-  subst t
-  refine ⟨[(FF,FF)],by simp,by simpa using hz,?_⟩
-  intro k S hS hm hc
-  exact ⟨S,hS,hm,FM_mono (FM_of hm hc) (fun x y _ => ⟨(FF,FF),by simp,hbF _⟩) (fun x _ => ⟨(FF,FF),by simp,hbF _⟩)⟩
-
-def BoundStep (e : ℕ × ℕ) := (∀ u∈pr e.1, Imp u.1 u.2) → Imp e.1 e.2
-def tab3 : List (ℕ × ℕ) := [(19, 8), (25, 8), (28, 8), (49, 8), (67, 8), (70, 7), (81, 8), (82, 8), (88, 8), (134, 7), (140, 8), (145, 8), (148, 8), (152, 8), (161, 8), (164, 7), (176, 8), (194, 7), (196, 7), (208, 8), (224, 7), (280, 8), (322, 7), (328, 8), (336, 8), (352, 7), (416, 7), (448, 7), (7, 7), (14, 7), (21, 7), (26, 7), (35, 7), (56, 7), (74, 7), (84, 7), (98, 6), (112, 7), (133, 7), (146, 7), (162, 6), (168, 7), (193, 7), (200, 7), (268, 7), (273, 7), (289, 7), (296, 7), (321, 7), (324, 6), (388, 6), (400, 7), (22, 6), (76, 6), (97, 6), (131, 6), (304, 6), (392, 6), (11, 5), (13, 5), (37, 5), (38, 4), (41, 5), (42, 5), (44, 5), (50, 5), (52, 5), (69, 5), (73, 5), (100, 5), (104, 5), (137, 5), (138, 5), (259, 5), (261, 5), (262, 4), (265, 5), (266, 5), (274, 5), (276, 5), (290, 4), (292, 4), (385, 5), (386, 5)]
-def tab2 : List (ℕ × ℕ) := [(17, 11), (24, 11), (66, 10), (80, 11), (132, 10), (144, 11), (160, 10), (192, 10), (320, 10), (3, 9), (6, 8), (12, 9), (18, 9), (20, 9), (33, 9), (48, 9), (65, 9), (68, 9), (72, 9), (96, 9), (129, 9), (130, 9), (136, 9), (264, 9), (272, 9), (288, 8), (384, 9), (5, 8), (9, 8), (10, 8), (34, 7), (36, 7), (40, 8), (257, 8), (258, 7), (260, 7)]
-def tab1 : List (ℕ × ℕ) := [(16, 13), (64, 13), (128, 13), (1, 12), (2, 11), (4, 11), (8, 12), (32, 11), (256, 11)]
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma pr3 : tab3.all (fun e => (pr e.1).isEmpty) = true := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma pr2 : tab2.all (fun e => (pr e.1).all (fun x => tab3.contains x)) = true := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma pr1 : tab1.all (fun e => (pr e.1).all (fun x => tab2.contains x || tab3.contains x)) = true := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma pr0 : (pr 0).all (fun x => tab1.contains x || tab2.contains x || tab3.contains x) = true := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk19 : chk 19 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full19 : BoundStep (19,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk19
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk25 : chk 25 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full25 : BoundStep (25,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk25
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk28 : chk 28 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full28 : BoundStep (28,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk28
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk49 : chk 49 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full49 : BoundStep (49,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk49
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk67 : chk 67 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full67 : BoundStep (67,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk67
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk70 : chk 70 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full70 : BoundStep (70,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk70
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk81 : chk 81 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full81 : BoundStep (81,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk81
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk82 : chk 82 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full82 : BoundStep (82,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk82
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk88 : chk 88 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full88 : BoundStep (88,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk88
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk134 : chk 134 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full134 : BoundStep (134,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk134
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk140 : chk 140 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full140 : BoundStep (140,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk140
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk145 : chk 145 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full145 : BoundStep (145,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk145
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk148 : chk 148 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full148 : BoundStep (148,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk148
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk152 : chk 152 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full152 : BoundStep (152,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk152
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk161 : chk 161 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full161 : BoundStep (161,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk161
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk164 : chk 164 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full164 : BoundStep (164,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk164
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk176 : chk 176 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full176 : BoundStep (176,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk176
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk194 : chk 194 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full194 : BoundStep (194,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk194
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk196 : chk 196 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full196 : BoundStep (196,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk196
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk208 : chk 208 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full208 : BoundStep (208,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk208
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk224 : chk 224 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full224 : BoundStep (224,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk224
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk280 : chk 280 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full280 : BoundStep (280,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk280
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk322 : chk 322 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full322 : BoundStep (322,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk322
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk328 : chk 328 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full328 : BoundStep (328,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk328
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk336 : chk 336 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full336 : BoundStep (336,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk336
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk352 : chk 352 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full352 : BoundStep (352,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk352
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk416 : chk 416 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full416 : BoundStep (416,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk416
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk448 : chk 448 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full448 : BoundStep (448,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk448
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk7 : chk 7 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full7 : BoundStep (7,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk7
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk14 : chk 14 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full14 : BoundStep (14,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk14
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk21 : chk 21 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full21 : BoundStep (21,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk21
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk26 : chk 26 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full26 : BoundStep (26,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk26
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk35 : chk 35 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full35 : BoundStep (35,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk35
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk56 : chk 56 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full56 : BoundStep (56,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk56
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk74 : chk 74 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full74 : BoundStep (74,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk74
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk84 : chk 84 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full84 : BoundStep (84,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk84
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk98 : chk 98 5 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full98 : BoundStep (98,6) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk98
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk112 : chk 112 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full112 : BoundStep (112,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk112
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk133 : chk 133 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full133 : BoundStep (133,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk133
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk146 : chk 146 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full146 : BoundStep (146,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk146
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk162 : chk 162 5 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full162 : BoundStep (162,6) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk162
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk168 : chk 168 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full168 : BoundStep (168,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk168
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk193 : chk 193 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full193 : BoundStep (193,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk193
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk200 : chk 200 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full200 : BoundStep (200,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk200
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk268 : chk 268 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full268 : BoundStep (268,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk268
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk273 : chk 273 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full273 : BoundStep (273,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk273
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk289 : chk 289 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full289 : BoundStep (289,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk289
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk296 : chk 296 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full296 : BoundStep (296,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk296
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk321 : chk 321 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full321 : BoundStep (321,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk321
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk324 : chk 324 5 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full324 : BoundStep (324,6) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk324
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk388 : chk 388 5 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full388 : BoundStep (388,6) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk388
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk400 : chk 400 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full400 : BoundStep (400,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk400
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk22 : chk 22 5 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full22 : BoundStep (22,6) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk22
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk76 : chk 76 5 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full76 : BoundStep (76,6) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk76
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk97 : chk 97 5 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full97 : BoundStep (97,6) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk97
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk131 : chk 131 5 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full131 : BoundStep (131,6) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk131
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk304 : chk 304 5 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full304 : BoundStep (304,6) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk304
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk392 : chk 392 5 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full392 : BoundStep (392,6) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk392
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk11 : chk 11 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full11 : BoundStep (11,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk11
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk13 : chk 13 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full13 : BoundStep (13,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk13
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk37 : chk 37 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full37 : BoundStep (37,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk37
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk38 : chk 38 3 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full38 : BoundStep (38,4) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk38
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk41 : chk 41 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full41 : BoundStep (41,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk41
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk42 : chk 42 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full42 : BoundStep (42,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk42
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk44 : chk 44 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full44 : BoundStep (44,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk44
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk50 : chk 50 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full50 : BoundStep (50,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk50
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk52 : chk 52 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full52 : BoundStep (52,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk52
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk69 : chk 69 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full69 : BoundStep (69,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk69
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk73 : chk 73 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full73 : BoundStep (73,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk73
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk100 : chk 100 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full100 : BoundStep (100,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk100
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk104 : chk 104 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full104 : BoundStep (104,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk104
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk137 : chk 137 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full137 : BoundStep (137,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk137
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk138 : chk 138 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full138 : BoundStep (138,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk138
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk259 : chk 259 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full259 : BoundStep (259,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk259
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk261 : chk 261 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full261 : BoundStep (261,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk261
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk262 : chk 262 3 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full262 : BoundStep (262,4) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk262
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk265 : chk 265 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full265 : BoundStep (265,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk265
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk266 : chk 266 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full266 : BoundStep (266,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk266
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk274 : chk 274 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full274 : BoundStep (274,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk274
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk276 : chk 276 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full276 : BoundStep (276,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk276
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk290 : chk 290 3 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full290 : BoundStep (290,4) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk290
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk292 : chk 292 3 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full292 : BoundStep (292,4) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk292
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk385 : chk 385 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full385 : BoundStep (385,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk385
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk386 : chk 386 4 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full386 : BoundStep (386,5) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk386
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk17 : chk 17 10 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full17 : BoundStep (17,11) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk17
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk24 : chk 24 10 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full24 : BoundStep (24,11) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk24
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk66 : chk 66 9 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full66 : BoundStep (66,10) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk66
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk80 : chk 80 10 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full80 : BoundStep (80,11) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk80
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk132 : chk 132 9 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full132 : BoundStep (132,10) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk132
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk144 : chk 144 10 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full144 : BoundStep (144,11) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk144
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk160 : chk 160 9 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full160 : BoundStep (160,10) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk160
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk192 : chk 192 9 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full192 : BoundStep (192,10) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk192
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk320 : chk 320 9 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full320 : BoundStep (320,10) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk320
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk3 : chk 3 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full3 : BoundStep (3,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk3
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk6 : chk 6 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full6 : BoundStep (6,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk6
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk12 : chk 12 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full12 : BoundStep (12,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk12
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk18 : chk 18 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full18 : BoundStep (18,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk18
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk20 : chk 20 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full20 : BoundStep (20,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk20
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk33 : chk 33 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full33 : BoundStep (33,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk33
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk48 : chk 48 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full48 : BoundStep (48,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk48
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk65 : chk 65 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full65 : BoundStep (65,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk65
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk68 : chk 68 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full68 : BoundStep (68,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk68
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk72 : chk 72 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full72 : BoundStep (72,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk72
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk96 : chk 96 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full96 : BoundStep (96,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk96
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk129 : chk 129 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full129 : BoundStep (129,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk129
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk130 : chk 130 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full130 : BoundStep (130,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk130
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk136 : chk 136 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full136 : BoundStep (136,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk136
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk264 : chk 264 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full264 : BoundStep (264,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk264
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk272 : chk 272 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full272 : BoundStep (272,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk272
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk288 : chk 288 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full288 : BoundStep (288,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk288
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk384 : chk 384 8 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full384 : BoundStep (384,9) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk384
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk5 : chk 5 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full5 : BoundStep (5,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk5
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk9 : chk 9 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full9 : BoundStep (9,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk9
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk10 : chk 10 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full10 : BoundStep (10,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk10
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk34 : chk 34 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full34 : BoundStep (34,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk34
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk36 : chk 36 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full36 : BoundStep (36,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk36
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk40 : chk 40 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full40 : BoundStep (40,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk40
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk257 : chk 257 7 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full257 : BoundStep (257,8) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk257
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk258 : chk 258 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full258 : BoundStep (258,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk258
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk260 : chk 260 6 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full260 : BoundStep (260,7) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk260
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk1 : chk 1 11 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full1 : BoundStep (1,12) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk1
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk2 : chk 2 10 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full2 : BoundStep (2,11) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk2
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk4 : chk 4 10 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full4 : BoundStep (4,11) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk4
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk8 : chk 8 11 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full8 : BoundStep (8,12) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk8
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk32 : chk 32 10 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full32 : BoundStep (32,11) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk32
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma chk256 : chk 256 10 0 FF FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full256 : BoundStep (256,11) := fun hI => monotoneImp (by decide +kernel) (by decide) hI chk256
-
-def groups16 : List (ℕ × ℕ) := [(0x3ffffed7ffffffdfffffffefffffff6fffffffffffbffefdfff7bf, FF), (0x10000000000000000000000000000040, FF), (0x80000002000000000000000000000000000000002000000, FF), (0x200000000000000000000000100000000000400000000000, FF), (0x800000000000000100000800, FF), (0x1000000000000000000000000000000000000000000000000, FF)]
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part16_0 : chk 16 12 0 0x3ffffed7ffffffdfffffffefffffff6fffffffffffbffefdfff7bf FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part16_1 : chk 16 12 0 0x10000000000000000000000000000040 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part16_2 : chk 16 12 0 0x80000002000000000000000000000000000000002000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part16_3 : chk 16 12 0 0x200000000000000000000000100000000000400000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part16_4 : chk 16 12 0 0x800000000000000100000800 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part16_5 : chk 16 12 0 0x1000000000000000000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full16 : BoundStep (16, 13) := by
-  intro hI
-  apply splitImp (M := groups16) (by decide +kernel) (by decide) hI (by decide) (by decide +kernel)
-  simp only [groups16, List.forall_mem_cons]
-  exact ⟨part16_0, part16_1, part16_2, part16_3, part16_4, part16_5, by simp⟩
-def groups64 : List (ℕ × ℕ) := [(0x40000000000000000000000000000000, FF), (0x80000000000000000000000000000000000, FF), (0x100000000000000000000000000000000000000000000000, FF), (0x3adffd4fffefff7fff57ff96ffffffffffcbfff3fff7ffffffef7f, FF), (0x800000000000000000000000000000000000, FF), (0x2000000000000000000000000000000000000000000000000000, FF), (0x8000000000000000000000000000000000000080, FF), (0x10000000000000000000000000000000000000000080000000000, FF), (0x4000000000000001000, FF), (0x40000800000000000000000000000000000000000000000000000, FF), (0x200000000000000000000000000000000000, FF), (0x2000000000000000000000000000000000000000000000000, FF), (0x20000400000000000000, FF), (0x8000000000010000000000000000000, FF), (0x200000000000000000000000000000000800000000000000, FF), (0x10000000000001000000000000000000000000000000, FF), (0x20000000000000000000000000000000, FF)]
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_0 : chk 64 12 0 0x40000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_1 : chk 64 12 0 0x80000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_2 : chk 64 12 0 0x100000000000000000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_3 : chk 64 12 0 0x3adffd4fffefff7fff57ff96ffffffffffcbfff3fff7ffffffef7f FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_4 : chk 64 12 0 0x800000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_5 : chk 64 12 0 0x2000000000000000000000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_6 : chk 64 12 0 0x8000000000000000000000000000000000000080 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_7 : chk 64 12 0 0x10000000000000000000000000000000000000000080000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_8 : chk 64 12 0 0x4000000000000001000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_9 : chk 64 12 0 0x40000800000000000000000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_10 : chk 64 12 0 0x200000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_11 : chk 64 12 0 0x2000000000000000000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_12 : chk 64 12 0 0x20000400000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_13 : chk 64 12 0 0x8000000000010000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_14 : chk 64 12 0 0x200000000000000000000000000000000800000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_15 : chk 64 12 0 0x10000000000001000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part64_16 : chk 64 12 0 0x20000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full64 : BoundStep (64, 13) := by
-  intro hI
-  apply splitImp (M := groups64) (by decide +kernel) (by decide) hI (by decide) (by decide +kernel)
-  simp only [groups64, List.forall_mem_cons]
-  exact ⟨part64_0, part64_1, part64_2, part64_3, part64_4, part64_5, part64_6, part64_7, part64_8, part64_9, part64_10, part64_11, part64_12, part64_13, part64_14, part64_15, part64_16, by simp⟩
-def groups128 : List (ℕ × ℕ) := [(0x4000000000000000000000000000, FF), (0x20000000000000000000000000000000000000000000000, FF), (0x4000000000000000000000000000000000000000000000, FF), (0x3dffffbdbfcfffeffffcfffffd9fffeff7e7edffffff7e5fffffd7, FF), (0x20000000000000000000000000000000000000000000, FF), (0x120000000000000000, FF), (0x8000000000000000000, FF), (0x8000000020, FF), (0x810000000000000000000, FF), (0x1000000000000000000000000000000000000000, FF), (0x400000000000000000000000000000000000000000000000, FF), (0x20000000000000000000100000000, FF), (0x10000000020000000000000000000000000000000000, FF), (0x100000000000000080000000, FF), (0x10000002000000000000000000000000000, FF), (0x20000008, FF), (0x20000000000000000000000000000000000000000000000000000, FF)]
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_0 : chk 128 12 0 0x4000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_1 : chk 128 12 0 0x20000000000000000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_2 : chk 128 12 0 0x4000000000000000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_3 : chk 128 12 0 0x3dffffbdbfcfffeffffcfffffd9fffeff7e7edffffff7e5fffffd7 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_4 : chk 128 12 0 0x20000000000000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_5 : chk 128 12 0 0x120000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_6 : chk 128 12 0 0x8000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_7 : chk 128 12 0 0x8000000020 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_8 : chk 128 12 0 0x810000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_9 : chk 128 12 0 0x1000000000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_10 : chk 128 12 0 0x400000000000000000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_11 : chk 128 12 0 0x20000000000000000000100000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_12 : chk 128 12 0 0x10000000020000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_13 : chk 128 12 0 0x100000000000000080000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_14 : chk 128 12 0 0x10000002000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_15 : chk 128 12 0 0x20000008 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma part128_16 : chk 128 12 0 0x20000000000000000000000000000000000000000000000000000 FF = false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma full128 : BoundStep (128, 13) := by
-  intro hI
-  apply splitImp (M := groups128) (by decide +kernel) (by decide) hI (by decide) (by decide +kernel)
-  simp only [groups128, List.forall_mem_cons]
-  exact ⟨part128_0, part128_1, part128_2, part128_3, part128_4, part128_5, part128_6, part128_7, part128_8, part128_9, part128_10, part128_11, part128_12, part128_13, part128_14, part128_15, part128_16, by simp⟩
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma all3 : ∀ e ∈ tab3, BoundStep e := by
-  simp only [tab3,List.forall_mem_cons]
-  exact ⟨full19, full25, full28, full49, full67, full70, full81, full82, full88, full134, full140, full145, full148, full152, full161, full164, full176, full194, full196, full208, full224, full280, full322, full328, full336, full352, full416, full448, full7, full14, full21, full26, full35, full56, full74, full84, full98, full112, full133, full146, full162, full168, full193, full200, full268, full273, full289, full296, full321, full324, full388, full400, full22, full76, full97, full131, full304, full392, full11, full13, full37, full38, full41, full42, full44, full50, full52, full69, full73, full100, full104, full137, full138, full259, full261, full262, full265, full266, full274, full276, full290, full292, full385, full386, by simp⟩
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma all2 : ∀ e ∈ tab2, BoundStep e := by
-  simp only [tab2,List.forall_mem_cons]
-  exact ⟨full17, full24, full66, full80, full132, full144, full160, full192, full320, full3, full6, full12, full18, full20, full33, full48, full65, full68, full72, full96, full129, full130, full136, full264, full272, full288, full384, full5, full9, full10, full34, full36, full40, full257, full258, full260, by simp⟩
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma all1 : ∀ e ∈ tab1, BoundStep e := by
-  simp only [tab1,List.forall_mem_cons]
-  exact ⟨full16, full64, full128, full1, full2, full4, full8, full32, full256, by simp⟩
-theorem i3 : ∀ e ∈ tab3, Imp e.1 e.2 := fun e he => (all3 e he) fun x hx => by
-  have := List.all_eq_true.1 pr3 e he
-  rw [List.isEmpty_iff] at this; rw [this] at hx; simp at hx
-lemma up2 {e : ℕ × ℕ} (he : e ∈ tab2) : ∀ x ∈ pr e.1, Imp x.1 x.2 := fun x hx =>
-  i3 x (by simpa using List.all_eq_true.1 (List.all_eq_true.1 pr2 e he) x hx)
-theorem i2 : ∀ e∈tab2, Imp e.1 e.2 := fun e he => all2 e he (up2 he)
-lemma up1 {e : ℕ × ℕ} (he : e ∈ tab1) : ∀ x ∈ pr e.1, Imp x.1 x.2 := fun x hx => by
-  have := List.all_eq_true.1 (List.all_eq_true.1 pr1 e he) x hx
-  rw [Bool.or_eq_true, List.contains_iff_mem, List.contains_iff_mem] at this
-  exact this.elim (i2 x) (i3 x)
-theorem i1 : ∀ e∈tab1, Imp e.1 e.2 := fun e he => all1 e he (up1 he)
-
-abbrev Snap := ℕ × List W
-def sameW (a b : W) : Bool :=
-  Nat.beq a.s b.s && Nat.beq a.a b.a && Nat.beq a.b b.b && Nat.beq a.c b.c
-lemma sameW_sound {a b : W} (h : sameW a b = true) : a = b := by
-  cases a; cases b
-  simp only [sameW, Bool.and_eq_true, Nat.beq_eq] at h
-  obtain ⟨⟨⟨rfl,rfl⟩,rfl⟩,rfl⟩ := h
+theorem domN_refl (w : ℕ) : domN w w = true := by
+  have h := land_compl w
+  have h1 : Nat.land (Nat.land w 4095) (Nat.sub 16777215 w) = 0 := by
+    show (w &&& 4095) &&& (16777215 - w) = 0
+    rw [Nat.and_right_comm, h]; simp
+  have h2 : Nat.land (Nat.land w (Nat.sub 16777215 w)) 16773120 = 0 := by
+    show (w &&& (16777215 - w)) &&& 16773120 = 0
+    rw [h]; simp
+  unfold domN
+  rw [h1, h2]
   rfl
-def sameV : List W → List W → Bool
-  | [], [] => true
-  | a :: x, b :: y => sameW a b && sameV x y
-  | _, _ => false
-lemma sameV_sound {v r : List W} (h : sameV v r=true) : v=r := by
-  induction v generalizing r with
-  | nil => cases r <;> simp_all [sameV]
-  | cons a v ih =>
-    cases r with
-    | nil => simp [sameV] at h
-    | cons b r =>
-      obtain ⟨hw,hr⟩ := Bool.and_eq_true_iff.mp h
-      rw [sameW_sound hw,ih hr]
-def listed (L : List Snap) (z : Nat) (v : List W) : Bool :=
-  L.any (fun s => Nat.beq z s.1 && sameV v s.2)
-lemma listed_mem {L : List Snap} {z v} (h : listed L z v=true) : (z,v)∈L := by
-  obtain ⟨⟨z',v'⟩,hL, h⟩ := List.any_eq_true.1 h
-  simp only [Bool.and_eq_true,Nat.beq_eq] at h
-  obtain ⟨rfl,h⟩ := h
-  rw [sameV_sound h]
-  exact hL
 
-noncomputable def runCut (l m g k : Nat) (cuts : List Snap) (s : Snap) : Bool :=
-  frc s.2 fun v => st s.1 fun z => st l fun l => st m fun m => st g fun g =>
-    bif Nat.ble v.length 1 then true else
-      node (fun z r => bif listed cuts z r then false else look l m g k (k-1) 0 z r)
-        false l m g k v.length z v pairs
+theorem blk_refl (m : Bool) (w : ℕ) : blk m w w = true := by
+  cases m
+  · simp [blk]
+  · simp [blk, domN_refl]
 
-def BoundAt (P : List ℕ) (T l m k : ℕ) (s : Snap) : Prop :=
-  ∀ S, StOk P T l k s.1 s.2 S → ∀ k'≤k, ¬ Min m T k' 0 S
-lemma cut_sound {P : List ℕ} {T l m g : ℕ} (ctx : Ctx P l m g T) {k : ℕ}
-    {s : Snap} {cs : List Snap}
-    (rec : ∀ c∈cs,BoundAt P T l m (k-1) c) (check : runCut l m g k cs s=false) :
-    BoundAt P T l m k s := by
-  intro S hs k' hk hm
-  simp only [runCut,frc_eq,st_eq] at check
-  cases hlen : Nat.ble s.2.length 1 with
-  | true => simp [hlen] at check
-  | false =>
-    simp only [hlen,Bool.cond_false] at check
-    have hc : 2≤S.card := by
-      rw [hs.rep.card]
-      have h : ¬s.2.length≤1 := by intro h; simp [Nat.ble_eq_true_of_le h] at hlen
-      omega
-    rcases first_move k' 0 S hm hc with ⟨j,d,a,b,S',rfl,hb,hl⟩ | ⟨_,_,_,_,_,_,_,_,bad,_⟩ | ⟨_,_,_,_,_,_,_,_,_,bad,_⟩
-    · obtain ⟨n,rfl⟩ : ∃ n, k=n+1 := ⟨k-1, by omega⟩
-      obtain ⟨z,r,hf,st'⟩ := node_bi ctx hs hm (by omega) (by rfl) rfl (by omega) hb hl
-        (fun h xs hp a c ha hc hax hcy hxs => by
-          subst xs
-          have hpw := pairs_false hp
-          have : Std.Symm (fun a c : X => h a c=false ∨ h c a=false) := ⟨fun a b h => h.symm⟩
-          refine (hpw.imp (S := fun a c => h a c=false ∨ h c a=false) fun h => Or.inl h).forall
-            (List.mem_map_of_mem ha) (List.mem_map_of_mem hc) ?_
-          intro e
-          have : a.s=c.s := congrArg X.s e
-          exact hb.1 (by rw [← hax,← hcy,this])) check
-      have hm' := hb.min hl hm.2
-      change (bif listed cs z r then false else look l m g (n+1) n 0 z r) = false at hf
-      cases h : listed cs z r with
-      | true => exact rec (z,r) (listed_mem h) S' st' j (by omega) hm'
-      | false =>
-        simp only [h,Bool.cond_false] at hf
-        exact look_sound ctx _ _ _ _ _ _ hf st' j (by omega) hm'
-    · omega
-    · omega
+inductive Reach (m : Bool) : Finset ℕ → ℕ → Prop
+  | done (k : ℕ) : Reach m {4095} k
+  | step (D : Finset ℕ) (k u v w : ℕ) (ka kb : Bool) :
+      u ∈ D → v ∈ D → (w = u &&& v ∨ w = u ||| v) →
+      (∀ d ∈ D, blk m w d = false) → (∀ d ∈ base12, blk m w d = false) →
+      Reach m (insert w (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))) k →
+      Reach m D (k + 1)
 
-def shiftW (s : Snap) (i j opn keepI keepJ : ℕ) : Snap :=
-  let w0 : W := ⟨0,0,0,0⟩
-  let a := s.2.getD i w0
-  let b := s.2.getD j w0
-  let x := if opn=0 then a.a ||| b.a else a.a &&& b.a
-  let y := if opn=0 then a.b &&& b.b else a.b ||| b.b
-  let o : W := ⟨if opn=0 then a.s &&& b.s else a.s ||| b.s, x, y, x ||| y⟩
-  let r := s.2.filter fun w => (keepI≠0 || w.s≠a.s) && (keepJ≠0 || w.s≠b.s)
-  (s.1 + (a.c &&& b.c) - o.c - keepI*a.c - keepJ*b.c,
-    r.takeWhile (fun w => o.s < w.s) ++ [o] ++ r.dropWhile (fun w => o.s < w.s))
+theorem Reach.mono {m : Bool} {D : Finset ℕ} {k : ℕ} (h : Reach m D k) : Reach m D (k + 1) := by
+  induction h with
+  | done k => exact Reach.done _
+  | step D k u v w ka kb hu hv hw hd hb _ ih => exact Reach.step D (k + 1) u v w ka kb hu hv hw hd hb ih
 
+theorem Reach.mono_le {m : Bool} {D : Finset ℕ} {k k' : ℕ} (hk : k ≤ k') (h : Reach m D k) :
+    Reach m D k' := by
+  induction hk with
+  | refl => exact h
+  | step _ ih => exact ih.mono
 
-noncomputable def initialCheck (Z K : ℕ) (answer : ℕ → List W → Bool) : Bool :=
-  let l := lz Z
-  let m := mz Z
-  let g := pL ((pr Z).map fun _ => 16)
-  let B := pL ((pr Z).map fun e => 16+(K-e.2))
-  frc (avl (PZ Z) m rawL) fun all => anySub all fun v =>
-    bif Nat.beq (cov false l v) l then
-      bif Nat.ble v.length (K+1) then
-        child answer false l g (K+1) v.length (fun f => f v) (Nat.sub B (sumc v)) else false
-    else false
-theorem initial_sound {Z L : ℕ} (hp : pOk Z=true) (hL : L≤15) (hI : ∀ e∈pr Z,Imp e.1 e.2)
-    {answer : ℕ → List W → Bool} (hans : initialCheck Z (L-1) answer=false)
-    (hbound : ∀ z v, answer z v=false → Ctx (PZ Z) (lz Z) (mz Z) (pL ((pr Z).map fun _ => 16)) (tz Z) →
-      BoundAt (PZ Z) (tz Z) (lz Z) (mz Z) (L-1) (z,v)) : Imp Z L := by
-  intro q hq hsol
-  simp only [pOk, Bool.and_eq_true, Bool.not_eq_true', List.all_eq_true] at hp
-  obtain ⟨⟨hp0, hp1⟩, hp2⟩ := hp
-  have nb : ∀ {x y : ℕ}, Nat.beq x y = false → x ≠ y := fun h e => by rw [e, Nat.beq_refl] at h; simp at h
-  have hT : tz Z &&& mz Z = tz Z := by simp only [tz, nl, Nat.and_assoc, Nat.and_self]
-  classical
-  have hex : ∃ q, Sol (mz Z) (tz Z) q (C (mz Z) (WZ Z)) := ⟨q, hsol⟩
-  have hqL : Nat.find hex < L := lt_of_le_of_lt (Nat.find_min' hex hsol) hq
-  obtain ⟨k, hk, t, S, hS, hl⟩ := (Nat.find_spec hex).live
-  have hCS : C (mz Z) (S : Set ℕ) ⊆ C (mz Z) (WZ Z) := by
-    rintro x (hx | hx)
-    · exact hS hx
-    · exact Or.inr hx
-  have hkeq : k = Nat.find hex := le_antisymm hk (Nat.find_min' hex (hl.sol.mono le_rfl hS))
-  have hm : Min (mz Z) (tz Z) k t S := ⟨hl, fun q' hq' hs => Nat.find_min hex (by omega) (hs.mono le_rfl hCS)⟩
-  have hbd : ∀ x ∈ S, x &&& mz Z = x := by
+theorem Reach.zero {m : Bool} {D : Finset ℕ} (h : Reach m D 0) : D = {4095} := by
+  cases h
+  rfl
+
+theorem Reach.inv' {m : Bool} {D : Finset ℕ} {k' : ℕ} (h : Reach m D k') : ∀ k : ℕ, k' = k + 1 →
+    D = {4095} ∨ ∃ (u v w : ℕ) (ka kb : Bool), u ∈ D ∧ v ∈ D ∧ (w = u &&& v ∨ w = u ||| v) ∧
+      (∀ d ∈ D, blk m w d = false) ∧ (∀ d ∈ base12, blk m w d = false) ∧
+      Reach m (insert w (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))) k := by
+  induction h with
+  | done k0 => intro _ _; exact Or.inl rfl
+  | step D k0 u v w ka kb hu hv hw hd hb hr _ =>
+    intro k hk
+    obtain rfl : k0 = k := by omega
+    exact Or.inr ⟨u, v, w, ka, kb, hu, hv, hw, hd, hb, hr⟩
+
+theorem Reach.inv {m : Bool} {D : Finset ℕ} {k : ℕ} (h : Reach m D (k + 1)) :
+    D = {4095} ∨ ∃ (u v w : ℕ) (ka kb : Bool), u ∈ D ∧ v ∈ D ∧ (w = u &&& v ∨ w = u ||| v) ∧
+      (∀ d ∈ D, blk m w d = false) ∧ (∀ d ∈ base12, blk m w d = false) ∧
+      Reach m (insert w (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))) k :=
+  h.inv' k rfl
+
+theorem Reach.card {m : Bool} {D : Finset ℕ} {k : ℕ} (h : Reach m D k) : D.card ≤ k + 1 := by
+  induction h with
+  | done k => simp
+  | step D k u v w ka kb hu hv hw hd hb _ ih =>
+    have hwD : w ∉ D := fun hm => by
+      have := hd w hm
+      rw [blk_refl] at this
+      exact Bool.noConfusion this
+    have hwF : w ∉ D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)) :=
+      fun hm => hwD (Finset.mem_of_mem_filter _ hm)
+    rw [Finset.card_insert_of_notMem hwF] at ih
+    have hsub : D ⊆ insert u (insert v
+        (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))) := by
+      intro x hx
+      by_cases h1 : x = u
+      · simp [h1]
+      by_cases h2 : x = v
+      · simp [h2]
+      simp [hx, h1, h2]
+    have h2 := Finset.card_le_card hsub
+    have h3 := Finset.card_insert_le u (insert v
+        (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v))))
+    have h4 := Finset.card_insert_le v
+        (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))
+    omega
+
+theorem tb4095 (i : ℕ) : (4095 : ℕ).testBit i = decide (i < 12) := by
+  have e : (4095 : ℕ) = 2 ^ 12 - 1 := by norm_num
+  rw [e, Nat.testBit_two_pow_sub_one]
+
+theorem Reach.sep {m : Bool} {D : Finset ℕ} {k : ℕ} (h : Reach m D k) (e i : ℕ) (he : e < 12)
+    (hi : 12 ≤ i) : ∃ w ∈ D, w.testBit e = true ∧ w.testBit i = false := by
+  induction h with
+  | done k =>
+    refine ⟨4095, by simp, ?_, ?_⟩
+    · rw [tb4095]; simpa using he
+    · rw [tb4095]; simpa using hi
+  | step D k u v w ka kb hu hv hw hd hb _ ih =>
+    obtain ⟨x, hx, h1, h2⟩ := ih
+    rcases Finset.mem_insert.mp hx with hxw | hx
+    · subst hxw
+      rcases hw with hw | hw
+      · subst hw
+        rw [Nat.testBit_and] at h1 h2
+        cases hum : u.testBit i
+        · exact ⟨u, hu, by simp_all, hum⟩
+        · exact ⟨v, hv, by simp_all, by simp_all⟩
+      · subst hw
+        rw [Nat.testBit_or] at h1 h2
+        cases hue : u.testBit e
+        · exact ⟨v, hv, by simp_all, by simp_all⟩
+        · exact ⟨u, hu, hue, by simp_all⟩
+    · exact ⟨x, Finset.mem_of_mem_filter _ hx, h1, h2⟩
+
+def tb (w e : ℕ) : Bool := !(Nat.beq (Nat.land (Nat.shiftRight w e) 1) 0)
+
+theorem tb_eq (w e : ℕ) : tb w e = w.testBit e := by
+  have h : Nat.land (Nat.shiftRight w e) 1 = 1 &&& (w >>> e) := Nat.and_comm _ _
+  unfold tb Nat.testBit
+  rw [h]
+  generalize (1 &&& w >>> e) = X
+  cases X <;> rfl
+
+def rect (x J : ℕ) : ℕ → ℕ
+  | 0 => 0
+  | e + 1 => Nat.lor (cond (tb x e) (Nat.shiftLeft J (Nat.mul 12 e)) 0) (rect x J e)
+
+def rectW (x : ℕ) : ℕ := rect x (Nat.xor (Nat.shiftRight x 12) 4095) 12
+
+theorem rect_tb (x J i : ℕ) (hJ : J.testBit i = true) : ∀ n e : ℕ, e < n → x.testBit e = true →
+    (rect x J n).testBit (12 * e + i) = true := by
+  intro n
+  induction n with
+  | zero => intro e he; omega
+  | succ n ih =>
+    intro e he hx
+    show ((cond (tb x n) (J <<< (12 * n)) 0) ||| rect x J n).testBit (12 * e + i) = true
+    rw [Nat.testBit_or]
+    by_cases hen : e = n
+    · subst hen
+      rw [tb_eq, hx]
+      simp [Nat.testBit_shiftLeft, hJ]
+    · rw [ih e (by omega) hx]
+      simp
+
+theorem rectW_tb (x e i : ℕ) (he : e < 12) (hi : i < 12) (h1 : x.testBit e = true)
+    (h2 : x.testBit (12 + i) = false) : (rectW x).testBit (12 * e + i) = true := by
+  apply rect_tb _ _ _ _ 12 e he h1
+  show ((x >>> 12) ^^^ 4095).testBit i = true
+  rw [Nat.testBit_xor, Nat.testBit_shiftRight, h2, tb4095]
+  simp [hi]
+
+theorem sep_bit {m : Bool} {D : Finset ℕ} {k : ℕ} (hR : Reach m D k) (p : ℕ) (hp : p < 144) :
+    ∃ x ∈ D, (rectW x).testBit p = true := by
+  obtain ⟨x, hx, h1, h2⟩ := hR.sep (p / 12) (12 + p % 12) (by omega) (by omega)
+  refine ⟨x, hx, ?_⟩
+  have := rectW_tb x (p / 12) (p % 12) (by omega) (Nat.mod_lt _ (by norm_num)) h1 h2
+  rwa [Nat.div_add_mod] at this
+
+def full : ℕ := 22300745198530623141535718272648361505980415
+
+theorem full_eq : full = 2 ^ 144 - 1 := by norm_num [full]
+
+def covR (c : ℕ) : Bool := Nat.beq (Nat.land c full) full
+
+theorem covR_of (c : ℕ) (h : ∀ p, p < 144 → c.testBit p = true) : covR c = true := by
+  have e : Nat.land c full = full := by
+    show c &&& full = full
+    rw [full_eq]
+    apply Nat.eq_of_testBit_eq
+    intro p
+    rw [Nat.testBit_and, Nat.testBit_two_pow_sub_one]
+    by_cases hp : p < 144
+    · simp [hp, h p hp]
+    · simp [hp]
+  unfold covR
+  rw [e]
+  exact Nat.beq_refl _
+
+def orR : List ℕ → ℕ
+  | [] => 0
+  | x :: l => Nat.lor (rectW x) (orR l)
+
+theorem orR_tb (p : ℕ) : ∀ l : List ℕ, ∀ x ∈ l, (rectW x).testBit p = true →
+    (orR l).testBit p = true := by
+  intro l
+  induction l with
+  | nil => intro x hx; simp at hx
+  | cons a l ih =>
+    intro x hx h
+    show (rectW a ||| orR l).testBit p = true
+    rw [Nat.testBit_or]
+    rcases List.mem_cons.mp hx with hxa | hx
+    · rw [← hxa, h]; rfl
+    · rw [ih x hx h]; simp
+
+theorem cover_sound {m : Bool} {l : List ℕ} {k : ℕ} (h : covR (orR l) = false) :
+    ¬ Reach m l.toFinset k := by
+  intro hR
+  have : covR (orR l) = true := by
+    apply covR_of
+    intro p hp
+    obtain ⟨x, hx, hb⟩ := sep_bit hR p hp
+    exact orR_tb p l x (List.mem_toFinset.mp hx) hb
+  rw [h] at this
+  exact Bool.noConfusion this
+
+def allFinal : List ℕ → Bool
+  | [] => true
+  | a :: l => Nat.beq a 4095 && allFinal l
+
+theorem allFinal_of : ∀ l : List ℕ, (∀ a ∈ l, a = 4095) → allFinal l = true := by
+  intro l
+  induction l with
+  | nil => intro _; rfl
+  | cons a l ih =>
+    intro h
+    have ha := h a (List.mem_cons_self)
+    simp only [allFinal, ha, Bool.and_eq_true]
+    exact ⟨rfl, ih (fun b hb => h b (List.mem_cons_of_mem _ hb))⟩
+
+theorem notFinal {l : List ℕ} (h : allFinal l = false) : l.toFinset ≠ {4095} := by
+  intro he
+  have : allFinal l = true := by
+    apply allFinal_of
+    intro a ha
+    have : a ∈ l.toFinset := List.mem_toFinset.mpr ha
+    rw [he] at this
+    exact Finset.mem_singleton.mp this
+  rw [h] at this
+  exact Bool.noConfusion this
+
+def ins (w : ℕ) : List ℕ → List ℕ
+  | [] => [w]
+  | a :: l => cond (Nat.blt w a) (w :: a :: l) (a :: ins w l)
+
+theorem ins_perm (w : ℕ) : ∀ l : List ℕ, (ins w l).Perm (w :: l) := by
+  intro l
+  induction l with
+  | nil => exact List.Perm.refl _
+  | cons a l ih =>
+    unfold ins
+    cases Nat.blt w a
+    · exact (List.Perm.cons a ih).trans (List.Perm.swap w a l)
+    · exact List.Perm.refl _
+
+def sortedFrom (a : ℕ) : List ℕ → Bool
+  | [] => true
+  | b :: l => Nat.blt a b && sortedFrom b l
+
+def sortedB : List ℕ → Bool
+  | [] => true
+  | a :: l => sortedFrom a l
+
+theorem sortedFrom_lt : ∀ (l : List ℕ) (a : ℕ), sortedFrom a l = true → ∀ x ∈ l, a < x := by
+  intro l
+  induction l with
+  | nil => intro a _ x hx; simp at hx
+  | cons b l ih =>
+    intro a h x hx
+    simp only [sortedFrom, Bool.and_eq_true] at h
+    have hab : a < b := by simpa [Nat.blt_eq] using h.1
+    rcases List.mem_cons.mp hx with rfl | hx
+    · exact hab
+    · exact lt_trans hab (ih b h.2 x hx)
+
+theorem sortedFrom_nodup : ∀ (l : List ℕ) (a : ℕ), sortedFrom a l = true → (a :: l).Nodup := by
+  intro l
+  induction l with
+  | nil => intro a _; simp
+  | cons b l ih =>
+    intro a h
+    have hlt := sortedFrom_lt (b :: l) a h
+    simp only [sortedFrom, Bool.and_eq_true] at h
+    refine List.nodup_cons.mpr ⟨fun hm => lt_irrefl a (hlt a hm), ih b h.2⟩
+
+theorem sortedB_nodup {l : List ℕ} (h : sortedB l = true) : l.Nodup := by
+  cases l with
+  | nil => simp
+  | cons a l => exact sortedFrom_nodup l a h
+
+abbrev Tree : Type := BinaryTree (List ℕ)
+
+def lcmp : List ℕ → List ℕ → Ordering
+  | [], [] => Ordering.eq
+  | [], _ :: _ => Ordering.lt
+  | _ :: _, [] => Ordering.gt
+  | a :: x, b :: y => cond (Nat.blt a b) Ordering.lt (cond (Nat.blt b a) Ordering.gt (lcmp x y))
+
+theorem lcmp_eq : ∀ (x y : List ℕ), lcmp x y = Ordering.eq → x = y := by
+  intro x
+  induction x with
+  | nil => intro y h; cases y with
+    | nil => rfl
+    | cons b y => simp [lcmp] at h
+  | cons a x ih =>
+    intro y h
+    cases y with
+    | nil => simp [lcmp] at h
+    | cons b y =>
+      unfold lcmp at h
+      cases h1 : Nat.blt a b
+      · cases h2 : Nat.blt b a
+        · rw [h1, h2] at h
+          have e1 : ¬ a < b := by rw [← Nat.blt_eq, h1]; simp
+          have e2 : ¬ b < a := by rw [← Nat.blt_eq, h2]; simp
+          have : a = b := by omega
+          rw [this, ih y h]
+        · rw [h1, h2] at h; simp at h
+      · rw [h1] at h; simp at h
+
+def thas : Tree → List ℕ → Bool
+  | BinaryTree.nil, _ => false
+  | BinaryTree.node key l r, x =>
+    match lcmp x key with
+    | Ordering.lt => thas l x
+    | Ordering.eq => true
+    | Ordering.gt => thas r x
+
+def tall (p : List ℕ → Bool) : Tree → Bool
+  | BinaryTree.nil => true
+  | BinaryTree.node key l r => p key && tall p l && tall p r
+
+theorem thas_all (p : List ℕ → Bool) : ∀ (t : Tree) (x : List ℕ), tall p t = true →
+    thas t x = true → p x = true := by
+  intro t
+  induction t with
+  | nil => intro x _ h; simp [thas] at h
+  | node key l r ihl ihr =>
+    intro x ha hh
+    simp only [tall, Bool.and_eq_true] at ha
+    unfold thas at hh
+    cases hc : lcmp x key
+    · rw [hc] at hh; exact ihl x ha.1.2 hh
+    · rw [lcmp_eq x key hc]; exact ha.1.1
+    · rw [hc] at hh; exact ihr x ha.2 hh
+
+def closed (prev : Tree) (k : ℕ) (l : List ℕ) : Bool :=
+  Nat.blt (Nat.succ k) l.length || !(covR (orR l)) || (Nat.beq k 0 && !(allFinal l)) || thas prev l
+
+def Inv (m : Bool) (prev : Tree) (k : ℕ) : Prop :=
+  ∀ x : List ℕ, thas prev x = true → ¬ Reach m x.toFinset k
+
+theorem closed_sound {m : Bool} {prev : Tree} {k : ℕ} {l : List ℕ} (hnd : l.Nodup)
+    (hinv : Inv m prev k) (h : closed prev k l = true) : ¬ Reach m l.toFinset k := by
+  intro hR
+  simp only [closed, Bool.or_eq_true, Bool.and_eq_true, Bool.not_eq_true'] at h
+  rcases h with ((h | h) | h) | h
+  · have h1 : k + 1 < l.length := by simpa [Nat.blt_eq] using h
+    have h2 := hR.card
+    rw [List.toFinset_card_of_nodup hnd] at h2
+    omega
+  · exact cover_sound h hR
+  · have hk : k = 0 := Nat.eq_of_beq_eq_true h.1
+    subst hk
+    exact notFinal h.2 hR.zero
+  · exact hinv l h hR
+
+theorem beq_false_iff (x u : ℕ) : Nat.beq x u = false ↔ x ≠ u := by
+  constructor
+  · intro h he
+    rw [he, Nat.beq_refl] at h
+    exact Bool.noConfusion h
+  · intro h
+    cases hb : Nat.beq x u
+    · rfl
+    · exact absurd (Nat.eq_of_beq_eq_true hb) h
+
+def remF (ka kb : Bool) (u v x : ℕ) : Bool := (ka || !(Nat.beq x u)) && (kb || !(Nat.beq x v))
+
+def PruneOK (m : Bool) (P : List ℕ → ℕ → Bool) : Prop :=
+  ∀ (l : List ℕ) (k : ℕ), l.Nodup → Reach m l.toFinset k → P l k = true
+
+theorem PruneOK.and {m : Bool} {P Q : List ℕ → ℕ → Bool} (hP : PruneOK m P) (hQ : PruneOK m Q) :
+    PruneOK m (fun l k => P l k && Q l k) := by
+  intro l k hnd hR
+  simp only [hP l k hnd hR, hQ l k hnd hR, Bool.and_self]
+
+def lastOK (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) : Bool :=
+  (Nat.beq k 0 && !(allFinal l)) || thas prev l || !(P l k)
+
+theorem lastOK_sound {m : Bool} {P : List ℕ → ℕ → Bool} {prev : Tree} {k : ℕ} {l : List ℕ}
+    (hP : PruneOK m P) (hnd : l.Nodup)
+    (hinv : Inv m prev k) (h : lastOK P prev k l = true) : ¬ Reach m l.toFinset k := by
+  intro hR
+  simp only [lastOK, Bool.or_eq_true, Bool.and_eq_true, Bool.not_eq_true'] at h
+  rcases h with (h | h) | h
+  · have hk : k = 0 := Nat.eq_of_beq_eq_true h.1
+    subst hk
+    exact notFinal h.2 hR.zero
+  · exact hinv l h hR
+  · rw [hP l k hnd hR] at h; exact Bool.noConfusion h
+
+def sOK (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) (u v w : ℕ) (sz : Bool) (c : ℕ) (ka kb : Bool) : Bool :=
+  sz || !(covR c) || lastOK P prev k (ins w (l.filter (remF ka kb u v)))
+
+def blkAny (m : Bool) (w : ℕ) : List ℕ → Bool
+  | [] => false
+  | d :: l => blk m w d || blkAny m w l
+
+theorem blkAny_false (m : Bool) (w : ℕ) : ∀ l : List ℕ, (∀ d ∈ l, blk m w d = false) →
+    blkAny m w l = false := by
+  intro l
+  induction l with
+  | nil => intro _; rfl
+  | cons a l ih =>
+    intro h
+    simp only [blkAny, h a List.mem_cons_self, Bool.false_or]
+    exact ih (fun d hd => h d (List.mem_cons_of_mem _ hd))
+
+def opOK2 (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) (u ru v rv w c : ℕ) : Bool :=
+  sOK P prev k l u v w (Nat.blt (Nat.add k 2) l.length) c false false &&
+  sOK P prev k l u v w (Nat.blt (Nat.succ k) l.length) (Nat.lor c rv) false true &&
+  sOK P prev k l u v w (Nat.blt (Nat.succ k) l.length) (Nat.lor c ru) true false &&
+  sOK P prev k l u v w (Nat.blt k l.length) (Nat.lor c (Nat.lor ru rv)) true true
+
+def opOK (m : Bool) (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) (u ru v rv ro w : ℕ) : Bool :=
+  blkAny m w base12 || blkAny m w l || opOK2 P prev k l u ru v rv w (Nat.lor (rectW w) ro)
+
+def orEx (u v : ℕ) : List ℕ → ℕ
+  | [] => 0
+  | x :: l => cond (Nat.beq x u || Nat.beq x v) (orEx u v l) (Nat.lor (rectW x) (orEx u v l))
+
+theorem orEx_tb (u v p : ℕ) : ∀ l : List ℕ, ∀ x : ℕ, x ∈ l → x ≠ u → x ≠ v →
+    (rectW x).testBit p = true → (orEx u v l).testBit p = true := by
+  intro l
+  induction l with
+  | nil => intro x hx; simp at hx
+  | cons y l ih =>
+    intro x hx hxu hxv h
+    unfold orEx
+    rcases List.mem_cons.mp hx with hxa | hx
+    · subst hxa
+      rw [(beq_false_iff x u).mpr hxu, (beq_false_iff x v).mpr hxv]
+      show (rectW x ||| orEx u v l).testBit p = true
+      rw [Nat.testBit_or, h]; rfl
+    · have := ih x hx hxu hxv h
+      cases (Nat.beq y u || Nat.beq y v)
+      · show (rectW y ||| orEx u v l).testBit p = true
+        rw [Nat.testBit_or, this]; simp
+      · exact this
+
+def pairOK (m : Bool) (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) (u v : ℕ) : Bool :=
+  opOK m P prev k l u (rectW u) v (rectW v) (orEx u v l) (Nat.land u v) &&
+  opOK m P prev k l u (rectW u) v (rectW v) (orEx u v l) (Nat.lor u v)
+
+def allB {α : Type} (f : α → Bool) : List α → Bool
+  | [] => true
+  | a :: l => f a && allB f l
+
+theorem allB_mem {α : Type} (f : α → Bool) : ∀ l : List α, allB f l = true →
+    ∀ x ∈ l, f x = true := by
+  intro l
+  induction l with
+  | nil => intro _ x hx; simp at hx
+  | cons a l ih =>
+    intro h x hx
+    simp only [allB, Bool.and_eq_true] at h
+    rcases List.mem_cons.mp hx with rfl | hx
+    · exact h.1
+    · exact ih h.2 x hx
+
+def pairsAll {α : Type} (f : α → α → Bool) : List α → Bool
+  | [] => true
+  | a :: l => allB (f a) l && pairsAll f l
+
+theorem pairsAll_mem {α : Type} (f : α → α → Bool) : ∀ l : List α, pairsAll f l = true →
+    ∀ u ∈ l, ∀ v ∈ l, u ≠ v → f u v = true ∨ f v u = true := by
+  intro l
+  induction l with
+  | nil => intro _ u hu; simp at hu
+  | cons a l ih =>
+    intro h u hu v hv huv
+    simp only [pairsAll, Bool.and_eq_true] at h
+    rcases List.mem_cons.mp hu with hua | hu
+    · rcases List.mem_cons.mp hv with hva | hv
+      · exact absurd (hua.trans hva.symm) huv
+      · rw [hua]; exact Or.inl (allB_mem _ l h.1 v hv)
+    · rcases List.mem_cons.mp hv with hva | hv
+      · rw [hva]; exact Or.inr (allB_mem _ l h.1 u hu)
+      · exact ih h.2 u hu v hv huv
+
+theorem size_lb (D : Finset ℕ) (u v : ℕ) (ka kb : Bool) :
+    D.card ≤ (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v))).card +
+      (cond ka 0 1 + cond kb 0 1) := by
+  have hsub : D ⊆ (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v))) ∪
+      ((cond ka ∅ {u}) ∪ (cond kb ∅ {v})) := by
     intro x hx
-    rcases hS hx with ⟨w, _, rfl⟩ | h
-    · rw [Nat.and_assoc, Nat.and_self]
-    · simp at h; rcases h with rfl | rfl <;> simp
-  obtain ⟨h0, h1⟩ := hm.proper hT (nb hp0) (nb hp1) hbd
-  have hSW : (S : Set ℕ) ⊆ WZ Z := by
-    intro x hx
-    rcases hS hx with h | h
-    · exact h
-    · simp at h; rcases h with rfl | rfl
-      · exact absurd hx h0
-      · exact absurd hx h1
-  have hproj : ∀ e ∈ pr Z, mz e.1 &&& mz Z = mz e.1 ∧ tz e.1 ≠ 0 ∧ tz e.1 ≠ mz e.1 := by
-    intro e he
-    obtain ⟨⟨a, b⟩, c⟩ := hp2 e he
-    exact ⟨Nat.eq_of_beq_eq_true a, nb b, nb c⟩
-  have hno : ∀ S : Finset ℕ, (S : Set ℕ) ⊆ WZ Z → ∀ e ∈ pr Z, ∀ q < e.2, ¬ Sol (mz e.1) (tz Z &&& mz e.1) q (C (mz e.1) (Im (mz e.1) S)) := by
-    intro S hSW e he q hq hs
-    have h3 := (hproj e he).1
-    rw [tz_sub h3] at hs
-    exact hI e he q hq (hs.mono le_rfl (C_mono (Im_WZ h3 hSW)))
-  have htk := hm.size.2
-  have tz0 : t=0 := by
-    have hh := hm.1
-    clear * - hh
-    induction hh with
-    | stop => rfl
-    | un bad => exact bad.elim
-    | bi _ _ ih => exact ih
-  subst t
-  obtain ⟨a1, a2, a3⟩ := avl_spec (PZ Z) (mz Z) rawL
-  set v := (avl (PZ Z) (mz Z) rawL).filter (fun w => decide (w.s ∈ S)) with hv
-  have hsub : v.Sublist (avl (PZ Z) (mz Z) rawL) := List.filter_sublist
-  have hnd : (v.map W.s).Nodup := by
-    rw [List.Nodup, List.pairwise_map]
-    exact (a1.sublist hsub).imp fun h => Nat.ne_of_gt h
-  have hrep : Rep v S := by
-    refine ⟨hnd, Finset.ext fun x => ?_⟩
-    rw [List.mem_toFinset, List.mem_map]
-    constructor
-    · rintro ⟨w, hw, rfl⟩
-      rw [hv, List.mem_filter] at hw; simpa using hw.2
-    · intro hx
-      obtain ⟨w, hw, rfl⟩ := hSW hx
-      obtain ⟨w', hw', e⟩ := a3 w hw (fun e => h0 (e ▸ hx)) (fun e => h1 (e ▸ hx))
-      exact ⟨w', by rw [hv, List.mem_filter]; exact ⟨hw', by simpa [e] using hx⟩, e⟩
-  have hwok : ∀ w ∈ v, WOk (PZ Z) w := by
-    intro w hw
-    obtain ⟨x, _, rfl⟩ := a2 w (hsub.subset hw); exact mkW_ok _ _
-  have hgood : ∀ w ∈ v, Good (lz Z) w.s := by
-    intro w hw
-    obtain ⟨x, hx, rfl⟩ := a2 w (hsub.subset hw); exact wire_good hx Z
-  have hPlen : (PZ Z).length = (pr Z).length := by simp [PZ]
-  have hPget : ∀ j < (PZ Z).length, (PZ Z).getD j 0 = mz ((pr Z).getD j (0, L - 1)).1 ∧ (pr Z).getD j (0, L - 1) ∈ pr Z := by
-    intro j hj
-    rw [hPlen] at hj
-    simp [PZ, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_eq_getElem hj]
-  have X : Ctx (PZ Z) (lz Z) (mz Z) (pL ((pr Z).map fun _ => 16)) (tz Z) := by
-    refine ⟨fun i hi => lz_lg Z i hi, fun j hj => ?_, ?_⟩
-    · obtain ⟨e1, e2⟩ := hPget j hj
-      have h3 := hproj _ e2
-      rw [e1, tz_sub h3.1]; exact h3
-    · rw [pL_pk, List.length_map, hPlen]
-      refine pk_congr fun j hj => ?_
-      rw [List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_eq_getElem hj]; rfl
-  have hcl : Cl (PZ Z) (tz Z) (L - 1) (fun j => L - 1 - ((pr Z).getD j (0, L - 1)).2) S := by
-    intro j hj q hq
-    obtain ⟨e1, e2⟩ := hPget j hj
-    have hq' : q + (L - 1 - ((pr Z).getD j (0, L - 1)).2) < L - 1 := hq
-    rw [e1]; exact hno S hSW _ e2 q (by omega)
-  have hle := cnt_le X hrep hwok hcl hm (by omega)
-  have hst : StOk (PZ Z) (tz Z) (lz Z) (L - 1) (pL ((pr Z).map fun e => 16 + (L - 1 - e.2)) - sumc v) v S := by
-    refine ⟨hrep, hwok, hgood, _, fun j _ => by omega, hcl, ?_⟩
-    rw [sumc_eq hwok, pk16, pk_sub]
-    intro j hj; have := hle j hj; omega
-  have hcov : Nat.beq (cov (pos 0) (lz Z) v) (lz Z) = true := by
-    rw [Nat.beq_eq]
-    apply Nat.eq_of_testBit_eq; intro i
-    cases hli : (lz Z).testBit i with
-    | false =>
-      by_contra hc
-      obtain ⟨w, _, hw⟩ := (cov_bit _ _ _ _).1 (by simpa using hc)
-      rw [sp_bit, hli] at hw; simp at hw
-    | true =>
-      rw [cov_bit]
-      obtain ⟨⟨m1, m2, t1, t2⟩, _⟩ := lz_lg Z i hli
-      obtain ⟨w, hw, hs⟩ := hl.cov m1 m2 t1 t2
-      obtain ⟨w', hw', rfl⟩ := hrep.mem.1 hw
-      exact ⟨w', hw', by rw [sp_bit, hli, pos_eq, hs]; rfl⟩
-  have hsz := hm.size.1
-  have hcard := hrep.card
-  have hble : Nat.ble v.length (Nat.sub (Nat.succ (L - 1)) 0) = true := Nat.ble_eq_true_of_le (by
-    change v.length ≤ L - 1 + 1 - 0; omega)
+    by_cases h1 : x = u <;> by_cases h2 : x = v <;> cases ka <;> cases kb <;> simp_all
+  have h1 := Finset.card_le_card hsub
+  have h2 := Finset.card_union_le (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))
+    ((cond ka ∅ {u}) ∪ (cond kb ∅ {v}))
+  have h3 := Finset.card_union_le (cond ka (∅ : Finset ℕ) {u}) (cond kb ∅ {v})
+  have h4 : (cond ka (∅ : Finset ℕ) {u}).card = cond ka 0 1 := by cases ka <;> simp
+  have h5 : (cond kb (∅ : Finset ℕ) {v}).card = cond kb 0 1 := by cases kb <;> simp
+  omega
 
-  have h2 := hans
-  simp only [initialCheck,frc_eq] at h2
-  have h3 := anySub_false h2 v hsub
-  change Nat.beq (cov false (lz Z) v) (lz Z)=true at hcov
-  have hsize : Nat.ble v.length (L-1+1) = true := by simpa using hble
-  simp only [hcov,hsize,Bool.cond_true] at h3
-  have h4 := child_sound X (f:=answer) (fun _ => rfl) hst hm (by omega) rfl rfl (by simp) h3
-  exact hbound _ _ h4 X S hst k (by omega) hm
+theorem pair_sound {m : Bool} {P : List ℕ → ℕ → Bool} {prev : Tree} {k : ℕ} {l : List ℕ} {u v : ℕ}
+    (hP : PruneOK m P) (hinv : Inv m prev k) (hnd : l.Nodup) (hp : pairOK m P prev k l u v = true)
+    (hu : u ∈ l) (hv : v ∈ l)
+    (ka kb : Bool) (w : ℕ) (hw : w = u &&& v ∨ w = u ||| v)
+    (hd : ∀ d ∈ l, blk m w d = false) (hb : ∀ d ∈ base12, blk m w d = false) :
+    ¬ Reach m (insert w (l.toFinset.filter
+      (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))) k := by
+  intro hR
+  simp only [pairOK, Bool.and_eq_true] at hp
+  have hop : opOK m P prev k l u (rectW u) v (rectW v) (orEx u v l) w = true := by
+    rcases hw with rfl | rfl
+    · exact hp.1
+    · exact hp.2
+  simp only [opOK, blkAny_false m w base12 hb, blkAny_false m w l hd, Bool.false_or, opOK2,
+    Bool.and_eq_true] at hop
+  have hwl : w ∉ l := fun hm => by
+    have := hd w hm
+    rw [blk_refl] at this
+    exact Bool.noConfusion this
 
-def rootL : ℕ := 0x1ffff7df7fffef7fffefbdffffbefbeeffffdffff7df7bef7fffefbdef6ffffbeffffdf7bef7deffffdef6fbffff7bffff7df7ddef6fbeefbbbbffd6ab6aaaad6db5b6aab5ab6b7fff6daadafffeab6b56dfffd6d6b56b6daadb5adb5ad7fff6b5ad56b7fff6b56b6d6dab5b6dad57fff5b6aad6dafffeb5fffdb5fffd6fffed7fff7fff0000000000000000
-def rootM : ℕ := 0x7fffdf7dffffbdffffbef7fffefbefbbffff7fffdf7defbdffffbef7bdbfffefbffff7defbdf7bffff7bdbeffffdeffffdf7df77bdbefbbeeeefff5aadaaaab5b6d6daaad6adadfffdb6ab6bfffaadad5b7fff5b5ad5adb6ab6d6b6d6b5fffdad6b55adfffdad5adb5b6ad6db6b55fffd6daab5b6bfffad7fff6d7fff5bfffb5fffdfffc0000000000000001ffff7df7fffef7fffefbdffffbefbeeffffdffff7df7bef7fffefbdef6ffffbeffffdf7bef7deffffdef6fbffff7bffff7df7ddef6fbeefbbbbffd6ab6aaaad6db5b6aab5ab6b7fff6daadafffeab6b56dfffd6d6b56b6daadb5adb5ad7fff6b5ad56b7fff6b56b6d6dab5b6dad57fff5b6aad6dafffeb5fffdb5fffd6fffed7fff7fffffffffffffffffff
-def rootG : ℕ := 0x108421084210842108421084210842108421084210842108421084210842108421084210842108421084210842108421084210842108421084210842108421084210842108421084210842108421084210
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma rootCtxEq : rootL=lz 0 ∧ rootM=mz 0 ∧ rootG=pL ((pr 0).map fun _ => 16) := by decide +kernel
-def mergeW (n : ℕ) (a b : W) : W :=
-  let x := if n=0 then a.a ||| b.a else a.a &&& b.a
-  let y := if n=0 then a.b &&& b.b else a.b ||| b.b
-  ⟨if n=0 then a.s &&& b.s else a.s ||| b.s, x, y, x ||| y⟩
-def w0 : W := ⟨0x7fffdf7dffffbdffffbef7fffefbefb80000000000000000000000000000000000000000000000000000000000000000000000000000000000000050292aaab5a496d800940929f001240a4be002adad527c005b0000000000000000001e00000000001e000000000000000000001e000000000003c0000780000780003c0001e001e0000000000000000001fe007df7fc00f7fc00fbdff003efbeef0001e000410400078000820000f00020f000104208410f000108483c00043c0004104100008208000038016ab6aaaad6db5b6aab5ab6b7fff6daadafffeab6b56dfffd6c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000092683e00754c0101, 0x10000000000084200000000421080000000000000000010000000000084210842108420000000000000000000210000008421084210000000000000000000008421084200000000000000000000000000, 0x0, 0x10000000000084200000000421080000000000000000010000000000084210842108420000000000000000000210000008421084210000000000000000000008421084200000000000000000000000000⟩
-def w1 : W := ⟨0x7fffdf7dffffbc000000000000000003ffff7fffdf7defbdffffbef7bd8000000000000000000000000000000000000000000000000000000000005aadaaaaa5b6d498000000018e000000031c0000000063800012852d36ab4962494259e01ad4b55a99e018000000000000000019c0000000000338000670000670003380019c019c000000000000000001f1807df7e300f4030000100c02000008fe011f807df7bef47f00fbdef60e00100e000821000000e0008004038002038002082090000000820006016ab6aaaad6db5b6000000000000000000000000000000000016b56b6daadb5adb5ad7fff6b5ad56b7fff6000000000000000000000000000000000000000000000000000000000000130220c900310c00, 0x400000000000000400004210000000000000000842100000084000000000001080000000000000000200800008400000000842108400000000000008400000010842108421084200000000000, 0x0, 0x400000000000000400004210000000000000000842100000084000000000001080000000000000000200800008400000000842108400000000000008400000010842108421084200000000000⟩
-def w2 : W := ⟨0x7fffdf00000001ffffbef00000000003ffff000000000fbc00000000003fffef80000000fbc00000000003effffde00000000007bd8000000000005800280ab500000280d600014911b600029242ad2800524800580009b400000b600015121096a00015120295a00000894d00001522149aa00002a4828549469549402a4801524152400000000000000001f0187c01003006b830fbc080c0000808f860081810403ef0083020804089cc3e01060003ef10800860020f925d8780118100001ef62084200100616000a02ad600000a035800000006d80000000ab6b0000000016000b6d800002d800000006b5ac00000000b56800002b5b6000000005b6a800000000b5fffdb5fffc000000000000004c32000238851dce, 0x1000000000000001000000000008021000000002008021000000840000000000000042000000000010000108000000200000008020080200840000001000200800100021080010840008421, 0x0, 0x1000000000000001000000000008021000000002008021000000840000000000000042000000000010000108000000200000008020080200840000001000200800100021080010840008421⟩
-def w3 : W := ⟨0x7fffc07c00000000003e00000003e0000000000000000f81ffff80078000000000000000000000000000000ffffc0ffffc001f003c3e00000e000040202208843010100010002102183080620460842018408c0a000000100100230c0310431810841210431000808010000400101043860888410a08c0c41182141184208c21046904700000000000000001f04301f02086001086f80012182f8200110c02430410be046e86081e1000a1840050c210420420030c2121127c30127c30027c04f0f82008b8810d0080882210c04060004000800000c20180000230806000016c000000c02c058c300c000060421068000060460610c0043002d57fff1862210c2000030000184000100000d7fff7fff605989290008a0c3, 0x100000004000042000000000200000000001004200000000400080010042008021000000002008020004000800100000000000000108001004010802100000004000002000000000200802100001, 0x0, 0x100000004000042000000000200000000001004200000000400080010042008021000000002008020004000800100000000000000108001004010802100000004000002000000000200802100001⟩
-def w4 : W := ⟨0x1ffff8000000007fffe000f8000007fffdf7c0001ffffbef03c0000003ffff000001f7bffff03c00000000ffffdf00000003efbbe00e000028c0080009646082000ac0ca6c800a8094da000850b29b64102c42402ab61000d604acd0a401558cacd084009b0822420b4b44ad902400a58215b5052b6a042b6a595b634ada0ada80000000000000000523d1457e47a202c7a28daf1e842be2148f53e3d7df00a54ee7afbc2f0115e8a99ef4508a57de99ef44f028417d1965fd7c5044a56fbeef90b88f40a30022816db18608002b030000002a020000a86b56dfffd0c0b10b01aad8400358100006b02d56300006b10b6c61ab186dad100005b0aad61afffeb5fffc35fffd6fffed00007fff2cb206d6df9ab675, 0x100000000000000000000000000000000000000000000100000080010000000400084000000000000000000000000000000000000000000000000000000000000000000000020, 0x0, 0x100000000000000000000000000000000000000000000100000080010000000400084000000000000000000000000000000000000000000000000000000000000000000000020⟩
-def w5 : W := ⟨0x1ffff8000000007fffe000f8000007fffc07c000000003e003c00000000000000001f03ffff03c00000000000000000000000f83e00e000020c00800086060800008c0ca44000080948800085032910410204200288610001004a8402001108ca8408000010822020b0844a880000000821511012a20042a221951014a880a888000000000000000010290417e052000852085ad14800be0008a51e2901f002100252f802f0005482002a4108217c089ea40f00800690800690410442120be0f80b80a40830020016181860000230300000002020000006b40c00010c0810801a218400040100000802c4630000601080c6188186c2110000000a8161afffe04000035fffc60000d00007fff2cb20284c2023205, 0x8000000200000108000000010000100400000200000000001004000000100420080010800000401084000840000001004200040000400000010040100000000000000000400080000040108021, 0x0, 0x8000000200000108000000010000100400000200000000001004000000100420080010800000401084000840000001004200040000400000010040100000000000000000400080000040108021⟩
-def w6 : W := ⟨0x1ffff8007fffef80000000000000000000000000000003fffe0000007c0f80003ffff7803e0000000000007c0078000003ee00000000000001000024208c00d806141800b00c282098140185050401000800024080008061400020000461482140405808160120506281012010260c502018a04c18a008c510462906280000000000000000020860820410c16b90c101ad433e100002218048608210420050c1044228bc30002819f03e00848be19e00f8088600088609f081e201042fb90021800000002c0005b08230036000006002c0000083605000001610040060281b020002000000058150b7fff08503016020580d814000040682c0d80000800001b000016fffe17fff00004840d0f006c20810, 0x2000000080000800008000000000002000020084000000100000000200800008400000200840100021080000002100420000010000000400080000042100000000000040008001004200002000400, 0x0, 0x2000000080000800008000000000002000020084000000100000000200800008400000200840100021080000002100420000010000000400080000042100000000000040008001004200002000400⟩
-def w7 : W := ⟨0x3ffff7fffdf7de00000000000003fffefbffff7defbdf7bffff7bd8000000000000000000000000000000000a84800000000002aa42a4840de00000001b800000000370005ad5ada6aa6d400000019c00000000019c02d52d35a6ad69b6a541bc00000000003700006e00006e000370001b801b800000000000000001084041041080830080820c020108208cf9019e407df7a0024080001000c9e03ec9f01f7bef7dec9f01ef60206000206000001000804000002021016ab600000000000aab5ab6b7fff000000000000000000000016b56b6daadb580000000000000000000000b56b6d6dab5b6dad57fff000000000000000000000000000000000000000a180bb188920c1a4, 0x20000000000000000000000842100000000010800008400000000000000000004210800000000000000042000021000000840000021084000000008021084010842000000000010842100000, 0x0, 0x20000000000000000000000842100000000010800008400000000000000000004210800000000000000042000021000000840000021084000000008021084010842000000000010842100000⟩
-def w8 : W := ⟨0x7fffdf000001ffffbef0000000003ffff000001f78000000000000000ffffdf00000003efb8000000002800000001240002000a000068800a0000d2000000901a60002c02400ab00000d6000c90a40055800c9004009b000240024b000d102400a58001a405034a000348501a6300d200d200000000000000000421410408428202428208060a042042140513e147c000844ee28fbc000110a0899e50400847de104504002041141165d47c4000844fbee110008500a00002800db0000800280000000028000000a80056dfffc000b00b002ac0000358000006b00156000000b0036c002b000dac000005b002d6000000b5fffc0000016fffec00000000000004525d9ab670, 0x40000000000010002100000084000040000000080000000000020000000002100001084010000108400084200002000000080010802000000004200802000000080200000000020004010000000420, 0x0, 0x40000000000010002100000084000040000000080000000000020000000002100001084010000108400084200002000000080010802000000004200802000000080200000000020004010000000420⟩
-def w9 : W := ⟨0x3fffefbffff7de00000000000003effffdeffffdf7df70000000000000000000000000000002aa000000019892a1200370000000006c00485080000000092429001b80000000001b02d5ada53400000000003316daab534806e0000d80000d80006c00036003600000000000000000852020820a4040c2404103090084104284805120208210813040410884add03eade81f780020025080040f9b5e079b5e07df7dc0000100400214800000aa800000000aa80000000006daadafffe00000000000016b56000000002db5ad7fff0000000000000b56b6d6d80000000000005b6aad6dafffe00000000000000000000000000940c0523a2600210, 0x800000000000010840000020000000800008400000000040000000000210000000000004200042108421000010040000000084000002100021000210000000420000010000108400000000000008000, 0x0, 0x800000000000010840000020000000800008400000000040000000000210000000000004200042108421000010040000000084000002100021000210000000420000010000108400000000000008000⟩
-def b0 : ℕ := 0x12946528c210ad694ad694a4e939ce739ce739ce739d27294a328ca31b5af7b5ad6bdad6b5ad6b5ad6b5af6b5ab5ad6b5a56b4a5294a5295a5295a5294a5294a52939d2749d293a4e739ce939ce939ce73
-def w10 := mergeW 1 w5 w0
-def b1 : ℕ := 0x119465284210a5254ad6939ca7294e729ce729ca739d25194a328ca30ad2d6ad6b4b5296adad5adad6b56f5ad694a52b59d2929ca53a4e95a4e95a5293a4e939ce7294e549d293a4a7394e939ca9294e52
-def w11 := mergeW 0 w9 w10
-def b2 : ℕ := 0x118465284210a52329ce939ca3294e728ce728c2739d251942328ca30ace94ad6b3b4e76ad295ad294a4eb3ad692a4ab59d2918c633a4e53a4e53a5251a4e939c63294e529d2919427394e939ca9284e52
-def w12 := mergeW 1 w3 w0
-def b3 : ℕ := 0x119465184210a4e54ad2739ca7294e529ce729ca729ce3194a328c630a52d5ad294ad275adad5adab6ad6d5ad2949d2b49d2929ca53a4e949ce94a4e929ce729ce7294a549d273a4a7394e7394a7194e51
-def b4 : ℕ := 0x119425284210a5253ad6729ca728ca729ca729ca739525194a328ca10ad2d6ad693b5295a56d4adad5ad2f5a5274a52959d29294a529ce75a4e95a4e739ce739ce728ce349d293a4a5394a929ca9294a32
-def w13 := mergeW 1 w9 w8
-def b5 : ℕ := 0x118c25284210a5252a52729ca528ca7294a729467395251946328ca10ad2b5ad693b5295a52b4ad6b4a4ed4a5273a4e959d2928c6529ce54a4e74a4e529ce739ca528ce339d2929c65394a929ca928ca32
-def w14 := mergeW 1 w9 w3
-def b6 : ℕ := 0x118c65184210a4e53a4e739ca5294e5294e72946729ce31946328c630a52b4ad294ad275ad6b5ad695a52b4ad2939ceb49d29294653a4e739ce73a4e719ce729ca5294a539d2729c67394e7394a718ce51
-def w15 := mergeW 1 w9 w6
-def b7 : ℕ := 0x118c632842109d2539d29394a5294e7294e529465394e51946318ca30ad295a56b4ace96ad695a52b4ad2b3a5693a4e949ce7294652a4e74a4a749d272a4a729ca5294e539ce929467294a739ca728ca52
-def w16 := mergeW 1 w6 w10
-def b8 : ℕ := 0x1194632842109d254a569394a7294e729ce529ca5394e5194a318ca30ad2b6a56b4ace96adab5a56d5b56d4a5694a52949ce729ca52a4e95a4a959d293a4a729ce7294e549ce939ca7294a739ca7294a52
-def w17 := mergeW 1 w8 w3
-def b9 : ℕ := 0x119425184210a4e53ad2529ca728ca529ca729ca7294e3194a328c610a52d5ad273ad274a56d4adab5a52d5a4e749d2949d29294a529ce749ce94a4a7294e529ce728ca349d273a4a5394a7294a7194a31
-def b10 : ℕ := 0x118465284210a52129ce939ca3294e728ce728c2739d251942328ca30aca94ad6b2b4a56ad295ad294a4eb3ad692a4ab59d2908c213a4e53a4e53a5251a4e939c63294e529d2919427394e939ca9284e52
-def w18 := mergeW 0 w6 w3
-def b11 : ℕ := 0x11946108421094a549ce538ca7294e329ce329ca318ca1194a308c2309d2949ce74a4a54ada959d294a56b39ce94952739ca529ca51a4e939469394a91946519ce72946549ca5394a71946538ca5094650
-def w19 := mergeW 1 w9 w0
-def b12 : ℕ := 0x118c65284210a5253a52939ca5294e7294e72946739d251946328ca30ad2b5ad6b4b5296ad6b5ad6b5ad2d4ad693a4eb59d29294653a4e74a4e74a5272a4e939ca5294e539d2929c67394e939ca928ce52
-def w20 := mergeW 1 w9 w5
-def w21 := mergeW 1 w6 w0
-def b13 : ℕ := 0x10946328421094e34a5693946518ce729ce529ca5394e5094a318ca30a4e959d293a4a76adab5a56d5b56d4a5673a529494a5194631a4e95a4a959d293a4a7294a518ca349ce939ca7294a739ca7294a52
-def b14 : ℕ := 0x1094651842109ca34ad2739c6518ce529ce729ca729ce3094a328c6309ceb4a4e73a4e55adad5adab6ad6d5ad2739d2b494e7194632a4e949ce94a4e929ce7294a518c6349d273a4a7394e7394a7194e51
-def w22 := mergeW 1 w8 w10
-def w23 := mergeW 0 w3 w10
-def b15 : ℕ := 0x119465084210a4a34ace539ca7294e329ce729ca719ca1194a328c2309ced4ace73a4e74adad5ada96a56b5ace94952b39d2919c633a4e9394e93a4a9194e519ce72946549d253a4a7394e538ca5094e50
-def w24 := mergeW 1 w3 w10
-def w25 := mergeW 1 w8 w6
-def b16 : ℕ := 0x1194232842109d253a567294a728ca729ca529ca538ce5194a318ca10ad2b6a5693ace95a56b4a56d4ad2d49d274a52749ce7294a519ce75a4a959ce739ca529ce728ce349ce939ca52946729ca7294632
-def w26 := mergeW 1 w6 w5
-def b17 : ℕ := 0x129463284210a5674a569394e939ce729ce529ca5394e5294a318ca30b56d7adad5b52b6adab5a56d5b56d4a56b5a5294a5293a4e73a4e95a4a959d293a4a72a52939d2749ce939ca7294a739ca7294a52
-def w27 := mergeW 0 w26 w3
-def b18 : ℕ := 0x129463084210a4e74a4e538ce939ce329ce529ca519461294a318c230a56d5ad295a4e74adab59d695a56939ceb595292a5293a4e73a4e93946939ca9194631a52939ca749ce539ca7294a338ca3094a50
-def b19 : ℕ := 0x128c63284210a56739d29394e739ce7294e529465394e52946318ca30b56b6adad5b52b6ad695a52b4ad2b3a56b4a4e94a52939ca73a4e74a4a749d272a4a72a4e739d2739ce929467294a739ca728ca52
-def b20 : ℕ := 0x129423284210a5673a567294e9394a729ca529ca538ce5294a318ca10b56d7adab4b52b5a56b4a56d4ad2d49d295a5274a52939ce729ce75a4a959ce739ca52a5293952549ce939ca52946729ca7294632
-def b21 : ℕ := 0x129423184210a5273a525294e9394a529ca529ca528ca3294a318c610ad6d6ad694ad294a56b4a56b4a52b49ce959d273a52939ce729ce749ca949ca7294a31a529394e549ce739ca529465294a5194631
-def b22 : ℕ := 0x128c63184210a52739ce7394e739ce5294e529465294a32946318c630ad6b5ad6b5ad295ad695a5294a5293a52b49ce93a52939ca73a4e739ca739ce719ca51a4e739ce739ce729467294a5394a518ca51
-def b23 : ℕ := 0x1194631842109ce54a527394a7294e529ce529ca5294a3194a318c630a52b5a5294a4e75adab5a56b5ad6b4a52949d2939ce729ca52a4e949ca949ce929ca519ce7294a549ce739ca7294a5394a5194a51
-def b24 : ℕ := 0x128c23284210a56729d27294e7394a7294a52946538ce52946318ca10b56b6adab4b52b5a5294a52b3a4eb39d294a4e74a529394a729ce54a4a749ce529ca52a4e73952539ce9294652946729ca728c632
-def b25 : ℕ := 0x129463084210a4e74a4e5384e939ce329ce529ca519461294a318c230a56d5ad295a4a74adab595695a569294eb595292a5293a4e73a4e93942939ca9194230a52939ca749ce539ca7294a338ca3094a50
-def w28 := mergeW 0 w9 w0
-def b26 : ℕ := 0x10846328421094e3294e93946518ce728ce528c25394e50942318ca30a4e959d293a4a76ad275a4e93a4e92a5673a4a9494a5194631a4e53a4a539d251a4a7294a518ca329ce918c27294a739ca7284a52
-def w29 := mergeW 1 w6 w3
-def b27 : ℕ := 0x129463184210a5274a527394e939ce529ce529ca5294a3294a318c630ad6d6ad6b5ad295adab5a56b5ad6b4a52b59d293a5293a4e73a4e949ca949ce929ca51a52939ce749ce739ca7294a5394a5194a51
-def w30 := mergeW 1 w5 w3
-def b28 : ℕ := 0x119461284210952549d6938ca7294e729ce329ca338ca5194a308ca30ad2969d6b4a4a96ada959d2d4b56b39d694a52739ca529ca51a4e95a469595293a46519ce7294e549ca9394a71946539ca5294652
-def b29 : ℕ := 0x128c612842109d673952938ce739ce7294e32946338ca52946308ca30b5696a5ad5aceb6ad6759ceb3ad2929d6b4a4e73a4e739ca72a4e74a467495272a4651a4e739d2739ca928c671946539ca528c652
-def w31 := mergeW 1 w8 w26
-def w32 := mergeW 0 w9 w26
-def b30 : ℕ := 0x128463284210a567294e938ce539ce728ce528c25394e52942318ca30b5695adad5b4eb6ad2759ce93a4e939d6b3a4a94a529394673a4e53a46539d251a4671a4a539d2729ce918c27294a739ca7284a52
-def w33 := mergeW 1 w9 w26
-def w34 := mergeW 1 w8 w0
-def b31 : ℕ := 0x12942518c210ad293ad253a4e9394a539ca739ce7294e5294a328c611adaf6b5695b5ab4ad6d5b5ab5a56d6ad295a5694a56b49d2939d2749d294a4a7395253a529394e549d273a4e539ca7294e729ca52
-def w35 := mergeW 0 w6 w17
-def b32 : ℕ := 0x12942118c2109d2939d23394e9394a539ca339ce328465294a308c611adab6a5675a52b3ad695a52b39d6949ce95a5652a4e749d2919d2749ca94946738ca31a529394e549ca7394e519c23294e329c252
-def b33 : ℕ := 0x11942518c210a4e73ad253a4a728ca539ca739ce7294e5194a328c611a56d5ad274ad694ad6d5b5ab5a56d6ad274a56949d29394e729d2749d294a4a73952539ce728ca349d273a4e539ca7294e729ca52
-def b34 : ℕ := 0x129425184210ad273ad2529ce9394a529ca729ca7294e3294a328c610ad6f6b5694b5694a56d4adab5a52d5a4e959d294a56b39ce739ce749ce94a4a7294e52a529394e549d273a4a5394a7294a7194a31
-def b35 : ℕ := 0x11942318c2109ce73a52539ca728ca539ca539ce528ca5194a318c611a56b5a5274a5294ad6b5ad6b4a56b5a5274a56739ce7394e719d2749ce949ca7394e329ce728ca349ce739ce529c65294e529c652
-def b36 : ℕ := 0x128c2318c210a52929ce539ce7394a5394a5394a528ca52946318c611adab5ad695ad6b4ad295ad2939d294a5294a5273a529494e929d2539ce739ca5294e32a4e7394e539ce7294a529c65294e5294652
-def w36 := mergeW 1 w9 w17
-def b37 : ℕ := 0x128c2518c210ad292a4e53a4e7394a5394a7394a7294e52946328c611adad5b5695b5ab4ad2b5b56949d2b5ad294a5294a56b494e939d2539d273a4a5295253a4e7394e539d2729ca539ca7294e7294a52
-def b38 : ℕ := 0x12942118c2109d2939d21394e9394a539ca339ce328465294a308c611adab6a5655a52b2ad695a52b3956949ca95a5652a4e749d2919d2749ca949427384a11a529394e549ca7394e519c23294e329c252
-def b39 : ℕ := 0x10842518c2109ca519ca53a465184a538ca738c67294e50942328c6119d2b4a4e53a5274ace95b527394e94ad253a4e9494e728ca519d2329d252a4a319525394a51846129d271946539ca7294e728ca52
-def b40 : ℕ := 0x12942318c210a5293a52539ce9394a539ca539ce528ca5294a318c611adad6ad695ad6b4ad6b5ad6b4a56b5a5295a5673a52949d2929d2749ce949ca7394e32a529394e549ce739ce529c65294e529c652
-def b41 : ℕ := 0x128c2508c210ace92a4a33a4e7394a3394a7394a7194a32946328c211a5ad4b5275ada93ad2b5b567495295ace949d293a56b494e939d25295272a46518d232a4e7394a539d2529ca539ca528ce5194a51
-def b42 : ℕ := 0x11942508c210a4a73ace33a4a728ca339ca739ce7194a3194a328c2119d6d4ace54a5673ad6d5b5a959d6b6ace749d6939d29394e729d27395293a46728d2329ce728c6349d253a4e539ca528ce519ca51
-def w37 := mergeW 1 w5 w17
-def w38 := mergeW 0 w17 w0
-def b43 : ℕ := 0x10942518c2109ca53ad233a465184a539ca739ce7294e5094a328c6119d2b4a4e73a5273ad6d5b5ab59d6d6ace53a569494e728ca519d2749d294a46738d23394a51846149d273a4e539ca7294e729ca52
-def w39 := mergeW 1 w17 w0
-def b44 : ℕ := 0x128c25184210ad272a4e529ce7394a5294a729467294e32946328c610ad6d5b5694b5694a52b4ad6949ceb4a4e949ce94a56b394a739ce539ce73a4a5194e52a4e7394e539d2729c65394a7294a718ca31
-def b45 : ℕ := 0x128c2528c210ad692a5273a4e7394a7394a7394a7395272946328ca11b5ad6b5ab5bdad5ad2b5b56b4a52d5ad694ad295a56b494e939d254a5274a4e539d274a4e73952539d2929ca539ca929ce9394a53
-def w40 := mergeW 0 w13 w0
-def b46 : ℕ := 0x108c2528c2109ce51a5273a463184a7394a7394a7395270946328ca11a5294a5273ad295aceb5b56b39ced5ad652ad29594e728c6519d234a5274a4e339d2749463184a139d2929ca539ca929ce9394a53
-def b47 : ℕ := 0x128c2328c210a56929d2739ce7394a7394a5394a538ce72946318ca11b5ab6adab5b56d5ad295ad2b3a52b4a5694ad274a529494e929d254a4e749ce539ce53a4e73952539ce9294a529c6729ce7394653
-def b48 : ℕ := 0x128c25284210ad672a52729ce7394a7294a729467395252946328ca10b56d6b5ab4bd6b5a52b4ad6b4a4ed4a5294a4e95a56b394a739ce54a4e74a4e529ce73a4e73952539d2929c65394a929ca928ca32
-def b49 : ℕ := 0x118c2328c2109d2729d2739ca528ca7394a5394a538ce71946318ca11ad695a5694ad2b5ad295ad2b3a52b4a5673ad2749ce738ca719d254a4e749ce539ce539ca528ce339ce9294a529c6729ce7394653
-def b50 : ℕ := 0x118c2518c210a4e72a4e53a4a528ca5394a7394a7294e51946328c611a56b4ad274ad694ad2b5b56949d2b5ad273a52949d2938ca729d2539d273a4a52952539ca528ca339d2729ca539ca7294e7294a52
-def b51 : ℕ := 0x108c2528c2109ce50a5273a463184a7394a7394a7395270946328ca11a5294a5273ad295acab5b56b294ad5ad652ad29594e72846519d214a5274a4e139d2749463184a139d2929ca539ca929ce9394a53
-def b52 : ℕ := 0x128c2108c2109ce9294a3394e7394a3394a3394a3184a32946308c211a5a94a5275ad293ad275a4e72952939ce949d253a4e7494e919d25294a72946518ca32a4e7394a539ca528ca519c2528ce5194251
-def b53 : ℕ := 0x118c2528c210a5272a5273a4a528ca7394a7394a7395271946328ca11ad6b5ad694b56b5ad2b5b56b4a52d5ad673ad2959d2938ca729d254a5274a4e539d2749ca528ce339d2929ca539ca929ce9394a53
-def b54 : ℕ := 0x12842518c210ad2919ca53a4e5394a538ca738c67294e52942328c611adab4b5695b5ab4ace95b527394e94ad293a4e94a56b48ca939d2329d252a4a3195253a4a5394e529d271946539ca7294e728ca52
-def b55 : ℕ := 0x12842328c210a569194e739ce5394a738ca538c6538ce72942318ca11b5a95adab5b56d5ace75ace929ce93a5693ace74a52948ca929d233a4e539ce329ce53a4a53952529ce918c6529c6729ce738c653
-def w41 := mergeW 1 w13 w5
-def w42 := mergeW 0 w13 w6
-def b56 : ℕ := 0x128c2128c2109d6919527394e7394a7394a3394a3384a72946308ca11b5a96a5ab5ad2d5ace75a4eb39ce939d694ad253a4e748ce919d234a4a7494e339ca32a4e73952539ca928ca519c2529ce5394253
-def w43 := mergeW 1 w13 w6
-def b57 : ℕ := 0x11946518c210a4e74ad274a4a7294e539ce739ce729ce5194a328c631a56d5ad295ad695b5ad6b5ab6adad6b5694a56b49d2939ce73a52949d294a4e939d2739ce7294a549d273a4e739ce7394e729ce72
-def b58 : ℕ := 0x11946318c2109ce74a52749ca7294e539ce539ce5294a5194a318c631a56b5a5295a5295b5ab6ad6b5adab5ad694a56939ce739ce72a52949ce949ce939ce529ce7294a549ce739ce729ca5394e529ca72
-def b59 : ℕ := 0x118c6518c210a4e73a4e74a4a5294e5394e7394a729ce51946328c631a56b4ad295ad695b56b6b5695a56b5b5693a52b49d29394a73a52739d273a4e729d2739ca5294a539d2729ca739ce7394e7294e72
-def b60 : ℕ := 0x118c6318c2109ce739ce749ca5294e5394e5394a5294a51946318c631a5694a5295a5295b5696ad294a5694ad693a52939ce7394a72a52739ce739ce729ce529ca5294a539ce7294a729ca5394e5294a72
-def b61 : ℕ := 0x10946318c21094a54a52749c6518ce539ce539ce5294a5094a318c6319d2949ce749ce75b5ab6ad6b5adab5ad673a569394a5294a51a52949ce949ce939ce5294a518c6349ce739ce729ca5394e529ca72
-def b62 : ℕ := 0x118c6508c210a4a73a4a54a4a5294e3394e7394a719ca31946328c2319d6b3ace75a5674b56b6b56759d695b52939d2b39d29394a73a527295272a4a71952529ca52946539d2529ca739ce538ce5194e71
-def w44 := mergeW 0 w9 w6
-def b63 : ℕ := 0x11846118c21094e729ca7494a3294e538ce338c6328c651942308c631a56939d2959ce95b5296a52749d294a5692a4e729ca538c671a52529ca5294e519ca319c63294a529ca71946719c63394e328c672
-def w45 := mergeW 1 w6 w12
-def w46 := mergeW 1 w9 w12
-def b64 : ℕ := 0x128c6328c210a56939d2949ce739ce7394e5394a5394e72946318ca31b5ab6adad6b56d6b5696ad2b4ad6b4adab4ad294a52949ce93a5274a4e749d273a4e73a4e739d2739ce9294a729ca739ce7394a73
-def b65 : ℕ := 0x118c6328c2109d2739d2949ca5294e7394e5394a5394e71946318ca31ad695a56b5ad2b6b5696ad2b4ad6b4ada93ad2949ce7394a72a5274a4e749d273a4e739ca5294e539ce9294a729ca739ce7394a73
-def b66 : ℕ := 0x128c6318c210a52939ce749ce739ce5394e5394a5294a52946318c631adab5ad6b6ad6b5b5696ad294a5694ad6b4a5293a52949ce93a52739ce739ce729ce52a4e739ce739ce7294a729ca5394e5294a72
-def b67 : ℕ := 0x118c6128c210952739529494a5294e7394e3394a338ca71946308ca31ad6759d6b5a4eb6b5676a4eb3ad693a5a93ad2739ca5394a71a5274a4a7495273a4a529ca5294e539ca928ca719c6539ce5394673
-def b68 : ℕ := 0x12846318c210a529294a749ce539ce538ce538c65294a52942318c631ada94ad6b6ad6b5b5276ace739d273ad6b3a4e93a529494a93a52529ce529ce519ce52a4a539ce729ce718c6729ca5394e528ca72
-def w47 := mergeW 0 w3 w0
-def b69 : ℕ := 0x108c6308c21094e539ca549c6318ce3394e5394a5194630946318c231a52749d294a4e94b5696ad2749d674ad2729d29294a528c651a527294e729ca7194e31946318ca339ce5294a729ca338ce3194a71
-def w48 := mergeW 1 w15 w0
-def w49 := mergeW 1 w15 w3
-def b70 : ℕ := 0x11946328c2109d274a56949ca7294e739ce539ce5394e7194a318ca31ad6b6a56b5ad2b6b5ab6ad6d5b5ad5ada94ad6949ce739ce72a5295a4e959d294a4e739ce7294e549ce939ce729ca739ce739ca73
-def w50 := mergeW 0 w3 w21
-def b71 : ℕ := 0x11946308c21094a74a4e549ca7294e339ce539ce519463194a318c2319d6949ce75a4e74b5ab6ad695a5a95ad2949d6929ca539ce71a529394e939ca9294e319ce72946549ce539ce729ca338ce319ca71
-def w51 := mergeW 0 w9 w21
-def b72 : ℕ := 0x11846328c2109527294e949ca3294e738ce538c65394e71942318ca31ad6949d6b5a4eb6b5276ace93a5293ada92ace949ca538c671a5253a4e539d252a4e739c63294e529ce918c6729ca739ce738ca73
-def b73 : ℕ := 0x11942328c2109d273a56739ca728ca739ca539ce538ce7194a318ca11ad6b6a5694ad2b5ad6b5ad6d4ad6d5a5674ad6749ce7394e719d275a4e959ce749ce539ce728ce349ce939ce529c6729ce739c653
-def b74 : ℕ := 0x128c6518c210ad293a4e74a4e739ce5394e7394a729ce52946328c631adad5b56b6b5ab5b56b6b5695a56b5b56b4a52b4a56b49ce94a52739d273a4e729d273a4e739ce739d2729ca739ce7394e7294e72
-def w52 := mergeW 0 w14 w0
-def b75 : ℕ := 0x108c6518c2109ca53a4a74a46318ce5394e7394a729ce50946328c6319d294a4e74a5275b56b6b56759d695b5672a52b494e728c652a52729d272a4e719d273946318c6339d2729ca739ce7394e7294e72
-def w53 := mergeW 0 w6 w14
-def b76 : ℕ := 0x128c6118c2109d29394a7494e739ce5394e3394a328c652946308c631ada94a56b6a52b5b5676a4e739d693a56b4a5272a4e749ce92a52729ca7294e719ca31a4e739ce739ca728ca719c63394e3294672
-def b77 : ℕ := 0x128c65184210ad273a4e739ce739ce5294e72946729ce32946328c630ad6d5b56b5b5695ad6b5ad695a52b4ad2b49ceb4a56b39ca74a4e739ce73a4e719ce72a4e739ce739d2729c67394e7394a718ce51
-def b78 : ℕ := 0x129425284210ad673ad6729ce9394a729ca729ca739525294a328ca10b56f7b5ab4bd6b5a56d4adad5ad2f5a5295a5295a56b39ce739ce75a4e95a4e739ce73a5293952549d293a4a5394a929ca9294a32
-def b79 : ℕ := 0x1294210842109ce739ce328ce9394a329ca329ca3184a1294a308c210a56b5a5274ace73a56949d2939d2b394a9595253a4e739ce719ce7394693946718c631a529394a549ca5394a51942528ca5094230
-def b80 : ℕ := 0x1084252842109ce319ce729c65184a728ca728c27395250942328ca10a4eb5a5272ace75a4e94ad2939cab3a5253a4a9594e718c6319ce33a4e53a4e319ce7394a5184a129d2919425394a929ca9284a32
-def b81 : ℕ := 0x12946108c2109ce949ce5494e939ce339ce339ce318ca3294a308c231a5ab5a5296ad294b5a96a5294a5ab4a52b59d673a4e74a5292a529394a9394a9294a52a52939ca749ca5394e719c6538ce519c671
-def b82 : ℕ := 0x10846108c2108c6528c654946518ce338ce338c6318ca30942308c2319527394a549ca54b5256a4a5295272a52739ce739463294a50a525194a5194a5094a5294a518c2329ca51846719c6538ce518c671
-def w54 := mergeW 1 w18 w0
-def b83 : ℕ := 0x11946108c21094a749ce5494a7294e339ce339ce318ca3194a308c2319d6949ce75a4e74b5a96a5294a5ab4a52949d6739ca539ce71a529394a9394a9294a529ce72946549ca5394e719c6538ce519c671
-def w55 := mergeW 1 w18 w9
-def b84 : ℕ := 0x128c6108c2109ce9394a5494e739ce3394e3394a318ca32946308c231a5a94a5296ad294b5676a4e739d693a52b49d273a4e749ce92a527294a7294a7194a52a4e739ca739ca528ca719c6538ce5194671
-def b85 : ℕ := 0x118c6108c21094a7394a5494a5294e3394e3394a318ca31946308c2319d6739ce75a4e74b5676a4e739d693a52939d2739ca5394a71a527294a7294a7194a529ca52946539ca528ca719c6538ce5194671
-def b86 : ℕ := 0x11942108c21094a739ce3394a728ca339ca339ce3184a3194a308c2119d6949ce54a4e73ad695a52939d6b49ce749d6539ca5394e709d27394a93946728ca329ce728c6349ca5394e519c2528ce519c251
-def b87 : ℕ := 0x10846528c2109ce529ce94a46518ce738ce738c6739d270942328ca31a52b5a5294ad296b5296b5294a52b4b5a73aceb594e7294a52a5253a5253a5252a529494a518ca329d291946739ce939ce938ce73
-def w56 := mergeW 1 w28 w3
-def b88 : ℕ := 0x10846518c2109ca529ca74a46518ce538ce738c6729ce50942328c6319d2b4a4e74a5275b5296b52749d294b5673a4eb494e7294a52a52529d252a4e519d27394a518c6329d271946739ce7394e728ce72
-def w57 := mergeW 1 w28 w6
-def b89 : ℕ := 0x10846328c21094e5294e949c6518ce738ce538c65394e70942318ca31a52959d294a4e96b5276ace93a5293ada73ace9494a5294a51a5253a4e539d252a4e7394a518ca329ce918c6729ca739ce738ca73
-def b90 : ℕ := 0x10846318c21094a5294a749c6518ce538ce538c65294a50942318c6319d2949ce749ce75b5276ace739d273ad673a4e9394a5294a51a52529ce529ce519ce5294a518c6329ce718c6729ca5394e528ca72
-def b91 : ℕ := 0x1084651842109ca329ca739c6518ce528ce728c2729ce30942328c6309ceb4a4e73a4e55ad295ad2749ce93ad2739cab494e7194632a4e529ce52a4e509ce7294a518c6329d2719427394e7394a7184e51
-def b92 : ℕ := 0x12946318c210a5294a52749ce939ce539ce539ce5294a5294a318c631adad6ad6b6ad6b5b5ab6ad6b5adab5ad6b5a5693a5294a5293a52949ce949ce939ce52a52939ce749ce739ce729ca5394e529ca72
-def b93 : ℕ := 0x11946118c21094e749d27494a7294e539ce339ce328c65194a308c631a56959d2959ce95b5a96a52b4ada94a5694a56729ca539ce71a52949ca9494e939ca319ce7294a549ca7394e719c63394e329c672
-def b94 : ℕ := 0x128c6308c210a4e939ca549ce739ce3394e5394a5194632946318c231a5ab4ad296a5694b5696ad2749d674ad2b49d292a52949ce93a527294e729ca7194e31a4e739ca739ce5294a729ca338ce3194a71
-def b95 : ℕ := 0x11946308c2109ca74a4e549ca7294e339ce539ce519463194a318c2319d6b4a4e759d274b5ab6ad695a5a95ad2949d6929ce739ce72a529394e939ca9294e319ce72946549ce539ce729ca338ce319ca71
-def b96 : ℕ := 0x118c6528c210a5273a5294a4a5294e7394e7394a739d271946328ca31ad6b5ad6b5b56b6b56b6b56b5ad6d5b5a93ad2b59d29394a73a5274a5274a5273a52949ca5294e539d2929ca739ce939ce9394e73
-def b97 : ℕ := 0x108c6328c21094e539d2949c6318ce7394e5394a5394e70946318ca31a52749d294a4e96b5696ad2b4ad6b4ada72ad29494a528c651a5274a4e749d273a4e73946318ca339ce9294a729ca739ce7394a73
-def b98 : ℕ := 0x11846518c210a4e729ca74a4a3294e538ce738c6729ce51942328c631a5693ad295ad695b5296b52749d294b5692a4eb49d2938c673a52529d252a4e519d2739c63294a529d271946739ce7394e728ce72
-def b99 : ℕ := 0x108c6518c2109ca53a4e74a46318ce5394e7394a729ce50946328c6319d293a4e74a5275b56b6b5695a56b5b5672a52b494e728c652a52739d273a4e729d273946318c6339d2729ca739ce7394e7294e72
-def b100 : ℕ := 0x129465184210ad274ad2739ce939ce529ce729ca729ce3294a328c630ad6f6b56b5b5695adad5adab6ad6d5ad2b59d2b4a56b3a4e74a4e949ce94a4e929ce72a52939ce749d273a4a7394e7394a7194e51
-def b101 : ℕ := 0x11942528c210a5273ad673a4a728ca739ca739ce739527194a328ca11ad6d6ad694b56b5ad6d5b5ad5ad6f6ad674ad6959d29394e729d275a5295a4e749d2749ce728ce349d293a4e539ca929ce939ca53
-def b102 : ℕ := 0x12942328c210a5693a56739ce9394a739ca539ce538ce7294a318ca11b5ad7adab5b56d5ad6b5ad6d4ad6d5a5695ad674a52949d2929d275a4e959ce749ce53a5293952549ce939ce529c6729ce739c653
-def b103 : ℕ := 0x10842328c21094e5194e739c65184a738ca538c6538ce70942318ca11a52959d273a4e95ace75ace929ce93a5653ace7494a528ca509d233a4e539ce329ce5394a5184a129ce918c6529c6729ce738c653
-def b104 : ℕ := 0x128c65284210ad673a52939ce739ce7294e72946739d252946328ca30b56d6b5ad5bd6b6ad6b5ad6b5ad2d4ad6b4a4eb5a56b39ca74a4e74a4e74a5272a4e93a4e739d2739d2929c67394e939ca928ce52
-def b105 : ℕ := 0x128c610842109ce7394a538ce739ce3294e32946318ca12946308c230a5694a5295ace74ad6759ce739d2929ceb494e73a4e739ca72a4e729467294a7094651a4e739ca739ca528c671946538ca508c650
-def b106 : ℕ := 0x10946508c2109ce54ace54a46518ce339ce739ce719ca3094a328c231a52b5a5294ad294b5ad6b5a96a5ab6b52739d6b394e7294a52a529395293a4a929525294a518ca349d253a4e739ce538ce519ce71
-def w58 := mergeW 1 w47 w1
-def b107 : ℕ := 0x12846128c2109d6929ce9494e539ce738ce338c6338ca72942308ca31b5ab5a5ad6ad2d6b5296a5294a52b4a5ab3ace73a4e7494a92a5253a4a5395252a4a52a4a539d2729ca91946719c6539ce538c673
-def w59 := mergeW 1 w44 w7
-def w60 := mergeW 0 w6 w0
-def b108 : ℕ := 0x10946128c2109ce549d694946518ce739ce339ce338ca7094a308ca31a52b5a5294ad296b5a96a52d4b5ab4a5a73ad67394e7294a52a5295a4a9595294a4a5294a518ca349ca9394e719c6539ce539c673
-def b109 : ℕ := 0x12946528c210ad694ad693a4e939ce739ce739ce739d27294a328ca31b5af7b5ad5bdad6adad5b5ad6b56f6ad6b5ad6b5a56b4a5294a5295a5295a5294a5294a52939d2749d293a4e739ce939ce939ce53
-def b110 : ℕ := 0x11946528c210a5274ad693a4a7294e739ce739ce739d27194a328ca31ad6d6ad6b4b56b6adad5b5ad6b56f6ad694ad6b59d2939ce73a5295a5295a5294a52949ce7294e549d293a4e739ce939ce939ce53
-def b111 : ℕ := 0x11946518c210a4e74ad273a4a7294e539ce739ce729ce5194a328c631a56d5ad294ad695adad5b5ab6ad6d6ad294a56b49d2939ce73a52949d294a4e939d2739ce7294a549d273a4e739ce7394e729ce52
-def b112 : ℕ := 0x118c6528c210a5273a5293a4a5294e7394e7394a739d271946328ca31ad6b5ad6b4b56b6ad6b5b56b5ad2d5ad693ad2b59d29394a73a5274a5274a5273a52949ca5294e539d2929ca739ce939ce9394e53
-def b113 : ℕ := 0x11846528c210a52329ce93a4a3294e738ce738c6739d271942328ca31ace94ad6b2b4e76ad295b5294a4eb4ad692aceb59d2918c633a5253a5253a5252a52949c63294e529d291946739ce939ce938ce53
-def b114 : ℕ := 0x118c6518c210a4e73a4e73a4a5294e5394e7394a729ce51946328c631a56b4ad294ad695ad6b5b5695a52b5ad293a52b49d29394a73a52739d273a4e729d2739ca5294a539d2729ca739ce7394e7294e52
-def b115 : ℕ := 0x11946328c2109d274a56939ca7294e739ce539ce5394e7194a318ca31ad6b6a56b4ad2b6adab5ad6d5b56d5a5694ad6949ce739ce72a5295a4e959d294a4e739ce7294e549ce939ce729ca739ce739ca53
-def b116 : ℕ := 0x11946108c21094a749ce5394a7294e339ce339ce318ca3194a308c2319d6949ce74a4e74ada95a5294a56b49ce949d6739ca539ce71a529394a9394a9294a529ce72946549ca5394e719c6538ce519c651
-def w61 := mergeW 0 w4 w10
-def b117 : ℕ := 0x11946528c210a5234ad692a4a7294e739ce739ce739d27194a328ca31aced6ad6b3b4e76a5ad4b5ad6b52f6a5294ad6b59d2919c633a5295a5295a5294a52949ce7294e549d293a4e739ce939ce939ce33
-def b118 : ℕ := 0x118c6328c2109d2739d2939ca5294e7394e5394a5394e71946318ca31ad695a56b4ad2b6ad695ad2b4ad2b4a5693ad2949ce7394a72a5274a4e749d273a4e739ca5294e539ce9294a729ca739ce7394a53
-def b119 : ℕ := 0x11946528c210a5254ad692a4a7294e739ce739ce739d27194a328ca31ad2d6ad6b4b5296a5ad4b5ad6b52f6a5294ad6b59d2929ca53a5295a5295a5294a52949ce7294e549d293a4e739ce939ce939ce33
-def b120 : ℕ := 0x10946328c21094e54a56939c6518ce739ce539ce5394e7094a318ca31a52959d293a4e96adab5ad6d5b56d5a5673ad69494a5294a51a5295a4e959d294a4e7394a518ca349ce939ce729ca739ce739ca53
-def b121 : ℕ := 0x11946328c2109d254a56939ca7294e739ce539ce5394e7194a318ca31ad2b6a56b3ace96adab5ad6d5b56d5a5694ad6949ce729ca52a5295a4e959d294a4e739ce7294e549ce939ce729ca739ce739ca53
-def b122 : ℕ := 0x11946508c210a4a34ace53a4a7294e339ce739ce719ca3194a328c2319ced4ace72a4e74adad5b5a96a56b6ace949d6b39d2919c633a529395293a4a92952529ce72946549d253a4e739ce538ce519ce51
-def b123 : ℕ := 0x118c2528c210a5272a5272a4a528ca7394a7394a7395271946328ca11ad6b5ad693b56b5a52b4b56b4a4ed5a5273ad2959d2938ca729d254a5274a4e539d2749ca528ce339d2929ca539ca929ce9394a33
-def b124 : ℕ := 0x11846128c210952729ce9394a3294e738ce338c6338ca71942308ca31ad6949d6b4a4eb6ad295a5294a4eb49d692ace739ca538c671a5253a4a5395252a4a529c63294e529ca91946719c6539ce538c653
-def b125 : ℕ := 0x11942518c210a4e73ad252a4a728ca539ca739ce7294e5194a328c611a56d5ad273ad694a56d4b5ab5a52d6a4e74a56949d29394e729d2749d294a4a73952539ce728ca349d273a4e539ca7294e729ca32
-def b126 : ℕ := 0x10946518c2109ca54ad273a46518ce539ce739ce729ce5094a328c6319d2b4a4e73a5275adad5b5ab6ad6d6ad273a56b494e7294a52a52949d294a4e939d27394a518c6349d273a4e739ce7394e729ce52
-def b127 : ℕ := 0x11946528c210a5254ad691a4a7294e739ce739ce739d27194a328ca31ad2d6ad6b3b52969dad3b5ad6b4ef69ce94ad6b59d2929ca53a5295a5295a5294a52949ce7294e549d293a4e739ce939ce939ce13
-def b128 : ℕ := 0x118c6528c210a5273a5292a4a5294e7394e7394a739d271946328ca31ad6b5ad6b3b56b6a56b4b56b5aced5a5293ad2b59d29394a73a5274a5274a5273a52949ca5294e539d2929ca739ce939ce9394e33
-def b129 : ℕ := 0x11946328c2109d274a56929ca7294e739ce539ce5394e7194a318ca31ad6b6a56b3ad2b6a5ab4ad6d5b52d59d294ad6949ce739ce72a5295a4e959d294a4e739ce7294e549ce939ce729ca739ce739ca33
-def b130 : ℕ := 0x108c6528c2109ce53a5293a46318ce7394e7394a739d270946328ca31a5294a5293ad296ad6b5b56b5ad2d5ad672ad2b594e728c652a5274a5274a5273a5294946318ca339d2929ca739ce939ce9394e53
-def b131 : ℕ := 0x11946318c2109ce74a52739ca7294e539ce539ce5294a5194a318c631a56b5a5294a5295adab5ad6b5ad6b5a5294a56939ce739ce72a52949ce949ce939ce529ce7294a549ce739ce729ca5394e529ca52
-def b132 : ℕ := 0x11946518c210a4e74ad272a4a7294e539ce739ce729ce5194a328c631a56d5ad293ad695a5ad4b5ab6ad2d6a4e94a56b49d2939ce73a52949d294a4e939d2739ce7294a549d273a4e739ce7394e729ce32
-def b133 : ℕ := 0x11946528c210a5234ad691a4a7294e739ce739ce739d27194a328ca31aced6ad6b2b4e769dad3b5ad6b4ef69ce94ad6b59d2919c633a5295a5295a5294a52949ce7294e549d293a4e739ce939ce939ce13
-def b134 : ℕ := 0x12946328c210a5694a56939ce939ce739ce539ce5394e7294a318ca31b5ad7adad5b56d6adab5ad6d5b56d5a56b5ad694a5294a5293a5295a4e959d294a4e73a52939d2749ce939ce729ca739ce739ca53
-def b135 : ℕ := 0x128c6328c210a56939d2939ce739ce7394e5394a5394e72946318ca31b5ab6adad5b56d6ad695ad2b4ad2b4a56b4ad294a52949ce93a5274a4e749d273a4e73a4e739d2739ce9294a729ca739ce7394a53
-def b136 : ℕ := 0x12946318c210a5294a52739ce939ce539ce539ce5294a5294a318c631adad6ad6b5ad6b5adab5ad6b5ad6b5a52b5a5693a5294a5293a52949ce949ce939ce52a52939ce749ce739ce729ca5394e529ca52
-def b137 : ℕ := 0x12946308c210a4e94a4e538ce939ce339ce539ce519463294a318c231a5ad5ad295a4e94adab59d695a569394eb59d692a5294a5293a5293946939ca9294631a52939ca749ce539ce729ca338ce319ca51
-def b138 : ℕ := 0x128c6318c210a52939ce739ce739ce5394e5394a5294a52946318c631adab5ad6b5ad6b5ad695ad294a5294a52b4a5293a52949ce93a52739ce739ce729ce52a4e739ce739ce7294a729ca5394e5294a52
-def b139 : ℕ := 0x10846328c21094e5294e939c6518ce738ce538c65394e70942318ca31a52959d293a4e96ad275ace93a4e93a5673ace9494a5294a51a5253a4e539d252a4e7394a518ca329ce918c6729ca739ce738ca53
-def w62 := mergeW 0 w4 w26
-def b140 : ℕ := 0x12946328c210a5694a56928ce939ce739ce539ce5394e7294a318ca31b5ad7adad4b4ed6a5ab49d6d5b52d39d2b5ad694a5294a5293a5295a46959d294a4671a52939d2749ce939ce729ca739ce739ca33
-def b141 : ℕ := 0x12946328c210a5694a569294e939ce739ce539ce5394e7294a318ca31b5ad7adad4b52d6a5ab4a56d5b52d4a52b5ad694a5294a5293a5295a4a959d294a4a72a52939d2749ce939ce729ca739ce739ca33
-def b142 : ℕ := 0x11946128c210952749d69394a7294e739ce339ce338ca7194a308ca31ad6969d6b4a4eb6ada95a52d4b56b49d694ad6739ca539ce71a5295a4a9595294a4a529ce7294e549ca9394e719c6539ce539c653
-def b143 : ℕ := 0x11946328c2109d274a569394a7294e739ce539ce5394e7194a318ca31ad6b6a56b4aceb6adab5a56d5b56d49d694ad6949ce739ce72a5295a4a959d294a4a729ce7294e549ce939ce729ca739ce739ca53
-def b144 : ℕ := 0x12846328c210a569294e938ce539ce738ce538c65394e72942318ca31b5a95adad5b4ed6ad2759ce93a4e93956b3ace94a529494a93a5253a46539d252a4671a4a539d2729ce918c6729ca739ce738ca53
-def b145 : ℕ := 0x12942318c210a5293a52529ce9394a539ca539ce528ca5294a318c611adad6ad694ad6b4a56b4ad6b4a52b59ce95a5673a52949d2929d2749ce949ca7394e32a529394e549ce739ce529c65294e529c632
-def b146 : ℕ := 0x10946308c21094e54a4e539c6518ce339ce539ce519463094a318c231a52959d293a4e94adab5ad695a5695a4e739d69294a5294a51a529394e939ca9294e3194a518ca349ce539ce729ca338ce319ca51
-def b147 : ℕ := 0x128c2328c210a56929d2729ce7394a7394a5394a538ce72946318ca11b5ab6adab4b56d5a5294ad2b3a4eb49d294ad274a529494e929d254a4e749ce539ce53a4e73952539ce9294a529c6729ce7394633
-def b148 : ℕ := 0x128c6128c2109d6939529394e739ce7394e3394a338ca72946308ca31b5a96a5ad5ad2d6ad675a4eb3ad2939d6b4ad273a4e749ce92a5274a4a7495273a4a52a4e739d2739ca928ca719c6539ce5394653
-def b149 : ℕ := 0x12946328c210a5694a569194e939ce739ce539ce5394e7294a318ca31b5ad7adad3b52d69dab3a56d5b4ed49ceb5ad694a5294a5293a5295a4a959d294a4a72a52939d2749ce939ce729ca739ce739ca13
-def b150 : ℕ := 0x12946318c210a5294a52729ce939ce539ce539ce5294a5294a318c631adad6ad6b4ad6b5a5ab4ad6b5ad2b59ceb5a5693a5294a5293a52949ce949ce939ce52a52939ce749ce739ce729ca5394e529ca32
-def b151 : ℕ := 0x12946118c2109d2949d27394e939ce539ce339ce328c65294a308c631adab6a56b5a52b5ada95a52b4ad6949d2b5a5672a4e74a5292a52949ca9494e939ca31a52939ce749ca7394e719c63394e329c652
-def b152 : ℕ := 0x128c6328c210a56939d2929ce739ce7394e5394a5394e72946318ca31b5ab6adad4b56d6a5694ad2b4aceb49d2b4ad294a52949ce93a5274a4e749d273a4e73a4e739d2739ce9294a729ca739ce7394a33
-def b153 : ℕ := 0x12946328c210a5694a56918ce939ce739ce539ce5394e7294a318ca31b5ad7adad3b4ed69dab39d6d5b4ed394eb5ad694a5294a5293a5295a46959d294a4671a52939d2749ce939ce729ca739ce739ca13
-def b154 : ℕ := 0x12946518c210ad294ad273a4e939ce539ce739ce729ce5294a328c631adaf6b56b5b5ab5adad5b5ab6ad6d6ad2b5a56b4a56b4a5294a52949d294a4e939d273a52939ce749d273a4e739ce7394e729ce52
-def b155 : ℕ := 0x12946118c2109d2949d23394e939ce539ce339ce328c65294a308c631adab6a5675a52b3ada95a52b49d6949cab5a5672a4e74a5292a52949ca94946938ca31a52939ce749ca7394e719c63394e329c652
-def b156 : ℕ := 0x128c6518c210ad293a4e73a4e739ce5394e7394a729ce52946328c631adad5b56b5b5ab5ad6b5b5695a52b5ad2b4a52b4a56b49ce94a52739d273a4e729d273a4e739ce739d2729ca739ce7394e7294e52
-def b157 : ℕ := 0x10846518c2109ca529ca73a46518ce538ce738c6729ce50942328c6319d2b4a4e73a5275ad295b52749ce94ad273a4eb494e7294a52a52529d252a4e519d27394a518c6329d271946739ce7394e728ce52
-def w63 := mergeW 0 w4 w17
-def b158 : ℕ := 0x12946518c210ad294ad232a4e939ce539ce739ce729ce5294a328c631adaf6b5674b5ab3a5ad4b5ab69d2d6a4eb5a56b4a56b4a5294a52949d294a46938d233a52939ce749d273a4e739ce7394e729ce32
-def b159 : ℕ := 0x12946518c210ad294ad252a4e939ce539ce739ce729ce5294a328c631adaf6b5694b5ab4a5ad4b5ab6a52d6a52b5a56b4a56b4a5294a52949d294a4a9395253a52939ce749d273a4e739ce7394e729ce32
-def b160 : ℕ := 0x128c6508c210ace93a4a53a4e739ce3394e7394a719ca32946328c231a5ad4b5295ada94ad6b5b56759d295aceb49d2b3a56b49ce94a527295272a4a7195252a4e739ca739d2529ca739ce538ce5194e51
-def b161 : ℕ := 0x128c6518c210ad293a4e53a4e739ce5394e7394a729ce52946328c631adad5b5695b5ab4ad6b5b56959d2b5aceb4a52b4a56b49ce94a52739d273a4a7295253a4e739ce739d2729ca739ce7394e7294e52
-def b162 : ℕ := 0x10946518c2109ca54ad233a46518ce539ce739ce729ce5094a328c6319d2b4a4e73a5273adad5b5ab69d6d6aca73a56b494e7294a52a52949d294a46938d23394a518c6349d273a4e739ce7394e729ce52
-def b163 : ℕ := 0x129463184210a5274a527294e939ce529ce529ca5294a3294a318c630ad6d6ad6b4ad295a5ab4a56b5ad2b49ceb59d293a5293a4e73a4e949ca949ce929ca51a52939ce749ce739ca7294a5394a5194a31
-def b164 : ℕ := 0x12846118c2109d2929ca7394e539ce538ce338c6328c652942308c631adab4a56b5a52b5ad295a52749ce949d2b3a4e72a4e7494a92a52529ca5294e519ca31a4a539ce729ca71946719c63394e328c652
-def b165 : ℕ := 0x119465184210a4e54ad2729ca7294e529ce729ca729ce3194a328c630a52d5ad293ad275a5ad4adab6ad2d5a4e949d2b49d2929ca53a4e949ce94a4e929ce729ce7294a549d273a4a7394e7394a7194e31
-def b166 : ℕ := 0x11946508c210a4a74ace53a4a7294e339ce739ce719ca3194a328c2319d6d4ace74a5674adad5b5a96a56b6ace949d6b39d2939ce73a529395293a4a92952529ce72946549d253a4e739ce538ce519ce51
-def b167 : ℕ := 0x12946518c210ad294ad251a4e939ce539ce739ce729ce5294a328c631adaf6b5693b5ab49dad3b5ab6a4ed69ceb5a56b4a56b4a5294a52949d294a4a9395253a52939ce749d273a4e739ce7394e729ce12
-def b168 : ℕ := 0x128c6518c210ad293a4e72a4e739ce5394e7394a729ce52946328c631adad5b56b4b5ab5a56b4b5695a4eb5a4eb4a52b4a56b49ce94a52739d273a4e729d273a4e739ce739d2729ca739ce7394e7294e32
-def b169 : ℕ := 0x12946308c210a4e94a4e539ce939ce339ce539ce519463294a318c231a5ad5ad295a5694adab5ad695a5695a4eb59d692a5294a5293a529394e939ca9294e31a52939ca749ce539ce729ca338ce319ca51
-def b170 : ℕ := 0x12946518c210ad294ad231a4e939ce539ce739ce729ce5294a328c631adaf6b5673b5ab39dad3b5ab69ced69cab5a56b4a56b4a5294a52949d294a46938d233a52939ce749d273a4e739ce7394e729ce12
-def b171 : ℕ := 0x128c6528c210ad693a5293a4e739ce7394e7394a739d272946328ca31b5ad6b5ad5bdad6ad6b5b56b5ad2d5ad6b4ad2b5a56b49ce94a5274a5274a5273a5294a4e739d2739d2929ca739ce939ce9394e53
-def b172 : ℕ := 0x108c6528c2109ce51a5293a46318ce7394e7394a739d270946328ca31a5294a5293ad296aceb5b56b39cad5ad672ad2b594e728c652a5234a5274a5233a5294946318ca339d2929ca739ce939ce9394e53
-def b173 : ℕ := 0x128c6108c2109ce9394a5394e739ce3394e3394a318ca32946308c231a5a94a5295ad294ad675a4e739d2939ceb49d273a4e749ce92a527294a7294a7194a52a4e739ca739ca528ca719c6538ce5194651
-def w64 := mergeW 0 w13 w4
-def b174 : ℕ := 0x128c6528c210ad691a5292a4e739ce7394e7394a739d272946328ca31b5ad6b5ad4bdad6a4eb4b56b39ced5a52b4ad2b5a56b48ce94a5234a5274a5233a5294a4e739d2739d2929ca739ce939ce9394e33
-def b175 : ℕ := 0x128c6528c210ad692a5292a4e739ce7394e7394a739d272946328ca31b5ad6b5ad4bdad6a52b4b56b4a52d5a52b4ad2b5a56b494e94a5254a5274a5253a5294a4e739d2739d2929ca739ce939ce9394e33
-def b176 : ℕ := 0x12846518c210ad2929ca73a4e539ce538ce738c6729ce52942328c631adab4b56b5b5ab5ad295b52749ce94ad2b3a4eb4a56b494a94a52529d252a4e519d273a4a539ce729d271946739ce7394e728ce52
-def b177 : ℕ := 0x128c6518c210ad292a4e73a4e739ce5394e7394a729ce52946328c631adad5b56b5b5ab5ad2b5b56949ceb5ad2b4a52b4a56b494e94a52539d273a4e529d273a4e739ce739d2729ca739ce7394e7294e52
-def b178 : ℕ := 0x128c6128c2109d6919529394e739ce7394e3394a338ca72946308ca31b5a96a5ad5ad2d6ace75a4eb39ca939d6b4ad273a4e748ce92a5234a4a7495233a4a52a4e739d2739ca928ca719c6539ce5394653
-def b179 : ℕ := 0x118c65284210a5253a52929ca5294e7294e72946739d251946328ca30ad2b5ad6b3b5296a56b4ad6b5aced4a5293a4eb59d29294653a4e74a4e74a5272a4e939ca5294e539d2929c67394e939ca928ce32
-def b180 : ℕ := 0x108c6508c2109ce53a4a53a46318ce3394e7394a719ca30946328c231a5294a5293ad294ad6b5b56759d295ace729d2b394e728c652a527295272a4a7195252946318ca339d2529ca739ce538ce5194e51
-def b181 : ℕ := 0x128c63284210a56739d29294e739ce7294e529465394e52946318ca30b56b6adad4b52b6a5694a52b4aceb39d2b4a4e94a52939ca73a4e74a4a749d272a4a72a4e739d2739ce929467294a739ca728ca32
-def b182 : ℕ := 0x12846328c210a569294e939ce539ce738ce538c65394e72942318ca31b5a95adad5b56d6ad275ace93a4e93a56b3ace94a529494a93a5253a4e539d252a4e73a4a539d2729ce918c6729ca739ce738ca53
-def b183 : ℕ := 0x128c6528c210ad692a5291a4e739ce7394e7394a739d272946328ca31b5ad6b5ad3bdad69d2b3b56b4a4ed59ceb4ad2b5a56b494e94a5254a5274a5253a5294a4e739d2739d2929ca739ce939ce9394e13
-def b184 : ℕ := 0x11846528c210a52729ce93a4a3294e738ce738c6739d271942328ca31ad694ad6b4b56b6ad295b5294a4eb4ad692aceb59d2938c673a5253a5253a5252a52949c63294e529d291946739ce939ce938ce53
-def b185 : ℕ := 0x128c6528c210ad691a5291a4e739ce7394e7394a739d272946328ca31b5ad6b5ad3bdad69ceb3b56b39cad59ceb4ad2b5a56b48ce94a5234a5274a5233a5294a4e739d2739d2929ca739ce939ce9394e13
-def w65 := mergeW 0 w8 w21
-def b186 : ℕ := 0x11942328c21095273a56729ca728ca739ca539ce538ce7194a318ca11ad6969d693a4eb5a56b4ad6d4ad2d59d274ad6749ca5394e729d275a4e959ce749ce539ce728ce349ce939ce529c6729ce739c633
-def b187 : ℕ := 0x11942328c2108d273a56729ca728ca739ca539ce538ce7194a318ca11ad676956939cab5a56b4ad6d4ad2d59d274ad6749c63394e719d275a4e959ce749ce539ce728ce349ce939ce529c6729ce739c633
-def w66 := mergeW 0 w4 w21
-def b188 : ℕ := 0x11946328c21095274a56929ca7294e739ce539ce5394e7194a318ca31ad6969d6b3a4eb6a5ab4ad6d5b52d59d294ad6949ca539ce71a5295a4e959d294a4e739ce7294e549ce939ce729ca739ce739ca33
-def b189 : ℕ := 0x11946308c21094a74a4e539ca7294e339ce539ce519463194a318c2319d6949ce74a4e74adab5ad695a5695a4e949d6929ca539ce71a529394e939ca9294e319ce72946549ce539ce729ca338ce319ca51
-def b190 : ℕ := 0x11846328c2109527294e939ca3294e738ce538c65394e71942318ca31ad6949d6b4a4eb6ad275ace93a4e93a5692ace949ca538c671a5253a4e539d252a4e739c63294e529ce918c6729ca739ce738ca53
-def b191 : ℕ := 0x118c6318c2109ce739ce739ca5294e5394e5394a5294a51946318c631a5694a5294a5295ad695ad294a5294a5293a52939ce7394a72a52739ce739ce729ce529ca5294a539ce7294a729ca5394e5294a52
-def b192 : ℕ := 0x1194632842109d254a569294a7294e729ce529ca5394e5194a318ca30ad2b6a56b3ace96a5ab4a56d5b52d49d294a52949ce729ca52a4e95a4a959d293a4a729ce7294e549ce939ca7294a739ca7294a32
-def b193 : ℕ := 0x11946328c21095274a56939ca7294e739ce539ce5394e7194a318ca31ad6969d6b4a4eb6adab5ad6d5b56d5a5694ad6949ca539ce71a5295a4e959d294a4e739ce7294e549ce939ce729ca739ce739ca53
-def w67 := mergeW 0 w4 w3
-def b194 : ℕ := 0x11946308c2109ca74a4e529ca7294e339ce539ce519463194a318c2319d6b4a4e739d274a5ab4ad695a52959d2949d6929ce739ce72a529394e939ca9294e319ce72946549ce539ce729ca338ce319ca31
-def w68 := mergeW 0 w9 w4
-def b195 : ℕ := 0x11846328c2109d27294e929ca3294e738ce538c65394e71942318ca31ad674a56b3ad2b6a5274ace93a52939d292ace949ce738c672a5253a4e539d252a4e739c63294e529ce918c6729ca739ce738ca33
-def b196 : ℕ := 0x11946328c21095274a56919ca7294e739ce539ce5394e7194a318ca31ad6969d6b2a4eb69dab3ad6d5b4ed594e94ad6949ca539ce71a5295a4e959d294a4e739ce7294e549ce939ce729ca739ce739ca13
-def w69 := mergeW 1 w4 w21
-def b197 : ℕ := 0x11946308c2108ca74a4e539ca7294e339ce539ce519463194a318c2319d67494e749ca74adab5ad695a5695a4e949d6929c6339ce70a529394e939ca9294e319ce72946549ce539ce729ca338ce319ca51
-def b198 : ℕ := 0x11846328c2108d27294e939ca3294e738ce538c65394e71942318ca31ad674956b49cab6ad275ace93a4e93a5692ace949c6338c670a5253a4e539d252a4e739c63294e529ce918c6729ca739ce738ca53
-def b199 : ℕ := 0x10946318c21094a54a52739c6518ce539ce539ce5294a5094a318c6319d2949ce739ce75adab5ad6b5ad6b5a5273a569394a5294a51a52949ce949ce939ce5294a518c6349ce739ce729ca5394e529ca52
-def b200 : ℕ := 0x118c6128c210952739529394a5294e7394e3394a338ca71946308ca31ad6759d6b4a4eb6ad675a4eb3ad2939d693ad2739ca5394a71a5274a4a7495273a4a529ca5294e539ca928ca719c6539ce5394653
-def b201 : ℕ := 0x11942318c2109ce73a52529ca728ca539ca539ce528ca5194a318c611a56b5a5273a5294a56b4ad6b4a52b59ce74a56739ce7394e719d2749ce949ca7394e329ce728ca349ce739ce529c65294e529c632
-def b202 : ℕ := 0x118c2328c2109d2729d2729ca528ca7394a5394a538ce71946318ca11ad695a5693ad2b5a5294ad2b3a4eb49d273ad2749ce738ca719d254a4e749ce539ce539ca528ce339ce9294a529c6729ce7394633
-def w70 := mergeW 1 w8 w21
-def b203 : ℕ := 0x11942328c2109d273a56729ca728ca739ca539ce538ce7194a318ca11ad6b6a5693ad2b5a56b4ad6d4ad2d59d274ad6749ce7394e719d275a4e959ce749ce539ce728ce349ce939ce529c6729ce739c633
-def b204 : ℕ := 0x11946118c21094e749d27394a7294e539ce339ce328c65194a308c631a56959d2949ce95ada95a52b4ad6949d294a56729ca539ce71a52949ca9494e939ca319ce7294a549ca7394e719c63394e329c652
-def w71 := mergeW 0 w5 w14
-def b205 : ℕ := 0x128c65184210ad273a4a729ce739ce5294e72946729ce32946328c630ad6d4b56b4b5695a56b4ad6759ce94a4eb49ceb4a56b39ca74a4e729ce72a4e729ce72a4e739ce739d2729c67394e7394a718ce31
-def b206 : ℕ := 0x128c65184210ad273a46729ce739ce5294e72946729ce32946328c630ad6d3b56b4b5695a56b4ad65594e74a4eb49ceb4a56b39ca74a4e719ce71a4e719ce72a4e739ce739d2729c67394e7394a718ce31
-def w72 := mergeW 0 w4 w14
-def b207 : ℕ := 0x128c6518c210ad293a4a72a4e739ce5394e7394a729ce52946328c631adad4b56b4b5ab5a56b4b56759ce95a4eb4a52b4a56b49ce94a52729d272a4e719d273a4e739ce739d2729ca739ce7394e7294e32
-def b208 : ℕ := 0x108c6518c2109ca53a4a73a46318ce5394e7394a729ce50946328c6319d294a4e73a5275ad6b5b56759d295ad272a52b494e728c652a52729d272a4e719d273946318c6339d2729ca739ce7394e7294e52
-def b209 : ℕ := 0x128c6118c2109d29394a7394e739ce5394e3394a328c652946308c631ada94a56b5a52b5ad675a4e739d2939d2b4a5272a4e749ce92a52729ca7294e719ca31a4e739ce739ca728ca719c63394e3294652
-def b210 : ℕ := 0x128c2518c210ad292a4e52a4e7394a5394a7394a7294e52946328c611adad5b5694b5ab4a52b4b56949ceb5a4e94a5294a56b494e939d2539d273a4a5295253a4e7394e539d2729ca539ca7294e7294a32
-def b211 : ℕ := 0x128c6518c210ad293a4a73a4e739ce5394e7394a729ce52946328c631adad4b56b5b5ab5ad6b5b56759d295ad2b4a52b4a56b49ce94a52729d272a4e719d273a4e739ce739d2729ca739ce7394e7294e52
-def w73 := mergeW 0 w4 w0
-def b212 : ℕ := 0x108c6518c2109ca53a4e72a46318ce5394e7394a729ce50946328c6319d293a4e74a5275a56b4b5695a4eb5a4e72a52b494e728c652a52739d273a4e729d273946318c6339d2729ca739ce7394e7294e32
-def w74 := mergeW 0 w6 w4
-def b213 : ℕ := 0x128c6118c2109d29394e7294e739ce5394e3394a328c652946308c631ada95a56b4a52b5a5674a4e93a4e73a4eb4a5272a4e749ce92a52739ca7394e729ca31a4e739ce739ca728ca719c63394e3294632
-def b214 : ℕ := 0x128c6518c210ad293a4a71a4e739ce5394e7394a729ce52946328c631adad4b56b3b5ab59d6b3b56759ca959cab4a52b4a56b49ce94a52729d272a4e719d273a4e739ce739d2729ca739ce7394e7294e12
-def w75 := mergeW 1 w4 w14
-def b215 : ℕ := 0x108c6518c2109ca53a4673a46318ce5394e7394a729ce50946328c6319d293a4e73a5275ad6b5b565595275ad272a52b494e728c652a52719d271a4e709d273946318c6339d2729ca739ce7394e7294e52
-def b216 : ℕ := 0x128c6118c2109d2939467394e739ce5394e3394a328c652946308c631ada93a56b5a52b5ad675a4e53952739d2b4a5272a4e749ce92a52719ca7194e709ca31a4e739ce739ca728ca719c63394e3294652
-def b217 : ℕ := 0x118c6508c210a4a73a4a53a4a5294e3394e7394a719ca31946328c2319d6b3ace74a5674ad6b5b56759d295ace939d2b39d29394a73a527295272a4a71952529ca52946539d2529ca739ce538ce5194e51
-def b218 : ℕ := 0x12846318c210a529294a739ce539ce538ce538c65294a52942318c631ada94ad6b5ad6b5ad275ace739ce73a52b3a4e93a529494a93a52529ce529ce519ce52a4a539ce729ce718c6729ca5394e528ca52
-def b219 : ℕ := 0x118c65184210a4e53a4e729ca5294e5294e72946729ce31946328c630a52b4ad293ad275a56b4ad695a4eb4a4e939ceb49d29294653a4e739ce73a4e719ce729ca5294a539d2729c67394e7394a718ce31
-def b220 : ℕ := 0x128c63184210a52739ce7294e739ce5294e529465294a32946318c630ad6b5ad6b4ad295a5694a5294a4e939ceb49ce93a52939ca73a4e739ca739ce719ca51a4e739ce739ce729467294a5394a518ca31
-def w76 := mergeW 1 w5 w14
-def b221 : ℕ := 0x128c65184210ad273a4e729ce739ce5294e72946729ce32946328c630ad6d5b56b4b5695a56b4ad695a4eb4a4eb49ceb4a56b39ca74a4e739ce73a4e719ce72a4e739ce739d2729c67394e7394a718ce31
-def b222 : ℕ := 0x128c6308c210a4e939ca539ce739ce3394e5394a5194632946318c231a5ab4ad295a5694ad695ad2749d274a4eb49d292a52949ce93a527294e729ca7194e31a4e739ca739ce5294a729ca338ce3194a51
-def w77 := mergeW 0 w4 w12
-def b223 : ℕ := 0x11946518c210a4a74ad272a4a7294e539ce739ce729ce5194a328c6319d6d4ace73a5675a5ad4b5ab6ad2d6a4e94a56b49d2939ce73a52949d294a4e939d2739ce72946549d273a4e739ce7394e729ce32
-def b224 : ℕ := 0x11846118c21094e729ca7394a3294e538ce338c6328c651942308c631a56939d2949ce95ad295a52749ce949d292a4e729ca538c671a52529ca5294e519ca319c63294a529ca71946719c63394e328c652
-def w78 := mergeW 0 w6 w12
-def b225 : ℕ := 0x11946118c21094a749d27394a7294e539ce339ce328c65194a308c6319d6949ce74a4e75ada95a52b4ad6949d294a56729ca539ce71a52949ca9494e939ca319ce72946549ca7394e719c63394e329c652
-def b226 : ℕ := 0x11946118c21094e749d27294a7294e539ce339ce328c65194a308c631a56959d2939ce95a5a94a52b4ad294a4e94a56729ca539ce71a52949ca9494e939ca319ce7294a549ca7394e719c63394e329c632
-def w79 := mergeW 0 w9 w12
-def b227 : ℕ := 0x11846518c210a4a729ca73a4a3294e538ce738c6729ce51942328c6319d694ace74a5675ad295b52749ce94ad292a4eb49d2938c673a52529d252a4e519d2739c632946529d271946739ce7394e728ce52
-def b228 : ℕ := 0x11846518c210a4e729ca72a4a3294e538ce738c6729ce51942328c631a5693ad293ad695a5294b52749d294a4e92a4eb49d2938c673a52529d252a4e519d2739c63294a529d271946739ce7394e728ce32
-def w80 := mergeW 1 w4 w12
-def b229 : ℕ := 0x1194631842109ce54a527294a7294e529ce529ca5294a3194a318c630a52b5a5293a4e75a5ab4a56b5ad2b49ce949d2939ce729ca52a4e949ca949ce929ca519ce7294a549ce739ca7294a5394a5194a31
-def b230 : ℕ := 0x118c2518c210a4e72a4e52a4a528ca5394a7394a7294e51946328c611a56b4ad273ad694a52b4b56949ceb5a4e73a52949d2938ca729d2539d273a4a52952539ca528ca339d2729ca539ca7294e7294a32
-def b231 : ℕ := 0x11946308c2109ca74a4e539ca7294e339ce539ce519463194a318c2319d6b4a4e749d274adab5ad695a5695a4e949d6929ce739ce72a529394e939ca9294e319ce72946549ce539ce729ca338ce319ca51
-def w81 := mergeW 0 w15 w4
-def b232 : ℕ := 0x128c6328c210a5693952929ce739ce7394e5394a5394e72946318ca31b5a96adad4b56d6a5674aceb3ace939d2b4ad294a52949ce93a5274a4e749d273a4e73a4e739d2739ce928ca729ca739ce7394a33
-def b233 : ℕ := 0x108c6308c21094e539ca539c6318ce3394e5394a5194630946318c231a52749d293a4e94ad695ad2749d274a4e729d29294a528c651a527294e729ca7194e31946318ca339ce5294a729ca338ce3194a51
-def b234 : ℕ := 0x108c6328c21094e539d2929c6318ce7394e5394a5394e70946318ca31a52749d294a4e96a5694ad2b4aceb49d272ad29494a528c651a5274a4e749d273a4e73946318ca339ce9294a729ca739ce7394a33
-def b235 : ℕ := 0x128c6308c210a4e939ca529ce739ce3394e5394a5194632946318c231a5ab4ad294a5694a5694ad2749ce749d2b49d292a52949ce93a527294e729ca7194e31a4e739ca739ce5294a729ca338ce3194a31
-def w82 := mergeW 0 w15 w0
-def b236 : ℕ := 0x108c6328c21094e53952939c6318ce7394e5394a5394e70946318ca31a52949d293a4e96ad675aceb3ad293a5672ad29494a528c651a5274a4e749d273a4e73946318ca339ce928ca729ca739ce7394a53
-def w83 := mergeW 0 w15 w3
-def b237 : ℕ := 0x128c6308c210a4e9394a539ce739ce3394e5394a5194632946318c231a5a94ad295a5694ad675ace739d293a4eb49d292a52949ce93a527294e729ca7194e31a4e739ca739ce528ca729ca338ce3194a51
-def w84 := mergeW 1 w15 w4
-def b238 : ℕ := 0x118c632842109d2539d29294a5294e7294e529465394e51946318ca30ad295a56b3ace96a5694a52b4aceb39d293a4e949ce7294652a4e74a4a749d272a4a729ca5294e539ce929467294a739ca728ca32
-def b239 : ℕ := 0x128c2318c210a52929ce529ce7394a5394a5394a528ca52946318c611adab5ad694ad6b4a5294ad2939ce949ce94a5273a529494e929d2539ce739ca5294e32a4e7394e539ce7294a529c65294e5294632
-def b240 : ℕ := 0x128c6118c2109d29394e7394e739ce5394e3394a328c652946308c631ada95a56b5a52b5ad675a4e93a52739d2b4a5272a4e749ce92a52739ca7394e729ca31a4e739ce739ca728ca719c63394e3294652
-def b241 : ℕ := 0x119465284210a5254ad6929ca7294e729ce729ca739d25194a328ca30ad2d6ad6b3b5296a5ad4adad6b52f5a5294a52b59d2929ca53a4e95a4e95a5293a4e939ce7294e549d293a4a7394e939ca9294e32
-def b242 : ℕ := 0x118465284210a52329ce929ca3294e728ce728c2739d251942328ca30ace94ad6b2b4e76a5294ad294a4ab3a5292a4ab59d2918c633a4e53a4e53a5251a4e939c63294e529d2919427394e939ca9284e32
-def b243 : ℕ := 0x119465084210a4a34ace529ca7294e329ce729ca719ca1194a328c2309ced4ace72a4e74a5ad4ada96a52b5a4a94952b39d2919c633a4e9394e93a4a9194e519ce72946549d253a4a7394e538ca5094e30
-def b244 : ℕ := 0x119465284210a5234ad6919ca7294e729ce729ca739d25194a328ca30aced6ad6b3b4e769dad3adad6b4ef59ce94a52b59d2919c633a4e95a4e95a5293a4e939ce7294e549d293a4a7394e939ca9294e12
-def b245 : ℕ := 0x119461284210952549d6918ca7294e729ce329ca338ca5194a308ca30ad2969d6b2a4a969da939d2d4b4eb39ce94a52739ca529ca51a4e95a469595293a46519ce7294e549ca9394a71946539ca5294612
-def b246 : ℕ := 0x11946108421094a549ce528ca7294e329ce329ca318ca1194a308c2309d2949ce73a4a54a5a949d294a52b394a94952739ca529ca51a4e939469394a91946519ce72946549ca5394a71946538ca5094630
-def b247 : ℕ := 0x119465084210a4a54ace519ca7294e329ce729ca719ca1194a328c2309d2d4ace72a52549dad3ada96a4eb59ce94952b39d2929ca53a4e9394e93a4a9194e519ce72946549d253a4a7394e538ca5094e10
-def w85 := mergeW 1 w9 w10
-def w86 := mergeW 0 w6 w10
-def b248 : ℕ := 0x119461284210952349d6928ca7294e729ce329ca338ca5194a308ca30ace969d6b2a4e76a5a949d2d4b52b395294a52739ca519c631a4e95a469595293a46519ce7294e549ca9394a71946539ca5294632
-def b249 : ℕ := 0x129463284210a5674a569294e939ce729ce529ca5394e5294a318ca30b56d7adad4b52b6a5ab4a56d5b52d49d2b5a5294a5293a4e73a4e95a4a959d293a4a72a52939d2749ce939ca7294a739ca7294a32
-def b250 : ℕ := 0x129463084210a4e74a4e528ce939ce329ce529ca519461294a318c230a56d5ad294a4e74a5ab49d695a529394ab595292a5293a4e73a4e93946939ca9194631a52939ca749ce539ca7294a338ca3094a30
-def b251 : ℕ := 0x128463284210a567294e928ce539ce728ce528c25394e52942318ca30b5695adad4b4eb6a52749ce93a4a93952b3a4a94a529394673a4e53a46539d251a4671a4a539d2729ce918c27294a739ca7284a32
-def b252 : ℕ := 0x129463284210a5674a56918ce939ce729ce529ca5394e5294a318ca30b56d7adad3b4eb69dab39d6d5b4ed39ceb5a5294a5293a4e73a4e95a46959d293a4671a52939d2749ce939ca7294a739ca7294a12
-def b253 : ℕ := 0x10946328421094e34a5691946518ce729ce529ca5394e5094a318ca30a4e959d293a4a769dab3a56d5b4ed494e73a529494a5194631a4e95a4a959d293a4a7294a518ca349ce939ca7294a739ca7294a12
-def b254 : ℕ := 0x10846328421094e3294e92946518ce728ce528c25394e50942318ca30a4e959d292a4a76a5274a4e93a4a929d273a4a9494a5194631a4e53a4a539d251a4a7294a518ca329ce918c27294a739ca7284a32
-def b255 : ℕ := 0x128463284210a567294e9194e539ce728ce528c25394e52942318ca30b5695adad3b52b69d273a4e93a4e9294eb3a4a94a529394673a4e53a4a539d251a4a72a4a539d2729ce918c27294a739ca7284a12
-def w87 := mergeW 1 w26 w3
-def w88 := mergeW 0 w26 w0
-def b256 : ℕ := 0x10946328421094e34a56928c6518ce729ce529ca5394e5094a318ca30a4e959d292a4e76a5ab49d6d5b52d395273a529494a5194631a4e95a46959d293a467194a518ca349ce939ca7294a739ca7294a32
-def b257 : ℕ := 0x12942518c210ad293ad252a4e9394a539ca739ce7294e5294a328c611adaf6b5694b5ab4a56d4b5ab5a52d6a4e95a5694a56b49d2939d2749d294a4a7395253a529394e549d273a4e539ca7294e729ca32
-def b258 : ℕ := 0x12942118c2109d2939d23294e9394a539ca339ce328465294a308c611adab6a5674a52b3a5694a52b39d29494a95a5652a4e749d2919d2749ca94946738ca31a529394e549ca7394e519c23294e329c232
-def b259 : ℕ := 0x10942518c2109ca53ad232a465184a539ca739ce7294e5094a328c6119d2b4a4e72a5273a56d4b5ab59d2d6a4a53a569494e728ca519d2749d294a46738d23394a51846149d273a4e539ca7294e729ca32
-def b260 : ℕ := 0x12942518c210ad293ad231a4e9394a539ca739ce7294e5294a328c611adaf6b5673b5ab39d6d3b5ab59ced69ce95a5694a56b49d2939d2749d294a46738d233a529394e549d273a4e539ca7294e729ca12
-def b261 : ℕ := 0x12842518c210ad2919ca51a4e5394a538ca738c67294e52942328c611adab4b5693b5ab49ce93b527394e949ca93a4e94a56b48ca939d2329d252a4a3195253a4a5394e529d271946539ca7294e728ca12
-def b262 : ℕ := 0x10842518c2109ca519ca52a465184a538ca738c67294e50942328c6119d2b4a4e52a5274a4e94b527394a94a4e53a4e9494e728ca519d2329d252a4a319525394a51846129d271946539ca7294e728ca32
-def b263 : ℕ := 0x10942518c2109ca53ad251a465184a539ca739ce7294e5094a328c6119d2b4a4e53a52749d6d3b5ab5a4ed69ca53a569494e728ca519d2749d294a4a739525394a51846149d273a4e539ca7294e729ca12
-def w89 := mergeW 1 w6 w17
-def w90 := mergeW 0 w9 w17
-def b264 : ℕ := 0x12842518c210ad2919ca32a4e5394a538ca738c67294e52942328c611adab4b5674b5ab3a4e94b52739ca94a4a93a4e94a56b48ca939d2329d252a46318d233a4a5394e529d271946539ca7294e728ca32
-def b265 : ℕ := 0x128c2528c210ad692a5272a4e7394a7394a7394a7395272946328ca11b5ad6b5ab4bdad5a52b4b56b4a4ed5a5294ad295a56b494e939d254a5274a4e539d274a4e73952539d2929ca539ca929ce9394a33
-def b266 : ℕ := 0x108c2528c2109ce51a5272a463184a7394a7394a7395270946328ca11a5294a5272ad295a4eb4b56b39cad5a5252ad29594e728c6519d234a5274a4e339d2749463184a139d2929ca539ca929ce9394a33
-def b267 : ℕ := 0x128c2128c2109d6919527294e7394a7394a3394a3384a72946308ca11b5a96a5ab4ad2d5a4e74a4eb39ca9395294ad253a4e748ce919d234a4a7494e339ca32a4e73952539ca928ca519c2529ce5394233
-def b268 : ℕ := 0x128c2528c210ad691a5271a4e7394a7394a7394a7395272946328ca11b5ad6b5ab3bdad59ceb3b56b39ced59ce94ad295a56b48ce939d234a5274a4e339d274a4e73952539d2929ca539ca929ce9394a13
-def b269 : ℕ := 0x128c2508c210ace92a4a31a4e7394a3394a7394a7194a32946328c211a5ad4b5273ada939d2b3b567494a959ce949d293a56b494e939d25295272a46518d232a4e7394a539d2529ca539ca528ce5194a11
-def b270 : ℕ := 0x128c2108c2109ce9294a3294e7394a3394a3394a3184a32946308c211a5a94a5274ad293a5274a4e7294e9394a949d253a4e7494e919d25294a72946518ca32a4e7394a539ca528ca519c2528ce5194231
-def b271 : ℕ := 0x128c2128c2109d6929527194e7394a7394a3394a3384a72946308ca11b5a96a5ab3ad2d59d273a4eb2a4a939ce94ad253a4e7494e919d254a4a7494e539ca32a4e73952539ca928ca519c2529ce5394213
-def w91 := mergeW 1 w13 w0
-def w92 := mergeW 0 w13 w3
-def b272 : ℕ := 0x128c2508c210ace91a4a32a4e7394a3394a7394a7194a32946328c211a5ad4b5274ada93a4eb4b56739ca95a4a949d293a56b48ce939d23295272a46318d232a4e7394a539d2529ca539ca528ce5194a31
-def b273 : ℕ := 0x12946108c2109ce949ce5394e939ce339ce339ce318ca3294a308c231a5ab5a5295ad294ada95a5294a56b49ceb59d673a4e74a5292a529394a9394a9294a52a52939ca749ca5394e719c6538ce519c651
-def b274 : ℕ := 0x10846108c2108c6528c653946518ce338ce338c6318ca30942308c2319527394a539ca54ad255a4a5294e729ce739ce739463294a50a525194a5194a5094a5294a518c2329ca51846719c6538ce518c651
-def w93 := mergeW 1 w18 w2
-def w94 := mergeW 1 w18 w5
-def w95 := mergeW 1 w18 w8
-def b275 : ℕ := 0x10946108c2108c6549ce52946518ce339ce339ce318ca3094a308c2319527394a549ca54a5a94a5294a52b494a739d6739463294a50a529394a9394a9294a5294a518c2349ca5394e719c6538ce519c631
-def b276 : ℕ := 0x12846108c2109ce928c65294e539ce338ce338c6318ca32942308c231a5a73a5294ad294a5254a4a529527294ab39ce73a4e7494a92a525194a5194a5094a52a4a539ca729ca51846719c6538ce518c631
-def b277 : ℕ := 0x118c6108c21094a7394a5394a5294e3394e3394a318ca31946308c2319d6739ce74a4e74ad675a4e739d2939ce939d2739ca5394a71a527294a7294a7194a529ca52946539ca528ca719c6538ce5194651
-def w96 := mergeW 1 w18 w4
-def w97 := mergeW 1 w18 w1
-def b278 : ℕ := 0x10846528c2109ce529ce93a46518ce738ce738c6739d270942328ca31a52b5a5293ad296ad295b5294a4eb4ad673aceb594e7294a52a5253a5253a5252a529494a518ca329d291946739ce939ce938ce53
-def w98 := mergeW 1 w28 w2
-def w99 := mergeW 1 w28 w5
-def w100 := mergeW 1 w28 w8
-def b279 : ℕ := 0x10846508c2109c6529c652a46518ce338ce738c6719ca30942328c231952b3a4a529d254a5294b525494a74a52739ceb394e7294a52a525195251a4a509525294a518c2329d251946739ce538ce518ce31
-def b280 : ℕ := 0x10846128c2108ce528ce92946518ce738ce338c6338ca70942308ca31a5275952929ca96a5254a4a92a4a72a5273ace739463294a50a5253a4a5395252a4a5294a518ca329ca91846719c6539ce538c633
-def b281 : ℕ := 0x10846318c21094a5294a739c6518ce538ce538c65294a50942318c6319d2949ce739ce75ad275ace739ce73a5273a4e9394a5294a51a52529ce529ce519ce5294a518c6329ce718c6729ca5394e528ca52
-def w101 := mergeW 1 w28 w4
-def w102 := mergeW 1 w28 w1
-def w103 := mergeW 0 w4 w29
-def b282 : ℕ := 0x12946318c210a5294a52729ce939ce539ce539ce529465294a318c631adad6ad6b4a56b5a5ab4ad6b5ad2959ceb5a5692a5294a5293a52949ce949ce939ce31a52939ce749ce739ce729ca3394e329ca32
-def w104 := mergeW 1 w4 w29
-def b283 : ℕ := 0x10946318c21094a54a52729c6518ce539ce539ce5294a5094a318c6319d2949ce749ce75a5ab4ad6b5ad2b59ce73a569394a5294a51a52949ce949ce939ce5294a518c6349ce739ce729ca5394e529ca32
-def b284 : ℕ := 0x12846318c210a529294a729ce539ce538ce538c65294a52942318c631ada94ad6b4ad6b5a5274ace739d2739ceb3a4e93a529494a93a52529ce529ce519ce52a4a539ce729ce718c6729ca5394e528ca32
-def w105 := mergeW 0 w29 w0
-def b285 : ℕ := 0x10946318c21094a54a52739c6518ce539ce539ce529465094a318c6319d2949ce73a4e75adab5ad6b5ad695a5273a569294a5294a51a52949ce949ce939ce3194a518c6349ce739ce729ca3394e329ca52
-def w106 := mergeW 0 w9 w29
-def b286 : ℕ := 0x12846318c210a529294a739ce539ce538ce538c65294652942318c631ada94ad6b5a56b5ad275ace739ce93a52b3a4e92a529494a93a52529ce529ce519ce31a4a539ce729ce718c6729ca3394e328ca52
-def w107 := mergeW 0 w4 w19
-def b287 : ℕ := 0x118c6528c210a5273a5292a4a3294e7394e7394a739d271946328ca31ad694ad6b3b56b6a56b4b56b5aced5a5292ad2b59d2938c673a5274a5274a5273a52949c63294e539d2929ca739ce939ce9394e33
-def w108 := mergeW 1 w4 w19
-def b288 : ℕ := 0x118c6508c210a4a73a4a52a4a5294e3394e7394a719ca31946328c2319d6b3ace73a5674a56b4b56759ce95a52939d2b39d29394a73a527295272a4a71952529ca52946539d2529ca739ce538ce5194e31
-def b289 : ℕ := 0x118c6128c210952739529294a5294e7394e3394a338ca71946308ca31ad6759d6b3a4eb6a5674a4eb3ace93a5293ad2739ca5394a71a5274a4a7495273a4a529ca5294e539ca928ca719c6539ce5394633
-def w109 := mergeW 0 w3 w19
-def b290 : ℕ := 0x118c6508c210a4a73a4a53a4a3294e3394e7394a719ca31946328c2319d694ace74a5674ad6b5b56759d295ace929d2b39d2938c673a527295272a4a71952529c632946539d2529ca739ce538ce5194e51
-def w110 := mergeW 0 w6 w19
-def b291 : ℕ := 0x118c6128c210952739529394a3294e7394e3394a338ca71946308ca31ad6949d6b4a4eb6ad675a4eb3ad2939d692ad2739ca538c671a5274a4a7495273a4a529c63294e539ca928ca719c6539ce5394653
-def b292 : ℕ := 0x108c6328c21094e539d2939c6318ce7394e5394a5394e70946318ca31a52749d293a4e96ad695ad2b4ad2b4a5672ad29494a528c651a5274a4e749d273a4e73946318ca339ce9294a729ca739ce7394a53
-def b293 : ℕ := 0x11846518c210a4e729ca73a4a3294e538ce738c6729ce51942328c631a5693ad294ad695ad295b52749ce94ad292a4eb49d2938c673a52529d252a4e519d2739c63294a529d271946739ce7394e728ce52
-def w111 := mergeW 0 w9 w22
-def b294 : ℕ := 0x11846528c210a52729ce93a4a3294e738ce738c6739d271942328ca31ad694ad6b3b56b6ad295b5294a4eb4ad692aceb59d2938c673a5253a5253a5252a52949c63294e529d291946739ce939ce938ce53
-def w112 := mergeW 0 w3 w22
-def b295 : ℕ := 0x11946508c210a4a74ace53a4a7294e339ce739ce719ca3194a328c2319d6d4ace73a5674adad5b5a96a56b6ace949d6b39d2939ce73a529395293a4a92952529ce72946549d253a4e739ce538ce519ce51
-def w113 := mergeW 0 w6 w22
-def b296 : ℕ := 0x11946128c210952749d69394a7294e739ce339ce338ca7194a308ca31ad6969d6b3a4eb6ada95a52d4b56b49d694ad6739ca539ce71a5295a4a9595294a4a529ce7294e549ca9394e719c6539ce539c653
-def w114 := mergeW 0 w6 w37
-def b297 : ℕ := 0x12946118c2109d2949d27394e939ce539ce339ce328c65294a308c631adab6a56b5a52b5ada95a52b4ad6949ceb5a5672a4e74a5292a52949ca9494e939ca31a52939ce749ca7394e719c63394e329c652
-def w115 := mergeW 0 w37 w0
-def b298 : ℕ := 0x10946518c2109ca54ad273a46518ce539ce739ce729ce5094a328c6319d2b4a4e73a5275adad5b5ab6ad6d6ace73a56b494e7294a52a52949d294a4e939d27394a518c6349d273a4e739ce7394e729ce52
-def w116 := mergeW 0 w9 w37
-def b299 : ℕ := 0x12846518c210ad2929ca73a4e539ce538ce738c6729ce52942328c631adab4b56b5b5ab5ad295b52749ce94aceb3a4eb4a56b494a94a52529d252a4e519d273a4a539ce729d271946739ce7394e728ce52
-def w117 := mergeW 0 w31 w3
-def b300 : ℕ := 0x12946308c210a4e94a4e539ce939ce339ce539ce519463294a318c231a5ad5ad295a5694adab5ad695a56959ceb59d692a5294a5293a529394e939ca9294e31a52939ca749ce539ce729ca338ce319ca51
-def w118 := mergeW 0 w9 w31
-def b301 : ℕ := 0x12846328c210a569294e939ce539ce738ce538c65394e72942318ca31b5a95adad5b56d6ad275ace93a4e939d6b3ace94a529494a93a5253a4e539d252a4e73a4a539d2729ce918c6729ca739ce738ca53
-def w119 := mergeW 0 w31 w0
-def b302 : ℕ := 0x10946328c21094e54a56939c6518ce739ce539ce5394e7094a318ca31a52959d293a4e96adab5ad6d5b56d59d673ad69494a5294a51a5295a4e959d294a4e7394a518ca349ce939ce729ca739ce739ca53
-def w120 := mergeW 0 w41 w0
-def b303 : ℕ := 0x108c6528c2109ce53a5293a46318ce7394e7394a739d270946328ca31a5294a5293ad296ad6b5b56b5aced5ad672ad2b594e728c652a5274a5274a5273a5294946318ca339d2929ca739ce939ce9394e53
-def w121 := mergeW 0 w6 w41
-def b304 : ℕ := 0x128c6128c2109d6939529394e739ce7394e3394a338ca72946308ca31b5a96a5ad5ad2d6ad675a4eb3ace939d6b4ad273a4e749ce92a5274a4a7495273a4a52a4e739d2739ca928ca719c6539ce5394653
-def w122 := mergeW 0 w41 w3
-def b305 : ℕ := 0x128c6508c210ace93a4a53a4e739ce3394e7394a719ca32946328c231a5ad4b5295ada94ad6b5b56759ce95aceb49d2b3a56b49ce94a527295272a4a7195252a4e739ca739d2529ca739ce538ce5194e51
-def b306 : ℕ := 0x129465184210ad274ad2729ce939ce529ce729ca729ce3294a328c630ad6f6b56b4b5695a5ad4adab6ad2d5a4eb59d2b4a56b3a4e74a4e949ce94a4e929ce72a52939ce749d273a4a7394e7394a7194e31
-def w123 := mergeW 0 w9 w30
-def b307 : ℕ := 0x128465184210ad2729ca729ce539ce528ce728c2729ce12942328c630ad6b4b56b4b5675a5294ad2749ca93a4ab394ab4a56b394674a4e529ce52a4e519ce71a4a539ce729d2719427394e7394a7084e30
-def w124 := mergeW 0 w6 w30
-def b308 : ℕ := 0x1294611842109d2749d2728ce939ce529ce329ca328c61294a308c630ad6b6a56b4a4e75a5a949d2b4ad29394ab595272a4e73a4e72a4e949c69494e919c631a52939ce749ca7394a719463394a3094630
-def b309 : ℕ := 0x1094651842109ca34ad2719c6518ce529ce729ca729ce3094a328c6309ceb4a4e73a4e559dad3adab6aced59ca739d2b494e7194632a4e949ce94a4e929ce7294a518c6349d273a4a7394e7394a7194e11
-def b310 : ℕ := 0x11942528c210a5273ad672a4a728ca739ca739ce739527194a328ca11ad6d6ad693b56b5a56d4b5ad5ad2f6a5274ad6959d29394e729d275a5295a4e749d2749ce728ce349d293a4e539ca929ce939ca33
-def w125 := mergeW 0 w6 w34
-def b311 : ℕ := 0x11942128c210952739d67294a7284a739ca339ce3384a7194a308ca11ad6969d672a4eb5a5694a52d3ad2b495254ad6539ca538ce719d275a4a9594e749ca329ce7284e149ca9394e519c2529ce539c233
-def w126 := mergeW 0 w9 w34
-def b312 : ℕ := 0x11842528c210a52719ce72a4a3284a738ca738c67395271942328ca11ad694ad672b56b5a4e94b52939cab4a5252ace959d2938c6719d233a5253a4e329d2749c63284e129d291946539ca929ce938ca33
-def b313 : ℕ := 0x11942508c210a4a73ace31a4a728ca339ca739ce7194a3194a328c2119d6d4ace52a56739d6d3b5a959ceb69ce749d6939d29394e729d27395293a46728d2329ce728c6349d253a4e539ca528ce519ca11
-def b314 : ℕ := 0x12942328c210a5693a56729ce9394a739ca539ce538ce7294a318ca11b5ad7adab4b56d5a56b4ad6d4ad2d59d295ad674a52949d2929d275a4e959ce749ce53a5293952549ce939ce529c6729ce739c633
-def w127 := mergeW 0 w25 w0
-def b315 : ℕ := 0x10942328c21094e53a56729c65184a739ca539ce5384e7094a318ca11a52959d272a4e95a56b4ad6d3ad2d595253ad65494a528ca519d275a4e959ce749ce3394a5184a149ce939ce529c2729ce739c233
-def w128 := mergeW 0 w25 w3
-def b316 : ℕ := 0x12942308c210a4e93a4e329ce9394a339ca539ce518463294a318c211a5ad5ad274a5693a56b4ad6939d29594a959d652a52949d2919d27394e939c6728ce31a529394a549ce539ce529c2328ce319c231
-def b317 : ℕ := 0x12842328c210a569194e719ce5394a738ca538c6538ce72942318ca11b5a95adab3b56d59ce73ace929ce9394e93ace74a52948ca929d233a4e539ce329ce53a4a53952529ce918c6529c6729ce738c613
-def b318 : ℕ := 0x128c65284210ad673a52929ce739ce7294e72946739d252946328ca30b56d6b5ad4bd6b6a56b4ad6b5aced4a52b4a4eb5a56b39ca74a4e74a4e74a5272a4e93a4e739d2739d2929c67394e939ca928ce32
-def w129 := mergeW 0 w20 w3
-def b319 : ℕ := 0x128c65084210ace73a4a529ce739ce3294e72942719ca12946328c230a56d4b5294ad674a56b4ad6759ca93a4ab494ab3a56b39c674a4e7294e72a4a7194e51a4e739ca739d2529c27394e538ca5084e30
-def w130 := mergeW 0 w20 w0
-def b320 : ℕ := 0x108c652842109ce33a52929c6318ce7294e72942739d250946328ca30a4e94a5292ace76a56b4ad6b5acad3a5272a4ab594e718c632a4e74a4e74a5271a4e93946318ca339d2929c27394e939ca9284e32
-def b321 : ℕ := 0x128c612842109d673952918ce739ce7294e32946338ca52946308ca30b5696a5ad3aceb69d6739ceb3aca929ceb4a4e73a4e739ca72a4e74a467495272a4651a4e739d2739ca928c671946539ca528c612
-def b322 : ℕ := 0x10946508c2109ce54ace53a46518ce339ce739ce719ca3094a328c231a52b5a5293ad294adad5b5a96a56b6ace739d6b394e7294a52a529395293a4a929525294a518ca349d253a4e739ce538ce519ce51
-def w131 := mergeW 1 w47 w2
-def w132 := mergeW 1 w6 w47
-def w133 := mergeW 1 w9 w47
-def w134 := mergeW 1 w5 w47
-def w135 := mergeW 1 w8 w47
-def b323 : ℕ := 0x12846128c2109d6929ce9394e539ce738ce338c6338ca72942308ca31b5ab5a5ad5ad2d6ad295a5294a4eb49d6b3ace73a4e7494a92a5253a4a5395252a4a52a4a539d2729ca91946719c6539ce538c653
-def w136 := mergeW 1 w44 w2
-def w137 := mergeW 1 w44 w0
-def w138 := mergeW 1 w44 w3
-def w139 := mergeW 1 w44 w5
-def w140 := mergeW 1 w44 w8
-def b324 : ℕ := 0x10946528c2109ce54ad692a46518ce739ce739ce739d27094a328ca31a52b5a5294ad296a5ad4b5ad6b52f6a5273ad6b594e7294a52a5295a5295a5294a529494a518ca349d293a4e739ce939ce939ce33
-def w141 := mergeW 1 w6 w73
-def b325 : ℕ := 0x10946328c21094e54a56929c6518ce739ce539ce5394e7094a318ca31a52959d294a4e96a5ab4ad6d5b52d59d273ad69494a5294a51a5295a4e959d294a4e7394a518ca349ce939ce729ca739ce739ca33
-def w142 := mergeW 1 w73 w3
-def b326 : ℕ := 0x10946518c2109ca54ad272a46518ce539ce739ce729ce5094a328c6319d2b4a4e74a5275a5ad4b5ab6ad2d6a4e73a56b494e7294a52a52949d294a4e939d27394a518c6349d273a4e739ce7394e729ce32
-def w143 := mergeW 1 w9 w73
-def b327 : ℕ := 0x108c6528c2109ce53a5292a46318ce7394e7394a739d270946328ca31a5294a5294ad296a56b4b56b5aced5a5272ad2b594e728c652a5274a5274a5273a5294946318ca339d2929ca739ce939ce9394e33
-def b328 : ℕ := 0x12946508c210ace94ace52a4e939ce339ce739ce719ca3294a328c231a5af5b5294ada94a5ad4b5a96a52b6a52b59d6b3a56b4a5294a529395293a4a9295252a52939ca749d253a4e739ce538ce519ce31
-def w144 := mergeW 1 w9 w67
-def b329 : ℕ := 0x128c6508c210ace93a4a52a4e739ce3394e7394a719ca32946328c231a5ad4b5294ada94a56b4b56759ce95a52b49d2b3a56b49ce94a527295272a4a7195252a4e739ca739d2529ca739ce538ce5194e31
-def w145 := mergeW 1 w67 w0
-def b330 : ℕ := 0x11946508c210a4a74ace52a4a7294e339ce739ce719ca3194a328c2319d6d4ace73a5674a5ad4b5a96a52b6a52949d6b39d2939ce73a529395293a4a92952529ce72946549d253a4e739ce538ce519ce31
-def w146 := mergeW 1 w67 w6
-def b331 : ℕ := 0x12946308c210a4e94a4e529ce939ce339ce539ce519463294a318c231a5ad5ad294a5694a5ab4ad695a52959d2b59d692a5294a5293a529394e939ca9294e31a52939ca749ce539ce729ca338ce319ca31
-def b332 : ℕ := 0x12946128c2109d6949d69294e939ce739ce339ce338ca7294a308ca31b5ab7a5ad4ad2d6a5a94a52d4b52b4a52b5ad673a4e74a5292a5295a4a9595294a4a52a52939d2749ca9394e719c6539ce539c633
-def w147 := mergeW 1 w74 w0
-def b333 : ℕ := 0x11946128c210952749d69294a7294e739ce339ce338ca7194a308ca31ad6969d6b3a4eb6a5a94a52d4b52b4a5294ad6739ca539ce71a5295a4a9595294a4a529ce7294e549ca9394e719c6539ce539c633
-def w148 := mergeW 1 w9 w74
-def b334 : ℕ := 0x128c6128c2109d6939529294e739ce7394e3394a338ca72946308ca31b5a96a5ad4ad2d6a5674a4eb3ace93a52b4ad273a4e749ce92a5274a4a7495273a4a52a4e739d2739ca928ca719c6539ce5394633
-def w149 := mergeW 1 w74 w3
-def b335 : ℕ := 0x12946118c2109d2949d27294e939ce539ce339ce328c65294a308c631adab6a56b4a52b5a5a94a52b4ad294a4eb5a5672a4e74a5292a52949ca9494e939ca31a52939ce749ca7394e719c63394e329c632
-def b336 : ℕ := 0x12846528c210ad6929ce92a4e539ce738ce738c6739d272942328ca31b5ab5b5ad4bdad6a5294b5294a52b4a52b3aceb5a56b494a94a5253a5253a5252a5294a4a539d2729d291946739ce939ce938ce33
-def w150 := mergeW 1 w68 w3
-def b337 : ℕ := 0x12846518c210ad2929ca72a4e539ce538ce738c6729ce52942328c631adab4b56b4b5ab5a5294b52749d294a4eb3a4eb4a56b494a94a52529d252a4e519d273a4a539ce729d271946739ce7394e728ce32
-def w151 := mergeW 1 w68 w6
-def b338 : ℕ := 0x12846328c210a569294e929ce539ce738ce538c65394e72942318ca31b5a95adad4b56d6a5274ace93a52939d2b3ace94a529494a93a5253a4e539d252a4e73a4a539d2729ce918c6729ca739ce738ca33
-def w152 := mergeW 1 w68 w0
-def b339 : ℕ := 0x11846528c210a52729ce92a4a3294e738ce738c6739d271942328ca31ad694ad6b3b56b6a5294b5294a52b4a5292aceb59d2938c673a5253a5253a5252a52949c63294e529d291946739ce939ce938ce33
-def b340 : ℕ := 0x11946528c210a5274ad692a4a7294e739ce739ce739d27194a328ca31ad6d6ad6b3b56b6a5ad4b5ad6b52f6a5294ad6b59d2939ce73a5295a5295a5294a52949ce7294e549d293a4e739ce939ce939ce33
-def b341 : ℕ := 0x11846528c210a52729ce92a4a3294e738ce738c6739d271942328ca31ad694ad6b2b56b6a5294b5294a4ab4a5292aceb59d2938c673a5253a5253a5252a52949c63294e529d291946739ce939ce938ce33
-def b342 : ℕ := 0x11946128c210952749d69294a7294e739ce339ce338ca7194a308ca31ad6969d6b2a4eb6a5a94a52d4b52b495294ad6739ca539ce71a5295a4a9595294a4a529ce7294e549ca9394e719c6539ce539c633
-def b343 : ℕ := 0x11946508c210a4a74ace52a4a7294e339ce739ce719ca3194a328c2319d6d4ace72a5674a5ad4b5a96a52b6a4a949d6b39d2939ce73a529395293a4a92952529ce72946549d253a4e739ce538ce519ce31
-def b344 : ℕ := 0x12946518c210ad294ad272a4e939ce539ce739ce729ce5294a328c631adaf6b56b4b5ab5a5ad4b5ab6ad2d6a4eb5a56b4a56b4a5294a52949d294a4e939d273a52939ce749d273a4e739ce7394e729ce32
-def b345 : ℕ := 0x12946118c2109d2949d27294e939ce539ce339ce328c65294a308c631adab6a56b4a52b5a5a94a52b4ad29494ab5a5672a4e74a5292a52949ca9494e939ca31a52939ce749ca7394e719c63394e329c632
-def b346 : ℕ := 0x12846518c210ad2929ca72a4e539ce538ce738c6729ce52942328c631adab4b56b4b5ab5a5294b52749ca94a4ab3a4eb4a56b494a94a52529d252a4e519d273a4a539ce729d271946739ce7394e728ce32
-def b347 : ℕ := 0x10946518c2109ca54ad272a46518ce539ce739ce729ce5094a328c6319d2b4a4e72a5275a5ad4b5ab6ad2d6a4a73a56b494e7294a52a52949d294a4e939d27394a518c6349d273a4e739ce7394e729ce32
-def b348 : ℕ := 0x12946328c210a5694a56929ce939ce739ce539ce5394e7294a318ca31b5ad7adad4b56d6a5ab4ad6d5b52d59d2b5ad694a5294a5293a5295a4e959d294a4e73a52939d2749ce939ce729ca739ce739ca33
-def b349 : ℕ := 0x12946308c210a4e94a4e529ce939ce339ce539ce519463294a318c231a5ad5ad294a5694a5ab4ad695a529594ab59d692a5294a5293a529394e939ca9294e31a52939ca749ce539ce729ca338ce319ca31
-def b350 : ℕ := 0x10946328c21094e54a56929c6518ce739ce539ce5394e7094a318ca31a52959d292a4e96a5ab4ad6d5b52d595273ad69494a5294a51a5295a4e959d294a4e7394a518ca349ce939ce729ca739ce739ca33
-def b351 : ℕ := 0x12846328c210a569294e929ce539ce738ce538c65394e72942318ca31b5a95adad4b56d6a5274ace93a4a93952b3ace94a529494a93a5253a4e539d252a4e73a4a539d2729ce918c6729ca739ce738ca33
-def b352 : ℕ := 0x128c6528c210ad693a5292a4e739ce7394e7394a739d272946328ca31b5ad6b5ad4bdad6a56b4b56b5aced5a52b4ad2b5a56b49ce94a5274a5274a5273a5294a4e739d2739d2929ca739ce939ce9394e33
-def b353 : ℕ := 0x108c6528c2109ce53a5292a46318ce7394e7394a739d270946328ca31a5294a5292ad296a56b4b56b5acad5a5272ad2b594e728c652a5274a5274a5273a5294946318ca339d2929ca739ce939ce9394e33
-def b354 : ℕ := 0x128c6508c210ace93a4a52a4e739ce3394e7394a719ca32946328c231a5ad4b5294ada94a56b4b56759ca95a4ab49d2b3a56b49ce94a527295272a4a7195252a4e739ca739d2529ca739ce538ce5194e31
-def b355 : ℕ := 0x128c6128c2109d6939529294e739ce7394e3394a338ca72946308ca31b5a96a5ad4ad2d6a5674a4eb3aca93952b4ad273a4e749ce92a5274a4a7495273a4a52a4e739d2739ca928ca719c6539ce5394633
-def b356 : ℕ := 0x10946128c2109ce549d693946518ce739ce339ce338ca7094a308ca31a52b5a5293ad296ada95a52d4b56b49d673ad67394e7294a52a5295a4a9595294a4a5294a518ca349ca9394e719c6539ce539c653
-def w153 := mergeW 1 w60 w5
-def b357 : ℕ := 0x1094612842109ce349d6928c6518ce729ce329ca338ca5094a308ca30a4eb5a5292ace76a5a949d2d4b52b395273a527394e7194632a4e95a469595293a465194a518ca349ca9394a71946539ca5294632
-def w154 := mergeW 0 w9 w3
-def b358 : ℕ := 0x12846508c210ace929ce53a4e539ce338ce738c6719ca32942328c231a5ab5b5295ada94ad295b5294a4eb4aceb39ceb3a56b494a94a525395253a4a5295252a4a539ca729d251946739ce538ce518ce51
-def w155 := mergeW 1 w154 w8
-def b359 : ℕ := 0x12842508c210ace919ce32a4e5394a338ca738c67194a32942328c211a5ab5b5274ada93a4e94b52939cab4a4a939ce93a56b48ca939d23395253a46328d232a4a5394a529d251946539ca528ce518ca31
-def b360 : ℕ := 0x10946528c2109ce54ad691a46518ce739ce739ce739d27094a328ca31a52b5a5293ad2969dad3b5ad6b4ef69ce73ad6b594e7294a52a5295a5295a5294a529494a518ca349d293a4e739ce939ce939ce13
-def b361 : ℕ := 0x12946508c210ace94ace51a4e939ce339ce739ce719ca3294a328c231a5af5b5293ada949dad3b5a96a4eb69ceb59d6b3a56b4a5294a529395293a4a9295252a52939ca749d253a4e739ce538ce519ce11
-def b362 : ℕ := 0x12946128c2109d6949d69194e939ce739ce339ce338ca7294a308ca31b5ab7a5ad3ad2d69da93a52d4b4eb49ceb5ad673a4e74a5292a5295a4a9595294a4a52a52939d2749ca9394e719c6539ce539c613
-def s0 : Snap := (b0, [w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s1 : Snap := (b1, [w10, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s2 : Snap := (b2, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w11])
-def s3 : Snap := (b3, [w10, w12, w1, w2, w3, w5, w6, w7, w8, w9])
-def s4 : Snap := (b4, [w10, w0, w1, w2, w3, w4, w6, w7, w8, w9])
-def s5 : Snap := (b5, [w10, w0, w1, w2, w3, w5, w6, w7, w13, w8, w9])
-def s6 : Snap := (b6, [w10, w0, w1, w2, w14, w3, w5, w6, w7, w8, w9])
-def s7 : Snap := (b7, [w10, w0, w1, w2, w3, w5, w15, w6, w7, w8, w9])
-def s8 : Snap := (b8, [w16, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s9 : Snap := (b9, [w10, w0, w1, w2, w17, w3, w5, w6, w7, w8, w9])
-def s10 : Snap := (b10, [w10, w0, w1, w2, w3, w5, w6, w7, w8, w9, w11])
-def s11 : Snap := (b11, [w10, w0, w1, w2, w3, w5, w6, w7, w8, w9, w18])
-def s12 : Snap := (b12, [w10, w19, w1, w2, w3, w5, w6, w7, w8, w9])
-def s13 : Snap := (b12, [w10, w0, w1, w2, w3, w20, w6, w7, w8, w9])
-def s14 : Snap := (b13, [w10, w21, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s15 : Snap := (b14, [w10, w12, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s16 : Snap := (b4, [w22, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s17 : Snap := (b15, [w0, w1, w2, w3, w23, w5, w6, w7, w8, w9])
-def s18 : Snap := (b3, [w24, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s19 : Snap := (b16, [w10, w0, w1, w2, w3, w5, w25, w6, w7, w8, w9])
-def s20 : Snap := (b17, [w0, w1, w2, w3, w26, w5, w6, w7, w8, w9])
-def s21 : Snap := (b18, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w27])
-def s22 : Snap := (b19, [w0, w1, w2, w3, w26, w5, w15, w7, w8, w9])
-def s23 : Snap := (b20, [w0, w1, w2, w3, w26, w4, w6, w7, w8, w9])
-def s24 : Snap := (b21, [w0, w1, w2, w17, w3, w26, w5, w6, w7, w8, w9])
-def s25 : Snap := (b22, [w0, w1, w2, w14, w3, w26, w5, w6, w7, w8, w9])
-def s26 : Snap := (b23, [w12, w0, w1, w2, w3, w26, w5, w6, w7, w8, w9])
-def s27 : Snap := (b24, [w0, w1, w2, w3, w26, w5, w6, w7, w13, w8, w9])
-def s28 : Snap := (b25, [w0, w1, w2, w3, w26, w5, w6, w7, w8, w9, w27])
-def s29 : Snap := (b26, [w0, w1, w2, w3, w26, w5, w6, w7, w8, w9, w28])
-def s30 : Snap := (b27, [w0, w1, w2, w29, w3, w26, w5, w7, w8, w9])
-def s31 : Snap := (b27, [w0, w1, w2, w30, w3, w26, w6, w7, w8, w9])
-def s32 : Snap := (b28, [w21, w0, w1, w2, w3, w26, w5, w6, w7, w8, w9])
-def s33 : Snap := (b29, [w0, w1, w2, w3, w26, w5, w15, w6, w7, w8, w9])
-def s34 : Snap := (b20, [w0, w1, w2, w3, w31, w5, w6, w7, w8, w9])
-def s35 : Snap := (b30, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w32])
-def s36 : Snap := (b19, [w0, w1, w2, w3, w33, w5, w6, w7, w8, w9])
-def s37 : Snap := (b16, [w34, w0, w1, w2, w3, w26, w5, w6, w7, w8, w9])
-def s38 : Snap := (b31, [w0, w1, w2, w17, w3, w5, w6, w7, w8, w9])
-def s39 : Snap := (b32, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w35])
-def s40 : Snap := (b33, [w12, w0, w1, w2, w17, w5, w6, w7, w8, w9])
-def s41 : Snap := (b34, [w0, w1, w2, w17, w3, w4, w5, w6, w7, w9])
-def s42 : Snap := (b35, [w21, w0, w1, w2, w17, w3, w5, w6, w7, w8, w9])
-def s43 : Snap := (b36, [w0, w1, w2, w17, w3, w5, w15, w6, w7, w8, w9])
-def s44 : Snap := (b37, [w0, w1, w2, w36, w3, w5, w6, w7, w8, w9])
-def s45 : Snap := (b38, [w0, w1, w2, w17, w3, w5, w6, w7, w8, w9, w35])
-def s46 : Snap := (b39, [w0, w1, w2, w17, w3, w5, w6, w7, w8, w9, w28])
-def s47 : Snap := (b40, [w0, w1, w2, w29, w17, w5, w6, w7, w8, w9])
-def s48 : Snap := (b40, [w0, w1, w2, w17, w3, w5, w25, w6, w7, w9])
-def s49 : Snap := (b41, [w0, w1, w2, w17, w14, w3, w5, w6, w7, w8, w9])
-def s50 : Snap := (b42, [w12, w0, w1, w2, w17, w3, w5, w6, w7, w8, w9])
-def s51 : Snap := (b34, [w0, w1, w2, w37, w3, w5, w6, w7, w8, w9])
-def s52 : Snap := (b43, [w0, w1, w2, w3, w38, w5, w6, w7, w8, w9])
-def s53 : Snap := (b33, [w39, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s54 : Snap := (b44, [w0, w1, w2, w17, w3, w20, w5, w6, w7, w8, w9])
-def s55 : Snap := (b45, [w0, w1, w2, w3, w5, w6, w7, w13, w8, w9])
-def s56 : Snap := (b46, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w40])
-def s57 : Snap := (b47, [w0, w1, w2, w3, w5, w15, w6, w7, w13, w8])
-def s58 : Snap := (b48, [w0, w1, w2, w3, w4, w5, w6, w7, w13, w9])
-def s59 : Snap := (b49, [w21, w0, w1, w2, w3, w5, w6, w7, w13, w8, w9])
-def s60 : Snap := (b50, [w12, w0, w1, w2, w3, w5, w6, w7, w13, w8, w9])
-def s61 : Snap := (b51, [w0, w1, w2, w3, w5, w6, w7, w13, w8, w9, w40])
-def s62 : Snap := (b52, [w0, w1, w2, w3, w5, w6, w7, w13, w8, w9, w18])
-def s63 : Snap := (b53, [w19, w0, w1, w2, w3, w5, w6, w7, w13, w8])
-def s64 : Snap := (b53, [w34, w0, w1, w2, w3, w5, w6, w7, w13, w9])
-def s65 : Snap := (b54, [w0, w1, w2, w14, w3, w5, w6, w7, w13, w8, w9])
-def s66 : Snap := (b55, [w0, w1, w2, w3, w5, w15, w6, w7, w13, w8, w9])
-def s67 : Snap := (b48, [w0, w1, w2, w3, w41, w5, w6, w7, w8, w9])
-def s68 : Snap := (b56, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w42])
-def s69 : Snap := (b47, [w0, w1, w2, w3, w5, w43, w6, w7, w8, w9])
-def s70 : Snap := (b44, [w0, w1, w2, w30, w3, w5, w6, w7, w13, w8, w9])
-def s71 : Snap := (b57, [w12, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s72 : Snap := (b58, [w12, w21, w1, w2, w3, w5, w6, w7, w8, w9])
-def s73 : Snap := (b59, [w12, w0, w1, w2, w14, w5, w6, w7, w8, w9])
-def s74 : Snap := (b60, [w12, w0, w1, w2, w3, w5, w15, w6, w7, w8, w9])
-def s75 : Snap := (b9, [w12, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s76 : Snap := (b35, [w12, w0, w1, w2, w3, w5, w25, w6, w7, w8, w9])
-def s77 : Snap := (b6, [w12, w0, w1, w2, w3, w20, w5, w6, w7, w8, w9])
-def s78 : Snap := (b61, [w12, w21, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s79 : Snap := (b62, [w12, w0, w1, w2, w14, w3, w5, w6, w7, w8, w9])
-def s80 : Snap := (b63, [w12, w0, w1, w2, w3, w5, w6, w7, w8, w9, w44])
-def s81 : Snap := (b58, [w45, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s82 : Snap := (b59, [w46, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s83 : Snap := (b64, [w0, w1, w2, w3, w5, w15, w6, w7, w8, w9])
-def s84 : Snap := (b65, [w21, w0, w1, w2, w3, w5, w15, w7, w8, w9])
-def s85 : Snap := (b66, [w0, w1, w2, w14, w3, w5, w15, w6, w7, w8])
-def s86 : Snap := (b24, [w0, w1, w2, w3, w4, w5, w15, w6, w7, w8, w9])
-def s87 : Snap := (b22, [w0, w1, w2, w30, w3, w5, w15, w6, w7, w8, w9])
-def s88 : Snap := (b49, [w34, w0, w1, w2, w3, w5, w15, w6, w7, w8, w9])
-def s89 : Snap := (b67, [w21, w0, w1, w2, w3, w5, w15, w6, w7, w8, w9])
-def s90 : Snap := (b68, [w0, w1, w2, w14, w3, w5, w15, w6, w7, w8, w9])
-def s91 : Snap := (b69, [w0, w1, w2, w3, w47, w5, w15, w6, w7, w8, w9])
-def s92 : Snap := (b65, [w48, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s93 : Snap := (b66, [w0, w1, w2, w49, w3, w5, w6, w7, w8, w9])
-def s94 : Snap := (b70, [w21, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s95 : Snap := (b60, [w21, w0, w1, w2, w14, w3, w5, w6, w7, w8, w9])
-def s96 : Snap := (b16, [w21, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s97 : Snap := (b71, [w0, w1, w2, w3, w50, w5, w6, w7, w8, w9])
-def s98 : Snap := (b72, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w51])
-def s99 : Snap := (b73, [w34, w21, w1, w2, w3, w5, w6, w7, w8, w9])
-def s100 : Snap := (b73, [w21, w0, w1, w2, w3, w5, w25, w7, w8, w9])
-def s101 : Snap := (b23, [w21, w0, w1, w2, w30, w3, w5, w6, w7, w8, w9])
-def s102 : Snap := (b74, [w0, w1, w2, w14, w3, w5, w6, w7, w8, w9])
-def s103 : Snap := (b44, [w0, w1, w2, w14, w3, w4, w5, w6, w7, w8, w9])
-def s104 : Snap := (b75, [w0, w1, w2, w3, w52, w5, w6, w7, w8, w9])
-def s105 : Snap := (b76, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w53])
-def s106 : Snap := (b77, [w0, w1, w2, w30, w14, w5, w6, w7, w8, w9])
-def s107 : Snap := (b77, [w0, w1, w2, w14, w3, w20, w5, w6, w7, w8])
-def s108 : Snap := (b50, [w34, w0, w1, w2, w14, w3, w5, w6, w7, w8, w9])
-def s109 : Snap := (b78, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s110 : Snap := (b79, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w18])
-def s111 : Snap := (b80, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w28])
-def s112 : Snap := (b21, [w0, w1, w2, w29, w3, w4, w5, w6, w7, w8, w9])
-def s113 : Snap := (b81, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w18])
-def s114 : Snap := (b82, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w28, w18])
-def s115 : Snap := (b83, [w54, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s116 : Snap := (b84, [w0, w1, w2, w3, w5, w6, w7, w8, w55, w9])
-def s117 : Snap := (b85, [w19, w0, w1, w2, w3, w5, w6, w7, w8, w9, w18])
-def s118 : Snap := (b86, [w34, w0, w1, w2, w3, w5, w6, w7, w8, w9, w18])
-def s119 : Snap := (b87, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w28])
-def s120 : Snap := (b88, [w0, w1, w2, w56, w3, w5, w6, w7, w8, w9])
-def s121 : Snap := (b89, [w0, w1, w2, w3, w5, w57, w6, w7, w8, w9])
-def s122 : Snap := (b90, [w0, w1, w2, w29, w3, w5, w6, w7, w8, w9, w28])
-def s123 : Snap := (b91, [w0, w1, w2, w30, w3, w5, w6, w7, w8, w9, w28])
-def s124 : Snap := (b92, [w0, w1, w2, w29, w3, w5, w6, w7, w8, w9])
-def s125 : Snap := (b23, [w10, w0, w1, w2, w29, w3, w5, w6, w7, w8, w9])
-def s126 : Snap := (b36, [w0, w1, w2, w29, w3, w5, w6, w7, w13, w8, w9])
-def s127 : Snap := (b93, [w21, w0, w1, w2, w29, w3, w5, w6, w7, w8, w9])
-def s128 : Snap := (b94, [w0, w1, w2, w29, w14, w3, w5, w6, w7, w8, w9])
-def s129 : Snap := (b60, [w19, w0, w1, w2, w29, w3, w5, w6, w7, w8, w9])
-def s130 : Snap := (b95, [w12, w0, w1, w2, w29, w3, w5, w6, w7, w8, w9])
-def s131 : Snap := (b96, [w19, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s132 : Snap := (b5, [w19, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s133 : Snap := (b7, [w19, w0, w1, w2, w3, w26, w5, w6, w7, w8, w9])
-def s134 : Snap := (b50, [w19, w0, w1, w2, w17, w3, w5, w6, w7, w8, w9])
-def s135 : Snap := (b97, [w19, w21, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s136 : Snap := (b98, [w19, w0, w1, w2, w14, w3, w5, w6, w7, w8, w9])
-def s137 : Snap := (b99, [w12, w19, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s138 : Snap := (b100, [w0, w1, w2, w30, w3, w5, w6, w7, w8, w9])
-def s139 : Snap := (b9, [w34, w0, w1, w2, w30, w3, w5, w6, w7, w8, w9])
-def s140 : Snap := (b101, [w34, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s141 : Snap := (b102, [w0, w1, w2, w3, w5, w25, w6, w7, w8, w9])
-def s142 : Snap := (b103, [w0, w1, w2, w3, w5, w25, w6, w7, w8, w9, w28])
-def s143 : Snap := (b36, [w0, w1, w2, w14, w3, w5, w25, w6, w7, w8, w9])
-def s144 : Snap := (b24, [w0, w1, w2, w3, w20, w5, w25, w6, w7, w8, w9])
-def s145 : Snap := (b104, [w0, w1, w2, w3, w20, w5, w6, w7, w8, w9])
-def s146 : Snap := (b105, [w0, w1, w2, w3, w20, w5, w6, w7, w8, w9, w18])
-def s147 : Snap := (b7, [w21, w0, w1, w2, w3, w20, w5, w6, w7, w8, w9])
-def s148 : Snap := (b106, [w0, w1, w2, w3, w47, w5, w6, w7, w8, w9])
-def s149 : Snap := (b106, [w0, w58, w2, w3, w5, w6, w7, w8, w9])
-def s150 : Snap := (b107, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w44])
-def s151 : Snap := (b107, [w0, w1, w2, w3, w5, w6, w59, w8, w9])
-def s152 : Snap := (b108, [w0, w1, w2, w3, w5, w6, w60, w7, w8, w9])
-def s153 : Snap := (b109, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s154 : Snap := (b110, [w10, w0, w1, w2, w3, w4, w6, w7, w8, w9])
-def s155 : Snap := (b111, [w10, w12, w1, w2, w3, w4, w6, w7, w8, w9])
-def s156 : Snap := (b111, [w10, w0, w1, w2, w17, w3, w4, w6, w7, w9])
-def s157 : Snap := (b112, [w10, w0, w1, w2, w3, w4, w6, w7, w13, w9])
-def s158 : Snap := (b113, [w10, w0, w1, w2, w3, w4, w6, w7, w8, w9, w11])
-def s159 : Snap := (b114, [w10, w0, w1, w2, w14, w3, w4, w6, w7, w8, w9])
-def s160 : Snap := (b115, [w16, w0, w1, w2, w3, w4, w6, w7, w8, w9])
-def s161 : Snap := (b112, [w10, w19, w1, w2, w3, w4, w6, w7, w8, w9])
-def s162 : Snap := (b116, [w10, w0, w1, w2, w3, w4, w6, w7, w8, w9, w18])
-def s163 : Snap := (b117, [w10, w0, w1, w2, w3, w61, w6, w7, w8, w9])
-def s164 : Snap := (b118, [w10, w0, w1, w2, w3, w4, w15, w6, w7, w8, w9])
-def s165 : Snap := (b119, [w0, w1, w2, w3, w61, w6, w7, w8, w9])
-def s166 : Snap := (b120, [w10, w21, w0, w1, w2, w3, w4, w6, w7, w8, w9])
-def s167 : Snap := (b121, [w16, w10, w0, w1, w2, w3, w4, w6, w7, w8, w9])
-def s168 : Snap := (b122, [w10, w0, w1, w2, w3, w23, w4, w6, w7, w8, w9])
-def s169 : Snap := (b112, [w10, w0, w1, w2, w3, w41, w6, w7, w8, w9])
-def s170 : Snap := (b123, [w10, w0, w1, w2, w3, w4, w6, w7, w13, w8, w9])
-def s171 : Snap := (b124, [w10, w0, w1, w2, w3, w4, w6, w7, w8, w9, w44])
-def s172 : Snap := (b125, [w10, w0, w1, w2, w17, w3, w4, w6, w7, w8, w9])
-def s173 : Snap := (b126, [w10, w12, w0, w1, w2, w3, w4, w6, w7, w8, w9])
-def s174 : Snap := (b127, [w0, w1, w2, w3, w4, w61, w6, w7, w8, w9])
-def s175 : Snap := (b128, [w10, w0, w1, w2, w3, w41, w4, w6, w7, w8, w9])
-def s176 : Snap := (b129, [w10, w0, w1, w2, w3, w31, w4, w6, w7, w8, w9])
-def s177 : Snap := (b130, [w10, w19, w0, w1, w2, w3, w4, w6, w7, w8, w9])
-def s178 : Snap := (b131, [w10, w0, w1, w2, w29, w3, w4, w6, w7, w8, w9])
-def s179 : Snap := (b132, [w10, w0, w1, w2, w37, w3, w4, w6, w7, w8, w9])
-def s180 : Snap := (b133, [w10, w0, w1, w2, w3, w4, w61, w6, w7, w8, w9])
-def s181 : Snap := (b134, [w0, w1, w2, w3, w26, w4, w6, w7, w8, w9])
-def s182 : Snap := (b135, [w0, w1, w2, w3, w26, w4, w15, w7, w8, w9])
-def s183 : Snap := (b135, [w0, w1, w2, w3, w26, w4, w6, w7, w13, w9])
-def s184 : Snap := (b136, [w0, w1, w2, w17, w3, w26, w4, w6, w7, w9])
-def s185 : Snap := (b137, [w0, w1, w2, w3, w26, w4, w6, w7, w8, w9, w27])
-def s186 : Snap := (b138, [w0, w1, w2, w14, w3, w26, w4, w6, w7, w8, w9])
-def s187 : Snap := (b136, [w0, w1, w2, w29, w3, w26, w4, w7, w8, w9])
-def s188 : Snap := (b139, [w0, w1, w2, w3, w26, w4, w6, w7, w8, w9, w28])
-def s189 : Snap := (b140, [w0, w1, w2, w3, w26, w62, w6, w7, w8, w9])
-def s190 : Snap := (b131, [w12, w0, w1, w2, w3, w26, w4, w6, w7, w8, w9])
-def s191 : Snap := (b141, [w0, w1, w2, w3, w62, w6, w7, w8, w9])
-def s192 : Snap := (b142, [w21, w0, w1, w2, w3, w26, w4, w6, w7, w8, w9])
-def s193 : Snap := (b143, [w16, w0, w1, w2, w3, w26, w4, w6, w7, w8, w9])
-def s194 : Snap := (b144, [w0, w1, w2, w3, w26, w4, w6, w7, w8, w9, w32])
-def s195 : Snap := (b136, [w0, w1, w2, w37, w3, w26, w6, w7, w8, w9])
-def s196 : Snap := (b145, [w0, w1, w2, w17, w3, w26, w4, w6, w7, w8, w9])
-def s197 : Snap := (b146, [w0, w1, w2, w3, w47, w26, w4, w6, w7, w8, w9])
-def s198 : Snap := (b147, [w0, w1, w2, w3, w26, w4, w6, w7, w13, w8, w9])
-def s199 : Snap := (b148, [w0, w1, w2, w3, w26, w4, w15, w6, w7, w8, w9])
-def s200 : Snap := (b149, [w0, w1, w2, w3, w4, w62, w6, w7, w8, w9])
-def s201 : Snap := (b150, [w0, w1, w2, w37, w3, w26, w4, w6, w7, w8, w9])
-def s202 : Snap := (b129, [w22, w0, w1, w2, w3, w26, w4, w6, w7, w8, w9])
-def s203 : Snap := (b151, [w0, w1, w2, w29, w3, w26, w4, w6, w7, w8, w9])
-def s204 : Snap := (b118, [w19, w0, w1, w2, w3, w26, w4, w6, w7, w8, w9])
-def s205 : Snap := (b152, [w0, w1, w2, w3, w26, w41, w4, w6, w7, w8, w9])
-def s206 : Snap := (b153, [w0, w1, w2, w3, w26, w4, w62, w6, w7, w8, w9])
-def s207 : Snap := (b154, [w0, w1, w2, w17, w3, w4, w5, w6, w7, w9])
-def s208 : Snap := (b111, [w12, w0, w1, w2, w17, w4, w5, w6, w7, w9])
-def s209 : Snap := (b155, [w0, w1, w2, w17, w3, w4, w5, w6, w7, w9, w35])
-def s210 : Snap := (b131, [w21, w0, w1, w2, w17, w3, w4, w5, w6, w7, w9])
-def s211 : Snap := (b156, [w0, w1, w2, w36, w3, w4, w5, w6, w7, w9])
-def s212 : Snap := (b136, [w0, w1, w2, w29, w17, w4, w5, w6, w7, w9])
-def s213 : Snap := (b157, [w0, w1, w2, w17, w3, w4, w5, w6, w7, w9, w28])
-def s214 : Snap := (b158, [w0, w1, w2, w17, w3, w5, w6, w7, w63, w9])
-def s215 : Snap := (b138, [w0, w1, w2, w17, w3, w4, w5, w15, w6, w7, w9])
-def s216 : Snap := (b159, [w0, w1, w2, w3, w5, w6, w7, w63, w9])
-def s217 : Snap := (b160, [w0, w1, w2, w17, w14, w3, w4, w5, w6, w7, w9])
-def s218 : Snap := (b161, [w0, w1, w2, w36, w17, w3, w4, w5, w6, w7, w9])
-def s219 : Snap := (b162, [w0, w1, w2, w17, w3, w38, w4, w5, w6, w7, w9])
-def s220 : Snap := (b136, [w0, w1, w2, w17, w3, w31, w5, w6, w7, w9])
-def s221 : Snap := (b163, [w0, w1, w2, w17, w3, w26, w4, w5, w6, w7, w9])
-def s222 : Snap := (b164, [w0, w1, w2, w17, w3, w4, w5, w6, w7, w9, w44])
-def s223 : Snap := (b165, [w10, w0, w1, w2, w17, w3, w4, w5, w6, w7, w9])
-def s224 : Snap := (b166, [w12, w0, w1, w2, w17, w3, w4, w5, w6, w7, w9])
-def s225 : Snap := (b167, [w0, w1, w2, w3, w4, w5, w6, w7, w63, w9])
-def s226 : Snap := (b150, [w0, w1, w2, w17, w3, w31, w4, w5, w6, w7, w9])
-def s227 : Snap := (b168, [w0, w1, w2, w17, w3, w41, w4, w5, w6, w7, w9])
-def s228 : Snap := (b169, [w0, w1, w2, w29, w17, w3, w4, w5, w6, w7, w9])
-def s229 : Snap := (b114, [w19, w0, w1, w2, w17, w3, w4, w5, w6, w7, w9])
-def s230 : Snap := (b132, [w22, w0, w1, w2, w17, w3, w4, w5, w6, w7, w9])
-def s231 : Snap := (b170, [w0, w1, w2, w17, w3, w4, w5, w6, w7, w63, w9])
-def s232 : Snap := (b171, [w0, w1, w2, w3, w4, w5, w6, w7, w13, w9])
-def s233 : Snap := (b135, [w0, w1, w2, w3, w4, w5, w15, w6, w7, w13])
-def s234 : Snap := (b172, [w0, w1, w2, w3, w4, w5, w6, w7, w13, w9, w40])
-def s235 : Snap := (b118, [w21, w0, w1, w2, w3, w4, w5, w6, w7, w13, w9])
-def s236 : Snap := (b112, [w19, w0, w1, w2, w3, w4, w5, w6, w7, w13])
-def s237 : Snap := (b173, [w0, w1, w2, w3, w4, w5, w6, w7, w13, w9, w18])
-def s238 : Snap := (b174, [w0, w1, w2, w3, w5, w6, w7, w13, w64, w9])
-def s239 : Snap := (b114, [w12, w0, w1, w2, w3, w4, w5, w6, w7, w13, w9])
-def s240 : Snap := (b175, [w0, w1, w2, w3, w5, w6, w7, w64, w9])
-def s241 : Snap := (b176, [w0, w1, w2, w14, w3, w4, w5, w6, w7, w13, w9])
-def s242 : Snap := (b177, [w0, w1, w2, w36, w3, w4, w5, w6, w7, w13, w9])
-def s243 : Snap := (b178, [w0, w1, w2, w3, w4, w5, w6, w7, w13, w9, w42])
-def s244 : Snap := (b112, [w22, w0, w1, w2, w3, w5, w6, w7, w13, w9])
-def s245 : Snap := (b179, [w10, w0, w1, w2, w3, w4, w5, w6, w7, w13, w9])
-def s246 : Snap := (b180, [w0, w1, w2, w3, w47, w4, w5, w6, w7, w13, w9])
-def s247 : Snap := (b181, [w0, w1, w2, w3, w26, w4, w5, w6, w7, w13, w9])
-def s248 : Snap := (b182, [w0, w1, w2, w3, w4, w5, w15, w6, w7, w13, w9])
-def s249 : Snap := (b183, [w0, w1, w2, w3, w4, w5, w6, w7, w64, w9])
-def s250 : Snap := (b128, [w22, w0, w1, w2, w3, w4, w5, w6, w7, w13, w9])
-def s251 : Snap := (b168, [w0, w1, w2, w37, w3, w4, w5, w6, w7, w13, w9])
-def s252 : Snap := (b184, [w19, w0, w1, w2, w3, w4, w5, w6, w7, w13, w9])
-def s253 : Snap := (b138, [w0, w1, w2, w29, w3, w4, w5, w6, w7, w13, w9])
-def s254 : Snap := (b152, [w0, w1, w2, w3, w31, w4, w5, w6, w7, w13, w9])
-def s255 : Snap := (b185, [w0, w1, w2, w3, w4, w5, w6, w7, w13, w64, w9])
-def s256 : Snap := (b115, [w21, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s257 : Snap := (b186, [w0, w1, w2, w3, w4, w5, w6, w7, w9, w65])
-def s258 : Snap := (b187, [w21, w0, w1, w2, w3, w4, w5, w6, w7, w9, w65])
-def s259 : Snap := (b188, [w0, w1, w2, w3, w5, w66, w6, w7, w8, w9])
-def s260 : Snap := (b131, [w12, w21, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s261 : Snap := (b118, [w21, w0, w1, w2, w3, w4, w5, w15, w7, w8, w9])
-def s262 : Snap := (b189, [w0, w1, w2, w3, w50, w4, w5, w6, w7, w8, w9])
-def s263 : Snap := (b190, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w51])
-def s264 : Snap := (b191, [w21, w0, w1, w2, w14, w3, w4, w5, w6, w7, w8, w9])
-def s265 : Snap := (b192, [w16, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s266 : Snap := (b193, [w16, w21, w0, w1, w2, w3, w4, w6, w7, w8, w9])
-def s267 : Snap := (b131, [w45, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s268 : Snap := (b118, [w48, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s269 : Snap := (b194, [w21, w0, w1, w2, w3, w5, w6, w7, w8, w67, w9])
-def s270 : Snap := (b195, [w21, w0, w1, w2, w3, w5, w6, w7, w8, w9, w68])
-def s271 : Snap := (b120, [w22, w21, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s272 : Snap := (b142, [w21, w0, w1, w2, w3, w31, w5, w6, w7, w8, w9])
-def s273 : Snap := (b131, [w21, w0, w1, w2, w37, w3, w5, w6, w7, w8, w9])
-def s274 : Snap := (b118, [w21, w0, w1, w2, w3, w41, w5, w6, w7, w8, w9])
-def s275 : Snap := (b196, [w0, w1, w2, w3, w4, w5, w66, w6, w7, w8, w9])
-def s276 : Snap := (b115, [w69, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s277 : Snap := (b197, [w21, w0, w1, w2, w3, w50, w4, w5, w6, w7, w8, w9])
-def s278 : Snap := (b198, [w21, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w51])
-def s279 : Snap := (b199, [w12, w21, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s280 : Snap := (b200, [w21, w0, w1, w2, w3, w4, w5, w15, w6, w7, w8, w9])
-def s281 : Snap := (b201, [w21, w0, w1, w2, w17, w3, w4, w5, w6, w7, w8, w9])
-def s282 : Snap := (b202, [w21, w0, w1, w2, w3, w4, w5, w6, w7, w13, w8, w9])
-def s283 : Snap := (b203, [w70, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s284 : Snap := (b203, [w34, w21, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s285 : Snap := (b203, [w21, w0, w1, w2, w3, w4, w5, w25, w7, w8, w9])
-def s286 : Snap := (b204, [w21, w0, w1, w2, w29, w3, w4, w5, w6, w7, w8, w9])
-def s287 : Snap := (b156, [w0, w1, w2, w14, w3, w4, w5, w6, w7, w8, w9])
-def s288 : Snap := (b205, [w0, w1, w2, w3, w4, w6, w7, w8, w9, w71])
-def s289 : Snap := (b206, [w0, w1, w2, w14, w3, w4, w6, w7, w8, w9, w71])
-def s290 : Snap := (b207, [w0, w1, w2, w3, w5, w6, w7, w8, w72, w9])
-def s291 : Snap := (b114, [w12, w0, w1, w2, w14, w4, w5, w6, w7, w8, w9])
-def s292 : Snap := (b138, [w0, w1, w2, w14, w3, w4, w5, w15, w6, w7, w8])
-def s293 : Snap := (b208, [w0, w1, w2, w3, w52, w4, w5, w6, w7, w8, w9])
-def s294 : Snap := (b209, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w53])
-def s295 : Snap := (b210, [w0, w1, w2, w36, w3, w4, w5, w6, w7, w8, w9])
-def s296 : Snap := (b211, [w0, w1, w2, w36, w14, w3, w4, w5, w6, w7, w9])
-def s297 : Snap := (b114, [w46, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s298 : Snap := (b138, [w0, w1, w2, w49, w3, w4, w5, w6, w7, w8, w9])
-def s299 : Snap := (b212, [w0, w1, w2, w14, w3, w5, w73, w6, w7, w8, w9])
-def s300 : Snap := (b213, [w0, w1, w2, w14, w3, w5, w6, w74, w7, w8, w9])
-def s301 : Snap := (b160, [w0, w1, w2, w37, w14, w3, w5, w6, w7, w8, w9])
-def s302 : Snap := (b176, [w0, w1, w2, w14, w3, w41, w5, w6, w7, w8, w9])
-def s303 : Snap := (b114, [w22, w0, w1, w2, w14, w3, w5, w6, w7, w8, w9])
-def s304 : Snap := (b138, [w0, w1, w2, w14, w3, w31, w5, w6, w7, w8, w9])
-def s305 : Snap := (b214, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w72, w9])
-def s306 : Snap := (b156, [w0, w1, w2, w75, w3, w5, w6, w7, w8, w9])
-def s307 : Snap := (b215, [w0, w1, w2, w14, w3, w52, w4, w5, w6, w7, w8, w9])
-def s308 : Snap := (b216, [w0, w1, w2, w14, w3, w4, w5, w6, w7, w8, w9, w53])
-def s309 : Snap := (b217, [w12, w0, w1, w2, w14, w3, w4, w5, w6, w7, w8, w9])
-def s310 : Snap := (b218, [w0, w1, w2, w14, w3, w4, w5, w15, w6, w7, w8, w9])
-def s311 : Snap := (b219, [w10, w0, w1, w2, w14, w3, w4, w5, w6, w7, w8, w9])
-def s312 : Snap := (b220, [w0, w1, w2, w14, w3, w26, w4, w5, w6, w7, w8, w9])
-def s313 : Snap := (b221, [w0, w1, w2, w76, w3, w4, w5, w6, w7, w8, w9])
-def s314 : Snap := (b221, [w0, w1, w2, w30, w14, w4, w5, w6, w7, w8, w9])
-def s315 : Snap := (b221, [w0, w1, w2, w14, w3, w4, w20, w5, w6, w7, w8])
-def s316 : Snap := (b222, [w0, w1, w2, w29, w14, w3, w4, w5, w6, w7, w8, w9])
-def s317 : Snap := (b111, [w12, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s318 : Snap := (b223, [w0, w1, w2, w3, w5, w77, w6, w7, w8, w9])
-def s319 : Snap := (b165, [w10, w12, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s320 : Snap := (b125, [w12, w0, w1, w2, w17, w4, w5, w6, w7, w8, w9])
-def s321 : Snap := (b131, [w12, w0, w1, w2, w3, w31, w5, w6, w7, w8, w9])
-def s322 : Snap := (b114, [w12, w0, w1, w2, w3, w41, w5, w6, w7, w8, w9])
-def s323 : Snap := (b191, [w12, w0, w1, w2, w3, w4, w5, w15, w6, w7, w8, w9])
-def s324 : Snap := (b224, [w12, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w44])
-def s325 : Snap := (b225, [w0, w1, w2, w3, w4, w5, w6, w78, w7, w8, w9])
-def s326 : Snap := (b226, [w12, w0, w1, w2, w3, w5, w6, w74, w7, w8, w9])
-def s327 : Snap := (b227, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w79])
-def s328 : Snap := (b228, [w12, w0, w1, w2, w3, w5, w6, w7, w8, w9, w68])
-def s329 : Snap := (b111, [w80, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s330 : Snap := (b126, [w22, w12, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s331 : Snap := (b166, [w12, w0, w1, w2, w37, w3, w5, w6, w7, w8, w9])
-def s332 : Snap := (b165, [w24, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s333 : Snap := (b125, [w39, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s334 : Snap := (b229, [w12, w0, w1, w2, w3, w26, w4, w5, w6, w7, w8, w9])
-def s335 : Snap := (b230, [w12, w0, w1, w2, w3, w4, w5, w6, w7, w13, w8, w9])
-def s336 : Snap := (b231, [w12, w0, w1, w2, w29, w3, w4, w5, w6, w7, w8, w9])
-def s337 : Snap := (b201, [w12, w0, w1, w2, w3, w4, w5, w25, w6, w7, w8, w9])
-def s338 : Snap := (b135, [w0, w1, w2, w3, w4, w5, w15, w6, w7, w8, w9])
-def s339 : Snap := (b232, [w0, w1, w2, w3, w5, w6, w81, w7, w8, w9])
-def s340 : Snap := (b181, [w0, w1, w2, w3, w26, w4, w5, w15, w7, w8, w9])
-def s341 : Snap := (b147, [w0, w1, w2, w3, w4, w5, w15, w6, w7, w13, w8])
-def s342 : Snap := (b118, [w22, w0, w1, w2, w3, w5, w15, w6, w7, w8, w9])
-def s343 : Snap := (b138, [w0, w1, w2, w37, w3, w5, w15, w6, w7, w8, w9])
-def s344 : Snap := (b233, [w0, w1, w2, w3, w47, w4, w5, w15, w6, w7, w8, w9])
-def s345 : Snap := (b234, [w0, w1, w2, w3, w5, w73, w15, w6, w7, w8, w9])
-def s346 : Snap := (b235, [w0, w1, w2, w3, w5, w15, w6, w7, w8, w67, w9])
-def s347 : Snap := (b236, [w0, w1, w2, w3, w4, w5, w6, w82, w7, w8, w9])
-def s348 : Snap := (b237, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w83])
-def s349 : Snap := (b135, [w0, w1, w2, w3, w84, w5, w6, w7, w8, w9])
-def s350 : Snap := (b181, [w0, w1, w2, w3, w33, w4, w5, w6, w7, w8, w9])
-def s351 : Snap := (b148, [w0, w1, w2, w3, w31, w5, w15, w6, w7, w8, w9])
-def s352 : Snap := (b147, [w0, w1, w2, w3, w4, w5, w43, w6, w7, w8, w9])
-def s353 : Snap := (b182, [w0, w1, w2, w3, w41, w5, w15, w6, w7, w8, w9])
-def s354 : Snap := (b238, [w10, w0, w1, w2, w3, w4, w5, w15, w6, w7, w8, w9])
-def s355 : Snap := (b239, [w0, w1, w2, w17, w3, w4, w5, w15, w6, w7, w8, w9])
-def s356 : Snap := (b220, [w0, w1, w2, w30, w3, w4, w5, w15, w6, w7, w8, w9])
-def s357 : Snap := (b240, [w0, w1, w2, w29, w3, w4, w5, w15, w6, w7, w8, w9])
-def s358 : Snap := (b241, [w10, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s359 : Snap := (b242, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w11])
-def s360 : Snap := (b192, [w10, w0, w1, w2, w3, w26, w4, w6, w7, w8, w9])
-def s361 : Snap := (b179, [w10, w0, w1, w2, w3, w4, w20, w6, w7, w8, w9])
-def s362 : Snap := (b241, [w22, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s363 : Snap := (b243, [w0, w1, w2, w3, w23, w4, w5, w6, w7, w8, w9])
-def s364 : Snap := (b192, [w10, w0, w1, w2, w3, w31, w5, w6, w7, w8, w9])
-def s365 : Snap := (b244, [w0, w1, w2, w3, w61, w5, w6, w7, w8, w9])
-def s366 : Snap := (b165, [w10, w0, w1, w2, w37, w3, w5, w6, w7, w8, w9])
-def s367 : Snap := (b165, [w10, w0, w1, w2, w30, w3, w4, w6, w7, w8, w9])
-def s368 : Snap := (b179, [w10, w19, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s369 : Snap := (b179, [w10, w0, w1, w2, w3, w41, w5, w6, w7, w8, w9])
-def s370 : Snap := (b245, [w10, w0, w1, w2, w3, w5, w6, w74, w7, w8, w9])
-def s371 : Snap := (b246, [w10, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w18])
-def s372 : Snap := (b247, [w10, w0, w1, w2, w3, w5, w6, w7, w8, w67, w9])
-def s373 : Snap := (b179, [w85, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s374 : Snap := (b248, [w0, w1, w2, w3, w4, w5, w6, w86, w7, w8, w9])
-def s375 : Snap := (b249, [w0, w1, w2, w3, w26, w4, w5, w6, w7, w8, w9])
-def s376 : Snap := (b250, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w27])
-def s377 : Snap := (b163, [w0, w1, w2, w30, w3, w26, w4, w6, w7, w8, w9])
-def s378 : Snap := (b249, [w0, w1, w2, w3, w31, w5, w6, w7, w8, w9])
-def s379 : Snap := (b251, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w32])
-def s380 : Snap := (b192, [w22, w0, w1, w2, w3, w26, w5, w6, w7, w8, w9])
-def s381 : Snap := (b252, [w0, w1, w2, w3, w62, w5, w6, w7, w8, w9])
-def s382 : Snap := (b181, [w0, w1, w2, w3, w26, w41, w5, w6, w7, w8, w9])
-def s383 : Snap := (b181, [w0, w1, w2, w3, w26, w4, w20, w6, w7, w8, w9])
-def s384 : Snap := (b163, [w0, w1, w2, w29, w3, w26, w4, w5, w7, w8, w9])
-def s385 : Snap := (b163, [w0, w1, w2, w37, w3, w26, w5, w6, w7, w8, w9])
-def s386 : Snap := (b253, [w0, w1, w2, w3, w26, w5, w73, w6, w7, w8, w9])
-def s387 : Snap := (b254, [w0, w1, w2, w3, w26, w4, w5, w6, w7, w8, w9, w28])
-def s388 : Snap := (b255, [w0, w1, w2, w3, w26, w5, w6, w7, w8, w9, w68])
-def s389 : Snap := (b163, [w0, w1, w2, w87, w3, w4, w5, w6, w7, w8, w9])
-def s390 : Snap := (b256, [w0, w1, w2, w3, w88, w4, w5, w6, w7, w8, w9])
-def s391 : Snap := (b257, [w0, w1, w2, w17, w3, w4, w5, w6, w7, w8, w9])
-def s392 : Snap := (b258, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w35])
-def s393 : Snap := (b210, [w0, w1, w2, w17, w3, w4, w5, w6, w7, w13, w9])
-def s394 : Snap := (b145, [w0, w1, w2, w17, w3, w4, w5, w25, w6, w7, w9])
-def s395 : Snap := (b257, [w0, w1, w2, w37, w3, w5, w6, w7, w8, w9])
-def s396 : Snap := (b259, [w0, w1, w2, w3, w38, w4, w5, w6, w7, w8, w9])
-def s397 : Snap := (b210, [w0, w1, w2, w17, w3, w41, w5, w6, w7, w8, w9])
-def s398 : Snap := (b260, [w0, w1, w2, w3, w5, w6, w7, w63, w8, w9])
-def s399 : Snap := (b125, [w22, w0, w1, w2, w17, w3, w5, w6, w7, w8, w9])
-def s400 : Snap := (b125, [w34, w0, w1, w2, w17, w3, w4, w5, w6, w7, w9])
-def s401 : Snap := (b145, [w0, w1, w2, w29, w17, w4, w5, w6, w7, w8, w9])
-def s402 : Snap := (b145, [w0, w1, w2, w17, w3, w31, w5, w6, w7, w8, w9])
-def s403 : Snap := (b261, [w0, w1, w2, w17, w3, w5, w6, w7, w8, w9, w68])
-def s404 : Snap := (b262, [w0, w1, w2, w17, w3, w4, w5, w6, w7, w8, w9, w28])
-def s405 : Snap := (b263, [w0, w1, w2, w17, w3, w5, w73, w6, w7, w8, w9])
-def s406 : Snap := (b145, [w0, w1, w2, w89, w3, w4, w5, w6, w7, w8, w9])
-def s407 : Snap := (b264, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w90])
-def s408 : Snap := (b265, [w0, w1, w2, w3, w4, w5, w6, w7, w13, w8, w9])
-def s409 : Snap := (b266, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w40])
-def s410 : Snap := (b123, [w34, w0, w1, w2, w3, w4, w5, w6, w7, w13, w9])
-def s411 : Snap := (b265, [w0, w1, w2, w3, w41, w5, w6, w7, w8, w9])
-def s412 : Snap := (b267, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w42])
-def s413 : Snap := (b210, [w0, w1, w2, w37, w3, w5, w6, w7, w13, w8, w9])
-def s414 : Snap := (b268, [w0, w1, w2, w3, w5, w6, w7, w64, w8, w9])
-def s415 : Snap := (b147, [w0, w1, w2, w3, w31, w5, w6, w7, w13, w8, w9])
-def s416 : Snap := (b147, [w0, w1, w2, w3, w4, w5, w25, w6, w7, w13, w9])
-def s417 : Snap := (b123, [w19, w0, w1, w2, w3, w4, w5, w6, w7, w13, w8])
-def s418 : Snap := (b123, [w22, w0, w1, w2, w3, w5, w6, w7, w13, w8, w9])
-def s419 : Snap := (b269, [w0, w1, w2, w3, w5, w6, w7, w13, w8, w67, w9])
-def s420 : Snap := (b270, [w0, w1, w2, w3, w4, w5, w6, w7, w13, w8, w9, w18])
-def s421 : Snap := (b271, [w0, w1, w2, w3, w5, w6, w74, w7, w13, w8, w9])
-def s422 : Snap := (b123, [w91, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s423 : Snap := (b272, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w92, w9])
-def s424 : Snap := (b273, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w18])
-def s425 : Snap := (b274, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w28, w18])
-def s426 : Snap := (b273, [w0, w1, w93, w3, w4, w5, w6, w7, w8, w9])
-def s427 : Snap := (b116, [w54, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s428 : Snap := (b173, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w55, w9])
-def s429 : Snap := (b273, [w0, w1, w2, w3, w4, w94, w6, w7, w8, w9])
-def s430 : Snap := (b273, [w0, w1, w2, w3, w4, w5, w6, w7, w95, w9])
-def s431 : Snap := (b275, [w0, w1, w2, w3, w5, w73, w6, w7, w8, w9, w18])
-def s432 : Snap := (b276, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w68, w18])
-def s433 : Snap := (b116, [w22, w0, w1, w2, w3, w5, w6, w7, w8, w9, w18])
-def s434 : Snap := (b173, [w0, w1, w2, w3, w41, w5, w6, w7, w8, w9, w18])
-def s435 : Snap := (b277, [w19, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w18])
-def s436 : Snap := (b273, [w0, w1, w2, w3, w96, w5, w6, w7, w8, w9])
-def s437 : Snap := (b273, [w54, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s438 : Snap := (b273, [w0, w97, w2, w3, w4, w5, w6, w7, w8, w9])
-def s439 : Snap := (b278, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w28])
-def s440 : Snap := (b278, [w0, w1, w98, w3, w4, w5, w6, w7, w8, w9])
-def s441 : Snap := (b157, [w0, w1, w2, w56, w3, w4, w5, w6, w7, w8, w9])
-def s442 : Snap := (b139, [w0, w1, w2, w3, w4, w5, w57, w6, w7, w8, w9])
-def s443 : Snap := (b278, [w0, w1, w2, w3, w4, w99, w6, w7, w8, w9])
-def s444 : Snap := (b278, [w0, w1, w2, w3, w4, w5, w6, w7, w100, w9])
-def s445 : Snap := (b279, [w0, w1, w2, w3, w5, w6, w7, w8, w67, w9, w28])
-def s446 : Snap := (b280, [w0, w1, w2, w3, w5, w6, w74, w7, w8, w9, w28])
-def s447 : Snap := (b157, [w0, w1, w2, w37, w3, w5, w6, w7, w8, w9, w28])
-def s448 : Snap := (b139, [w0, w1, w2, w3, w31, w5, w6, w7, w8, w9, w28])
-def s449 : Snap := (b281, [w0, w1, w2, w29, w3, w4, w5, w6, w7, w8, w9, w28])
-def s450 : Snap := (b278, [w0, w1, w2, w3, w101, w5, w6, w7, w8, w9])
-def s451 : Snap := (b278, [w0, w102, w2, w3, w4, w5, w6, w7, w8, w9])
-def s452 : Snap := (b278, [w0, w1, w2, w56, w4, w5, w6, w7, w8, w9])
-def s453 : Snap := (b136, [w0, w1, w2, w29, w3, w4, w5, w6, w7, w8, w9])
-def s454 : Snap := (b282, [w0, w1, w2, w3, w5, w6, w103, w7, w8, w9])
-def s455 : Snap := (b136, [w0, w1, w2, w104, w3, w5, w6, w7, w8, w9])
-def s456 : Snap := (b283, [w0, w1, w2, w29, w3, w5, w73, w6, w7, w8, w9])
-def s457 : Snap := (b284, [w0, w1, w2, w29, w3, w5, w6, w7, w8, w9, w68])
-def s458 : Snap := (b169, [w0, w1, w2, w37, w29, w3, w5, w6, w7, w8, w9])
-def s459 : Snap := (b151, [w0, w1, w2, w29, w3, w31, w5, w6, w7, w8, w9])
-def s460 : Snap := (b131, [w22, w0, w1, w2, w29, w3, w5, w6, w7, w8, w9])
-def s461 : Snap := (b138, [w0, w1, w2, w29, w3, w41, w5, w6, w7, w8, w9])
-def s462 : Snap := (b285, [w0, w1, w2, w105, w3, w4, w5, w6, w7, w8, w9])
-def s463 : Snap := (b286, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w106])
-def s464 : Snap := (b112, [w19, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s465 : Snap := (b287, [w0, w1, w2, w3, w5, w107, w6, w7, w8, w9])
-def s466 : Snap := (b112, [w108, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s467 : Snap := (b288, [w19, w0, w1, w2, w3, w5, w6, w7, w8, w67, w9])
-def s468 : Snap := (b289, [w19, w0, w1, w2, w3, w5, w6, w74, w7, w8, w9])
-def s469 : Snap := (b130, [w22, w19, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s470 : Snap := (b184, [w19, w0, w1, w2, w3, w41, w5, w6, w7, w8, w9])
-def s471 : Snap := (b114, [w19, w0, w1, w2, w37, w3, w5, w6, w7, w8, w9])
-def s472 : Snap := (b118, [w19, w0, w1, w2, w3, w31, w5, w6, w7, w8, w9])
-def s473 : Snap := (b290, [w0, w1, w2, w3, w109, w4, w5, w6, w7, w8, w9])
-def s474 : Snap := (b291, [w0, w1, w2, w3, w4, w5, w6, w110, w7, w8, w9])
-def s475 : Snap := (b292, [w19, w21, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s476 : Snap := (b293, [w19, w0, w1, w2, w14, w3, w4, w5, w6, w7, w8, w9])
-def s477 : Snap := (b110, [w22, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s478 : Snap := (b294, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w111])
-def s479 : Snap := (b295, [w0, w1, w2, w3, w112, w5, w6, w7, w8, w9])
-def s480 : Snap := (b296, [w0, w1, w2, w3, w5, w6, w113, w7, w8, w9])
-def s481 : Snap := (b124, [w22, w0, w1, w2, w3, w5, w6, w7, w8, w9, w44])
-def s482 : Snap := (b154, [w0, w1, w2, w37, w3, w5, w6, w7, w8, w9])
-def s483 : Snap := (b297, [w0, w1, w2, w3, w5, w6, w114, w7, w8, w9])
-def s484 : Snap := (b298, [w0, w1, w2, w115, w3, w5, w6, w7, w8, w9])
-def s485 : Snap := (b299, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w116])
-def s486 : Snap := (b164, [w0, w1, w2, w37, w3, w5, w6, w7, w8, w9, w44])
-def s487 : Snap := (b134, [w0, w1, w2, w3, w31, w5, w6, w7, w8, w9])
-def s488 : Snap := (b300, [w0, w1, w2, w3, w5, w6, w7, w8, w117, w9])
-def s489 : Snap := (b301, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w118])
-def s490 : Snap := (b302, [w0, w1, w2, w3, w119, w5, w6, w7, w8, w9])
-def s491 : Snap := (b146, [w0, w1, w2, w3, w47, w31, w5, w6, w7, w8, w9])
-def s492 : Snap := (b171, [w0, w1, w2, w3, w41, w5, w6, w7, w8, w9])
-def s493 : Snap := (b303, [w0, w1, w2, w3, w5, w120, w6, w7, w8, w9])
-def s494 : Snap := (b304, [w0, w1, w2, w3, w5, w6, w121, w7, w8, w9])
-def s495 : Snap := (b305, [w0, w1, w2, w3, w5, w6, w7, w8, w122, w9])
-def s496 : Snap := (b180, [w0, w1, w2, w3, w47, w41, w5, w6, w7, w8, w9])
-def s497 : Snap := (b306, [w0, w1, w2, w30, w3, w4, w5, w6, w7, w8, w9])
-def s498 : Snap := (b306, [w0, w1, w2, w37, w3, w5, w6, w7, w8, w9])
-def s499 : Snap := (b165, [w22, w0, w1, w2, w30, w3, w5, w6, w7, w8, w9])
-def s500 : Snap := (b221, [w0, w1, w2, w30, w3, w4, w5, w6, w7, w13, w9])
-def s501 : Snap := (b163, [w0, w1, w2, w30, w3, w31, w5, w6, w7, w8, w9])
-def s502 : Snap := (b221, [w0, w1, w2, w30, w3, w41, w5, w6, w7, w8, w9])
-def s503 : Snap := (b307, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w123])
-def s504 : Snap := (b308, [w0, w1, w2, w3, w4, w5, w6, w124, w7, w8, w9])
-def s505 : Snap := (b309, [w0, w1, w2, w30, w3, w5, w73, w6, w7, w8, w9])
-def s506 : Snap := (b310, [w34, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s507 : Snap := (b310, [w22, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s508 : Snap := (b125, [w34, w0, w1, w2, w37, w3, w5, w6, w7, w8, w9])
-def s509 : Snap := (b203, [w34, w0, w1, w2, w3, w26, w4, w6, w7, w8, w9])
-def s510 : Snap := (b123, [w34, w0, w1, w2, w3, w41, w5, w6, w7, w8, w9])
-def s511 : Snap := (b203, [w34, w0, w1, w2, w3, w31, w5, w6, w7, w8, w9])
-def s512 : Snap := (b311, [w0, w1, w2, w3, w4, w5, w6, w125, w7, w8, w9])
-def s513 : Snap := (b312, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w126])
-def s514 : Snap := (b313, [w34, w0, w1, w2, w3, w5, w6, w7, w8, w67, w9])
-def s515 : Snap := (b314, [w0, w1, w2, w3, w4, w5, w25, w6, w7, w8, w9])
-def s516 : Snap := (b314, [w0, w1, w2, w3, w31, w5, w6, w7, w8, w9])
-def s517 : Snap := (b147, [w0, w1, w2, w3, w41, w5, w25, w6, w7, w8, w9])
-def s518 : Snap := (b203, [w10, w0, w1, w2, w3, w4, w25, w6, w7, w8, w9])
-def s519 : Snap := (b145, [w0, w1, w2, w37, w3, w5, w25, w6, w7, w8, w9])
-def s520 : Snap := (b203, [w22, w0, w1, w2, w3, w5, w25, w6, w7, w8, w9])
-def s521 : Snap := (b315, [w0, w1, w2, w3, w4, w5, w6, w127, w7, w8, w9])
-def s522 : Snap := (b316, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w128, w9])
-def s523 : Snap := (b317, [w0, w1, w2, w3, w5, w25, w6, w7, w8, w9, w68])
-def s524 : Snap := (b318, [w0, w1, w2, w3, w4, w20, w5, w6, w7, w8, w9])
-def s525 : Snap := (b318, [w0, w1, w2, w3, w41, w5, w6, w7, w8, w9])
-def s526 : Snap := (b181, [w0, w1, w2, w3, w31, w20, w5, w6, w7, w8, w9])
-def s527 : Snap := (b221, [w0, w1, w2, w17, w3, w4, w20, w5, w6, w7, w9])
-def s528 : Snap := (b179, [w22, w0, w1, w2, w3, w20, w5, w6, w7, w8, w9])
-def s529 : Snap := (b221, [w0, w1, w2, w37, w3, w20, w5, w6, w7, w8, w9])
-def s530 : Snap := (b319, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w129])
-def s531 : Snap := (b320, [w0, w1, w2, w3, w4, w5, w130, w6, w7, w8, w9])
-def s532 : Snap := (b321, [w0, w1, w2, w3, w20, w5, w6, w74, w7, w8, w9])
-def s533 : Snap := (b322, [w0, w1, w2, w3, w47, w4, w5, w6, w7, w8, w9])
-def s534 : Snap := (b322, [w0, w1, w131, w3, w4, w5, w6, w7, w8, w9])
-def s535 : Snap := (b322, [w0, w58, w2, w3, w4, w5, w6, w7, w8, w9])
-def s536 : Snap := (b146, [w0, w1, w2, w132, w3, w4, w5, w6, w7, w8, w9])
-def s537 : Snap := (b180, [w0, w1, w2, w3, w133, w4, w5, w6, w7, w8, w9])
-def s538 : Snap := (b322, [w0, w1, w2, w134, w3, w4, w6, w7, w8, w9])
-def s539 : Snap := (b322, [w0, w1, w2, w135, w3, w4, w5, w6, w7, w9])
-def s540 : Snap := (b323, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w44])
-def s541 : Snap := (b323, [w0, w1, w136, w3, w4, w5, w6, w7, w8, w9])
-def s542 : Snap := (b323, [w0, w1, w2, w3, w4, w5, w6, w59, w8, w9])
-def s543 : Snap := (b124, [w137, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s544 : Snap := (b164, [w0, w1, w2, w138, w3, w4, w5, w6, w7, w8, w9])
-def s545 : Snap := (b323, [w0, w1, w2, w3, w4, w139, w6, w7, w8, w9])
-def s546 : Snap := (b323, [w0, w1, w2, w3, w4, w5, w6, w7, w140, w9])
-def s547 : Snap := (b324, [w0, w1, w2, w3, w5, w73, w6, w7, w8, w9])
-def s548 : Snap := (b325, [w0, w1, w2, w3, w141, w5, w6, w7, w8, w9])
-def s549 : Snap := (b326, [w0, w1, w2, w142, w3, w5, w6, w7, w8, w9])
-def s550 : Snap := (b324, [w0, w1, w2, w3, w61, w6, w7, w8, w9])
-def s551 : Snap := (b327, [w0, w1, w2, w3, w5, w143, w6, w7, w8, w9])
-def s552 : Snap := (b328, [w0, w1, w2, w3, w5, w6, w7, w8, w67, w9])
-def s553 : Snap := (b329, [w0, w1, w2, w3, w5, w6, w7, w8, w144, w9])
-def s554 : Snap := (b330, [w145, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s555 : Snap := (b328, [w0, w1, w2, w3, w5, w6, w7, w63, w9])
-def s556 : Snap := (b331, [w0, w1, w2, w3, w5, w146, w6, w7, w8, w9])
-def s557 : Snap := (b332, [w0, w1, w2, w3, w5, w6, w74, w7, w8, w9])
-def s558 : Snap := (b333, [w147, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s559 : Snap := (b334, [w0, w1, w2, w3, w5, w6, w148, w7, w8, w9])
-def s560 : Snap := (b332, [w0, w1, w2, w3, w62, w6, w7, w8, w9])
-def s561 : Snap := (b335, [w0, w1, w2, w149, w3, w5, w6, w7, w8, w9])
-def s562 : Snap := (b336, [w0, w1, w2, w3, w5, w6, w7, w8, w9, w68])
-def s563 : Snap := (b337, [w0, w1, w2, w150, w3, w5, w6, w7, w8, w9])
-def s564 : Snap := (b338, [w0, w1, w2, w3, w5, w151, w6, w7, w8, w9])
-def s565 : Snap := (b336, [w0, w1, w2, w3, w5, w6, w7, w64, w9])
-def s566 : Snap := (b339, [w152, w0, w1, w2, w3, w5, w6, w7, w8, w9])
-def s567 : Snap := (b340, [w22, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9])
-def s568 : Snap := (b341, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w111])
-def s569 : Snap := (b342, [w0, w1, w2, w3, w4, w5, w6, w113, w7, w8, w9])
-def s570 : Snap := (b343, [w0, w1, w2, w3, w112, w4, w5, w6, w7, w8, w9])
-def s571 : Snap := (b128, [w22, w0, w1, w2, w3, w41, w5, w6, w7, w8, w9])
-def s572 : Snap := (b132, [w22, w0, w1, w2, w37, w3, w5, w6, w7, w8, w9])
-def s573 : Snap := (b344, [w0, w1, w2, w37, w3, w4, w5, w6, w7, w8, w9])
-def s574 : Snap := (b345, [w0, w1, w2, w3, w4, w5, w6, w114, w7, w8, w9])
-def s575 : Snap := (b346, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w116])
-def s576 : Snap := (b347, [w0, w1, w2, w115, w3, w4, w5, w6, w7, w8, w9])
-def s577 : Snap := (b150, [w0, w1, w2, w37, w3, w31, w5, w6, w7, w8, w9])
-def s578 : Snap := (b348, [w0, w1, w2, w3, w31, w4, w5, w6, w7, w8, w9])
-def s579 : Snap := (b349, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w117, w9])
-def s580 : Snap := (b350, [w0, w1, w2, w3, w119, w4, w5, w6, w7, w8, w9])
-def s581 : Snap := (b351, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w118])
-def s582 : Snap := (b152, [w0, w1, w2, w3, w31, w41, w5, w6, w7, w8, w9])
-def s583 : Snap := (b352, [w0, w1, w2, w3, w41, w4, w5, w6, w7, w8, w9])
-def s584 : Snap := (b353, [w0, w1, w2, w3, w4, w5, w120, w6, w7, w8, w9])
-def s585 : Snap := (b354, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w122, w9])
-def s586 : Snap := (b355, [w0, w1, w2, w3, w4, w5, w6, w121, w7, w8, w9])
-def s587 : Snap := (b356, [w0, w1, w2, w3, w4, w5, w6, w60, w7, w8, w9])
-def s588 : Snap := (b356, [w0, w1, w2, w3, w153, w4, w6, w7, w8, w9])
-def s589 : Snap := (b357, [w0, w1, w2, w3, w153, w4, w5, w6, w7, w8, w9])
-def s590 : Snap := (b358, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w154])
-def s591 : Snap := (b358, [w0, w1, w2, w3, w4, w5, w6, w7, w155, w9])
-def s592 : Snap := (b359, [w0, w1, w2, w3, w4, w5, w6, w7, w155, w8, w9])
-def s593 : Snap := (b360, [w0, w1, w2, w3, w4, w5, w73, w6, w7, w8, w9])
-def s594 : Snap := (b361, [w0, w1, w2, w3, w4, w5, w6, w7, w8, w67, w9])
-def s595 : Snap := (b362, [w0, w1, w2, w3, w4, w5, w6, w74, w7, w8, w9])
-noncomputable def testCut (k : ℕ) (cs : List Snap) (s : Snap) := runCut rootL rootM rootG k cs s
-def Valid (k : ℕ) (s : Snap) := BoundAt (PZ 0) (tz 0) rootL rootM k s
-def RootCtx := Ctx (PZ 0) rootL rootM rootG (tz 0)
+  have hsz : l.length ≤ k + (cond ka 0 1 + cond kb 0 1) := by
+    have h1 := hR.card
+    have hwF : w ∉ l.toFinset.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)) :=
+      fun hm => hwl (List.mem_toFinset.mp (Finset.mem_of_mem_filter _ hm))
+    rw [Finset.card_insert_of_notMem hwF] at h1
+    have h2 := size_lb l.toFinset u v ka kb
+    rw [List.toFinset_card_of_nodup hnd] at h2
+    omega
 
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma init0 : initialCheck 0 14 (fun z v => !listed [s0, s153] z v)=false := by decide +kernel
+  have hbit : ∀ p, p < 144 → ((rectW w).testBit p = true ∨ (orEx u v l).testBit p = true) ∨
+      (ka = true ∧ (rectW u).testBit p = true) ∨ (kb = true ∧ (rectW v).testBit p = true) := by
+    intro p hp
+    obtain ⟨x, hx, hxb⟩ := sep_bit hR p hp
+    rcases Finset.mem_insert.mp hx with rfl | hx
+    · exact Or.inl (Or.inl hxb)
+    · obtain ⟨hxl, h1, h2⟩ := Finset.mem_filter.mp hx
+      by_cases hxu : x = u
+      · exact Or.inr (Or.inl ⟨h1.resolve_right (fun h => h hxu), hxu ▸ hxb⟩)
+      · by_cases hxv : x = v
+        · exact Or.inr (Or.inr ⟨h2.resolve_right (fun h => h hxv), hxv ▸ hxb⟩)
+        · exact Or.inl (Or.inr (orEx_tb u v p _ x (List.mem_toFinset.mp hxl) hxu hxv hxb))
+  have hfs : (ins w (l.filter (remF ka kb u v))).toFinset =
+      insert w (l.toFinset.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v))) := by
+    ext x
+    rw [List.mem_toFinset, (ins_perm w _).mem_iff]
+    simp [remF, List.mem_filter, beq_false_iff]
+  have key : ∀ (sz : Bool) (c : ℕ), sOK P prev k l u v w sz c ka kb = true →
+      (sz = true → False) → (∀ p, p < 144 → c.testBit p = true) → False := by
+    intro sz c h h1 h2
+    simp only [sOK, Bool.or_eq_true, Bool.not_eq_true'] at h
+    rcases h with (h | h) | h
+    · exact h1 h
+    · rw [covR_of c h2] at h; exact Bool.noConfusion h
+    · rw [← hfs] at hR
+      refine lastOK_sound hP ?_ hinv h hR
+      rw [(ins_perm w _).nodup_iff]
+      exact List.nodup_cons.mpr ⟨fun hm => hwl (List.mem_filter.mp hm).1, hnd.filter _⟩
+  cases ka <;> cases kb
+  · refine key _ _ hop.1.1.1 (fun h => ?_) (fun p hp => ?_)
+    · have : k + 2 < l.length := by simpa [Nat.blt_eq] using h
+      simp at hsz; omega
+    · have := hbit p hp
+      show (rectW w ||| orEx u v l).testBit p = true
+      rw [Nat.testBit_or]; simp at this; simpa using this
+  · refine key _ _ hop.1.1.2 (fun h => ?_) (fun p hp => ?_)
+    · have : k + 1 < l.length := by simpa [Nat.blt_eq] using h
+      simp at hsz; omega
+    · have := hbit p hp
+      show ((rectW w ||| orEx u v l) ||| rectW v).testBit p = true
+      rw [Nat.testBit_or, Nat.testBit_or]; simp at this; simpa using this
+  · refine key _ _ hop.1.2 (fun h => ?_) (fun p hp => ?_)
+    · have : k + 1 < l.length := by simpa [Nat.blt_eq] using h
+      simp at hsz; omega
+    · have := hbit p hp
+      show ((rectW w ||| orEx u v l) ||| rectW u).testBit p = true
+      rw [Nat.testBit_or, Nat.testBit_or]; simp at this; simpa using this
+  · refine key _ _ hop.2 (fun h => ?_) (fun p hp => ?_)
+    · have : k < l.length := by simpa [Nat.blt_eq] using h
+      simp at hsz; omega
+    · have := hbit p hp
+      show ((rectW w ||| orEx u v l) ||| (rectW u ||| rectW v)).testBit p = true
+      rw [Nat.testBit_or, Nat.testBit_or, Nat.testBit_or]; simp at this; simpa using this
 
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert0 : testCut 14 [s1, s20, s38, s55, s71, s83, s94, s102, s109, s113, s119, s124, s131, s138, s140, s141, s145, s148, s150, s152] s0=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert1 : testCut 13 [s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19] s1=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert2 : testCut 12 [] s2=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert3 : testCut 12 [] s3=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert4 : testCut 12 [] s4=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert5 : testCut 12 [] s5=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert6 : testCut 12 [] s6=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert7 : testCut 12 [] s7=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert8 : testCut 12 [] s8=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert9 : testCut 12 [] s9=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert10 : testCut 12 [] s10=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert11 : testCut 12 [] s11=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert12 : testCut 12 [] s12=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert13 : testCut 12 [] s13=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert14 : testCut 12 [] s14=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert15 : testCut 12 [] s15=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert16 : testCut 12 [] s16=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert17 : testCut 12 [] s17=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert18 : testCut 12 [] s18=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert19 : testCut 12 [] s19=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert20 : testCut 13 [s21, s22, s23, s24, s25, s26, s8, s27, s28, s29, s30, s31, s32, s33, s34, s35, s36, s37] s20=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert21 : testCut 12 [] s21=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert22 : testCut 12 [] s22=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert23 : testCut 12 [] s23=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert24 : testCut 12 [] s24=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert25 : testCut 12 [] s25=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert26 : testCut 12 [] s26=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert27 : testCut 12 [] s27=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert28 : testCut 12 [] s28=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert29 : testCut 12 [] s29=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert30 : testCut 12 [] s30=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert31 : testCut 12 [] s31=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert32 : testCut 12 [] s32=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert33 : testCut 12 [] s33=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert34 : testCut 12 [] s34=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert35 : testCut 12 [] s35=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert36 : testCut 12 [] s36=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert37 : testCut 12 [] s37=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert38 : testCut 13 [s39, s40, s41, s24, s42, s43, s44, s9, s45, s46, s47, s48, s49, s50, s51, s52, s53, s54] s38=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert39 : testCut 12 [] s39=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert40 : testCut 12 [] s40=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert41 : testCut 12 [] s41=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert42 : testCut 12 [] s42=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert43 : testCut 12 [] s43=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert44 : testCut 12 [] s44=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert45 : testCut 12 [] s45=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert46 : testCut 12 [] s46=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert47 : testCut 12 [] s47=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert48 : testCut 12 [] s48=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert49 : testCut 12 [] s49=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert50 : testCut 12 [] s50=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert51 : testCut 12 [] s51=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert52 : testCut 12 [] s52=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert53 : testCut 12 [] s53=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert54 : testCut 12 [] s54=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert55 : testCut 13 [s56, s57, s58, s5, s59, s60, s44, s27, s61, s62, s63, s64, s65, s66, s67, s68, s69, s70] s55=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert56 : testCut 12 [] s56=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert57 : testCut 12 [] s57=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert58 : testCut 12 [] s58=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert59 : testCut 12 [] s59=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert60 : testCut 12 [] s60=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert61 : testCut 12 [] s61=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert62 : testCut 12 [] s62=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert63 : testCut 12 [] s63=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert64 : testCut 12 [] s64=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert65 : testCut 12 [] s65=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert66 : testCut 12 [] s66=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert67 : testCut 12 [] s67=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert68 : testCut 12 [] s68=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert69 : testCut 12 [] s69=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert70 : testCut 12 [] s70=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert71 : testCut 13 [s72, s73, s3, s40, s26, s60, s74, s75, s15, s50, s76, s77, s78, s79, s80, s18, s53, s81, s82] s71=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert72 : testCut 12 [] s72=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert73 : testCut 12 [] s73=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert74 : testCut 12 [] s74=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert75 : testCut 12 [] s75=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert76 : testCut 12 [] s76=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert77 : testCut 12 [] s77=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert78 : testCut 12 [] s78=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert79 : testCut 12 [] s79=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert80 : testCut 12 [] s80=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert81 : testCut 12 [] s81=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert82 : testCut 12 [] s82=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert83 : testCut 13 [s84, s85, s22, s57, s7, s43, s74, s86, s87, s33, s88, s66, s89, s90, s91, s36, s69, s92, s93] s83=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert84 : testCut 12 [] s84=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert85 : testCut 12 [] s85=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert86 : testCut 12 [] s86=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert87 : testCut 12 [] s87=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert88 : testCut 12 [] s88=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert89 : testCut 12 [] s89=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert90 : testCut 12 [] s90=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert91 : testCut 12 [] s91=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert92 : testCut 12 [] s92=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert93 : testCut 12 [] s93=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert94 : testCut 13 [s72, s84, s42, s59, s8, s95, s96, s97, s98, s14, s32, s78, s89, s99, s100, s81, s92, s101] s94=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert95 : testCut 12 [] s95=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert96 : testCut 12 [] s96=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert97 : testCut 12 [] s97=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert98 : testCut 12 [] s98=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert99 : testCut 12 [] s99=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert100 : testCut 12 [] s100=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert101 : testCut 12 [] s101=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert102 : testCut 13 [s73, s85, s6, s25, s44, s95, s103, s104, s105, s49, s65, s79, s90, s106, s107, s82, s93, s108] s102=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert103 : testCut 12 [] s103=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert104 : testCut 12 [] s104=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert105 : testCut 12 [] s105=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert106 : testCut 12 [] s106=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert107 : testCut 12 [] s107=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert108 : testCut 12 [] s108=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert109 : testCut 13 [s4, s23, s41, s58, s75, s86, s96, s103, s110, s111, s16, s51, s34, s67, s112] s109=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert110 : testCut 12 [] s110=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert111 : testCut 12 [] s111=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert112 : testCut 12 [] s112=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert113 : testCut 13 [s114, s11, s62, s115, s116, s117, s110, s118] s113=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert114 : testCut 12 [] s114=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert115 : testCut 12 [] s115=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert116 : testCut 12 [] s116=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert117 : testCut 12 [] s117=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert118 : testCut 12 [] s118=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert119 : testCut 13 [s114, s29, s46, s120, s121, s122, s111, s123] s119=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert120 : testCut 12 [] s120=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert121 : testCut 12 [] s121=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert122 : testCut 12 [] s122=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert123 : testCut 12 [] s123=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert124 : testCut 13 [s122, s30, s47, s112, s81, s93, s125, s126, s127, s128, s129, s130] s124=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert125 : testCut 12 [] s125=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert126 : testCut 12 [] s126=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert127 : testCut 12 [] s127=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert128 : testCut 12 [] s128=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert129 : testCut 12 [] s129=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert130 : testCut 12 [] s130=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert131 : testCut 13 [s117, s12, s63, s132, s82, s92, s133, s134, s135, s136, s129, s137] s131=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert132 : testCut 12 [] s132=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert133 : testCut 12 [] s133=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert134 : testCut 12 [] s134=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert135 : testCut 12 [] s135=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert136 : testCut 12 [] s136=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert137 : testCut 12 [] s137=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert138 : testCut 13 [s31, s87, s51, s18, s106, s123, s70, s101, s139] s138=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert139 : testCut 12 [] s139=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert140 : testCut 13 [s64, s88, s16, s53, s99, s118, s37, s108, s139] s140=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert141 : testCut 13 [s48, s76, s34, s69, s100, s142, s19, s143, s144] s141=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert142 : testCut 12 [] s142=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert143 : testCut 12 [] s143=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert144 : testCut 12 [] s144=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert145 : testCut 13 [s13, s77, s67, s36, s107, s146, s54, s147, s144] s145=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert146 : testCut 12 [] s146=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert147 : testCut 12 [] s147=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert148 : testCut 13 [s149, s91] s148=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert149 : testCut 12 [] s149=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert150 : testCut 13 [s151, s80] s150=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert151 : testCut 12 [] s151=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert152 : testCut 13 [] s152=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert153 : testCut 14 [s154, s181, s207, s232, s256, s287, s317, s338, s358, s375, s391, s408, s424, s439, s453, s464, s477, s482, s487, s492, s497, s506, s515, s524, s533, s540, s547, s552, s557, s562, s567, s573, s578, s583, s587, s590, s593, s594, s595] s153=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert154 : testCut 13 [s155, s156, s157, s158, s159, s160, s161, s162, s163, s164, s165, s166, s167, s168, s169, s170, s171, s172, s173, s174, s175, s176, s177, s178, s179, s180] s154=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert155 : testCut 12 [] s155=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert156 : testCut 12 [] s156=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert157 : testCut 12 [] s157=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert158 : testCut 12 [] s158=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert159 : testCut 12 [] s159=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert160 : testCut 12 [] s160=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert161 : testCut 12 [] s161=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert162 : testCut 12 [] s162=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert163 : testCut 12 [] s163=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert164 : testCut 12 [] s164=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert165 : testCut 12 [] s165=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert166 : testCut 12 [] s166=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert167 : testCut 12 [] s167=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert168 : testCut 12 [] s168=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert169 : testCut 12 [] s169=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert170 : testCut 12 [] s170=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert171 : testCut 12 [] s171=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert172 : testCut 12 [] s172=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert173 : testCut 12 [] s173=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert174 : testCut 12 [] s174=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert175 : testCut 12 [] s175=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert176 : testCut 12 [] s176=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert177 : testCut 12 [] s177=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert178 : testCut 12 [] s178=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert179 : testCut 12 [] s179=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert180 : testCut 12 [] s180=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert181 : testCut 13 [s182, s183, s184, s185, s186, s160, s187, s188, s189, s190, s191, s192, s193, s194, s195, s196, s197, s198, s199, s200, s201, s202, s203, s204, s205, s206] s181=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert182 : testCut 12 [] s182=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert183 : testCut 12 [] s183=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert184 : testCut 12 [] s184=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert185 : testCut 12 [] s185=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert186 : testCut 12 [] s186=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert187 : testCut 12 [] s187=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert188 : testCut 12 [] s188=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert189 : testCut 12 [] s189=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert190 : testCut 12 [] s190=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert191 : testCut 12 [] s191=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert192 : testCut 12 [] s192=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert193 : testCut 12 [] s193=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert194 : testCut 12 [] s194=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert195 : testCut 12 [] s195=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert196 : testCut 12 [] s196=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert197 : testCut 12 [] s197=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert198 : testCut 12 [] s198=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert199 : testCut 12 [] s199=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert200 : testCut 12 [] s200=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert201 : testCut 12 [] s201=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert202 : testCut 12 [] s202=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert203 : testCut 12 [] s203=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert204 : testCut 12 [] s204=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert205 : testCut 12 [] s205=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert206 : testCut 12 [] s206=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert207 : testCut 13 [s208, s156, s184, s209, s210, s211, s212, s213, s214, s215, s216, s217, s218, s219, s220, s221, s222, s223, s224, s225, s226, s227, s228, s229, s230, s231] s207=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert208 : testCut 12 [] s208=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert209 : testCut 12 [] s209=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert210 : testCut 12 [] s210=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert211 : testCut 12 [] s211=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert212 : testCut 12 [] s212=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert213 : testCut 12 [] s213=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert214 : testCut 12 [] s214=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert215 : testCut 12 [] s215=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert216 : testCut 12 [] s216=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert217 : testCut 12 [] s217=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert218 : testCut 12 [] s218=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert219 : testCut 12 [] s219=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert220 : testCut 12 [] s220=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert221 : testCut 12 [] s221=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert222 : testCut 12 [] s222=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert223 : testCut 12 [] s223=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert224 : testCut 12 [] s224=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert225 : testCut 12 [] s225=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert226 : testCut 12 [] s226=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert227 : testCut 12 [] s227=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert228 : testCut 12 [] s228=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert229 : testCut 12 [] s229=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert230 : testCut 12 [] s230=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert231 : testCut 12 [] s231=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert232 : testCut 13 [s233, s183, s157, s234, s235, s211, s236, s237, s238, s239, s240, s241, s242, s243, s244, s245, s246, s247, s248, s249, s250, s251, s252, s253, s254, s255] s232=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert233 : testCut 12 [] s233=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert234 : testCut 12 [] s234=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert235 : testCut 12 [] s235=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert236 : testCut 12 [] s236=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert237 : testCut 12 [] s237=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert238 : testCut 12 [] s238=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert239 : testCut 12 [] s239=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert240 : testCut 12 [] s240=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert241 : testCut 12 [] s241=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert242 : testCut 12 [] s242=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert243 : testCut 12 [] s243=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert244 : testCut 12 [] s244=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert245 : testCut 12 [] s245=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert246 : testCut 12 [] s246=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert247 : testCut 12 [] s247=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert248 : testCut 12 [] s248=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert249 : testCut 12 [] s249=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert250 : testCut 12 [] s250=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert251 : testCut 12 [] s251=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert252 : testCut 12 [] s252=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert253 : testCut 12 [] s253=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert254 : testCut 12 [] s254=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert255 : testCut 12 [] s255=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert256 : testCut 13 [s257, s210, s235, s258, s160, s259, s260, s261, s166, s192, s262, s263, s264, s265, s266, s267, s268, s269, s270, s271, s272, s273, s274, s275, s276, s277, s278, s279, s280, s281, s282, s283, s284, s285, s286] s256=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert257 : testCut 12 [] s257=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert258 : testCut 12 [] s258=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert259 : testCut 12 [] s259=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert260 : testCut 12 [] s260=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert261 : testCut 12 [] s261=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert262 : testCut 12 [] s262=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert263 : testCut 12 [] s263=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert264 : testCut 12 [] s264=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert265 : testCut 12 [] s265=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert266 : testCut 12 [] s266=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert267 : testCut 12 [] s267=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert268 : testCut 12 [] s268=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert269 : testCut 12 [] s269=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert270 : testCut 12 [] s270=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert271 : testCut 12 [] s271=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert272 : testCut 12 [] s272=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert273 : testCut 12 [] s273=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert274 : testCut 12 [] s274=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert275 : testCut 12 [] s275=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert276 : testCut 12 [] s276=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert277 : testCut 12 [] s277=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert278 : testCut 12 [] s278=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert279 : testCut 12 [] s279=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert280 : testCut 12 [] s280=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert281 : testCut 12 [] s281=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert282 : testCut 12 [] s282=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert283 : testCut 12 [] s283=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert284 : testCut 12 [] s284=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert285 : testCut 12 [] s285=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert286 : testCut 12 [] s286=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert287 : testCut 13 [s288, s159, s186, s289, s211, s290, s291, s292, s217, s241, s293, s294, s264, s295, s296, s297, s298, s299, s300, s301, s302, s303, s304, s305, s306, s307, s308, s309, s310, s311, s312, s313, s314, s315, s316] s287=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert288 : testCut 12 [] s288=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert289 : testCut 12 [] s289=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert290 : testCut 12 [] s290=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert291 : testCut 12 [] s291=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert292 : testCut 12 [] s292=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert293 : testCut 12 [] s293=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert294 : testCut 12 [] s294=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert295 : testCut 12 [] s295=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert296 : testCut 12 [] s296=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert297 : testCut 12 [] s297=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert298 : testCut 12 [] s298=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert299 : testCut 12 [] s299=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert300 : testCut 12 [] s300=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert301 : testCut 12 [] s301=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert302 : testCut 12 [] s302=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert303 : testCut 12 [] s303=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert304 : testCut 12 [] s304=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert305 : testCut 12 [] s305=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert306 : testCut 12 [] s306=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert307 : testCut 12 [] s307=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert308 : testCut 12 [] s308=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert309 : testCut 12 [] s309=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert310 : testCut 12 [] s310=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert311 : testCut 12 [] s311=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert312 : testCut 12 [] s312=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert313 : testCut 12 [] s313=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert314 : testCut 12 [] s314=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert315 : testCut 12 [] s315=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert316 : testCut 12 [] s316=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert317 : testCut 13 [s155, s208, s260, s190, s291, s239, s318, s173, s319, s224, s320, s267, s321, s297, s322, s323, s324, s325, s326, s327, s328, s329, s330, s331, s332, s333, s279, s334, s309, s335, s336, s337] s317=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert318 : testCut 12 [] s318=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert319 : testCut 12 [] s319=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert320 : testCut 12 [] s320=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert321 : testCut 12 [] s321=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert322 : testCut 12 [] s322=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert323 : testCut 12 [] s323=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert324 : testCut 12 [] s324=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert325 : testCut 12 [] s325=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert326 : testCut 12 [] s326=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert327 : testCut 12 [] s327=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert328 : testCut 12 [] s328=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert329 : testCut 12 [] s329=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert330 : testCut 12 [] s330=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert331 : testCut 12 [] s331=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert332 : testCut 12 [] s332=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert333 : testCut 12 [] s333=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert334 : testCut 12 [] s334=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert335 : testCut 12 [] s335=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert336 : testCut 12 [] s336=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert337 : testCut 12 [] s337=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert338 : testCut 13 [s182, s233, s164, s261, s215, s292, s339, s340, s199, s341, s248, s342, s343, s268, s298, s323, s344, s345, s346, s347, s348, s349, s350, s351, s352, s353, s354, s280, s355, s310, s356, s357] s338=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert339 : testCut 12 [] s339=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert340 : testCut 12 [] s340=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert341 : testCut 12 [] s341=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert342 : testCut 12 [] s342=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert343 : testCut 12 [] s343=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert344 : testCut 12 [] s344=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert345 : testCut 12 [] s345=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert346 : testCut 12 [] s346=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert347 : testCut 12 [] s347=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert348 : testCut 12 [] s348=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert349 : testCut 12 [] s349=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert350 : testCut 12 [] s350=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert351 : testCut 12 [] s351=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert352 : testCut 12 [] s352=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert353 : testCut 12 [] s353=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert354 : testCut 12 [] s354=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert355 : testCut 12 [] s355=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert356 : testCut 12 [] s356=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert357 : testCut 12 [] s357=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert358 : testCut 13 [s359, s360, s245, s265, s223, s319, s361, s362, s363, s364, s365, s366, s367, s368, s369, s332, s370, s371, s354, s311, s372, s373, s374] s358=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert359 : testCut 12 [] s359=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert360 : testCut 12 [] s360=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert361 : testCut 12 [] s361=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert362 : testCut 12 [] s362=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert363 : testCut 12 [] s363=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert364 : testCut 12 [] s364=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert365 : testCut 12 [] s365=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert366 : testCut 12 [] s366=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert367 : testCut 12 [] s367=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert368 : testCut 12 [] s368=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert369 : testCut 12 [] s369=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert370 : testCut 12 [] s370=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert371 : testCut 12 [] s371=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert372 : testCut 12 [] s372=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert373 : testCut 12 [] s373=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert374 : testCut 12 [] s374=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert375 : testCut 13 [s376, s360, s221, s265, s247, s340, s377, s378, s379, s380, s381, s382, s383, s384, s385, s350, s386, s387, s334, s312, s388, s389, s390] s375=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert376 : testCut 12 [] s376=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert377 : testCut 12 [] s377=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert378 : testCut 12 [] s378=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert379 : testCut 12 [] s379=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert380 : testCut 12 [] s380=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert381 : testCut 12 [] s381=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert382 : testCut 12 [] s382=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert383 : testCut 12 [] s383=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert384 : testCut 12 [] s384=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert385 : testCut 12 [] s385=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert386 : testCut 12 [] s386=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert387 : testCut 12 [] s387=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert388 : testCut 12 [] s388=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert389 : testCut 12 [] s389=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert390 : testCut 12 [] s390=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert391 : testCut 13 [s392, s393, s196, s295, s172, s320, s394, s395, s396, s397, s398, s399, s400, s401, s402, s333, s403, s404, s355, s281, s405, s406, s407] s391=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert392 : testCut 12 [] s392=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert393 : testCut 12 [] s393=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert394 : testCut 12 [] s394=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert395 : testCut 12 [] s395=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert396 : testCut 12 [] s396=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert397 : testCut 12 [] s397=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert398 : testCut 12 [] s398=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert399 : testCut 12 [] s399=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert400 : testCut 12 [] s400=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert401 : testCut 12 [] s401=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert402 : testCut 12 [] s402=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert403 : testCut 12 [] s403=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert404 : testCut 12 [] s404=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert405 : testCut 12 [] s405=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert406 : testCut 12 [] s406=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert407 : testCut 12 [] s407=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert408 : testCut 13 [s409, s393, s170, s295, s198, s341, s410, s411, s412, s413, s414, s415, s416, s417, s418, s352, s419, s420, s335, s282, s421, s422, s423] s408=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert409 : testCut 12 [] s409=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert410 : testCut 12 [] s410=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert411 : testCut 12 [] s411=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert412 : testCut 12 [] s412=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert413 : testCut 12 [] s413=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert414 : testCut 12 [] s414=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert415 : testCut 12 [] s415=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert416 : testCut 12 [] s416=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert417 : testCut 12 [] s417=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert418 : testCut 12 [] s418=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert419 : testCut 12 [] s419=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert420 : testCut 12 [] s420=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert421 : testCut 12 [] s421=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert422 : testCut 12 [] s422=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert423 : testCut 12 [] s423=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert424 : testCut 13 [s162, s237, s425, s426, s427, s428, s429, s430, s431, s432, s433, s434, s435, s436, s437, s438] s424=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert425 : testCut 12 [] s425=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert426 : testCut 12 [] s426=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert427 : testCut 12 [] s427=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert428 : testCut 12 [] s428=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert429 : testCut 12 [] s429=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert430 : testCut 12 [] s430=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert431 : testCut 12 [] s431=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert432 : testCut 12 [] s432=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert433 : testCut 12 [] s433=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert434 : testCut 12 [] s434=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert435 : testCut 12 [] s435=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert436 : testCut 12 [] s436=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert437 : testCut 12 [] s437=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert438 : testCut 12 [] s438=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert439 : testCut 13 [s188, s213, s425, s440, s441, s442, s443, s444, s445, s446, s447, s448, s449, s450, s451, s452] s439=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert440 : testCut 12 [] s440=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert441 : testCut 12 [] s441=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert442 : testCut 12 [] s442=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert443 : testCut 12 [] s443=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert444 : testCut 12 [] s444=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert445 : testCut 12 [] s445=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert446 : testCut 12 [] s446=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert447 : testCut 12 [] s447=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert448 : testCut 12 [] s448=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert449 : testCut 12 [] s449=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert450 : testCut 12 [] s450=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert451 : testCut 12 [] s451=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert452 : testCut 12 [] s452=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert453 : testCut 13 [s187, s212, s267, s298, s454, s449, s384, s401, s203, s228, s178, s253, s455, s456, s457, s458, s459, s460, s461, s462, s463, s389, s406, s286, s316] s453=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert454 : testCut 12 [] s454=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert455 : testCut 12 [] s455=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert456 : testCut 12 [] s456=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert457 : testCut 12 [] s457=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert458 : testCut 12 [] s458=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert459 : testCut 12 [] s459=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert460 : testCut 12 [] s460=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert461 : testCut 12 [] s461=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert462 : testCut 12 [] s462=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert463 : testCut 12 [] s463=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert464 : testCut 13 [s161, s236, s297, s268, s465, s435, s368, s417, s177, s252, s204, s229, s466, s467, s468, s469, s470, s471, s472, s473, s474, s373, s422, s475, s476] s464=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert465 : testCut 12 [] s465=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert466 : testCut 12 [] s466=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert467 : testCut 12 [] s467=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert468 : testCut 12 [] s468=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert469 : testCut 12 [] s469=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert470 : testCut 12 [] s470=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert471 : testCut 12 [] s471=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert472 : testCut 12 [] s472=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert473 : testCut 12 [] s473=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert474 : testCut 12 [] s474=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert475 : testCut 12 [] s475=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert476 : testCut 12 [] s476=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert477 : testCut 13 [s244, s478, s342, s433, s380, s399, s271, s418, s479, s480, s329, s303, s466, s330, s276, s481] s477=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert478 : testCut 12 [] s478=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert479 : testCut 12 [] s479=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert480 : testCut 12 [] s480=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert481 : testCut 12 [] s481=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert482 : testCut 13 [s195, s483, s343, s447, s413, s366, s301, s385, s484, s485, s329, s273, s455, s331, s306, s486] s482=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert483 : testCut 12 [] s483=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert484 : testCut 12 [] s484=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert485 : testCut 12 [] s485=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert486 : testCut 12 [] s486=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert487 : testCut 13 [s220, s488, s321, s448, s364, s415, s272, s402, s489, s490, s349, s304, s455, s351, s276, s491] s487=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert488 : testCut 12 [] s488=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert489 : testCut 12 [] s489=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert490 : testCut 12 [] s490=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert491 : testCut 12 [] s491=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert492 : testCut 13 [s169, s493, s322, s434, s397, s382, s302, s369, s494, s495, s349, s274, s466, s353, s306, s496] s492=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert493 : testCut 12 [] s493=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert494 : testCut 12 [] s494=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert495 : testCut 12 [] s495=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert496 : testCut 12 [] s496=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert497 : testCut 13 [s377, s498, s367, s332, s499, s500, s501, s502, s313, s389, s314, s503, s504, s505] s497=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert498 : testCut 12 [] s498=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert499 : testCut 12 [] s499=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert500 : testCut 12 [] s500=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert501 : testCut 12 [] s501=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert502 : testCut 12 [] s502=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert503 : testCut 12 [] s503=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert504 : testCut 12 [] s504=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert505 : testCut 12 [] s505=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert506 : testCut 13 [s410, s507, s400, s333, s508, s509, s510, s511, s283, s284, s422, s512, s513, s514] s506=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert507 : testCut 12 [] s507=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert508 : testCut 12 [] s508=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert509 : testCut 12 [] s509=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert510 : testCut 12 [] s510=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert511 : testCut 12 [] s511=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert512 : testCut 12 [] s512=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert513 : testCut 12 [] s513=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert514 : testCut 12 [] s514=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert515 : testCut 13 [s394, s516, s416, s352, s517, s518, s519, s520, s283, s406, s285, s521, s522, s523] s515=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert516 : testCut 12 [] s516=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert517 : testCut 12 [] s517=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert518 : testCut 12 [] s518=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert519 : testCut 12 [] s519=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert520 : testCut 12 [] s520=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert521 : testCut 12 [] s521=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert522 : testCut 12 [] s522=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert523 : testCut 12 [] s523=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert524 : testCut 13 [s361, s525, s383, s350, s526, s527, s528, s529, s313, s373, s315, s530, s531, s532] s524=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert525 : testCut 12 [] s525=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert526 : testCut 12 [] s526=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert527 : testCut 12 [] s527=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert528 : testCut 12 [] s528=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert529 : testCut 12 [] s529=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert530 : testCut 12 [] s530=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert531 : testCut 12 [] s531=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert532 : testCut 12 [] s532=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert533 : testCut 13 [s534, s197, s246, s535, s536, s537, s344, s538, s539] s533=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert534 : testCut 12 [] s534=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert535 : testCut 12 [] s535=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert536 : testCut 12 [] s536=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert537 : testCut 12 [] s537=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert538 : testCut 12 [] s538=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert539 : testCut 12 [] s539=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert540 : testCut 13 [s541, s171, s222, s542, s543, s544, s324, s545, s546] s540=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert541 : testCut 12 [] s541=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert542 : testCut 12 [] s542=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert543 : testCut 12 [] s543=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert544 : testCut 12 [] s544=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert545 : testCut 12 [] s545=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert546 : testCut 12 [] s546=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert547 : testCut 13 [s548, s431, s549, s550, s299, s551] s547=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert548 : testCut 12 [] s548=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert549 : testCut 12 [] s549=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert550 : testCut 12 [] s550=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert551 : testCut 12 [] s551=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert552 : testCut 13 [s553, s445, s554, s555, s269, s556] s552=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert553 : testCut 12 [] s553=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert554 : testCut 12 [] s554=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert555 : testCut 12 [] s555=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert556 : testCut 12 [] s556=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert557 : testCut 13 [s558, s446, s559, s560, s300, s561] s557=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert558 : testCut 12 [] s558=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert559 : testCut 12 [] s559=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert560 : testCut 12 [] s560=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert561 : testCut 12 [] s561=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert562 : testCut 13 [s563, s432, s564, s565, s270, s566] s562=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert563 : testCut 12 [] s563=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert564 : testCut 12 [] s564=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert565 : testCut 12 [] s565=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert566 : testCut 12 [] s566=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert567 : testCut 13 [s250, s568, s202, s230, s569, s570, s571, s572] s567=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert568 : testCut 12 [] s568=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert569 : testCut 12 [] s569=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert570 : testCut 12 [] s570=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert571 : testCut 12 [] s571=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert572 : testCut 12 [] s572=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert573 : testCut 13 [s201, s574, s251, s179, s575, s576, s577, s572] s573=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert574 : testCut 12 [] s574=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert575 : testCut 12 [] s575=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert576 : testCut 12 [] s576=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert577 : testCut 12 [] s577=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert578 : testCut 13 [s226, s579, s176, s254, s580, s581, s577, s582] s578=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert579 : testCut 12 [] s579=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert580 : testCut 12 [] s580=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert581 : testCut 12 [] s581=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert582 : testCut 12 [] s582=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert583 : testCut 13 [s175, s584, s227, s205, s585, s586, s571, s582] s583=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert584 : testCut 12 [] s584=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert585 : testCut 12 [] s585=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert586 : testCut 12 [] s586=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert587 : testCut 13 [s588, s589] s587=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert588 : testCut 12 [] s588=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert589 : testCut 12 [] s589=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert590 : testCut 13 [s591, s592] s590=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert591 : testCut 12 [] s591=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert592 : testCut 12 [] s592=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert593 : testCut 13 [] s593=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert594 : testCut 13 [] s594=false := by decide +kernel
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma cert595 : testCut 13 [] s595=false := by decide +kernel
+def expOK (m : Bool) (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) : Bool :=
+  sortedB l && !(allFinal l) && pairsAll (pairOK m P prev k l) l
 
-lemma v2 (h : RootCtx) : Valid 12 s2 := cut_sound h (by simp) cert2
-lemma v3 (h : RootCtx) : Valid 12 s3 := cut_sound h (by simp) cert3
-lemma v4 (h : RootCtx) : Valid 12 s4 := cut_sound h (by simp) cert4
-lemma v5 (h : RootCtx) : Valid 12 s5 := cut_sound h (by simp) cert5
-lemma v6 (h : RootCtx) : Valid 12 s6 := cut_sound h (by simp) cert6
-lemma v7 (h : RootCtx) : Valid 12 s7 := cut_sound h (by simp) cert7
-lemma v8 (h : RootCtx) : Valid 12 s8 := cut_sound h (by simp) cert8
-lemma v9 (h : RootCtx) : Valid 12 s9 := cut_sound h (by simp) cert9
-lemma v10 (h : RootCtx) : Valid 12 s10 := cut_sound h (by simp) cert10
-lemma v11 (h : RootCtx) : Valid 12 s11 := cut_sound h (by simp) cert11
-lemma v12 (h : RootCtx) : Valid 12 s12 := cut_sound h (by simp) cert12
-lemma v13 (h : RootCtx) : Valid 12 s13 := cut_sound h (by simp) cert13
-lemma v14 (h : RootCtx) : Valid 12 s14 := cut_sound h (by simp) cert14
-lemma v15 (h : RootCtx) : Valid 12 s15 := cut_sound h (by simp) cert15
-lemma v16 (h : RootCtx) : Valid 12 s16 := cut_sound h (by simp) cert16
-lemma v17 (h : RootCtx) : Valid 12 s17 := cut_sound h (by simp) cert17
-lemma v18 (h : RootCtx) : Valid 12 s18 := cut_sound h (by simp) cert18
-lemma v19 (h : RootCtx) : Valid 12 s19 := cut_sound h (by simp) cert19
-lemma v21 (h : RootCtx) : Valid 12 s21 := cut_sound h (by simp) cert21
-lemma v22 (h : RootCtx) : Valid 12 s22 := cut_sound h (by simp) cert22
-lemma v23 (h : RootCtx) : Valid 12 s23 := cut_sound h (by simp) cert23
-lemma v24 (h : RootCtx) : Valid 12 s24 := cut_sound h (by simp) cert24
-lemma v25 (h : RootCtx) : Valid 12 s25 := cut_sound h (by simp) cert25
-lemma v26 (h : RootCtx) : Valid 12 s26 := cut_sound h (by simp) cert26
-lemma v27 (h : RootCtx) : Valid 12 s27 := cut_sound h (by simp) cert27
-lemma v28 (h : RootCtx) : Valid 12 s28 := cut_sound h (by simp) cert28
-lemma v29 (h : RootCtx) : Valid 12 s29 := cut_sound h (by simp) cert29
-lemma v30 (h : RootCtx) : Valid 12 s30 := cut_sound h (by simp) cert30
-lemma v31 (h : RootCtx) : Valid 12 s31 := cut_sound h (by simp) cert31
-lemma v32 (h : RootCtx) : Valid 12 s32 := cut_sound h (by simp) cert32
-lemma v33 (h : RootCtx) : Valid 12 s33 := cut_sound h (by simp) cert33
-lemma v34 (h : RootCtx) : Valid 12 s34 := cut_sound h (by simp) cert34
-lemma v35 (h : RootCtx) : Valid 12 s35 := cut_sound h (by simp) cert35
-lemma v36 (h : RootCtx) : Valid 12 s36 := cut_sound h (by simp) cert36
-lemma v37 (h : RootCtx) : Valid 12 s37 := cut_sound h (by simp) cert37
-lemma v39 (h : RootCtx) : Valid 12 s39 := cut_sound h (by simp) cert39
-lemma v40 (h : RootCtx) : Valid 12 s40 := cut_sound h (by simp) cert40
-lemma v41 (h : RootCtx) : Valid 12 s41 := cut_sound h (by simp) cert41
-lemma v42 (h : RootCtx) : Valid 12 s42 := cut_sound h (by simp) cert42
-lemma v43 (h : RootCtx) : Valid 12 s43 := cut_sound h (by simp) cert43
-lemma v44 (h : RootCtx) : Valid 12 s44 := cut_sound h (by simp) cert44
-lemma v45 (h : RootCtx) : Valid 12 s45 := cut_sound h (by simp) cert45
-lemma v46 (h : RootCtx) : Valid 12 s46 := cut_sound h (by simp) cert46
-lemma v47 (h : RootCtx) : Valid 12 s47 := cut_sound h (by simp) cert47
-lemma v48 (h : RootCtx) : Valid 12 s48 := cut_sound h (by simp) cert48
-lemma v49 (h : RootCtx) : Valid 12 s49 := cut_sound h (by simp) cert49
-lemma v50 (h : RootCtx) : Valid 12 s50 := cut_sound h (by simp) cert50
-lemma v51 (h : RootCtx) : Valid 12 s51 := cut_sound h (by simp) cert51
-lemma v52 (h : RootCtx) : Valid 12 s52 := cut_sound h (by simp) cert52
-lemma v53 (h : RootCtx) : Valid 12 s53 := cut_sound h (by simp) cert53
-lemma v54 (h : RootCtx) : Valid 12 s54 := cut_sound h (by simp) cert54
-lemma v56 (h : RootCtx) : Valid 12 s56 := cut_sound h (by simp) cert56
-lemma v57 (h : RootCtx) : Valid 12 s57 := cut_sound h (by simp) cert57
-lemma v58 (h : RootCtx) : Valid 12 s58 := cut_sound h (by simp) cert58
-lemma v59 (h : RootCtx) : Valid 12 s59 := cut_sound h (by simp) cert59
-lemma v60 (h : RootCtx) : Valid 12 s60 := cut_sound h (by simp) cert60
-lemma v61 (h : RootCtx) : Valid 12 s61 := cut_sound h (by simp) cert61
-lemma v62 (h : RootCtx) : Valid 12 s62 := cut_sound h (by simp) cert62
-lemma v63 (h : RootCtx) : Valid 12 s63 := cut_sound h (by simp) cert63
-lemma v64 (h : RootCtx) : Valid 12 s64 := cut_sound h (by simp) cert64
-lemma v65 (h : RootCtx) : Valid 12 s65 := cut_sound h (by simp) cert65
-lemma v66 (h : RootCtx) : Valid 12 s66 := cut_sound h (by simp) cert66
-lemma v67 (h : RootCtx) : Valid 12 s67 := cut_sound h (by simp) cert67
-lemma v68 (h : RootCtx) : Valid 12 s68 := cut_sound h (by simp) cert68
-lemma v69 (h : RootCtx) : Valid 12 s69 := cut_sound h (by simp) cert69
-lemma v70 (h : RootCtx) : Valid 12 s70 := cut_sound h (by simp) cert70
-lemma v72 (h : RootCtx) : Valid 12 s72 := cut_sound h (by simp) cert72
-lemma v73 (h : RootCtx) : Valid 12 s73 := cut_sound h (by simp) cert73
-lemma v74 (h : RootCtx) : Valid 12 s74 := cut_sound h (by simp) cert74
-lemma v75 (h : RootCtx) : Valid 12 s75 := cut_sound h (by simp) cert75
-lemma v76 (h : RootCtx) : Valid 12 s76 := cut_sound h (by simp) cert76
-lemma v77 (h : RootCtx) : Valid 12 s77 := cut_sound h (by simp) cert77
-lemma v78 (h : RootCtx) : Valid 12 s78 := cut_sound h (by simp) cert78
-lemma v79 (h : RootCtx) : Valid 12 s79 := cut_sound h (by simp) cert79
-lemma v80 (h : RootCtx) : Valid 12 s80 := cut_sound h (by simp) cert80
-lemma v81 (h : RootCtx) : Valid 12 s81 := cut_sound h (by simp) cert81
-lemma v82 (h : RootCtx) : Valid 12 s82 := cut_sound h (by simp) cert82
-lemma v84 (h : RootCtx) : Valid 12 s84 := cut_sound h (by simp) cert84
-lemma v85 (h : RootCtx) : Valid 12 s85 := cut_sound h (by simp) cert85
-lemma v86 (h : RootCtx) : Valid 12 s86 := cut_sound h (by simp) cert86
-lemma v87 (h : RootCtx) : Valid 12 s87 := cut_sound h (by simp) cert87
-lemma v88 (h : RootCtx) : Valid 12 s88 := cut_sound h (by simp) cert88
-lemma v89 (h : RootCtx) : Valid 12 s89 := cut_sound h (by simp) cert89
-lemma v90 (h : RootCtx) : Valid 12 s90 := cut_sound h (by simp) cert90
-lemma v91 (h : RootCtx) : Valid 12 s91 := cut_sound h (by simp) cert91
-lemma v92 (h : RootCtx) : Valid 12 s92 := cut_sound h (by simp) cert92
-lemma v93 (h : RootCtx) : Valid 12 s93 := cut_sound h (by simp) cert93
-lemma v95 (h : RootCtx) : Valid 12 s95 := cut_sound h (by simp) cert95
-lemma v96 (h : RootCtx) : Valid 12 s96 := cut_sound h (by simp) cert96
-lemma v97 (h : RootCtx) : Valid 12 s97 := cut_sound h (by simp) cert97
-lemma v98 (h : RootCtx) : Valid 12 s98 := cut_sound h (by simp) cert98
-lemma v99 (h : RootCtx) : Valid 12 s99 := cut_sound h (by simp) cert99
-lemma v100 (h : RootCtx) : Valid 12 s100 := cut_sound h (by simp) cert100
-lemma v101 (h : RootCtx) : Valid 12 s101 := cut_sound h (by simp) cert101
-lemma v103 (h : RootCtx) : Valid 12 s103 := cut_sound h (by simp) cert103
-lemma v104 (h : RootCtx) : Valid 12 s104 := cut_sound h (by simp) cert104
-lemma v105 (h : RootCtx) : Valid 12 s105 := cut_sound h (by simp) cert105
-lemma v106 (h : RootCtx) : Valid 12 s106 := cut_sound h (by simp) cert106
-lemma v107 (h : RootCtx) : Valid 12 s107 := cut_sound h (by simp) cert107
-lemma v108 (h : RootCtx) : Valid 12 s108 := cut_sound h (by simp) cert108
-lemma v110 (h : RootCtx) : Valid 12 s110 := cut_sound h (by simp) cert110
-lemma v111 (h : RootCtx) : Valid 12 s111 := cut_sound h (by simp) cert111
-lemma v112 (h : RootCtx) : Valid 12 s112 := cut_sound h (by simp) cert112
-lemma v114 (h : RootCtx) : Valid 12 s114 := cut_sound h (by simp) cert114
-lemma v115 (h : RootCtx) : Valid 12 s115 := cut_sound h (by simp) cert115
-lemma v116 (h : RootCtx) : Valid 12 s116 := cut_sound h (by simp) cert116
-lemma v117 (h : RootCtx) : Valid 12 s117 := cut_sound h (by simp) cert117
-lemma v118 (h : RootCtx) : Valid 12 s118 := cut_sound h (by simp) cert118
-lemma v120 (h : RootCtx) : Valid 12 s120 := cut_sound h (by simp) cert120
-lemma v121 (h : RootCtx) : Valid 12 s121 := cut_sound h (by simp) cert121
-lemma v122 (h : RootCtx) : Valid 12 s122 := cut_sound h (by simp) cert122
-lemma v123 (h : RootCtx) : Valid 12 s123 := cut_sound h (by simp) cert123
-lemma v125 (h : RootCtx) : Valid 12 s125 := cut_sound h (by simp) cert125
-lemma v126 (h : RootCtx) : Valid 12 s126 := cut_sound h (by simp) cert126
-lemma v127 (h : RootCtx) : Valid 12 s127 := cut_sound h (by simp) cert127
-lemma v128 (h : RootCtx) : Valid 12 s128 := cut_sound h (by simp) cert128
-lemma v129 (h : RootCtx) : Valid 12 s129 := cut_sound h (by simp) cert129
-lemma v130 (h : RootCtx) : Valid 12 s130 := cut_sound h (by simp) cert130
-lemma v132 (h : RootCtx) : Valid 12 s132 := cut_sound h (by simp) cert132
-lemma v133 (h : RootCtx) : Valid 12 s133 := cut_sound h (by simp) cert133
-lemma v134 (h : RootCtx) : Valid 12 s134 := cut_sound h (by simp) cert134
-lemma v135 (h : RootCtx) : Valid 12 s135 := cut_sound h (by simp) cert135
-lemma v136 (h : RootCtx) : Valid 12 s136 := cut_sound h (by simp) cert136
-lemma v137 (h : RootCtx) : Valid 12 s137 := cut_sound h (by simp) cert137
-lemma v139 (h : RootCtx) : Valid 12 s139 := cut_sound h (by simp) cert139
-lemma v142 (h : RootCtx) : Valid 12 s142 := cut_sound h (by simp) cert142
-lemma v143 (h : RootCtx) : Valid 12 s143 := cut_sound h (by simp) cert143
-lemma v144 (h : RootCtx) : Valid 12 s144 := cut_sound h (by simp) cert144
-lemma v146 (h : RootCtx) : Valid 12 s146 := cut_sound h (by simp) cert146
-lemma v147 (h : RootCtx) : Valid 12 s147 := cut_sound h (by simp) cert147
-lemma v149 (h : RootCtx) : Valid 12 s149 := cut_sound h (by simp) cert149
-lemma v151 (h : RootCtx) : Valid 12 s151 := cut_sound h (by simp) cert151
-lemma v155 (h : RootCtx) : Valid 12 s155 := cut_sound h (by simp) cert155
-lemma v156 (h : RootCtx) : Valid 12 s156 := cut_sound h (by simp) cert156
-lemma v157 (h : RootCtx) : Valid 12 s157 := cut_sound h (by simp) cert157
-lemma v158 (h : RootCtx) : Valid 12 s158 := cut_sound h (by simp) cert158
-lemma v159 (h : RootCtx) : Valid 12 s159 := cut_sound h (by simp) cert159
-lemma v160 (h : RootCtx) : Valid 12 s160 := cut_sound h (by simp) cert160
-lemma v161 (h : RootCtx) : Valid 12 s161 := cut_sound h (by simp) cert161
-lemma v162 (h : RootCtx) : Valid 12 s162 := cut_sound h (by simp) cert162
-lemma v163 (h : RootCtx) : Valid 12 s163 := cut_sound h (by simp) cert163
-lemma v164 (h : RootCtx) : Valid 12 s164 := cut_sound h (by simp) cert164
-lemma v165 (h : RootCtx) : Valid 12 s165 := cut_sound h (by simp) cert165
-lemma v166 (h : RootCtx) : Valid 12 s166 := cut_sound h (by simp) cert166
-lemma v167 (h : RootCtx) : Valid 12 s167 := cut_sound h (by simp) cert167
-lemma v168 (h : RootCtx) : Valid 12 s168 := cut_sound h (by simp) cert168
-lemma v169 (h : RootCtx) : Valid 12 s169 := cut_sound h (by simp) cert169
-lemma v170 (h : RootCtx) : Valid 12 s170 := cut_sound h (by simp) cert170
-lemma v171 (h : RootCtx) : Valid 12 s171 := cut_sound h (by simp) cert171
-lemma v172 (h : RootCtx) : Valid 12 s172 := cut_sound h (by simp) cert172
-lemma v173 (h : RootCtx) : Valid 12 s173 := cut_sound h (by simp) cert173
-lemma v174 (h : RootCtx) : Valid 12 s174 := cut_sound h (by simp) cert174
-lemma v175 (h : RootCtx) : Valid 12 s175 := cut_sound h (by simp) cert175
-lemma v176 (h : RootCtx) : Valid 12 s176 := cut_sound h (by simp) cert176
-lemma v177 (h : RootCtx) : Valid 12 s177 := cut_sound h (by simp) cert177
-lemma v178 (h : RootCtx) : Valid 12 s178 := cut_sound h (by simp) cert178
-lemma v179 (h : RootCtx) : Valid 12 s179 := cut_sound h (by simp) cert179
-lemma v180 (h : RootCtx) : Valid 12 s180 := cut_sound h (by simp) cert180
-lemma v182 (h : RootCtx) : Valid 12 s182 := cut_sound h (by simp) cert182
-lemma v183 (h : RootCtx) : Valid 12 s183 := cut_sound h (by simp) cert183
-lemma v184 (h : RootCtx) : Valid 12 s184 := cut_sound h (by simp) cert184
-lemma v185 (h : RootCtx) : Valid 12 s185 := cut_sound h (by simp) cert185
-lemma v186 (h : RootCtx) : Valid 12 s186 := cut_sound h (by simp) cert186
-lemma v187 (h : RootCtx) : Valid 12 s187 := cut_sound h (by simp) cert187
-lemma v188 (h : RootCtx) : Valid 12 s188 := cut_sound h (by simp) cert188
-lemma v189 (h : RootCtx) : Valid 12 s189 := cut_sound h (by simp) cert189
-lemma v190 (h : RootCtx) : Valid 12 s190 := cut_sound h (by simp) cert190
-lemma v191 (h : RootCtx) : Valid 12 s191 := cut_sound h (by simp) cert191
-lemma v192 (h : RootCtx) : Valid 12 s192 := cut_sound h (by simp) cert192
-lemma v193 (h : RootCtx) : Valid 12 s193 := cut_sound h (by simp) cert193
-lemma v194 (h : RootCtx) : Valid 12 s194 := cut_sound h (by simp) cert194
-lemma v195 (h : RootCtx) : Valid 12 s195 := cut_sound h (by simp) cert195
-lemma v196 (h : RootCtx) : Valid 12 s196 := cut_sound h (by simp) cert196
-lemma v197 (h : RootCtx) : Valid 12 s197 := cut_sound h (by simp) cert197
-lemma v198 (h : RootCtx) : Valid 12 s198 := cut_sound h (by simp) cert198
-lemma v199 (h : RootCtx) : Valid 12 s199 := cut_sound h (by simp) cert199
-lemma v200 (h : RootCtx) : Valid 12 s200 := cut_sound h (by simp) cert200
-lemma v201 (h : RootCtx) : Valid 12 s201 := cut_sound h (by simp) cert201
-lemma v202 (h : RootCtx) : Valid 12 s202 := cut_sound h (by simp) cert202
-lemma v203 (h : RootCtx) : Valid 12 s203 := cut_sound h (by simp) cert203
-lemma v204 (h : RootCtx) : Valid 12 s204 := cut_sound h (by simp) cert204
-lemma v205 (h : RootCtx) : Valid 12 s205 := cut_sound h (by simp) cert205
-lemma v206 (h : RootCtx) : Valid 12 s206 := cut_sound h (by simp) cert206
-lemma v208 (h : RootCtx) : Valid 12 s208 := cut_sound h (by simp) cert208
-lemma v209 (h : RootCtx) : Valid 12 s209 := cut_sound h (by simp) cert209
-lemma v210 (h : RootCtx) : Valid 12 s210 := cut_sound h (by simp) cert210
-lemma v211 (h : RootCtx) : Valid 12 s211 := cut_sound h (by simp) cert211
-lemma v212 (h : RootCtx) : Valid 12 s212 := cut_sound h (by simp) cert212
-lemma v213 (h : RootCtx) : Valid 12 s213 := cut_sound h (by simp) cert213
-lemma v214 (h : RootCtx) : Valid 12 s214 := cut_sound h (by simp) cert214
-lemma v215 (h : RootCtx) : Valid 12 s215 := cut_sound h (by simp) cert215
-lemma v216 (h : RootCtx) : Valid 12 s216 := cut_sound h (by simp) cert216
-lemma v217 (h : RootCtx) : Valid 12 s217 := cut_sound h (by simp) cert217
-lemma v218 (h : RootCtx) : Valid 12 s218 := cut_sound h (by simp) cert218
-lemma v219 (h : RootCtx) : Valid 12 s219 := cut_sound h (by simp) cert219
-lemma v220 (h : RootCtx) : Valid 12 s220 := cut_sound h (by simp) cert220
-lemma v221 (h : RootCtx) : Valid 12 s221 := cut_sound h (by simp) cert221
-lemma v222 (h : RootCtx) : Valid 12 s222 := cut_sound h (by simp) cert222
-lemma v223 (h : RootCtx) : Valid 12 s223 := cut_sound h (by simp) cert223
-lemma v224 (h : RootCtx) : Valid 12 s224 := cut_sound h (by simp) cert224
-lemma v225 (h : RootCtx) : Valid 12 s225 := cut_sound h (by simp) cert225
-lemma v226 (h : RootCtx) : Valid 12 s226 := cut_sound h (by simp) cert226
-lemma v227 (h : RootCtx) : Valid 12 s227 := cut_sound h (by simp) cert227
-lemma v228 (h : RootCtx) : Valid 12 s228 := cut_sound h (by simp) cert228
-lemma v229 (h : RootCtx) : Valid 12 s229 := cut_sound h (by simp) cert229
-lemma v230 (h : RootCtx) : Valid 12 s230 := cut_sound h (by simp) cert230
-lemma v231 (h : RootCtx) : Valid 12 s231 := cut_sound h (by simp) cert231
-lemma v233 (h : RootCtx) : Valid 12 s233 := cut_sound h (by simp) cert233
-lemma v234 (h : RootCtx) : Valid 12 s234 := cut_sound h (by simp) cert234
-lemma v235 (h : RootCtx) : Valid 12 s235 := cut_sound h (by simp) cert235
-lemma v236 (h : RootCtx) : Valid 12 s236 := cut_sound h (by simp) cert236
-lemma v237 (h : RootCtx) : Valid 12 s237 := cut_sound h (by simp) cert237
-lemma v238 (h : RootCtx) : Valid 12 s238 := cut_sound h (by simp) cert238
-lemma v239 (h : RootCtx) : Valid 12 s239 := cut_sound h (by simp) cert239
-lemma v240 (h : RootCtx) : Valid 12 s240 := cut_sound h (by simp) cert240
-lemma v241 (h : RootCtx) : Valid 12 s241 := cut_sound h (by simp) cert241
-lemma v242 (h : RootCtx) : Valid 12 s242 := cut_sound h (by simp) cert242
-lemma v243 (h : RootCtx) : Valid 12 s243 := cut_sound h (by simp) cert243
-lemma v244 (h : RootCtx) : Valid 12 s244 := cut_sound h (by simp) cert244
-lemma v245 (h : RootCtx) : Valid 12 s245 := cut_sound h (by simp) cert245
-lemma v246 (h : RootCtx) : Valid 12 s246 := cut_sound h (by simp) cert246
-lemma v247 (h : RootCtx) : Valid 12 s247 := cut_sound h (by simp) cert247
-lemma v248 (h : RootCtx) : Valid 12 s248 := cut_sound h (by simp) cert248
-lemma v249 (h : RootCtx) : Valid 12 s249 := cut_sound h (by simp) cert249
-lemma v250 (h : RootCtx) : Valid 12 s250 := cut_sound h (by simp) cert250
-lemma v251 (h : RootCtx) : Valid 12 s251 := cut_sound h (by simp) cert251
-lemma v252 (h : RootCtx) : Valid 12 s252 := cut_sound h (by simp) cert252
-lemma v253 (h : RootCtx) : Valid 12 s253 := cut_sound h (by simp) cert253
-lemma v254 (h : RootCtx) : Valid 12 s254 := cut_sound h (by simp) cert254
-lemma v255 (h : RootCtx) : Valid 12 s255 := cut_sound h (by simp) cert255
-lemma v257 (h : RootCtx) : Valid 12 s257 := cut_sound h (by simp) cert257
-lemma v258 (h : RootCtx) : Valid 12 s258 := cut_sound h (by simp) cert258
-lemma v259 (h : RootCtx) : Valid 12 s259 := cut_sound h (by simp) cert259
-lemma v260 (h : RootCtx) : Valid 12 s260 := cut_sound h (by simp) cert260
-lemma v261 (h : RootCtx) : Valid 12 s261 := cut_sound h (by simp) cert261
-lemma v262 (h : RootCtx) : Valid 12 s262 := cut_sound h (by simp) cert262
-lemma v263 (h : RootCtx) : Valid 12 s263 := cut_sound h (by simp) cert263
-lemma v264 (h : RootCtx) : Valid 12 s264 := cut_sound h (by simp) cert264
-lemma v265 (h : RootCtx) : Valid 12 s265 := cut_sound h (by simp) cert265
-lemma v266 (h : RootCtx) : Valid 12 s266 := cut_sound h (by simp) cert266
-lemma v267 (h : RootCtx) : Valid 12 s267 := cut_sound h (by simp) cert267
-lemma v268 (h : RootCtx) : Valid 12 s268 := cut_sound h (by simp) cert268
-lemma v269 (h : RootCtx) : Valid 12 s269 := cut_sound h (by simp) cert269
-lemma v270 (h : RootCtx) : Valid 12 s270 := cut_sound h (by simp) cert270
-lemma v271 (h : RootCtx) : Valid 12 s271 := cut_sound h (by simp) cert271
-lemma v272 (h : RootCtx) : Valid 12 s272 := cut_sound h (by simp) cert272
-lemma v273 (h : RootCtx) : Valid 12 s273 := cut_sound h (by simp) cert273
-lemma v274 (h : RootCtx) : Valid 12 s274 := cut_sound h (by simp) cert274
-lemma v275 (h : RootCtx) : Valid 12 s275 := cut_sound h (by simp) cert275
-lemma v276 (h : RootCtx) : Valid 12 s276 := cut_sound h (by simp) cert276
-lemma v277 (h : RootCtx) : Valid 12 s277 := cut_sound h (by simp) cert277
-lemma v278 (h : RootCtx) : Valid 12 s278 := cut_sound h (by simp) cert278
-lemma v279 (h : RootCtx) : Valid 12 s279 := cut_sound h (by simp) cert279
-lemma v280 (h : RootCtx) : Valid 12 s280 := cut_sound h (by simp) cert280
-lemma v281 (h : RootCtx) : Valid 12 s281 := cut_sound h (by simp) cert281
-lemma v282 (h : RootCtx) : Valid 12 s282 := cut_sound h (by simp) cert282
-lemma v283 (h : RootCtx) : Valid 12 s283 := cut_sound h (by simp) cert283
-lemma v284 (h : RootCtx) : Valid 12 s284 := cut_sound h (by simp) cert284
-lemma v285 (h : RootCtx) : Valid 12 s285 := cut_sound h (by simp) cert285
-lemma v286 (h : RootCtx) : Valid 12 s286 := cut_sound h (by simp) cert286
-lemma v288 (h : RootCtx) : Valid 12 s288 := cut_sound h (by simp) cert288
-lemma v289 (h : RootCtx) : Valid 12 s289 := cut_sound h (by simp) cert289
-lemma v290 (h : RootCtx) : Valid 12 s290 := cut_sound h (by simp) cert290
-lemma v291 (h : RootCtx) : Valid 12 s291 := cut_sound h (by simp) cert291
-lemma v292 (h : RootCtx) : Valid 12 s292 := cut_sound h (by simp) cert292
-lemma v293 (h : RootCtx) : Valid 12 s293 := cut_sound h (by simp) cert293
-lemma v294 (h : RootCtx) : Valid 12 s294 := cut_sound h (by simp) cert294
-lemma v295 (h : RootCtx) : Valid 12 s295 := cut_sound h (by simp) cert295
-lemma v296 (h : RootCtx) : Valid 12 s296 := cut_sound h (by simp) cert296
-lemma v297 (h : RootCtx) : Valid 12 s297 := cut_sound h (by simp) cert297
-lemma v298 (h : RootCtx) : Valid 12 s298 := cut_sound h (by simp) cert298
-lemma v299 (h : RootCtx) : Valid 12 s299 := cut_sound h (by simp) cert299
-lemma v300 (h : RootCtx) : Valid 12 s300 := cut_sound h (by simp) cert300
-lemma v301 (h : RootCtx) : Valid 12 s301 := cut_sound h (by simp) cert301
-lemma v302 (h : RootCtx) : Valid 12 s302 := cut_sound h (by simp) cert302
-lemma v303 (h : RootCtx) : Valid 12 s303 := cut_sound h (by simp) cert303
-lemma v304 (h : RootCtx) : Valid 12 s304 := cut_sound h (by simp) cert304
-lemma v305 (h : RootCtx) : Valid 12 s305 := cut_sound h (by simp) cert305
-lemma v306 (h : RootCtx) : Valid 12 s306 := cut_sound h (by simp) cert306
-lemma v307 (h : RootCtx) : Valid 12 s307 := cut_sound h (by simp) cert307
-lemma v308 (h : RootCtx) : Valid 12 s308 := cut_sound h (by simp) cert308
-lemma v309 (h : RootCtx) : Valid 12 s309 := cut_sound h (by simp) cert309
-lemma v310 (h : RootCtx) : Valid 12 s310 := cut_sound h (by simp) cert310
-lemma v311 (h : RootCtx) : Valid 12 s311 := cut_sound h (by simp) cert311
-lemma v312 (h : RootCtx) : Valid 12 s312 := cut_sound h (by simp) cert312
-lemma v313 (h : RootCtx) : Valid 12 s313 := cut_sound h (by simp) cert313
-lemma v314 (h : RootCtx) : Valid 12 s314 := cut_sound h (by simp) cert314
-lemma v315 (h : RootCtx) : Valid 12 s315 := cut_sound h (by simp) cert315
-lemma v316 (h : RootCtx) : Valid 12 s316 := cut_sound h (by simp) cert316
-lemma v318 (h : RootCtx) : Valid 12 s318 := cut_sound h (by simp) cert318
-lemma v319 (h : RootCtx) : Valid 12 s319 := cut_sound h (by simp) cert319
-lemma v320 (h : RootCtx) : Valid 12 s320 := cut_sound h (by simp) cert320
-lemma v321 (h : RootCtx) : Valid 12 s321 := cut_sound h (by simp) cert321
-lemma v322 (h : RootCtx) : Valid 12 s322 := cut_sound h (by simp) cert322
-lemma v323 (h : RootCtx) : Valid 12 s323 := cut_sound h (by simp) cert323
-lemma v324 (h : RootCtx) : Valid 12 s324 := cut_sound h (by simp) cert324
-lemma v325 (h : RootCtx) : Valid 12 s325 := cut_sound h (by simp) cert325
-lemma v326 (h : RootCtx) : Valid 12 s326 := cut_sound h (by simp) cert326
-lemma v327 (h : RootCtx) : Valid 12 s327 := cut_sound h (by simp) cert327
-lemma v328 (h : RootCtx) : Valid 12 s328 := cut_sound h (by simp) cert328
-lemma v329 (h : RootCtx) : Valid 12 s329 := cut_sound h (by simp) cert329
-lemma v330 (h : RootCtx) : Valid 12 s330 := cut_sound h (by simp) cert330
-lemma v331 (h : RootCtx) : Valid 12 s331 := cut_sound h (by simp) cert331
-lemma v332 (h : RootCtx) : Valid 12 s332 := cut_sound h (by simp) cert332
-lemma v333 (h : RootCtx) : Valid 12 s333 := cut_sound h (by simp) cert333
-lemma v334 (h : RootCtx) : Valid 12 s334 := cut_sound h (by simp) cert334
-lemma v335 (h : RootCtx) : Valid 12 s335 := cut_sound h (by simp) cert335
-lemma v336 (h : RootCtx) : Valid 12 s336 := cut_sound h (by simp) cert336
-lemma v337 (h : RootCtx) : Valid 12 s337 := cut_sound h (by simp) cert337
-lemma v339 (h : RootCtx) : Valid 12 s339 := cut_sound h (by simp) cert339
-lemma v340 (h : RootCtx) : Valid 12 s340 := cut_sound h (by simp) cert340
-lemma v341 (h : RootCtx) : Valid 12 s341 := cut_sound h (by simp) cert341
-lemma v342 (h : RootCtx) : Valid 12 s342 := cut_sound h (by simp) cert342
-lemma v343 (h : RootCtx) : Valid 12 s343 := cut_sound h (by simp) cert343
-lemma v344 (h : RootCtx) : Valid 12 s344 := cut_sound h (by simp) cert344
-lemma v345 (h : RootCtx) : Valid 12 s345 := cut_sound h (by simp) cert345
-lemma v346 (h : RootCtx) : Valid 12 s346 := cut_sound h (by simp) cert346
-lemma v347 (h : RootCtx) : Valid 12 s347 := cut_sound h (by simp) cert347
-lemma v348 (h : RootCtx) : Valid 12 s348 := cut_sound h (by simp) cert348
-lemma v349 (h : RootCtx) : Valid 12 s349 := cut_sound h (by simp) cert349
-lemma v350 (h : RootCtx) : Valid 12 s350 := cut_sound h (by simp) cert350
-lemma v351 (h : RootCtx) : Valid 12 s351 := cut_sound h (by simp) cert351
-lemma v352 (h : RootCtx) : Valid 12 s352 := cut_sound h (by simp) cert352
-lemma v353 (h : RootCtx) : Valid 12 s353 := cut_sound h (by simp) cert353
-lemma v354 (h : RootCtx) : Valid 12 s354 := cut_sound h (by simp) cert354
-lemma v355 (h : RootCtx) : Valid 12 s355 := cut_sound h (by simp) cert355
-lemma v356 (h : RootCtx) : Valid 12 s356 := cut_sound h (by simp) cert356
-lemma v357 (h : RootCtx) : Valid 12 s357 := cut_sound h (by simp) cert357
-lemma v359 (h : RootCtx) : Valid 12 s359 := cut_sound h (by simp) cert359
-lemma v360 (h : RootCtx) : Valid 12 s360 := cut_sound h (by simp) cert360
-lemma v361 (h : RootCtx) : Valid 12 s361 := cut_sound h (by simp) cert361
-lemma v362 (h : RootCtx) : Valid 12 s362 := cut_sound h (by simp) cert362
-lemma v363 (h : RootCtx) : Valid 12 s363 := cut_sound h (by simp) cert363
-lemma v364 (h : RootCtx) : Valid 12 s364 := cut_sound h (by simp) cert364
-lemma v365 (h : RootCtx) : Valid 12 s365 := cut_sound h (by simp) cert365
-lemma v366 (h : RootCtx) : Valid 12 s366 := cut_sound h (by simp) cert366
-lemma v367 (h : RootCtx) : Valid 12 s367 := cut_sound h (by simp) cert367
-lemma v368 (h : RootCtx) : Valid 12 s368 := cut_sound h (by simp) cert368
-lemma v369 (h : RootCtx) : Valid 12 s369 := cut_sound h (by simp) cert369
-lemma v370 (h : RootCtx) : Valid 12 s370 := cut_sound h (by simp) cert370
-lemma v371 (h : RootCtx) : Valid 12 s371 := cut_sound h (by simp) cert371
-lemma v372 (h : RootCtx) : Valid 12 s372 := cut_sound h (by simp) cert372
-lemma v373 (h : RootCtx) : Valid 12 s373 := cut_sound h (by simp) cert373
-lemma v374 (h : RootCtx) : Valid 12 s374 := cut_sound h (by simp) cert374
-lemma v376 (h : RootCtx) : Valid 12 s376 := cut_sound h (by simp) cert376
-lemma v377 (h : RootCtx) : Valid 12 s377 := cut_sound h (by simp) cert377
-lemma v378 (h : RootCtx) : Valid 12 s378 := cut_sound h (by simp) cert378
-lemma v379 (h : RootCtx) : Valid 12 s379 := cut_sound h (by simp) cert379
-lemma v380 (h : RootCtx) : Valid 12 s380 := cut_sound h (by simp) cert380
-lemma v381 (h : RootCtx) : Valid 12 s381 := cut_sound h (by simp) cert381
-lemma v382 (h : RootCtx) : Valid 12 s382 := cut_sound h (by simp) cert382
-lemma v383 (h : RootCtx) : Valid 12 s383 := cut_sound h (by simp) cert383
-lemma v384 (h : RootCtx) : Valid 12 s384 := cut_sound h (by simp) cert384
-lemma v385 (h : RootCtx) : Valid 12 s385 := cut_sound h (by simp) cert385
-lemma v386 (h : RootCtx) : Valid 12 s386 := cut_sound h (by simp) cert386
-lemma v387 (h : RootCtx) : Valid 12 s387 := cut_sound h (by simp) cert387
-lemma v388 (h : RootCtx) : Valid 12 s388 := cut_sound h (by simp) cert388
-lemma v389 (h : RootCtx) : Valid 12 s389 := cut_sound h (by simp) cert389
-lemma v390 (h : RootCtx) : Valid 12 s390 := cut_sound h (by simp) cert390
-lemma v392 (h : RootCtx) : Valid 12 s392 := cut_sound h (by simp) cert392
-lemma v393 (h : RootCtx) : Valid 12 s393 := cut_sound h (by simp) cert393
-lemma v394 (h : RootCtx) : Valid 12 s394 := cut_sound h (by simp) cert394
-lemma v395 (h : RootCtx) : Valid 12 s395 := cut_sound h (by simp) cert395
-lemma v396 (h : RootCtx) : Valid 12 s396 := cut_sound h (by simp) cert396
-lemma v397 (h : RootCtx) : Valid 12 s397 := cut_sound h (by simp) cert397
-lemma v398 (h : RootCtx) : Valid 12 s398 := cut_sound h (by simp) cert398
-lemma v399 (h : RootCtx) : Valid 12 s399 := cut_sound h (by simp) cert399
-lemma v400 (h : RootCtx) : Valid 12 s400 := cut_sound h (by simp) cert400
-lemma v401 (h : RootCtx) : Valid 12 s401 := cut_sound h (by simp) cert401
-lemma v402 (h : RootCtx) : Valid 12 s402 := cut_sound h (by simp) cert402
-lemma v403 (h : RootCtx) : Valid 12 s403 := cut_sound h (by simp) cert403
-lemma v404 (h : RootCtx) : Valid 12 s404 := cut_sound h (by simp) cert404
-lemma v405 (h : RootCtx) : Valid 12 s405 := cut_sound h (by simp) cert405
-lemma v406 (h : RootCtx) : Valid 12 s406 := cut_sound h (by simp) cert406
-lemma v407 (h : RootCtx) : Valid 12 s407 := cut_sound h (by simp) cert407
-lemma v409 (h : RootCtx) : Valid 12 s409 := cut_sound h (by simp) cert409
-lemma v410 (h : RootCtx) : Valid 12 s410 := cut_sound h (by simp) cert410
-lemma v411 (h : RootCtx) : Valid 12 s411 := cut_sound h (by simp) cert411
-lemma v412 (h : RootCtx) : Valid 12 s412 := cut_sound h (by simp) cert412
-lemma v413 (h : RootCtx) : Valid 12 s413 := cut_sound h (by simp) cert413
-lemma v414 (h : RootCtx) : Valid 12 s414 := cut_sound h (by simp) cert414
-lemma v415 (h : RootCtx) : Valid 12 s415 := cut_sound h (by simp) cert415
-lemma v416 (h : RootCtx) : Valid 12 s416 := cut_sound h (by simp) cert416
-lemma v417 (h : RootCtx) : Valid 12 s417 := cut_sound h (by simp) cert417
-lemma v418 (h : RootCtx) : Valid 12 s418 := cut_sound h (by simp) cert418
-lemma v419 (h : RootCtx) : Valid 12 s419 := cut_sound h (by simp) cert419
-lemma v420 (h : RootCtx) : Valid 12 s420 := cut_sound h (by simp) cert420
-lemma v421 (h : RootCtx) : Valid 12 s421 := cut_sound h (by simp) cert421
-lemma v422 (h : RootCtx) : Valid 12 s422 := cut_sound h (by simp) cert422
-lemma v423 (h : RootCtx) : Valid 12 s423 := cut_sound h (by simp) cert423
-lemma v425 (h : RootCtx) : Valid 12 s425 := cut_sound h (by simp) cert425
-lemma v426 (h : RootCtx) : Valid 12 s426 := cut_sound h (by simp) cert426
-lemma v427 (h : RootCtx) : Valid 12 s427 := cut_sound h (by simp) cert427
-lemma v428 (h : RootCtx) : Valid 12 s428 := cut_sound h (by simp) cert428
-lemma v429 (h : RootCtx) : Valid 12 s429 := cut_sound h (by simp) cert429
-lemma v430 (h : RootCtx) : Valid 12 s430 := cut_sound h (by simp) cert430
-lemma v431 (h : RootCtx) : Valid 12 s431 := cut_sound h (by simp) cert431
-lemma v432 (h : RootCtx) : Valid 12 s432 := cut_sound h (by simp) cert432
-lemma v433 (h : RootCtx) : Valid 12 s433 := cut_sound h (by simp) cert433
-lemma v434 (h : RootCtx) : Valid 12 s434 := cut_sound h (by simp) cert434
-lemma v435 (h : RootCtx) : Valid 12 s435 := cut_sound h (by simp) cert435
-lemma v436 (h : RootCtx) : Valid 12 s436 := cut_sound h (by simp) cert436
-lemma v437 (h : RootCtx) : Valid 12 s437 := cut_sound h (by simp) cert437
-lemma v438 (h : RootCtx) : Valid 12 s438 := cut_sound h (by simp) cert438
-lemma v440 (h : RootCtx) : Valid 12 s440 := cut_sound h (by simp) cert440
-lemma v441 (h : RootCtx) : Valid 12 s441 := cut_sound h (by simp) cert441
-lemma v442 (h : RootCtx) : Valid 12 s442 := cut_sound h (by simp) cert442
-lemma v443 (h : RootCtx) : Valid 12 s443 := cut_sound h (by simp) cert443
-lemma v444 (h : RootCtx) : Valid 12 s444 := cut_sound h (by simp) cert444
-lemma v445 (h : RootCtx) : Valid 12 s445 := cut_sound h (by simp) cert445
-lemma v446 (h : RootCtx) : Valid 12 s446 := cut_sound h (by simp) cert446
-lemma v447 (h : RootCtx) : Valid 12 s447 := cut_sound h (by simp) cert447
-lemma v448 (h : RootCtx) : Valid 12 s448 := cut_sound h (by simp) cert448
-lemma v449 (h : RootCtx) : Valid 12 s449 := cut_sound h (by simp) cert449
-lemma v450 (h : RootCtx) : Valid 12 s450 := cut_sound h (by simp) cert450
-lemma v451 (h : RootCtx) : Valid 12 s451 := cut_sound h (by simp) cert451
-lemma v452 (h : RootCtx) : Valid 12 s452 := cut_sound h (by simp) cert452
-lemma v454 (h : RootCtx) : Valid 12 s454 := cut_sound h (by simp) cert454
-lemma v455 (h : RootCtx) : Valid 12 s455 := cut_sound h (by simp) cert455
-lemma v456 (h : RootCtx) : Valid 12 s456 := cut_sound h (by simp) cert456
-lemma v457 (h : RootCtx) : Valid 12 s457 := cut_sound h (by simp) cert457
-lemma v458 (h : RootCtx) : Valid 12 s458 := cut_sound h (by simp) cert458
-lemma v459 (h : RootCtx) : Valid 12 s459 := cut_sound h (by simp) cert459
-lemma v460 (h : RootCtx) : Valid 12 s460 := cut_sound h (by simp) cert460
-lemma v461 (h : RootCtx) : Valid 12 s461 := cut_sound h (by simp) cert461
-lemma v462 (h : RootCtx) : Valid 12 s462 := cut_sound h (by simp) cert462
-lemma v463 (h : RootCtx) : Valid 12 s463 := cut_sound h (by simp) cert463
-lemma v465 (h : RootCtx) : Valid 12 s465 := cut_sound h (by simp) cert465
-lemma v466 (h : RootCtx) : Valid 12 s466 := cut_sound h (by simp) cert466
-lemma v467 (h : RootCtx) : Valid 12 s467 := cut_sound h (by simp) cert467
-lemma v468 (h : RootCtx) : Valid 12 s468 := cut_sound h (by simp) cert468
-lemma v469 (h : RootCtx) : Valid 12 s469 := cut_sound h (by simp) cert469
-lemma v470 (h : RootCtx) : Valid 12 s470 := cut_sound h (by simp) cert470
-lemma v471 (h : RootCtx) : Valid 12 s471 := cut_sound h (by simp) cert471
-lemma v472 (h : RootCtx) : Valid 12 s472 := cut_sound h (by simp) cert472
-lemma v473 (h : RootCtx) : Valid 12 s473 := cut_sound h (by simp) cert473
-lemma v474 (h : RootCtx) : Valid 12 s474 := cut_sound h (by simp) cert474
-lemma v475 (h : RootCtx) : Valid 12 s475 := cut_sound h (by simp) cert475
-lemma v476 (h : RootCtx) : Valid 12 s476 := cut_sound h (by simp) cert476
-lemma v478 (h : RootCtx) : Valid 12 s478 := cut_sound h (by simp) cert478
-lemma v479 (h : RootCtx) : Valid 12 s479 := cut_sound h (by simp) cert479
-lemma v480 (h : RootCtx) : Valid 12 s480 := cut_sound h (by simp) cert480
-lemma v481 (h : RootCtx) : Valid 12 s481 := cut_sound h (by simp) cert481
-lemma v483 (h : RootCtx) : Valid 12 s483 := cut_sound h (by simp) cert483
-lemma v484 (h : RootCtx) : Valid 12 s484 := cut_sound h (by simp) cert484
-lemma v485 (h : RootCtx) : Valid 12 s485 := cut_sound h (by simp) cert485
-lemma v486 (h : RootCtx) : Valid 12 s486 := cut_sound h (by simp) cert486
-lemma v488 (h : RootCtx) : Valid 12 s488 := cut_sound h (by simp) cert488
-lemma v489 (h : RootCtx) : Valid 12 s489 := cut_sound h (by simp) cert489
-lemma v490 (h : RootCtx) : Valid 12 s490 := cut_sound h (by simp) cert490
-lemma v491 (h : RootCtx) : Valid 12 s491 := cut_sound h (by simp) cert491
-lemma v493 (h : RootCtx) : Valid 12 s493 := cut_sound h (by simp) cert493
-lemma v494 (h : RootCtx) : Valid 12 s494 := cut_sound h (by simp) cert494
-lemma v495 (h : RootCtx) : Valid 12 s495 := cut_sound h (by simp) cert495
-lemma v496 (h : RootCtx) : Valid 12 s496 := cut_sound h (by simp) cert496
-lemma v498 (h : RootCtx) : Valid 12 s498 := cut_sound h (by simp) cert498
-lemma v499 (h : RootCtx) : Valid 12 s499 := cut_sound h (by simp) cert499
-lemma v500 (h : RootCtx) : Valid 12 s500 := cut_sound h (by simp) cert500
-lemma v501 (h : RootCtx) : Valid 12 s501 := cut_sound h (by simp) cert501
-lemma v502 (h : RootCtx) : Valid 12 s502 := cut_sound h (by simp) cert502
-lemma v503 (h : RootCtx) : Valid 12 s503 := cut_sound h (by simp) cert503
-lemma v504 (h : RootCtx) : Valid 12 s504 := cut_sound h (by simp) cert504
-lemma v505 (h : RootCtx) : Valid 12 s505 := cut_sound h (by simp) cert505
-lemma v507 (h : RootCtx) : Valid 12 s507 := cut_sound h (by simp) cert507
-lemma v508 (h : RootCtx) : Valid 12 s508 := cut_sound h (by simp) cert508
-lemma v509 (h : RootCtx) : Valid 12 s509 := cut_sound h (by simp) cert509
-lemma v510 (h : RootCtx) : Valid 12 s510 := cut_sound h (by simp) cert510
-lemma v511 (h : RootCtx) : Valid 12 s511 := cut_sound h (by simp) cert511
-lemma v512 (h : RootCtx) : Valid 12 s512 := cut_sound h (by simp) cert512
-lemma v513 (h : RootCtx) : Valid 12 s513 := cut_sound h (by simp) cert513
-lemma v514 (h : RootCtx) : Valid 12 s514 := cut_sound h (by simp) cert514
-lemma v516 (h : RootCtx) : Valid 12 s516 := cut_sound h (by simp) cert516
-lemma v517 (h : RootCtx) : Valid 12 s517 := cut_sound h (by simp) cert517
-lemma v518 (h : RootCtx) : Valid 12 s518 := cut_sound h (by simp) cert518
-lemma v519 (h : RootCtx) : Valid 12 s519 := cut_sound h (by simp) cert519
-lemma v520 (h : RootCtx) : Valid 12 s520 := cut_sound h (by simp) cert520
-lemma v521 (h : RootCtx) : Valid 12 s521 := cut_sound h (by simp) cert521
-lemma v522 (h : RootCtx) : Valid 12 s522 := cut_sound h (by simp) cert522
-lemma v523 (h : RootCtx) : Valid 12 s523 := cut_sound h (by simp) cert523
-lemma v525 (h : RootCtx) : Valid 12 s525 := cut_sound h (by simp) cert525
-lemma v526 (h : RootCtx) : Valid 12 s526 := cut_sound h (by simp) cert526
-lemma v527 (h : RootCtx) : Valid 12 s527 := cut_sound h (by simp) cert527
-lemma v528 (h : RootCtx) : Valid 12 s528 := cut_sound h (by simp) cert528
-lemma v529 (h : RootCtx) : Valid 12 s529 := cut_sound h (by simp) cert529
-lemma v530 (h : RootCtx) : Valid 12 s530 := cut_sound h (by simp) cert530
-lemma v531 (h : RootCtx) : Valid 12 s531 := cut_sound h (by simp) cert531
-lemma v532 (h : RootCtx) : Valid 12 s532 := cut_sound h (by simp) cert532
-lemma v534 (h : RootCtx) : Valid 12 s534 := cut_sound h (by simp) cert534
-lemma v535 (h : RootCtx) : Valid 12 s535 := cut_sound h (by simp) cert535
-lemma v536 (h : RootCtx) : Valid 12 s536 := cut_sound h (by simp) cert536
-lemma v537 (h : RootCtx) : Valid 12 s537 := cut_sound h (by simp) cert537
-lemma v538 (h : RootCtx) : Valid 12 s538 := cut_sound h (by simp) cert538
-lemma v539 (h : RootCtx) : Valid 12 s539 := cut_sound h (by simp) cert539
-lemma v541 (h : RootCtx) : Valid 12 s541 := cut_sound h (by simp) cert541
-lemma v542 (h : RootCtx) : Valid 12 s542 := cut_sound h (by simp) cert542
-lemma v543 (h : RootCtx) : Valid 12 s543 := cut_sound h (by simp) cert543
-lemma v544 (h : RootCtx) : Valid 12 s544 := cut_sound h (by simp) cert544
-lemma v545 (h : RootCtx) : Valid 12 s545 := cut_sound h (by simp) cert545
-lemma v546 (h : RootCtx) : Valid 12 s546 := cut_sound h (by simp) cert546
-lemma v548 (h : RootCtx) : Valid 12 s548 := cut_sound h (by simp) cert548
-lemma v549 (h : RootCtx) : Valid 12 s549 := cut_sound h (by simp) cert549
-lemma v550 (h : RootCtx) : Valid 12 s550 := cut_sound h (by simp) cert550
-lemma v551 (h : RootCtx) : Valid 12 s551 := cut_sound h (by simp) cert551
-lemma v553 (h : RootCtx) : Valid 12 s553 := cut_sound h (by simp) cert553
-lemma v554 (h : RootCtx) : Valid 12 s554 := cut_sound h (by simp) cert554
-lemma v555 (h : RootCtx) : Valid 12 s555 := cut_sound h (by simp) cert555
-lemma v556 (h : RootCtx) : Valid 12 s556 := cut_sound h (by simp) cert556
-lemma v558 (h : RootCtx) : Valid 12 s558 := cut_sound h (by simp) cert558
-lemma v559 (h : RootCtx) : Valid 12 s559 := cut_sound h (by simp) cert559
-lemma v560 (h : RootCtx) : Valid 12 s560 := cut_sound h (by simp) cert560
-lemma v561 (h : RootCtx) : Valid 12 s561 := cut_sound h (by simp) cert561
-lemma v563 (h : RootCtx) : Valid 12 s563 := cut_sound h (by simp) cert563
-lemma v564 (h : RootCtx) : Valid 12 s564 := cut_sound h (by simp) cert564
-lemma v565 (h : RootCtx) : Valid 12 s565 := cut_sound h (by simp) cert565
-lemma v566 (h : RootCtx) : Valid 12 s566 := cut_sound h (by simp) cert566
-lemma v568 (h : RootCtx) : Valid 12 s568 := cut_sound h (by simp) cert568
-lemma v569 (h : RootCtx) : Valid 12 s569 := cut_sound h (by simp) cert569
-lemma v570 (h : RootCtx) : Valid 12 s570 := cut_sound h (by simp) cert570
-lemma v571 (h : RootCtx) : Valid 12 s571 := cut_sound h (by simp) cert571
-lemma v572 (h : RootCtx) : Valid 12 s572 := cut_sound h (by simp) cert572
-lemma v574 (h : RootCtx) : Valid 12 s574 := cut_sound h (by simp) cert574
-lemma v575 (h : RootCtx) : Valid 12 s575 := cut_sound h (by simp) cert575
-lemma v576 (h : RootCtx) : Valid 12 s576 := cut_sound h (by simp) cert576
-lemma v577 (h : RootCtx) : Valid 12 s577 := cut_sound h (by simp) cert577
-lemma v579 (h : RootCtx) : Valid 12 s579 := cut_sound h (by simp) cert579
-lemma v580 (h : RootCtx) : Valid 12 s580 := cut_sound h (by simp) cert580
-lemma v581 (h : RootCtx) : Valid 12 s581 := cut_sound h (by simp) cert581
-lemma v582 (h : RootCtx) : Valid 12 s582 := cut_sound h (by simp) cert582
-lemma v584 (h : RootCtx) : Valid 12 s584 := cut_sound h (by simp) cert584
-lemma v585 (h : RootCtx) : Valid 12 s585 := cut_sound h (by simp) cert585
-lemma v586 (h : RootCtx) : Valid 12 s586 := cut_sound h (by simp) cert586
-lemma v588 (h : RootCtx) : Valid 12 s588 := cut_sound h (by simp) cert588
-lemma v589 (h : RootCtx) : Valid 12 s589 := cut_sound h (by simp) cert589
-lemma v591 (h : RootCtx) : Valid 12 s591 := cut_sound h (by simp) cert591
-lemma v592 (h : RootCtx) : Valid 12 s592 := cut_sound h (by simp) cert592
-lemma v1 (h : RootCtx) : Valid 13 s1 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v2 h, v3 h, v4 h, v5 h, v6 h, v7 h, v8 h, v9 h, v10 h, v11 h, v12 h, v13 h, v14 h, v15 h, v16 h, v17 h, v18 h, v19 h, by simp⟩) cert1
-lemma v20 (h : RootCtx) : Valid 13 s20 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v21 h, v22 h, v23 h, v24 h, v25 h, v26 h, v8 h, v27 h, v28 h, v29 h, v30 h, v31 h, v32 h, v33 h, v34 h, v35 h, v36 h, v37 h, by simp⟩) cert20
-lemma v38 (h : RootCtx) : Valid 13 s38 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v39 h, v40 h, v41 h, v24 h, v42 h, v43 h, v44 h, v9 h, v45 h, v46 h, v47 h, v48 h, v49 h, v50 h, v51 h, v52 h, v53 h, v54 h, by simp⟩) cert38
-lemma v55 (h : RootCtx) : Valid 13 s55 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v56 h, v57 h, v58 h, v5 h, v59 h, v60 h, v44 h, v27 h, v61 h, v62 h, v63 h, v64 h, v65 h, v66 h, v67 h, v68 h, v69 h, v70 h, by simp⟩) cert55
-lemma v71 (h : RootCtx) : Valid 13 s71 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v72 h, v73 h, v3 h, v40 h, v26 h, v60 h, v74 h, v75 h, v15 h, v50 h, v76 h, v77 h, v78 h, v79 h, v80 h, v18 h, v53 h, v81 h, v82 h, by simp⟩) cert71
-lemma v83 (h : RootCtx) : Valid 13 s83 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v84 h, v85 h, v22 h, v57 h, v7 h, v43 h, v74 h, v86 h, v87 h, v33 h, v88 h, v66 h, v89 h, v90 h, v91 h, v36 h, v69 h, v92 h, v93 h, by simp⟩) cert83
-lemma v94 (h : RootCtx) : Valid 13 s94 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v72 h, v84 h, v42 h, v59 h, v8 h, v95 h, v96 h, v97 h, v98 h, v14 h, v32 h, v78 h, v89 h, v99 h, v100 h, v81 h, v92 h, v101 h, by simp⟩) cert94
-lemma v102 (h : RootCtx) : Valid 13 s102 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v73 h, v85 h, v6 h, v25 h, v44 h, v95 h, v103 h, v104 h, v105 h, v49 h, v65 h, v79 h, v90 h, v106 h, v107 h, v82 h, v93 h, v108 h, by simp⟩) cert102
-lemma v109 (h : RootCtx) : Valid 13 s109 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v4 h, v23 h, v41 h, v58 h, v75 h, v86 h, v96 h, v103 h, v110 h, v111 h, v16 h, v51 h, v34 h, v67 h, v112 h, by simp⟩) cert109
-lemma v113 (h : RootCtx) : Valid 13 s113 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v114 h, v11 h, v62 h, v115 h, v116 h, v117 h, v110 h, v118 h, by simp⟩) cert113
-lemma v119 (h : RootCtx) : Valid 13 s119 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v114 h, v29 h, v46 h, v120 h, v121 h, v122 h, v111 h, v123 h, by simp⟩) cert119
-lemma v124 (h : RootCtx) : Valid 13 s124 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v122 h, v30 h, v47 h, v112 h, v81 h, v93 h, v125 h, v126 h, v127 h, v128 h, v129 h, v130 h, by simp⟩) cert124
-lemma v131 (h : RootCtx) : Valid 13 s131 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v117 h, v12 h, v63 h, v132 h, v82 h, v92 h, v133 h, v134 h, v135 h, v136 h, v129 h, v137 h, by simp⟩) cert131
-lemma v138 (h : RootCtx) : Valid 13 s138 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v31 h, v87 h, v51 h, v18 h, v106 h, v123 h, v70 h, v101 h, v139 h, by simp⟩) cert138
-lemma v140 (h : RootCtx) : Valid 13 s140 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v64 h, v88 h, v16 h, v53 h, v99 h, v118 h, v37 h, v108 h, v139 h, by simp⟩) cert140
-lemma v141 (h : RootCtx) : Valid 13 s141 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v48 h, v76 h, v34 h, v69 h, v100 h, v142 h, v19 h, v143 h, v144 h, by simp⟩) cert141
-lemma v145 (h : RootCtx) : Valid 13 s145 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v13 h, v77 h, v67 h, v36 h, v107 h, v146 h, v54 h, v147 h, v144 h, by simp⟩) cert145
-lemma v148 (h : RootCtx) : Valid 13 s148 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v149 h, v91 h, by simp⟩) cert148
-lemma v150 (h : RootCtx) : Valid 13 s150 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v151 h, v80 h, by simp⟩) cert150
-lemma v152 (h : RootCtx) : Valid 13 s152 := cut_sound h (by simp) cert152
-lemma v154 (h : RootCtx) : Valid 13 s154 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v155 h, v156 h, v157 h, v158 h, v159 h, v160 h, v161 h, v162 h, v163 h, v164 h, v165 h, v166 h, v167 h, v168 h, v169 h, v170 h, v171 h, v172 h, v173 h, v174 h, v175 h, v176 h, v177 h, v178 h, v179 h, v180 h, by simp⟩) cert154
-lemma v181 (h : RootCtx) : Valid 13 s181 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v182 h, v183 h, v184 h, v185 h, v186 h, v160 h, v187 h, v188 h, v189 h, v190 h, v191 h, v192 h, v193 h, v194 h, v195 h, v196 h, v197 h, v198 h, v199 h, v200 h, v201 h, v202 h, v203 h, v204 h, v205 h, v206 h, by simp⟩) cert181
-lemma v207 (h : RootCtx) : Valid 13 s207 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v208 h, v156 h, v184 h, v209 h, v210 h, v211 h, v212 h, v213 h, v214 h, v215 h, v216 h, v217 h, v218 h, v219 h, v220 h, v221 h, v222 h, v223 h, v224 h, v225 h, v226 h, v227 h, v228 h, v229 h, v230 h, v231 h, by simp⟩) cert207
-lemma v232 (h : RootCtx) : Valid 13 s232 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v233 h, v183 h, v157 h, v234 h, v235 h, v211 h, v236 h, v237 h, v238 h, v239 h, v240 h, v241 h, v242 h, v243 h, v244 h, v245 h, v246 h, v247 h, v248 h, v249 h, v250 h, v251 h, v252 h, v253 h, v254 h, v255 h, by simp⟩) cert232
-lemma v256 (h : RootCtx) : Valid 13 s256 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v257 h, v210 h, v235 h, v258 h, v160 h, v259 h, v260 h, v261 h, v166 h, v192 h, v262 h, v263 h, v264 h, v265 h, v266 h, v267 h, v268 h, v269 h, v270 h, v271 h, v272 h, v273 h, v274 h, v275 h, v276 h, v277 h, v278 h, v279 h, v280 h, v281 h, v282 h, v283 h, v284 h, v285 h, v286 h, by simp⟩) cert256
-lemma v287 (h : RootCtx) : Valid 13 s287 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v288 h, v159 h, v186 h, v289 h, v211 h, v290 h, v291 h, v292 h, v217 h, v241 h, v293 h, v294 h, v264 h, v295 h, v296 h, v297 h, v298 h, v299 h, v300 h, v301 h, v302 h, v303 h, v304 h, v305 h, v306 h, v307 h, v308 h, v309 h, v310 h, v311 h, v312 h, v313 h, v314 h, v315 h, v316 h, by simp⟩) cert287
-lemma v317 (h : RootCtx) : Valid 13 s317 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v155 h, v208 h, v260 h, v190 h, v291 h, v239 h, v318 h, v173 h, v319 h, v224 h, v320 h, v267 h, v321 h, v297 h, v322 h, v323 h, v324 h, v325 h, v326 h, v327 h, v328 h, v329 h, v330 h, v331 h, v332 h, v333 h, v279 h, v334 h, v309 h, v335 h, v336 h, v337 h, by simp⟩) cert317
-lemma v338 (h : RootCtx) : Valid 13 s338 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v182 h, v233 h, v164 h, v261 h, v215 h, v292 h, v339 h, v340 h, v199 h, v341 h, v248 h, v342 h, v343 h, v268 h, v298 h, v323 h, v344 h, v345 h, v346 h, v347 h, v348 h, v349 h, v350 h, v351 h, v352 h, v353 h, v354 h, v280 h, v355 h, v310 h, v356 h, v357 h, by simp⟩) cert338
-lemma v358 (h : RootCtx) : Valid 13 s358 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v359 h, v360 h, v245 h, v265 h, v223 h, v319 h, v361 h, v362 h, v363 h, v364 h, v365 h, v366 h, v367 h, v368 h, v369 h, v332 h, v370 h, v371 h, v354 h, v311 h, v372 h, v373 h, v374 h, by simp⟩) cert358
-lemma v375 (h : RootCtx) : Valid 13 s375 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v376 h, v360 h, v221 h, v265 h, v247 h, v340 h, v377 h, v378 h, v379 h, v380 h, v381 h, v382 h, v383 h, v384 h, v385 h, v350 h, v386 h, v387 h, v334 h, v312 h, v388 h, v389 h, v390 h, by simp⟩) cert375
-lemma v391 (h : RootCtx) : Valid 13 s391 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v392 h, v393 h, v196 h, v295 h, v172 h, v320 h, v394 h, v395 h, v396 h, v397 h, v398 h, v399 h, v400 h, v401 h, v402 h, v333 h, v403 h, v404 h, v355 h, v281 h, v405 h, v406 h, v407 h, by simp⟩) cert391
-lemma v408 (h : RootCtx) : Valid 13 s408 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v409 h, v393 h, v170 h, v295 h, v198 h, v341 h, v410 h, v411 h, v412 h, v413 h, v414 h, v415 h, v416 h, v417 h, v418 h, v352 h, v419 h, v420 h, v335 h, v282 h, v421 h, v422 h, v423 h, by simp⟩) cert408
-lemma v424 (h : RootCtx) : Valid 13 s424 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v162 h, v237 h, v425 h, v426 h, v427 h, v428 h, v429 h, v430 h, v431 h, v432 h, v433 h, v434 h, v435 h, v436 h, v437 h, v438 h, by simp⟩) cert424
-lemma v439 (h : RootCtx) : Valid 13 s439 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v188 h, v213 h, v425 h, v440 h, v441 h, v442 h, v443 h, v444 h, v445 h, v446 h, v447 h, v448 h, v449 h, v450 h, v451 h, v452 h, by simp⟩) cert439
-lemma v453 (h : RootCtx) : Valid 13 s453 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v187 h, v212 h, v267 h, v298 h, v454 h, v449 h, v384 h, v401 h, v203 h, v228 h, v178 h, v253 h, v455 h, v456 h, v457 h, v458 h, v459 h, v460 h, v461 h, v462 h, v463 h, v389 h, v406 h, v286 h, v316 h, by simp⟩) cert453
-lemma v464 (h : RootCtx) : Valid 13 s464 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v161 h, v236 h, v297 h, v268 h, v465 h, v435 h, v368 h, v417 h, v177 h, v252 h, v204 h, v229 h, v466 h, v467 h, v468 h, v469 h, v470 h, v471 h, v472 h, v473 h, v474 h, v373 h, v422 h, v475 h, v476 h, by simp⟩) cert464
-lemma v477 (h : RootCtx) : Valid 13 s477 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v244 h, v478 h, v342 h, v433 h, v380 h, v399 h, v271 h, v418 h, v479 h, v480 h, v329 h, v303 h, v466 h, v330 h, v276 h, v481 h, by simp⟩) cert477
-lemma v482 (h : RootCtx) : Valid 13 s482 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v195 h, v483 h, v343 h, v447 h, v413 h, v366 h, v301 h, v385 h, v484 h, v485 h, v329 h, v273 h, v455 h, v331 h, v306 h, v486 h, by simp⟩) cert482
-lemma v487 (h : RootCtx) : Valid 13 s487 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v220 h, v488 h, v321 h, v448 h, v364 h, v415 h, v272 h, v402 h, v489 h, v490 h, v349 h, v304 h, v455 h, v351 h, v276 h, v491 h, by simp⟩) cert487
-lemma v492 (h : RootCtx) : Valid 13 s492 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v169 h, v493 h, v322 h, v434 h, v397 h, v382 h, v302 h, v369 h, v494 h, v495 h, v349 h, v274 h, v466 h, v353 h, v306 h, v496 h, by simp⟩) cert492
-lemma v497 (h : RootCtx) : Valid 13 s497 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v377 h, v498 h, v367 h, v332 h, v499 h, v500 h, v501 h, v502 h, v313 h, v389 h, v314 h, v503 h, v504 h, v505 h, by simp⟩) cert497
-lemma v506 (h : RootCtx) : Valid 13 s506 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v410 h, v507 h, v400 h, v333 h, v508 h, v509 h, v510 h, v511 h, v283 h, v284 h, v422 h, v512 h, v513 h, v514 h, by simp⟩) cert506
-lemma v515 (h : RootCtx) : Valid 13 s515 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v394 h, v516 h, v416 h, v352 h, v517 h, v518 h, v519 h, v520 h, v283 h, v406 h, v285 h, v521 h, v522 h, v523 h, by simp⟩) cert515
-lemma v524 (h : RootCtx) : Valid 13 s524 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v361 h, v525 h, v383 h, v350 h, v526 h, v527 h, v528 h, v529 h, v313 h, v373 h, v315 h, v530 h, v531 h, v532 h, by simp⟩) cert524
-lemma v533 (h : RootCtx) : Valid 13 s533 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v534 h, v197 h, v246 h, v535 h, v536 h, v537 h, v344 h, v538 h, v539 h, by simp⟩) cert533
-lemma v540 (h : RootCtx) : Valid 13 s540 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v541 h, v171 h, v222 h, v542 h, v543 h, v544 h, v324 h, v545 h, v546 h, by simp⟩) cert540
-lemma v547 (h : RootCtx) : Valid 13 s547 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v548 h, v431 h, v549 h, v550 h, v299 h, v551 h, by simp⟩) cert547
-lemma v552 (h : RootCtx) : Valid 13 s552 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v553 h, v445 h, v554 h, v555 h, v269 h, v556 h, by simp⟩) cert552
-lemma v557 (h : RootCtx) : Valid 13 s557 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v558 h, v446 h, v559 h, v560 h, v300 h, v561 h, by simp⟩) cert557
-lemma v562 (h : RootCtx) : Valid 13 s562 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v563 h, v432 h, v564 h, v565 h, v270 h, v566 h, by simp⟩) cert562
-lemma v567 (h : RootCtx) : Valid 13 s567 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v250 h, v568 h, v202 h, v230 h, v569 h, v570 h, v571 h, v572 h, by simp⟩) cert567
-lemma v573 (h : RootCtx) : Valid 13 s573 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v201 h, v574 h, v251 h, v179 h, v575 h, v576 h, v577 h, v572 h, by simp⟩) cert573
-lemma v578 (h : RootCtx) : Valid 13 s578 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v226 h, v579 h, v176 h, v254 h, v580 h, v581 h, v577 h, v582 h, by simp⟩) cert578
-lemma v583 (h : RootCtx) : Valid 13 s583 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v175 h, v584 h, v227 h, v205 h, v585 h, v586 h, v571 h, v582 h, by simp⟩) cert583
-lemma v587 (h : RootCtx) : Valid 13 s587 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v588 h, v589 h, by simp⟩) cert587
-lemma v590 (h : RootCtx) : Valid 13 s590 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v591 h, v592 h, by simp⟩) cert590
-lemma v593 (h : RootCtx) : Valid 13 s593 := cut_sound h (by simp) cert593
-lemma v594 (h : RootCtx) : Valid 13 s594 := cut_sound h (by simp) cert594
-lemma v595 (h : RootCtx) : Valid 13 s595 := cut_sound h (by simp) cert595
-lemma v0 (h : RootCtx) : Valid 14 s0 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v1 h, v20 h, v38 h, v55 h, v71 h, v83 h, v94 h, v102 h, v109 h, v113 h, v119 h, v124 h, v131 h, v138 h, v140 h, v141 h, v145 h, v148 h, v150 h, v152 h, by simp⟩) cert0
-lemma v153 (h : RootCtx) : Valid 14 s153 := cut_sound h (by simp only [List.forall_mem_cons]; exact ⟨v154 h, v181 h, v207 h, v232 h, v256 h, v287 h, v317 h, v338 h, v358 h, v375 h, v391 h, v408 h, v424 h, v439 h, v453 h, v464 h, v477 h, v482 h, v487 h, v492 h, v497 h, v506 h, v515 h, v524 h, v533 h, v540 h, v547 h, v552 h, v557 h, v562 h, v567 h, v573 h, v578 h, v583 h, v587 h, v590 h, v593 h, v594 h, v595 h, by simp⟩) cert153
+theorem expOK_sound {m : Bool} {P : List ℕ → ℕ → Bool} {prev : Tree} {k : ℕ} {l : List ℕ}
+    (hP : PruneOK m P) (hinv : Inv m prev k)
+    (h : expOK m P prev k l = true) : ¬ Reach m l.toFinset (k + 1) := by
+  intro hR
+  simp only [expOK, Bool.and_eq_true, Bool.not_eq_true'] at h
+  obtain ⟨⟨hs, hf⟩, hp⟩ := h
+  have hnd := sortedB_nodup hs
+  rcases hR.inv with he | ⟨u, v, w, ka, kb, hu, hv, hw, hd, hb, hR'⟩
+  · exact notFinal hf he
+  · have hd' : ∀ d ∈ l, blk m w d = false := fun d hdm => hd d (List.mem_toFinset.mpr hdm)
+    have hu' := List.mem_toFinset.mp hu
+    have hv' := List.mem_toFinset.mp hv
+    have huv : u ≠ v := by
+      rintro rfl
+      have hwu : w = u := by
+        rcases hw with hw | hw
+        · rw [hw, Nat.and_self]
+        · rw [hw, Nat.or_self]
+      have := hd u hu
+      rw [hwu, blk_refl] at this
+      exact Bool.noConfusion this
+    rcases pairsAll_mem _ _ hp u hu' v hv' huv with h1 | h1
+    · exact pair_sound hP hinv hnd h1 hu' hv' ka kb w hw hd' hb hR'
+    · have hw2 : w = v &&& u ∨ w = v ||| u := by
+        rw [Nat.and_comm v u, Nat.or_comm v u]; exact hw
+      have hfe : (l.toFinset.filter (fun x => (kb = true ∨ x ≠ v) ∧ (ka = true ∨ x ≠ u))) =
+          (l.toFinset.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v))) := by
+        ext x
+        simp only [Finset.mem_filter]
+        tauto
+      have := pair_sound hP hinv hnd h1 hv' hu' kb ka w hw2 hd' hb
+      rw [hfe] at this
+      exact this hR'
 
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-theorem concludeRoot (hI : ∀ e∈pr 0,Imp e.1 e.2) : Imp 0 15 := by
-  apply initial_sound (Z:=0) (L:=15) (answer:=fun z v => !listed [s0,s153] z v) (by decide +kernel) (by decide) hI init0
-  intro z v hin ctx
-  have h : RootCtx := by
-    unfold RootCtx
-    rw [rootCtxEq.1,rootCtxEq.2.1,rootCtxEq.2.2]
-    exact ctx
-  have hv : ∀ s∈[s0, s153],Valid 14 s := by simp only [List.forall_mem_cons]; exact ⟨v0 h, v153 h, by simp⟩
-  have hm : (z,v) ∈ [s0, s153] := listed_mem (by simpa using hin)
-  have hh := hv _ hm
-  simpa only [Valid,rootCtxEq.1,rootCtxEq.2.1] using hh
+def subsAll : List ℕ → (List ℕ → Bool) → Bool
+  | [], p => p []
+  | a :: l, p => subsAll l p && subsAll l (fun s => p (a :: s))
 
-theorem i0 : Imp 0 15 := by
-  apply concludeRoot
-  intro x hx
-  have h := List.all_eq_true.1 pr0 x hx
-  rw [Bool.or_eq_true, Bool.or_eq_true, List.contains_iff_mem, List.contains_iff_mem, List.contains_iff_mem] at h
-  exact h.elim (fun h => h.elim (i1 x) (i2 x)) (i3 x)
-open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
-section circuit
-variable (m : ℕ)
-def gv (w : List ℕ) (g : Gate) : ℕ := match g.op, g.inputs with
-  | .and, [] => m
-  | .and, [i] => w.getD i 0
-  | .and, i :: j :: _ => w.getD i 0 &&& w.getD j 0
-  | .or, [] => 0
-  | .or, [i] => w.getD i 0
-  | .or, i :: j :: _ => w.getD i 0 ||| w.getD j 0
-  | .not, [] => m
-  | .not, i :: _ => w.getD i 0 ^^^ m
-  | _, _ => 0
-def ex (gs : List Gate) (w : List ℕ) : List ℕ := gs.foldl (fun w g => w ++ [gv m w g]) w
-lemma getD_mem {S : Set ℕ} {w : List ℕ} (hw : ∀ x ∈ w, x ∈ S) (h0 : 0 ∈ S) (i : ℕ) : w.getD i 0 ∈ S := by
-  rw [List.getD_eq_getElem?_getD]
-  by_cases h : i < w.length
-  · rw [List.getElem?_eq_getElem h]; exact hw _ (List.getElem_mem h)
-  · rw [List.getElem?_eq_none (by omega)]; exact h0
-lemma ex_sol {T : ℕ} (gs : List Gate) : ∀ (w : List ℕ) (S : Set ℕ), (∀ x ∈ w, x ∈ S) → 0 ∈ S → m ∈ S →
-    (∀ g ∈ gs, g.op ∈ ({GateOp.and, GateOp.or} : Set GateOp) ∧ g.inputs.length ≤ 2) →
-    (∃ i, (ex m gs w).getD i 0 = T) → Sol m T gs.length S := by
-  induction gs with
+theorem subsAll_sub : ∀ (l : List ℕ) (p : List ℕ → Bool), subsAll l p = true →
+    ∀ s : List ℕ, s.Sublist l → p s = true := by
+  intro l
+  induction l with
   | nil =>
-    rintro w S hw h0 _ _ ⟨i, rfl⟩
-    exact .done (getD_mem hw h0 i)
-  | cons g gs ih =>
-    intro w S hw h0 hm hg hT
-    have hgs := fun x hx => hg x (List.mem_cons_of_mem _ hx)
-    have rd := fun i => getD_mem hw h0 i
-    have stay : gv m w g ∈ S → Sol m T (g :: gs).length S := fun h =>
-      (ih (w ++ [gv m w g]) S (fun x hx => by
-        simp only [List.mem_append, List.mem_singleton] at hx
-        rcases hx with hx | rfl
-        · exact hw x hx
-        · exact h) h0 hm hgs hT).mono (by simp) subset_rfl
-    have go : Sol m T gs.length (insert (gv m w g) S) := ih (w ++ [gv m w g]) _ (fun x hx => by
-        simp only [List.mem_append, List.mem_singleton] at hx
-        rcases hx with hx | rfl
-        · exact Or.inr (hw x hx)
-        · exact Or.inl rfl) (Or.inr h0) (Or.inr hm) hgs hT
-    obtain ⟨hop, hlen⟩ := hg g List.mem_cons_self
-    obtain ⟨o, l⟩ := g
-    simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hop
-    rcases hop with rfl | rfl
-    · match l with
-      | [] => exact stay hm
-      | [i] => exact stay (rd i)
-      | i :: j :: _ => exact .bi (d := false) (rd i) (rd j) go
-    · match l with
-      | [] => exact stay h0
-      | [i] => exact stay (rd i)
-      | i :: j :: _ => exact .bi (d := true) (rd i) (rd j) go
-lemma gv_sub {w : List ℕ} (hw : ∀ x ∈ w, x &&& m = x) (g : Gate) : gv m w g &&& m = gv m w g := by
-  have rd : ∀ i, w.getD i 0 &&& m = w.getD i 0 := fun i => getD_mem (S := {x | x &&& m = x}) hw (by simp) i
-  unfold gv
+    intro p h s hs
+    rw [List.sublist_nil.mp hs]; exact h
+  | cons a l ih =>
+    intro p h s hs
+    simp only [subsAll, Bool.and_eq_true] at h
+    cases hs with
+    | cons _ hs' => exact ih p h.1 s hs'
+    | cons_cons _ hs' => exact ih _ h.2 _ hs'
+
+def bor (a b : Bool) : Bool := @Bool.rec (fun _ => Bool) b true a
+def band (a b : Bool) : Bool := @Bool.rec (fun _ => Bool) false b a
+def bnot (a : Bool) : Bool := @Bool.rec (fun _ => Bool) true false a
+
+theorem bor_eq (a b : Bool) : bor a b = (a || b) := by cases a <;> rfl
+theorem band_eq (a b : Bool) : band a b = (a && b) := by cases a <;> rfl
+theorem bnot_eq (a : Bool) : bnot a = !a := by cases a <;> rfl
+
+def domN' (w d : ℕ) : Bool :=
+  band (Nat.beq (Nat.land (Nat.land w 4095) (Nat.sub 16777215 d)) 0)
+    (Nat.beq (Nat.land (Nat.land d (Nat.sub 16777215 w)) 16773120) 0)
+
+theorem domN'_eq (w d : ℕ) : domN' w d = domN w d := by
+  unfold domN' domN; rw [band_eq]
+
+def blk' (m : Bool) (w d : ℕ) : Bool := @Bool.rec (fun _ => Bool) (Nat.beq w d) (domN' w d) m
+
+theorem blk'_eq (m : Bool) (w d : ℕ) : blk' m w d = blk m w d := by
+  cases m
+  · rfl
+  · show domN' w d = domN w d
+    exact domN'_eq w d
+
+def blkAny' (m : Bool) (w : ℕ) (l : List ℕ) : Bool :=
+  @List.rec ℕ (fun _ => Bool) false (fun d _ ih => bor (blk' m w d) ih) l
+
+theorem blkAny'_eq (m : Bool) (w : ℕ) (l : List ℕ) : blkAny' m w l = blkAny m w l := by
+  induction l with
+  | nil => rfl
+  | cons d l ih =>
+    show bor (blk' m w d) (blkAny' m w l) = (blk m w d || blkAny m w l)
+    rw [ih, bor_eq, blk'_eq]
+
+def tb' (w e : ℕ) : Bool := bnot (Nat.beq (Nat.land (Nat.shiftRight w e) 1) 0)
+
+theorem tb'_eq (w e : ℕ) : tb' w e = tb w e := by
+  unfold tb' tb; rw [bnot_eq]
+
+def rect' (x J n : ℕ) : ℕ :=
+  @Nat.rec (fun _ => ℕ) 0
+    (fun e ih => Nat.lor (@Bool.rec (fun _ => ℕ) 0 (Nat.shiftLeft J (Nat.mul 12 e)) (tb' x e)) ih) n
+
+theorem rect'_eq (x J n : ℕ) : rect' x J n = rect x J n := by
+  induction n with
+  | zero => rfl
+  | succ e ih =>
+    show Nat.lor (@Bool.rec (fun _ => ℕ) 0 (Nat.shiftLeft J (Nat.mul 12 e)) (tb' x e)) (rect' x J e) =
+      Nat.lor (cond (tb x e) (Nat.shiftLeft J (Nat.mul 12 e)) 0) (rect x J e)
+    rw [ih, tb'_eq]
+    cases tb x e <;> rfl
+
+def rectW' (x : ℕ) : ℕ := rect' x (Nat.xor (Nat.shiftRight x 12) 4095) 12
+
+theorem rectW'_eq (x : ℕ) : rectW' x = rectW x := rect'_eq _ _ _
+
+def orEx' (u v : ℕ) (l : List ℕ) : ℕ :=
+  @List.rec ℕ (fun _ => ℕ) 0
+    (fun x _ ih => @Bool.rec (fun _ => ℕ) (Nat.lor (rectW' x) ih) ih
+      (bor (Nat.beq x u) (Nat.beq x v))) l
+
+theorem orEx'_eq (u v : ℕ) (l : List ℕ) : orEx' u v l = orEx u v l := by
+  induction l with
+  | nil => rfl
+  | cons x l ih =>
+    show @Bool.rec (fun _ => ℕ) (Nat.lor (rectW' x) (orEx' u v l)) (orEx' u v l)
+      (bor (Nat.beq x u) (Nat.beq x v)) =
+      cond (Nat.beq x u || Nat.beq x v) (orEx u v l) (Nat.lor (rectW x) (orEx u v l))
+    rw [ih, bor_eq, rectW'_eq]
+    cases (Nat.beq x u || Nat.beq x v) <;> rfl
+
+def allFinal' (l : List ℕ) : Bool :=
+  @List.rec ℕ (fun _ => Bool) true (fun a _ ih => band (Nat.beq a 4095) ih) l
+
+theorem allFinal'_eq (l : List ℕ) : allFinal' l = allFinal l := by
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    show band (Nat.beq a 4095) (allFinal' l) = (Nat.beq a 4095 && allFinal l)
+    rw [ih, band_eq]
+
+def ins' (w : ℕ) (l : List ℕ) : List ℕ :=
+  @List.rec ℕ (fun _ => List ℕ) [w]
+    (fun a t ih => @Bool.rec (fun _ => List ℕ) (a :: ih) (w :: a :: t) (Nat.blt w a)) l
+
+theorem ins'_eq (w : ℕ) (l : List ℕ) : ins' w l = ins w l := by
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    show @Bool.rec (fun _ => List ℕ) (a :: ins' w l) (w :: a :: l) (Nat.blt w a) =
+      cond (Nat.blt w a) (w :: a :: l) (a :: ins w l)
+    rw [ih]
+    cases Nat.blt w a <;> rfl
+
+def filt' (ka kb : Bool) (u v : ℕ) (l : List ℕ) : List ℕ :=
+  @List.rec ℕ (fun _ => List ℕ) []
+    (fun x _ ih => @Bool.rec (fun _ => List ℕ) ih (x :: ih)
+      (band (bor ka (bnot (Nat.beq x u))) (bor kb (bnot (Nat.beq x v))))) l
+
+theorem filt'_eq (ka kb : Bool) (u v : ℕ) (l : List ℕ) :
+    filt' ka kb u v l = l.filter (remF ka kb u v) := by
+  induction l with
+  | nil => rfl
+  | cons x l ih =>
+    show @Bool.rec (fun _ => List ℕ) (filt' ka kb u v l) (x :: filt' ka kb u v l)
+      (band (bor ka (bnot (Nat.beq x u))) (bor kb (bnot (Nat.beq x v)))) = _
+    rw [ih, band_eq, bor_eq, bor_eq, bnot_eq, bnot_eq, List.filter_cons]
+    show _ = if remF ka kb u v x = true then _ else _
+    unfold remF
+    cases ((ka || !Nat.beq x u) && (kb || !Nat.beq x v)) <;> rfl
+
+def lcmp' (x y : List ℕ) : Ordering :=
+  @List.rec ℕ (fun _ => List ℕ → Ordering)
+    (fun y => @List.rec ℕ (fun _ => Ordering) Ordering.eq (fun _ _ _ => Ordering.lt) y)
+    (fun a _ ih y => @List.rec ℕ (fun _ => Ordering) Ordering.gt
+      (fun b y' _ => @Bool.rec (fun _ => Ordering)
+        (@Bool.rec (fun _ => Ordering) (ih y') Ordering.gt (Nat.blt b a)) Ordering.lt (Nat.blt a b)) y)
+    x y
+
+theorem lcmp'_eq (x : List ℕ) : ∀ y : List ℕ, lcmp' x y = lcmp x y := by
+  induction x with
+  | nil => intro y; cases y <;> rfl
+  | cons a x ih =>
+    intro y
+    cases y with
+    | nil => rfl
+    | cons b y =>
+      show @Bool.rec (fun _ => Ordering)
+        (@Bool.rec (fun _ => Ordering) (lcmp' x y) Ordering.gt (Nat.blt b a)) Ordering.lt (Nat.blt a b) =
+        cond (Nat.blt a b) Ordering.lt (cond (Nat.blt b a) Ordering.gt (lcmp x y))
+      rw [ih y]
+      cases Nat.blt a b <;> cases Nat.blt b a <;> rfl
+
+noncomputable def has' (t : Tree) (x : List ℕ) : Bool :=
+  @BinaryTree.rec (List ℕ) (fun _ => Bool) false
+    (fun key _ _ ihl ihr => @Ordering.rec (fun _ => Bool) ihl true ihr (lcmp' x key)) t
+
+theorem has'_eq (t : Tree) (x : List ℕ) : has' t x = thas t x := by
+  induction t with
+  | nil => rfl
+  | node key l r ihl ihr =>
+    show @Ordering.rec (fun _ => Bool) (has' l x) true (has' r x) (lcmp' x key) =
+      thas (BinaryTree.node key l r) x
+    rw [ihl, ihr, lcmp'_eq]
+    cases h : lcmp x key <;> rw [thas, h]
+
+noncomputable def lastOK' (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) : Bool :=
+  bor (bor (band (Nat.beq k 0) (bnot (allFinal' l))) (has' prev l)) (bnot (P l k))
+
+theorem lastOK'_eq (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) : lastOK' P prev k l = lastOK P prev k l := by
+  unfold lastOK' lastOK
+  rw [bor_eq, bor_eq, band_eq, bnot_eq, bnot_eq, allFinal'_eq, has'_eq]
+
+def covR' (c : ℕ) : Bool := Nat.beq (Nat.land c full) full
+
+def forceN (x : ℕ) (f : ℕ → Bool) : Bool :=
+  @Nat.rec (fun _ => Bool) (f 0) (fun p _ => f (Nat.succ p)) x
+
+theorem forceN_eq (x : ℕ) (f : ℕ → Bool) : forceN x f = f x := by
+  cases x <;> rfl
+
+def forceL (l : List ℕ) (c : List ℕ → Bool) : Bool :=
+  @List.rec ℕ (fun _ => (List ℕ → Bool) → Bool) (fun c => c [])
+    (fun x _ ih c => forceN x (fun x' => ih (fun t => c (x' :: t)))) l c
+
+theorem forceL_eq (l : List ℕ) : ∀ c : List ℕ → Bool, forceL l c = c l := by
+  induction l with
+  | nil => intro c; rfl
+  | cons x l ih =>
+    intro c
+    show forceN x (fun x' => forceL l (fun t => c (x' :: t))) = c (x :: l)
+    rw [forceN_eq, ih]
+
+noncomputable def sOK' (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) (u v w : ℕ) (sz : Bool) (c : ℕ) (ka kb : Bool) : Bool :=
+  bor (bor sz (bnot (covR' c))) (forceL (ins' w (filt' ka kb u v l)) (lastOK' P prev k))
+
+theorem sOK'_eq (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) (u v w : ℕ) (sz : Bool) (c : ℕ) (ka kb : Bool) :
+    sOK' P prev k l u v w sz c ka kb = sOK P prev k l u v w sz c ka kb := by
+  unfold sOK' sOK
+  rw [bor_eq, bor_eq, bnot_eq, forceL_eq, lastOK'_eq, ins'_eq, filt'_eq]
+  rfl
+
+def len' (l : List ℕ) : ℕ := @List.rec ℕ (fun _ => ℕ) 0 (fun _ _ ih => Nat.succ ih) l
+
+theorem len'_eq (l : List ℕ) : len' l = l.length := by
+  induction l with
+  | nil => rfl
+  | cons a l ih => show Nat.succ (len' l) = _; rw [ih]; rfl
+
+noncomputable def opOK2' (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) (u ru v rv w c : ℕ) : Bool :=
+  band (band (band
+    (sOK' P prev k l u v w (Nat.blt (Nat.add k 2) (len' l)) c false false)
+    (sOK' P prev k l u v w (Nat.blt (Nat.succ k) (len' l)) (Nat.lor c rv) false true))
+    (sOK' P prev k l u v w (Nat.blt (Nat.succ k) (len' l)) (Nat.lor c ru) true false))
+    (sOK' P prev k l u v w (Nat.blt k (len' l)) (Nat.lor c (Nat.lor ru rv)) true true)
+
+theorem opOK2'_eq (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) (u ru v rv w c : ℕ) :
+    opOK2' P prev k l u ru v rv w c = opOK2 P prev k l u ru v rv w c := by
+  unfold opOK2' opOK2
+  simp only [band_eq, sOK'_eq, len'_eq]
+
+noncomputable def opOK' (m : Bool) (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) (u ru v rv ro w : ℕ) : Bool :=
+  bor (bor (blkAny' m w base12) (blkAny' m w l))
+    (opOK2' P prev k l u ru v rv w (Nat.lor (rectW' w) ro))
+
+theorem opOK'_eq (m : Bool) (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) (u ru v rv ro w : ℕ) :
+    opOK' m P prev k l u ru v rv ro w = opOK m P prev k l u ru v rv ro w := by
+  unfold opOK' opOK
+  simp only [bor_eq, blkAny'_eq, opOK2'_eq, rectW'_eq]
+
+noncomputable def pairOK' (m : Bool) (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) (u v : ℕ) : Bool :=
+  band (opOK' m P prev k l u (rectW' u) v (rectW' v) (orEx' u v l) (Nat.land u v))
+    (opOK' m P prev k l u (rectW' u) v (rectW' v) (orEx' u v l) (Nat.lor u v))
+
+theorem pairOK'_eq (m : Bool) (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) (u v : ℕ) :
+    pairOK' m P prev k l u v = pairOK m P prev k l u v := by
+  unfold pairOK' pairOK
+  simp only [band_eq, opOK'_eq, rectW'_eq, orEx'_eq]
+
+def allB' (f : ℕ → Bool) (l : List ℕ) : Bool :=
+  @List.rec ℕ (fun _ => Bool) true (fun a _ ih => band (f a) ih) l
+
+theorem allB'_eq (f : ℕ → Bool) (l : List ℕ) : allB' f l = allB f l := by
+  induction l with
+  | nil => rfl
+  | cons a l ih => show band (f a) (allB' f l) = (f a && allB f l); rw [ih, band_eq]
+
+def pairsAll' (f : ℕ → ℕ → Bool) (l : List ℕ) : Bool :=
+  @List.rec ℕ (fun _ => Bool) true (fun a t ih => band (allB' (f a) t) ih) l
+
+theorem pairsAll'_eq (f : ℕ → ℕ → Bool) (l : List ℕ) : pairsAll' f l = pairsAll f l := by
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    show band (allB' (f a) l) (pairsAll' f l) = (allB (f a) l && pairsAll f l)
+    rw [ih, band_eq, allB'_eq]
+
+noncomputable def expOK' (m : Bool) (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) : Bool :=
+  band (band (sortedB l) (bnot (allFinal' l))) (pairsAll' (pairOK' m P prev k l) l)
+
+theorem expOK'_eq (m : Bool) (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) (l : List ℕ) :
+    expOK' m P prev k l = expOK m P prev k l := by
+  unfold expOK' expOK
+  have : pairOK' m P prev k l = pairOK m P prev k l := by
+    funext u v; exact pairOK'_eq m P prev k l u v
+  rw [band_eq, band_eq, bnot_eq, allFinal'_eq, pairsAll'_eq, this]
+
+noncomputable def expFastSub :
+    {f : Bool → (List ℕ → ℕ → Bool) → Tree → ℕ → List ℕ → Bool // f = expOK'} := by
+  refine ⟨?f, ?h⟩
+  case h =>
+    delta expOK' pairsAll' allB' pairOK' opOK' opOK2' sOK' len' covR' lastOK' has' lcmp' filt' ins'
+      allFinal' orEx' rectW' rect' tb' blkAny' blk' domN' band bor bnot full base12 base10 forceL forceN
+    beta_reduce
+    exact rfl
+
+noncomputable def expFast : Bool → (List ℕ → ℕ → Bool) → Tree → ℕ → List ℕ → Bool :=
+  expFastSub.1
+
+theorem expFast_eq (m : Bool) (P : List ℕ → ℕ → Bool) (prev : Tree) (k : ℕ) :
+    expFast m P prev k = expOK m P prev k := by
+  funext l
+  have : expFast = expOK' := expFastSub.2
+  rw [this]
+  exact expOK'_eq m P prev k l
+
+theorem level_fast {m : Bool} {P : List ℕ → ℕ → Bool} {prev T : Tree} {k : ℕ}
+    (hP : PruneOK m P) (hinv : Inv m prev k)
+    (h : tall (expFast m P prev k) T = true) : Inv m T (k + 1) := by
+  rw [expFast_eq] at h
+  intro x hx
+  exact expOK_sound hP hinv (thas_all _ T x h hx)
+
+theorem tall_node (p : List ℕ → Bool) (l r : Tree) (key : List ℕ) (h1 : tall p l = true)
+    (h2 : p key = true) (h3 : tall p r = true) : tall p (BinaryTree.node key l r) = true := by
+  simp only [tall, h1, h2, h3]; rfl
+
+theorem inv_leaf (m : Bool) : Inv m BinaryTree.nil 0 := by
+  intro x hx
+  simp [thas] at hx
+
+def NoStart (m : Bool) (n : ℕ) : Prop :=
+  ∀ L : Finset ℕ, (∀ x ∈ L, x ∈ base10) → ¬ Reach m L n
+
+theorem start_sound {m : Bool} {prev : Tree} {n : ℕ} (hinv : Inv m prev n)
+    (h : subsAll base10 (closed prev n) = true) : NoStart m n := by
+  intro L hL
+  have hs : (base10.filter (fun x => decide (x ∈ L))).Sublist base10 := List.filter_sublist
+  have he : (base10.filter (fun x => decide (x ∈ L))).toFinset = L := by
+    ext x
+    simp only [List.mem_toFinset, List.mem_filter, decide_eq_true_eq]
+    exact ⟨fun h => h.2, fun h => ⟨hL x h, h⟩⟩
+  have hnd : (base10.filter (fun x => decide (x ∈ L))).Nodup := List.Nodup.sublist hs (by decide)
+  have := closed_sound hnd hinv (subsAll_sub base10 _ h _ hs)
+  rw [he] at this
+  exact this
+
+inductive ReachH (m : Bool) : Finset ℕ → Finset ℕ → ℕ → Prop
+  | done (H : Finset ℕ) (k : ℕ) : ReachH m H {4095} k
+  | step (H D : Finset ℕ) (k u v w : ℕ) (ka kb : Bool) :
+      u ∈ D → v ∈ D → (w = u &&& v ∨ w = u ||| v) →
+      (∀ d ∈ H, blk m w d = false) →
+      (∀ d ∈ D, blk m w d = false) → (∀ d ∈ base12, blk m w d = false) →
+      ReachH m (insert w H)
+        (insert w (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))) k →
+      ReachH m H D (k + 1)
+
+theorem ReachH.toReach {m : Bool} {H D : Finset ℕ} {k : ℕ} (h : ReachH m H D k) : Reach m D k := by
+  induction h with
+  | done H k => exact Reach.done k
+  | step H D k u v w ka kb hu hv hw _ hd hb _ ih => exact Reach.step D k u v w ka kb hu hv hw hd hb ih
+
+theorem ReachH.anti {m : Bool} {H D : Finset ℕ} {k : ℕ} (h : ReachH m H D k) :
+    ∀ H' : Finset ℕ, H' ⊆ H → ReachH m H' D k := by
+  induction h with
+  | done H k => intro H' _; exact ReachH.done H' k
+  | step H D k u v w ka kb hu hv hw hH hd hb _ ih =>
+    intro H' hsub
+    exact ReachH.step H' D k u v w ka kb hu hv hw (fun d hd' => hH d (hsub hd')) hd hb
+      (ih _ (Finset.insert_subset_insert w hsub))
+
+theorem ReachH.mono {m : Bool} {H D : Finset ℕ} {k : ℕ} (h : ReachH m H D k) :
+    ReachH m H D (k + 1) := by
+  induction h with
+  | done H k => exact ReachH.done _ _
+  | step H D k u v w ka kb hu hv hw hH hd hb _ ih =>
+    exact ReachH.step H D (k + 1) u v w ka kb hu hv hw hH hd hb ih
+
+theorem ReachH.mono_le {m : Bool} {H D : Finset ℕ} {k k' : ℕ} (hk : k ≤ k') (h : ReachH m H D k) :
+    ReachH m H D k' := by
+  induction hk with
+  | refl => exact h
+  | step _ ih => exact ih.mono
+
+theorem ReachH.inv' {m : Bool} {H D : Finset ℕ} {k' : ℕ} (h : ReachH m H D k') : ∀ k : ℕ,
+    k' = k + 1 →
+    D = {4095} ∨ ∃ (u v w : ℕ) (ka kb : Bool), u ∈ D ∧ v ∈ D ∧ (w = u &&& v ∨ w = u ||| v) ∧
+      (∀ d ∈ H, blk m w d = false) ∧
+      (∀ d ∈ D, blk m w d = false) ∧ (∀ d ∈ base12, blk m w d = false) ∧
+      ReachH m (insert w H)
+        (insert w (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))) k := by
+  induction h with
+  | done H k0 => intro _ _; exact Or.inl rfl
+  | step H D k0 u v w ka kb hu hv hw hH hd hb hr _ =>
+    intro k hk
+    obtain rfl : k0 = k := by omega
+    exact Or.inr ⟨u, v, w, ka, kb, hu, hv, hw, hH, hd, hb, hr⟩
+
+inductive Tr (m : Bool) : List ℕ → Prop
+  | nil : Tr m []
+  | snoc (s : List ℕ) (w : ℕ) : Tr m s → w < 16777216 →
+      (∀ d ∈ base12 ++ s, blk m w d = false) →
+      (∃ u ∈ base12 ++ s, ∃ v ∈ base12 ++ s, w = u &&& v ∨ w = u ||| v) → Tr m (s ++ [w])
+
+theorem Tr.bound {m : Bool} {s : List ℕ} (h : Tr m s) : ∀ x ∈ s, x < 16777216 := by
+  induction h with
+  | nil => intro x hx; simp at hx
+  | snoc s w _ hw _ _ ih =>
+    intro x hx
+    rcases List.mem_append.mp hx with hx | hx
+    · exact ih x hx
+    · rw [List.mem_singleton.mp hx]; exact hw
+
+theorem ones_and (v : ℕ) (hv : v < 16777216) : 16777215 &&& v = v := by
+  have e : (16777215 : ℕ) = 2 ^ 24 - 1 := by norm_num
+  rw [Nat.and_comm, e, Nat.and_two_pow_sub_one_eq_mod]
+  exact Nat.mod_eq_of_lt hv
+
+theorem ones_or (v : ℕ) (hv : v < 16777216) : 16777215 ||| v = 16777215 := by
+  have e : (16777215 : ℕ) = 2 ^ 24 - 1 := by norm_num
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [Nat.testBit_or, e, Nat.testBit_two_pow_sub_one]
+  by_cases hi : i < 24
+  · simp [hi]
+  · have : v.testBit i = false := by
+      apply Nat.testBit_lt_two_pow
+      exact lt_of_lt_of_le hv (by
+        have : (2 : ℕ) ^ 24 ≤ 2 ^ i := Nat.pow_le_pow_right (by norm_num) (by omega)
+        omega)
+    simp [hi, this]
+
+theorem absorb (S : List ℕ) (h0 : 0 ∈ S) (h1 : 16777215 ∈ S) (hb : ∀ x ∈ S, x < 16777216)
+    (u v : ℕ) (hu : u ∈ S) (hv : v ∈ S) (hz : u = 0 ∨ u = 16777215 ∨ u = v) :
+    u &&& v ∈ S ∧ u ||| v ∈ S := by
+  rcases hz with rfl | rfl | rfl
+  · simpa using ⟨h0, hv⟩
+  · rw [ones_and v (hb v hv), ones_or v (hb v hv)]; exact ⟨hv, h1⟩
+  · simpa using hu
+
+theorem base12_lt : ∀ x ∈ base12, x < 16777216 := by decide
+
+theorem mem12 {x : ℕ} (h : x ∈ base12) : x = 0 ∨ x = 16777215 ∨ x ∈ base10 := by
+  simpa [base12] using h
+
+theorem Tr.reach {m : Bool} {s : List ℕ} (h : Tr m s) : ∀ (L : Finset ℕ) (k : ℕ),
+    (∀ x ∈ L, x ∈ base10 ∨ x ∈ s) → ReachH m s.toFinset L k →
+    ∃ L0 : Finset ℕ, (∀ x ∈ L0, x ∈ base10) ∧ ReachH m ∅ L0 (k + s.length) := by
+  induction h with
+  | nil =>
+    intro L k hL hR
+    exact ⟨L, fun x hx => (hL x hx).resolve_right (by simp), by simpa using hR⟩
+  | snoc s w hs hwlt hdom hop ih =>
+    intro L k hL hR
+    have hlen : k + (s ++ [w]).length = k + s.length + 1 := by simp; omega
+    rw [hlen]
+    by_cases hwL : w ∈ L
+    · obtain ⟨u, hu, v, hv, hw⟩ := hop
+      have hne : ∀ x ∈ base12 ++ s, w ≠ x := fun x hx he => by
+        have := hdom x hx
+        rw [← he, blk_refl] at this
+        exact Bool.noConfusion this
+      have hbd : ∀ x ∈ base12 ++ s, x < 16777216 := by
+        intro x hx
+        rcases List.mem_append.mp hx with hx | hx
+        · exact base12_lt x hx
+        · exact hs.bound x hx
+      have h0 : (0 : ℕ) ∈ base12 ++ s := List.mem_append_left _ (by simp [base12])
+      have h1 : (16777215 : ℕ) ∈ base12 ++ s := List.mem_append_left _ (by simp [base12])
+      have hwS : ¬ (w ∈ base12 ++ s) := fun hm => hne w hm rfl
+      have hu0 : ¬ (u = 0 ∨ u = 16777215 ∨ u = v) := fun hz => by
+        have := absorb _ h0 h1 hbd u v hu hv hz
+        rcases hw with hw | hw
+        · exact hwS (hw ▸ this.1)
+        · exact hwS (hw ▸ this.2)
+      have hv0 : ¬ (v = 0 ∨ v = 16777215) := fun hz => by
+        have := absorb _ h0 h1 hbd v u hv hu (by tauto)
+        rw [Nat.and_comm, Nat.or_comm] at this
+        rcases hw with hw | hw
+        · exact hwS (hw ▸ this.1)
+        · exact hwS (hw ▸ this.2)
+      have hu' : u ∈ base10 ∨ u ∈ s := by
+        rcases List.mem_append.mp hu with hx | hx
+        · rcases mem12 hx with h | h | h
+          · exact absurd (Or.inl h) hu0
+          · exact absurd (Or.inr (Or.inl h)) hu0
+          · exact Or.inl h
+        · exact Or.inr hx
+      have hv' : v ∈ base10 ∨ v ∈ s := by
+        rcases List.mem_append.mp hv with hx | hx
+        · rcases mem12 hx with h | h | h
+          · exact absurd (Or.inl h) hv0
+          · exact absurd (Or.inr h) hv0
+          · exact Or.inl h
+        · exact Or.inr hx
+      have hwu : w ≠ u := hne u hu
+      have hwv : w ≠ v := hne v hv
+      have hL' : ∀ x ∈ insert u (insert v (L.erase w)), x ∈ base10 ∨ x ∈ s := by
+        intro x hx
+        rcases Finset.mem_insert.mp hx with rfl | hx
+        · exact hu'
+        rcases Finset.mem_insert.mp hx with rfl | hx
+        · exact hv'
+        have hx2 := Finset.mem_erase.mp hx
+        rcases hL x hx2.2 with h | h
+        · exact Or.inl h
+        · rcases List.mem_append.mp h with h | h
+          · exact Or.inr h
+          · exact absurd (List.mem_singleton.mp h) hx2.1
+      have hsub : ∀ x, (x ∈ base10 ∨ x ∈ s) → x ∈ base12 ++ s := by
+        intro x hx
+        rcases hx with h | h
+        · exact List.mem_append_left _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h))
+        · exact List.mem_append_right _ h
+      have hEq : insert w ((insert u (insert v (L.erase w))).filter
+          (fun x => (decide (u ∈ L) = true ∨ x ≠ u) ∧ (decide (v ∈ L) = true ∨ x ≠ v))) = L := by
+        ext x
+        simp only [Finset.mem_insert, Finset.mem_filter, Finset.mem_erase, decide_eq_true_eq]
+        constructor
+        · rintro (rfl | ⟨hx, h1, h2⟩)
+          · exact hwL
+          · rcases hx with rfl | rfl | hx
+            · exact h1.resolve_right (fun h => h rfl)
+            · exact h2.resolve_right (fun h => h rfl)
+            · exact hx.2
+        · intro hx
+          by_cases hxw : x = w
+          · exact Or.inl hxw
+          · refine Or.inr ⟨Or.inr (Or.inr ⟨hxw, hx⟩), ?_, ?_⟩
+            · by_cases hxu : x = u
+              · exact Or.inl (hxu ▸ hx)
+              · exact Or.inr hxu
+            · by_cases hxv : x = v
+              · exact Or.inl (hxv ▸ hx)
+              · exact Or.inr hxv
+      have hT : (s ++ [w]).toFinset = insert w s.toFinset := by
+        ext x; simp [or_comm]
+      have hR' : ReachH m s.toFinset (insert u (insert v (L.erase w))) (k + 1) := by
+        refine ReachH.step _ _ k u v w (decide (u ∈ L)) (decide (v ∈ L)) (by simp) (by simp) hw
+          (fun d hd => hdom d (List.mem_append_right _ (List.mem_toFinset.mp hd)))
+          (fun d hd => hdom d (hsub d (hL' d hd)))
+          (fun d hd => hdom d (List.mem_append_left _ hd)) ?_
+        rw [hEq, ← hT]; exact hR
+      obtain ⟨L0, hL0, hR0⟩ := ih _ (k + 1) hL' hR'
+      refine ⟨L0, hL0, ?_⟩
+      have e : k + 1 + s.length = k + s.length + 1 := by omega
+      rw [← e]; exact hR0
+    · have hL' : ∀ x ∈ L, x ∈ base10 ∨ x ∈ s := by
+        intro x hx
+        rcases hL x hx with h | h
+        · exact Or.inl h
+        · rcases List.mem_append.mp h with h | h
+          · exact Or.inr h
+          · exact absurd (List.mem_singleton.mp h ▸ hx) hwL
+      obtain ⟨L0, hL0, hR0⟩ := ih L k hL' (hR.anti _ (by
+        intro x hx
+        rw [List.mem_toFinset] at hx ⊢
+        exact List.mem_append_left _ hx))
+      exact ⟨L0, hL0, hR0.mono⟩
+
+def NoStartH (m : Bool) (n : ℕ) : Prop :=
+  ∀ L : Finset ℕ, (∀ x ∈ L, x ∈ base10) → ¬ ReachH m ∅ L n
+
+theorem NoStart.toH {m : Bool} {n : ℕ} (h : NoStart m n) : NoStartH m n :=
+  fun L hL hR => h L hL hR.toReach
+
+theorem no_trace {m : Bool} {n : ℕ} (h : NoStartH m n) {s : List ℕ}
+    (hs : Tr m s) (hlen : s.length ≤ n) : 4095 ∉ s := by
+  intro hmem
+  obtain ⟨L0, hL0, hR0⟩ := hs.reach {4095} 0
+    (fun x hx => Or.inr (Finset.mem_singleton.mp hx ▸ hmem)) (ReachH.done _ 0)
+  exact h L0 hL0 (hR0.mono_le (by omega))
+
+def sD (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) (u v w : ℕ) (sz : Bool) (c : ℕ)
+    (ka kb : Bool) : Bool :=
+  sz || !(covR c) || rec k (w :: l.filter (remF ka kb u v))
+
+def opD2 (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) (u ru v rv w c : ℕ) : Bool :=
+  sD rec k l u v w (Nat.blt (Nat.add k 2) l.length) c false false &&
+  sD rec k l u v w (Nat.blt (Nat.succ k) l.length) (Nat.lor c rv) false true &&
+  sD rec k l u v w (Nat.blt (Nat.succ k) l.length) (Nat.lor c ru) true false &&
+  sD rec k l u v w (Nat.blt k l.length) (Nat.lor c (Nat.lor ru rv)) true true
+
+def opD (m : Bool) (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) (u ru v rv ro w : ℕ) : Bool :=
+  blkAny m w base12 || blkAny m w l || opD2 rec k l u ru v rv w (Nat.lor (rectW w) ro)
+
+def pairD (m : Bool) (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) (u v : ℕ) : Bool :=
+  opD m rec k l u (rectW u) v (rectW v) (orEx u v l) (Nat.land u v) &&
+  opD m rec k l u (rectW u) v (rectW v) (orEx u v l) (Nat.lor u v)
+
+def node (m : Bool) (P : List ℕ → ℕ → Bool) (rec : ℕ → List ℕ → Bool) (k : ℕ) (l : List ℕ) : Bool :=
+  !(P l k) || (!(allFinal l) && (Nat.beq k 0 || pairsAll (pairD m rec (Nat.pred k) l) l))
+
+theorem ite_p {c : Prop} [Decidable c] (a b : ℕ) (h : c) : (if c then a else b) = a := by
   split
+  · rfl
+  · contradiction
+
+theorem ite_n {c : Prop} [Decidable c] (a b : ℕ) (h : ¬ c) : (if c then a else b) = b := by
+  split
+  · contradiction
+  · rfl
+
+theorem pw_forall {α : Type} {R : α → α → Prop} (hs : ∀ a b, R a b → R b a) :
+    ∀ l : List α, l.Pairwise R → ∀ a ∈ l, ∀ b ∈ l, a ≠ b → R a b := by
+  intro l
+  induction l with
+  | nil => intro _ a ha; simp at ha
+  | cons x l ih =>
+    intro h a ha b hb hab
+    rw [List.pairwise_cons] at h
+    rcases List.mem_cons.mp ha with ha' | ha'
+    · rcases List.mem_cons.mp hb with hb' | hb'
+      · exact absurd (ha'.trans hb'.symm) hab
+      · rw [ha']; exact h.1 b hb'
+    · rcases List.mem_cons.mp hb with hb' | hb'
+      · rw [hb']; exact hs _ _ (h.1 a ha')
+      · exact ih h.2 a ha' b hb' hab
+
+theorem kw_step (D D' : Finset ℕ) (u v w : ℕ) (c : ℕ → ℕ → Bool) (f : ℕ → ℕ → ℕ)
+    (hu : u ∈ D) (hv : v ∈ D) (huv : u ≠ v) (huD : u ∉ D') (hvD : v ∉ D')
+    (hsub : ∀ x ∈ D', x ≠ w → x ∈ D)
+    (hf : ∀ e i, e < 12 → 12 ≤ i →
+      f e i ∈ D' ∧ (f e i).testBit e = true ∧ (f e i).testBit i = false)
+    (hr : ∀ e i e' i', e < 12 → e' < 12 → 12 ≤ i → 12 ≤ i' → f e i = f e' i' → f e i' = f e i)
+    (hcu : ∀ e i, w.testBit e = true → w.testBit i = false → c e i = true →
+      u.testBit e = true ∧ u.testBit i = false)
+    (hcv : ∀ e i, w.testBit e = true → w.testBit i = false → c e i = false →
+      v.testBit e = true ∧ v.testBit i = false)
+    (hc : ∀ e i e' i', c e i = c e' i' → c e i' = c e i) :
+    ∃ g : ℕ → ℕ → ℕ,
+      (∀ e i, e < 12 → 12 ≤ i →
+        g e i ∈ D ∧ (g e i).testBit e = true ∧ (g e i).testBit i = false) ∧
+      (∀ e i e' i', e < 12 → e' < 12 → 12 ≤ i → 12 ≤ i' → g e i = g e' i' → g e i' = g e i) := by
+  have hg : ∀ e i, e < 12 → 12 ≤ i → f e i = w →
+      ((if f e i = w then (cond (c e i) u v) else f e i) = u ∧ c e i = true) ∨
+      ((if f e i = w then (cond (c e i) u v) else f e i) = v ∧ c e i = false) := by
+    intro e i _ _ h
+    rw [ite_p _ _ (h)]
+    cases c e i
+    · exact Or.inr ⟨rfl, rfl⟩
+    · exact Or.inl ⟨rfl, rfl⟩
+  refine ⟨fun e i => if f e i = w then (cond (c e i) u v) else f e i, ?_, ?_⟩
+  · intro e i he hi
+    obtain ⟨h1, h2, h3⟩ := hf e i he hi
+    show (if f e i = w then (cond (c e i) u v) else f e i) ∈ D ∧
+      (if f e i = w then (cond (c e i) u v) else f e i).testBit e = true ∧
+      (if f e i = w then (cond (c e i) u v) else f e i).testBit i = false
+    by_cases hw : f e i = w
+    · rw [hw] at h2 h3
+      rcases hg e i he hi hw with ⟨hx, hcc⟩ | ⟨hx, hcc⟩
+      · rw [hx]; exact ⟨hu, hcu e i h2 h3 hcc⟩
+      · rw [hx]; exact ⟨hv, hcv e i h2 h3 hcc⟩
+    · rw [ite_n _ _ (hw)]; exact ⟨hsub _ h1 hw, h2, h3⟩
+  · intro e i e' i' he he' hi hi' heq
+    show (if f e i' = w then (cond (c e i') u v) else f e i') =
+      (if f e i = w then (cond (c e i) u v) else f e i)
+    have heq' : (if f e i = w then (cond (c e i) u v) else f e i) =
+      (if f e' i' = w then (cond (c e' i') u v) else f e' i') := heq
+    by_cases h1 : f e i = w
+    · by_cases h2 : f e' i' = w
+      · have h3 : f e i' = w := (hr e i e' i' he he' hi hi' (h1.trans h2.symm)).trans h1
+        have hcc : c e i = c e' i' := by
+          rcases hg e i he hi h1 with ⟨hx, hx'⟩ | ⟨hx, hx'⟩ <;>
+            rcases hg e' i' he' hi' h2 with ⟨hy, hy'⟩ | ⟨hy, hy'⟩
+          · rw [hx', hy']
+          · exact absurd (hx.symm.trans (heq'.trans hy)) huv
+          · exact absurd (hy.symm.trans (heq'.symm.trans hx)) huv
+          · rw [hx', hy']
+        rw [ite_p _ _ (h3), ite_p _ _ (h1), hc e i e' i' hcc]
+      · exfalso
+        rw [ite_n _ _ (h2)] at heq'
+        have hm := (hf e' i' he' hi').1
+        rcases hg e i he hi h1 with ⟨hx, _⟩ | ⟨hx, _⟩
+        · exact huD (by rw [← hx, heq']; exact hm)
+        · exact hvD (by rw [← hx, heq']; exact hm)
+    · by_cases h2 : f e' i' = w
+      · exfalso
+        rw [ite_n _ _ (h1)] at heq'
+        have hm := (hf e i he hi).1
+        rcases hg e' i' he' hi' h2 with ⟨hx, _⟩ | ⟨hx, _⟩
+        · exact huD (by rw [← hx, ← heq']; exact hm)
+        · exact hvD (by rw [← hx, ← heq']; exact hm)
+      · have h1n : (if f e i = w then (cond (c e i) u v) else f e i) = f e i := ite_n _ _ h1
+        have h2n : (if f e' i' = w then (cond (c e' i') u v) else f e' i') = f e' i' := ite_n _ _ h2
+        rw [h1n, h2n] at heq'
+        have h3 := hr e i e' i' he he' hi hi' heq'
+        have h3n : ¬ f e i' = w := by rw [h3]; exact h1
+        rw [h1n, ite_n _ _ (h3n)]
+        exact h3
+
+theorem size_lb2 (D : Finset ℕ) (u v : ℕ) (ka kb : Bool) :
+    D.card ≤ (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v))).card +
+      (cond ka 0 1 + cond kb 0 1) := by
+  have hsub : D ⊆ (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v))) ∪
+      ((cond ka ∅ {u}) ∪ (cond kb ∅ {v})) := by
+    intro x hx
+    by_cases h1 : x = u <;> by_cases h2 : x = v <;> cases ka <;> cases kb <;> simp_all
+  have h1 := Finset.card_le_card hsub
+  have h2 := Finset.card_union_le (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))
+    ((cond ka ∅ {u}) ∪ (cond kb ∅ {v}))
+  have h3 := Finset.card_union_le (cond ka (∅ : Finset ℕ) {u}) (cond kb ∅ {v})
+  have h4 : (cond ka (∅ : Finset ℕ) {u}).card = cond ka 0 1 := by cases ka <;> simp
+  have h5 : (cond kb (∅ : Finset ℕ) {v}).card = cond kb 0 1 := by cases kb <;> simp
+  omega
+
+theorem and_cu (u v e i : ℕ) (h1 : (u &&& v).testBit e = true) (_h2 : (u &&& v).testBit i = false)
+    (h3 : (!(u.testBit i)) = true) : u.testBit e = true ∧ u.testBit i = false := by
+  rw [Nat.testBit_and] at h1
+  cases hue : u.testBit e <;> cases hui : u.testBit i <;> simp_all
+
+theorem and_cv (u v e i : ℕ) (h1 : (u &&& v).testBit e = true) (h2 : (u &&& v).testBit i = false)
+    (h3 : (!(u.testBit i)) = false) : v.testBit e = true ∧ v.testBit i = false := by
+  rw [Nat.testBit_and] at h1 h2
+  cases hue : u.testBit e <;> cases hui : u.testBit i <;> simp_all
+
+theorem or_cu (u v e i : ℕ) (_h1 : (u ||| v).testBit e = true) (h2 : (u ||| v).testBit i = false)
+    (h3 : u.testBit e = true) : u.testBit e = true ∧ u.testBit i = false := by
+  rw [Nat.testBit_or] at h2
+  cases hue : u.testBit e <;> cases hui : u.testBit i <;> simp_all
+
+theorem or_cv (u v e i : ℕ) (h1 : (u ||| v).testBit e = true) (h2 : (u ||| v).testBit i = false)
+    (h3 : u.testBit e = false) : v.testBit e = true ∧ v.testBit i = false := by
+  rw [Nat.testBit_or] at h1 h2
+  cases hue : u.testBit e <;> cases hui : u.testBit i <;> simp_all
+
+theorem Reach.kw {m : Bool} {D : Finset ℕ} {k : ℕ} (h : Reach m D k) (ht : D.card = k + 1) :
+    ∃ f : ℕ → ℕ → ℕ,
+      (∀ e i, e < 12 → 12 ≤ i →
+        f e i ∈ D ∧ (f e i).testBit e = true ∧ (f e i).testBit i = false) ∧
+      (∀ e i e' i', e < 12 → e' < 12 → 12 ≤ i → 12 ≤ i' → f e i = f e' i' → f e i' = f e i) := by
+  induction h with
+  | done k =>
+    refine ⟨fun _ _ => 4095, ?_, ?_⟩
+    · intro e i he hi
+      refine ⟨by simp, ?_, ?_⟩
+      · rw [tb4095]; simpa using he
+      · rw [tb4095]; simpa using hi
+    · intros; rfl
+  | step D k u v w ka kb hu hv hw hd hb hR ih =>
+    have hwD : w ∉ D := fun hm => by
+      have := hd w hm
+      rw [blk_refl] at this
+      exact Bool.noConfusion this
+    have hwu : w ≠ u := fun h => hwD (h ▸ hu)
+    have hwv : w ≠ v := fun h => hwD (h ▸ hv)
+    have huv : u ≠ v := by
+      rintro rfl
+      rcases hw with hw | hw
+      · rw [Nat.and_self] at hw; exact hwu hw
+      · rw [Nat.or_self] at hw; exact hwu hw
+    have hwF : w ∉ D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)) :=
+      fun hm => hwD (Finset.mem_of_mem_filter _ hm)
+    have hkk : ka = false ∧ kb = false := by
+      have h1 := hR.card
+      rw [Finset.card_insert_of_notMem hwF] at h1
+      have h2 := size_lb2 D u v ka kb
+      generalize (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v))).card = c at h1 h2
+      cases ka <;> cases kb
+      · exact ⟨rfl, rfl⟩
+      · exfalso
+        have h2' : D.card ≤ c + (1 + 0) := h2
+        omega
+      · exfalso
+        have h2' : D.card ≤ c + (0 + 1) := h2
+        omega
+      · exfalso
+        have h2' : D.card ≤ c + (0 + 0) := h2
+        omega
+    obtain ⟨rfl, rfl⟩ := hkk
+    have h1 := hR.card
+    rw [Finset.card_insert_of_notMem hwF] at h1
+    have h2 : D.card ≤ (D.filter
+        (fun x => (false = true ∨ x ≠ u) ∧ (false = true ∨ x ≠ v))).card + (1 + 1) :=
+      size_lb2 D u v false false
+    have hc : (insert w (D.filter
+        (fun x => (false = true ∨ x ≠ u) ∧ (false = true ∨ x ≠ v)))).card = k + 1 := by
+      rw [Finset.card_insert_of_notMem hwF]; omega
+    obtain ⟨f, hf, hr⟩ := ih hc
+    have huD : u ∉ insert w (D.filter
+        (fun x => (false = true ∨ x ≠ u) ∧ (false = true ∨ x ≠ v))) := by
+      intro hm
+      rcases Finset.mem_insert.mp hm with h | h
+      · exact hwu h.symm
+      · have := (Finset.mem_filter.mp h).2.1
+        simp at this
+    have hvD : v ∉ insert w (D.filter
+        (fun x => (false = true ∨ x ≠ u) ∧ (false = true ∨ x ≠ v))) := by
+      intro hm
+      rcases Finset.mem_insert.mp hm with h | h
+      · exact hwv h.symm
+      · have := (Finset.mem_filter.mp h).2.2
+        simp at this
+    have hsub : ∀ x ∈ insert w (D.filter
+        (fun x => (false = true ∨ x ≠ u) ∧ (false = true ∨ x ≠ v))), x ≠ w → x ∈ D := by
+      intro x hx hxw
+      rcases Finset.mem_insert.mp hx with h | h
+      · exact absurd h hxw
+      · exact Finset.mem_of_mem_filter _ h
+    rcases hw with rfl | rfl
+    · exact kw_step D _ u v (u &&& v) (fun _ i => !(u.testBit i)) f hu hv huv huD hvD hsub hf hr
+        (fun e i h1 h2 h3 => and_cu u v e i h1 h2 h3) (fun e i h1 h2 h3 => and_cv u v e i h1 h2 h3)
+        (fun e i e' i' h => h.symm)
+    · exact kw_step D _ u v (u ||| v) (fun e _ => u.testBit e) f hu hv huv huD hvD hsub hf hr
+        (fun e i h1 h2 h3 => or_cu u v e i h1 h2 h3) (fun e i h1 h2 h3 => or_cv u v e i h1 h2 h3)
+        (fun e i e' i' _ => rfl)
+
+theorem tb_land (a b q : ℕ) : (Nat.land a b).testBit q = (a.testBit q && b.testBit q) :=
+  Nat.testBit_and a b q
+
+theorem tb_lor (a b q : ℕ) : (Nat.lor a b).testBit q = (a.testBit q || b.testBit q) :=
+  Nat.testBit_or a b q
+
+theorem tb_xor (a b q : ℕ) : (Nat.xor a b).testBit q = Bool.xor (a.testBit q) (b.testBit q) :=
+  Nat.testBit_xor a b q
+
+theorem full_tb (q : ℕ) : full.testBit q = decide (q < 144) := by
+  rw [full_eq, Nat.testBit_two_pow_sub_one]
+
+theorem land_sub (h a : ℕ) (H : ∀ q, h.testBit q = true → a.testBit q = true) :
+    Nat.land h a = h := by
+  apply Nat.eq_of_testBit_eq
+  intro q
+  rw [tb_land]
+  cases hh : h.testBit q
+  · rfl
+  · rw [H q hh]; rfl
+
+theorem land_disj (a h : ℕ) (H : ∀ q, a.testBit q = true → h.testBit q = true → False) :
+    Nat.land a h = 0 := by
+  apply Nat.eq_of_testBit_eq
+  intro q
+  rw [tb_land, Nat.zero_testBit]
+  cases ha : a.testBit q
+  · rfl
+  · cases hh : h.testBit q
+    · rfl
+    · exact (H q ha hh).elim
+
+def orS (x s : ℕ) : ℕ := Nat.lor x (Nat.shiftRight x s)
+
+def orSL (x s : ℕ) : ℕ := Nat.lor x (Nat.shiftLeft x s)
+
+theorem orS_tb (x s q : ℕ) : (orS x s).testBit q = (x.testBit q || x.testBit (s + q)) := by
+  show (x ||| x >>> s).testBit q = _
+  rw [Nat.testBit_or, Nat.testBit_shiftRight]
+
+theorem orSL_tb (x s q : ℕ) :
+    (orSL x s).testBit q = (x.testBit q || (decide (s ≤ q) && x.testBit (q - s))) := by
+  show (x ||| x <<< s).testBit q = _
+  simp only [Nat.testBit_or, Nat.testBit_shiftLeft, ge_iff_le]
+
+theorem orS_ex (k p x n s : ℕ)
+    (hx : ∀ q, x.testBit q = true → ∃ j, j < n ∧ p.testBit (k * j + q) = true) (q : ℕ)
+    (h : (orS x (k * s)).testBit q = true) : ∃ j, j < n + s ∧ p.testBit (k * j + q) = true := by
+  rw [orS_tb, Bool.or_eq_true] at h
+  rcases h with h | h
+  · obtain ⟨j, hj, hp⟩ := hx q h
+    exact ⟨j, by omega, hp⟩
+  · obtain ⟨j, hj, hp⟩ := hx _ h
+    refine ⟨j + s, by omega, ?_⟩
+    rw [Nat.mul_add, Nat.add_assoc]; exact hp
+
+theorem orSL_ex (k p x n s : ℕ)
+    (hx : ∀ q, x.testBit q = true → ∃ j, j < n ∧ k * j ≤ q ∧ p.testBit (q - k * j) = true)
+    (q : ℕ) (h : (orSL x (k * s)).testBit q = true) :
+    ∃ j, j < n + s ∧ k * j ≤ q ∧ p.testBit (q - k * j) = true := by
+  rw [orSL_tb, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at h
+  rcases h with h | ⟨hs, h⟩
+  · obtain ⟨j, hj, hq, hp⟩ := hx q h
+    exact ⟨j, by omega, hq, hp⟩
+  · obtain ⟨j, hj, hq, hp⟩ := hx _ h
+    have e : q - k * (j + s) = q - k * s - k * j := by rw [Nat.mul_add]; omega
+    refine ⟨j + s, by omega, ?_, ?_⟩
+    · rw [Nat.mul_add]; omega
+    · rw [e]; exact hp
+
+def rowM : ℕ := 5445847423328601499764522166702896582657
+
+theorem rowM_tb (q : ℕ) (h : rowM.testBit q = true) : q < 144 ∧ q % 12 = 0 := by
+  have hlt : q < 144 := by
+    by_contra hq
+    have h0 : rowM.testBit q = false := by
+      apply Nat.testBit_lt_two_pow
+      have h1 : rowM < 2 ^ 144 := by norm_num [rowM]
+      have h2 : (2 : ℕ) ^ 144 ≤ 2 ^ q := Nat.pow_le_pow_right (by norm_num) (by omega)
+      omega
+    rw [h0] at h
+    exact Bool.noConfusion h
+  have hall : ∀ q : ℕ, q < 144 → rowM.testBit q = true → q % 12 = 0 := by decide +kernel
+  exact ⟨hlt, hall q hlt h⟩
+
+def rowsOf (p : ℕ) : ℕ := Nat.land (orS (orS (orS (orS p 6) 3) 1) 1) rowM
+
+def colsOf (p : ℕ) : ℕ := Nat.land (orS (orS (orS (orS p 96) 48) 24) 12) 4095
+
+def hullC (p : ℕ) : ℕ :=
+  Nat.land (orSL (orSL (orSL (orSL (rowsOf p) 6) 3) 1) 1)
+    (orSL (orSL (orSL (orSL (colsOf p) 96) 48) 24) 12)
+
+def hull (p : ℕ) : ℕ := hullC (Nat.land p full)
+
+theorem rowsOf_tb (p q : ℕ) (h : (rowsOf p).testBit q = true) :
+    (q < 144 ∧ q % 12 = 0) ∧ ∃ j, j < 12 ∧ p.testBit (j + q) = true := by
+  unfold rowsOf at h
+  rw [tb_land, Bool.and_eq_true] at h
+  refine ⟨rowM_tb q h.2, ?_⟩
+  have h0 : ∀ q, p.testBit q = true → ∃ j, j < 1 ∧ p.testBit (1 * j + q) = true :=
+    fun q hq => ⟨0, by norm_num, by simpa using hq⟩
+  have h1 := orS_ex 1 p _ 1 6 h0
+  have h2 := orS_ex 1 p _ _ 3 h1
+  have h3 := orS_ex 1 p _ _ 1 h2
+  have h4 := orS_ex 1 p _ _ 1 h3
+  obtain ⟨j, hj, hp⟩ := h4 q h.1
+  exact ⟨j, by omega, by simpa using hp⟩
+
+theorem colsOf_tb (p q : ℕ) (h : (colsOf p).testBit q = true) :
+    q < 12 ∧ ∃ j, j < 16 ∧ p.testBit (12 * j + q) = true := by
+  unfold colsOf at h
+  rw [tb_land, Bool.and_eq_true, tb4095, decide_eq_true_eq] at h
+  refine ⟨h.2, ?_⟩
+  have h0 : ∀ q, p.testBit q = true → ∃ j, j < 1 ∧ p.testBit (12 * j + q) = true :=
+    fun q hq => ⟨0, by norm_num, by simpa using hq⟩
+  have h1 := orS_ex 12 p _ 1 8 h0
+  have h2 := orS_ex 12 p _ _ 4 h1
+  have h3 := orS_ex 12 p _ _ 2 h2
+  have h4 := orS_ex 12 p _ _ 1 h3
+  obtain ⟨j, hj, hp⟩ := h4 q h.1
+  exact ⟨j, by omega, hp⟩
+
+theorem hullC_spec (p : ℕ) (hp : ∀ q, p.testBit q = true → q < 144) (q : ℕ)
+    (h : (hullC p).testBit q = true) :
+    q < 144 ∧ ∃ i e', i < 12 ∧ e' < 12 ∧ p.testBit (12 * (q / 12) + i) = true ∧
+      p.testBit (12 * e' + q % 12) = true := by
+  unfold hullC at h
+  rw [tb_land, Bool.and_eq_true] at h
+  obtain ⟨hR, hC⟩ := h
+  have r0 : ∀ q, (rowsOf p).testBit q = true →
+      ∃ j, j < 1 ∧ 1 * j ≤ q ∧ (rowsOf p).testBit (q - 1 * j) = true :=
+    fun q hq => ⟨0, by norm_num, by omega, by simpa using hq⟩
+  have r1 := orSL_ex 1 (rowsOf p) _ 1 6 r0
+  have r2 := orSL_ex 1 (rowsOf p) _ _ 3 r1
+  have r3 := orSL_ex 1 (rowsOf p) _ _ 1 r2
+  have r4 := orSL_ex 1 (rowsOf p) _ _ 1 r3
+  obtain ⟨j, hj, hjq, hr⟩ := r4 q hR
+  obtain ⟨⟨hb, hm⟩, i, hi, hpi⟩ := rowsOf_tb p _ hr
+  have c0 : ∀ q, (colsOf p).testBit q = true →
+      ∃ j, j < 1 ∧ 12 * j ≤ q ∧ (colsOf p).testBit (q - 12 * j) = true :=
+    fun q hq => ⟨0, by norm_num, by omega, by simpa using hq⟩
+  have c1 := orSL_ex 12 (colsOf p) _ 1 8 c0
+  have c2 := orSL_ex 12 (colsOf p) _ _ 4 c1
+  have c3 := orSL_ex 12 (colsOf p) _ _ 2 c2
+  have c4 := orSL_ex 12 (colsOf p) _ _ 1 c3
+  obtain ⟨j', hj', hjq', hc⟩ := c4 q hC
+  obtain ⟨hlt, e', he', hpe⟩ := colsOf_tb p _ hc
+  have e1 : i + (q - 1 * j) = 12 * (q / 12) + i := by omega
+  have e2 : q - 12 * j' = q % 12 := by omega
+  rw [e1] at hpi
+  rw [e2] at hpe
+  have hb' := hp _ hpe
+  exact ⟨by omega, i, e', hi, by omega, hpi, hpe⟩
+
+theorem hull_spec (p q : ℕ) (h : (hull p).testBit q = true) :
+    q < 144 ∧ ∃ i e', i < 12 ∧ e' < 12 ∧ p.testBit (12 * (q / 12) + i) = true ∧
+      p.testBit (12 * e' + q % 12) = true := by
+  have hp : ∀ q, (Nat.land p full).testBit q = true → q < 144 := by
+    intro q hq
+    rw [tb_land, full_tb, Bool.and_eq_true, decide_eq_true_eq] at hq
+    exact hq.2
+  obtain ⟨h1, i, e', hi, he, ha, hb⟩ := hullC_spec _ hp q h
+  rw [tb_land, Bool.and_eq_true] at ha hb
+  exact ⟨h1, i, e', hi, he, ha.1, hb.1⟩
+
+def tw : List ℕ → ℕ → ℕ → ℕ
+  | [], _, t => t
+  | a :: l, o, t => tw l (Nat.lor o a) (Nat.lor t (Nat.land o a))
+
+def priv (t a : ℕ) : ℕ := hull (Nat.land a (Nat.xor t full))
+
+def hullsOK (t : ℕ) : List ℕ → ℕ → Bool
+  | [], _ => true
+  | a :: l, acc => Nat.beq (Nat.land (priv t a) a) (priv t a) &&
+      (Nat.beq (Nat.land acc (priv t a)) 0 && hullsOK t l (Nat.lor acc (priv t a)))
+
+def avOK1 (as : List ℕ) : Bool := hullsOK (tw as 0 0) as 0
+
+def orL : List ℕ → ℕ
+  | [] => 0
+  | a :: l => Nat.lor a (orL l)
+
+def rectOK1 (l : List ℕ) : Bool := avOK1 (l.map rectW)
+
+def IsRect (R : ℕ → Prop) : Prop :=
+  ∀ e i e' i' : ℕ, e < 12 → i < 12 → e' < 12 → i' < 12 →
+    R (12 * e + i) → R (12 * e' + i') → R (12 * e + i')
+
+structure Part (zs : List ((ℕ → Prop) × ℕ)) : Prop where
+  rect : ∀ z ∈ zs, IsRect z.1
+  bnd : ∀ z ∈ zs, ∀ q, z.1 q → q < 144
+  disj : zs.Pairwise (fun z z' => ∀ q, z.1 q → z'.1 q → False)
+  cov : ∀ q, q < 144 → ∃ z ∈ zs, z.1 q
+  sub : ∀ z ∈ zs, ∀ q, z.1 q → z.2.testBit q = true
+
+theorem tw_spec (q : ℕ) : ∀ (as : List ℕ) (o t : ℕ), (tw as o t).testBit q = false →
+    t.testBit q = false ∧ (o.testBit q = true → ∀ a ∈ as, a.testBit q = false) ∧
+    as.Pairwise (fun a b => ¬ (a.testBit q = true ∧ b.testBit q = true)) := by
+  intro as
+  induction as with
+  | nil => intro o t h; exact ⟨h, fun _ a ha => by simp at ha, List.Pairwise.nil⟩
+  | cons a l ih =>
+    intro o t h
+    obtain ⟨h1, h2, h3⟩ := ih (Nat.lor o a) (Nat.lor t (Nat.land o a)) h
+    rw [tb_lor, Bool.or_eq_false_iff, tb_land] at h1
+    refine ⟨h1.1, ?_, ?_⟩
+    · intro ho b hb
+      rcases List.mem_cons.mp hb with rfl | hb
+      · have h4 := h1.2
+        rw [ho] at h4
+        simpa using h4
+      · exact h2 (by rw [tb_lor, ho]; rfl) b hb
+    · refine List.pairwise_cons.mpr ⟨?_, h3⟩
+      intro b hb hab
+      have h4 := h2 (by rw [tb_lor, hab.1]; simp) b hb
+      rw [h4] at hab
+      exact Bool.noConfusion hab.2
+
+theorem priv_in {zs : List ((ℕ → Prop) × ℕ)} (hP : Part zs) : ∀ z ∈ zs, ∀ q,
+    (priv (tw (zs.map Prod.snd) 0 0) z.2).testBit q = true → z.1 q := by
+  intro z hz q hq
+  obtain ⟨hq144, i, e', hi, he', ha, hb⟩ := hull_spec _ q hq
+  have key : ∀ x, x < 144 →
+      (Nat.land z.2 (Nat.xor (tw (zs.map Prod.snd) 0 0) full)).testBit x = true → z.1 x := by
+    intro x hx hbit
+    rw [tb_land, tb_xor, full_tb, Bool.and_eq_true] at hbit
+    obtain ⟨hzx, ht⟩ := hbit
+    have ht' : (tw (zs.map Prod.snd) 0 0).testBit x = false := by simpa [hx] using ht
+    obtain ⟨_, _, hpw⟩ := tw_spec x _ 0 0 ht'
+    rw [List.pairwise_map] at hpw
+    obtain ⟨z', hz', hzq⟩ := hP.cov x hx
+    by_cases hzz : z' = z
+    · rw [← hzz]; exact hzq
+    · exfalso
+      exact pw_forall (fun a b h h' => h ⟨h'.2, h'.1⟩) zs hpw z' hz' z hz hzz
+        ⟨hP.sub z' hz' x hzq, hzx⟩
+  have h1 := key _ (by omega) ha
+  have h2 := key _ (by omega) hb
+  have h3 := hP.rect z hz (q / 12) i e' (q % 12) (by omega) hi he' (Nat.mod_lt _ (by norm_num))
+    h1 h2
+  rwa [Nat.div_add_mod] at h3
+
+theorem hullsOK_sound (t : ℕ) : ∀ (zs : List ((ℕ → Prop) × ℕ)) (acc : ℕ),
+    (∀ z ∈ zs, ∀ q, (priv t z.2).testBit q = true → z.1 q) →
+    (∀ z ∈ zs, ∀ q, z.1 q → z.2.testBit q = true) →
+    zs.Pairwise (fun z z' => ∀ q, z.1 q → z'.1 q → False) →
+    (∀ q, acc.testBit q = true → ∀ z ∈ zs, ¬ z.1 q) →
+    hullsOK t (zs.map Prod.snd) acc = true := by
+  intro zs
+  induction zs with
+  | nil => intros; rfl
+  | cons z zs ih =>
+    intro acc hh hs hd ha
+    rw [List.pairwise_cons] at hd
+    have hz := hh z List.mem_cons_self
+    have e1 := land_sub _ _ (fun q hq => hs z List.mem_cons_self q (hz q hq))
+    have e2 := land_disj acc (priv t z.2) (fun q h1 h2 => ha q h1 z List.mem_cons_self (hz q h2))
+    have e3 := ih (Nat.lor acc (priv t z.2)) (fun z' hz' => hh z' (List.mem_cons_of_mem _ hz'))
+      (fun z' hz' => hs z' (List.mem_cons_of_mem _ hz')) hd.2 (fun q hq z' hz' hz'q => by
+        rw [tb_lor, Bool.or_eq_true] at hq
+        rcases hq with hq | hq
+        · exact ha q hq z' (List.mem_cons_of_mem _ hz') hz'q
+        · exact hd.1 z' hz' q (hz q hq) hz'q)
+    show (Nat.beq (Nat.land (priv t z.2) z.2) (priv t z.2) &&
+      (Nat.beq (Nat.land acc (priv t z.2)) 0 &&
+        hullsOK t (zs.map Prod.snd) (Nat.lor acc (priv t z.2)))) = true
+    rw [e1, e2, e3, Nat.beq_refl]
+    rfl
+
+theorem avOK1_sound {zs : List ((ℕ → Prop) × ℕ)} (hP : Part zs) :
+    avOK1 (zs.map Prod.snd) = true :=
+  hullsOK_sound _ zs 0 (priv_in hP) hP.sub hP.disj (fun q hq => by simp at hq)
+
+theorem orL_tb' (q : ℕ) : ∀ as : List ℕ, ∀ a ∈ as, a.testBit q = true →
+    (orL as).testBit q = true := by
+  intro as
+  induction as with
+  | nil => intro a ha; simp at ha
+  | cons b l ih =>
+    intro a ha h
+    show (Nat.lor b (orL l)).testBit q = true
+    rw [tb_lor]
+    rcases List.mem_cons.mp ha with rfl | ha
+    · rw [h]; rfl
+    · rw [ih a ha h]; simp
+
+theorem Part.covR {zs : List ((ℕ → Prop) × ℕ)} (hP : Part zs) :
+    covR (orL (zs.map Prod.snd)) = true := by
+  apply covR_of
+  intro q hq
+  obtain ⟨z, hz, hzq⟩ := hP.cov q hq
+  exact orL_tb' q _ z.2 (List.mem_map.mpr ⟨z, hz, rfl⟩) (hP.sub z hz q hzq)
+
+theorem part_of_reach {m : Bool} {l : List ℕ} {k : ℕ} (hnd : l.Nodup) (hlen : l.length = k + 1)
+    (hR : Reach m l.toFinset k) :
+    ∃ zs : List ((ℕ → Prop) × ℕ), zs.map Prod.snd = l.map rectW ∧ Part zs := by
+  have hc : l.toFinset.card = k + 1 := by rw [List.toFinset_card_of_nodup hnd, hlen]
+  obtain ⟨f, hf, hr⟩ := hR.kw hc
+  refine ⟨l.map (fun w => ((fun q => q < 144 ∧ f (q / 12) (12 + q % 12) = w), rectW w)), ?_, ?_⟩
+  · rw [List.map_map]
+    rfl
+  · constructor
+    · intro z hz
+      obtain ⟨w, _, rfl⟩ := List.mem_map.mp hz
+      intro e i e' i' he hi he' hi' h1 h2
+      have h1' : f ((12 * e + i) / 12) (12 + (12 * e + i) % 12) = w := h1.2
+      have h2' : f ((12 * e' + i') / 12) (12 + (12 * e' + i') % 12) = w := h2.2
+      have e1 : (12 * e + i) / 12 = e := by omega
+      have e2 : (12 * e + i) % 12 = i := by omega
+      have e3 : (12 * e' + i') / 12 = e' := by omega
+      have e4 : (12 * e' + i') % 12 = i' := by omega
+      have e5 : (12 * e + i') / 12 = e := by omega
+      have e6 : (12 * e + i') % 12 = i' := by omega
+      rw [e1, e2] at h1'
+      rw [e3, e4] at h2'
+      show 12 * e + i' < 144 ∧ f ((12 * e + i') / 12) (12 + (12 * e + i') % 12) = w
+      rw [e5, e6]
+      exact ⟨by omega, (hr e (12 + i) e' (12 + i') he he' (by omega) (by omega)
+        (h1'.trans h2'.symm)).trans h1'⟩
+    · intro z hz q hq
+      obtain ⟨w, _, rfl⟩ := List.mem_map.mp hz
+      exact hq.1
+    · rw [List.pairwise_map]
+      exact List.Pairwise.imp (fun hne q h1 h2 => hne (h1.2.symm.trans h2.2)) hnd
+    · intro q hq
+      have h := (hf (q / 12) (12 + q % 12) (by omega) (by omega)).1
+      exact ⟨_, List.mem_map.mpr ⟨_, List.mem_toFinset.mp h, rfl⟩, hq, rfl⟩
+    · intro z hz q hq
+      obtain ⟨w, _, rfl⟩ := List.mem_map.mp hz
+      have hq1 : q < 144 := hq.1
+      have hq2 : f (q / 12) (12 + q % 12) = w := hq.2
+      have h := hf (q / 12) (12 + q % 12) (by omega) (by omega)
+      rw [hq2] at h
+      have h3 := rectW_tb w (q / 12) (q % 12) (by omega) (Nat.mod_lt _ (by norm_num)) h.2.1 h.2.2
+      rwa [Nat.div_add_mod] at h3
+
+theorem rectOK1_sound {m : Bool} {l : List ℕ} {k : ℕ} (hnd : l.Nodup) (hlen : l.length = k + 1)
+    (hR : Reach m l.toFinset k) : rectOK1 l = true := by
+  obtain ⟨zs, he, hP⟩ := part_of_reach hnd hlen hR
+  unfold rectOK1
+  rw [← he]
+  exact avOK1_sound hP
+
+def rectP1 (l : List ℕ) (k : ℕ) : Bool := !(Nat.beq l.length (Nat.succ k)) || rectOK1 l
+
+theorem rectP1_ok (m : Bool) : PruneOK m rectP1 := by
+  intro l k hnd hR
+  unfold rectP1
+  cases h : Nat.beq l.length (Nat.succ k)
+  · rfl
+  · rw [rectOK1_sound hnd (Nat.eq_of_beq_eq_true h) hR]
+    rfl
+
+def tw' (l : List ℕ) : ℕ → ℕ → ℕ :=
+  @List.rec ℕ (fun _ => ℕ → ℕ → ℕ) (fun _ t => t)
+    (fun a _ ih o t => ih (Nat.lor o a) (Nat.lor t (Nat.land o a))) l
+
+theorem tw'_eq (l : List ℕ) : ∀ o t : ℕ, tw' l o t = tw l o t := by
+  induction l with
+  | nil => intro o t; rfl
+  | cons a l ih =>
+    intro o t
+    show tw' l (Nat.lor o a) (Nat.lor t (Nat.land o a)) = tw l (Nat.lor o a) (Nat.lor t (Nat.land o a))
+    exact ih _ _
+
+def hullsOK' (t : ℕ) (l : List ℕ) : ℕ → Bool :=
+  @List.rec ℕ (fun _ => ℕ → Bool) (fun _ => true)
+    (fun a _ ih acc => (fun h => band (Nat.beq (Nat.land h a) h)
+      (band (Nat.beq (Nat.land acc h) 0) (ih (Nat.lor acc h)))) (priv t a)) l
+
+theorem hullsOK'_eq (t : ℕ) (l : List ℕ) : ∀ acc : ℕ, hullsOK' t l acc = hullsOK t l acc := by
+  induction l with
+  | nil => intro acc; rfl
+  | cons a l ih =>
+    intro acc
+    show band (Nat.beq (Nat.land (priv t a) a) (priv t a))
+      (band (Nat.beq (Nat.land acc (priv t a)) 0) (hullsOK' t l (Nat.lor acc (priv t a)))) =
+      (Nat.beq (Nat.land (priv t a) a) (priv t a) &&
+        (Nat.beq (Nat.land acc (priv t a)) 0 && hullsOK t l (Nat.lor acc (priv t a))))
+    rw [ih, band_eq, band_eq]
+
+def mapW' (l : List ℕ) : List ℕ :=
+  @List.rec ℕ (fun _ => List ℕ) [] (fun x _ ih => rectW' x :: ih) l
+
+theorem mapW'_eq (l : List ℕ) : mapW' l = l.map rectW := by
+  induction l with
+  | nil => rfl
+  | cons x l ih =>
+    show rectW' x :: mapW' l = rectW x :: l.map rectW
+    rw [ih, rectW'_eq]
+
+def rectP1' (l : List ℕ) (k : ℕ) : Bool :=
+  bor (bnot (Nat.beq (len' l) (Nat.succ k)))
+    ((fun as => hullsOK' (tw' as 0 0) as 0) (mapW' l))
+
+theorem rectP1'_eq (l : List ℕ) (k : ℕ) : rectP1' l k = rectP1 l k := by
+  show bor (bnot (Nat.beq (len' l) (Nat.succ k))) (hullsOK' (tw' (mapW' l) 0 0) (mapW' l) 0) =
+    (!(Nat.beq l.length (Nat.succ k)) || hullsOK (tw (l.map rectW) 0 0) (l.map rectW) 0)
+  rw [bor_eq, bnot_eq, len'_eq, mapW'_eq, hullsOK'_eq, tw'_eq]
+
+theorem rectP1'_ok (m : Bool) : PruneOK m rectP1' := by
+  intro l k hnd hR
+  rw [rectP1'_eq]
+  exact rectP1_ok m l k hnd hR
+
+def Pc (x e i : ℕ) : Prop := x.testBit e = true ∧ x.testBit i = false
+
+def IsRect2 (S : ℕ → ℕ → Prop) : Prop := ∀ e i e' i' : ℕ, S e i → S e' i' → S e i'
+
+theorem pc_rect (x : ℕ) : IsRect2 (Pc x) := fun _ _ _ _ h1 h2 => ⟨h1.1, h2.2⟩
+
+structure KS (D : Finset ℕ) (j : ℕ) (f : ℕ → ℕ → ℕ) (env : ℕ → ℕ → ℕ → Prop) (c : ℕ → ℕ)
+    (Pi : ℕ → ℕ → ℕ → Prop) : Prop where
+  own : ∀ e i, e < 12 → 12 ≤ i → f e i ∈ D ∧ env (f e i) e i
+  envR : ∀ x ∈ D, IsRect2 (env x)
+  envP : ∀ x ∈ D, ∀ e i, env x e i → Pc x e i
+  s1 : ∀ x ∈ D, ∀ y ∈ D, x ≠ y → c x = c y → ∀ e i, env x e i → env y e i → False
+  s2 : ∀ x ∈ D, 1 ≤ c x → ∀ e i, env x e i → Pi (c x) e i
+  piR : ∀ n, IsRect2 (Pi n)
+  s3 : ∀ n e i, 1 ≤ n → Pi n e i → ∃ y ∈ D, 1 ≤ c y ∧ c y ≤ n ∧ Pc y e i
+  lab : ∀ x ∈ D, c x ≤ j
+
+theorem ks_done : KS {4095} 0 (fun _ _ => 4095) (fun _ e i => Pc 4095 e i) (fun _ => 0)
+    (fun _ _ _ => False) := by
+  constructor
+  · intro e i he hi
+    refine ⟨by simp, ?_, ?_⟩
+    · rw [tb4095]; simpa using he
+    · rw [tb4095]; simpa using hi
+  · intro x _; exact pc_rect 4095
+  · intro x hx e i h
+    rw [Finset.mem_singleton.mp hx]; exact h
+  · intro x hx y hy hxy
+    exact absurd ((Finset.mem_singleton.mp hx).trans (Finset.mem_singleton.mp hy).symm) hxy
+  · intro x _ h; omega
+  · intro n e i e' i' h; exact h.elim
+  · intro n e i _ h; exact h.elim
+  · intro x _; exact le_rfl
+
+def shiftL (c : ℕ → ℕ) (x y : ℕ) : ℕ := if y = x then 1 else if c y = 0 then 0 else c y + 1
+
+theorem shiftL_self (c : ℕ → ℕ) (x : ℕ) : shiftL c x x = 1 := by
+  unfold shiftL; exact ite_p _ _ rfl
+
+theorem shiftL_ne (c : ℕ → ℕ) (x y : ℕ) (h : y ≠ x) :
+    (c y = 0 ∧ shiftL c x y = 0) ∨ (1 ≤ c y ∧ shiftL c x y = c y + 1) := by
+  unfold shiftL
+  rw [ite_n _ _ h]
+  by_cases h0 : c y = 0
+  · rw [ite_p _ _ h0]; exact Or.inl ⟨h0, rfl⟩
+  · rw [ite_n _ _ h0]; exact Or.inr ⟨by omega, rfl⟩
+
+theorem KS.promote {D : Finset ℕ} {j : ℕ} {f : ℕ → ℕ → ℕ} {env : ℕ → ℕ → ℕ → Prop} {c : ℕ → ℕ}
+    {Pi : ℕ → ℕ → ℕ → Prop} (h : KS D j f env c Pi) (x : ℕ) (hxD : x ∈ D) :
+    KS D (j + 1) f (fun y e i => (y = x ∧ Pc x e i) ∨ (y ≠ x ∧ env y e i)) (shiftL c x)
+      (fun n e i => (n = 1 ∧ Pc x e i) ∨ (2 ≤ n ∧ Pi (n - 1) e i)) := by
+  constructor
+  · intro e i he hi
+    obtain ⟨h1, h2⟩ := h.own e i he hi
+    refine ⟨h1, ?_⟩
+    by_cases hx : f e i = x
+    · exact Or.inl ⟨hx, hx ▸ h.envP _ h1 e i h2⟩
+    · exact Or.inr ⟨hx, h2⟩
+  · intro y hy e i e' i' h1 h2
+    rcases h1 with ⟨hx, h1⟩ | ⟨hx, h1⟩ <;> rcases h2 with ⟨hx', h2⟩ | ⟨hx', h2⟩
+    · exact Or.inl ⟨hx, pc_rect x e i e' i' h1 h2⟩
+    · exact absurd hx hx'
+    · exact absurd hx' hx
+    · exact Or.inr ⟨hx, h.envR y hy e i e' i' h1 h2⟩
+  · intro y hy e i h1
+    rcases h1 with ⟨hx, h1⟩ | ⟨hx, h1⟩
+    · rw [hx]; exact h1
+    · exact h.envP y hy e i h1
+  · intro y hy z hz hyz hc e i h1 h2
+    by_cases hyx : y = x
+    · have hzx : z ≠ x := fun hh => hyz (hyx.trans hh.symm)
+      rw [hyx, shiftL_self] at hc
+      rcases shiftL_ne c x z hzx with ⟨_, h3⟩ | ⟨_, h3⟩ <;> omega
+    · by_cases hzx : z = x
+      · rw [hzx, shiftL_self] at hc
+        rcases shiftL_ne c x y hyx with ⟨_, h3⟩ | ⟨_, h3⟩ <;> omega
+      · have hcc : c y = c z := by
+          rcases shiftL_ne c x y hyx with ⟨_, h3⟩ | ⟨_, h3⟩ <;>
+            rcases shiftL_ne c x z hzx with ⟨_, h4⟩ | ⟨_, h4⟩ <;> omega
+        rcases h1 with ⟨hx, _⟩ | ⟨_, h1⟩
+        · exact hyx hx
+        · rcases h2 with ⟨hx, _⟩ | ⟨_, h2⟩
+          · exact hzx hx
+          · exact h.s1 y hy z hz hyz hcc e i h1 h2
+  · intro y hy hc e i h1
+    rcases h1 with ⟨hx, h1⟩ | ⟨hx, h1⟩
+    · rw [hx, shiftL_self]; exact Or.inl ⟨rfl, h1⟩
+    · rcases shiftL_ne c x y hx with ⟨_, h3⟩ | ⟨h4, h3⟩
+      · omega
+      · rw [h3]
+        refine Or.inr ⟨by omega, ?_⟩
+        rw [Nat.add_sub_cancel]
+        exact h.s2 y hy h4 e i h1
+  · intro n e i e' i' h1 h2
+    rcases h1 with ⟨hn, h1⟩ | ⟨hn, h1⟩ <;> rcases h2 with ⟨hn', h2⟩ | ⟨hn', h2⟩
+    · exact Or.inl ⟨hn, pc_rect x e i e' i' h1 h2⟩
+    · omega
+    · omega
+    · exact Or.inr ⟨hn, h.piR _ e i e' i' h1 h2⟩
+  · intro n e i hn h1
+    rcases h1 with ⟨hn1, h1⟩ | ⟨hn2, h1⟩
+    · exact ⟨x, hxD, by rw [shiftL_self], by rw [shiftL_self]; omega, h1⟩
+    · obtain ⟨y, hy, h3, h4, h5⟩ := h.s3 (n - 1) e i (by omega) h1
+      by_cases hyx : y = x
+      · exact ⟨y, hy, by rw [hyx, shiftL_self], by rw [hyx, shiftL_self]; omega, h5⟩
+      · rcases shiftL_ne c x y hyx with ⟨_, h6⟩ | ⟨_, h6⟩
+        · omega
+        · exact ⟨y, hy, by omega, by omega, h5⟩
+  · intro y hy
+    have := h.lab y hy
+    by_cases hyx : y = x
+    · rw [hyx, shiftL_self]; omega
+    · rcases shiftL_ne c x y hyx with ⟨_, h6⟩ | ⟨_, h6⟩ <;> omega
+
+def Prom (env : ℕ → ℕ → ℕ → Prop) (c : ℕ → ℕ) (w x : ℕ) : Prop :=
+  (∀ e i, Pc x e i → env x e i) ∧ 1 ≤ c x ∧ (1 ≤ c w → c x ≤ c w)
+
+theorem prom_self (env : ℕ → ℕ → ℕ → Prop) (c : ℕ → ℕ) (w x : ℕ) :
+    Prom (fun y e i => (y = x ∧ Pc x e i) ∨ (y ≠ x ∧ env y e i)) (shiftL c x) w x := by
+  refine ⟨fun e i h => Or.inl ⟨rfl, h⟩, by rw [shiftL_self], fun h => by rw [shiftL_self]; exact h⟩
+
+theorem prom_other (env : ℕ → ℕ → ℕ → Prop) (c : ℕ → ℕ) (w x y : ℕ) (hyx : y ≠ x) (hwx : w ≠ x)
+    (h : Prom env c w y) :
+    Prom (fun y e i => (y = x ∧ Pc x e i) ∨ (y ≠ x ∧ env y e i)) (shiftL c x) w y := by
+  obtain ⟨h1, h2, h3⟩ := h
+  refine ⟨fun e i hp => Or.inr ⟨hyx, h1 e i hp⟩, ?_, ?_⟩
+  · rcases shiftL_ne c x y hyx with ⟨_, h6⟩ | ⟨_, h6⟩ <;> omega
+  · intro hw
+    rcases shiftL_ne c x y hyx with ⟨_, h6⟩ | ⟨_, h6⟩ <;>
+      rcases shiftL_ne c x w hwx with ⟨_, h7⟩ | ⟨_, h7⟩ <;> omega
+
+theorem ks_prom {D' : Finset ℕ} {j : ℕ} {f : ℕ → ℕ → ℕ} {env : ℕ → ℕ → ℕ → Prop} {c : ℕ → ℕ}
+    {Pi : ℕ → ℕ → ℕ → Prop} (hK : KS D' j f env c Pi) (u v w : ℕ) (_huw : u ≠ w) (hvw : v ≠ w)
+    (huv : u ≠ v) (ka kb : Bool) (hua : u ∈ D' ↔ ka = true) (hvb : v ∈ D' ↔ kb = true) :
+    ∃ (j2 : ℕ) (env2 : ℕ → ℕ → ℕ → Prop) (c2 : ℕ → ℕ) (Pi2 : ℕ → ℕ → ℕ → Prop),
+      KS D' j2 f env2 c2 Pi2 ∧ j2 = j + (cond ka 1 0 + cond kb 1 0) ∧
+      (u ∈ D' → Prom env2 c2 w u) ∧ (v ∈ D' → Prom env2 c2 w v) := by
+  cases ka <;> cases kb
+  · exact ⟨j, env, c, Pi, hK, rfl, fun h => Bool.noConfusion (hua.mp h),
+      fun h => Bool.noConfusion (hvb.mp h)⟩
+  · exact ⟨_, _, _, _, hK.promote v (hvb.mpr rfl), rfl, fun h => Bool.noConfusion (hua.mp h),
+      fun _ => prom_self env c w v⟩
+  · exact ⟨_, _, _, _, hK.promote u (hua.mpr rfl), rfl, fun _ => prom_self env c w u,
+      fun h => Bool.noConfusion (hvb.mp h)⟩
+  · exact ⟨_, _, _, _, (hK.promote u (hua.mpr rfl)).promote v (hvb.mpr rfl), rfl,
+      fun _ => prom_other _ _ w v u huv (Ne.symm hvw) (prom_self env c w u),
+      fun _ => prom_self _ _ w v⟩
+
+theorem KS.step {D D' : Finset ℕ} {j : ℕ} {f : ℕ → ℕ → ℕ} {env : ℕ → ℕ → ℕ → Prop} {c : ℕ → ℕ}
+    {Pi : ℕ → ℕ → ℕ → Prop} (h : KS D' j f env c Pi) (u v w : ℕ) (hu : u ∈ D) (hv : v ∈ D)
+    (huv : u ≠ v) (hwD : w ∉ D) (hw : w ∈ D') (hD' : ∀ x ∈ D', x ≠ w → x ∈ D)
+    (cc : ℕ → ℕ → Bool)
+    (hcu : ∀ e i, Pc w e i → cc e i = true → Pc u e i)
+    (hcv : ∀ e i, Pc w e i → cc e i = false → Pc v e i)
+    (hcr : ∀ (b : Bool) (e i e' i' : ℕ), cc e i = b → cc e' i' = b → cc e i' = b)
+    (hku : u ∈ D' → Prom env c w u) (hkv : v ∈ D' → Prom env c w v) :
+    ∃ (f2 : ℕ → ℕ → ℕ) (env2 : ℕ → ℕ → ℕ → Prop) (c2 : ℕ → ℕ), KS D j f2 env2 c2 Pi := by
+  have hc2a : ∀ x, x ∈ D' → (if x ∈ D' then c x else c w) = c x := fun x hx => ite_p _ _ hx
+  have hc2b : ∀ x, x ∉ D' → (if x ∈ D' then c x else c w) = c w := fun x hx => ite_n _ _ hx
+  refine ⟨fun e i => if f e i = w then cond (cc e i) u v else f e i,
+    fun x e i => (x ∈ D' ∧ env x e i) ∨
+      (x ∉ D' ∧ env w e i ∧ ((x = u ∧ cc e i = true) ∨ (x = v ∧ cc e i = false))),
+    fun x => if x ∈ D' then c x else c w, ?_⟩
+  constructor
+  · intro e i he hi
+    obtain ⟨h1, h2⟩ := h.own e i he hi
+    show (if f e i = w then cond (cc e i) u v else f e i) ∈ D ∧
+      (((if f e i = w then cond (cc e i) u v else f e i) ∈ D' ∧
+        env (if f e i = w then cond (cc e i) u v else f e i) e i) ∨
+      ((if f e i = w then cond (cc e i) u v else f e i) ∉ D' ∧ env w e i ∧
+        (((if f e i = w then cond (cc e i) u v else f e i) = u ∧ cc e i = true) ∨
+         ((if f e i = w then cond (cc e i) u v else f e i) = v ∧ cc e i = false))))
+    by_cases hfw : f e i = w
+    · rw [ite_p _ _ hfw]
+      rw [hfw] at h2
+      have hpw := h.envP w hw e i h2
+      cases hcc : cc e i
+      · refine ⟨hv, ?_⟩
+        by_cases hvD : v ∈ D'
+        · exact Or.inl ⟨hvD, (hkv hvD).1 e i (hcv e i hpw hcc)⟩
+        · exact Or.inr ⟨hvD, h2, Or.inr ⟨rfl, rfl⟩⟩
+      · refine ⟨hu, ?_⟩
+        by_cases huD : u ∈ D'
+        · exact Or.inl ⟨huD, (hku huD).1 e i (hcu e i hpw hcc)⟩
+        · exact Or.inr ⟨huD, h2, Or.inl ⟨rfl, rfl⟩⟩
+    · rw [ite_n _ _ hfw]
+      exact ⟨hD' _ h1 hfw, Or.inl ⟨h1, h2⟩⟩
+  · intro x _ e i e' i' h1 h2
+    rcases h1 with ⟨hx, h1⟩ | ⟨hx, h1, h1c⟩ <;> rcases h2 with ⟨hx', h2⟩ | ⟨hx', h2, h2c⟩
+    · exact Or.inl ⟨hx, h.envR x hx e i e' i' h1 h2⟩
+    · exact absurd hx hx'
+    · exact absurd hx' hx
+    · refine Or.inr ⟨hx, h.envR w hw e i e' i' h1 h2, ?_⟩
+      rcases h1c with ⟨hxu, hc1⟩ | ⟨hxv, hc1⟩ <;> rcases h2c with ⟨hxu', hc2⟩ | ⟨hxv', hc2⟩
+      · exact Or.inl ⟨hxu, hcr true e i e' i' hc1 hc2⟩
+      · exact absurd (hxu.symm.trans hxv') huv
+      · exact absurd (hxu'.symm.trans hxv) huv
+      · exact Or.inr ⟨hxv, hcr false e i e' i' hc1 hc2⟩
+  · intro x _ e i h1
+    rcases h1 with ⟨hx, h1⟩ | ⟨_, h1, h1c⟩
+    · exact h.envP x hx e i h1
+    · have hpw := h.envP w hw e i h1
+      rcases h1c with ⟨hxu, hc1⟩ | ⟨hxv, hc1⟩
+      · rw [hxu]; exact hcu e i hpw hc1
+      · rw [hxv]; exact hcv e i hpw hc1
+  · intro x hx y hy hxy hc e i h1 h2
+    have hxw : x ≠ w := fun hh => hwD (hh ▸ hx)
+    have hyw : y ≠ w := fun hh => hwD (hh ▸ hy)
+    have hc' : (if x ∈ D' then c x else c w) = (if y ∈ D' then c y else c w) := hc
+    rcases h1 with ⟨hx', h1⟩ | ⟨hx', h1, h1c⟩ <;> rcases h2 with ⟨hy', h2⟩ | ⟨hy', h2, h2c⟩
+    · rw [hc2a x hx', hc2a y hy'] at hc'
+      exact h.s1 x hx' y hy' hxy hc' e i h1 h2
+    · rw [hc2a x hx', hc2b y hy'] at hc'
+      exact h.s1 x hx' w hw hxw hc' e i h1 h2
+    · rw [hc2b x hx', hc2a y hy'] at hc'
+      exact h.s1 w hw y hy' (Ne.symm hyw) hc' e i h1 h2
+    · rcases h1c with ⟨hxu, hc1⟩ | ⟨hxv, hc1⟩ <;> rcases h2c with ⟨hyu, hc2⟩ | ⟨hyv, hc2⟩
+      · exact hxy (hxu.trans hyu.symm)
+      · rw [hc1] at hc2; exact Bool.noConfusion hc2
+      · rw [hc1] at hc2; exact Bool.noConfusion hc2
+      · exact hxy (hxv.trans hyv.symm)
+  · intro x _ hc e i h1
+    have hc' : 1 ≤ (if x ∈ D' then c x else c w) := hc
+    show Pi (if x ∈ D' then c x else c w) e i
+    rcases h1 with ⟨hx', h1⟩ | ⟨hx', h1, _⟩
+    · rw [hc2a x hx'] at hc' ⊢
+      exact h.s2 x hx' hc' e i h1
+    · rw [hc2b x hx'] at hc' ⊢
+      exact h.s2 w hw hc' e i h1
+  · exact h.piR
+  · intro n e i hn h1
+    obtain ⟨y, hy, h3, h4, h5⟩ := h.s3 n e i hn h1
+    show ∃ y ∈ D, 1 ≤ (if y ∈ D' then c y else c w) ∧ (if y ∈ D' then c y else c w) ≤ n ∧ Pc y e i
+    by_cases hyw : y = w
+    · rw [hyw] at h3 h4 h5
+      cases hcc : cc e i
+      · refine ⟨v, hv, ?_, ?_, hcv e i h5 hcc⟩
+        · by_cases hvD : v ∈ D'
+          · rw [hc2a v hvD]; exact (hkv hvD).2.1
+          · rw [hc2b v hvD]; exact h3
+        · by_cases hvD : v ∈ D'
+          · rw [hc2a v hvD]; exact le_trans ((hkv hvD).2.2 h3) h4
+          · rw [hc2b v hvD]; exact h4
+      · refine ⟨u, hu, ?_, ?_, hcu e i h5 hcc⟩
+        · by_cases huD : u ∈ D'
+          · rw [hc2a u huD]; exact (hku huD).2.1
+          · rw [hc2b u huD]; exact h3
+        · by_cases huD : u ∈ D'
+          · rw [hc2a u huD]; exact le_trans ((hku huD).2.2 h3) h4
+          · rw [hc2b u huD]; exact h4
+    · exact ⟨y, hD' y hy hyw, by rw [hc2a y hy]; exact h3, by rw [hc2a y hy]; exact h4, h5⟩
+  · intro x _
+    show (if x ∈ D' then c x else c w) ≤ j
+    by_cases hx' : x ∈ D'
+    · rw [hc2a x hx']; exact h.lab x hx'
+    · rw [hc2b x hx']; exact h.lab w hw
+
+theorem cond_sum (b : Bool) : (cond b 1 0 : ℕ) + cond b 0 1 = 1 := by cases b <;> rfl
+
+theorem Reach.ks {m : Bool} {D : Finset ℕ} {k : ℕ} (h : Reach m D k) :
+    ∃ (j : ℕ) (f : ℕ → ℕ → ℕ) (env : ℕ → ℕ → ℕ → Prop) (c : ℕ → ℕ) (Pi : ℕ → ℕ → ℕ → Prop),
+      KS D j f env c Pi ∧ j + D.card ≤ k + 1 := by
+  induction h with
+  | done k => exact ⟨0, _, _, _, _, ks_done, by simp⟩
+  | step D k u v w ka kb hu hv hw hd hb hR ih =>
+    obtain ⟨j, f, env, c, Pi, hK, hj⟩ := ih
+    have hwD : w ∉ D := fun hm => by
+      have := hd w hm
+      rw [blk_refl] at this
+      exact Bool.noConfusion this
+    have hwu : w ≠ u := fun h => hwD (h ▸ hu)
+    have hwv : w ≠ v := fun h => hwD (h ▸ hv)
+    have huv : u ≠ v := by
+      rintro rfl
+      rcases hw with hw | hw
+      · rw [Nat.and_self] at hw; exact hwu hw
+      · rw [Nat.or_self] at hw; exact hwu hw
+    have hwF : w ∉ D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)) :=
+      fun hm => hwD (Finset.mem_of_mem_filter _ hm)
+    rw [Finset.card_insert_of_notMem hwF] at hj
+    have hsz := size_lb2 D u v ka kb
+    have hua : u ∈ insert w (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v))) ↔
+        ka = true := by
+      rw [Finset.mem_insert, Finset.mem_filter]
+      constructor
+      · rintro (h | ⟨_, h, _⟩)
+        · exact absurd h.symm hwu
+        · exact h.resolve_right (fun hh => hh rfl)
+      · intro h
+        exact Or.inr ⟨hu, Or.inl h, Or.inr huv⟩
+    have hvb : v ∈ insert w (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v))) ↔
+        kb = true := by
+      rw [Finset.mem_insert, Finset.mem_filter]
+      constructor
+      · rintro (h | ⟨_, _, h⟩)
+        · exact absurd h.symm hwv
+        · exact h.resolve_right (fun hh => hh rfl)
+      · intro h
+        exact Or.inr ⟨hv, Or.inr (Ne.symm huv), Or.inl h⟩
+    obtain ⟨j2, env2, c2, Pi2, hK2, hj2, hpu, hpv⟩ :=
+      ks_prom hK u v w (Ne.symm hwu) (Ne.symm hwv) huv ka kb hua hvb
+    have hD' : ∀ x ∈ insert w (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v))),
+        x ≠ w → x ∈ D := by
+      intro x hx hxw
+      rcases Finset.mem_insert.mp hx with h | h
+      · exact absurd h hxw
+      · exact Finset.mem_of_mem_filter _ h
+    have hfin : ∃ (f2 : ℕ → ℕ → ℕ) (env3 : ℕ → ℕ → ℕ → Prop) (c3 : ℕ → ℕ),
+        KS D j2 f2 env3 c3 Pi2 := by
+      rcases hw with rfl | rfl
+      · exact hK2.step u v (u &&& v) hu hv huv hwD (Finset.mem_insert_self _ _) hD'
+          (fun _ i => !(u.testBit i))
+          (fun e i h1 h3 => and_cu u v e i h1.1 h1.2 h3)
+          (fun e i h1 h3 => and_cv u v e i h1.1 h1.2 h3)
+          (fun b e i e' i' _ h2 => h2) hpu hpv
+      · exact hK2.step u v (u ||| v) hu hv huv hwD (Finset.mem_insert_self _ _) hD'
+          (fun e _ => u.testBit e)
+          (fun e i h1 h3 => or_cu u v e i h1.1 h1.2 h3)
+          (fun e i h1 h3 => or_cv u v e i h1.1 h1.2 h3)
+          (fun b e i e' i' h1 _ => h1) hpu hpv
+    obtain ⟨f2, env3, c3, hK3⟩ := hfin
+    refine ⟨j2, f2, env3, c3, Pi2, hK3, ?_⟩
+    have e1 := cond_sum ka
+    have e2 := cond_sum kb
+    omega
+
+structure MS (l : List ℕ) (j : ℕ) (Env : ℕ → ℕ → Prop) (c : ℕ → ℕ) (PiM : ℕ → ℕ → Prop) : Prop where
+  own : ∀ q, q < 144 → ∃ x ∈ l, Env x q
+  envR : ∀ x ∈ l, IsRect (Env x)
+  envB : ∀ x ∈ l, ∀ q, Env x q → q < 144 ∧ (rectW x).testBit q = true
+  s1 : ∀ x ∈ l, ∀ y ∈ l, x ≠ y → c x = c y → ∀ q, Env x q → Env y q → False
+  s2 : ∀ x ∈ l, 1 ≤ c x → ∀ q, Env x q → PiM (c x) q
+  piR : ∀ n, IsRect (PiM n)
+  s3 : ∀ n q, 1 ≤ n → PiM n q → ∃ y ∈ l, 1 ≤ c y ∧ c y ≤ n ∧ (rectW y).testBit q = true
+  lab : ∀ x ∈ l, c x ≤ j
+
+theorem rect_conv (S : ℕ → ℕ → Prop) (hS : IsRect2 S) :
+    IsRect (fun q => q < 144 ∧ S (q / 12) (12 + q % 12)) := by
+  intro e i e' i' he hi he' hi' h1 h2
+  have h1' : S ((12 * e + i) / 12) (12 + (12 * e + i) % 12) := h1.2
+  have h2' : S ((12 * e' + i') / 12) (12 + (12 * e' + i') % 12) := h2.2
+  have e1 : (12 * e + i) / 12 = e := by omega
+  have e2 : (12 * e + i) % 12 = i := by omega
+  have e3 : (12 * e' + i') / 12 = e' := by omega
+  have e4 : (12 * e' + i') % 12 = i' := by omega
+  have e5 : (12 * e + i') / 12 = e := by omega
+  have e6 : (12 * e + i') % 12 = i' := by omega
+  rw [e1, e2] at h1'
+  rw [e3, e4] at h2'
+  show 12 * e + i' < 144 ∧ S ((12 * e + i') / 12) (12 + (12 * e + i') % 12)
+  rw [e5, e6]
+  exact ⟨by omega, hS _ _ _ _ h1' h2'⟩
+
+theorem pc_bit (x q : ℕ) (hq : q < 144) (h : Pc x (q / 12) (12 + q % 12)) :
+    (rectW x).testBit q = true := by
+  have h3 := rectW_tb x (q / 12) (q % 12) (by omega) (Nat.mod_lt _ (by norm_num)) h.1 h.2
+  rwa [Nat.div_add_mod] at h3
+
+theorem KS.toMS {l : List ℕ} {j : ℕ} {f : ℕ → ℕ → ℕ} {env : ℕ → ℕ → ℕ → Prop} {c : ℕ → ℕ}
+    {Pi : ℕ → ℕ → ℕ → Prop} (h : KS l.toFinset j f env c Pi) :
+    MS l j (fun x q => q < 144 ∧ env x (q / 12) (12 + q % 12)) c
+      (fun n q => q < 144 ∧ Pi n (q / 12) (12 + q % 12)) := by
+  constructor
+  · intro q hq
+    obtain ⟨h1, h2⟩ := h.own (q / 12) (12 + q % 12) (by omega) (by omega)
+    exact ⟨_, List.mem_toFinset.mp h1, hq, h2⟩
+  · intro x hx
+    exact rect_conv _ (h.envR x (List.mem_toFinset.mpr hx))
+  · intro x hx q hq
+    exact ⟨hq.1, pc_bit x q hq.1 (h.envP x (List.mem_toFinset.mpr hx) _ _ hq.2)⟩
+  · intro x hx y hy hxy hc q h1 h2
+    exact h.s1 x (List.mem_toFinset.mpr hx) y (List.mem_toFinset.mpr hy) hxy hc _ _ h1.2 h2.2
+  · intro x hx hc q h1
+    exact ⟨h1.1, h.s2 x (List.mem_toFinset.mpr hx) hc _ _ h1.2⟩
+  · intro n
+    exact rect_conv _ (h.piR n)
+  · intro n q hn h1
+    obtain ⟨y, hy, h3, h4, h5⟩ := h.s3 n _ _ hn h1.2
+    exact ⟨y, List.mem_toFinset.mp hy, h3, h4, pc_bit y q h1.1 h5⟩
+  · intro x hx
+    exact h.lab x (List.mem_toFinset.mpr hx)
+
+theorem MS.priv_env {l : List ℕ} {j : ℕ} {Env : ℕ → ℕ → Prop} {c : ℕ → ℕ} {PiM : ℕ → ℕ → Prop}
+    (hM : MS l j Env c PiM) : ∀ y ∈ l, ∀ q,
+    (priv (tw (l.map rectW) 0 0) (rectW y)).testBit q = true → Env y q := by
+  intro y hy q hq
+  obtain ⟨hq144, i, e', hi, he', ha, hb⟩ := hull_spec _ q hq
+  have key : ∀ x, x < 144 →
+      (Nat.land (rectW y) (Nat.xor (tw (l.map rectW) 0 0) full)).testBit x = true → Env y x := by
+    intro x hx hbit
+    rw [tb_land, tb_xor, full_tb, Bool.and_eq_true] at hbit
+    obtain ⟨hzx, ht⟩ := hbit
+    have ht' : (tw (l.map rectW) 0 0).testBit x = false := by simpa [hx] using ht
+    obtain ⟨_, _, hpw⟩ := tw_spec x _ 0 0 ht'
+    rw [List.pairwise_map] at hpw
+    obtain ⟨z, hz, hzq⟩ := hM.own x hx
+    by_cases hzz : z = y
+    · rw [← hzz]; exact hzq
+    · exfalso
+      exact pw_forall (fun a b h h' => h ⟨h'.2, h'.1⟩) l hpw z hz y hy hzz
+        ⟨(hM.envB z hz x hzq).2, hzx⟩
+  have h1 := key _ (by omega) ha
+  have h2 := key _ (by omega) hb
+  have h3 := hM.envR y hy (q / 12) i e' (q % 12) (by omega) hi he' (Nat.mod_lt _ (by norm_num))
+    h1 h2
+  rwa [Nat.div_add_mod] at h3
+
+def ValidLab (l : List ℕ) (K : ℕ) (c : ℕ → ℕ) : Prop :=
+  (∀ x ∈ l, c x ≤ K) ∧
+  (∀ x ∈ l, ∀ y ∈ l, x ≠ y → c x = c y →
+    Nat.land (priv (tw (l.map rectW) 0 0) (rectW x)) (priv (tw (l.map rectW) 0 0) (rectW y)) = 0) ∧
+  (∀ i U : ℕ, 1 ≤ i →
+    (∀ q, U.testBit q = true →
+      ∃ x ∈ l, c x = i ∧ (priv (tw (l.map rectW) 0 0) (rectW x)).testBit q = true) →
+    ∀ q, (hull U).testBit q = true → ∃ y ∈ l, 1 ≤ c y ∧ c y ≤ i ∧ (rectW y).testBit q = true) ∧
+  (∀ x ∈ l, ∀ q, (priv (tw (l.map rectW) 0 0) (rectW x)).testBit q = true →
+    (rectW x).testBit q = true)
+
+theorem MS.validLab {l : List ℕ} {j : ℕ} {Env : ℕ → ℕ → Prop} {c : ℕ → ℕ} {PiM : ℕ → ℕ → Prop}
+    (hM : MS l j Env c PiM) (K : ℕ) (hK : j ≤ K) : ValidLab l K c := by
+  refine ⟨fun x hx => le_trans (hM.lab x hx) hK, ?_, ?_, ?_⟩
+  · intro x hx y hy hxy hc
+    exact land_disj _ _ (fun q h1 h2 =>
+      hM.s1 x hx y hy hxy hc q (hM.priv_env x hx q h1) (hM.priv_env y hy q h2))
+  · intro i U hi hU q hq
+    obtain ⟨_, a, e', ha, he', h1, h2⟩ := hull_spec _ q hq
+    obtain ⟨x1, hx1, hc1, hb1⟩ := hU _ h1
+    obtain ⟨x2, hx2, hc2, hb2⟩ := hU _ h2
+    have hp1 := hM.s2 x1 hx1 (by omega) _ (hM.priv_env x1 hx1 _ hb1)
+    have hp2 := hM.s2 x2 hx2 (by omega) _ (hM.priv_env x2 hx2 _ hb2)
+    rw [hc1] at hp1
+    rw [hc2] at hp2
+    have h3 := hM.piR i (q / 12) a e' (q % 12) (by omega) ha he' (Nat.mod_lt _ (by norm_num))
+      hp1 hp2
+    rw [Nat.div_add_mod] at h3
+    exact hM.s3 i q hi h3
+  · intro x hx q hq
+    exact (hM.envB x hx q (hM.priv_env x hx q hq)).2
+
+theorem reach_validLab {m : Bool} {l : List ℕ} {k : ℕ} (hnd : l.Nodup) (hR : Reach m l.toFinset k) :
+    ∃ c : ℕ → ℕ, ValidLab l (Nat.sub (Nat.succ k) l.length) c := by
+  obtain ⟨j, f, env, c, Pi, hK, hj⟩ := hR.ks
+  rw [List.toFinset_card_of_nodup hnd] at hj
+  exact ⟨c, hK.toMS.validLab _ (by
+    show j ≤ (k + 1) - l.length
+    omega)⟩
+
+def fld (x i : ℕ) : ℕ := Nat.land (Nat.shiftRight x (Nat.mul 144 i)) full
+
+def put (x i v : ℕ) : ℕ := Nat.lor x (Nat.shiftLeft v (Nat.mul 144 i))
+
+def subM (h c : ℕ) : Bool := Nat.beq (Nat.land h c) h
+
+def chkA (bc hs cs K : ℕ) : ℕ → ℕ → Bool
+  | 0, _ => true
+  | n + 1, pre =>
+    subM (fld hs (Nat.sub K n)) (Nat.lor bc (Nat.lor pre (fld cs (Nat.sub K n)))) &&
+    chkA bc hs cs K n (Nat.lor pre (fld cs (Nat.sub K n)))
+
+def tryL (K bc a h : ℕ) (cont : ℕ → ℕ → ℕ → Bool) (us hs cs : ℕ) : ℕ → Bool
+  | 0 => false
+  | n + 1 =>
+    (Nat.beq (Nat.land (fld us (Nat.sub K n)) h) 0 &&
+      (chkA bc (put hs (Nat.sub K n) (hull (Nat.lor (fld us (Nat.sub K n)) h)))
+          (put cs (Nat.sub K n) a) K K 0 &&
+        cont (put us (Nat.sub K n) h)
+          (put hs (Nat.sub K n) (hull (Nat.lor (fld us (Nat.sub K n)) h)))
+          (put cs (Nat.sub K n) a))) ||
+    tryL K bc a h cont us hs cs n
+
+def orA : List ℕ → ℕ
+  | [] => 0
+  | it :: r => Nat.lor (fld it 0) (orA r)
+
+def go (K base : ℕ) : List ℕ → ℕ → ℕ → ℕ → Bool
+  | [] => fun _ _ _ => true
+  | it :: rest => fun us hs cs =>
+    tryL K (Nat.lor base (orA rest)) (fld it 0) (fld it 1) (go K base rest) us hs cs (Nat.succ K)
+
+def vs (t t2 : ℕ) : List ℕ → List ℕ
+  | [] => []
+  | a :: l => cond (Nat.beq (Nat.land (priv t a) t2) 0) (vs t t2 l)
+      (put (Nat.land a full) 1 (priv t a) :: vs t t2 l)
+
+def fcov (t t2 : ℕ) : List ℕ → ℕ
+  | [] => 0
+  | a :: l => cond (Nat.beq (Nat.land (priv t a) t2) 0) (Nat.lor a (fcov t t2 l)) (fcov t t2 l)
+
+def degI (x : ℕ) : List ℕ → ℕ
+  | [] => 0
+  | y :: l => cond (Nat.beq (Nat.land (fld y 1) (fld x 1)) 0) (degI x l) (Nat.succ (degI x l))
+
+def insD (all : List ℕ) (x : ℕ) : List ℕ → List ℕ
+  | [] => [x]
+  | y :: l => cond (Nat.blt (degI y all) (degI x all)) (x :: y :: l) (y :: insD all x l)
+
+def sortD (all : List ℕ) : List ℕ → List ℕ
+  | [] => []
+  | x :: l => insD all x (sortD all l)
+
+theorem insD_perm (all : List ℕ) (x : ℕ) : ∀ l : List ℕ, (insD all x l).Perm (x :: l) := by
+  intro l
+  induction l with
+  | nil => exact List.Perm.refl _
+  | cons y l ih =>
+    unfold insD
+    cases Nat.blt (degI y all) (degI x all)
+    · exact (List.Perm.cons y ih).trans (List.Perm.swap x y l)
+    · exact List.Perm.refl _
+
+theorem sortD_perm (all : List ℕ) : ∀ l : List ℕ, (sortD all l).Perm l := by
+  intro l
+  induction l with
+  | nil => exact List.Perm.refl _
+  | cons x l ih => exact (insD_perm all x _).trans (List.Perm.cons x ih)
+
+def classP3 (K t t2 : ℕ) (as : List ℕ) : Bool :=
+  go K (fcov t t2 as)
+    (cond (Nat.blt 1 K) (sortD (vs t t2 as) (vs t t2 as)) (vs t t2 as)) 0 0 0
+
+def classP2 (K : ℕ) (as : List ℕ) (t : ℕ) : Bool := classP3 K t (tw (as.map (priv t)) 0 0) as
+
+def classP (l : List ℕ) (k : ℕ) : Bool :=
+  classP2 (Nat.sub (Nat.succ k) l.length) (l.map rectW) (tw (l.map rectW) 0 0)
+
+def chkA' (bc hs cs K n : ℕ) : ℕ → Bool :=
+  @Nat.rec (fun _ => ℕ → Bool) (fun _ => true)
+    (fun n ih pre => band (subM (fld hs (Nat.sub K n)) (Nat.lor bc (Nat.lor pre (fld cs (Nat.sub K n)))))
+      (ih (Nat.lor pre (fld cs (Nat.sub K n))))) n
+
+theorem chkA'_eq (bc hs cs K n : ℕ) : ∀ pre : ℕ, chkA' bc hs cs K n pre = chkA bc hs cs K n pre := by
+  induction n with
+  | zero => intro pre; rfl
+  | succ n ih =>
+    intro pre
+    show band (subM (fld hs (Nat.sub K n)) (Nat.lor bc (Nat.lor pre (fld cs (Nat.sub K n)))))
+      (chkA' bc hs cs K n (Nat.lor pre (fld cs (Nat.sub K n)))) =
+      (subM (fld hs (Nat.sub K n)) (Nat.lor bc (Nat.lor pre (fld cs (Nat.sub K n)))) &&
+        chkA bc hs cs K n (Nat.lor pre (fld cs (Nat.sub K n))))
+    rw [ih, band_eq]
+
+def tryL' (K bc a h : ℕ) (cont : ℕ → ℕ → ℕ → Bool) (us hs cs n : ℕ) : Bool :=
+  @Nat.rec (fun _ => Bool) false
+    (fun n ih => bor
+      (band (Nat.beq (Nat.land (fld us (Nat.sub K n)) h) 0)
+        (band (chkA' bc (put hs (Nat.sub K n) (hull (Nat.lor (fld us (Nat.sub K n)) h)))
+            (put cs (Nat.sub K n) a) K K 0)
+          (cont (put us (Nat.sub K n) h)
+            (put hs (Nat.sub K n) (hull (Nat.lor (fld us (Nat.sub K n)) h)))
+            (put cs (Nat.sub K n) a))))
+      ih) n
+
+theorem tryL'_eq (K bc a h : ℕ) (cont : ℕ → ℕ → ℕ → Bool) (us hs cs n : ℕ) :
+    tryL' K bc a h cont us hs cs n = tryL K bc a h cont us hs cs n := by
+  induction n with
+  | zero => rfl
+  | succ n ih =>
+    show bor
+      (band (Nat.beq (Nat.land (fld us (Nat.sub K n)) h) 0)
+        (band (chkA' bc (put hs (Nat.sub K n) (hull (Nat.lor (fld us (Nat.sub K n)) h)))
+            (put cs (Nat.sub K n) a) K K 0)
+          (cont (put us (Nat.sub K n) h)
+            (put hs (Nat.sub K n) (hull (Nat.lor (fld us (Nat.sub K n)) h)))
+            (put cs (Nat.sub K n) a))))
+      (tryL' K bc a h cont us hs cs n) = tryL K bc a h cont us hs cs (n + 1)
+    rw [ih, bor_eq, band_eq, band_eq, chkA'_eq]
+    rfl
+
+def orA' (l : List ℕ) : ℕ := @List.rec ℕ (fun _ => ℕ) 0 (fun it _ ih => Nat.lor (fld it 0) ih) l
+
+theorem orA'_eq (l : List ℕ) : orA' l = orA l := by
+  induction l with
+  | nil => rfl
+  | cons it r ih => show Nat.lor (fld it 0) (orA' r) = Nat.lor (fld it 0) (orA r); rw [ih]
+
+def go' (K base : ℕ) (l : List ℕ) : ℕ → ℕ → ℕ → Bool :=
+  @List.rec ℕ (fun _ => ℕ → ℕ → ℕ → Bool) (fun _ _ _ => true)
+    (fun it rest ih us hs cs =>
+      tryL' K (Nat.lor base (orA' rest)) (fld it 0) (fld it 1) ih us hs cs (Nat.succ K)) l
+
+theorem go'_eq (K base : ℕ) (l : List ℕ) : go' K base l = go K base l := by
+  induction l with
+  | nil => rfl
+  | cons it rest ih =>
+    funext us hs cs
+    show tryL' K (Nat.lor base (orA' rest)) (fld it 0) (fld it 1) (go' K base rest) us hs cs
+      (Nat.succ K) = tryL K (Nat.lor base (orA rest)) (fld it 0) (fld it 1) (go K base rest) us hs cs
+      (Nat.succ K)
+    rw [ih, orA'_eq, tryL'_eq]
+
+def vs' (t t2 : ℕ) (l : List ℕ) : List ℕ :=
+  @List.rec ℕ (fun _ => List ℕ) []
+    (fun a _ ih => @Bool.rec (fun _ => List ℕ) (put (Nat.land a full) 1 (priv t a) :: ih) ih
+      (Nat.beq (Nat.land (priv t a) t2) 0)) l
+
+theorem vs'_eq (t t2 : ℕ) (l : List ℕ) : vs' t t2 l = vs t t2 l := by
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    show @Bool.rec (fun _ => List ℕ) (put (Nat.land a full) 1 (priv t a) :: vs' t t2 l) (vs' t t2 l)
+      (Nat.beq (Nat.land (priv t a) t2) 0) =
+      cond (Nat.beq (Nat.land (priv t a) t2) 0) (vs t t2 l)
+        (put (Nat.land a full) 1 (priv t a) :: vs t t2 l)
+    rw [ih]
+    cases Nat.beq (Nat.land (priv t a) t2) 0 <;> rfl
+
+def fcov' (t t2 : ℕ) (l : List ℕ) : ℕ :=
+  @List.rec ℕ (fun _ => ℕ) 0
+    (fun a _ ih => @Bool.rec (fun _ => ℕ) ih (Nat.lor a ih) (Nat.beq (Nat.land (priv t a) t2) 0)) l
+
+theorem fcov'_eq (t t2 : ℕ) (l : List ℕ) : fcov' t t2 l = fcov t t2 l := by
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    show @Bool.rec (fun _ => ℕ) (fcov' t t2 l) (Nat.lor a (fcov' t t2 l))
+      (Nat.beq (Nat.land (priv t a) t2) 0) =
+      cond (Nat.beq (Nat.land (priv t a) t2) 0) (Nat.lor a (fcov t t2 l)) (fcov t t2 l)
+    rw [ih]
+    cases Nat.beq (Nat.land (priv t a) t2) 0 <;> rfl
+
+def degI' (x : ℕ) (l : List ℕ) : ℕ :=
+  @List.rec ℕ (fun _ => ℕ) 0
+    (fun y _ ih => @Bool.rec (fun _ => ℕ) (Nat.succ ih) ih
+      (Nat.beq (Nat.land (fld y 1) (fld x 1)) 0)) l
+
+theorem degI'_eq (x : ℕ) (l : List ℕ) : degI' x l = degI x l := by
+  induction l with
+  | nil => rfl
+  | cons y l ih =>
+    show @Bool.rec (fun _ => ℕ) (Nat.succ (degI' x l)) (degI' x l)
+      (Nat.beq (Nat.land (fld y 1) (fld x 1)) 0) =
+      cond (Nat.beq (Nat.land (fld y 1) (fld x 1)) 0) (degI x l) (Nat.succ (degI x l))
+    rw [ih]
+    cases Nat.beq (Nat.land (fld y 1) (fld x 1)) 0 <;> rfl
+
+def insD' (all : List ℕ) (x : ℕ) (l : List ℕ) : List ℕ :=
+  @List.rec ℕ (fun _ => List ℕ) [x]
+    (fun y t ih => @Bool.rec (fun _ => List ℕ) (y :: ih) (x :: y :: t)
+      (Nat.blt (degI' y all) (degI' x all))) l
+
+theorem insD'_eq (all : List ℕ) (x : ℕ) (l : List ℕ) : insD' all x l = insD all x l := by
+  induction l with
+  | nil => rfl
+  | cons y l ih =>
+    show @Bool.rec (fun _ => List ℕ) (y :: insD' all x l) (x :: y :: l)
+      (Nat.blt (degI' y all) (degI' x all)) =
+      cond (Nat.blt (degI y all) (degI x all)) (x :: y :: l) (y :: insD all x l)
+    rw [ih, degI'_eq, degI'_eq]
+    cases Nat.blt (degI y all) (degI x all) <;> rfl
+
+def sortD' (all : List ℕ) (l : List ℕ) : List ℕ :=
+  @List.rec ℕ (fun _ => List ℕ) [] (fun x _ ih => insD' all x ih) l
+
+theorem sortD'_eq (all : List ℕ) (l : List ℕ) : sortD' all l = sortD all l := by
+  induction l with
+  | nil => rfl
+  | cons x l ih => show insD' all x (sortD' all l) = insD all x (sortD all l); rw [ih, insD'_eq]
+
+def mapP' (t : ℕ) (l : List ℕ) : List ℕ :=
+  @List.rec ℕ (fun _ => List ℕ) [] (fun a _ ih => priv t a :: ih) l
+
+theorem mapP'_eq (t : ℕ) (l : List ℕ) : mapP' t l = l.map (priv t) := by
+  induction l with
+  | nil => rfl
+  | cons a l ih => show priv t a :: mapP' t l = priv t a :: l.map (priv t); rw [ih]
+
+def classQ (K : ℕ) (as : List ℕ) : Bool :=
+  (fun t => (fun t2 => (fun items =>
+      go' K (fcov' t t2 as)
+        (@Bool.rec (fun _ => List ℕ) items (sortD' items items) (Nat.blt 1 K)) 0 0 0)
+    (vs' t t2 as)) (tw' (mapP' t as) 0 0)) (tw' as 0 0)
+
+def classP' (l : List ℕ) (k : ℕ) : Bool := classQ (Nat.sub (Nat.succ k) (len' l)) (mapW' l)
+
+theorem classP'_eq (l : List ℕ) (k : ℕ) : classP' l k = classP l k := by
+  show go' _ (fcov' _ _ (mapW' l))
+    (@Bool.rec (fun _ => List ℕ) (vs' _ _ (mapW' l)) (sortD' (vs' _ _ (mapW' l)) (vs' _ _ (mapW' l)))
+      (Nat.blt 1 (Nat.sub (Nat.succ k) (len' l)))) 0 0 0 = classP l k
+  rw [mapW'_eq, len'_eq, tw'_eq, mapP'_eq, tw'_eq, go'_eq, fcov'_eq, vs'_eq, sortD'_eq]
+  unfold classP classP2 classP3
+  cases Nat.blt 1 (Nat.sub (Nat.succ k) l.length) <;> rfl
+
+def privH (l : List ℕ) (x : ℕ) : ℕ := priv (tw (l.map rectW) 0 0) (rectW x)
+
+def t2Of (l : List ℕ) : ℕ := tw ((l.map rectW).map (priv (tw (l.map rectW) 0 0))) 0 0
+
+def isConf (l : List ℕ) (x : ℕ) : Prop := Nat.land (privH l x) (t2Of l) ≠ 0
+
+structure ClassLab (l : List ℕ) (K : ℕ) (c : ℕ → ℕ) : Prop where
+  le : ∀ x ∈ l, isConf l x → c x ≤ K
+  ne : l.Pairwise (fun x y => isConf l x → isConf l y → c x = c y →
+        Nat.land (privH l x) (privH l y) = 0)
+  cov : ∀ i U : ℕ, 1 ≤ i → i ≤ K →
+        (∀ r, U.testBit r = true →
+          ∃ x ∈ l, isConf l x ∧ c x = i ∧ (privH l x).testBit r = true) →
+        ∀ q, (hull U).testBit q = true →
+        ∃ y ∈ l, (rectW y).testBit q = true ∧ (isConf l y → 1 ≤ c y ∧ c y ≤ i)
+
+theorem ValidLab.classLab {l : List ℕ} {K : ℕ} {c : ℕ → ℕ} (hnd : l.Nodup)
+    (h : ValidLab l K c) : ClassLab l K c := by
+  obtain ⟨h1, h2, h3, _⟩ := h
+  refine ⟨fun x hx _ => h1 x hx, ?_, ?_⟩
+  · have hnd' : l.Pairwise (fun x y => x ≠ y) := hnd
+    exact List.Pairwise.imp_of_mem (fun hx hy hxy _ _ hc => h2 _ hx _ hy hxy hc) hnd'
+  · intro i U hi1 _ hU q hq
+    obtain ⟨y, hy, hc1, hc2, hb⟩ :=
+      h3 i U hi1 (fun r hr => (hU r hr).imp (fun x hx => ⟨hx.1, hx.2.2⟩)) q hq
+    exact ⟨y, hy, hb, fun _ => ⟨hc1, hc2⟩⟩
+
+theorem fld_tb (x i q : ℕ) :
+    (fld x i).testBit q = (x.testBit (144 * i + q) && decide (q < 144)) := by
+  unfold fld
+  rw [tb_land, full_tb]
+  show ((x >>> (144 * i)).testBit q && decide (q < 144)) = _
+  rw [Nat.testBit_shiftRight]
+
+theorem put_tb (x i v r : ℕ) :
+    (put x i v).testBit r = (x.testBit r || (decide (144 * i ≤ r) && v.testBit (r - 144 * i))) := by
+  unfold put
+  rw [tb_lor]
+  show (x.testBit r || (v <<< (144 * i)).testBit r) = _
+  rw [Nat.testBit_shiftLeft]
+
+theorem fld_lt (x i q : ℕ) (h : (fld x i).testBit q = true) : q < 144 := by
+  rw [fld_tb, Bool.and_eq_true, decide_eq_true_eq] at h
+  exact h.2
+
+theorem fld_zero (j q : ℕ) : (fld 0 j).testBit q = false := by
+  rw [fld_tb, Nat.zero_testBit]
+  rfl
+
+theorem fld_put_same (x i v q : ℕ) (hv : ∀ r, v.testBit r = true → r < 144) :
+    (fld (put x i v) i).testBit q = ((fld x i).testBit q || v.testBit q) := by
+  rw [fld_tb, put_tb, fld_tb]
+  have e : 144 * i + q - 144 * i = q := by omega
+  have e2 : decide (144 * i ≤ 144 * i + q) = true := decide_eq_true (by omega)
+  rw [e, e2]
+  cases h : v.testBit q
   · simp
-  · exact rd _
-  · rw [Nat.and_assoc, rd]
-  · simp
-  · exact rd _
-  · rw [Nat.and_or_distrib_right, rd, rd]
-  · simp
-  · rw [and_neg (Nat.and_self m), rd]
-  · simp
-lemma ex_sub {gs : List Gate} : ∀ {w : List ℕ}, (∀ x ∈ w, x &&& m = x) → ∀ x ∈ ex m gs w, x &&& m = x := by
-  induction gs with
-  | nil => intro w hw; exact hw
-  | cons g gs ih =>
-    intro w hw
-    refine ih (w := w ++ [gv m w g]) fun x hx => ?_
-    simp only [List.mem_append, List.mem_singleton] at hx
-    rcases hx with hx | rfl
-    · exact hw x hx
-    · exact gv_sub m hw g
-lemma getD_map (w : List ℕ) (b i : ℕ) : (w.map (fun x => x.testBit b)).getD i false = (w.getD i 0).testBit b := by
-  rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map]
-  cases w[i]? <;> simp
-lemma gv_bit {b : ℕ} (hb : m.testBit b = true) (w : List ℕ) (g : Gate)
-    (hg : g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) ∧ g.inputs.length ≤ 2) :
-    (gv m w g).testBit b = g.op.eval (g.inputs.map fun i => (w.map (fun x => x.testBit b)).getD i false) := by
-  have e1 : ∀ l, GateOp.and.eval l = l.all id := fun _ => rfl
-  have e2 : ∀ l, GateOp.or.eval l = l.any id := fun _ => rfl
-  have e3 : ∀ l, GateOp.not.eval l = !(l.headD false) := fun _ => rfl
-  obtain ⟨o, l⟩ := g
-  obtain ⟨hop, hlen⟩ := hg
-  simp only [getD_map]
-  simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hop
-  simp only at hlen
-  rcases hop with rfl | rfl | rfl
-  · match l, hlen with
-    | [], _ => simp [gv, e1, hb]
-    | [i], _ => simp [gv, e1]
-    | [i, j], _ => simp [gv, e1]
-  · match l, hlen with
-    | [], _ => simp [gv, e2]
-    | [i], _ => simp [gv, e2]
-    | [i, j], _ => simp [gv, e2]
-  · match l, hlen with
-    | [], _ => simp [gv, e3, hb]
-    | [i], _ => simp [gv, e3, hb]
-    | [i, j], _ => simp [gv, e3, hb]
-lemma ex_bit {b : ℕ} (hb : m.testBit b = true) (gs : List Gate) : ∀ (w : List ℕ),
-    (∀ g ∈ gs, g.op ∈ ({GateOp.and, GateOp.or, GateOp.not} : Set GateOp) ∧ g.inputs.length ≤ 2) →
-    (ex m gs w).map (fun x => x.testBit b) =
-      gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) (w.map (fun x => x.testBit b)) := by
-  induction gs with
-  | nil => intro w _; rfl
-  | cons g gs ih =>
-    intro w hg
-    rw [List.foldl_cons, ← gv_bit m hb w g (hg g List.mem_cons_self)]
-    have := ih (w ++ [gv m w g]) (fun x hx => hg x (List.mem_cons_of_mem _ hx))
-    rw [List.map_append] at this
-    exact this
-end circuit
-def EF : ℕ := (([(0, 1), (1, 2), (2, 3), (3, 4), (4, 0), (0, 5), (1, 6), (2, 7), (3, 8), (5, 7), (6, 8), (8, 5)] : List (ℕ × ℕ)).map
-  (fun e => rawP.getD e.1 0 &&& rawP.getD e.2 0)).foldr (· ||| ·) 0
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma EF_ok : EF &&& mz 0 = tz 0 := by decide +kernel
-lemma rawP_len : rawP.length = 9 := rfl
-lemma row_list (b : ℕ) : List.ofFn (fun v : Fin 9 => (rawP.getD v.val 0).testBit b) = rawP.map (fun x => x.testBit b) := by
-  apply List.ext_getElem
-  · simp [rawP_len]
-  · intro i h1 h2
-    have : i < rawP.length := by simpa using h2
-    rw [List.getElem_ofFn, List.getElem_map, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem this]; rfl
-lemma fold_keep (gs : List Gate) (w : List Bool) (i : ℕ) (hi : i < w.length) :
-    (gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]) w).getD i false = w.getD i false := by
+  · have e3 : decide (q < 144) = true := decide_eq_true (hv q h)
+    rw [e3]
+    simp
+
+theorem fld_put_ne (x i j v q : ℕ) (hv : ∀ r, v.testBit r = true → r < 144) (hij : j ≠ i) :
+    (fld (put x i v) j).testBit q = (fld x j).testBit q := by
+  rw [fld_tb, put_tb, fld_tb]
+  by_cases hq : q < 144
+  · have e : (decide (144 * i ≤ 144 * j + q) && v.testBit (144 * j + q - 144 * i)) = false := by
+      by_cases hle : 144 * i ≤ 144 * j + q
+      · have hb : v.testBit (144 * j + q - 144 * i) = false := by
+          cases hc : v.testBit (144 * j + q - 144 * i)
+          · rfl
+          · have := hv _ hc
+            omega
+        rw [hb]
+        exact Bool.and_false _
+      · rw [decide_eq_false hle]
+        rfl
+    rw [e, Bool.or_false]
+  · rw [decide_eq_false hq, Bool.and_false, Bool.and_false]
+
+theorem land_zero_tb (a b q : ℕ) (h : Nat.land a b = 0) (ha : a.testBit q = true)
+    (hb : b.testBit q = true) : False := by
+  have e := tb_land a b q
+  rw [h, ha, hb, Nat.zero_testBit] at e
+  exact Bool.noConfusion e
+
+theorem chkA_true (bc hs cs K : ℕ)
+    (G : ∀ i, 1 ≤ i → i ≤ K → ∀ q, (fld hs i).testBit q = true →
+      bc.testBit q = true ∨ ∃ j, 1 ≤ j ∧ j ≤ i ∧ (fld cs j).testBit q = true) :
+    ∀ n pre : ℕ, n ≤ K →
+      (∀ j, 1 ≤ j → j + n ≤ K → ∀ q, (fld cs j).testBit q = true → pre.testBit q = true) →
+      chkA bc hs cs K n pre = true := by
+  intro n
+  induction n with
+  | zero => intro pre _ _; rfl
+  | succ n ih =>
+    intro pre hn hpre
+    show (subM (fld hs (K - n)) (Nat.lor bc (Nat.lor pre (fld cs (K - n)))) &&
+      chkA bc hs cs K n (Nat.lor pre (fld cs (K - n)))) = true
+    rw [Bool.and_eq_true]
+    constructor
+    · have e : Nat.land (fld hs (K - n)) (Nat.lor bc (Nat.lor pre (fld cs (K - n)))) =
+          fld hs (K - n) := by
+        apply land_sub
+        intro q hq
+        rw [tb_lor, tb_lor]
+        rcases G (K - n) (by omega) (by omega) q hq with h | ⟨j, hj1, hj2, hj⟩
+        · rw [h]; rfl
+        · by_cases hj' : j = K - n
+          · subst hj'; rw [hj]; simp
+          · rw [hpre j hj1 (by omega) q hj]; simp
+      unfold subM
+      rw [e]
+      exact Nat.beq_refl _
+    · apply ih _ (by omega)
+      intro j hj1 hj2 q hq
+      rw [tb_lor]
+      by_cases hj' : j = K - n
+      · subst hj'; rw [hq]; simp
+      · rw [hpre j hj1 (by omega) q hq]; simp
+
+theorem tryL_true (K bc a h : ℕ) (cont : ℕ → ℕ → ℕ → Bool) (us hs cs j : ℕ)
+    (h1 : Nat.land (fld us j) h = 0)
+    (h2 : chkA bc (put hs j (hull (Nat.lor (fld us j) h))) (put cs j a) K K 0 = true)
+    (h3 : cont (put us j h) (put hs j (hull (Nat.lor (fld us j) h))) (put cs j a) = true) :
+    ∀ n : ℕ, j ≤ K → K - j < n → tryL K bc a h cont us hs cs n = true := by
+  intro n
+  induction n with
+  | zero => intro _ hn; omega
+  | succ n ih =>
+    intro hj hn
+    show ((Nat.beq (Nat.land (fld us (K - n)) h) 0 &&
+      (chkA bc (put hs (K - n) (hull (Nat.lor (fld us (K - n)) h)))
+          (put cs (K - n) a) K K 0 &&
+        cont (put us (K - n) h)
+          (put hs (K - n) (hull (Nat.lor (fld us (K - n)) h)))
+          (put cs (K - n) a))) ||
+      tryL K bc a h cont us hs cs n) = true
+    by_cases e : K - j = n
+    · have e2 : K - n = j := by omega
+      rw [e2, h1, h2, h3]
+      rfl
+    · rw [ih hj (by omega)]
+      exact Bool.or_true _
+
+theorem orA_tb (q : ℕ) : ∀ (rest : List (ℕ × ℕ)), ∀ p ∈ rest, (fld p.1 0).testBit q = true →
+    (orA (rest.map Prod.fst)).testBit q = true := by
+  intro rest
+  induction rest with
+  | nil => intro p hp; simp at hp
+  | cons r rest ih =>
+    intro p hp hb
+    show (Nat.lor (fld r.1 0) (orA (rest.map Prod.fst))).testBit q = true
+    rw [tb_lor]
+    rcases List.mem_cons.mp hp with rfl | hp
+    · rw [hb]; rfl
+    · rw [ih p hp hb]; exact Bool.or_true _
+
+theorem go_inv (K base : ℕ) (M : ℕ × ℕ → Prop)
+    (h2 : ∀ i, 1 ≤ i → i ≤ K → ∀ q,
+      (∃ U : ℕ, (∀ r, U.testBit r = true → ∃ p, M p ∧ p.2 = i ∧ (fld p.1 1).testBit r = true) ∧
+        (hull U).testBit q = true) →
+      base.testBit q = true ∨ ∃ p, M p ∧ 1 ≤ p.2 ∧ p.2 ≤ i ∧ (fld p.1 0).testBit q = true) :
+    ∀ (rest : List (ℕ × ℕ)) (us hs cs : ℕ),
+      (∀ p ∈ rest, M p) → (∀ p ∈ rest, p.2 ≤ K) →
+      rest.Pairwise (fun p r => p.2 = r.2 → Nat.land (fld p.1 1) (fld r.1 1) = 0) →
+      (∀ r ∈ rest, ∀ q, (fld us r.2).testBit q = true → (fld r.1 1).testBit q = true → False) →
+      (∀ j q, (fld us j).testBit q = true → ∃ p, M p ∧ p.2 = j ∧ (fld p.1 1).testBit q = true) →
+      (∀ j q, (fld hs j).testBit q = true →
+        ∃ U : ℕ, (∀ r, U.testBit r = true → ∃ p, M p ∧ p.2 = j ∧ (fld p.1 1).testBit r = true) ∧
+          (hull U).testBit q = true) →
+      (∀ p, M p → p ∈ rest ∨ ∀ q, (fld p.1 0).testBit q = true → (fld cs p.2).testBit q = true) →
+      go K base (rest.map Prod.fst) us hs cs = true := by
+  intro rest
+  induction rest with
+  | nil => intro us hs cs _ _ _ _ _ _ _; rfl
+  | cons it rest ih =>
+    intro us hs cs hM hK hP Ius Ius2 Ihs Ics
+    show tryL K (Nat.lor base (orA (rest.map Prod.fst))) (fld it.1 0) (fld it.1 1)
+      (go K base (rest.map Prod.fst)) us hs cs (Nat.succ K) = true
+    have hit : it ∈ it :: rest := List.mem_cons_self
+    have bh : ∀ r, (fld it.1 1).testBit r = true → r < 144 := fun r => fld_lt _ _ r
+    have ba : ∀ r, (fld it.1 0).testBit r = true → r < 144 := fun r => fld_lt _ _ r
+    have bH : ∀ r, (hull (Nat.lor (fld us it.2) (fld it.1 1))).testBit r = true → r < 144 :=
+      fun r hr => (hull_spec _ r hr).1
+    have Fus : ∀ j q, (fld (put us it.2 (fld it.1 1)) j).testBit q = true →
+        ∃ p, M p ∧ p.2 = j ∧ (fld p.1 1).testBit q = true := by
+      intro j q hq
+      by_cases hj : j = it.2
+      · subst hj
+        rw [fld_put_same _ _ _ _ bh, Bool.or_eq_true] at hq
+        rcases hq with hq | hq
+        · exact Ius2 _ q hq
+        · exact ⟨it, hM it hit, rfl, hq⟩
+      · rw [fld_put_ne _ _ _ _ _ bh hj] at hq
+        exact Ius2 j q hq
+    have Fhs : ∀ j q,
+        (fld (put hs it.2 (hull (Nat.lor (fld us it.2) (fld it.1 1)))) j).testBit q = true →
+        ∃ U : ℕ, (∀ r, U.testBit r = true → ∃ p, M p ∧ p.2 = j ∧ (fld p.1 1).testBit r = true) ∧
+          (hull U).testBit q = true := by
+      intro j q hq
+      by_cases hj : j = it.2
+      · subst hj
+        rw [fld_put_same _ _ _ _ bH, Bool.or_eq_true] at hq
+        rcases hq with hq | hq
+        · exact Ihs _ q hq
+        · refine ⟨Nat.lor (fld us it.2) (fld it.1 1), ?_, hq⟩
+          intro r hr
+          rw [tb_lor, Bool.or_eq_true] at hr
+          rcases hr with hr | hr
+          · exact Ius2 _ r hr
+          · exact ⟨it, hM it hit, rfl, hr⟩
+      · rw [fld_put_ne _ _ _ _ _ bH hj] at hq
+        exact Ihs j q hq
+    have Fcs : ∀ p, M p → p ∈ rest ∨
+        ∀ q, (fld p.1 0).testBit q = true →
+          (fld (put cs it.2 (fld it.1 0)) p.2).testBit q = true := by
+      intro p hp
+      have key : (∀ q, (fld p.1 0).testBit q = true → (fld cs p.2).testBit q = true) →
+          ∀ q, (fld p.1 0).testBit q = true →
+            (fld (put cs it.2 (fld it.1 0)) p.2).testBit q = true := by
+        intro hold q hq
+        by_cases hj : p.2 = it.2
+        · rw [hj, fld_put_same _ _ _ _ ba, ← hj, hold q hq]
+          rfl
+        · rw [fld_put_ne _ _ _ _ _ ba hj]
+          exact hold q hq
+      rcases Ics p hp with hin | hold
+      · rcases List.mem_cons.mp hin with rfl | hin
+        · right
+          intro q hq
+          rw [fld_put_same _ _ _ _ ba, hq]
+          exact Bool.or_true _
+        · exact Or.inl hin
+      · exact Or.inr (key hold)
+    have hP' := List.pairwise_cons.mp hP
+    apply tryL_true K _ _ _ _ us hs cs it.2 ?_ ?_ ?_ (Nat.succ K) (hK it hit)
+      (Nat.lt_succ_of_le (Nat.sub_le _ _))
+    · exact land_disj _ _ (Ius it hit)
+    · apply chkA_true _ _ _ _ ?_ K 0 (Nat.le_refl _)
+      · intro j hj1 hj2; omega
+      · intro i hi1 hi2 q hq
+        rcases h2 i hi1 hi2 q (Fhs i q hq) with hb | ⟨p, hp, hp1, hp2, hpq⟩
+        · left
+          rw [tb_lor, hb]
+          rfl
+        · rcases Fcs p hp with hin | hc
+          · left
+            rw [tb_lor, orA_tb q rest p hin hpq]
+            exact Bool.or_true _
+          · exact Or.inr ⟨p.2, hp1, hp2, hc q hpq⟩
+    · apply ih _ _ _ (fun p hp => hM p (List.mem_cons_of_mem _ hp))
+        (fun p hp => hK p (List.mem_cons_of_mem _ hp)) hP'.2 ?_ Fus Fhs Fcs
+      intro r hr q hq hrq
+      by_cases hj : r.2 = it.2
+      · rw [hj, fld_put_same _ _ _ _ bh, Bool.or_eq_true] at hq
+        rcases hq with hq | hq
+        · rw [← hj] at hq
+          exact Ius r (List.mem_cons_of_mem _ hr) q hq hrq
+        · exact land_zero_tb _ _ q (hP'.1 r hr hj.symm) hq hrq
+      · rw [fld_put_ne _ _ _ _ _ bh hj] at hq
+        exact Ius r (List.mem_cons_of_mem _ hr) q hq hrq
+
+theorem perm_map_lift {α β : Type} (f : α → β) {l1 l2 : List β} (h : l1.Perm l2) :
+    ∀ ps : List α, ps.map f = l1 → ∃ ps' : List α, ps'.Perm ps ∧ ps'.map f = l2 := by
+  induction h with
+  | nil => intro ps hps; exact ⟨ps, List.Perm.refl _, hps⟩
+  | cons x _ ih =>
+    intro ps hps
+    rcases ps with _ | ⟨p, ps⟩
+    · simp at hps
+    · rw [List.map_cons, List.cons.injEq] at hps
+      obtain ⟨qs, hq1, hq2⟩ := ih ps hps.2
+      refine ⟨p :: qs, List.Perm.cons p hq1, ?_⟩
+      rw [List.map_cons, hq2, hps.1]
+  | swap x y l =>
+    intro ps hps
+    rcases ps with _ | ⟨p, _ | ⟨q, r⟩⟩
+    · simp at hps
+    · rw [List.map_cons, List.cons.injEq] at hps
+      simp at hps
+    · rw [List.map_cons, List.map_cons, List.cons.injEq, List.cons.injEq] at hps
+      refine ⟨q :: p :: r, List.Perm.swap _ _ _, ?_⟩
+      rw [List.map_cons, List.map_cons, hps.1, hps.2.1, hps.2.2]
+  | trans _ _ ih1 ih2 =>
+    intro ps hps
+    obtain ⟨qs, a, b⟩ := ih1 ps hps
+    obtain ⟨rs, c, d⟩ := ih2 qs b
+    exact ⟨rs, c.trans a, d⟩
+
+theorem go_complete (K base : ℕ) (all : List (ℕ × ℕ)) (its : List ℕ)
+    (hperm : its.Perm (all.map Prod.fst))
+    (hK : ∀ p ∈ all, p.2 ≤ K)
+    (h1 : all.Pairwise (fun p r => p.2 = r.2 → Nat.land (fld p.1 1) (fld r.1 1) = 0))
+    (h2 : ∀ i, 1 ≤ i → i ≤ K → ∀ q,
+      (∃ U : ℕ, (∀ r, U.testBit r = true →
+          ∃ p, p ∈ all ∧ p.2 = i ∧ (fld p.1 1).testBit r = true) ∧
+        (hull U).testBit q = true) →
+      base.testBit q = true ∨
+        ∃ p, p ∈ all ∧ 1 ≤ p.2 ∧ p.2 ≤ i ∧ (fld p.1 0).testBit q = true) :
+    go K base its 0 0 0 = true := by
+  obtain ⟨ps, hps, hmap⟩ := perm_map_lift Prod.fst hperm.symm all rfl
+  rw [← hmap]
+  have hsym : ∀ {p r : ℕ × ℕ}, (p.2 = r.2 → Nat.land (fld p.1 1) (fld r.1 1) = 0) →
+      (r.2 = p.2 → Nat.land (fld r.1 1) (fld p.1 1) = 0) := by
+    intro p r h e
+    have h' := h e.symm
+    apply land_disj
+    intro q ha hb
+    exact land_zero_tb _ _ q h' hb ha
+  apply go_inv K base (fun p => p ∈ all) h2 ps 0 0 0
+  · exact fun p hp => hps.mem_iff.mp hp
+  · exact fun p hp => hK p (hps.mem_iff.mp hp)
+  · exact (hps.pairwise_iff hsym).mpr h1
+  · intro r _ q hq
+    rw [fld_zero] at hq
+    exact Bool.noConfusion hq
+  · intro j q hq
+    rw [fld_zero] at hq
+    exact Bool.noConfusion hq
+  · intro j q hq
+    rw [fld_zero] at hq
+    exact Bool.noConfusion hq
+  · exact fun p hp => Or.inl (hps.mem_iff.mpr hp)
+
+theorem vs_eq (t t2 : ℕ) : ∀ l : List ℕ, vs t t2 (l.map rectW) =
+    (l.filter (fun x => !(Nat.beq (Nat.land (priv t (rectW x)) t2) 0))).map
+      (fun x => put (Nat.land (rectW x) full) 1 (priv t (rectW x))) := by
+  intro l
+  induction l with
+  | nil => rfl
+  | cons x l ih =>
+    show cond (Nat.beq (Nat.land (priv t (rectW x)) t2) 0) (vs t t2 (l.map rectW))
+      (put (Nat.land (rectW x) full) 1 (priv t (rectW x)) :: vs t t2 (l.map rectW)) = _
+    rw [ih]
+    cases hb : Nat.beq (Nat.land (priv t (rectW x)) t2) 0
+    · rw [List.filter_cons_of_pos (by rw [hb]; rfl)]
+      rfl
+    · rw [List.filter_cons_of_neg (by rw [hb]; exact Bool.noConfusion)]
+      rfl
+
+theorem fcov_tb (t t2 q : ℕ) : ∀ as : List ℕ, ∀ a ∈ as,
+    Nat.beq (Nat.land (priv t a) t2) 0 = true → a.testBit q = true →
+    (fcov t t2 as).testBit q = true := by
+  intro as
+  induction as with
+  | nil => intro a ha; simp at ha
+  | cons b as ih =>
+    intro a ha hb hq
+    show (cond (Nat.beq (Nat.land (priv t b) t2) 0) (Nat.lor b (fcov t t2 as))
+      (fcov t t2 as)).testBit q = true
+    rcases List.mem_cons.mp ha with rfl | ha
+    · rw [hb]
+      show (Nat.lor a (fcov t t2 as)).testBit q = true
+      rw [tb_lor, hq]
+      rfl
+    · have := ih a ha hb hq
+      cases Nat.beq (Nat.land (priv t b) t2) 0
+      · exact this
+      · show (Nat.lor b (fcov t t2 as)).testBit q = true
+        rw [tb_lor, this]
+        exact Bool.or_true _
+
+theorem item_tb1 (a h q : ℕ) (hh : (fld (put (Nat.land a full) 1 h) 1).testBit q = true) :
+    h.testBit q = true := by
+  rw [fld_tb, put_tb, tb_land, full_tb] at hh
+  have e : 144 * 1 + q - 144 * 1 = q := by omega
+  have e1 : decide (144 * 1 + q < 144) = false := decide_eq_false (by omega)
+  rw [e, e1, Bool.and_false, Bool.false_or, Bool.and_eq_true, Bool.and_eq_true] at hh
+  exact hh.1.2
+
+theorem item_tb0 (a h q : ℕ) (hq : q < 144) (ha : a.testBit q = true) :
+    (fld (put (Nat.land a full) 1 h) 0).testBit q = true := by
+  rw [fld_tb, put_tb, tb_land, full_tb]
+  have e : 144 * 0 + q = q := by omega
+  rw [e, ha, decide_eq_true hq]
+  rfl
+
+theorem beq0_false {n : ℕ} (h : Nat.beq n 0 = false) : n ≠ 0 := by
+  intro e
+  rw [e] at h
+  exact Bool.noConfusion h
+
+theorem classP3_of_lab (K t t2 : ℕ) (l : List ℕ) (c : ℕ → ℕ)
+    (hle : ∀ x ∈ l, Nat.land (priv t (rectW x)) t2 ≠ 0 → c x ≤ K)
+    (hne : l.Pairwise (fun x y => Nat.land (priv t (rectW x)) t2 ≠ 0 →
+      Nat.land (priv t (rectW y)) t2 ≠ 0 → c x = c y →
+      Nat.land (priv t (rectW x)) (priv t (rectW y)) = 0))
+    (hcov : ∀ i U : ℕ, 1 ≤ i → i ≤ K →
+      (∀ r, U.testBit r = true → ∃ x ∈ l, Nat.land (priv t (rectW x)) t2 ≠ 0 ∧ c x = i ∧
+        (priv t (rectW x)).testBit r = true) →
+      ∀ q, (hull U).testBit q = true → ∃ y ∈ l, (rectW y).testBit q = true ∧
+        (Nat.land (priv t (rectW y)) t2 ≠ 0 → 1 ≤ c y ∧ c y ≤ i)) :
+    classP3 K t t2 (l.map rectW) = true := by
+  have hmem : ∀ p : ℕ × ℕ,
+      p ∈ (l.filter (fun x => !(Nat.beq (Nat.land (priv t (rectW x)) t2) 0))).map
+        (fun x => (put (Nat.land (rectW x) full) 1 (priv t (rectW x)), c x)) →
+      ∃ x ∈ l, Nat.land (priv t (rectW x)) t2 ≠ 0 ∧
+        p = (put (Nat.land (rectW x) full) 1 (priv t (rectW x)), c x) := by
+    intro p hp
+    obtain ⟨x, hx, rfl⟩ := List.mem_map.mp hp
+    obtain ⟨hx1, hx2⟩ := List.mem_filter.mp hx
+    refine ⟨x, hx1, ?_, rfl⟩
+    apply beq0_false
+    cases hb : Nat.beq (Nat.land (priv t (rectW x)) t2) 0
+    · rfl
+    · rw [hb] at hx2
+      exact Bool.noConfusion hx2
+  unfold classP3
+  apply go_complete K _
+    ((l.filter (fun x => !(Nat.beq (Nat.land (priv t (rectW x)) t2) 0))).map
+      (fun x => (put (Nat.land (rectW x) full) 1 (priv t (rectW x)), c x)))
+  · have e : ((l.filter (fun x => !(Nat.beq (Nat.land (priv t (rectW x)) t2) 0))).map
+        (fun x => (put (Nat.land (rectW x) full) 1 (priv t (rectW x)), c x))).map Prod.fst =
+        vs t t2 (l.map rectW) := by
+      rw [vs_eq, List.map_map]
+      rfl
+    rw [e]
+    cases Nat.blt 1 K
+    · exact List.Perm.refl _
+    · exact sortD_perm _ _
+  · intro p hp
+    obtain ⟨x, hx, hc, rfl⟩ := hmem p hp
+    exact hle x hx hc
+  · rw [List.pairwise_map]
+    refine List.Pairwise.imp_of_mem ?_ (List.Pairwise.filter _ hne)
+    intro x y hx hy hxy hc
+    have hx' := hmem _ (List.mem_map_of_mem (f := fun x =>
+      (put (Nat.land (rectW x) full) 1 (priv t (rectW x)), c x)) hx)
+    have hy' := hmem _ (List.mem_map_of_mem (f := fun x =>
+      (put (Nat.land (rectW x) full) 1 (priv t (rectW x)), c x)) hy)
+    obtain ⟨x', _, hcx, ex⟩ := hx'
+    obtain ⟨y', _, hcy, ey⟩ := hy'
+    have ex1 := congrArg Prod.fst ex
+    have ey1 := congrArg Prod.fst ey
+    have ex2 := congrArg Prod.snd ex
+    have ey2 := congrArg Prod.snd ey
+    have hcx' : Nat.land (priv t (rectW x)) t2 ≠ 0 := by
+      have hx2 := (List.mem_filter.mp hx).2
+      apply beq0_false
+      cases hb : Nat.beq (Nat.land (priv t (rectW x)) t2) 0
+      · rfl
+      · rw [hb] at hx2
+        exact Bool.noConfusion hx2
+    have hcy' : Nat.land (priv t (rectW y)) t2 ≠ 0 := by
+      have hy2 := (List.mem_filter.mp hy).2
+      apply beq0_false
+      cases hb : Nat.beq (Nat.land (priv t (rectW y)) t2) 0
+      · rfl
+      · rw [hb] at hy2
+        exact Bool.noConfusion hy2
+    have h0 := hxy hcx' hcy' hc
+    apply land_disj
+    intro q ha hb
+    exact land_zero_tb _ _ q h0 (item_tb1 _ _ q ha) (item_tb1 _ _ q hb)
+  · intro i hi1 hi2 q hq
+    obtain ⟨U, hU, hUq⟩ := hq
+    have hq144 : q < 144 := (hull_spec U q hUq).1
+    obtain ⟨y, hy, hyq, hyc⟩ := hcov i U hi1 hi2 (by
+      intro r hr
+      obtain ⟨p, hp, hpi, hpr⟩ := hU r hr
+      obtain ⟨x, hx, hc, rfl⟩ := hmem p hp
+      exact ⟨x, hx, hc, hpi, item_tb1 _ _ r hpr⟩) q hUq
+    cases hb : Nat.beq (Nat.land (priv t (rectW y)) t2) 0
+    · right
+      have hc := hyc (beq0_false hb)
+      refine ⟨(put (Nat.land (rectW y) full) 1 (priv t (rectW y)), c y), ?_, hc.1, hc.2,
+        item_tb0 _ _ q hq144 hyq⟩
+      apply List.mem_map_of_mem
+      apply List.mem_filter.mpr
+      refine ⟨hy, ?_⟩
+      rw [hb]
+      rfl
+    · left
+      exact fcov_tb t t2 q _ (rectW y) (List.mem_map_of_mem hy) hb hyq
+
+theorem classP_of_classLab (l : List ℕ) (k : ℕ) (c : ℕ → ℕ)
+    (h : ClassLab l (Nat.sub (Nat.succ k) l.length) c) : classP l k = true :=
+  classP3_of_lab _ _ _ l c h.le h.ne h.cov
+
+theorem classP_of_validLab (l : List ℕ) (k : ℕ) (c : ℕ → ℕ) (hnd : l.Nodup)
+    (h : ValidLab l (Nat.sub (Nat.succ k) l.length) c) : classP l k = true :=
+  classP_of_classLab l k c (h.classLab hnd)
+
+theorem classP'_of_validLab (l : List ℕ) (k : ℕ) (c : ℕ → ℕ) (hnd : l.Nodup)
+    (h : ValidLab l (Nat.sub (Nat.succ k) l.length) c) : classP' l k = true := by
+  rw [classP'_eq]
+  exact classP_of_validLab l k c hnd h
+
+theorem classP'_sound (m : Bool) : PruneOK m classP' := by
+  intro l k hnd hR
+  obtain ⟨c, hc⟩ := reach_validLab hnd hR
+  exact classP'_of_validLab l k c hnd hc
+
+def dsw (mk d x : ℕ) : ℕ :=
+  Nat.xor (Nat.xor x (Nat.land (Nat.xor (Nat.shiftRight x d) x) mk))
+    (Nat.shiftLeft (Nat.land (Nat.xor (Nat.shiftRight x d) x) mk) d)
+
+def letN (x : ℕ) (f : ℕ → ℕ) : ℕ := @Nat.rec (fun _ => ℕ) (f 0) (fun p _ => f (Nat.succ p)) x
+
+theorem letN_eq (x : ℕ) (f : ℕ → ℕ) : letN x f = f x := by
+  cases x <;> rfl
+
+def sig1 (x : ℕ) : ℕ :=
+  letN (dsw 584 1 x) fun x => letN (dsw 1 2 x) fun x => letN (dsw 16416 3 x) fun x => letN (dsw 98304 7 x) fun x => dsw 12288 8 x
+
+def sig2 (x : ℕ) : ℕ :=
+  letN (dsw 32768 2 x) fun x => letN (dsw 192 3 x) fun x => letN (dsw 1 5 x) fun x => letN (dsw 4 6 x) fun x => letN (dsw 65536 7 x) fun x => letN (dsw 16384 8 x) fun x => dsw 2 10 x
+
+def sig3 (x : ℕ) : ℕ :=
+  letN (dsw 16392 1 x) fun x => letN (dsw 128 2 x) fun x => letN (dsw 4 3 x) fun x => letN (dsw 64 4 x) fun x => letN (dsw 131072 5 x) fun x => letN (dsw 12289 8 x) fun x => dsw 2 10 x
+
+def BitPerm (f : ℕ → ℕ) : Prop :=
+  ∃ p : ℕ → ℕ, (∀ j, ∃ i, p i = j) ∧ (∀ i, p i < 12 ↔ i < 12) ∧ (∀ i, p i < 24 ↔ i < 24) ∧
+    ∀ x i, (f x).testBit i = x.testBit (p i)
+
+theorem BitPerm.comp {f g : ℕ → ℕ} (hf : BitPerm f) (hg : BitPerm g) :
+    BitPerm (fun x => f (g x)) := by
+  obtain ⟨p, ps, p12, p24, pe⟩ := hf
+  obtain ⟨q, qs, q12, q24, qe⟩ := hg
+  refine ⟨fun i => q (p i), ?_, fun i => (q12 (p i)).trans (p12 i),
+    fun i => (q24 (p i)).trans (p24 i), fun x i => by rw [pe, qe]⟩
+  intro j
+  obtain ⟨i, hi⟩ := qs j
+  obtain ⟨i', hi'⟩ := ps i
+  exact ⟨i', by show q (p i') = j; rw [hi', hi]⟩
+
+def dpi (mk d i : ℕ) : ℕ :=
+  if mk.testBit i = true then i + d else if d ≤ i ∧ mk.testBit (i - d) = true then i - d else i
+
+theorem dpi_a (mk d i : ℕ) (h : mk.testBit i = true) : dpi mk d i = i + d := by
+  simp only [dpi, h, ite_true]
+
+theorem dpi_b (mk d i : ℕ) (h : mk.testBit i = false) (h2 : d ≤ i) (h3 : mk.testBit (i - d) = true) :
+    dpi mk d i = i - d := by
+  simp only [dpi, h, h2, h3, Bool.false_eq_true, ite_false, and_self, ite_true]
+
+theorem dpi_c (mk d i : ℕ) (h : mk.testBit i = false) (h2 : ¬ (d ≤ i ∧ mk.testBit (i - d) = true)) :
+    dpi mk d i = i := by
+  simp only [dpi, h, h2, Bool.false_eq_true, ite_false]
+
+theorem dsw_perm (mk d : ℕ) (h1 : mk < 16777216)
+    (h2 : ∀ i, i < 24 → mk.testBit i = true →
+      (i + d < 12 ∨ (12 ≤ i ∧ i + d < 24)) ∧ mk.testBit (i + d) = false) : BitPerm (dsw mk d) := by
+  have hm : ∀ i, mk.testBit i = true → i < 24 := by
+    intro i hi
+    by_contra hc
+    have h3 : mk < 2 ^ i :=
+      lt_of_lt_of_le h1 (le_trans (by norm_num) (Nat.pow_le_pow_right (by norm_num) (not_lt.mp hc)))
+    rw [Nat.testBit_lt_two_pow h3] at hi
+    exact Bool.noConfusion hi
+  have key : ∀ i, mk.testBit i = true →
+      (i + d < 12 ∨ (12 ≤ i ∧ i + d < 24)) ∧ mk.testBit (i + d) = false :=
+    fun i hi => h2 i (hm i hi) hi
+  have key2 : ∀ i, mk.testBit i = true → d ≤ i → mk.testBit (i - d) = false := by
+    intro i hi hd
+    cases hc : mk.testBit (i - d)
+    · rfl
+    · have h3 := (key (i - d) hc).2
+      rw [Nat.sub_add_cancel hd, hi] at h3
+      exact Bool.noConfusion h3
+
+  have cases3 : ∀ i, (mk.testBit i = true ∧ (d ≤ i → mk.testBit (i - d) = false)) ∨
+      (mk.testBit i = false ∧ d ≤ i ∧ mk.testBit (i - d) = true) ∨
+      (mk.testBit i = false ∧ ¬ (d ≤ i ∧ mk.testBit (i - d) = true)) := by
+    intro i
+    cases hi : mk.testBit i
+    · by_cases hi2 : d ≤ i ∧ mk.testBit (i - d) = true
+      · exact Or.inr (Or.inl ⟨rfl, hi2⟩)
+      · exact Or.inr (Or.inr ⟨rfl, hi2⟩)
+    · exact Or.inl ⟨rfl, key2 i hi⟩
+  refine ⟨dpi mk d, ?_, ?_, ?_, ?_⟩
+  · intro j
+    rcases cases3 j with ⟨hj, _⟩ | ⟨hj, hd, hj2⟩ | ⟨hj, hj2⟩
+    · refine ⟨j + d, ?_⟩
+      rw [dpi_b mk d (j + d) (key j hj).2 (Nat.le_add_left d j) (by rw [Nat.add_sub_cancel]; exact hj),
+        Nat.add_sub_cancel]
+    · refine ⟨j - d, ?_⟩
+      rw [dpi_a mk d (j - d) hj2, Nat.sub_add_cancel hd]
+    · exact ⟨j, dpi_c mk d j hj hj2⟩
+  · intro i
+    rcases cases3 i with ⟨hi, _⟩ | ⟨hi, hd, hi2⟩ | ⟨hi, hi2⟩
+    · rw [dpi_a mk d i hi]
+      have h3 := (key i hi).1
+      omega
+    · rw [dpi_b mk d i hi hd hi2]
+      have h3 := (key (i - d) hi2).1
+      omega
+    · rw [dpi_c mk d i hi hi2]
+  · intro i
+    rcases cases3 i with ⟨hi, _⟩ | ⟨hi, hd, hi2⟩ | ⟨hi, hi2⟩
+    · rw [dpi_a mk d i hi]
+      have h3 := (key i hi).1
+      omega
+    · rw [dpi_b mk d i hi hd hi2]
+      have h3 := (key (i - d) hi2).1
+      omega
+    · rw [dpi_c mk d i hi hi2]
+  · intro x i
+    show ((x ^^^ ((x >>> d ^^^ x) &&& mk)) ^^^ (((x >>> d ^^^ x) &&& mk) <<< d)).testBit i =
+      x.testBit (dpi mk d i)
+    rw [Nat.testBit_xor, Nat.testBit_xor, Nat.testBit_and, Nat.testBit_xor, Nat.testBit_shiftRight,
+      Nat.testBit_shiftLeft, Nat.testBit_and, Nat.testBit_xor, Nat.testBit_shiftRight]
+    rcases cases3 i with ⟨hi, hi2⟩ | ⟨hi, hd, hi2⟩ | ⟨hi, hi2⟩
+    · rw [dpi_a mk d i hi, hi, Nat.add_comm d i]
+      by_cases hd : d ≤ i
+      · rw [hi2 hd]
+        cases x.testBit i <;> cases x.testBit (i + d) <;> simp
+      · have e : decide (i ≥ d) = false := by simpa using hd
+        rw [e]
+        cases x.testBit i <;> cases x.testBit (i + d) <;> simp
+    · have e : decide (i ≥ d) = true := by simpa using hd
+      rw [dpi_b mk d i hi hd hi2, hi, hi2, e, Nat.add_sub_cancel' hd]
+      cases x.testBit i <;> cases x.testBit (i - d) <;> simp
+    · rw [dpi_c mk d i hi hi2, hi]
+      by_cases hd : d ≤ i
+      · have h3 : mk.testBit (i - d) = false := by
+          cases hc : mk.testBit (i - d)
+          · rfl
+          · exact absurd ⟨hd, hc⟩ hi2
+        rw [h3]; simp
+      · have e : decide (i ≥ d) = false := by simpa using hd
+        rw [e]; simp
+
+theorem BitPerm.and {f : ℕ → ℕ} (hf : BitPerm f) (a b : ℕ) : f (a &&& b) = f a &&& f b := by
+  obtain ⟨p, _, _, _, pe⟩ := hf
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [pe, Nat.testBit_and, Nat.testBit_and, pe, pe]
+
+theorem BitPerm.or {f : ℕ → ℕ} (hf : BitPerm f) (a b : ℕ) : f (a ||| b) = f a ||| f b := by
+  obtain ⟨p, _, _, _, pe⟩ := hf
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [pe, Nat.testBit_or, Nat.testBit_or, pe, pe]
+
+theorem BitPerm.xor {f : ℕ → ℕ} (hf : BitPerm f) (a b : ℕ) : f (a ^^^ b) = f a ^^^ f b := by
+  obtain ⟨p, _, _, _, pe⟩ := hf
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [pe, Nat.testBit_xor, Nat.testBit_xor, pe, pe]
+
+theorem BitPerm.inj {f : ℕ → ℕ} (hf : BitPerm f) {a b : ℕ} (h : f a = f b) : a = b := by
+  obtain ⟨p, ps, _, _, pe⟩ := hf
+  apply Nat.eq_of_testBit_eq
+  intro j
+  obtain ⟨i, rfl⟩ := ps j
+  rw [← pe, ← pe, h]
+
+theorem BitPerm.zero {f : ℕ → ℕ} (hf : BitPerm f) : f 0 = 0 := by
+  obtain ⟨p, _, _, _, pe⟩ := hf
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [pe, Nat.zero_testBit, Nat.zero_testBit]
+
+theorem BitPerm.target {f : ℕ → ℕ} (hf : BitPerm f) : f 4095 = 4095 := by
+  obtain ⟨p, _, p12, _, pe⟩ := hf
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [pe, tb4095, tb4095, decide_eq_decide]
+  exact p12 i
+
+theorem tbOnes (i : ℕ) : (16777215 : ℕ).testBit i = decide (i < 24) := by
+  have e : (16777215 : ℕ) = 2 ^ 24 - 1 := by norm_num
+  rw [e, Nat.testBit_two_pow_sub_one]
+
+theorem BitPerm.ones {f : ℕ → ℕ} (hf : BitPerm f) : f 16777215 = 16777215 := by
+  obtain ⟨p, _, _, p24, pe⟩ := hf
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [pe, tbOnes, tbOnes, decide_eq_decide]
+  exact p24 i
+
+theorem BitPerm.hi {f : ℕ → ℕ} (hf : BitPerm f) : f 16773120 = 16773120 := by
+  have e : (16773120 : ℕ) = 16777215 ^^^ 4095 := by decide
+  rw [e, hf.xor, hf.ones, hf.target]
+
+theorem lt24_iff (x : ℕ) : x < 16777216 ↔ ∀ i, 24 ≤ i → x.testBit i = false := by
+  have e : (16777216 : ℕ) = 2 ^ 24 := by norm_num
+  rw [e]
+  constructor
+  · intro h i hi
+    exact Nat.testBit_lt_two_pow (lt_of_lt_of_le h (Nat.pow_le_pow_right (by norm_num) hi))
+  · intro h
+    exact Nat.lt_pow_two_of_testBit x h
+
+theorem BitPerm.lt {f : ℕ → ℕ} (hf : BitPerm f) (x : ℕ) : f x < 16777216 ↔ x < 16777216 := by
+  obtain ⟨p, ps, _, p24, pe⟩ := hf
+  rw [lt24_iff, lt24_iff]
+  constructor
+  · intro h j hj
+    obtain ⟨i, rfl⟩ := ps j
+    rw [← pe]
+    refine h i ?_
+    by_contra hc
+    have := (p24 i).mpr (not_le.mp hc)
+    omega
+  · intro h i hi
+    rw [pe]
+    refine h (p i) ?_
+    by_contra hc
+    have := (p24 i).mp (not_le.mp hc)
+    omega
+
+theorem sub_xor (d : ℕ) (h : d < 16777216) : 16777215 - d = 16777215 ^^^ d := by
+  have e : 16777215 - d = 2 ^ 24 - (d + 1) := by omega
+  have h' : d < 2 ^ 24 := by omega
+  apply Nat.eq_of_testBit_eq
+  intro i
+  rw [e, Nat.testBit_two_pow_sub_succ h', Nat.testBit_xor, tbOnes]
+  by_cases hi : i < 24
+  · simp [hi]
+  · have h3 : d.testBit i = false :=
+      Nat.testBit_lt_two_pow (lt_of_lt_of_le h' (Nat.pow_le_pow_right (by norm_num) (not_lt.mp hi)))
+    simp [hi, h3]
+
+theorem BitPerm.sub {f : ℕ → ℕ} (hf : BitPerm f) (d : ℕ) : f (16777215 - d) = 16777215 - f d := by
+  by_cases h : d < 16777216
+  · rw [sub_xor d h, sub_xor (f d) ((hf.lt d).mpr h), hf.xor, hf.ones]
+  · have h2 : ¬ f d < 16777216 := fun hc => h ((hf.lt d).mp hc)
+    have e1 : 16777215 - d = 0 := by omega
+    have e2 : 16777215 - f d = 0 := by omega
+    rw [e1, e2, hf.zero]
+
+theorem BitPerm.beq {f : ℕ → ℕ} (hf : BitPerm f) (a b : ℕ) : Nat.beq (f a) (f b) = Nat.beq a b := by
+  by_cases h : a = b
+  · rw [h, Nat.beq_refl, Nat.beq_refl]
+  · rw [(beq_false_iff a b).mpr h, (beq_false_iff (f a) (f b)).mpr (fun e => h (hf.inj e))]
+
+theorem BitPerm.beq0 {f : ℕ → ℕ} (hf : BitPerm f) (a : ℕ) : Nat.beq (f a) 0 = Nat.beq a 0 := by
+  have := hf.beq a 0
+  rwa [hf.zero] at this
+
+theorem BitPerm.domN {f : ℕ → ℕ} (hf : BitPerm f) (w d : ℕ) : domN (f w) (f d) = domN w d := by
+  have e1 : Nat.land (Nat.land (f w) 4095) (Nat.sub 16777215 (f d)) =
+      f (Nat.land (Nat.land w 4095) (Nat.sub 16777215 d)) := by
+    show (f w &&& 4095) &&& (16777215 - f d) = f ((w &&& 4095) &&& (16777215 - d))
+    rw [hf.and, hf.and, hf.target, hf.sub]
+  have e2 : Nat.land (Nat.land (f d) (Nat.sub 16777215 (f w))) 16773120 =
+      f (Nat.land (Nat.land d (Nat.sub 16777215 w)) 16773120) := by
+    show (f d &&& (16777215 - f w)) &&& 16773120 = f ((d &&& (16777215 - w)) &&& 16773120)
+    rw [hf.and, hf.and, hf.hi, hf.sub]
+  unfold PEqualNP.Outside.L_meta_2766.domN
+  rw [e1, e2, hf.beq0, hf.beq0]
+
+theorem BitPerm.blk {f : ℕ → ℕ} (hf : BitPerm f) (m : Bool) (w d : ℕ) :
+    blk m (f w) (f d) = blk m w d := by
+  cases m
+  · exact hf.beq w d
+  · exact hf.domN w d
+
+def BaseOK (f : ℕ → ℕ) : Prop := ∀ d ∈ base12, ∃ d' ∈ base12, f d' = d
+
+theorem Reach.image {f : ℕ → ℕ} (hf : BitPerm f) (hb : BaseOK f) {m : Bool} {D : Finset ℕ} {k : ℕ}
+    (h : Reach m D k) : Reach m (D.image f) k := by
+  induction h with
+  | done k =>
+    rw [Finset.image_singleton, hf.target]
+    exact Reach.done k
+  | step D k u v w ka kb hu hv hw hd hbase _ ih =>
+    have hfil : (insert w (D.filter (fun x => (ka = true ∨ x ≠ u) ∧ (kb = true ∨ x ≠ v)))).image f =
+        insert (f w) ((D.image f).filter (fun x => (ka = true ∨ x ≠ f u) ∧ (kb = true ∨ x ≠ f v))) := by
+      ext y
+      simp only [Finset.mem_image, Finset.mem_insert, Finset.mem_filter]
+      constructor
+      · rintro ⟨x, hx | ⟨hxD, h1, h2⟩, rfl⟩
+        · exact Or.inl (by rw [hx])
+        · exact Or.inr ⟨⟨x, hxD, rfl⟩, h1.imp_right (fun h e => h (hf.inj e)),
+            h2.imp_right (fun h e => h (hf.inj e))⟩
+      · rintro (rfl | ⟨⟨x, hxD, rfl⟩, h1, h2⟩)
+        · exact ⟨w, Or.inl rfl, rfl⟩
+        · exact ⟨x, Or.inr ⟨hxD, h1.imp_right (fun h e => h (by rw [e])),
+            h2.imp_right (fun h e => h (by rw [e]))⟩, rfl⟩
+    rw [hfil] at ih
+    refine Reach.step (D.image f) k (f u) (f v) (f w) ka kb (Finset.mem_image_of_mem f hu)
+      (Finset.mem_image_of_mem f hv) ?_ ?_ ?_ ih
+    · rcases hw with hw | hw
+      · exact Or.inl (by rw [hw, hf.and])
+      · exact Or.inr (by rw [hw, hf.or])
+    · intro d hdm
+      obtain ⟨d', hd', rfl⟩ := Finset.mem_image.mp hdm
+      rw [hf.blk]
+      exact hd d' hd'
+    · intro d hdm
+      obtain ⟨d', hd', rfl⟩ := hb d hdm
+      rw [hf.blk]
+      exact hbase d' hd'
+
+theorem sig1_perm : BitPerm sig1 := by
+  have e : sig1 = fun x => dsw 12288 8 (dsw 98304 7 (dsw 16416 3 (dsw 1 2 (dsw 584 1 x)))) := by
+    funext x; simp only [sig1, letN_eq]
+  rw [e]
+  exact (dsw_perm 12288 8 (by decide) (by decide)).comp ((dsw_perm 98304 7 (by decide) (by decide)).comp ((dsw_perm 16416 3 (by decide) (by decide)).comp ((dsw_perm 1 2 (by decide) (by decide)).comp (dsw_perm 584 1 (by decide) (by decide)))))
+
+theorem sig2_perm : BitPerm sig2 := by
+  have e : sig2 = fun x => dsw 2 10 (dsw 16384 8 (dsw 65536 7 (dsw 4 6 (dsw 1 5 (dsw 192 3 (dsw 32768 2 x)))))) := by
+    funext x; simp only [sig2, letN_eq]
+  rw [e]
+  exact (dsw_perm 2 10 (by decide) (by decide)).comp ((dsw_perm 16384 8 (by decide) (by decide)).comp ((dsw_perm 65536 7 (by decide) (by decide)).comp ((dsw_perm 4 6 (by decide) (by decide)).comp ((dsw_perm 1 5 (by decide) (by decide)).comp ((dsw_perm 192 3 (by decide) (by decide)).comp (dsw_perm 32768 2 (by decide) (by decide)))))))
+
+theorem sig3_perm : BitPerm sig3 := by
+  have e : sig3 = fun x => dsw 2 10 (dsw 12289 8 (dsw 131072 5 (dsw 64 4 (dsw 4 3 (dsw 128 2 (dsw 16392 1 x)))))) := by
+    funext x; simp only [sig3, letN_eq]
+  rw [e]
+  exact (dsw_perm 2 10 (by decide) (by decide)).comp ((dsw_perm 12289 8 (by decide) (by decide)).comp ((dsw_perm 131072 5 (by decide) (by decide)).comp ((dsw_perm 64 4 (by decide) (by decide)).comp ((dsw_perm 4 3 (by decide) (by decide)).comp ((dsw_perm 128 2 (by decide) (by decide)).comp (dsw_perm 16392 1 (by decide) (by decide)))))))
+
+theorem sig1_base : BaseOK sig1 := by unfold BaseOK; decide +kernel
+
+theorem sig2_base : BaseOK sig2 := by unfold BaseOK; decide +kernel
+
+theorem sig3_base : BaseOK sig3 := by unfold BaseOK; decide +kernel
+
+def map' (f : ℕ → ℕ) (l : List ℕ) : List ℕ :=
+  @List.rec ℕ (fun _ => List ℕ) [] (fun a _ ih => f a :: ih) l
+
+theorem map'_eq (f : ℕ → ℕ) (l : List ℕ) : map' f l = l.map f := by
+  induction l with
+  | nil => rfl
+  | cons a l ih => show f a :: map' f l = _; rw [ih]; rfl
+
+def sort' (l : List ℕ) : List ℕ :=
+  @List.rec ℕ (fun _ => List ℕ) [] (fun a _ ih => ins' a ih) l
+
+theorem sort'_perm (l : List ℕ) : (sort' l).Perm l := by
+  induction l with
+  | nil => exact List.Perm.refl _
+  | cons a l ih =>
+    show (ins' a (sort' l)).Perm (a :: l)
+    rw [ins'_eq]
+    exact (ins_perm a _).trans (List.Perm.cons a ih)
+
+noncomputable def symHas1 (f : ℕ → ℕ) (prev : Tree) (l : List ℕ) : Bool :=
+  forceL (map' f l) (fun l1 => forceL (sort' l1) (has' prev))
+
+theorem symHas1_sound {m : Bool} {f : ℕ → ℕ} {prev : Tree} {k : ℕ} {l : List ℕ} (hf : BitPerm f)
+    (hb : BaseOK f) (hinv : Inv m prev k) (h : symHas1 f prev l = true) : ¬ Reach m l.toFinset k := by
+  intro hR
+  unfold symHas1 at h
+  rw [forceL_eq, forceL_eq, has'_eq, map'_eq] at h
+  have h2 := hinv _ h
+  have e : (sort' (l.map f)).toFinset = l.toFinset.image f := by
+    rw [List.toFinset_eq_of_perm _ _ (sort'_perm _)]
+    ext y
+    simp only [List.mem_toFinset, List.mem_map, Finset.mem_image]
+  rw [e] at h2
+  exact h2 (hR.image hf hb)
+
+noncomputable def symHas (prev : Tree) (l : List ℕ) : Bool :=
+  bor (symHas1 sig1 prev l) (bor (symHas1 sig2 prev l) (symHas1 sig3 prev l))
+
+theorem symHas_sound {m : Bool} {prev : Tree} {k : ℕ} {l : List ℕ}
+    (hinv : Inv m prev k) (h : symHas prev l = true) : ¬ Reach m l.toFinset k := by
+  unfold symHas at h
+  simp only [bor_eq, Bool.or_eq_true] at h
+  rcases h with h | h | h
+  · exact symHas1_sound sig1_perm sig1_base hinv h
+  · exact symHas1_sound sig2_perm sig2_base hinv h
+  · exact symHas1_sound sig3_perm sig3_base hinv h
+
+noncomputable def symP (P : List ℕ → ℕ → Bool) (prev : Tree) (k0 : ℕ) (l : List ℕ) (k : ℕ) : Bool :=
+  band (P l k) (bnot (band (Nat.beq k k0) (symHas prev l)))
+
+theorem symP_ok {m : Bool} {P : List ℕ → ℕ → Bool} {prev : Tree} {k0 : ℕ}
+    (hP : PruneOK m P) (hinv : Inv m prev k0) : PruneOK m (symP P prev k0) := by
+  intro l k hnd hR
+  unfold symP
+  rw [band_eq, bnot_eq, band_eq, hP l k hnd hR]
+  cases hk : Nat.beq k k0
+  · rfl
+  · have e : k = k0 := Nat.eq_of_beq_eq_true hk
+    subst e
+    cases hs : symHas prev l
+    · rfl
+    · exact absurd hR (symHas_sound hinv hs)
+
+theorem level_sym {m : Bool} {P : List ℕ → ℕ → Bool} {prev T : Tree} {k : ℕ}
+    (hP : PruneOK m P) (hinv : Inv m prev k)
+    (h : tall (expFast m (symP P prev k) prev k) T = true) : Inv m T (k + 1) :=
+  level_fast (symP_ok hP hinv) hinv h
+
+noncomputable def closedS (prev : Tree) (k : ℕ) (l : List ℕ) : Bool :=
+  bor (closed prev k l) (symHas prev l)
+
+theorem start_sym {m : Bool} {prev : Tree} {n : ℕ} (hinv : Inv m prev n)
+    (h : subsAll base10 (closedS prev n) = true) : NoStart m n := by
+  intro L hL
+  have hs : (base10.filter (fun x => decide (x ∈ L))).Sublist base10 := List.filter_sublist
+  have he : (base10.filter (fun x => decide (x ∈ L))).toFinset = L := by
+    ext x
+    simp only [List.mem_toFinset, List.mem_filter, decide_eq_true_eq]
+    exact ⟨fun h => h.2, fun h => ⟨hL x h, h⟩⟩
+  have hnd : (base10.filter (fun x => decide (x ∈ L))).Nodup := List.Nodup.sublist hs (by decide)
+  have h2 := subsAll_sub base10 _ h _ hs
+  unfold closedS at h2
+  rw [bor_eq, Bool.or_eq_true] at h2
+  rw [← he]
+  rcases h2 with h2 | h2
+  · exact closed_sound hnd hinv h2
+  · exact symHas_sound hinv h2
+noncomputable def minL (a b : List ℕ) : List ℕ := @Ordering.rec (fun _ => List ℕ) a a b (lcmp' a b)
+
+theorem minL_cases (a b : List ℕ) : minL a b = a ∨ minL a b = b := by
+  unfold minL
+  cases lcmp' a b
+  · exact Or.inl rfl
+  · exact Or.inl rfl
+  · exact Or.inr rfl
+
+noncomputable def img (f : ℕ → ℕ) (l : List ℕ) : List ℕ := sort' (map' f l)
+
+noncomputable def canon (l : List ℕ) : List ℕ := minL (minL (minL l (img sig1 l)) (img sig2 l)) (img sig3 l)
+
+theorem img_reach {m : Bool} {f : ℕ → ℕ} (hf : BitPerm f) (hb : BaseOK f) {l : List ℕ} {k : ℕ}
+    (hnd : l.Nodup) (hR : Reach m l.toFinset k) :
+    (img f l).Nodup ∧ Reach m (img f l).toFinset k := by
+  unfold img
+  rw [map'_eq]
+  have hp := sort'_perm (l.map f)
+  refine ⟨hp.nodup_iff.mpr (List.Nodup.map (fun a b h => hf.inj h) hnd), ?_⟩
+  have e : (sort' (l.map f)).toFinset = l.toFinset.image f := by
+    rw [List.toFinset_eq_of_perm _ _ hp]
+    ext y
+    simp only [List.mem_toFinset, List.mem_map, Finset.mem_image]
+  rw [e]
+  exact hR.image hf hb
+
+theorem canon_reach {m : Bool} {l : List ℕ} {k : ℕ} (hnd : l.Nodup) (hR : Reach m l.toFinset k) :
+    (canon l).Nodup ∧ Reach m (canon l).toFinset k := by
+  have h1 := img_reach sig1_perm sig1_base hnd hR
+  have h2 := img_reach sig2_perm sig2_base hnd hR
+  have h3 := img_reach sig3_perm sig3_base hnd hR
+  have c0 : l.Nodup ∧ Reach m l.toFinset k := ⟨hnd, hR⟩
+  have c1 : (minL l (img sig1 l)).Nodup ∧ Reach m (minL l (img sig1 l)).toFinset k := by
+    rcases minL_cases l (img sig1 l) with e | e <;> rw [e]
+    · exact c0
+    · exact h1
+  have c2 : (minL (minL l (img sig1 l)) (img sig2 l)).Nodup ∧ Reach m (minL (minL l (img sig1 l)) (img sig2 l)).toFinset k := by
+    rcases minL_cases (minL l (img sig1 l)) (img sig2 l) with e | e <;> rw [e]
+    · exact c1
+    · exact h2
+  have c3 : (minL (minL (minL l (img sig1 l)) (img sig2 l)) (img sig3 l)).Nodup ∧ Reach m (minL (minL (minL l (img sig1 l)) (img sig2 l)) (img sig3 l)).toFinset k := by
+    rcases minL_cases (minL (minL l (img sig1 l)) (img sig2 l)) (img sig3 l) with e | e <;> rw [e]
+    · exact c2
+    · exact h3
+  exact c3
+
+noncomputable def RP (P : List ℕ → ℕ → Bool) (T R : Tree) (k0 : ℕ) (l : List ℕ) (k : ℕ) : Bool :=
+  @Bool.rec (fun _ => Bool) (symP P T k0 l k)
+    (forceL (canon l) (fun c => band (bnot (bor (has' T c) (has' R c))) (P c k)))
+    (band (Nat.beq k k0) (Nat.ble 2 (Nat.sub (Nat.succ k) (len' l))))
+
+theorem RP_ok {m : Bool} {P : List ℕ → ℕ → Bool} {T R : Tree} {k0 : ℕ}
+    (hP : PruneOK m P) (hT : Inv m T k0) (hRi : Inv m R k0) : PruneOK m (RP P T R k0) := by
+  intro l k hnd hR
+  unfold RP
+  cases hb : band (Nat.beq k k0) (Nat.ble 2 (Nat.sub (Nat.succ k) (len' l)))
+  · exact symP_ok hP hT l k hnd hR
+  · show forceL (canon l) (fun c => band (bnot (bor (has' T c) (has' R c))) (P c k)) = true
+    rw [forceL_eq]
+    rw [band_eq, Bool.and_eq_true] at hb
+    have e : k = k0 := Nat.eq_of_beq_eq_true hb.1
+    subst e
+    obtain ⟨hnd', hR'⟩ := canon_reach hnd hR
+    have hTf : has' T (canon l) = false := by
+      cases h : has' T (canon l)
+      · rfl
+      · rw [has'_eq] at h; exact absurd hR' (hT _ h)
+    have hRf : has' R (canon l) = false := by
+      cases h : has' R (canon l)
+      · rfl
+      · rw [has'_eq] at h; exact absurd hR' (hRi _ h)
+    rw [hTf, hRf, hP _ k hnd' hR']
+    rfl
+
+theorem level_R {m : Bool} {P : List ℕ → ℕ → Bool} {prev R T : Tree} {k : ℕ}
+    (hP : PruneOK m P) (hinv : Inv m prev k) (hRi : Inv m R k)
+    (h : tall (expFast m (RP P prev R k) prev k) T = true) : Inv m T (k + 1) :=
+  level_fast (RP_ok hP hinv hRi) hinv h
+
+def refOK (P : List ℕ → ℕ → Bool) (k : ℕ) (x : List ℕ) : Bool := band (sortedB x) (bnot (P x k))
+
+theorem refuted {m : Bool} {P : List ℕ → ℕ → Bool} {R : Tree} {k : ℕ} (hP : PruneOK m P)
+    (h : tall (refOK P k) R = true) : Inv m R k := by
+  intro x hx hR
+  have h1 := thas_all _ R x h hx
+  unfold refOK at h1
+  rw [band_eq, bnot_eq, Bool.and_eq_true] at h1
+  have h2 := hP x k (sortedB_nodup h1.1) hR
+  rw [h2] at h1
+  exact Bool.noConfusion h1.2
+
+theorem inv_nil (m : Bool) (k : ℕ) : Inv m BinaryTree.nil k := by
+  intro x hx
+  simp [thas] at hx
+
+noncomputable def cpSub : {f : List ℕ → ℕ → Bool // f = classP'} := by
+  refine ⟨?f, ?h⟩
+  case h =>
+    delta classP' classQ go' tryL' chkA' fld put subM hull hullC rowsOf colsOf orS orSL rowM full
+      band bor bnot vs' fcov' priv tw' mapP' mapW' rectW' rect' tb' len' orA' sortD' insD' degI'
+    beta_reduce
+    exact rfl
+
+noncomputable def cpF : List ℕ → ℕ → Bool := cpSub.1
+
+theorem cpF_sound (m : Bool) : PruneOK m cpF := by
+  have e : cpF = classP' := cpSub.2
+  rw [e]
+  exact classP'_sound m
+
+noncomputable def PR (l : List ℕ) (k : ℕ) : Bool := rectP1' l k && cpF l k
+
+theorem PR_sound : PruneOK false PR := PruneOK.and (rectP1'_ok false) (cpF_sound false)
+
+def T1 : Tree := .nil
+theorem T1_ok : tall (expFast false (RP PR BinaryTree.nil BinaryTree.nil 0) BinaryTree.nil 0) T1 = true := by decide +kernel
+def T2 : Tree := .nil
+theorem T2_ok : tall (expFast false (RP PR T1 BinaryTree.nil 1) T1 1) T2 = true := by decide +kernel
+def T3 : Tree := .nil
+theorem T3_ok : tall (expFast false (RP PR T2 BinaryTree.nil 2) T2 2) T3 = true := by decide +kernel
+def T4 : Tree := .nil
+theorem T4_ok : tall (expFast false (RP PR T3 BinaryTree.nil 3) T3 3) T4 = true := by decide +kernel
+def T5 : Tree := .nil
+theorem T5_ok : tall (expFast false (RP PR T4 BinaryTree.nil 4) T4 4) T5 = true := by decide +kernel
+def T6 : Tree := (.node [2726,902208,5689661,8827215,11083800,15875395,16010545] .nil .nil)
+theorem T6_ok : tall (expFast false (RP PR T5 BinaryTree.nil 5) T5 5) T6 = true := by decide +kernel
+def T7 : Tree := (.node [2726,902208,5689661,8532035,8827215,11083800,15731968,16010545] (.node [67,3328,506668,3275430,5689661,7684279,11083800,13501056] .nil .nil) .nil)
+theorem T7_ok : tall (expFast false (RP PR T6 BinaryTree.nil 6) T6 6) T7 = true := by decide +kernel
+def T8 : Tree := (.node [67,506668,1048428,3275430,5689661,7684279,11083800,13501056,15731968] (.node [67,3328,113184,506668,3227782,5689661,7684279,11083800,13501056] .nil .nil) .nil)
+theorem T8_ok : tall (expFast false (RP PR T7 BinaryTree.nil 7) T7 7) T8 = true := by decide +kernel
+def T9aa : Tree := (.node [640,113184,902208,3227782,5689661,8827215,11083800,15875395,16010545] (.node [67,113184,506668,1037644,3227782,5689661,7684279,11083800,13501056,15731968] (.node [57,113184,430348,902208,3227782,8532035,8632931,13501056,15731968,15814022] (.node [24,430348,902208,3275430,5521457,8632931,13501056,15814022,15875395] .nil .nil) .nil) (.node [67,506668,902208,3275430,5689661,7684279,11083800,13501056,15731968] (.node [67,113184,506668,1048428,3227782,5689661,7684279,11083800,13501056,15731968] .nil .nil) .nil)) (.node [1728,113184,430348,3227782,3275430,5521457,5689661,8532035,11083800,15731968] (.node [664,113184,430348,902208,3227782,5521457,5689661,8532035,15731968,15875395] (.node [664,113184,430348,902208,3227782,3275430,5521457,8532035,15731968,15875395] .nil .nil) .nil) (.node [113184,430348,902208,3227782,3275430,5521457,8532059,13501056,15731992,15875419] (.node [113184,430348,902208,3227782,3275430,5521457,8532059,13501056,15731992,15875395] .nil .nil) .nil)))
+theorem T9aa_ok : tall (expFast false (RP PR T8 BinaryTree.nil 8) T8 8) T9aa = true := by decide +kernel
+def T9ab : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532675,11083800,15732608,15875395] (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15732480,15875395] (.node [113184,430348,902208,3227782,3275454,5521457,8532035,13501080,15731968,15875395] (.node [113184,430348,902208,3227782,3275430,5521465,8532059,13501056,15731968,15875419] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15732480,15876035] (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15732480,15875523] .nil .nil) .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8632955,13501056,15731968,15814046] (.node [113184,430348,902208,3227782,5521457,5690301,8532035,11084440,15731968,15875395] (.node [113184,430348,902208,3227782,5521457,5689661,8532675,11083800,15732608,15876035] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,8532059,8632955,13501056,15731992,15814046] (.node [113184,430348,902208,3227782,5521457,8532035,8632955,13501056,15731992,15814046] .nil .nil) .nil)))
+theorem T9ab_ok : tall (expFast false (RP PR T8 BinaryTree.nil 8) T8 8) T9ab = true := by decide +kernel
+def T9a : Tree := .node [113184,430348,902208,3227782,3275430,5521465,8532059,13501056,15731968,15875395] T9aa T9ab
+theorem T9a_ok : tall (expFast false (RP PR T8 BinaryTree.nil 8) T8 8) T9a = true :=
+  tall_node _ _ _ _ T9aa_ok (by decide +kernel) T9ab_ok
+def T9ba : Tree := (.node [113184,430348,902208,3227806,3275430,5521457,8532059,13501056,15731968,15875419] (.node [113184,430348,902208,3227782,5522097,5689661,8532675,11083800,15731968,15875395] (.node [113184,430348,902208,3227782,5521969,5689661,8532163,11083800,15731968,15875523] (.node [113184,430348,902208,3227782,5521465,8532059,8632955,13501056,15731968,15814022] .nil .nil) .nil) (.node [113184,430348,902208,3227806,3275430,5521457,8532059,13501056,15731968,15875395] (.node [113184,430348,902208,3227782,5522097,5689661,8532675,11083800,15731968,15876035] .nil .nil) .nil)) (.node [113184,430348,902208,3227806,5521457,8532035,8632931,13501080,15731968,15814022] (.node [113184,430348,902208,3227806,3275454,5521457,8532059,13501056,15731968,15875419] (.node [113184,430348,902208,3227806,3275454,5521457,8532035,13501080,15731968,15875395] .nil .nil) .nil) (.node [113184,430348,902208,3227806,5521457,8532059,8632955,13501056,15731968,15814046] (.node [113184,430348,902208,3227806,5521457,8532035,8632931,13501080,15731968,15814046] .nil .nil) .nil)))
+theorem T9ba_ok : tall (expFast false (RP PR T8 BinaryTree.nil 8) T8 8) T9ba = true := by decide +kernel
+def T9bb : Tree := (.node [113184,430988,902208,3227782,5522097,5689661,8532035,11083800,15731968,15875395] (.node [113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15732608,15876035] (.node [113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15731968,15876035] (.node [113184,430348,902208,3228294,5521457,5689661,8532675,11083800,15731968,15876035] .nil .nil) .nil) (.node [113184,430476,902208,3227782,5521969,5689661,8532035,11083800,15731968,15875395] (.node [113184,430348,3227782,3275430,5522545,5689661,8533059,11083800,13501056,15731968] .nil .nil) .nil)) (.node [113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15732001,15814055] (.node [113184,902208,3227782,5689661,8532035,8633191,11083800,13501056,15731968,16076215] (.node [113184,902208,3227782,5689661,8532035,8632931,11084060,13501056,15731968,16076215] .nil .nil) .nil) (.node [113184,902208,3227782,5689661,8827215,11083800,13546447,15875395,16010545,16666545] .nil .nil)))
+theorem T9bb_ok : tall (expFast false (RP PR T8 BinaryTree.nil 8) T8 8) T9bb = true := by decide +kernel
+def T9b : Tree := .node [113184,430348,902208,3228294,5521457,5689661,8532675,11083800,15731968,15875395] T9ba T9bb
+theorem T9b_ok : tall (expFast false (RP PR T8 BinaryTree.nil 8) T8 8) T9b = true :=
+  tall_node _ _ _ _ T9ba_ok (by decide +kernel) T9bb_ok
+def T9 : Tree := .node [113184,430348,902208,3227782,5521465,8532035,8632955,13501056,15731968,15814022] T9a T9b
+theorem T9_ok : tall (expFast false (RP PR T8 BinaryTree.nil 8) T8 8) T9 = true :=
+  tall_node _ _ _ _ T9a_ok (by decide +kernel) T9b_ok
+def R9 : Tree := (.node [640,113208,430348,902208,3227806,5521457,8532035,15731968] (.node [640,113184,430364,902208,3227806,5521457,8532035,15731968] (.node [640,113184,430348,902208,3227806,5521457,8532059,15731968] .nil .nil) .nil) (.node [664,113184,430348,902208,3227782,5521457,8532035,15731968] .nil .nil))
+theorem R9_ok : tall (refOK cpF 9) R9 = true := by decide +kernel
+def T10aaaa : Tree := (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731968,15875419] (.node [24,640,113184,430348,902208,3227782,3275430,5521457,8532035,15731968,15875395] (.node [24,33,113184,430348,902208,3227782,8532035,8632931,13501056,15731968,15814022] .nil .nil) (.node [24,640,113184,430348,902208,3227782,5521457,5689661,8532035,15731968,15875395] .nil .nil)) (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731992,15875419] (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731992,15875395] .nil .nil) (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501080,15731968,15875395] .nil .nil)))
+theorem T10aaaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aaaa = true := by decide +kernel
+def T10aaab : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501080,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731992,15814022] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731968,15814046] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731992,15814046] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521465,8532035,8632931,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,8632931,13501056,15814022,15875395] .nil .nil) (.node [24,113184,430348,902208,3275430,5521457,8532035,13501056,15814022,15875395] .nil .nil)))
+theorem T10aaab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aaab = true := by decide +kernel
+def T10aaa : Tree := .node [24,113184,430348,902208,3227782,3275430,5521465,8532035,13501056,15731968,15875395] T10aaaa T10aaab
+theorem T10aaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aaa = true :=
+  tall_node _ _ _ _ T10aaaa_ok (by decide +kernel) T10aaab_ok
+def T10aaba : Tree := (.node [64,114208,430348,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] (.node [57,113184,430348,902208,3227782,8532035,8632931,13501056,15731968] (.node [49,113184,430348,902208,3227782,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil) (.node [64,113184,431372,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [67,113184,430348,506668,902208,3227782,5521457,7684279,11083800,13501056,15731968] (.node [64,114208,430348,3227782,3276454,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [67,113184,430348,506668,902208,3227782,5689661,7684279,11083800,13501056,15731968] .nil .nil)))
+theorem T10aaba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aaba = true := by decide +kernel
+def T10aabb : Tree := (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968,15875395] (.node [67,113184,506668,902208,3227782,5689661,7684279,11083800,13501056,15731968] (.node [67,113184,430348,1037644,3227782,5689661,7684279,11083800,13501056,15731968] .nil .nil) (.node [640,1088,113184,430348,3227782,3275430,5521457,5689661,8532035,11083800,15731968] .nil .nil)) (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15732608,15875395] (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968,15876035] .nil .nil) (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15732608,15876035] .nil .nil)))
+theorem T10aabb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aabb = true := by decide +kernel
+def T10aab : Tree := .node [67,113184,430348,902208,3275430,5689661,7684279,11083800,13501056,15731968] T10aaba T10aabb
+theorem T10aab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aab = true :=
+  tall_node _ _ _ _ T10aaba_ok (by decide +kernel) T10aabb_ok
+def T10aa : Tree := .node [33,113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15731968,15814022] T10aaa T10aab
+theorem T10aa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aa = true :=
+  tall_node _ _ _ _ T10aaa_ok (by decide +kernel) T10aab_ok
+def T10abaa : Tree := (.node [640,113184,430348,902208,3227782,5689661,8532035,11083800,15875395,16010545] (.node [640,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,15731968,16010545] (.node [640,113184,430348,902208,3227782,5521457,5690301,8532035,11083800,15731968,15875395] .nil .nil) (.node [640,113184,430348,902208,3227782,5522097,5689661,8532035,11083800,15731968,15875395] .nil .nil)) (.node [640,113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15731968,15875395] (.node [640,113184,430348,902208,3228294,5521457,5689661,8532035,11083800,15731968,15875395] .nil .nil) (.node [640,113184,902208,3227782,5689661,8532035,8827215,11083800,15731968,16010545] .nil .nil)))
+theorem T10abaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abaa = true := by decide +kernel
+def T10ababa : Tree := (.node [113184,113208,430348,902208,3227782,3227806,5521457,8532035,13501056,15731968,15875395] (.node [664,113184,430348,902208,3227782,5521457,5689661,8532035,15731968] .nil .nil) (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15814046] .nil .nil))
+theorem T10ababa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10ababa = true := by decide +kernel
+def T10ababb : Tree := (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731992,15875419] (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731992,15875395] .nil .nil) (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501080,15731968,15814022] .nil .nil))
+theorem T10ababb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10ababb = true := by decide +kernel
+def T10abab : Tree := .node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731992,15814046] T10ababa T10ababb
+theorem T10abab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abab = true :=
+  tall_node _ _ _ _ T10ababa_ok (by decide +kernel) T10ababb_ok
+def T10aba : Tree := .node [664,113184,430348,902208,3227782,3275430,5521457,8532035,15731968] T10abaa T10abab
+theorem T10aba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10aba = true :=
+  tall_node _ _ _ _ T10abaa_ok (by decide +kernel) T10abab_ok
+def T10abbaa : Tree := (.node [113184,113208,430348,902208,3227782,5521465,8532035,13501056,15731968,15875395] (.node [113184,113208,430348,902208,3227782,5521465,8532035,13501056,15731968,15814022] .nil .nil) (.node [113184,113208,430348,902208,3227806,5521457,8532035,13501056,15731968,15814046] .nil .nil))
+theorem T10abbaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abbaa = true := by decide +kernel
+def T10abbab : Tree := (.node [113184,114208,430348,3227782,3227846,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,113444,902208,3227782,5689661,8532035,11083800,13501056,15731968,16076215] .nil .nil) (.node [113184,114208,430348,3227782,5521521,5689661,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T10abbab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abbab = true := by decide +kernel
+def T10abba : Tree := .node [113184,113208,430348,902208,3227806,5521457,8532035,13501056,15731968,15875395] T10abbaa T10abbab
+theorem T10abba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abba = true :=
+  tall_node _ _ _ _ T10abbaa_ok (by decide +kernel) T10abbab_ok
+def T10abbba : Tree := (.node [113184,114272,430348,3227782,5521457,5689661,8532035,11083800,13501056,15732032] (.node [113184,114272,430348,3227782,3228870,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,114272,430348,3227782,5521457,5689661,8532035,11083800,13502144,15731968] .nil .nil))
+theorem T10abbba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abbba = true := by decide +kernel
+def T10abbbb : Tree := (.node [113184,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15732032] (.node [113184,114272,430348,3228870,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,7684343,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T10abbbb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abbbb = true := by decide +kernel
+def T10abbb : Tree := .node [113184,114272,430348,3227782,5522545,5689661,8532035,11083800,13501056,15731968] T10abbba T10abbbb
+theorem T10abbb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abbb = true :=
+  tall_node _ _ _ _ T10abbba_ok (by decide +kernel) T10abbbb_ok
+def T10abb : Tree := .node [113184,114208,430348,3227846,5521457,5689661,8532035,11083800,13501056,15731968] T10abba T10abbb
+theorem T10abb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10abb = true :=
+  tall_node _ _ _ _ T10abba_ok (by decide +kernel) T10abbb_ok
+def T10ab : Tree := .node [113184,113208,430348,902208,3227782,5521457,8532035,13501080,15731968,15875395] T10aba T10abb
+theorem T10ab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10ab = true :=
+  tall_node _ _ _ _ T10aba_ok (by decide +kernel) T10abb_ok
+def T10a : Tree := .node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11084440,15731968,15875395] T10aa T10ab
+theorem T10a_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10a = true :=
+  tall_node _ _ _ _ T10aa_ok (by decide +kernel) T10ab_ok
+def T10baaaa : Tree := (.node [113184,430348,506668,902208,3227846,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521521,7684343,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227846,5521457,7684343,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T10baaaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baaaa = true := by decide +kernel
+def T10baaaba : Tree := (.node [113184,430348,902208,3227782,3275430,5521465,8532059,13501056,15731968] .nil .nil)
+theorem T10baaaba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baaaba = true := by decide +kernel
+def T10baaabb : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532163,11083800,15732480] .nil .nil)
+theorem T10baaabb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baaabb = true := by decide +kernel
+def T10baaab : Tree := .node [113184,430348,902208,3227782,3275454,5521457,8532035,13501080,15731968] T10baaaba T10baaabb
+theorem T10baaab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baaab = true :=
+  tall_node _ _ _ _ T10baaaba_ok (by decide +kernel) T10baaabb_ok
+def T10baaa : Tree := .node [113184,430348,902208,3227782,3275430,5521457,8532059,13501056,15731992] T10baaaa T10baaab
+theorem T10baaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baaa = true :=
+  tall_node _ _ _ _ T10baaaa_ok (by decide +kernel) T10baaab_ok
+def T10baab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731976,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814030] (.node [113184,430348,902208,3227782,5521457,5690301,8532035,11084440,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814046] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731992,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731976,15814030] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731992,15814046] .nil .nil)))
+theorem T10baab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baab = true := by decide +kernel
+def T10baa : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532675,11083800,15732608] T10baaa T10baab
+theorem T10baa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baa = true :=
+  tall_node _ _ _ _ T10baaa_ok (by decide +kernel) T10baab_ok
+def T10babaaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532059,8632955,13501056,15731992] .nil .nil)
+theorem T10babaaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babaaa = true := by decide +kernel
+def T10babaab : Tree := (.node [113184,430348,902208,3227782,5521457,8532059,13501056,15731992,15875419] .nil .nil)
+theorem T10babaab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babaab = true := by decide +kernel
+def T10babaa : Tree := .node [113184,430348,902208,3227782,5521457,8532059,13501056,15731992,15875395] T10babaaa T10babaab
+theorem T10babaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babaa = true :=
+  tall_node _ _ _ _ T10babaaa_ok (by decide +kernel) T10babaab_ok
+def T10bababa : Tree := (.node [113184,430348,902208,3227782,5521465,8532035,8632955,13501056,15731968] .nil .nil)
+theorem T10bababa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bababa = true := by decide +kernel
+def T10bababb : Tree := (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,15814022] .nil .nil)
+theorem T10bababb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bababb = true := by decide +kernel
+def T10babab : Tree := .node [113184,430348,902208,3227782,5521465,8532059,8632955,13501056,15731968] T10bababa T10bababb
+theorem T10babab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babab = true :=
+  tall_node _ _ _ _ T10bababa_ok (by decide +kernel) T10bababb_ok
+def T10baba : Tree := .node [113184,430348,902208,3227782,5521465,8532035,8632931,11083800,13501056,15731968,15814022] T10babaa T10babab
+theorem T10baba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10baba = true :=
+  tall_node _ _ _ _ T10babaa_ok (by decide +kernel) T10babab_ok
+def T10babbaa : Tree := (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,15875419] .nil .nil)
+theorem T10babbaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babbaa = true := by decide +kernel
+def T10babbab : Tree := (.node [113184,430348,902208,3227782,5522097,5689661,8532675,11083800,15731968] .nil .nil)
+theorem T10babbab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babbab = true := by decide +kernel
+def T10babba : Tree := .node [113184,430348,902208,3227782,5521969,5689661,8532163,11083800,15731968] T10babbaa T10babbab
+theorem T10babba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babba = true :=
+  tall_node _ _ _ _ T10babbaa_ok (by decide +kernel) T10babbab_ok
+def T10babbb : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15732001,15814055] (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,15814055] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083833,13501056,15731968,15814022] .nil .nil))
+theorem T10babbb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babbb = true := by decide +kernel
+def T10babb : Tree := .node [113184,430348,902208,3227782,5689661,8456227,8532035,11083800,13501056,15731968,15814022] T10babba T10babbb
+theorem T10babb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10babb = true :=
+  tall_node _ _ _ _ T10babba_ok (by decide +kernel) T10babbb_ok
+def T10bab : Tree := .node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968,15875395] T10baba T10babb
+theorem T10bab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bab = true :=
+  tall_node _ _ _ _ T10baba_ok (by decide +kernel) T10babb_ok
+def T10ba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632955,13501056,15731992] T10baa T10bab
+theorem T10ba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10ba = true :=
+  tall_node _ _ _ _ T10baa_ok (by decide +kernel) T10bab_ok
+def T10bbaaa : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13538188,15731968,16011057] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875907,16011057] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13538188,15732480,16011057] .nil .nil))
+theorem T10bbaaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbaaa = true := by decide +kernel
+def T10bbaaba : Tree := (.node [113184,430348,902208,3227806,3275454,5521457,8532035,13501080,15731968] .nil .nil)
+theorem T10bbaaba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbaaba = true := by decide +kernel
+def T10bbaabb : Tree := (.node [113184,430348,902208,3227806,5521457,8532035,8632931,13501080,15731968] .nil .nil)
+theorem T10bbaabb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbaabb = true := by decide +kernel
+def T10bbaab : Tree := .node [113184,430348,902208,3227806,3275454,5521457,8532059,13501056,15731968] T10bbaaba T10bbaabb
+theorem T10bbaab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbaab = true :=
+  tall_node _ _ _ _ T10bbaaba_ok (by decide +kernel) T10bbaabb_ok
+def T10bbaa : Tree := .node [113184,430348,902208,3227806,3275430,5521457,8532059,13501056,15731968] T10bbaaa T10bbaab
+theorem T10bbaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbaa = true :=
+  tall_node _ _ _ _ T10bbaaa_ok (by decide +kernel) T10bbaab_ok
+def T10bbabaa : Tree := (.node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,15814046] .nil .nil)
+theorem T10bbabaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbabaa = true := by decide +kernel
+def T10bbabab : Tree := (.node [113184,430348,902208,3227806,5521457,8532059,8632955,13501056,15731968] .nil .nil)
+theorem T10bbabab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbabab = true := by decide +kernel
+def T10bbaba : Tree := .node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,15875395] T10bbabaa T10bbabab
+theorem T10bbaba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbaba = true :=
+  tall_node _ _ _ _ T10bbabaa_ok (by decide +kernel) T10bbabab_ok
+def T10bbabb : Tree := (.node [113184,430348,902208,3228294,5689661,8532035,11083800,13538188,15731968,16010545] (.node [113184,430348,902208,3228294,5689661,8532035,11083800,13501056,15875395,16010545] .nil .nil) (.node [113184,430348,902208,3275430,5689661,8532035,11083800,13501056,15875395,16076215] .nil .nil))
+theorem T10bbabb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbabb = true := by decide +kernel
+def T10bbab : Tree := .node [113184,430348,902208,3228294,5521457,5689661,8532675,11083800,15731968] T10bbaba T10bbabb
+theorem T10bbab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbab = true :=
+  tall_node _ _ _ _ T10bbaba_ok (by decide +kernel) T10bbabb_ok
+def T10bba : Tree := .node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,15814022] T10bbaa T10bbab
+theorem T10bba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bba = true :=
+  tall_node _ _ _ _ T10bbaa_ok (by decide +kernel) T10bbab_ok
+def T10bbbaaa : Tree := (.node [113184,430348,3227782,5522545,5689661,8533059,11083800,13501056,15731968] .nil .nil)
+theorem T10bbbaaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbbaaa = true := by decide +kernel
+def T10bbbaab : Tree := (.node [113184,430988,902208,3227782,5522097,5689661,8532035,11083800,15731968] .nil .nil)
+theorem T10bbbaab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbbaab = true := by decide +kernel
+def T10bbbaa : Tree := .node [113184,430476,902208,3227782,5521969,5689661,8532035,11083800,15731968] T10bbbaaa T10bbbaab
+theorem T10bbbaa_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbbaa = true :=
+  tall_node _ _ _ _ T10bbbaaa_ok (by decide +kernel) T10bbbaab_ok
+def T10bbbab : Tree := (.node [113184,506668,1048428,3227782,5689661,7684279,8242423,8532035,11083800,13501056,15731968] (.node [113184,506668,1037644,3227782,5689661,7684279,8242423,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,902208,3227782,3275430,5689661,8827215,11083800,13501056,15875395,16010545] .nil .nil))
+theorem T10bbbab_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbbab = true := by decide +kernel
+def T10bbba : Tree := .node [113184,506668,1037644,3227782,5689661,6145137,7684279,8532035,11083800,13501056,15731968] T10bbbaa T10bbbab
+theorem T10bbba_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbba = true :=
+  tall_node _ _ _ _ T10bbbaa_ok (by decide +kernel) T10bbbab_ok
+def T10bbbb : Tree := (.node [113184,902208,3275430,5521457,5689661,8827215,11083800,13501056,15814022,15875395] (.node [113184,902208,3227782,5689661,8651009,8827215,11083800,13501056,15875395,16010545] (.node [113184,902208,3227782,5689661,8532035,8895343,11083833,13501056,15731968] .nil .nil) (.node [113184,902208,3227782,5689661,8827215,11083800,13501056,13546447,15875395,16010545] .nil .nil)) (.node [430348,902208,3275430,5521457,5689661,8632931,11083800,13501056,15814022,15875395] (.node [113184,902208,3275430,5689661,7684279,8827215,11083800,13501056,15731968,15875395] .nil .nil) .nil))
+theorem T10bbbb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbbb = true := by decide +kernel
+def T10bbb : Tree := .node [113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15732001] T10bbba T10bbbb
+theorem T10bbb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bbb = true :=
+  tall_node _ _ _ _ T10bbba_ok (by decide +kernel) T10bbbb_ok
+def T10bb : Tree := .node [113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15732608] T10bba T10bbb
+theorem T10bb_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10bb = true :=
+  tall_node _ _ _ _ T10bba_ok (by decide +kernel) T10bbb_ok
+def T10b : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875395,16011057] T10ba T10bb
+theorem T10b_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10b = true :=
+  tall_node _ _ _ _ T10ba_ok (by decide +kernel) T10bb_ok
+def T10 : Tree := .node [113184,430348,506668,902208,3227782,5521521,7684279,8532035,11083800,13501056,15731968] T10a T10b
+theorem T10_ok : tall (expFast false (RP PR T9 R9 9) T9 9) T10 = true :=
+  tall_node _ _ _ _ T10a_ok (by decide +kernel) T10b_ok
+def R10a : Tree := (.node [12288,113184,430348,902208,3227782,5521465,8532059,13501056,15731968] (.node [24,640,113184,430348,902208,3227782,5521457,8532035,15731968] (.node [2,113184,430348,902208,3227806,5521457,8532035,13501080,15731968] (.node [2,113184,430348,902208,3227782,5521457,8532059,13501056,15731992] (.node [1,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [1,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) .nil) (.node [2,113184,430348,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil)) (.node [12,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] (.node [2,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil) (.node [12,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil))) (.node [64,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532059,13501056,15731992] (.node [49,113184,430348,902208,3227782,8532035,11083800,13501056,15731968] (.node [24,640,113184,430348,902208,3227806,5521457,8532035,15731968] .nil .nil) .nil) (.node [64,113184,430348,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil)) (.node [64,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [64,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) (.node [12288,113184,430348,902208,3227782,5521457,8532059,13501056,15731992] .nil .nil)))) (.node [65536,113184,430364,902208,3227806,5521457,8532035,13501056,15731968] (.node [36872,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] (.node [36864,113184,430348,902208,3227782,5521457,8532059,13501056,15731992] (.node [12288,113184,430348,902232,3227782,5521457,8532059,13501056,15731968] (.node [12288,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil) .nil) (.node [36864,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil)) (.node [65536,113184,430348,902208,3227806,5521457,8532035,13501080,15731968] (.node [36872,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [65536,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil))) (.node [81920,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] (.node [81920,113184,430348,902208,3227782,5521457,8532059,13501056,15731992] (.node [65536,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [81920,113184,430348,902208,3227806,5521457,8532035,13501080,15731968] .nil .nil)) (.node [81920,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] (.node [81920,113184,430364,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [81920,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil)))))
+theorem R10a_ok : tall (refOK cpF 10) R10a = true := by decide +kernel
+def R10b : Tree := (.node [113184,430348,902208,3227782,5521457,8532059,13501056,14053499,15731992] (.node [113184,430348,902208,1037644,3227806,5521457,8532059,13501056,15731968] (.node [113184,430348,506668,902208,3227806,5521457,8532059,13501056,15731968] (.node [113184,393216,430348,902208,3227782,5521457,8532059,13501056,15731992] (.node [113184,294912,430348,902208,3227806,5521457,8532059,13501056,15731968] (.node [113184,278528,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532059,13501056,15731992] .nil .nil)) (.node [113184,430348,902208,917088,3227806,5521457,8532059,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532059,13501056,15731992] .nil .nil) (.node [113184,430348,902208,1037644,3227782,5521457,8532059,13501056,15731992] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532059,11759839,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532059,8827231,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532059,8632931,13501056,15731992] (.node [113184,430348,902208,3227782,3658126,5521457,8532059,13501056,15731992] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,8532059,9434203,13501056,15731992] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532059,13501056,13538188,15731992] (.node [113184,430348,902208,3227782,5521457,8532059,13501056,13513435,15731992] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532059,13501056,13613728,15731992] .nil .nil)))) (.node [113184,430348,902208,3227806,5521457,6145137,8532059,13501056,15731968] (.node [113184,430348,902208,3227806,3275430,5521457,8532035,13501080,15731968] (.node [113184,430348,902208,3227782,5521713,8532035,11083800,13501056,15732480] (.node [113184,430348,902208,3227782,5521465,8532059,13501056,14053499,15731968] (.node [113184,430348,902208,3227782,5521465,8532059,8632931,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5522097,5689661,8532035,11084440,15731968] .nil .nil)) (.node [113184,430348,902208,3227806,4048094,5521457,8532059,13501056,15731968] (.node [113184,430348,902208,3227806,3658142,5521457,8532059,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227806,5521457,5634609,8532059,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227806,5521457,8532059,9434203,13501056,15731968] (.node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968,16728734] (.node [113184,430348,902208,3227806,5521457,7684287,8532059,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227806,5521457,8532059,8632931,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227806,5521457,8532059,13501056,13613728,15731968] (.node [113184,430348,902208,3227806,5521457,8532059,11759839,13501056,15731968] .nil .nil) (.node [113184,902208,3227782,5689661,8827215,11083800,13501056,15875395,16076215] .nil .nil)))))
+theorem R10b_ok : tall (refOK cpF 10) R10b = true := by decide +kernel
+def R10 : Tree := .node [113184,278528,430348,902208,3227782,5521457,8532059,13501056,15731992] R10a R10b
+theorem R10_ok : tall (refOK cpF 10) R10 = true :=
+  tall_node _ _ _ _ R10a_ok (by decide +kernel) R10b_ok
+def T11aaaaaa : Tree := (.node [24,33,113184,430348,902208,3227782,8532035,8632931,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil) .nil)
+theorem T11aaaaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaaaaa = true := by decide +kernel
+def T11aaaaab : Tree := (.node [24,640,113184,430348,902208,3227782,5521457,5689661,8532035,15731968] .nil .nil)
+theorem T11aaaaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaaaab = true := by decide +kernel
+def T11aaaaa : Tree := .node [24,640,113184,430348,902208,3227782,3275430,5521457,8532035,15731968] T11aaaaaa T11aaaaab
+theorem T11aaaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaaaa = true :=
+  tall_node _ _ _ _ T11aaaaaa_ok (by decide +kernel) T11aaaaab_ok
+def T11aaaab : Tree := (.node [24,113184,430348,506668,902208,3227782,5521457,6145137,8532035,13501056,15731968] (.node [24,113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15875395] .nil .nil) (.node [24,113184,430348,506668,902208,3227782,5521457,7684279,8532035,13501056,15731968] .nil .nil))
+theorem T11aaaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaaab = true := by decide +kernel
+def T11aaaa : Tree := .node [24,113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15814022] T11aaaaa T11aaaab
+theorem T11aaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaaa = true :=
+  tall_node _ _ _ _ T11aaaaa_ok (by decide +kernel) T11aaaab_ok
+def T11aaaba : Tree := (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968,15875395] (.node [24,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,13501056,15731968,15875395] (.node [24,113184,430348,902208,917088,3227782,5521457,8532035,13501056,13538188,15731968] .nil .nil) .nil) (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731968,15875395] .nil .nil))
+theorem T11aaaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaaba = true := by decide +kernel
+def T11aaabba : Tree := (.node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501080,15731968] .nil .nil)
+theorem T11aaabba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaabba = true := by decide +kernel
+def T11aaabbb : Tree := (.node [24,113184,430348,902208,3227782,3275454,5521457,8532035,13501056,15731968] .nil .nil)
+theorem T11aaabbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaabbb = true := by decide +kernel
+def T11aaabb : Tree := .node [24,113184,430348,902208,3227782,3275430,5521465,8532035,13501056,15731968] T11aaabba T11aaabbb
+theorem T11aaabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaabb = true :=
+  tall_node _ _ _ _ T11aaabba_ok (by decide +kernel) T11aaabbb_ok
+def T11aaab : Tree := .node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731992] T11aaaba T11aaabb
+theorem T11aaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaab = true :=
+  tall_node _ _ _ _ T11aaaba_ok (by decide +kernel) T11aaabb_ok
+def T11aaa : Tree := .node [24,113184,430348,902208,917088,3227782,5521457,8532035,13501056,13513411,15731968] T11aaaa T11aaab
+theorem T11aaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaa = true :=
+  tall_node _ _ _ _ T11aaaa_ok (by decide +kernel) T11aaab_ok
+def T11aabaaa : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil) .nil)
+theorem T11aabaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabaaa = true := by decide +kernel
+def T11aabaab : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501080,15731968] .nil .nil)
+theorem T11aabaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabaab = true := by decide +kernel
+def T11aabaa : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731992] T11aabaaa T11aabaab
+theorem T11aabaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabaa = true :=
+  tall_node _ _ _ _ T11aabaaa_ok (by decide +kernel) T11aabaab_ok
+def T11aababa : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,15814022] .nil .nil)
+theorem T11aababa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aababa = true := by decide +kernel
+def T11aababb : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,15875395] .nil .nil)
+theorem T11aababb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aababb = true := by decide +kernel
+def T11aabab : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,15814046] T11aababa T11aababb
+theorem T11aabab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabab = true :=
+  tall_node _ _ _ _ T11aababa_ok (by decide +kernel) T11aababb_ok
+def T11aaba : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,8632955,13501056,15731968] T11aabaa T11aabab
+theorem T11aaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aaba = true :=
+  tall_node _ _ _ _ T11aabaa_ok (by decide +kernel) T11aabab_ok
+def T11aabbaa : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,15731968,15875395] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15814022,15875395] .nil .nil) .nil)
+theorem T11aabbaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabbaa = true := by decide +kernel
+def T11aabbab : Tree := (.node [24,113184,430348,902208,3227782,5521465,8532035,8632931,13501056,15731968] .nil .nil)
+theorem T11aabbab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabbab = true := by decide +kernel
+def T11aabba : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,13538188,14566065,15731968] T11aabbaa T11aabbab
+theorem T11aabba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabba = true :=
+  tall_node _ _ _ _ T11aabbaa_ok (by decide +kernel) T11aabbab_ok
+def T11aabbb : Tree := (.node [33,113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,15814022] (.node [24,113184,430348,902208,3227782,6145137,8532035,13501056,14566065,15731968] .nil .nil) (.node [33,113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15731968] .nil .nil))
+theorem T11aabbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabbb = true := by decide +kernel
+def T11aabb : Tree := .node [24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968,15814022] T11aabba T11aabbb
+theorem T11aabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aabb = true :=
+  tall_node _ _ _ _ T11aabba_ok (by decide +kernel) T11aabbb_ok
+def T11aab : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,15875419] T11aaba T11aabb
+theorem T11aab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aab = true :=
+  tall_node _ _ _ _ T11aaba_ok (by decide +kernel) T11aabb_ok
+def T11aa : Tree := .node [24,113184,430348,902208,3227782,5521457,5689661,8532035,8632931,13501056,15731968,15814022] T11aaa T11aab
+theorem T11aa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aa = true :=
+  tall_node _ _ _ _ T11aaa_ok (by decide +kernel) T11aab_ok
+def T11abaaa : Tree := (.node [64,113184,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [64,113184,114208,430348,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [64,1024,113184,430348,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [64,113184,430348,902208,3275430,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T11abaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abaaa = true := by decide +kernel
+def T11abaaba : Tree := (.node [64,113184,431372,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T11abaaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abaaba = true := by decide +kernel
+def T11abaabb : Tree := (.node [67,113184,430348,902208,3227782,5521457,7684279,11083800,13501056,15731968] .nil .nil)
+theorem T11abaabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abaabb = true := by decide +kernel
+def T11abaab : Tree := .node [64,114208,430348,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T11abaaba T11abaabb
+theorem T11abaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abaab = true :=
+  tall_node _ _ _ _ T11abaaba_ok (by decide +kernel) T11abaabb_ok
+def T11abaa : Tree := .node [64,113184,430348,1037644,3227782,5689661,7684279,8532035,11083800,13501056,15731968] T11abaaa T11abaab
+theorem T11abaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abaa = true :=
+  tall_node _ _ _ _ T11abaaa_ok (by decide +kernel) T11abaab_ok
+def T11ababaa : Tree := (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,8532675,11083800,15731968] (.node [640,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,15731968,15875395] .nil .nil) .nil)
+theorem T11ababaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ababaa = true := by decide +kernel
+def T11ababab : Tree := (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968] .nil .nil)
+theorem T11ababab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ababab = true := by decide +kernel
+def T11ababa : Tree := .node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15875395] T11ababaa T11ababab
+theorem T11ababa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ababa = true :=
+  tall_node _ _ _ _ T11ababaa_ok (by decide +kernel) T11ababab_ok
+def T11ababba : Tree := (.node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15732608] .nil .nil)
+theorem T11ababba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ababba = true := by decide +kernel
+def T11ababbb : Tree := (.node [640,113184,430348,902208,3227782,5521457,5690301,8532035,11083800,15731968] .nil .nil)
+theorem T11ababbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ababbb = true := by decide +kernel
+def T11ababb : Tree := .node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11084440,15731968] T11ababba T11ababbb
+theorem T11ababb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ababb = true :=
+  tall_node _ _ _ _ T11ababba_ok (by decide +kernel) T11ababbb_ok
+def T11abab : Tree := .node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968,15875395] T11ababa T11ababb
+theorem T11abab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abab = true :=
+  tall_node _ _ _ _ T11ababa_ok (by decide +kernel) T11ababb_ok
+def T11aba : Tree := .node [67,113184,430348,902208,3227782,5689661,7684279,11083800,13501056,15731968] T11abaa T11abab
+theorem T11aba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11aba = true :=
+  tall_node _ _ _ _ T11abaa_ok (by decide +kernel) T11abab_ok
+def T11abbaaaa : Tree := (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968,15875395] .nil .nil)
+theorem T11abbaaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbaaaa = true := by decide +kernel
+def T11abbaaab : Tree := .nil
+theorem T11abbaaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbaaab = true := by decide +kernel
+def T11abbaaa : Tree := .node [640,113184,430348,902208,3227782,5522097,5689661,8532035,11083800,15731968] T11abbaaaa T11abbaaab
+theorem T11abbaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbaaa = true :=
+  tall_node _ _ _ _ T11abbaaaa_ok (by decide +kernel) T11abbaaab_ok
+def T11abbaab : Tree := (.node [640,113184,430348,902208,3228294,5521457,5689661,8532035,11083800,15731968] .nil .nil)
+theorem T11abbaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbaab = true := by decide +kernel
+def T11abbaa : Tree := .node [640,113184,430348,902208,3227782,5689661,8532035,11083800,15731968,16010545] T11abbaaa T11abbaab
+theorem T11abbaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbaa = true :=
+  tall_node _ _ _ _ T11abbaaa_ok (by decide +kernel) T11abbaab_ok
+def T11abbaba : Tree := (.node [113184,113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil)
+theorem T11abbaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbaba = true := by decide +kernel
+def T11abbabb : Tree := (.node [113184,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil)
+theorem T11abbabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbabb = true := by decide +kernel
+def T11abbab : Tree := .node [113184,113208,430348,902208,3227782,3227806,5521457,8532035,13501056,15731968] T11abbaba T11abbabb
+theorem T11abbab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbab = true :=
+  tall_node _ _ _ _ T11abbaba_ok (by decide +kernel) T11abbabb_ok
+def T11abba : Tree := .node [640,113184,430348,902848,3227782,5521457,5689661,8532035,11083800,15731968] T11abbaa T11abbab
+theorem T11abba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abba = true :=
+  tall_node _ _ _ _ T11abbaa_ok (by decide +kernel) T11abbab_ok
+def T11abbbaa : Tree := (.node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil)
+theorem T11abbbaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbbaa = true := by decide +kernel
+def T11abbbab : Tree := (.node [113184,113208,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil)
+theorem T11abbbab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbbab = true := by decide +kernel
+def T11abbba : Tree := .node [113184,113208,430348,902208,3227782,5521457,8532035,13501080,15731968] T11abbbaa T11abbbab
+theorem T11abbba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbba = true :=
+  tall_node _ _ _ _ T11abbbaa_ok (by decide +kernel) T11abbbab_ok
+def T11abbbb : Tree := (.node [113184,113444,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15814022] (.node [113184,113312,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968,15875395] .nil .nil) (.node [113184,114208,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T11abbbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbbb = true := by decide +kernel
+def T11abbb : Tree := .node [113184,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] T11abbba T11abbbb
+theorem T11abbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abbb = true :=
+  tall_node _ _ _ _ T11abbba_ok (by decide +kernel) T11abbbb_ok
+def T11abb : Tree := .node [113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968,15731992] T11abba T11abbb
+theorem T11abb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11abb = true :=
+  tall_node _ _ _ _ T11abba_ok (by decide +kernel) T11abbb_ok
+def T11ab : Tree := .node [640,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,15731968] T11aba T11abb
+theorem T11ab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ab = true :=
+  tall_node _ _ _ _ T11aba_ok (by decide +kernel) T11abb_ok
+def T11a : Tree := .node [49,113184,430348,902208,3227782,8532035,8632931,11083800,13501056,15731968] T11aa T11ab
+theorem T11a_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11a = true :=
+  tall_node _ _ _ _ T11aa_ok (by decide +kernel) T11ab_ok
+def T11baaaa : Tree := (.node [113184,430348,506668,902208,917088,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] (.node [113184,327716,506668,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,506668,902208,1037644,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T11baaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baaaa = true := by decide +kernel
+def T11baaab : Tree := (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16076215] (.node [113184,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968,15875395] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15732032] .nil .nil))
+theorem T11baaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baaab = true := by decide +kernel
+def T11baaa : Tree := .node [113184,430348,506668,902208,1048428,3227782,5521457,7684279,8532035,11083800,13501056,15731968] T11baaaa T11baaab
+theorem T11baaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baaa = true :=
+  tall_node _ _ _ _ T11baaaa_ok (by decide +kernel) T11baaab_ok
+def T11baaba : Tree := (.node [113184,430348,506668,902208,3227782,5689661,6145137,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521461,7684279,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,506668,902208,3227782,5689661,7684279,8242423,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T11baaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baaba = true := by decide +kernel
+def T11baabba : Tree := (.node [113184,430348,507692,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T11baabba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baabba = true := by decide +kernel
+def T11baabbb : Tree := (.node [113184,430348,902208,3227782,3275430,5521521,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T11baabbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baabbb = true := by decide +kernel
+def T11baabb : Tree := .node [113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15732032] T11baabba T11baabbb
+theorem T11baabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baabb = true :=
+  tall_node _ _ _ _ T11baabba_ok (by decide +kernel) T11baabbb_ok
+def T11baab : Tree := .node [113184,430348,506668,902208,3227846,5521457,8532035,11083800,13501056,15731968] T11baaba T11baabb
+theorem T11baab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baab = true :=
+  tall_node _ _ _ _ T11baaba_ok (by decide +kernel) T11baabb_ok
+def T11baa : Tree := .node [113184,430348,506668,902208,3227782,5521457,8533059,11083800,13501056,15731968] T11baaa T11baab
+theorem T11baa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baa = true :=
+  tall_node _ _ _ _ T11baaa_ok (by decide +kernel) T11baab_ok
+def T11babaaa : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732480,15875907] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732480,15875395] .nil .nil) .nil)
+theorem T11babaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babaaa = true := by decide +kernel
+def T11babaab : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8632931,11083800,13501056,15814022,15875395] .nil .nil)
+theorem T11babaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babaab = true := by decide +kernel
+def T11babaa : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13538188,15732480] T11babaaa T11babaab
+theorem T11babaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babaa = true :=
+  tall_node _ _ _ _ T11babaaa_ok (by decide +kernel) T11babaab_ok
+def T11babab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,16076215] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11254395,13501056,15731968,15814022] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731976] .nil .nil))
+theorem T11babab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babab = true := by decide +kernel
+def T11baba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11123256,13501056,15731968,15814022] T11babaa T11babab
+theorem T11baba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11baba = true :=
+  tall_node _ _ _ _ T11babaa_ok (by decide +kernel) T11babab_ok
+def T11babbaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,8632947,11083800,13501056,15731968] .nil .nil)
+theorem T11babbaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babbaa = true := by decide +kernel
+def T11babbab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,15814022] .nil .nil)
+theorem T11babbab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babbab = true := by decide +kernel
+def T11babba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632955,11083800,13501056,15731968] T11babbaa T11babbab
+theorem T11babba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babba = true :=
+  tall_node _ _ _ _ T11babbaa_ok (by decide +kernel) T11babbab_ok
+def T11babbba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,15814022] .nil .nil)
+theorem T11babbba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babbba = true := by decide +kernel
+def T11babbbb : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16010545] .nil .nil)
+theorem T11babbbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babbbb = true := by decide +kernel
+def T11babbb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,15814046] T11babbba T11babbbb
+theorem T11babbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babbb = true :=
+  tall_node _ _ _ _ T11babbba_ok (by decide +kernel) T11babbbb_ok
+def T11babb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,15814030] T11babba T11babbb
+theorem T11babb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11babb = true :=
+  tall_node _ _ _ _ T11babba_ok (by decide +kernel) T11babbb_ok
+def T11bab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731992] T11baba T11babb
+theorem T11bab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bab = true :=
+  tall_node _ _ _ _ T11baba_ok (by decide +kernel) T11babb_ok
+def T11ba : Tree := .node [113184,430348,902208,3227782,3275430,5689661,8532035,11083800,13501056,15875395,16010545] T11baa T11bab
+theorem T11ba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11ba = true :=
+  tall_node _ _ _ _ T11baa_ok (by decide +kernel) T11bab_ok
+def T11bbaaaa : Tree := (.node [113184,430348,902208,3227782,5521465,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532059,13501056,15731992] .nil .nil) .nil)
+theorem T11bbaaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaaaa = true := by decide +kernel
+def T11bbaaab : Tree := (.node [113184,430348,902208,3227782,5521465,8532059,13501056,15731968] .nil .nil)
+theorem T11bbaaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaaab = true := by decide +kernel
+def T11bbaaa : Tree := .node [113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968,15814022] T11bbaaaa T11bbaaab
+theorem T11bbaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaaa = true :=
+  tall_node _ _ _ _ T11bbaaaa_ok (by decide +kernel) T11bbaaab_ok
+def T11bbaaba : Tree := (.node [113184,430348,902208,3227782,5521521,7684343,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T11bbaaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaaba = true := by decide +kernel
+def T11bbaabb : Tree := (.node [113184,430348,902208,3227782,5689661,7684279,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil)
+theorem T11bbaabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaabb = true := by decide +kernel
+def T11bbaab : Tree := .node [113184,430348,902208,3227782,5521969,5689661,8532035,11083800,13538188,15731968] T11bbaaba T11bbaabb
+theorem T11bbaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaab = true :=
+  tall_node _ _ _ _ T11bbaaba_ok (by decide +kernel) T11bbaabb_ok
+def T11bbaa : Tree := .node [113184,430348,902208,3227782,5521521,7684279,8532035,11083800,13501056,15731968] T11bbaaa T11bbaab
+theorem T11bbaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaa = true :=
+  tall_node _ _ _ _ T11bbaaa_ok (by decide +kernel) T11bbaab_ok
+def T11bbaba : Tree := (.node [113184,430348,902208,3227782,5689661,7684343,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5689661,7684279,8632931,11083800,13501056,15731968,15875395] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15814022,15875395] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,15814022,16076215] .nil .nil))
+theorem T11bbaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbaba = true := by decide +kernel
+def T11bbabba : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,16076215] .nil .nil)
+theorem T11bbabba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbabba = true := by decide +kernel
+def T11bbabbb : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,8632931,11083833,13501056,15731968] .nil .nil)
+theorem T11bbabbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbabbb = true := by decide +kernel
+def T11bbabb : Tree := .node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15732001] T11bbabba T11bbabbb
+theorem T11bbabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbabb = true :=
+  tall_node _ _ _ _ T11bbabba_ok (by decide +kernel) T11bbabbb_ok
+def T11bbab : Tree := .node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,15814022,16605241] T11bbaba T11bbabb
+theorem T11bbab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbab = true :=
+  tall_node _ _ _ _ T11bbaba_ok (by decide +kernel) T11bbabb_ok
+def T11bba : Tree := .node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15732032] T11bbaa T11bbab
+theorem T11bba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bba = true :=
+  tall_node _ _ _ _ T11bbaa_ok (by decide +kernel) T11bbab_ok
+def T11bbbaaa : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875395,16010545,16666545] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15732480,16011057] .nil .nil) .nil)
+theorem T11bbbaaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbaaa = true := by decide +kernel
+def T11bbbaab : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13538188,14566065,15731968,16010545] .nil .nil)
+theorem T11bbbaab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbaab = true := by decide +kernel
+def T11bbbaa : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875395,16076215] T11bbbaaa T11bbbaab
+theorem T11bbbaa_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbaa = true :=
+  tall_node _ _ _ _ T11bbbaaa_ok (by decide +kernel) T11bbbaab_ok
+def T11bbbaba : Tree := (.node [113184,430348,902208,3227782,5689661,8632931,11083800,13501056,15875395,16010545] .nil .nil)
+theorem T11bbbaba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbaba = true := by decide +kernel
+def T11bbbabb : Tree := (.node [113184,430348,902208,3227806,5521457,8532059,13501056,15731968] .nil .nil)
+theorem T11bbbabb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbabb = true := by decide +kernel
+def T11bbbab : Tree := .node [113184,430348,902208,3227806,5521457,8532035,13501080,15731968] T11bbbaba T11bbbabb
+theorem T11bbbab_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbab = true :=
+  tall_node _ _ _ _ T11bbbaba_ok (by decide +kernel) T11bbbabb_ok
+def T11bbba : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13538188,15731968,16010545,16666545] T11bbbaa T11bbbab
+theorem T11bbba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbba = true :=
+  tall_node _ _ _ _ T11bbbaa_ok (by decide +kernel) T11bbbab_ok
+def T11bbbba : Tree := (.node [113184,506668,902208,1037644,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3275430,5521457,5689661,8532035,11083800,13501056,15814022,15875395] .nil .nil) (.node [113184,506668,902208,1048428,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil))
+theorem T11bbbba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbba = true := by decide +kernel
+def T11bbbbba : Tree := (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16076215] .nil .nil)
+theorem T11bbbbba_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbbba = true := by decide +kernel
+def T11bbbbbb : Tree := (.node [113184,902208,3227782,5689661,8827215,11083800,13501056,15875395,16010545] .nil .nil)
+theorem T11bbbbbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbbbb = true := by decide +kernel
+def T11bbbbb : Tree := .node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15875395,16010545] T11bbbbba T11bbbbbb
+theorem T11bbbbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbbb = true :=
+  tall_node _ _ _ _ T11bbbbba_ok (by decide +kernel) T11bbbbbb_ok
+def T11bbbb : Tree := .node [113184,506668,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,15875395] T11bbbba T11bbbbb
+theorem T11bbbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbbb = true :=
+  tall_node _ _ _ _ T11bbbba_ok (by decide +kernel) T11bbbbb_ok
+def T11bbb : Tree := .node [113184,430348,902208,3228294,5521457,5689661,8532035,11083800,13538188,15731968] T11bbba T11bbbb
+theorem T11bbb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bbb = true :=
+  tall_node _ _ _ _ T11bbba_ok (by decide +kernel) T11bbbb_ok
+def T11bb : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15732480,16010545] T11bba T11bbb
+theorem T11bb_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11bb = true :=
+  tall_node _ _ _ _ T11bba_ok (by decide +kernel) T11bbb_ok
+def T11b : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16011057] T11ba T11bb
+theorem T11b_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11b = true :=
+  tall_node _ _ _ _ T11ba_ok (by decide +kernel) T11bb_ok
+def T11 : Tree := .node [113184,114208,430348,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] T11a T11b
+theorem T11_ok : tall (expFast false (RP PR T10 R10 10) T10 10) T11 = true :=
+  tall_node _ _ _ _ T11a_ok (by decide +kernel) T11b_ok
+def R11aaa : Tree := (.node [2,113184,430348,902208,3227782,5521457,8532059,11083800,13501056,15731968] (.node [1,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] (.node [1,640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [1,24,113184,430348,902232,3227782,5521457,8532035,13501056,15731968] (.node [1,24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [1,24,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil) .nil) (.node [1,24,113184,430364,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)) (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1,1088,113184,430348,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [1,113184,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968] .nil .nil))) (.node [2,24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [2,24,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] (.node [1,113184,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1,113184,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [2,24,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] .nil .nil)) (.node [2,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [2,640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil) (.node [2,113184,430348,902208,3227782,5521457,8532051,11083800,13501056,15731968] .nil .nil)))) (.node [12,113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968] (.node [8,113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [8,24,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] (.node [8,24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [2,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [8,640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil)) (.node [8,113184,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] .nil .nil) (.node [12,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [24,64,113184,430348,1037644,3227782,5521457,8532035,13501056,15731968] (.node [24,64,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,64,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] (.node [24,64,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil) .nil) (.node [24,64,113184,430348,902232,3227782,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [24,64,113184,430364,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,640,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)))))
+theorem R11aaa_ok : tall (refOK cpF 11) R11aaa = true := by decide +kernel
+def R11aab : Tree := (.node [24,82944,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,65536,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,36864,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,12290,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,12288,113184,430348,902208,3227782,5521457,8532059,13501056,15731968] (.node [24,12288,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil) .nil) (.node [24,36864,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil)) (.node [24,36864,113184,430364,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,36864,113184,430348,902232,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,36868,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil))) (.node [24,81920,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,81920,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,65538,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,65536,113184,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil) .nil) (.node [24,81920,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil)) (.node [24,81920,113184,430348,902232,3227782,5521457,8532035,13501056,15731968] (.node [24,81920,113184,430348,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,81920,113184,430364,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)))) (.node [24,113184,278528,430348,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,113184,113208,430348,902208,3227806,5521457,8532035,13501056,15731968] (.node [24,113184,113208,430348,902208,3227782,5521457,8532059,13501056,15731968] (.node [24,113184,113208,430348,902208,3227782,5521457,8532035,13501080,15731968] (.node [24,113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil) .nil) (.node [24,113184,113208,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,113208,430364,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,113208,430348,902232,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,113184,278528,430348,902208,3227782,5521457,8532035,13501080,15731968] .nil .nil))) (.node [24,113184,430348,506668,902208,3227782,5521457,8532035,13501080,15731968] (.node [24,113184,430348,430364,902208,3227782,5521457,8532035,13501080,15731968] (.node [24,113184,278544,430348,902232,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,278528,430364,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) .nil) (.node [24,113184,430348,506668,902208,3227782,5521457,8532035,13501056,15731992] .nil .nil)) (.node [24,113184,430348,506668,902208,3227782,5521465,8532035,13501056,15731968] (.node [24,113184,430348,506668,902208,3227782,5521457,8532059,13501056,15731968] .nil .nil) (.node [24,113184,430348,506668,902208,3227806,5521457,8532035,13501056,15731968] .nil .nil)))))
+theorem R11aab_ok : tall (refOK cpF 11) R11aab = true := by decide +kernel
+def R11aa : Tree := .node [24,640,113184,430348,902208,3227782,5521457,8532035,15731968] R11aaa R11aab
+theorem R11aa_ok : tall (refOK cpF 11) R11aa = true :=
+  tall_node _ _ _ _ R11aaa_ok (by decide +kernel) R11aab_ok
+def R11aba : Tree := (.node [24,113184,430348,902208,3227782,4048070,5521465,8532035,13501056,15731968] (.node [24,113184,430348,902208,1037644,3227782,5521457,8532035,13501056,15731992] (.node [24,113184,430348,902208,917088,3227782,5521457,8532059,13501056,15731968] (.node [24,113184,430348,902208,917088,3227782,5521457,8532035,13501056,15731992] (.node [24,113184,430348,902208,902232,3227782,5521465,8532035,13501056,15731968] (.node [24,113184,430348,506684,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) .nil) (.node [24,113184,430348,902208,917088,3227782,5521457,8532035,13501080,15731968] .nil .nil)) (.node [24,113184,430348,902208,917088,3227806,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,917088,3227782,5521465,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,917112,3227782,5521457,8532035,13501056,15731968] .nil .nil))) (.node [24,113184,430348,902208,1048428,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,1037644,3227782,5521465,8532035,13501056,15731968] (.node [24,113184,430348,902208,1037644,3227782,5521457,8532059,13501056,15731968] (.node [24,113184,430348,902208,1037644,3227782,5521457,8532035,13501080,15731968] .nil .nil) .nil) (.node [24,113184,430348,902208,1037644,3227806,5521457,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,3658126,5521465,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,3658126,5521457,8532035,13501080,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,3668910,5521457,8532035,13501056,15731968] .nil .nil)))) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,14566065,15731992] (.node [24,113184,430348,902208,3227782,5521457,8532035,9434447,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,8895343,13501056,15731968] (.node [24,113184,430348,902208,3227782,4183502,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,4062950,5521457,8532035,13501056,15731968] .nil .nil) .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,9434179,13501080,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,11759815,13501080,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,9436771,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,11795175,13501056,15731968] .nil .nil))) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15875395,16010545] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15814022,16162060] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,16650112] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992,16010545] .nil .nil) .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15814022,16650112] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,13513435,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15875395,16633152] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,13538204,15731968] .nil .nil)))))
+theorem R11aba_ok : tall (refOK cpF 11) R11aba = true := by decide +kernel
+def R11abba : Tree := (.node [24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968,16633152] (.node [24,113184,430348,902208,3227782,5521465,6145145,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13513411,14566065,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,15731992] (.node [24,113184,430348,902208,3227782,5521457,8532035,13501080,14053491,15731968] .nil .nil) .nil) (.node [24,113184,430348,902208,3227782,5521465,5634617,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521465,8532035,9434179,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521465,7684287,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521465,8532035,11759815,13501056,15731968] .nil .nil))) (.node [24,113184,430348,902208,3227782,5689661,8532035,13501056,15875395,16010545] (.node [24,113184,430348,902208,3227782,5521465,8532059,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521465,8532035,13501080,15731968] (.node [24,113184,430348,902208,3227782,5521465,8532035,13501056,15731992] .nil .nil) .nil) (.node [24,113184,430348,902208,3227782,5689661,8532035,13501056,15731968,16076215] .nil .nil)) (.node [24,113184,430348,902208,3227806,5521457,8532035,13501056,15731992] (.node [24,113184,430348,902208,3227782,6145137,8532035,13501056,15731968,16010545] .nil .nil) (.node [24,113184,430348,902208,3227806,5521457,8532035,13501080,15731968] .nil .nil))))
+theorem R11abba_ok : tall (refOK cpF 11) R11abba = true := by decide +kernel
+def R11abbb : Tree := (.node [65,113184,430348,1037644,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532059,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,1088,113184,430348,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil) .nil) (.node [64,113184,430348,902208,3227782,5521457,8532051,11083800,13501056,15731968] .nil .nil)) (.node [64,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [640,36896,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [640,12288,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [66,113184,430348,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [640,36864,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil)) (.node [640,81920,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [640,73728,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil) (.node [640,113184,113312,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil))))
+theorem R11abbb_ok : tall (refOK cpF 11) R11abbb = true := by decide +kernel
+def R11abb : Tree := .node [24,113184,430348,902208,3227806,5521457,8532059,13501056,15731968] R11abba R11abbb
+theorem R11abb_ok : tall (refOK cpF 11) R11abb = true :=
+  tall_node _ _ _ _ R11abba_ok (by decide +kernel) R11abbb_ok
+def R11ab : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,13501080,13613752,15731968] R11aba R11abb
+theorem R11ab_ok : tall (refOK cpF 11) R11ab = true :=
+  tall_node _ _ _ _ R11aba_ok (by decide +kernel) R11abb_ok
+def R11a : Tree := .node [24,113184,430348,506668,902232,3227782,5521457,8532035,13501056,15731968] R11aa R11ab
+theorem R11a_ok : tall (refOK cpF 11) R11a = true :=
+  tall_node _ _ _ _ R11aa_ok (by decide +kernel) R11ab_ok
+def R11baaa : Tree := (.node [640,113184,430348,902208,3227782,5521457,8396800,8532035,11083800,15731968] (.node [640,113184,430348,902208,917088,3227782,5521457,8532035,11083800,15731968] (.node [640,113184,430348,430988,902208,3227782,5521457,8532035,11083800,15731968] (.node [640,113184,278528,430348,902208,3227782,5521457,8532035,11083800,15731968] (.node [640,113184,135169,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil) .nil) (.node [640,113184,430348,506668,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil)) (.node [640,113184,430348,902208,3227782,3658126,5521457,8532035,11083800,15731968] (.node [640,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,15731968] .nil .nil) (.node [640,113184,430348,902208,3227782,5521457,5765949,8532035,11083800,15731968] .nil .nil))) (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,11219035,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532035,9434179,11083800,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532035,8532675,11083800,15731968] .nil .nil) .nil) (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,15731968] .nil .nil)) (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,11759815,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,11514140,15731968] .nil .nil) (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,14053491,15731968] .nil .nil))))
+theorem R11baaa_ok : tall (refOK cpF 11) R11baaa = true := by decide +kernel
+def R11baab : Tree := (.node [12288,113184,430348,902208,3227782,5521457,8532059,11083800,13501056,15731968] (.node [640,113184,430348,902208,3228294,5521457,8532035,11083800,15731968] (.node [640,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,15731968] (.node [640,113184,430348,902208,3227782,5522097,8532035,11083800,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,15732608] .nil .nil) .nil) (.node [640,113184,430348,902208,3227782,5689661,8532035,11083800,15731968,16605241] .nil .nil)) (.node [12288,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [640,113184,430348,902208,3275430,5689661,7684279,8532035,11083800,15731968] .nil .nil) (.node [12288,113184,430348,902208,3227782,5521457,8532051,11083800,13501056,15731968] .nil .nil))) (.node [36864,113184,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [12288,113184,430348,902208,3227782,5521457,8532163,11083800,13501056,15731968] .nil .nil) .nil) (.node [36864,113184,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [36864,113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36864,113184,431372,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [36864,114208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R11baab_ok : tall (refOK cpF 11) R11baab = true := by decide +kernel
+def R11baa : Tree := .node [640,113184,430348,902208,3227782,5521457,8532035,11083800,14086527,15731968] R11baaa R11baab
+theorem R11baa_ok : tall (refOK cpF 11) R11baa = true :=
+  tall_node _ _ _ _ R11baaa_ok (by decide +kernel) R11baab_ok
+def R11bab : Tree := (.node [113184,262144,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] (.node [73728,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] (.node [65536,113184,430348,902208,3227790,5521457,8532035,11083800,13501056,15731968] (.node [65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36896,114208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36896,113312,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [65536,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil)) (.node [65536,113184,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] (.node [65536,113184,430348,902208,3227806,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [65542,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [81920,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] (.node [73752,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [73728,114208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [73728,113184,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [81920,113184,430348,902208,3227806,5521457,8532035,11083800,13501056,15731968] (.node [81920,113184,430348,902208,3227790,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [81920,113184,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [113184,430348,786496,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,430364,902208,3227782,5521457,8532035,13501056,15731992] (.node [113184,278528,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5521969,8532035,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,345088,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,506684,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,589824,902208,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731992] (.node [113184,430348,902208,1037644,3227782,5521465,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521465,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,1048428,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,3275454,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521465,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968] .nil .nil)))))
+theorem R11bab_ok : tall (refOK cpF 11) R11bab = true := by decide +kernel
+def R11ba : Tree := .node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R11baa R11bab
+theorem R11ba_ok : tall (refOK cpF 11) R11ba = true :=
+  tall_node _ _ _ _ R11baa_ok (by decide +kernel) R11bab_ok
+def R11bbaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501064,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732608] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732032] (.node [113184,430348,902208,3227782,4048070,5521465,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731984] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501080,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501072,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,9437039,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731984,15814022] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,16162060] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15990759] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12057583,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976,16330008] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,16330008] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992,15875395] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,15843104] .nil .nil))))
+theorem R11bbaa_ok : tall (refOK cpF 11) R11bbaa = true := by decide +kernel
+def R11bbab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13538188,15731968,16736953] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15814022,16650112] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15731968,16732038] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15731968,16666545] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15875395,16076215] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15731968,16764864] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13538188,15731968,16666545] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15843104,16650112] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13538188,15731968,16728759] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,8532035,11219035,13501056,15731992] (.node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968,16736926] (.node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968,16605375] (.node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968,16346526] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731992] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11219035,13501056,16162060,16330008] (.node [113184,430348,902208,3227782,5521457,8532035,11219035,13501056,16010545,16330008] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8632931,11083800,13501056,15814022,15875395] .nil .nil))))
+theorem R11bbab_ok : tall (refOK cpF 11) R11bbab = true := by decide +kernel
+def R11bba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480,16650112] R11bbaa R11bbab
+theorem R11bba_ok : tall (refOK cpF 11) R11bba = true :=
+  tall_node _ _ _ _ R11bbaa_ok (by decide +kernel) R11bbab_ok
+def R11bbb : Tree := (.node [113184,430348,902208,3227782,5689661,7684791,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968,16633152] (.node [113184,430348,902208,3227782,5521465,8532035,11083800,11123256,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,7684287,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,6145145,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,5634617,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521465,8532035,9434179,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521465,8532035,11083800,11759815,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,8532035,11083800,11396184,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521465,8532035,11083800,12148894,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521713,8532035,11083800,13501056,15875395,16010545] (.node [113184,430348,902208,3227782,5521521,6145137,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521521,5689725,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521465,8532035,11123256,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,14053491,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5554225,8532035,11083800,13501056,14566065,15731968] (.node [113184,430348,902208,3227782,5522097,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5634609,8532035,11083800,13538188,14566065,15731968] .nil .nil)))) (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605375] (.node [113184,430348,902208,3227782,7684279,8532035,11083800,13538188,14566065,15731968] (.node [113184,430348,902208,3227782,5689661,8827215,11083800,13501056,15875395,16010545] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15974243,16010545] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16608703] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5765949,8532035,11083800,13501056,15731968,16010545] .nil .nil)) (.node [113184,430349,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3275430,5521457,8532035,11083800,13501056,15814022,15875395] .nil .nil) (.node [113184,430349,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil))) (.node [113184,506668,902208,3275430,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15843104,16010545] (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16608569] .nil .nil) (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,16010545,16330008] .nil .nil)) (.node [113184,506668,902208,5689661,7684279,8532035,11083800,12148894,13501056,15731968] (.node [113184,506668,902208,5689661,7684279,8532035,11083800,11759815,13501056,15731968] .nil .nil) (.node [113184,902208,3227782,5689661,8532035,8895343,11083800,13501056,15731968,16605241] .nil .nil)))))
+theorem R11bbb_ok : tall (refOK cpF 11) R11bbb = true := by decide +kernel
+def R11bb : Tree := .node [113184,430348,902208,3227782,5521461,8242423,8532035,11083800,13501056,15731968] R11bba R11bbb
+theorem R11bb_ok : tall (refOK cpF 11) R11bb = true :=
+  tall_node _ _ _ _ R11bba_ok (by decide +kernel) R11bbb_ok
+def R11b : Tree := .node [113184,430348,902208,3227782,3658126,5521465,8532035,11083800,13501056,15731968] R11ba R11bb
+theorem R11b_ok : tall (refOK cpF 11) R11b = true :=
+  tall_node _ _ _ _ R11ba_ok (by decide +kernel) R11bb_ok
+def R11 : Tree := .node [640,113184,135168,430348,902208,3227782,5521457,8532035,11083800,15731968] R11a R11b
+theorem R11_ok : tall (refOK cpF 11) R11 = true :=
+  tall_node _ _ _ _ R11a_ok (by decide +kernel) R11b_ok
+def T12aaaaaa : Tree := (.node [8,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil)
+theorem T12aaaaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaaaa = true := by decide +kernel
+def T12aaaaab : Tree := .nil
+theorem T12aaaaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaaab = true := by decide +kernel
+def T12aaaaa : Tree := .node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] T12aaaaaa T12aaaaab
+theorem T12aaaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaaa = true :=
+  tall_node _ _ _ _ T12aaaaaa_ok (by decide +kernel) T12aaaaab_ok
+def T12aaaaba : Tree := (.node [24,113184,430348,506668,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)
+theorem T12aaaaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaaba = true := by decide +kernel
+def T12aaaabb : Tree := .nil
+theorem T12aaaabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaabb = true := by decide +kernel
+def T12aaaab : Tree := .node [24,113184,430348,902208,917088,3227782,5521457,8532035,13501056,15731968] T12aaaaba T12aaaabb
+theorem T12aaaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaab = true :=
+  tall_node _ _ _ _ T12aaaaba_ok (by decide +kernel) T12aaaabb_ok
+def T12aaaa : Tree := .node [24,113184,113208,430348,902208,3227782,5521457,8532035,13501056,15731968] T12aaaaa T12aaaab
+theorem T12aaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaa = true :=
+  tall_node _ _ _ _ T12aaaaa_ok (by decide +kernel) T12aaaab_ok
+def T12aaabaa : Tree := (.node [24,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,13501056,15731968] .nil .nil)
+theorem T12aaabaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaabaa = true := by decide +kernel
+def T12aaabab : Tree := .nil
+theorem T12aaabab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaabab = true := by decide +kernel
+def T12aaaba : Tree := .node [24,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] T12aaabaa T12aaabab
+theorem T12aaaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaaba = true :=
+  tall_node _ _ _ _ T12aaabaa_ok (by decide +kernel) T12aaabab_ok
+def T12aaabb : Tree := (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,8632931,13501056,15731968] .nil .nil)
+theorem T12aaabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaabb = true := by decide +kernel
+def T12aaab : Tree := .node [24,113184,430348,902208,3227782,3275430,5521457,8532035,13501056,15731968] T12aaaba T12aaabb
+theorem T12aaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaab = true :=
+  tall_node _ _ _ _ T12aaaba_ok (by decide +kernel) T12aaabb_ok
+def T12aaa : Tree := .node [24,113184,430348,902208,1037644,3227782,5521457,8532035,13501056,15731968] T12aaaa T12aaab
+theorem T12aaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaa = true :=
+  tall_node _ _ _ _ T12aaaa_ok (by decide +kernel) T12aaab_ok
+def T12aabaaa : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,8632931,13501056,15731968] .nil .nil)
+theorem T12aabaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabaaa = true := by decide +kernel
+def T12aabaab : Tree := .nil
+theorem T12aabaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabaab = true := by decide +kernel
+def T12aabaa : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731992] T12aabaaa T12aabaab
+theorem T12aabaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabaa = true :=
+  tall_node _ _ _ _ T12aabaaa_ok (by decide +kernel) T12aabaab_ok
+def T12aabab : Tree := (.node [33,113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521465,8532035,13501056,15731968] .nil .nil) .nil)
+theorem T12aabab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabab = true := by decide +kernel
+def T12aaba : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,13501080,15731968] T12aabaa T12aabab
+theorem T12aaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aaba = true :=
+  tall_node _ _ _ _ T12aabaa_ok (by decide +kernel) T12aabab_ok
+def T12aabbaa : Tree := (.node [64,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12aabbaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabbaa = true := by decide +kernel
+def T12aabbab : Tree := .nil
+theorem T12aabbab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabbab = true := by decide +kernel
+def T12aabba : Tree := .node [64,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] T12aabbaa T12aabbab
+theorem T12aabba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabba = true :=
+  tall_node _ _ _ _ T12aabbaa_ok (by decide +kernel) T12aabbab_ok
+def T12aabbb : Tree := (.node [64,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12aabbb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabbb = true := by decide +kernel
+def T12aabb : Tree := .node [64,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] T12aabba T12aabbb
+theorem T12aabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aabb = true :=
+  tall_node _ _ _ _ T12aabba_ok (by decide +kernel) T12aabbb_ok
+def T12aab : Tree := .node [64,1024,113184,430348,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T12aaba T12aabb
+theorem T12aab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aab = true :=
+  tall_node _ _ _ _ T12aaba_ok (by decide +kernel) T12aabb_ok
+def T12aa : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] T12aaa T12aab
+theorem T12aa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aa = true :=
+  tall_node _ _ _ _ T12aaa_ok (by decide +kernel) T12aab_ok
+def T12abaaaa : Tree := (.node [640,113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,15731968] .nil .nil)
+theorem T12abaaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abaaaa = true := by decide +kernel
+def T12abaaab : Tree := .nil
+theorem T12abaaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abaaab = true := by decide +kernel
+def T12abaaa : Tree := .node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T12abaaaa T12abaaab
+theorem T12abaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abaaa = true :=
+  tall_node _ _ _ _ T12abaaaa_ok (by decide +kernel) T12abaaab_ok
+def T12abaaba : Tree := (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,15731968] .nil .nil)
+theorem T12abaaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abaaba = true := by decide +kernel
+def T12abaabb : Tree := .nil
+theorem T12abaabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abaabb = true := by decide +kernel
+def T12abaab : Tree := .node [113184,113200,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] T12abaaba T12abaabb
+theorem T12abaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abaab = true :=
+  tall_node _ _ _ _ T12abaaba_ok (by decide +kernel) T12abaabb_ok
+def T12abaa : Tree := .node [640,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,15731968] T12abaaa T12abaab
+theorem T12abaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abaa = true :=
+  tall_node _ _ _ _ T12abaaa_ok (by decide +kernel) T12abaab_ok
+def T12ababaa : Tree := (.node [113184,113312,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12ababaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12ababaa = true := by decide +kernel
+def T12ababab : Tree := .nil
+theorem T12ababab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12ababab = true := by decide +kernel
+def T12ababa : Tree := .node [113184,114208,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T12ababaa T12ababab
+theorem T12ababa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12ababa = true :=
+  tall_node _ _ _ _ T12ababaa_ok (by decide +kernel) T12ababab_ok
+def T12ababb : Tree := (.node [113184,430348,430476,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12ababb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12ababb = true := by decide +kernel
+def T12abab : Tree := .node [113184,114208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] T12ababa T12ababb
+theorem T12abab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abab = true :=
+  tall_node _ _ _ _ T12ababa_ok (by decide +kernel) T12ababb_ok
+def T12aba : Tree := .node [113184,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] T12abaa T12abab
+theorem T12aba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12aba = true :=
+  tall_node _ _ _ _ T12abaa_ok (by decide +kernel) T12abab_ok
+def T12abbaaa : Tree := (.node [113184,430348,506668,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12abbaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbaaa = true := by decide +kernel
+def T12abbaab : Tree := .nil
+theorem T12abbaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbaab = true := by decide +kernel
+def T12abbaa : Tree := .node [113184,430348,506668,902208,1048428,3227782,5521457,8532035,11083800,13501056,15731968] T12abbaaa T12abbaab
+theorem T12abbaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbaa = true :=
+  tall_node _ _ _ _ T12abbaaa_ok (by decide +kernel) T12abbaab_ok
+def T12abbab : Tree := (.node [113184,430348,506668,902208,3227782,5521457,5689661,6145137,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12abbab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbab = true := by decide +kernel
+def T12abba : Tree := .node [113184,430348,506668,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] T12abbaa T12abbab
+theorem T12abba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abba = true :=
+  tall_node _ _ _ _ T12abbaa_ok (by decide +kernel) T12abbab_ok
+def T12abbbaa : Tree := (.node [113184,430348,506668,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12abbbaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbbaa = true := by decide +kernel
+def T12abbbab : Tree := .nil
+theorem T12abbbab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbbab = true := by decide +kernel
+def T12abbba : Tree := .node [113184,430348,506668,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] T12abbbaa T12abbbab
+theorem T12abbba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbba = true :=
+  tall_node _ _ _ _ T12abbbaa_ok (by decide +kernel) T12abbbab_ok
+def T12abbbb : Tree := (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] .nil .nil)
+theorem T12abbbb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbbb = true := by decide +kernel
+def T12abbb : Tree := .node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] T12abbba T12abbbb
+theorem T12abbb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abbb = true :=
+  tall_node _ _ _ _ T12abbba_ok (by decide +kernel) T12abbbb_ok
+def T12abb : Tree := .node [113184,430348,506668,902208,3227782,5521457,5689661,7684279,8532035,11083800,13501056,15731968] T12abba T12abbb
+theorem T12abb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12abb = true :=
+  tall_node _ _ _ _ T12abba_ok (by decide +kernel) T12abbb_ok
+def T12ab : Tree := .node [113184,430348,506668,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] T12aba T12abb
+theorem T12ab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12ab = true :=
+  tall_node _ _ _ _ T12aba_ok (by decide +kernel) T12abb_ok
+def T12a : Tree := .node [64,113184,430348,1037644,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T12aa T12ab
+theorem T12a_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12a = true :=
+  tall_node _ _ _ _ T12aa_ok (by decide +kernel) T12ab_ok
+def T12baaaaa : Tree := (.node [113184,430348,506668,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12baaaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaaaa = true := by decide +kernel
+def T12baaaab : Tree := .nil
+theorem T12baaaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaaab = true := by decide +kernel
+def T12baaaa : Tree := .node [113184,430348,902208,917088,3227782,5521457,5689661,8532035,11083800,13501056,13513411,15731968] T12baaaaa T12baaaab
+theorem T12baaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaaa = true :=
+  tall_node _ _ _ _ T12baaaaa_ok (by decide +kernel) T12baaaab_ok
+def T12baaaba : Tree := (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,13513411,15731968] .nil .nil)
+theorem T12baaaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaaba = true := by decide +kernel
+def T12baaabb : Tree := .nil
+theorem T12baaabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaabb = true := by decide +kernel
+def T12baaab : Tree := .node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,11219035,13501056,15731968] T12baaaba T12baaabb
+theorem T12baaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaab = true :=
+  tall_node _ _ _ _ T12baaaba_ok (by decide +kernel) T12baaabb_ok
+def T12baaa : Tree := .node [113184,430348,902208,917088,3227782,5521457,5689661,8532035,11083800,13501056,13538188,15731968] T12baaaa T12baaab
+theorem T12baaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaa = true :=
+  tall_node _ _ _ _ T12baaaa_ok (by decide +kernel) T12baaab_ok
+def T12baabaa : Tree := (.node [113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968,15875395] .nil .nil)
+theorem T12baabaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baabaa = true := by decide +kernel
+def T12baabab : Tree := .nil
+theorem T12baabab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baabab = true := by decide +kernel
+def T12baaba : Tree := .node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968,15875395] T12baabaa T12baabab
+theorem T12baaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baaba = true :=
+  tall_node _ _ _ _ T12baabaa_ok (by decide +kernel) T12baabab_ok
+def T12baabb : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil)
+theorem T12baabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baabb = true := by decide +kernel
+def T12baab : Tree := .node [113184,430348,902208,3227782,3275430,5689661,8532035,11083800,13501056,15731968,16010545] T12baaba T12baabb
+theorem T12baab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baab = true :=
+  tall_node _ _ _ _ T12baaba_ok (by decide +kernel) T12baabb_ok
+def T12baa : Tree := .node [113184,430348,902208,1037644,3227782,5689661,7684279,8532035,11083800,13501056,15731968] T12baaa T12baab
+theorem T12baa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baa = true :=
+  tall_node _ _ _ _ T12baaa_ok (by decide +kernel) T12baab_ok
+def T12babaaa : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732480] .nil .nil)
+theorem T12babaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babaaa = true := by decide +kernel
+def T12babaab : Tree := .nil
+theorem T12babaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babaab = true := by decide +kernel
+def T12babaa : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15814022,15875395] T12babaaa T12babaab
+theorem T12babaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babaa = true :=
+  tall_node _ _ _ _ T12babaaa_ok (by decide +kernel) T12babaab_ok
+def T12bababa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11123256,13501056,15731968] .nil .nil)
+theorem T12bababa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bababa = true := by decide +kernel
+def T12bababb : Tree := .nil
+theorem T12bababb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bababb = true := by decide +kernel
+def T12babab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11254395,13501056,15731968] T12bababa T12bababb
+theorem T12babab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babab = true :=
+  tall_node _ _ _ _ T12bababa_ok (by decide +kernel) T12bababb_ok
+def T12baba : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13538188,14566065,15731968] T12babaa T12babab
+theorem T12baba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12baba = true :=
+  tall_node _ _ _ _ T12babaa_ok (by decide +kernel) T12babab_ok
+def T12babbaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,15814022] .nil .nil)
+theorem T12babbaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babbaa = true := by decide +kernel
+def T12babbab : Tree := .nil
+theorem T12babbab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babbab = true := by decide +kernel
+def T12babba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8895343,11083800,13501056,15731968] T12babbaa T12babbab
+theorem T12babba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babba = true :=
+  tall_node _ _ _ _ T12babbaa_ok (by decide +kernel) T12babbab_ok
+def T12babbb : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] .nil .nil)
+theorem T12babbb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babbb = true := by decide +kernel
+def T12babb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] T12babba T12babbb
+theorem T12babb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12babb = true :=
+  tall_node _ _ _ _ T12babba_ok (by decide +kernel) T12babbb_ok
+def T12bab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,12148894,13501056,15731968] T12baba T12babb
+theorem T12bab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bab = true :=
+  tall_node _ _ _ _ T12baba_ok (by decide +kernel) T12babb_ok
+def T12ba : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732032] T12baa T12bab
+theorem T12ba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12ba = true :=
+  tall_node _ _ _ _ T12baa_ok (by decide +kernel) T12bab_ok
+def T12bbaaaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732480] .nil .nil)
+theorem T12bbaaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbaaaa = true := by decide +kernel
+def T12bbaaab : Tree := .nil
+theorem T12bbaaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbaaab = true := by decide +kernel
+def T12bbaaa : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15731968,16650112] T12bbaaaa T12bbaaab
+theorem T12bbaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbaaa = true :=
+  tall_node _ _ _ _ T12bbaaaa_ok (by decide +kernel) T12bbaaab_ok
+def T12bbaaba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11123256,12148894,13501056,15731968] .nil .nil)
+theorem T12bbaaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbaaba = true := by decide +kernel
+def T12bbaabb : Tree := .nil
+theorem T12bbaabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbaabb = true := by decide +kernel
+def T12bbaab : Tree := .node [113184,430348,902208,3227782,5521461,7684279,8532035,11083800,13501056,15731968] T12bbaaba T12bbaabb
+theorem T12bbaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbaab = true :=
+  tall_node _ _ _ _ T12bbaaba_ok (by decide +kernel) T12bbaabb_ok
+def T12bbaa : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13538188,14566065,15731968] T12bbaaa T12bbaab
+theorem T12bbaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbaa = true :=
+  tall_node _ _ _ _ T12bbaaa_ok (by decide +kernel) T12bbaab_ok
+def T12bbabaa : Tree := (.node [113184,430348,902208,3227782,5521521,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T12bbabaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbabaa = true := by decide +kernel
+def T12bbabab : Tree := .nil
+theorem T12bbabab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbabab = true := by decide +kernel
+def T12bbaba : Tree := .node [113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] T12bbabaa T12bbabab
+theorem T12bbaba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbaba = true :=
+  tall_node _ _ _ _ T12bbabaa_ok (by decide +kernel) T12bbabab_ok
+def T12bbabb : Tree := (.node [113184,430348,902208,3227782,5689661,6145137,8532035,11083800,13501056,14566065,15731968] .nil .nil)
+theorem T12bbabb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbabb = true := by decide +kernel
+def T12bbab : Tree := .node [113184,430348,902208,3227782,5689661,6145137,7684279,8532035,11083800,13501056,15731968] T12bbaba T12bbabb
+theorem T12bbab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbab = true :=
+  tall_node _ _ _ _ T12bbaba_ok (by decide +kernel) T12bbabb_ok
+def T12bba : Tree := .node [113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] T12bbaa T12bbab
+theorem T12bba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bba = true :=
+  tall_node _ _ _ _ T12bbaa_ok (by decide +kernel) T12bbab_ok
+def T12bbbaaa : Tree := (.node [113184,430348,902208,3227782,5689661,7684279,8532035,8632931,11083800,13501056,15731968] .nil .nil)
+theorem T12bbbaaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbaaa = true := by decide +kernel
+def T12bbbaab : Tree := .nil
+theorem T12bbbaab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbaab = true := by decide +kernel
+def T12bbbaa : Tree := .node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,15814022] T12bbbaaa T12bbbaab
+theorem T12bbbaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbaa = true :=
+  tall_node _ _ _ _ T12bbbaaa_ok (by decide +kernel) T12bbbaab_ok
+def T12bbbab : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,15814022,16076215] .nil .nil)
+theorem T12bbbab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbab = true := by decide +kernel
+def T12bbba : Tree := .node [113184,430348,902208,3227782,5689661,8532035,8632931,11083800,13501056,15731968,16605241] T12bbbaa T12bbbab
+theorem T12bbba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbba = true :=
+  tall_node _ _ _ _ T12bbbaa_ok (by decide +kernel) T12bbbab_ok
+def T12bbbbaa : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16076215] .nil .nil)
+theorem T12bbbbaa_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbbaa = true := by decide +kernel
+def T12bbbbab : Tree := .nil
+theorem T12bbbbab_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbbab = true := by decide +kernel
+def T12bbbba : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15875395,16010545] T12bbbbaa T12bbbbab
+theorem T12bbbba_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbba = true :=
+  tall_node _ _ _ _ T12bbbbaa_ok (by decide +kernel) T12bbbbab_ok
+def T12bbbbb : Tree := (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil)
+theorem T12bbbbb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbbb = true := by decide +kernel
+def T12bbbb : Tree := .node [113184,506668,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] T12bbbba T12bbbbb
+theorem T12bbbb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbbb = true :=
+  tall_node _ _ _ _ T12bbbba_ok (by decide +kernel) T12bbbbb_ok
+def T12bbb : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,15814022,16605241] T12bbba T12bbbb
+theorem T12bbb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bbb = true :=
+  tall_node _ _ _ _ T12bbba_ok (by decide +kernel) T12bbbb_ok
+def T12bb : Tree := .node [113184,430348,902208,3227782,5689661,7684279,8242423,8532035,11083800,13501056,15731968] T12bba T12bbb
+theorem T12bb_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12bb = true :=
+  tall_node _ _ _ _ T12bba_ok (by decide +kernel) T12bbb_ok
+def T12b : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] T12ba T12bb
+theorem T12b_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12b = true :=
+  tall_node _ _ _ _ T12ba_ok (by decide +kernel) T12bb_ok
+def T12 : Tree := .node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] T12a T12b
+theorem T12_ok : tall (expFast false (RP PR T11 R11 11) T11 11) T12 = true :=
+  tall_node _ _ _ _ T12a_ok (by decide +kernel) T12b_ok
+def R12aaaaa : Tree := (.node [1,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [1,24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [1,24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [1,16,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [1,8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [1,24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [1,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [1,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [1,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil))) (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16650112] (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil) (.node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil)) (.node [1,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [1,113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil) (.node [1,113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] .nil .nil))))
+theorem R12aaaaa_ok : tall (refOK cpF 12) R12aaaaa = true := by decide +kernel
+def R12aaaab : Tree := (.node [2,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [2,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [2,24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [2,24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [2,24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil) .nil) (.node [2,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [2,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] (.node [2,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [2,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil))) (.node [3,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [2,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [2,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] .nil .nil) (.node [2,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil)) (.node [8,24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [8,16,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [8,24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R12aaaab_ok : tall (refOK cpF 12) R12aaaab = true := by decide +kernel
+def R12aaaa : Tree := .node [2,8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R12aaaaa R12aaaab
+theorem R12aaaa_ok : tall (refOK cpF 12) R12aaaa = true :=
+  tall_node _ _ _ _ R12aaaaa_ok (by decide +kernel) R12aaaab_ok
+def R12aaab : Tree := (.node [8,113184,430348,902208,2162688,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,128,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [8,65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [8,98304,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [8,113184,113192,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [8,113184,430348,902208,902216,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,294912,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [8,113184,430348,589824,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [8,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [8,113184,430348,902208,1064960,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))) (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,5634609,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,3227790,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [8,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [8,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil) (.node [8,113184,430348,902208,3227782,5521457,8532035,9434179,11083800,13501056,15731968] .nil .nil))) (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,11759815,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,11396184,13501056,15731968] .nil .nil) (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] .nil .nil)) (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731976] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16633152] .nil .nil) (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501064,15731968] .nil .nil)))))
+theorem R12aaab_ok : tall (refOK cpF 12) R12aaab = true := by decide +kernel
+def R12aaa : Tree := .node [8,24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] R12aaaa R12aaab
+theorem R12aaa_ok : tall (refOK cpF 12) R12aaa = true :=
+  tall_node _ _ _ _ R12aaaa_ok (by decide +kernel) R12aaab_ok
+def R12aabaaa : Tree := (.node [24,64,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [8,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532043,11083800,13501056,15731968] .nil .nil) .nil) (.node [12,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [24,64,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [24,12288,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil)))
+theorem R12aabaaa_ok : tall (refOK cpF 12) R12aabaaa = true := by decide +kernel
+def R12aabaab : Tree := (.node [24,36864,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,36864,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [24,12288,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [24,36896,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,36896,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil) (.node [24,65536,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil)))
+theorem R12aabaab_ok : tall (refOK cpF 12) R12aabaab = true := by decide +kernel
+def R12aabaa : Tree := .node [24,12288,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R12aabaaa R12aabaab
+theorem R12aabaa_ok : tall (refOK cpF 12) R12aabaa = true :=
+  tall_node _ _ _ _ R12aabaaa_ok (by decide +kernel) R12aabaab_ok
+def R12aabab : Tree := (.node [24,113184,278528,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [24,81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [24,73728,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [24,65536,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) .nil) (.node [24,81920,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,113208,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [24,81920,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,113184,113208,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [24,113184,311296,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,278528,430348,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [24,113184,311296,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430348,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [24,113184,430348,430364,902208,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,430364,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil))))
+theorem R12aabab_ok : tall (refOK cpF 12) R12aabab = true := by decide +kernel
+def R12aaba : Tree := .node [24,65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R12aabaa R12aabab
+theorem R12aaba_ok : tall (refOK cpF 12) R12aaba = true :=
+  tall_node _ _ _ _ R12aabaa_ok (by decide +kernel) R12aabab_ok
+def R12aabba : Tree := (.node [24,113184,430348,902208,1037644,3227782,5521457,5689661,8532035,13501056,15731968] (.node [24,113184,430348,902208,902232,3227782,5521457,8532035,11083800,13501056,15731968] (.node [24,113184,430348,589824,902208,3227782,5521457,8532035,13501056,15731968] (.node [24,113184,430348,589824,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [24,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [24,113184,430348,902208,902232,3227782,5521457,5689661,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,917088,3227782,5521457,5689661,8532035,13501056,15731968] (.node [24,113184,430348,902208,902232,3227782,5521457,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [24,113184,430348,902208,3227782,3658126,5521457,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,3658126,5521457,5689661,8532035,13501056,15731968] (.node [24,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,5689661,6280573,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,5689661,5765949,8532035,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,9434179,13501056,15731968] .nil .nil))))
+theorem R12aabba_ok : tall (refOK cpF 12) R12aabba = true := by decide +kernel
+def R12aabbba : Tree := (.node [24,113184,430348,902208,3227782,5521457,6280573,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,13501080,15731968] (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731992] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,5765949,8532035,13501056,15731968] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,9434179,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,9434179,11083800,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] .nil .nil)))
+theorem R12aabbba_ok : tall (refOK cpF 12) R12aabbba = true := by decide +kernel
+def R12aabbbb : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,13501080,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,11759815,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,11514140,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731992] .nil .nil)) (.node [24,113184,430348,902208,3227782,5521457,8532035,11396184,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968] .nil .nil) (.node [24,113184,430348,902208,3227782,5521457,8532035,11514140,13501056,15731968] .nil .nil)))
+theorem R12aabbbb_ok : tall (refOK cpF 12) R12aabbbb = true := by decide +kernel
+def R12aabbb : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,11083800,11396184,13501056,15731968] R12aabbba R12aabbbb
+theorem R12aabbb_ok : tall (refOK cpF 12) R12aabbb = true :=
+  tall_node _ _ _ _ R12aabbba_ok (by decide +kernel) R12aabbbb_ok
+def R12aabb : Tree := .node [24,113184,430348,902208,3227782,5521457,5689661,8532035,11759815,13501056,15731968] R12aabba R12aabbb
+theorem R12aabb_ok : tall (refOK cpF 12) R12aabb = true :=
+  tall_node _ _ _ _ R12aabba_ok (by decide +kernel) R12aabbb_ok
+def R12aab : Tree := .node [24,113184,430348,506668,902208,3227782,5521457,5689661,8532035,13501056,15731968] R12aaba R12aabb
+theorem R12aab_ok : tall (refOK cpF 12) R12aab = true :=
+  tall_node _ _ _ _ R12aaba_ok (by decide +kernel) R12aabb_ok
+def R12aa : Tree := .node [8,113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968] R12aaa R12aab
+theorem R12aa_ok : tall (refOK cpF 12) R12aa = true :=
+  tall_node _ _ _ _ R12aaa_ok (by decide +kernel) R12aab_ok
+def R12abaaaa : Tree := (.node [33,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [24,113184,430348,902208,3227782,5689661,7684279,8532035,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968] (.node [24,113184,430348,902208,3227782,5521465,5689661,8532035,13501056,15731968] .nil .nil) .nil) (.node [24,113184,430348,902208,3227782,5689661,8532035,13501056,15731968,16605241] .nil .nil)) (.node [64,1024,113184,430348,3227782,5521457,8532035,11083800,13501056,15731968] (.node [33,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))
+theorem R12abaaaa_ok : tall (refOK cpF 12) R12abaaaa = true := by decide +kernel
+def R12abaaab : Tree := (.node [64,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil)) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] .nil .nil)))
+theorem R12abaaab_ok : tall (refOK cpF 12) R12abaaab = true := by decide +kernel
+def R12abaaa : Tree := .node [64,113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] R12abaaaa R12abaaab
+theorem R12abaaa_ok : tall (refOK cpF 12) R12abaaa = true :=
+  tall_node _ _ _ _ R12abaaaa_ok (by decide +kernel) R12abaaab_ok
+def R12abaab : Tree := (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732032] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] .nil .nil) .nil) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil)) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16330008] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16650112] .nil .nil))) (.node [64,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083864,13501056,15731968] (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501120,15731968] .nil .nil) (.node [64,113184,430348,902208,3227782,5521521,8532035,11083800,13501056,15731968] .nil .nil)) (.node [64,113184,430348,902208,3227846,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil) (.node [64,113184,430348,917088,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R12abaab_ok : tall (refOK cpF 12) R12abaab = true := by decide +kernel
+def R12abaa : Tree := .node [64,113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] R12abaaa R12abaab
+theorem R12abaa_ok : tall (refOK cpF 12) R12abaa = true :=
+  tall_node _ _ _ _ R12abaaa_ok (by decide +kernel) R12abaab_ok
+def R12ababaa : Tree := (.node [64,113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] (.node [64,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [64,113184,430412,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113184,430348,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [64,113184,902208,3227782,5521457,5689661,8532035,8827215,11083800,13501056,15731968] .nil .nil)) (.node [65,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [64,113248,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [66,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))
+theorem R12ababaa_ok : tall (refOK cpF 12) R12ababaa = true := by decide +kernel
+def R12ababab : Tree := (.node [12288,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [12288,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [640,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [12288,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [12290,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [12290,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [12290,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))
+theorem R12ababab_ok : tall (refOK cpF 12) R12ababab = true := by decide +kernel
+def R12ababa : Tree := .node [640,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,15731968] R12ababaa R12ababab
+theorem R12ababa_ok : tall (refOK cpF 12) R12ababa = true :=
+  tall_node _ _ _ _ R12ababaa_ok (by decide +kernel) R12ababab_ok
+def R12ababb : Tree := (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [36864,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] (.node [36864,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36864,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [12352,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [36864,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [36864,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil))) (.node [36868,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [36864,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [36864,113184,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [36868,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36868,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [36872,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R12ababb_ok : tall (refOK cpF 12) R12ababb = true := by decide +kernel
+def R12abab : Tree := .node [12352,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] R12ababa R12ababb
+theorem R12abab_ok : tall (refOK cpF 12) R12abab = true :=
+  tall_node _ _ _ _ R12ababa_ok (by decide +kernel) R12ababb_ok
+def R12aba : Tree := .node [64,113184,430348,917088,3227782,5521457,8532035,11083800,13501056,15731968] R12abaa R12abab
+theorem R12aba_ok : tall (refOK cpF 12) R12aba = true :=
+  tall_node _ _ _ _ R12abaa_ok (by decide +kernel) R12abab_ok
+def R12abbaa : Tree := (.node [37376,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [36896,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [36896,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [36896,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil)) (.node [36896,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [36896,113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] .nil .nil))) (.node [65536,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [45056,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [45056,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil) (.node [65536,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [65536,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [65536,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [65536,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil))))
+theorem R12abbaa_ok : tall (refOK cpF 12) R12abbaa = true := by decide +kernel
+def R12abbab : Tree := (.node [73728,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [65540,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [65540,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [65538,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [65538,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) .nil) (.node [65540,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)) (.node [73728,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [73728,113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [73728,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] (.node [73728,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil) (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] .nil .nil) (.node [73728,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil))))
+theorem R12abbab_ok : tall (refOK cpF 12) R12abbab = true := by decide +kernel
+def R12abba : Tree := .node [65538,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R12abbaa R12abbab
+theorem R12abba_ok : tall (refOK cpF 12) R12abba = true :=
+  tall_node _ _ _ _ R12abbaa_ok (by decide +kernel) R12abbab_ok
+def R12abbba : Tree := (.node [81920,113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [81920,113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [75776,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [73760,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [73736,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [77824,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [81920,113184,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] (.node [81920,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [81920,113184,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil))) (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [81920,113184,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil) (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil)) (.node [81920,113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [81920,113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] .nil .nil))))
+theorem R12abbba_ok : tall (refOK cpF 12) R12abbba = true := by decide +kernel
+def R12abbbba : Tree := (.node [102400,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [82944,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [82944,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [82944,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil)) (.node [113184,113192,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [110592,113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] .nil .nil) (.node [113184,113248,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)))
+theorem R12abbbba_ok : tall (refOK cpF 12) R12abbbba = true := by decide +kernel
+def R12abbbbb : Tree := (.node [113184,167969,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,114688,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,114688,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,167936,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,262144,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,262144,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,262145,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)))
+theorem R12abbbbb_ok : tall (refOK cpF 12) R12abbbbb = true := by decide +kernel
+def R12abbbb : Tree := .node [113184,113312,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R12abbbba R12abbbbb
+theorem R12abbbb_ok : tall (refOK cpF 12) R12abbbb = true :=
+  tall_node _ _ _ _ R12abbbba_ok (by decide +kernel) R12abbbbb_ok
+def R12abbb : Tree := .node [81924,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R12abbba R12abbbb
+theorem R12abbb_ok : tall (refOK cpF 12) R12abbb = true :=
+  tall_node _ _ _ _ R12abbba_ok (by decide +kernel) R12abbbb_ok
+def R12abb : Tree := .node [73728,113184,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] R12abba R12abbb
+theorem R12abb_ok : tall (refOK cpF 12) R12abb = true :=
+  tall_node _ _ _ _ R12abba_ok (by decide +kernel) R12abbb_ok
+def R12ab : Tree := .node [36896,113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] R12aba R12abb
+theorem R12ab_ok : tall (refOK cpF 12) R12ab = true :=
+  tall_node _ _ _ _ R12aba_ok (by decide +kernel) R12abb_ok
+def R12a : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,11759815,13501056,15731968] R12aa R12ab
+theorem R12a_ok : tall (refOK cpF 12) R12a = true :=
+  tall_node _ _ _ _ R12aa_ok (by decide +kernel) R12ab_ok
+def R12baaaa : Tree := (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15814022] (.node [113184,278528,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [113184,278528,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,278528,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,278528,430348,902208,3227782,4048070,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,278528,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,278528,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,15875395] .nil .nil) (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16650112] .nil .nil)) (.node [113184,279552,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,278560,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,279552,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16010545] .nil .nil))))
+theorem R12baaaa_ok : tall (refOK cpF 12) R12baaaa = true := by decide +kernel
+def R12baaaba : Tree := (.node [113184,311296,430348,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [113184,311296,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [113184,311296,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,299008,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,311296,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil)) (.node [113184,315424,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,311296,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil) (.node [113184,344064,430348,902208,3227782,5521457,7684279,8532035,11083800,13501056,15731968] .nil .nil)))
+theorem R12baaaba_ok : tall (refOK cpF 12) R12baaaba = true := by decide +kernel
+def R12baaabb : Tree := (.node [113184,430348,430364,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,430349,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] (.node [113184,430348,430349,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,430349,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,446732,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,430412,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil)))
+theorem R12baaabb_ok : tall (refOK cpF 12) R12baaabb = true := by decide +kernel
+def R12baaab : Tree := .node [113184,344064,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R12baaaba R12baaabb
+theorem R12baaab_ok : tall (refOK cpF 12) R12baaab = true :=
+  tall_node _ _ _ _ R12baaaba_ok (by decide +kernel) R12baaabb_ok
+def R12baaa : Tree := .node [113184,299008,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] R12baaaa R12baaab
+theorem R12baaa_ok : tall (refOK cpF 12) R12baaa = true :=
+  tall_node _ _ _ _ R12baaaa_ok (by decide +kernel) R12baaab_ok
+def R12baaba : Tree := (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,5765949,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,5634609,8532035,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,3668910,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,506668,902208,3227782,5521457,6280573,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,506668,902208,3227782,5521457,8532035,8895343,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,8827215,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,9434179,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,12148894,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,11514140,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,11219035,13501056,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,11759815,13501056,15731968] .nil .nil)) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,13538188,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,13513411,15731968] .nil .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,13613728,15731968] .nil .nil))))
+theorem R12baaba_ok : tall (refOK cpF 12) R12baaba = true := by decide +kernel
+def R12baabb : Tree := (.node [113184,430348,589824,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16650112] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16162060] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,15843104] (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,14566065,15731968] .nil .nil) .nil) (.node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968,16330008] .nil .nil)) (.node [113184,430348,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,430348,589824,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,598016,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,589832,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,589824,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil) (.node [113184,430348,589888,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,606208,902208,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,598016,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,786432,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R12baabb_ok : tall (refOK cpF 12) R12baabb = true := by decide +kernel
+def R12baab : Tree := .node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,14053491,15731968] R12baaba R12baabb
+theorem R12baab_ok : tall (refOK cpF 12) R12baab = true :=
+  tall_node _ _ _ _ R12baaba_ok (by decide +kernel) R12baabb_ok
+def R12baa : Tree := .node [113184,430348,506668,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968] R12baaa R12baab
+theorem R12baa_ok : tall (refOK cpF 12) R12baa = true :=
+  tall_node _ _ _ _ R12baaa_ok (by decide +kernel) R12baab_ok
+def R12babaa : Tree := (.node [113184,430348,902208,917088,3227782,3658126,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,902336,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,902216,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,868352,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,802816,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,902208,902232,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,917088,1048428,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,1037644,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,917088,3227782,5521457,6159985,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,4062950,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,4048070,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,6145137,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,917088,3227782,5521457,8532035,9434179,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532035,9436771,11083800,13501056,15731968] .nil .nil))))
+theorem R12babaa_ok : tall (refOK cpF 12) R12babaa = true := by decide +kernel
+def R12babab : Tree := (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,13631200,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,11759815,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,11402872,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,11396184,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,11219035,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,11514140,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,13538188,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,12148894,13501056,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,13616832,15731968] .nil .nil))) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,14603197,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,14566065,15731968] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil)) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,16330008] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,16162060] .nil .nil) (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,16605241] .nil .nil))))
+theorem R12babab_ok : tall (refOK cpF 12) R12babab = true := by decide +kernel
+def R12baba : Tree := .node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,11123256,13501056,15731968] R12babaa R12babab
+theorem R12baba_ok : tall (refOK cpF 12) R12baba = true :=
+  tall_node _ _ _ _ R12babaa_ok (by decide +kernel) R12babab_ok
+def R12babba : Tree := (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,12148894,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,3275430,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,917088,3227782,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,16645984] .nil .nil) .nil) (.node [113184,430348,902208,917088,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil)) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5521457,6280573,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,11123256,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,1037644,3227782,5689661,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968,15875395] (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968,15814022] .nil .nil) (.node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968,16330008] .nil .nil)) (.node [113184,430348,902208,1048428,3227782,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1037644,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil) (.node [113184,430348,902208,1048428,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R12babba_ok : tall (refOK cpF 12) R12babba = true := by decide +kernel
+def R12babbb : Tree := (.node [113184,430348,902208,3227782,3275430,5521457,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,3658126,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1101860,3227782,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,1101860,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,2170880,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,3275430,5521457,5765949,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,3668910,5521457,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3275430,5521457,6280573,8532035,11083800,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,11514140,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,11123256,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,9434179,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,11219035,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,11795175,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,11759815,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,13613728,15731968] .nil .nil))))
+theorem R12babbb_ok : tall (refOK cpF 12) R12babbb = true := by decide +kernel
+def R12babb : Tree := .node [113184,430348,902208,1101860,3227782,3275430,5521457,8532035,11083800,13501056,15731968] R12babba R12babbb
+theorem R12babb_ok : tall (refOK cpF 12) R12babb = true :=
+  tall_node _ _ _ _ R12babba_ok (by decide +kernel) R12babbb_ok
+def R12bab : Tree := .node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968,16633152] R12baba R12babb
+theorem R12bab_ok : tall (refOK cpF 12) R12bab = true :=
+  tall_node _ _ _ _ R12baba_ok (by decide +kernel) R12babb_ok
+def R12ba : Tree := .node [113184,430348,786496,902208,3227782,5521457,8532035,11083800,13501056,15731968] R12baa R12bab
+theorem R12ba_ok : tall (refOK cpF 12) R12ba = true :=
+  tall_node _ _ _ _ R12baa_ok (by decide +kernel) R12bab_ok
+def R12bbaaa : Tree := (.node [113184,430348,902208,3227782,3658126,5689661,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,3658126,5521457,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5689661,7684279,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,14603197,15731968] (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,14086527,15731968] .nil .nil) .nil) (.node [113184,430348,902208,3227782,3275430,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil)) (.node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968,15814022] (.node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,11123256,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968,16330008] .nil .nil))) (.node [113184,430348,902208,3227782,4048070,5689661,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,3668910,5521457,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,3668910,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,4048070,5689661,7684279,8532035,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,4062950,5521457,5689661,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,4048070,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil) (.node [113184,430348,902208,3227782,4062950,5521457,8532035,11083800,13501056,15731968] .nil .nil))))
+theorem R12bbaaa_ok : tall (refOK cpF 12) R12bbaaa = true := by decide +kernel
+def R12bbaab : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,12054991,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,9434447,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,6280573,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,5765949,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,4183502,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,8895343,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11514207,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,9436771,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11795175,13501056,15731968] .nil .nil))) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15814022,16650112] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15732096] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,12188350,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15814022,16162060] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15875395,16633152] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15875395,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,16010545,16330008] .nil .nil))))
+theorem R12bbaab_ok : tall (refOK cpF 12) R12bbaab = true := by decide +kernel
+def R12bbaa : Tree := .node [113184,430348,902208,3227782,4183502,5521457,5689661,8532035,11083800,13501056,15731968] R12bbaaa R12bbaab
+theorem R12bbaa_ok : tall (refOK cpF 12) R12bbaa = true :=
+  tall_node _ _ _ _ R12bbaaa_ok (by decide +kernel) R12bbaab_ok
+def R12bbabaa : Tree := (.node [113184,430348,902208,3227782,5521457,5765949,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689725,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13513411,15731968,16728710] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13513411,15731968,16650112] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,5765949,8532035,8632931,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,6280573,8532035,8632931,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5765949,8532035,11083800,13501056,15731968,15814022] .nil .nil) (.node [113184,430348,902208,3227782,5521457,6280573,8532035,11083800,13501056,15731968] .nil .nil)))
+theorem R12bbabaa_ok : tall (refOK cpF 12) R12bbabaa = true := by decide +kernel
+def R12bbabab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,8632931,9436771,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8462336,8532035,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,7863231,8532035,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,9434179,11083800,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11759815,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11396184,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,11795175,13501056,15731968] .nil .nil)))
+theorem R12bbabab_ok : tall (refOK cpF 12) R12bbabab = true := by decide +kernel
+def R12bbaba : Tree := .node [113184,430348,902208,3227782,5521457,6291325,8532035,11083800,13501056,15731968] R12bbabaa R12bbabab
+theorem R12bbaba_ok : tall (refOK cpF 12) R12bbaba = true :=
+  tall_node _ _ _ _ R12bbabaa_ok (by decide +kernel) R12bbabab_ok
+def R12bbabba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,11759815,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,9436771,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,9434447,11083800,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11083864,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11254395,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,12148894,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11402872,13501056,15731968] .nil .nil)))
+theorem R12bbabba_ok : tall (refOK cpF 12) R12bbabba = true := by decide +kernel
+def R12bbabbb : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12054991,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11531612,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11531355,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11795175,13501056,15731968] .nil .nil)) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12284127,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12188350,13501056,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,12579230,13501056,15731968] .nil .nil)))
+theorem R12bbabbb_ok : tall (refOK cpF 12) R12bbabbb = true := by decide +kernel
+def R12bbabb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,11514207,13501056,15731968] R12bbabba R12bbabbb
+theorem R12bbabb_ok : tall (refOK cpF 12) R12bbabb = true :=
+  tall_node _ _ _ _ R12bbabba_ok (by decide +kernel) R12bbabbb_ok
+def R12bbab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968,16633152] R12bbaba R12bbabb
+theorem R12bbab_ok : tall (refOK cpF 12) R12bbab = true :=
+  tall_node _ _ _ _ R12bbaba_ok (by decide +kernel) R12bbabb_ok
+def R12bba : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13513411,14566065,15731968] R12bbaa R12bbab
+theorem R12bba_ok : tall (refOK cpF 12) R12bba = true :=
+  tall_node _ _ _ _ R12bbaa_ok (by decide +kernel) R12bbab_ok
+def R12bbbaaaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14154355,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13629123,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13621196,15731968] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14154623,15731968] .nil .nil))
+theorem R12bbbaaaa_ok : tall (refOK cpF 12) R12bbbaaaa = true := by decide +kernel
+def R12bbbaaaba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16775846] .nil .nil)
+theorem R12bbbaaaba_ok : tall (refOK cpF 12) R12bbbaaaba = true := by decide +kernel
+def R12bbbaaabb : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15732096] .nil .nil)
+theorem R12bbbaaabb_ok : tall (refOK cpF 12) R12bbbaaabb = true := by decide +kernel
+def R12bbbaaab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731984] R12bbbaaaba R12bbbaaabb
+theorem R12bbbaaab_ok : tall (refOK cpF 12) R12bbbaaab = true :=
+  tall_node _ _ _ _ R12bbbaaaba_ok (by decide +kernel) R12bbbaaabb_ok
+def R12bbbaaa : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,14677107,15731968] R12bbbaaaa R12bbbaaab
+theorem R12bbbaaa_ok : tall (refOK cpF 12) R12bbbaaa = true :=
+  tall_node _ _ _ _ R12bbbaaaa_ok (by decide +kernel) R12bbbaaab_ok
+def R12bbbaaba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15814022,16650112] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15814022,16162060] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15843104,16010545] .nil .nil))
+theorem R12bbbaaba_ok : tall (refOK cpF 12) R12bbbaaba = true := by decide +kernel
+def R12bbbaabb : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15875395,16633152] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15875395,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,16010545,16330008] .nil .nil))
+theorem R12bbbaabb_ok : tall (refOK cpF 12) R12bbbaabb = true := by decide +kernel
+def R12bbbaab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15843104,16650112] R12bbbaaba R12bbbaabb
+theorem R12bbbaab_ok : tall (refOK cpF 12) R12bbbaab = true :=
+  tall_node _ _ _ _ R12bbbaaba_ok (by decide +kernel) R12bbbaabb_ok
+def R12bbbaa : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15814022,15875395] R12bbbaaa R12bbbaab
+theorem R12bbbaa_ok : tall (refOK cpF 12) R12bbbaa = true :=
+  tall_node _ _ _ _ R12bbbaaa_ok (by decide +kernel) R12bbbaab_ok
+def R12bbbabaaaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501064,15731968] .nil .nil)
+theorem R12bbbabaaaa_ok : tall (refOK cpF 12) R12bbbabaaaa = true := by decide +kernel
+def R12bbbabaaab : Tree := .nil
+theorem R12bbbabaaab_ok : tall (refOK cpF 12) R12bbbabaaab = true := by decide +kernel
+def R12bbbabaaa : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501080,15731968] R12bbbabaaaa R12bbbabaaab
+theorem R12bbbabaaa_ok : tall (refOK cpF 12) R12bbbabaaa = true :=
+  tall_node _ _ _ _ R12bbbabaaaa_ok (by decide +kernel) R12bbbabaaab_ok
+def R12bbbabaab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,13616832,15731968] .nil .nil)
+theorem R12bbbabaab_ok : tall (refOK cpF 12) R12bbbabaab = true := by decide +kernel
+def R12bbbabaa : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501120,15731968] R12bbbabaaa R12bbbabaab
+theorem R12bbbabaa_ok : tall (refOK cpF 12) R12bbbabaa = true :=
+  tall_node _ _ _ _ R12bbbabaaa_ok (by decide +kernel) R12bbbabaab_ok
+def R12bbbabab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13538188,15671960,15731968] (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,15731968,16728710] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13538188,15731968,16728710] .nil .nil))
+theorem R12bbbabab_ok : tall (refOK cpF 12) R12bbbabab = true := by decide +kernel
+def R12bbbaba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13513411,14566065,15731968] R12bbbabaa R12bbbabab
+theorem R12bbbaba_ok : tall (refOK cpF 12) R12bbbaba = true :=
+  tall_node _ _ _ _ R12bbbabaa_ok (by decide +kernel) R12bbbabab_ok
+def R12bbbabba : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968,16330008] (.node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15671960,15731968] .nil .nil) (.node [113184,430348,902208,3227782,5521457,8532035,11123256,13501056,15731968,16605241] .nil .nil))
+theorem R12bbbabba_ok : tall (refOK cpF 12) R12bbbabba = true := by decide +kernel
+def R12bbbabbba : Tree := (.node [113184,430348,902208,3227782,5521461,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R12bbbabbba_ok : tall (refOK cpF 12) R12bbbabbba = true := by decide +kernel
+def R12bbbabbbb : Tree := (.node [113184,430348,902208,3227782,5521465,8532035,11083800,13501056,15731968,16605241] .nil .nil)
+theorem R12bbbabbbb_ok : tall (refOK cpF 12) R12bbbabbbb = true := by decide +kernel
+def R12bbbabbb : Tree := .node [113184,430348,902208,3227782,5521465,5689661,8532035,11083800,13501056,15731968] R12bbbabbba R12bbbabbbb
+theorem R12bbbabbb_ok : tall (refOK cpF 12) R12bbbabbb = true :=
+  tall_node _ _ _ _ R12bbbabbba_ok (by decide +kernel) R12bbbabbbb_ok
+def R12bbbabb : Tree := .node [113184,430348,902208,3227782,5521461,5689661,8532035,11083800,13501056,15731968] R12bbbabba R12bbbabbb
+theorem R12bbbabb_ok : tall (refOK cpF 12) R12bbbabb = true :=
+  tall_node _ _ _ _ R12bbbabba_ok (by decide +kernel) R12bbbabbb_ok
+def R12bbbab : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083864,13501056,15731968] R12bbbaba R12bbbabb
+theorem R12bbbab_ok : tall (refOK cpF 12) R12bbbab = true :=
+  tall_node _ _ _ _ R12bbbaba_ok (by decide +kernel) R12bbbabb_ok
+def R12bbba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,16162060,16330008] R12bbbaa R12bbbab
+theorem R12bbba_ok : tall (refOK cpF 12) R12bbba = true :=
+  tall_node _ _ _ _ R12bbbaa_ok (by decide +kernel) R12bbbab_ok
+def R12bbbbaaaa : Tree := (.node [113184,430348,902208,3227782,5634609,5689661,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5521585,8532035,11083800,13501056,15731968] .nil .nil) .nil)
+theorem R12bbbbaaaa_ok : tall (refOK cpF 12) R12bbbbaaaa = true := by decide +kernel
+def R12bbbbaaab : Tree := (.node [113184,430348,902208,3227782,5634609,8532035,11083800,13501056,15731968,16010545] .nil .nil)
+theorem R12bbbbaaab_ok : tall (refOK cpF 12) R12bbbbaaab = true := by decide +kernel
+def R12bbbbaaa : Tree := .node [113184,430348,902208,3227782,5634609,8532035,11083800,13501056,14566065,15731968] R12bbbbaaaa R12bbbbaaab
+theorem R12bbbbaaa_ok : tall (refOK cpF 12) R12bbbbaaa = true :=
+  tall_node _ _ _ _ R12bbbbaaaa_ok (by decide +kernel) R12bbbbaaab_ok
+def R12bbbbaab : Tree := (.node [113184,430348,902208,3227782,5689661,6280573,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5689661,6145137,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5689661,7684279,7852479,8532035,11083800,13501056,15731968] .nil .nil))
+theorem R12bbbbaab_ok : tall (refOK cpF 12) R12bbbbaab = true := by decide +kernel
+def R12bbbbaa : Tree := .node [113184,430348,902208,3227782,5689661,5765949,8532035,11083800,13501056,15731968,16605241] R12bbbbaaa R12bbbbaab
+theorem R12bbbbaa_ok : tall (refOK cpF 12) R12bbbbaa = true :=
+  tall_node _ _ _ _ R12bbbbaaa_ok (by decide +kernel) R12bbbbaab_ok
+def R12bbbbab : Tree := (.node [113184,430348,902208,3227782,5689661,7852479,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,16076215] (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,16605241] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,11123256,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5689661,8532035,9434179,11083800,13501056,15731968,16605241] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,11396184,13501056,15731968,16605241] .nil .nil)))
+theorem R12bbbbab_ok : tall (refOK cpF 12) R12bbbbab = true := by decide +kernel
+def R12bbbba : Tree := .node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968,15843104] R12bbbbaa R12bbbbab
+theorem R12bbbba_ok : tall (refOK cpF 12) R12bbbba = true :=
+  tall_node _ _ _ _ R12bbbbaa_ok (by decide +kernel) R12bbbbab_ok
+def R12bbbbba : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241,16639097] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241,16605375] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,12148894,13501056,15731968,16605241] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241,16633152] .nil .nil)) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241,16773437] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241,16644665] .nil .nil) (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605375] .nil .nil)))
+theorem R12bbbbba_ok : tall (refOK cpF 12) R12bbbbba = true := by decide +kernel
+def R12bbbbbb : Tree := (.node [113184,430348,902208,3227782,6145137,8532035,11083800,13501056,15731968,16010545] (.node [113184,430348,902208,3227782,5689661,8532035,11123256,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,16010545,16330008] .nil .nil) (.node [113184,430348,902208,3227782,5765949,8532035,11083800,13501056,15731968,16010545] .nil .nil)) (.node [113184,506668,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] (.node [113184,430348,902208,3227782,6280573,8532035,11083800,13501056,15731968,16010545] .nil .nil) (.node [113184,902208,3227782,5689661,8532035,11083800,11514140,13501056,15731968,16605241] .nil .nil)))
+theorem R12bbbbbb_ok : tall (refOK cpF 12) R12bbbbbb = true := by decide +kernel
+def R12bbbbb : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15843104,16010545] R12bbbbba R12bbbbbb
+theorem R12bbbbb_ok : tall (refOK cpF 12) R12bbbbb = true :=
+  tall_node _ _ _ _ R12bbbbba_ok (by decide +kernel) R12bbbbbb_ok
+def R12bbbb : Tree := .node [113184,430348,902208,3227782,5689661,8532035,11083800,11759815,13501056,15731968,16605241] R12bbbba R12bbbbb
+theorem R12bbbb_ok : tall (refOK cpF 12) R12bbbb = true :=
+  tall_node _ _ _ _ R12bbbba_ok (by decide +kernel) R12bbbbb_ok
+def R12bbb : Tree := .node [113184,430348,902208,3227782,5521585,5689661,8532035,11083800,13501056,15731968] R12bbba R12bbbb
+theorem R12bbb_ok : tall (refOK cpF 12) R12bbb = true :=
+  tall_node _ _ _ _ R12bbba_ok (by decide +kernel) R12bbbb_ok
+def R12bb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,12580039,13501056,15731968] R12bba R12bbb
+theorem R12bb_ok : tall (refOK cpF 12) R12bb = true :=
+  tall_node _ _ _ _ R12bba_ok (by decide +kernel) R12bbb_ok
+def R12b : Tree := .node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,14053491,15731968] R12ba R12bb
+theorem R12b_ok : tall (refOK cpF 12) R12b = true :=
+  tall_node _ _ _ _ R12ba_ok (by decide +kernel) R12bb_ok
+def R12 : Tree := .node [113184,262145,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R12a R12b
+theorem R12_ok : tall (refOK cpF 12) R12 = true :=
+  tall_node _ _ _ _ R12a_ok (by decide +kernel) R12b_ok
+def T13aaa : Tree := (.node [24,113184,430348,902208,3227782,5521457,5689661,8532035,13501056,15731968] (.node [8,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil) .nil)
+theorem T13aaa_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13aaa = true := by decide +kernel
+def T13aab : Tree := (.node [24,113184,430348,902208,3227782,5521457,8532035,13501056,15731968] .nil .nil)
+theorem T13aab_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13aab = true := by decide +kernel
+def T13aa : Tree := .node [24,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] T13aaa T13aab
+theorem T13aa_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13aa = true :=
+  tall_node _ _ _ _ T13aaa_ok (by decide +kernel) T13aab_ok
+def T13abaa : Tree := (.node [64,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T13abaa_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13abaa = true := by decide +kernel
+def T13abab : Tree := .nil
+theorem T13abab_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13abab = true := by decide +kernel
+def T13aba : Tree := .node [113184,430348,506668,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T13abaa T13abab
+theorem T13aba_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13aba = true :=
+  tall_node _ _ _ _ T13abaa_ok (by decide +kernel) T13abab_ok
+def T13abb : Tree := (.node [113184,430348,902208,917088,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T13abb_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13abb = true := by decide +kernel
+def T13ab : Tree := .node [113184,430348,506668,902208,3227782,5521457,8532035,11083800,13501056,15731968] T13aba T13abb
+theorem T13ab_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13ab = true :=
+  tall_node _ _ _ _ T13aba_ok (by decide +kernel) T13abb_ok
+def T13a : Tree := .node [64,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] T13aa T13ab
+theorem T13a_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13a = true :=
+  tall_node _ _ _ _ T13aa_ok (by decide +kernel) T13ab_ok
+def T13baaa : Tree := (.node [113184,430348,902208,1037644,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T13baaa_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13baaa = true := by decide +kernel
+def T13baab : Tree := .nil
+theorem T13baab_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13baab = true := by decide +kernel
+def T13baa : Tree := .node [113184,430348,902208,1037644,3227782,5521457,8532035,11083800,13501056,15731968] T13baaa T13baab
+theorem T13baa_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13baa = true :=
+  tall_node _ _ _ _ T13baaa_ok (by decide +kernel) T13baab_ok
+def T13bab : Tree := (.node [113184,430348,902208,3227782,3275430,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T13bab_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13bab = true := by decide +kernel
+def T13ba : Tree := .node [113184,430348,902208,3227782,3275430,5521457,5689661,8532035,11083800,13501056,15731968] T13baa T13bab
+theorem T13ba_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13ba = true :=
+  tall_node _ _ _ _ T13baa_ok (by decide +kernel) T13bab_ok
+def T13bbaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,8632931,11083800,13501056,15731968] .nil .nil)
+theorem T13bbaa_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13bbaa = true := by decide +kernel
+def T13bbab : Tree := .nil
+theorem T13bbab_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13bbab = true := by decide +kernel
+def T13bba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,11123256,13501056,15731968] T13bbaa T13bbab
+theorem T13bba_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13bba = true :=
+  tall_node _ _ _ _ T13bbaa_ok (by decide +kernel) T13bbab_ok
+def T13bbb : Tree := (.node [113184,430348,902208,3227782,5689661,8532035,11083800,13501056,15731968,16605241] .nil .nil)
+theorem T13bbb_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13bbb = true := by decide +kernel
+def T13bb : Tree := .node [113184,430348,902208,3227782,5689661,7684279,8532035,11083800,13501056,15731968] T13bba T13bbb
+theorem T13bb_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13bb = true :=
+  tall_node _ _ _ _ T13bba_ok (by decide +kernel) T13bbb_ok
+def T13b : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,8632931,11083800,13501056,15731968] T13ba T13bb
+theorem T13b_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13b = true :=
+  tall_node _ _ _ _ T13ba_ok (by decide +kernel) T13bb_ok
+def T13 : Tree := .node [113184,430348,902208,917088,3227782,5521457,8532035,11083800,13501056,15731968] T13a T13b
+theorem T13_ok : tall (expFast false (RP PR T12 R12 12) T12 12) T13 = true :=
+  tall_node _ _ _ _ T13a_ok (by decide +kernel) T13b_ok
+def R13aaaaa : Tree := (.node [1,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13aaaaa_ok : tall (refOK cpF 13) R13aaaaa = true := by decide +kernel
+def R13aaaab : Tree := .nil
+theorem R13aaaab_ok : tall (refOK cpF 13) R13aaaab = true := by decide +kernel
+def R13aaaa : Tree := .node [1,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R13aaaaa R13aaaab
+theorem R13aaaa_ok : tall (refOK cpF 13) R13aaaa = true :=
+  tall_node _ _ _ _ R13aaaaa_ok (by decide +kernel) R13aaaab_ok
+def R13aaaba : Tree := (.node [2,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13aaaba_ok : tall (refOK cpF 13) R13aaaba = true := by decide +kernel
+def R13aaabb : Tree := .nil
+theorem R13aaabb_ok : tall (refOK cpF 13) R13aaabb = true := by decide +kernel
+def R13aaab : Tree := .node [8,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13aaaba R13aaabb
+theorem R13aaab_ok : tall (refOK cpF 13) R13aaab = true :=
+  tall_node _ _ _ _ R13aaaba_ok (by decide +kernel) R13aaabb_ok
+def R13aaa : Tree := .node [2,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13aaaa R13aaab
+theorem R13aaa_ok : tall (refOK cpF 13) R13aaa = true :=
+  tall_node _ _ _ _ R13aaaa_ok (by decide +kernel) R13aaab_ok
+def R13aabaa : Tree := (.node [12288,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13aabaa_ok : tall (refOK cpF 13) R13aabaa = true := by decide +kernel
+def R13aabab : Tree := .nil
+theorem R13aabab_ok : tall (refOK cpF 13) R13aabab = true := by decide +kernel
+def R13aaba : Tree := .node [36864,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13aabaa R13aabab
+theorem R13aaba_ok : tall (refOK cpF 13) R13aaba = true :=
+  tall_node _ _ _ _ R13aabaa_ok (by decide +kernel) R13aabab_ok
+def R13aabb : Tree := (.node [36896,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13aabb_ok : tall (refOK cpF 13) R13aabb = true := by decide +kernel
+def R13aab : Tree := .node [36864,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R13aaba R13aabb
+theorem R13aab_ok : tall (refOK cpF 13) R13aab = true :=
+  tall_node _ _ _ _ R13aaba_ok (by decide +kernel) R13aabb_ok
+def R13aa : Tree := .node [12288,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13aaa R13aab
+theorem R13aa_ok : tall (refOK cpF 13) R13aa = true :=
+  tall_node _ _ _ _ R13aaa_ok (by decide +kernel) R13aab_ok
+def R13abaaa : Tree := (.node [65536,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13abaaa_ok : tall (refOK cpF 13) R13abaaa = true := by decide +kernel
+def R13abaab : Tree := .nil
+theorem R13abaab_ok : tall (refOK cpF 13) R13abaab = true := by decide +kernel
+def R13abaa : Tree := .node [65536,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R13abaaa R13abaab
+theorem R13abaa_ok : tall (refOK cpF 13) R13abaa = true :=
+  tall_node _ _ _ _ R13abaaa_ok (by decide +kernel) R13abaab_ok
+def R13abab : Tree := (.node [73728,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13abab_ok : tall (refOK cpF 13) R13abab = true := by decide +kernel
+def R13aba : Tree := .node [73728,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13abaa R13abab
+theorem R13aba_ok : tall (refOK cpF 13) R13aba = true :=
+  tall_node _ _ _ _ R13abaa_ok (by decide +kernel) R13abab_ok
+def R13abbaa : Tree := (.node [81920,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13abbaa_ok : tall (refOK cpF 13) R13abbaa = true := by decide +kernel
+def R13abbab : Tree := .nil
+theorem R13abbab_ok : tall (refOK cpF 13) R13abbab = true := by decide +kernel
+def R13abba : Tree := .node [113184,262144,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R13abbaa R13abbab
+theorem R13abba_ok : tall (refOK cpF 13) R13abba = true :=
+  tall_node _ _ _ _ R13abbaa_ok (by decide +kernel) R13abbab_ok
+def R13abbb : Tree := (.node [113184,278528,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13abbb_ok : tall (refOK cpF 13) R13abbb = true := by decide +kernel
+def R13abb : Tree := .node [113184,278528,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13abba R13abbb
+theorem R13abb_ok : tall (refOK cpF 13) R13abb = true :=
+  tall_node _ _ _ _ R13abba_ok (by decide +kernel) R13abbb_ok
+def R13ab : Tree := .node [81920,113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13aba R13abb
+theorem R13ab_ok : tall (refOK cpF 13) R13ab = true :=
+  tall_node _ _ _ _ R13aba_ok (by decide +kernel) R13abb_ok
+def R13a : Tree := .node [36896,113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] R13aa R13ab
+theorem R13a_ok : tall (refOK cpF 13) R13a = true :=
+  tall_node _ _ _ _ R13aa_ok (by decide +kernel) R13ab_ok
+def R13baaaa : Tree := (.node [113184,311296,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13baaaa_ok : tall (refOK cpF 13) R13baaaa = true := by decide +kernel
+def R13baaab : Tree := .nil
+theorem R13baaab_ok : tall (refOK cpF 13) R13baaab = true := by decide +kernel
+def R13baaa : Tree := .node [113184,430348,589824,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13baaaa R13baaab
+theorem R13baaa_ok : tall (refOK cpF 13) R13baaa = true :=
+  tall_node _ _ _ _ R13baaaa_ok (by decide +kernel) R13baaab_ok
+def R13baaba : Tree := (.node [113184,430348,902208,3227782,3658126,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem R13baaba_ok : tall (refOK cpF 13) R13baaba = true := by decide +kernel
+def R13baabb : Tree := .nil
+theorem R13baabb_ok : tall (refOK cpF 13) R13baabb = true := by decide +kernel
+def R13baab : Tree := .node [113184,430348,902208,3227782,3658126,5521457,8532035,11083800,13501056,15731968] R13baaba R13baabb
+theorem R13baab_ok : tall (refOK cpF 13) R13baab = true :=
+  tall_node _ _ _ _ R13baaba_ok (by decide +kernel) R13baabb_ok
+def R13baa : Tree := .node [113184,430348,589824,902208,3227782,5521457,8532035,11083800,13501056,15731968] R13baaa R13baab
+theorem R13baa_ok : tall (refOK cpF 13) R13baa = true :=
+  tall_node _ _ _ _ R13baaa_ok (by decide +kernel) R13baab_ok
+def R13bab : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11123256,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,8532035,9434179,11083800,13501056,15731968] (.node [113184,430348,902208,3227782,5521457,5689661,6280573,8532035,11083800,13501056,15731968] .nil .nil) .nil) (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11396184,13501056,15731968] .nil .nil))
+theorem R13bab_ok : tall (refOK cpF 13) R13bab = true := by decide +kernel
+def R13ba : Tree := .node [113184,430348,902208,3227782,5521457,5689661,5765949,8532035,11083800,13501056,15731968] R13baa R13bab
+theorem R13ba_ok : tall (refOK cpF 13) R13ba = true :=
+  tall_node _ _ _ _ R13baa_ok (by decide +kernel) R13bab_ok
+def R13bbaaa : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11759815,13501056,15731968] .nil .nil)
+theorem R13bbaaa_ok : tall (refOK cpF 13) R13bbaaa = true := by decide +kernel
+def R13bbaab : Tree := .nil
+theorem R13bbaab_ok : tall (refOK cpF 13) R13bbaab = true := by decide +kernel
+def R13bbaa : Tree := .node [113184,430348,902208,3227782,5521457,5765949,8532035,11083800,13501056,15731968] R13bbaaa R13bbaab
+theorem R13bbaa_ok : tall (refOK cpF 13) R13bbaa = true :=
+  tall_node _ _ _ _ R13bbaaa_ok (by decide +kernel) R13bbaab_ok
+def R13bbab : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,9434179,11083800,13501056,15731968] .nil .nil)
+theorem R13bbab_ok : tall (refOK cpF 13) R13bbab = true := by decide +kernel
+def R13bba : Tree := .node [113184,430348,902208,3227782,5521457,6280573,8532035,11083800,13501056,15731968] R13bbaa R13bbab
+theorem R13bba_ok : tall (refOK cpF 13) R13bba = true :=
+  tall_node _ _ _ _ R13bbaa_ok (by decide +kernel) R13bbab_ok
+def R13bbbaa : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,11514140,13501056,15731968] .nil .nil)
+theorem R13bbbaa_ok : tall (refOK cpF 13) R13bbbaa = true := by decide +kernel
+def R13bbbab : Tree := .nil
+theorem R13bbbab_ok : tall (refOK cpF 13) R13bbbab = true := by decide +kernel
+def R13bbba : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,11759815,13501056,15731968] R13bbbaa R13bbbab
+theorem R13bbba_ok : tall (refOK cpF 13) R13bbba = true :=
+  tall_node _ _ _ _ R13bbbaa_ok (by decide +kernel) R13bbbab_ok
+def R13bbbb : Tree := (.node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968,16773437] .nil .nil)
+theorem R13bbbb_ok : tall (refOK cpF 13) R13bbbb = true := by decide +kernel
+def R13bbb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,13616832,15731968] R13bbba R13bbbb
+theorem R13bbb_ok : tall (refOK cpF 13) R13bbb = true :=
+  tall_node _ _ _ _ R13bbba_ok (by decide +kernel) R13bbbb_ok
+def R13bb : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,11396184,13501056,15731968] R13bba R13bbb
+theorem R13bb_ok : tall (refOK cpF 13) R13bb = true :=
+  tall_node _ _ _ _ R13bba_ok (by decide +kernel) R13bbb_ok
+def R13b : Tree := .node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,11514140,13501056,15731968] R13ba R13bb
+theorem R13b_ok : tall (refOK cpF 13) R13b = true :=
+  tall_node _ _ _ _ R13ba_ok (by decide +kernel) R13bb_ok
+def R13 : Tree := .node [113184,311296,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] R13a R13b
+theorem R13_ok : tall (refOK cpF 13) R13 = true :=
+  tall_node _ _ _ _ R13a_ok (by decide +kernel) R13b_ok
+def T14a : Tree := (.node [113184,430348,902208,3227782,5521457,5689661,8532035,11083800,13501056,15731968] .nil .nil)
+theorem T14a_ok : tall (expFast false (RP PR T13 R13 13) T13 13) T14a = true := by decide +kernel
+def T14b : Tree := .nil
+theorem T14b_ok : tall (expFast false (RP PR T13 R13 13) T13 13) T14b = true := by decide +kernel
+def T14 : Tree := .node [113184,430348,902208,3227782,5521457,8532035,11083800,13501056,15731968] T14a T14b
+theorem T14_ok : tall (expFast false (RP PR T13 R13 13) T13 13) T14 = true :=
+  tall_node _ _ _ _ T14a_ok (by decide +kernel) T14b_ok
+theorem start_ok : subsAll base10 (closedS T14 14) = true := by decide +kernel
+
+theorem noStart : NoStart false 14 :=
+  start_sym (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (level_R PR_sound (inv_leaf false) (inv_nil false 0) T1_ok) (inv_nil false 1) T2_ok) (inv_nil false 2) T3_ok) (inv_nil false 3) T4_ok) (inv_nil false 4) T5_ok) (inv_nil false 5) T6_ok) (inv_nil false 6) T7_ok) (inv_nil false 7) T8_ok) (inv_nil false 8) T9_ok) (refuted (cpF_sound false) R9_ok) T10_ok) (refuted (cpF_sound false) R10_ok) T11_ok) (refuted (cpF_sound false) R11_ok) T12_ok) (refuted (cpF_sound false) R12_ok) T13_ok) (refuted (cpF_sound false) R13_ok) T14_ok) start_ok
+
+
+namespace Direct
+open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
+
+-- Each wire is recorded as a word of 24 bits, bit i being its value on row i.
+abbrev Word := BitVec 24
+
+def inputs : List Word :=
+  [5521457, 8532035, 3227782, 430348, 11083800, 113184, 902208, 13501056, 15731968]
+
+def base : List Word := inputs ++ [5689661]
+
+def F (x7 : Fin 9 → Bool) : Bool :=
+  [(1 : ℕ), 11, 21, 31, 36, 5, 15, 25, 35, 52, 62, 77].any fun x8 : ℕ =>
+    x7 (Fin.ofNat (9 : ℕ) (x8 / (9 : ℕ))) && x7 (Fin.ofNat (9 : ℕ) (x8 % (9 : ℕ)))
+
+def bit (i : Fin 24) (v : Word) : Bool := v.getLsbD i.val
+
+def xs (i : Fin 24) : Fin 9 → Bool := fun k => bit i (inputs.getD k.val 0)
+
+lemma row_data : ∀ i : Fin 24, List.ofFn (xs i) = inputs.map (bit i) ∧
+    F (xs i) = bit i 4095 := by decide +kernel
+
+def gateWord (w : List Word) (g : Gate) : Word :=
+  let args := g.inputs.map fun j => w.getD j 0
+  match g.op with
+  | .and => args.getD 0 (BitVec.allOnes 24) &&& args.getD 1 (BitVec.allOnes 24)
+  | _ => args.getD 0 0 ||| args.getD 1 0
+
+def wordStep (w : List Word) (g : Gate) := w ++ [gateWord w g]
+
+def boolStep (w : List Bool) (g : Gate) :=
+  w ++ [g.op.eval (g.inputs.map fun j => w.getD j false)]
+
+lemma zero_bit (i : Fin 24) : (0 : Word).getLsbD i.val = false :=
+  BitVec.getLsbD_zero
+
+lemma read_bit (w : List Word) (i : Fin 24) (j : Nat) :
+    (w.map (bit i)).getD j false = bit i (w.getD j 0) := by
+  simpa only [bit, zero_bit] using (List.getD_map w 0 (n := j) (bit i))
+
+lemma step_bits (w : List Word) (i : Fin 24) (g : Gate)
+    (hg : g.op = .and ∨ g.op = .or) (hlen : g.inputs.length ≤ 2) :
+    (wordStep w g).map (bit i) = boolStep (w.map (bit i)) g := by
+  obtain ⟨op, args⟩ := g
+  change op = .and ∨ op = .or at hg
+  change args.length ≤ 2 at hlen
+  have shapes : args = [] ∨ (∃ a, args = [a]) ∨ ∃ a b, args = [a, b] := by
+    cases args with
+    | nil => exact Or.inl rfl
+    | cons a tail =>
+      cases tail with
+      | nil => exact Or.inr (Or.inl ⟨a, rfl⟩)
+      | cons b tail =>
+        cases tail with
+        | nil => exact Or.inr (Or.inr ⟨a, b, rfl⟩)
+        | cons _ _ => simp at hlen
+  rcases hg with rfl | rfl <;>
+    rcases shapes with rfl | ⟨a, rfl⟩ | ⟨a, b, rfl⟩ <;>
+    simp only [wordStep, boolStep, gateWord, GateOp.eval, List.map_append, List.map_cons,
+      List.map_nil, List.getD_cons_zero, List.getD_cons_succ, List.getD_nil, read_bit,
+      List.all_cons, List.all_nil, List.any_cons, List.any_nil, id_eq, bit,
+      BitVec.getLsbD_and, BitVec.getLsbD_or, zero_bit, BitVec.getLsbD_allOnes,
+      i.isLt, decide_true, Bool.and_true, Bool.or_false]
+
+lemma run_bits (gs : List Gate) (w : List Word) (i : Fin 24)
+    (hm : ∀ g ∈ gs, (g.op = .and ∨ g.op = .or) ∧ g.inputs.length ≤ 2) :
+    (gs.foldl wordStep w).map (bit i) = gs.foldl boolStep (w.map (bit i)) := by
   induction gs generalizing w with
   | nil => rfl
   | cons g gs ih =>
-    rw [List.foldl_cons, ih _ (by simp; omega)]
-    simp [List.getD_eq_getElem?_getD, List.getElem?_append_left hi]
-lemma rawL_mem (i : ℕ) (hi : i < 9) : rawP.getD i 0 ∈ rawL := by
-  rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by rw [rawP_len]; exact hi)]
-  exact List.mem_append_left _ (List.getElem_mem _)
-lemma or03_mem : rawP.getD 0 0 ||| rawP.getD 3 0 ∈ rawL := List.mem_append_right _ (by simp)
-set_option maxRecDepth 100000 in
-set_option maxHeartbeats 0 in
-lemma m0_full : rawL.all (fun w => Nat.beq (Nat.land w (mz 0)) w) = true := by decide +kernel
-lemma raw_sub {x : ℕ} (hx : x ∈ rawL) : x &&& mz 0 = x := by
-  have := List.all_eq_true.1 m0_full x hx
-  rwa [Nat.beq_eq, nl] at this
-theorem final (i0 : Imp 0 15) : ∀ C : PEqualNP.CircuitLowerBounds.Circuit, (∀ g∈C.gates, g.op∈({GateOp.and,GateOp.or}:Set GateOp) ∧ g.inputs.length≤2) → (∀ y : Fin 9 → Bool, (C.wires (List.ofFn y)).getD 9 false = (y 0 || y 3)) → PEqualNP.MetaComplexity.circuitFun 9 C = (fun x : Fin 9 → Bool => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)) → 16 ≤ C.size := by
-  intro C hfan hfirst hfun
-  by_contra hsz
-  obtain ⟨gates, out⟩ := C
-  let row : ℕ → Fin 9 → Bool := fun b v => (rawP.getD v.val 0).testBit b
-  have hrow : ∀ b, List.ofFn (row b) = rawP.map (fun x => x.testBit b) := row_list
-  have hRP : ∀ x ∈ rawP, x &&& mz 0 = x := fun x hx => raw_sub (List.mem_append_left _ hx)
-  match gates, hfan, hfirst, hfun, hsz with
-  | [], _, hfirst, _, _ =>
-    have := hfirst (fun _ => true)
-    simp [PEqualNP.CircuitLowerBounds.Circuit.wires] at this
-  | g :: gs, hfan, hfirst, hfun, hsz =>
-    have hlen : gs.length ≤ 14 := by
-      have : ¬ 16 ≤ gs.length + 1 := hsz
-      omega
-    have hg : ∀ x ∈ g :: gs, x.op ∈ ({PEqualNP.CircuitLowerBounds.GateOp.and, PEqualNP.CircuitLowerBounds.GateOp.or,
-        PEqualNP.CircuitLowerBounds.GateOp.not} : Set PEqualNP.CircuitLowerBounds.GateOp) ∧ x.inputs.length ≤ 2 := by
-      intro g h
-      obtain ⟨a,b⟩ := hfan g h
-      simp only [Set.mem_insert_iff,Set.mem_singleton_iff] at a ⊢
-      exact ⟨a.imp_right Or.inl,b⟩
-    have hy : gv (mz 0) rawP g = rawP.getD 0 0 ||| rawP.getD 3 0 := by
-      apply Nat.eq_of_testBit_eq; intro b
-      cases hb : (mz 0).testBit b with
-      | false =>
-        have e1 := congrArg (fun x => x.testBit b) (gv_sub (mz 0) hRP g)
-        have e2 := congrArg (fun x => x.testBit b) (raw_sub or03_mem)
-        simp only [Nat.testBit_and, hb, Bool.and_false] at e1 e2
-        rw [← e1, ← e2]
-      | true =>
-        have h := hfirst (row b)
-        have e : (PEqualNP.CircuitLowerBounds.Circuit.mk (g :: gs) out).wires (List.ofFn (row b)) =
-          gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
-            (rawP.map (fun x => x.testBit b) ++ [g.op.eval (g.inputs.map fun i => (rawP.map (fun x => x.testBit b)).getD i false)]) := by
-          rw [hrow]; rfl
-        rw [e, fold_keep _ _ _ (by simp [rawP_len]), ← gv_bit (mz 0) hb rawP g (hg g List.mem_cons_self)] at h
-        have h9 : (rawP.map (fun x => x.testBit b) ++ [(gv (mz 0) rawP g).testBit b]).getD 9 false = (gv (mz 0) rawP g).testBit b := by
-          rw [List.getD_eq_getElem?_getD, List.getElem?_append_right (by simp [rawP_len])]; simp [rawP_len]
-        rw [h9] at h
-        rw [h, Nat.testBit_or]; rfl
-    have hsub : ∀ x ∈ rawP ++ [rawP.getD 0 0 ||| rawP.getD 3 0], x ∈ rawL := fun x hx => hx
-    have hout : (ex (mz 0) gs (rawP ++ [rawP.getD 0 0 ||| rawP.getD 3 0])).getD out 0 = tz 0 := by
-      rw [← EF_ok]
-      have hs : ∀ x ∈ ex (mz 0) gs (rawP ++ [rawP.getD 0 0 ||| rawP.getD 3 0]), x &&& mz 0 = x :=
-        ex_sub (mz 0) fun x hx => raw_sub (hsub x hx)
-      have hs' := getD_mem (S := {x | x &&& mz 0 = x}) hs (by simp) out
-      apply Nat.eq_of_testBit_eq; intro b
-      have e1 := congrArg (fun x => x.testBit b) hs'
-      simp only [Nat.testBit_and] at e1
-      rw [← e1, Nat.testBit_and]
-      cases hb : (mz 0).testBit b with
-      | false => simp
-      | true =>
-        simp only [Bool.and_true]
-        rw [← getD_map, ex_bit (mz 0) hb gs _ (fun x hx => hg x (List.mem_cons_of_mem _ hx))]
-        have h := congrFun hfun (row b)
-        have e : PEqualNP.MetaComplexity.circuitFun 9 ⟨g :: gs, out⟩ (row b) =
-          (gs.foldl (fun w g => w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)])
-            (rawP.map (fun x => x.testBit b) ++ [g.op.eval (g.inputs.map fun i => (rawP.map (fun x => x.testBit b)).getD i false)])).getD out false := by
-          change ((PEqualNP.CircuitLowerBounds.Circuit.mk (g :: gs) out).wires (List.ofFn (row b))).getD out false = _
-          rw [hrow]; rfl
-        rw [e, ← gv_bit (mz 0) hb rawP g (hg g List.mem_cons_self), hy] at h
-        rw [List.map_append, List.map_singleton, h]
-        simp only [EF, List.map_cons, List.map_nil, List.foldr_cons, List.foldr_nil, Nat.testBit_or, Nat.testBit_and, Nat.zero_testBit, Bool.or_false]
-        simp only [Bool.or_assoc]; rfl
-    have hsol := ex_sol (mz 0) gs (rawP ++ [rawP.getD 0 0 ||| rawP.getD 3 0]) (C (mz 0) (WZ 0))
-      (fun x hx => Or.inl ⟨x, hsub x hx, (raw_sub (hsub x hx)).symm⟩) (Or.inr (Set.mem_insert _ _)) (Or.inr (Set.mem_insert_of_mem _ rfl))
-      (fun x hx => hfan x (List.mem_cons_of_mem _ hx)) ⟨out, hout⟩
-    exact i0 _ (by omega) hsol
+    obtain ⟨hop, hlen⟩ := hm g List.mem_cons_self
+    rw [List.foldl_cons, List.foldl_cons, ih _ (fun k hk => hm k (List.mem_cons_of_mem g hk)),
+      step_bits w i g hop hlen]
 
-theorem fromBound (bound : Imp 0 15) : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit),   (x1.gates.length = (15 : ℕ) ∧       x1.output = (23 : ℕ) ∧         x1.gates[(0 : ℕ)]? = Option.some { op := PEqualNP.CircuitLowerBounds.GateOp.or, inputs := [(0 : ℕ), (3 : ℕ)] : PEqualNP.CircuitLowerBounds.Gate } ∧           ∀ (x2 : ℕ) (x3 : x2 < x1.gates.length),             have x4 : PEqualNP.CircuitLowerBounds.Gate := x1.gates[x2];             have x5 : ℕ → Prop := fun (x5 : ℕ) => x5 < (9 : ℕ) + x2 ∨ x5 = (24 : ℕ);             have x6 : ℕ → ℕ := fun (x6 : ℕ) => if x6 < (9 : ℕ) then x6 else if x6 = (24 : ℕ) then (9 : ℕ) else x6 + (1 : ℕ);             x4 = { op := PEqualNP.CircuitLowerBounds.GateOp.and, inputs := [] : PEqualNP.CircuitLowerBounds.Gate } ∨ (∃ (x7 : ℕ), x5 x7 ∧ x4 = { op := PEqualNP.CircuitLowerBounds.GateOp.not, inputs := [x7] : PEqualNP.CircuitLowerBounds.Gate }) ∨ ∃ (x7 : ℕ) (x8 : ℕ), x5 x7 ∧ x5 x8 ∧ x6 x7 ≤ x6 x8 ∧ (x4 = { op := PEqualNP.CircuitLowerBounds.GateOp.and, inputs := [x7, x8] : PEqualNP.CircuitLowerBounds.Gate } ∨ x4 = { op := PEqualNP.CircuitLowerBounds.GateOp.or, inputs := [x7, x8] : PEqualNP.CircuitLowerBounds.Gate })) →     List.countP (fun (x3 : PEqualNP.CircuitLowerBounds.Gate) => x3.op.eval [Bool.false]) x1.gates = (0 : ℕ) → PEqualNP.MetaComplexity.circuitFun (9 : ℕ) x1 ≠ fun (x4 : Fin (9 : ℕ) → Bool) => x4 (0 : Fin (9 : ℕ)) && x4 (1 : Fin (9 : ℕ)) || x4 (1 : Fin (9 : ℕ)) && x4 (2 : Fin (9 : ℕ)) || x4 (2 : Fin (9 : ℕ)) && x4 (3 : Fin (9 : ℕ)) || x4 (3 : Fin (9 : ℕ)) && x4 (4 : Fin (9 : ℕ)) || x4 (4 : Fin (9 : ℕ)) && x4 (0 : Fin (9 : ℕ)) || x4 (0 : Fin (9 : ℕ)) && x4 (5 : Fin (9 : ℕ)) || x4 (1 : Fin (9 : ℕ)) && x4 (6 : Fin (9 : ℕ)) || x4 (2 : Fin (9 : ℕ)) && x4 (7 : Fin (9 : ℕ)) || x4 (3 : Fin (9 : ℕ)) && x4 (8 : Fin (9 : ℕ)) || x4 (5 : Fin (9 : ℕ)) && x4 (7 : Fin (9 : ℕ)) || x4 (6 : Fin (9 : ℕ)) && x4 (8 : Fin (9 : ℕ)) || x4 (8 : Fin (9 : ℕ)) && x4 (5 : Fin (9 : ℕ)) := by
-  intro C form count good
-  obtain ⟨size,cout,first,restr⟩ := form
-  have allops : ∀ g∈C.gates, g.op∈({GateOp.and,GateOp.or}:Set GateOp) ∧ g.inputs.length≤2 := by
+def Binary (pool : List Word) (v : Word) : Prop :=
+  ∃ a ∈ pool, ∃ b ∈ pool, v = a &&& b ∨ v = a ||| b
+
+lemma getD_cases {xs Q : List Word} (h : ∀ x ∈ xs, x ∈ Q) (d : Word) (i : Nat) :
+    xs.getD i d = d ∨ xs.getD i d ∈ Q := by
+  rw [List.getD_eq_getElem?_getD]
+  cases hv : xs[i]? with
+  | none => left; rfl
+  | some v => right; exact h v (List.mem_of_getElem? hv)
+
+lemma gate_new {w P : List Word} (g : Gate) (hw : ∀ x ∈ w, x ∈ 0 :: P)
+    (hnew : gateWord w g ∉ 0 :: P) :
+    gateWord w g = BitVec.allOnes 24 ∨ Binary P (gateWord w g) := by
+  have hargs : ∀ x ∈ g.inputs.map (fun j => w.getD j 0), x ∈ 0 :: P := by
+    intro x hx
+    obtain ⟨j, _, rfl⟩ := List.mem_map.mp hx
+    rcases getD_cases hw 0 j with e | e
+    · rw [e]
+      exact List.mem_cons_self
+    · exact e
+  revert hnew
+  unfold gateWord
+  split
+  · intro hnew
+    dsimp only at hnew ⊢
+    rcases getD_cases hargs (BitVec.allOnes 24) 0 with h0 | h0 <;>
+      rcases getD_cases hargs (BitVec.allOnes 24) 1 with h1 | h1
+    · left
+      rw [h0, h1]
+      simp
+    · exfalso
+      apply hnew
+      rw [h0, BitVec.allOnes_and]
+      exact h1
+    · exfalso
+      apply hnew
+      rw [h1, BitVec.and_allOnes]
+      exact h0
+    · right
+      rcases List.mem_cons.mp h0 with z0 | p0
+      · exfalso
+        apply hnew
+        rw [z0]
+        simp
+      rcases List.mem_cons.mp h1 with z1 | p1
+      · exfalso
+        apply hnew
+        rw [z1]
+        simp
+      exact ⟨_, p0, _, p1, Or.inl rfl⟩
+  · intro hnew
+    dsimp only at hnew ⊢
+    have m0 : (g.inputs.map fun j => w.getD j 0).getD 0 0 ∈ 0 :: P := by
+      rcases getD_cases hargs 0 0 with e | e
+      · rw [e]
+        exact List.mem_cons_self
+      · exact e
+    have m1 : (g.inputs.map fun j => w.getD j 0).getD 1 0 ∈ 0 :: P := by
+      rcases getD_cases hargs 0 1 with e | e
+      · rw [e]
+        exact List.mem_cons_self
+      · exact e
+    right
+    rcases List.mem_cons.mp m0 with z0 | p0
+    · exfalso
+      apply hnew
+      rw [z0]
+      simpa using m1
+    rcases List.mem_cons.mp m1 with z1 | p1
+    · exfalso
+      apply hnew
+      rw [z1]
+      simpa using m0
+    exact ⟨_, p0, _, p1, Or.inr rfl⟩
+
+lemma start_word : wordStep inputs { op := GateOp.or, inputs := [0, 3] } = base := by
+  have h : gateWord inputs { op := GateOp.or, inputs := [0, 3] } = 5689661 := by
+    decide +kernel
+  rw [wordStep, h]
+  rfl
+
+lemma run_trace (gs : List Gate) (w : List Word) (s : List ℕ) (ht : Tr false s)
+    (hw : ∀ b∈w,b.toNat∈base12++s) :
+    ∃ t : List ℕ,Tr false t ∧ t.length≤s.length+gs.length ∧
+      ∀ b∈gs.foldl wordStep w,b.toNat∈base12++t := by
+  induction gs generalizing w s with
+  | nil => exact ⟨s,ht,by simp,hw⟩
+  | cons g gs ih =>
+    let v := gateWord w g
+    have extend : ∃ t : List ℕ,Tr false t ∧ t.length≤s.length+1 ∧
+        ∀ b∈wordStep w g,b.toNat∈base12++t := by
+      by_cases here : v.toNat∈base12++s
+      · refine ⟨s,ht,by omega,?_⟩
+        intro b h
+        rcases List.mem_append.mp h with old|fresh
+        · exact hw b old
+        · exact List.mem_singleton.mp fresh ▸ here
+      · have fresh : v ∉ 0 :: w := by
+          intro dup
+          rcases List.mem_cons.mp dup with z|old
+          · apply here;rw [z];exact List.mem_append_left _ (by decide)
+          · exact here (hw v old)
+        have hnew := gate_new (P:=w) g (fun b hb => List.mem_cons_of_mem _ hb) fresh
+        rcases hnew with top|⟨a,ha,b,hb,op⟩
+        · apply False.elim (here _)
+          change (gateWord w g).toNat ∈ _
+          rw [top];exact List.mem_append_left _ (by decide)
+        · refine ⟨s++[v.toNat],Tr.snoc s _ ht (BitVec.isLt v) ?_ ?_,by simp,?_⟩
+          · intro k hk
+            change Nat.beq v.toNat k=false
+            cases eq : Nat.beq v.toNat k with
+            | false => rfl
+            | true => exact False.elim (here (Nat.eq_of_beq_eq_true eq ▸ hk))
+          · refine ⟨a.toNat,hw a ha,b.toNat,hw b hb,?_⟩
+            rcases op with e|e
+            · left;exact congrArg BitVec.toNat e
+            · right;exact congrArg BitVec.toNat e
+          · intro z hz
+            rcases List.mem_append.mp hz with old|fresh
+            · rw [← List.append_assoc]; exact List.mem_append_left _ (hw z old)
+            · rw [List.mem_singleton.mp fresh]
+              exact List.mem_append_right _ (List.mem_append_right _ (by simp [v]))
+    obtain ⟨t,ht,sz,covers⟩ := extend
+    obtain ⟨r,hr,sr,out⟩ := ih (wordStep w g) t ht covers
+    exact ⟨r,hr,by simp;omega,out⟩
+
+theorem checkBridge (noTrace : ∀ t : List Nat, Tr false t → t.length≤14 → 4095∉t) : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit),   (x1.gates.length = (15 : ℕ) ∧       x1.output = (23 : ℕ) ∧         x1.gates[(0 : ℕ)]? = Option.some { op := PEqualNP.CircuitLowerBounds.GateOp.or, inputs := [(0 : ℕ), (3 : ℕ)] : PEqualNP.CircuitLowerBounds.Gate } ∧           ∀ (x2 : ℕ) (x3 : x2 < x1.gates.length),             have x4 : PEqualNP.CircuitLowerBounds.Gate := x1.gates[x2];             have x5 : ℕ → Prop := fun (x5 : ℕ) => x5 < (9 : ℕ) + x2 ∨ x5 = (24 : ℕ);             have x6 : ℕ → ℕ := fun (x6 : ℕ) => if x6 < (9 : ℕ) then x6 else if x6 = (24 : ℕ) then (9 : ℕ) else x6 + (1 : ℕ);             x4 = { op := PEqualNP.CircuitLowerBounds.GateOp.and, inputs := [] : PEqualNP.CircuitLowerBounds.Gate } ∨ (∃ (x7 : ℕ), x5 x7 ∧ x4 = { op := PEqualNP.CircuitLowerBounds.GateOp.not, inputs := [x7] : PEqualNP.CircuitLowerBounds.Gate }) ∨ ∃ (x7 : ℕ) (x8 : ℕ), x5 x7 ∧ x5 x8 ∧ x6 x7 ≤ x6 x8 ∧ (x4 = { op := PEqualNP.CircuitLowerBounds.GateOp.and, inputs := [x7, x8] : PEqualNP.CircuitLowerBounds.Gate } ∨ x4 = { op := PEqualNP.CircuitLowerBounds.GateOp.or, inputs := [x7, x8] : PEqualNP.CircuitLowerBounds.Gate })) →     List.countP (fun (x3 : PEqualNP.CircuitLowerBounds.Gate) => x3.op.eval [Bool.false]) x1.gates = (0 : ℕ) → PEqualNP.MetaComplexity.circuitFun (9 : ℕ) x1 ≠ fun (x4 : Fin (9 : ℕ) → Bool) => x4 (0 : Fin (9 : ℕ)) && x4 (1 : Fin (9 : ℕ)) || x4 (1 : Fin (9 : ℕ)) && x4 (2 : Fin (9 : ℕ)) || x4 (2 : Fin (9 : ℕ)) && x4 (3 : Fin (9 : ℕ)) || x4 (3 : Fin (9 : ℕ)) && x4 (4 : Fin (9 : ℕ)) || x4 (4 : Fin (9 : ℕ)) && x4 (0 : Fin (9 : ℕ)) || x4 (0 : Fin (9 : ℕ)) && x4 (5 : Fin (9 : ℕ)) || x4 (1 : Fin (9 : ℕ)) && x4 (6 : Fin (9 : ℕ)) || x4 (2 : Fin (9 : ℕ)) && x4 (7 : Fin (9 : ℕ)) || x4 (3 : Fin (9 : ℕ)) && x4 (8 : Fin (9 : ℕ)) || x4 (5 : Fin (9 : ℕ)) && x4 (7 : Fin (9 : ℕ)) || x4 (6 : Fin (9 : ℕ)) && x4 (8 : Fin (9 : ℕ)) || x4 (8 : Fin (9 : ℕ)) && x4 (5 : Fin (9 : ℕ)) := by
+  intro C h nz same
+  obtain ⟨len,output,first,form⟩ := h
+  have mono : PEqualNP.MetaComplexity.Monotone2 C := by
     intro g hg
-    obtain ⟨i,hi,rfl⟩ := List.getElem_of_mem hg
-    have gs := restr i hi
-    dsimp only at gs
-    rcases gs with eq | ⟨a,_,eq⟩ | ⟨a,b,_,_,_,eq|eq⟩
-    · rw [eq];exact ⟨Or.inl rfl,by decide⟩
-    · have z := (List.countP_eq_zero.mp count) C.gates[i] (List.getElem_mem hi)
-      rw [eq] at z; contradiction
-    · rw [eq];exact ⟨Or.inl rfl,by simp⟩
-    · rw [eq];exact ⟨Or.inr rfl,by simp⟩
+    obtain ⟨j,p,eq⟩ := List.mem_iff_getElem.mp hg
+    obtain zero | ⟨a,ha,neq⟩ | ⟨a,b,ha,hb,rk,closed⟩ := form j p
+    · rw [← eq,zero]
+      simp
+    · have no := List.countP_eq_zero.mp nz g hg
+      rw [← eq,neq] at no
+      exact (no rfl).elim
+    · rw [← eq]
+      rcases closed with e | e <;> rw [e] <;> simp
+  have graph (x : Fin 9 → Bool) : ([1,11,21,31,36,5,15,25,35,52,62,77] : List ℕ).any
+        (fun k => x (Fin.ofNat 9 (k / 9)) && x (Fin.ofNat 9 (k % 9))) =
+      ((x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) ||
+        (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) ||
+        (x 3 && x 8) || (x 5 && x 7) || (x 6 && x 8) || (x 8 && x 5)) := by
+    simp only [List.any_cons,List.any_nil]
+    change (x 0 && x 1 || (x 1 && x 2 || (x 2 && x 3 || (x 3 && x 4 ||
+      (x 4 && x 0 || (x 0 && x 5 || (x 1 && x 6 || (x 2 && x 7 ||
+        (x 3 && x 8 || (x 5 && x 7 || (x 6 && x 8 || (x 8 && x 5 || false)))))))))))) = _
+    simp only [Bool.or_false,Bool.or_assoc]
+  have hF : circuitFun 9 C = F := by
+    funext x
+    exact (congrFun same x).trans (graph x).symm
+  obtain ⟨rest, hsplit⟩ : ∃ rest, C.gates = { op := GateOp.or, inputs := [0, 3] } :: rest := by
+    cases hc : C.gates with
+    | nil =>
+      rw [hc] at first
+      simp at first
+    | cons a t =>
+      rw [hc] at first
+      simp at first
+      exact ⟨t, by rw [first]⟩
+  have hrest : rest.length = 14 := by
+    rw [hsplit] at len
+    simpa using len
+  have hm' : ∀ g ∈ C.gates, (g.op = .and ∨ g.op = .or) ∧ g.inputs.length ≤ 2 := by
+    intro g hg
+    obtain ⟨h1, h2⟩ := mono g hg
+    exact ⟨by simpa using h1, h2⟩
+  -- the output wire carries 4095 on the 24 rows
+  have houtput : (C.gates.foldl wordStep inputs).getD C.output 0 = 4095 := by
+    apply BitVec.eq_of_getLsbD_eq
+    intro j hj
+    let i : Fin 24 := ⟨j, hj⟩
+    obtain ⟨hin, hval⟩ := row_data i
+    change bit i ((C.gates.foldl wordStep inputs).getD C.output 0) = bit i 4095
+    rw [← read_bit, run_bits C.gates inputs i hm', ← hin, ← hval]
+    exact congrFun hF (xs i)
+  have hfold : C.gates.foldl wordStep inputs = rest.foldl wordStep base := by
+    rw [hsplit, List.foldl_cons, start_word]
+  have initial : base.all (fun b => decide (b.toNat∈base12)) = true := by decide +kernel
+  have haveBase (b : Word) (hb : b∈base) : b.toNat∈base12++[] := by
+    simpa only [List.append_nil] using of_decide_eq_true (List.all_eq_true.mp initial b hb)
+  obtain ⟨t,tr,sz,covers⟩ := run_trace rest base [] .nil haveBase
+  have z : ((rest.foldl wordStep base).getD C.output 0).toNat = 4095 := by rw [← hfold,houtput];rfl
+  have mem : (4095 : ℕ) ∈ base12++t := by
+    by_cases hlt : C.output<(rest.foldl wordStep base).length
+    · rw [List.getD_eq_getElem _ _ hlt] at z
+      rw [← z];exact covers _ (List.getElem_mem hlt)
+    · rw [List.getD_eq_default _ _ (Nat.le_of_not_gt hlt)] at z
+      exact False.elim ((by decide : (0 : ℕ) ≠ 4095) z)
+  rcases List.mem_append.mp mem with init|later
+  · exact (by decide : (4095 : ℕ) ∉ base12) init
+  · exact noTrace t tr (by simp at sz; omega) later
 
-  have seed (y : Fin 9 → Bool) : (C.wires (List.ofFn y)).getD 9 false = (y 0 || y 3) := by
-    cases hg : C.gates with
-    | nil => simp [hg] at size
-    | cons g gs =>
-      have he : g=⟨.or,[0,3]⟩ := by simpa [hg] using first
-      subst g
-      unfold Circuit.wires
-      rw [hg, List.foldl_cons, fold_keep _ _ _ (by simp)]
-      rw [List.getD_eq_getElem?_getD, List.getElem?_append_right (by simp)]
-      simp [GateOp.eval, List.getD_eq_getElem?_getD]
-  have hs := final bound C allops seed good
-  change 16 ≤ C.gates.length at hs
-  omega
+end Direct
 end PEqualNP.Outside.L_meta_2766
 
 theorem PEqualNP.Outside.L_meta_2766 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit),   (x1.gates.length = (15 : ℕ) ∧       x1.output = (23 : ℕ) ∧         x1.gates[(0 : ℕ)]? = Option.some { op := PEqualNP.CircuitLowerBounds.GateOp.or, inputs := [(0 : ℕ), (3 : ℕ)] : PEqualNP.CircuitLowerBounds.Gate } ∧           ∀ (x2 : ℕ) (x3 : x2 < x1.gates.length),             have x4 : PEqualNP.CircuitLowerBounds.Gate := x1.gates[x2];             have x5 : ℕ → Prop := fun (x5 : ℕ) => x5 < (9 : ℕ) + x2 ∨ x5 = (24 : ℕ);             have x6 : ℕ → ℕ := fun (x6 : ℕ) => if x6 < (9 : ℕ) then x6 else if x6 = (24 : ℕ) then (9 : ℕ) else x6 + (1 : ℕ);             x4 = { op := PEqualNP.CircuitLowerBounds.GateOp.and, inputs := [] : PEqualNP.CircuitLowerBounds.Gate } ∨ (∃ (x7 : ℕ), x5 x7 ∧ x4 = { op := PEqualNP.CircuitLowerBounds.GateOp.not, inputs := [x7] : PEqualNP.CircuitLowerBounds.Gate }) ∨ ∃ (x7 : ℕ) (x8 : ℕ), x5 x7 ∧ x5 x8 ∧ x6 x7 ≤ x6 x8 ∧ (x4 = { op := PEqualNP.CircuitLowerBounds.GateOp.and, inputs := [x7, x8] : PEqualNP.CircuitLowerBounds.Gate } ∨ x4 = { op := PEqualNP.CircuitLowerBounds.GateOp.or, inputs := [x7, x8] : PEqualNP.CircuitLowerBounds.Gate })) →     List.countP (fun (x3 : PEqualNP.CircuitLowerBounds.Gate) => x3.op.eval [Bool.false]) x1.gates = (0 : ℕ) → PEqualNP.MetaComplexity.circuitFun (9 : ℕ) x1 ≠ fun (x4 : Fin (9 : ℕ) → Bool) => x4 (0 : Fin (9 : ℕ)) && x4 (1 : Fin (9 : ℕ)) || x4 (1 : Fin (9 : ℕ)) && x4 (2 : Fin (9 : ℕ)) || x4 (2 : Fin (9 : ℕ)) && x4 (3 : Fin (9 : ℕ)) || x4 (3 : Fin (9 : ℕ)) && x4 (4 : Fin (9 : ℕ)) || x4 (4 : Fin (9 : ℕ)) && x4 (0 : Fin (9 : ℕ)) || x4 (0 : Fin (9 : ℕ)) && x4 (5 : Fin (9 : ℕ)) || x4 (1 : Fin (9 : ℕ)) && x4 (6 : Fin (9 : ℕ)) || x4 (2 : Fin (9 : ℕ)) && x4 (7 : Fin (9 : ℕ)) || x4 (3 : Fin (9 : ℕ)) && x4 (8 : Fin (9 : ℕ)) || x4 (5 : Fin (9 : ℕ)) && x4 (7 : Fin (9 : ℕ)) || x4 (6 : Fin (9 : ℕ)) && x4 (8 : Fin (9 : ℕ)) || x4 (8 : Fin (9 : ℕ)) && x4 (5 : Fin (9 : ℕ)) := by
-  exact PEqualNP.Outside.L_meta_2766.fromBound PEqualNP.Outside.L_meta_2766.i0
+  exact PEqualNP.Outside.L_meta_2766.Direct.checkBridge (fun _ ht sz => PEqualNP.Outside.L_meta_2766.no_trace PEqualNP.Outside.L_meta_2766.noStart.toH ht sz)
