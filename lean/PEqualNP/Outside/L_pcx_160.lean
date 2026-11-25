@@ -1,6 +1,7 @@
+import PEqualNP.Defs
+
 -- Adapted from the merged Apache-2.0 proof of `L_pcx_148` (`PHP 4 3` resolution lower bound)
 -- in `open-goat/pequalnp-proofs`, generalized from `PHP 4 3` to `PHP 5 4` (`45 + 40 + 16 = 101 > 99`).
-import PEqualNP.Defs
 
 namespace PEqualNP.Outside.L_pcx_160_aux
 
