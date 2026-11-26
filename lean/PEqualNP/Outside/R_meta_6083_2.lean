@@ -188,7 +188,7 @@ theorem PEqualNP.Outside.R_meta_6083_2
       ⟨.or, []⟩
   let adapt (g : Gate) := lowerGate g.op (g.inputs.map m)
   let valid (g : Gate) := g.op ∈ ({GateOp.and, .or, .not} : Set GateOp) ∧ g.inputs.length ≤ 2
-  -- Use definitional equations without asking Lean to generate equations for the underlying definitions.
+  -- Use definitional equations without generating equations for the underlying definitions.
   have evalAnd (w : List Bool) : GateOp.and.eval w = w.all id := rfl
   have evalOr (w : List Bool) : GateOp.or.eval w = w.any id := rfl
   have evalNot (w : List Bool) : GateOp.not.eval w = !(w.headD false) := rfl
