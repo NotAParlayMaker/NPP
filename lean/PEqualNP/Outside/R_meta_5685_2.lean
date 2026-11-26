@@ -40,10 +40,12 @@ theorem PEqualNP.Outside.R_meta_5685_2
       have hb : g.op.eval (g.inputs.map fun i => u.getD i false) = true →
           g.op.eval (g.inputs.map fun i => u'.getD i false) = true := by
         rcases hops g (List.mem_cons_self ..) with hop | hop
-        · rw [hop]; simp only [PEqualNP.CircuitLowerBounds.GateOp.eval, List.all_eq_true, List.mem_map, id]
+        · rw [hop]; show List.all _ id = true → List.all _ id = true
+          simp only [List.all_eq_true, List.mem_map, id]
           rintro hall _ ⟨j, hj, rfl⟩
           exact h2 j (hall _ ⟨j, hj, rfl⟩)
-        · rw [hop]; simp only [PEqualNP.CircuitLowerBounds.GateOp.eval, List.any_eq_true, List.mem_map, id]
+        · rw [hop]; show List.any _ id = true → List.any _ id = true
+          simp only [List.any_eq_true, List.mem_map, id]
           rintro ⟨_, ⟨j, hj, rfl⟩, hv⟩
           exact ⟨_, ⟨j, hj, rfl⟩, h2 j hv⟩
       apply ih (fun g' hg' => hops g' (List.mem_cons_of_mem _ hg'))
@@ -117,7 +119,8 @@ theorem PEqualNP.Outside.R_meta_5685_2
     exact ⟨h1, by simpa using h2⟩
   have hRS : ∀ σ, (R σ).size ≤ 18 := by
     intro σ
-    simpa [R, PEqualNP.CircuitLowerBounds.Circuit.size] using hS
+    show (C.gates.map _).length ≤ 18
+    rw [List.length_map]; exact hS
   have hRE : ∀ σ : ℕ → ℕ, (∀ i, i < 11 → σ i < 11 ∨ 11 + C.gates.length ≤ σ i) →
       ∀ x x' : List Bool, x.length = 11 → x'.length = 11 →
       (∀ i, i < 11 → x'.getD (σ i) false = x.getD i false) → (R σ).eval x' = C.eval x := by
