@@ -10,8 +10,6 @@ theorem PEqualNP.Outside.R_meta_6070_2
       (∀ x6 : Fin 26 → Bool, x1.eval (List.ofFn x6) = true ↔
         ∃ (x7 x8 : Fin 13), (x7 = x8 ∨ x7 = x8 + 1 ∨ x7 = x8 + 3 ∨ x7 = x8 + 9) ∧
           x6 (Fin.castAdd 13 x7) = true ∧ x6 (Fin.natAdd 13 x8) = true) →
-      lineSingle x1 26 (fun x7 : ℕ => decide (x7 = 13)) 0 13 = false →
-      lineSingle x1 26 (fun x8 : ℕ => decide (x8 = 0)) 13 0 = false →
       0 ∈ (gateAt x1 0).inputs → 13 ∈ (gateAt x1 0).inputs →
       have x9 : Finset ℕ → ℕ → Bool := fun x9 => wval x1 (indW 26 x9);
       have x10 : ℕ → ℕ → Prop := fun x10 x11 =>
@@ -31,8 +29,6 @@ theorem PEqualNP.Outside.R_meta_6070_2
       (∀ x6 : Fin 26 → Bool, x1.eval (List.ofFn x6) = true ↔
         ∃ (x7 x8 : Fin 13), (x7 = x8 ∨ x7 = x8 + 1 ∨ x7 = x8 + 3 ∨ x7 = x8 + 9) ∧
           x6 (Fin.castAdd 13 x7) = true ∧ x6 (Fin.natAdd 13 x8) = true) →
-      lineSingle x1 26 (fun x7 : ℕ => decide (x7 = 13)) 0 13 = false →
-      lineSingle x1 26 (fun x8 : ℕ => decide (x8 = 0)) 13 0 = false →
       0 ∈ (gateAt x1 0).inputs → 13 ∉ (gateAt x1 0).inputs →
       have x9 : Finset ℕ → ℕ → Bool := fun x9 => wval x1 (indW 26 x9);
       have x10 : ℕ → ℕ → Prop := fun x10 x11 =>
@@ -52,8 +48,6 @@ theorem PEqualNP.Outside.R_meta_6070_2
       (∀ x6 : Fin 26 → Bool, x1.eval (List.ofFn x6) = true ↔
         ∃ (x7 x8 : Fin 13), (x7 = x8 ∨ x7 = x8 + 1 ∨ x7 = x8 + 3 ∨ x7 = x8 + 9) ∧
           x6 (Fin.castAdd 13 x7) = true ∧ x6 (Fin.natAdd 13 x8) = true) →
-      lineSingle x1 26 (fun x7 : ℕ => decide (x7 = 13)) 0 13 = false →
-      lineSingle x1 26 (fun x8 : ℕ => decide (x8 = 0)) 13 0 = false →
       0 ∉ (gateAt x1 0).inputs → 13 ∈ (gateAt x1 0).inputs →
       have x9 : Finset ℕ → ℕ → Bool := fun x9 => wval x1 (indW 26 x9);
       have x10 : ℕ → ℕ → Prop := fun x10 x11 =>
@@ -73,8 +67,6 @@ theorem PEqualNP.Outside.R_meta_6070_2
       (∀ x6 : Fin 26 → Bool, x1.eval (List.ofFn x6) = true ↔
         ∃ (x7 x8 : Fin 13), (x7 = x8 ∨ x7 = x8 + 1 ∨ x7 = x8 + 3 ∨ x7 = x8 + 9) ∧
           x6 (Fin.castAdd 13 x7) = true ∧ x6 (Fin.natAdd 13 x8) = true) →
-      lineSingle x1 26 (fun x7 : ℕ => decide (x7 = 13)) 0 13 = false →
-      lineSingle x1 26 (fun x8 : ℕ => decide (x8 = 0)) 13 0 = false →
       0 ∉ (gateAt x1 0).inputs → 13 ∉ (gateAt x1 0).inputs →
       have x9 : Finset ℕ → ℕ → Bool := fun x9 => wval x1 (indW 26 x9);
       have x10 : ℕ → ℕ → Prop := fun x10 x11 =>
@@ -92,7 +84,7 @@ theorem PEqualNP.Outside.R_meta_6070_2
   classical
   intro C hge hle hAO hnodup hfun hs0 hs13 x9 x10 x11 hex
   by_cases h0 : 0 ∈ (gateAt C 0).inputs <;> by_cases h13 : 13 ∈ (gateAt C 0).inputs
-  · exact hBoth C hge hle hAO hnodup hfun hs0 hs13 h0 h13 hex
-  · exact hPoint C hge hle hAO hnodup hfun hs0 hs13 h0 h13 hex
-  · exact hLine C hge hle hAO hnodup hfun hs0 hs13 h0 h13 hex
-  · exact hNone C hge hle hAO hnodup hfun hs0 hs13 h0 h13 hex
+  · exact hBoth C hge hle hAO hnodup hfun h0 h13 hex
+  · exact hPoint C hge hle hAO hnodup hfun h0 h13 hex
+  · exact hLine C hge hle hAO hnodup hfun h0 h13 hex
+  · exact hNone C hge hle hAO hnodup hfun h0 h13 hex
