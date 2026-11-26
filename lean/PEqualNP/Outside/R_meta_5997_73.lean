@@ -1,0 +1,14 @@
+import PEqualNP.Defs
+
+theorem PEqualNP.Outside.R_meta_5997_73
+    (c1 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.TopForm.IsAO2 (26 : ℕ) x1 → (∀ (x3 : Fin (26 : ℕ) → Bool), x1.eval (List.ofFn x3) = Bool.true ↔ ∃ (x4 : Fin (13 : ℕ)) (x5 : Fin (13 : ℕ)), (x4 = x5 ∨ x4 = x5 + (1 : Fin (13 : ℕ)) ∨ x4 = x5 + (3 : Fin (13 : ℕ)) ∨ x4 = x5 + (9 : Fin (13 : ℕ))) ∧ x4 ≠ (0 : Fin (13 : ℕ)) ∧ x3 (Fin.castAdd (13 : ℕ) x4) = Bool.true ∧ x3 (Fin.natAdd (13 : ℕ) x5) = Bool.true) → List.countP (fun g => PEqualNP.CircuitLowerBounds.GateOp.rec Bool.false Bool.true Bool.false (fun _ => Bool.false) Bool.false g.op) x1.gates ≤ (19 : ℕ) → (59 : ℕ) ≤ x1.size)
+    (c2 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.TopForm.IsAO2 (26 : ℕ) x1 → (∀ (x3 : Fin (26 : ℕ) → Bool), x1.eval (List.ofFn x3) = Bool.true ↔ ∃ (x4 : Fin (13 : ℕ)) (x5 : Fin (13 : ℕ)), (x4 = x5 ∨ x4 = x5 + (1 : Fin (13 : ℕ)) ∨ x4 = x5 + (3 : Fin (13 : ℕ)) ∨ x4 = x5 + (9 : Fin (13 : ℕ))) ∧ x4 ≠ (0 : Fin (13 : ℕ)) ∧ x3 (Fin.castAdd (13 : ℕ) x4) = Bool.true ∧ x3 (Fin.natAdd (13 : ℕ) x5) = Bool.true) → (20 : ℕ) ≤ List.countP (fun g => PEqualNP.CircuitLowerBounds.GateOp.rec Bool.false Bool.true Bool.false (fun _ => Bool.false) Bool.false g.op) x1.gates ∧ List.countP (fun g => PEqualNP.CircuitLowerBounds.GateOp.rec Bool.false Bool.true Bool.false (fun _ => Bool.false) Bool.false g.op) x1.gates ≤ (38 : ℕ) → (59 : ℕ) ≤ x1.size)
+    (c3 : ∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.TopForm.IsAO2 (26 : ℕ) x1 → (∀ (x3 : Fin (26 : ℕ) → Bool), x1.eval (List.ofFn x3) = Bool.true ↔ ∃ (x4 : Fin (13 : ℕ)) (x5 : Fin (13 : ℕ)), (x4 = x5 ∨ x4 = x5 + (1 : Fin (13 : ℕ)) ∨ x4 = x5 + (3 : Fin (13 : ℕ)) ∨ x4 = x5 + (9 : Fin (13 : ℕ))) ∧ x4 ≠ (0 : Fin (13 : ℕ)) ∧ x3 (Fin.castAdd (13 : ℕ) x4) = Bool.true ∧ x3 (Fin.natAdd (13 : ℕ) x5) = Bool.true) → (39 : ℕ) ≤ List.countP (fun g => PEqualNP.CircuitLowerBounds.GateOp.rec Bool.false Bool.true Bool.false (fun _ => Bool.false) Bool.false g.op) x1.gates → (59 : ℕ) ≤ x1.size) :
+    (∀ (x1 : PEqualNP.CircuitLowerBounds.Circuit), PEqualNP.TopForm.IsAO2 (26 : ℕ) x1 → (∀ (x3 : Fin (26 : ℕ) → Bool), x1.eval (List.ofFn x3) = Bool.true ↔ ∃ (x4 : Fin (13 : ℕ)) (x5 : Fin (13 : ℕ)), (x4 = x5 ∨ x4 = x5 + (1 : Fin (13 : ℕ)) ∨ x4 = x5 + (3 : Fin (13 : ℕ)) ∨ x4 = x5 + (9 : Fin (13 : ℕ))) ∧ x4 ≠ (0 : Fin (13 : ℕ)) ∧ x3 (Fin.castAdd (13 : ℕ) x4) = Bool.true ∧ x3 (Fin.natAdd (13 : ℕ) x5) = Bool.true) → (59 : ℕ) ≤ x1.size) :=
+  fun x1 hao hev =>
+    if h1 : List.countP (fun g => PEqualNP.CircuitLowerBounds.GateOp.rec Bool.false Bool.true Bool.false (fun _ => Bool.false) Bool.false g.op) x1.gates ≤ 19 then
+      c1 x1 hao hev h1
+    else if h2 : List.countP (fun g => PEqualNP.CircuitLowerBounds.GateOp.rec Bool.false Bool.true Bool.false (fun _ => Bool.false) Bool.false g.op) x1.gates ≤ 38 then
+      c2 x1 hao hev ⟨Nat.succ_le_of_lt (Nat.lt_of_not_ge h1), h2⟩
+    else
+      c3 x1 hao hev (Nat.succ_le_of_lt (Nat.lt_of_not_ge h2))
