@@ -21,14 +21,14 @@ theorem PEqualNP.Outside.R_meta_5108_404
     (A : Finset (Fin n)) (C : Circuit),
   ¬G.Colorable 2 → (∀ z ∉ A, (G.neighborSet z).ncard = 3) →
   (∀ z (w : G.Walk z z), w.IsCycle → 7 ≤ w.length) →
-  (∀ u v, G.Adj u v → u ∉ A) → (∃ u v, G.Adj u v) →
+  (∀ u v, G.Adj u v → u ∉ A) →
   FanInTwo C → (∀ x, C.eval (List.ofFn x) = NestedCover.graphFun G A x) →
   (∀ D : Circuit, FanInTwo D → (∀ x, D.eval (List.ofFn x) = NestedCover.graphFun G A x) →
     C.size ≤ D.size) →
   (∀ T : Finset (Fin n), (∀ u v, G.Adj u v → u ∈ T ∨ v ∈ T) →
     C.size + 1 < A.card + G.edgeSet.ncard + T.card) →
   ∃ u v, G.Adj u v ∧ ∃ S R : Finset ℕ, Disjoint S R ∧
-    (∀ j ∈ S, j < C.size) ∧ (∀ j ∈ R, j < C.size) ∧
+    (∀ j ∈ S ∪ R, j < C.size) ∧
     (∀ j ∈ S, ∃ q : ℕ, (q < n + j ∨ n + C.size ≤ q) ∧ (∀ r ∈ R, q ≠ n + r) ∧
       ∀ x : Fin n → Bool,
         let w := C.wires (List.ofFn (Function.update (Function.update x u false) v false))
@@ -172,8 +172,10 @@ theorem PEqualNP.Outside.R_meta_5108_404
       intro T hT
       have hn : ¬ A.card+G.edgeSet.ncard+T.card ≤ s+1 := fun h => large ⟨T,hT,h⟩
       omega
-    obtain ⟨u,v,huv,S,R,hdis,hS,hR,hal,hdead,h7⟩ := weakCore n G A C hnon hdeg hgirth hiso hedge
+    obtain ⟨u,v,huv,S,R,hdis,hSR,hal,hdead,h7⟩ := weakCore n G A C hnon hdeg hgirth hiso
       hC (fun x => (hcorrect x).trans (heq x)) minimal below
+    have hS : ∀ j ∈ S, j < C.size := fun j hj => hSR j (Finset.mem_union_left R hj)
+    have hR : ∀ j ∈ R, j < C.size := fun j hj => hSR j (Finset.mem_union_right S hj)
     have hE := elim n C u v S R hC hdis hS hR hal hdead
     have hsub : S ∪ R ⊆ Finset.range C.size := by
       intro j hj
