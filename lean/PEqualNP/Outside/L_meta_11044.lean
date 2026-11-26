@@ -551,8 +551,64 @@ def g2h_6 : List (ℕ × ℕ) := [(36, 11), (68, 11)]
 def g2h_7 : List (ℕ × ℕ) := [(24, 11), (34, 12)]
 def tb2 : List (ℕ × ℕ) := g2h_0 ++ (g2h_1 ++ (g2h_2 ++ (g2h_3 ++ (g2h_4 ++ (g2h_5 ++ (g2h_6 ++ (g2h_7 ++ (g2l_0 ++ (g2l_1 ++ (g2l_2 ++ (g2l_3 ++ (g2l_4 ++ (g2l_5 ++ (g2l_6 ++ (g2l_7 ++ (g2l_8 ++ (g2l_9 ++ (ac0))))))))))))))))))
 def tbA : List (ℕ × ℕ) := g2h_0 ++ (g2h_1 ++ (g2h_2 ++ (g2h_3 ++ (g2h_4 ++ (g2h_5 ++ (g2h_6 ++ (g2h_7 ++ (g2l_0 ++ (g2l_1 ++ (g2l_2 ++ (g2l_3 ++ (g2l_4 ++ (g2l_5 ++ (g2l_6 ++ (g2l_7 ++ (g2l_8 ++ (g2l_9 ++ (tb3))))))))))))))))))
-def g1_0 : List (ℕ × ℕ) := [(1, 12), (512, 7), (2, 13), (1024, 10), (4, 14), (2048, 9), (8, 13), (4096, 10), (16, 13), (8192, 10), (32, 13), (16384, 10), (64, 12), (32768, 10), (128, 11), (65536, 9), (256, 11), (131072, 7)]
-def ac3 : List (ℕ × ℕ) := g1_0 ++ (tb2)
+def HM2_0 : ℕ := 0x155555555555555555555555555555555555555555555555555555
+def HM2_1 : ℕ := 0x2aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+def HM3_0 : ℕ := 0x249249249249249249249249249249249249249249249249249249
+def HM3_1 : ℕ := 0x92492492492492492492492492492492492492492492492492492
+def HM3_2 : ℕ := 0x124924924924924924924924924924924924924924924924924924
+def HM4_0 : ℕ := 0x111111111111111111111111111111111111111111111111111111
+def HM4_1 : ℕ := 0x222222222222222222222222222222222222222222222222222222
+def HM4_2 : ℕ := 0x44444444444444444444444444444444444444444444444444444
+def HM4_3 : ℕ := 0x88888888888888888888888888888888888888888888888888888
+def g1p_0 : List (ℕ × ℕ) := [(1, 12)]
+def g1p_1 : List (ℕ × ℕ) := [(512, 7)]
+def g1p_2 : List (ℕ × ℕ) := [(2, 13)]
+def g1p_3 : List (ℕ × ℕ) := [(1024, 10)]
+def g1p_4 : List (ℕ × ℕ) := [(4, 14)]
+def g1p_5 : List (ℕ × ℕ) := [(2048, 9)]
+def g1p_6 : List (ℕ × ℕ) := [(8, 13)]
+def g1p_7 : List (ℕ × ℕ) := [(4096, 10)]
+def g1p_8 : List (ℕ × ℕ) := [(16, 13)]
+def g1p_9 : List (ℕ × ℕ) := [(8192, 10)]
+def g1p_10 : List (ℕ × ℕ) := [(32, 13)]
+def g1p_11 : List (ℕ × ℕ) := [(16384, 10)]
+def g1p_12 : List (ℕ × ℕ) := [(64, 12)]
+def g1p_13 : List (ℕ × ℕ) := [(32768, 10)]
+def g1p_14 : List (ℕ × ℕ) := [(128, 11)]
+def g1p_15 : List (ℕ × ℕ) := [(65536, 9)]
+def g1p_16 : List (ℕ × ℕ) := [(256, 11)]
+def g1p_17 : List (ℕ × ℕ) := [(131072, 7)]
+def g1_0 : List (ℕ × ℕ) := g1p_0 ++ (g1p_1 ++ (g1p_2 ++ (g1p_3 ++ (g1p_4 ++ (g1p_5 ++ (g1p_6 ++ (g1p_7 ++ (g1p_8 ++ (g1p_9 ++ (g1p_10 ++ (g1p_11 ++ (g1p_12 ++ (g1p_13 ++ (g1p_14 ++ (g1p_15 ++ (g1p_16 ++ (g1p_17)))))))))))))))))
+def mc1_0 : List (ℕ × ℕ × ℕ) := [(0, FF, 1)]
+def mc1_1 : List (ℕ × ℕ × ℕ) := [(1, FF, 1)]
+def mc1_2 : List (ℕ × ℕ × ℕ) := [(2, FF, 1)]
+def mc1_r : List (ℕ × ℕ × ℕ) := [(3, FF, 1), (4, FF, 1), (5, FF, 1), (6, FF, 1), (7, FF, 1), (8, FF, 1), (9, FF, 1), (10, FF, 1), (11, FF, 1)]
+def mc2_0 : List (ℕ × ℕ × ℕ) := [(0, FF, 1)]
+def mc2_1 : List (ℕ × ℕ × ℕ) := [(1, FF, 1)]
+def mc2_2 : List (ℕ × ℕ × ℕ) := [(2, FF, 1)]
+def mc2_r : List (ℕ × ℕ × ℕ) := [(3, FF, 1), (4, FF, 1), (5, FF, 1), (6, FF, 1), (7, FF, 1), (8, FF, 1), (9, FF, 1), (10, FF, 1), (11, FF, 1), (12, FF, 1)]
+def mc4_0_0 : List (ℕ × ℕ × ℕ) := [(0, HM2_0, 1)]
+def mc4_0_1 : List (ℕ × ℕ × ℕ) := [(0, HM2_1, 0)]
+def mc4_1 : List (ℕ × ℕ × ℕ) := [(1, FF, 1)]
+def mc4_2 : List (ℕ × ℕ × ℕ) := [(2, FF, 1)]
+def mc4_r : List (ℕ × ℕ × ℕ) := [(3, FF, 1), (4, FF, 1), (5, FF, 1), (6, FF, 1), (7, FF, 1), (8, FF, 1), (9, FF, 1), (10, FF, 1), (11, FF, 1), (12, FF, 1), (13, FF, 1)]
+def mc8_0 : List (ℕ × ℕ × ℕ) := [(0, FF, 1)]
+def mc8_1 : List (ℕ × ℕ × ℕ) := [(1, FF, 1)]
+def mc8_2 : List (ℕ × ℕ × ℕ) := [(2, FF, 1)]
+def mc8_r : List (ℕ × ℕ × ℕ) := [(3, FF, 1), (4, FF, 1), (5, FF, 1), (6, FF, 1), (7, FF, 1), (8, FF, 1), (9, FF, 1), (10, FF, 1), (11, FF, 1), (12, FF, 1)]
+def mc16_0 : List (ℕ × ℕ × ℕ) := [(0, FF, 1)]
+def mc16_1 : List (ℕ × ℕ × ℕ) := [(1, FF, 1)]
+def mc16_2 : List (ℕ × ℕ × ℕ) := [(2, FF, 1)]
+def mc16_r : List (ℕ × ℕ × ℕ) := [(3, FF, 1), (4, FF, 1), (5, FF, 1), (6, FF, 1), (7, FF, 1), (8, FF, 1), (9, FF, 1), (10, FF, 1), (11, FF, 1), (12, FF, 1)]
+def mc32_0 : List (ℕ × ℕ × ℕ) := [(0, FF, 1)]
+def mc32_1 : List (ℕ × ℕ × ℕ) := [(1, FF, 1)]
+def mc32_2 : List (ℕ × ℕ × ℕ) := [(2, FF, 1)]
+def mc32_r : List (ℕ × ℕ × ℕ) := [(3, FF, 1), (4, FF, 1), (5, FF, 1), (6, FF, 1), (7, FF, 1), (8, FF, 1), (9, FF, 1), (10, FF, 1), (11, FF, 1), (12, FF, 1)]
+def mc64_0 : List (ℕ × ℕ × ℕ) := [(0, FF, 1)]
+def mc64_1 : List (ℕ × ℕ × ℕ) := [(1, FF, 1)]
+def mc64_2 : List (ℕ × ℕ × ℕ) := [(2, FF, 1)]
+def mc64_r : List (ℕ × ℕ × ℕ) := [(3, FF, 1), (4, FF, 1), (5, FF, 1), (6, FF, 1), (7, FF, 1), (8, FF, 1), (9, FF, 1), (10, FF, 1), (11, FF, 1)]
+def ac3 : List (ℕ × ℕ) := g1_0 ++ (tbA)
 abbrev rawT := ac3
 def gtypes : List Gt := [(false, 0, 2), (false, 1, 2), (false, 2, 3), (false, 2, 4), (false, 2, 5), (false, 2, 8), (false, 2, 6), (false, 2, 7), (false, 0, 1), (false, 0, 3), (false, 0, 5), (false, 1, 3), (false, 1, 4), (false, 1, 6), (false, 1, 8), (false, 3, 4), (false, 3, 5), (false, 3, 7), (false, 4, 5), (false, 4, 6), (false, 4, 8), (false, 5, 6), (false, 5, 7), (true, 1, 5), (true, 2, 5), (true, 2, 6), (true, 2, 7), (false, 0, 4), (false, 1, 5), (false, 1, 7), (false, 3, 6), (false, 3, 8), (false, 4, 7), (false, 5, 8), (true, 0, 2), (true, 1, 2), (true, 2, 3), (true, 2, 4), (true, 2, 8), (false, 0, 6), (false, 6, 7), (false, 7, 8), (true, 0, 8), (true, 1, 3), (true, 1, 6), (true, 1, 7), (true, 3, 4), (true, 3, 7), (true, 4, 5), (true, 4, 6), (true, 5, 8), (false, 0, 7), (false, 0, 8), (false, 6, 8), (true, 0, 1), (true, 0, 3), (true, 0, 4), (true, 0, 5), (true, 0, 6), (true, 0, 7), (true, 1, 4), (true, 1, 8), (true, 3, 5), (true, 3, 6), (true, 3, 8), (true, 4, 7), (true, 4, 8), (true, 5, 6), (true, 5, 7), (true, 6, 7), (true, 6, 8), (true, 7, 8)]
 def slA : List ℕ := [34, 4, 2, 8, 16, 32, 1, 64, 128, 256, 1024, 4096, 8192, 16384, 32768, 2048, 65536, 512, 131072]
@@ -779,9 +835,149 @@ theorem k2h_6 : g2h_6.all (fun x => okR topC [] (pr tb3 x.1) x) = true := by dec
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
 theorem k2h_7 : g2h_7.all (fun x => okR topC [] (pr tb3 x.1) x) = true := by decide +kernel
+noncomputable def okC (T : List (ℕ × ℕ)) (Z K : ℕ) (p : ℕ × ℕ × ℕ) : Bool := !chkG topC [] (pr T Z) (1, 0) Z K p.1 p.2.1 p.2.2
+noncomputable def okTH (raw : List (ℕ × ℕ)) (K : ℕ) (e : Gt) (own cs : List ℕ) (fb : ℕ × ℕ) (t : ℕ) (p : ℕ × ℕ) : Bool := !chkG topC [e] (tabE e own (pick raw cs)) fb 0 K t p.1 p.2
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem k1_0 : g1_0.all (fun x => okR topC [] (pr tbA x.1) x) = true := by decide +kernel
+theorem hc1_0 : mc1_0.all (okC tbA 1 11) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc1_1 : mc1_1.all (okC tbA 1 11) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc1_2 : mc1_2.all (okC tbA 1 11) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc1_r : mc1_r.all (okC tbA 1 11) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hp1 : (pOk 1 (pr tbA 1) && Nat.ble 12 16 && (List.range 12).all (fun t => mFull (((mc1_0 ++ (mc1_1 ++ (mc1_2 ++ (mc1_r)))).filter (fun p => Nat.beq p.1 t)).map Prod.snd))) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem k1p_1 : g1p_1.all (fun x => okR topC [] (pr tbA x.1) x) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc2_0 : mc2_0.all (okC tbA 2 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc2_1 : mc2_1.all (okC tbA 2 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc2_2 : mc2_2.all (okC tbA 2 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc2_r : mc2_r.all (okC tbA 2 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hp2 : (pOk 2 (pr tbA 2) && Nat.ble 13 16 && (List.range 13).all (fun t => mFull (((mc2_0 ++ (mc2_1 ++ (mc2_2 ++ (mc2_r)))).filter (fun p => Nat.beq p.1 t)).map Prod.snd))) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem k1p_3 : g1p_3.all (fun x => okR topC [] (pr tbA x.1) x) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc4_0_0 : mc4_0_0.all (okC tbA 4 13) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc4_0_1 : mc4_0_1.all (okC tbA 4 13) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc4_1 : mc4_1.all (okC tbA 4 13) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc4_2 : mc4_2.all (okC tbA 4 13) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc4_r : mc4_r.all (okC tbA 4 13) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hp4 : (pOk 4 (pr tbA 4) && Nat.ble 14 16 && (List.range 14).all (fun t => mFull (((mc4_0_0 ++ (mc4_0_1 ++ (mc4_1 ++ (mc4_2 ++ (mc4_r))))).filter (fun p => Nat.beq p.1 t)).map Prod.snd))) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem k1p_5 : g1p_5.all (fun x => okR topC [] (pr tbA x.1) x) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc8_0 : mc8_0.all (okC tbA 8 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc8_1 : mc8_1.all (okC tbA 8 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc8_2 : mc8_2.all (okC tbA 8 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc8_r : mc8_r.all (okC tbA 8 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hp8 : (pOk 8 (pr tbA 8) && Nat.ble 13 16 && (List.range 13).all (fun t => mFull (((mc8_0 ++ (mc8_1 ++ (mc8_2 ++ (mc8_r)))).filter (fun p => Nat.beq p.1 t)).map Prod.snd))) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem k1p_7 : g1p_7.all (fun x => okR topC [] (pr tbA x.1) x) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc16_0 : mc16_0.all (okC tbA 16 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc16_1 : mc16_1.all (okC tbA 16 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc16_2 : mc16_2.all (okC tbA 16 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc16_r : mc16_r.all (okC tbA 16 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hp16 : (pOk 16 (pr tbA 16) && Nat.ble 13 16 && (List.range 13).all (fun t => mFull (((mc16_0 ++ (mc16_1 ++ (mc16_2 ++ (mc16_r)))).filter (fun p => Nat.beq p.1 t)).map Prod.snd))) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem k1p_9 : g1p_9.all (fun x => okR topC [] (pr tbA x.1) x) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc32_0 : mc32_0.all (okC tbA 32 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc32_1 : mc32_1.all (okC tbA 32 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc32_2 : mc32_2.all (okC tbA 32 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc32_r : mc32_r.all (okC tbA 32 12) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hp32 : (pOk 32 (pr tbA 32) && Nat.ble 13 16 && (List.range 13).all (fun t => mFull (((mc32_0 ++ (mc32_1 ++ (mc32_2 ++ (mc32_r)))).filter (fun p => Nat.beq p.1 t)).map Prod.snd))) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem k1p_11 : g1p_11.all (fun x => okR topC [] (pr tbA x.1) x) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc64_0 : mc64_0.all (okC tbA 64 11) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc64_1 : mc64_1.all (okC tbA 64 11) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc64_2 : mc64_2.all (okC tbA 64 11) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hc64_r : mc64_r.all (okC tbA 64 11) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem hp64 : (pOk 64 (pr tbA 64) && Nat.ble 12 16 && (List.range 12).all (fun t => mFull (((mc64_0 ++ (mc64_1 ++ (mc64_2 ++ (mc64_r)))).filter (fun p => Nat.beq p.1 t)).map Prod.snd))) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem k1p_13 : g1p_13.all (fun x => okR topC [] (pr tbA x.1) x) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem k1p_14 : g1p_14.all (fun x => okR topC [] (pr tbA x.1) x) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem k1p_15 : g1p_15.all (fun x => okR topC [] (pr tbA x.1) x) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem k1p_16 : g1p_16.all (fun x => okR topC [] (pr tbA x.1) x) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem k1p_17 : g1p_17.all (fun x => okR topC [] (pr tbA x.1) x) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
 theorem qqk0 : (okTy gtypes rawT 14 0 (false, 0, 2) ([] : List ℕ) ([4] : List ℕ) fb0 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
@@ -938,144 +1134,771 @@ set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
 theorem qqk38 : (okTy gtypes rawT 14 38 (true, 2, 8) ([] : List ℕ) ([4] : List ℕ) fb38 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
  (okTs rawT 14 (true, 2, 8) ([] : List ℕ) ([4] : List ℕ) fb38 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+def sl39 : List ℕ := [32, 1, 68, 72, 6, 8193, 33024, 1152, 145, 70, 328]
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk39 : (okTy gtypes rawT 14 39 (false, 0, 6) ([] : List ℕ) slA fb39 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (false, 0, 6) ([] : List ℕ) slA fb39 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qqk39 : okTy gtypes rawT 14 39 (false, 0, 6) ([] : List ℕ) sl39 fb39 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk40 : (okTy gtypes rawT 14 40 (false, 6, 7) ([] : List ℕ) slA fb40 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (false, 6, 7) ([] : List ℕ) slA fb40 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qs39_0 : okTs rawT 14 (false, 0, 6) ([] : List ℕ) sl39 fb39 [0] = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk41 : (okTy gtypes rawT 14 41 (false, 7, 8) ([] : List ℕ) slA fb41 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (false, 7, 8) ([] : List ℕ) slA fb41 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qs39_1 : okTs rawT 14 (false, 0, 6) ([] : List ℕ) sl39 fb39 [1] = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk42 : (okTy gtypes rawT 14 42 (true, 0, 8) ([] : List ℕ) slA fb42 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 0, 8) ([] : List ℕ) slA fb42 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qs39_2 : okTs rawT 14 (false, 0, 6) ([] : List ℕ) sl39 fb39 [2] = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk43 : (okTy gtypes rawT 14 43 (true, 1, 3) ([] : List ℕ) slA fb43 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 1, 3) ([] : List ℕ) slA fb43 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qs39_3 : okTs rawT 14 (false, 0, 6) ([] : List ℕ) sl39 fb39 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def mh40_0_0 : List (ℕ × ℕ) := [(HM2_0, 1)]
+def mh40_0_1 : List (ℕ × ℕ) := [(HM2_1, 0)]
+def mh40_0 : List (ℕ × ℕ) := mh40_0_0 ++ (mh40_0_1)
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk44 : (okTy gtypes rawT 14 44 (true, 1, 6) ([] : List ℕ) slA fb44 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 1, 6) ([] : List ℕ) slA fb44 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qh40_0_0 : mh40_0_0.all (okTH rawT 14 (false, 6, 7) ([] : List ℕ) slA fb40 0) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk45 : (okTy gtypes rawT 14 45 (true, 1, 7) ([] : List ℕ) slA fb45 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 1, 7) ([] : List ℕ) slA fb45 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qh40_0_1 : mh40_0_1.all (okTH rawT 14 (false, 6, 7) ([] : List ℕ) slA fb40 0) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk46 : (okTy gtypes rawT 14 46 (true, 3, 4) ([] : List ℕ) slA fb46 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 3, 4) ([] : List ℕ) slA fb46 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem mf40_0 : mFull mh40_0 = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk47 : (okTy gtypes rawT 14 47 (true, 3, 7) ([] : List ℕ) slA fb47 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 3, 7) ([] : List ℕ) slA fb47 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qqk40 : (Nat.blt ((false, 6, 7)).2.1 9 && Nat.blt ((false, 6, 7)).2.2 9 && Nat.ble 14 15 && pOk 0 (tabE (false, 6, 7) ([] : List ℕ) (pick rawT slA)) && fbOk [(false, 6, 7)] (gtypes.take 40) fb40) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk48 : (okTy gtypes rawT 14 48 (true, 4, 5) ([] : List ℕ) slA fb48 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 4, 5) ([] : List ℕ) slA fb48 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qc40 : (List.range (14 + 1)).all (fun t => ([[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)) || ([(0, mh40_0)] : List (ℕ × List (ℕ × ℕ))).any (fun x => Nat.beq t x.1)) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk49 : (okTy gtypes rawT 14 49 (true, 4, 6) ([] : List ℕ) slA fb49 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 4, 6) ([] : List ℕ) slA fb49 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qs40_0 : okTs rawT 14 (false, 6, 7) ([] : List ℕ) slA fb40 [1] = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk50 : (okTy gtypes rawT 14 50 (true, 5, 8) ([] : List ℕ) slA fb50 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 5, 8) ([] : List ℕ) slA fb50 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qs40_1 : okTs rawT 14 (false, 6, 7) ([] : List ℕ) slA fb40 [2] = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk51 : (okTy gtypes rawT 14 51 (false, 0, 7) ([] : List ℕ) slA fb51 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (false, 0, 7) ([] : List ℕ) slA fb51 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qs40_2 : okTs rawT 14 (false, 6, 7) ([] : List ℕ) slA fb40 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def sl41 : List ℕ := [128, 4, 32, 1, 64, 2, 2048, 132, 130, 264, 257, 8320, 33024, 1152, 140, 133, 137, 145, 328]
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk52 : (okTy gtypes rawT 14 52 (false, 0, 8) ([] : List ℕ) slA fb52 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (false, 0, 8) ([] : List ℕ) slA fb52 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qqk41 : okTy gtypes rawT 14 41 (false, 7, 8) ([] : List ℕ) sl41 fb41 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk53 : (okTy gtypes rawT 14 53 (false, 6, 8) ([] : List ℕ) slA fb53 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (false, 6, 8) ([] : List ℕ) slA fb53 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qs41_0 : okTs rawT 14 (false, 7, 8) ([] : List ℕ) sl41 fb41 [0] = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk54 : (okTy gtypes rawT 14 54 (true, 0, 1) ([] : List ℕ) slA fb54 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 0, 1) ([] : List ℕ) slA fb54 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qs41_1 : okTs rawT 14 (false, 7, 8) ([] : List ℕ) sl41 fb41 [1] = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk55 : (okTy gtypes rawT 14 55 (true, 0, 3) ([] : List ℕ) slA fb55 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 0, 3) ([] : List ℕ) slA fb55 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qs41_2 : okTs rawT 14 (false, 7, 8) ([] : List ℕ) sl41 fb41 [2] = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk56 : (okTy gtypes rawT 14 56 (true, 0, 4) ([] : List ℕ) slA fb56 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 0, 4) ([] : List ℕ) slA fb56 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qs41_3 : okTs rawT 14 (false, 7, 8) ([] : List ℕ) sl41 fb41 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def mh42_0_0 : List (ℕ × ℕ) := [(HM4_0, 1)]
+def mh42_0_1 : List (ℕ × ℕ) := [(HM4_1, 0)]
+def mh42_0_2 : List (ℕ × ℕ) := [(HM4_2, 0)]
+def mh42_0_3 : List (ℕ × ℕ) := [(HM4_3, 0)]
+def mh42_0 : List (ℕ × ℕ) := mh42_0_0 ++ (mh42_0_1 ++ (mh42_0_2 ++ (mh42_0_3)))
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk57 : (okTy gtypes rawT 14 57 (true, 0, 5) ([] : List ℕ) slA fb57 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 0, 5) ([] : List ℕ) slA fb57 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qh42_0_0 : mh42_0_0.all (okTH rawT 14 (true, 0, 8) ([] : List ℕ) slA fb42 0) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk58 : (okTy gtypes rawT 14 58 (true, 0, 6) ([] : List ℕ) slA fb58 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 0, 6) ([] : List ℕ) slA fb58 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qh42_0_1 : mh42_0_1.all (okTH rawT 14 (true, 0, 8) ([] : List ℕ) slA fb42 0) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk59 : (okTy gtypes rawT 14 59 (true, 0, 7) ([] : List ℕ) slA fb59 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 0, 7) ([] : List ℕ) slA fb59 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qh42_0_2 : mh42_0_2.all (okTH rawT 14 (true, 0, 8) ([] : List ℕ) slA fb42 0) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk60 : (okTy gtypes rawT 14 60 (true, 1, 4) ([] : List ℕ) slA fb60 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 1, 4) ([] : List ℕ) slA fb60 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qh42_0_3 : mh42_0_3.all (okTH rawT 14 (true, 0, 8) ([] : List ℕ) slA fb42 0) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk61 : (okTy gtypes rawT 14 61 (true, 1, 8) ([] : List ℕ) slA fb61 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 1, 8) ([] : List ℕ) slA fb61 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem mf42_0 : mFull mh42_0 = true := by decide +kernel
+def mh42_1_0 : List (ℕ × ℕ) := [(HM3_0, 1)]
+def mh42_1_1 : List (ℕ × ℕ) := [(HM3_1, 0)]
+def mh42_1_2 : List (ℕ × ℕ) := [(HM3_2, 0)]
+def mh42_1 : List (ℕ × ℕ) := mh42_1_0 ++ (mh42_1_1 ++ (mh42_1_2))
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk62 : (okTy gtypes rawT 14 62 (true, 3, 5) ([] : List ℕ) slA fb62 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 3, 5) ([] : List ℕ) slA fb62 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qh42_1_0 : mh42_1_0.all (okTH rawT 14 (true, 0, 8) ([] : List ℕ) slA fb42 1) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk63 : (okTy gtypes rawT 14 63 (true, 3, 6) ([] : List ℕ) slA fb63 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 3, 6) ([] : List ℕ) slA fb63 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qh42_1_1 : mh42_1_1.all (okTH rawT 14 (true, 0, 8) ([] : List ℕ) slA fb42 1) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk64 : (okTy gtypes rawT 14 64 (true, 3, 8) ([] : List ℕ) slA fb64 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 3, 8) ([] : List ℕ) slA fb64 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qh42_1_2 : mh42_1_2.all (okTH rawT 14 (true, 0, 8) ([] : List ℕ) slA fb42 1) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk65 : (okTy gtypes rawT 14 65 (true, 4, 7) ([] : List ℕ) slA fb65 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 4, 7) ([] : List ℕ) slA fb65 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem mf42_1 : mFull mh42_1 = true := by decide +kernel
+def mh42_2_0 : List (ℕ × ℕ) := [(HM2_0, 1)]
+def mh42_2_1 : List (ℕ × ℕ) := [(HM2_1, 0)]
+def mh42_2 : List (ℕ × ℕ) := mh42_2_0 ++ (mh42_2_1)
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk66 : (okTy gtypes rawT 14 66 (true, 4, 8) ([] : List ℕ) slA fb66 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 4, 8) ([] : List ℕ) slA fb66 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qh42_2_0 : mh42_2_0.all (okTH rawT 14 (true, 0, 8) ([] : List ℕ) slA fb42 2) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk67 : (okTy gtypes rawT 14 67 (true, 5, 6) ([] : List ℕ) slA fb67 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 5, 6) ([] : List ℕ) slA fb67 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qh42_2_1 : mh42_2_1.all (okTH rawT 14 (true, 0, 8) ([] : List ℕ) slA fb42 2) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk68 : (okTy gtypes rawT 14 68 (true, 5, 7) ([] : List ℕ) slA fb68 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 5, 7) ([] : List ℕ) slA fb68 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem mf42_2 : mFull mh42_2 = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk69 : (okTy gtypes rawT 14 69 (true, 6, 7) ([] : List ℕ) slA fb69 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 6, 7) ([] : List ℕ) slA fb69 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qqk42 : (Nat.blt ((true, 0, 8)).2.1 9 && Nat.blt ((true, 0, 8)).2.2 9 && Nat.ble 14 15 && pOk 0 (tabE (true, 0, 8) ([] : List ℕ) (pick rawT slA)) && fbOk [(true, 0, 8)] (gtypes.take 42) fb42) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk70 : (okTy gtypes rawT 14 70 (true, 6, 8) ([] : List ℕ) slA fb70 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 6, 8) ([] : List ℕ) slA fb70 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qc42 : (List.range (14 + 1)).all (fun t => ([[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)) || ([(0, mh42_0), (1, mh42_1), (2, mh42_2)] : List (ℕ × List (ℕ × ℕ))).any (fun x => Nat.beq t x.1)) = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqk71 : (okTy gtypes rawT 14 71 (true, 7, 8) ([] : List ℕ) slA fb71 [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true) ∧
- (okTs rawT 14 (true, 7, 8) ([] : List ℕ) slA fb71 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true) := by decide +kernel
+theorem qs42_0 : okTs rawT 14 (true, 0, 8) ([] : List ℕ) slA fb42 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def sl43 : List ℕ := [4, 8, 32, 1, 16, 72, 10, 34, 264, 65538, 2056, 4352, 16392, 8320, 8193, 32776, 33024, 1152, 145]
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqkA : (Nat.ble 15 15 && pOk 0 (pick rawT slA) && fbOk [] gtypes (1, 1) && (List.range 16).all (fun t => ([[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)))) = true := by decide +kernel
+theorem qqk43 : okTy gtypes rawT 14 43 (true, 1, 3) ([] : List ℕ) sl43 fb43 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
 set_option maxRecDepth 100000 in
 set_option maxHeartbeats 0 in
-theorem qqkB : okLs (pick rawT slA) 15 (1, 1) [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] = true := by decide +kernel
+theorem qs43_0 : okTs rawT 14 (true, 1, 3) ([] : List ℕ) sl43 fb43 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs43_1 : okTs rawT 14 (true, 1, 3) ([] : List ℕ) sl43 fb43 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs43_2 : okTs rawT 14 (true, 1, 3) ([] : List ℕ) sl43 fb43 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs43_3 : okTs rawT 14 (true, 1, 3) ([] : List ℕ) sl43 fb43 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def mh44_0_0 : List (ℕ × ℕ) := [(HM2_0, 1)]
+def mh44_0_1 : List (ℕ × ℕ) := [(HM2_1, 0)]
+def mh44_0 : List (ℕ × ℕ) := mh44_0_0 ++ (mh44_0_1)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh44_0_0 : mh44_0_0.all (okTH rawT 14 (true, 1, 6) ([] : List ℕ) slA fb44 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh44_0_1 : mh44_0_1.all (okTH rawT 14 (true, 1, 6) ([] : List ℕ) slA fb44 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf44_0 : mFull mh44_0 = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk44 : (Nat.blt ((true, 1, 6)).2.1 9 && Nat.blt ((true, 1, 6)).2.2 9 && Nat.ble 14 15 && pOk 0 (tabE (true, 1, 6) ([] : List ℕ) (pick rawT slA)) && fbOk [(true, 1, 6)] (gtypes.take 44) fb44) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qc44 : (List.range (14 + 1)).all (fun t => ([[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)) || ([(0, mh44_0)] : List (ℕ × List (ℕ × ℕ))).any (fun x => Nat.beq t x.1)) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs44_0 : okTs rawT 14 (true, 1, 6) ([] : List ℕ) slA fb44 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs44_1 : okTs rawT 14 (true, 1, 6) ([] : List ℕ) slA fb44 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs44_2 : okTs rawT 14 (true, 1, 6) ([] : List ℕ) slA fb44 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk45 : okTy gtypes rawT 14 45 (true, 1, 7) ([] : List ℕ) slA fb45 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs45_0 : okTs rawT 14 (true, 1, 7) ([] : List ℕ) slA fb45 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs45_1 : okTs rawT 14 (true, 1, 7) ([] : List ℕ) slA fb45 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs45_2 : okTs rawT 14 (true, 1, 7) ([] : List ℕ) slA fb45 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs45_3 : okTs rawT 14 (true, 1, 7) ([] : List ℕ) slA fb45 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def sl46 : List ℕ := [4, 32, 24, 72, 34, 264, 4160, 4352, 8320, 8193, 32776, 1152, 152, 145]
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk46 : okTy gtypes rawT 14 46 (true, 3, 4) ([] : List ℕ) sl46 fb46 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs46_0 : okTs rawT 14 (true, 3, 4) ([] : List ℕ) sl46 fb46 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs46_1 : okTs rawT 14 (true, 3, 4) ([] : List ℕ) sl46 fb46 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs46_2 : okTs rawT 14 (true, 3, 4) ([] : List ℕ) sl46 fb46 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs46_3 : okTs rawT 14 (true, 3, 4) ([] : List ℕ) sl46 fb46 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def sl47 : List ℕ := [4, 8, 32, 1, 2, 136, 9, 24, 72, 130, 10, 264, 65537, 65552, 65538, 2056, 4160, 4352, 8320, 32776, 33024, 1152, 152, 145, 200, 73, 70]
+def mh47_0_0 : List (ℕ × ℕ) := [(HM2_0, 1)]
+def mh47_0_1 : List (ℕ × ℕ) := [(HM2_1, 0)]
+def mh47_0 : List (ℕ × ℕ) := mh47_0_0 ++ (mh47_0_1)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh47_0_0 : mh47_0_0.all (okTH rawT 14 (true, 3, 7) ([] : List ℕ) sl47 fb47 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh47_0_1 : mh47_0_1.all (okTH rawT 14 (true, 3, 7) ([] : List ℕ) sl47 fb47 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf47_0 : mFull mh47_0 = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk47 : (Nat.blt ((true, 3, 7)).2.1 9 && Nat.blt ((true, 3, 7)).2.2 9 && Nat.ble 14 15 && pOk 0 (tabE (true, 3, 7) ([] : List ℕ) (pick rawT sl47)) && fbOk [(true, 3, 7)] (gtypes.take 47) fb47) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qc47 : (List.range (14 + 1)).all (fun t => ([[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)) || ([(0, mh47_0)] : List (ℕ × List (ℕ × ℕ))).any (fun x => Nat.beq t x.1)) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs47_0 : okTs rawT 14 (true, 3, 7) ([] : List ℕ) sl47 fb47 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs47_1 : okTs rawT 14 (true, 3, 7) ([] : List ℕ) sl47 fb47 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs47_2 : okTs rawT 14 (true, 3, 7) ([] : List ℕ) sl47 fb47 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk48 : okTy gtypes rawT 14 48 (true, 4, 5) ([] : List ℕ) slA fb48 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs48_0 : okTs rawT 14 (true, 4, 5) ([] : List ℕ) slA fb48 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs48_1 : okTs rawT 14 (true, 4, 5) ([] : List ℕ) slA fb48 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs48_2 : okTs rawT 14 (true, 4, 5) ([] : List ℕ) slA fb48 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs48_3 : okTs rawT 14 (true, 4, 5) ([] : List ℕ) slA fb48 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def sl49 : List ℕ := [128, 4, 32, 1, 16, 64, 2, 256, 24, 17, 80, 130, 10, 264, 65552, 4160, 4352, 8320, 8193, 33024, 1152, 145]
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk49 : okTy gtypes rawT 14 49 (true, 4, 6) ([] : List ℕ) sl49 fb49 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs49_0 : okTs rawT 14 (true, 4, 6) ([] : List ℕ) sl49 fb49 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs49_1 : okTs rawT 14 (true, 4, 6) ([] : List ℕ) sl49 fb49 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs49_2 : okTs rawT 14 (true, 4, 6) ([] : List ℕ) sl49 fb49 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs49_3 : okTs rawT 14 (true, 4, 6) ([] : List ℕ) sl49 fb49 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk50 : okTy gtypes rawT 14 50 (true, 5, 8) ([] : List ℕ) slA fb50 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs50_0 : okTs rawT 14 (true, 5, 8) ([] : List ℕ) slA fb50 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs50_1 : okTs rawT 14 (true, 5, 8) ([] : List ℕ) slA fb50 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs50_2 : okTs rawT 14 (true, 5, 8) ([] : List ℕ) slA fb50 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs50_3 : okTs rawT 14 (true, 5, 8) ([] : List ℕ) slA fb50 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def mh51_0_0 : List (ℕ × ℕ) := [(HM4_0, 1)]
+def mh51_0_1 : List (ℕ × ℕ) := [(HM4_1, 0)]
+def mh51_0_2 : List (ℕ × ℕ) := [(HM4_2, 0)]
+def mh51_0_3 : List (ℕ × ℕ) := [(HM4_3, 0)]
+def mh51_0 : List (ℕ × ℕ) := mh51_0_0 ++ (mh51_0_1 ++ (mh51_0_2 ++ (mh51_0_3)))
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh51_0_0 : mh51_0_0.all (okTH rawT 14 (false, 0, 7) ([] : List ℕ) slA fb51 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh51_0_1 : mh51_0_1.all (okTH rawT 14 (false, 0, 7) ([] : List ℕ) slA fb51 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh51_0_2 : mh51_0_2.all (okTH rawT 14 (false, 0, 7) ([] : List ℕ) slA fb51 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh51_0_3 : mh51_0_3.all (okTH rawT 14 (false, 0, 7) ([] : List ℕ) slA fb51 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf51_0 : mFull mh51_0 = true := by decide +kernel
+def mh51_1_0 : List (ℕ × ℕ) := [(HM3_0, 1)]
+def mh51_1_1 : List (ℕ × ℕ) := [(HM3_1, 0)]
+def mh51_1_2 : List (ℕ × ℕ) := [(HM3_2, 0)]
+def mh51_1 : List (ℕ × ℕ) := mh51_1_0 ++ (mh51_1_1 ++ (mh51_1_2))
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh51_1_0 : mh51_1_0.all (okTH rawT 14 (false, 0, 7) ([] : List ℕ) slA fb51 1) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh51_1_1 : mh51_1_1.all (okTH rawT 14 (false, 0, 7) ([] : List ℕ) slA fb51 1) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh51_1_2 : mh51_1_2.all (okTH rawT 14 (false, 0, 7) ([] : List ℕ) slA fb51 1) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf51_1 : mFull mh51_1 = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk51 : (Nat.blt ((false, 0, 7)).2.1 9 && Nat.blt ((false, 0, 7)).2.2 9 && Nat.ble 14 15 && pOk 0 (tabE (false, 0, 7) ([] : List ℕ) (pick rawT slA)) && fbOk [(false, 0, 7)] (gtypes.take 51) fb51) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qc51 : (List.range (14 + 1)).all (fun t => ([[2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)) || ([(0, mh51_0), (1, mh51_1)] : List (ℕ × List (ℕ × ℕ))).any (fun x => Nat.beq t x.1)) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs51_0 : okTs rawT 14 (false, 0, 7) ([] : List ℕ) slA fb51 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs51_1 : okTs rawT 14 (false, 0, 7) ([] : List ℕ) slA fb51 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def sl52 : List ℕ := [4, 32, 1, 2, 5, 264, 288, 65537, 4352, 8193, 33024, 1152, 145, 328]
+def mh52_0_0 : List (ℕ × ℕ) := [(HM2_0, 1)]
+def mh52_0_1 : List (ℕ × ℕ) := [(HM2_1, 0)]
+def mh52_0 : List (ℕ × ℕ) := mh52_0_0 ++ (mh52_0_1)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh52_0_0 : mh52_0_0.all (okTH rawT 14 (false, 0, 8) ([] : List ℕ) sl52 fb52 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh52_0_1 : mh52_0_1.all (okTH rawT 14 (false, 0, 8) ([] : List ℕ) sl52 fb52 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf52_0 : mFull mh52_0 = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk52 : (Nat.blt ((false, 0, 8)).2.1 9 && Nat.blt ((false, 0, 8)).2.2 9 && Nat.ble 14 15 && pOk 0 (tabE (false, 0, 8) ([] : List ℕ) (pick rawT sl52)) && fbOk [(false, 0, 8)] (gtypes.take 52) fb52) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qc52 : (List.range (14 + 1)).all (fun t => ([[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)) || ([(0, mh52_0)] : List (ℕ × List (ℕ × ℕ))).any (fun x => Nat.beq t x.1)) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs52_0 : okTs rawT 14 (false, 0, 8) ([] : List ℕ) sl52 fb52 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs52_1 : okTs rawT 14 (false, 0, 8) ([] : List ℕ) sl52 fb52 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs52_2 : okTs rawT 14 (false, 0, 8) ([] : List ℕ) sl52 fb52 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def sl53 : List ℕ := [128, 32, 1, 16, 2, 192, 68, 72, 288, 257, 65538, 2112, 4352, 16640, 8320, 8193, 33024, 1152, 145, 88, 112, 70, 98]
+def mh53_0_0 : List (ℕ × ℕ) := [(HM2_0, 1)]
+def mh53_0_1 : List (ℕ × ℕ) := [(HM2_1, 0)]
+def mh53_0 : List (ℕ × ℕ) := mh53_0_0 ++ (mh53_0_1)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh53_0_0 : mh53_0_0.all (okTH rawT 14 (false, 6, 8) ([] : List ℕ) sl53 fb53 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh53_0_1 : mh53_0_1.all (okTH rawT 14 (false, 6, 8) ([] : List ℕ) sl53 fb53 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf53_0 : mFull mh53_0 = true := by decide +kernel
+def mh53_1_0 : List (ℕ × ℕ) := [(HM2_0, 1)]
+def mh53_1_1 : List (ℕ × ℕ) := [(HM2_1, 0)]
+def mh53_1 : List (ℕ × ℕ) := mh53_1_0 ++ (mh53_1_1)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh53_1_0 : mh53_1_0.all (okTH rawT 14 (false, 6, 8) ([] : List ℕ) sl53 fb53 1) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh53_1_1 : mh53_1_1.all (okTH rawT 14 (false, 6, 8) ([] : List ℕ) sl53 fb53 1) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf53_1 : mFull mh53_1 = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk53 : (Nat.blt ((false, 6, 8)).2.1 9 && Nat.blt ((false, 6, 8)).2.2 9 && Nat.ble 14 15 && pOk 0 (tabE (false, 6, 8) ([] : List ℕ) (pick rawT sl53)) && fbOk [(false, 6, 8)] (gtypes.take 53) fb53) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qc53 : (List.range (14 + 1)).all (fun t => ([[2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)) || ([(0, mh53_0), (1, mh53_1)] : List (ℕ × List (ℕ × ℕ))).any (fun x => Nat.beq t x.1)) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs53_0 : okTs rawT 14 (false, 6, 8) ([] : List ℕ) sl53 fb53 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs53_1 : okTs rawT 14 (false, 6, 8) ([] : List ℕ) sl53 fb53 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def mh54_0_0 : List (ℕ × ℕ) := [(HM3_0, 1)]
+def mh54_0_1 : List (ℕ × ℕ) := [(HM3_1, 0)]
+def mh54_0_2 : List (ℕ × ℕ) := [(HM3_2, 0)]
+def mh54_0 : List (ℕ × ℕ) := mh54_0_0 ++ (mh54_0_1 ++ (mh54_0_2))
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh54_0_0 : mh54_0_0.all (okTH rawT 14 (true, 0, 1) ([] : List ℕ) slA fb54 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh54_0_1 : mh54_0_1.all (okTH rawT 14 (true, 0, 1) ([] : List ℕ) slA fb54 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh54_0_2 : mh54_0_2.all (okTH rawT 14 (true, 0, 1) ([] : List ℕ) slA fb54 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf54_0 : mFull mh54_0 = true := by decide +kernel
+def mh54_1_0 : List (ℕ × ℕ) := [(HM2_0, 1)]
+def mh54_1_1 : List (ℕ × ℕ) := [(HM2_1, 0)]
+def mh54_1 : List (ℕ × ℕ) := mh54_1_0 ++ (mh54_1_1)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh54_1_0 : mh54_1_0.all (okTH rawT 14 (true, 0, 1) ([] : List ℕ) slA fb54 1) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh54_1_1 : mh54_1_1.all (okTH rawT 14 (true, 0, 1) ([] : List ℕ) slA fb54 1) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf54_1 : mFull mh54_1 = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk54 : (Nat.blt ((true, 0, 1)).2.1 9 && Nat.blt ((true, 0, 1)).2.2 9 && Nat.ble 14 15 && pOk 0 (tabE (true, 0, 1) ([] : List ℕ) (pick rawT slA)) && fbOk [(true, 0, 1)] (gtypes.take 54) fb54) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qc54 : (List.range (14 + 1)).all (fun t => ([[2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)) || ([(0, mh54_0), (1, mh54_1)] : List (ℕ × List (ℕ × ℕ))).any (fun x => Nat.beq t x.1)) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs54_0 : okTs rawT 14 (true, 0, 1) ([] : List ℕ) slA fb54 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs54_1 : okTs rawT 14 (true, 0, 1) ([] : List ℕ) slA fb54 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def sl55 : List ℕ := [128, 4, 8, 32, 1, 256, 1024, 132, 160, 9, 24, 72, 130, 6, 34, 3, 264, 288, 65538, 2056, 4160, 4352, 8320, 8193, 33024, 145, 25, 73, 88, 265, 328]
+def mh55_0_0 : List (ℕ × ℕ) := [(HM2_0, 1)]
+def mh55_0_1 : List (ℕ × ℕ) := [(HM2_1, 0)]
+def mh55_0 : List (ℕ × ℕ) := mh55_0_0 ++ (mh55_0_1)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh55_0_0 : mh55_0_0.all (okTH rawT 14 (true, 0, 3) ([] : List ℕ) sl55 fb55 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh55_0_1 : mh55_0_1.all (okTH rawT 14 (true, 0, 3) ([] : List ℕ) sl55 fb55 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf55_0 : mFull mh55_0 = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk55 : (Nat.blt ((true, 0, 3)).2.1 9 && Nat.blt ((true, 0, 3)).2.2 9 && Nat.ble 14 15 && pOk 0 (tabE (true, 0, 3) ([] : List ℕ) (pick rawT sl55)) && fbOk [(true, 0, 3)] (gtypes.take 55) fb55) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qc55 : (List.range (14 + 1)).all (fun t => ([[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)) || ([(0, mh55_0)] : List (ℕ × List (ℕ × ℕ))).any (fun x => Nat.beq t x.1)) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs55_0 : okTs rawT 14 (true, 0, 3) ([] : List ℕ) sl55 fb55 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs55_1 : okTs rawT 14 (true, 0, 3) ([] : List ℕ) sl55 fb55 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs55_2 : okTs rawT 14 (true, 0, 3) ([] : List ℕ) sl55 fb55 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def sl56 : List ℕ := [128, 4, 8, 32, 1, 16, 17, 68, 72, 96, 6, 264, 65552, 8320, 8200, 8193, 33024, 1152, 145, 25]
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk56 : okTy gtypes rawT 14 56 (true, 0, 4) ([] : List ℕ) sl56 fb56 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs56_0 : okTs rawT 14 (true, 0, 4) ([] : List ℕ) sl56 fb56 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs56_1 : okTs rawT 14 (true, 0, 4) ([] : List ℕ) sl56 fb56 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs56_2 : okTs rawT 14 (true, 0, 4) ([] : List ℕ) sl56 fb56 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs56_3 : okTs rawT 14 (true, 0, 4) ([] : List ℕ) sl56 fb56 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def mh57_0_0 : List (ℕ × ℕ) := [(HM2_0, 1)]
+def mh57_0_1 : List (ℕ × ℕ) := [(HM2_1, 0)]
+def mh57_0 : List (ℕ × ℕ) := mh57_0_0 ++ (mh57_0_1)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh57_0_0 : mh57_0_0.all (okTH rawT 14 (true, 0, 5) ([] : List ℕ) slA fb57 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh57_0_1 : mh57_0_1.all (okTH rawT 14 (true, 0, 5) ([] : List ℕ) slA fb57 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf57_0 : mFull mh57_0 = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk57 : (Nat.blt ((true, 0, 5)).2.1 9 && Nat.blt ((true, 0, 5)).2.2 9 && Nat.ble 14 15 && pOk 0 (tabE (true, 0, 5) ([] : List ℕ) (pick rawT slA)) && fbOk [(true, 0, 5)] (gtypes.take 57) fb57) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qc57 : (List.range (14 + 1)).all (fun t => ([[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)) || ([(0, mh57_0)] : List (ℕ × List (ℕ × ℕ))).any (fun x => Nat.beq t x.1)) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs57_0 : okTs rawT 14 (true, 0, 5) ([] : List ℕ) slA fb57 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs57_1 : okTs rawT 14 (true, 0, 5) ([] : List ℕ) slA fb57 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs57_2 : okTs rawT 14 (true, 0, 5) ([] : List ℕ) slA fb57 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def sl58 : List ℕ := [128, 4, 8, 32, 1, 16, 64, 2, 256, 136, 160, 130, 10, 264, 288, 257, 65537, 2112, 4160, 16640, 8320, 8193, 32776, 33024, 1152, 145, 69, 73]
+def mh58_0_0 : List (ℕ × ℕ) := [(HM2_0, 1)]
+def mh58_0_1 : List (ℕ × ℕ) := [(HM2_1, 0)]
+def mh58_0 : List (ℕ × ℕ) := mh58_0_0 ++ (mh58_0_1)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh58_0_0 : mh58_0_0.all (okTH rawT 14 (true, 0, 6) ([] : List ℕ) sl58 fb58 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh58_0_1 : mh58_0_1.all (okTH rawT 14 (true, 0, 6) ([] : List ℕ) sl58 fb58 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf58_0 : mFull mh58_0 = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk58 : (Nat.blt ((true, 0, 6)).2.1 9 && Nat.blt ((true, 0, 6)).2.2 9 && Nat.ble 14 15 && pOk 0 (tabE (true, 0, 6) ([] : List ℕ) (pick rawT sl58)) && fbOk [(true, 0, 6)] (gtypes.take 58) fb58) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qc58 : (List.range (14 + 1)).all (fun t => ([[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)) || ([(0, mh58_0)] : List (ℕ × List (ℕ × ℕ))).any (fun x => Nat.beq t x.1)) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs58_0 : okTs rawT 14 (true, 0, 6) ([] : List ℕ) sl58 fb58 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs58_1 : okTs rawT 14 (true, 0, 6) ([] : List ℕ) sl58 fb58 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs58_2 : okTs rawT 14 (true, 0, 6) ([] : List ℕ) sl58 fb58 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def mh59_0_0 : List (ℕ × ℕ) := [(HM2_0, 1)]
+def mh59_0_1 : List (ℕ × ℕ) := [(HM2_1, 0)]
+def mh59_0 : List (ℕ × ℕ) := mh59_0_0 ++ (mh59_0_1)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh59_0_0 : mh59_0_0.all (okTH rawT 14 (true, 0, 7) ([] : List ℕ) slA fb59 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh59_0_1 : mh59_0_1.all (okTH rawT 14 (true, 0, 7) ([] : List ℕ) slA fb59 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf59_0 : mFull mh59_0 = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk59 : (Nat.blt ((true, 0, 7)).2.1 9 && Nat.blt ((true, 0, 7)).2.2 9 && Nat.ble 14 15 && pOk 0 (tabE (true, 0, 7) ([] : List ℕ) (pick rawT slA)) && fbOk [(true, 0, 7)] (gtypes.take 59) fb59) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qc59 : (List.range (14 + 1)).all (fun t => ([[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)) || ([(0, mh59_0)] : List (ℕ × List (ℕ × ℕ))).any (fun x => Nat.beq t x.1)) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs59_0 : okTs rawT 14 (true, 0, 7) ([] : List ℕ) slA fb59 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs59_1 : okTs rawT 14 (true, 0, 7) ([] : List ℕ) slA fb59 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs59_2 : okTs rawT 14 (true, 0, 7) ([] : List ℕ) slA fb59 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def sl60 : List ℕ := [128, 4, 8, 32, 16, 2, 8192, 17, 68, 72, 96, 18, 260, 264, 65552, 2112, 4352, 8320, 8200, 8193, 33024, 1152, 145, 35, 146]
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk60 : okTy gtypes rawT 14 60 (true, 1, 4) ([] : List ℕ) sl60 fb60 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs60_0 : okTs rawT 14 (true, 1, 4) ([] : List ℕ) sl60 fb60 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs60_1 : okTs rawT 14 (true, 1, 4) ([] : List ℕ) sl60 fb60 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs60_2 : okTs rawT 14 (true, 1, 4) ([] : List ℕ) sl60 fb60 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs60_3 : okTs rawT 14 (true, 1, 4) ([] : List ℕ) sl60 fb60 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk61 : okTy gtypes rawT 14 61 (true, 1, 8) ([] : List ℕ) slA fb61 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs61_0 : okTs rawT 14 (true, 1, 8) ([] : List ℕ) slA fb61 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs61_1 : okTs rawT 14 (true, 1, 8) ([] : List ℕ) slA fb61 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs61_2 : okTs rawT 14 (true, 1, 8) ([] : List ℕ) slA fb61 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs61_3 : okTs rawT 14 (true, 1, 8) ([] : List ℕ) slA fb61 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def mh62_0_0 : List (ℕ × ℕ) := [(HM2_0, 1)]
+def mh62_0_1 : List (ℕ × ℕ) := [(HM2_1, 0)]
+def mh62_0 : List (ℕ × ℕ) := mh62_0_0 ++ (mh62_0_1)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh62_0_0 : mh62_0_0.all (okTH rawT 14 (true, 3, 5) ([] : List ℕ) slA fb62 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh62_0_1 : mh62_0_1.all (okTH rawT 14 (true, 3, 5) ([] : List ℕ) slA fb62 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf62_0 : mFull mh62_0 = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk62 : (Nat.blt ((true, 3, 5)).2.1 9 && Nat.blt ((true, 3, 5)).2.2 9 && Nat.ble 14 15 && pOk 0 (tabE (true, 3, 5) ([] : List ℕ) (pick rawT slA)) && fbOk [(true, 3, 5)] (gtypes.take 62) fb62) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qc62 : (List.range (14 + 1)).all (fun t => ([[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)) || ([(0, mh62_0)] : List (ℕ × List (ℕ × ℕ))).any (fun x => Nat.beq t x.1)) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs62_0 : okTs rawT 14 (true, 3, 5) ([] : List ℕ) slA fb62 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs62_1 : okTs rawT 14 (true, 3, 5) ([] : List ℕ) slA fb62 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs62_2 : okTs rawT 14 (true, 3, 5) ([] : List ℕ) slA fb62 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def mh63_0_0 : List (ℕ × ℕ) := [(HM2_0, 1)]
+def mh63_0_1 : List (ℕ × ℕ) := [(HM2_1, 0)]
+def mh63_0 : List (ℕ × ℕ) := mh63_0_0 ++ (mh63_0_1)
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh63_0_0 : mh63_0_0.all (okTH rawT 14 (true, 3, 6) ([] : List ℕ) slA fb63 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qh63_0_1 : mh63_0_1.all (okTH rawT 14 (true, 3, 6) ([] : List ℕ) slA fb63 0) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem mf63_0 : mFull mh63_0 = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk63 : (Nat.blt ((true, 3, 6)).2.1 9 && Nat.blt ((true, 3, 6)).2.2 9 && Nat.ble 14 15 && pOk 0 (tabE (true, 3, 6) ([] : List ℕ) (pick rawT slA)) && fbOk [(true, 3, 6)] (gtypes.take 63) fb63) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qc63 : (List.range (14 + 1)).all (fun t => ([[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)) || ([(0, mh63_0)] : List (ℕ × List (ℕ × ℕ))).any (fun x => Nat.beq t x.1)) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs63_0 : okTs rawT 14 (true, 3, 6) ([] : List ℕ) slA fb63 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs63_1 : okTs rawT 14 (true, 3, 6) ([] : List ℕ) slA fb63 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs63_2 : okTs rawT 14 (true, 3, 6) ([] : List ℕ) slA fb63 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def sl64 : List ℕ := [128, 4, 8, 32, 1, 16, 132, 160, 72, 130, 6, 34, 264, 4128, 4160, 4352, 8320, 8193, 32776, 33024, 1152, 145, 73, 88, 70, 265, 328]
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk64 : okTy gtypes rawT 14 64 (true, 3, 8) ([] : List ℕ) sl64 fb64 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs64_0 : okTs rawT 14 (true, 3, 8) ([] : List ℕ) sl64 fb64 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs64_1 : okTs rawT 14 (true, 3, 8) ([] : List ℕ) sl64 fb64 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs64_2 : okTs rawT 14 (true, 3, 8) ([] : List ℕ) sl64 fb64 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs64_3 : okTs rawT 14 (true, 3, 8) ([] : List ℕ) sl64 fb64 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk65 : okTy gtypes rawT 14 65 (true, 4, 7) ([] : List ℕ) slA fb65 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs65_0 : okTs rawT 14 (true, 4, 7) ([] : List ℕ) slA fb65 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs65_1 : okTs rawT 14 (true, 4, 7) ([] : List ℕ) slA fb65 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs65_2 : okTs rawT 14 (true, 4, 7) ([] : List ℕ) slA fb65 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs65_3 : okTs rawT 14 (true, 4, 7) ([] : List ℕ) slA fb65 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+def sl66 : List ℕ := [128, 4, 8, 32, 1, 16, 2, 8192, 1024, 68, 72, 130, 288, 257, 65552, 2112, 4352, 8320, 8193, 8194, 33024, 148, 145, 280, 328]
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk66 : okTy gtypes rawT 14 66 (true, 4, 8) ([] : List ℕ) sl66 fb66 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs66_0 : okTs rawT 14 (true, 4, 8) ([] : List ℕ) sl66 fb66 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs66_1 : okTs rawT 14 (true, 4, 8) ([] : List ℕ) sl66 fb66 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs66_2 : okTs rawT 14 (true, 4, 8) ([] : List ℕ) sl66 fb66 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs66_3 : okTs rawT 14 (true, 4, 8) ([] : List ℕ) sl66 fb66 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk67 : okTy gtypes rawT 14 67 (true, 5, 6) ([] : List ℕ) slA fb67 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs67_0 : okTs rawT 14 (true, 5, 6) ([] : List ℕ) slA fb67 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs67_1 : okTs rawT 14 (true, 5, 6) ([] : List ℕ) slA fb67 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs67_2 : okTs rawT 14 (true, 5, 6) ([] : List ℕ) slA fb67 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs67_3 : okTs rawT 14 (true, 5, 6) ([] : List ℕ) slA fb67 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk68 : okTy gtypes rawT 14 68 (true, 5, 7) ([] : List ℕ) slA fb68 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs68_0 : okTs rawT 14 (true, 5, 7) ([] : List ℕ) slA fb68 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs68_1 : okTs rawT 14 (true, 5, 7) ([] : List ℕ) slA fb68 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs68_2 : okTs rawT 14 (true, 5, 7) ([] : List ℕ) slA fb68 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs68_3 : okTs rawT 14 (true, 5, 7) ([] : List ℕ) slA fb68 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk69 : okTy gtypes rawT 14 69 (true, 6, 7) ([] : List ℕ) slA fb69 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs69_0 : okTs rawT 14 (true, 6, 7) ([] : List ℕ) slA fb69 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs69_1 : okTs rawT 14 (true, 6, 7) ([] : List ℕ) slA fb69 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs69_2 : okTs rawT 14 (true, 6, 7) ([] : List ℕ) slA fb69 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs69_3 : okTs rawT 14 (true, 6, 7) ([] : List ℕ) slA fb69 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk70 : okTy gtypes rawT 14 70 (true, 6, 8) ([] : List ℕ) slA fb70 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs70_0 : okTs rawT 14 (true, 6, 8) ([] : List ℕ) slA fb70 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs70_1 : okTs rawT 14 (true, 6, 8) ([] : List ℕ) slA fb70 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs70_2 : okTs rawT 14 (true, 6, 8) ([] : List ℕ) slA fb70 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs70_3 : okTs rawT 14 (true, 6, 8) ([] : List ℕ) slA fb70 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqk71 : okTy gtypes rawT 14 71 (true, 7, 8) ([] : List ℕ) slA fb71 [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs71_0 : okTs rawT 14 (true, 7, 8) ([] : List ℕ) slA fb71 [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs71_1 : okTs rawT 14 (true, 7, 8) ([] : List ℕ) slA fb71 [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs71_2 : okTs rawT 14 (true, 7, 8) ([] : List ℕ) slA fb71 [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qs71_3 : okTs rawT 14 (true, 7, 8) ([] : List ℕ) slA fb71 [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqkA : (Nat.ble 15 15 && pOk 0 (pick rawT slA) && fbOk [] gtypes (1, 1) && (List.range 16).all (fun t => ([[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]] : List (List ℕ)).any (fun ts => ts.any (Nat.beq t)))) = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqkB_0 : okLs (pick rawT slA) 15 (1, 1) [0] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqkB_1 : okLs (pick rawT slA) 15 (1, 1) [1] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqkB_2 : okLs (pick rawT slA) 15 (1, 1) [2] = true := by decide +kernel
+set_option maxRecDepth 100000 in
+set_option maxHeartbeats 0 in
+theorem qqkB_3 : okLs (pick rawT slA) 15 (1, 1) [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] = true := by decide +kernel
 end hz20
 section hz21
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
@@ -6444,6 +7267,21 @@ lemma ty_imp {gs : List Gt} {raw : List (ℕ × ℕ)} {K i : ℕ} {e : Gt} {own 
   · rw [List.all_eq_true] at a6 ⊢
     intro t ht
     simp only [a6 t ht, Bool.true_or]
+lemma cT_app {raw : List (ℕ × ℕ)} {K : ℕ} {e : Gt} {own cs : List ℕ} {fb : ℕ × ℕ} {t : ℕ} {A B : List (ℕ × ℕ)} (ha : A.all (okTH raw K e own cs fb t) = true) (hb : B.all (okTH raw K e own cs fb t) = true) : (A ++ B).all (okTH raw K e own cs fb t) = true := by
+  rw [List.all_append, ha, hb]; rfl
+lemma ty_impH {gs : List Gt} {raw : List (ℕ × ℕ)} {K i : ℕ} {e : Gt} {own cs : List ℕ} {fb : ℕ × ℕ} {tt : List (List ℕ)} {Ms : List (ℕ × List (ℕ × ℕ))}
+    (hr : ∀ x ∈ raw, Imp [] x.1 x.2) (ho : ∀ x ∈ raw, x.1 ∈ own → Imp [e] x.1 x.2)
+    (h1 : (Nat.blt e.2.1 9 && Nat.blt e.2.2 9 && Nat.ble K 15 && pOk 0 (tabE e own (pick raw cs)) && fbOk [e] (gs.take i) fb) = true)
+    (hcov : (List.range (K + 1)).all (fun t => tt.any (fun ts => ts.any (Nat.beq t)) || Ms.any (fun x => Nat.beq t x.1)) = true)
+    (h2 : tt.all (okTs raw K e own cs fb) = true) (h3 : ∀ x ∈ Ms, mFull x.2 = true ∧ x.2.all (okTH raw K e own cs fb x.1) = true)
+    {L : ℕ} (hL : L ≤ K + 1) (h0 : Imp [] 0 L) (hF : ∀ f ∈ gs.take i, Imp [f] 0 L) : Imp [e] 0 L := by
+  simp only [Bool.and_eq_true] at h1
+  obtain ⟨⟨⟨⟨a1, a2⟩, a3⟩, a4⟩, a5⟩ := h1
+  refine rootT topC_ok (Ms := Ms) (tt := tt) (K := K) hL (Nat.le_of_ble_eq_true a3) ⟨Nat.le_of_ble_eq_true a1, Nat.le_of_ble_eq_true a2⟩ h0 (rootQ hr ho) a4 a5 hF (fun x hx => ⟨(h3 x hx).1, fun p hp => ?_⟩) (fun ts hts => ?_) hcov
+  · have := List.all_eq_true.1 (h3 x hx).2 p hp
+    simpa only [okTH, Bool.not_eq_true'] using this
+  · have := List.all_eq_true.1 h2 ts hts
+    simpa only [okTs, Bool.not_eq_true'] using this
 lemma chainT {gs : List Gt} {L : ℕ} (H : ∀ i (hi : i < gs.length), (∀ f ∈ gs.take i, Imp [f] 0 L) → Imp [gs[i]] 0 L) : ∀ f ∈ gs, Imp [f] 0 L := by
   have P : ∀ n, ∀ i (hi : i < gs.length), i < n → Imp [gs[i]] 0 L := by
     intro n
@@ -6506,8 +7344,47 @@ lemma j2h_6 : ∀ e ∈ g2h_6, Imp [] e.1 e.2 := okAll topC_ok k2h_6 at3
 lemma j2h_7 : ∀ e ∈ g2h_7, Imp [] e.1 e.2 := okAll topC_ok k2h_7 at3
 lemma at2 : ∀ e ∈ tb2, Imp [] e.1 e.2 := apI (j2h_0) (apI (j2h_1) (apI (j2h_2) (apI (j2h_3) (apI (j2h_4) (apI (j2h_5) (apI (j2h_6) (apI (j2h_7) (apI (j2l_0) (apI (j2l_1) (apI (j2l_2) (apI (j2l_3) (apI (j2l_4) (apI (j2l_5) (apI (j2l_6) (apI (j2l_7) (apI (j2l_8) (apI (j2l_9) (ai0))))))))))))))))))
 lemma atA : ∀ e ∈ tbA, Imp [] e.1 e.2 := apI (j2h_0) (apI (j2h_1) (apI (j2h_2) (apI (j2h_3) (apI (j2h_4) (apI (j2h_5) (apI (j2h_6) (apI (j2h_7) (apI (j2l_0) (apI (j2l_1) (apI (j2l_2) (apI (j2l_3) (apI (j2l_4) (apI (j2l_5) (apI (j2l_6) (apI (j2l_7) (apI (j2l_8) (apI (j2l_9) (at3))))))))))))))))))
-lemma j1_0 : ∀ e ∈ g1_0, Imp [] e.1 e.2 := okAll topC_ok k1_0 atA
-lemma ai3 : ∀ e ∈ ac3, Imp [] e.1 e.2 := apI (j1_0) (at2)
+lemma cC_app {T : List (ℕ × ℕ)} {Z K : ℕ} {A B : List (ℕ × ℕ × ℕ)} (ha : A.all (okC T Z K) = true) (hb : B.all (okC T Z K) = true) : (A ++ B).all (okC T Z K) = true := by
+  rw [List.all_append, ha, hb]; rfl
+lemma imp_runC {T : List (ℕ × ℕ)} {Z L : ℕ} (M : List (ℕ × ℕ × ℕ)) (hT : ∀ e ∈ T, Imp [] e.1 e.2)
+    (hp : (pOk Z (pr T Z) && Nat.ble L 16 && (List.range L).all (fun t => mFull ((M.filter (fun p => Nat.beq p.1 t)).map Prod.snd))) = true)
+    (h : M.all (okC T Z (L - 1)) = true) : Imp [] Z L := by
+  simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hp
+  have h16 := Nat.le_of_ble_eq_true hp.1.2
+  refine imp_FK topC_ok (F := []) (fb := (1, 0)) (K := L - 1) (by omega) (by omega) (Or.inl rfl) hp.1.1 (fun e he => hT e (List.mem_of_mem_filter he)) (Or.inl rfl) (by simp) (Or.inr fun t ht => ⟨_, hp.2 t ht, fun p hq => ?_⟩)
+  simp only [List.mem_map, List.mem_filter] at hq
+  obtain ⟨q, ⟨hq1, hq2⟩, rfl⟩ := hq
+  have h1 := List.all_eq_true.1 h q hq1
+  have h2 : q.1 = t := Nat.eq_of_beq_eq_true hq2
+  simp only [okC, Bool.not_eq_true'] at h1
+  rw [← h2]; exact h1
+lemma jh1 : Imp [] 1 12 := imp_runC (mc1_0 ++ (mc1_1 ++ (mc1_2 ++ (mc1_r)))) atA hp1 (cC_app hc1_0 (cC_app hc1_1 (cC_app hc1_2 hc1_r)))
+lemma j1p_0 : ∀ e ∈ g1p_0, Imp [] e.1 e.2 := one1 jh1
+lemma j1p_1 : ∀ e ∈ g1p_1, Imp [] e.1 e.2 := okAll topC_ok k1p_1 atA
+lemma jh2 : Imp [] 2 13 := imp_runC (mc2_0 ++ (mc2_1 ++ (mc2_2 ++ (mc2_r)))) atA hp2 (cC_app hc2_0 (cC_app hc2_1 (cC_app hc2_2 hc2_r)))
+lemma j1p_2 : ∀ e ∈ g1p_2, Imp [] e.1 e.2 := one1 jh2
+lemma j1p_3 : ∀ e ∈ g1p_3, Imp [] e.1 e.2 := okAll topC_ok k1p_3 atA
+lemma jh4 : Imp [] 4 14 := imp_runC (mc4_0_0 ++ (mc4_0_1 ++ (mc4_1 ++ (mc4_2 ++ (mc4_r))))) atA hp4 (cC_app hc4_0_0 (cC_app hc4_0_1 (cC_app hc4_1 (cC_app hc4_2 hc4_r))))
+lemma j1p_4 : ∀ e ∈ g1p_4, Imp [] e.1 e.2 := one1 jh4
+lemma j1p_5 : ∀ e ∈ g1p_5, Imp [] e.1 e.2 := okAll topC_ok k1p_5 atA
+lemma jh8 : Imp [] 8 13 := imp_runC (mc8_0 ++ (mc8_1 ++ (mc8_2 ++ (mc8_r)))) atA hp8 (cC_app hc8_0 (cC_app hc8_1 (cC_app hc8_2 hc8_r)))
+lemma j1p_6 : ∀ e ∈ g1p_6, Imp [] e.1 e.2 := one1 jh8
+lemma j1p_7 : ∀ e ∈ g1p_7, Imp [] e.1 e.2 := okAll topC_ok k1p_7 atA
+lemma jh16 : Imp [] 16 13 := imp_runC (mc16_0 ++ (mc16_1 ++ (mc16_2 ++ (mc16_r)))) atA hp16 (cC_app hc16_0 (cC_app hc16_1 (cC_app hc16_2 hc16_r)))
+lemma j1p_8 : ∀ e ∈ g1p_8, Imp [] e.1 e.2 := one1 jh16
+lemma j1p_9 : ∀ e ∈ g1p_9, Imp [] e.1 e.2 := okAll topC_ok k1p_9 atA
+lemma jh32 : Imp [] 32 13 := imp_runC (mc32_0 ++ (mc32_1 ++ (mc32_2 ++ (mc32_r)))) atA hp32 (cC_app hc32_0 (cC_app hc32_1 (cC_app hc32_2 hc32_r)))
+lemma j1p_10 : ∀ e ∈ g1p_10, Imp [] e.1 e.2 := one1 jh32
+lemma j1p_11 : ∀ e ∈ g1p_11, Imp [] e.1 e.2 := okAll topC_ok k1p_11 atA
+lemma jh64 : Imp [] 64 12 := imp_runC (mc64_0 ++ (mc64_1 ++ (mc64_2 ++ (mc64_r)))) atA hp64 (cC_app hc64_0 (cC_app hc64_1 (cC_app hc64_2 hc64_r)))
+lemma j1p_12 : ∀ e ∈ g1p_12, Imp [] e.1 e.2 := one1 jh64
+lemma j1p_13 : ∀ e ∈ g1p_13, Imp [] e.1 e.2 := okAll topC_ok k1p_13 atA
+lemma j1p_14 : ∀ e ∈ g1p_14, Imp [] e.1 e.2 := okAll topC_ok k1p_14 atA
+lemma j1p_15 : ∀ e ∈ g1p_15, Imp [] e.1 e.2 := okAll topC_ok k1p_15 atA
+lemma j1p_16 : ∀ e ∈ g1p_16, Imp [] e.1 e.2 := okAll topC_ok k1p_16 atA
+lemma j1p_17 : ∀ e ∈ g1p_17, Imp [] e.1 e.2 := okAll topC_ok k1p_17 atA
+lemma j1_0 : ∀ e ∈ g1_0, Imp [] e.1 e.2 := apI (j1p_0) (apI (j1p_1) (apI (j1p_2) (apI (j1p_3) (apI (j1p_4) (apI (j1p_5) (apI (j1p_6) (apI (j1p_7) (apI (j1p_8) (apI (j1p_9) (apI (j1p_10) (apI (j1p_11) (apI (j1p_12) (apI (j1p_13) (apI (j1p_14) (apI (j1p_15) (apI (j1p_16) (j1p_17)))))))))))))))))
+lemma ai3 : ∀ e ∈ ac3, Imp [] e.1 e.2 := apI (j1_0) (atA)
 lemma ty0 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 0, Imp [f] 0 L) → Imp [(false, 0, 2)] 0 L :=
   ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk0.1 (by simp only [List.all_cons, List.all_nil, qqk0.2, Bool.and_true]) hL h0
 lemma ty1 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 1, Imp [f] 0 L) → Imp [(false, 1, 2)] 0 L :=
@@ -6587,71 +7464,127 @@ lemma ty37 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 
 lemma ty38 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 38, Imp [f] 0 L) → Imp [(true, 2, 8)] 0 L :=
   ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk38.1 (by simp only [List.all_cons, List.all_nil, qqk38.2, Bool.and_true]) hL h0
 lemma ty39 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 39, Imp [f] 0 L) → Imp [(false, 0, 6)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk39.1 (by simp only [List.all_cons, List.all_nil, qqk39.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk39 (by simp only [List.all_cons, List.all_nil, qs39_0, qs39_1, qs39_2, qs39_3, Bool.and_true]) hL h0
 lemma ty40 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 40, Imp [f] 0 L) → Imp [(false, 6, 7)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk40.1 (by simp only [List.all_cons, List.all_nil, qqk40.2, Bool.and_true]) hL h0
+  ty_impH (tt := [[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) (Ms := [(0, mh40_0)]) ai3 own0 qqk40 qc40 (by simp only [List.all_cons, List.all_nil, qs40_0, qs40_1, qs40_2, Bool.and_true])
+    (fun x hx => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl
+      exact ⟨mf40_0, (cT_app qh40_0_0 qh40_0_1)⟩) hL h0
 lemma ty41 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 41, Imp [f] 0 L) → Imp [(false, 7, 8)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk41.1 (by simp only [List.all_cons, List.all_nil, qqk41.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk41 (by simp only [List.all_cons, List.all_nil, qs41_0, qs41_1, qs41_2, qs41_3, Bool.and_true]) hL h0
 lemma ty42 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 42, Imp [f] 0 L) → Imp [(true, 0, 8)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk42.1 (by simp only [List.all_cons, List.all_nil, qqk42.2, Bool.and_true]) hL h0
+  ty_impH (tt := [[3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) (Ms := [(0, mh42_0), (1, mh42_1), (2, mh42_2)]) ai3 own0 qqk42 qc42 (by simp only [List.all_cons, List.all_nil, qs42_0, Bool.and_true])
+    (fun x hx => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl | rfl | rfl
+      exacts [⟨mf42_0, (cT_app qh42_0_0 (cT_app qh42_0_1 (cT_app qh42_0_2 qh42_0_3)))⟩, ⟨mf42_1, (cT_app qh42_1_0 (cT_app qh42_1_1 qh42_1_2))⟩, ⟨mf42_2, (cT_app qh42_2_0 qh42_2_1)⟩]) hL h0
 lemma ty43 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 43, Imp [f] 0 L) → Imp [(true, 1, 3)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk43.1 (by simp only [List.all_cons, List.all_nil, qqk43.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk43 (by simp only [List.all_cons, List.all_nil, qs43_0, qs43_1, qs43_2, qs43_3, Bool.and_true]) hL h0
 lemma ty44 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 44, Imp [f] 0 L) → Imp [(true, 1, 6)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk44.1 (by simp only [List.all_cons, List.all_nil, qqk44.2, Bool.and_true]) hL h0
+  ty_impH (tt := [[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) (Ms := [(0, mh44_0)]) ai3 own0 qqk44 qc44 (by simp only [List.all_cons, List.all_nil, qs44_0, qs44_1, qs44_2, Bool.and_true])
+    (fun x hx => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl
+      exact ⟨mf44_0, (cT_app qh44_0_0 qh44_0_1)⟩) hL h0
 lemma ty45 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 45, Imp [f] 0 L) → Imp [(true, 1, 7)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk45.1 (by simp only [List.all_cons, List.all_nil, qqk45.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk45 (by simp only [List.all_cons, List.all_nil, qs45_0, qs45_1, qs45_2, qs45_3, Bool.and_true]) hL h0
 lemma ty46 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 46, Imp [f] 0 L) → Imp [(true, 3, 4)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk46.1 (by simp only [List.all_cons, List.all_nil, qqk46.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk46 (by simp only [List.all_cons, List.all_nil, qs46_0, qs46_1, qs46_2, qs46_3, Bool.and_true]) hL h0
 lemma ty47 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 47, Imp [f] 0 L) → Imp [(true, 3, 7)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk47.1 (by simp only [List.all_cons, List.all_nil, qqk47.2, Bool.and_true]) hL h0
+  ty_impH (tt := [[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) (Ms := [(0, mh47_0)]) ai3 own0 qqk47 qc47 (by simp only [List.all_cons, List.all_nil, qs47_0, qs47_1, qs47_2, Bool.and_true])
+    (fun x hx => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl
+      exact ⟨mf47_0, (cT_app qh47_0_0 qh47_0_1)⟩) hL h0
 lemma ty48 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 48, Imp [f] 0 L) → Imp [(true, 4, 5)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk48.1 (by simp only [List.all_cons, List.all_nil, qqk48.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk48 (by simp only [List.all_cons, List.all_nil, qs48_0, qs48_1, qs48_2, qs48_3, Bool.and_true]) hL h0
 lemma ty49 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 49, Imp [f] 0 L) → Imp [(true, 4, 6)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk49.1 (by simp only [List.all_cons, List.all_nil, qqk49.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk49 (by simp only [List.all_cons, List.all_nil, qs49_0, qs49_1, qs49_2, qs49_3, Bool.and_true]) hL h0
 lemma ty50 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 50, Imp [f] 0 L) → Imp [(true, 5, 8)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk50.1 (by simp only [List.all_cons, List.all_nil, qqk50.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk50 (by simp only [List.all_cons, List.all_nil, qs50_0, qs50_1, qs50_2, qs50_3, Bool.and_true]) hL h0
 lemma ty51 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 51, Imp [f] 0 L) → Imp [(false, 0, 7)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk51.1 (by simp only [List.all_cons, List.all_nil, qqk51.2, Bool.and_true]) hL h0
+  ty_impH (tt := [[2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) (Ms := [(0, mh51_0), (1, mh51_1)]) ai3 own0 qqk51 qc51 (by simp only [List.all_cons, List.all_nil, qs51_0, qs51_1, Bool.and_true])
+    (fun x hx => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl | rfl
+      exacts [⟨mf51_0, (cT_app qh51_0_0 (cT_app qh51_0_1 (cT_app qh51_0_2 qh51_0_3)))⟩, ⟨mf51_1, (cT_app qh51_1_0 (cT_app qh51_1_1 qh51_1_2))⟩]) hL h0
 lemma ty52 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 52, Imp [f] 0 L) → Imp [(false, 0, 8)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk52.1 (by simp only [List.all_cons, List.all_nil, qqk52.2, Bool.and_true]) hL h0
+  ty_impH (tt := [[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) (Ms := [(0, mh52_0)]) ai3 own0 qqk52 qc52 (by simp only [List.all_cons, List.all_nil, qs52_0, qs52_1, qs52_2, Bool.and_true])
+    (fun x hx => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl
+      exact ⟨mf52_0, (cT_app qh52_0_0 qh52_0_1)⟩) hL h0
 lemma ty53 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 53, Imp [f] 0 L) → Imp [(false, 6, 8)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk53.1 (by simp only [List.all_cons, List.all_nil, qqk53.2, Bool.and_true]) hL h0
+  ty_impH (tt := [[2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) (Ms := [(0, mh53_0), (1, mh53_1)]) ai3 own0 qqk53 qc53 (by simp only [List.all_cons, List.all_nil, qs53_0, qs53_1, Bool.and_true])
+    (fun x hx => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl | rfl
+      exacts [⟨mf53_0, (cT_app qh53_0_0 qh53_0_1)⟩, ⟨mf53_1, (cT_app qh53_1_0 qh53_1_1)⟩]) hL h0
 lemma ty54 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 54, Imp [f] 0 L) → Imp [(true, 0, 1)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk54.1 (by simp only [List.all_cons, List.all_nil, qqk54.2, Bool.and_true]) hL h0
+  ty_impH (tt := [[2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) (Ms := [(0, mh54_0), (1, mh54_1)]) ai3 own0 qqk54 qc54 (by simp only [List.all_cons, List.all_nil, qs54_0, qs54_1, Bool.and_true])
+    (fun x hx => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl | rfl
+      exacts [⟨mf54_0, (cT_app qh54_0_0 (cT_app qh54_0_1 qh54_0_2))⟩, ⟨mf54_1, (cT_app qh54_1_0 qh54_1_1)⟩]) hL h0
 lemma ty55 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 55, Imp [f] 0 L) → Imp [(true, 0, 3)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk55.1 (by simp only [List.all_cons, List.all_nil, qqk55.2, Bool.and_true]) hL h0
+  ty_impH (tt := [[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) (Ms := [(0, mh55_0)]) ai3 own0 qqk55 qc55 (by simp only [List.all_cons, List.all_nil, qs55_0, qs55_1, qs55_2, Bool.and_true])
+    (fun x hx => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl
+      exact ⟨mf55_0, (cT_app qh55_0_0 qh55_0_1)⟩) hL h0
 lemma ty56 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 56, Imp [f] 0 L) → Imp [(true, 0, 4)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk56.1 (by simp only [List.all_cons, List.all_nil, qqk56.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk56 (by simp only [List.all_cons, List.all_nil, qs56_0, qs56_1, qs56_2, qs56_3, Bool.and_true]) hL h0
 lemma ty57 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 57, Imp [f] 0 L) → Imp [(true, 0, 5)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk57.1 (by simp only [List.all_cons, List.all_nil, qqk57.2, Bool.and_true]) hL h0
+  ty_impH (tt := [[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) (Ms := [(0, mh57_0)]) ai3 own0 qqk57 qc57 (by simp only [List.all_cons, List.all_nil, qs57_0, qs57_1, qs57_2, Bool.and_true])
+    (fun x hx => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl
+      exact ⟨mf57_0, (cT_app qh57_0_0 qh57_0_1)⟩) hL h0
 lemma ty58 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 58, Imp [f] 0 L) → Imp [(true, 0, 6)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk58.1 (by simp only [List.all_cons, List.all_nil, qqk58.2, Bool.and_true]) hL h0
+  ty_impH (tt := [[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) (Ms := [(0, mh58_0)]) ai3 own0 qqk58 qc58 (by simp only [List.all_cons, List.all_nil, qs58_0, qs58_1, qs58_2, Bool.and_true])
+    (fun x hx => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl
+      exact ⟨mf58_0, (cT_app qh58_0_0 qh58_0_1)⟩) hL h0
 lemma ty59 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 59, Imp [f] 0 L) → Imp [(true, 0, 7)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk59.1 (by simp only [List.all_cons, List.all_nil, qqk59.2, Bool.and_true]) hL h0
+  ty_impH (tt := [[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) (Ms := [(0, mh59_0)]) ai3 own0 qqk59 qc59 (by simp only [List.all_cons, List.all_nil, qs59_0, qs59_1, qs59_2, Bool.and_true])
+    (fun x hx => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl
+      exact ⟨mf59_0, (cT_app qh59_0_0 qh59_0_1)⟩) hL h0
 lemma ty60 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 60, Imp [f] 0 L) → Imp [(true, 1, 4)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk60.1 (by simp only [List.all_cons, List.all_nil, qqk60.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk60 (by simp only [List.all_cons, List.all_nil, qs60_0, qs60_1, qs60_2, qs60_3, Bool.and_true]) hL h0
 lemma ty61 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 61, Imp [f] 0 L) → Imp [(true, 1, 8)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk61.1 (by simp only [List.all_cons, List.all_nil, qqk61.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk61 (by simp only [List.all_cons, List.all_nil, qs61_0, qs61_1, qs61_2, qs61_3, Bool.and_true]) hL h0
 lemma ty62 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 62, Imp [f] 0 L) → Imp [(true, 3, 5)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk62.1 (by simp only [List.all_cons, List.all_nil, qqk62.2, Bool.and_true]) hL h0
+  ty_impH (tt := [[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) (Ms := [(0, mh62_0)]) ai3 own0 qqk62 qc62 (by simp only [List.all_cons, List.all_nil, qs62_0, qs62_1, qs62_2, Bool.and_true])
+    (fun x hx => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl
+      exact ⟨mf62_0, (cT_app qh62_0_0 qh62_0_1)⟩) hL h0
 lemma ty63 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 63, Imp [f] 0 L) → Imp [(true, 3, 6)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk63.1 (by simp only [List.all_cons, List.all_nil, qqk63.2, Bool.and_true]) hL h0
+  ty_impH (tt := [[1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) (Ms := [(0, mh63_0)]) ai3 own0 qqk63 qc63 (by simp only [List.all_cons, List.all_nil, qs63_0, qs63_1, qs63_2, Bool.and_true])
+    (fun x hx => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+      rcases hx with rfl
+      exact ⟨mf63_0, (cT_app qh63_0_0 qh63_0_1)⟩) hL h0
 lemma ty64 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 64, Imp [f] 0 L) → Imp [(true, 3, 8)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk64.1 (by simp only [List.all_cons, List.all_nil, qqk64.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk64 (by simp only [List.all_cons, List.all_nil, qs64_0, qs64_1, qs64_2, qs64_3, Bool.and_true]) hL h0
 lemma ty65 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 65, Imp [f] 0 L) → Imp [(true, 4, 7)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk65.1 (by simp only [List.all_cons, List.all_nil, qqk65.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk65 (by simp only [List.all_cons, List.all_nil, qs65_0, qs65_1, qs65_2, qs65_3, Bool.and_true]) hL h0
 lemma ty66 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 66, Imp [f] 0 L) → Imp [(true, 4, 8)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk66.1 (by simp only [List.all_cons, List.all_nil, qqk66.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk66 (by simp only [List.all_cons, List.all_nil, qs66_0, qs66_1, qs66_2, qs66_3, Bool.and_true]) hL h0
 lemma ty67 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 67, Imp [f] 0 L) → Imp [(true, 5, 6)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk67.1 (by simp only [List.all_cons, List.all_nil, qqk67.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk67 (by simp only [List.all_cons, List.all_nil, qs67_0, qs67_1, qs67_2, qs67_3, Bool.and_true]) hL h0
 lemma ty68 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 68, Imp [f] 0 L) → Imp [(true, 5, 7)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk68.1 (by simp only [List.all_cons, List.all_nil, qqk68.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk68 (by simp only [List.all_cons, List.all_nil, qs68_0, qs68_1, qs68_2, qs68_3, Bool.and_true]) hL h0
 lemma ty69 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 69, Imp [f] 0 L) → Imp [(true, 6, 7)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk69.1 (by simp only [List.all_cons, List.all_nil, qqk69.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk69 (by simp only [List.all_cons, List.all_nil, qs69_0, qs69_1, qs69_2, qs69_3, Bool.and_true]) hL h0
 lemma ty70 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 70, Imp [f] 0 L) → Imp [(true, 6, 8)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk70.1 (by simp only [List.all_cons, List.all_nil, qqk70.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk70 (by simp only [List.all_cons, List.all_nil, qs70_0, qs70_1, qs70_2, qs70_3, Bool.and_true]) hL h0
 lemma ty71 {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : (∀ f ∈ gtypes.take 71, Imp [f] 0 L) → Imp [(true, 7, 8)] 0 L :=
-  ty_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk71.1 (by simp only [List.all_cons, List.all_nil, qqk71.2, Bool.and_true]) hL h0
+  ty_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]]) ai3 own0 qqk71 (by simp only [List.all_cons, List.all_nil, qs71_0, qs71_1, qs71_2, qs71_3, Bool.and_true]) hL h0
 lemma allT {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : ∀ f ∈ gtypes, Imp [f] 0 L := chainT (fun i hi => by
   have hi : i < 72 := hi
   interval_cases i
@@ -6727,7 +7660,7 @@ lemma allT {L : ℕ} (hL : L ≤ 15) (h0 : Imp [] 0 L) : ∀ f ∈ gtypes, Imp [
   · exact ty69 hL h0
   · exact ty70 hL h0
   · exact ty71 hL h0)
-lemma iroot : Imp [] 0 16 := iroot_min (N := 15) fun L hL h0 => last_imp (tt := [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]]) ai3 qqkA (by simp only [List.all_cons, List.all_nil, qqkB, Bool.and_true]) hL (allT hL h0)
+lemma iroot : Imp [] 0 16 := iroot_min (N := 15) fun L hL h0 => last_imp (tt := [[0], [1], [2], [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]]) ai3 qqkA (by simp only [List.all_cons, List.all_nil, qqkB_0, qqkB_1, qqkB_2, qqkB_3, Bool.and_true]) hL (allT hL h0)
 open PEqualNP.CircuitLowerBounds PEqualNP.MetaComplexity
 section circuit
 variable (m : ℕ)
