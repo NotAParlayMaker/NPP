@@ -1,5 +1,5 @@
 theorem PEqualNP.Outside.R_meta_7105_1
-    (meet : let E : List (Fin 10 × Fin 10) := [(0,1),(1,2),(2,3),(3,4),(4,0),(0,5),(1,6),(2,7),(3,8),(4,9),(5,7),(7,9),(9,6),(6,8),(8,5)]
+    (meet : let E : List (Fin 10 × Fin 10) := ([1,12,23,34,40,5,16,27,38,49,57,79,96,68,85] : List Nat).map (fun n => (Fin.ofNat 10 (n / 10), Fin.ofNat 10 n))
       let base : List ((Fin 10 → Bool) → Bool) := ((fun _ => false) :: (fun _ => true) :: List.ofFn (fun (i : Fin 10) (x : Fin 10 → Bool) => x i)) ++ [fun x => x 0 || x 2]
       ∀ a ∈ base, ∀ b ∈ base, let h := fun x => a x && b x
         h ∉ base →
@@ -12,7 +12,7 @@ theorem PEqualNP.Outside.R_meta_7105_1
           let adj := (E.any fun e => decide ((i,j) = e ∨ (j,i) = e)) = true
           (¬adj → w ≠ fun x => x i && x j) ∧ (adj → w ≠ fun x => x i || x j)) →
         (fun x => E.any fun e => x e.1 && x e.2) ∉ ws)
-    (join : let E : List (Fin 10 × Fin 10) := [(0,1),(1,2),(2,3),(3,4),(4,0),(0,5),(1,6),(2,7),(3,8),(4,9),(5,7),(7,9),(9,6),(6,8),(8,5)]
+    (join : let E : List (Fin 10 × Fin 10) := ([1,12,23,34,40,5,16,27,38,49,57,79,96,68,85] : List Nat).map (fun n => (Fin.ofNat 10 (n / 10), Fin.ofNat 10 n))
       let base : List ((Fin 10 → Bool) → Bool) := ((fun _ => false) :: (fun _ => true) :: List.ofFn (fun (i : Fin 10) (x : Fin 10 → Bool) => x i)) ++ [fun x => x 0 || x 2]
       ∀ a ∈ base, ∀ b ∈ base, let h := fun x => a x || b x
         h ∉ base →
