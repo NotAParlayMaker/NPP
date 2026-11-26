@@ -178,15 +178,19 @@ theorem PEqualNP.Outside.R_meta_6583_481
       (C.wires x).getD j false = (run (C.gates.take 5) x).getD j false := by
     by_cases hsize : C.gates.length ≤ 5
     · have ht : C.gates.take 5 = C.gates := (List.take_eq_self_iff _).mpr hsize
-      simp [Circuit.wires, run, ht]
+      change (run C.gates x).getD j false = _
+      rw [ht]
     · have hb : j < (run (C.gates.take 5) x).length := by
         rw [runLength, hx, List.length_take]
         omega
       have hs : C.gates.take 5 ++ C.gates.drop 5 = C.gates := List.take_append_drop _ _
-      unfold Circuit.wires
-      conv_lhs => rw [← hs]
-      rw [List.foldl_append]
-      exact preserve (C.gates.drop 5) (run (C.gates.take 5) x) j hb
+      change (run C.gates x).getD j false = _
+      calc
+        (run C.gates x).getD j false = (run (C.gates.take 5 ++ C.gates.drop 5) x).getD j false :=
+          congrArg (fun gs => (run gs x).getD j false) hs.symm
+        _ = (run (C.gates.drop 5) (run (C.gates.take 5) x)).getD j false := by
+          simp only [run, List.foldl_append]
+        _ = _ := preserve (C.gates.drop 5) (run (C.gates.take 5) x) j hb
 
   have early (C : Circuit) (hc : FanInTwo C) (i : Fin 28) (hi : i.val ≤ 14) :
       ∃ S : Finset (Fin 10), S.card ≤ 6 ∧ ∀ x y : Fin 10 → Bool,
