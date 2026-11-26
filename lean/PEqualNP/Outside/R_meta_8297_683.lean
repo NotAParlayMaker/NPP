@@ -25,6 +25,12 @@ theorem PEqualNP.Outside.R_meta_8297_683
   intro A B hA hB hbudget hcompute
   let f := fun x : Fin 10 → Bool => (x 0 && x 1) || (x 1 && x 2) || (x 2 && x 3) || (x 3 && x 4) || (x 4 && x 0) || (x 0 && x 5) || (x 1 && x 6) || (x 2 && x 7) || (x 3 && x 8) || (x 4 && x 9) || (x 5 && x 7) || (x 7 && x 9) || (x 9 && x 6) || (x 6 && x 8) || (x 8 && x 5)
   let calcGate (w : List Bool) (g : Gate) := w ++ [g.op.eval (g.inputs.map fun i => w.getD i false)]
+  have andEval (l : List Bool) : GateOp.and.eval l = l.all id := rfl
+  have orEval (l : List Bool) : GateOp.or.eval l = l.any id := rfl
+  have notEval (l : List Bool) : GateOp.not.eval l = !(l.headD false) := rfl
+  have sizeEq (C : Circuit) : C.size = C.gates.length := rfl
+  have wiresEq (C : Circuit) (x : List Bool) : C.wires x = C.gates.foldl calcGate x := rfl
+  have evalEq (C : Circuit) (x : List Bool) : C.eval x = (C.wires x).getD C.output false := rfl
   let G : Circuit := ⟨A.gates ++ ⟨.not,[A.output]⟩ :: B.gates, B.output⟩
   have gFan : FanInTwo G := by
     intro g hg
@@ -36,13 +42,13 @@ theorem PEqualNP.Outside.R_meta_8297_683
         exact ⟨by rcases hop with h | h; exact Or.inl h; exact Or.inr (Or.inl h),hcap⟩
   have gSize : G.size ≤ 19 := by
     change A.gates.length + B.gates.length ≤ 18 at hbudget
-    simp [G,Circuit.size]
+    simp [G,sizeEq]
     omega
   have gNot : ∃ g ∈ G.gates, g.op = .not :=
     ⟨⟨.not,[A.output]⟩,List.mem_append_right _ (by simp),rfl⟩
   have gCompute (x : Fin 10 → Bool) : G.eval (List.ofFn x) = f x := by
-    simpa only [G,List.foldl_append,List.foldl_cons,GateOp.eval,List.map_cons,List.map_nil,
-      List.headD_cons,Circuit.eval,Circuit.wires] using hcompute x
+    simpa only [G,List.foldl_append,List.foldl_cons,calcGate,notEval,List.map_cons,List.map_nil,
+      List.headD_cons,evalEq,wiresEq] using hcompute x
 
   have foldExt (gs : List Gate) : ∀ w : List Bool,
       ∃ t : List Bool, gs.foldl calcGate w = w ++ t ∧ t.length = gs.length := by
@@ -71,10 +77,10 @@ theorem PEqualNP.Outside.R_meta_8297_683
       bit D a x = false := by
     change (D.gates.foldl calcGate (List.ofFn x)).getD a false = false
     apply List.getD_eq_default
-    simpa [foldLength,Circuit.size] using ha
+    simpa [foldLength,sizeEq] using ha
   let cut (D : Circuit) (n a : ℕ) : Circuit := ⟨D.gates.take n,a⟩
   have cutSize (D : Circuit) (n a : ℕ) (h : n ≤ D.size) : (cut D n a).size = n := by
-    simpa [cut,Circuit.size] using Nat.min_eq_left h
+    simpa [cut,sizeEq] using Nat.min_eq_left h
   have cutFan (D : Circuit) (n a : ℕ) (h : FanInTwo D) : FanInTwo (cut D n a) := by
     intro g hg
     exact h g (List.mem_of_mem_take hg)
@@ -143,13 +149,13 @@ theorem PEqualNP.Outside.R_meta_8297_683
           (if a < 10+j then bit D a (fun _ => false) else false) = true →
           (if a < 10+j then bit D a (fun _ => true) else false) = true := by
         by_cases ar : a < 10+j
-        · simpa only [if_pos ar] using (ih a (by omega))
+        · simpa only [ite_eq_left ar] using (ih a (by omega))
         · simp [ar]
       rw [← red,gateRead D j jr] at ht ⊢
       rcases legal with op | op | op
-      · simp only [op,GateOp.eval,List.all_map,Function.comp_apply,id_eq,List.all_eq_true] at ht ⊢
+      · simp only [op,andEval,List.all_map,Function.comp_apply,id_eq,List.all_eq_true] at ht ⊢
         exact fun a ha => move a (ht a ha)
-      · simp only [op,GateOp.eval,List.any_map,Function.comp_apply,id_eq,List.any_eq_true] at ht ⊢
+      · simp only [op,orEval,List.any_map,Function.comp_apply,id_eq,List.any_eq_true] at ht ⊢
         obtain ⟨a,ha,hb⟩ := ht
         exact ⟨a,ha,move a hb⟩
       · exact False.elim (none ⟨D.gates[j],List.getElem_mem jr,op⟩)
@@ -165,7 +171,7 @@ theorem PEqualNP.Outside.R_meta_8297_683
       · let i : Fin 10 := ⟨r,rawR⟩
         have q := comp (fun j => decide (j=i))
         rw [raw D r rawR, singletonFalse i] at q
-        simpa [i] using q
+        simp [i] at q
       by_cases invR : 10+D.size ≤ r
       · exact noFalse fun x => (invalid D r invR x).symm.trans (comp x)
       let j := r-10
@@ -196,7 +202,7 @@ theorem PEqualNP.Outside.R_meta_8297_683
             change bit P a x = !(f x)
             rw [cutRead D (a+1-10) a a nle (by omega)]
             have q := congrArg Bool.not (hread x)
-            simpa only [readAt,if_pos ha,Bool.not_not] using q
+            simpa only [readAt,ite_eq_left ha,Bool.not_not] using q
           by_cases neg : ∃ t ∈ P.gates, t.op = .not
           · exact notRoot P (cutFan D _ _ hd) (by change (cut D _ _).size ≤ 18; omega)
               (by omega) neg (by change a+1 = 10 + (cut D _ _).size; omega) complement
@@ -221,25 +227,25 @@ theorem PEqualNP.Outside.R_meta_8297_683
               · let i : Fin 10 := ⟨a,ha10⟩
                 have q := formula (fun k => decide (k≠i))
                 rw [absentTrue i] at q
-                simp [GateOp.eval,readAt,ha,hb,raw D a ha10,i] at q
+                simp [andEval,orEval,notEval,readAt,ha,hb,raw D a ha10,i] at q
               · let i : Fin 10 := ⟨a,ha10⟩
                 have q := formula (fun k => decide (k=i))
-                simp [GateOp.eval,readAt,ha,hb,raw D a ha10,singletonFalse i,i] at q
+                simp [andEval,orEval,notEval,readAt,ha,hb,raw D a ha10,singletonFalse i,i] at q
             by_cases hb10 : b < 10
             · rcases bin with rfl | rfl
               · let i : Fin 10 := ⟨b,hb10⟩
                 have q := formula (fun k => decide (k≠i))
                 rw [absentTrue i] at q
-                simp [GateOp.eval,readAt,ha,hb,raw D b hb10,i] at q
+                simp [andEval,orEval,notEval,readAt,ha,hb,raw D b hb10,i] at q
               · let i : Fin 10 := ⟨b,hb10⟩
                 have q := formula (fun k => decide (k=i))
-                simp [GateOp.eval,readAt,ha,hb,raw D b hb10,singletonFalse i,i] at q
+                simp [andEval,orEval,notEval,readAt,ha,hb,raw D b hb10,singletonFalse i,i] at q
             by_cases hab : a=b
             · subst b
               apply projection a
               intro x
               have q := formula x
-              rcases bin with rfl | rfl <;> simpa [GateOp.eval] using q
+              rcases bin with rfl | rfl <;> simpa [andEval,orEval,notEval] using q
             let lo := min a b
             let hi := max a b
             have hmin : 10 ≤ lo := by dsimp [lo]; omega
@@ -281,9 +287,9 @@ theorem PEqualNP.Outside.R_meta_8297_683
               · have ba : b ≤ a := by omega
                 rcases bin with rfl | rfl
                 · simpa [lo,hi,Nat.min_eq_right ba,Nat.max_eq_left ba,readAt,ha,hb,
-                    GateOp.eval,Bool.and_comm] using eq
+                    andEval,Bool.and_comm] using eq
                 · simpa [lo,hi,Nat.min_eq_right ba,Nat.max_eq_left ba,readAt,ha,hb,
-                    GateOp.eval,Bool.or_comm] using eq
+                    orEval,Bool.or_comm] using eq
             have lowWire (x) := cutRead D (hi+1-10) hi lo hl (by omega) x
             have highWire (x) := cutRead D (hi+1-10) hi hi hl (by omega) x
             rcases bin with rfl | rfl
@@ -292,19 +298,19 @@ theorem PEqualNP.Outside.R_meta_8297_683
               change (bit P lo x && bit P hi x) = f x
               rw [show bit P lo x = bit D lo x from lowWire x,
                 show bit P hi x = bit D hi x from highWire x]
-              simpa [GateOp.eval] using swap x
+              simpa [andEval,orEval,notEval] using swap x
             · apply orRoot P lo (cutFan D _ _ hd) pSmall pNeg hmin (by simpa [po] using ord) pLast
               intro x
               change (bit P lo x || bit P hi x) = f x
               rw [show bit P lo x = bit D lo x from lowWire x,
                 show bit P hi x = bit D hi x from highWire x]
-              simpa [GateOp.eval] using swap x
+              simpa [andEval,orEval,notEval] using swap x
           · rcases bin with rfl | rfl
-            · exact noFalse fun x => by simpa [GateOp.eval,readAt,hb] using formula x
-            · exact projection a fun x => by simpa [GateOp.eval,readAt,hb] using formula x
+            · exact noFalse fun x => by simpa [andEval,orEval,notEval,readAt,hb] using formula x
+            · exact projection a fun x => by simpa [andEval,orEval,notEval,readAt,hb] using formula x
         · rcases bin with rfl | rfl
-          · exact noFalse fun x => by simpa [GateOp.eval,readAt,ha] using formula x
-          · exact projection b fun x => by simpa [GateOp.eval,readAt,ha] using formula x
+          · exact noFalse fun x => by simpa [andEval,orEval,notEval,readAt,ha] using formula x
+          · exact projection b fun x => by simpa [andEval,orEval,notEval,readAt,ha] using formula x
       have inputCases (l : List ℕ) (len : l.length ≤ 2) :
           l = [] ∨ (∃ a, l = [a]) ∨ (∃ a b, l = [a,b]) := by
         rcases l with _ | ⟨a,l⟩
@@ -316,16 +322,16 @@ theorem PEqualNP.Outside.R_meta_8297_683
         simp at len
       rcases inputCases g.inputs hg.2 with no | ⟨a,one⟩ | ⟨a,b,two⟩
       · rcases go with op | op | op
-        · exact noTrue fun x => by simpa [op,no,GateOp.eval] using form x
-        · exact noFalse fun x => by simpa [op,no,GateOp.eval] using form x
-        · exact noTrue fun x => by simpa [op,no,GateOp.eval] using form x
+        · exact noTrue fun x => by simpa [op,no,andEval,orEval,notEval] using form x
+        · exact noFalse fun x => by simpa [op,no,andEval,orEval,notEval] using form x
+        · exact noTrue fun x => by simpa [op,no,andEval,orEval,notEval] using form x
       · rcases go with op | op | op
-        · exact projection a fun x => by simpa [op,one,GateOp.eval] using form x
-        · exact projection a fun x => by simpa [op,one,GateOp.eval] using form x
-        · exact validNot a fun x => by simpa [op,one,GateOp.eval] using form x
+        · exact projection a fun x => by simpa [op,one,andEval,orEval,notEval] using form x
+        · exact projection a fun x => by simpa [op,one,andEval,orEval,notEval] using form x
+        · exact validNot a fun x => by simpa [op,one,andEval,orEval,notEval] using form x
       · rcases go with op | op | op
         · exact binary .and op (Or.inl rfl) a b fun x => by simpa [op,two] using form x
         · exact binary .or op (Or.inr rfl) a b fun x => by simpa [op,two] using form x
-        · exact validNot a fun x => by simpa [op,two,GateOp.eval] using form x
+        · exact validNot a fun x => by simpa [op,two,andEval,orEval,notEval] using form x
 
   exact solve G gFan gSize (Or.inr gNot) G.output gCompute
