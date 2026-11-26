@@ -180,16 +180,26 @@ theorem PEqualNP.Outside.R_meta_6083_2
   let val (w : List Bool) : Bool ⊕ Nat → Bool := Sum.elim id (fun i => w.getD i false)
   let pick : Bool ⊕ Nat → Option Nat := Sum.elim (fun _ => none) some
   let lowerGate (op : GateOp) (as : List (Bool ⊕ Nat)) : Gate :=
-    match op with
-    | .and => if Sum.inl false ∈ as then ⟨.or, []⟩ else ⟨.and, as.filterMap pick⟩
-    | .or => if Sum.inl true ∈ as then ⟨.and, []⟩ else ⟨.or, as.filterMap pick⟩
-    | .not => match as.head? with
-      | none => ⟨.and, []⟩
-      | some (.inl b) => ⟨if b then .or else .and, []⟩
-      | some (.inr i) => ⟨.not, [i]⟩
-    | _ => ⟨.or, []⟩
+    GateOp.casesOn op
+      (if Sum.inl false ∈ as then ⟨.or, []⟩ else ⟨.and, as.filterMap pick⟩)
+      (if Sum.inl true ∈ as then ⟨.and, []⟩ else ⟨.or, as.filterMap pick⟩)
+      (as.head?.elim ⟨.and, []⟩ (Sum.elim (fun b => ⟨if b then .or else .and, []⟩) (fun i => ⟨.not, [i]⟩)))
+      (fun _ => ⟨.or, []⟩)
+      ⟨.or, []⟩
   let adapt (g : Gate) := lowerGate g.op (g.inputs.map m)
   let valid (g : Gate) := g.op ∈ ({GateOp.and, .or, .not} : Set GateOp) ∧ g.inputs.length ≤ 2
+  -- Use definitional equations without asking Lean to generate equations for the underlying definitions.
+  have evalAnd (w : List Bool) : GateOp.and.eval w = w.all id := rfl
+  have evalOr (w : List Bool) : GateOp.or.eval w = w.any id := rfl
+  have evalNot (w : List Bool) : GateOp.not.eval w = !(w.headD false) := rfl
+  have lowerAnd (as : List (Bool ⊕ Nat)) :
+      lowerGate .and as = if Sum.inl false ∈ as then ⟨.or, []⟩ else ⟨.and, as.filterMap pick⟩ := rfl
+  have lowerOr (as : List (Bool ⊕ Nat)) :
+      lowerGate .or as = if Sum.inl true ∈ as then ⟨.and, []⟩ else ⟨.or, as.filterMap pick⟩ := rfl
+  have dropRef (b : Bool) (as : List (Bool ⊕ Nat)) :
+      (Sum.inl b :: as).filterMap pick = as.filterMap pick := rfl
+  have keepRef (i : Nat) (as : List (Bool ⊕ Nat)) :
+      (Sum.inr i :: as).filterMap pick = i :: as.filterMap pick := rfl
   have lowerValid (op : GateOp) (as : List (Bool ⊕ Nat)) (hlen : as.length ≤ 2) :
       valid (lowerGate op as) := by
     have cnt := (List.length_filterMap_le (f := pick) (l := as)).trans hlen
@@ -213,8 +223,10 @@ theorem PEqualNP.Outside.R_meta_6083_2
     | cons a as ih =>
       rw [List.map_cons, List.all_cons, ih]
       rcases a with b | i
-      · cases b <;> by_cases q : Sum.inl false ∈ as <;> simp [val, pick, List.filterMap_cons, q]
-      · by_cases q : Sum.inl false ∈ as <;> simp [val, pick, q]
+      · rw [dropRef]
+        cases b <;> by_cases q : Sum.inl false ∈ as <;> simp (config := { iota := false }) [val, q]
+      · rw [keepRef]
+        by_cases q : Sum.inl false ∈ as <;> simp (config := { iota := false }) [val, q]
   have anySound (w : List Bool) (as : List (Bool ⊕ Nat)) :
       (as.map (val w)).any id =
         if Sum.inl true ∈ as then true else ((as.filterMap pick).map fun i => w.getD i false).any id := by
@@ -223,16 +235,24 @@ theorem PEqualNP.Outside.R_meta_6083_2
     | cons a as ih =>
       rw [List.map_cons, List.any_cons, ih]
       rcases a with b | i
-      · cases b <;> by_cases q : Sum.inl true ∈ as <;> simp [val, pick, List.filterMap_cons, q]
-      · by_cases q : Sum.inl true ∈ as <;> simp [val, pick, q]
+      · rw [dropRef]
+        cases b <;> by_cases q : Sum.inl true ∈ as <;> simp (config := { iota := false }) [val, q]
+      · rw [keepRef]
+        by_cases q : Sum.inl true ∈ as <;> simp (config := { iota := false }) [val, q]
   have lowerSound (w : List Bool) (op : GateOp) (as : List (Bool ⊕ Nat))
       (hop : op ∈ ({GateOp.and, .or, .not} : Set GateOp)) :
       op.eval (as.map (val w)) = (lowerGate op as).op.eval
         ((lowerGate op as).inputs.map fun i => w.getD i false) := by
     simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hop
     rcases hop with rfl | rfl | rfl
-    · by_cases q : Sum.inl false ∈ as <;> simp [lowerGate, GateOp.eval, allSound, q]
-    · by_cases q : Sum.inl true ∈ as <;> simp [lowerGate, GateOp.eval, anySound, q]
+    · rw [evalAnd, allSound, lowerAnd]
+      by_cases q : Sum.inl false ∈ as
+      · simp (config := { iota := false }) only [ite_eq_left q] <;> rfl
+      · simp (config := { iota := false }) only [ite_eq_right q] <;> rfl
+    · rw [evalOr, anySound, lowerOr]
+      by_cases q : Sum.inl true ∈ as
+      · simp (config := { iota := false }) only [ite_eq_left q] <;> rfl
+      · simp (config := { iota := false }) only [ite_eq_right q] <;> rfl
     · cases as with
       | nil => rfl
       | cons a as =>
@@ -250,9 +270,17 @@ theorem PEqualNP.Outside.R_meta_6083_2
       have fixed : m 10 = (if u false = u true then Sum.inl (u false)
           else if u false then Sum.inr 10 else Sum.inr 0) := by simp [m]
       rw [fixed] at e
-      split at e
-      · cases e
-      · split at e <;> simp at e <;> omega
+      by_cases same : u false = u true
+      · rw [ite_eq_left same] at e
+        cases e
+      · rw [ite_eq_right same] at e
+        by_cases bit : u false = true
+        · rw [ite_eq_left bit] at e
+          have eq := Sum.inr.inj e
+          omega
+        · rw [ite_eq_right bit] at e
+          have eq := Sum.inr.inj e
+          omega
   have initial (x : Fin 10 → Bool) (i : Nat) :
       (List.ofFn (x ∘ σ) ++ [u (x 0)]).getD i false = val (input x) (m i) := by
     by_cases hi : i < 10
@@ -316,7 +344,10 @@ theorem PEqualNP.Outside.R_meta_6083_2
     intro g hg
     obtain ⟨g₀, hg₀, rfl⟩ := List.mem_map.mp hg
     exact lowerValid g₀.op (g₀.inputs.map m) (by simpa using (fan g₀ hg₀).2)
-  have newSize : D.size ≤ 18 := by simpa [D, Circuit.size] using budget
+  have newSize : D.size ≤ 18 := by
+    change (C.gates.map adapt).length ≤ 18
+    rw [List.length_map]
+    exact budget
   have implements : ∀ x : Fin 10 → Bool, D.eval (input x) = edge x := by
     intro x
     have simulation (y : Fin 10 → Bool) := (simFold C.gates fan (List.ofFn (y ∘ σ) ++ [u (y 0)]) (input y)
@@ -466,13 +497,13 @@ theorem PEqualNP.Outside.R_meta_6083_2
             | cons c t => rw [hs] at arity; simp at arity
       rcases op with op | op | op
       · rcases few with e | ⟨a,e⟩ | ⟨a,b,e⟩
-        · exact noConst true (by simpa [op, e, GateOp.eval] using value)
-        · exact aliasOf a (by simpa [op, e, GateOp.eval] using value)
-        · exact binary true a b (by simpa [op, e, GateOp.eval] using value)
+        · exact noConst true (by simpa [op, e, evalAnd] using value)
+        · exact aliasOf a (by simpa [op, e, evalAnd] using value)
+        · exact binary true a b (by simpa [op, e, evalAnd] using value)
       · rcases few with e | ⟨a,e⟩ | ⟨a,b,e⟩
-        · exact noConst false (by simpa [op, e, GateOp.eval] using value)
-        · exact aliasOf a (by simpa [op, e, GateOp.eval] using value)
-        · exact binary false a b (by simpa [op, e, GateOp.eval] using value)
+        · exact noConst false (by simpa [op, e, evalOr] using value)
+        · exact aliasOf a (by simpa [op, e, evalOr] using value)
+        · exact binary false a b (by simpa [op, e, evalOr] using value)
       · have notCase (i : Nat) (h : ∀ x, (!wire gs x i) = edge x) : False := by
           by_cases low : i < 11
           · exact noRawNot gs ⟨i,low⟩ h
@@ -482,7 +513,7 @@ theorem PEqualNP.Outside.R_meta_6083_2
             simpa [oob gs x i high] using h x
           exact hNot coreCircuit i pref prefSize (by omega) (by change i < 11 + gs.length; omega) h
         rcases few with e | ⟨a,e⟩ | ⟨a,b,e⟩
-        · exact noConst true (by simpa [op, e, GateOp.eval] using value)
-        · exact notCase a (by simpa [op, e, GateOp.eval] using value)
-        · exact notCase a (by simpa [op, e, GateOp.eval] using value)
+        · exact noConst true (by simpa [op, e, evalNot] using value)
+        · exact notCase a (by simpa [op, e, evalNot] using value)
+        · exact notCase a (by simpa [op, e, evalNot] using value)
   exact impossible D.gates D.output newFan newSize implements
