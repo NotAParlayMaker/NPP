@@ -167,19 +167,19 @@ theorem PEqualNP.Outside.R_meta_4075_780
     simp only [Set.mem_insert_iff, Set.mem_singleton_iff] at hop
     rcases hop with hop | hop | hop
     · rcases hin : g.inputs with _ | ⟨a, _ | ⟨c, _ | ⟨d, t⟩⟩⟩
-      · exfalso; obtain ⟨x, _, h2⟩ := K1; rw [wv x, hop, hin] at h2; simp [PEqualNP.CircuitLowerBounds.GateOp.eval] at h2
-      · exact andCase a a (fun x => by rw [wv, hop, hin]; simp [PEqualNP.CircuitLowerBounds.GateOp.eval])
-      · exact andCase a c (fun x => by rw [wv, hop, hin]; simp [PEqualNP.CircuitLowerBounds.GateOp.eval])
+      · exfalso; obtain ⟨x, _, h2⟩ := K1; rw [wv x, hop, hin] at h2; have h3 : true = false := h2; exact Bool.noConfusion h3
+      · exact andCase a a (fun x => by rw [wv, hop, hin]; show ((gs.foldl step (seed x)).getD a false && true) = ((gs.foldl step (seed x)).getD a false && (gs.foldl step (seed x)).getD a false); generalize (gs.foldl step (seed x)).getD a false = p; cases p <;> rfl)
+      · exact andCase a c (fun x => by rw [wv, hop, hin]; show ((gs.foldl step (seed x)).getD a false && ((gs.foldl step (seed x)).getD c false && true)) = ((gs.foldl step (seed x)).getD a false && (gs.foldl step (seed x)).getD c false); generalize (gs.foldl step (seed x)).getD a false = p; generalize (gs.foldl step (seed x)).getD c false = q; cases p <;> cases q <;> rfl)
       · rw [hin] at hlen; simp at hlen
     · rcases hin : g.inputs with _ | ⟨a, _ | ⟨c, _ | ⟨d, t⟩⟩⟩
-      · exfalso; have h2 := (K3 (fun _ => true) allT).2; rw [wv, hop, hin] at h2; simp [PEqualNP.CircuitLowerBounds.GateOp.eval] at h2
-      · exact orCase a a (fun x => by rw [wv, hop, hin]; simp [PEqualNP.CircuitLowerBounds.GateOp.eval])
-      · exact orCase a c (fun x => by rw [wv, hop, hin]; simp [PEqualNP.CircuitLowerBounds.GateOp.eval])
+      · exfalso; have h2 := (K3 (fun _ => true) allT).2; rw [wv, hop, hin] at h2; have h3 : false = true := h2; exact Bool.noConfusion h3
+      · exact orCase a a (fun x => by rw [wv, hop, hin]; show ((gs.foldl step (seed x)).getD a false || false) = ((gs.foldl step (seed x)).getD a false || (gs.foldl step (seed x)).getD a false); generalize (gs.foldl step (seed x)).getD a false = p; cases p <;> rfl)
+      · exact orCase a c (fun x => by rw [wv, hop, hin]; show ((gs.foldl step (seed x)).getD a false || ((gs.foldl step (seed x)).getD c false || false)) = ((gs.foldl step (seed x)).getD a false || (gs.foldl step (seed x)).getD c false); generalize (gs.foldl step (seed x)).getD a false = p; generalize (gs.foldl step (seed x)).getD c false = q; cases p <;> cases q <;> rfl)
       · rw [hin] at hlen; simp at hlen
     · rcases hin : g.inputs with _ | ⟨a, _ | ⟨c, _ | ⟨d, t⟩⟩⟩
-      · exfalso; obtain ⟨x, _, h2⟩ := K1; rw [wv x, hop, hin] at h2; simp [PEqualNP.CircuitLowerBounds.GateOp.eval] at h2
-      · exact notCase a (fun x => by rw [wv, hop, hin]; simp [PEqualNP.CircuitLowerBounds.GateOp.eval])
-      · exact notCase a (fun x => by rw [wv, hop, hin]; simp [PEqualNP.CircuitLowerBounds.GateOp.eval])
+      · exfalso; obtain ⟨x, _, h2⟩ := K1; rw [wv x, hop, hin] at h2; have h3 : true = false := h2; exact Bool.noConfusion h3
+      · exact notCase a (fun x => by rw [wv, hop, hin]; rfl)
+      · exact notCase a (fun x => by rw [wv, hop, hin]; rfl)
       · rw [hin] at hlen; simp at hlen
   have H3' : ∀ x, f x = true → w0 x u0 = true ∧ w0 x v0 = true :=
     fun x hx => H3 x (by rw [← hf x]; exact hx)
@@ -187,6 +187,7 @@ theorem PEqualNP.Outside.R_meta_4075_780
   · obtain ⟨x, hx1, hx2, hx3⟩ := core u0 v0 h H1 H2 H3'
     exact ⟨x, by rw [← hf x]; exact hx1, hx2, hx3⟩
   · subst h; obtain ⟨x, h1, h2⟩ := H1; rw [h1] at h2; exact absurd h2 (by decide)
-  · obtain ⟨x, hx1, hx2, hx3⟩ := core v0 u0 h (let ⟨x, p, q⟩ := H2; ⟨x, q, p⟩)
-      (let ⟨x, p, q⟩ := H1; ⟨x, q, p⟩) (fun x hx => (H3' x hx).symm)
+  · obtain ⟨y1, p1, q1⟩ := H1
+    obtain ⟨y2, p2, q2⟩ := H2
+    obtain ⟨x, hx1, hx2, hx3⟩ := core v0 u0 h ⟨y2, q2, p2⟩ ⟨y1, q1, p1⟩ (fun x hx => (H3' x hx).symm)
     exact ⟨x, by rw [← hf x]; exact hx1, hx3, hx2⟩
