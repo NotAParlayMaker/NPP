@@ -2,12 +2,18 @@ import Mathlib
 import PEqualNP.Defs
 
 theorem PEqualNP.Outside.R_meta_8913_1
-    (notconst : (let I : Fin 13 → Fin 13 → Prop := fun p l => p = l ∨ p = l + 1 ∨ p = l + 3 ∨ p = l + 9;
+    (hne_empty : (let I : Fin 13 → Fin 13 → Prop := fun p l => p = l ∨ p = l + 1 ∨ p = l + 3 ∨ p = l + 9;
       ∀ (n : ℕ) (X Y : Fin n → Finset (Fin 13)),
         (∀ p l : Fin 13, I p l → ∃ i, X i = {p} ∧ Y i = {l}) →
         (∀ P Q : Finset (Fin 13), (∀ p ∈ P, ∀ l ∈ Q, ¬I p l) → (∀ l : Fin 13, {p ∈ P | I p l}.card ≤ 2) →
           (∀ p : Fin 13, {l ∈ Q | I p l}.card ≤ 2) → ∃ i, X i = P ∧ Y i = Q) →
-        {i : Fin n | ∃ p l, I p l ∧ X i = {p} ∧ Y i = {l}} ∉ ({∅, Set.univ} : Set (Set (Fin n)))))
+        {i : Fin n | ∃ p l, I p l ∧ X i = {p} ∧ Y i = {l}} ≠ ∅))
+    (hne_univ : (let I : Fin 13 → Fin 13 → Prop := fun p l => p = l ∨ p = l + 1 ∨ p = l + 3 ∨ p = l + 9;
+      ∀ (n : ℕ) (X Y : Fin n → Finset (Fin 13)),
+        (∀ p l : Fin 13, I p l → ∃ i, X i = {p} ∧ Y i = {l}) →
+        (∀ P Q : Finset (Fin 13), (∀ p ∈ P, ∀ l ∈ Q, ¬I p l) → (∀ l : Fin 13, {p ∈ P | I p l}.card ≤ 2) →
+          (∀ p : Fin 13, {l ∈ Q | I p l}.card ≤ 2) → ∃ i, X i = P ∧ Y i = Q) →
+        {i : Fin n | ∃ p l, I p l ∧ X i = {p} ∧ Y i = {l}} ≠ Set.univ))
     (notcol : (let I : Fin 13 → Fin 13 → Prop := fun p l => p = l ∨ p = l + 1 ∨ p = l + 3 ∨ p = l + 9;
       ∀ (n : ℕ) (X Y : Fin n → Finset (Fin 13)),
         (∀ p l : Fin 13, I p l → ∃ i, X i = {p} ∧ Y i = {l}) →
@@ -59,6 +65,9 @@ theorem PEqualNP.Outside.R_meta_8913_1
         {t : Set (Fin m) | t ∈ s} := hmem
     rcases hmem' with (hB | hL)
     · rcases hB with (hCU | hR)
-      · exact notconst m X Y hpos hneg hCU
+      · rw [Set.mem_insert_iff, Set.mem_singleton_iff] at hCU
+        cases hCU with
+        | inl h => exact hne_empty m X Y hpos hneg h
+        | inr h => exact hne_univ m X Y hpos hneg h
       · exact notcol m X Y hpos hneg hR
     · exact notlist m X Y hpos hneg s hlen hval hL
