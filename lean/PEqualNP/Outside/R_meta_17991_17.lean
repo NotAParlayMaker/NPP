@@ -49,15 +49,22 @@ theorem PEqualNP.Outside.R_meta_17991_17
      . rw [lGD _ _ (by simp;omega),lGD _ _ (by omega)]
     have z0 {α:Type} (L:List α) (S d : α):(L++[S]).getD L.length d=S:=by
      simp
+    have truthAnd (xs : List Bool) : GateOp.and.eval xs = xs.all id := rfl
+    have truthOr (xs : List Bool) : GateOp.or.eval xs = xs.any id := rfl
+    have truthNot (xs : List Bool) : GateOp.not.eval xs = !(xs.headD false) := rfl
+    have circuitSize (C : Circuit) : C.size = C.gates.length := rfl
+    have circuitEval (C : Circuit) (w : List Bool) :
+        C.eval w = (C.wires w).getD C.output false := rfl
+    have circuitWires (C : Circuit) (w : List Bool) :
+        C.wires w = C.gates.foldl
+          (fun a gate => a ++ [gate.op.eval (gate.inputs.map fun i => a.getD i false)]) w := rfl
     let vg (g:Gate):Gate :=
-     match g.op with
-     | GateOp.not => ⟨GateOp.not,g.inputs.take 1⟩
-     | _ => g
+     GateOp.casesOn (motive := fun _ => Gate) g.op g g ⟨.not,g.inputs.take 1⟩ (fun _ => g) g
     have q107 (g:Gate) (F : ℕ->Bool) :
        (vg g).op.eval ((vg g).inputs.map F)=g.op.eval (g.inputs.map F):=by
      obtain ⟨op,inputs⟩:=g
      cases op <;> simp only [vg]
-     cases inputs <;> simp [GateOp.eval]
+     cases inputs <;> simp [truthAnd, truthOr, truthNot]
     let NOk (g:Gate):Prop:=Ok g/\(g.op=GateOp.not->g.inputs.length<=1)
     have q45 (g:Gate) (h:Ok g):NOk (vg g):=by
      obtain ⟨op,inputs⟩:=g
@@ -152,7 +159,7 @@ theorem PEqualNP.Outside.R_meta_17991_17
      . intro g hg
        obtain ⟨g0,hg0,rfl⟩:=List.mem_map.1 hg
        exact ⟨(ok g0 hg0).1,by simpa [jt] using (ok g0 hg0).2⟩
-     . simpa [q174,Circuit.size] using hsz
+     . simpa [q174,circuitSize] using hsz
      . intro x
        show _=h (x ∘ π)
        rw [← hev (x ∘ π)]
@@ -472,7 +479,7 @@ theorem PEqualNP.Outside.R_meta_17991_17
         rw [←correct x]
         change (⟨gs,o⟩ : Circuit).eval (List.ofFn (Fin.snoc x (!(x 9)))) = _
         rw [q134]
-        simp [Circuit.eval, Circuit.wires, GateOp.eval]
+        simp [circuitEval, circuitWires, truthAnd, truthOr, truthNot]
       have eq1 : fix (fix g 9 false) 10 true = tailDeleted := by
         funext x
         exact (congrArg g (inputs_eq x)).trans ((diag (notRaw x)).trans (edge_restrict x))
@@ -542,7 +549,7 @@ theorem PEqualNP.Outside.R_meta_17991_17
       have gate : op.eval ([u.val,v.val].map fun i => (List.ofFn x).getD i false) =
           op.eval ([u.val,v.val].map fun i => (List.ofFn y).getD i false) := by
         simp only [List.map_cons,List.map_nil,get_input,uv,vu]
-        rcases hop with rfl | rfl <;> simp [GateOp.eval, Bool.and_comm, Bool.or_comm]
+        rcases hop with rfl | rfl <;> simp [truthAnd, truthOr, truthNot, Bool.and_comm, Bool.or_comm]
       change (q3 tail ((List.ofFn x) ++ [op.eval _])).getD o false =
           (q3 tail ((List.ofFn y) ++ [op.eval _])).getD o false
       rw [gate]
@@ -611,9 +618,9 @@ theorem PEqualNP.Outside.R_meta_17991_17
           left
           by_cases ha : a < 10
           · right; refine ⟨⟨a,ha⟩, ?_⟩; intro x
-            rcases hop with rfl|rfl <;> simp [val, GateOp.eval, from_input x ha]
+            rcases hop with rfl|rfl <;> simp [val, truthAnd, truthOr, truthNot, from_input x ha]
           · left; refine ⟨false,?_⟩; intro x
-            rcases hop with rfl|rfl <;> simp [val, GateOp.eval, from_past x ha]
+            rcases hop with rfl|rfl <;> simp [val, truthAnd, truthOr, truthNot, from_past x ha]
         | cons b tail =>
           have ht : tail = [] := by simpa using len
           subst tail
@@ -621,17 +628,17 @@ theorem PEqualNP.Outside.R_meta_17991_17
           · by_cases hb : b < 10
             · by_cases eq : a = b
               · subst b; left; right; refine ⟨⟨a,ha⟩,?_⟩; intro x
-                rcases hop with rfl|rfl <;> simp [val, GateOp.eval, from_input x ha]
+                rcases hop with rfl|rfl <;> simp [val, truthAnd, truthOr, truthNot, from_input x ha]
               · right; exact ⟨⟨a,ha⟩, ⟨b,hb⟩, fun e => eq (congrArg Fin.val e), hop, rfl⟩
             · left; rcases hop with rfl|rfl
-              · left; exact ⟨false, fun x => by simp [val, GateOp.eval, from_past x hb]⟩
-              · right; exact ⟨⟨a,ha⟩, fun x => by simp [val, GateOp.eval, from_input x ha, from_past x hb]⟩
+              · left; exact ⟨false, fun x => by simp [val, truthAnd, truthOr, truthNot, from_past x hb]⟩
+              · right; exact ⟨⟨a,ha⟩, fun x => by simp [val, truthAnd, truthOr, truthNot, from_input x ha, from_past x hb]⟩
           · by_cases hb : b < 10
             · left; rcases hop with rfl|rfl
-              · left; exact ⟨false, fun x => by simp [val, GateOp.eval, from_past x ha]⟩
-              · right; exact ⟨⟨b,hb⟩, fun x => by simp [val, GateOp.eval, from_past x ha, from_input x hb]⟩
+              · left; exact ⟨false, fun x => by simp [val, truthAnd, truthOr, truthNot, from_past x ha]⟩
+              · right; exact ⟨⟨b,hb⟩, fun x => by simp [val, truthAnd, truthOr, truthNot, from_past x ha, from_input x hb]⟩
             · left; left; refine ⟨false, ?_⟩; intro x
-              rcases hop with rfl|rfl <;> simp [val, GateOp.eval, from_past x ha, from_past x hb]
+              rcases hop with rfl|rfl <;> simp [val, truthAnd, truthOr, truthNot, from_past x ha, from_past x hb]
 
     have classify (g : Gate) (legal : g.op ∈ ({.and,.or,.not} : Set GateOp) ∧
         g.inputs.length ≤ 2) : Simple g ∨ Neg g ∨ Pair g := by
@@ -647,7 +654,7 @@ theorem PEqualNP.Outside.R_meta_17991_17
         | cons a rest =>
           by_cases ha : a < 10
           · exact Or.inr (Or.inl ⟨⟨a,ha⟩,rest,rfl⟩)
-          · exact Or.inl (Or.inl ⟨true, fun x => by simp [val, GateOp.eval, from_past x ha]⟩)
+          · exact Or.inl (Or.inl ⟨true, fun x => by simp [val, truthAnd, truthOr, truthNot, from_past x ha]⟩)
 
     let globBits {n : Nat} (mask : Nat) (i : Fin n) : Bool := mask.testBit i.val
 
@@ -796,11 +803,11 @@ theorem PEqualNP.Outside.R_meta_17991_17
         change ins.length ≤ 2 at hlen
         rcases hop with hop|hop|hop
         · change o = .and at hop; subst o
-          simp [vg,predicate,Function.comp_def,GateOp.eval,List.take_of_length_le hlen,List.contains_eq_any_beq]
+          simp [vg,predicate,Function.comp_def,truthAnd, truthOr, truthNot,List.take_of_length_le hlen,List.contains_eq_any_beq]
         · change o = .or at hop; subst o
-          simp [vg,predicate,Function.comp_def,GateOp.eval,List.take_of_length_le hlen,List.contains_eq_any_beq]
+          simp [vg,predicate,Function.comp_def,truthAnd, truthOr, truthNot,List.take_of_length_le hlen,List.contains_eq_any_beq]
         · change o = .not at hop; subst o
-          simp [vg,predicate,Function.comp_def,GateOp.eval,List.contains_eq_any_beq]
+          simp [vg,predicate,Function.comp_def,truthAnd, truthOr, truthNot,List.contains_eq_any_beq]
       omega
     exact assemble nine first_not_lower oneReader requires_tail_use
   have erase : let operands := fun g : Gate => GateOp.casesOn (motive := fun _ => List ℕ) g.op g.inputs g.inputs (g.inputs.take 1) (fun _ => g.inputs) g.inputs
@@ -863,7 +870,8 @@ theorem PEqualNP.Outside.R_meta_17991_17
       rw [List.length_map]
       rcases orig with ⟨o,ins⟩
       cases o <;> simp_all [ops]
-    · simp [Circuit.size]
+    · change (C.gates.map project).length ≤ C.gates.length
+      simp
     · intro x a b
       have noPins : ∀ g ∈ C.gates, ∀ i ∈ ops g, i ≠ n ∧ i ≠ n+1 := by
         intro g hg i hi
@@ -916,15 +924,16 @@ theorem PEqualNP.Outside.R_meta_17991_17
      . rw [lGD _ _ (by simp;omega),lGD _ _ (by omega)]
     have z0 {α:Type} (L:List α) (S d : α):(L++[S]).getD L.length d=S:=by
      simp
-    let vg (g:Gate):Gate :=
-     match g.op with
-     | GateOp.not => ⟨GateOp.not,g.inputs.take 1⟩
-     | _ => g
+    have truthAnd (xs : List Bool) : GateOp.and.eval xs = xs.all id := rfl
+    have truthOr (xs : List Bool) : GateOp.or.eval xs = xs.any id := rfl
+    have truthNot (xs : List Bool) : GateOp.not.eval xs = !(xs.headD false) := rfl
+    let vg (g : Gate) : Gate :=
+      GateOp.casesOn (motive := fun _ => Gate) g.op g g ⟨.not,g.inputs.take 1⟩ (fun _ => g) g
     have q107 (g:Gate) (F : ℕ->Bool) :
        (vg g).op.eval ((vg g).inputs.map F)=g.op.eval (g.inputs.map F):=by
      obtain ⟨op,inputs⟩:=g
      cases op <;> simp only [vg]
-     cases inputs <;> simp [GateOp.eval]
+     cases inputs <;> simp [truthNot]
     let NOk (g:Gate):Prop:=Ok g/\(g.op=GateOp.not->g.inputs.length<=1)
     have q45 (g:Gate) (h:Ok g):NOk (vg g):=by
      obtain ⟨op,inputs⟩:=g
@@ -949,51 +958,45 @@ theorem PEqualNP.Outside.R_meta_17991_17
            = q3 gs (w++[g.op.eval (g.inputs.map fun i => w.getD i false)]):=rfl
        rw [s1,s2,q107,ih]
     let Stat:=Sum Bool ℕ
-    let ze (w:List Bool):Stat->Bool := fun
-     | Sum.inl c => c
-     | Sum.inr j => w.getD j false
-    let qn (m : ℕ):Stat->Prop := fun
-     | Sum.inl _ => True
-     | Sum.inr j => j < m
-    let wr (m : ℕ):List Stat->Option Gate × Stat := fun
-     | [] => (none,Sum.inl true)
-     | Sum.inl c::_ => (none,Sum.inl (!c))
-     | Sum.inr j::_ => (some ⟨GateOp.not,[j]⟩,Sum.inr m)
-    let ko (m : ℕ):List Stat->Option Gate × Stat := fun
-     | [] => (none,Sum.inl true)
-     | [Sum.inl c] => (none,Sum.inl c)
-     | [Sum.inr j] => (none,Sum.inr j)
-     | [Sum.inl c,Sum.inl d] => (none,Sum.inl (c&&d))
-     | [Sum.inl c,Sum.inr j] => (none,bif c then Sum.inr j else Sum.inl false)
-     | [Sum.inr j,Sum.inl c] => (none,bif c then Sum.inr j else Sum.inl false)
-     | [Sum.inr j,Sum.inr k] => (some ⟨GateOp.and,[j,k]⟩,Sum.inr m)
-     | _ => (none,Sum.inl false)
-    let ji (m : ℕ):List Stat->Option Gate × Stat := fun
-     | [] => (none,Sum.inl false)
-     | [Sum.inl c] => (none,Sum.inl c)
-     | [Sum.inr j] => (none,Sum.inr j)
-     | [Sum.inl c,Sum.inl d] => (none,Sum.inl (c||d))
-     | [Sum.inl c,Sum.inr j] => (none,bif c then Sum.inl true else Sum.inr j)
-     | [Sum.inr j,Sum.inl c] => (none,bif c then Sum.inl true else Sum.inr j)
-     | [Sum.inr j,Sum.inr k] => (some ⟨GateOp.or,[j,k]⟩,Sum.inr m)
-     | _ => (none,Sum.inl false)
+    let ze (w : List Bool) (s : Stat) : Bool :=
+      Sum.casesOn (motive := fun _ => Bool) s (fun b => b) (fun j => w.getD j false)
+    let qn (m : ℕ) (s : Stat) : Prop :=
+      Sum.casesOn (motive := fun _ => Prop) s (fun _ => True) (fun j => j < m)
+    let wr (m : ℕ) (ins : List Stat) : Option Gate × Stat :=
+      List.casesOn (motive := fun _ => Option Gate × Stat) ins (none,.inl true) fun a _ =>
+        Sum.casesOn (motive := fun _ => Option Gate × Stat) a
+          (fun c => (none,.inl (!c))) (fun j => (some ⟨.not,[j]⟩,.inr m))
+    let binary (empty : Bool) (pair : Stat → Stat → Option Gate × Stat)
+        (ins : List Stat) : Option Gate × Stat :=
+      List.casesOn (motive := fun _ => Option Gate × Stat) ins (none,.inl empty) fun a tail =>
+        List.casesOn (motive := fun _ => Option Gate × Stat) tail (none,a) fun b rest =>
+          List.casesOn (motive := fun _ => Option Gate × Stat) rest (pair a b) (fun _ _ => (none,.inl false))
+    let ko (m : ℕ) (ins : List Stat) : Option Gate × Stat :=
+      binary true (fun a b => Sum.casesOn (motive := fun _ => Option Gate × Stat) a
+        (fun c => Sum.casesOn (motive := fun _ => Option Gate × Stat) b
+          (fun d => (none,.inl (c && d))) (fun j => (none,bif c then Sum.inr j else Sum.inl false)))
+        (fun j => Sum.casesOn (motive := fun _ => Option Gate × Stat) b
+          (fun c => (none,bif c then Sum.inr j else Sum.inl false)) (fun k => (some ⟨.and,[j,k]⟩,.inr m)))) ins
+    let ji (m : ℕ) (ins : List Stat) : Option Gate × Stat :=
+      binary false (fun a b => Sum.casesOn (motive := fun _ => Option Gate × Stat) a
+        (fun c => Sum.casesOn (motive := fun _ => Option Gate × Stat) b
+          (fun d => (none,.inl (c || d))) (fun j => (none,bif c then Sum.inl true else Sum.inr j)))
+        (fun j => Sum.casesOn (motive := fun _ => Option Gate × Stat) b
+          (fun c => (none,bif c then Sum.inl true else Sum.inr j)) (fun k => (some ⟨.or,[j,k]⟩,.inr m)))) ins
     let qg (op:GateOp) (m : ℕ) (ins:List Stat):Option Gate × Stat :=
-     match op with
-     | GateOp.and => ko m ins
-     | GateOp.or => ji m ins
-     | GateOp.not => wr m ins
-     | _ => (none,Sum.inl false)
+     GateOp.casesOn (motive := fun _ => Option Gate × Stat) op
+       (ko m ins) (ji m ins) (wr m ins) (fun _ => (none,Sum.inl false)) (none,Sum.inl false)
     have q151 (op:GateOp) (m : ℕ) (ins:List Stat) :
        ∀ g ∈ (qg op m ins).1,Ok g:=by
      clear * - op m ins qg Ok wr ko ji
      intro g hg
      cases op <;> simp only [qg] at hg
      . rcases ins with _ | ⟨a,_ | ⟨b,_ | ⟨c,l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
-         simp_all [ko, Ok]
+         simp_all [ko,binary, Ok]
        subst g
        simp
      . rcases ins with _ | ⟨a,_ | ⟨b,_ | ⟨c,l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
-         simp_all [ji, Ok]
+         simp_all [ji,binary, Ok]
        subst g
        simp
      . rcases ins with _ | ⟨a,l⟩ <;> (try cases a) <;>
@@ -1010,9 +1013,9 @@ theorem PEqualNP.Outside.R_meta_17991_17
      obtain ⟨c,hc⟩:=hc
      rcases hop with rfl | rfl | rfl
      . rcases ins with _ | ⟨a,_ | ⟨b,_ | ⟨d,l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
-         simp_all [qg,ko]
+         simp_all [qg,ko,binary]
      . rcases ins with _ | ⟨a,_ | ⟨b,_ | ⟨d,l⟩⟩⟩ <;> (try cases a) <;> (try cases b) <;>
-         simp_all [qg,ji]
+         simp_all [qg,ji,binary]
      . have:=hnot rfl
        rcases ins with _ | ⟨a,_ | ⟨b,l⟩⟩ <;> (try cases a) <;> simp_all [qg,wr]
     have kn (op:GateOp) (hop:op=GateOp.and\/op=GateOp.or\/op=GateOp.not)
@@ -1021,23 +1024,23 @@ theorem PEqualNP.Outside.R_meta_17991_17
        qn (w.length+(qg op w.length ins).1.toList.length) (qg op w.length ins).2 /\
        ze (q3 (qg op w.length ins).1.toList w) (qg op w.length ins).2
          = op.eval (ins.map (ze w)):=by
-     clear * - op hop w ins hlen hv qg wr ko ji qn ze q3
+     clear * - op hop w ins hlen hv qg wr ko ji qn ze q3 truthAnd truthOr truthNot
      rcases hop with rfl | rfl | rfl
      . rcases ins with _ | ⟨a,_ | ⟨b,_ | ⟨d,l⟩⟩⟩
-       . simp [qg,ko,qn,ze,GateOp.eval]
-       . cases a <;> simp_all [qg,ko,qn,ze,GateOp.eval,q3]
+       . simp [qg,ko,binary,qn,ze,truthAnd]
+       . cases a <;> simp_all [qg,ko,binary,qn,ze,q3]
        . cases a <;> cases b <;> (rename_i c e; cases c) <;> cases e <;>
-           simp_all [qg,ko,qn,ze,GateOp.eval,q3]
+           simp_all [qg,ko,binary,qn,ze,q3]
        . simp at hlen
      . rcases ins with _ | ⟨a,_ | ⟨b,_ | ⟨d,l⟩⟩⟩
-       . simp [qg,ji,qn,ze,GateOp.eval]
-       . cases a <;> simp_all [qg,ji,qn,ze,GateOp.eval,q3]
+       . simp [qg,ji,binary,qn,ze,truthOr]
+       . cases a <;> simp_all [qg,ji,binary,qn,ze,q3]
        . cases a <;> cases b <;> (rename_i c e; cases c) <;> cases e <;>
-           simp_all [qg,ji,qn,ze,GateOp.eval,q3]
+           simp_all [qg,ji,binary,qn,ze,q3]
        . simp at hlen
      . rcases ins with _ | ⟨a,l⟩
-       . simp [qg,wr,qn,ze,GateOp.eval]
-       . cases a <;> simp_all [qg,wr,qn,ze,GateOp.eval,q3]
+       . simp [qg,wr,qn,ze,truthNot]
+       . cases a <;> simp_all [qg,wr,qn,ze,q3]
     let qa (n : ℕ) (acc:List Stat × List Gate) (g:Gate):List Stat × List Gate :=
      (acc.1++[(qg g.op (n+acc.2.length)
          (g.inputs.map fun i => acc.1.getD i (Sum.inl false))).2],
@@ -1060,13 +1063,16 @@ theorem PEqualNP.Outside.R_meta_17991_17
        rcases List.mem_append.1 hg' with h1 | h1
        . exact h g' h1
        . exact q151 _ _ _ g' (by simpa using h1)
-    have km {m m' : ℕ} (h:m<=m'):∀ s:Stat,qn m s->qn m' s := fun
-     | Sum.inl _,_ => trivial
-     | Sum.inr _,hj => lt_of_lt_of_le hj h
-    have jg (w t:List Bool):∀ s:Stat,qn w.length s ->
-       ze (w++t) s=ze w s := fun
-     | Sum.inl _,_ => rfl
-     | Sum.inr _,hj => List.getD_append _ _ _ _ hj
+    have km {m m' : ℕ} (h:m<=m'):∀ s:Stat,qn m s->qn m' s := by
+      intro s hs
+      cases s with
+      | inl c => exact trivial
+      | inr j => exact lt_of_lt_of_le hs h
+    have jg (w t : List Bool) (s : Stat) (hs : qn w.length s) :
+        ze (w ++ t) s = ze w s := by
+      cases s with
+      | inl c => rfl
+      | inr j => exact List.getD_append _ _ _ _ hs
     let Inv (n : ℕ) (y:List Bool) (w:List Bool) (acc:List Stat × List Gate):Prop :=
      acc.1.length=w.length/\∀ i : ℕ,
        qn (n+acc.2.length) (acc.1.getD i (Sum.inl false)) /\
@@ -1305,7 +1311,7 @@ theorem PEqualNP.Outside.R_meta_17991_17
       g.op.eval (g.inputs.map f) = g.op.eval ((operands g).map f) := by
     obtain ⟨op,is⟩ := g
     cases op <;> try rfl
-    cases is <;> simp [operands,GateOp.eval]
+    cases is <;> rfl
   have originalInput (gs : List Gate) (a : List Bool) (i : ℕ) (lt : i < a.length) :
       (run gs a).getD i false = a.getD i false := by
     induction gs generalizing a with
